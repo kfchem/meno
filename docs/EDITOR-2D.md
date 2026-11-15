@@ -773,8 +773,9 @@ Both go together, because both touch every layer.
   the other (IUPAC 2006 ST-3.1: the front-to-back order of crossing bonds
   shown by a small discontinuity in the one behind), the gap easing open
   and closed as the page's changes do. The item that holds is shown as
-  chosen; choosing it again takes the mark away, and the other item turns
-  it round. Each is one step, undone and done again ("Bond in front",
+  chosen, said of the bond clicked: on the bond behind, *Behind*; on the
+  one in front, *In front* (`chem/crossings.ts` `crossingMenu`). Choosing
+  it again takes the mark away, and the other item turns it round. Each is one step, undone and done again ("Bond in front",
   "Bond behind").
   - It is kept on the bond behind, by the other bond's id
     (`Bond.behind`), never both ways round, and nothing silent ever says

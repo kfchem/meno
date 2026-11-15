@@ -48,6 +48,17 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
 }
 
 describe("a bond's menu", () => {
+  it("marks which of two crossing bonds is in front as it holds: the held item shown as chosen, the other not", () => {
+    const chosen = (front: boolean, behind: boolean) => {
+      const html = menu(target({ kind: "bond", id: 2 }), { crossing: { front, behind, onFront: none, onBehind: none } }).html;
+      const mark = (name: string) => new RegExp(`<span>${name}</span><svg[^>]*aria-label="Chosen"`).test(html);
+      return [mark("In front"), mark("Behind")];
+    };
+    expect(chosen(false, true)).toEqual([false, true]);
+    expect(chosen(true, false)).toEqual([true, false]);
+    expect(chosen(false, false)).toEqual([false, false]);
+  });
+
   it("chooses its kind in the first row, the rest of its kinds under it, Delete last, and lists what else it does", () => {
     const m = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "double", choose: none } });
     expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "More kinds of bond", "Delete bond"]);

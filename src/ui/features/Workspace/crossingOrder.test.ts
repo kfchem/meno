@@ -9,7 +9,7 @@ import { layoutAtomOf, layoutBonds } from "./layoutOptions";
 import { buildAllPrimitives, createSVG, layoutMolecule, type LineSeg, type Poly } from "../../../lib/chem/layout2d";
 import { layoutEmf, emfRecords } from "../../../lib/chem/emf";
 import { acsWorldOptions } from "../../../lib/chem/acs";
-import { crossingsOf } from "./chem/crossings";
+import { crossingMenu, crossingsOf } from "./chem/crossings";
 import { numberedApart } from "./workflow/run";
 import { inRow } from "./components/structureDrag";
 import type { Model } from "./store/types";
@@ -74,6 +74,36 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     st().orderCrossing(ac, bd, "front");
     expect(drawn(st().model).ac).toHaveLength(1);
     expect(drawn(st().model).bd).toHaveLength(1);
+    expect(st().model.bonds.some((b) => b.behind)).toBe(false);
+  });
+
+  it("is shown on either bond's menu as it holds, said of the bond right-clicked; the held item chosen again takes it away", () => {
+    const { st, ac, bd } = editor();
+    const menuOf = (id: number) => crossingMenu(st().model, id, { x: 1, y: 1 }, st().orderCrossing)!;
+    expect([menuOf(ac).front, menuOf(ac).behind, menuOf(bd).front, menuOf(bd).behind]).toEqual([false, false, false, false]);
+    menuOf(bd).onBehind();
+    // (BD behind: on BD's own menu Behind holds, on AC's - the bond in front - In front)
+    expect([menuOf(bd).front, menuOf(bd).behind]).toEqual([false, true]);
+    expect([menuOf(ac).front, menuOf(ac).behind]).toEqual([true, false]);
+    expect(drawn(st().model).bd).toHaveLength(2);
+    // (Behind, held, chosen again: the mark gone, both whole, neither item held)
+    menuOf(bd).onBehind();
+    expect(st().model.bonds.some((b) => b.behind)).toBe(false);
+    expect(drawn(st().model).bd).toHaveLength(1);
+    expect([menuOf(bd).front, menuOf(bd).behind, menuOf(ac).front, menuOf(ac).behind]).toEqual([false, false, false, false]);
+    // (In front on AC: the same mark as Behind on BD)
+    menuOf(ac).onFront();
+    expect(bondOf(st().model, bd).behind).toEqual([ac]);
+    expect(menuOf(bd).behind).toBe(true);
+  });
+
+  it("is offered no more, and its mark is gone, once a depth on all four atoms takes over from what the menu said", () => {
+    const { doc, st, ac, bd } = editor();
+    crossingMenu(st().model, ac, { x: 1, y: 1 }, st().orderCrossing)!.onBehind();
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    doc.edit("all depth", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, z: 0 })) } }));
+    expect(crossingMenu(st().model, ac, { x: 1, y: 1 }, st().orderCrossing)).toBeUndefined();
+    expect(crossingMenu(st().model, bd, { x: 1, y: 1 }, st().orderCrossing)).toBeUndefined();
     expect(st().model.bonds.some((b) => b.behind)).toBe(false);
   });
 

@@ -231,3 +231,25 @@ export function crossingsOf(model: Model, bondId: number, at?: Pt): { other: num
   if (at) out.sort((m, n) => Math.hypot(m.at.x - at.x, m.at.y - at.y) - Math.hypot(n.at.x - at.x, n.at.y - at.y));
   return out;
 }
+
+/**
+ * A bond's menu's two items where the bond right-clicked crosses another that no depth orders, at the crossing nearest the pointer: which holds
+ * now, said of the bond clicked (`front`, `behind`), and choosing either (`order`, the store's `orderCrossing`: chosen again, the mark goes).
+ * None where the bond crosses none.
+ */
+export function crossingMenu(
+  model: Model,
+  bondId: number,
+  at: Pt | undefined,
+  order: (bondId: number, otherId: number, how: "front" | "behind") => void,
+): { front: boolean; behind: boolean; onFront: () => void; onBehind: () => void } | undefined {
+  const nearest = crossingsOf(model, bondId, at)[0];
+  if (!nearest) return undefined;
+  const now = orderBetween(model, bondId, nearest.other);
+  return {
+    front: now === "front",
+    behind: now === "behind",
+    onFront: () => order(bondId, nearest.other, "front"),
+    onBehind: () => order(bondId, nearest.other, "behind"),
+  };
+}
