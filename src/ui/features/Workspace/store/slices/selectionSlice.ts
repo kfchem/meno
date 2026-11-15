@@ -76,6 +76,14 @@ export function createSelectionSlice(set: SetState) {
         };
       }),
 
+    /** A click on a bond: it selected, alone, with its two atoms - what was selected let go, as a click on an atom does. */
+    clickSelectBond: (id: number) =>
+      set((prev: EditorState) => {
+        const bond = prev.model.bonds.find((b) => b.id === id);
+        if (!bond) return prev;
+        return { ...prev, sel: { atoms: new Set([bond.a, bond.b]), bonds: new Set([id]) }, selAnchor: bond.a };
+      }),
+
     clickTakeBack: (id: number) => {
       let taken = false;
       set((prev: EditorState) => {
