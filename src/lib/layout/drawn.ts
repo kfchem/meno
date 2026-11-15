@@ -112,6 +112,18 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
  * `LayoutInput.cumulated`, left as it is); an allene's axis is not a double bond's to open.
  */
 export function openDoubleBonds(input: LayoutInput): { straight: number[]; either: number[] } {
+  return openOf(input, true);
+}
+
+/**
+ * The odd cumulenes alone of `openDoubleBonds` (a butatriene's): those of a structure that `input.cumulated` does not give, open. For a
+ * drawing nobody made - a plugin's, from a MOL block, which cannot say a run's cis or trans: what its picture shows of one is chance.
+ */
+export function openRuns(input: LayoutInput): { straight: number[]; either: number[] } {
+  return openOf(input, false);
+}
+
+function openOf(input: LayoutInput, doubles: boolean): { straight: number[]; either: number[] } {
   const n = input.atoms.length;
   const neighbours: number[][] = Array.from({ length: n }, () => []);
   const order = new Map<string, number>();
@@ -134,7 +146,7 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
   const straight = new Set<number>();
   const either: number[] = [];
   input.bonds.forEach((b, i) => {
-    if (b.order !== 2 || b.stereo) return;
+    if (!doubles || b.order !== 2 || b.stereo) return;
     const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
     const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
     if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;

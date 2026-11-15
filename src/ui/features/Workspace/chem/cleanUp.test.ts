@@ -19,6 +19,7 @@ import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
 import { identityOfDrawn } from "./identityOf";
+import { drawingOf as drawnFromBlock } from "./fromSmiles";
 import { blocksOf } from "./make3d";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 import { measured } from "../../../../testing/timeouts";
@@ -676,6 +677,52 @@ describe("cleanUp", () => {
       // (an allene's run, and a drawing that shows no run, as they are)
       const allene = arrived("CC=C=CC");
       expect(runsAsCame(allene, undefined)).toBe(allene);
+    });
+
+    describe("a run in a drawing nobody made - a plugin's, from a MOL block - that Meno's reading of the text does not give", () => {
+      const runsOf = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated;
+      };
+      /** The picture as a plugin's MOL block carries it, read as the app reads one. */
+      const blockOf = (m: Model) => structureFileText(drawnOf({ ...emptyWorkspaceDocument(), model: m, nextId: 1000 } as never), "came.mol");
+
+      it("is laid out open, and stays open through Clean-up, where nothing is given: the text not read by Meno, or a step's block", async () => {
+        for (const s of ["CC=C=C=CC", "CC=C=C=CC[C@H]1CN1C", "CC=C=C=CCO[S](=O)c1ccccc1"]) {
+          const came = arrived(s);
+          expect(runsOf(came), s).toHaveLength(1);
+          const laid = await laidOut(came, MENO, undefined, undefined, true);
+          expect(runsOf(laid), s).toEqual([]);
+          const { store } = canvas(laid);
+          for (const time of [1, 2]) {
+            await cleanUp(store);
+            expect(runsOf(store.getState().model), `${s} ${time}`).toEqual([]);
+          }
+        }
+      }, 120000);
+
+      it("is drawn so through the route a plugin's block takes (fromSmiles drawingOf)", async () => {
+        for (const s of ["CC=C=C=CC", "CC=C=C=CC[C@H]1CN1C"]) {
+          const laid = await drawnFromBlock(blockOf(arrived(s)), MENO);
+          expect(laid.asCame, s).toBeUndefined();
+          expect(runsOf(laid), s).toEqual([]);
+        }
+      }, 60000);
+
+      it("is drawn as given where Meno's reading gives it, either way", async () => {
+        for (const [s, cis] of [["C/C=C=C=C/C", false], [String.raw`C/C=C=C=C\C`, true]] as const) {
+          const own = readSmiles(s);
+          const laid = await laidOut(arrived("CC=C=C=CC"), MENO, { axes: [], cumulated: own.cumulated ?? [] }, undefined, true);
+          expect(runsOf(laid).map((r) => r.cis), s).toEqual([cis]);
+        }
+      }, 60000);
+
+      it("is kept as drawn in a drawing someone made: Clean-up's own laying out keeps what a chemist drew", async () => {
+        const came = arrived("CC=C=C=CC");
+        const [was] = runsOf(came);
+        const laid = await laidOut(came, MENO);
+        expect(runsOf(laid).map((r) => r.cis)).toEqual([was.cis]);
+      });
     });
 
     it("marks the run of a drawing read from a MOL block, as a plugin's comes: its bonds carry no mark, 'none'", () => {

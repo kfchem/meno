@@ -1985,10 +1985,15 @@ lipids each have their own way of being drawn, which it should know.
      in a ring of seven or fewer is held cis; in a ring of eight or more it
      is drawn open, though the smallest ring a run can be trans in is
      larger than a double bond's: there Meno may leave open what only cis
-     can be, never state the other isomer. A structure kept as it came,
-     not laid out, shows no run's cis or trans but the one its text gives:
-     a MOL block cannot say one, so a run the plugin's picture shows
-     otherwise is marked with a wavy bond. An allene's run (two double
+     can be, never state the other isomer. A structure drawn from a
+     plugin's MOL block - a SMILES's, a step's, the formula of a molecule
+     in 3D - shows no run's cis or trans but one Meno's own reading of its
+     text gives: a MOL block cannot say one, so what the plugin's picture
+     shows of a run is chance. Laid out, any other run is drawn open, as
+     above, and stays so through Clean-up; kept as it came, not laid out, a
+     run it shows otherwise is marked with a wavy bond. Where Meno's own
+     reader does not take the text, no run is given, and every odd run is
+     so drawn open. An allene's run (two double
      bonds, or four) has an axis instead, which nothing draws open.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
