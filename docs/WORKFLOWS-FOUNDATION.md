@@ -628,9 +628,11 @@ way:
 Charge and multiplicity are each entry's *species*, not options. A *Species*
 node sets them where the atoms do not say it.
 
-**Restraints are a property** (`restraints`), made by the *Restraints* and
-*Torsion restraints* nodes, riding with each entry to the steps whose
-plugins apply them. Each row is one restraint:
+**Restraints are a table** (2026-11-11, v0.1.26; until then a property
+riding with each entry), made by the *Restraints* and *Torsion restraints*
+nodes and wired into the *Restraints* input of the steps whose plugins
+apply them, each row for its entry by an ID a node wrote (question A; see
+WORKFLOWS.md, *Restraints wired in*). Each row is one restraint:
 - distance, torsion, or fixed atoms;
 - the atoms, in the entry's numbering;
 - the target, with its unit;
@@ -682,8 +684,9 @@ of highest weight stands for it, carrying the results.
 | **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*), or atoms typed | every entry, each with where its imaginary vibration ranks those atoms - the window, each one's rank, how many fall outside - for a *Filter* to keep on (built 2026-11-02, STRUCTURE-STEPS.md) |
 | **Atom map** | *molecules* and a *reference* (3D, every hydrogen present), each input's entries each a side of its own or one side together; matched on a property, or one reference for all; whether bonds may change (a reaction) or stay the same (conformers of the reference) | *mapped*: each side a complete 3D structure in the reference's numbering, every atom mapped one to one, hydrogens included (the first map, or every map) - a reaction's products in its reactants' numbering, or a species' conformers with their equivalent atoms (a methylene's hydrogens) where the species has them; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
-| **Restraints** | molecules | the same, each with its restraints from itself: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
-| **Torsion restraints** | molecules, 3D, and *reference* (molecules) | *restrained*: each torsion trans across the reference's double bonds and not trans here held at 180°, stronger by a step each time; *trans already*: the rest, as they came |
+| **Restraints** | molecules | a table of restraints, each from its entry: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
+| **Torsion restraints** | molecules, 3D, and *reference* where wanted (molecules) | a table of torsion restraints: typed, or each torsion unlike the reference's, at 180° where trans or at its own angle, by a strength or exactly |
+| **Compare torsions** | molecules, 3D, and *reference* (molecules) | the same, each with how many torsions are trans in the reference and cis here, and which |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
 | **Displace** | molecules with vibrations | the same, the geometry moved along a vibration (the imaginary one, or a chosen one) by an amplitude |
@@ -877,16 +880,43 @@ The texts are compared, not their hashed keys. The set states the method:
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
-- **a configuration drawn where there is no stereo unit counts for
-  nothing.** That is a wedge on a centre two of whose groups are alike (an
-  isopropyl's CH), or a double bond drawn bent whose one end carries two
-  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
-  it was drawn so or not. "Alike" counts every other configuration in the
-  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
-  are alike only until the other centre is counted, so its cis and trans
-  stay two structures, and a pseudoasymmetric centre keeps its r or s
-  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
-  them aside;
+- **a configuration that sets nothing is the same drawn or not.** That is
+  a wedge on a centre two of whose groups are alike (an isopropyl's CH),
+  or a double bond drawn bent whose one end carries two alike groups (a
+  prenyl's C=C(CH3)2). Identity never takes a configuration out: where
+  one could stand and none is drawn, it fills one in wherever both
+  senses write the same text, since such a place sets nothing
+  (`filledIn`). That joins mirror writings of one ring
+  compound: the cis,trans 1,2,3-trimethylcyclopropane drawn in full, and
+  drawn with its trans pair and its third centre plain, are one
+  structure. A place whose two senses write two texts is open and stays
+  so: the same compound with its cis pair drawn and the third plain
+  stands for two compounds, and is neither of them. "Alike" counts every
+  other configuration in the structure: the two ring arms at each centre
+  of 1,4-dimethylcyclohexane are alike only until the other centre is
+  counted, so its cis and trans stay two structures, a pseudoasymmetric
+  centre keeps its r or s, and the two enantiomers of a spirane such as
+  2,6-dimethylspiro[3.3]heptane are two structures. Places are filled one
+  at a time, the lowest in the canonical order first, then asked again.
+  The order matters, so it is always that one - but a centre or double
+  bond two of whose groups are alike (two methyls, PPh3's three phenyls:
+  each group hanging from the place alone, with no place or configuration
+  in it) sets nothing whatever else is given: it carries no configuration
+  in the identity, one drawn on it taken off, and is asked no more, with
+  no search of the whole structure. So its identity never turns on which
+  way it was filled in, as it could where a search runs out of steps
+  (Pd(PPh3)4). The filled form is
+  identity's own: the drawing keeps its wedges as drawn, and nothing filled
+  in is shown, drawn or saved;
+- **a limit, on the safe side:** some writings that leave the same thing
+  unsaid in different ways get two identities. (4-Methylcyclohexylidene)
+  acetic acid drawn with its double bond bent and its centre plain, and
+  drawn with its centre wedged and its double bond straight, each mean
+  "either enantiomer", yet are two structures. Its centre alone sets
+  nothing, and its double bond alone, but once either is given the other
+  decides. Alike structures can be told apart this way; unlike ones are
+  never joined, and only writings that state no single compound are
+  affected;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);
@@ -1343,24 +1373,29 @@ side together, on the *Atom map* card); set **P** holds the products drawn.
     second *Re-bond* (*geometry* PC, *bonding* R) and the same chain after
     it, merged before F4. ConfoTS chooses the direction from the conformer
     counts [`path_flag`]; here it is wired.
-12. **Restraints** (Meno): on P′, its coordination bonds as in step 3. They
-    ride through *Re-bond* onto E, which takes the bonding entry's
-    restraints.
-13. **Minimise with restraints** (a force-field plugin): E, its coordination
-    bonds held, no torsions yet. Its result records where its restraints
-    were first held.
-14. **Torsion restraints** (Meno) against P′, matched on *product*: each
-    torsion trans across P′'s double bonds (hydrogens' included) and not
-    trans after the minimisation is held at 180°, at the step the workflow
-    sets. *Trans already* goes on [ConfoTS's trans-torsion check].
-15. **Its *restrained*, again, drawn:** **Minimise with restraints** from
-    the geometry the first minimisation started from (*Start from: where
-    its restraints were first held*), then **Torsion
-    restraints**, each torsion still not trans a step stronger (a
-    torsion held once stays held), and a **Merge** with 14's *trans
-    already*. Pasted once more for each further attempt; the last
-    attempt's *restrained* goes on too, as ConfoTS passes it on
-    [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
+12. **Restraints** (Meno): on P′, its coordination bonds as in step 3, each
+    row for its entry by its *start* (Tag). The ID rides through *Re-bond*
+    onto E, so E takes P′'s rows (v0.1.26: a table, wired in; until then
+    the restraints rode on the entries).
+13. **Minimise with restraints** (a force-field plugin): E, 12's table
+    wired into its *Restraints*, its coordination bonds held, no torsions
+    yet. Its result records where its restraints were first held.
+14. **Compare torsions** (Meno) against P′, matched on *product*: how many
+    torsions are trans across P′'s double bonds (hydrogens' included) and
+    cis after the minimisation; a **Filter** on `torsions unlike reference
+    = 0` splits those done from those to go again [ConfoTS's trans-torsion
+    check].
+15. **Again, drawn:** **Torsion restraints** from the reference, 180° where
+    trans, at the strength typed for this round; **Minimise with
+    restraints** from the geometry the first minimisation started from
+    (*Start from: where its restraints were first held*), every earlier
+    round's table wired in beside this one's, so a torsion held once stays
+    held (the later round's row held where two hold one torsion); then
+    **Compare torsions** and a **Filter** again. Pasted once more for each
+    further attempt, each round's strength typed (50, 100, 150: one value a
+    round for every torsion it holds, where ConfoTS adds to each torsion's
+    own as it fails); the last attempt's goes on too, as ConfoTS passes it
+    on [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
 17. **Compare bonding** (Meno) against P′, on *product*, with R or S, E or Z

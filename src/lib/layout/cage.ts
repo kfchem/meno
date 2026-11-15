@@ -23,9 +23,13 @@ import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
 import { ringShape } from "./conformation";
 import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
 import { byStructure } from "./ranks";
+import { freeCorners } from "../chem/perception/stereo/senses";
 import { ringsAlike } from "./rings";
 
 export type Vec3 = [number, number, number];
+
+// (a tetrahedron's free corners are the core's: lib/chem/perception/stereo/senses)
+export { freeCorners };
 
 /** Graph distances between the system's atoms, through its own bonds. */
 function hops(mol: Molecule, atoms: number[]): number[][] {
@@ -1780,22 +1784,6 @@ export function axialOut(mol: Molecule, sys: RingSystem, ring: readonly number[]
   return found;
 }
 
-/**
- * Where the bonds of a tetrahedral atom that are not among `us` (its bonds
- * given, as unit vectors) point: with three given, the one corner left;
- * with two, the two either side of their plane.
- */
-export function freeCorners(us: readonly Vec3[]): Vec3[] {
-  const away = awayFrom(us);
-  if (us.length !== 2) return [away];
-  const across = normalise(crossV(us[0], us[1]));
-  const k = Math.cos((54.75 * Math.PI) / 180);
-  const j = Math.sin((54.75 * Math.PI) / 180);
-  return [
-    [0, 1, 2].map((c) => away[c] * k + across[c] * j) as Vec3,
-    [0, 1, 2].map((c) => away[c] * k - across[c] * j) as Vec3,
-  ];
-}
 
 /**
  * The directions, in the solid, of an atom's bonds out of the cage: the

@@ -78,6 +78,22 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     expect(wiresInto(doc, dup).map((w) => w.from.set)).toEqual([left.set, right.set]);
   });
 
+  it("judge every wire into a later input, not its first alone: one from a step that gives nothing yet is said", () => {
+    const a = waterAt(emptyWorkspaceDocument(), 0, 20, "A");
+    const b = waterAt(a.doc, 0, 10, "B");
+    // (an Optimise with nothing wired into it, lower on the page: its exit gives nothing yet)
+    let doc = addStep(b.doc, "optimise", 0, -10);
+    const optimise = doc.steps![doc.steps!.length - 1].id;
+    doc = addStep(doc, "merge", 40, 0);
+    const merge = doc.steps![doc.steps!.length - 1];
+    doc = connect(connect(doc, { set: a.set }, merge.id, "first"), { set: b.set }, merge.id, "second");
+    expect(whyNot(doc, merge, "meno")).toBeNull();
+    const nothingYet = resultOf(doc, optimise)!.id;
+    doc = { ...doc, wires: [...doc.wires!, { id: 900, from: { set: nothingYet }, to: { step: merge.id, port: "second" } }] };
+    expect(wiresInto(doc, merge.id, "second").map((w) => w.from.set)).toEqual([b.set, nothingYet]);
+    expect(whyNot(doc, merge, "meno")).toBe("Nothing comes into Second");
+  });
+
   it("name every entry by the set it came from - one wire alone adds no such name", () => {
     const { doc: d0, high, low, step } = twoRounds();
     const one = connect(d0, { set: low }, step);

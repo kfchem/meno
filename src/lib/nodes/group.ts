@@ -14,7 +14,7 @@
  * that was in another group is counted and said.
  */
 import type { Entry } from "../entry";
-import { identityKey } from "../chem/identity";
+import { constitutionKey } from "../chem/identity";
 import type { LayoutInput } from "../layout/perceive";
 import { entries as count, groupLetter, groups as countGroups, PROPERTY, setAside, tally, unitLabel, unreadable, type NodeOutcome } from "./base";
 
@@ -31,7 +31,7 @@ export function constitutionOf(e: Entry): LayoutInput {
 /** The key an entry is grouped by, or why it has none. */
 function keyOf(e: Entry, by: GroupOptions["by"]): { key: string } | { why: string } {
   if (by === "all together") return { key: "" };
-  if (by === "constitution") return { key: `${identityKey(constitutionOf(e))}|${e.species ? `${e.species.charge}|${e.species.multiplicity}` : "skeleton"}` };
+  if (by === "constitution") return { key: `${constitutionKey(constitutionOf(e))}|${e.species ? `${e.species.charge}|${e.species.multiplicity}` : "skeleton"}` };
   const p = e.properties[by.property];
   const why = unreadable(p, by.property);
   if (why) return { why };

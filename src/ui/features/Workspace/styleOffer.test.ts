@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STYLE_3D_CHOICE, withRole } from "../../../lib/chem/style3d";
 import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
-import { drawingName, keyOf, settingsDiffer, settingsStylesOf, styleAsk } from "./styleOffer";
+import { answeredWith, drawingName, keyOf, settingsDiffer, settingsStylesOf, styleAsk } from "./styleOffer";
 import { connectStoreToDocument, createEditorStore } from "./store";
 import { createWorkspaceDocument } from "./document";
 
@@ -64,5 +64,36 @@ describe("a workspace offered Settings' styles", () => {
     const swapped = settingsStylesOf(ACS, withRole(DEFAULT_STYLE_3D_CHOICE, "primary", DEFAULT_STYLE_3D_CHOICE.secondary));
     expect(settingsDiffer(ws, swapped)).toEqual({ drawing: false, d3: true });
     expect(settingsDiffer({ ...ws, style: MENO }, swapped)).toEqual({ drawing: true, d3: true });
+  });
+});
+
+describe("a workspace opened before Settings were read (the defaults are in the store until then)", () => {
+  const defaults = settingsStylesOf(ACS, DEFAULT_STYLE_3D_CHOICE);
+  const saved = settingsStylesOf(RSC, DEFAULT_STYLE_3D_CHOICE);
+  const ws = { style: RSC, style3d: workspace3dOf(DEFAULT_STYLE_3D_CHOICE) };
+
+  it("holds nothing to compare with before they are read, and asks nothing", () => {
+    expect(answeredWith(null, false, defaults)).toBeNull();
+    expect(styleAsk({ ...ws, style: MENO }, saved, answeredWith(null, false, defaults))).toBeNull();
+  });
+
+  it("takes them as they are when first read - a saved style that is not the default is not a change", () => {
+    const answered = answeredWith(null, true, saved);
+    expect(answered).toBe(keyOf(saved));
+    expect(styleAsk({ ...ws, style: MENO }, saved, answered)).toBeNull();
+  });
+
+  it("keeps what it took: a change after they were read is asked, once", () => {
+    const held = answeredWith(null, true, saved)!;
+    // (taken once: later reads of the store give the same)
+    expect(answeredWith(held, true, settingsStylesOf(MENO, DEFAULT_STYLE_3D_CHOICE))).toBe(held);
+    const changed = settingsStylesOf(MENO, DEFAULT_STYLE_3D_CHOICE);
+    expect(styleAsk(ws, changed, held)).toEqual({ drawing: { now: "RSC", settings: "Meno" } });
+    // (answered: not again until they change again)
+    expect(styleAsk(ws, changed, keyOf(changed))).toBeNull();
+  });
+
+  it("is as before where it was opened after they were read", () => {
+    expect(answeredWith(null, true, defaults)).toBe(keyOf(defaults));
   });
 });

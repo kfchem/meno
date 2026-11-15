@@ -161,7 +161,18 @@ stops being part of the work.
   one), the way it is going first; one that has left the view a moment
   before its turn is dropped. A zoom still waits for the view to stop,
   the level changing. Tiles that come are shown one a frame, each put on
-  the graphics card as it is, so that none waits on several at once.
+  the graphics card as it is, so that none waits on several at once: one
+  picture a frame however many views draw (the column and the page both ask
+  each frame; a 1024 px picture is some milliseconds on the card), and a
+  page's small picture waits its turn with them - put on the card there,
+  not all together inside the frame's draw.
+- **A page a fast scroll comes to is never white.** While the column is
+  still, the small pictures of the twelve pages either side of the one in
+  view are drawn ahead, nearest first, two at a time and behind every tile
+  of what is seen; a scroll stops them. A page the column then comes to
+  shows its small picture at once, and sharpens as its tiles come (before,
+  a page far from where the column rested was an empty frame until they
+  did).
 - **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
   scrolled in the column kept the graphics card full).
   - A picture of a page come and faded in is drawn opaque, and its tiles
@@ -557,7 +568,41 @@ together, in short eased transitions.
   PDFium's pixels, in the order a WebGL texture takes them
   (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
   white. They go to the window as bytes, not as text (Tauri's binary
-  response), and are unpacked off its main thread.
+  response), and are unpacked off its main thread: decoded whole in a
+  worker before they come back, so that putting one on the graphics card
+  is a copy and not a decode as well (the Mac's WebKit otherwise decodes a
+  picture at its first use, inside the frame that shows it).
+
+### Never in the way of a frame (2026-11-12)
+
+Drawing and input come first, always. What a PDF is read for besides being
+shown - its letters, its figures, its structures, its index of compounds'
+numbers - is background work, and it never stalls a frame:
+- **Off the drawing's thread.** A figure's structures are read in a worker
+  (`utils/structuresRead`, `structuresWorker`, `structuresOff`), two of them:
+  one for the figure the pointer is on, which is never kept waiting behind
+  the other, the one that reads a whole PDF's figures ahead, one after
+  another. A figure taking seconds - a large scheme drawn with thousands of
+  paths can - holds nothing up. Its drawn lines come from the reader as
+  bytes (`pdf_figure_raw`) and are unpacked in the worker, so that even
+  the parsing of megabytes of them is not done on the drawing's thread.
+  What is left there - handing a figure's page over, taking its structures
+  back - is milliseconds.
+- **It waits for the hands to rest** (`lib/core/calm`). Nothing read ahead
+  starts while a wheel turns (scroll, a touchpad's pinch), a button is
+  down on a drag or a pan, or a touch moves, and for 200 ms after the last
+  of it: the window's idle callback, where macOS' has none, was a fixed wait
+  that scrolling did not stop. The pointer coming to a figure begins its
+  reading at once, as it did - one still waiting for the hands is begun then;
+  a figure already begun in the background is not hurried: it goes on in its
+  own worker, which the pointer's never waits behind.
+- **The reader is not held up by a page's words.** Listing what a page is
+  made of (`pdf_objects`) asked each text object for its words, each
+  loading the page's text again, so that a page of a thousand words kept
+  the one reader that answers everything but pages' pictures busy for
+  seconds; the page's text is loaded once.
+- **Results land in small pieces:** a figure at a time, the page's own
+  letters and objects having come before it.
 
 ### One canvas
 
@@ -1404,7 +1449,7 @@ it where it lies out of view.
   keep theirs), and the atom says so - a level number's place cannot tell a count
   from an atom's number - while one clearly high needs no mark. A level number
   that also reads as a count stays (N3, O3, Me2: a stated limit; CH3 and a
-  level 7 after it are one run, CH37). A charge drawn in a small circle - a "+" or a "-" in a ring,
+  level 7 after it are one run, CH37). A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no
@@ -1733,7 +1778,7 @@ words are: by itself, not by a box drawn round it.
 - **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
-- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - in idle time, one page at a time, and its figures worked out in idle time once its parts have come (`lib/core/idle`): never with its turn. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
+- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - once the hands rest, one page at a time, and its figures worked out once its parts have come (`lib/core/calm`; *Never in the way of a frame*): never with its turn, and never while it is scrolled. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
 - a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
@@ -1808,8 +1853,8 @@ mention a number, and the card.
   structure it is set by - its page, its figure and its key there - in the
   order of the pages, so that a compound drawn again in a later scheme keeps
   each place. Kept as figures are read, by the pointer on one or through the
-  whole PDF in idle time (`indexPdf`): a page, then the window's next idle
-  moment, then the next, each page's figures read as the column reads them
+  whole PDF once the hands rest (`indexPdf`): a page, then the next moment
+  they rest, then the next, each page's figures read as the column reads them
   (`pdfPageLabels`), never holding up what is shown; a page that could not
   be read is gone through again the next time. It starts the first time
   the pointer moves over the PDF's words, in the column or on the page
@@ -1830,18 +1875,32 @@ mention a number, and the card.
   mentioned (350 ms) whose structure the PDF's figures number, a calm card
   by its word - over its line, covering only what has been read, its left
   edge on the word's and a little gap above the letters; under the line
-  only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
-  and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
-  in and out (`DURATION.base`), lingering a moment so the pointer can come
-  onto it. While the PDF is still being gone through for numbers, or the
-  number's figure is still being read, it says so ("12  Reading this PDF's
-  figures…") and grows into the drawing once it comes, its size and place
-  eased, never a jump (`cardHolds`); gone through whole and the number
-  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
-  one dragged out of its figure is (*Structures picked from a PDF*: the same
-  reading, its note and unsure marks). Its page clicked shows the figure in
+  only where there is no room above - holds the PDF's own picture of the
+  region of its page where the compound is drawn, its number, its page, and
+  the pages it is drawn on again ("12  p. 1 · also on p. 4"). It never shows
+  the structure Meno read from there (the maintainer, 2026-11-13: where the
+  reading is wrong, the chemist would be shown a wrong structure): that
+  appears only once the compound is on the canvas, where it can be checked
+  and edited. The picture is the structure's own box in its figure - the
+  tightest the reader knows, not the whole scheme - drawn again from the
+  PDF by PDFium at the size the card shows it, a point a pixel and a little
+  enlarged where small, at the screen's own resolution, so it is crisp
+  (`utils/lensPicture`); PDFium draws it in its own process, so the window
+  is never held up, and the card is there at once with the picture's place
+  held, the picture fading in. Pictures are kept, the oldest let go
+  past 48. It fades in and out (`DURATION.base`), lingering a moment so the
+  pointer can come onto it. While the PDF is still being gone through for
+  numbers, or the number's figure is still being read, it says so ("12
+  Reading this PDF's figures…") and grows into the picture once it comes,
+  its size and place eased, never a jump (`cardHolds`); gone through whole
+  and the number drawn nowhere in it, it says so in words ("No drawing of
+  this compound was found in this PDF."), never a guess. The picture
+  dragged onto the canvas puts the structure there as one dragged out of its
+  figure is (*Structures picked from a PDF*: the same reading, its note and
+  unsure marks) - where it was read whole; a structure not read whole is
+  shown by its picture and not carried. Its page clicked shows the figure in
   the column, the structure marked a moment. A number no structure is set
-  by, or one of a structure not read, has no card.
+  by has the card's words above.
 - **In the column and on the page alike** (`utils/compoundLens`
   `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
   a PDF's words bring a card where they can be read - at the size a long

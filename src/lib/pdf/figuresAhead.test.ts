@@ -8,9 +8,9 @@ vi.mock("@tauri-apps/api/core", () => ({
     return new ArrayBuffer(0);
   },
 }));
-// (idle time that never comes on its own)
+// (rest for the hands that never comes on its own)
 const waiting: (() => void)[] = [];
-vi.mock("../core/idle", () => ({ whenIdle: (work: () => void) => void waiting.push(work) }));
+vi.mock("../core/calm", () => ({ whenCalm: (work: () => void) => (waiting.push(work), () => {}) }));
 
 const { figuresHad } = await import("./figures");
 const settle = () => new Promise((done) => setTimeout(done, 0));
