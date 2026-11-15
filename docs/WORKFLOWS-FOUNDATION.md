@@ -368,7 +368,9 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 The texts are compared, not their keys. `identity` also says whether the
 canonical search was complete: where it ran out of steps (`settleBudget`),
 one structure may be written two ways, so a duplicate can be missed, but two
-different structures are never written the same. A drawing's structures are
+different structures are never written the same - save those that differ only
+by the hand of an octahedral centre, which is not yet told (*Duplicates,
+and what judges them*). A drawing's structures are
 read for it by `chem/identityOf.ts`, which also names any atom whose wedges
 it could not read. The rule is checked against RDKit's canonical isomeric
 SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
@@ -940,7 +942,11 @@ drawn, aromatic rings as one form.* What that means, plainly:
   each taken as not given alike, not only the one the canonical order
   fills last (`arrangementOpen`). The hand of an octahedral
   centre is not yet told: the two enantiomers of [Co(en)3]3+ are one
-  structure;
+  structure. With two such centres, or one beside another place that is
+  set, structures that differ by a hand are joined though they are not
+  mirror images: two metals of six donors sharing an edge, their axial
+  donors on one side of the bridges' plane or on opposite sides, are one
+  structure where they are two compounds;
 - **a limit, on the safe side:** some writings that leave the same thing
   unsaid in different ways get two identities. (4-Methylcyclohexylidene)
   acetic acid drawn with its double bond bent and its centre plain, and
@@ -948,7 +954,8 @@ drawn, aromatic rings as one form.* What that means, plainly:
   "either enantiomer", yet are two structures. Its centre alone sets
   nothing, and its double bond alone, but once either is given the other
   decides. Alike structures can be told apart this way; unlike ones are
-  never joined, and only writings that state no single compound are
+  never joined by it (the hand of an octahedral centre, above, is the one
+  case that joins), and only writings that state no single compound are
   affected;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the

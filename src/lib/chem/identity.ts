@@ -332,7 +332,9 @@ function compared(input: IdentityInput): LayoutInput {
  * symmetric structures), one structure may be written two ways, so a
  * duplicate can be missed; two different structures are still never
  * written the same, but by the rules identity follows (Kekulé structures,
- * bond-shift isomers, hydrogens folded in).
+ * bond-shift isomers, hydrogens folded in) and for the hand of an
+ * octahedral centre, not yet told, which joins its enantiomers and, with
+ * another such centre, its diastereomers (docs/WORKFLOWS-FOUNDATION.md).
  */
 export function identity(input: IdentityInput): { text: string; complete: boolean } {
   const filled = filledIn(compared(input));
