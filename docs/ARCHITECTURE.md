@@ -62,7 +62,7 @@ src/
   lib/chem/cip/           R/S and E/Z by Meno's own reading of the CIP rules: prepare.ts (the 1966 conventions), digraph.ts,
                           rank.ts (rules 1a to 5), in3d.ts (a molecule in 3D's) - docs/CIP.md; on the drawing by Workspace/chem/cipMarks (cipWorker.ts)
   lib/chem/perception/    the core of what the chemistry reads of a structure (one definition per concept): graph.ts (the graph the core
-                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), stereo/types.ts (the
+                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), aromatic.ts (Meno's rule for an aromatic ring: an atom's pi electrons, counted 4n + 2 by ring and by pair of rings fused at a bond), elements.ts (what kind of element: the metals, the elements that are none, and each set a reader takes, under its name), stereo/types.ts (the
                           types for a centre, a double bond, an axis and an odd cumulene), stereo/from2d.ts (the reader of a drawing's
                           configuration: wedges, depth, the lines that say none; a cage's solid fitted to the drawing is the layout's, handed
                           in by lib/layout/drawn, which keeps every name it had), stereo/senses.ts (a volume and an axis's turn as drawn, a
@@ -542,7 +542,20 @@ What is left before the editor counts as finished, and in what order, is in
   `ChemMarks2D` (see the chemistry worker below); clean-up and a SMILES's
   layout by Meno's own engine (`src/lib/layout`), run in a web worker
   (`chem/layoutWorker.ts`), what it is given read out of the drawing
-  (`chem/engineLayout.ts`, `lib/layout/drawn.ts`).
+  (`chem/engineLayout.ts`, `lib/layout/drawn.ts`). A structure's identity
+  (`lib/chem/identity`) is worked out in a web worker of its own
+  (`chem/identityWorker.ts`, asked through `chem/identityOff.ts`), each
+  answer kept by the structure's content: on the drawing thread a structure
+  not yet answered is worked out in place only where it is small, and is
+  otherwise pending - a record kept as it stands, a table's cell said to be
+  still worked out, re-made as the answer lands - while a step putting its
+  structures down, a file being written, a 3D make and a conversation's
+  search ask first and wait. A worker that fails, or says nothing for a
+  minute while anything waits on it, is let go and what waited is worked
+  out in place; the minute is counted from its last answer, so structures
+  asked together wait behind each other. Enumerate and Substituents, for each product
+  they make, and the constitution keys a step's grouping uses, still work
+  theirs out on the drawing thread.
 - **Frame loop**: the canvas runs `frameloop="demand"` at a fixed `CANVAS_DPR`
   (2x). React commits (store changes) request a frame automatically; anything
   that animates or mutates the scene imperatively must call `invalidate()`

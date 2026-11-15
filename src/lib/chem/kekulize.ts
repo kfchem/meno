@@ -28,8 +28,8 @@
  * carbons as possible still get their double bond and the rest stay single.
  */
 
-import { piElectrons } from "./aromaticity";
-import { NOT_METALS } from "./elements";
+import { piElectrons } from "./perception/aromatic";
+import { notMetal } from "./perception/elements";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -102,10 +102,10 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
   return { orders, hChosen, left: left.sort((p, q) => p - q) };
 }
 
-/** A metal, by its symbol: an element not among the nonmetals and metalloids (`NOT_METALS`). */
+/** A metal, by its symbol: an element not among the nonmetals and metalloids (perception/elements `notMetal`). */
 function isMetalEl(el: string | undefined): boolean {
   const s = canonical(el ?? "");
-  return /^[A-Z][a-z]?$/.test(s) && !NOT_METALS.has(s) && !QUERY_ATOMS.has(s);
+  return /^[A-Z][a-z]?$/.test(s) && !notMetal.has(s) && !QUERY_ATOMS.has(s);
 }
 
 /** The aromatic bonds by ring system: those joined at their atoms, by bond index. */
@@ -208,7 +208,7 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     .sort(byRank);
 
   // Each atom's pi electrons are counted as Meno counts them for its rule on
-  // aromatic rings (lib/chem/aromaticity `piElectrons`). How many N carry an
+  // aromatic rings (lib/chem/perception/aromatic `piElectrons`). How many N carry an
   // H is a count over each ring system whole: of the ways to give the double
   // bonds, those whose every system holding an atom that may take one counts
   // 4n + 2 come first - guanine's two N-H with its C=O, a tetrazine's none,
@@ -239,7 +239,7 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     }
   }
   const inRing = (i: number, j: number) => system[i] >= 0 && system[i] === system[j];
-  /** An atom's pi electrons as the matching stands (lib/chem/aromaticity `piElectrons`); null where not known. */
+  /** An atom's pi electrons as the matching stands (lib/chem/perception/aromatic `piElectrons`); null where not known. */
   const electrons = (i: number): number | null => {
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return null;
     // (its double bond made already: in the ring, or out of it - a C=O, a C=S - to the element across it)

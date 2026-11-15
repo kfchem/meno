@@ -48,7 +48,9 @@ export function shuffled(g: LayoutInput, seed: number): LayoutInput {
   // (and each axis of chirality, its atoms and references where they now are)
   const axes = g.axes?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
   const cumulated = g.cumulated?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
-  return { atoms, bonds, ...(axes ? { axes } : {}), ...(cumulated ? { cumulated } : {}) };
+  // (and each metal's donors across from each other, each pair either way round)
+  const arrangements = g.arrangements?.map((x) => ({ metal: to[x.metal], pairs: x.pairs.map(([p, q]) => (next() < 0.5 ? ([to[p], to[q]] as const) : ([to[q], to[p]] as const))) }));
+  return { atoms, bonds, ...(axes ? { axes } : {}), ...(cumulated ? { cumulated } : {}), ...(arrangements ? { arrangements } : {}) };
 }
 
 /**

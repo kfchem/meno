@@ -1,0 +1,134 @@
+import { describe, expect, it } from "vitest";
+import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
+import { blocksOf, drawnBlocksOf } from "../chem/make3d";
+import type { Atom, Bond, Model } from "../store/types";
+import { drawnHash, setMembers, structuresOf } from "./entries";
+import { runMenoDrawn } from "./meno";
+import { clearOf } from "./place";
+import { framesSettled } from "./fitFrames";
+import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
+import { addSet } from "./model";
+import { cycleThings } from "../utils/cycles";
+import { MENO } from "../../../../lib/chem/style";
+import { drawnEntries } from "./run";
+
+/**
+ * (Z)-4-hydroxypent-3-en-2-one (ids 1-8), its own O-H...O=C hydrogen bond drawn (18) when `own`; with `water`, a water (9) its
+ * C=O holds by a hydrogen bond (19); and methylammonium (21-23) with a chloride (24) held to its N-H by a hydrogen bond (31).
+ */
+function page({ own = true, water = true } = {}): Model {
+  const at = (id: number, deg: number, r: number, el = "C", charge?: number, dx = 0): Atom =>
+    ({ id, el, x: dx + r * L * Math.cos((deg * Math.PI) / 180), y: -r * L * Math.sin((deg * Math.PI) / 180), r: 0.9, ...(charge ? { charge } : {}) }) as Atom;
+  const bond = (id: number, a: number, b: number, hydrogen = false): Bond => ({ id, a, b, order: 1, ...(hydrogen ? { hydrogen: true } : {}) }) as Bond;
+  return {
+    atoms: [
+      ...[at(1, 150, 2), at(2, 150, 1), at(3, -150, 1, "O"), at(4, 90, 1), at(5, 30, 1), at(6, -30, 1, "O"), at(7, 30, 2), at(8, -90, 1, "H")],
+      ...(water ? [at(9, -90, 2, "O")] : []),
+      ...[at(21, 180, 1, "C", 0, 8 * L), at(22, 0, 0, "N", 1, 8 * L), at(23, 0, 1, "H", 0, 8 * L), at(24, 0, 2, "Cl", -1, 8 * L)],
+    ],
+    bonds: [
+      ...[bond(11, 1, 2), { ...bond(12, 2, 3), order: 2 } as Bond, bond(13, 2, 4), { ...bond(14, 4, 5), order: 2 } as Bond, bond(15, 5, 6), bond(16, 5, 7), bond(17, 6, 8)],
+      ...(own ? [bond(18, 8, 3, true)] : []),
+      ...(water ? [bond(19, 9, 3, true)] : []),
+      ...[bond(25, 21, 22), bond(26, 22, 23), bond(31, 23, 24, true)],
+    ],
+  } as Model;
+}
+const sorted = (s: readonly number[]) => [...s].sort((p, q) => p - q);
+/** Structures each sorted, and in order of their first atom: whatever order a set lists them in. */
+const each = (all: readonly (readonly number[])[]) => all.map(sorted).sort((p, q) => p[0] - q[0]);
+
+describe("a hydrogen bond drawn, as a set's entries have it", () => {
+  it("makes what it alone joins two structures, two entries - as a set round them holds them - and one piece of ink as drawn", () => {
+    const m = page();
+    expect(structuresOf(m).map(sorted)).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [9], [21, 22, 23], [24]]);
+    const set = { id: 1, x0: -10 * L, y0: -10 * L, x1: 20 * L, y1: 10 * L };
+    expect(each(setMembers({ model: m }, set).structures)).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [9], [21, 22, 23], [24]]);
+    // (the same entries Make 3D and a step's conformers make of it: chem/make3d `blocksOf`)
+    expect(blocksOf(m, [1]).map((b) => sorted(b.atoms))).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [9]]);
+    // (as ink - what moves a structure out of a frame, or keeps a line clear of it - the pair is one, its hydrogen bond between)
+    expect(structuresOf(m, true).map(sorted)).toEqual([[1, 2, 3, 4, 5, 6, 7, 8, 9], [21, 22, 23, 24]]);
+  });
+
+  it("comes into a step as two entries: Enumerate, which takes one template, is given two", () => {
+    const m = page();
+    const pair = structuresOf(m).filter((ids) => ids.some((id) => id <= 9));
+    const entries = drawnEntries(m, pair);
+    expect(entries.map((e) => e.drawn.atoms.length)).toEqual([8, 1]);
+    // (the enol's own hydrogen bond kept in its drawing as drawn; the one to the water in neither)
+    expect(entries[0].drawn.bonds.some((b) => b.id === 18)).toBe(true);
+    expect(entries.some((e) => e.drawn.bonds.some((b) => b.id === 19))).toBe(false);
+    expect(runMenoDrawn("enumerate", entries)).toEqual({ ok: false, said: "Enumerate takes one structure drawn, its template: 2 came in" });
+  });
+
+  it("gives a structure the same identity with its own hydrogen bond drawn and without it", () => {
+    const enol = [1, 2, 3, 4, 5, 6, 7, 8];
+    expect(drawnHash(page({ water: false }), enol)).toBe(drawnHash(page({ own: false, water: false }), enol));
+    expect(drawnHash(page(), enol)).toBe(drawnHash(page({ own: false, water: false }), enol));
+  });
+
+  it("gives every entry of a page as one structure: one block each, so what a step asks of an entry's first block it asks of all of it", () => {
+    // (the page above, and beside it: sodium acetate made one structure of two parts (Atom.joined), a lone Na+, and ammonia bound to a
+    //  platinum by a dative bond)
+    const at = (id: number, el: string, x: number, y: number, extra: Partial<Atom> = {}) => ({ id, el, x: (x + 20) * L, y: y * L, r: 0.9, ...extra }) as Atom;
+    const bond = (id: number, a: number, b: number, order: 1 | 2 = 1, extra: Partial<Bond> = {}) => ({ id, a, b, order, ...extra }) as Bond;
+    const m = page();
+    const all: Model = {
+      atoms: [
+        ...m.atoms,
+        ...[at(41, "C", 0, 0, { joined: 1 }), at(42, "C", 0.87, 0.5, { joined: 1 }), at(43, "O", 1.73, 0, { joined: 1 }), at(44, "O", 0.87, 1.5, { joined: 1, charge: -1 })],
+        ...[at(45, "Na", 3, 0.5, { joined: 1, charge: 1 }), at(46, "Na", 6, 0.5, { charge: 1 }), at(47, "Pt", 9, 0), at(48, "N", 10, 0), at(49, "Cl", 8, 0)],
+      ],
+      bonds: [...m.bonds, bond(51, 41, 42), bond(52, 42, 43, 2), bond(53, 42, 44), bond(54, 48, 47, 1, { dative: true }), bond(55, 47, 49)],
+    };
+    const entries = drawnEntries(all, structuresOf(all));
+    expect(entries).toHaveLength(7);
+    for (const e of entries) {
+      const ids = e.drawn.atoms.map((a) => a.id);
+      expect(drawnBlocksOf(e.drawn, ids), ids.join(" ")).toHaveLength(1);
+      expect(blocksOf(e.drawn, ids).length, ids.join(" ")).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe("a hydrogen-bonded pair as ink: one piece, as it is drawn (fitFrames, place, cycles)", () => {
+  /** The page with the water drawn where it is, but its hydrogen bond to the enol taken away: two pieces of ink. */
+  const apart = (): Model => ({ ...page(), bonds: page().bonds.filter((b) => b.id !== 19) });
+  const enolAndWater = (m: Model) => ({ ...m, atoms: m.atoms.filter((a) => a.id <= 9), bonds: m.bonds.filter((b) => b.a <= 9 && b.b <= 9) });
+
+  it("keeps a frame placed between them clear of the pair's ink as one: a place the two apart would leave free", () => {
+    const f = { x0: -2.5 * L, y0: 2.5 * L, x1: -2.2 * L, y1: 2.8 * L };
+    const far = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a) => (a.id === 9 ? { ...a, y: a.y + 0.6 * L } : a)) });
+    expect(clearOf({ ...emptyWorkspaceDocument(), model: far(enolAndWater(apart())) }, f)).toBe(true);
+    expect(clearOf({ ...emptyWorkspaceDocument(), model: far(enolAndWater(page())) }, f)).toBe(false);
+  });
+
+  it("moves the pair together out of a frame's way: the water goes as far as the enol", () => {
+    const R = 1.2;
+    const reach = () => ({ x0: -R, x1: R, y0: -R, y1: R });
+    const doc = createWorkspaceDocument();
+    doc.edit("place", (d) => addMolecule3d(d, { at: { x: 0, y: 0 }, atoms: [{ el: "O", x: 0, y: 0, z: 0 }], bonds: [] } as never));
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    const before = doc.getState();
+    const frame = before.sets![0];
+    // (the pair laid over the frame's right edge, the enol's middle outside it, the water below it - outside the frame)
+    const m = enolAndWater(page());
+    const dx = frame.x1 + 1.2 * L;
+    doc.edit("structure", (d) => ({ ...d, model: { ...m, atoms: m.atoms.map((a) => ({ ...a, x: a.x + dx })) }, nextId: 100 }));
+    const state = doc.getState();
+    const settled = framesSettled(state, before, reach);
+    const moved = (id: number) => settled.model.atoms.find((a) => a.id === id)!.x - state.model.atoms.find((a) => a.id === id)!.x;
+    expect(moved(1)).toBeGreaterThan(0);
+    expect(moved(9)).toBeCloseTo(moved(1), 9);
+  });
+
+  it("is one thing for a catalytic cycle's lines to keep clear of, the water with the enol", () => {
+    const things = cycleThings(enolAndWater(page()), [], MENO);
+    const enol = things.find((t) => t.atoms?.includes(1));
+    expect(enol?.atoms).toContain(9);
+    const parts = cycleThings(enolAndWater(apart()), [], MENO);
+    expect(parts.find((t) => t.atoms?.includes(1))?.atoms).not.toContain(9);
+  });
+});
+

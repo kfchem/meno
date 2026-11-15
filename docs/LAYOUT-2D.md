@@ -470,9 +470,109 @@ they hang from.
   four at 90. A tert-butyl is drawn as it always is: its three methyls
   fanned 60 degrees apart about the line of the bond into it, 120 from
   that bond - and so is any such trident, a carbon, silicon or nitrogen
-  with three like ends and a fourth bond: a trimethylsilyl, a
-  trimethylammonium (choline's), a CF3, a CCl3. Neopentane's middle
-  carbon, four methyls, stays a cross, as CF4 does. The fan is compact,
+  with three like ends and a fourth bond to an atom that goes on - a
+  group on a skeleton: a trimethylsilyl, a trimethylammonium (choline's),
+  a CF3, a CCl3. Neopentane's middle
+  carbon, four methyls, stays a cross, as CF4 does - and any atom of four
+  like groups (each the same element with as many bonds, in no ring) that
+  is no stereocentre and no metal is an upright cross, its bonds level and
+  upright, never an X turned 45 degrees to the page (GR-4.1.3):
+  tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium;
+  and so are four ends not alike (CF2Cl2) - three alike and one other
+  among them, a molecule of four ends being no group on a skeleton
+  (tert-butanol, CFCl3, chlorotrimethylsilane, tert-butyl chloride,
+  tert-butylamine, trimethylamine oxide: GR-4.1.3's first case, none of
+  the four bonded to anything else) - and four groups that go on alike
+  through rings (tetraphenylborate, tetraphenylmethane). A trident keeps
+  its fan where its fourth bond goes on, as the maintainer has it.
+- **A metal with four bonds** (in no chelate's ring, bound to no pi
+  system's centre and to no other metal) is the X only where it is surely
+  square planar: Pt(II), Pd(II), Au(III), Rh(I) or Ir(I), its oxidation
+  state counted plainly from the drawing - a donor whose valence is full
+  without its bond to the metal counts nought, one the bond completes one,
+  the metal's own charge added (an NH3 counts nought; an N drawn with two
+  H's is an amido and counts one; a carbonyl's or an isocyanide's C -
+  triple-bonded to an O, or to an N that goes on - lends its pair and
+  counts nought, as drawn its bonds would have it count one; a cyanide's,
+  its N bare, counts one). Every other such metal, an ambiguous
+  one too (Ni(II), a state not counted plainly), is the upright cross: the
+  text's form for four groups, which states no geometry, where the X
+  states square planar (TiCl4, ZnCl4 2-, FeCl4-, NiCl4 2-, Ni(CO)4,
+  Pd(PPh3)4; Cu(II) and Co(II) are ambiguous as Ni(II) is). A main-group
+  centre with four single bonds and two lone pairs - its valence electrons
+  by its group, less its charge, less the four bonds, leaving four - is
+  square planar too, and the X: XeF4 (GR-4.1.3's own figure), ICl4-,
+  BrF4-; SF4, one lone pair, is upright. The X is held where the four
+  donors are ends and can lie round the centre one way only (PtCl4 2-,
+  PdCl4 2-, AuCl4-, and three alike and one other: PtCl3(NH3)-,
+  AuCl3Br-), grown so and never turned off it to bring its bonds onto the
+  page's lattice (`squareXAt`). Where they can lie more ways - two and two, two and
+  one and one, four different, told apart as ligands (`donorKinds`) - and the
+  input gives none (cisplatin from a SMILES, PdCl2(PPh3)2), drawing either
+  would say cis or trans, an isomer nobody gave: the centre is the upright
+  cross, and the editor marks it as it marks what it is unsure of - the
+  dashed ring, "Which donors are next to each other is not given." -
+  while its donors lie round it as they were laid out (`arrangementAs`):
+  moved round by the chemist, the arrangement is theirs and the mark goes;
+  a Clean-up that keeps the cross keeps the mark. A chemist's own X or
+  cross carries none. (A SMILES's square-planar marks, @SP1 to @SP3, are
+  not read: Meno's reader refuses them, saying so.) Where they go on - a
+  phosphine's phenyls, set on the lattice their own way - the centre is
+  left as it grows (PdCl2(PPh3)2 upright, RhCl(PPh3)3 as before), held to
+  the X there its angles would bend between the two. Clean-up keeps a
+  four-bond metal in the form it was drawn in, the cross or the X,
+  whichever its bonds lie nearer to, for every metal (`LayoutAtom.fourForm`):
+  drawn upright, it is held upright; drawn as an X, it is never turned
+  upright, held to the X only where it would be anyway and otherwise left
+  as drawn. A drawing nobody made - the plugin's for a typed SMILES or a
+  step's structure, a molecule in 3D drawn as a formula - is laid out as
+  new: its metal by the rule above, not in whichever form its coordinates
+  happen to have, nor with its donors opposite each other as they happen
+  to lie there (`laidOut`'s `asNew`) - but at a metal whose arrangement
+  the SMILES gives, a mark at the metal's own atom (@SP1 to @SP3 on four
+  neighbours, @OH1 to @OH30 on six; a bare @ or any other mark states no
+  pairs, and the metal is not given), the
+  plugin's drawing carries it, and its places and its form are kept: the
+  isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
+  donors are joined other than through it, a chelate or a bridge: there the
+  plugin's picture was found not to carry the pairs the mark states
+  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac). So the pairs
+  are read from the mark itself (`metalPairsIn`: the OpenSMILES shapes and
+  table, by the neighbours' written order), and a marked metal - chelated
+  or not - is taken as given only where the finished drawing has those
+  pairs; where it has others, it is marked as not given (`marksKept`),
+  never an isomer the input did not write. Where Meno cannot read the
+  mark (an H written in the metal's bracket, a mark that would put a
+  small chelate's two ends across), a chelated metal is laid out as new
+  and marked as not given
+  where its donors could lie more ways than one, as above - two metals
+  held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
+  dimers differ only together, each marked alike (a bridge's charge
+  shared between its metals, each Pt(II)). And where it cannot be laid
+  out and is kept as it came, its square-planar centres whose arrangement
+  is not given are marked all the same (`arrangementsMarked`). A metal of
+  six donors in such a drawing is marked so too where its donors could be
+  set round it with other pairs across - [CoCl2(NH3)4]+ cis or trans,
+  CoCl3(NH3)3 fac or mer, [Co(en)2Cl2]+, Co(gly)3, the two of a chelate
+  never across - and not where every way sets the same pairs across (MA6,
+  MA5B, M(en)3: its hands are no pairs across) (`octahedralOpen`). Only
+  the two donors of a two-donor chelate are held not across: a ligand whose
+  own rigid shape fixes its donors round the metal - a porphyrin's ring of
+  four with two axial donors, two terpyridines - is marked all the same,
+  though only one arrangement can be; the mark makes no structure wrong.
+  How its spokes are laid out is section 7's. Donors are told apart, here and for
+  four, as ligands - all each carries, not only the atom on the metal:
+  [Pt(NH2Me)2(NH2Et)2]2+ is two and two, [Co(NH2Me)4(NH2Et)2]3+ four and
+  two (`donorKinds`). A four-bond metal drawn in one form - the X or the
+  upright cross, by the chemist, or by the plugin for an arrangement its
+  input gave - that the layout would set in the other is refused, saying
+  so, its donors left as drawn: the other form would say another thing of
+  its arrangement. A chemist's X whose donors go on - a phosphine's, a
+  pyridine's - is laid out as the X: the piece is turned so that the
+  metal's four bonds lie on the diagonals, its ligands set off them as
+  they come, a ring of theirs off the page's lattice where it must be. A chelate's metal (two of its donors joined other than through
+  it) goes by its own rules.
+  The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
   five degrees at a time, to where the drawing reads best, its bonds kept
   clear of the whole letter of an H beside it (ginkgolide B's OH).
@@ -794,6 +894,24 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   bridgehead often has them so), read from the angles two of them and the
   wedge would say one thing and the other two the opposite
   (`drawnVolume`). With three drawn and the H left out, the angles are read.
+- And where the layout leaves two of a centre's three bonds in one line,
+  within 10 degrees, and its wedge on one of them - doxorubicin's and
+  ouabain's sugar C1, ginkgolide B's C23, bilobalide's C10, vinblastine's
+  C5 - a form the text grades not acceptable (Brecher 2006, ST-1.2.4)
+  however a reader reads it: such a centre with an H has the H drawn in
+  the widest gap round it and wedged instead (ST-1.1.4's form), the way
+  Meno's reader reads as given (`hydrogensWhereUnread`, as a cage's
+  wedges for a flat reader are); with no H, or where that reads no
+  surer, it is left as placed. The H stands clear of every other atom -
+  three quarters of a bond - and every bond - 0.4 of one - at the gap's
+  middle where that is clear, else turned within the gap, up to 25
+  degrees short of its bonds, where it is clearest (GR-2.1.6: a label
+  clear of all else; an H on another label reads as that label's). It is
+  always a bond long, as every H Meno draws: drawn shorter, its wedge, the
+  H label's room taken off, reads as a speck - worse than an H near
+  another atom. ST-1.2.4 grades so every wedge 180
+  degrees or more from one of its plain neighbours; the layout catches
+  the ones in line, within 10 degrees: those are the ones it leaves.
 - An axis of chirality - a biaryl's bond, BINAP's C1-C1' - is shown by
   one wedge out of an end of it, narrow there, on the single bond to the
   neighbour that stands out of the page for the sense the axis has (or on

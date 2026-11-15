@@ -1,5 +1,6 @@
 import type { CtMolecule } from "./ctfile";
-import { elementOf, NOT_METALS } from "./elements";
+import { elementOf } from "./elements";
+import { notMetal } from "./perception/elements";
 
 /**
  * What an atom is, chemically - the one place it is said, for every kind of
@@ -214,7 +215,7 @@ export function valenceOrder(b: BondChem & { order: number; dative?: boolean }, 
  * two H nobody wrote.)
  */
 export function setValenceOrder(b: BondChem & { order: number; dative?: boolean }, el?: string): number {
-  if ((b.dative || b.coordination) && el && elementOf(el) && !NOT_METALS.has(el)) return b.order || 1;
+  if ((b.dative || b.coordination) && el && elementOf(el) && !notMetal.has(el)) return b.order || 1;
   return valenceOrder(b, el);
 }
 

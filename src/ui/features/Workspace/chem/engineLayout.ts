@@ -18,9 +18,12 @@ import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/lay
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
+import { pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { ARRANGED, arrangementAs } from "../utils/arrangement";
+import { arrangementNotGiven } from "./arrangementsMarked";
 import { allylCurve } from "../../../../lib/chem/allylArc";
 import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
@@ -32,6 +35,10 @@ import { greatest } from "../../../../lib/chem/lists";
 
 export type LayoutJob = {
   input: LayoutInput;
+  /** A drawing nobody made - a plugin's (`laidOut`'s `asNew`): which donors of a metal lie opposite each other in it is not kept (`oppositesKept`), as it says nothing - */
+  asNew?: true;
+  /** - but at these metals, by id: those its input gave the arrangement of (a SMILES's mark at the metal, `metalsArrangedIn`), which the plugin's drawing carries, its form kept (`laidOut`) and so not marked. */
+  arranged?: ReadonlySet<number>;
   /** The model atom each of the input's atoms is - but the stars the engine is given for rings bound atom by atom, after them. */
   ids: number[];
   /** Each ring or chain bound so: its metal and its atoms, by id - made one bond to its centre as it is laid out. */
@@ -113,6 +120,34 @@ export function layoutJob(part: Model): LayoutJob {
   //  what is laid out leaves it unsaid too, rather than saying one or the other)
   const straight = straightEnds(drawing.atoms, drawing.bonds);
   const bondsOf = bondsAt(drawing.bonds);
+  // (a metal with four bonds kept as drawn - an upright cross or an X, whichever its bonds lie nearer to: Clean-up never turns
+  //  one into the other, for any metal - docs/LAYOUT-2D.md, *At an atom in no ring*)
+  const fourForm = new Map<number, "x" | "cross">();
+  part.atoms.forEach((a, i) => {
+    const mine = bondsOf.get(i) ?? [];
+    if (!isMetal(a.el) || mine.length !== 4) return;
+    // (not a chelate's metal - two of its donors joined other than through it: its own rules lay it out)
+    const donors = mine.map((k) => (drawing.bonds[k].a === i ? drawing.bonds[k].b : drawing.bonds[k].a));
+    const reached = new Set([donors[0]]);
+    for (const todo = [donors[0]]; todo.length; ) {
+      const u = todo.pop()!;
+      for (const k of bondsOf.get(u) ?? []) {
+        const v = drawing.bonds[k].a === u ? drawing.bonds[k].b : drawing.bonds[k].a;
+        if (v === i || reached.has(v)) continue;
+        reached.add(v);
+        todo.push(v);
+      }
+    }
+    if (donors.slice(1).some((d) => reached.has(d))) return;
+    const off = (offset: number) =>
+      mine.reduce((sum, k) => {
+        const b = drawing.bonds[k];
+        const o = part.atoms[b.a === i ? b.b : b.a];
+        const t = (Math.atan2(o.y - a.y, o.x - a.x) * 180) / Math.PI - offset;
+        return sum + Math.abs(t - 90 * Math.round(t / 90));
+      }, 0);
+    fourForm.set(i, off(45) < off(0) ? "x" : "cross");
+  });
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
   const unread = unreadWedges(drawing, stereo);
@@ -161,6 +196,7 @@ export function layoutJob(part: Model): LayoutJob {
         ...(t ? { tetra: t } : {}),
         ...(pi.has(i) ? { pi: pi.get(i)! } : {}),
         ...(straight.has(i) ? { linear: true } : {}),
+        ...(fourForm.has(i) ? { fourForm: fourForm.get(i)! } : {}),
       };
     }),
     bonds: drawing.bonds.flatMap((b, k) => {
@@ -228,8 +264,25 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
   const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
-  // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin)
-  const laid = oppositesKept(ids.map((id) => byId.get(id)!), input, given);
+  // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
+  const kept = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
+  const laid = kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept);
+  // (a four-bond metal drawn in one form - the X or the upright cross, by the chemist, or a plugin's for an arrangement its input
+  // gave - laid out in the other would say another thing of its arrangement: refused, saying so, its donors left as drawn; the X
+  // grown as the X where its donors go on is backlog 118)
+  for (const [i, a] of input.atoms.entries()) {
+    if (!a.fourForm || i >= n) continue;
+    const round = input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
+    const off = (turn: number) =>
+      round.reduce((sum, o) => {
+        const t = (Math.atan2(laid.y[o] - laid.y[i], laid.x[o] - laid.x[i]) * 180) / Math.PI - turn;
+        return sum + Math.abs(t - 90 * Math.round(t / 90));
+      }, 0);
+    // (not one bound to a pi system's centre or to another metal: its form is no X or cross)
+    if (round.length !== 4 || round.some((o) => input.atoms[o].el === "*" || isMetal(input.atoms[o].el))) continue;
+    if (a.fourForm === "x" && off(0) <= off(45)) throw new Error(`the ${a.el} drawn as an X could not be laid out as one, so nothing was moved`);
+    if (a.fourForm === "cross" && off(45) < off(0)) throw new Error(`the ${a.el} drawn as an upright cross could not be laid out as one, so nothing was moved`);
+  }
   // at the style's bond length, whatever the drawing's was - a structure put
   // down too large or too small, read from a figure at a wrong scale, comes
   // to the workspace's one style (the maintainer, 2026-10-27): the engine's
@@ -244,11 +297,50 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const ny = mid(laid.y.slice(0, n));
   const place = (x: number, y: number) => ({ x: ox + (x - nx) * k, y: oy + (y - ny) * k });
 
+  // (a square-planar centre whose donors can lie round it more than one way, laid out with none given - not as the chemist drew
+  // it, or drawn so and still marked: the upright cross, marked "which donors are next to each other is not given")
+  const nbOf = input.atoms.map(() => [] as number[]);
+  const orders = new Map<string, number>();
+  for (const b of input.bonds) {
+    nbOf[b.a].push(b.b);
+    nbOf[b.b].push(b.a);
+    orders.set(pairKey(b.a, b.b), b.order);
+  }
+  const open = (i: number) => {
+    const was = byId.get(ids[i]);
+    const marked = !!was?.unsure && was.unsure.as.startsWith(ARRANGED) && was.unsure.as === arrangementAs(was, model.atoms, model.bonds);
+    // (a metal as the chemist drew it - four donors in their form, six on a chemist's spokes - or whose arrangement the input gave:
+    // never marked, but where it was marked already and is still as it was)
+    // (a chelated square-planar centre has no form of its own to keep: drawn so where it was not laid out anew, as six donors are)
+    const view = {
+      el: (j: number) => input.atoms[j].el,
+      charge: (j: number) => input.atoms[j].charge ?? 0,
+      hs: (j: number) => input.atoms[j].hs ?? 0,
+      neighbours: (j: number) => nbOf[j],
+      order: (p: number, q: number) => orders.get(pairKey(p, q)) ?? 1,
+    };
+    const chelated = nbOf[i].length === 4 && nbOf[i].some((d) => {
+      // (any two of its donors joined other than through it)
+      const seen = new Set([d, i]);
+      for (const todo = [d]; todo.length; )
+        for (const w of nbOf[todo.pop()!]) {
+          if (seen.has(w)) continue;
+          if (nbOf[i].includes(w)) return true;
+          seen.add(w);
+          todo.push(w);
+        }
+      return false;
+    });
+    const drawnSo = nbOf[i].length === 6 || chelated ? !job.asNew : !!input.atoms[i].fourForm;
+    if ((drawnSo && !marked) || job.arranged?.has(ids[i])) return false;
+    return arrangementNotGiven(input, view, i);
+  };
   const atoms: Relayout["atoms"] = ids.map((id, i) => ({
     id,
     ...place(laid.x[i], laid.y[i]),
     ...(laid.depth[i] != null ? { z: laid.depth[i]! * k } : {}),
     ...(laid.solid[i] && input.atoms[i].tetra ? { stereoCentre: true } : {}),
+    ...(open(i) ? { arrangementOpen: true } : {}),
   }));
   // each star at its pi system's centre, as a written-out label's: cod's
   // C=C, as well as a ring
@@ -780,13 +872,15 @@ export function nextFree(model: Model): number {
  * six none drawn side by side; or six spokes drawn, laid out as two lines
  * and two side by side, where that picture reads only as the isomer drawn
  * (cis-[Co(en)2Cl2]+). Refused, saying so, where no move keeps it. Not at
- * a metal drawn in perspective, nor by mirroring a chelate drawn so, nor
- * where a change would need a donor of a larger chelate to move.
+ * a metal drawn in perspective - save by its two bridges to another metal,
+ * which stay, the metal's other donors changing places round it (cis- and
+ * trans-[Pt2Cl4(NH3)2]) - nor by mirroring a chelate drawn so, nor where a
+ * change would need a donor of a larger chelate to move.
  */
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
 
-export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D): Layout2D {
+export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D, only?: ReadonlySet<number>): Layout2D {
   const near = input.atoms.map(() => [] as number[]);
   for (const { a, b } of input.bonds) {
     near[a].push(b);
@@ -803,7 +897,7 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   for (let m = 0; m < was.length; m++) {
     const donors = near[m];
     const n = donors.length;
-    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || laid.depth[m] != null || donors.some((d) => d >= was.length)) continue;
+    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
     // (each donor's unit: what it carries, reached not through the metal - a chelate's, its donors' together)
     const reach = donors.map((d) => {
       const seen = new Set([d]);
@@ -820,41 +914,19 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     // (a unit drawn in perspective - a phosphine's phenyls turned - is turned about the metal as any is; mirrored, it would show
     // its other face, so a chelate drawn so is not)
     const inDepth = (i: number) => [...reach[i]].some((a) => laid.depth[a] != null);
-    // (which stands opposite which, by the angles round the metal: each donor's partner in the pairing whose straightest pair is
-    // straightest - then its next, and with six its last; none where another pairing is about as straight, pair by pair)
+    // (a unit that holds another metal - two metals' bridges, with all the other metal carries - drawn in perspective, their ring seen
+    // a little from above, stays where it is: turned, it would carry the other metal round with its ring's depth; the metal's own
+    // donors change places round it instead. Laid flat - a chain of three metals' middle one - it is turned or mirrored as any
+    // unit is, the other metal's donors with it, their pairs as they were)
+    const holdsMetal = (i: number) => [...reach[i]].some((a) => a !== donors[i] && isMetal(input.atoms[a].el));
+    // (a metal drawn in perspective is not - save one in perspective only by its bridges to another metal, their ring seen a little
+    // from above (placePair): its donors lie round it as drawn, in the page's plane, and its bridges stay)
+    if (laid.depth[m] != null && (donors.some((_, i) => inDepth(i) && !holdsMetal(i)) || !donors.some((_, i) => inDepth(i)))) continue;
+    // (which stands opposite which, by the angles round the metal: lib/chem/arrangement `pairingDrawn`, the one reading
+    // identity asks too. A tie - none said - leaves the layout's pairing: an isomer nobody gave)
     const pairing = (px: readonly number[], py: readonly number[]): number[] | null => {
       if (donors.some((d) => Math.hypot(px[d] - px[m], py[d] - py[m]) < 1e-6)) return null;
-      const angle = donors.map((d) => Math.atan2(py[d] - py[m], px[d] - px[m]));
-      const off = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle[i] - angle[j]), Math.cos(angle[i] - angle[j]))));
-      const all: { partner: number[]; offs: number[] }[] = [];
-      const pair = (left: number[], partner: number[], offs: number[]) => {
-        if (!left.length) return void all.push({ partner: [...partner], offs: [...offs].sort((p, q) => p - q) });
-        const [i, ...rest] = left;
-        for (const j of rest) {
-          partner[i] = j;
-          partner[j] = i;
-          pair(
-            rest.filter((k) => k !== j),
-            partner,
-            [...offs, off(i, j)],
-          );
-        }
-      };
-      pair(
-        donors.map((_, i) => i),
-        donors.map(() => -1),
-        [],
-      );
-      const before = (p: number[], q: number[]) => {
-        for (let k = 0; k < p.length; k++) if (p[k] !== q[k]) return p[k] - q[k];
-        return 0;
-      };
-      all.sort((p, q) => before(p.offs, q.offs));
-      // (a tie - every pair of the next pairing within 20 degrees as straight as the best's - leaves the layout's pairing, saying
-      // nothing: an isomer nobody gave, where the centre is surely square planar; there it is to be the cross marked "Which donors are
-      // next to each other is not given", as a centre laid out with none given is)
-      const told = all[0].offs.some((v, k) => all[1].offs[k] - v > (20 * Math.PI) / 180);
-      return told ? all[0].partner : null;
+      return pairingDrawn(donors.map((d) => Math.atan2(py[d] - py[m], px[d] - px[m])));
     };
     const drawn = pairing(
       was.map((a) => a.x),
@@ -938,9 +1010,10 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
         return;
       }
       const members = groups[g];
+      const stays = holdsMetal(members[0]) && inDepth(members[0]);
       const mirrors = members.length === 2 && !inDepth(members[0]) ? [false, true] : [false];
       for (const mirror of mirrors) {
-        for (let turn = 0; turn < n; turn++) {
+        for (let turn = 0; turn < (stays ? 1 : n); turn++) {
           const slots = members.map((i, k) => ((mirror ? slotOf[members[1 - k]] : slotOf[i]) + turn) % n);
           if (slots.some((t) => taken.has(t))) continue;
           const next = [...at];
