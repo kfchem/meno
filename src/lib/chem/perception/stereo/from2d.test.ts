@@ -880,7 +880,7 @@ describe("a double bond's cis or trans, drawn: in no ring, or in a ring of eight
 describe("the ends kept straight on of an odd cumulene drawn so: its cis or trans across the run left unsaid", () => {
   /** Hexa-2,3,4-triene, C0 C1=C2=C3=C4 C5, its run along x, each end's methyl straight on or bent off by `bend` (y). */
   const triene = (bendA: number, bendB: number, wavy = false) => {
-    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: "C", x, y: i === 0 ? bendA : i === 5 ? bendB : 0, hs: 0 }));
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: "C", x, y: i === 0 ? bendA : i === 5 ? bendB : 0, hs: i === 1 || i === 4 ? 1 : 0 }));
     const bonds: DrawnBond[] = [0, 1, 2, 3, 4].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 4 ? 1 : 2, ...(wavy && i === 0 ? { either: true } : {}) }));
     return straightEnds(atoms, bonds);
   };
@@ -891,6 +891,12 @@ describe("the ends kept straight on of an odd cumulene drawn so: its cis or tran
     expect([...triene(0.9, 0.9)]).toEqual([]);
   });
 
+  it("keeps none of an end of one group and no H - an N's, which has no cis or trans to state, as the run is read", () => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: i === 4 ? "N" : "C", x, y: 0, hs: i === 1 ? 1 : 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3, 4].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 4 ? 1 : 2 }));
+    expect([...straightEnds(atoms, bonds)]).toEqual([]);
+  });
+
   it("keeps none where a wavy bond at an end says either already", () => {
     expect([...triene(0, 0, true)]).toEqual([]);
   });
@@ -899,7 +905,7 @@ describe("the ends kept straight on of an odd cumulene drawn so: its cis or tran
     /** A ring of `n`: the run 0=1=2=3 along x, 4 straight on from 3, the rest round back to 0. */
     const ring = (n: number) => {
       const atoms: DrawnAtom[] = [
-        ...[0, 1, 2, 3, 4].map((x) => ({ el: "C", x, y: 0, hs: 0 })),
+        ...[0, 1, 2, 3, 4].map((x) => ({ el: "C", x, y: 0, hs: x === 0 || x === 3 ? 1 : 0 })),
         ...Array.from({ length: n - 5 }, (_, k) => {
           const t = (Math.PI * (k + 1)) / (n - 4);
           return { el: "C", x: 2 + 2 * Math.cos(t), y: 2 * Math.sin(t), hs: 0 };

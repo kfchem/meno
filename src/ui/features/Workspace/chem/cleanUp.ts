@@ -16,6 +16,7 @@ import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayout";
 import { layOut } from "./layOut";
 import type { Axial, Cumulated } from "../../../../lib/layout/stereo";
+import { readStereo } from "../../../../lib/layout/drawn";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
 
@@ -360,7 +361,9 @@ export async function laidOut(
     // (an odd cumulene's the same, by its run's two ends: the cis or trans the plugin's drawing of it read, its ends now kept straight on)
     const runOpen = (c: Cumulated) => linear.has(c.atoms[0]) && linear.has(c.atoms[1]);
     const runs = job.input.cumulated ?? [];
-    const opened = [...model.bonds.filter(straightOn).map((b) => pair(b.a, b.b)), ...runs.filter(runOpen).map((c) => pair(job.ids[c.atoms[0]], job.ids[c.atoms[1]]))];
+    // (read from the plugin's drawing, whether or not another run of it is given, which takes the place of what the drawing read)
+    const pictured = [...(read.input.cumulated ?? []), ...runs].filter(runOpen);
+    const opened = [...model.bonds.filter(straightOn).map((b) => pair(b.a, b.b)), ...pictured.map((c) => pair(job.ids[c.atoms[0]], job.ids[c.atoms[1]]))];
     const { cumulated: _c, ...input } = job.input;
     const kept = runs.filter((c) => !runOpen(c));
     job = {
@@ -385,3 +388,24 @@ export async function laidOut(
  * `openDoubleBonds`): the ends to keep straight on, by atom, and the bonds to give a wavy bond, by bond.
  */
 export type OpenDoubles = { straight: readonly number[]; either: readonly number[] };
+
+/**
+ * A plugin's drawing kept as it came - not laid out (`laidOut` refused) - with each odd cumulene's cis or trans (a butatriene's) it shows
+ * other than the text gives marked unsaid: its double bond at an end of the run "either", drawn with a wavy bond. A MOL block cannot say a
+ * run's cis or trans, so what the plugin's picture shows of one is chance: kept, it would state an isomer the text never wrote, or one it
+ * left open. One the text gives (`given`), shown as given, stays. The same model where there is none.
+ */
+export function runsAsCame(model: Model, given: GivenRuns | undefined): Model {
+  const d = drawingOf(model);
+  const shown = readStereo(d.atoms, d.bonds).cumulated;
+  if (!shown.length) return model;
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const told = new Map((given?.cumulated ?? []).map((c) => [pair(c.atoms[0], c.atoms[1]), c.cis]));
+  const ends = new Set(shown.filter((r) => told.get(pair(r.atoms[0], r.atoms[1])) !== r.cis).map((r) => model.atoms[r.atoms[0]].id));
+  if (!ends.size) return model;
+  // (the run's own double bond at that end: an end of a run has no other)
+  return {
+    ...model,
+    bonds: model.bonds.map((b) => ((ends.has(b.a) || ends.has(b.b)) && b.order === 2 && !b.stereo ? { ...b, stereo: "either" as const } : b)),
+  };
+}

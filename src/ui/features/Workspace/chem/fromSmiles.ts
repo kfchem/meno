@@ -3,7 +3,7 @@ import type { ChemClient } from "../../../../lib/roles/client";
 import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
-import { laidOut, type GivenRuns, type OpenDoubles } from "./cleanUp";
+import { laidOut, runsAsCame, type GivenRuns, type OpenDoubles } from "./cleanUp";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { smilesInput } from "../../../../lib/layout/smilesInput";
 import { openDoubleBonds } from "../../../../lib/layout/drawn";
@@ -120,8 +120,9 @@ export async function drawingOf(molblock: string, style?: DrawingStyle, given?: 
   return laidOut(drawn, style, given, open, true, arranged).catch((e: unknown) => {
     // (kept for whoever looks: what the sentence said plainly leaves out)
     console.warn("the structure is drawn as the plugin laid it out", e);
-    // (a square-planar centre nobody gave the arrangement of marked so, as it would be laid out: the plugin's drawing says none)
-    return { ...arrangementsMarked(drawn, arranged), asCame: e instanceof Error ? e.message : String(e) };
+    // (a square-planar centre nobody gave the arrangement of marked so, as it would be laid out: the plugin's drawing says none; and an
+    //  odd cumulene's cis or trans it shows by chance marked unsaid, unless the text gives that one: a MOL block cannot say it)
+    return { ...arrangementsMarked(runsAsCame(drawn, given), arranged), asCame: e instanceof Error ? e.message : String(e) };
   });
 }
 

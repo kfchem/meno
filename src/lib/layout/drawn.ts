@@ -167,7 +167,8 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
       // (once for each run, from its lower end; an even run of double bonds - an allene's - has an axis, not a cis or trans)
       if (j <= i || run.length % 2 === 1 || given.has(key(i, j))) continue;
       const [ga, gb] = [neighbours[i].filter((x) => x !== m), neighbours[j].filter((x) => x !== run[run.length - 2])];
-      if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) continue;
+      // (each end with two groups, an H among them at most: the reader's test of a run's end - an N's end of one group has none to state)
+      if (!ga.length || !gb.length || ga.length + (input.atoms[i].hs ?? 0) !== 2 || gb.length + (input.atoms[j].hs ?? 0) !== 2) continue;
       const first = bondOf(i, m);
       if (facts.inRingSmallerThan(first, OPEN_RING)) continue;
       if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) continue;

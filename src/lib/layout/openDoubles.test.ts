@@ -211,7 +211,7 @@ describe("an odd cumulene its text leaves open: cis or trans across its run's en
   });
 
   it("leaves as they are the runs that have no cis or trans, or have it given: an end of two alike groups, an end with none, an allene's, a pentatetraene's (an axis), and C/C=C=C=C/C", () => {
-    for (const s of ["CC=C=C=C(C)C", "C=C=C=CC", "CC=C=C=C", "CC=C=CC", "CC=C=C=C=CC", "C/C=C=C=C/C", "C/C=C=C=C\\C"]) expect(open(s), s).toEqual({ straight: [], either: [] });
+    for (const s of ["CC=C=C=C(C)C", "C=C=C=CC", "CC=C=C=C", "CC=C=C=NC", "CN=C=C=CC", "CN=C=C=NC", "CC=C=CC", "CC=C=C=C=CC", "C/C=C=C=C/C", "C/C=C=C=C\\C"]) expect(open(s), s).toEqual({ straight: [], either: [] });
   });
 });
 

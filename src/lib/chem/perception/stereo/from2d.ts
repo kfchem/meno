@@ -295,7 +295,8 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
         [j, run[run.length - 2]],
       ];
       const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
-      if (ends.some(([e, t]) => !groups(e, t).length) || inRingUnder(i, m, OPEN_RING)) continue;
+      // (each end with two groups, an H among them at most, as the run is read)
+      if (ends.some(([e, t]) => !groups(e, t).length || groups(e, t).length + atoms[e].hs !== 2) || inRingUnder(i, m, OPEN_RING)) continue;
       if (ends.some(([e]) => neighbours[e].some((n) => bondOf.get(key(e, n))!.either))) continue;
       for (const [e, t] of ends) {
         const g = groups(e, t);
