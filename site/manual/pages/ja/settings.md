@@ -4,7 +4,7 @@ Meno の設定がどこにあり、それぞれの部分に何があるかを説
 
 ## 設定を開く {#opening}
 
-ウィンドウの右上にある「Settings」ボタンで、設定が専用のタブに開きます。ほかのタブと同じように閉じられます。上に部分ごとのタブが並びます。「General」「Drawing」「3D」「Chemistry」「Files」「Calculations」「Plugins」「Dictionary」「Network」です。
+ウィンドウの右上にある「Settings」ボタンで、設定が専用のタブに開きます。ほかのタブと同じように閉じられます。上に部分ごとのタブが並びます。「General」「Drawing」「3D」「Chemistry」「Files」「Calculations」「Conversations」「Plugins」「Dictionary」「Network」です。
 
 ## ワークスペースのスタイル {#workspace}
 
@@ -17,6 +17,7 @@ Meno の設定がどこにあり、それぞれの部分に何があるかを説
 - 「Read labels as they are meant」と「Write words on the page as they are meant」：略記で打ったラベルや言葉が、その意味の形になります。
 - 「Colours」：パレット。「Meno」「Okabe–Ito」か、「New set」で作る自分のセット。
 - 「Say a workspace is large past」：保存のときに大きなワークスペースについて尋ねる大きさ。
+- 「First steps」（「Show」）、「A long press」（「Shorter」「Normal」「Longer」）。
 - 「Meno's log」（「Open log folder」）と「Licences」。
 
 ## Drawing {#drawing}
@@ -44,6 +45,10 @@ Meno の設定がどこにあり、それぞれの部分に何があるかを説
 - 計算のステップの種類ごとの、最初の指定です。それを走らせるもの（加えた各プラグインと Meno）ごとに並びます。ページに置いたステップはこの指定で始まり、ステップの中で変えた指定はそのステップだけのものです。値のない指定（たとえば「Energy window」の幅）は、下に説明が出て、ここで決めた値が使われます。値がないまま置いたステップは、その値を尋ねます。
 - 「Jobs」：「Cores for each job」「Cores jobs may use」「Memory jobs may use」、「Where jobs run」（「Choose…」でフォルダーを選ぶか「Meno's own」）、「Clear」の付いた「Finished jobs' files」、そして初期値でオンの「Keep the computer awake while calculations run」。
 - 「Procedures」：ページから「Save as procedure…」で保存したもので、「Rename」「Save as file…」「Remove」があります。
+
+## Conversations {#conversations}
+
+ページ上の会話で、モデルと話すのはどのプラグインか。「Chemistry」と同じように選び、そのプラグインの指定がその下に並びます。「Its key」は、そのプラグインのサービスのキーです。一度入力するとシステムのキーチェーンに保たれ、二度と表示されず、Meno のログにも書かれません。欄には「Kept」か「None kept」が出て、「Forget」で消せます。
 
 ## Plugins {#plugins}
 

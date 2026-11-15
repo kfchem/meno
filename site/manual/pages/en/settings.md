@@ -4,7 +4,7 @@ Where Meno's settings are, and what each part of them holds. They are Meno's on 
 
 ## Opening Settings {#opening}
 
-*Settings*, the button at the top right of the window, opens them in a tab of their own, which closes like any tab. Along their top are their parts: *General*, *Drawing*, *3D*, *Chemistry*, *Files*, *Calculations*, *Plugins*, *Dictionary* and *Network*.
+*Settings*, the button at the top right of the window, opens them in a tab of their own, which closes like any tab. Along their top are their parts: *General*, *Drawing*, *3D*, *Chemistry*, *Files*, *Calculations*, *Conversations*, *Plugins*, *Dictionary* and *Network*.
 
 ## A workspace's own styles {#workspace}
 
@@ -17,6 +17,7 @@ The drawing style and the 3D styles in Settings are the ones new workspaces star
 - *Read labels as they are meant* and *Write words on the page as they are meant*: labels and words typed in shorthand become what they mean.
 - *Colours*: the palette - *Meno*, *Okabe–Ito*, or a set of your own, made with *New set*.
 - *Say a workspace is large past*: the size at which Meno asks about a large workspace as it saves it.
+- *First steps*, with *Show*; *A long press*: *Shorter*, *Normal* or *Longer*.
 - *Meno's log*, with *Open log folder*, and *Licences*.
 
 ## Drawing {#drawing}
@@ -44,6 +45,10 @@ The drawing style and the 3D styles in Settings are the ones new workspaces star
 - The options each kind of calculation step starts with, by what runs it: each plugin added, and Meno. A step put on the page starts with these; options changed in a step are that step's alone. An option with no value of its own - an *Energy window*'s window, say - shows its guide under it and takes the value set here; a step put down without one asks for it.
 - *Jobs*: *Cores for each job*, *Cores jobs may use*, *Memory jobs may use*; *Where jobs run* - *Choose…* a folder, or *Meno's own*; and *Finished jobs' files*, with *Clear*; and *Keep the computer awake while calculations run*, on by default.
 - *Procedures*: the ones you saved from the page with *Save as procedure…*, with *Rename*, *Save as file…* and *Remove*.
+
+## Conversations {#conversations}
+
+Who talks with a model for a conversation on the page: the plugin that does it, chosen as in *Chemistry*, and the options it has. *Its key* is the key for that plugin's service: typed once, kept in the system's keychain, never shown again nor written to Meno's log - the field says whether one is *Kept* or *None kept*, and *Forget* takes it away.
 
 ## Plugins {#plugins}
 
