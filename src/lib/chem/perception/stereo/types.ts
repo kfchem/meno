@@ -36,3 +36,12 @@ export type CisTrans = {
  * end's neighbours in it - as an atropisomer's wedge is read.
  */
 export type Axial = { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 };
+
+/**
+ * An odd run of cumulated double bonds' cis or trans (a butatriene's,
+ * C=C=C=C): its two ends, `atoms`, not bonded to each other, each with two
+ * other neighbours, all of them in one plane; an atom bonded to each end
+ * (`refs`, the first to `atoms[0]`), and whether the two are on the same
+ * side.
+ */
+export type Cumulated = { atoms: readonly [number, number]; refs: readonly [number, number]; cis: boolean };
