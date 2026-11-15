@@ -23,7 +23,7 @@ import { CHELATE_RING } from "./chelateRing";
 import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
-import { aromaticForm } from "./perception/aromatic";
+import { AROMATIC, aromaticForm } from "./perception/aromatic";
 
 // (the aromatic form identity and symmetry compare structures in: the core's, where the two forms are said apart)
 export { aromaticForm };

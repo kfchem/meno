@@ -143,7 +143,7 @@ export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: 
  */
 
 /** The order a bond of an aromatic form is given, beside 1, 2 and 3. */
-const AROMATIC = 4;
+export const AROMATIC = 4;
 
 /** A graph as an aromatic form gives it back: as it was, but that its bonds' orders may now be 4. */
 export type AromaticForm<G extends ChemGraph> = Omit<G, "bonds"> & { bonds: readonly ChemBond[] };
