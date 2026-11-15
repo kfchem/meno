@@ -8,6 +8,7 @@
  * - where the selected atoms go when the selection is turned about its
  *   middle, or turned over.
  */
+import { turnedOverCrossings } from "../chem/crossings";
 import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
@@ -245,7 +246,7 @@ export function turnedOver(
   atoms: ReadonlySet<number>,
   axis: "vertical" | "horizontal",
   about?: Pt,
-): { atoms: { id: number; x: number; y: number; z?: number }[]; bonds: Pick<Bond, "id" | "stereo">[] } {
+): { atoms: { id: number; x: number; y: number; z?: number }[]; bonds: (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>)[] } {
   const mid = about ?? middleOf(model, atoms);
   if (!mid) return { atoms: [], bonds: [] };
   const moved = model.atoms
@@ -256,8 +257,12 @@ export function turnedOver(
       y: axis === "horizontal" ? 2 * mid.y - a.y : a.y,
       ...(a.z != null ? { z: -a.z } : {}),
     }));
-  const bonds = model.bonds
+  const wedges = model.bonds
     .filter((b) => atoms.has(b.a) && atoms.has(b.b) && (b.stereo === "up" || b.stereo === "down"))
     .map((b) => ({ id: b.id, stereo: b.stereo === "up" ? ("down" as const) : ("up" as const) }));
-  return { atoms: moved, bonds };
+  // (and where two of them cross, the one said to be behind is in front now, as a depth would turn: chem/crossings)
+  const exchanged = turnedOverCrossings(model, atoms);
+  const byId = new Map<number, Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>>(wedges.map((b) => [b.id, b]));
+  for (const c of exchanged) byId.set(c.id, { ...(byId.get(c.id) ?? { id: c.id }), behind: c.behind });
+  return { atoms: moved, bonds: [...byId.values()] };
 }
