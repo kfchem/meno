@@ -75,6 +75,19 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
   return { atoms: labels(r.centres), bonds: { ...labels(r.bonds), ...runs } };
 }
 
+/** Each allene's axis and each odd cumulene's cis or trans of a molecule in 3D, read from where its atoms are (`runsIn3d`), by atom number. */
+export function runsIn3dOf(m: In3d): { axes: Axial[]; cumulated: Cumulated[] } {
+  const around: number[][] = m.atoms.map(() => []);
+  m.bonds.forEach((b) => {
+    around[b.a1]?.push(b.a2);
+    around[b.a2]?.push(b.a1);
+  });
+  const places: Record<number, Place> = {};
+  for (let i = 0; i < m.atoms.length; i++) places[i] = [m.xyz[3 * i], m.xyz[3 * i + 1], m.xyz[3 * i + 2]];
+  const { axes, cumulated } = runsIn3d(around, m.bonds, places);
+  return { axes, cumulated };
+}
+
 /** An axis's descriptor as the page shows it (docs/CIP.md, *Axes*): M is Ra, P is Sa. */
 const AXIS_SHOWN: Record<string, string | undefined> = { M: "Ra", P: "Sa", m: "ra", p: "sa" };
 

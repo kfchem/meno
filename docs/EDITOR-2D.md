@@ -1988,7 +1988,10 @@ lipids each have their own way of being drawn, which it should know.
      can be, never state the other isomer. A structure drawn from a
      plugin's MOL block - a SMILES's, a step's, the formula of a molecule
      in 3D - shows no run's cis or trans but one Meno's own reading of its
-     text gives: a MOL block cannot say one, so what the plugin's picture
+     text gives (of a molecule in 3D, of its places: each allene's axis and
+     odd cumulene's cis or trans as it stands, an H at a run's end standing
+     for the end's other group, which the formula draws): a MOL block
+     cannot say one, so what the plugin's picture
      shows of a run is chance. Laid out, any other run is drawn open, as
      above, and stays so through Clean-up; kept as it came, not laid out, a
      run it shows otherwise is marked with a wavy bond. Where Meno's own
