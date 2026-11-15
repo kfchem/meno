@@ -9,6 +9,7 @@ import { laidOut, notShownOf } from "./cleanUp";
 import { identityOfDrawn } from "./identityOf";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { asCameSaid } from "./fromSmiles";
+import { cisTransOfGiven } from "./givenConfiguration";
 
 /**
  * A structure laid out from the configuration its source gives beside its drawing (backlog 106 B; chem/givenConfiguration): the plugin's
@@ -67,6 +68,14 @@ describe("a centre given beside the plugin's drawing: its sense, by hand", () =>
     expect(await labelOf("NC(C)C(=O)O", { centres: [centreFrom(1, [{ at: 0, deg: 90 }, { at: 2, deg: 330 }, { at: 3, deg: 210 }])], doubles: [] }, 1)).toBe("S");
   });
 
+  it("lays a sulfoxide's S out as given - its fourth place a lone pair, not an H - and its mirror as the other", async () => {
+    // (CS(=O)c1ccccc1: C 0, S 1, O 2, the ring's C 3; three named, the lone pair away)
+    const s = centreFrom(1, [{ at: 2, deg: 90 }, { at: 0, deg: 210 }, { at: 3, deg: 330 }]);
+    const one = await labelOf("CS(=O)c1ccccc1", { centres: [s], doubles: [] }, 1);
+    const other = await labelOf("CS(=O)c1ccccc1", { centres: [{ ...s, sense: (-s.sense) as 1 | -1 }], doubles: [] }, 1);
+    expect(new Set([one, other])).toEqual(new Set(["R", "S"]));
+  });
+
   it("lays L-proline out as S, its centre in a ring", async () => {
     // (OC(=O)C1CCCN1: O 0, C 1, O 2, Ca 3, C 4, C 5, C 6, N 7; S: N, COOH, C4 counterclockwise as seen, the H away)
     for (const order of [[{ at: 1, deg: 210 }, { at: 4, deg: 330 }, { at: 7, deg: 90 }], [{ at: 7, deg: 90 }, { at: 1, deg: 210 }, { at: 4, deg: 330 }]]) {
@@ -122,6 +131,17 @@ describe("a macrocycle given beside the plugin's polygon", () => {
     }
   });
 
+  it("takes a centre given beside the drawing, though the polygon's wedge at it - its ring bonds in line - says nothing: no 'unread wedge'", async () => {
+    // (a ring of 40: its ring bonds at an atom 171 degrees apart, in line - a ring of 36 stands on the 170 degrees of the line itself)
+    const lactone40 = "C[C@@H]1" + "C".repeat(37) + "C(=O)O1";
+    const came = polygon(lactone40);
+    // (the plugin's wedge on the methyl at C1, between two ring bonds near in line: a wedge Clean-up refuses to keep on its own)
+    const m: Model = { ...came, bonds: came.bonds.map((b) => (b.a === came.atoms[0].id && b.b === came.atoms[1].id ? { ...b, stereo: "up" as const, narrow: came.atoms[1].id } : b)) };
+    await expect(laidOut(m, MENO)).rejects.toThrow(/wedges at C do not say its configuration/);
+    const laid = await laidOut(m, MENO, { axes: [], cumulated: [], configuration: configurationOf(lactone40) });
+    expect(identityOfDrawn(laid).text).toBe(identity(smilesInput(lactone40)).text);
+  });
+
   it("states nothing given as the polygon came, and says how much: the drawing kept as it came shows none of the centres given", () => {
     const came = polygon(diol36);
     const lost = notShownOf(came, { axes: [], cumulated: [], configuration: configurationOf(diol36) });
@@ -129,3 +149,24 @@ describe("a macrocycle given beside the plugin's polygon", () => {
     expect(asCameSaid({ asCame: "the structure could not be laid out", notShown: lost! })).toBe("Drawn as it came: it could not be laid out. 2 of its 2 stereocentres are not shown by this drawing.");
   });
 });
+
+describe("a double bond given beside the drawing, as the engine takes it", () => {
+  // (the bond 3-4: atom 3 carries 1 and 2, atom 4 carries 5 and 6)
+  const around: Record<number, number[]> = { 3: [1, 2, 4], 4: [3, 5, 6] };
+  const neighbours = (x: number) => around[x] ?? [];
+
+  it("is in one fixed form, the lowest group on each end - whichever groups were given - so the engine's input does not depend on who gave it", () => {
+    expect(cisTransOfGiven({ bond: 0, ends: [1, 5], cis: true }, 3, 4, neighbours)).toEqual({ refs: [1, 5], cis: true });
+    // (the other group on one end: the other side of it - the same bond, the cis turned)
+    expect(cisTransOfGiven({ bond: 0, ends: [2, 5], cis: false }, 3, 4, neighbours)).toEqual({ refs: [1, 5], cis: true });
+    // (the other on both: turned twice)
+    expect(cisTransOfGiven({ bond: 0, ends: [2, 6], cis: true }, 3, 4, neighbours)).toEqual({ refs: [1, 5], cis: true });
+    // (given from the bond's other end first)
+    expect(cisTransOfGiven({ bond: 0, ends: [6, 1], cis: false }, 3, 4, neighbours)).toEqual({ refs: [1, 5], cis: true });
+  });
+
+  it("is none where the groups given are not that bond's", () => {
+    expect(cisTransOfGiven({ bond: 0, ends: [7, 5], cis: true }, 3, 4, neighbours)).toBeNull();
+  });
+});
+

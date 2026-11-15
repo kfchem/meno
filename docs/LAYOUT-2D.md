@@ -997,7 +997,14 @@ more; else it is refused, and the drawing is kept as it came. Where a
 drawing kept as it came states less than was given, what it leaves out is
 said with the count: "Drawn as it came: it could not be laid out. 4 of its
 12 stereocentres are not shown by this drawing." A centre whose fourth
-place is a lone pair is given only where Meno's own rules hold one there.
+place is a lone pair is given only where Meno's own rules hold one there;
+a wedge at a given centre is no reading of it - what is given is - so a
+wedge the drawing's own reading could not keep does not stop the layout.
+What is given goes to the engine in one fixed form (a centre's neighbours
+rising, a double bond's group on each end the lowest-numbered), so that
+the drawing Meno makes does not depend on who gave it. A double bond the
+plugin gives nothing of, which Meno's rules read from the drawing (an
+aromatic macrocycle's), is laid out as the drawing reads it, as before.
 A plugin that sends no configuration is read as before.
 
 ## How the engine goes about it

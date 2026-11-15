@@ -20,25 +20,35 @@ export type Given = { axes: readonly Axial[]; cumulated: readonly Cumulated[]; c
 const HANDED = 1;
 
 /**
- * A given centre as the engine takes one (`Tetrahedral`): its neighbours in one fixed order - rising, the one not named last (an H not drawn,
- * or a lone pair) - so that the engine's input does not depend on who gave it, and the sense turned with the order's parity.
+ * A given centre as the engine takes one (`Tetrahedral`): its neighbours in one fixed order - rising - so that the engine's input does not
+ * depend on who gave it, and the sense turned with the order's parity. With three named, the fourth place is an H not drawn (`-1`, last) -
+ * or, where the atom has none (`lonePair`), a lone pair, which a centre's neighbours leave out as the reader does.
  */
-export function tetraOfGiven(c: ConfiguredCentre): Tetrahedral {
+export function tetraOfGiven(c: ConfiguredCentre, lonePair = false): Tetrahedral {
   const named = [...c.neighbours];
   const ordered = [...named].sort((p, q) => p - q);
   // (the swaps that take the order given to the rising order, counted as inversions; the one not named stays last in both)
   let odd = false;
   for (let i = 0; i < named.length; i++) for (let j = i + 1; j < named.length; j++) if (named[i] > named[j]) odd = !odd;
-  const neighbours = named.length === 3 ? [...ordered, -1] : ordered;
+  const neighbours = named.length === 3 && !lonePair ? [...ordered, -1] : ordered;
   return { neighbours, volume: (HANDED * c.sense * (odd ? -1 : 1)) as 1 | -1 };
 }
 
-/** A given double bond as the engine takes one, on the bond `a`-`b`: a group on each end - the first on `a`'s - and whether those two are on one side. Null where its ends are not that bond's groups. */
-export function cisTransOfGiven(d: ConfiguredDouble, a: number, b: number, bonded: (x: number, y: number) => boolean): CisTrans | null {
+/**
+ * A given double bond as the engine takes one, on the bond `a`-`b`: a group on each end - the first on `a`'s - and whether those two are on
+ * one side, in one fixed form: on each end its lowest-numbered group (`neighbours` each atom's), the cis or trans turned for each end whose
+ * group given was another - so that the engine's input does not depend on who gave it. Null where its ends are not that bond's groups.
+ */
+export function cisTransOfGiven(d: ConfiguredDouble, a: number, b: number, neighbours: (x: number) => readonly number[]): CisTrans | null {
   const [p, q] = d.ends;
-  if (bonded(a, p) && bonded(b, q)) return { refs: [p, q], cis: d.cis };
-  if (bonded(a, q) && bonded(b, p)) return { refs: [q, p], cis: d.cis };
-  return null;
+  const on = (end: number, other: number, x: number) => x !== other && neighbours(end).includes(x);
+  const given = on(a, b, p) && on(b, a, q) ? ([p, q] as const) : on(a, b, q) && on(b, a, p) ? ([q, p] as const) : null;
+  if (!given) return null;
+  const lowest = (end: number, other: number) => Math.min(...neighbours(end).filter((x) => x !== other));
+  const [ra, rb] = [lowest(a, b), lowest(b, a)];
+  // (another group on an end: on the other side of it - an end has two at most - so the cis or trans turns)
+  const turns = (ra !== given[0] ? 1 : 0) + (rb !== given[1] ? 1 : 0);
+  return { refs: [ra, rb], cis: turns % 2 === 0 ? d.cis : !d.cis };
 }
 
 /**

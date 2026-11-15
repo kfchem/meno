@@ -302,12 +302,14 @@ function withGiven(job: LayoutJob, model: Model, given: Given): LayoutJob {
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
   const bondsThere = new Set(input.bonds.map((b) => pair(b.a, b.b)));
   const bonded = (x: number, y: number) => bondsThere.has(pair(x, y));
+  const around = new Map<number, number[]>();
+  for (const b of input.bonds) for (const [x, y] of [[b.a, b.b], [b.b, b.a]]) around.set(x, [...(around.get(x) ?? []), y]);
   const drawing = drawingOf(model);
   const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
   const centres = new Map(
     c.centres
       .filter((x) => x.atom < n && x.neighbours.every((k) => k < n && bonded(x.atom, k)) && (x.neighbours.length === 4 || (input.atoms[x.atom].hs ?? 0) > 0 || keepsPyramid(x.atom)))
-      .map((x) => [x.atom, tetraOfGiven(x)] as const),
+      .map((x) => [x.atom, tetraOfGiven(x, x.neighbours.length === 3 && !((input.atoms[x.atom].hs ?? 0) > 0))] as const),
   );
   // (a double bond by its atoms: the block's bond numbers are the drawing's, as it was read)
   const index = new Map(model.atoms.map((a, i) => [a.id, i]));
@@ -329,9 +331,12 @@ function withGiven(job: LayoutJob, model: Model, given: Given): LayoutJob {
         return t ? { ...rest, tetra: t } : rest;
       }),
       bonds: input.bonds.map((b) => {
-        const { stereo: _drawn, ...rest } = b;
         const d = doubles.get(pair(b.a, b.b));
-        const ct = d && b.order === 2 ? cisTransOfGiven(d, b.a, b.b, bonded) : null;
+        // (a double bond the plugin gives nothing of, which the drawing reads cis or trans - an aromatic macrocycle's, which Meno's own
+        //  rules read and the toolkit's do not: as the drawing reads it, as before; the two are listed in the differential)
+        if (!d) return b;
+        const { stereo: _drawn, ...rest } = b;
+        const ct = b.order === 2 ? cisTransOfGiven(d, b.a, b.b, (x) => around.get(x) ?? []) : null;
         return ct ? { ...rest, stereo: ct } : rest;
       }),
     },
@@ -350,7 +355,7 @@ function withGiven(job: LayoutJob, model: Model, given: Given): LayoutJob {
  * atoms. For a drawing kept as it came (fromSmiles `drawingOf`), so that what it leaves out is said.
  */
 export function notShownOf(model: Model, given: Given): { centres: [number, number]; doubles: [number, number]; axes: [number, number] } | null {
-  const read = layoutJob(model);
+  const read = layoutJob(model, new Set(given.configuration?.centres.map((c) => c.atom) ?? []));
   if (!givenFits(read, model)) return null;
   const stated = statedOf(withGiven(read, model, given), model);
   const now = stereoOf(model);
@@ -386,7 +391,7 @@ export async function laidOut(model: Model, style: DrawingStyle = styleOf(useApp
           }),
         }
       : model;
-  const read = layoutJob(m);
+  const read = layoutJob(m, new Set(given?.configuration?.centres.map((c) => c.atom) ?? []));
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block
   //  has no way to say them - and the centres and double bonds the plugin read, which its drawing may not state: a ring of 36 or more - by
   //  atom, in the drawing's order)

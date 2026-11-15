@@ -108,7 +108,7 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
   return pi;
 }
 
-export function layoutJob(part: Model): LayoutJob {
+export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const { tetra, cisTrans, axes, cumulated } = stereo;
@@ -118,7 +118,8 @@ export function layoutJob(part: Model): LayoutJob {
   const bondsOf = bondsAt(drawing.bonds);
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
-  const unread = unreadWedges(drawing, stereo);
+  // (but at a centre whose configuration is given beside the drawing - by atom, `given` - the wedge is no reading of it: what is given is)
+  const unread = unreadWedges(drawing, stereo).filter((i) => !given.has(i));
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
