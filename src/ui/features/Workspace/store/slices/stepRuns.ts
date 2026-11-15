@@ -17,7 +17,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, molblockOfSmiles, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { madeDrawn, molblockOfSmiles, smilesMadeDrawn, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -26,7 +26,7 @@ import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, molecul
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
-import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
+import { EXAMINE_MS, type Configuration } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
@@ -987,7 +987,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
         try {
-          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: withoutStereoOpen(await drawingOf(block, style)) }))));
+          // (each laid out from the configuration it was made with, where the plugin sends it)
+          made.push((await madeDrawn(a, style)).map((drawn) => ({ place: 0, drawn: withoutStereoOpen(drawn) })));
         } catch {
           made.push([]);
           answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
@@ -1111,9 +1112,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let block: string;
+        let read: { molblock: string; configuration?: Configuration };
         try {
-          block = await molblockOfSmiles(smiles, g.smiles);
+          read = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
           notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;
@@ -1122,7 +1123,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
         let unset: number | null = null;
         try {
-          const { left } = await openStereo(stereo, [block]);
+          const { left } = await openStereo(stereo, [read.molblock]);
           unset = left.atoms.length + left.bonds.length;
         } catch {
           unexamined++;
@@ -1139,7 +1140,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(seed?.from?.length ? { from: seed.from } : {}),
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
-        kept.push({ place: kept.length, drawn: withoutStereoOpen(await drawingOf(block, style)), record });
+        // (laid out from what the plugin read of the SMILES, and the text's own axes, as a SMILES typed is)
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, read, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);

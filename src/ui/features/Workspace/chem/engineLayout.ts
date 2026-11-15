@@ -48,6 +48,12 @@ export type LayoutJob = {
   /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
   given?: true;
   /**
+   * `input`'s configuration - its centres, double bonds, axes and cumulenes - is the whole of what the structure states, given by where it
+   * came from (a plugin's reading, beside its drawing: `laidOut`), not read from its drawing: the drawing laid out must state each of them as
+   * given, and none more.
+   */
+  stated?: true;
+  /**
    * The double bonds the structure's own text leaves without a configuration, drawn straight on so that they state none (`laidOut`), by their
    * atoms' ids ("a,b", the smaller first): what a plugin's drawing of them said is not to be kept.
    */
@@ -112,7 +118,7 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
 /** An H that is only an H: no mass number, charge or anything more a centre's count of its H's would lose. */
 const plainH = (a: Model["atoms"][number]) => a.el === "H" && !Object.keys(chemistry(a)).length;
 
-export function layoutJob(part: Model): LayoutJob {
+export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const { tetra, cisTrans, axes, cumulated } = stereo;
@@ -150,7 +156,8 @@ export function layoutJob(part: Model): LayoutJob {
   });
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
-  const unread = unreadWedges(drawing, stereo);
+  // (but at a centre whose configuration is given beside the drawing - by atom, `given` - the wedge is no reading of it: what is given is)
+  const unread = unreadWedges(drawing, stereo).filter((i) => !given.has(i));
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
@@ -741,6 +748,8 @@ function drawnAs(m: Model, style: DrawingStyle) {
  */
 function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed" | "gained" | null {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
+  // (what was given is what must be shown: each unit as given, and none more - not what the drawing given with it read)
+  if (job.stated) return stereoAgainst(statedOf(job, part), stereoOf(relayout(doc, change).model));
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
   const cumulated = new Set((job.input.cumulated ?? []).map((x) => pair(job.ids[x.atoms[0]], job.ids[x.atoms[1]])));
   const axes = new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]])));
@@ -798,13 +807,59 @@ function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; 
   return null;
 }
 
+export type StereoShown = ReturnType<typeof stereoOf>;
+
+/**
+ * The configuration a job gives the engine (`LayoutJob.stated`), by atom id, as `stereoOf` gives a drawing's: each centre's neighbours by id
+ * (-1 its H or lone pair not drawn), each double bond's groups from its lower id's end first, each axis's sense against the lowest-id
+ * neighbour at each end - of `part`, whose atoms the job's are.
+ */
+export function statedOf(job: LayoutJob, part: Model): StereoShown {
+  const n = job.ids.length;
+  const id = (k: number) => (k === -1 ? -1 : job.ids[k]);
+  const centres = new Map<number, Tetrahedral>(
+    job.input.atoms.flatMap((a, k) => (k < n && a.tetra ? [[job.ids[k], { neighbours: a.tetra.neighbours.map(id), volume: a.tetra.volume }] as [number, Tetrahedral]] : [])),
+  );
+  const doubles = new Map<string, { refs: [number, number]; cis: boolean }>();
+  const keyed = (a: number, b: number, r: readonly [number, number], cis: boolean) => {
+    const [x, z] = [id(a), id(b)];
+    doubles.set(x < z ? `${x},${z}` : `${z},${x}`, { refs: x < z ? [id(r[0]), id(r[1])] : [id(r[1]), id(r[0])], cis });
+  };
+  for (const b of job.input.bonds) if (b.stereo) keyed(b.a, b.b, b.stereo.refs, b.stereo.cis);
+  for (const x of job.input.cumulated ?? []) keyed(x.atoms[0], x.atoms[1], x.refs, x.cis);
+  const d = drawingOf(part);
+  const axes = new Map<string, number>();
+  for (const ax of job.input.axes ?? []) {
+    const [i, j] = ax.atoms;
+    axes.set(id(i) < id(j) ? `${id(i)},${id(j)}` : `${id(j)},${id(i)}`, axisAgainstLowest(d, part.atoms.map((a) => a.id), ax));
+  }
+  return { centres, doubles, axes };
+}
+
+/** How the stereochemistry `now` shows differs from `stated`, each unit by atom id: "changed" where one is lost or turned, "gained" where `now` shows one not stated. */
+export function stereoAgainst(stated: StereoShown, now: StereoShown): "changed" | "gained" | null {
+  for (const [c, t] of stated.centres) {
+    const u = now.centres.get(c);
+    if (!u || !sameConfiguration(t, u)) return "changed";
+  }
+  for (const [key, d] of stated.doubles) {
+    const e = now.doubles.get(key);
+    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
+  }
+  for (const [key, sense] of stated.axes) if (now.axes.get(key) !== sense) return "changed";
+  for (const c of now.centres.keys()) if (!stated.centres.has(c)) return "gained";
+  for (const key of now.doubles.keys()) if (!stated.doubles.has(key)) return "gained";
+  for (const key of now.axes.keys()) if (!stated.axes.has(key)) return "gained";
+  return null;
+}
+
 /**
  * The stereochemistry `m` shows, by atom id: an H drawn on its own on a
  * centre counted as the centre's H (-1), each double bond's groups given
  * from its lower id's end first, and each axis's sense taken against the
  * lowest-id neighbour at each end.
  */
-function stereoOf(m: Model) {
+export function stereoOf(m: Model) {
   const d = drawingOf(m);
   const ids = m.atoms.map((a) => a.id);
   const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
@@ -827,6 +882,16 @@ function stereoOf(m: Model) {
     const refs: [number, number] = a < z ? [ids[x.refs[0]], ids[x.refs[1]]] : [ids[x.refs[1]], ids[x.refs[0]]];
     doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: x.cis });
   }
+  const axes = new Map<string, number>();
+  for (const ax of drawnAxes) {
+    const [i, j] = ax.atoms;
+    axes.set(ids[i] < ids[j] ? `${ids[i]},${ids[j]}` : `${ids[j]},${ids[i]}`, axisAgainstLowest(d, ids, ax));
+  }
+  return { centres, doubles, axes };
+}
+
+/** An axis's sense taken against the lowest-id neighbour at each end (`ids` the drawing's atoms' ids, by place): against the other neighbour at an end, the sense turns. */
+function axisAgainstLowest(d: { bonds: readonly { a: number; b: number; order: number }[] }, ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: number }): number {
   // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
   const bonded = (x: number, y: number) => d.bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
   const through = (x: number, end: number) => {
@@ -839,14 +904,8 @@ function stereoOf(m: Model) {
     return d.bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));
   };
   const lowest = (x: number, not: number) => others(x, not).reduce((p, q) => (ids[p] < ids[q] ? p : q));
-  const axes = new Map<string, number>();
-  for (const ax of drawnAxes) {
-    const [i, j] = ax.atoms;
-    // (against the other neighbour at an end, the sense turns)
-    const sense = ax.sense * (ax.refs[0] === lowest(i, j) ? 1 : -1) * (ax.refs[1] === lowest(j, i) ? 1 : -1);
-    axes.set(ids[i] < ids[j] ? `${ids[i]},${ids[j]}` : `${ids[j]},${ids[i]}`, sense);
-  }
-  return { centres, doubles, axes };
+  const [i, j] = ax.atoms;
+  return ax.sense * (ax.refs[0] === lowest(i, j) ? 1 : -1) * (ax.refs[1] === lowest(j, i) ? 1 : -1);
 }
 
 /** The first id no atom or bond of `model` has. */
