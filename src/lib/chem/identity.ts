@@ -398,7 +398,10 @@ function unconfigured(g: LayoutInput): LayoutInput {
 /**
  * The structure with every configuration that sets nothing filled in, so
  * that it is one structure whether that configuration is drawn or not
- * (a rule of the chemistry check): nothing drawn is ever taken out. A
+ * (a rule of the chemistry check): nothing drawn is ever taken out, but
+ * at a centre or double bond two of whose groups are alike - two ends, or
+ * two whole groups (`groupsAlike`) - which sets nothing however the rest is
+ * given: there no configuration is written, drawn or not. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
  * nothing, so writing it changes no compound - an isopropyl's CH, a
@@ -447,19 +450,28 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   //  C=C(CH3)2 - sets nothing whatever else is given: swapping the two turns it over and leaves all else. Filled first,
   //  with no search; and as it sets nothing in every completion, it changes no other place's two senses)
   const ends = endsAlike(g);
-  for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (and one two of whose groups are alike as wholes - PPh3's P, its three phenyls - likewise: `groupsAlike`. Each group's
-  //  writing is small; the structure's own search, the costly part, is left for the places these do not settle)
-  const start = blanksOf(g);
-  const alike = groupsAlike(g, new Set(start.flatMap((b) => b.own)), symmetryClasses(unconfigured(input)));
-  for (const b of start) if (b.kind !== "biaryl" && b.sides.some((side, k) => alike(b.own[k] ?? b.own[0], side))) g = given(g, b, true);
+  //  writing is small; the structure's own search, the costly part, is left for the places these do not settle. Such a
+  //  centre or double bond sets nothing however the rest is given, so it carries no configuration at all - one drawn on it
+  //  taken off, none filled in, it is offered no more: written so, its text never turns on which way it was filled in, as a
+  //  sense picked by the order the atoms came in would where a search runs out of steps - Pd(PPh3)4, found in review)
+  const every = blanksOf(unconfigured(g));
+  const alike = groupsAlike(g, new Set(every.flatMap((b) => b.own)), symmetryClasses(unconfigured(input)));
+  const settled = every.filter((b) => (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
+  const plainAt = new Set(settled.flatMap((b) => (b.kind === "centre" ? [b.at] : [])));
+  const plainBond = new Set(settled.flatMap((b) => (b.kind === "bond" ? [b.at] : [])));
+  g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  // (the places left: those not settled so)
+  const open = (b: Blank) => !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at));
+  // (an axis or a cumulene of alike end atoms: filled, as before)
+  for (const b of blanksOf(g)) if ((b.kind === "axis" || b.kind === "cumulated") && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
   let classes: number[] | null = null;
   // (each fill gives one place or takes out one drawn axis, so there are never more rounds than places at the start: a round
   //  past that is a fault, and ends with what is filled so far, said incomplete, rather than running on)
-  const most = blanksOf(g).length;
+  const most = blanksOf(g).filter(open).length;
   for (let round = 0; ; round++) {
-    const blanks = blanksOf(g);
+    const blanks = blanksOf(g).filter(open);
     if (!blanks.length) return { input: g, complete, text, searches };
     if (round > most) return { input: g, complete: false, text: undefined, searches };
     classes ??= symmetryClasses(unconfigured(input));
