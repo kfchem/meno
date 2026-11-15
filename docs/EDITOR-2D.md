@@ -1989,7 +1989,32 @@ lipids each have their own way of being drawn, which it should know.
      the text gives E or Z is drawn as given. A double bond drawn straight
      on carries no other mark of being open - not a plugin's either
      configuration for it - so Clean-up keeps it straight, as it keeps any
-     double bond drawn so.
+     double bond drawn so. An odd cumulene (a butatriene's run of three
+     double bonds, or five) has its cis or trans across the run's two
+     ends, and is drawn open the same way when the text gives it none:
+     each end's one group straight on from the run, or a wavy bond on a
+     group of an end, an end of one group first. Clean-up keeps such a
+     run's ends straight too. An end of one group and no H (an N's) has
+     none to state, as the reader takes a run, and is left as it is. A run
+     in a ring of seven or fewer is held cis; in a ring of eight or more it
+     is drawn open, though the smallest ring a run can be trans in is
+     larger than a double bond's: there Meno may leave open what only cis
+     can be, never state the other isomer. A structure drawn from a
+     plugin's MOL block - a SMILES's, a step's, the formula of a molecule
+     in 3D - shows no run's cis or trans but one Meno's own reading of its
+     text gives (of a molecule in 3D, of its places: each allene's axis and
+     odd cumulene's cis or trans as it stands, an H at a run's end standing
+     for the end's other group, which the formula draws): a MOL block
+     cannot say one, so what the plugin's picture
+     shows of a run is chance. Laid out, any other run is drawn open, as
+     above, and stays so through Clean-up; kept as it came, not laid out, a
+     run it shows otherwise is marked with a wavy bond. Where Meno's own
+     reader does not take the text, no run is given, and every odd run is
+     so drawn open. An allene's run (two double
+     bonds, or four) has an axis instead, which nothing draws open: a
+     bond of it marked either is drawn as a double bond of no run, so no
+     wavy bond goes on an end's groups for it. An odd run's bond marked
+     either - any of its bonds - goes to the run's two far ends.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the
