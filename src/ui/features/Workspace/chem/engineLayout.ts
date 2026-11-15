@@ -40,6 +40,11 @@ export type LayoutJob = {
   folded: Map<number, number[]>;
   /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
   given?: true;
+  /**
+   * The double bonds the structure's own text leaves without a configuration, drawn straight on so that they state none (`laidOut`), by their
+   * atoms' ids ("a,b", the smaller first): what a plugin's drawing of them said is not to be kept.
+   */
+  opened?: readonly string[];
 };
 
 /**
@@ -97,6 +102,9 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
   return pi;
 }
 
+/** An H that is only an H: no mass number, charge or anything more a centre's count of its H's would lose. */
+const plainH = (a: Model["atoms"][number]) => a.el === "H" && !Object.keys(chemistry(a)).length;
+
 export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
@@ -114,11 +122,12 @@ export function layoutJob(part: Model): LayoutJob {
         `(${unreadWhy(drawing.atoms, drawing.bonds, unread[0])}), so nothing was moved`,
     );
   }
-  // an H on a stereocentre, bonded to nothing else: the centre's own
+  // an H on a stereocentre, bonded to nothing else: the centre's own - but an H that is more than an H (a 2H, a 3H), which folded
+  // into its centre's count would be lost, and would leave the centre two H's alike where its groups differ only by isotope
   const foldedInto = new Map<number, number>();
   part.atoms.forEach((a, h) => {
     const mine = bondsOf.get(h) ?? [];
-    if (a.el !== "H" || mine.length !== 1) return;
+    if (!plainH(a) || mine.length !== 1) return;
     const b = drawing.bonds[mine[0]];
     const c = b.a === h ? b.b : b.a;
     if (b.order === 1 && part.atoms[c].el !== "H" && tetra.has(c)) foldedInto.set(h, c);
@@ -651,7 +660,7 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
       doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated]),
       axes,
     },
-    job.given ? { doubles: cumulated, axes } : undefined,
+    job.given || job.opened?.length ? { doubles: new Set([...(job.given ? cumulated : []), ...(job.opened ?? [])]), axes: job.given ? axes : new Set<string>() } : undefined,
   );
 }
 
@@ -708,7 +717,8 @@ function stereoOf(m: Model) {
   const ids = m.atoms.map((a) => a.id);
   const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
   const degree = degrees(m.bonds);
-  const asId = (n: number) => (n === -1 || (m.atoms[n].el === "H" && degree.get(ids[n]) === 1) ? -1 : ids[n]);
+  // (an H that is more than an H - a 2H, a 3H - is an atom of its own here too: two on one centre told apart)
+  const asId = (n: number) => (n === -1 || (plainH(m.atoms[n]) && degree.get(ids[n]) === 1) ? -1 : ids[n]);
   const centres = new Map<number, Tetrahedral>(
     [...tetra].map(([c, t]) => [ids[c], { neighbours: t.neighbours.map(asId), volume: t.volume }]),
   );
