@@ -5,7 +5,7 @@ import { smilesInput } from "../../../../lib/layout/smilesInput";
 import type { ConfiguredCentre, Configuration } from "../../../../lib/chem/stereoOpen";
 import type { Model } from "../store/types";
 import { cipMarksOf } from "./cipMarks";
-import { laidOut, notShownOf } from "./cleanUp";
+import { laidOut, notShownOf, openAsCame } from "./cleanUp";
 import { identityOfDrawn } from "./identityOf";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { asCameSaid } from "./fromSmiles";
@@ -167,6 +167,27 @@ describe("a double bond given beside the drawing, as the engine takes it", () =>
 
   it("is none where the groups given are not that bond's", () => {
     expect(cisTransOfGiven({ bond: 0, ends: [7, 5], cis: true }, 3, 4, neighbours)).toBeNull();
+  });
+});
+
+describe("a double bond the field does not name, that could be cis or trans", () => {
+  // (hexa-2,4-diene: C1-C2=C3-C4=C5-C6, both bonds drawn trans by the plugin's picture; the field names the first alone, bond 1 - C2=C3)
+  const picture = () => {
+    const m = drawnFromSmiles("C/C=C/C=C/C");
+    return { ...m, bonds: m.bonds.map(({ stereo: _s, narrow: _n, display: _d, ...b }) => b) as Model["bonds"] };
+  };
+  const firstOnly: Configuration = { centres: [], doubles: [{ bond: 1, ends: [0, 3], cis: false }] };
+  const stated = (m: Model) => identityOfDrawn(m).text;
+
+  it("is laid out open - stating neither - with nothing asked of Meno's own reading of the text: one stated, as given", async () => {
+    const laid = await laidOut(picture(), MENO, { axes: [], cumulated: [], configuration: firstOnly });
+    expect(stated(laid)).toBe(identity(smilesInput("C/C=C/C=CC")).text);
+    expect(stated(laid)).not.toBe(identity(smilesInput("C/C=C/C=C/C")).text);
+  });
+
+  it("is open in a drawing kept as it came too: the plugin's picture states it, the drawing kept does not", () => {
+    expect(stated(picture())).toBe(identity(smilesInput("C/C=C/C=C/C")).text);
+    expect(stated(openAsCame(picture(), { axes: [], cumulated: [], configuration: firstOnly }, undefined))).toBe(identity(smilesInput("C/C=C/C=CC")).text);
   });
 });
 

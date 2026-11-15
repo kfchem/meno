@@ -14,7 +14,7 @@ import type { EditorStore } from "../store";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, statedOf, stereoOf, type LayoutJob } from "./engineLayout";
-import { sameConfiguration } from "../../../../lib/layout/drawn";
+import { openDoubleBonds, sameConfiguration } from "../../../../lib/layout/drawn";
 import { layOut } from "./layOut";
 import { cisTransOfGiven, tetraOfGiven, type Given } from "./givenConfiguration";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
@@ -303,7 +303,7 @@ const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === m
  * (lib/chem/lonePairCentres); one whose atoms are not the drawing's is not given. The drawing laid out is then held to the whole of it
  * (`LayoutJob.stated`).
  */
-function withGiven(job: LayoutJob, model: Model, given: Given): LayoutJob {
+function withGiven(job: LayoutJob, model: Model, given: Given, ungivenDoubles: "kept" | "dropped" = "kept"): LayoutJob {
   const input = { ...job.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) };
   const c = given.configuration;
   if (!c) return { ...job, given: true, stated: true, input };
@@ -343,7 +343,11 @@ function withGiven(job: LayoutJob, model: Model, given: Given): LayoutJob {
         const d = doubles.get(pair(b.a, b.b));
         // (a double bond the plugin gives nothing of, which the drawing reads cis or trans - an aromatic macrocycle's, which Meno's own
         //  rules read and the toolkit's do not: as the drawing reads it, as before; the two are listed in the differential)
-        if (!d) return b;
+        if (!d && ungivenDoubles === "kept") return b;
+        if (!d) {
+          const { stereo: _drawn, ...bare } = b;
+          return bare;
+        }
         const { stereo: _drawn, ...rest } = b;
         const ct = b.order === 2 ? cisTransOfGiven(d, b.a, b.b, (x) => around.get(x) ?? []) : null;
         return ct ? { ...rest, stereo: ct } : rest;
@@ -383,6 +387,40 @@ export function notShownOf(model: Model, given: Given): { centres: [number, numb
   return { centres: [centres, stated.centres.size], doubles: [doubles, stated.doubles.size], axes: [axes, stated.axes.size] };
 }
 
+/**
+ * The double bonds of a structure whose source gave its configuration beside its drawing (`Given`) that could be cis or trans and that it
+ * does not name: open, so drawn that they state neither - each end straight on, or a wavy bond on a group (Brecher 2006, ST-4.4), as the
+ * layout's own test has them (lib/layout/drawn `openDoubleBonds`). Read from what was given and the drawing alone: nothing of Meno's own
+ * reading of a SMILES. None where the plugin sent no configuration, or its atoms are not the drawing's.
+ */
+export function openOfField(model: Model, given: Given): OpenDoubles | null {
+  if (!given.configuration) return null;
+  const read = layoutJob(model, new Set(given.configuration.centres.map((c) => c.atom)));
+  if (!givenFits(read, model)) return null;
+  // (what was given held, the drawing's own cis or trans of every other double bond set aside: what is left that could have one is open)
+  return openDoubleBonds(withGiven(read, model, given, "dropped").input);
+}
+
+/**
+ * A drawing kept as it came (fromSmiles `drawingOf`, where Meno's layout could not be made) with its open double bonds - the text's, and the
+ * field's - drawn so that they state neither: a wavy bond on each (its ends cannot be put straight on without a layout). Else it would state
+ * whatever the plugin's picture shows.
+ */
+export function openAsCame(model: Model, given: Given | undefined, open: OpenDoubles | undefined): Model {
+  const all = bothOpen(open, given ? openOfField(model, given) : null);
+  if (!all) return model;
+  const ends = new Set(all.straight.map((i) => model.atoms[i]?.id));
+  const either = new Set(all.either);
+  return { ...model, bonds: model.bonds.map((b, i) => (b.order === 2 && (either.has(i) || (ends.has(b.a) && ends.has(b.b))) ? { ...b, stereo: "either" as const } : b)) };
+}
+
+/** Two sets of open double bonds as one: the text's, where Meno read it, and the field's. */
+function bothOpen(p: OpenDoubles | null | undefined, q: OpenDoubles | null | undefined): OpenDoubles | undefined {
+  if (!p) return q ?? undefined;
+  if (!q) return p;
+  return { straight: [...new Set([...p.straight, ...q.straight])], either: [...new Set([...p.either, ...q.either])] };
+}
+
 export async function laidOut(
   model: Model,
   style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle),
@@ -392,6 +430,9 @@ export async function laidOut(
   arranged: ReadonlySet<number> = new Set(),
 ): Promise<Model> {
   if (!model.bonds.length) return model;
+  // (and one the plugin's reading leaves open, where it sent one: open whatever Meno could read of the text - a SMILES its own reader
+  //  refuses gives no list of its own, and its open double bonds would else be drawn bent, stating what nobody gave)
+  open = given?.configuration ? bothOpen(open, openOfField(model, given)) : open;
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
   // (one left open with one group at each end, its ends kept straight on below: the plugin's own mark of either configuration taken off it,

@@ -1086,8 +1086,14 @@ wedge the drawing's own reading could not keep does not stop the layout.
 What is given goes to the engine in one fixed form (a centre's neighbours
 rising, a double bond's group on each end the lowest-numbered), so that
 the drawing Meno makes does not depend on who gave it. A double bond the
-plugin gives nothing of, which Meno's rules read from the drawing (an
-aromatic macrocycle's), is laid out as the drawing reads it, as before.
+plugin gives nothing of that could be cis or trans is open: drawn so that
+it states neither, each end straight on or a wavy bond on a group (ST-4.4),
+worked out from what was given and the drawing alone - so a SMILES Meno's
+own reader refuses (a metal's mark, a sense written at an aziridine's N)
+still has its open double bonds open; and a drawing kept as it came has a
+wavy bond on each. One that is no stereo unit, which Meno's rules read from
+the drawing (an aromatic macrocycle's, a guanidine's), is laid out as the
+drawing reads it, as before.
 A plugin that sends no configuration is read as before.
 
 ## How the engine goes about it
