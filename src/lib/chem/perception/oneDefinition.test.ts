@@ -27,7 +27,9 @@ export const CONCEPTS: Record<string, RegExp> = {
   valence: /^(?:export )?(?:function|const) (VALENCE|VALENCES|HIGHER|OUTER|HIGHEST|PYRAMID_VALENCE|VALENCE_ELECTRONS|D_ORBITAL_VALENCE|NORMAL_VALENCES|BONDS_LEFT|CARRIERS)\b/,
   parity: /^(?:export )?(?:function|const) (parity|permutationParity)\b/,
   volume: /^(?:export )?(?:function|const) (drawnVolume|volumeSign|handedness|signedVolume)\b/,
-  "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
+  "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
+  // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
+  "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
 };
 
 /**
@@ -37,9 +39,6 @@ export const CONCEPTS: Record<string, RegExp> = {
 export const STILL_APART: Copy[] = [
   // rings: one perception, and the "smallest ring through" searches, the bridge test and the ring-system groupers onto it
   { concept: "rings", file: "lib/layout/rings.ts", name: "ringsAlike", part: 2, why: "the cycles beyond a smallest set: the layout's own question, not the set the core defines" },
-  { concept: "rings", file: "lib/layout/drawn.ts", name: "inSmallRing", part: 2, why: "in drawn.ts, which the CIP chain rewrites: moved after it, with part 2b" },
-  { concept: "rings", file: "lib/layout/drawn.ts", name: "ringThrough", part: 2, why: "in drawn.ts, which the CIP chain rewrites: moved after it, with part 2b" },
-  { concept: "rings", file: "lib/chem/cip/in3d.ts", name: "ringThrough", part: 2, why: "the size of the smallest ring through a bond, in the CIP's reading of a molecule in 3D (on main since this part was built): moved with the CIP chain, with part 2b" },
   { concept: "rings", file: "lib/chem/ordersFromGeometry.ts", name: "smallRings", part: 2, why: "every simple cycle of three to six atoms, not a smallest set: its flatness test is asked of each (not moved in part 2)" },
   { concept: "rings", file: "lib/chem/protonation.ts", name: "smallRings", part: 2, why: "returns the smallest ring through each bond, each once, its atoms in order: the core's set holds two of bicyclo[2.2.2]octane's three six-rings, this returns all three, so the lists are not the same sets (not moved in part 2)" },
   { concept: "rings", file: "ui/features/Workspace/utils/expandPlace.ts", name: "ringsThrough", part: 2, why: "the rings through two neighbours of one atom, the shortest way round from one to the other, their atoms in order: another question than a smallest set (not moved in part 2)" },
@@ -49,17 +48,9 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/cage.ts", name: "smallestSets", part: 2, why: "the layout's own choice of ring set for a cage" },
   { concept: "rings", file: "lib/layout/cage.ts", name: "sixCycles", part: 2, why: "the six-cycles of a cage, the layout's own search" },
   { concept: "rings", file: "lib/layout/ringSets.ts", name: "ringSetsToTry", part: 2, why: "the layout's own choice of ring sets to try" },
-  // metals: every list in one file under its name
-  { concept: "metals", file: "lib/layout/perceive.ts", name: "METALS", part: 3 },
-  { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3 },
-  { concept: "metals", file: "lib/layout/perceive.ts", name: "BRIDGED_TO", part: 3 },
-  { concept: "metals", file: "lib/chem/ligands.ts", name: "METALS", part: 3 },
-  { concept: "metals", file: "lib/chem/metalHolds.ts", name: "isMetal", part: 3 },
-  { concept: "metals", file: "lib/chem/elements.ts", name: "NOT_METALS", part: 3 },
-  { concept: "metals", file: "lib/chem/condensed.ts", name: "IONIC", part: 3 },
-  { concept: "metals", file: "lib/chem/smilesWhy.ts", name: "IONIC", part: 3 },
-  { concept: "metals", file: "lib/chem/protonation.ts", name: "COUNTED", part: 3 },
-  { concept: "metals", file: "lib/chem/ordersFromGeometry.ts", name: "COUNTED", part: 3 },
+  // metals: every list in one file under its name (perception/elements.ts); what stands apart is a name for a set of it, or a test of its own
+  { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
+  { concept: "metals", file: "lib/chem/conformersSought.ts", name: "metalByBonds", part: 3, why: "a test of its own (no most bonds), not a list: it becomes the core's metal in part 3's fixes (B4)" },
   // valence tables: one count, one table (hydrogens and valence)
   { concept: "valence", file: "lib/chem/molecule.ts", name: "VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/molecule.ts", name: "HIGHEST", part: 12 },
@@ -78,7 +69,6 @@ export const STILL_APART: Copy[] = [
   { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
   { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
   { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
-  { concept: "volume", file: "lib/layout/geometry.ts", name: "drawnVolume", part: 4 },
   { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },
   { concept: "volume", file: "lib/layout/cage.ts", name: "handedness", part: 4 },
   { concept: "volume", file: "lib/steps/compareBonding.ts", name: "handedness", part: 4 },
@@ -94,6 +84,7 @@ export const STILL_APART: Copy[] = [
   // the layout's names for what the core now defines: re-exports, staged, each going as its consumers move
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Tetrahedral", part: 14, why: "re-exported from the core: no consumer's import line changes in the PR that made the core" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Axial", part: 14, why: "re-exported from the core, as Tetrahedral" },
+  { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Cumulated", part: 14, why: "re-exported from the core, as Tetrahedral (part 14 A)" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
 ];
 
@@ -159,11 +150,12 @@ describe("one definition per concept: the ratchet", () => {
 });
 
 describe("the ratchet's own reading, so that it bites", () => {
-  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre", () => {
+  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule", () => {
     expect(declarationsIn("export function ringThrough(g, a) {}\nconst x = 1;\n", CONCEPTS.rings)).toEqual([{ name: "ringThrough", line: 1 }]);
     expect(declarationsIn("const METALS = new Set([]);\n", CONCEPTS.metals)).toEqual([{ name: "METALS", line: 1 }]);
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
+    expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
   });
 
   it("leaves a use, a local and an import alone: only a declaration counts", () => {

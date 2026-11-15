@@ -368,7 +368,9 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 The texts are compared, not their keys. `identity` also says whether the
 canonical search was complete: where it ran out of steps (`settleBudget`),
 one structure may be written two ways, so a duplicate can be missed, but two
-different structures are never written the same. A drawing's structures are
+different structures are never written the same - save those that differ only
+by the hand of an octahedral centre, which is not yet told (*Duplicates,
+and what judges them*). A drawing's structures are
 read for it by `chem/identityOf.ts`, which also names any atom whose wedges
 it could not read. The rule is checked against RDKit's canonical isomeric
 SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
@@ -876,23 +878,92 @@ which is the same in every product.
   `src/lib/chem/identity.ts`);
 - the canonical text of the structure's aromatic form;
 - with each stereocentre's and each double bond's configuration as drawn,
-  and each axis of chirality.
+  and each axis of chirality;
+- and, for a square-planar or an octahedral metal, which of its donors are
+  across from each other (`src/lib/chem/arrangement.ts`).
 
 The texts are compared, not their hashed keys. The set states the method:
 *Duplicates judged by Meno's identity: constitution and configurations as
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
-- **a configuration drawn where there is no stereo unit counts for
-  nothing.** That is a wedge on a centre two of whose groups are alike (an
-  isopropyl's CH), or a double bond drawn bent whose one end carries two
-  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
-  it was drawn so or not. "Alike" counts every other configuration in the
-  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
-  are alike only until the other centre is counted, so its cis and trans
-  stay two structures, and a pseudoasymmetric centre keeps its r or s
-  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
-  them aside;
+- **a configuration that sets nothing is the same drawn or not.** That is
+  a wedge on a centre two of whose groups are alike (an isopropyl's CH),
+  or a double bond drawn bent whose one end carries two alike groups (a
+  prenyl's C=C(CH3)2). Identity never takes a configuration out: where
+  one could stand and none is drawn, it fills one in wherever both
+  senses write the same text, since such a place sets nothing
+  (`filledIn`). That joins mirror writings of one ring
+  compound: the cis,trans 1,2,3-trimethylcyclopropane drawn in full, and
+  drawn with its trans pair and its third centre plain, are one
+  structure. A place whose two senses write two texts is open and stays
+  so: the same compound with its cis pair drawn and the third plain
+  stands for two compounds, and is neither of them. "Alike" counts every
+  other configuration in the structure: the two ring arms at each centre
+  of 1,4-dimethylcyclohexane are alike only until the other centre is
+  counted, so its cis and trans stay two structures, a pseudoasymmetric
+  centre keeps its r or s, and the two enantiomers of a spirane such as
+  2,6-dimethylspiro[3.3]heptane are two structures. Places are filled one
+  at a time, the lowest in the canonical order first, then asked again.
+  The order matters, so it is always that one - but a centre or double
+  bond two of whose groups are alike (two methyls, PPh3's three phenyls:
+  each group hanging from the place alone, with no place or configuration
+  in it) sets nothing whatever else is given: it carries no configuration
+  in the identity, one drawn on it taken off, and is asked no more, with
+  no search of the whole structure. So its identity never turns on which
+  way it was filled in, as it could where a search runs out of steps
+  (Pd(PPh3)4). The filled form is
+  identity's own: the drawing keeps its wedges as drawn, and nothing filled
+  in is shown, drawn or saved;
+- **a metal's isomers by which donors are across are two structures:**
+  cisplatin and transplatin, fac and mer, the cis and trans forms of
+  [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
+  them for a metal of six donors however drawn, and for a metal of four
+  drawn as the X or in ST-2.6's wedge form, or as the upright cross where
+  it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I)) and
+  not marked "Which donors are next to each other is not given", as Meno
+  marks one it laid out with nothing given. Any other upright cross states
+  no geometry and is read as none, and so is any metal, of four donors or
+  six, that still carries that mark. A drawing nearer the diagonals is the
+  X, one nearer the page's axes the cross. A surely square-planar metal held
+  to another by bridges - [Pt2Cl4(NH3)2]'s, its donors joined only through
+  the other metal - states its pairs however its bonds lie, unless it is
+  marked: Clean-up sets such a pair out as a diamond that is neither the X
+  nor the cross, and cis and trans stay what they were. In 3D the places decide, for any metal
+  of four or six donors. Two donors are across where the angle between
+  them at the metal is at least 150 degrees (four donors) or 135 (six:
+  a terpyridine holds its outer donors short of a line), with no other
+  donor within 15 degrees of that angle. A flattened tetrahedron and a
+  trigonal prism have none. As for a centre, an arrangement that sets
+  nothing is filled in: PtCl4 2-, PtCl3(NH3)-, [Co(NH3)6]3+, Pt(en)Cl2
+  and [Co(en)3]3+ are one structure each, given or not. A metal all of
+  whose donors, or all but one, are groups alike as wholes (each hanging
+  from the metal alone: PtCl3Br 2-, RhCl(PPh3)3, Pd(PPh3)4) carries no
+  arrangement, one given taken off, with no search of the whole
+  structure, as such a centre carries no sense. A chelate's two
+  ends, joined by a ring of seven atoms or fewer with the metal, are
+  never taken as across. A complex whose arrangement can be more than
+  one and is not given (cisplatin from a SMILES) is a third structure,
+  matching neither isomer until it is given. Two metals held by bridges,
+  whose cis and trans dimers differ only together ([Pt2Cl4(NH3)2]), are
+  each taken as not given alike, not only the one the canonical order
+  fills last (`arrangementOpen`). The hand of an octahedral
+  centre is not yet told: the two enantiomers of [Co(en)3]3+ are one
+  structure. With two such centres, or one beside another place that is
+  set, structures that differ by a hand are joined though they are not
+  mirror images: two metals of six donors sharing an edge, their axial
+  donors on one side of the bridges' plane or on opposite sides, are one
+  structure where they are two compounds;
+- **a limit, on the safe side:** some writings that leave the same thing
+  unsaid in different ways get two identities. (4-Methylcyclohexylidene)
+  acetic acid drawn with its double bond bent and its centre plain, and
+  drawn with its centre wedged and its double bond straight, each mean
+  "either enantiomer", yet are two structures. Its centre alone sets
+  nothing, and its double bond alone, but once either is given the other
+  decides. Alike structures can be told apart this way; unlike ones are
+  never joined by it (the hand of an octahedral centre, above, is the one
+  case that joins), and only writings that state no single compound are
+  affected;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);

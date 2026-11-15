@@ -10,7 +10,7 @@ How to draw structures on the page with the pointer: bonds out of atoms, chains 
 
 ## Starting on empty space {#quick-add}
 
-Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked.
+Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked. Or just type a SMILES: it goes into the SMILES field. The first SMILES takes a moment.
 
 ## Bonds and atoms {#bonds}
 
