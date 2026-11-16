@@ -306,7 +306,8 @@ and plain with its other end narrow - once no second click has come (the
 maintainer, 2026-11-17, giving back the click of 2026-09-27; from
 2026-11-14 to 2026-11-17 a click selected the bond and changed nothing). A
 bond is selected by Cmd or Ctrl and a click, which adds it or takes it
-out, by the box and by the lasso; Shift and a click are as before. A
+out, by a right-click, which selects what it is on as it opens its menu,
+by the box and by the lasso; Shift and a click are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click
 turning nothing; a slower one, its second click within a double-click's time

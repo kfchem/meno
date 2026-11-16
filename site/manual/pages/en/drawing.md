@@ -47,7 +47,7 @@ Right-click an atom or a bond for what can be done to it: a row of icons, each s
 
 ## Choosing what to work on {#selecting}
 
-- Click an atom to choose it alone. Hold ⌘ (Ctrl on Windows) and click to add or take out an atom or a bond, or hold Shift and click to take everything along the bonds from the last atom chosen to this one. A bond is chosen with ⌘ (Ctrl), a box or a lasso.
+- Click an atom to choose it alone. Hold ⌘ (Ctrl on Windows) and click to add or take out an atom or a bond, or hold Shift and click to take everything along the bonds from the last atom chosen to this one. A bond is chosen with ⌘ (Ctrl), a right-click, a box or a lasso.
 - Press and hold on an atom or a bond to choose its whole structure; drag from there to move it.
 - Press and hold on empty space, then drag, to choose what a box holds - with Option (Alt on Windows) held, what a lasso encloses.
 - ⌘A (Ctrl+A) chooses everything; a click on empty space, or Escape, nothing.
