@@ -44,6 +44,12 @@ export type Facts = {
 /** A pair of atoms as one key, the lower first. */
 const keyOf = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
 
+/**
+ * The smallest ring a double bond can be in and have a cis or trans to state: eight atoms - one in a ring of seven or fewer is held cis. What
+ * the reader of a drawing, the layout's open double bonds and the CIP each ask of `inRingSmallerThan`.
+ */
+export const OPEN_RING = 8;
+
 const made = new WeakMap<ChemGraph, Facts>();
 
 /** The facts of a graph: made on first asking, kept with the graph. */

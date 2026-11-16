@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aromaticRingSides, ringSides } from "./aromaticSides";
+import { ELEMENTS } from "./elements";
+import { piElectrons } from "./perception/aromatic";
 
 type B = { a1: number; a2: number; order: number };
 const bond = (a1: number, a2: number, order = 1): B => ({ a1, a2, order });
@@ -59,6 +61,31 @@ describe("aromaticRingSides", () => {
     expect(aromaticRingSides(8, quinone, [..."CCCCCCOO"]).size).toBe(0);
     const cp = [bond(0, 1, 2), bond(1, 2), bond(2, 3, 2), bond(3, 4), bond(4, 0)];
     expect(aromaticRingSides(5, cp, Array(5).fill("C")).size).toBe(0);
+  });
+
+  it("shows a five-ring as aromatic exactly where Meno's aromatic rule gives its fifth atom a lone pair: an arsole, a tellurophene too", () => {
+    // the ring 0-4, 0=1 and 2=3, the atom left over at 4
+    const ring = [bond(0, 1, 2), bond(1, 2), bond(2, 3, 2), bond(3, 4), bond(4, 0)];
+    const pair = (el: string) =>
+      piElectrons({ el, charge: 0, inSystem: false, outTo: null, triple: false, degree: 2 }) === 2;
+    const shown = ELEMENTS.map((e) => e.symbol).filter(
+      (el) => aromaticRingSides(5, ring, ["C", "C", "C", "C", el]).size === 2,
+    );
+    expect(shown).toEqual(ELEMENTS.map((e) => e.symbol).filter(pair));
+    expect([...shown].sort()).toEqual(["As", "N", "O", "P", "S", "Se", "Te"]);
+  });
+
+  it("puts a double bond shared by a tellurophene and a cyclopentadiene into the tellurophene, however the atoms are numbered", () => {
+    // two five-rings fused at 3=4: 0,1,2,3,4 (1=2) and 3,4,5,6,7 (5=6); one
+    // atom left over in each, at 0 and at 7 - the Te at one, a CH2 at the other
+    const bonds = [
+      bond(0, 1), bond(1, 2, 2), bond(2, 3), bond(3, 4, 2), bond(4, 0),
+      bond(4, 5), bond(5, 6, 2), bond(6, 7), bond(7, 3),
+    ];
+    const teAt0 = ringSides(8, bonds, ["Te", "C", "C", "C", "C", "C", "C", "C"]);
+    expect(into(teAt0, 3)).toEqual([0, 1, 2, 3, 4]);
+    const teAt7 = ringSides(8, bonds, ["C", "C", "C", "C", "C", "C", "C", "Te"]);
+    expect(into(teAt7, 3)).toEqual([3, 4, 5, 6, 7]);
   });
 });
 

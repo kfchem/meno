@@ -966,7 +966,10 @@ round).
   those bonds, and lays them out as one bond from the metal to that star,
   as the CTfile's multi-centre bond is, the ring's atoms its endpoints -
   ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
-  2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
+  2026-10-17, `etaBondedAtomByAtom`; such a ring's double bonds, bound
+  face-on through every atom, are one Kekule form of it and have no cis
+  or trans, so uranocene drawn so is laid out as ferrocene is, not refused
+  for its eight-rings' double bonds - backlog 178, 2026-11-16; so too a chain of three atoms or more
   each bonded to the metal, an allyl, but not two, a three-membered ring
   with the metal being how a metallacyclopropane is drawn as well; an
   η3-allyl, once laid out, posed with its middle carbon away from the

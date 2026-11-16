@@ -873,6 +873,74 @@ describe("a double bond's cis or trans, drawn: in no ring, or in a ring of eight
     expect(read("C1CCC=CC1")).toEqual([]);
     expect(read("C1CCCC=CC1")).toEqual([]);
   });
+
+  /** A ring of `n` with its double bond 0=1 and atom 2 drawn straight on from it, the rest round a circle back to 0: the ends kept straight. */
+  const ringDrawnStraight = (n: number) => {
+    const atoms: DrawnAtom[] = [
+      { el: "C", x: 0, y: 0, hs: 0 },
+      { el: "C", x: 1, y: 0, hs: 0 },
+      { el: "C", x: 2, y: 0, hs: 0 },
+      ...Array.from({ length: n - 3 }, (_, k) => {
+        const t = (Math.PI * (k + 1)) / (n - 2);
+        return { el: "C", x: 1 + Math.cos(t), y: 1.5 * Math.sin(t), hs: 0 };
+      }),
+    ];
+    const bonds: DrawnBond[] = atoms.map((_, i) => ({ a: i, b: (i + 1) % n, order: i === 0 ? 2 : 1 }));
+    return straightEnds(atoms, bonds);
+  };
+
+  it("keeps an end drawn straight on in a ring of eight, which can state cis or trans, and none in a ring of seven, which cannot", () => {
+    expect([...ringDrawnStraight(8)]).toEqual([1]);
+    expect([...ringDrawnStraight(7)]).toEqual([]);
+  });
+});
+
+describe("the ends kept straight on of an odd cumulene drawn so: its cis or trans across the run left unsaid", () => {
+  /** Hexa-2,3,4-triene, C0 C1=C2=C3=C4 C5, its run along x, each end's methyl straight on or bent off by `bend` (y). */
+  const triene = (bendA: number, bendB: number, wavy = false) => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: "C", x, y: i === 0 ? bendA : i === 5 ? bendB : 0, hs: i === 1 || i === 4 ? 1 : 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3, 4].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 4 ? 1 : 2, ...(wavy && i === 0 ? { either: true } : {}) }));
+    return straightEnds(atoms, bonds);
+  };
+
+  it("keeps each end whose group is straight on from the run", () => {
+    expect([...triene(0, 0)].sort()).toEqual([1, 4]);
+    expect([...triene(0, 0.9)]).toEqual([1]);
+    expect([...triene(0.9, 0.9)]).toEqual([]);
+  });
+
+  it("keeps none of an end of one group and no H - an N's, which has no cis or trans to state, as the run is read", () => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: i === 4 ? "N" : "C", x, y: 0, hs: i === 1 ? 1 : 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3, 4].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 4 ? 1 : 2 }));
+    expect([...straightEnds(atoms, bonds)]).toEqual([]);
+  });
+
+  it("keeps none where a wavy bond at an end says either already", () => {
+    expect([...triene(0, 0, true)]).toEqual([]);
+  });
+
+  it("keeps an end drawn straight on of a run in a ring of nine, and none of one in a ring of seven", () => {
+    /** A ring of `n`: the run 0=1=2=3 along x, 4 straight on from 3, the rest round back to 0. */
+    const ring = (n: number) => {
+      const atoms: DrawnAtom[] = [
+        ...[0, 1, 2, 3, 4].map((x) => ({ el: "C", x, y: 0, hs: x === 0 || x === 3 ? 1 : 0 })),
+        ...Array.from({ length: n - 5 }, (_, k) => {
+          const t = (Math.PI * (k + 1)) / (n - 4);
+          return { el: "C", x: 2 + 2 * Math.cos(t), y: 2 * Math.sin(t), hs: 0 };
+        }),
+      ];
+      const bonds: DrawnBond[] = atoms.map((_, i) => ({ a: i, b: (i + 1) % n, order: i < 3 ? 2 : 1 }));
+      return straightEnds(atoms, bonds);
+    };
+    expect([...ring(9)]).toEqual([3]);
+    expect([...ring(7)]).toEqual([]);
+  });
+
+  it("keeps none of an allene's run, which has an axis, not a cis or trans", () => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3].map((x) => ({ el: "C", x, y: 0, hs: 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 3 ? 1 : 2 }));
+    expect([...straightEnds(atoms, bonds)]).toEqual([]);
+  });
 });
 
 describe("a wedge out of an allene's end, read once: the allene's axis, and no axis about the end's single bond", () => {
@@ -1043,7 +1111,8 @@ describe("an axis inside a ring, drawn", () => {
     expect(read[0].sense).toBe(given.sense);
     // (2,2'-bipyridine-PdCl2, its N bound to Pd written as N+, Pd as 2-, so that its rings are aromatic as drawn)
     expect(readBack("Cl[Pd-2]1(Cl)[n+]2ccccc2-c2cccc[n+]21", [8, 9]).read).toEqual([]);
-  });
+    // (BINAP and bipyridine complexes laid out and read: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(600));
 
   it("reads one on a biaryl bond in no ring: 2,2',6,6'-tetramethylbiphenyl's", () => {
     const { given, read } = readBack("Cc1cccc(C)c1-c1c(C)cccc1C", [7, 8]);

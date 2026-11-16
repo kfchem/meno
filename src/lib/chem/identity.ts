@@ -23,6 +23,7 @@ import { CHELATE_RING } from "./chelateRing";
 import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
+import { runsThrough } from "./perception/stereo/runs";
 import { AROMATIC, aromaticForm } from "./perception/aromatic";
 
 // (the aromatic form identity and symmetry compare structures in: the core's, where the two forms are said apart)
@@ -117,8 +118,8 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     }
     return [{ ...bond, stereo: { refs: [at.get(p)!, at.get(q)!], cis } }];
   });
-  // (the atom an axis's or a cumulene's end runs on through: its cumulated double bond's)
-  const runsOn = (end: number) => around[end].find((e) => e.order >= 2)?.to ?? -1;
+  // (the atom an axis's or a cumulene's end runs on through: its cumulated double bond's - perception/stereo/runs)
+  const runsOn = (end: number) => runsThrough(around[end]) ?? -1;
   const axes = (input.axes ?? []).flatMap((x): Axial[] => {
     const refs = [...x.refs];
     let sense = x.sense;
@@ -126,7 +127,7 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
       if (!folded[refs[k]]) continue;
       // (the other end, a biaryl's; an allene's end runs on through its cumulated double bond)
       const end = x.atoms[k];
-      const by = instead(end, refs[k], around[end].some((e) => e.to === x.atoms[1 - k]) ? x.atoms[1 - k] : runsOn(end));
+      const by = instead(end, refs[k], runsThrough(around[end], x.atoms[1 - k]) ?? -1);
       if (by == null) return [];
       refs[k] = by;
       sense = -sense as 1 | -1;

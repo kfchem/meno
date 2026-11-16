@@ -77,8 +77,8 @@ export function bondKindOf(b: Pick<Bond, "order" | "stereo" | "display" | "dativ
 
 /**
  * What the key 1 makes of a single bond, pressed again and again: plain,
- * wedge, hashed wedge, plain again with the wedge's other end narrow (a
- * click on a bond did this until 2026-11-14; it now selects the bond). A
+ * wedge, hashed wedge, plain again with the wedge's other end narrow - and
+ * a click on a bond does the same (the maintainer, 2026-11-17). A
  * bond that is another kind - wavy, or bold, hashed, dashed or dative, as
  * its menu or a file made it - is taken out of it into the round's plain,
  * not left as it was. `narrowNow` is the end a wedge is narrow at as drawn
