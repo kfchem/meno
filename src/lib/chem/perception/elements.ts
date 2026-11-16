@@ -41,11 +41,12 @@ export const labelNotElement: ReadonlySet<string> = new Set(["Pr"]);
 
 /**
  * The metals ligands are drawn round (lib/layout/perceive `isMetal`, docs/LAYOUT-2D.md section 7), and a complex's formula is read for
- * (lib/chem/ligands): the `transitionMetal`s, but for two gaps. Pr, its label being propyl's (`labelNotElement`). And the seventh row, Ac to Cn:
- * not listed - so a thorium's or a uranium's complex is not drawn round its metal (foundation part 3, B1).
+ * (lib/chem/ligands): the `transitionMetal`s, the actinoids among them (Ac to Lr: uranocene is a sandwich as ferrocene is, and an H on U is a
+ * hydride kept, as on Pd - foundation part 3, B1), but for two gaps. Pr, its label being propyl's (`labelNotElement`). And Rf to Cn, the
+ * seventh row's d block, whose complexes are not made: not listed, as before.
  */
-export const drawnRoundMetal: ReadonlySet<string> = ((seventhRow) =>
-  new Set([...transitionMetal].filter((el) => !labelNotElement.has(el) && !seventhRow.has(el))))(byNumber([89, 112]));
+export const drawnRoundMetal: ReadonlySet<string> = ((notMade) =>
+  new Set([...transitionMetal].filter((el) => !labelNotElement.has(el) && !notMade.has(el))))(byNumber([104, 112]));
 
 /**
  * Nine metals of groups 1, 2, 12 and 13 bridged to a transition metal by two atoms as a second transition metal is - the Tebbe reagent's

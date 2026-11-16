@@ -948,6 +948,15 @@ its ligands round it, what is three-dimensional shown in perspective. None
 of it is a template - each is a rule, and the drawing is what the rules
 make of the molecule (`hapto.ts`, `assemble.ts`).
 
+The metals ligands are drawn round are the transition metals - the d
+block with the lanthanoids and actinoids, IUPAC's inner transition
+elements - but Pr, whose label on a drawing is propyl's, and Rf to Cn,
+whose complexes are not made (lib/chem/perception/elements
+`drawnRoundMetal`). So uranocene and thorocene are sandwiches as
+ferrocene is, and an H on U is a hydride, kept as an atom as on Pd
+(foundation part 3, B1, 2026-11-16; before, the actinoids were not drawn
+round).
+
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
   the metal to each of its atoms - ferrocene, bis(benzene)chromium with no

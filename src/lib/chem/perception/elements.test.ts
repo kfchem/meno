@@ -57,11 +57,11 @@ describe("what kind of element: each set by hand, against the periodic table", (
     expect([...ionic.keys()].filter((el) => !symbols.includes(el))).toEqual([]);
   });
 
-  it("draws ligands round the transition metals but Pr, propyl's label, and the seventh row", () => {
+  it("draws ligands round the transition metals, the actinoids among them, but Pr, propyl's label, and Rf to Cn", () => {
     expect(sorted(labelNotElement)).toEqual(["Pr"]);
-    expect(drawnRoundMetal.size).toBe(43);
-    for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Nd", "Lu", "Hg"]) expect(drawnRoundMetal.has(el), el).toBe(true);
-    for (const el of ["Pr", "Ac", "Th", "U", "Lr", "Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
+    expect(drawnRoundMetal.size).toBe(58);
+    for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Nd", "Lu", "Hg", "Ac", "Th", "U", "Lr"]) expect(drawnRoundMetal.has(el), el).toBe(true);
+    for (const el of ["Pr", "Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
     expect([...drawnRoundMetal].filter((el) => !transitionMetal.has(el))).toEqual([]);
   });
 
@@ -110,8 +110,8 @@ describe("each caller takes the set that was its list: nothing moved", () => {
   const every = [...symbols, ...notSymbols];
   const differ = (was: (el: string) => unknown, is: (el: string) => unknown) => every.filter((el) => was(el) !== is(el));
 
-  it("draws round the same metals, and a complex's formula reads the same ones", () => {
-    expect(differ((el) => old.drawnRound.has(el), (el) => drawnRoundMetal.has(el))).toEqual([]);
+  it("draws round the same metals, and a complex's formula reads the same ones - but the actinoids, B1's fix", () => {
+    expect(differ((el) => old.drawnRound.has(el), (el) => drawnRoundMetal.has(el))).toEqual(["Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr"]);
   });
   it("holds the same metals by their d count", () => {
     expect(differ(old.dOrF, (el) => transitionMetal.has(el))).toEqual([]);
