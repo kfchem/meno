@@ -479,7 +479,14 @@ named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,
 2026-10-10): typed, or written by Clean-up, the atom holds the group
 (`abbrev`), drawn as a label, written out whole and expanded as any
-abbreviation is; typed with more - AcH, Ac+ - it is the element. Settings ›
+abbreviation is; typed with more - AcH, Ac+ - it is the element. So is
+one read from a page's figure. The atom that holds the group is read as
+the group everywhere - the layout, identity, a metal's tests - and never as
+the element; the same symbol with nothing held - a file's element column,
+a SMILES's [Pr], 3D - is the element: PrCl3 from a file is
+praseodymium's chloride (chem/drawing `readAs`; the maintainer's choice,
+2026-11-16). A drawing saved before this, with Pr typed and nothing held,
+opens as praseodymium: type Pr again. Settings ›
 Abbreviations shows Meno's list, each drawn as what it stands for.
 
 A bond that came from a file as one of these becomes an ordinary bond once

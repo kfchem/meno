@@ -20,6 +20,17 @@ const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** Whether a label is a name - an abbreviation, a formula - rather than an element's symbol. */
 export const isName = (el: string) => el !== "*" && !ELEMENT_SYMBOLS.has(el);
 
+/**
+ * Set after a group's label that is also an element's symbol - Pr, propyl's; Ac, acetyl's; Ts, Fm, At - where the drawing holds it as the
+ * group (the maintainer, 2026-10-10 and 2026-11-16: a typed Pr is propyl; a file's, a SMILES's or 3D's Pr is praseodymium): the label so
+ * marked is no element's symbol, so that every reader of elements takes it for the name it is (`isName`), never for the element. A
+ * word joiner: no letter, nothing drawn, no width (`nameBox`).
+ */
+export const HELD_NAME = "\u2060";
+
+/** A group's label, held as the group, as the readers of elements are given it: the label itself where it is no element's symbol. */
+export const heldName = (label: string) => (ELEMENT_SYMBOLS.has(label) ? label + HELD_NAME : label);
+
 /** A bond within this of straight up or down (its sine) is read rightward, the usual way; within */
 const BAND = Math.sin((10 * Math.PI) / 180);
 /** this, either way, as there is room. */
@@ -31,7 +42,7 @@ const UPRIGHT = Math.sin((35 * Math.PI) / 180);
  * about 0.42 of a bond across, a count's digit 0.28, its line 0.6 high.
  */
 export function nameBox(el: string, left: boolean): Box {
-  const rest = [...el.slice(1)].reduce((t, ch) => t + (/[0-9]/.test(ch) ? 0.28 : 0.42), 0);
+  const rest = [...el.slice(1)].reduce((t, ch) => t + (ch === HELD_NAME ? 0 : /[0-9]/.test(ch) ? 0.28 : 0.42), 0);
   return left ? { x0: -0.25 - rest, x1: 0.25, y0: -0.3, y1: 0.3 } : { x0: -0.25, x1: 0.25 + rest, y0: -0.3, y1: 0.3 };
 }
 

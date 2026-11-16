@@ -14,6 +14,7 @@ import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { isMetal } from "../../../../lib/layout/perceive";
+import { readAs } from "./drawing";
 import type { Model } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelBox, labelSetOf, runsWidth, type LayoutOptions, type TextItem, type TextRun } from "../../../../lib/chem/layout2d";
@@ -139,14 +140,14 @@ const HALOGEN = new Set(ELEMENTS.filter((e) => [9, 17, 35, 53, 85, 117].includes
  * marked still.
  */
 function bridgesMetals(model: Model, atom: Model["atoms"][number], p: ValenceProblem): boolean {
-  if (!HALOGEN.has(atom.el)) return false;
+  if (!HALOGEN.has(readAs(atom))) return false;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   let toMetals = 0;
   for (const b of model.bonds) {
     const other = b.a === atom.id ? b.b : b.b === atom.id ? b.a : null;
     if (other == null) continue;
     const o = byId.get(other);
-    if (o && isMetal(o.el)) toMetals += b.order;
+    if (o && isMetal(readAs(o))) toMetals += b.order;
   }
   return toMetals > 0 && p.valence - toMetals <= (p.most ?? 1);
 }
