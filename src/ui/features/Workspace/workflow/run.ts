@@ -80,6 +80,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const none = emptyIn(doc, step, by);
   if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
+  // (a Repeat runs its steps pass by pass, as a pass of them: not as one step - none is made yet, and one read from a file says so)
+  if (step.kind === "repeat") return fail("A Repeat's passes are not run in this version of Meno");
   // (its options' values: its own, else Settings' for its kind, else each option's default - doers `stepValues`)
   const values = stepValues(step);
   // (a chart: a table's columns, one against the other)

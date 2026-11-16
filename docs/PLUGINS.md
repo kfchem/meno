@@ -1129,7 +1129,7 @@ The same for every plugin and for Meno's own parts:
     `kind`, the atom or bond it is `at` and its `state`: `specified`,
     `unspecified`, or `unknown`, drawn as not known - none left out; what
     is left open, which atoms of three neighbours are centres by their
-    lone pair (lib/chem/lonePairCentres), which C=N bonds are never
+    lone pair (lib/chem/perception/stereo/lonePairs), which C=N bonds are never
     enumerated and which open double bonds are cumulated are Meno's:
     lib/chem/stereoOpen);
     `stereoisomers {molblocks, open, configured?, notEnumerated, most,

@@ -43,7 +43,7 @@ import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/cal
 import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { membersSettled } from "./workflow/model";
+import { membersSettled, repeatsSettled } from "./workflow/model";
 import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
@@ -237,7 +237,7 @@ export function createWorkspaceDocument(
       const extentOf = extentIn?.(next);
       const held = heldSettled(next, before, extentOf);
       // (members as the edit leaves them, then each frame its members' room - where none is being dragged: workflow/fitFrames)
-      const members = membersSettled(withOneMagnification(held, before), before);
+      const members = repeatsSettled(membersSettled(withOneMagnification(held, before), before));
       return framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf);
     },
     cost: stepCost,

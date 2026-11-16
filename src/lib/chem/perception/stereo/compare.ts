@@ -22,6 +22,7 @@
 import { parity } from "./geometry";
 import type { DrawnAtom, DrawnBond, DrawnStereo } from "./from2d";
 import { ofTheStructure } from "../graph";
+import { runsThrough } from "./runs";
 
 /** A centre as a drawing says it: its neighbours by atom id (-1 its carried H), and the sign of the volume the first three span. */
 export type SaidCentre = { neighbours: readonly number[]; volume: 1 | -1 };
@@ -101,13 +102,10 @@ export function saidOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[],
 export function againstLowest(drawn: readonly DrawnBond[], ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 }): 1 | -1 {
   // (the structure's bonds: a hydrogen bond is none)
   const bonds = drawn.filter(ofTheStructure);
-  // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
-  const bonded = (x: number, y: number) => bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
-  const through = (x: number, end: number) => {
-    if (bonded(x, end)) return end;
-    const run = bonds.find((b) => b.order >= 2 && (b.a === x || b.b === x));
-    return run ? (run.a === x ? run.b : run.a) : end;
-  };
+  // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's -
+  //  perception/stereo/runs `runsThrough`, of the atom's bonds in their order; the other end where it has neither)
+  const through = (x: number, end: number) =>
+    runsThrough(bonds.flatMap((b) => (b.a === x ? [{ to: b.b, order: b.order }] : b.b === x ? [{ to: b.a, order: b.order }] : [])), end) ?? end;
   const others = (x: number, end: number) => {
     const skip = through(x, end);
     return bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));
