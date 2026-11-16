@@ -800,7 +800,8 @@ export function placeResults(
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
   if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
-  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  // (`turns` are of its molecules and then of those it set aside, in turn: each set's room made for them turned - found in review)
+  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w, turns?.slice(made.length));
   // (a table it gave at a later exit - an Atom map's bond changes - in that exit's set: under the others as they have grown)
   const tables = Object.entries(results.tables ?? {});
   for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);

@@ -697,7 +697,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const turns = get().turns3d;
     const entries = setEntries(input.molecules, input.holds);
     const turnOf = (e: SetEntry) => (e.from != null ? turns[e.from] : undefined);
-    return LAID_OVER.includes(kind) ? laidOver(results.molecules, entries, turnOf) : viewKept(results.molecules, entries, turnOf);
+    // (those it gave, then those it set aside: the turns of both, in the order they are put down)
+    const all = [...results.molecules, ...results.rest];
+    return LAID_OVER.includes(kind) ? laidOver(all, entries, turnOf) : viewKept(all, entries, turnOf);
   }
 
   /**

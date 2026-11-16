@@ -110,6 +110,42 @@ describe("a step's results seen as what they came from: room and copies (found i
     expect(outside).toEqual([]);
   });
 
+  it("leaves room as they are turned in the set a step puts aside too: a Filter's rest", async () => {
+    const { st, f } = pageOf([0, 14, 28].map((x) => ({ ...chain(x), at: { x: x + 4, y: 0 } })), { x0: -3, y0: -6, x1: 40, y1: 6 });
+    st().updateStep(f, { options: { conditions: "number > 99", match: "all" } });
+    const ids = st().molecules3d.map((m) => m.id);
+    const standing: Turn3D = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+    st().setTurn3d(ids[0], standing);
+    st().setTurn3d(ids[1], standing);
+    await st().runStep(f);
+    const set = st().sets.find((b) => b.made?.step === f && b.made.exit === "rest")!;
+    const rest = setMolecules(st(), set);
+    expect(rest).toHaveLength(3);
+    expect(rest.map((m) => st().turns3d[m.id])).toEqual([standing, standing, undefined]);
+    const seen: Box[] = rest.map((m) => {
+      const e = reachOverFrames({ ...m, id: 0, at: { x: 0, y: 0 } } as never, style3dOf(st()), st().turns3d[m.id]);
+      return { x0: m.at.x + e.x0, x1: m.at.x + e.x1, y0: m.at.y + e.y0, y1: m.at.y + e.y1 };
+    });
+    const hits: string[] = [];
+    for (let i = 0; i < seen.length; i++) for (let j = i + 1; j < seen.length; j++) if (overlap(seen[i], seen[j])) hits.push(`${i} x ${j}`);
+    expect(hits).toEqual([]);
+    expect(seen.map((b, i) => (b.x0 < set.x0 || b.x1 > set.x1 || b.y0 < set.y0 || b.y1 > set.y1 ? i : -1)).filter((i) => i >= 0)).toEqual([]);
+  });
+
+  it("turns what Duplicates keeps and what it puts aside as each came, run in turns as it is", async () => {
+    const { st } = pageOf([water(0), water(5)], { x0: -3, y0: -3, x1: 8, y1: 3 });
+    const d = st().addStep("duplicates", "meno", 500, -400);
+    st().connect({ set: st().sets.find((b) => !b.made)!.id }, d);
+    const [a, b] = st().molecules3d.map((m) => m.id);
+    const A: Turn3D = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    const B: Turn3D = [0, Math.SQRT1_2, 0, Math.SQRT1_2];
+    st().setTurn3d(a, A);
+    st().setTurn3d(b, B);
+    await st().runStep(d);
+    const of = (exit: string) => setMolecules(st(), st().sets.find((x) => x.made?.step === d && x.made.exit === exit)!).map((m) => st().turns3d[m.id]);
+    expect([...of("out"), ...of("rest")].sort()).toEqual([A, B].sort());
+  });
+
   it("turns each of two identical copies as the copy it came from, not both as the first", async () => {
     const { st, f } = pageOf([water(0), water(5)], { x0: -3, y0: -3, x1: 8, y1: 3 });
     const [a, b] = st().molecules3d.map((m) => m.id);
@@ -135,6 +171,8 @@ describe("which entry a result is seen as (viewKept)", () => {
     expect(viewKept([molecule(["O", "H"], [0, 0, 0, 0, 0.97, 0])], [e], turnOf)).toEqual([undefined]);
     expect(viewKept([molecule(["S", "H"], [0, 0, 0, 0, 0.96, 0])], [e], turnOf)).toEqual([undefined]);
     expect(viewKept([molecule(["O"], [0, 0, 0])], [e], turnOf)).toEqual([undefined]);
+    // (a step that added an atom - an H on the end - its first atoms where they were: none)
+    expect(viewKept([molecule(["O", "H", "H"], [0, 0, 0, 0, 0.96, 0, 0.9, -0.3, 0])], [e], turnOf)).toEqual([undefined]);
   });
 
   it("asks a molecule of several frames by its last", () => {
