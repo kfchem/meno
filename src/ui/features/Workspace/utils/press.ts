@@ -141,3 +141,23 @@ export function swallowPress(down: Event, on: EventTarget = window, most = 10_00
 export function releaseClicksBond(armed: { armed: boolean; downBondId: number | null }, id: number, button: number): boolean {
   return button === 0 && armed.armed && armed.downBondId === id;
 }
+
+/** A click's turn of a bond, applied: the bond, when its click was let go, and the drawing it made (to take it back, where it still is). */
+export type TurnedBond = { id: number; releasedAt: number; after: unknown };
+
+/**
+ * Whether a click on bond `id` at `now` takes back the turn the click before it made and makes the bond double: a second click on the same
+ * bond within `clickMs` of the first's release, its turn already applied - a slow double-click always makes a double bond (the
+ * maintainer, 2026-11-17).
+ */
+export function turnTakenBack(turned: TurnedBond | null, id: number, now: number, clickMs: number): boolean {
+  return !!turned && turned.id === id && now - turned.releasedAt <= clickMs;
+}
+
+/**
+ * Whether a click waiting to turn its bond (`pending`, its bond; null where none waits) is applied at once as a press lands: on another bond,
+ * or anywhere not that bond (`pressed` null) - so no click is lost to the next press (the maintainer, 2026-11-17).
+ */
+export function flushesClick(pending: number | null, pressed: number | null): boolean {
+  return pending != null && pressed !== pending;
+}

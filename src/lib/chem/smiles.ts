@@ -10,7 +10,8 @@
  * aziridine's N) - and a double bond's cis or trans, as its neighbours' directional bonds
  * (/ and \) say it. Any other stereo mark (@@@, @TH, @SP and the rest), or
  * an @ on an atom it cannot be read of, is refused with the reason: a
- * configuration is never dropped without a word. An atom class is kept: a
+ * configuration is never dropped without a word. So is a quadruple bond
+ * ("$"): Meno has no bond of that order. An atom class is kept: a
  * ligand's (./ligands) marks the atoms that bind a metal.
  */
 import { torsionSense, type Axial, type Cumulated } from "../layout/stereo";
@@ -57,7 +58,9 @@ export type MarkedArrangement = { metal: number; pairs: [number, number][] };
 
 const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
 const AROMATIC = ["b", "c", "n", "o", "p", "s"];
-const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, $: 4, ":": 4, "/": 1, "\\": 1 };
+const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, ":": 4, "/": 1, "\\": 1 };
+/** Why a quadruple bond ("$", OpenSMILES's bond symbols) is refused: Meno has no bond of that order, and never reads one as another. */
+export const QUADRUPLE_REFUSED = "a quadruple bond, which Meno does not draw";
 
 /**
  * The aromatic bonds (order 4) that lie in no ring of aromatic bonds - each a
@@ -165,6 +168,7 @@ export function readSmiles(text: string, { metalMarks = false }: { metalMarks?: 
       i++;
       continue;
     }
+    if (c === "$") throw new Error(`Cannot read "$" at ${i} in ${text}: ${QUADRUPLE_REFUSED}`);
     if (c in BOND_ORDER) {
       pending = BOND_ORDER[c];
       if (c === "/" || c === "\\") pendingDir = c;

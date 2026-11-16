@@ -948,6 +948,17 @@ its ligands round it, what is three-dimensional shown in perspective. None
 of it is a template - each is a rule, and the drawing is what the rules
 make of the molecule (`hapto.ts`, `assemble.ts`).
 
+The metals ligands are drawn round are the transition metals - the d
+block with the lanthanoids and actinoids, IUPAC's inner transition
+elements - but Pr, Ac and Fm, whose labels on a drawing are propyl's,
+acetyl's and 9-fluorenylmethyl's (a group named as an element is the
+group: the maintainer, 2026-10-10), and Rf to Cn, whose complexes are not
+made (lib/chem/perception/elements
+`drawnRoundMetal`). So uranocene and thorocene are sandwiches as
+ferrocene is, and an H on U is a hydride, kept as an atom as on Pd
+(foundation part 3, B1, 2026-11-16; before, the actinoids were not drawn
+round).
+
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
   the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
@@ -955,7 +966,10 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   those bonds, and lays them out as one bond from the metal to that star,
   as the CTfile's multi-centre bond is, the ring's atoms its endpoints -
   ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
-  2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
+  2026-10-17, `etaBondedAtomByAtom`; such a ring's double bonds, bound
+  face-on through every atom, are one Kekule form of it and have no cis
+  or trans, so uranocene drawn so is laid out as ferrocene is, not refused
+  for its eight-rings' double bonds - backlog 178, 2026-11-16; so too a chain of three atoms or more
   each bonded to the metal, an allyl, but not two, a three-membered ring
   with the metal being how a metallacyclopropane is drawn as well; an
   η3-allyl, once laid out, posed with its middle carbon away from the
@@ -1095,6 +1109,41 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   system - and each star put afterwards at the centre of its system's
   atoms (a ring's is there already; a C=C's, cod's, is not), so a complex
   expanded and then cleaned up does not move.
+
+## A structure from a plugin
+
+A structure a plugin hands Meno - a SMILES it read, a stereoisomer it
+made, a molecule in 3D it drew - comes as a drawing block and, where the
+plugin sends it, the configuration it read beside it (PLUGINS.md, *A
+drawing's configuration beside it*). Meno's engine lays it out from that
+configuration, not from the block's wedges: the block is only places, and
+a lossy carrier (a ring of 36 or more comes as a regular polygon, its
+centres stating nothing). So a large ring comes out as Meno draws large
+rings - its re-entrant angles, a group at a re-entrant atom inward, never
+round (Brecher 2008, GR-3.3.2; Brecher 2006, ST-1.4) - with every centre
+and double bond given, a ring double bond as given (ST-4.3).
+
+The drawing laid out is read back by the one reader, and must state every
+centre, double bond, axis and odd cumulene given, each as given, and none
+more; else it is refused, and the drawing is kept as it came. Where a
+drawing kept as it came states less than was given, what it leaves out is
+said with the count: "Drawn as it came: it could not be laid out. 4 of its
+12 stereocentres are not shown by this drawing." A centre whose fourth
+place is a lone pair is given only where Meno's own rules hold one there;
+a wedge at a given centre is no reading of it - what is given is - so a
+wedge the drawing's own reading could not keep does not stop the layout.
+What is given goes to the engine in one fixed form (a centre's neighbours
+rising, a double bond's group on each end the lowest-numbered), so that
+the drawing Meno makes does not depend on who gave it. A double bond the
+plugin gives nothing of that could be cis or trans is open: drawn so that
+it states neither, each end straight on or a wavy bond on a group (ST-4.4),
+worked out from what was given and the drawing alone - so a SMILES Meno's
+own reader refuses (a metal's mark, a sense written at an aziridine's N)
+still has its open double bonds open; and a drawing kept as it came has a
+wavy bond on each. One that is no stereo unit, which Meno's rules read from
+the drawing (an aromatic macrocycle's, a guanidine's), is laid out as the
+drawing reads it, as before.
+A plugin that sends no configuration is read as before.
 
 ## How the engine goes about it
 

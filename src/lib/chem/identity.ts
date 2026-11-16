@@ -24,6 +24,10 @@ import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutIn
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
 import { runsThrough } from "./perception/stereo/runs";
+import { AROMATIC, aromaticForm } from "./perception/aromatic";
+
+// (the aromatic form identity and symmetry compare structures in: the core's, where the two forms are said apart)
+export { aromaticForm };
 
 /**
  * An atom as identity reads it: as the layout does, and besides, its mass
@@ -34,99 +38,6 @@ import { runsThrough } from "./perception/stereo/runs";
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
 export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[]; arrangements?: readonly Arranged[] };
-
-/** The bond order a bond its Kekulé structures disagree on is given for identity and symmetry, beside 1, 2 and 3. */
-const AROMATIC = 4;
-
-/**
- * The structure with every bond whose order its Kekulé structures disagree
- * on given one order, whichever of them was drawn: Meno's rule for identity
- * and symmetry. A structure's double bonds pair its atoms off (a perfect
- * matching of those with one); another Kekulé structure of it differs by
- * an alternating cycle - single and double bonds in turn, round a ring.
- * So a bond is drawn now single, now double exactly where it lies on such a
- * cycle, and those bonds become `AROMATIC`: benzene's, naphthalene's,
- * phenanthrene's and azulene's ring bonds, a pyridine's, cyclooctatetraene's.
- * A bond on no such cycle keeps its order, as every Kekulé structure has it:
- * pyrrole's, furan's and thiophene's (they have one Kekulé structure), a
- * quinone's (its C=O is no part of a cycle), azulene's middle bond. Which
- * bonds lie on an alternating cycle is the structure's, not the drawing's,
- * so every Kekulé structure of one structure comes to the same form, and
- * its identity cannot split by how its rings were drawn. It follows that
- * bond-shift isomers are one structure: 1,2-disubstituted cyclooctatetraene
- * with its substituents across a double bond and across a single one - two
- * compounds, a barrier apart - has one identity, as joins and duplicates
- * want it. A bond so made one order says no cis or trans of its own: it is
- * single in some of the structure's Kekulé structures, so a drawing's side
- * on it - a cyclooctatetraene's ring bonds, drawn cis - is dropped with its
- * order. That holds for a real trans bond too: in a large annulene (a
- * [14]- or [18]annulene, with E bonds in its ring), configurational
- * isomers that differ by such a bond are one structure, as the rule
- * states.
- */
-export function aromaticForm(input: LayoutInput): LayoutInput {
-  const n = input.atoms.length;
-  // (each atom's partner by its one double bond, where it has exactly one and no triple bond)
-  const mate = new Array<number>(n).fill(-1);
-  const doubles = new Array<number>(n).fill(0);
-  const triple = new Array<boolean>(n).fill(false);
-  for (const b of input.bonds) {
-    if (b.order === 2) {
-      doubles[b.a]++;
-      doubles[b.b]++;
-      mate[b.a] = b.b;
-      mate[b.b] = b.a;
-    } else if (b.order === 3) triple[b.a] = triple[b.b] = true;
-  }
-  const paired = (i: number) => doubles[i] === 1 && !triple[i] && mate[i] >= 0 && doubles[mate[i]] === 1 && !triple[mate[i]];
-  // (the single bonds between paired atoms: what an alternating cycle's other half runs along)
-  const singles: number[][] = input.atoms.map(() => []);
-  for (const b of input.bonds) {
-    if (b.order === 1 && paired(b.a) && paired(b.b)) {
-      singles[b.a].push(b.b);
-      singles[b.b].push(b.a);
-    }
-  }
-  const key = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
-  const aromatic = new Set<string>();
-  // a single bond u-v lies on an alternating cycle where, from v's partner, single and double bonds in
-  // turn reach a single bond into u's partner (u - v = v' - ... - u' = u)
-  for (const b of input.bonds) {
-    if (b.order !== 1 || !paired(b.a) || !paired(b.b) || mate[b.a] === b.b) continue;
-    const [u, v] = [b.a, b.b];
-    const goal = mate[u];
-    const seen = new Set<number>([mate[v]]);
-    const queue = [mate[v]];
-    let found = false;
-    while (queue.length && !found) {
-      const x = queue.shift()!;
-      for (const y of singles[x]) {
-        if (y === goal) {
-          found = true;
-          break;
-        }
-        if (y === u || y === v) continue;
-        const next = mate[y];
-        if (next === u || next === v || seen.has(next)) continue;
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-    if (!found) continue;
-    aromatic.add(key(u, v));
-    aromatic.add(key(u, mate[u]));
-    aromatic.add(key(v, mate[v]));
-  }
-  if (!aromatic.size) return input;
-  return {
-    ...input,
-    bonds: input.bonds.map((b) => {
-      if (!aromatic.has(key(b.a, b.b))) return b;
-      const { stereo: _side, ...rest } = b;
-      return { ...rest, order: AROMATIC };
-    }),
-  };
-}
 
 /**
  * The structure with each plain hydrogen atom counted as one of its
@@ -447,11 +358,17 @@ function blanksOf(g: LayoutInput): Blank[] {
   //  are never across, a porphyrin's opposite N may be. Bonds through the metal are not the ligand's: `ligandNear` from a
   //  donor walks no further than the metal)
   const arranged = new Set((g.arrangements ?? []).map((x) => x.metal));
+  const orderAt = new Map(g.bonds.map((b) => [b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`, b.order]));
   for (let m = 0; m < n; m++) {
     const donors = around[m];
     if (!isMetal(element(m)) || arranged.has(m) || hs(m) || (donors.length !== 4 && donors.length !== 6)) continue;
     const joined = (p: number, q: number) => ligandNear(around, m, p, q, CHELATE_RING - 2);
-    const pairings = pairingsOf(donors).filter((pairing) => pairing.every(([p, q]) => !joined(p, q)));
+    const unjoined = pairingsOf(donors).filter((pairing) => pairing.every(([p, q]) => !joined(p, q)));
+    // (and two donors a third holds flat across from each other in every pairing: a porphyrin's opposite N, terpyridine's
+    //  outer two - `heldFlat`. Pairs that cannot all be had together leave the pairings as they were: never closed by a fault)
+    const held = donors.length === 6 ? heldFlat(m, donors, around, (p, q) => orderAt.get(p < q ? `${p},${q}` : `${q},${p}`) ?? 1, element) : [];
+    const across = unjoined.filter((pairing) => held.every(([p, q]) => pairing.some(([x, y]) => (x === p && y === q) || (x === q && y === p))));
+    const pairings = across.length ? across : unjoined;
     if (pairings.length) out.push({ kind: "metal", at: m, pairings, own: [m], sides: [donors] });
   }
   // (a biaryl's axis drawn: no place of its own when blank - only a drawing states one - so where it sets nothing, its
@@ -486,6 +403,67 @@ function pairingsOf(donors: readonly number[]): (readonly [number, number])[][] 
   if (!donors.length) return [[]];
   const [first, ...rest] = donors;
   return rest.flatMap((q) => pairingsOf(rest.filter((r) => r !== q)).map((more) => [[Math.min(first, q), Math.max(first, q)] as const, ...more]));
+}
+
+/**
+ * The pairs of a six-donor metal `m`'s donors a third holds flat across from each other (found in the chemistry check): B, a
+ * donor in a ring of five or six that does not hold the metal, B and its two neighbours in that ring trigonal, and from each
+ * of those two a path of trigonal atoms - B's neighbour and one or two more, a chelate ring of five or six with the metal -
+ * to one donor: those two donors are across. A porphyrin's opposite N, terpyridine's outer two, a pincer's whose arms are
+ * trigonal. A path of CH2 - cyclam, dien, salen - holds nothing flat. Trigonal: an atom with a double or aromatic bond, or an
+ * N in a ring of five or six whose two neighbours in that ring each have one (a pyrrole's).
+ */
+function heldFlat(m: number, donors: readonly number[], around: readonly number[][], order: (p: number, q: number) => number, element: (i: number) => string): [number, number][] {
+  const doubled = (i: number) => around[i].some((j) => order(i, j) === 2 || order(i, j) === AROMATIC);
+  // (a ring of five or six through B and its two neighbours x and y, not through the metal: x to y in three or four bonds)
+  const ringed = (b: number, x: number, y: number) => {
+    let at = [x];
+    const seen = new Set([b, m, x]);
+    for (let d = 1; d <= 4 && at.length; d++) {
+      const next: number[] = [];
+      for (const u of at)
+        for (const v of around[u]) {
+          if (v === y && d >= 3) return true;
+          if (seen.has(v)) continue;
+          seen.add(v);
+          next.push(v);
+        }
+      at = next;
+    }
+    return false;
+  };
+  // (trigonal: a double or aromatic bond of its own; or an N in a ring of five or six whose two neighbours in that ring each have
+  //  one - a pyrrole's. An NH linking two rings by single bonds is not held flat for sure: never counted so)
+  const trigonal = (i: number) => {
+    if (doubled(i)) return true;
+    if (element(i) !== "N") return false;
+    const near = around[i].filter((j) => j !== m && doubled(j));
+    return near.some((j, k) => near.slice(k + 1).some((l) => ringed(i, j, l)));
+  };
+  // (the one donor reached from x - B's neighbour - by trigonal atoms, x and one or two more between B and it; none, or two, and null)
+  const donorBy = (b: number, x: number): number | null => {
+    const found = new Set<number>();
+    const walk = (path: number[]) => {
+      const last = path[path.length - 1];
+      if (path.length >= 2) for (const d of around[last]) if (d !== b && d !== m && donors.includes(d) && !path.includes(d)) found.add(d);
+      if (path.length === 3) return;
+      for (const v of around[last]) if (v !== b && v !== m && !path.includes(v) && !donors.includes(v) && trigonal(v)) walk([...path, v]);
+    };
+    walk([x]);
+    return found.size === 1 ? [...found][0] : null;
+  };
+  const out: [number, number][] = [];
+  for (const b of donors) {
+    if (!trigonal(b)) continue;
+    const near = around[b].filter((x) => x !== m && trigonal(x));
+    for (let i = 0; i < near.length; i++)
+      for (let j = i + 1; j < near.length; j++) {
+        if (!ringed(b, near[i], near[j])) continue;
+        const [a, c] = [donorBy(b, near[i]), donorBy(b, near[j])];
+        if (a != null && c != null && a !== c && !out.some(([p, q]) => (p === a && q === c) || (p === c && q === a))) out.push([a, c]);
+      }
+  }
+  return out;
 }
 
 /** Whether two donors `p` and `q` of metal `m` are joined, not through the metal, within `most` bonds. */

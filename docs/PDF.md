@@ -117,7 +117,9 @@ stops being part of the work.
   labels, and the icon is five times as tall as it, as a file's icon is
   to its name on a desktop: three and a half bonds in ACS 1996's style.
   *Show full size*, in its menu, makes it the stack at the size it is
-  printed; *Minimize to an icon* makes it small again. An icon is moved,
+  printed, and the view eases to take it in where it is not seen whole -
+  along, or out as little as needed, as for anything put down; *Minimize
+  to an icon* makes it small again. An icon is moved,
   read in the column and deleted as the stack is.
 - **Its figures and words are taken out from here** as from the column
   (*Taking things out*, below).

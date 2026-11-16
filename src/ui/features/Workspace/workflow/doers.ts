@@ -31,7 +31,8 @@ export const MENO: Doer = { id: "meno", name: "Meno" };
  * on Windows, where Meno does not run it).
  */
 export function kindsOf(by: string): StepKind[] {
-  if (by === MENO.id) return [...MENO_DOES];
+  // (Meno's, but those made otherwise than chosen - a Repeat, round steps: kinds `apart`)
+  if (by === MENO.id) return MENO_DOES.filter((k) => !kindInfo(k).apart);
   const p = pluginById(by);
   if (!p) return [];
   const here = systemHere();
@@ -206,15 +207,23 @@ export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | un
 }
 
 /** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (`optionsNeed`). */
-export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
+export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options" | "bound">): string | undefined {
   return missingFor(s) ?? optionsNeed(s);
 }
 
 /** What step `s` still needs of its options before it can run, in its card's words: a value the chemist gives (kinds `needsOf`) - an Energy window's window, a Conformers step's window for new conformers (`roundsNeed`). */
-export function optionsNeed(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
+export function optionsNeed(s: Pick<WorkflowStep, "kind" | "by" | "options" | "bound">): string | undefined {
   const by = byOf(s);
-  // (its values: its own, else Settings' for its kind, else each option's default - `stepValues`)
-  const values = stepValues(s);
+  // (its values: its own, else Settings' for its kind, else each option's default - `stepValues`; one taken from a property is
+  // given entry by entry, so needs no value of the step's own: a stand-in that reads, the option's least or one)
+  const values = { ...stepValues(s) };
+  for (const o of stepOptions(s, by)) {
+    const name = s.bound?.[o.id];
+    if (name == null) continue;
+    // (taken from a property not yet named: said, as a value not given is)
+    if (!name.trim()) return `Name the property its ${(o.label.split(",")[0] ?? o.label).toLowerCase()} is taken from`;
+    if (o.type === "number" && !Number.isFinite(Number(values[o.id]))) values[o.id] = o.min ?? 1;
+  }
   return needsOf({ ...s, options: values }) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), values);
 }
 

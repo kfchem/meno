@@ -345,7 +345,8 @@ describe("cleanUp", () => {
       const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
       expect(overlapsMade(drawn, moved)).toEqual([]);
     }
-  });
+    // (a drawing cleaned up and every placement checked: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_900));
 
   it("lays out the rest when it must leave one structure as drawn, and names that one by its formula and why", async () => {
     // the made-up bridged macrocycle drawn round a circle (the engine lays an atom on a bond there), and a butane
@@ -1011,6 +1012,89 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
     expect(m.overlaps).toBe(0);
     // in perspective, as Haworth drew rings: some edges bold
     expect(laid.bonds.some((b) => b.display === "bold")).toBe(true);
+  });
+
+  it("uranocene drawn atom by atom is laid out as ferrocene so drawn: its eight-rings' double bonds no cis or trans, nothing refused (backlog 178)", async () => {
+    const octagon = (cy: number, from: number) =>
+      Array.from({ length: 8 }, (_, i) => ({ id: from + i, x: 1.1 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 8), y: cy + 0.45 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 8), r: 0.9, el: "C" }));
+    const eight = (from: number, id0: number): Bond[] =>
+      Array.from({ length: 8 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 1 : 2, stereo: "none" }) as Bond);
+    const uranocene: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "U" }, ...octagon(1.6, 2), ...octagon(-1.6, 10)],
+      bonds: [...eight(2, 20), ...eight(10, 30), ...Array.from({ length: 16 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none" }) as Bond)],
+    };
+    const laid = await laidOut(uranocene);
+    // (as ferrocene's ten Fe-C bonds: two, to stars at the rings' centres - the maintainer, 2026-10-17)
+    const eta = laid.bonds.filter((b) => b.endpoints?.length);
+    expect(eta.map((b) => [...b.endpoints!].sort((p, q) => p - q))).toEqual(
+      expect.arrayContaining([
+        [2, 3, 4, 5, 6, 7, 8, 9],
+        [10, 11, 12, 13, 14, 15, 16, 17],
+      ]),
+    );
+    const at = new Map(laid.atoms.map((a) => [a.id, a]));
+    const middle = (ids: number[]) => ({ x: ids.reduce((s, i) => s + at.get(i)!.x, 0) / ids.length, y: ids.reduce((s, i) => s + at.get(i)!.y, 0) / ids.length });
+    const [u, top, bottom] = [at.get(1)!, middle([2, 3, 4, 5, 6, 7, 8, 9]), middle([10, 11, 12, 13, 14, 15, 16, 17])];
+    expect(Math.sign(top.y - u.y)).toBe(-Math.sign(bottom.y - u.y));
+    // (each ring double bond kept as drawn, as a double bond)
+    expect(laid.bonds.filter((b) => b.order === 2)).toHaveLength(8);
+  });
+
+  it("bis(benzene)chromium drawn atom by atom is laid out so too; an eta-4 cyclooctatetraene is as it was (backlog 178)", async () => {
+    const ngon = (n: number, cy: number, from: number, w = 1) =>
+      Array.from({ length: n }, (_, i) => ({ id: from + i, x: w * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / n), y: cy + 0.4 * w * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / n), r: 0.9, el: "C" }));
+    const ring = (n: number, from: number, id0: number): Bond[] =>
+      Array.from({ length: n }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % n), order: i % 2 ? 1 : 2, stereo: "none" }) as Bond);
+    const chromium: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "Cr" }, ...ngon(6, 1.5, 2), ...ngon(6, -1.5, 8)],
+      bonds: [...ring(6, 2, 20), ...ring(6, 8, 30), ...Array.from({ length: 12 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none" }) as Bond)],
+    };
+    const laid = await laidOut(chromium);
+    expect(laid.bonds.filter((b) => b.endpoints?.length)).toHaveLength(2);
+    // (an eight-ring bound through four of its atoms, as in (eta4-C8H8)Fe(CO)3: what Clean-up does with it is as before this fix)
+    const fe = { id: 1, x: 0, y: -1.2, r: 0.9, el: "Fe" };
+    const cot: Model = {
+      atoms: [fe, ...ngon(8, 0.6, 2, 1.3), ...[0, 1, 2].map((k) => ({ id: 20 + k, x: -1 + k, y: -2.6, r: 0.9, el: "C" })), ...[0, 1, 2].map((k) => ({ id: 30 + k, x: -1.2 + 1.2 * k, y: -3.8, r: 0.9, el: "O" }))],
+      bonds: [
+        ...ring(8, 2, 40),
+        ...[6, 7, 8, 9].map((a, k) => ({ id: 50 + k, a: 1, b: a, order: 1, stereo: "none" }) as Bond),
+        ...[0, 1, 2].flatMap((k) => [{ id: 60 + k, a: 1, b: 20 + k, order: 1, stereo: "none" } as Bond, { id: 70 + k, a: 20 + k, b: 30 + k, order: 3, stereo: "none" } as Bond]),
+      ],
+    };
+    // (refused today for its free double bonds as before this fix - their own question, not a ring bound through every atom)
+    await expect(laidOut(cot)).rejects.toThrow("would show a configuration its drawing does not state");
+  });
+
+  it("uranocene drawn with haptic bonds is laid out as the same sandwich: an actinoid's rings round it as iron's (foundation part 3, B1)", async () => {
+    const octagon = (cy: number, from: number) =>
+      Array.from({ length: 8 }, (_, i) => ({ id: from + i, x: 1.1 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 8), y: cy + 0.45 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 8), r: 0.9, el: "C" }));
+    const eight = (from: number, id0: number): Bond[] =>
+      Array.from({ length: 8 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 1 : 2, stereo: "none" }) as Bond);
+    const uranocene: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "U" }, ...octagon(1.6, 2), ...octagon(-1.6, 10), { id: 18, x: 0, y: 1.6, r: 0.9, el: "*" }, { id: 19, x: 0, y: -1.6, r: 0.9, el: "*" }],
+      bonds: [
+        ...eight(2, 20),
+        ...eight(10, 30),
+        { id: 40, a: 1, b: 18, order: 1, stereo: "none", endpoints: [2, 3, 4, 5, 6, 7, 8, 9] } as Bond,
+        { id: 41, a: 1, b: 19, order: 1, stereo: "none", endpoints: [10, 11, 12, 13, 14, 15, 16, 17] } as Bond,
+      ],
+    };
+    const laid = await laidOut(uranocene);
+    // its two haptic bonds, to stars at the rings' centres
+    const eta = laid.bonds.filter((b) => b.endpoints?.length);
+    expect(eta.map((b) => [...b.endpoints!].sort((p, q) => p - q))).toEqual(
+      expect.arrayContaining([
+        [2, 3, 4, 5, 6, 7, 8, 9],
+        [10, 11, 12, 13, 14, 15, 16, 17],
+      ]),
+    );
+    expect(eta.every((b) => b.a === 1)).toBe(true);
+    expect(laid.bonds.filter((b) => (b.a === 1 || b.b === 1) && !b.endpoints)).toEqual([]);
+    const at = new Map(laid.atoms.map((a) => [a.id, a]));
+    const middle = (ids: number[]) => ({ x: ids.reduce((s, i) => s + at.get(i)!.x, 0) / ids.length, y: ids.reduce((s, i) => s + at.get(i)!.y, 0) / ids.length });
+    const [u, top, bottom] = [at.get(1)!, middle([2, 3, 4, 5, 6, 7, 8, 9]), middle([10, 11, 12, 13, 14, 15, 16, 17])];
+    expect(Math.sign(top.y - u.y)).toBe(-Math.sign(bottom.y - u.y));
+    expect(Math.abs(top.x - u.x)).toBeLessThan(0.2 * NOMINAL_BOND_LENGTH);
   });
 });
 
