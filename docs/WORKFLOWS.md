@@ -832,6 +832,52 @@ step's options are its own: it starts with the defaults Settings,
 in it changes it alone - the defaults are set in Settings and nowhere
 else (decided: 17).
 
+### Options from a property
+
+A step's number or text option can take its value entry by entry, from
+a property each entry carries, rather than one value for all (the
+maintainer's ruling on loops: a general loop that steps a property,
+which any option can name; `lib/boundOptions`).
+
+- **Where.** On a step's open card, a small button at the right end of
+  the option's field (two links of a chain), named on hover *From a
+  property*. It is offered on every number and text option of a
+  plugin's step that takes entries in (not on one that makes them from
+  nothing, nor Render's), and on those of Meno's own steps that are an
+  entry's own to take: *Torsion restraints*' strength. A chemist who
+  never presses it never meets it.
+- **Taken.** Pressed, the field becomes the property's name, the names
+  the entries coming in carry offered as it is typed; the option's own
+  value is kept underneath, and pressed again it is back. Each change
+  is one undo step, a name typed as one. Pointing at the name says
+  whether the entries coming in carry it. Until a name is typed, the
+  card says so where *Ready* would be ("Name the property its strength
+  is taken from").
+- **Said.** The step's line says the option as `= k`, with its unit
+  ("1 torsion at 180°, = k kcal/mol/rad²; for each start").
+- **Units.** The value is taken in the option's unit, converted within
+  its dimension (`lib/units`: a k in kJ/mol/rad² held as kcal/mol/rad²).
+  An entry whose property is not there, was not worked out, is of
+  another dimension ("Its k is in kcal/mol; its strength is in
+  kcal/mol/rad²"), has no unit where the option has one or one where it
+  has none, is out of the option's range, or - a strength - is not
+  above 0, goes out of the step's *Failed*, saying why. Never the
+  option's own value instead, never a guess. An option whose unit is
+  not in Meno's table is not converted: an entry asked for it is
+  refused, saying so.
+- **Run.** A step Meno runs takes each entry's value as it makes that
+  entry's rows. A plugin's step run as jobs, or in its worker at once,
+  groups the entries by the values they take and asks its plugin once
+  for each group, with that group's values; its line says how many
+  ("2 calls, one for each value taken from a property"). A step that
+  judges its entries against each other judges each group apart. A
+  plugin's step that runs on structures drawn, makes from nothing, or
+  renders takes its options as given on its card, and run with one
+  taken from a property, says so and runs nothing.
+- **Kept.** Which options are taken from which property is the step's
+  own, saved with it in the workspace's file (`bound`), and part of
+  what says it has changed since its run.
+
 ## Compound sets and conformer sets
 
 ![A set of conformers through a workflow](workflows/7-conformers.svg)

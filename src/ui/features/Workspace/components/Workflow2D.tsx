@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
@@ -32,7 +32,8 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, inputOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
+import { bindable } from "../../../../lib/boundOptions";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { cardHighOf, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
@@ -41,7 +42,7 @@ import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished, quietFor } from "../../../../lib/jobs";
 import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, portDown, PORT_PAGE_PX, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
-import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, optionsNeed, setName, stepOptions } from "../workflow/doers";
+import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, optionsNeed, setName, stepOptions, takesNothingBy } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -448,6 +449,27 @@ function WireLine({ target, color, zoom, onHover, leaving = false }: { target: P
 
 /** How many of an earlier run's molecules did not read from its file, of both its exits. */
 const notRead = (r: StepRunKept) => (r.results?.unread ?? 0) + (r.results?.restUnread ?? 0);
+
+/** A step's options that may take their value from a property, entry by entry (lib/boundOptions), as its open card offers them: none for a step that takes nothing in, or Render's. */
+function bindsOf(s: WorkflowStep, flow: Parameters<typeof inputOf>[0], onBound: (bound: Record<string, string>) => void): ComponentProps<typeof StepCard>["binds"] {
+  const by = byOf(s);
+  const plugin = by !== "meno";
+  if (plugin && (takesNothingBy(s.kind, by) || s.kind === "render")) return undefined;
+  // (the names the entries coming in carry, each once, in the order first met)
+  const names = new Set<string>();
+  for (const m of inputOf(flow, s.id)?.molecules ?? []) for (const p of m.properties ?? []) for (const k of Object.keys(p ?? {})) names.add(k);
+  return {
+    can: (o) => bindable(o, !plugin),
+    bound: s.bound ?? {},
+    offered: [...names],
+    onBind: (id, name) => {
+      const next: Record<string, string> = { ...(s.bound ?? {}) };
+      if (name == null) delete next[id];
+      else next[id] = name;
+      onBound(next);
+    },
+  };
+}
 
 /** A step's runs as its card lists them: the one shown, then those it keeps, each with how it was set - its kind, where it was another. */
 function runRows(s: WorkflowStep): RunRow[] {
@@ -1176,7 +1198,7 @@ export default function Workflow2D() {
       const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
       const own = diagram ? diagramValues(takes, s.options) : s.options;
       // (Add's: its formula, the number wired into its Number with it, where one is)
-      const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
+      const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined, s.bound);
       const run = runs.get(s.id);
       const state = run?.waiting ? "waiting" : (states.get(s.id) ?? "ready");
       const missing = notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined);
@@ -1233,6 +1255,7 @@ export default function Workflow2D() {
             runs={runRows(s)}
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
+            binds={openStep === s.id ? bindsOf(s, flow, (bound) => store.getState().updateStep(s.id, { bound })) : undefined}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
             asks={!!optionsNeed(s)}
             onChoose={(option) => store.getState().chooseAtomsFor(s.id, option)}
