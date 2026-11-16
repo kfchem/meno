@@ -105,6 +105,7 @@ export default function BondsPick2D() {
     downBondId: number | null; // bondId hit by the last pointerDown
     turned: TurnedBond | null; // the last click's turn, applied: taken back by a second click soon after (utils/press `turnTakenBack`)
     flushCheck: boolean; // a press landed while a click waits: applied unless that press was on the same bond (`flushesClick`)
+    holdEnded: boolean; // the waiting click's hold on the view already let go (by the next press, before it begins its own)
   }>({
     lastAt: 0,
     count: 0,
@@ -118,6 +119,7 @@ export default function BondsPick2D() {
     downBondId: null,
     turned: null,
     flushCheck: false,
+    holdEnded: false,
   });
   const CLICK_MS = 350;
   const SINGLE_DELAY_MS = 200;
@@ -132,15 +134,22 @@ export default function BondsPick2D() {
       st.timer = null;
     }
     if (st.count === 1 && st.bondId != null) {
+      const was = store.getState().model;
       store.getState().bondClicked(st.bondId, 1);
-      st.turned = { id: st.bondId, releasedAt: st.lastAt, after: store.getState().model };
+      // (kept only where it turned something: a turn taken back is an undo, never of another step)
+      const now = store.getState().model;
+      st.turned = now !== was ? { id: st.bondId, releasedAt: st.lastAt, after: now } : null;
     }
-    try {
-      if (st.pointerId != null) endPanHold(st.pointerId);
-      else endPanHold(null);
-    } catch {
-      endPanHold(null);
+    // (its hold on the view let go here - unless the next press let it go already, before beginning its own, which this must not end)
+    if (!st.holdEnded) {
+      try {
+        if (st.pointerId != null) endPanHold(st.pointerId);
+        else endPanHold(null);
+      } catch {
+        endPanHold(null);
+      }
     }
+    st.holdEnded = false;
     st.count = 0;
     st.bondId = null;
     st.pointerId = null;
@@ -153,6 +162,14 @@ export default function BondsPick2D() {
     const onDown = () => {
       const st = clickState.current;
       if (st.timer == null || st.count !== 1) return;
+      // (the waiting click's hold let go now, before this press's own handlers begin theirs)
+      try {
+        if (st.pointerId != null) endPanHold(st.pointerId);
+        else endPanHold(null);
+      } catch {
+        endPanHold(null);
+      }
+      st.holdEnded = true;
       st.flushCheck = true;
       window.setTimeout(() => {
         if (!clickState.current.flushCheck) return;
@@ -251,6 +268,8 @@ export default function BondsPick2D() {
           const pending = st.timer != null && st.count === 1 ? st.bondId : null;
           st.flushCheck = false;
           if (flushesClick(pending, b.id)) fireSingle();
+          // (on its own bond: the click waits on, and this press holds the view again as it begins its own hold below)
+          else st.holdEnded = false;
         }
         try {
           const p = (e as any).point as { x: number; y: number } | undefined;
