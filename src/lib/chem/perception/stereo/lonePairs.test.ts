@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  FIVE_RING_SHOWN_AROMATIC,
   GIVES_A_METAL_A_PAIR,
   HELD_FLAT_BY_AN_ACYL,
   lonePairCentres,
@@ -214,7 +213,6 @@ describe("the other lists of atoms with a lone pair, each its caller's own (part
   it("holds each list as its caller had it", () => {
     expect([...HELD_FLAT_BY_AN_ACYL]).toEqual(["N", "O", "S"]);
     expect([...SHARED_WITH_A_DOUBLE_BOND]).toEqual(["N", "O"]);
-    expect([...FIVE_RING_SHOWN_AROMATIC]).toEqual(["N", "O", "S", "Se", "P"]);
     expect([...GIVES_A_METAL_A_PAIR]).toEqual(["N", "P", "As", "O", "S", "Se", "Te"]);
   });
 });

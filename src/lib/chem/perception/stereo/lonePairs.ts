@@ -200,12 +200,6 @@ export const HELD_FLAT_BY_AN_ACYL: ReadonlySet<string> = new Set(["N", "O", "S"]
 export const SHARED_WITH_A_DOUBLE_BOND: ReadonlySet<string> = new Set(["N", "O"]);
 
 /**
- * lib/chem/aromaticSides: the atom of a five-ring with two double bonds that makes it show as aromatic, as drawn - a pyrrole's
- * N, a furan's O, a thiophene's S, a selenophene's Se, a phosphole's P.
- */
-export const FIVE_RING_SHOWN_AROMATIC: ReadonlySet<string> = new Set(["N", "O", "S", "Se", "P"]);
-
-/**
  * lib/chem/protonation: the elements that may give a metal a pair of electrons of their own, a bond of theirs to a metal then
  * in place of a hydrogen or not, which only the chemist can say.
  */
