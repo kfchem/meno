@@ -136,7 +136,13 @@ function repeatWireRefusal(doc: Flow, set: WorkflowSet, to: WorkflowStep, port: 
     return inside === to.id ? "It is inside this Repeat: wire it to Again to go round once more" : inside != null ? "It is inside another Repeat: what leaves it goes by Done and Out" : null;
   }
   const holder = repeatHolding(doc, to.id);
-  if (holder != null && inside !== holder) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
+  // (a step inside takes its entries from This pass or a step inside; a later input of it - a Reference, Restraints - may take a set from
+  //  outside, read the same in every pass; never one of another Repeat's)
+  const first = inputsFor(to.kind, byOf(to))[0]?.id ?? ONE_INPUT;
+  if (holder != null && inside !== holder && (port === first || inside != null)) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
+  // (a reference inside a Repeat is the same in every pass: one from inside it would change between passes, and the rows of earlier
+  //  passes were made against another - CHEM's rule for rows held over passes)
+  if (holder != null && inside === holder && to.kind === "torsion-restraints" && port === "reference") return "A reference inside a Repeat is the same in every pass: wire it from outside the Repeat";
   if (inside != null && inside !== holder) return "It is inside a Repeat: what leaves it goes by Done, then Out";
   return null;
 }

@@ -33,7 +33,7 @@
 import type { Restraint } from "../../../../lib/entry";
 import type { HeldKind } from "../../../../lib/plugins/steps";
 import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
-import { findSet, stepsBefore, type Flow } from "./flow";
+import { findSet, repeatHolding, stepsBefore, type Flow } from "./flow";
 import { kindInfo, RESTRAINTS_INPUT, type StepKind } from "./kinds";
 import type { SetEntry } from "./entries";
 
@@ -42,6 +42,13 @@ const MINIMISE_HOLDS: readonly HeldKind[] = ["fixed", "distance", "dihedral"];
 
 /** What a step of `kind` done by a plugin that declares `declared` holds (lib/plugins/manifest `StepDecl.restraints`). */
 export const heldBy = (kind: StepKind, declared: readonly HeldKind[] | undefined): readonly HeldKind[] => declared ?? (kind === "minimise" ? MINIMISE_HOLDS : []);
+
+/** The rows an entry was held with in a Repeat's earlier passes, carried on with it, and the numbering they were made in; none where it carries none. */
+function carriedOf(e: SetEntry): { rows: Restraint[]; numbering: string } | null {
+  const v = e.properties?.restraints?.value;
+  if (!v || typeof v !== "object" || !("restraints" in v) || !v.restraints.length) return null;
+  return { rows: v.restraints, numbering: v.numbering ?? OWN_NUMBERING };
+}
 
 /** The kind of holding a row asks of a program (lib/plugins/steps `HELD_KINDS`). */
 export const heldKindOf = (r: Restraint): HeldKind => (r.kind === "fixed" ? "fixed" : r.exact ? `${r.kind}-exact` : r.kind);
@@ -68,7 +75,7 @@ function idOf(e: SetEntry, on: string): string | null {
 }
 
 /** The numbering an entry is in now (lib/steps `NUMBERING`). */
-function numberingOf(e: SetEntry): string {
+export function numberingOf(e: SetEntry): string {
   const n = e.properties?.[NUMBERING];
   return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
 }
@@ -129,7 +136,14 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   const after = (a: Wired, b: Wired) => a.step != null && b.step != null && a.step !== b.step && (before.get(a.step) ?? before.set(a.step, stepsBefore(doc, a.step)).get(a.step)!).includes(b.step);
   const used = new Set<Wired>();
   let takenOver = 0;
+  // (inside a Repeat: the rows each entry was held with in its earlier passes, carried on with it - workflow/programs `firstHeld` -
+  //  held again, a row of this pass's tables taking a torsion's place over its earlier one: CHEM's rule, the later pass winning)
+  const inRepeat = repeatHolding(doc, step) != null;
+  let carriedOver = 0;
   const each = entries.map((e): { rows: Restraint[] } | { why: string } => {
+    const carried = inRepeat ? carriedOf(e) : null;
+    if (carried && carried.rows.length && carried.numbering !== numberingOf(e)) return { why: RENUMBERED_WHY };
+    const earlier = carried?.rows ?? [];
     const mine = wired.filter((w) => idOf(e, w.row.on) === w.row.for);
     // (its rows are for a molecule that came in, held or not)
     mine.forEach((w) => used.add(w));
@@ -140,6 +154,11 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
     if (silent >= 0) return { why: silentWhy(silent) };
     if (found.some((x) => x && x.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
     if (!mine.length) {
+      // (held in an earlier pass, nothing new this one: its earlier rows, held again)
+      if (earlier.length) {
+        carriedOver += earlier.length;
+        return { rows: earlier.map((r) => ({ ...r, atoms: [...r.atoms] })).sort(byKindAndAtoms) };
+      }
       // (found to have nothing to hold by every table - rows for other molecules or none: it goes on, holding nothing)
       heldNothing++;
       return { rows: [] };
@@ -166,6 +185,12 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
       rows.push(last.row.restraint);
       over += group.filter((o) => !alike(o.row.restraint, last.row.restraint)).length;
     }
+    // (an earlier pass's rows for torsions this pass has none for: held again)
+    for (const r of earlier) {
+      if (byKey.has(restraintKey(r))) continue;
+      rows.push({ ...r, atoms: [...r.atoms] });
+      carriedOver++;
+    }
     const refused = rows.map((r) => notHeld(r, holds, name)).find((w) => w);
     if (refused) return { why: refused };
     takenOver += over;
@@ -178,6 +203,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   const said = [
     ...(heldNothing ? [heldSome ? `${plural(heldNothing, "entry", "entries")} with ${NOTHING_TO_HOLD}` : NOTHING_TO_HOLD] : []),
     ...(takenOver ? [`${plural(takenOver, "row")} taken over by a later step's`] : []),
+    ...(carriedOver ? [`${plural(carriedOver, "row")} held again from earlier passes`] : []),
     ...(unmatched ? [`${plural(unmatched, "restraint row")} for no molecule here`] : []),
   ];
   return { each, said };

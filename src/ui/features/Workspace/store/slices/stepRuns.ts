@@ -31,7 +31,7 @@ import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHo
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { boundGroups } from "../../../../../lib/boundOptions";
 import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
-import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
+import { heldBy, heldRows, numberingOf, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
@@ -43,14 +43,14 @@ import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from 
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, landing, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
+import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, landing, repeatHolding, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
 import { REPEAT_IN, REPEAT_OUT, repeatRead, THIS_PASS } from "../../workflow/repeat";
 import { lastPass, passEntries, ranOut, startsFrom } from "../../workflow/repeatRun";
 import { setMolecules } from "../../workflow/entries";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresLine, folded, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type CarriedRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -1827,6 +1827,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (the restraints wired in that each entry's run held - its atoms held where they stood said on what it made, and checked)
       const wiredNow = plugin ? restraintsWired(d, id, kind, plugin, entries) : null;
       const rowsOf = (e: SetEntry) => rowsWired(wiredNow && !("why" in wiredNow) ? wiredNow : null, entries.indexOf(e));
+      // (inside a Repeat, the rows each entry was held with carried on with it, in their numbering: its next pass holds them again)
+      const inRepeat = repeatHolding(doc.getState(), id) != null;
+      const restrainedOf = (e: SetEntry): boolean | CarriedRows => {
+        const rows = rowsOf(e);
+        return inRepeat && rows?.length ? { rows, numbering: numberingOf(e) } : !!rows;
+      };
       const heldOf = (e: SetEntry) => fixedAtoms(rowsOf(e) ?? []);
       // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
       //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
@@ -1931,7 +1937,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               continue;
             }
             const made =
-              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? []));
+              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), restrainedOf(mine[i]), exactRows(rowsOf(mine[i]) ?? []));
             if (isFailure(made)) {
               fails([mine[i]], made.kind, made.why);
               continue;
@@ -1955,7 +1961,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", out);
               continue;
             }
-            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
+            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), restrainedOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
           }
           continue;
         }
@@ -1974,7 +1980,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
           // (a search Meno tells how many to try: which of what it made stand, Meno's checks - lib/chem/metalHolds)
           const checks = plugin.roleTries.includes("conformers") ? entryChecks(mine[i]) : undefined;
-          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
+          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), restrainedOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
         }
       }
       passOn(Infinity);
