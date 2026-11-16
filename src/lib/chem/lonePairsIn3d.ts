@@ -19,6 +19,7 @@
 import { identityKey, type IdentityAtom } from "./identity";
 import { AROMATIC_BOND, kekuleOrders } from "./kekulize";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
+import { EXACT, volumeSign } from "./perception/stereo/geometry";
 
 /** An atom of a molecule in 3D as this reads it. */
 export type AtomIn3d = { el: string; charge?: number; isotope?: number };
@@ -89,10 +90,10 @@ export function lonePairsIn3d(atoms: readonly AtomIn3d[], bonds: readonly BondIn
       flat.set(c, sum);
       continue;
     }
-    const volume = u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0]);
+    const volume = volumeSign(u, v, w, [0, 0, 0], EXACT);
     // (three bonds in one plane, all to one side: their angles short of 360, but no side the centre lies to)
     if (volume === 0) continue;
-    read.set(c, { neighbours: [...around[c]], volume: volume > 0 ? 1 : -1 });
+    read.set(c, { neighbours: [...around[c]], volume });
   }
   // (bonds marked aromatic - a file's type 4 - written out as a Kekulé structure first: identity takes the aromatic form of
   //  any one Kekulé structure - lib/chem/identity `aromaticForm` - never order 4 as given, so that one molecule read with its

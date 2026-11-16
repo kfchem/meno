@@ -57,5 +57,6 @@ export async function stereoisomersAnswer(chem: ChemClient, molblocks: readonly 
   // (an adduct's drawing that cannot be written back as drawn: set aside, in the plugin's words)
   const failed = sorted.find((i) => i.error != null || i.molblock == null);
   if (failed) return { aside: failed.error ?? "what it was made into could not be drawn", kind: "drawing" };
-  return { made: sorted.map((i) => i.molblock!), smiles: sorted.map((i) => i.smiles), ...note };
+  // (each with the configuration the plugin made it with, where it sends it: Meno lays its drawing out from that, not from its wedges)
+  return { made: sorted.map((i) => i.molblock!), smiles: sorted.map((i) => i.smiles), ...(sorted.some((i) => i.configuration) ? { configurations: sorted.map((i) => i.configuration) } : {}), ...note };
 }
