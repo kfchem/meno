@@ -543,7 +543,7 @@ function firstHeld(entry: SetEntry, restrained: boolean | CarriedRows): Pick<Set
   const held = entry.properties?.restraints;
   const was = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
   // (inside a Repeat, the rows it held carried on with it, in the numbering they were made in, for its next pass to hold them again -
-  //  CHEM's rule: rows up the entry's own lineage, the later pass winning; workflow/heldRows)
+  //  rows up the entry's own lineage, the later pass winning: docs/WORKFLOWS.md, *Repeat*; workflow/heldRows)
   const carry = typeof restrained === "object" ? restrained : null;
   if (!restrained || (was?.start && !carry)) return {};
   const start = was?.start ? [...was.start] : [...entry.xyz];

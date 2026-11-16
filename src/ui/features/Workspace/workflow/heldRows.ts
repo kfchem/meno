@@ -137,7 +137,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   const used = new Set<Wired>();
   let takenOver = 0;
   // (inside a Repeat: the rows each entry was held with in its earlier passes, carried on with it - workflow/programs `firstHeld` -
-  //  held again, a row of this pass's tables taking a torsion's place over its earlier one: CHEM's rule, the later pass winning)
+  //  held again, a row of this pass's tables taking a torsion's place over its earlier one: the later pass wins (docs/WORKFLOWS.md, *Repeat*))
   const inRepeat = repeatHolding(doc, step) != null;
   let carriedOver = 0;
   const each = entries.map((e): { rows: Restraint[] } | { why: string } => {

@@ -1,5 +1,5 @@
 /**
- * Rows held over a Repeat's passes (workflow/heldRows; CHEM's rule for 2d-2): an entry inside a Repeat holds the rows of every pass up
+ * Rows held over a Repeat's passes (workflow/heldRows; docs/WORKFLOWS.md, *Repeat*): an entry inside a Repeat holds the rows of every pass up
  * its own lineage - those it was held with before, carried on with it (workflow/programs `firstHeld`) - and this pass's, the later pass
  * winning a torsion held in both; rows carried in another numbering are refused, never held on other atoms.
  */
