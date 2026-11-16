@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  startAlone,
   advanceStroke,
   finishStroke,
   holdStroke,
@@ -236,5 +237,22 @@ describe("a chain stroke beside a large drawing", () => {
     expect(s.nodes.length).toBeGreaterThanOrEqual(2);
     // (gone over once: about 70 ms of CPU; gone over at every step, about 950)
     expect(spent).toBeLessThan(350);
+  });
+});
+
+describe("a stroke's start on empty space, alone (Quick Add's Chain)", () => {
+  const model = { atoms: [], bonds: [] } as never;
+  it("is where it starts until it has a bond - no node, no bond in preview - and then none", () => {
+    const s = startStroke("chain", NEW_ATOM, model, { x: 2, y: 3 }, 1.5);
+    expect(startAlone(s, null)).toEqual({ x: 2, y: 3 });
+    // (a bond in preview from it: it has one, drawn as any atom is)
+    expect(startAlone(s, { x: 3, y: 3 })).toBeNull();
+    // (a node drawn: the same)
+    expect(startAlone({ ...s, nodes: [{ x: 3, y: 3 }] as never }, null)).toBeNull();
+  });
+
+  it("is none for a stroke from an atom, or none at all", () => {
+    expect(startAlone(startStroke("bond", 1), null)).toBeNull();
+    expect(startAlone(null, null)).toBeNull();
   });
 });

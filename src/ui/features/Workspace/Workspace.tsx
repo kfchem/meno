@@ -26,6 +26,7 @@ import {
   JoinCaps2D,
   BondsPick2D,
   AtomsHoverRings2D,
+  StrokeStart2D,
   ExtendPreview2D,
   ClickBondPreview2D,
   HoldProgress2D,
@@ -2929,6 +2930,7 @@ function WorkspaceContent({
           <PushDraw2D />
           {/* Atom hover rings */}
           <AtomsHoverRings2D />
+          <StrokeStart2D />
           {/* what is selected, the box or lasso selecting, the handle turning it */}
           <Selection2D />
           {/* a press held, for a long press: the selection spreading, or a ring */}
