@@ -12,7 +12,8 @@ import { offeredSteps } from "../workflow/offered";
 import { inputKey } from "../workflow/flow";
 import { repeatBox } from "../workflow/repeat";
 import { cardHighOf } from "../workflow/kinds";
-import { CARD_W } from "../workflow/look";
+import { CARD_W, GAP } from "../workflow/look";
+import { unseenSets } from "../workflow/onPage";
 
 /** The page: two waters in a set, wired into a Repeat whose frame holds a Filter (pass < 3): its kept to Again, its rest to Done. */
 function page(options: Record<string, string | number>) {
@@ -143,7 +144,10 @@ describe("a Repeat made", () => {
     expect([held.x >= box.x0, held.x + CARD_W <= box.x1, held.y - cardHighOf("filter") > box.y0]).toEqual([true, true, true]);
     expect(box.x0).toBeGreaterThan(st().sets.find((b) => b.id === input)!.x1);
     // (the sets the step it holds gives, inside the frame; its own Out wholly outside it, to its right)
-    for (const b of st().sets.filter((x) => x.made?.step === f)) expect([b.x0 >= box.x0, b.x1 <= box.x1, b.y0 >= box.y0, b.y1 <= box.y1]).toEqual([true, true, true, true]);
+    const shown = st().sets.filter((x) => x.made?.step === f && !unseenSets(st() as never).has(x.id));
+    for (const b of shown) expect([b.x0 >= box.x0, b.x1 <= box.x1, b.y0 >= box.y0, b.y1 <= box.y1]).toEqual([true, true, true, true]);
+    // (no deeper than what it holds on the page and a gap or two: a set held off the page takes no room)
+    expect(box.y0).toBeGreaterThan(Math.min(held.y - cardHighOf("filter"), ...shown.map((b) => b.y0)) - 3 * GAP);
     expect(st().sets.find((b) => b.made?.step === r && b.made.exit === "reached")!.x0).toBeGreaterThan(box.x1);
     expect(step.kind).toBe("repeat");
     expect(step.holds).toEqual([f]);
@@ -161,6 +165,25 @@ describe("a Repeat made", () => {
     expect(doc.undo()).toBe(true);
     expect(st().steps.some((s) => s.id === r)).toBe(false);
     expect(st().wires).toHaveLength(2);
+  });
+
+  it("round a step whose second exit's set is held off the page, empty: its frame not drawn down round that set (found in the GUI check)", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const input = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const f = st().addStep("filter", "meno", 400, 300);
+    st().connect({ set: input }, f);
+    const rest = st().sets.find((b) => b.made?.step === f && b.made.exit === "rest")!;
+    expect(unseenSets(st() as never).has(rest.id)).toBe(true);
+    const r = st().repeatSteps([f]) as number;
+    const step = st().steps.find((s) => s.id === r)!;
+    const box = repeatBox({ x: step.x, y: step.y, frame: step.frame! });
+    // (its foot two gaps below the lowest of the step's card and the sets of it drawn on the page)
+    const card = st().steps.find((s) => s.id === f)!;
+    const shown = st().sets.filter((b) => b.made?.step === f && !unseenSets(st() as never).has(b.id));
+    expect(box.y0).toBeCloseTo(Math.min(card.y - cardHighOf("filter"), ...shown.map((b) => b.y0)) - 2 * GAP);
   });
 
   it("round steps that structures drawn come into: refused, saying why, and nothing changed - never made with the wire lost (found in the GUI check)", () => {

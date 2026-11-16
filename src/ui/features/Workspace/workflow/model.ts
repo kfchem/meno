@@ -17,6 +17,7 @@ import { cardHighOf, exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 import { frameAt, placeBelow, placeCard, placeNext } from "./place";
+import { unseenSets } from "./onPage";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -398,7 +399,9 @@ export function repeatMade(doc: WorkspaceDocument, ids: readonly number[]): { do
   // (its card above theirs, at the frame's top left - never out to their left, where what comes in to them stands - and its frame
   //  round all of them, no wider than they are and a gap: the page's y runs up, a card's top its y, its foot below it)
   //  (the sets their exits give round with them: what they make is inside it, found in the GUI check)
-  const theirs = (doc.sets ?? []).filter((b) => insideSet(b.id));
+  //  (those drawn on the page: one held off it - an exit of theirs nothing is wired from - takes no room, found in the GUI check)
+  const unseen = unseenSets(doc);
+  const theirs = (doc.sets ?? []).filter((b) => insideSet(b.id) && !unseen.has(b.id));
   const x0 = Math.min(...inner.map((s) => s.x)) - GAP;
   const top = Math.max(...inner.map((s) => s.y), ...theirs.map((b) => b.y1)) + 2 * GAP + cardHighOf("repeat");
   const x1 = Math.max(x0 + CARD_W + 2 * GAP, ...inner.map((s) => s.x + CARD_W + GAP), ...theirs.map((b) => b.x1 + GAP));
