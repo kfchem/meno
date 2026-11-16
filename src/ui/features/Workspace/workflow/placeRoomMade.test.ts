@@ -1,0 +1,64 @@
+/**
+ * A step's result set grown as it runs again, where another step's frame not run yet stands in its way below it (workflow/place
+ * `roomMadeFor`; docs/WORKFLOWS.md, *Where a result set goes*): the frame not run yet is pushed down just clear, and the grown set keeps
+ * its place by its step. A set that holds results is never moved: the grown set goes lower, as before.
+ */
+import { describe, expect, it } from "vitest";
+import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import type { DrawnModel, WorkflowSet } from "../store/types";
+import type { Frame } from "./entries";
+import { CARD_H } from "./look";
+import { addStep } from "./model";
+import { placeResults, type RunResults, type RunWith } from "./run";
+
+const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
+const chloroethane = (): DrawnModel => ({
+  atoms: [
+    { id: 1, el: "C", x: 0, y: 0 },
+    { id: 2, el: "C", x: 1.56, y: 0.9 },
+    { id: 3, el: "Cl", x: 3.12, y: 0 },
+  ] as never,
+  bonds: [
+    { id: 1, a: 1, b: 2, order: 1 },
+    { id: 2, a: 2, b: 3, order: 1 },
+  ] as never,
+});
+const drawn = (n: number): RunResults => ({ molecules: [], rest: [], holds: "structures", drawn: { made: Array.from({ length: n }, chloroethane), rest: [] } });
+const overlap = (a: Frame, b: Frame) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+/** Two steps, one above the other, each with its exit's frame to its right; the upper run once, small. */
+function page(): { doc: WorkspaceDocument; upper: number; lower: number } {
+  let doc = addStep(emptyWorkspaceDocument(), "descriptors", 0, 0);
+  doc = addStep(doc, "descriptors", 0, -3 * CARD_H);
+  const [upper, lower] = doc.steps!.map((s) => s.id);
+  doc = placeResults(doc, doc.steps![0], drawn(1), W);
+  return { doc, upper, lower };
+}
+const setOf = (doc: WorkspaceDocument, step: number): WorkflowSet => doc.sets!.find((b) => b.made?.step === step)!;
+
+describe("a result set grown as its step runs again, a frame not run yet below it", () => {
+  it("keeps its place by its step, the frame not run yet pushed down just clear of it, still not run", () => {
+    const { doc, upper, lower } = page();
+    const was = setOf(doc, upper);
+    const grown = placeResults(doc, doc.steps![0], drawn(19), W);
+    const now = setOf(grown, upper);
+    expect([now.x0, now.y1]).toEqual([was.x0, was.y1]);
+    expect(now.y0).toBeLessThan(was.y0);
+    const pushed = setOf(grown, lower);
+    expect(pushed.made?.holds).toBeUndefined();
+    expect(pushed.y1).toBeLessThan(setOf(doc, lower).y1);
+    expect(overlap(now, pushed)).toBe(false);
+  });
+
+  it("goes lower, as before, where the set in its way holds results: that set never moved", () => {
+    const first = page();
+    const { upper, lower } = first;
+    const doc = placeResults(first.doc, first.doc.steps![1], drawn(1), W);
+    const stays = setOf(doc, lower);
+    const was = setOf(doc, upper);
+    const grown = placeResults(doc, doc.steps![0], drawn(19), W);
+    expect(setOf(grown, lower)).toMatchObject({ x0: stays.x0, x1: stays.x1, y0: stays.y0, y1: stays.y1 });
+    expect(setOf(grown, upper).y1).not.toBe(was.y1);
+    expect(overlap(setOf(grown, upper), setOf(grown, lower))).toBe(false);
+  });
+});

@@ -3053,6 +3053,12 @@ page could not be read after one run.
     it.
   - **Run again**, a set stays where it was, its top left kept, unless it
     grew over something beside it; then it goes where a new one would.
+    Where all that is in its way is other steps' frames not run yet,
+    empty, they make room instead: each is pushed down just clear of it,
+    its wires with it, in the same undo step as the run
+    (place `roomMadeFor`). A card, a chemist's set or a set that holds
+    results is never moved: with one of them in its way, the grown set
+    goes lower, as before.
   - A step's second exit's set keeps under its first, and lower still
     where something else is there (`keepExitsUnder`). A step's empty
     exit frames, made as it is added, go clear in the same way (model

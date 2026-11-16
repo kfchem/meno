@@ -212,6 +212,36 @@ export function placeAgain(doc: WorkspaceDocument, step: { id: number; x: number
   return clearOf(doc, there, self) ? there : placeFor(doc, step, made?.exit ?? ONE_EXIT, width, height, self);
 }
 
+/** A step's exit's frame not run yet: made for the step, holding nothing yet ("Not run yet", workflow/entries `countSaid`). */
+const notRunYet = (b: WorkflowSet): boolean => !!b.made && !b.made.holds && !b.notKept;
+
+/** `doc` with set `id`'s frame now `f`: a frame alone, what it holds left where it is - for a frame not run yet, which holds nothing. */
+const framed = (doc: WorkspaceDocument, id: number, f: Frame): WorkspaceDocument => ({ ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? { ...b, x0: f.x0, x1: f.x1, y0: f.y0, y1: f.y1 } : b)) });
+
+/**
+ * `doc` with room made, where it can be, for a step's result set made before as it runs again, grown to `width` by `height`
+ * (`placeAgain`): where what stands in the way of it where it was, its top left kept, is frames not run yet alone - other steps' exits,
+ * empty - each is pushed down just clear of it, as far as it must (`placeBelow`), its wires with it, in the same edit as the run. A
+ * card or a set the chemist placed, or one that holds results, is never moved: where one is in the way, or the frames pushed would
+ * not clear its place, `doc` as it was, and the set goes lower (`placeFor`), as docs/WORKFLOWS.md says.
+ */
+export function roomMadeFor(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, was: Frame & { id: number }, width: number, height: number): WorkspaceDocument {
+  const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === step.id && b.id !== was.id).map((b) => b.id));
+  const self: Self = { set: was.id, sets: siblings, step: step.id };
+  const there = frameAt(was.x0, was.y1, width, height);
+  if (clearOf(doc, there, self)) return doc;
+  const near = (b: Frame) => b.x0 < there.x1 + BETWEEN && there.x0 < b.x1 + BETWEEN && b.y0 < there.y1 + BETWEEN && there.y0 < b.y1 + BETWEEN;
+  const inWay = (doc.sets ?? []).filter((b) => b.id !== was.id && !siblings.has(b.id) && notRunYet(b) && near(b));
+  if (!inWay.length) return doc;
+  // (the grown set where it was, then each frame in its way pushed down just clear of it - the highest first)
+  let d = framed(doc, was.id, there);
+  for (const b of [...inWay].sort((p, q) => q.y1 - p.y1)) {
+    const f = placeBelow(d, b.x0, Math.min(b.y1, there.y0 - BETWEEN), b.x1 - b.x0, b.y1 - b.y0, { set: b.id });
+    d = framed(d, b.id, f);
+  }
+  return clearOf(d, there, self) ? framed(d, was.id, doc.sets!.find((b) => b.id === was.id) ?? was) : doc;
+}
+
 /**
  * Where a frame `width` by `height` goes under one at (x, `top`): there, or
  * lower, half a card at a time, as far as it must to keep clear (`clearOf`).
