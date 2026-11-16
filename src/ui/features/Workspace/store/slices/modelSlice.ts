@@ -14,6 +14,7 @@ import { newBondFrom } from "../../utils/geometry";
 import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
+import { depthStored, recognisedDepthOf } from "../../chem/depthHeld";
 import { renumbered } from "../../chem/atomMap";
 import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
@@ -218,6 +219,12 @@ export const createModelSlice = (
     doc.drop(`move-atoms:${gesture}`);
   },
 
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => {
+    // (a ring in perspective with no depth, about to be turned: its worked-out depth stored first, in the same step - chem/depthHeld)
+    const held = recognisedDepthOf(get().model, atoms);
+    if (held.size) doc.edit("move atoms", (d) => depthStored(d, held), gestureStep(`move-atoms:${gesture}`));
+  },
+
   settleMove: (gesture: string, atoms: Iterable<number>) => {
     // (a mark between two bonds the move has left apart - one with an atom it moved - taken away, in the move's own step: chem/crossings
     // `crossingsApart`)
@@ -236,11 +243,14 @@ export const createModelSlice = (
     const words = among.captions;
     // (all of it - and the pictures, texts' sheets, PDFs, slides, shapes and molecules in 3D selected with it - about the middle of all it moves, which so stays where it was)
     const mid = turnOverMiddle(get(), { arrows: among.arrows, pluses: among.pluses, captions: words })!;
-    const over = turnedOver(model, sel.atoms, axis, mid);
+    // (a ring in perspective with no depth: its worked-out depth stored first, so that it is turned over as one drawn with depth is - the
+    //  same compound seen from its other side, not its mirror image: chem/depthHeld)
+    const held = recognisedDepthOf(model, sel.atoms);
+    const over = turnedOver(held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model, sel.atoms, axis, mid);
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)
-    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
