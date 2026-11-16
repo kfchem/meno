@@ -463,7 +463,7 @@ describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
     expect(m.selIcons).toEqual(["Cut", "Copy"]);
     expect(m.listed).toContain("Unpaired electron on 3 atoms");
     // (and its key, + : it acts on the selection as the item does)
-    expect(m.html).toContain('title="Charge one up on 3 atoms (+)"');
+    expect(m.html).toContain('data-tip="Charge one up on 3 atoms (+)"');
   });
 
   it("on a shape selected with more is the shape's menu under one line counting the selection: its own items reaching the shapes selected, Delete the selection", () => {
