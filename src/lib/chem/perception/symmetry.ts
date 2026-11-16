@@ -145,11 +145,11 @@ function classedNow(input: SymmetryInput): Classed {
   const rank = ranksOf(first);
   const refine = (r: number[]): number[] => {
     for (;;) {
-      const keys = r.map((v, i) =>
-        [v, ...adj[i].map((e) => `${r[e.to]}:${e.order}`).sort(), ...pis[i].map((m) => `${r[m]}:pi`).sort()].join(","),
+      const now = r;
+      const { next, after, before } = parted(now, (i) =>
+        [now[i], ...adj[i].map((e) => `${now[e.to]}:${e.order}`).sort(), ...pis[i].map((m) => `${now[m]}:pi`).sort()].join(","),
       );
-      const next = ranksOf(keys.map((k, i) => `${String(r[i]).padStart(6, "0")}/${k}`));
-      if (classes(next) === classes(r)) return next;
+      if (after === before) return next;
       r = next;
     }
   };
@@ -168,42 +168,42 @@ function classedNow(input: SymmetryInput): Classed {
       partnerOf.set(p, [...(partnerOf.get(p) ?? []), q]);
       partnerOf.set(q, [...(partnerOf.get(q) ?? []), p]);
     }
-  const stereoKeys = (r: number[]): string[] =>
-    input.atoms.map((a, i) => {
-      const parts: (number | string)[] = [];
-      if (a.tetra) {
-        const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
-        parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
-      }
-      // (each end's reference against its other neighbour: endSet)
-      for (const b of stereoAt[i]) {
-        const [p, q] = b.stereo!.refs;
-        parts.push((b.stereo!.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, p) * endSet(adj, r, b.b, b.a, q));
-      }
-      // (and an axis of chirality's sense, likewise)
-      for (const x of input.axes ?? []) {
-        if (!x.atoms.includes(i)) continue;
-        const [p, q] = x.refs;
-        const [u, v] = x.atoms;
-        parts.push(x.sense * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
-      }
-      // (and an odd cumulene's cis or trans, as a double bond's, at its ends)
-      for (const x of input.cumulated ?? []) {
-        if (!x.atoms.includes(i)) continue;
-        const [p, q] = x.refs;
-        const [u, v] = x.atoms;
-        parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
-      }
-      // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N. A
-      //  bridge is a donor of two metals, across one donor at each: those ranks in order, not in the order the input lists the
-      //  metals - else the bridges of a dimer ranked by the order of its atoms, two texts for one structure: found in the chemistry check)
-      for (const v of (partnerOf.get(i) ?? []).map((q) => r[q]).sort((p, q) => p - q)) parts.push(`x${v}`);
-      return parts.join(",");
-    });
+  const stereoKey = (r: number[], i: number): string => {
+    const a = input.atoms[i];
+    const parts: (number | string)[] = [];
+    if (a.tetra) {
+      const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
+      parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
+    }
+    // (each end's reference against its other neighbour: endSet)
+    for (const b of stereoAt[i]) {
+      const [p, q] = b.stereo!.refs;
+      parts.push((b.stereo!.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, p) * endSet(adj, r, b.b, b.a, q));
+    }
+    // (and an axis of chirality's sense, likewise)
+    for (const x of input.axes ?? []) {
+      if (!x.atoms.includes(i)) continue;
+      const [p, q] = x.refs;
+      const [u, v] = x.atoms;
+      parts.push(x.sense * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
+    }
+    // (and an odd cumulene's cis or trans, as a double bond's, at its ends)
+    for (const x of input.cumulated ?? []) {
+      if (!x.atoms.includes(i)) continue;
+      const [p, q] = x.refs;
+      const [u, v] = x.atoms;
+      parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
+    }
+    // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N. A
+    //  bridge is a donor of two metals, across one donor at each: those ranks in order, not in the order the input lists the
+    //  metals - else the bridges of a dimer ranked by the order of its atoms, two texts for one structure: found in the chemistry check)
+    for (const v of (partnerOf.get(i) ?? []).map((q) => r[q]).sort((p, q) => p - q)) parts.push(`x${v}`);
+    return parts.join(",");
+  };
   const withStereo = (r: number[]): number[] => {
     for (;;) {
-      const keys = stereoKeys(r);
-      const next = refine(ranksOf(r.map((v, i) => `${String(v).padStart(6, "0")}/${keys[i]}`)));
+      const now = r;
+      const next = refine(parted(now, (i) => stereoKey(now, i)).next);
       if (classes(next) === classes(r)) return next;
       r = next;
     }
@@ -481,7 +481,7 @@ function search(start: number[], n: number, refined: (r: number[]) => number[], 
         break;
       }
       budget--;
-      const leaf = search(refined(ranksOf(r.map((v, i) => `${String(v).padStart(6, "0")}/${i === m ? 0 : 1}`))));
+      const leaf = search(refined(parted(r, (i) => (i === m ? "0" : "1")).next));
       tried.push(m);
       for (const g of leaf.symmetries) {
         symmetries.push(g);
@@ -550,6 +550,35 @@ function written(input: SymmetryInput, what: readonly string[], r: readonly numb
     .map((x) => `${pad(r[x.metal])}:${x.pairs.map(([p, q]) => (r[p] < r[q] ? pad(r[p]) + pad(r[q]) : pad(r[q]) + pad(r[p]))).sort().join(".")}`)
     .sort();
   return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}${cumulated.length ? `|${cumulated.join(" ")}` : ""}${arranged.length ? `|m${arranged.join(" ")}` : ""}`;
+}
+
+/**
+ * Each atom's rank (`r`) parted by what `key` says of it: `ranksOf` of the keys `${r[i]} padded to six}/${key(i)}` - the ranks
+ * first, then the keys within each, sorted - with a key asked only of an atom whose rank it shares with another, so that a
+ * refinement pays only for the atoms still alike. With how many ranks there are after, and before.
+ */
+function parted(r: readonly number[], key: (i: number) => string): { next: number[]; after: number; before: number } {
+  const members = new Map<number, number[]>();
+  r.forEach((v, i) => {
+    const m = members.get(v);
+    if (m) m.push(i);
+    else members.set(v, [i]);
+  });
+  const next = new Array<number>(r.length);
+  let rank = 0;
+  for (const v of [...members.keys()].sort((p, q) => p - q)) {
+    const atoms = members.get(v)!;
+    if (atoms.length === 1) {
+      next[atoms[0]] = rank++;
+      continue;
+    }
+    const keys = atoms.map(key);
+    const distinct = [...new Set(keys)].sort();
+    const at = new Map(distinct.map((k, i) => [k, rank + i]));
+    atoms.forEach((a, i) => (next[a] = at.get(keys[i])!));
+    rank += distinct.length;
+  }
+  return { next, after: rank, before: members.size };
 }
 
 /** Each key's rank among the distinct keys, in sorted order. */
