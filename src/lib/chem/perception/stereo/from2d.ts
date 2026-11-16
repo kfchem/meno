@@ -31,7 +31,10 @@
  *   hashes), the other end's neighbours in it. Not a wedge out of an
  *   allene's end: that states the allene's axis (ST-1.6) and nothing else,
  *   so a single bond from there is read only from wedges at its other end
- *   (ST-1.7's form, by analogy).
+ *   (ST-1.7's form, by analogy). An allene with an end whose two other
+ *   groups are alike has no axis, however it is wedged - its mirror image is
+ *   the molecule itself (2-methylpenta-2,3-diene's): none is read there, by
+ *   the same test, and `unreadWhy` says so.
  *
  * The rules it follows (Brecher 2006, by rule number):
  * - ST-0.3: a wedge is narrow at its stereocentre, and is read there only
@@ -523,20 +526,30 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
   });
 
   // (none where it sets nothing - an end of two alike groups: perception/symmetry `settingCisTrans`, asked of the molecule as
-  //  read, its atoms as identity writes them, every other configuration kept. Asked when first wanted: a reader that wants
-  //  only the centres - the layout's checks of each centre it draws, many times over - asks nothing of the symmetry)
-  let setting: { cisTrans: Map<number, CisTrans>; cumulated: Cumulated[] } | null = null;
+  //  read, its atoms as identity writes them, every other configuration kept; an allene's axis likewise, a biaryl's as read.
+  //  Asked when first wanted: a reader that wants only the centres - the layout's checks of each centre it draws, many times
+  //  over - asks nothing of the symmetry)
+  let setting: { cisTrans: Map<number, CisTrans>; axes: Axial[]; cumulated: Cumulated[] } | null = null;
   const settled = () => {
     if (setting) return setting;
     const { graph: read, bondAt: unique } = drawnGraph(atoms, bonds, { tetra, cisTrans, axes, cumulated: odd });
     const kept = settingCisTrans(read);
     const set = new Set(unique.filter((_, j) => kept.bonds[j].stereo));
-    setting = kept === read ? { cisTrans, cumulated: odd } : { cisTrans: new Map([...cisTrans].filter(([k]) => set.has(k))), cumulated: odd.filter((x) => kept.cumulated.includes(x)) };
+    setting =
+      kept === read
+        ? { cisTrans, axes, cumulated: odd }
+        : {
+            cisTrans: new Map([...cisTrans].filter(([k]) => set.has(k))),
+            axes: axes.filter((x) => kept.axes!.includes(x)),
+            cumulated: odd.filter((x) => kept.cumulated.includes(x)),
+          };
     return setting;
   };
   return {
     tetra,
-    axes,
+    get axes() {
+      return settled().axes;
+    },
     get cisTrans() {
       return settled().cisTrans;
     },
@@ -597,7 +610,10 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * rule, lib/chem/lonePairCentres); a centre by its lone pair drawn with
  * two bonds, its H carried (a secondary phosphine's P), its H and its lone
  * pair both left out; two of its bonds in line or on top of each other (a T, ST-1.2.12);
- * or else wedges and hashes that cancel, saying neither way round.
+ * or else wedges and hashes that cancel, saying neither way round. At an
+ * allene's end: its other end with fewer than two different groups, an end
+ * of two alike groups (`settingCisTrans`), or wedges at its two ends that
+ * say opposite ways.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
   const mine = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c));
@@ -621,6 +637,15 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
     const hs = atoms[end].hs + onEnd.filter((n) => atoms[n].el === "H").length;
     // (a ketene's O, with no group; a ketenimine's N, with one; a terminal allene's CH2, with two H: no axis for the wedge to state)
     if (onEnd.length + atoms[end].hs < 2 || hs >= 2) return "the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state";
+    // (an end of two alike groups - 2-methylpenta-2,3-diene's two methyls: the axis, given either way, sets nothing - perception/symmetry
+    //  `settingCisTrans`, asked as readStereo asks it, every other configuration as read)
+    const near = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c) && b.a !== run && b.b !== run).map((b) => (b.a === c ? b.b : b.a));
+    if (near.length && onEnd.length) {
+      const read = readStereo(atoms, bonds);
+      const axis: Axial = { atoms: [c, end], refs: [near[0], onEnd[0]], sense: 1 };
+      const { graph } = drawnGraph(atoms, bonds, { ...read, axes: [...read.axes, axis] });
+      if (!settingCisTrans(graph).axes!.includes(axis)) return "an end of these double bonds carries two alike groups, so there is no axis for a wedge to state";
+    }
     return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
   }
   const groups = around.length + atom.hs;

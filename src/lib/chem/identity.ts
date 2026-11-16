@@ -521,14 +521,15 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * at a centre or double bond two of whose groups are alike - two ends, or
  * two whole groups (`groupsAlike`) - which sets nothing however the rest is
  * given: there no configuration is written, drawn or not; and a double
- * bond's or an odd cumulene's cis or trans that sets nothing with the rest
- * as given (perception/symmetry `settingCisTrans`) is taken off. A
+ * bond's or an odd cumulene's cis or trans, or an allene's sense, that sets
+ * nothing with the rest as given (perception/symmetry `settingCisTrans`) is
+ * taken off. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
  * nothing, so writing it changes no compound - an isopropyl's CH, the
  * third centre of the cis,trans 1,2,3-trimethylcyclopropane written with
- * its trans pair; a double bond or an odd cumulene so is left with none,
- * and asked no more (below). A place whose
+ * its trans pair; a double bond, an odd cumulene or an allene's axis so is
+ * left with none, and asked no more (below). A place whose
  * two senses write two texts is open, and stays so: the cis pair's third
  * centre, which decides between two compounds.
  *
@@ -544,9 +545,9 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * and a writing that states one compound has that compound's text. Where
  * writings that leave the same thing unsaid in different ways get two
  * identities, they are alike told apart, never two unlike joined, and only
- * where no single compound is stated. A double bond or an odd cumulene
- * that sets nothing is left with none, never filled: a cis or trans given
- * there is none to every canonical reading (perception/symmetry
+ * where no single compound is stated. A double bond, an odd cumulene or an
+ * allene's axis that sets nothing is left with none, never filled: a cis or
+ * trans or a sense given there is none to every canonical reading (perception/symmetry
  * `settingCisTrans`) while the rest stays open, so filled, it would turn
  * into a configuration again once another place was filled - that acid
  * with its double bond filled and then its centre would have one
@@ -574,8 +575,8 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * and wrote two, that place is left as it is, and `complete` says so.
  */
 export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string; searches: number; settledMetals: number[] } {
-  // (a cis or trans given where it sets nothing, the rest as given - a cyclohexylidene's with its ring's C4 left open - taken
-  //  off: perception/symmetry `settingCisTrans`, as every canonical reading takes it)
+  // (a cis or trans or an allene's sense given where it sets nothing, the rest as given - a cyclohexylidene's with its ring's
+  //  C4 left open - taken off: perception/symmetry `settingCisTrans`, as every canonical reading takes it)
   let g = settingCisTrans(input);
   let complete = true;
   // (how many canonical searches the fill made - its cost, the same for the same structure whatever its atoms' order)
@@ -610,12 +611,12 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   if (plainMetal.size) g = { ...g, arrangements: (g.arrangements ?? []).filter((x) => !plainMetal.has(x.metal)) };
   // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
   const settledMetals = [...plainMetal];
-  // (a double bond or an odd cumulene found to set nothing below: left with none, never given one - a cis or trans given there
-  //  would be taken off by every canonical reading while its place stays open, and become a configuration again once
-  //  another place was filled: (4-methylcyclohexylidene)acetic acid's C=C filled and then its C4, one enantiomer's text for
-  //  a writing that states neither)
+  // (a double bond, an odd cumulene or an allene's axis found to set nothing below: left with none, never given one - a cis or
+  //  trans or a sense given there would be taken off by every canonical reading while its place stays open, and become a
+  //  configuration again once another place was filled: (4-methylcyclohexylidene)acetic acid's C=C filled and then its C4,
+  //  one enantiomer's text for a writing that states neither; an allene ending in that ring likewise)
   const leftNone = new Set<string>();
-  const noneKey = (b: Blank) => (b.kind === "bond" ? `b${b.at}` : b.kind === "cumulated" ? `c${b.ends.join(",")}` : null);
+  const noneKey = (b: Blank) => (b.kind === "bond" ? `b${b.at}` : b.kind === "cumulated" || b.kind === "axis" ? `${b.kind[0]}${b.ends.join(",")}` : null);
   // (the places left: those not settled so)
   const open = (b: Blank) =>
     !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at)) && !(b.kind === "metal" && plainMetal.has(b.at)) && !leftNone.has(noneKey(b) ?? "");

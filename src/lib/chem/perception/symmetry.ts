@@ -16,7 +16,8 @@
  * - the canonical text (`canonicalText`, `canonicalWritten`, `canonicalSearched`): equal for two orders of one structure when
  *   the search was complete; never equal for two structures.
  * - a cis or trans that sets nothing is read as none (`settingCisTrans`): a double bond with an end whose two other groups are
- *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there.
+ *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there; an
+ *   allene's axis with such an end likewise.
  *
  * What an orbit is NOT:
  * - not "atoms alike to a chemist". An automorphism here keeps every centre's sense, so orbits are the homotopic sets: right for
@@ -295,13 +296,15 @@ export function canonicalSearched(input: SymmetryInput): { text: string; ranks: 
 }
 
 /**
- * `input` with each cis or trans that sets nothing taken off - a double bond's, an odd cumulene's: where, with that unit left
- * out and every other configuration kept, a symmetry of the structure holds both its ends and the groups on one end where
- * they are and swaps the two groups on the other. Turned over, it is then the same structure, so it states nothing: a
- * 2-methylbut-2-ene's C=C, a prenyl's, a cyclohexylidene's (its ring's two arms alike). Written as it stands, it would part
- * those two groups by which one the search took first - two orbits for 2,7-dimethylocta-2,6-diene's alike methyls, found in
- * the chemistry check - so it is read as none, by every reading here and by the drawing's reader
- * (perception/stereo/from2d `readStereo`), from this one test.
+ * `input` with each cis or trans that sets nothing taken off - a double bond's, an odd cumulene's - and each allene's axis
+ * that sets nothing (an even run's, its ends not bonded to each other): where, with that unit left out and every other
+ * configuration kept, a symmetry of the structure holds both its ends and the groups on one end where they are and swaps
+ * the two groups on the other. Turned over, it is then the same structure, so it states nothing: a 2-methylbut-2-ene's C=C,
+ * a prenyl's, a cyclohexylidene's (its ring's two arms alike); 2-methylpenta-2,3-diene's axis, its end of two methyls - an
+ * allene's two senses are each other's mirror image, and with two alike groups on an end the mirror image is the molecule
+ * itself. Written as it stands, it would part those two groups by which one the search took first - two orbits for
+ * 2,7-dimethylocta-2,6-diene's alike methyls, found in the chemistry check - so it is read as none, by every reading here
+ * and by the drawing's reader (perception/stereo/from2d `readStereo`), from this one test.
  *
  * - Every other configuration kept: two groups alike in constitution but not in configuration are not alike.
  *   (4-methylcyclohexylidene)acetic acid's ring arms are alike while its C4 is open, and its C=C then sets nothing; with C4
@@ -321,6 +324,9 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
   const units = [
     ...input.bonds.flatMap((b, k) => (b.stereo ? [{ bond: k }] : [])),
     ...(input.cumulated ?? []).map((_, k) => ({ run: k })),
+    // (an allene's axis - its ends not bonded to each other; a biaryl's, a single bond, is not asked here: identity `filledIn`
+    //  takes one that sets nothing out as a place of its own)
+    ...(input.axes ?? []).flatMap(({ atoms: [u, v] }, k) => (input.bonds.some((b) => (b.a === u && b.b === v) || (b.a === v && b.b === u)) ? [] : [{ axis: k }])),
   ];
   if (!units.length) return input;
   const adj = adjacency(input);
@@ -333,7 +339,7 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
         [b, a],
       ];
     }
-    const [p, q] = input.cumulated![u.run].atoms;
+    const [p, q] = ("run" in u ? input.cumulated![u.run] : input.axes![u.axis]).atoms;
     return [
       [p, across(adj, p, q)],
       [q, across(adj, q, p)],
@@ -358,7 +364,9 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
     const left: SymmetryInput =
       "bond" in u
         ? { ...input, bonds: input.bonds.map((b, k) => (k === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) }
-        : { ...input, cumulated: input.cumulated!.filter((_, k) => k !== u.run) };
+        : "run" in u
+          ? { ...input, cumulated: input.cumulated!.filter((_, k) => k !== u.run) }
+          : { ...input, axes: input.axes!.filter((_, k) => k !== u.axis) };
     for (const [e, en, f, fn] of [
       [p, pn, q, qn],
       [q, qn, p, pn],
@@ -387,10 +395,12 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
   if (!empty.length) return input;
   const bonds = new Set(empty.flatMap((u) => ("bond" in u ? [u.bond] : [])));
   const runs = new Set(empty.flatMap((u) => ("run" in u ? [u.run] : [])));
+  const axes = new Set(empty.flatMap((u) => ("axis" in u ? [u.axis] : [])));
   return {
     ...input,
     bonds: input.bonds.map((b, k) => (bonds.has(k) ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)),
     ...(input.cumulated ? { cumulated: input.cumulated.filter((_, k) => !runs.has(k)) } : {}),
+    ...(input.axes ? { axes: input.axes.filter((_, k) => !axes.has(k)) } : {}),
   };
 }
 
