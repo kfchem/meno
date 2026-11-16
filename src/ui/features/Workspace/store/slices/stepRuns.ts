@@ -1112,9 +1112,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let read: { molblock: string; configuration?: Configuration };
+        let block: { molblock: string; configuration?: Configuration };
         try {
-          read = await molblockOfSmiles(smiles, g.smiles);
+          block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
           notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;
@@ -1123,7 +1123,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
         let unset: number | null = null;
         try {
-          const { left } = await openStereo(stereo, [read.molblock]);
+          const { left } = await openStereo(stereo, [block.molblock]);
           unset = left.atoms.length + left.bonds.length;
         } catch {
           unexamined++;
@@ -1141,7 +1141,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
         // (laid out from what the plugin read of the SMILES, and the text's own axes, as a SMILES typed is)
-        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, read, style)), record });
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, block, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);
