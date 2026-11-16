@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bandAround, hull } from "./hoverBand";
+import { bandAround, hull, BAND_STEP_MOST, bandStep, type BandClock } from "./hoverBand";
 
 type P = { x: number; y: number };
 const even = (h: number) => ({ left1: h, right1: h, left2: h, right2: h });
@@ -76,5 +76,51 @@ describe("the band round a bond under the pointer", () => {
       area += a.x * b.y - b.x * a.y;
     }
     expect(area).toBeGreaterThan(0);
+  });
+});
+
+describe("a band's own clock (no abrupt changes, the same ease every time)", () => {
+  /** A band coming in over frames `every` ms apart, from `start`: how far in it is after each frame (0.16 s to come in, as the overlay's). */
+  const comingIn = (start: number, every: number, frames: number) => {
+    const clock: BandClock = { last: null };
+    let u = 0;
+    const seen: number[] = [];
+    for (let k = 0; k < frames; k++) {
+      u = Math.min(1, u + bandStep(clock, start + k * every, u < 1) / 0.16);
+      seen.push(u);
+    }
+    return seen;
+  };
+
+  it("starts where it is at its first frame, however long since the canvas last drew - after a zoom, a pause, a pinch", () => {
+    // (the page's clock far on, as after seconds with nothing drawn: no frame of its own before, so none of that time counts)
+    expect(comingIn(5_000, 16, 1)).toEqual([0]);
+    expect(comingIn(123_456, 16, 1)).toEqual([0]);
+  });
+
+  it("comes in at the same pace every time, whenever it begins", () => {
+    const a = comingIn(1_000, 16, 12);
+    const b = comingIn(987_654, 16, 12);
+    expect(b.map((x) => x.toFixed(6))).toEqual(a.map((x) => x.toFixed(6)));
+    // (in over about 0.16 s of its own frames, not at once)
+    expect(a[1]).toBeLessThan(0.2);
+    expect(a[a.length - 1]).toBe(1);
+  });
+
+  it("a frame held up mid-way takes it no further than BAND_STEP_MOST", () => {
+    const clock: BandClock = { last: null };
+    bandStep(clock, 0, true);
+    expect(bandStep(clock, 2_000, true)).toBe(BAND_STEP_MOST);
+  });
+
+  it("at rest its clock stops, so the next motion - going out after a while - starts afresh too", () => {
+    const clock: BandClock = { last: null };
+    bandStep(clock, 0, true);
+    bandStep(clock, 16, true);
+    expect(bandStep(clock, 32, false)).toBe(0);
+    expect(clock.last).toBeNull();
+    // (seconds later the pointer leaves: its first frame out moves it nothing)
+    expect(bandStep(clock, 9_000, true)).toBe(0);
+    expect(bandStep(clock, 9_016, true)).toBeCloseTo(0.016, 6);
   });
 });
