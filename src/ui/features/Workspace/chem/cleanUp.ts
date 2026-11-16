@@ -14,7 +14,8 @@ import type { EditorStore } from "../store";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, statedOf, stereoOf, type LayoutJob } from "./engineLayout";
-import { openDoubleBonds, openRuns, readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
+import { openDoubleBonds, openRuns, readStereo } from "../../../../lib/layout/drawn";
+import { compared } from "../../../../lib/chem/perception/stereo/compare";
 import { layOut } from "./layOut";
 import { cisTransOfGiven, tetraOfGiven, type Given } from "./givenConfiguration";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
@@ -378,13 +379,9 @@ export function notShownOf(model: Model, given: Given): { centres: [number, numb
   const read = layoutJob(model, new Set(given.configuration?.centres.map((c) => c.atom) ?? []));
   if (!givenFits(read, model)) return null;
   const stated = statedOf(withGiven(read, model, given), model);
-  const now = stereoOf(model);
-  const centres = [...stated.centres].filter(([c, t]) => !now.centres.get(c) || !sameConfiguration(t, now.centres.get(c)!)).length;
-  const doubles = [...stated.doubles].filter(([key, d]) => {
-    const e = now.doubles.get(key);
-    return !e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]));
-  }).length;
-  const axes = [...stated.axes].filter(([key, sense]) => now.axes.get(key) !== sense).length;
+  // (each unit given and not shown as given: lost, turned or no longer one - lib/chem/perception/stereo/compare `compared`)
+  const lost = compared(stated, stereoOf(model)).filter((d) => d.how !== "closed");
+  const [centres, doubles, axes] = (["centre", "double", "axis"] as const).map((kind) => lost.filter((d) => d.kind === kind).length);
   return { centres: [centres, stated.centres.size], doubles: [doubles, stated.doubles.size], axes: [axes, stated.axes.size] };
 }
 

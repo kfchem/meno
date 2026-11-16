@@ -62,7 +62,9 @@ import {
 } from "./lib/net/network";
 import { sayFailedSetUps, sayUsedBefore } from "./ui/setUpSaid";
 import { getUsedBefore } from "./lib/plugins/usedBefore";
+import { DEPS as FIRST_SET_UP, offerFirstSetUp } from "./lib/plugins/firstSetUp";
 import ConsentDialog from "./ui/network/ConsentDialog";
+import FirstSetUpCard from "./ui/network/FirstSetUpCard";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
 import TextMenuHost from "./ui/features/TextEditor/TextMenuHost";
@@ -169,6 +171,8 @@ export default function App() {
       if (!gone) stopUpdates = startUpdates();
       // the plugins set up here before they came online, asked about once (lib/plugins/usedBefore)
       if (!gone && isTauri()) void getUsedBefore(sayUsedBefore);
+      // chemistry set up from one card, where nothing here reads SMILES yet (lib/plugins/firstSetUp)
+      if (!gone && isTauri()) void offerFirstSetUp(FIRST_SET_UP);
     })();
     const unwatch = useNetwork.subscribe((s, prev) => {
       if (!useAppSettings.getState().loaded) return;
@@ -930,6 +934,7 @@ export default function App() {
       />
       <GuideCard />
       <ConsentDialog />
+      <FirstSetUpCard />
       <UpdateNotice />
       {/* (the right-click menu on words typed or read in place: TextEditor/textMenu) */}
       <TextMenuHost />

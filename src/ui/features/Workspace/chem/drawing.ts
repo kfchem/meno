@@ -215,14 +215,13 @@ function unsureIn(model: Model): Unsure {
   const ids = new Set(model.atoms.map((a) => a.id));
   const kept = model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b));
   // (a ring taken for one drawn in perspective but not read: the unread mark on each of its atoms that carries a group and could be a
-  //  centre, its words on it - as a crossed wedge's is; nothing is silent)
+  //  centre, its words on it - "No R or S:" and why, as the R or S asked of it says - as a crossed wedge's is; nothing is silent)
   const unread = new Map([...recognisedSaid(atoms, bonds)].filter(([, words]) => words !== READ_IN_PERSPECTIVE && words !== READ_AS_HAWORTH));
   const around = (i: number) => bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
   const marked = [...unread.keys()].filter((i) => atoms[i].hs <= 1 && around(i).some((n) => !unread.has(n)) && !found.atoms.includes(i));
-  const sentence = (words: string) => `${words[0].toUpperCase()}${words.slice(1)}.`;
   return {
     atoms: [...found.atoms, ...marked].map((i) => model.atoms[i].id),
     bonds: found.bonds.map((i) => kept[i].id),
-    ...(marked.length ? { said: marked.map((i): [number, string] => [model.atoms[i].id, sentence(unread.get(i)!)]) } : {}),
+    ...(marked.length ? { said: marked.map((i): [number, string] => [model.atoms[i].id, `No R or S: ${unread.get(i)!}.`]) } : {}),
   };
 }

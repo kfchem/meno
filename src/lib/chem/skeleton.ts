@@ -11,7 +11,7 @@
  * Meno's one rule for whether some atoms are a skeleton. Pure: over atoms
  * and bonds.
  */
-import { implicitHydrogens, type Radical } from "./molecule";
+import { implicitHydrogens, type Radical } from "./perception/hydrogens";
 import { orderFromLength, ordersFromGeometry } from "./ordersFromGeometry";
 
 export type SkeletonAtom = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical };
@@ -81,6 +81,22 @@ function wantsHydrogens(atoms: readonly SkeletonAtom[], i: number, near: readonl
   return false;
 }
 
+/**
+ * Each atom's bonds' orders summed, an aromatic bond (order 4) as one and a half: not the core's count (perception/hydrogens
+ * `hydrogenCounts`, an aromatic bond by its Kekule order), from which it differs on an aromatic N-H's nitrogen, its two aromatic bonds
+ * summing to three and leaving it no room where the core counts one H (a pyrrole's, an indole's). Kept so (foundation part 12a: a move
+ * changes no answer); which is meant for a skeleton is part 12's fixes' question.
+ */
+export function halfOrderSums(n: number, bonds: readonly SkeletonBond[]): Float64Array {
+  const sum = new Float64Array(n);
+  for (const b of bonds) {
+    const order = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
+    sum[b.a1] += order;
+    sum[b.a2] += order;
+  }
+  return sum;
+}
+
 /** Whether atoms with their bonds' orders summed (`sum`) take hydrogens their valence leaves room for. */
 const roomFor = (atoms: readonly SkeletonAtom[], among: readonly number[], sum: ArrayLike<number>, charges?: readonly number[]) =>
   among.some((i) => implicitHydrogens(atoms[i].el, Math.round(sum[i]), charges ? charges[i] : (atoms[i].charge ?? 0), atoms[i].radical) > 0);
@@ -108,15 +124,7 @@ export function lacksHydrogens(
   among: readonly number[] = atoms.map((_, i) => i),
 ): boolean {
   if (!among.length || among.some((i) => atoms[i].el === "H")) return false;
-  if (!ordersUnknown) {
-    const sum = new Float64Array(atoms.length);
-    for (const b of bonds) {
-      const order = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
-      sum[b.a1] += order;
-      sum[b.a2] += order;
-    }
-    return roomFor(atoms, among, sum);
-  }
+  if (!ordersUnknown) return roomFor(atoms, among, halfOrderSums(atoms.length, bonds));
   const near: number[][] = atoms.map(() => []);
   for (const b of bonds) {
     near[b.a1]?.push(b.a2);
