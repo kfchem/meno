@@ -59,6 +59,8 @@ describe("a Repeat run pass by pass", () => {
     await st().runStep(r);
     const ran = st().steps.find((s) => s.id === r)!.ran!;
     expect(ran).toMatchObject({ ok: true, said: "3 passes · 2 done" });
+    // (its pass under way said on its tab while it ran: gone once it has ended)
+    expect(st().repeatPasses[r]).toBeUndefined();
     const out = setMolecules(st(), st().sets.find((b) => b.id === exit(r, "reached"))!);
     expect(out.map((m) => [props(m, PASS), props(m, TIMES_ROUND), props(m, RAN_OUT) ?? null])).toEqual([
       [3, 2, null],

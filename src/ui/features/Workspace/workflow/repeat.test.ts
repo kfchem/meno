@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import type { WorkspaceDocument } from "../document";
 import { canWire, landing, repeatHolding, stepsAfter, stepsBefore, wireRefusal, type Flow } from "./flow";
-import { repeatsSettled } from "./model";
+import { moveStep, repeatsSettled } from "./model";
 import { readWorkflow } from "./saved";
 import { kindsOf } from "./doers";
 import { cardHighOf } from "./kinds";
@@ -124,6 +124,15 @@ describe("the steps a Repeat holds", () => {
     expect(out.steps!.find((s) => s.id === R)!.holds).toEqual([B, C]);
     // (nothing moved: the same document)
     expect(repeatsSettled(out)).toBe(out);
+  });
+
+  it("move with it, by as much: its frame round them as it was", () => {
+    const moved = moveStep(doc([step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 }, holds: [A] }), step(A, "tag", 100, 100), step(C, "tag", 2000, 0)]), R, 50, -20);
+    expect(moved.steps!.map((s) => [s.id, s.x, s.y])).toEqual([
+      [R, 50, -20],
+      [A, 150, 80],
+      [C, 2000, 0],
+    ]);
   });
 
   it("are kept with its frame in the workspace's file; a step of another kind keeps neither", () => {

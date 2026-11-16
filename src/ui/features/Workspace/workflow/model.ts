@@ -256,6 +256,13 @@ function withStep(doc: WorkspaceDocument, id: number, change: (s: WorkflowStep) 
 }
 
 export function moveStep(doc: WorkspaceDocument, id: number, x: number, y: number): WorkspaceDocument {
+  const was = doc.steps?.find((s) => s.id === id);
+  // (a Repeat moved with the steps it holds, by as much: its frame round them as it was)
+  if (was?.kind === "repeat" && was.holds?.length && (was.x !== x || was.y !== y)) {
+    const [dx, dy] = [x - was.x, y - was.y];
+    const held = new Set(was.holds);
+    return { ...doc, steps: doc.steps!.map((s) => (s.id === id ? { ...s, x, y } : held.has(s.id) ? { ...s, x: s.x + dx, y: s.y + dy } : s)) };
+  }
   return withStep(doc, id, (s) => (s.x === x && s.y === y ? s : { ...s, x, y }));
 }
 

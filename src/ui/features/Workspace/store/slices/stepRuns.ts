@@ -286,6 +286,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       out.push(...spent.map(ranOut));
       ranOutCount += spent.length;
       if (!go.length) break;
+      // (the pass under way, said on its tab - Stop pressed meanwhile kept)
+      set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { pass, ...(r.repeat !== "until" ? { of: r.passes } : {}), ...(prev.repeatPasses[id]?.stopping ? { stopping: true as const } : {}) } } }));
       doc.amend((x) => (stepOf(x, id) ? fillExit(x, stepOf(x, id)!, THIS_PASS, go, holds, undefined, w) : x), { unsaved: true });
       for (const s of inner) {
         if (menoStops.has(id) || !stepOf(doc.getState(), s)) break;
@@ -299,6 +301,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     const stopped = menoStops.has(id);
     menoStops.delete(id);
+    set((prev) => {
+      const { [id]: _done, ...rest } = prev.repeatPasses;
+      return { ...prev, repeatPasses: rest };
+    });
     // (still going round as its passes ran out - or as it was stopped: left by Out, marked so)
     const left = r.repeat === "until" && !again.length ? [] : again;
     out.push(...left.map(ranOut));
@@ -2136,11 +2142,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   return {
     jobsSeen: {} as Record<string, JobSeen>,
     menoWorking: {} as Record<number, { since: number; done: number; total: number }>,
+    repeatPasses: {} as Record<number, { pass: number; of?: number; stopping?: true }>,
     runStep: (id: number) => runSteps([id]),
     runFrom: (id: number) => runSteps([id, ...stepsAfter(doc.getState(), id)]),
     runAll: () => runSteps(allToRun(doc.getState())),
     stopStep: (id: number) => {
       if (get().menoWorking[id]) menoStops.add(id);
+      // (a Repeat: no next pass, its steps running finishing first - its tab says so at once)
+      const pass = get().repeatPasses[id];
+      if (pass) {
+        menoStops.add(id);
+        set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { ...pass, stopping: true } } }));
+      }
       menoKills.get(id)?.();
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
@@ -2153,6 +2166,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     },
     stopAll: () => {
       for (const id of Object.keys(get().menoWorking)) menoStops.add(Number(id));
+      for (const [id, pass] of Object.entries(get().repeatPasses)) {
+        menoStops.add(Number(id));
+        set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { ...pass, stopping: true } } }));
+      }
       menoKills.forEach((kill) => kill());
       for (const s of doc.getState().steps ?? []) for (const j of s.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
