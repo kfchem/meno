@@ -66,7 +66,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   for (const wire of allWiresInto(doc, id)) {
     const before = findSet(doc, wire.from.set)?.made?.step;
     const prior = before != null ? stepOf(doc, before) : undefined;
-    if (prior && [prior.id, ...stepsBefore(doc, prior.id)].some(stale)) doc = runStep(doc, prior.id, w, depth + 1);
+    // (a Repeat's This pass is what the Repeat put there for this pass: never run from a step inside it - store `runRepeat`)
+    if (prior && prior.kind !== "repeat" && [prior.id, ...stepsBefore(doc, prior.id)].some(stale)) doc = runStep(doc, prior.id, w, depth + 1);
   }
 
   const by = w.byOf(step);
@@ -80,8 +81,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const none = emptyIn(doc, step, by);
   if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
-  // (a Repeat runs its steps pass by pass, as a pass of them: not as one step - none is made yet, and one read from a file says so)
-  if (step.kind === "repeat") return fail("A Repeat's passes are not run in this version of Meno");
+  // (a Repeat runs its steps pass by pass - the store's `runRepeat` - never as one step of its own here)
+  if (step.kind === "repeat") return fail("A Repeat runs pass by pass, with its steps: run it from the page");
   // (its options' values: its own, else Settings' for its kind, else each option's default - doers `stepValues`)
   const values = stepValues(step);
   // (a chart: a table's columns, one against the other)
@@ -832,7 +833,7 @@ export function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, 
  * laid out on the page, held in the set itself. With how many did not read
  * from a file (`unread`), where any.
  */
-function fillExit(
+export function fillExit(
   doc: WorkspaceDocument,
   step: WorkflowStep,
   exit: string,
