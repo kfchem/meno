@@ -71,7 +71,7 @@ export function aromaticIn(
 export const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
 
 /** Each atom's bonds, as [other atom, order]. */
-function neighboursOf(atoms: readonly FlatAtom[], bonds: readonly FlatBond[]): [number, number][][] {
+export function neighboursOf(atoms: readonly FlatAtom[], bonds: readonly FlatBond[]): [number, number][][] {
   const out: [number, number][][] = atoms.map(() => []);
   for (const b of bonds) {
     if (b.a === b.b || !atoms[b.a] || !atoms[b.b]) continue;

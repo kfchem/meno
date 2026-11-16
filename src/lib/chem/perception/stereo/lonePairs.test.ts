@@ -78,6 +78,13 @@ describe("lonePairCentres", () => {
     expect(centres("ClN1C(=C)C1")).toEqual([]);
   });
 
+  it("reads an aromatic bond as a pi system's, of order one and a half: an N-aryl oxaziridine's and diaziridine's N, the aryl's bonds aromatic, keep none", () => {
+    // (each N's lone pair is shared with its aryl, as an N-aryl aziridine's is: read as single bonds, the aryl would be no pi system and
+    //  the N a centre, its ring's O or N next to it)
+    expect(centres("c1ccccc1N1OC1")).toEqual([]);
+    expect(centres("c1ccccc1N1NC1")).toEqual([]);
+  });
+
   it("keeps a bridgehead N of a small bridged ring system, every bridge of three atoms or fewer: Tröger's base's two, a quinuclidine's, a manxine's", () => {
     // (Tröger's base, C17H18N2: its two N joined by a CH2 and by two bridges of three atoms each)
     expect(centres("CC1=CC2=C(C=C1)N3CC4=C(C=CC(=C4)C)N(C2)C3")).toEqual(["N7", "N16"]);

@@ -22,7 +22,7 @@ import { symmetryOrbits } from "../layout/canonical";
 import { factsOf } from "./perception/facts";
 import { sharesMoreThanABond } from "./perception/rings";
 import { readMolfile } from "./ctfile";
-import { flatRingAtoms } from "./perception/flatRings";
+import { flatRingAtoms, neighboursOf } from "./perception/flatRings";
 import { HELD_FLAT_BY_AN_ACYL } from "./perception/stereo/lonePairs";
 import { implicitHydrogens } from "./molecule";
 
@@ -62,18 +62,6 @@ export const BY_TURNS: readonly (readonly [number, number])[] = [
 export const MOST_CONFORMERS = 5000;
 
 const heavy = (a: SoughtAtom | undefined) => a != null && a.el !== "H" && a.el !== "*";
-
-
-/** Each atom's bonds, as [other atom, order]. */
-function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): [number, number][][] {
-  const out: [number, number][][] = atoms.map(() => []);
-  for (const b of bonds) {
-    if (b.a === b.b || !atoms[b.a] || !atoms[b.b]) continue;
-    out[b.a].push([b.b, b.order]);
-    out[b.b].push([b.a, b.order]);
-  }
-  return out;
-}
 
 /** The bonds that lie in a ring - those whose ends stay joined without them - by index: the core's (lib/chem/perception/rings). */
 export function bondsInRings(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): Set<number> {
