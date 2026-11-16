@@ -11,6 +11,8 @@ import { valueAt, type RepeatRead } from "./repeat";
 export const PASS = "pass";
 /** The property that counts how many times an entry has gone round before this pass: 0 in its first. Rides with it, as a Tag's ID does. */
 export const TIMES_ROUND = "times round";
+/** The property that says which of what came into *In* an entry is - its place there, from 0 - kept through every pass, for a pass that starts from what came in. */
+export const CAME_IN = "repeat entry";
 /** What an entry carries that leaves a Repeat whose passes ran out while it still went round. */
 export const RAN_OUT = "passes ran out";
 
@@ -39,6 +41,8 @@ export function passEntries<M extends Pick<Molecule3D, "properties">>(molecules:
     }
     const add: Record<string, Property> = {
       [PASS]: label(pass),
+      // (its place among what came in, given in its first pass: which it is, for a pass that starts from what came in)
+      ...(propsOf(m)[CAME_IN] == null ? { [CAME_IN]: label(molecules.indexOf(m)) } : {}),
       [TIMES_ROUND]: label(count),
       ...(r.variable && value != null ? { [r.variable.name]: label(value, r.variable.unit) } : {}),
     };
@@ -59,3 +63,29 @@ export function lastPass(r: RepeatRead, pass: number, again: number): boolean {
   if (r.repeat === "until" && again === 0) return true;
   return pass >= r.passes;
 }
+
+/** A molecule as a pass starts from it: its atoms where `xyz` puts them (x, y and z by atom in turn), one geometry, nothing worked out at another kept. */
+function at<M extends Pick<Molecule3D, "atoms" | "frames" | "energies">>(m: M, xyz: readonly number[]): M {
+  const { frames: _f, energies: _e, ...rest } = m;
+  return { ...rest, atoms: m.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })) } as M;
+}
+
+/**
+ * What landed on *Again*, each as the next pass starts from it (*Each pass starts*): as it landed (`last`); from the geometry where
+ * restraints were first held on it (`held`, its restraints' `start`), or as it landed where none was; or from what came into *In* as
+ * it (`in`, by `CAME_IN`) - in each case carrying what it carries now, its count of times round and its rows among it.
+ */
+export function startsFrom<M extends Pick<Molecule3D, "atoms" | "frames" | "energies" | "properties">>(again: readonly M[], starts: RepeatRead["starts"], cameIn: readonly Pick<Molecule3D, "atoms">[]): M[] {
+  if (starts === "last") return [...again];
+  return again.map((m) => {
+    if (starts === "held") {
+      const v = propsOf(m).restraints?.value;
+      const start = v && typeof v === "object" && "restraints" in v ? v.start : undefined;
+      return start && start.length === 3 * m.atoms.length ? at(m, start) : m;
+    }
+    const k = propsOf(m)[CAME_IN]?.value;
+    const was = typeof k === "number" ? cameIn[k] : undefined;
+    return was && was.atoms.length === m.atoms.length ? at(m, was.atoms.flatMap((a) => [a.x, a.y, a.z])) : m;
+  });
+}
+

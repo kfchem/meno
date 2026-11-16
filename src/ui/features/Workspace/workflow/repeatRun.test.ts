@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { Property } from "../../../../lib/entry";
 import { repeatRead, type RepeatRead } from "./repeat";
-import { lastPass, PASS, passEntries, RAN_OUT, ranOut, TIMES_ROUND } from "./repeatRun";
+import { CAME_IN, lastPass, PASS, passEntries, RAN_OUT, ranOut, startsFrom, TIMES_ROUND } from "./repeatRun";
 
 const read = (v: Record<string, string | number>): RepeatRead => {
   const r = repeatRead(v);
@@ -48,9 +48,9 @@ describe("each entry of a pass", () => {
     expect(passEntries<M>(two, O, 3)).toEqual({ go: [], spent: two });
   });
 
-  it("with no variable carries its pass and count alone", () => {
+  it("with no variable carries its pass, its count and which of In's it is, alone", () => {
     const { go } = passEntries<M>([{ name: "a" }], read({}), 2);
-    expect(Object.keys(go[0].properties![0]).sort()).toEqual([PASS, TIMES_ROUND].sort());
+    expect(Object.keys(go[0].properties![0]).sort()).toEqual([PASS, CAME_IN, TIMES_ROUND].sort());
   });
 
   it("left going round when the passes run out is marked so as it leaves by Out", () => {
@@ -65,3 +65,38 @@ describe("the last pass", () => {
     expect([lastPass(U, 1, 2), lastPass(U, 2, 0), lastPass(U, 4, 3)]).toEqual([false, true, true]);
   });
 });
+
+describe("where the next pass starts", () => {
+  type G = { atoms: { el: string; x: number; y: number; z: number }[]; frames?: number[][]; energies?: number[]; properties?: Record<string, Property>[] };
+  const atom = (x: number) => ({ el: "C", x, y: 0, z: 0 });
+  const cameIn: G[] = [{ atoms: [atom(0), atom(1)] }, { atoms: [atom(10), atom(11)] }];
+  const landed: G = {
+    atoms: [atom(5), atom(6)],
+    frames: [[5, 0, 0, 6, 0, 0]],
+    energies: [-1],
+    properties: [{ [CAME_IN]: { value: 1, unit: "none", status: "computed", label: true }, restraints: { value: { restraints: [], start: [2, 0, 0, 3, 0, 0] }, unit: "none", status: "computed" } }],
+  };
+  const xs = (m: G) => m.atoms.map((a) => a.x);
+
+  it("from the last pass: as it landed", () => {
+    expect(startsFrom([landed], "last", cameIn)[0]).toBe(landed);
+  });
+  it("from where restraints were first held: their start, one geometry, nothing worked out kept; as it landed where it has none", () => {
+    const s = startsFrom([landed], "held", cameIn)[0];
+    expect([xs(s), s.frames, s.energies]).toEqual([[2, 3], undefined, undefined]);
+    expect(s.properties).toBe(landed.properties);
+    const none = { ...landed, properties: [{}] };
+    expect(startsFrom([none], "held", cameIn)[0]).toBe(none);
+  });
+  it("from what came in: the molecule it was in In, by its place there, carrying what it carries now", () => {
+    const s = startsFrom([landed], "in", cameIn)[0];
+    expect(xs(s)).toEqual([10, 11]);
+    expect(s.properties).toBe(landed.properties);
+  });
+  it("each entry of a first pass is told which of In's it is", () => {
+    const { go } = passEntries<M>([{ name: "a" }, { name: "b" }], read({}), 1);
+    expect(go.map((m) => value(m, CAME_IN))).toEqual([0, 1]);
+    expect(passEntries<M>(go, read({}), 2).go.map((m) => value(m, CAME_IN))).toEqual([0, 1]);
+  });
+});
+
