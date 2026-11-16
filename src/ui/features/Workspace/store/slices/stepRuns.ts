@@ -22,7 +22,7 @@ import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, drawnPartsOf, moleculeOf } from "../../chem/make3d";
+import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
@@ -301,8 +301,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const blocks = entries.map((e) => drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock));
       const { structures } = await chem.request("structure_facts", { structures: blocks.map((molblocks) => ({ molblocks })) }, drawnMs(blocks.length));
       if (structures.length !== entries.length) return void fail(id, `${by.name} answered for ${structures.length} of ${entries.length}`, at, key);
-      // (its parts by the structure's bonds: two molecules a hydrogen bond alone joins are two, though the plugin is given them as drawn)
-      answers = structures.map((facts, i) => checked(facts, drawnPartsOf(entries[i].drawn, entries[i].drawn.atoms.map((a) => a.id)), keep, program));
+      answers = structures.map((facts, i) => checked(facts, blocks[i].length, keep, program));
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
