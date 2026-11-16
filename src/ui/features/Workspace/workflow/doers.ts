@@ -31,7 +31,8 @@ export const MENO: Doer = { id: "meno", name: "Meno" };
  * on Windows, where Meno does not run it).
  */
 export function kindsOf(by: string): StepKind[] {
-  if (by === MENO.id) return [...MENO_DOES];
+  // (Meno's, but those made otherwise than chosen - a Repeat, round steps: kinds `apart`)
+  if (by === MENO.id) return MENO_DOES.filter((k) => !kindInfo(k).apart);
   const p = pluginById(by);
   if (!p) return [];
   const here = systemHere();
