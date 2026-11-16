@@ -30,6 +30,7 @@ import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf } from "./drawing";
+import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 
@@ -85,10 +86,12 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
  * an aziridine's N are read, lib/layout/drawn).
  */
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
-  const bondsOf = bondsAt(drawing.bonds);
+  // (the structure's bonds only, as the reader takes them: a hydrogen bond takes no place round an atom)
+  const structure = drawing.bonds.filter(ofTheStructure);
+  const bondsOf = bondsAt(structure);
   const out = new Set<number>();
   // (a centre by its lone pair drawn with two bonds, its H carried - a secondary phosphine's P: a centre its wedge cannot state)
-  const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
+  const keepsPyramid = lonePairCentres(drawing.atoms, structure);
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
     // (an axis of chirality's end, either: its wedge says how the axis turns)
