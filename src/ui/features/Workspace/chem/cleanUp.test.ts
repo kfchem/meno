@@ -867,8 +867,10 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
   it("uranocene drawn atom by atom is laid out as ferrocene so drawn: its eight-rings' double bonds no cis or trans, nothing refused (backlog 178)", async () => {
     const octagon = (cy: number, from: number) =>
       Array.from({ length: 8 }, (_, i) => ({ id: from + i, x: 1.1 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 8), y: cy + 0.45 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 8), r: 0.9, el: "C" }));
+    // (the Kekule form on the odd bonds: the ring closed by a double bond from its last atom back to its first, its ids the larger
+    //  first - each pair taken either way round)
     const eight = (from: number, id0: number): Bond[] =>
-      Array.from({ length: 8 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 1 : 2, stereo: "none" }) as Bond);
+      Array.from({ length: 8 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 2 : 1, stereo: "none" }) as Bond);
     const uranocene: Model = {
       atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "U" }, ...octagon(1.6, 2), ...octagon(-1.6, 10)],
       bonds: [...eight(2, 20), ...eight(10, 30), ...Array.from({ length: 16 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none" }) as Bond)],
@@ -913,6 +915,23 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
     };
     // (refused today for its free double bonds as before this fix - their own question, not a ring bound through every atom)
     await expect(laidOut(cot)).rejects.toThrow("would show a configuration its drawing does not state");
+  });
+
+  it("a chain bound to its metal through every atom keeps the rule of any double bond: hexa-2,4-diene on Fe as before (backlog 178)", async () => {
+    const at = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
+    const diene: Model = {
+      atoms: [at(1, 0, 1.6, "Fe"), at(2, -2.2, 0), at(3, -0.75, 0.8), at(4, 0.75, 0), at(5, 2.2, 0.8), at(6, -3.6, 0.8), at(7, 3.6, 0)],
+      bonds: [
+        { id: 10, a: 6, b: 2, order: 1, stereo: "none" },
+        { id: 11, a: 2, b: 3, order: 2, stereo: "none" },
+        { id: 12, a: 3, b: 4, order: 1, stereo: "none" },
+        { id: 13, a: 4, b: 5, order: 2, stereo: "none" },
+        { id: 14, a: 5, b: 7, order: 1, stereo: "none" },
+        ...[2, 3, 4, 5].map((b, k) => ({ id: 20 + k, a: 1, b, order: 1, stereo: "none" }) as Bond),
+      ],
+    };
+    // (no ring: its double bonds are not one Kekule form of anything, and it is laid out, or not, as before this fix)
+    await expect(laidOut(diene)).rejects.toThrow("would show a configuration its drawing does not state");
   });
 
   it("uranocene drawn with haptic bonds is laid out as the same sandwich: an actinoid's rings round it as iron's (foundation part 3, B1)", async () => {
