@@ -126,7 +126,8 @@ describe("a Repeat made", () => {
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     const st = () => store.getState();
-    const input = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    // (what comes in, a card's width and a little to the left of the step - as Quick Add lays a set before its step)
+    const input = st().addSet({ x0: 400 - CARD_W - 100, y0: 300 - 120, x1: 400 - 100, y1: 300 });
     const f = st().addStep("filter", "meno", 400, 300);
     const t = st().addStep("tag", "meno", 900, 300);
     const exit = (step: number, id: string) => st().sets.find((b) => b.made?.step === step && b.made.exit === id)!.id;
@@ -134,12 +135,13 @@ describe("a Repeat made", () => {
     st().connect({ set: exit(f, "out") }, t);
     const r = st().repeatSteps([f]) as number;
     const step = st().steps.find((s) => s.id === r)!;
-    // (its card at its frame's top left, the step it holds below and beside it, inside: the page's y runs up)
+    // (its card at its frame's top left, above the step it holds, inside it; the frame clear of what comes in, to its left - the
+    //  page's y runs up, found in the GUI check)
     const box = repeatBox({ x: step.x, y: step.y, frame: step.frame! });
     const held = st().steps.find((s) => s.id === f)!;
-    expect(held.x).toBeGreaterThan(step.x + CARD_W);
-    expect(held.y).toBeLessThan(box.y1);
-    expect(held.y - cardHighOf("filter")).toBeGreaterThan(box.y0);
+    expect(held.y).toBeLessThan(step.y - cardHighOf("repeat"));
+    expect([held.x >= box.x0, held.x + CARD_W <= box.x1, held.y - cardHighOf("filter") > box.y0]).toEqual([true, true, true]);
+    expect(box.x0).toBeGreaterThan(st().sets.find((b) => b.id === input)!.x1);
     expect(step.kind).toBe("repeat");
     expect(step.holds).toEqual([f]);
     const ends = st().wires.map((w) => [st().sets.find((b) => b.id === w.from.set)?.made ?? "input", w.to.step, w.to.port]);

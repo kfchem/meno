@@ -366,7 +366,7 @@ export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocumen
 const REPEAT_EMPTY = { w: 4 * CARD_W + 5 * GAP, h: 3 * CARD_H + 4 * GAP };
 
 /**
- * `doc` with a Repeat made round steps `ids` (*Repeat these steps*): its card to the left of them, its frame round them all, and each wire
+ * `doc` with a Repeat made round steps `ids` (*Repeat these steps*): its card above them, its frame round them all, and each wire
  * that crossed their edge routed through it in the same edit - a wire into one's first input from outside goes to *In*, and *This pass*
  * to that step; one from a set of theirs to a step outside lands on *Done*, and *Out* goes to that step. A later input - a Reference -
  * keeps its wire from outside, read the same every pass. Where what comes in is more than one set, or none of the steps is left, nothing.
@@ -395,11 +395,11 @@ export function repeatMade(doc: WorkspaceDocument, ids: readonly number[]): { do
   const comingIn = wires.filter((w) => held.has(w.to.step) && !insideSet(w.from.set) && w.to.port === firstOf(w.to.step));
   if (new Set(comingIn.map((w) => w.from.set)).size > 1) return { why: "More than one set comes into these steps: a Repeat takes one, by its In" };
   const goingOut = wires.filter((w) => !held.has(w.to.step) && insideSet(w.from.set));
-  // (its card to the left of theirs, at the frame's top left; its frame round all of them - the page's y runs up: a card's top is
-  //  its y, its foot below it)
-  const x0 = Math.min(...inner.map((s) => s.x)) - CARD_W - 2 * GAP;
-  const top = Math.max(...inner.map((s) => s.y)) + GAP;
-  const x1 = Math.max(...inner.map((s) => s.x + CARD_W)) + GAP;
+  // (its card above theirs, at the frame's top left - never out to their left, where what comes in to them stands - and its frame
+  //  round all of them, no wider than they are and a gap: the page's y runs up, a card's top its y, its foot below it)
+  const x0 = Math.min(...inner.map((s) => s.x)) - GAP;
+  const top = Math.max(...inner.map((s) => s.y)) + 2 * GAP + cardHighOf("repeat");
+  const x1 = Math.max(x0 + CARD_W + 2 * GAP, ...inner.map((s) => s.x + CARD_W + GAP));
   const foot = Math.min(...inner.map((s) => s.y - cardHighOf(s.kind))) - 2 * GAP;
   const id = idOf(doc);
   let d = addStep(doc, "repeat", x0, top, undefined, "meno");
