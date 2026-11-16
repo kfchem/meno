@@ -465,6 +465,19 @@ describe("an atom map renumbered", () => {
     const mapping = kept.maps[kept.chosen];
     const j = mapping.indexOf(c1);
     expect(marks.texts.get(kept.product.drawnFrom[j]!)).toEqual({ base: "4a" });
+    // (two naphthalenes in one reaction: only the first shows its letters - no text repeats)
+    const twoNaphthalenes = {
+      ...kept,
+      reactant: {
+        atoms: Array.from({ length: 20 }, (_, i) => ({ el: "C", x: i, y: 0, z: 0 })),
+        bonds: [0, 10].flatMap((o) => [
+          [0, 1, 2], [1, 2, 1], [2, 3, 2], [3, 4, 1], [4, 5, 2], [5, 6, 1], [6, 7, 2], [7, 8, 1], [8, 9, 2], [9, 0, 1], [4, 9, 1],
+        ].map(([a, b, order]) => ({ a1: a + o, a2: b + o, order }))),
+        drawnFrom: Array.from({ length: 20 }, (_, i) => i + 100),
+      },
+    };
+    const shown = renumberedTexts(twoNaphthalenes as never, new Map()).filter((t) => t != null).map((t) => t!.base).sort();
+    expect(shown).toEqual(["4a", "8a"]);
     // (not renumbered: no texts, whatever the map holds)
     expect(mapMarks({ ...kept, numbers: undefined, texts }, page().doc.model).texts.size).toBe(0);
   });

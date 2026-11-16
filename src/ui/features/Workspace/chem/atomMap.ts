@@ -316,6 +316,7 @@ export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number
   const order: number[] = [];
   const texts = new Map<number, Locant>();
   const own: number[] = [];
+  const shownTexts = new Set<string>();
   for (const piece of pieces) {
     const at = new Map(piece.map((i, k) => [i, k]));
     const input = {
@@ -328,7 +329,13 @@ export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number
       const l = r.locant[k];
       // (a parent's atom shows its locant where that is no plain number - 4a, 1', 3a with a superscript; a plain locant is its number
       //  in the first molecule, and in the next ones the number shows, so that a product's atoms never show two partners alike)
-      if (l && (l.sup || !/^\d+$/.test(l.base))) texts.set(piece[k], l);
+      // (and only once in a reaction: a later molecule with a parent of the same letters shows its numbers there - the maintainer's
+      //  call through CC, 2026-11-17 - so that no text repeats)
+      if (!l || (!l.sup && /^\d+$/.test(l.base))) return;
+      const key = `${l.base}^${l.sup ?? ""}`;
+      if (shownTexts.has(key)) return;
+      shownTexts.add(key);
+      texts.set(piece[k], l);
     });
     for (const o of r.own) own.push(piece[o.atom]);
   }
