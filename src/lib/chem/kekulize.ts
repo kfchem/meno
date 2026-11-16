@@ -437,6 +437,12 @@ function canonical(el: string): string {
  * the bonds to them (Morgan's refinement, H. L. Morgan, J. Chem. Doc. 5,
  * 107 (1965)), until the ranks part no further. Atoms alike in every way
  * share a rank; the file's order decides only between them.
+ *
+ * Its own, not the core's (perception/symmetry), by design: which N
+ * carries an H where the structure does not say is a tautomer drawn, an
+ * answer, and the core's classes, ordered by more than these keys, would
+ * turn the H of guanine, hypoxanthine and their kin from N1 and N9 to N3
+ * and N9 (kekulize.test, the forms usually drawn, kept as known answers).
  */
 function canonicalRanks(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): number[] {
   const near = atoms.map(() => [] as { other: number; order: number }[]);

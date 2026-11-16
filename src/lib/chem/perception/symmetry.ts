@@ -74,11 +74,9 @@ const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: num
 /**
  * `endSet` for an end whose neighbours other than its partner are
  * `others`, ranked by `r`: 1 where `ref` is the lower-ranked of them (or
- * the only one), -1 the higher, 0 where they share a rank. Also the
- * layout's (layout/ranks `written`), so that both write one configuration
- * one way.
+ * the only one), -1 the higher, 0 where they share a rank.
  */
-export function setAgainst(others: readonly number[], r: readonly number[], ref: number): number {
+function setAgainst(others: readonly number[], r: readonly number[], ref: number): number {
   if (others.length < 2) return 1;
   const other = others.find((o) => o !== ref);
   if (other == null) return 1;

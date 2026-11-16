@@ -259,6 +259,41 @@ describe("which atom carries an H the input did not place (kekulized hChosen)", 
     expect(chosen("c1cnccn1")).toEqual([]); // pyrazine
     expect(chosen("c1c[nH]cn1")).toEqual([]); // imidazole, its H stated
   });
+
+  // Where the structure does not say, Meno draws one tautomer, the same whatever order the atoms come in; no rule of chemistry
+  // picks it, and none is claimed to be the more stable. These are the forms usually drawn, kept as known answers: the choice
+  // is made by this file's own ranks (`canonicalRanks`), which the core's classes in their place would turn to N3 and N9.
+  /** Each N given its H, by what its two neighbours are: fused (a ring atom of the two rings), C=X (a C=O or C=S), C-N (an amino carbon), CH, N. */
+  const placed = (smiles: string) => {
+    const s = readSmiles(smiles);
+    const near = (i: number) => s.bonds.flatMap((b) => (b.a1 === i ? [{ to: b.a2, order: b.order }] : b.a2 === i ? [{ to: b.a1, order: b.order }] : []));
+    const kind = (i: number) => {
+      if (s.atoms[i].el === "N") return "N";
+      const out = near(i).filter((e) => e.order !== A);
+      if (out.some((e) => e.order === 2)) return "C=X";
+      if (out.some((e) => s.atoms[e.to].el === "N")) return "C-N";
+      return near(i).length === 3 ? "fused" : "CH";
+    };
+    return kekulized(s.atoms, s.bonds)
+      .hChosen.map((i) => near(i).map((e) => kind(e.to)).sort().join(" "))
+      .sort();
+  };
+
+  it.each([
+    ["guanine", "Nc1nc2ncnc2c(=O)n1", ["C-N C=X", "CH fused"]],
+    ["hypoxanthine", "O=c1ncnc2ncnc12", ["C=X CH", "CH fused"]],
+    ["purine-6-thione (6-mercaptopurine)", "S=c1ncnc2ncnc12", ["C=X CH", "CH fused"]],
+    ["6-thioguanine", "Nc1nc(=S)c2ncnc2n1", ["C-N C=X", "CH fused"]],
+    ["8-azaguanine", "Nc1nc2nnnc2c(=O)n1", ["C-N C=X", "N fused"]],
+  ])("gives %s its H on N1 and N9, as it is usually drawn", (_, smiles, nh) => {
+    expect(placed(smiles)).toEqual(nh);
+  });
+
+  // (known failure: allopurinol is usually drawn as its 1,5-dihydro form - the H on the pyrazole's N1, by the fused carbon, and
+  //  on the pyrimidine's N5, by the C=O - and the ranks give N2 for N1. A rule for this tie is to come; this test passes then)
+  it.fails("gives allopurinol its H on N1 and N5, as it is usually drawn", () => {
+    expect(placed("O=c1ncnc2nncc12")).toEqual(["C=X CH", "N fused"]);
+  });
 });
 
 describe("the orders an atom's hydrogens are counted from (valenceOrders)", () => {
