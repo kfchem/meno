@@ -31,8 +31,12 @@ import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf } from "./drawing";
+import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
+import { projectionsKept } from "./projectionKept";
+import { recognisedSaid, withRecognisedDepth } from "../../../../lib/layout/recognised";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -46,6 +50,11 @@ export type LayoutJob = {
   bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
+  /**
+   * A ring in perspective the drawing gives no depth, its depth worked out (lib/layout/recognised): each such atom's depth, by its input
+   * index - so that Clean-up keeps it as drawn, as it keeps one drawn with depth, and stores no depth for it.
+   */
+  recognised?: Map<number, number>;
   /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
   given?: true;
   /**
@@ -86,10 +95,12 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
  * an aziridine's N are read, lib/layout/drawn).
  */
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
-  const bondsOf = bondsAt(drawing.bonds);
+  // (the structure's bonds only, as the reader takes them: a hydrogen bond takes no place round an atom)
+  const structure = drawing.bonds.filter(ofTheStructure);
+  const bondsOf = bondsAt(structure);
   const out = new Set<number>();
   // (a centre by its lone pair drawn with two bonds, its H carried - a secondary phosphine's P: a centre its wedge cannot state)
-  const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
+  const keepsPyramid = lonePairCentres(drawing.atoms, structure);
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
     // (an axis of chirality's end, either: its wedge says how the axis turns)
@@ -236,6 +247,16 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
       : {}),
   };
   const ids = kept.map((i) => part.atoms[i].id);
+  // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
+  const seen = withRecognisedDepth(drawing.atoms, drawing.bonds);
+  // (and one taken for a ring in perspective but not read - its near and far not marked: kept where it is drawn too, since the words ask
+  //  the chemist to mark it, by no depth of its own)
+  const said = recognisedSaid(drawing.atoms, drawing.bonds);
+  const unreadRing = (i: number) => said.has(i) && said.get(i) !== READ_IN_PERSPECTIVE && said.get(i) !== READ_AS_HAWORTH;
+  const recognisedAt = new Map(
+    kept.flatMap((i, k) => (drawing.atoms[i].z != null ? [] : seen[i].z != null ? [[k, seen[i].z!] as const] : unreadRing(i) ? [[k, 0] as const] : [])),
+  );
+  const recognised = recognisedAt.size ? { recognised: recognisedAt } : {};
   // A ring bound to a metal atom by atom - ferrocene drawn by hand, a bond
   // from the iron to each carbon - or a chain of three or more (an allyl)
   // is given to the engine as a haptic bond's is, a star at its centre
@@ -243,7 +264,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   // laid out, the bonds to its atoms become that one bond (chem/eta, the
   // maintainer, 2026-10-17).
   const bound = etaBondedAtomByAtom(input);
-  if (!bound.length) return { input, ids, folded };
+  if (!bound.length) return { input, ids, folded, ...recognised };
   const dropped = new Set(bound.flatMap((r) => r.bonds));
   const atoms = [...input.atoms];
   const bonds = input.bonds.filter((_, i) => !dropped.has(i));
@@ -252,7 +273,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
     bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
   }
   const systems = bound.map((r) => ({ metal: ids[r.metal], atoms: r.ring.map((a) => ids[a]) }));
-  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems };
+  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems, ...recognised };
 }
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -273,8 +294,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
-  const kept = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
-  const laid = kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept);
+  const opposite = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
+  const laid = opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite);
   // (a four-bond metal drawn in one form - the X or the upright cross, by the chemist, or a plugin's for an arrangement its input
   // gave - laid out in the other would say another thing of its arrangement: refused, saying so, its donors left as drawn; the X
   // grown as the X where its donors go on is backlog 118)
@@ -350,6 +371,26 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
     ...(laid.solid[i] && input.atoms[i].tetra ? { stereoCentre: true } : {}),
     ...(open(i) ? { arrangementOpen: true } : {}),
   }));
+  // a ring system the drawing shows in perspective, that the engine lays flat - a chair, a Haworth ring - kept where it is, depth and
+  // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)
+  // - and a ring in perspective drawn with no depth, recognised as one (lib/layout/recognised), kept so too, by the depth worked out for it:
+  // the recognition changes nothing in the document, so no depth is stored for it, and its centres stay as the reading finds them
+  const recognised = job.recognised ?? new Map<number, number>();
+  const kept = projectionsKept(
+    input,
+    was.map((a, i) => {
+      if (i >= n) return undefined;
+      const z = a.z ?? recognised.get(i);
+      return { x: a.x, y: a.y, ...(z != null ? { z } : {}), ...(a.stereoCentre ? { stereoCentre: true } : {}) };
+    }),
+    (i) => laid.depth[i] == null,
+    (i) => place(laid.x[i], laid.y[i]),
+    k,
+  );
+  for (const [i, spot] of kept.places) {
+    const stored = !recognised.has(i);
+    atoms[i] = { id: ids[i], x: spot.x, y: spot.y, ...(stored && spot.z != null ? { z: spot.z } : {}), ...(stored && spot.stereoCentre ? { stereoCentre: true } : {}) };
+  }
   // each star at its pi system's centre, as a written-out label's: cod's
   // C=C, as well as a ring
   input.atoms.forEach((a, i) => {
@@ -360,6 +401,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const hydrogenOf = new Map<number, number | { added: number }>();
   const added: NonNullable<Relayout["added"]> = [];
   for (const h of laid.hydrogens) {
+    // (a centre of a projection says its configuration by the drawing: no H drawn to carry a wedge, and those it has stay as they are)
+    if (kept.projected.has(h.on)) continue;
     const own = spare.get(h.on)?.shift();
     const p = place(h.at.x, h.at.y);
     if (own != null) {
@@ -370,13 +413,14 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
       added.push({ ...p, on: ids[h.on], stereo: "none" });
     }
   }
-  const removed = [...spare.values()].flat();
+  const removed = [...spare].filter(([c]) => !kept.projected.has(c)).flatMap(([, hs]) => hs);
 
   // the wedges: those the engine draws, and no others in the part
   const gone = new Set(removed);
   const inPart = new Set(part.atoms.map((a) => a.id));
   const wedgeOn = new Map<number, { stereo: "up" | "down"; narrow: number }>();
   for (const w of laid.wedges) {
+    if (kept.projected.has(w.from)) continue;
     const from = ids[w.from];
     const to = w.to === -1 ? hydrogenOf.get(w.from)! : ids[w.to];
     if (typeof to === "object") {
@@ -413,7 +457,9 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
     const w = wedgeOn.get(b.id);
     const d = display(b);
     if (w) return [{ id: b.id, stereo: w.stereo, narrow: w.narrow, ...d }];
-    if (b.stereo === "up" || b.stereo === "down") return [{ id: b.id, stereo: "none", ...d }];
+    // (a wedge on a group of a projection's centre is read as it was drawn: out, behind)
+    const onProjection = kept.projected.has(indexOf.get(b.a) ?? -1) || kept.projected.has(indexOf.get(b.b) ?? -1);
+    if ((b.stereo === "up" || b.stereo === "down") && !onProjection) return [{ id: b.id, stereo: "none", ...d }];
     if (d) return [{ id: b.id, stereo: b.stereo, narrow: b.narrow, ...d }];
     return [];
   });

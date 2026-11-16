@@ -278,11 +278,11 @@ export async function drawnHashesAsked(model: Model, structures: readonly (reado
 
 /**
  * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out): a hydrogen bond in it - an
- * enol's own - no bond of the structure, nor of its identity (`structuresOf`). Each ask and each reading of a structure's identity
- * (`drawnHash`) goes through it, so that what is asked is what is read.
+ * enol's own - is no bond of the structure, nor of its identity, which identity's input leaves out itself. Each ask and each reading of a
+ * structure's identity (`drawnHash`) goes through it, so that what is asked is what is read.
  */
 export function structureInputOf(part: Model): ReturnType<typeof identityInputOf> {
-  return identityInputOf(labelsDrawnOut(part.bonds.some((b) => b.hydrogen) ? { ...part, bonds: part.bonds.filter((b) => !b.hydrogen) } : part));
+  return identityInputOf(labelsDrawnOut(part));
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;

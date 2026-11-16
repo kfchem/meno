@@ -199,7 +199,9 @@ its own only where nothing is lost or guessed:
     its id, its identity and its properties as columns;
   - numbers between units of one dimension that Meno's units table knows
     (Eh, kcal/mol, kJ/mol, eV, cm⁻¹; K and °C; nm and eV on a spectrum's
-    axis), converted where they are read;
+    axis; a restraint's strength, kcal/mol/rad² and kJ/mol/rad² for a
+    torsion's, kcal/mol/Å² and kJ/mol/Å² for a distance's), converted
+    where they are read;
 - **never implicit**: molecules to 3D (decision 18); frames to one geometry
   (*Take frames* says which); a table to molecules; a table to a number;
   across dimensions; a model to anything.

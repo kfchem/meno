@@ -111,6 +111,16 @@ holds whole: the file is read (before, either failed as it was read).
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
 atoms at its ends, as a dative bond does not: an ammine stays NH3.
 
+Nor is a hydrogen bond a bond of the structure for anything Meno reads of
+it (`ofTheStructure`, lib/chem/perception/graph): it closes no ring, so the
+double bond of an enol it closes a ring of six round keeps its cis or trans;
+it joins no two molecules, so a water bound to an enol by one leaves the
+enol's identity as it is drawn apart; and it takes no place round an atom,
+so an amine's N it is drawn to keeps three bonds and no configuration. It is
+kept, drawn and laid out as before: Clean-up gives it to the layout as a
+bond. Until 2026-11-15 a hydrogen bond drawn so hid the double bond's cis or
+trans, and the molecules it joined had one identity.
+
 Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
 way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
 joins - an enol and a water, an acid's dimer - is two structures, made side
