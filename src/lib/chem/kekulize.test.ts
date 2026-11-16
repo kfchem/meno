@@ -263,7 +263,11 @@ describe("which atom carries an H the input did not place (kekulized hChosen)", 
   // Where the structure does not say, Meno draws one tautomer, the same whatever order the atoms come in; no rule of chemistry
   // picks it, and none is claimed to be the more stable. These are the forms usually drawn, kept as known answers: the choice
   // is made by this file's own ranks (`canonicalRanks`), which the core's classes in their place would turn to N3 and N9.
-  /** Each N given its H, by what its two neighbours are: fused (a ring atom of the two rings), C=X (a C=O or C=S), C-N (an amino carbon), CH, N. */
+  /**
+   * Each N given its H, by the ring it is in (5-ring or 6-ring) and what its two neighbours are: C=X (a C=O or C=S), C-N (an amino carbon),
+   * CH, N, or a fused carbon (a ring atom of the two rings) told by its neighbour that is neither the N nor the other fused atom - "fused by
+   * N" (a purine's C4, by N3 or N9) or "fused by C=X" (its C5, by C6). So each of a purine's N1, N3, N7 and N9 reads differently.
+   */
   const placed = (smiles: string) => {
     const s = readSmiles(smiles);
     const near = (i: number) => s.bonds.flatMap((b) => (b.a1 === i ? [{ to: b.a2, order: b.order }] : b.a2 === i ? [{ to: b.a1, order: b.order }] : []));
@@ -274,17 +278,37 @@ describe("which atom carries an H the input did not place (kekulized hChosen)", 
       if (out.some((e) => s.atoms[e.to].el === "N")) return "C-N";
       return near(i).length === 3 ? "fused" : "CH";
     };
+    // a fused carbon by its neighbour that is neither the N nor the other fused atom
+    const seen = (i: number, from: number) =>
+      kind(i) === "fused"
+        ? `fused by ${near(i).filter((e) => e.to !== from && kind(e.to) !== "fused").map((e) => kind(e.to)).join(" ")}`
+        : kind(i);
+    // the smallest ring through an atom of two neighbours: the shortest way from one neighbour to the other, not through it
+    const ring = (i: number) => {
+      const [a, b] = near(i).map((e) => e.to);
+      const steps = new Map([[a, 1]]);
+      const queue = [a];
+      while (queue.length) {
+        const at = queue.shift()!;
+        for (const e of near(at)) {
+          if (e.to === i || steps.has(e.to)) continue;
+          steps.set(e.to, steps.get(at)! + 1);
+          queue.push(e.to);
+        }
+      }
+      return `${steps.get(b)! + 1}-ring`;
+    };
     return kekulized(s.atoms, s.bonds)
-      .hChosen.map((i) => near(i).map((e) => kind(e.to)).sort().join(" "))
+      .hChosen.map((i) => [ring(i), ...near(i).map((e) => seen(e.to, i)).sort()].join(" "))
       .sort();
   };
 
   it.each([
-    ["guanine", "Nc1nc2ncnc2c(=O)n1", ["C-N C=X", "CH fused"]],
-    ["hypoxanthine", "O=c1ncnc2ncnc12", ["C=X CH", "CH fused"]],
-    ["purine-6-thione (6-mercaptopurine)", "S=c1ncnc2ncnc12", ["C=X CH", "CH fused"]],
-    ["6-thioguanine", "Nc1nc(=S)c2ncnc2n1", ["C-N C=X", "CH fused"]],
-    ["8-azaguanine", "Nc1nc2nnnc2c(=O)n1", ["C-N C=X", "N fused"]],
+    ["guanine", "Nc1nc2ncnc2c(=O)n1", ["5-ring CH fused by N", "6-ring C-N C=X"]],
+    ["hypoxanthine", "O=c1ncnc2ncnc12", ["5-ring CH fused by N", "6-ring C=X CH"]],
+    ["purine-6-thione (6-mercaptopurine)", "S=c1ncnc2ncnc12", ["5-ring CH fused by N", "6-ring C=X CH"]],
+    ["6-thioguanine", "Nc1nc(=S)c2ncnc2n1", ["5-ring CH fused by N", "6-ring C-N C=X"]],
+    ["8-azaguanine", "Nc1nc2nnnc2c(=O)n1", ["5-ring N fused by N", "6-ring C-N C=X"]],
   ])("gives %s its H on N1 and N9, as it is usually drawn", (_, smiles, nh) => {
     expect(placed(smiles)).toEqual(nh);
   });
@@ -292,7 +316,7 @@ describe("which atom carries an H the input did not place (kekulized hChosen)", 
   // (known failure: allopurinol is usually drawn as its 1,5-dihydro form - the H on the pyrazole's N1, by the fused carbon, and
   //  on the pyrimidine's N5, by the C=O - and the ranks give N2 for N1. A rule for this tie is to come; this test passes then)
   it.fails("gives allopurinol its H on N1 and N5, as it is usually drawn", () => {
-    expect(placed("O=c1ncnc2nncc12")).toEqual(["C=X CH", "N fused"]);
+    expect(placed("O=c1ncnc2nncc12")).toEqual(["5-ring N fused by N", "6-ring C=X CH"]);
   });
 });
 
