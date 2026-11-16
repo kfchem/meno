@@ -1190,7 +1190,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (options its entries take from a property: a call for each group of values, each judging its own - one that cannot take
     //  them out of Failed, saying why: lib/boundOptions)
     const grouped = boundGroups(optionsFor(step.kind, plugin.id), options, step.bound, (i) => entryOfSet(entries[i], String(i)).properties, entries.map((_, i) => i));
-    if (!grouped.groups.length) return void fail(id, grouped.refused[0]?.why ?? "Nothing came in", at, key);
+    // (every one refused: why the first was, and how many more - as a step run as jobs says it)
+    const refusedAll = grouped.refused;
+    if (!grouped.groups.length) return void fail(id, refusedAll.length > 1 ? `${refusedAll[0].why}; and ${refusedAll.length - 1} more cannot be worked out` : (refusedAll[0]?.why ?? "Nothing came in"), at, key);
     const keep = new Set<number>();
     try {
       const client = await pluginClient(plugin);

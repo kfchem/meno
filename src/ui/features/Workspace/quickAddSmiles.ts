@@ -1,6 +1,7 @@
 /** A SMILES read from Quick Add's field (./QuickAdd), plain, to be tested without a page. */
 import { NoPlugin, type ChemState } from "../../../lib/roles/worker";
 import type { RoleId } from "../../../lib/plugins/roles";
+import { firstSetUpStep, type FirstSetUpCard } from "../../../lib/plugins/firstSetUp";
 
 /** What came of it: drawn (null), or why not - and, where no plugin here reads it, the role the plugins online are offered for (./RoleOffer). */
 export type SmilesRead = null | { error: string; needs: RoleId | null };
@@ -37,12 +38,12 @@ export function afterAdded(typed: string, reading: boolean, read: (smiles: strin
  * environment set up, which reports none - or its being started. None where it is ready, or nothing has asked for it yet (what
  * is said of a plugin missing, or offline, is said as before).
  */
-export function chemistryStep(chem: ChemState, share: number | undefined): string | null {
-  if (chem.state === "setting-up") {
-    const step = share != null ? `downloading ${chem.plugin} (${Math.round(Math.min(1, Math.max(0, share)) * 100)}%)` : `setting up ${chem.plugin}'s environment`;
-    return `Setting up chemistry: ${step}`;
-  }
+export function chemistryStep(chem: ChemState, share: number | undefined, card?: FirstSetUpCard): string | null {
+  // (the card's phrase: lib/plugins/firstSetUp `firstSetUpStep`)
+  if (chem.state === "setting-up") return firstSetUpStep(share != null ? "files" : "environment", chem.plugin, share);
   if (chem.state === "starting") return `Starting ${chem.plugin}`;
+  // (the first start's card setting chemistry up: its step, as the card says it)
+  if (card?.phase === "going") return firstSetUpStep(card.step, card.plugin?.name, card.step === "files" ? share : undefined);
   return null;
 }
 
@@ -50,8 +51,8 @@ export function chemistryStep(chem: ChemState, share: number | undefined): strin
  * The one line under the SMILES field: `chemistryStep` as a sentence - and, where a SMILES typed waits for it (`waiting`), that
  * it is drawn when ready; as it starts, that the first one takes a moment.
  */
-export function chemistryLine(chem: ChemState, share: number | undefined, waiting: boolean): string | null {
-  const step = chemistryStep(chem, share);
+export function chemistryLine(chem: ChemState, share: number | undefined, waiting: boolean, card?: FirstSetUpCard): string | null {
+  const step = chemistryStep(chem, share, card);
   if (!step) return null;
   if (chem.state === "starting") return `${step}. The first one takes a moment.`;
   return `${step}.${waiting ? " This is drawn when it is ready." : ""}`;
