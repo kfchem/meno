@@ -50,7 +50,6 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/ringSets.ts", name: "ringSetsToTry", part: 2, why: "the layout's own choice of ring sets to try" },
   // metals: every list in one file under its name (perception/elements.ts); what stands apart is a name for a set of it, or a test of its own
   { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
-  { concept: "metals", file: "lib/chem/conformersSought.ts", name: "metalByBonds", part: 3, why: "a test of its own (no most bonds), not a list: it becomes the core's metal in part 3's fixes (B4)" },
   // valence tables: one count, one table (hydrogens and valence)
   { concept: "valence", file: "lib/chem/molecule.ts", name: "VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/molecule.ts", name: "HIGHEST", part: 12 },
