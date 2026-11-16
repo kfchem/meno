@@ -21,6 +21,7 @@
  */
 import { parity } from "./geometry";
 import type { DrawnAtom, DrawnBond, DrawnStereo } from "./from2d";
+import { ofTheStructure } from "../graph";
 
 /** A centre as a drawing says it: its neighbours by atom id (-1 its carried H), and the sign of the volume the first three span. */
 export type SaidCentre = { neighbours: readonly number[]; volume: 1 | -1 };
@@ -64,19 +65,21 @@ const endsOf = (key: string) => key.split(",").map(Number) as [number, number];
  * What the drawing of `atoms` and `bonds` says, as `stereo` reads it (the
  * reader's `readStereo`, with the caller's cage fitter: lib/layout/drawn's),
  * its atoms' ids `ids`, by place; `plain` says which atoms are plain H (no
- * mass number, charge or map number).
+ * mass number, charge or map number). A hydrogen bond is no bond of the
+ * structure (perception/graph `ofTheStructure`): an H drawn with one is
+ * still its centre's own H.
  */
 export function saidOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], ids: readonly number[], plain: (i: number) => boolean, stereo: DrawnStereo): Said {
   const degree = atoms.map(() => 0);
   for (const b of bonds) {
-    if (b.a === b.b) continue;
+    if (b.a === b.b || !ofTheStructure(b)) continue;
     degree[b.a]++;
     degree[b.b]++;
   }
   const plainAt = new Set(atoms.flatMap((_, i) => (plain(i) && degree[i] === 1 ? [ids[i]] : [])));
   const hydrogens = new Map(atoms.map((a, i) => [ids[i], a.hs]));
   for (const b of bonds) {
-    if (b.a === b.b) continue;
+    if (b.a === b.b || !ofTheStructure(b)) continue;
     if (plainAt.has(ids[b.b])) hydrogens.set(ids[b.a], hydrogens.get(ids[b.a])! + 1);
     if (plainAt.has(ids[b.a])) hydrogens.set(ids[b.b], hydrogens.get(ids[b.b])! + 1);
   }
@@ -95,7 +98,9 @@ export function saidOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[],
 }
 
 /** An axis's sense taken against the lowest-id other neighbour at each end: against the other neighbour at an end, the sense turns. */
-export function againstLowest(bonds: readonly DrawnBond[], ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 }): 1 | -1 {
+export function againstLowest(drawn: readonly DrawnBond[], ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 }): 1 | -1 {
+  // (the structure's bonds: a hydrogen bond is none)
+  const bonds = drawn.filter(ofTheStructure);
   // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
   const bonded = (x: number, y: number) => bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
   const through = (x: number, end: number) => {
