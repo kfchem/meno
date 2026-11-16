@@ -67,13 +67,10 @@ export const ionic: ReadonlyMap<string, number> = new Map([
 export const alwaysIonic: ReadonlySet<string> = new Set([...ionic].filter(([el, charge]) => charge === 1 && el !== "Li" && el !== "Fr").map(([el]) => el));
 
 /**
- * The elements whose bonds count in their neighbours' valences, as a structure's protonation reads them (lib/chem/protonation): hydrogen, the
- * nonmetals and the metalloids - not a metal's bonds, nor a noble gas's, At's or Ts's. One more than `inValenceSumsFromGeometry`: Sb.
+ * The elements whose bonds count in their neighbours' valences, as a structure's protonation reads them (lib/chem/protonation) and as bond
+ * orders are worked out from a geometry (lib/chem/ordersFromGeometry): hydrogen, the nonmetals and the metalloids - not a metal's bonds, which
+ * are dative, kept single and out of the reckoning, nor a noble gas's, At's or Ts's. Sb among them as As is: a metalloid bonded covalently to
+ * C, H and halogens (SbPh3, SbCl3), so that an aryl carbon on it is not one bond short (foundation part 3, B3; before, the geometry's set
+ * left Sb out).
  */
 export const inValenceSums: ReadonlySet<string> = new Set("H B C N O F Si P S Cl Ge As Se Br Sb Te I".split(" "));
-
-/**
- * The elements whose bonds count in their neighbours' valences, as bond orders are worked out from a geometry (lib/chem/ordersFromGeometry):
- * `inValenceSums` without Sb - a metal's bonds being dative, kept single and out of the reckoning. Sb is to join it (foundation part 3, B3).
- */
-export const inValenceSumsFromGeometry: ReadonlySet<string> = new Set([...inValenceSums].filter((el) => el !== "Sb"));
