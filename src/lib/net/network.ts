@@ -91,6 +91,8 @@ export function purposeName(purpose: string): string {
   if (purpose === "python-code") return "Python run in the console";
   if (purpose === "web-view") return "The window";
   if (purpose === "app-update") return "Keeping Meno up to date";
+  // (the list of plugins online - lib/plugins/catalogue `CATALOGUE_PURPOSE`)
+  if (purpose === "plugin-catalogue") return "Looking up plugins online";
   if (purpose === "ccd") return "Chemical components from the wwPDB's dictionary";
   if (purpose === "python-env:console")
     return "Setting up Python for the console";
