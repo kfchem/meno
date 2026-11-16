@@ -169,6 +169,19 @@ describe("texts on the page", () => {
     expect(state().texts[0].icon).toBeUndefined();
   });
 
+  it("shown full size, is taken into view: the view asked to show its whole sheet (backlog 173)", () => {
+    const { state } = editor();
+    state().addTexts([{ name: "a.txt", text: "a\nb\nc" }], { x: 0, y: 0 });
+    const [t] = state().texts;
+    const before = state().showRequest?.n ?? 0;
+    state().setTextIcon(t.id, false);
+    expect(state().showRequest?.n).toBe(before + 1);
+    expect(state().showRequest?.box).toEqual(sheetRoom(state().texts[0]));
+    // (made an icon again: nothing asked)
+    state().setTextIcon(t.id, true);
+    expect(state().showRequest?.n).toBe(before + 1);
+  });
+
   it("without a sheet keep what they are the text of - a molecule by its place, as the molecules are numbered again", () => {
     const { doc, state } = editor();
     const water = { atoms: [{ el: "O", x: 0, y: 0, z: 0 }], bonds: [], at: { x: 0, y: 0 } };
