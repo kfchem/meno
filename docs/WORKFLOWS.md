@@ -841,7 +841,7 @@ which any option can name; `lib/boundOptions`).
 
 - **Where.** On a step's open card, a small button at the right end of
   the option's field (two links of a chain), named on hover *From a
-  property*. It is offered on every number and text option of a
+  property*, and reached by the Tab key as the card's other controls are. It is offered on every number and text option of a
   plugin's step that takes entries in (not on one that makes them from
   nothing, nor Render's), and on those of Meno's own steps that are an
   entry's own to take: *Torsion restraints*' strength. A chemist who
@@ -857,6 +857,9 @@ which any option can name; `lib/boundOptions`).
   ("1 torsion at 180°, = k kcal/mol/rad²; for each start").
 - **Units.** The value is taken in the option's unit, converted within
   its dimension (`lib/units`: a k in kJ/mol/rad² held as kcal/mol/rad²).
+  A restraint's strength is k as in E = k x²/2, as Meno's restraint rows
+  state it: a k from a program that writes E = k x², without the half, is
+  a factor of 2 off, which no unit can catch.
   An entry whose property is not there, was not worked out, is of
   another dimension ("Its k is in kcal/mol; its strength is in
   kcal/mol/rad²"), has no unit where the option has one or one where it
