@@ -498,13 +498,17 @@ export const createModelSlice = (
     return true;
   },
 
-  // (clicks on a bond, so many in a row: the first selects it alone - a click never changes the compound (the maintainer,
-  //  2026-11-14) - the second makes it double, a double's second line on its next side as the 2 key does, the third a triple)
+  // (clicks on a bond, so many in a row: one turns it as the 1 key does (the maintainer, 2026-11-17), two make it double, a double's
+  //  second line on its next side as the 2 key does, three a triple)
   bondClicked: (id: number, clicks: number) => {
     const { model } = get();
     const bond = model.bonds.find((b) => b.id === id);
     if (!bond) return;
-    if (clicks <= 1) return get().clickSelectBond(id);
+    // (one click: the key 1's round - a double or triple made single, a single round its wedge, hashed wedge, the other end narrow)
+    if (clicks <= 1) {
+      get().bondKey(id, 1);
+      return;
+    }
     if (clicks === 2) {
       const patch = doubleClickPatch(bond, model.atoms, model.bonds);
       if (bond.order === 2) get().setBondDoubleMode(id, patch.doubleMode!);
@@ -512,6 +516,13 @@ export const createModelSlice = (
       return;
     }
     get().updateBond(id, { order: 3, stereo: "none" });
+  },
+
+  // (a click's turn of a bond taken back - where the drawing is still the one it made - so that the second click of a slow
+  //  double-click makes the bond double from what it was, as one step: utils/press `turnTakenBack`)
+  takeBackTurn: (after: unknown) => {
+    if (get().model !== after) return false;
+    return doc.undo();
   },
 
   setBondOrder: (id: number, order: Bond["order"]) => {

@@ -299,16 +299,22 @@ held still before it is let go stays where it was put. (It used to glide on
 by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
-**A click keeps each view's own meaning**: in 2D a click selects what is
-under the pointer, an atom or a bond alike - a bond with its two atoms,
-alone, what was selected let go - and a single click never changes the
-compound (the maintainer, 2026-11-14: a click on a bond had gone round its
-kinds, and a click meant to select it could put a wedge in, a statement of
-configuration, with nothing said). Cmd or Ctrl and a click adds a bond or
-takes it out; Shift and a click, the box and the lasso are as before. A
+**A click keeps each view's own meaning**: in 2D a click on an atom selects
+it, and a click on a bond turns its kind as the key 1 does - a double or
+triple bond made single; a single bond round its wedge, its hashed wedge
+and plain with its other end narrow - once no second click has come (the
+maintainer, 2026-11-17, giving back the click of 2026-09-27; from
+2026-11-14 to 2026-11-17 a click selected the bond and changed nothing). A
+bond is selected by Cmd or Ctrl and a click, which adds it or takes it
+out, by the box and by the lasso; Shift and a click are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click
-having selected it, which stays selected. A bond's kind is otherwise set by
+turning nothing; a slower one, its second click within a double-click's time
+of the first but after the first had turned the bond, takes that turn back
+and makes the bond double from what it was, as one step. A click is never
+lost: one still waiting is turned at once as the next press lands anywhere
+but on its bond, or as a drag begins (`turnTakenBack`, `flushesClick`, the
+maintainer, 2026-11-17). A bond's kind is otherwise set by
 the bond keys (*Bond keys*, below) and by its right-click menu, which
 chooses its kind outright (2026-10-14), for every bond selected at once, as
 one step. In the menu's row of kinds, the icon of the kind the bond already
@@ -342,7 +348,7 @@ again they go on round, 2026-11-04). With the pointer on a bond, 1, 2
 and 3 set its kind, and a key pressed again goes on round:
 - **1** makes a double or triple bond single; on a single bond it goes round
   - wedge, hashed wedge, plain with the other end narrow (`singleRoundPatch`;
-  a click on a bond went this round until 2026-11-14).
+  a click on a bond goes this round too).
 - **2** makes a bond double; on a double bond it moves the second line to
   the next side as a double-click does - its own side, the middle, the
   other side (`doubleClickPatch`, shared with the double-click).
