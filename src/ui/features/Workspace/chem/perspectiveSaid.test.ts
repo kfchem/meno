@@ -83,7 +83,8 @@ describe("a chair drawn steep and the textbook chair, the same compound", () => 
   // bonds alike)
   const bonds: DrawnBond[] = [...[...Array(6)].map((_, k) => ({ a: k, b: (k + 1) % 6, order: 1 as const })), { a: 0, b: 6, order: 1 }, { a: 3, b: 7, order: 1 }];
   const els = ["C", "C", "C", "C", "C", "C", "O", "C"];
-  const atomsAt = (xy: number[][]): DrawnAtom[] => xy.map(([x, y], i) => ({ x, y, el: els[i] }));
+  const hs = [1, 2, 2, 1, 2, 2, 1, 3];
+  const atomsAt = (xy: number[][]): DrawnAtom[] => xy.map(([x, y], i) => ({ x, y, el: els[i], hs: hs[i] }));
   const steep = {
     atoms: atomsAt([[1.45, -0.2349], [0.725, 0.6644], [-0.725, 0.1946], [-1.45, 0.2349], [-0.725, -0.6644], [0.725, -0.1946], [2.8922, 0.245], [-2.8922, -0.245]]),
     bonds,
