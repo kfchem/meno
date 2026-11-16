@@ -43,7 +43,7 @@ function page(options: Record<string, string | number>) {
   st().connect({ set: exit(r, "out") }, f);
   st().connect({ set: exit(f, "out") }, r, "again");
   st().connect({ set: exit(f, "rest") }, r, "done");
-  return { st, r, f, exit };
+  return { st, r, f, exit, doc, input };
 }
 
 const props = (m: { properties?: Record<string, { value: unknown }>[] }, name: string) => m.properties?.[0]?.[name]?.value;
@@ -93,6 +93,19 @@ describe("a Repeat run pass by pass", () => {
     expect(st().wires.some((x) => x.id === w.id)).toBe(false);
     await st().runStep(r);
     expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, said: "Nothing is wired to Again: wire what is to go round once more, or repeat a number of times" });
+  });
+});
+
+describe("a Repeat whose frame a wire crosses", () => {
+  it("refuses to run where a card was dragged into its frame with a wire from outside on it, saying why (found in review)", async () => {
+    const { st, r, doc, input } = page({ repeat: "times", times: 2 });
+    const t = st().addStep("tag", "meno", 4000, 300);
+    st().connect({ set: input }, t);
+    // (dragged in: its middle inside the frame now, its wire from the set outside still on it)
+    doc.edit("drag", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === t ? { ...s, x: 1500, y: 600 } : s)) }));
+    expect(st().steps.find((s) => s.id === r)!.holds).toContain(t);
+    await st().runStep(r);
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, said: expect.stringMatching(/^A wire crosses its frame's edge, a card moved in or out with its wires on: This step is inside a Repeat/) });
   });
 });
 

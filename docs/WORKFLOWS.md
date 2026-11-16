@@ -903,14 +903,18 @@ any option can name - *Options from a property*).
 - **The steps it holds** are those whose cards' middles lie inside its
   frame, in reading order: a step dragged in joins it, one dragged out
   leaves (`repeatsSettled`), as a set's members do. A Repeat holds no
-  Repeat.
+  Repeat, and a step is held by one Repeat alone: where frames overlap,
+  the smallest round its card's middle.
 - **Its edge is crossed by its ports**, and by a later input's set read
   the same every pass (below). What comes in goes into *In*; its steps
   take their entries from *This pass* and from one another; what leaves
   goes by *Again* or *Done*, then *Out*. A wire that would cross it
   otherwise is not made, and the step's card says why ("This step is
   inside a Repeat: wire it into the Repeat's In, and This pass to this
-  step").
+  step"). A card dragged across the edge keeps its wires as they were;
+  where one of them now crosses it, the Repeat does not run, and says so
+  ("A wire crosses its frame's edge, a card moved in or out with its
+  wires on: ..."), until it is wired through its ports.
 - **No loop.** What lands on *Again* or *Done* is read by the Repeat as a
   pass ends, never a way back in the flow (`landing`): the steps before a
   Repeat are those before its *In*, and the steps after one of its steps

@@ -412,16 +412,21 @@ export function repeatsSettled(doc: WorkspaceDocument): WorkspaceDocument {
   const steps = doc.steps ?? [];
   if (!steps.some((s) => s.kind === "repeat" && s.frame)) return doc;
   let changed = false;
+  // (each step held by one Repeat alone: of the frames round its card's middle, the smallest - the same size, the first made)
+  const frames = steps.filter((r) => r.kind === "repeat" && r.frame);
+  const holder = new Map<number, number>();
+  for (const s of steps) {
+    if (s.kind === "repeat") continue;
+    const mx = s.x + CARD_W / 2;
+    const my = s.y + cardHighOf(s.kind) / 2;
+    const round = frames.filter((r) => mx > r.x && mx < r.x + r.frame!.w && my > r.y && my < r.y + r.frame!.h);
+    round.sort((p, q) => p.frame!.w * p.frame!.h - q.frame!.w * q.frame!.h || p.id - q.id);
+    if (round.length) holder.set(s.id, round[0].id);
+  }
   const next = steps.map((r) => {
     if (r.kind !== "repeat" || !r.frame) return r;
-    const { w, h } = r.frame;
     const inside = steps
-      .filter((s) => s.kind !== "repeat")
-      .filter((s) => {
-        const mx = s.x + CARD_W / 2;
-        const my = s.y + cardHighOf(s.kind) / 2;
-        return mx > r.x && mx < r.x + w && my > r.y && my < r.y + h;
-      })
+      .filter((s) => holder.get(s.id) === r.id)
       .sort((a, b) => a.y - b.y || a.x - b.x)
       .map((s) => s.id);
     if (JSON.stringify(inside) === JSON.stringify(r.holds ?? [])) return r;

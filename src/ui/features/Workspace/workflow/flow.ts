@@ -141,9 +141,29 @@ function repeatWireRefusal(doc: Flow, set: WorkflowSet, to: WorkflowStep, port: 
   const first = inputsFor(to.kind, byOf(to))[0]?.id ?? ONE_INPUT;
   if (holder != null && inside !== holder && (port === first || inside != null)) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
   // (a reference inside a Repeat is the same in every pass: one from inside it would change between passes, and the rows of earlier
-  //  passes were made against another - CHEM's rule for rows held over passes)
+  //  passes were made against another: docs/WORKFLOWS.md, *Repeat*)
   if (holder != null && inside === holder && to.kind === "torsion-restraints" && port === "reference") return "A reference inside a Repeat is the same in every pass: wire it from outside the Repeat";
   if (inside != null && inside !== holder) return "It is inside a Repeat: what leaves it goes by Done, then Out";
+  return null;
+}
+
+/**
+ * Why a Repeat cannot run as its wires stand: one of them crosses its frame otherwise than by its ports - a card dragged in or out
+ * of the frame with its wires on it, which a wire made now would not be (`repeatWireRefusal`); none where none does.
+ */
+export function repeatCrossing(doc: Flow, repeat: number): string | null {
+  const r = stepOf(doc, repeat);
+  if (!r || r.kind !== "repeat") return null;
+  const held = new Set(r.holds ?? []);
+  for (const w of doc.wires ?? []) {
+    const set = findSet(doc, w.from.set);
+    const to = stepOf(doc, w.to.step);
+    if (!set || !to) continue;
+    const maker = set.made?.step;
+    if (!held.has(w.to.step) && !(maker != null && held.has(maker)) && w.to.step !== repeat) continue;
+    const why = repeatWireRefusal(doc, set, to, w.to.port);
+    if (why) return `A wire crosses its frame's edge, a card moved in or out with its wires on: ${why}`;
+  }
   return null;
 }
 

@@ -43,7 +43,7 @@ import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from 
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, landing, repeatHolding, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
+import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, landing, repeatCrossing, repeatHolding, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
 import { REPEAT_IN, REPEAT_OUT, repeatRead, THIS_PASS } from "../../workflow/repeat";
 import { lastPass, passEntries, ranOut, startsFrom } from "../../workflow/repeatRun";
 import { setMolecules } from "../../workflow/entries";
@@ -254,6 +254,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const key = inputKey(d0, step, "meno");
     const r = repeatRead(stepValues(step));
     if ("why" in r) return void fail(id, r.why, at, key);
+    // (a wire across its frame's edge - a card dragged in or out with its wires on: said, never run past)
+    const crossed = repeatCrossing(d0, id);
+    if (crossed) return void fail(id, crossed, at, key);
     const wired = (port: string) => allWiresInto(doc.getState(), id).filter((x) => x.to.port === port);
     if (!wired("again").length && !wired("done").length) return void fail(id, "Nothing is wired to Again or Done: wire what the steps inside give to them", at, key);
     if (r.repeat === "until" && !wired("again").length) return void fail(id, "Nothing is wired to Again: wire what is to go round once more, or repeat a number of times", at, key);
