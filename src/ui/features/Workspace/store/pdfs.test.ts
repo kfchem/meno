@@ -99,6 +99,25 @@ describe("PDFs on the page", () => {
     expect(state().pdfs[0].icon).toBe(true);
   });
 
+  it("shown full size again, is taken into view: the view asked to show the whole stack, not its icon (backlog 173)", () => {
+    const { state } = editor();
+    state().addPdfs([{ name: "paper.pdf", sha256: SHA, pages: [A4, A4] }], { x: 0, y: 0 });
+    state().iconPdf(1, true);
+    const before = state().showRequest?.n ?? 0;
+    // (made an icon: nothing asked of the view)
+    state().iconPdf(1, true);
+    expect(state().showRequest?.n ?? 0).toBe(before);
+    state().iconPdf(1, false);
+    expect(state().showRequest?.n).toBe(before + 1);
+    expect(state().showRequest?.box).toEqual(pdfBounds(state().pdfs[0]));
+    // (the stack, which is larger than the icon it was)
+    const icon = pdfBounds({ ...state().pdfs[0], icon: true });
+    expect(state().showRequest!.box.y1 - state().showRequest!.box.y0).toBeGreaterThan(icon.y1 - icon.y0);
+    // (full size already: not asked again)
+    state().iconPdf(1, false);
+    expect(state().showRequest?.n).toBe(before + 1);
+  });
+
   it("are taken by a canvas opened for them", () => {
     const { state } = editor({ pdfs: [{ name: "paper.pdf", sha256: SHA, pages: [A4], size: 1000 }] });
     expect(state().pdfs).toEqual([{ id: 1, name: "paper.pdf", sha256: SHA, pages: [A4], x: 0, y: 0, page: 0, icon: true }]);

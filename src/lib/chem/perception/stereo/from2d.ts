@@ -50,6 +50,7 @@ import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
 import { parity } from "./geometry";
 import { runsOf } from "./runs";
 import { factsOf, OPEN_RING } from "../facts";
+import { ofTheStructure } from "../graph";
 
 /** A pair of atoms as one key, the lower first. */
 const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -80,6 +81,10 @@ export type DrawnBond = {
   wedge?: { narrow: number; stereo: "up" | "down" };
   /** A wavy bond: either configuration, so none is read at its ends. */
   either?: boolean;
+  /** A ring bond drawn bold, or as a near edge: the edge of a ring in perspective that is the nearer. */
+  bold?: boolean;
+  /** A hydrogen bond: no bond of the structure (perception/graph `ofTheStructure`), so read as if it were not there. */
+  hydrogen?: boolean;
 };
 
 export type DrawnStereo = {
@@ -119,6 +124,12 @@ const WEDGE_LIFT = 0.8;
  * centre's three span 0.77).
  */
 const HAIR = 0.2;
+/**
+ * How far a group of a perspective centre is drawn from half way between two free positions, as seen, to be unread there: the drawing says neither (by convention, as UNSURE_TURN; no text gives a number). Two free positions seen less than twice this apart leave a group between them unread, however it is drawn.
+ */
+const BETWEEN = (12 * Math.PI) / 180;
+/** A bond is seen end-on where its length on the page is less than this share of its depth: a Newman projection's central bond. */
+const END_ON = 0.1;
 
 /**
  * How near two bonds' directions are taken to be one line, either way - in
@@ -255,6 +266,10 @@ function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x
  * unsaid too.
  */
 export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
+  return straightEndsOf(atoms, structureOf(bonds).bonds);
+}
+
+function straightEndsOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -311,11 +326,11 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
 }
 
 /**
- * The stereochemistry a drawing shows (this file's header). A drawing with depth is read by its bonds with depth; `fit`, where given, says
- * for each atom of a cage the solid it is drawn from, fitted to the drawing (the layout's `cageFits`): asked once, and again with the
- * centres the first reading fixed held.
+ * The centres a drawing shows, and what each was read against: the atoms, their bonds, and for each atom of a bridged system or a cage the
+ * solid fitted to it (`fit`, the layout's: asked once, and again with the centres the first reading fixed held). `readStereo` and
+ * `groupDepths` both read from this, so a group's depth is the very choice that read its centre.
  */
-export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): DrawnStereo {
+function readCentres(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter) {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -324,7 +339,6 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     neighbours[b.b].push(b.a);
     bondOf.set(key(b.a, b.b), b);
   });
-  const inRingUnder = ringsOfDrawing(atoms, bonds);
   // how a bond out of a centre stands: +1 on a wedge, -1 on hashes, 0 in
   // the page (a wedge narrow at the other end says nothing about this one)
   const lift = (c: number, n: number) => {
@@ -373,6 +387,7 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
   // two corners drawn on one side, read by a hair)
   const first = fit(atoms, bonds);
   let tetra = centres(first);
+  let fits = first;
   const fixed = new Map(
     [...tetra].filter(([c]) => {
       const fit = first.get(c);
@@ -382,8 +397,27 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
   if (fixed.size) {
     const second = fit(atoms, bonds, fixed);
     const nearer = new Map([...first].map(([a, f]) => [a, (second.get(a)?.miss ?? Infinity) < f.miss ? second.get(a)! : f]));
-    if ([...nearer].some(([a, f]) => f !== first.get(a))) tetra = centres(nearer);
+    if ([...nearer].some(([a, f]) => f !== first.get(a))) {
+      fits = nearer;
+      tetra = centres(nearer);
+    }
   }
+  return { neighbours, bondOf, lift, keepsPyramid, tetra, fits };
+}
+
+/**
+ * The stereochemistry a drawing shows (this file's header). A drawing with depth is read by its bonds with depth; `fit`, where given, says
+ * for each atom of a bridged system or a cage the solid it is drawn from, fitted to the drawing (the layout's `cageFits`).
+ */
+export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): DrawnStereo {
+  const kept = structureOf(bonds);
+  const read = readStereoOf(atoms, kept.bonds, fit);
+  return { ...read, cisTrans: new Map([...read.cisTrans].map(([i, c]) => [kept.at(i), c])) };
+}
+
+function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter): DrawnStereo {
+  const { neighbours, bondOf, lift, keepsPyramid, tetra } = readCentres(atoms, bonds, fit);
+  const inRingUnder = ringsOfDrawing(atoms, bonds);
 
   const cisTrans = new Map<number, CisTrans>();
   // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
@@ -533,10 +567,16 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * or else wedges and hashes that cancel, saying neither way round.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
+  return unreadWhyOf(atoms, structureOf(bonds).bonds, c);
+}
+
+function unreadWhyOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
   const mine = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c));
   const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
   const atom = atoms[c];
   if (mine.some((b) => b.either)) return "a wavy bond at it says it is either";
+  // (a centre drawn in perspective with no wedge: a group drawn half way between the two ways it could point)
+  if (atom.centre && atom.z != null && !mine.some((b) => b.wedge)) return "its bond is drawn between its two free positions";
   // (an allene's end: its wedge says how the allene turns - or, wedged at both ends, the two say opposite ways)
   const doubles = (x: number) => bonds.filter((b) => b.order === 2 && (b.a === x || b.b === x));
   const run = doubles(c).map((b) => (b.a === c ? b.b : b.a)).find((m) => doubles(m).length === 2);
@@ -586,6 +626,12 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * configuration read as readStereo reads it, from its three groups.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
+  const kept = structureOf(bonds);
+  const unsure = unsureStereoOf(atoms, kept.bonds);
+  return { atoms: unsure.atoms, bonds: unsure.bonds.map(kept.at) };
+}
+
+function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -714,6 +760,8 @@ function volumeInSpace(
   around: readonly number[],
   lift: (c: number, n: number) => number,
   fit?: CageFit,
+  /** Filled, where the centre is read, with the way each of its groups out of the ring (no depth, no wedge) was read to go: for `groupDepths`. */
+  chosen?: Map<number, V3>,
 ): number {
   const at: V3 = [atoms[c].x, atoms[c].y, atoms[c].z!];
   const dirs = new Map<number, V3>();
@@ -735,11 +783,34 @@ function volumeInSpace(
     const left = around.length === 4 && out >= 0 ? out : 3;
     const three = around.filter((_, k) => k !== left).slice(0, 3);
     const sign = left % 2 === 1 ? 1 : -1;
+    // (a fourth group the three leave where they leave it: away from all three, as they were read)
+    const fourth = (ways: V3[]) => {
+      const group = unknown.length === 1 ? unknown[0] : null;
+      if (chosen && group != null) chosen.set(group, unit3(ways.reduce((s, u) => sub3(s, unit3(u)), [0, 0, 0] as V3)));
+    };
     const d = det3(...(three.map((n) => unit3(dirs.get(n)!)) as [V3, V3, V3]));
-    if (Math.abs(d) >= HAIR || !fit) return Math.abs(d) < 1e-6 ? 0 : Math.sign(d) * sign;
+    if (Math.abs(d) >= HAIR || !fit) {
+      if (Math.abs(d) < 1e-6) return 0;
+      fourth(caged.map((n) => dirs.get(n)!));
+      return Math.sign(d) * sign;
+    }
     const s = fit.solid.get(c)!;
     const f = det3(...(three.map((n) => unit3(fit.map(sub3(fit.solid.get(n)!, s)))) as [V3, V3, V3]));
-    return Math.abs(f) < 1e-6 ? 0 : Math.sign(f) * sign;
+    if (Math.abs(f) < 1e-6) return 0;
+    fourth(caged.map((n) => fit.map(sub3(fit.solid.get(n)!, s))));
+    return Math.sign(f) * sign;
+  }
+  // a Newman projection's atom (docs/EDITOR-2D.md, *Drawn in perspective*): its one known bond end-on - the atom behind it, or before it, in the same place on the page - and its groups drawn about it at angles of their own: each leaves it away from that atom, at the angle it is drawn at, as a staggered or an eclipsed projection says
+  if (dirs.size === 1 && unknown.length >= 2) {
+    const d0 = [...dirs.values()][0];
+    if (Math.hypot(d0[0], d0[1]) >= END_ON * Math.abs(d0[2])) return 0;
+    const away = d0[2] > 0 ? -1 : 1;
+    const t = Math.acos(-1 / 3);
+    const angles = unknown.map((n) => Math.atan2(atoms[n].y - at[1], atoms[n].x - at[0]));
+    // (two groups drawn on one line, or all but, say nothing of which is which)
+    for (let i = 0; i < angles.length; i++) for (let j = i + 1; j < angles.length; j++) if (apart(angles[i], angles[j]) < 2 * BETWEEN) return 0;
+    unknown.forEach((n, i) => dirs.set(n, [Math.sin(t) * Math.cos(angles[i]), Math.sin(t) * Math.sin(angles[i]), away * -Math.cos(t)]));
+    unknown.length = 0;
   }
   if (dirs.size < 2) return 0;
   if (unknown.length) {
@@ -775,6 +846,18 @@ function volumeInSpace(
     };
     if (unknown.length === 1) {
       const [n] = unknown;
+      // (drawn half way between its two nearest free ways, as seen, or between two seen close together: neither is said)
+      if (free.length >= 2 && !fit) {
+        const seen = free.filter((d) => Math.hypot(d[0], d[1]) > 1e-9).map((d) => Math.atan2(d[1], d[0]));
+        const group = Math.atan2(atoms[n].y - at[1], atoms[n].x - at[0]);
+        const near = [...seen].sort((p, q) => apart(group, p) - apart(group, q)).slice(0, 2);
+        if (near.length === 2) {
+          const mid = Math.atan2(Math.sin(near[0]) + Math.sin(near[1]), Math.cos(near[0]) + Math.cos(near[1]));
+          const between = apart(near[0], near[1]) < Math.PI && apart(group, near[0]) + apart(group, near[1]) <= apart(near[0], near[1]) + 1e-9;
+          if (apart(near[0], near[1]) < 2 * BETWEEN && between) return 0;
+          if (apart(group, mid) < BETWEEN && apart(near[0], near[1]) > 1e-9) return 0;
+        }
+      }
       dirs.set(n, free.reduce((best, d) => (fitTo(n, d) > fitTo(n, best) ? d : best)));
     } else if (unknown.length === 2 && free.length === 2) {
       const [m, n] = unknown;
@@ -788,7 +871,78 @@ function volumeInSpace(
   }
   const [p, q, r] = around.slice(0, 3).map((n) => unit3(dirs.get(n)!));
   const d = det3(p, q, r);
-  return Math.abs(d) < 1e-6 ? 0 : Math.sign(d);
+  if (Math.abs(d) < 1e-6) return 0;
+  if (chosen) for (const n of around) if (!lift(c, n) && !(fit ? fit.solid.has(n) : atoms[n].z != null)) chosen.set(n, unit3(dirs.get(n)!));
+  return Math.sign(d);
+}
+
+/**
+ * The depth of each group drawn out of a ring in perspective, worked out for where its bond passes behind another (lib/chem/layout2d
+ * `brokenBehind`; Brecher 2006, ST-3.1): the way its centre is read to send it (`volumeInSpace`, the very choice that reads the centre - the
+ * ring's bonds as drawn, or a bridged system's or a cage's solid fitted to it) says how far before or behind its ring atom it lies: that way's
+ * depth, as a part of a bond one long, times the bond's length as drawn. The atoms further out along the same group lie at its first atom's
+ * depth: a group is drawn flat, before or behind its ring as its first atom is. None where the ring atom is not read there - a group drawn half
+ * way between two places, a wavy bond at it - nor for an atom reached from two atoms with depth, nor where nothing in the drawing has depth.
+ * Nothing is kept: the drawing asks again as it is drawn, so a group dragged round has its depth, and its gap, follow it. By atom index.
+ */
+export function groupDepths(drawnAtoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): Map<number, number> {
+  return groupDepthsOf(drawnAtoms, structureOf(bonds).bonds, fit);
+}
+
+function groupDepthsOf(drawnAtoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter): Map<number, number> {
+  const out = new Map<number, number>();
+  const deep = (i: number) => drawnAtoms[i].z != null;
+  // (no atom with depth that has a group without and two bonds with depth, or one seen end-on as a Newman projection's: nothing to work out,
+  //  and nothing read - an engine's cage gives its groups' first atoms depth already)
+  const near = drawnAtoms.map((): number[] => []);
+  for (const b of bonds) {
+    if (b.a === b.b) continue;
+    near[b.a].push(b.b);
+    near[b.b].push(b.a);
+  }
+  const endOn = (c: number, n: number) => Math.hypot(drawnAtoms[n].x - drawnAtoms[c].x, drawnAtoms[n].y - drawnAtoms[c].y) < END_ON * Math.abs(drawnAtoms[n].z! - drawnAtoms[c].z!);
+  const anchors = (c: number) => deep(c) && near[c].some((n) => !deep(n)) && (near[c].filter(deep).length >= 2 || near[c].some((n) => deep(n) && endOn(c, n)));
+  if (!drawnAtoms.some((_, c) => anchors(c))) return out;
+  const atoms = drawnAtoms;
+  const { neighbours, bondOf, lift, fits } = readCentres(atoms, bonds, fit);
+  const first = new Map<number, number>();
+  const twice = new Set<number>();
+  atoms.forEach((atom, c) => {
+    if (!deep(c)) return;
+    const around = neighbours[c];
+    if (around.length > 4 || around.length + atom.hs > 4 || around.some((n) => bondOf.get(key(c, n))!.either)) return;
+    const groups = around.filter((n) => !deep(n) && !lift(c, n));
+    if (!groups.length) return;
+    const chosen = new Map<number, V3>();
+    if (!volumeInSpace(atoms, c, around, lift, fits.get(c), chosen)) return;
+    for (const n of groups) {
+      const way = chosen.get(n);
+      if (!way) continue;
+      if (first.has(n)) twice.add(n);
+      first.set(n, atoms[c].z! + way[2] * Math.hypot(atoms[n].x - atom.x, atoms[n].y - atom.y));
+    }
+  });
+  // (an atom bonded to two atoms with depth is between them, not out of either)
+  for (const [n] of first) if (twice.has(n) || neighbours[n].filter(deep).length > 1) first.delete(n);
+  // each group's further atoms at its first atom's depth; one reached from two groups, neither's
+  const from = new Map<number, number>();
+  for (const [g] of first) {
+    const seen = new Set([g]);
+    const queue = [g];
+    while (queue.length) {
+      const i = queue.shift()!;
+      for (const n of neighbours[i]) {
+        if (deep(n) || seen.has(n) || first.has(n)) continue;
+        seen.add(n);
+        queue.push(n);
+        if (from.has(n) && from.get(n) !== g) twice.add(n);
+        from.set(n, g);
+      }
+    }
+  }
+  for (const [g, z] of first) out.set(g, z);
+  for (const [n, g] of from) if (!twice.has(n)) out.set(n, first.get(g)!);
+  return out;
 }
 
 /**
@@ -807,6 +961,19 @@ export function sameConfiguration(
   if (a.length !== b.length || a.some((n) => !b.includes(n))) return false;
   // (the parity of the permutation taking one order to the other: geometry's)
   return (parity(a.map((n) => b.indexOf(n))) === 1) === (p.volume === q.volume);
+}
+
+/**
+ * The drawing's bonds of the structure (perception/graph `ofTheStructure`: a hydrogen bond is none), which every reading here takes in place
+ * of the caller's, and `at`, which gives a kept bond's index in the caller's list back - so what is said of bonds is said in its numbering.
+ */
+function structureOf(bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]; at: (i: number) => number } {
+  if (bonds.every(ofTheStructure)) return { bonds, at: (i) => i };
+  const at: number[] = [];
+  bonds.forEach((b, i) => {
+    if (ofTheStructure(b)) at.push(i);
+  });
+  return { bonds: at.map((i) => bonds[i]), at: (i) => at[i] };
 }
 
 /** The smallest ring a drawn axis may be in: seven atoms. */

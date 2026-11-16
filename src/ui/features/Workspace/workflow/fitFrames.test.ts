@@ -4,7 +4,8 @@ vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.rej
 import { gestureStep } from "../../../../lib/doc/document";
 import type { DocumentStore } from "../../../../lib/doc";
 import { addMolecule3d, addPicture, createWorkspaceDocument, moveMolecule3d, type WorkspaceDocument } from "../document";
-import type { Molecule3D } from "../store/types";
+import type { Model, Molecule3D } from "../store/types";
+import { drawnBox } from "../../../../utils/importers";
 import type { Frame } from "./entries";
 import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
 import { CHIP, PX, SET_PAD, SET_TOP } from "./look";
@@ -431,5 +432,47 @@ describe("a molecule's room", () => {
   it("is as roomOf has it, its chip's height below it", () => {
     const m = { frames: [[], []] as number[][], calc: undefined, energies: undefined, shares: undefined, numbers: undefined, conformerSet: undefined };
     expect(roomOf(m as never, { x0: -R, x1: R, y0: -R, y1: R }).chip).toBe(CHIP);
+  });
+});
+
+describe("a structure's box beside another a hydrogen bond joins it to: its labels as the page draws them", () => {
+  // (methanol's C 1 and O 2, a water's O 3 to its right held by a hydrogen bond O 2...O 3: as two entries, the water's label is drawn toward
+  //  the bond, OH2, its H2 hanging right - not as the water alone would have it)
+  const model = {
+    atoms: [
+      { id: 1, el: "C", x: 0, y: 0 },
+      { id: 2, el: "O", x: 1.8, y: 0 },
+      { id: 3, el: "O", x: 4.68, y: 0 },
+    ],
+    bonds: [
+      { id: 10, a: 1, b: 2, order: 1 },
+      { id: 11, a: 2, b: 3, order: 1, hydrogen: true },
+    ],
+  } as unknown as Model;
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const whole = drawnBox(model);
+
+  it("reaches as far right as the water's subscript is drawn: the right edge of the pair as a whole", () => {
+    const water = structureBox(model, byId, [3]);
+    expect(water.x1).toBeCloseTo(whole.maxX, 6);
+    // (the water alone would put its H2 on the other side)
+    const alone = drawnBox({ atoms: [model.atoms[2]], bonds: [] });
+    expect(alone.maxX).toBeLessThan(whole.maxX - 0.1);
+  });
+
+  it("puts a frame round both entries that holds all of the pair's ink", () => {
+    const boxes = [structureBox(model, byId, [1, 2]), structureBox(model, byId, [3])];
+    const frame = frameAround(boxes);
+    expect(frame.x1).toBeGreaterThanOrEqual(whole.maxX + SET_PAD - 1e-9);
+    expect(frame.x0).toBeLessThanOrEqual(whole.minX - SET_PAD + 1e-9);
+  });
+
+  it("holds each entry's own ink only: the water's reaching no further left than its O's own label, the methanol's no further right than its O's", () => {
+    const [methanol, water] = [structureBox(model, byId, [1, 2]), structureBox(model, byId, [3])];
+    // (the hydrogen bond between them is neither's alone: a gap is left between the two boxes)
+    expect(methanol.x1).toBeLessThan(water.x0);
+    // (the water's box no wider than its label as drawn: OH2 from its O rightward)
+    const alone = drawnBox({ atoms: [model.atoms[2]], bonds: [] });
+    expect(water.x1 - water.x0).toBeLessThan(alone.maxX - alone.minX + 0.5);
   });
 });

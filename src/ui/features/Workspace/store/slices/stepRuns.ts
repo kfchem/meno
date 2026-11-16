@@ -17,7 +17,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, molblockOfSmiles, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { madeDrawn, molblockOfSmiles, smilesMadeDrawn, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -26,15 +26,16 @@ import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, molecul
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
-import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
+import { EXAMINE_MS, type Configuration } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
+import { boundGroups } from "../../../../../lib/boundOptions";
 import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
 import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
-import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, whenDrawnKnown, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { entryOfSet, compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, whenDrawnKnown, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -46,7 +47,7 @@ import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, stepOf, st
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresLine, folded, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -266,6 +267,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (a plugin stopped - one it uses not added, or not of a version it works with - runs nothing, saying why)
     const stopped = stoppedOf(plugin, addedNow());
     if (stopped) return void fail(id, `${plugin.name} is stopped. ${stopped}.`, at, key);
+    // (options taken from a property, entry by entry: by a step run as jobs, or in its plugin's worker, a call for each group of
+    // values - one that takes its options once for all of what comes in says so, never runs on the step's own values instead)
+    const bindsHere = !(takesNothing(step.kind) || step.kind === "render" || (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") || (kindInfo(step.kind).gives === "structures" && inputOf(d, id)?.holds === "structures"));
+    if (step.bound && Object.keys(step.bound).length && !bindsHere) return void fail(id, `${kindInfo(step.kind).name} here takes its options as given on its card, not from a property: give each its own value`, at, key);
     if (takesNothing(step.kind)) return runGenerate(id, plugin, at);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
     if (step.kind === "render") return renderEach(id, plugin, at);
@@ -987,7 +992,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
         try {
-          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: withoutStereoOpen(await drawingOf(block, style)) }))));
+          // (each laid out from the configuration it was made with, where the plugin sends it)
+          made.push((await madeDrawn(a, style)).map((drawn) => ({ place: 0, drawn: withoutStereoOpen(drawn) })));
         } catch {
           made.push([]);
           answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
@@ -1111,7 +1117,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let block: string;
+        let block: { molblock: string; configuration?: Configuration };
         try {
           block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
@@ -1122,7 +1128,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
         let unset: number | null = null;
         try {
-          const { left } = await openStereo(stereo, [block]);
+          const { left } = await openStereo(stereo, [block.molblock]);
           unset = left.atoms.length + left.bonds.length;
         } catch {
           unexamined++;
@@ -1139,7 +1145,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(seed?.from?.length ? { from: seed.from } : {}),
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
-        kept.push({ place: kept.length, drawn: withoutStereoOpen(await drawingOf(block, style)), record });
+        // (laid out from what the plugin read of the SMILES, and the text's own axes, as a SMILES typed is)
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, block, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -1180,23 +1187,33 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const refused = skeletonsRefused(step.kind, entries);
     if (refused) return void fail(id, refused, at, key);
     const options: OptionValues = stepValues(step, plugin.id);
-    let kept;
+    // (options its entries take from a property: a call for each group of values, each judging its own - one that cannot take
+    //  them out of Failed, saying why: lib/boundOptions)
+    const grouped = boundGroups(optionsFor(step.kind, plugin.id), options, step.bound, (i) => entryOfSet(entries[i], String(i)).properties, entries.map((_, i) => i));
+    // (every one refused: why the first was, and how many more - as a step run as jobs says it)
+    const refusedAll = grouped.refused;
+    if (!grouped.groups.length) return void fail(id, refusedAll.length > 1 ? `${refusedAll[0].why}; and ${refusedAll.length - 1} more cannot be worked out` : (refusedAll[0]?.why ?? "Nothing came in"), at, key);
+    const keep = new Set<number>();
     try {
       const client = await pluginClient(plugin);
-      const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
-      kept = readKept(await client.run(step.kind, given, options, input.holds), entries.length);
+      for (const g of grouped.groups) {
+        const given = g.entries.map((i) => entries[i]).map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
+        const kept = readKept(await client.run(step.kind, given, g.values, input.holds), g.entries.length);
+        if (typeof kept === "string") return void fail(id, kept, at, key);
+        for (const k of kept) keep.add(g.entries[k]);
+      }
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
-    if (typeof kept === "string") return void fail(id, kept, at, key);
-    const keep = new Set(kept);
+    const cannot = new Map(grouped.refused.map((r) => [r.entry, r.why]));
     const took = Date.now() - at;
+    const calls = grouped.groups.length > 1 ? ` \u00b7 ${grouped.groups.length} calls, one for each value taken from a property` : "";
     bringIn(
       id,
       entries.filter((_, i) => keep.has(i)),
       gives,
-      { at, ok: true, said: `${keep.size} of ${entries.length} kept`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
-      entries.filter((_, i) => !keep.has(i)),
+      { at, ok: true, said: `${keep.size} of ${entries.length} kept${calls}`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
+      entries.flatMap((e, i) => (keep.has(i) ? [] : cannot.has(i) ? [{ ...e, failed: { kind: "refused" as const, why: cannot.get(i)! } }] : [e])),
     );
   }
 
@@ -1226,6 +1243,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         return why && !(taking?.refused ?? []).some((u) => u.entry === entry) ? [{ entry, why }] : [];
       }),
     ];
+    // (options its entries take from a property: one that cannot take them refused before anything is sent, saying why - its
+    //  property missing, of another unit: lib/boundOptions)
+    const bindOptions = optionsFor(step.kind, plugin.id);
+    const propertiesOf = (i: number) => entryOfSet(entries[i], String(i)).properties;
+    unpaired.push(...boundGroups(bindOptions, options, step.bound, propertiesOf, entries.flatMap((_, i) => (unpaired.some((u) => u.entry === i) ? [] : [i]))).refused);
     // (skeletons, their hydrogens not there, refused before anything is sent - each to the Failed exit, the rest run:
     //  lib/chem/skeleton. All of them skeletons, the step itself refused)
     const skeletons = skeletonEntries(step.kind, entries).filter((i) => !unpaired.some((u) => u.entry === i));
@@ -1264,7 +1286,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     };
     const sending = sendIdx.map((i) => entries[i]);
     const given = await Promise.all(sending.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
-    let prepared;
+    let prepared: (Prepared & { options?: OptionValues })[] | string;
     // (what its worker says it runs: the program's version where none installed separately says its own)
     let said = "";
     let refused: Refusal[] = [];
@@ -1273,19 +1295,37 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const client = await pluginClient(plugin);
       // (a conformer search that takes how many to try: told, for each molecule, the step's own number or as many as it needs - lib/chem/conformersSought)
       const tries = step.kind === "conformers" && plugin.roleTries.includes("conformers");
-      const triesOf = (e: SetEntry) => soughtNumber(options, () => conformersSought(e.atoms, e.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order }))));
+      const triesOf = (e: SetEntry, values: OptionValues) => soughtNumber(values, () => conformersSought(e.atoms, e.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order }))));
       // (and a molecule with metals its holds: lib/chem/metalHolds)
       const holdsOf = (e: SetEntry) => {
         const holds = entryHolds(e);
         return holds ? { holds } : {};
       };
-      const sent = sending.map((e, i) => ({ ...pluginEntry(e, rowsWired(wired, sendIdx[i])), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e), ...holdsOf(e) } : {}) }));
-      const raw = await client.prepare(step.kind, sent, holdAsked(options, plugin, step.kind, wired), cores, Object.fromEntries(paths));
-      prepared = readPrepared(raw, sending.length);
-      refused = readRefused(raw, sending.length);
+      // (a prepare for each group of values its entries take from a property - one, where none is taken: lib/boundOptions - each
+      //  job keeping its group's options where there are several, for its results to be read with)
+      const groups = boundGroups(bindOptions, options, step.bound, propertiesOf, sendIdx).groups;
+      const place = new Map(sendIdx.map((e, k) => [e, k]));
+      const made: (Prepared & { options?: OptionValues })[] = [];
+      let first: unknown = null;
+      let failedWhy: string | null = null;
+      for (const g of groups) {
+        const ks = g.entries.map((e) => place.get(e)!);
+        const sent = ks.map((k) => ({ ...pluginEntry(sending[k], rowsWired(wired, sendIdx[k])), ...(given[k].length ? { files: given[k] } : {}), ...(tries ? { count: triesOf(sending[k], g.values), ...holdsOf(sending[k]) } : {}) }));
+        const raw = await client.prepare(step.kind, sent, holdAsked(g.values, plugin, step.kind, wired), cores, Object.fromEntries(paths));
+        first ??= raw;
+        const p = readPrepared(raw, sent.length);
+        if (typeof p === "string") {
+          failedWhy = p;
+          break;
+        }
+        made.push(...p.map((j) => ({ ...j, entries: j.entries.map((x) => ks[x]), ...(groups.length > 1 ? { options: g.values } : {}) })));
+        refused.push(...readRefused(raw, sent.length).map((r) => ({ ...r, entry: ks[r.entry] })));
+      }
+      prepared = failedWhy ?? made;
       // (asked for as many as each molecule needs, where the search takes draws: of molecules in 3D, run as jobs, one round - said)
       const once = oneRoundAsJobs(tries, plugin.roleDraws.includes("conformers"), options);
-      note = [readNote(raw), once, ...(wired?.said ?? [])].filter(Boolean).join(" \u00b7 ") || undefined;
+      const calls = groups.length > 1 ? `${groups.length} calls, one for each value taken from a property` : "";
+      note = [readNote(first), once, calls, ...(wired?.said ?? [])].filter(Boolean).join(" \u00b7 ") || undefined;
       said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -1361,6 +1401,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           reads: p.reads,
           key: jobKeyed,
           ...(again ? { reused: true as const, gave: again.gave } : {}),
+          ...(p.options ? { options: p.options } : {}),
         });
       }
     } catch (e) {
@@ -1778,7 +1819,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         let said;
         try {
           // (a folder with no record, adopted: read as one that ran to its end - the chemist took what it holds)
-          said = readCollected(await client.collect(kind, mine.map((e) => pluginEntry(e, rowsOf(e))), holdAsked(run.options, plugin, kind, wiredNow && !("why" in wiredNow) ? wiredNow : null), files, log, unrecorded[k] ? "done" : record.state), mine.length);
+          said = readCollected(await client.collect(kind, mine.map((e) => pluginEntry(e, rowsOf(e))), holdAsked(j.options ?? run.options, plugin, kind, wiredNow && !("why" in wiredNow) ? wiredNow : null), files, log, unrecorded[k] ? "done" : record.state), mine.length);
         } catch (e) {
           // (its plugin refused what it was given, or what came back)
           fails(mine, "refused", message(e));

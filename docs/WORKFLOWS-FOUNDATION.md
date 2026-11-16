@@ -199,7 +199,9 @@ its own only where nothing is lost or guessed:
     its id, its identity and its properties as columns;
   - numbers between units of one dimension that Meno's units table knows
     (Eh, kcal/mol, kJ/mol, eV, cm⁻¹; K and °C; nm and eV on a spectrum's
-    axis), converted where they are read;
+    axis; a restraint's strength, kcal/mol/rad² and kJ/mol/rad² for a
+    torsion's, kcal/mol/Å² and kJ/mol/Å² for a distance's), converted
+    where they are read;
 - **never implicit**: molecules to 3D (decision 18); frames to one geometry
   (*Take frames* says which); a table to molecules; a table to a number;
   across dimensions; a model to anything.
@@ -939,7 +941,12 @@ drawn, aromatic rings as one form.* What that means, plainly:
   arrangement, one given taken off, with no search of the whole
   structure, as such a centre carries no sense. A chelate's two
   ends, joined by a ring of seven atoms or fewer with the metal, are
-  never taken as across. A complex whose arrangement can be more than
+  never taken as across; and two donors a third holds flat - the third in
+  a ring of five or six off the metal, it and its two ring neighbours
+  trigonal, each led to its donor by trigonal atoms in a chelate ring of
+  five or six - always are: a porphyrin's opposite N, terpyridine's outer
+  two, dipicolinate's two O, so such a complex has one arrangement. A path
+  of CH2 holds nothing flat: cyclam, dien and salen stay open. A complex whose arrangement can be more than
   one and is not given (cisplatin from a SMILES) is a third structure,
   matching neither isomer until it is given. Two metals held by bridges,
   whose cis and trans dimers differ only together ([Pt2Cl4(NH3)2]), are
