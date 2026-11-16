@@ -85,7 +85,7 @@ Check "a part gone while its chain is read stops it" (Stops { Assert-NotNetworkY
 Check "Not now, read, goes on" (Stops { Assert-NotNetworkYes -Look (Read-Part { [pscustomobject]@{ Chain = @("Button`tNot now", "Group`t") } }) -What "a click" }) $false
 
 Write-Host "Windows' presses, told by Meno's buttons (UI Automation stood in for)"
-# (as WINPC read them: the question's two buttons among the rest, in screen pixels)
+# (as read on the Windows test machine: the question's two buttons among the rest, in screen pixels)
 $allowB = [pscustomobject]@{ Name = "Allow and download"; X = 1300; Y = 900; Width = 220; Height = 60 }
 $notNowB = [pscustomobject]@{ Name = "Not now"; X = 1180; Y = 900; Width = 100; Height = 60 }
 $settingsB = [pscustomobject]@{ Name = "Settings"; X = 2320; Y = 10; Width = 60; Height = 60 }

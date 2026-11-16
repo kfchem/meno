@@ -15,6 +15,7 @@ export { default as ExtendPreview2D } from "./ExtendPreview2D";
 export { default as ClickBondPreview2D } from "./ClickBondPreview2D";
 export { default as BondsPick2D } from "./BondsPick2D";
 export { default as AtomsHoverRings2D } from "./AtomsHoverRings2D";
+export { default as StrokeStart2D } from "./StrokeStart2D";
 export { default as MovePreview2D } from "./MovePreview2D";
 export { default as ReactionArrow2D } from "./ReactionArrow2D";
 export { default as Arrows2D } from "./Arrows2D";

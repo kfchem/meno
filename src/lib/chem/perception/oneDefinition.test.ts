@@ -35,6 +35,8 @@ export const CONCEPTS: Record<string, RegExp> = {
   "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI|RING_LONE_PAIR)\b/,
   // a structure's symmetry and canonical order: the one refinement and search (perception/symmetry.ts, part 6)
   symmetry: /^(?:export )?(?:function|const) (symmetryClasses|symmetryOrbits|canonicalRanks|canonicalText|canonicalWritten|canonicalSearched|settleBudget|withStereo|isomorphisms|coreMatches|matchedAtoms)\b/,
+  // which atoms of three keep a configuration by their lone pair, and which have one (perception/stereo/lonePairs.ts)
+  "lone pair": /^(?:export )?(?:function|const) (lonePairCentres|lonePairOfThree|lonePairs|pyramidal|protonatedAmineHeld)\b/,
   // an atom's hydrogens that are no atoms of their own, counted over its bonds (perception/hydrogens.ts `hydrogenCounts`)
   "hydrogen count": /^(?:export )?(?:function|const) (implicitOf|hydrogensOf|undrawnHydrogens|hydrogenCounts)\b/,
   // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
@@ -60,11 +62,12 @@ export const STILL_APART: Copy[] = [
   // metals: every list in one file under its name (perception/elements.ts); what stands apart is a name for a set of it, or a test of its own
   { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
   // valence tables: one count, one table (hydrogens and valence)
-  { concept: "valence", file: "lib/chem/lonePairCentres.ts", name: "PYRAMID_VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "VALENCE_ELECTRONS", part: 12 },
   { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "D_ORBITAL_VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
+  // the lone pair: the CIP's own count stands apart by design
+  { concept: "lone pair", file: "lib/chem/cip/prepare.ts", name: "lonePairs", part: "14 B", why: "the conventions' count, for describing a configuration given (a carbanion's lone pair counted with its charge, its fourth place a phantom): not which atoms keep one - the core's rule would refuse a carbanion's label (cip.test.ts)" },
   // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "hydrogensOf", part: 12, why: "implicitOf's count and the hydrogen atoms bonded: goes with implicitOf" },
@@ -166,13 +169,14 @@ describe("one definition per concept: the ratchet", () => {
 });
 
 describe("the ratchet's own reading, so that it bites", () => {
-  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a hydrogen count, a symmetry search", () => {
+  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a hydrogen count, a lone pair's rule, a symmetry search", () => {
     expect(declarationsIn("export function ringThrough(g, a) {}\nconst x = 1;\n", CONCEPTS.rings)).toEqual([{ name: "ringThrough", line: 1 }]);
     expect(declarationsIn("const METALS = new Set([]);\n", CONCEPTS.metals)).toEqual([{ name: "METALS", line: 1 }]);
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
     expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
     expect(declarationsIn("export function symmetryOrbits(g) {}\nconst settleBudgets = 1;\n", CONCEPTS.symmetry)).toEqual([{ name: "symmetryOrbits", line: 1 }]);
+    expect(declarationsIn("function lonePairs(p, a) {}\nexport function lonePairsIn3d() {}\n", CONCEPTS["lone pair"])).toEqual([{ name: "lonePairs", line: 1 }]);
     expect(declarationsIn("function implicitOf(atoms, bonds) {}\nconst hydrogensOfThem = 1;\n", CONCEPTS["hydrogen count"])).toEqual([{ name: "implicitOf", line: 1 }]);
     expect(declarationsIn("function aromaticRing(ring) {}\nconst isFlatter = 1;\n", CONCEPTS["aromatic tests"])).toEqual([{ name: "aromaticRing", line: 1 }]);
   });
