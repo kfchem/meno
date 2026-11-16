@@ -378,6 +378,19 @@ describe("a file with no coordinates, damaged (reader fuzzing, 2026-10-13)", () 
     expect(performance.now() - t).toBeLessThan(200);
   });
 
+  it("draws a double bond a file with no places leaves open as open: but-2-ene straight on, 3-methylpent-2-ene with its code 3 (Brecher 2006, ST-4.4)", async () => {
+    const { laidOutWhereUnplaced } = await import("./unplaced");
+    const { readStereo } = await import("../layout/drawn");
+    const at = (el: string) => ({ el, x: 0, y: 0, z: 0 });
+    const butene = { atoms: ["C", "C", "C", "C"].map(at), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 2 }, { a1: 2, a2: 3, order: 1 }] } as never;
+    const [b] = laidOutWhereUnplaced([butene]) as { atoms: { el: string; x: number; y: number }[]; bonds: { a1: number; a2: number; order: number; stereoCode?: number }[] }[];
+    const read = readStereo(b.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, hs: 0 })) as never, b.bonds.map((x) => ({ a: x.a1, b: x.a2, order: x.order })));
+    expect(read.cisTrans.size).toBe(0);
+    const pentene = { atoms: ["C", "C", "C", "C", "C", "C"].map(at), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 2 }, { a1: 2, a2: 3, order: 1 }, { a1: 2, a2: 4, order: 1 }, { a1: 4, a2: 5, order: 1 }] } as never;
+    const [p] = laidOutWhereUnplaced([pentene]) as { bonds: { order: number; stereoCode?: number }[] }[];
+    expect(p.bonds.find((x) => x.order === 2)?.stereoCode).toBe(3);
+  });
+
   it("costs a file whose records all have coordinates nothing: the records come back as they were read", async () => {
     const { laidOutWhereUnplaced } = await import("./unplaced");
     const mols = [

@@ -12,12 +12,14 @@
  * conformer reflected through a plane - every x turned - and its R and S
  * turned.
  */
-import { identityText, type IdentityInput } from "../../../../lib/chem/identity";
+import type { IdentityInput } from "../../../../lib/chem/identity";
+import { identitiesAsked } from "./identityOff";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { identityInputOf } from "./identityOf";
+import { EXACT, sideOfLine, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
 
 /** A drawing seen in a mirror: each wedge turned over (up for down), each depth turned (a cage drawn in perspective). */
 export function mirroredPart(part: Model): Model {
@@ -43,14 +45,14 @@ export function mirroredConfiguration(c: Configuration): Configuration {
  * not read, a label written out, a ring bound to a metal through a star -
  * so that nothing is taken for a mirror image that is not one.
  */
-export function madeAs(part: Model, isomer: Configuration): "itself" | "mirror" {
+export async function madeAs(part: Model, isomer: Configuration): Promise<"itself" | "mirror"> {
   if (part.atoms.some((a) => !isElementSymbol(a.el) || a.abbrev) || part.bonds.some((b) => b.endpoints?.length)) return "itself";
   const { input, unread } = identityInputOf(part);
   if (unread.length) return "itself";
   const own = withConfiguration(input, isomer);
   if (!own) return "itself";
-  const text = identityText(own);
-  const mirror = identityText(turned(own));
+  // (the two identities worked out off the drawing thread - chem/identityOff)
+  const [text, mirror] = (await identitiesAsked([own, turned(own)])).map((f) => f.text);
   return mirror < text ? "mirror" : "itself";
 }
 
@@ -116,20 +118,15 @@ export function hasConfiguration(c: Pick<Conformers, "frames">, part: Model, iso
   const own = withConfiguration(input, isomer);
   if (!own) return false;
   const at = (f: number[], i: number) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
-  const minus = (p: number[], q: number[]) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-  const cross = (p: number[], q: number[]) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
-  const dot = (p: number[], q: number[]) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
   return c.frames.every((f) =>
     own.atoms.every((a, i) => {
       if (!a.tetra) return true;
-      const [u, v, w] = a.tetra.neighbours.slice(0, 3).map((n) => minus(at(f, n), at(f, i)));
-      return Math.sign(dot(u, cross(v, w))) === a.tetra.volume;
+      const [u, v, w] = a.tetra.neighbours.slice(0, 3).map((n) => at(f, n));
+      return volumeSign(u, v, w, at(f, i), EXACT) === a.tetra.volume;
     }) &&
     own.bonds.every((b) => {
       if (!b.stereo) return true;
-      const axis = minus(at(f, b.b), at(f, b.a));
-      const side = dot(cross(axis, minus(at(f, b.stereo.refs[0]), at(f, b.a))), cross(axis, minus(at(f, b.stereo.refs[1]), at(f, b.b))));
-      return side > 0 === b.stereo.cis;
+      return sideOfLine(at(f, b.a), at(f, b.b), at(f, b.stereo.refs[0]), at(f, b.stereo.refs[1])) > 0 === b.stereo.cis;
     }),
   );
 }

@@ -9,6 +9,7 @@ import type { NumberValue, Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
+import type { Bound } from "../../../../lib/boundOptions";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, type Frame } from "./entries";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
 import { canWire, resultOf, wiresInto } from "./flow";
@@ -259,9 +260,14 @@ export function moveStep(doc: WorkspaceDocument, id: number, x: number, y: numbe
 }
 
 /** A step's options changed - or its kind, to another who does it fills, with the options it takes for that one. */
-export function updateStep(doc: WorkspaceDocument, id: number, patch: { options?: OptionValues; kind?: StepKind }): WorkspaceDocument {
+export function updateStep(doc: WorkspaceDocument, id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }): WorkspaceDocument {
   return withStep(doc, id, (s) => {
     const next: WorkflowStep = { ...s, ...(patch.kind ? { kind: patch.kind } : {}), ...(patch.options ? { options: patch.options } : {}) };
+    // (the options taken from a property: as given - none left, none kept)
+    if (patch.bound) {
+      if (Object.keys(patch.bound).length) next.bound = patch.bound;
+      else delete next.bound;
+    }
     return JSON.stringify(next) === JSON.stringify(s) ? s : next;
   });
 }

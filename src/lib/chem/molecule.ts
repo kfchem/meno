@@ -1,5 +1,6 @@
 import type { CtMolecule } from "./ctfile";
-import { elementOf, NOT_METALS } from "./elements";
+import { elementOf } from "./elements";
+import { notMetal } from "./perception/elements";
 
 /**
  * What an atom is, chemically - the one place it is said, for every kind of
@@ -100,6 +101,12 @@ export type AtomChem = {
   stereoGroup?: StereoGroup;
   /** The Sgroups it is in. */
   sgroups?: SgroupMark[];
+  /**
+   * A carbon written out, with its hydrogens - CH2, H2C on a bond's left -
+   * where the chemist typed it so: drawn labelled, not as a bare vertex. The
+   * hydrogens are its bonds' to give, as for any atom.
+   */
+  shown?: true;
 };
 
 /**
@@ -208,7 +215,7 @@ export function valenceOrder(b: BondChem & { order: number; dative?: boolean }, 
  * two H nobody wrote.)
  */
 export function setValenceOrder(b: BondChem & { order: number; dative?: boolean }, el?: string): number {
-  if ((b.dative || b.coordination) && el && elementOf(el) && !NOT_METALS.has(el)) return b.order || 1;
+  if ((b.dative || b.coordination) && el && elementOf(el) && !notMetal.has(el)) return b.order || 1;
   return valenceOrder(b, el);
 }
 
@@ -358,5 +365,6 @@ export function chemistry(a: AtomChem): Omit<AtomChem, "el"> {
     ...(a.exactChange ? { exactChange: true } : {}),
     ...(a.stereoGroup ? { stereoGroup: a.stereoGroup } : {}),
     ...(a.sgroups?.length ? { sgroups: a.sgroups } : {}),
+    ...(a.shown ? { shown: true } : {}),
   };
 }

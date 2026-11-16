@@ -185,6 +185,8 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(degeneracies ? { degeneracies } : {}),
     ...(m.conformerSet ? { conformerSet: true } : {}),
     ...((m.conformerSet && part) || m.partOf ? { partOf: true as const } : {}),
+    // (its parts searched alone: no shares of it, wherever its frames go - chem/partsAlone)
+    ...(m.partsAlone ? { partsAlone: true as const } : {}),
     ...(m.conformerSet && !part && each(m.shares) ? { shares: each(m.shares) } : {}),
     ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n, calcFrame(m, n)) } : {}),
     ...(m.made ? { made: m.made } : {}),

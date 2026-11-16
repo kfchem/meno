@@ -1,3 +1,4 @@
+import { readMolfile } from "../../../../lib/chem/ctfile";
 import { describe, expect, it, vi } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -6,7 +7,7 @@ import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
-import { solidOf } from "../utils/molecule3d";
+import { PARTS_ALONE_WHY, sharesOf, sharesWithheld, solidOf } from "../utils/molecule3d";
 import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
@@ -577,7 +578,7 @@ describe("conformers made for the page", () => {
     expect(pageRounds(block, {}, true)).toEqual({ window: WITHIN_3D, first: 50, most: MOST_CONFORMERS });
     // (ethanol's first round its own fifty - lib/chem/conformersSought - or the chemist's)
     expect(pageRounds(block, { within3d: 2.5 }, true)).toEqual({ window: 2.5, first: 50, most: MOST_CONFORMERS });
-    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000 });
+    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000, firstChosen: true });
   });
 
   it("makes a 3D structure from fresh Settings, in rounds, no window asked - Meno's window for new conformers its own", async () => {
@@ -649,6 +650,120 @@ describe("conformers made for the page", () => {
     // (run once)
     await growth.rest(() => grown.push(answer));
     expect(grown[grown.length - 1]).toBe(last);
+  });
+
+  it("growing, of several parts: a water drawn as its one O is searched as a water, its hydrogens kept (found in the chemistry check)", async () => {
+    // (acetic acid with a water beside it, drawn as one structure: the O alone is H2O, no bare atom)
+    const wet = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", joined: 1 },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C", joined: 1 },
+        { id: 3, x: 1.3, y: 2.25, r: 0.9, el: "O", joined: 1 },
+        { id: 4, x: 2.6, y: 0, r: 0.9, el: "O", joined: 1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "O", joined: 1 },
+      ],
+      bonds: [
+        { id: 1, a: 1, b: 2, order: 1 },
+        { id: 2, a: 2, b: 3, order: 2 },
+        { id: 3, a: 2, b: 4, order: 1 },
+      ],
+    } as Model;
+    const acid: Conformers = {
+      atoms: ["C", "C", "O", "O", "H", "H", "H", "H"].map((el) => ({ el, charge: 0 })),
+      bonds: [[0, 1, 1], [1, 2, 2], [1, 3, 1], [0, 4, 1], [0, 5, 1], [0, 6, 1], [3, 7, 1]].map(([a1, a2, order]) => ({ a1, a2, order: order as 1 | 2 })),
+      frames: [[0, 0, 0, 1.5, 0, 0, 2.1, 1.1, 0, 2.1, -1.1, 0, -0.4, 1, 0, -0.4, -0.5, -0.9, -0.4, -0.5, 0.9, 3, -1.2, 0]],
+      energies: [-0.05],
+      field: "MMFF94",
+      cip: { atoms: {}, bonds: {} },
+      chosen: { atoms: {}, bonds: {} },
+      smiles: "CC(=O)O",
+    };
+    const water: Conformers = { ...acid, atoms: ["O", "H", "H"].map((el) => ({ el, charge: 0 })), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }], frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0]], energies: [-0.01], smiles: "O" };
+    const asked: number[] = [];
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        const n = readMolfile(String(args.molblock))!.atoms.length;
+        asked.push(n);
+        return { isomers: [n === 1 ? water : acid] };
+      },
+    } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(wet, [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 5, first: 10, most: MOST_CONFORMERS }, () => false);
+    const [first] = growth.first;
+    expect(asked).toContain(1);
+    expect(first.atoms.filter((a) => a.el === "H")).toHaveLength(6);
+    expect(first.how?.find((r) => r.label === "Part 2")).toBeUndefined();
+    await growth.rest(() => {});
+  });
+
+  it("growing, of several parts: each part searched alone - a one-atom part not at all - the whole put together of them, no shares of it", async () => {
+    // (sodium acetate as one structure: its acetate searched, two conformers, then none new; Na+ never asked about)
+    const salt = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", joined: 1 },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C", joined: 1 },
+        { id: 3, x: 1.3, y: 2.25, r: 0.9, el: "O", joined: 1 },
+        { id: 4, x: 2.6, y: 0, r: 0.9, el: "O", charge: -1, joined: 1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "Na", charge: 1, joined: 1 },
+      ],
+      bonds: [
+        { id: 1, a: 1, b: 2, order: 1 },
+        { id: 2, a: 2, b: 3, order: 2 },
+        { id: 3, a: 2, b: 4, order: 1 },
+      ],
+    } as Model;
+    const frame = (twist: number) => [0, 0, 0, 1.5, 0, 0, 2.1, 1.1, 0, 2.1, -1.1, 0, -0.4, 1, twist, -0.4, -0.5, -0.9, -0.4, -0.5, 0.9];
+    const acetateIs = (draw: number): Conformers => ({
+      atoms: ["C", "C", "O", "O", "H", "H", "H"].map((el, i) => ({ el, charge: i === 3 ? -1 : 0 })),
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 2 },
+        { a1: 1, a2: 3, order: 1 },
+        { a1: 0, a2: 4, order: 1 },
+        { a1: 0, a2: 5, order: 1 },
+        { a1: 0, a2: 6, order: 1 },
+      ],
+      frames: draw === 0 ? [frame(0)] : [frame(0), frame(0.6)],
+      energies: draw === 0 ? [-0.05] : [-0.05, -0.0495],
+      field: "MMFF94",
+      cip: { atoms: {}, bonds: {} },
+      chosen: { atoms: {}, bonds: {} },
+      smiles: "CC(=O)[O-]",
+    });
+    const asked: string[] = [];
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        asked.push(String(args.molblock));
+        return { isomers: [acetateIs(Number(args.draw))] };
+      },
+    } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(salt, [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 5, first: 10, most: MOST_CONFORMERS }, () => false);
+    const [first] = growth.first as (Conformers & { partsAlone?: true })[];
+    expect(first.partsAlone).toBe(true);
+    expect(first.atoms.map((a) => a.el)).toEqual(["C", "C", "O", "O", "Na", "H", "H", "H"]);
+    expect(first.frames).toHaveLength(1);
+    expect(first.how?.filter((r) => ["Searched", "Part 1: Rounds", "Part 2", "Parts"].includes(r.label))).toEqual([
+      { label: "Searched", text: "each of its 2 parts alone" },
+      { label: "Part 1: Rounds", text: "1 round, 10 tried so far: searching on" },
+      { label: "Part 2", text: "Na+: one atom, no search" },
+      { label: "Parts", text: "2, side by side: where they lie against each other is not modelled" },
+    ]);
+    // (never Na+ asked about: one atom; every asking the acetate alone - no Na in it)
+    expect(asked.every((m) => !/\bNa\b/.test(m))).toBe(true);
+    const grown: Conformers[] = [];
+    await growth.rest((_, c) => grown.push(c));
+    const last = grown[grown.length - 1];
+    expect(last.frames).toHaveLength(2);
+    expect(last.how?.find((r) => r.label === "Part 1: Rounds")?.text).toMatch(/: the last brought no new conformer within 5 kcal\/mol of the lowest$/);
+    expect(last.how?.some((r) => r.label === "Energies")).toBe(true);
+    // (on the page: no shares of the whole)
+    const m = moleculeOf(last, block);
+    expect(m.partsAlone).toBe(true);
+    expect(sharesOf({ ...m, conformerSet: true })).toBeUndefined();
+    expect(sharesWithheld(m)).toBe(PARTS_ALONE_WHY);
   });
 
   it("growing: stopped, ends where it is, what came kept and said", async () => {
@@ -770,5 +885,75 @@ describe("conformers made for the page", () => {
     expect(pageCount(block, {})).toBe(50);
     expect(pageCount(block, { sought3d: "fixed", count3d: 40 })).toBe(40);
     expect(pageCount(block, { sought3d: "fixed" })).toBe(RING_CONFORMERS);
+  });
+});
+
+describe("a hydrogen bond drawn, made in 3D", () => {
+  // ((Z)-4-hydroxypent-3-en-2-one, its O-H...O=C hydrogen bond drawn (a file's type 10), and a water whose H it binds - when `water`)
+  const L = NOMINAL_BOND_LENGTH;
+  const at = (id: number, deg: number, r: number, el = "C") => ({ id, x: r * L * Math.cos((deg * Math.PI) / 180), y: -r * L * Math.sin((deg * Math.PI) / 180), r: 0.9, el });
+  const drawn = (water: boolean): Model => ({
+    atoms: [at(1, 150, 2), at(2, 150, 1), at(3, -150, 1, "O"), at(4, 90, 1), at(5, 30, 1), at(6, -30, 1, "O"), at(7, 30, 2), at(8, -90, 1, "H"), ...(water ? [at(9, -90, 2, "O")] : [])],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 2 },
+      { id: 13, a: 2, b: 4, order: 1 },
+      { id: 14, a: 4, b: 5, order: 2 },
+      { id: 15, a: 5, b: 6, order: 1 },
+      { id: 16, a: 5, b: 7, order: 1 },
+      { id: 17, a: 6, b: 8, order: 1 },
+      { id: 18, a: 8, b: 3, order: 1, hydrogen: true },
+      ...(water ? [{ id: 19, a: 9, b: 3, order: 1 as const, hydrogen: true as const }] : []),
+    ],
+  });
+  /** A V3000 MOL block's bonds, as its lines say them: type, first atom, second. */
+  const bondsIn = (molblock: string) => {
+    const lines = molblock.split("\n");
+    const [from, to] = [lines.indexOf("M  V30 BEGIN BOND"), lines.indexOf("M  V30 END BOND")];
+    return lines.slice(from + 1, to).map((l) => l.split(/\s+/).slice(3, 6).map(Number));
+  };
+
+  it("hands the embedding no hydrogen bond: the enol's block holds its seven bonds, none of them the hydrogen bond (type 10)", () => {
+    const blocks = blocksOf(drawn(false), [1]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].bonds).toEqual([11, 12, 13, 14, 15, 16, 17]);
+    const bonds = bondsIn(blocks[0].molblock);
+    expect(bonds).toHaveLength(7);
+    expect(bonds.some(([type]) => type === 10)).toBe(false);
+  });
+
+  it("makes what a hydrogen bond alone joins two structures, side by side - the one asked of first - and counts two parts", () => {
+    const blocks = blocksOf(drawn(true), [1]);
+    expect(blocks.map((b) => b.atoms)).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [9]]);
+    expect(drawnBlocksOf(drawn(true), [9]).map((b) => b.atoms.length)).toEqual([1, 8]);
+    expect(drawnBlocksOf(drawn(true), drawn(true).atoms.map((a) => a.id))).toHaveLength(2);
+  });
+
+  it("keeps a molecule made so its drawing's: a hydrogen bond drawn or taken away since changes nothing made", () => {
+    const blocks = blocksOf(drawn(true), [1]);
+    expect(blocksStill(blocks, drawn(true))).toBe(true);
+    const without = { ...drawn(true), bonds: drawn(true).bonds.filter((b) => !b.hydrogen) };
+    expect(blocksStill(blocks, without)).toBe(true);
+    expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(drawn(true), blocks[0].atoms));
+    expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(without, blocks[0].atoms));
+  });
+
+  it("tells of a counter-ion a hydrogen bond alone holds, as of one drawn apart: Cl- left out, and still a part of what was drawn", () => {
+    // (methylammonium, one N-H drawn, and a chloride held to that H by a hydrogen bond - a salt drawn with its hydrogen bond)
+    const salt = (bond: boolean): Model => ({
+      atoms: [at(1, 180, 1), at(2, 0, 0, "N"), at(3, 0, 1, "H"), at(4, 0, 2, "Cl")].map((a) => (a.id === 2 ? { ...a, charge: 1 } : a.id === 4 ? { ...a, charge: -1 } : a)),
+      bonds: [
+        { id: 11, a: 1, b: 2, order: 1 },
+        { id: 12, a: 2, b: 3, order: 1 },
+        ...(bond ? [{ id: 13, a: 3, b: 4, order: 1 as const, hydrogen: true as const }] : []),
+      ],
+    });
+    for (const bond of [true, false]) {
+      expect(blocksOf(salt(bond), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3]]);
+      const bare = bareAtomsOf(salt(bond), bond ? [1] : [1, 4]);
+      expect(bare.map((a) => a.id)).toEqual([4]);
+      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure.");
+    }
+    expect(drawnBlocksOf(salt(true), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3], [4]]);
   });
 });

@@ -5,6 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
+import { behindRemapped } from "../chem/crossings";
 import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, removePictures, withoutAtoms, type WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Member, Model, Molecule3D, SeriesCore, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
@@ -37,7 +38,7 @@ import { rmsd } from "./rmsd";
 import { recordsWithRoles } from "./schemeRoles";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
-import type { NumberValue, Table } from "../../../../lib/table";
+import type { ConstitutionOf, NumberValue, Table } from "../../../../lib/table";
 import { addedSet, numberOf } from "./addStep";
 
 /**
@@ -96,7 +97,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const [p, q] = ["molecules", "reference"].map((port) => inputOf(doc, id, port));
     if (!p) return fail("Nothing comes into Molecules");
     const of = (x: NonNullable<typeof p>) => setEntries(x.molecules, x.holds as Holds3D);
-    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values), key, w);
+    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values, step.bound), key, w);
   }
   // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
   if (step.kind === "onto-structures") {
@@ -523,8 +524,8 @@ export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3
 }
 
 /** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
-export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): Table {
-  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet, constitutionOf?: ConstitutionOf): Table {
+  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`, constitutionOf);
 }
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
@@ -1099,8 +1100,11 @@ export function numberedApart(models: readonly Model[]): Model {
         ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: group(g.id), ...(g.parent != null ? { parent: group(g.parent) } : {}) })) } : {}),
       });
     }
+    const bondIds = new Map(m.bonds.map((b, k) => [b.id, next + k]));
+    next += m.bonds.length;
     for (const b of m.bonds) {
-      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
+      const { behind, ...rest } = b;
+      out.bonds.push({ ...rest, id: bondIds.get(b.id)!, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}), ...behindRemapped(behind, (id) => bondIds.get(id)) });
     }
   }
   return out;
@@ -1278,6 +1282,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
         ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
+        ...(e.partsAlone ? { partsAlone: true as const } : {}),
         ...(e.madeOf?.length ? { madeOf: [...e.madeOf] } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
@@ -1325,6 +1330,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
+      ...(g.some((e) => e.partsAlone) ? { partsAlone: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
       ...(madeOf ? { madeOf: [...madeOf] } : {}),
       ...keptKnown(first),

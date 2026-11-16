@@ -10,6 +10,7 @@ import { identityText } from "../chem/identity";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import type { Layout2D } from "./engine";
 import { perceive, type LayoutInput } from "./perceive";
+import { FLAT_VOLUME_DRAWN, volumeSign } from "../chem/perception/stereo/geometry";
 
 /**
  * The double bonds a drawing shows the other way round: one the molecule
@@ -20,7 +21,7 @@ import { perceive, type LayoutInput } from "./perceive";
  * The smallest rings (`perceive`, a minimum cycle basis) hold, for every
  * bond, a ring as small as the smallest through it - where rings tie, and
  * the one kept is another - so a ring of seven or fewer through a double
- * bond is never missed here (rings.test.ts holds it, ties included).
+ * bond is never missed here (perception/rings.ts says why; its tests hold it, ties included).
  */
 export function turnedDoubleBonds(input: LayoutInput, out: { x: readonly number[]; y: readonly number[] }): string[] {
   const side = (a: number, b: number, n: number) =>
@@ -71,9 +72,9 @@ export function misreadCentres(input: LayoutInput, out: Layout2D): string[] {
     const turned = [0, 1, 2, 3].some((left) => {
       const three = known.filter(([, k]) => k !== left);
       if (three.length !== 3) return false;
-      const [u, v, w] = three.map(([n]) => at(n).map((x, k) => x - at(c)[k]));
-      const volume = u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0]);
-      return Math.abs(volume) > 1e-6 && Math.sign(volume) !== a.tetra!.volume * (left % 2 === 1 ? 1 : -1);
+      const [u, v, w] = three.map(([n]) => at(n));
+      const volume = volumeSign(u, v, w, at(c), FLAT_VOLUME_DRAWN);
+      return volume !== 0 && volume !== a.tetra!.volume * (left % 2 === 1 ? 1 : -1);
     });
     return turned ? [`${a.el}${c} (${drawn}): its depth shows the other configuration`] : [];
   });

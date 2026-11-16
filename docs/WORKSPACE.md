@@ -582,6 +582,44 @@ Taken on 2026-10-13:
     until its search ends: at most one for each stereoisomer asked for.
   - An atom map's 3D structures are made as before: their search is asked
     to its end, the map waiting on it.
+- **A structure of several parts** (2026-11-13; the chemistry check's ruling, the
+  maintainer's idea) - a salt, a mixture, drawn as one structure: each
+  part's conformers are searched as the part alone, in rounds of its own
+  (`chem/partsAlone`) - its own first round, as the part drawn alone would
+  be asked (a first round set in Settings is kept as set: `partRounds`),
+  its own charge and electrons, its own lowest, Meno's
+  one definition of the same conformer - for nothing between parts is
+  modelled, and a search of the whole found each embedding's parts at a
+  place of their own, every one new, to its most. A part alike to one
+  before it - written alike, atom for atom, and configured alike atom
+  for atom, as its wedges and places say and as the page chose where its
+  drawing leaves anything open - is searched once. (R)- and
+  (S)-butan-2-ol, or (E)- and (Z)-but-2-ene, drawn side by side are each
+  searched; so is a meso compound drawn beside its mirror drawing - one
+  compound, its R and S on each other's atoms. A bare atom with no hydrogens (Na+, Ca2+, Cl-) is not searched
+  at all; a water or a methane drawn as its one O or C is.
+  - Its conformers are put together of its parts': the first every part at
+    its lowest; then, part by part, each other conformer of a part not
+    alike to one before, the rest at their lowest - never every
+    combination. They are set side by side as before (*Parts*: where they
+    lie against each other is not modelled).
+  - Each energy is its parts', summed, and said so (*Energies*: nothing
+    between parts is counted): above the first, a conformer's is its own
+    part's.
+  - No share of the whole is given - on its chip, nor by a *Populations*
+    or *Ensemble* step it goes into, which refuse it, saying why: one part
+    varied at a time, its frames are no compound's population
+    (`Molecule3D.partsAlone`, kept in its file and through the steps it
+    passes).
+  - Its rows say how each part was searched (*Part 1: Rounds*, *Part 2*:
+    "Na+: one atom, no search"; "Ca2+: ...").
+  - Each stereoisomer of the whole the page makes has its parts searched
+    for it: a part configured alike in two of them (the anion of a salt
+    of a chiral cation) is searched once for each.
+  - Searched whole, as before: a structure of several parts one of which
+    holds a ring bound to a metal through all its atoms; one made with a
+    number of conformers of the chemist's own, not in rounds; and a
+    workflow's *Conformers* step.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
@@ -714,7 +752,21 @@ Taken on 2026-10-13:
   the same labels where the canvas puts them, kept clear in the same way
   of the balls, the bonds, the measurements' values and each other
   (`utils/molecule3d`, `stereoSpot`, which the canvas and the picture
-  share), as large as the drawing's in print. In SVG, and the PNG drawn
+  share), as large as the drawing's in print. The canvas places them as
+  the picture does, by the one placing both share (`stereoSpotsAmong`):
+  at the drawing's own letter size, though it draws the letters no
+  smaller than its least size; in the order a picture takes them (a
+  molecule's atoms', then its double bonds'), not the order they came to
+  be shown in; with every ball as at rest, none swollen under the
+  pointer; and those going counted after those shown, clear of them and
+  of what is written over the molecule, but no obstacle to them or to
+  each other, so a label going stands where it would alone
+  (`stereoSpotsShown`). What counts as clear of the balls and bonds
+  is a share of the label's own size (a hundredth of its half height),
+  not a fixed length: a fixed 0.05 was nothing in the canvas's pixels and
+  much of a letter in the page's units, and a picture took another way
+  than the canvas. So a picture made now has each label where the canvas
+  has it, at any zoom. In SVG, and the PNG drawn
   from it, they stand on a white halo as on the canvas; in an EMF the
   letters are written without one. As in a picture of the drawing, a view
   zoomed so far out that the canvas leaves them out does not leave them
@@ -2507,5 +2559,6 @@ Meno's first steps (`lib/guide`, `ui/guide/GuideCard.tsx`): steps of plain text 
 - **The steps:** double-click on empty space for Quick Add; Chain and SMILES there; press and hold to select a structure; a right-click menu and its row of icons; Save, with Settings beside it; plugins, added in Settings, *Plugins*, each set up only when added, after Meno asks.
 - **Where a step points** (`at`) is a part Meno names, never how the window is built: `page`, `quick-add` (once open), `structure` (the one selected, else the last drawn), `menu` (a right-click menu, once open), `save`, `settings`. None, or a part not there now, and the card sits low in the middle of the page. A step that points at a part, while neither it nor any page is seen (Settings the tab in front), waits out of sight until a workspace is in front again.
 - **What a step waits for** (`until`), Meno names too: `quick-add` opened, a structure `selected`, a `menu` opened. A moment after the chemist does it, the guide goes on by itself; Next does as well.
+- **An empty page says one line** in quiet grey in the middle of what is seen: *Double-click to add something, or drop a file here.* - where the page in view holds nothing at all, eased out as the first thing is put on it and back where it is emptied again; not while the file a tab was opened with is still being read (its page only waits for it), a card says what could not be read, Quick Add or a menu is open, something is dragged over the window, or a talk is given (`components/EmptyPageLine`, `utils/emptyPage`). It is not on the page: never saved, exported, printed, selected or filmed, and still as the page is zoomed or moved. No other tip is shown.
 - **Only when asked:** from Settings, *General*, *First steps* (*Show*), with a workspace brought to the front - never of itself: not on Meno's first start (2026-10-24). They close when gone through or skipped - Skip, or Escape where nothing else takes it (the maintainer, 2026-10-13).
 - **Meno's question about keeping itself up to date** waits until they are closed (it comes after the user's first action: `lib/firstAction.ts`).

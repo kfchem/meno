@@ -5,7 +5,7 @@ import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
-import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
+import { BOND_ICONS, bondIconAsLying, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
@@ -212,6 +212,7 @@ export default function PartMenu({
   onMake3d,
   onSelectStructure,
   bondKind,
+  crossing,
   onTurnOver,
   onCharge,
   onRadical,
@@ -274,7 +275,19 @@ export default function PartMenu({
   onMake3d: () => void;
   onSelectStructure: () => void;
   /** The kind of the bond right-clicked - or of the bonds selected, where it is one of them - and a kind chosen for it (utils/bondKinds); `current` is null where the bond is none of them. */
-  bondKind?: { current: BondKindName | null; choose: (kind: BondKindName) => void };
+  bondKind?: {
+    current: BondKindName | null;
+    choose: (kind: BondKindName) => void;
+    /** How the right-clicked bond lies: its kind's icon drawn so (utils/bondKinds `bondLie`). */
+    lie?: { narrowLeft: boolean; side: "upper" | "lower" | "center" };
+    /** Whether the menu acts on that one bond alone: only then is each kind's key shown beside it - a key changes one bond. */
+    one?: boolean;
+  };
+  /**
+   * Where the bond right-clicked crosses another bond of its structure that no depth orders: which of the two is in front, said of the bond
+   * right-clicked at the crossing nearest the pointer (chem/crossings) - the one that holds now chosen, chosen again to take it away.
+   */
+  crossing?: { front: boolean; behind: boolean; onFront: () => void; onBehind: () => void };
   /** The selection turned over, left to right or top to bottom. */
   onTurnOver: (axis: "vertical" | "horizontal") => void;
   /** An atom's charge one up or one down. */
@@ -1031,7 +1044,15 @@ export default function PartMenu({
           ...(target.kind === "bond" && bondKind
             ? [
                 // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
-                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: BOND_KIND_KEYS[k] ?? "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                // (the bond's own kind drawn as the bond lies - a wedge narrow where it is, a double bond's second line on its side -
+                //  pressed again, one step on in its round; each kind's key beside it only where the menu acts on that one bond)
+                ...COMMON_BOND_KINDS.map((k): Item => ({
+                  name: BOND_KIND_NAMES[k],
+                  keys: bondKind.one === false ? "" : (BOND_KIND_KEYS[k] ?? ""),
+                  run: () => bondKind.choose(k),
+                  icon: bondKind.current === k && bondKind.lie ? bondIconAsLying(k, bondKind.lie) : BOND_ICONS[k],
+                  checked: bondKind.current === k,
+                })),
                 { name: "More kinds of bond", keys: "", run: () => setMore((m) => !m), icon: BOND_ICONS.more, checked: more, keep: true },
                 ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
               ]
@@ -1043,6 +1064,12 @@ export default function PartMenu({
             ...colour,
           ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined } : i)),
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
+          ...(target.kind === "bond" && crossing
+            ? [
+                { name: "In front", keys: "", run: crossing.onFront, checked: crossing.front, divider: true },
+                { name: "Behind", keys: "", run: crossing.onBehind, checked: crossing.behind },
+              ]
+            : []),
           ...(target.kind === "atom"
             ? [
                 ...(onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
@@ -1144,13 +1171,17 @@ export default function PartMenu({
       {/* the frequent, as icons - named as the pointer rests on one - and Delete at the right end */}
       {row.length > 0 && (
         <div role="group" aria-label="Frequent" className={`flex items-center gap-0.5 px-1 ${list.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
-          {row.map((item) => (
+          {row.map((item) => {
+            const tip = item.keys ? `${item.name} (${item.keys})` : item.name;
+            const button = (
             <button
               key={item.name}
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              title={item.keys ? `${item.name} (${item.keys})` : item.name}
+              data-tip={item.disabled ? undefined : tip}
+              // (its keys said to a screen reader too, as the system's tooltip said them)
+              aria-description={item.keys ? `${item.name} (${item.keys})` : undefined}
               disabled={item.disabled}
               // (one begun by its press is not begun again by its click - but by a key, it is)
               onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
@@ -1165,12 +1196,21 @@ export default function PartMenu({
                     }
                   : undefined
               }
-              className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`${item.del && !item.disabled ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:pointer-events-none disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
             >
               {item.icon}
             </button>
-          ))}
+            );
+            // (one not to be pressed is named from round it: a disabled button is not sent the pointer in every engine)
+            return item.disabled ? (
+              <span key={item.name} data-tip={tip} className={`${item.del ? "ml-auto " : ""}shrink-0 flex`}>
+                {button}
+              </span>
+            ) : (
+              button
+            );
+          })}
         </div>
       )}
       {font && (
@@ -1203,7 +1243,7 @@ export default function PartMenu({
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              title={item.name}
+              data-tip={item.name}
               onClick={run(item)}
               className={`meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
