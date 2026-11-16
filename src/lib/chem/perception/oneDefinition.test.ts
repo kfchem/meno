@@ -28,6 +28,8 @@ export const CONCEPTS: Record<string, RegExp> = {
   parity: /^(?:export )?(?:function|const) (parity|permutationParity)\b/,
   volume: /^(?:export )?(?:function|const) (drawnVolume|volumeSign|handedness|signedVolume)\b/,
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
+  // a run of cumulated double bonds, and the atom an axis's or a cumulene's end runs on through (perception/stereo/runs.ts, part 4)
+  runs: /^(?:export )?(?:function|const) (cumulatedRuns|runsThrough|runsOfDrawing|linearMiddle)\b/,
   "depth read": /^(?:export )?(?:function|const) (withRecognisedDepth|recogniseChair|recogniseHaworth)\b/,
   // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
   "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI|RING_LONE_PAIR)\b/,
@@ -85,6 +87,7 @@ export const STILL_APART: Copy[] = [
   // depth recognised from a ring drawn in perspective: the reading is the core's; what asks it, by the layout's rings, is still the layout's
   { concept: "depth read", file: "lib/layout/recognised.ts", name: "withRecognisedDepth", part: 11, why: "code in motion: it finds rings by the layout's perceive, which the core may not import; it moves into perception/projection, now that the core has its rings, as a small change of its own" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
+  { concept: "runs", file: "lib/chem/stereoOpen.ts", name: "cumulatedRuns", part: "by design", why: "groups the double bonds a structure leaves open by the runs they are in: written over the core's runs (part 4), not a second finder of them" },
   // tests of a ring as aromatic that are not Meno's rule nor its two forms (perception/aromatic.ts): each answers a question of its own
   { concept: "aromatic tests", file: "lib/chem/aromaticSides.ts", name: "aromaticRing", part: "stays", why: "display, by design: a ring drawn with its double bonds in turn, for the side its second lines are drawn on" },
   { concept: "aromatic tests", file: "lib/chem/contract.ts", name: "aromaticBonds", part: "stays", why: "by design, of a drawing: a six-ring drawn alternating, matched as a group's ring when Clean-up writes groups by their labels" },
