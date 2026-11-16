@@ -816,7 +816,7 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
  * The double bonds of each ring bound to its metal through every one of its atoms, drawn atom by atom (`LayoutJob.bound`: uranocene's
  * eight-rings drawn with a bond from U to each carbon, ferrocene's five-rings): a pair of ids each. Such a ring's double bonds have no cis
  * or trans - the ring is held flat and face-on by its metal, its double bonds one Kekule form of it - so a layout that draws the ring free
- * of its metal's bonds, as a haptic drawing is, states none of them (backlog 178, CHEM 11-16). A ring of which only some atoms are bound
+ * of its metal's bonds, as a haptic drawing is, states none of them (backlog 178). A ring of which only some atoms are bound
  * (an eta-4 cyclooctatetraene) and a ring with no metal keep the rule of any ring: an eight-ring's double bond may be trans.
  */
 function boundRingDoubles(part: Model, job: Pick<LayoutJob, "bound">): string[] {
