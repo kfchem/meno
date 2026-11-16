@@ -18,6 +18,7 @@ import type { IdentityInput } from "../identity";
 import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Budget, type CipNode } from "./digraph";
 import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
+import { runsThrough } from "../perception/stereo/runs";
 
 /**
  * Why a unit has no descriptor:
@@ -181,6 +182,9 @@ function doubleBond(p: Prepared, i: number): Said {
   return cisOrTrans(p, [b.a, b.b], [b.b, b.a], b.stereo!);
 }
 
+/** An atom's neighbours with the order of the bond to each (one where none is said), as perception/stereo/runs `runsThrough` takes them. */
+const near = (p: Prepared, end: number) => p.around[end].map((n) => ({ to: n, order: p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1 }));
+
 /**
  * An odd cumulene's E or Z (a butatriene's: CIP 1966 p. 396, its ends'
  * groups in one plane as a double bond's are; the Blue Book via Hanson et
@@ -191,8 +195,7 @@ function doubleBond(p: Prepared, i: number): Said {
 function cumulene(p: Prepared, k: number): Said {
   const c = p.input.cumulated![k];
   const [i, j] = c.atoms;
-  const through = (end: number) => p.around[end].find((n) => (p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1) >= 2);
-  const [ti, tj] = [through(i), through(j)];
+  const [ti, tj] = [runsThrough(near(p, i)), runsThrough(near(p, j))];
   if (ti == null || tj == null) return no("unsure");
   return cisOrTrans(p, [i, j], [ti, tj], c);
 }
@@ -257,8 +260,7 @@ function axis(p: Prepared, k: number): Said {
   const [i, j] = x.atoms;
   if (p.unsure[i] || p.unsure[j]) return no("unsure");
   // (the neighbour each end runs on to the other through: the other end, a biaryl's; its cumulated double bond, an allene's)
-  const through = (end: number, other: number) => (p.around[end].includes(other) ? other : p.around[end].find((n) => (p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1) >= 2));
-  const [ti, tj] = [through(i, j), through(j, i)];
+  const [ti, tj] = [runsThrough(near(p, i), j), runsThrough(near(p, j), i)];
   if (ti == null || tj == null) return no("unsure");
   const budget: Budget = { left: NODE_BUDGET, steps: STEP_BUDGET };
   try {

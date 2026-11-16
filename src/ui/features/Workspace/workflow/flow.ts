@@ -6,6 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { recordsWithRoles } from "./schemeRoles";
+import { LANDING, THIS_PASS } from "./repeat";
 import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAmong, readingOrder, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 import { moleculesAsTable, WHAT_COLUMN, type ConstitutionOf, type Table } from "../../../../lib/table";
@@ -90,18 +91,54 @@ export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new
 }
 
 
+/**
+ * Whether a wire lands inside a Repeat's frame - into its *Again* or *Done* (workflow/repeat `LANDING`): what its steps give, read by it
+ * as a pass ends, never a way back in the flow. The steps before a Repeat are those before its *In* alone, and such a wire makes no loop.
+ */
+export const landing = (doc: Flow, w: Wire): boolean => (LANDING as readonly string[]).includes(w.to.port) && stepOf(doc, w.to.step)?.kind === "repeat";
+
+/** The wires into a step that lead back in the flow: all of them, but those landing inside a Repeat (`landing`). */
+const wiresBack = (doc: Flow, step: number): Wire[] => allWiresInto(doc, step).filter((w) => !landing(doc, w));
+
 /** The steps before a step, nearest first, as its wires lead back. */
 export function stepsBefore(doc: Flow, step: number): number[] {
   const out: number[] = [];
-  const todo = allWiresInto(doc, step).map((w) => w.from);
+  const todo = wiresBack(doc, step).map((w) => w.from);
   for (let guard = 0; todo.length && guard < 1000; guard++) {
     const at = todo.shift()!;
     const made = findSet(doc, at.set)?.made?.step;
     if (made == null || out.includes(made) || made === step) continue;
     out.push(made);
-    todo.push(...allWiresInto(doc, made).map((w) => w.from));
+    todo.push(...wiresBack(doc, made).map((w) => w.from));
   }
   return out;
+}
+
+/** The Repeat whose frame holds step `step`, by id; none where none does. */
+export const repeatHolding = (doc: Flow, step: number): number | undefined => (doc.steps ?? []).find((s) => s.kind === "repeat" && s.holds?.includes(step))?.id;
+
+/** The Repeat a set lies inside, as its wires go: one a step inside gives, or a Repeat's *This pass*; none for one outside - a chemist's, a Repeat's *Out*. */
+function repeatOfSet(doc: Flow, set: WorkflowSet): number | undefined {
+  const maker = set.made ? stepOf(doc, set.made.step) : undefined;
+  if (!maker) return undefined;
+  if (maker.kind === "repeat") return set.made!.exit === THIS_PASS ? maker.id : repeatHolding(doc, maker.id);
+  return repeatHolding(doc, maker.id);
+}
+
+/**
+ * Why a wire may not cross a Repeat's frame as it would (workflow/repeat): what comes in goes by *In*, its steps take from *This pass*
+ * and from one another, and what leaves goes by *Again* or *Done*, then *Out* - none where it may. A Repeat is held by none.
+ */
+function repeatWireRefusal(doc: Flow, set: WorkflowSet, to: WorkflowStep, port: string): string | null {
+  const inside = repeatOfSet(doc, set);
+  if (to.kind === "repeat") {
+    if ((LANDING as readonly string[]).includes(port)) return inside === to.id ? null : "Only what the steps inside it give goes to Again or Done";
+    return inside === to.id ? "It is inside this Repeat: wire it to Again to go round once more" : inside != null ? "It is inside another Repeat: what leaves it goes by Done and Out" : null;
+  }
+  const holder = repeatHolding(doc, to.id);
+  if (holder != null && inside !== holder) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
+  if (inside != null && inside !== holder) return "It is inside a Repeat: what leaves it goes by Done, then Out";
+  return null;
 }
 
 /** Whether a wire may go from `from` into the step `to` (`wireRefusal`: none). */
@@ -123,10 +160,14 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   if (!step || !set) return "It is not there";
   // (a step that takes nothing in has nothing to wire to)
   if (takesNothingBy(step.kind, byOf(step))) return "It takes nothing in";
-  if (set.made?.step === to) return "It is what this step gives";
-  // (nothing it gives may come back round to it)
+  if (set.made?.step === to && !(step.kind === "repeat" && (LANDING as readonly string[]).includes(port))) return "It is what this step gives";
+  // (a Repeat's frame crossed only by its own ports: workflow/repeat)
+  const crossing = repeatWireRefusal(doc, set, step, port);
+  if (crossing) return crossing;
+  // (nothing it gives may come back round to it - but what lands inside a Repeat, which it reads as a pass ends)
   const madeBy = set.made?.step;
-  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
+  const lands = step.kind === "repeat" && (LANDING as readonly string[]).includes(port);
+  if (!lands && madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
   const holds = givesOf(doc, from);
   // (pictures - a Render step's - and charts no step takes)
   if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
@@ -355,7 +396,8 @@ function keyTexts(m: Molecule3D): readonly string[] {
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const values = stepValues(step, by);
   // (and, a Render's, the plugins its look and studio are of, by version)
-  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values);
+  // (and the options taken from a property, each by the property's name: what each entry takes is in its properties, keyed below)
+  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values) + (step.bound && Object.keys(step.bound).length ? `|bound${JSON.stringify(Object.entries(step.bound).sort())}` : "");
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);

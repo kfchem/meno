@@ -18,6 +18,7 @@
  * mirror image or turned.
  */
 import { orderOf, type Molecule } from "./perceive";
+import { parity } from "../chem/perception/stereo/geometry";
 
 type Ranked = { classes: number[]; canonical?: number[] };
 
@@ -272,9 +273,3 @@ function ranksOf(keys: readonly string[]): number[] {
 
 const classesIn = (r: readonly number[]) => new Set(r).size;
 
-/** The sign of the permutation that sorts `xs` (distinct) ascending. */
-function parity(xs: readonly number[]): 1 | -1 {
-  let sign: 1 | -1 = 1;
-  for (let i = 0; i < xs.length; i++) for (let j = i + 1; j < xs.length; j++) if (xs[i] > xs[j]) sign = sign === 1 ? -1 : 1;
-  return sign;
-}

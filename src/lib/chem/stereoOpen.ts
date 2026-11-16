@@ -11,6 +11,8 @@ import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
+import { FLAT_VOLUME_3D, parity, sideOfLine, signedVolume } from "./perception/stereo/geometry";
+import { runsOf } from "./perception/stereo/runs";
 
 /** An atom as the rules read it: its element and charge, and its hydrogens where they are given (else by its valence). */
 export type StereoAtom = { el: string; charge?: number; hs?: number };
@@ -120,16 +122,39 @@ export function movingSaid(whys: readonly MovingWhy[]): string | null {
   return `E/Z of ${whys.length} C=N not enumerated: ${[...new Set(whys)].map((w) => MOVING_CN[w]).join("; ")} - no configuration of its own`;
 }
 
-/** The double bonds `open` (by index, all cumulated) as the runs they make, each run's bonds in order of index: two that share an atom are of one run. */
+/**
+ * The double bonds `open` (by index, all cumulated) as the runs they make, each run's bonds in order of index: two that share an atom are
+ * of one run. The runs are the core's (perception/stereo/runs, on through each atom with two double bonds); of each, the open bonds one
+ * after another along it are one group. (Two open double bonds that meet at an atom of three or more double bonds are no run's here, and
+ * two groups: no carbon has three.)
+ */
 export function cumulatedRuns(bonds: readonly StereoBond[], open: readonly number[]): number[][] {
-  const runs: number[][] = [];
-  for (const i of [...open].sort((p, q) => p - q)) {
-    const ends = new Set([bonds[i].a, bonds[i].b]);
-    const joined = runs.filter((r) => r.some((j) => ends.has(bonds[j].a) || ends.has(bonds[j].b)));
-    for (const r of joined) runs.splice(runs.indexOf(r), 1);
-    runs.push([...new Set([i, ...joined.flat()])].sort((p, q) => p - q));
+  const isOpen = new Set(open);
+  const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
+  const index = new Map<string, number>();
+  for (const i of [...isOpen].sort((p, q) => p - q)) if (!index.has(key(bonds[i].a, bonds[i].b))) index.set(key(bonds[i].a, bonds[i].b), i);
+  const atoms = Array.from({ length: bonds.reduce((n, b) => Math.max(n, b.a + 1, b.b + 1), 0) }, () => ({}));
+  const runs = runsOf({ atoms, bonds }, "twoDoubles");
+  const groups: number[][] = [];
+  const placed = new Set<number>();
+  for (const i of [...isOpen].sort((p, q) => p - q)) {
+    if (placed.has(i)) continue;
+    const along = runs.of(bonds[i].a, bonds[i].b).atoms;
+    // (the open bonds along the run, split where one between them is not open)
+    let group: number[] = [];
+    for (let k = 1; k < along.length; k++) {
+      const j = index.get(key(along[k - 1], along[k]));
+      if (j == null) {
+        if (group.includes(i)) break;
+        group = [];
+        continue;
+      }
+      group.push(j);
+    }
+    for (const j of group) placed.add(j);
+    groups.push([...new Set([i, ...group])].sort((p, q) => p - q));
   }
-  return runs.sort((p, q) => p[0] - q[0]);
+  return groups.sort((p, q) => p[0] - q[0]);
 }
 
 /** Of the open double bonds (by index), those of cumulated double bonds - an allene's - whose stereoisomers are an axis's. */
@@ -165,15 +190,11 @@ export function configuredFrom(
     around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
   }
   const placed = (x: number) => x in places && (around.get(x) ?? []).every((n) => n in places);
-  const minus = (p: Place, q: Place): Place => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-  const cross = (p: Place, q: Place): Place => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
-  const dot = (p: Place, q: Place) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
   const centres = openAtoms.flatMap((c) => {
     const ns = around.get(c) ?? [];
     if (ns.length < 3 || !placed(c)) return [];
-    const [u, v, w] = ns.slice(0, 3).map((n) => minus(places[n], places[c]));
-    const volume = dot(u, cross(v, w));
-    return Math.abs(volume) < 1e-6 ? [] : [{ atom: c, neighbours: ns, sense: (volume > 0 ? 1 : -1) as 1 | -1 }];
+    const volume = signedVolume(places[ns[0]], places[ns[1]], places[ns[2]], places[c]);
+    return Math.abs(volume) < FLAT_VOLUME_3D ? [] : [{ atom: c, neighbours: ns, sense: (volume > 0 ? 1 : -1) as 1 | -1 }];
   });
   const doubles = openBonds.flatMap((i) => {
     const { a, b } = bonds[i];
@@ -181,9 +202,8 @@ export function configuredFrom(
     const na = (around.get(a) ?? []).find((n) => n !== b);
     const nb = (around.get(b) ?? []).find((n) => n !== a);
     if (na == null || nb == null) return [];
-    const axis = minus(places[b], places[a]);
-    const side = dot(cross(axis, minus(places[na], places[a])), cross(axis, minus(places[nb], places[b])));
-    return Math.abs(side) < 1e-6 ? [] : [{ bond: i, ends: [na, nb] as [number, number], cis: side > 0 }];
+    const side = sideOfLine(places[a], places[b], places[na], places[nb]);
+    return Math.abs(side) < FLAT_VOLUME_3D ? [] : [{ bond: i, ends: [na, nb] as [number, number], cis: side > 0 }];
   });
   return { centres, doubles };
 }
@@ -226,9 +246,8 @@ export function configurationKey(c: Configuration): string {
     .sort((p, q) => p.atom - q.atom)
     .map((x) => {
       const sorted = [...x.neighbours].sort((p, q) => p - q);
-      // (the swaps that put the neighbours in order, counted as inversions)
-      let odd = false;
-      for (let i = 0; i < x.neighbours.length; i++) for (let j = i + 1; j < x.neighbours.length; j++) if (x.neighbours[i] > x.neighbours[j]) odd = !odd;
+      // (the swaps that put the neighbours in order)
+      const odd = parity(x.neighbours) === -1;
       return [x.atom, sorted, odd ? -x.sense : x.sense];
     });
   const doubles = [...c.doubles].sort((p, q) => p.bond - q.bond).map((x) => [x.bond, [...x.ends].sort((p, q) => p - q), x.cis]);

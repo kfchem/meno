@@ -22,18 +22,13 @@ import { huckelForm } from "../../../../lib/chem/huckel";
 import { symmetryClasses } from "../../../../lib/layout/canonical";
 import { eigenvalues } from "../workflow/rmsd";
 import { bestTurn } from "../workflow/sameConformer";
+import { HANDED, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
 
 /** How many whole branches a group may have for every way of laying them out to be tried (4! = 24). */
 const MOST_BRANCHES = 4;
 /** The largest pendant ring turned about its bond, and how many of its symmetries are tried. */
 const MOST_RING_ATOMS = 16;
 const MOST_SYMMETRIES = 64;
-/**
- * The least triple product, in cubic ångströms, that says which way round three bonds go: a tetrahedral centre's
- * are some 0.9; a planar one's (an =CH2's) are nought but for noise, which says no way round - a hundredth of an
- * ångström in a place can turn its sign, and its hydrogens are then told apart by their fit alone.
- */
-const HANDED = 0.05;
 
 type Atom = { el: string; charge?: number };
 type Bond = { a1: number; a2: number; order: number };
@@ -215,9 +210,7 @@ export function settleEquivalents(atoms: readonly Atom[], bonds: readonly Bond[]
       for (let j = i + 1; j < vs.length; j++)
         for (let l = j + 1; l < vs.length; l++) {
           if (i >= k) continue;
-          const [a, b, c] = [vs[i], vs[j], vs[l]];
-          const det = a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
-          signs.push(Math.abs(det) <= HANDED ? 0 : det > 0 ? 1 : -1);
+          signs.push(volumeSign(vs[i], vs[j], vs[l], [0, 0, 0], HANDED));
         }
     return signs;
   };

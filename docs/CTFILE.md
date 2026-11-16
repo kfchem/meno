@@ -101,7 +101,7 @@ holds whole: the file is read (before, either failed as it was read).
 
 | What | How | Why |
 |---|---|---|
-| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
+| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it (on an odd cumulene's double bond, a butatriene's, beside the run's ends): never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |
@@ -110,6 +110,16 @@ holds whole: the file is read (before, either failed as it was read).
 
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
 atoms at its ends, as a dative bond does not: an ammine stays NH3.
+
+Nor is a hydrogen bond a bond of the structure for anything Meno reads of
+it (`ofTheStructure`, lib/chem/perception/graph): it closes no ring, so the
+double bond of an enol it closes a ring of six round keeps its cis or trans;
+it joins no two molecules, so a water bound to an enol by one leaves the
+enol's identity as it is drawn apart; and it takes no place round an atom,
+so an amine's N it is drawn to keeps three bonds and no configuration. It is
+kept, drawn and laid out as before: Clean-up gives it to the layout as a
+bond. Until 2026-11-15 a hydrogen bond drawn so hid the double bond's cis or
+trans, and the molecules it joined had one identity.
 
 Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
 way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone

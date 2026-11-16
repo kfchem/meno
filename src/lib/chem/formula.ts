@@ -1,33 +1,18 @@
 import type { GroupStructure, StructureBond } from "./ligands";
 import type { SmilesAtom } from "./smiles";
 import { movedBond } from "./structureBonds";
+import { FORMULA_HIGHER as HIGHER, FORMULA_OUTER as OUTER, FORMULA_VALENCE as VALENCE } from "./perception/hydrogens";
 
 /**
  * A formula's parts - groups and elements, each as often as its count - and
  * the valences its elements take: what a simple formula is read by
  * (./condensed), and an anion - BF4, PF6, ClO4, CO3 - whether a salt's
  * (NaBH4, K2CO3) or a complex's counter-anion ([Rh(cod)2]BF4, ./ligands).
+ * Its valences are the core's tables (perception/hydrogens, foundation part 12a), each as this file has always read them.
  */
 
 /** The valence each element of such a formula has first. */
-export const VALENCE: Record<string, number> = {
-  H: 1, Li: 1, Na: 1, K: 1, Rb: 1, Cs: 1, F: 1, Cl: 1, Br: 1, I: 1,
-  Be: 2, Mg: 2, Ca: 2, Sr: 2, Ba: 2, O: 2, S: 2, Se: 2, Te: 2,
-  B: 3, Al: 3, Ga: 3, In: 3, N: 3, P: 3, As: 3, Sb: 3, Bi: 3,
-  C: 4, Si: 4, Ge: 4, Sn: 4, Pb: 4,
-};
-
-/** The valences beyond it an element below the second row takes in an anion: P(V) in PF6, Cl(VII) in ClO4. */
-const HIGHER: Record<string, number[]> = {
-  P: [5], As: [5], Sb: [5], Bi: [5], S: [4, 6], Se: [4, 6], Te: [4, 6], Cl: [3, 5, 7], Br: [3, 5, 7], I: [3, 5, 7],
-};
-
-/** Its outer electrons, by its group: a centre with as many bonds has no lone pair left. */
-const OUTER: Record<string, number> = Object.fromEntries(
-  ["H Li Na K Rb Cs", "Be Mg Ca Sr Ba", "B Al Ga In", "C Si Ge Sn Pb", "N P As Sb Bi", "O S Se Te", "F Cl Br I"].flatMap((g, i) =>
-    g.split(" ").map((el) => [el, i + 1]),
-  ),
-);
+export { VALENCE };
 
 /** The second row's, which have no more than an octet: four bonds. */
 const SECOND_ROW = new Set(["B", "C", "N", "O"]);

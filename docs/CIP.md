@@ -262,7 +262,7 @@ group of each, and whether the two are on one side (`Cumulated`).
   in solution it gives its H up and takes one back, turning over as it
   does - but where its amine's N keeps its configuration by Meno's rule on
   lone pairs (a small cage's bridgehead), it keeps it too
-  (lib/chem/lonePairCentres `protonatedAmineHeld`).
+  (lib/chem/perception/stereo/lonePairs `protonatedAmineHeld`).
 - **The plugin's labels are never read.**
 
 ## No label, and why

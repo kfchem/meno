@@ -299,16 +299,22 @@ held still before it is let go stays where it was put. (It used to glide on
 by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
-**A click keeps each view's own meaning**: in 2D a click selects what is
-under the pointer, an atom or a bond alike - a bond with its two atoms,
-alone, what was selected let go - and a single click never changes the
-compound (the maintainer, 2026-11-14: a click on a bond had gone round its
-kinds, and a click meant to select it could put a wedge in, a statement of
-configuration, with nothing said). Cmd or Ctrl and a click adds a bond or
-takes it out; Shift and a click, the box and the lasso are as before. A
+**A click keeps each view's own meaning**: in 2D a click on an atom selects
+it, and a click on a bond turns its kind as the key 1 does - a double or
+triple bond made single; a single bond round its wedge, its hashed wedge
+and plain with its other end narrow - once no second click has come (the
+maintainer, 2026-11-17, giving back the click of 2026-09-27; from
+2026-11-14 to 2026-11-17 a click selected the bond and changed nothing). A
+bond is selected by Cmd or Ctrl and a click, which adds it or takes it
+out, by the box and by the lasso; Shift and a click are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click
-having selected it, which stays selected. A bond's kind is otherwise set by
+turning nothing; a slower one, its second click within a double-click's time
+of the first but after the first had turned the bond, takes that turn back
+and makes the bond double from what it was, as one step. A click is never
+lost: one still waiting is turned at once as the next press lands anywhere
+but on its bond, or as a drag begins (`turnTakenBack`, `flushesClick`, the
+maintainer, 2026-11-17). A bond's kind is otherwise set by
 the bond keys (*Bond keys*, below) and by its right-click menu, which
 chooses its kind outright (2026-10-14), for every bond selected at once, as
 one step. In the menu's row of kinds, the icon of the kind the bond already
@@ -342,7 +348,7 @@ again they go on round, 2026-11-04). With the pointer on a bond, 1, 2
 and 3 set its kind, and a key pressed again goes on round:
 - **1** makes a double or triple bond single; on a single bond it goes round
   - wedge, hashed wedge, plain with the other end narrow (`singleRoundPatch`;
-  a click on a bond went this round until 2026-11-14).
+  a click on a bond goes this round too).
 - **2** makes a bond double; on a double bond it moves the second line to
   the next side as a double-click does - its own side, the middle, the
   other side (`doubleClickPatch`, shared with the double-click).
@@ -375,6 +381,14 @@ was asked for). What is done most to the thing right-clicked comes first,
 each an icon at Quick Add's size, named as the pointer rests on it (with
 its key, if it has one), and Delete at the row's right end, always; the
 rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
+An icon's name - of a menu's rows, the menu on empty space and Quick
+Add's - is shown in Meno's own look, as the page's tip is: under the icon,
+or over it where there is no room under it, once the pointer has rested on
+it 0.45 s, so that passing over a row shows none; gone as the pointer
+leaves, presses, a key is pressed, the view scrolls or the icon goes
+(`IconTips`, by the workspace in front alone; a row's keys are said to a
+screen reader too; 2026-11-14: the system's own tooltip had been asked for,
+which looks like no other part of Meno and was not shown in every view).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
@@ -540,11 +554,37 @@ missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
 plugin that reads SMILES refuses it). A bond written with no symbol between
 two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
 joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
-is single, and each ring is read as its own. Text is
+is single, and each ring is read as its own. A bond written aromatic
+outside any ring (":") takes a form of single and double bonds as
+one in a ring does, each atom by the room its valence, its H and its
+charge leave (lib/chem/perception/kekule): CC(:O):O is acetic acid, one
+C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
+An atom whose H is written in its brackets has its valence fixed by
+what is written: CC(:N):[NH2+] is the acetamidinium, its [NH2+] taking
+the C=N. Where more than one end may take the one double bond a centre
+needs, it goes to O first, then S and Se, then N, then C: CC(:O):N is
+acetamide, never the imidic acid; CC(:S):N is thioacetamide; NC(:O):N is
+urea. Between two of one element - an amidine's two N - Meno draws one
+form, the same however it is written, with no claim of which is the
+more stable.
+Where no such form closes them, the SMILES is refused, never read by
+adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
+2, 3 and 4) have no form with single and double bonds: is a charge
+missing?" (`outsideRingRefusal`). It errs on the side of refusing: a lone
+C:O between two atoms that both have room - oxalate written
+[O-]C(:O)C(:O)[O-] - and a chain marked aromatic throughout (C:C:C:C)
+are refused, though one form would close them; write their double
+bonds. Where such a bond is read and not refused - from a file - a lone
+one between two atoms that both have room is read as single for now.
+Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
-an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
+an atom by the same label reader, kept a label. A quadruple bond ("$")
+is refused where Meno reads the SMILES itself - a group typed with its
+"*" - in words: "a quadruple bond, which Meno does not draw"
+(lib/chem/smiles); Meno has no bond of that order, and never reads it
+as another. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
@@ -1284,7 +1324,7 @@ All hover-based, as above.
     mirror image (seqCis, seqTrans) says so there too. A protonated
     amine's N (R3NH+) has none: it gives its H up and takes one back,
     turning over as it does - but where its amine's N keeps its
-    configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
+    configuration, a small cage's bridgehead (lib/chem/perception/stereo/lonePairs).
     An axis's Ra or Sa - a biaryl's, an allene's, asked for on a bond of
     it - and an odd cumulene's E or Z are Meno's too (docs/CIP.md, *Axes
     and odd cumulenes*).
@@ -1907,9 +1947,203 @@ lipids each have their own way of being drawn, which it should know.
      and its structure in 3D are given the wedges that say it
      (`chem/drawing.ts#forFlatReaders`; until 2026-11-04 the structure in
      3D was not: its centres reached RDKit as left open, and tetrodotoxin's
-     nine were too many to be made in 3D in time);
-     the depth itself is not saved, so a cage opened again is flat, its
-     stereochemistry wedged.
+     nine were too many to be made in 3D in time).
+     The workspace file and the clipboard's own record keep the drawing as
+     it is - each atom's depth, its centres, a ring's near edge - so a cage
+     or a chair opened again, or pasted, is drawn and read as it was, its
+     bonds broken where they were; only files for other programs are given
+     wedges in its place.
+   - **Drawn in perspective**: any centre of a drawing with
+     depth is read in space, not only a cage's - a chair, a Haworth ring, a
+     Newman projection - by one reader (`lib/layout/drawn`, `volumeInSpace`).
+     The model is said once: an atom's depth (`Atom.z`, nearer is larger);
+     `Atom.stereoCentre`, that its configuration is the drawing's own
+     (every atom of a projection that has depth; whether it is a stereo
+     unit is asked afterwards, by identity); a ring bond's near-edge look
+     (`display`). Nothing records what kind of projection a ring is.
+     A drawing in perspective states the absolute configuration of every
+     stereocentre that has no wavy bond at it (Brecher 2006, ST-3.2).
+     - A ring atom with depth, its two ring neighbours with depth, one or
+       two groups without: each group takes the free direction it is drawn
+       nearer to (a chair's axial or equatorial, a Haworth ring's up or
+       down). Only a bridged system (two rings sharing three atoms or more) or
+       a cage is read against the engine's solid, fitted to the drawing; every
+       other ring system with depth - a chair, chairs fused (a decalin, a
+       steroid's rings), a Haworth ring - is read from its own ring bonds as
+       drawn, which asks nothing of which solid was drawn (the engine's solid
+       for a decalin is not two chairs, so it read about one group in four
+       the other way). A system both bridged and carrying fused chairs is
+       read through the fit: no tool makes one.
+     - A Newman projection's atom: the atom behind it, or before it, in the
+       same place on the page, with less (or more) depth; its groups
+       leave it away from that atom, each at the angle it is drawn at. The
+       front atom's bonds meet at the circle's middle, the back atom's start
+       at its rim (the circle stands for the nearer atom; Moss 1996). Two
+       groups of one atom drawn within twice `BETWEEN` of each other say
+       nothing, and the atom is unread. The reader goes by the places
+       alone: the bond seen end-on is the look's (the projection tools'), not the reader's.
+     - A group drawn within `BETWEEN` (12 degrees, by convention after the
+       turn a wedge's bond may be moved by: no text gives a number) of half
+       way between its two nearest free positions as seen - or between two
+       free positions seen less than twice that apart - is unread at that
+       centre, never given the nearer by a hair; the unread centre says why
+       (`unreadWhy`: its bond is drawn between its two free positions).
+       Applies to a ring alone; a cage's near-hair test is the engine's.
+     - A wedge or hashes out of such a centre are read as before (out,
+       behind), and where they contradict the direction drawn, the centre is
+       unread (ST-3.3). A wavy bond out of such a centre leaves it open
+       (ST-3.2): its other centres are read.
+     - A bond passing behind another is drawn with a gap (Brecher 2006,
+       ST-3.1), and a group out of such a ring takes part though it has no
+       depth of its own: the free direction its centre is read to send it -
+       the very choice that read the centre - says how far before or behind
+       its ring atom it lies (that direction's depth for a bond one long,
+       times the bond as drawn), and its further atoms lie at its first
+       atom's depth (`groupDepths`). A chair as the textbook draws it, a
+       group on each free position, has exactly two crossings: a near atom's
+       axial bond before the far seat line, a far atom's behind the near one.
+       A group on an unread centre, or bonded to two atoms with depth, has
+       none, and no gap. Nothing is kept: a group dragged round is read
+       again, and its gap follows.
+     - A flat reader is told what the perspective shows
+       (`wedgesForFlat`), for a chair, a Haworth ring and a Newman
+       projection as for a cage; a structure made in 3D from such a drawing
+       reaches the plugin by wedges, as a file does. Meno's own moves keep
+       depth: turned in the page and scaled (the compound is the same),
+       turned over (the page mirrored and the depth turned: the compound is
+       kept), mirrored in the page with the depth as it was (the mirror
+       image); an atom dragged keeps its depth.
+     - **A chair recognised where the drawing gives no depth**: a six-ring
+       on its own, drawn as a chair (opposite bonds parallel, its outline
+       not convex) with no wedge at its atoms, is a ring in perspective; its depth is worked out by fitting the chair's
+       solid (`lib/chem/perception/projection`) to the drawn places, and its
+       centres are read in space as a tool's drawing is. Near and far, in
+       this order: a bold or near-edge ring bond marks which edge is the
+       nearer (Brecher 2006, ST-3.1, ST-3.3: the drawn order takes
+       precedence); else the convention - the lower atoms of a
+       mostly-horizontal ring are the nearer, the ring's long axis within
+       30 degrees of level (that angle is a convention, no text gives one);
+       else unread, and the words say what to draw: its near and far are
+       not marked: draw its near bonds bold. A fit that is not clearly one
+       shape is unread too, and a flat drawing - a regular hexagon - is read
+       as ever. The numbers of the fit were set on a corpus of every chair
+       view of the solid and every flat ring the engine draws, so that each
+       chair is read as the solid it was or not at all, and no flat ring is
+       read. A chair is fitted to the chair as a textbook
+       draws it (its bonds along four directions, the axis vertical), by a
+       turn, a scale and a shift in the page, beside the chair seen from
+       above. A ring of five or six is read as a Haworth ring by what the
+       texts' own figures share, not by its fit to a regular ring (McNaught
+       1996 draws a furanose 2.5 level bonds wide and a pyranose taller than
+       Brecher 2006 does): its lowest ring bond level (the front edge, and so
+       the nearer: ST-3.1, 2-Carb-5.4), every other ring atom above it, and
+       every group drawn straight up or down at any length, and the ring no
+       taller than 0.87 of the regular ring of its level bond standing on
+       that edge (1.5 level bonds for a six-ring, 1.34 for a five-ring): a
+       regular ring is a flat drawing that happens to lie so, and nothing is
+       guessed - or a near edge marked bold, at any height (a mark, ST-3.3).
+       Never the shape alone (Brecher 2006, ST-1.9: such a drawing is
+       ambiguous). No ring O at the back is needed: each of the
+       twelve representations 2-Carb-5.4 names, the ring turned and turned
+       over, reads as the same compound.
+       Chairs fused on bonds (a decalin, a perhydrophenanthrene, a
+       steroid's three chairs) are recognised as one solid: the whole
+       system is fitted at once to every way the chairs fuse on its bonds -
+       each fusion trans, or cis on either face - as the textbook draws
+       them, so a trans or a cis fusion is read from the drawing, never
+       assumed. A cis-fused ring may be drawn nearly edge on, its outline
+       convex: it is taken where it is fused to a ring drawn as a chair,
+       and the fit of the whole reads or refuses it. Near and far go by the
+       same order, for the whole system. First a mark: a bold bond is the
+       near edge of its own ring (ST-3.1, ST-3.3), so it is judged against
+       that ring's middle - a bond two rings share says something only
+       where it says the same in both - and every mark that says must say
+       the same. Else the convention: the lower atoms nearer in each ring
+       that lies mostly level and is drawn as a chair (a cis-fused ring
+       rising up the page says nothing), all of them agreeing - and only
+       while the whole system stands within 30 degrees of the textbook
+       form it was fitted to: stood on its side, it is unread. Else
+       unread. Rings that share one atom only,
+       or more than a bond, and a system with a ring drawn flat, are
+       unread. A bridged system or a cage (norbornane, camphor) drawn with
+       no depth is fitted to the ways Meno itself draws it in perspective -
+       its textbook views, each also mirrored in the page - by a turn, a
+       scale and a shift; not to a view of its solid, since Meno draws a
+       cage the way textbooks do, and for the larger cages that is further
+       from any true view than some flat drawings are. Its near and far go
+       by a mark only: a bold ring bond is the nearer edge. With no mark it
+       is unread, and the words ask for the near bonds drawn bold: the
+       texts' convention is for ring systems in general, but Meno does not
+       apply it to a bridged system yet, since which of its rings is the
+       mostly-horizontal one is not always clear. A bridged system drawn
+       another way, or flat, is read as ever.
+       Where a centre's R or S is shown, its tip says how it was read:
+       "Read from the ring as drawn in perspective.", or "Read as a Haworth
+       ring."; a centre of a ring the reading took for one in perspective
+       but could not read has no R or S, and its tip says why and what to
+       draw: "No R or S: the ring is drawn in perspective, but its near and
+       far are not marked: draw its near bonds bold." (or "... but not
+       clearly as one shape."). Which atoms are centres is the CIP's, so an
+       atom that is no centre is told nothing. (A limit: a bridged system
+       read by a mark makes every atom of it a centre, as a tool's
+       projection does; quinuclidin-3-ol's N and other bridgehead, whose
+       alike arms run between the same two atoms, then carry a sense that
+       says nothing, and its identity is not yet the typed one's - which
+       sense says nothing is identity's to tell. Tropine and pseudotropine,
+       whose C3 is pseudo-asymmetric, are two compounds, as they are.) And
+       such a ring, not read, is never silent: each of its atoms that
+       carries a group has the unread mark a crossed wedge has, unasked,
+       its words the same.
+     - **The recognition's bounds** (`lib/chem/perception/projection/recognise`).
+       No text gives a number for any of them. All were set on the corpus
+       of the tests - every chair view of the solid, turned and jittered,
+       and every flat ring the engine draws - so that each chair is read
+       as the solid it was or not at all, and no flat ring is read. The
+       three that guard against another reading - `PARALLEL`, `MARGIN` and
+       `LEVEL_ANGLE` - are each asked just inside and just outside by a
+       test (`recogniseBounds.test.ts`):
+       - `PARALLEL`, 12 degrees: how far from parallel two opposite bonds of
+         a ring drawn as a chair may be.
+       - `MOST_MISS` (0.02 of a bond length, squared, on average),
+         `MOST_UNEQUAL` (0.25) and `MOST_SKEW` (20 degrees): how far the
+         fit may miss the drawn places, and how far its two directions may
+         differ in scale and stand off a right angle - generous, as a
+         textbook chair is drawn the way textbooks do, not exactly as seen.
+       - `MARGIN`, 3: the guard against the mirror image. Another reading
+         that takes the ring as another shape must fit at least three
+         times worse than the best, or the ring is unread.
+       - `LEVEL_ANGLE`, 30 degrees: how near level a ring's long axis, and
+         the whole system's turn from its textbook form, must lie for the
+         lower atoms to be the nearer. ST-3.1 speaks of a mostly-horizontal
+         ring and gives no angle: a convention, so that a chair stood
+         further on its side is unread rather than read as its mirror
+         image. A mark reads the ring at any angle.
+     - **Meno's moves keep the compound:** a ring read this way follows
+       the page - its lower atoms the nearer - so before Meno turns it on
+       the page, or turns it over, the depth the reading worked out is
+       stored on its atoms, in the same step, and the move carries it as
+       it carries any depth drawn: turned half round, or turned over left
+       for right, it is the same compound, not its mirror image. Undone,
+       the drawing is as it was. A drawing that arrives turned (pasted,
+       opened) has only the convention to go by.
+     - **Clean-up keeps a projection** (the maintainer, 2026-11-13): a ring
+       system the drawing shows with a depth that the engine would lay flat -
+       a chair, a Haworth ring - is left where it is, its atoms' places,
+       depth and being stereocentres unchanged, and what is flat on it is
+       laid out onto it: each group's first atom the way the drawing has it
+       from the ring, a bond long, the rest as the engine lays the group
+       out. No wedge is drawn and no H added for the ring's centres: the
+       perspective says them, and a wedge or an H already drawn there stays.
+       A piece joined to projections by more than one bond is kept as
+       drawn. The new drawing is read back as always: the same compound
+       (`chem/projectionKept`). A ring in perspective drawn with no depth
+       and recognised as one is kept so too, by the depth the reading
+       works out for it; no depth is stored for it, so the document is as
+       the chemist drew it. One taken for a ring in perspective but not
+       read is kept where it is as well, not laid flat: its words ask the
+       chemist to mark it. 3D and a file are told its configuration by
+       wedges, as for a projection drawn with depth: the configuration
+       read, never the shape drawn.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
@@ -1959,13 +2193,16 @@ lipids each have their own way of being drawn, which it should know.
      to redraw. A deciding gap within 10 degrees of half a turn says
      nothing either: which side of the rule it is on cannot be told.
      A centre with four bonds drawn is read as open, likewise, in the forms
-     the text calls ambiguous or the picture of another shape (ST-1.1.9,
-     1.1.10, 1.1.11, 1.1.13 to 1.1.20): four wedges alike, three alike with
+     the text calls ambiguous or the picture of another shape (ST-1.1.9 to
+     1.1.20): all four bonds within half the page, whatever they are drawn
+     as (a tetrahedron's four bonds never all point one way; ST-1.1.12's
+     drawings are all so); four wedges alike, three alike with
      the fourth in their wide space, two plain bonds with a wedge and hashes
      where the plain ones are not side by side or are half a turn or more
      apart, two like wedges beside two plain bonds, three plain with the
      wedge outside their wide space, two wedges and two hashes like by like.
-     ST-1.1.4's cross with one wedge and ST-1.1.12 stay read.
+     ST-1.1.4's cross with one wedge and the upright cross with two like
+     wedges across from each other stay read.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
@@ -1989,7 +2226,32 @@ lipids each have their own way of being drawn, which it should know.
      the text gives E or Z is drawn as given. A double bond drawn straight
      on carries no other mark of being open - not a plugin's either
      configuration for it - so Clean-up keeps it straight, as it keeps any
-     double bond drawn so.
+     double bond drawn so. An odd cumulene (a butatriene's run of three
+     double bonds, or five) has its cis or trans across the run's two
+     ends, and is drawn open the same way when the text gives it none:
+     each end's one group straight on from the run, or a wavy bond on a
+     group of an end, an end of one group first. Clean-up keeps such a
+     run's ends straight too. An end of one group and no H (an N's) has
+     none to state, as the reader takes a run, and is left as it is. A run
+     in a ring of seven or fewer is held cis; in a ring of eight or more it
+     is drawn open, though the smallest ring a run can be trans in is
+     larger than a double bond's: there Meno may leave open what only cis
+     can be, never state the other isomer. A structure drawn from a
+     plugin's MOL block - a SMILES's, a step's, the formula of a molecule
+     in 3D - shows no run's cis or trans but one Meno's own reading of its
+     text gives (of a molecule in 3D, of its places: each allene's axis and
+     odd cumulene's cis or trans as it stands, an H at a run's end standing
+     for the end's other group, which the formula draws): a MOL block
+     cannot say one, so what the plugin's picture
+     shows of a run is chance. Laid out, any other run is drawn open, as
+     above, and stays so through Clean-up; kept as it came, not laid out, a
+     run it shows otherwise is marked with a wavy bond. Where Meno's own
+     reader does not take the text, no run is given, and every odd run is
+     so drawn open. An allene's run (two double
+     bonds, or four) has an axis instead, which nothing draws open: a
+     bond of it marked either is drawn as a double bond of no run, so no
+     wavy bond goes on an end's groups for it. An odd run's bond marked
+     either - any of its bonds - goes to the run's two far ends.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the
@@ -2026,7 +2288,7 @@ lipids each have their own way of being drawn, which it should know.
      and Clean-up says so rather than lose it. A SMILES's [P@H] is
      still refused: where its H and its lone pair each go in the text's
      order is not yet measured against the reading libraries.
-     An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
+     An amine's N keeps none. One rule (`lib/chem/perception/stereo/lonePairs.ts`)
      says which such atoms a drawing's wedge is read at, which a SMILES's @
      is read at, which centres a structure leaves open, and which a
      molecule in 3D has read from its geometry (docs/PLUGINS.md,

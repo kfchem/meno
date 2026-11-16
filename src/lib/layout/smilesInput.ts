@@ -1,5 +1,5 @@
 import { implicitHydrogens } from "../chem/molecule";
-import { aromaticRefusal, kekuleOrders } from "../chem/kekulize";
+import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "../chem/kekulize";
 import { typedRingRefused } from "../chem/smilesWhy";
 import { readSmiles } from "../chem/smiles";
 import type { LayoutInput } from "./perceive";
@@ -17,6 +17,9 @@ export function smilesInput(smiles: string): LayoutInput {
   const s = readSmiles(smiles);
   const refused = aromaticRefusal(s.atoms, s.bonds);
   if (refused) throw new Error(`This SMILES could not be read: ${typedRingRefused(refused)}`);
+  // (its bonds marked aromatic outside a ring, where no form of single and double bonds closes them: refused, never filled with an H)
+  const outside = outsideRingRefusal(s.atoms, s.bonds);
+  if (outside) throw new Error(`This SMILES could not be read: ${outside}`);
   const orders = kekuleOrders(s.atoms, s.bonds);
   const sum = s.atoms.map(() => 0);
   s.bonds.forEach((b, i) => {
