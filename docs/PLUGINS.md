@@ -1089,14 +1089,27 @@ The same for every plugin and for Meno's own parts:
     never saved), `key` added by the backend alone
     (CONVERSATIONS.md, *Talking through a plugin*);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
+    {smiles}` (answered with `molblock`, and with `configuration` beside
+    it: see below), `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
     reaction as an RXN file holds it, as a reaction SMILES), and
     `smiles_read {smiles}` (what the toolkit makes of a SMILES, as facts:
     whether it reads, whether it parses at all, and the problems its own
     check finds, each with the atoms it names - `{reads, parsed,
     problems}`) (SMILES). A SMILES that cannot be read is refused in
     those words alone, "This SMILES could not be read.": why is Meno's to
-    say, from the SMILES itself and those facts (`lib/chem/smilesWhy`);
+    say, from the SMILES itself and those facts (`lib/chem/smilesWhy`).
+    **A drawing's configuration beside it:** an answer that carries a
+    drawing block - `from_smiles`, `drawing_of`, and each stereoisomer
+    drawn by `stereoisomers` - carries `configuration` beside it: each
+    centre and double bond the toolkit holds a configuration for, by the
+    block's own atom and bond numbers (`{centres: [{atom, neighbours,
+    sense}], doubles: [{bond, ends, cis}]}`; `sense` +1 where det(n1 - c,
+    n2 - c, n3 - c) is positive in a right-handed frame, the neighbours
+    in the order given; `ends` an atom on each end, `cis` whether the two
+    are on one side). Meno lays its own drawing out from that, never from
+    the block's wedges: the block is only places for Meno's engine to lay
+    out again (LAYOUT-2D.md, *A structure from a plugin*). A plugin that
+    sends none is read as before, its block's wedges read as a file's;
     `analyse {molblock}`
     (the checks, R/S and E/Z among them); `structure_facts {structures:
     [{molblocks}]}` (what the toolkit makes of each structure drawn, its
@@ -1139,7 +1152,8 @@ The same for every plugin and for Meno's own parts:
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies` - each stereoisomer made itself);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
-    answered with whether it found the bond orders, `perceived`),
+    answered with whether it found the bond orders, `perceived`, and with
+    `configuration` beside its block),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
     {molblock, hydrogens?}` (its bond orders from a SMILES, its hydrogens
     added - as many on each atom as `hydrogens` says, by atom, where it is
@@ -1503,7 +1517,8 @@ of odd valence - is for the general steps after it, and for
 - `said`: the run in a line.
 
 Meno reads each SMILES itself, as one pasted is (the roles'
-`from_smiles`, laid out by Meno's engine: `chem/fromSmiles` `drawingOf`).
+`from_smiles`, laid out by Meno's engine from the configuration the
+answer carries: `chem/fromSmiles` `drawingOf`).
 Each becomes a structure drawn of its own in the step's result set, in the
 order given. Its record (WORKFLOWS.md, *A structure drawn's record*) holds
 the SMILES as given (`smiles`), the model's values, each `computed` by

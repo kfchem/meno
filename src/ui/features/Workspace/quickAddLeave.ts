@@ -27,3 +27,20 @@ export function quickAddLeaves(inside: (target: EventTarget | null) => boolean, 
     },
   };
 }
+
+/**
+ * A key typed while Quick Add is open with none of its icons chosen (no row or field open), and nothing typed into elsewhere:
+ * what it does - its letter put in the SMILES field, the field opening (`seed`); or, from an input method, only the field opened
+ * and given the focus, so that what it composes is composed there (`focus`); or nothing (null): a key with Ctrl, Cmd or Alt, a key
+ * that writes no letter (Escape, Enter, an arrow), one held down and coming again, or one typed into a field.
+ */
+export function typedIntoQuickAdd(
+  e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "repeat" | "isComposing" | "keyCode" | "target">,
+  panelOpen: boolean,
+): { seed: string } | { focus: true } | null {
+  if (panelOpen || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return null;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return null;
+  if (e.isComposing || e.key === "Process" || e.keyCode === 229) return { focus: true };
+  return e.key.length === 1 && e.key.trim() ? { seed: e.key } : null;
+}

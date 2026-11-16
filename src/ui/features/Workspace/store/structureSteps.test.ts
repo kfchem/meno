@@ -55,16 +55,22 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 }));
 
 /** A drawing made of a block, as Meno's engine lays one out: here, the block's name as its one carbon's label, two atoms apart - one called "undrawable", none. */
-vi.mock("../chem/fromSmiles", async (actual) => ({
-  ...(await actual<typeof import("../chem/fromSmiles")>()),
-  drawingOf: async (block: string): Promise<Model> => {
+vi.mock("../chem/fromSmiles", async (actual) => {
+  const drawingOf = async (block: string): Promise<Model> => {
     if (block === "undrawable") throw new Error("it could not be laid out");
     return {
-    atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
-    bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
+      atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
+      bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
     };
-  },
-}));
+  };
+  // (and the step's two ways of drawing what it made, each through that drawing)
+  return {
+    ...(await actual<typeof import("../chem/fromSmiles")>()),
+    drawingOf,
+    madeDrawn: (a: { made: readonly string[] }) => Promise.all(a.made.map((block) => drawingOf(block))),
+    smilesMadeDrawn: (_smiles: string, read: { molblock: string }) => drawingOf(read.molblock),
+  };
+});
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";

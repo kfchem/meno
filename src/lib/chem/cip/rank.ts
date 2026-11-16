@@ -64,6 +64,7 @@
 import { HYDROGEN, PHANTOM, rootwardOf, TooLarge, type Budget, type CipNode } from "./digraph";
 import type { Prepared } from "./prepare";
 import { parity } from "../perception/stereo/geometry";
+import { factsOf } from "../perception/facts";
 
 /** The rules in their order: 1a, 1b, 2, 3, 4a, 4b, 4c, 5, and the proposed 6. */
 export const RULES = ["1a", "1b", "2", "3", "4a", "4b", "4c", "5", "6"] as const;
@@ -130,7 +131,6 @@ export class Ranker {
   private readonly letterOf = new Map<CipNode, Letter | Unknown>();
   private readonly auxOf = new Map<CipNode, Aux | Unknown>();
   private readonly placesOf = new Map<CipNode, { places: Place[] } | Unknown>();
-  private readonly ringOf = new Map<string, number>();
 
   constructor(p: Prepared, budget: Budget, mirrored = false, twin: Ranker | null = null, promoted: number | null = null, base: Ranker | null = null) {
     this.p = p;
@@ -379,29 +379,6 @@ export class Ranker {
     return seen;
   }
 
-  /** The size of the smallest ring through a bond, or Infinity. */
-  private ringThrough(a: number, b: number): number {
-    const k = pair(a, b);
-    const known = this.ringOf.get(k);
-    if (known != null) return known;
-    const far = new Map<number, number>([[a, 0]]);
-    const queue = [a];
-    let size = Infinity;
-    while (queue.length && size === Infinity) {
-      const x = queue.shift()!;
-      for (const y of this.p.around[x]) {
-        if ((x === a && y === b) || far.has(y)) continue;
-        far.set(y, far.get(x)! + 1);
-        if (y === b) {
-          size = far.get(y)! + 1;
-          break;
-        }
-        if (far.get(y)! < OPEN_RING) queue.push(y);
-      }
-    }
-    this.ringOf.set(k, size);
-    return size;
-  }
 
   /** Whether an atom has more than one multiple bond (an allene's middle C, a cumulene's): its double bonds have no cis or trans. */
   private cumulated(a: number): boolean {
@@ -601,7 +578,7 @@ export class Ranker {
     const u = near.atom;
     const v = far.atom;
     const bond = p.bondAt.get(pair(u, v))!;
-    if (this.ringThrough(u, v) < OPEN_RING || this.cumulated(u) || this.cumulated(v)) return null;
+    if (factsOf(p.input).inRingSmallerThan(bond, OPEN_RING) || this.cumulated(u) || this.cumulated(v)) return null;
     // at the far end: its two substituents, all the rules
     const atFar = this.sorted(far, LAST_RULE);
     if (atFar instanceof Unknown) return atFar;

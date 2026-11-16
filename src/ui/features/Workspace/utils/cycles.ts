@@ -53,7 +53,7 @@ export function cycleThings(model: Pick<Model, "atoms" | "bonds">, captions: rea
   const reach = NEAR * NOMINAL_BOND_LENGTH;
   const at = new Map(model.atoms.map((a) => [a.id, a]));
   const out: CycleThing[] = [];
-  for (const ids of structuresOf(model as Model)) {
+  for (const ids of structuresOf(model as Model, true)) {
     let box: CycleBox | null = null;
     const take = (b: CycleBox) => (box = box ? { x0: Math.min(box.x0, b.x0), y0: Math.min(box.y0, b.y0), x1: Math.max(box.x1, b.x1), y1: Math.max(box.y1, b.y1) } : b);
     for (const id of ids) {
