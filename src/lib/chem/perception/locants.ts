@@ -318,7 +318,11 @@ function groupText(c: Ctx, from: number, parent: ReadonlySet<number>): string {
   while (queue.length) {
     const u = queue.shift()!;
     atoms.push(u);
-    for (const v of c.around[u]) if (!seen.has(v) && !parent.has(v)) seen.add(v), queue.push(v);
+    for (const v of c.around[u]) {
+      if (seen.has(v) || parent.has(v)) continue;
+      seen.add(v);
+      queue.push(v);
+    }
   }
   const inG = new Set(atoms);
   const atomText = (a: number) => {
@@ -401,7 +405,13 @@ function sameUnderSymmetry(c: Ctx, cands: readonly Candidate[]): boolean {
 /** The atoms whose place differs between the candidates left. */
 function differing(_c: Ctx, cands: readonly Candidate[]): number[] {
   const out = new Set<number>();
-  for (const cd of cands.slice(1)) cd.atoms.forEach((a, k) => a !== cands[0].atoms[k] && (out.add(a), out.add(cands[0].atoms[k])));
+  for (const cd of cands.slice(1)) {
+    cd.atoms.forEach((a, k) => {
+      if (a === cands[0].atoms[k]) return;
+      out.add(a);
+      out.add(cands[0].atoms[k]);
+    });
+  }
   return [...out];
 }
 
@@ -623,7 +633,11 @@ function allFrom(c: Ctx, x: number, taken: ReadonlySet<number>): Set<number> {
   const queue = [x];
   while (queue.length) {
     const u = queue.shift()!;
-    for (const v of c.around[u]) if (!seen.has(v) && !taken.has(v)) seen.add(v), queue.push(v);
+    for (const v of c.around[u]) {
+      if (seen.has(v) || taken.has(v)) continue;
+      seen.add(v);
+      queue.push(v);
+    }
   }
   return seen;
 }
@@ -674,6 +688,10 @@ export function locants(input: LocantsInput, level: 1 | 2 = 1): Locants {
   const shown = input.atoms.map((_, i) => locant[i] ?? { base: String(place.get(i) ?? 0) });
   // (each atom once, its first reason)
   const seenOwn = new Set<number>();
-  const ownOnce = own.filter((o) => !seenOwn.has(o.atom) && (seenOwn.add(o.atom), true));
+  const ownOnce = own.filter((o) => {
+    if (seenOwn.has(o.atom)) return false;
+    seenOwn.add(o.atom);
+    return true;
+  });
   return { order, locant, shown, own: ownOnce };
 }
