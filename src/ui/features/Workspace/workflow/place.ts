@@ -229,7 +229,8 @@ export function roomMadeFor(doc: WorkspaceDocument, step: { id: number; x: numbe
   const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === step.id && b.id !== was.id).map((b) => b.id));
   const self: Self = { set: was.id, sets: siblings, step: step.id };
   const there = frameAt(was.x0, was.y1, width, height);
-  if (clearOf(doc, there, self)) return doc;
+  // (asked of the grown set and its step's later exits together: its own place clear is not theirs - a small growth too, found in
+  //  review)
   // (the grown set and, under it, where its step's later exits' frames go as they are kept under it (run `keepExitsUnder`): what is
   //  pushed goes below them all, never onto one of them - found in review)
   const kind = (doc.steps ?? []).find((x) => x.id === step.id)?.kind;

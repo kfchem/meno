@@ -10,6 +10,7 @@ import type { Frame } from "./entries";
 import { CARD_H } from "./look";
 import { addStep } from "./model";
 import { placeResults, type RunResults, type RunWith } from "./run";
+import { roomMadeFor } from "./place";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 const chloroethane = (): DrawnModel => ({
@@ -76,5 +77,49 @@ describe("every frame of both steps, a result set grown as its step runs again",
     const { doc } = page();
     expect(overlaps(doc)).toEqual([]);
     expect(overlaps(placeResults(doc, doc.steps![0], drawn(19), W))).toEqual([]);
+  });
+
+  it("overlaps no other after a small growth too, its own place clear but its later exit's not (found in review)", () => {
+    const { doc } = page();
+    expect(overlaps(placeResults(doc, doc.steps![0], drawn(5), W))).toEqual([]);
+  });
+});
+
+describe("room made for a grown set (roomMadeFor), one frame in its way and nothing else", () => {
+  /**
+   * A Tag run once, its set emptied as a run empties it before placing again (a set's own drawn structures are what its frame would be
+   * clear of), grown to `grow` tall where it is; a frame B below it, made as `made` says, in the way of the growth; and, where `card`,
+   * another step's card in the way too.
+   */
+  function room(made: Partial<WorkflowSet>, grow = 40, card = false) {
+    let doc = addStep(emptyWorkspaceDocument(), "tag", 0, 0);
+    doc = placeResults(doc, doc.steps![0], drawn(1), W);
+    doc = { ...doc, model: { atoms: [], bonds: [] }, sets: doc.sets!.map((x) => ({ ...x, members: [] })) };
+    const was = setOf(doc, doc.steps![0].id);
+    const B = { id: 900, x0: was.x0, x1: was.x1, y0: was.y0 - 8, y1: was.y0 - 4, made: { step: 999, exit: "out" }, ...made } as WorkflowSet;
+    doc = { ...doc, sets: [...doc.sets!, B] };
+    if (card) doc = addStep(doc, "tag", was.x0 + 1, was.y0 - 12);
+    return { doc, out: roomMadeFor(doc, doc.steps![0], was, was.x1 - was.x0, grow) };
+  }
+  const b = (doc: WorkspaceDocument) => doc.sets!.find((x) => x.id === 900)!;
+
+  it("pushes a frame not run yet down below the grown set; leaves the page as it was where nothing is in the way", () => {
+    const { doc, out } = room({});
+    expect(b(out).y1).toBeLessThan(b(doc).y1);
+    expect(b(out).y1).toBeLessThan(setOf(doc, doc.steps![0].id).y1 - 40);
+    const clear = room({}, 1);
+    expect(clear.out).toBe(clear.doc);
+  });
+
+  it("never moves a set that holds results, nor one not kept: the page as it was", () => {
+    for (const made of [{ made: { step: 999, exit: "out", holds: "structures" } }, { notKept: { count: 3 } }] as Partial<WorkflowSet>[]) {
+      const { doc, out } = room(made);
+      expect(out).toBe(doc);
+    }
+  });
+
+  it("keeps nothing it pushed where the grown set's place is not cleared by it - a card in the way too", () => {
+    const { doc, out } = room({}, 40, true);
+    expect(out).toBe(doc);
   });
 });
