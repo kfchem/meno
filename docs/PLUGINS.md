@@ -555,7 +555,10 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     (however drawn), none from a
     carbon with a C=O, C=N, C=S, C=Se or C=Te out of it or a carbocation,
     two from a lone pair (pyrrole's N, furan's O, a carbanion), and a ring
-    with any other atom (a CH2, a fulvene's C=CH2) none. So a
+    with any other atom (a CH2, a fulvene's C=CH2) none; nor a ring of lone
+    pairs alone, with no pi bond and no empty p orbital in it (As4's and
+    P4's three-rings, a triaziridine): lone pairs complete a pi system and
+    never make one alone (backlog 182, 2026-11-16). So a
     fluoranthene's five-ring, aromatic in none of its own, is held flat,
     every atom of it lying on an aromatic six-ring; and so, whatever its
     count, is a ring drawn with aromatic bonds or bound to a metal through
