@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import { COLORS, ALPHA } from "../../../theme/colors";
@@ -26,6 +26,9 @@ export default function StrokeStart2D() {
     mark.current.x = start.x;
     mark.current.y = start.y;
   }
+  // (a frame asked for as the start comes or goes: with the pointer held still nothing else would draw one, and the mark would wait)
+  const shown = !!start;
+  useEffect(() => invalidate(), [shown, invalidate]);
   useFrame(() => {
     const m = mark.current;
     const inward = !!start;

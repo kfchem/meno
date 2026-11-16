@@ -107,10 +107,12 @@ describe("a band's own clock (no abrupt changes, the same ease every time)", () 
     expect(a[a.length - 1]).toBe(1);
   });
 
-  it("a frame held up mid-way takes it no further than BAND_STEP_MOST", () => {
+  it("a frame held up mid-way takes it no further than BAND_STEP_MOST, a twentieth of a second; a clock gone back, nowhere", () => {
+    expect(BAND_STEP_MOST).toBeCloseTo(0.05, 9);
     const clock: BandClock = { last: null };
     bandStep(clock, 0, true);
     expect(bandStep(clock, 2_000, true)).toBe(BAND_STEP_MOST);
+    expect(bandStep(clock, 1_990, true)).toBe(0);
   });
 
   it("at rest its clock stops, so the next motion - going out after a while - starts afresh too", () => {

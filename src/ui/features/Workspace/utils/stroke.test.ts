@@ -253,6 +253,8 @@ describe("a stroke's start on empty space, alone (Quick Add's Chain)", () => {
 
   it("is none for a stroke from an atom, or none at all", () => {
     expect(startAlone(startStroke("bond", 1), null)).toBeNull();
+    // (from an atom, even with a place of its start given: the atom is there, drawn as it is)
+    expect(startAlone({ ...startStroke("bond", 1), start: { x: 2, y: 3 } }, null)).toBeNull();
     expect(startAlone(null, null)).toBeNull();
   });
 });
