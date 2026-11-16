@@ -2294,7 +2294,10 @@ lipids each have their own way of being drawn, which it should know.
      molecule in 3D has read from its geometry (docs/PLUGINS.md,
      *Configurations*). A wedge at a
      pyramid of three that keeps none - an O+ - is read as no axis's end
-     either: Clean-up refuses it rather than lose it. An N's wedge may
+     either: Clean-up refuses it rather than lose it. Its bonds are
+     counted by a Kekule structure's orders, an aromatic bond not as one
+     and a half: a 1-arylphosphole's P, two ring bonds and its aryl, keeps
+     its lone pair and is such a pyramid, its bond to the aryl no axis. An N's wedge may
      still be an axis's, where its lone pair lies in a ring or a carbonyl
      beside it (an N-aryl pyrrole, an anilide). A wedge out of an
      allene's end - narrow there, on either of its groups - states the

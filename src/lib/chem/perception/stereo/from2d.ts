@@ -45,6 +45,7 @@
  * layout's `lib/layout/drawn` reads through it with its cage fit handed in.
  */
 import { lonePairCentres, pyramidal } from "./lonePairs";
+import { AROMATIC_BOND, valenceOrders } from "../kekule";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
 import { parity } from "./geometry";
@@ -459,6 +460,13 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
   const endsAnAllene = (i: number) =>
     !middle(i) && neighbours[i].some((m) => bondOf.get(key(i, m))!.order === 2 && middle(m) && runFrom(i, m).length % 2 === 1);
 
+  // (each bond's order with the aromatic ones written out as a Kekule structure, worked out once and only where one is asked of)
+  let kekule: Map<DrawnBond, number> | null = null;
+  const kekuleOrder = (b: DrawnBond): number => {
+    if (b.order !== AROMATIC_BOND) return b.order;
+    kekule ??= new Map(valenceOrders(atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, charge: a.charge ?? 0 })), bonds).map((o, k) => [bonds[k], o]));
+    return kekule.get(b) ?? 1;
+  };
   const axes: Axial[] = [];
   bonds.forEach((bond) => {
     if (bond.order !== 1 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
@@ -478,7 +486,9 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
       // turned the S over: laid out, the axis was kept and the centre not.
       // A wedge at a pyramid of three is about the pyramid, whether or not
       // that keeps a configuration - no axis's end)
-      const orders = neighbours[i].reduce((sum, n) => sum + (bondOf.get(key(i, n))!.order === 4 ? 1.5 : bondOf.get(key(i, n))!.order), 0);
+      // (by a Kekule structure's orders - perception/kekule `valenceOrders` - not an aromatic bond as 1.5: a 1-arylphosphole's P,
+      //  1 + 1 + 1 so, keeps its lone pair and is a pyramid, where 1.5 + 1.5 + 1 left it none and offered its P-aryl bond as an axis)
+      const orders = neighbours[i].reduce((sum, n) => sum + kekuleOrder(bondOf.get(key(i, n))!), 0);
       if (keepsPyramid(i) || pyramidal(atoms[i].el ?? "C", atoms[i].charge ?? 0, 3, orders, atoms[i].hs)) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
       // (an axis in a ring only where the ring is of seven atoms or more - a 2,2'-bridged biphenyl's, a BINOL phosphoric
