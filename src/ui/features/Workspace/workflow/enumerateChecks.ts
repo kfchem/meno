@@ -31,7 +31,8 @@ function onAnR(option: OptionRead): Model {
 async function flagged(model: Model, analyse: (molblock: string) => Promise<Analysis>): Promise<string[]> {
   const marks = marksOf(model, await analyse(chemMolblock(forFlatReaders(model))));
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
-  return [...marks.valence].filter(([id]) => byId.get(id)!.el !== "R#").map(([id, p]) => valenceMessage(byId.get(id)!.el, p));
+  // (an R drawn, or typed as an R or a star: no atom of its own to check)
+  return [...marks.valence].filter(([id]) => !["R#", "R", "*"].includes(byId.get(id)!.el)).map(([id, p]) => valenceMessage(byId.get(id)!.el, p));
 }
 
 /**
