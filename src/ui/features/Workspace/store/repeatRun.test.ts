@@ -9,6 +9,10 @@ import { addMolecule3d, createWorkspaceDocument } from "../document";
 import { setMolecules } from "../workflow/entries";
 import { PASS, RAN_OUT, TIMES_ROUND } from "../workflow/repeatRun";
 import { offeredSteps } from "../workflow/offered";
+import { inputKey } from "../workflow/flow";
+import { repeatBox } from "../workflow/repeat";
+import { cardHighOf } from "../workflow/kinds";
+import { CARD_W } from "../workflow/look";
 
 /** The page: two waters in a set, wired into a Repeat whose frame holds a Filter (pass < 3): its kept to Again, its rest to Done. */
 function page(options: Record<string, string | number>) {
@@ -35,7 +39,7 @@ function page(options: Record<string, string | number>) {
   const r = st().addStep("repeat", "meno", 100, 0);
   const f = st().addStep("filter", "meno", 400, 300);
   // (the Repeat's frame round the Filter, and each card where it is meant to be: the Filter's middle inside the frame)
-  doc.edit("place", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === r ? { ...s, x: 100, y: 0, frame: { w: 3000, h: 2000 } } : s.id === f ? { ...s, x: 600, y: 600 } : s)) }));
+  doc.edit("place", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === r ? { ...s, x: 100, y: 0, frame: { w: 3000, h: 2000 } } : s.id === f ? { ...s, x: 600, y: -600 } : s)) }));
   st().updateStep(r, { options });
   st().updateStep(f, { options: { conditions: "pass < 3" } });
   const exit = (step: number, id: string) => st().sets.find((b) => b.made?.step === step && b.made.exit === id)!.id;
@@ -67,6 +71,13 @@ describe("a Repeat run pass by pass", () => {
       [3, 2, null],
       [3, 2, null],
     ]);
+  });
+
+  it("reads as run, not changed, once it has run: what its passes fill on Again and Done is not what it ran on (found in the GUI check)", async () => {
+    const { st, r } = page({ repeat: "until", most: 10 });
+    await st().runStep(r);
+    const step = st().steps.find((s) => s.id === r)!;
+    expect(step.ran?.input).toBe(inputKey(st() as never, step, "meno"));
   });
 
   it("twice: both still going round as the passes run out, out by Out, marked so - and said", async () => {
@@ -102,7 +113,7 @@ describe("a Repeat whose frame a wire crosses", () => {
     const t = st().addStep("tag", "meno", 4000, 300);
     st().connect({ set: input }, t);
     // (dragged in: its middle inside the frame now, its wire from the set outside still on it)
-    doc.edit("drag", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === t ? { ...s, x: 1500, y: 600 } : s)) }));
+    doc.edit("drag", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === t ? { ...s, x: 1500, y: -600 } : s)) }));
     expect(st().steps.find((s) => s.id === r)!.holds).toContain(t);
     await st().runStep(r);
     expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, said: expect.stringMatching(/^A wire crosses its frame's edge, a card moved in or out with its wires on: This step is inside a Repeat/) });
@@ -121,8 +132,14 @@ describe("a Repeat made", () => {
     const exit = (step: number, id: string) => st().sets.find((b) => b.made?.step === step && b.made.exit === id)!.id;
     st().connect({ set: input }, f);
     st().connect({ set: exit(f, "out") }, t);
-    const r = st().repeatSteps([f])!;
+    const r = st().repeatSteps([f]) as number;
     const step = st().steps.find((s) => s.id === r)!;
+    // (its card at its frame's top left, the step it holds below and beside it, inside: the page's y runs up)
+    const box = repeatBox({ x: step.x, y: step.y, frame: step.frame! });
+    const held = st().steps.find((s) => s.id === f)!;
+    expect(held.x).toBeGreaterThan(step.x + CARD_W);
+    expect(held.y).toBeLessThan(box.y1);
+    expect(held.y - cardHighOf("filter")).toBeGreaterThan(box.y0);
     expect(step.kind).toBe("repeat");
     expect(step.holds).toEqual([f]);
     const ends = st().wires.map((w) => [st().sets.find((b) => b.id === w.from.set)?.made ?? "input", w.to.step, w.to.port]);
@@ -139,6 +156,20 @@ describe("a Repeat made", () => {
     expect(doc.undo()).toBe(true);
     expect(st().steps.some((s) => s.id === r)).toBe(false);
     expect(st().wires).toHaveLength(2);
+  });
+
+  it("round steps that structures drawn come into: refused, saying why, and nothing changed - never made with the wire lost (found in the GUI check)", () => {
+    const doc = createWorkspaceDocument();
+    doc.edit("draw", (d) => ({ ...d, model: { atoms: [{ id: 1, el: "C", x: 0, y: 0 }, { id: 2, el: "O", x: 1.3, y: 0 }], bonds: [{ id: 3, a: 1, b: 2, order: 1 }] } as never, nextId: 10 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const input = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const f = st().addStep("filter", "meno", 400, 300);
+    st().connect({ set: input }, f);
+    const before = doc.getState();
+    expect(st().repeatSteps([f])).toEqual({ why: expect.stringMatching(/^What comes into these steps cannot go into a Repeat: /) });
+    expect(doc.getState()).toBe(before);
   });
 
   it("is offered in Quick Add's Meno row, put down alone - never from a wire, which a step takes", () => {

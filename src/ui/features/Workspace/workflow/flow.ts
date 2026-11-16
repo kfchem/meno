@@ -428,7 +428,9 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
   // (a Restraints input with nothing wired into it: no input of its - a step that never had one keeps its key)
-  const ports = inputsFor(step.kind, by).filter((p) => p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0);
+  // (a Repeat's Again and Done its own passes fill, never what it was run on: its key is what comes into In - a run of it never
+  //  reads as changed by what it made)
+  const ports = inputsFor(step.kind, by).filter((p) => (p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0) && !(step.kind === "repeat" && (LANDING as readonly string[]).includes(p.id)));
   // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
   if (ports.length > 1) {
     const keys = ports.map((p) => portKey(doc, step.id, p.id, true));

@@ -12,7 +12,7 @@ import type { OptionValues } from "../../../../lib/options";
 import type { Bound } from "../../../../lib/boundOptions";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, type Frame } from "./entries";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
-import { canWire, resultOf, wiresInto } from "./flow";
+import { canWire, resultOf, wireRefusal, wiresInto } from "./flow";
 import { cardHighOf, exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
@@ -372,8 +372,18 @@ const REPEAT_EMPTY = { w: 4 * CARD_W + 5 * GAP, h: 3 * CARD_H + 4 * GAP };
  * keeps its wire from outside, read the same every pass. Where what comes in is more than one set, or none of the steps is left, nothing.
  */
 export function repeatAround(doc: WorkspaceDocument, ids: readonly number[]): WorkspaceDocument {
+  const made = repeatMade(doc, ids);
+  return made && "doc" in made ? made.doc : doc;
+}
+
+/**
+ * `repeatAround`'s Repeat, or why it is not made, in words: what comes into the steps is more than one set, or a set *In* does not take
+ * (structures drawn: a Repeat runs on molecules in 3D) - never made with the wire that crossed its edge lost. None where there is
+ * nothing to make it round: no step, or one a Repeat holds already.
+ */
+export function repeatMade(doc: WorkspaceDocument, ids: readonly number[]): { doc: WorkspaceDocument } | { why: string } | null {
   const inner = (doc.steps ?? []).filter((s) => ids.includes(s.id) && s.kind !== "repeat");
-  if (!inner.length || (doc.steps ?? []).some((s) => s.kind === "repeat" && s.holds?.some((h) => ids.includes(h)))) return doc;
+  if (!inner.length || (doc.steps ?? []).some((s) => s.kind === "repeat" && s.holds?.some((h) => ids.includes(h)))) return null;
   const held = new Set(inner.map((s) => s.id));
   const made = new Map((doc.sets ?? []).flatMap((b) => (b.made ? [[b.id, b.made.step] as const] : [])));
   const insideSet = (set: number) => held.has(made.get(set) ?? -1);
@@ -383,16 +393,21 @@ export function repeatAround(doc: WorkspaceDocument, ids: readonly number[]): Wo
     return inputsFor(s.kind, byOf(s))[0]?.id ?? ONE_INPUT;
   };
   const comingIn = wires.filter((w) => held.has(w.to.step) && !insideSet(w.from.set) && w.to.port === firstOf(w.to.step));
-  if (new Set(comingIn.map((w) => w.from.set)).size > 1) return doc;
+  if (new Set(comingIn.map((w) => w.from.set)).size > 1) return { why: "More than one set comes into these steps: a Repeat takes one, by its In" };
   const goingOut = wires.filter((w) => !held.has(w.to.step) && insideSet(w.from.set));
-  // (its card to the left of theirs, its frame round all of them)
+  // (its card to the left of theirs, at the frame's top left; its frame round all of them - the page's y runs up: a card's top is
+  //  its y, its foot below it)
   const x0 = Math.min(...inner.map((s) => s.x)) - CARD_W - 2 * GAP;
-  const y0 = Math.min(...inner.map((s) => s.y)) - GAP;
+  const top = Math.max(...inner.map((s) => s.y)) + GAP;
   const x1 = Math.max(...inner.map((s) => s.x + CARD_W)) + GAP;
-  const y1 = Math.max(...inner.map((s) => s.y + cardHighOf(s.kind))) + 2 * GAP;
+  const foot = Math.min(...inner.map((s) => s.y - cardHighOf(s.kind))) - 2 * GAP;
   const id = idOf(doc);
-  let d = addStep(doc, "repeat", x0, y0, undefined, "meno");
-  d = { ...d, steps: d.steps!.map((s) => (s.id === id ? { ...s, frame: { w: x1 - x0, h: Math.max(y1 - y0, cardHighOf("repeat") + 2 * GAP) }, holds: inner.map((x) => x.id) } : s)) };
+  let d = addStep(doc, "repeat", x0, top, undefined, "meno");
+  d = { ...d, steps: d.steps!.map((s) => (s.id === id ? { ...s, frame: { w: x1 - x0, h: Math.max(top - foot, cardHighOf("repeat") + 2 * GAP) }, holds: inner.map((x) => x.id) } : s)) };
+  // (what comes in must go into its In: a set In does not take is said, never dropped)
+  if (comingIn.length && !canWire(d, { set: comingIn[0].from.set }, id, "in")) {
+    return { why: `What comes into these steps cannot go into a Repeat: ${wireRefusal(d, { set: comingIn[0].from.set }, id, "in") ?? "In does not take it"}` };
+  }
   const exit = (e: string) => d.sets!.find((b) => b.made?.step === id && b.made.exit === e)!.id;
   // (what crossed its edge taken away, then routed through it)
   for (const w of [...comingIn, ...goingOut]) d = removeWire(d, w.id);
@@ -400,7 +415,7 @@ export function repeatAround(doc: WorkspaceDocument, ids: readonly number[]): Wo
   for (const w of comingIn) d = connect(d, { set: exit("out") }, w.to.step, w.to.port);
   for (const set of new Set(goingOut.map((w) => w.from.set))) d = connect(d, { set }, id, "done");
   for (const w of goingOut) d = connect(d, { set: exit("reached") }, w.to.step, w.to.port);
-  return d;
+  return { doc: d };
 }
 
 /**
@@ -417,9 +432,10 @@ export function repeatsSettled(doc: WorkspaceDocument): WorkspaceDocument {
   const holder = new Map<number, number>();
   for (const s of steps) {
     if (s.kind === "repeat") continue;
+    // (its card's middle: the page's y runs up, so half its height below its top)
     const mx = s.x + CARD_W / 2;
-    const my = s.y + cardHighOf(s.kind) / 2;
-    const round = frames.filter((r) => mx > r.x && mx < r.x + r.frame!.w && my > r.y && my < r.y + r.frame!.h);
+    const my = s.y - cardHighOf(s.kind) / 2;
+    const round = frames.filter((r) => mx > r.x && mx < r.x + r.frame!.w && my < r.y && my > r.y - r.frame!.h);
     round.sort((p, q) => p.frame!.w * p.frame!.h - q.frame!.w * q.frame!.h || p.id - q.id);
     if (round.length) holder.set(s.id, round[0].id);
   }
@@ -427,7 +443,8 @@ export function repeatsSettled(doc: WorkspaceDocument): WorkspaceDocument {
     if (r.kind !== "repeat" || !r.frame) return r;
     const inside = steps
       .filter((s) => holder.get(s.id) === r.id)
-      .sort((a, b) => a.y - b.y || a.x - b.x)
+      // (in reading order: the highest first - the page's y runs up - then left to right)
+      .sort((a, b) => b.y - a.y || a.x - b.x)
       .map((s) => s.id);
     if (JSON.stringify(inside) === JSON.stringify(r.holds ?? [])) return r;
     changed = true;

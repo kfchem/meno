@@ -19,6 +19,7 @@ import { schemeSaid } from "../workflow/schemeRoles";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
+import { repeatBox } from "../workflow/repeat";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
 import { unseenSets } from "../workflow/onPage";
 import { exitChip, exitNames } from "../workflow/exitNames";
@@ -1351,7 +1352,7 @@ export default function Workflow2D() {
     return [
       {
         key: `repeat:${s.id}`,
-        box: { x0: s.x, y0: s.y, x1: s.x + s.frame.w, y1: s.y + s.frame.h },
+        box: repeatBox({ x: s.x, y: s.y, frame: s.frame }),
         tone: selFlow.steps.has(s.id) ? ("chosen" as const) : hoveredStep === s.id ? ("hover" as const) : ("rest" as const),
         loop: true as const,
         tab: { icon: "repeat", name: "Repeat", ...(status ? { status } : {}) },

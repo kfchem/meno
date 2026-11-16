@@ -118,7 +118,8 @@ describe("a Repeat's frame in the flow", () => {
 
 describe("the steps a Repeat holds", () => {
   const doc = (steps: WorkflowStep[]) => ({ steps }) as unknown as WorkspaceDocument;
-  const inFrame = (x: number, y: number) => ({ x: x - CARD_W / 2, y: y - cardHighOf("tag") / 2 });
+  /** A card's top left with its middle at `x` across and `y` below its frame's top (the page's y runs up: a card's top is its y, its foot below). */
+  const inFrame = (x: number, y: number) => ({ x: x - CARD_W / 2, y: -y + cardHighOf("tag") / 2 });
 
   it("are those whose cards' middles lie inside its frame, in reading order: one dragged in joins, one dragged out leaves", () => {
     const r = step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
@@ -145,7 +146,7 @@ describe("the steps a Repeat holds", () => {
 
   it("are held by their card's middle, not its top: a card whose top lies outside the frame and its middle inside is held", () => {
     const r = step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
-    const a = step(A, "tag", 300, -cardHighOf("tag") / 2 + 20);
+    const a = step(A, "tag", 300, cardHighOf("tag") / 2 - 20);
     expect(repeatsSettled(doc([r, a])).steps!.find((s) => s.id === R)!.holds).toEqual([A]);
   });
 

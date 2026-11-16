@@ -893,7 +893,10 @@ any option can name - *Options from a property*).
   steps*: its frame drawn round them, and every wire that crossed their
   edge routed through it in the same edit (a wire coming in to *In*, and
   *This pass* on to the step it fed; a wire going out from *Done*, and
-  *Out* on to where it went). One undo step either way.
+  *Out* on to where it went). One undo step either way. Where what
+  comes into the steps is more than one set, or one *In* does not take -
+  structures drawn: a Repeat runs on molecules in 3D - none is made, and a
+  notice says why; the wire is never lost.
 - **What it is.** A step of its own kind (`workflow/repeat`), whose card
   stands at its frame's top left. *In* is its input from outside. Inside
   its frame, *This pass* is the set its first steps take, and *Again* and

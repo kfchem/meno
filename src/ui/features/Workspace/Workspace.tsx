@@ -2291,7 +2291,11 @@ function WorkspaceContent({
             // (not a Repeat's own card, nor a step a Repeat holds already)
             if (!pointed || pointed.kind === "repeat" || st.steps.some((s) => s.kind === "repeat" && s.holds?.includes(pointed.id))) return undefined;
             const chosen = st.selFlow.steps.has(pointed.id) ? [...st.selFlow.steps] : [pointed.id];
-            return () => void store.getState().repeatSteps(chosen);
+            return () => {
+              const made = store.getState().repeatSteps(chosen);
+              // (one that cannot be made round them: why, said where the page's notices are)
+              if (made && typeof made === "object") useNotices.getState().show({ id: "repeat-steps", title: "Repeat these steps", text: made.why });
+            };
           })()}
           onSaveProcedure={(menu.kind === "step" || menu.kind === "set") && menu.id != null ? () => {
             const st = store.getState();

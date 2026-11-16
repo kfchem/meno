@@ -160,6 +160,9 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     repeatSteps: (ids: readonly number[]) => {
       const before = doc.getState();
       const id = before.nextWorkflowId ?? 1;
+      // (one that cannot be made round them says why, and nothing changes: workflow/model `repeatMade`)
+      const made = wf.repeatMade(before, ids);
+      if (made && "why" in made) return { why: made.why };
       doc.edit("repeat steps", (d) => wf.repeatAround(d, ids));
       return doc.getState().steps?.some((s) => s.id === id && s.kind === "repeat") ? id : null;
     },

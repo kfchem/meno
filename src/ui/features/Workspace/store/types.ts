@@ -1858,8 +1858,8 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
-  /** A Repeat made round steps (*Repeat these steps*: workflow/model `repeatAround`), the wires that crossed their edge routed through it - one undo step; its id, or none where it could not be. */
-  repeatSteps: (ids: readonly number[]) => number | null;
+  /** A Repeat made round steps (*Repeat these steps*: workflow/model `repeatAround`), the wires that crossed their edge routed through it - one undo step; its id, why it could not be made (`workflow/model` `repeatMade`), or none where there is nothing to make it round. */
+  repeatSteps: (ids: readonly number[]) => number | { why: string } | null;
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
