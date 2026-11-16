@@ -739,6 +739,29 @@ export function laidOver(
   });
 }
 
+/** How near, in angstroms, a result's atoms are to an entry's to be where they were: a step that passed it through, not one that moved it. */
+const KEPT_AT = 1e-6;
+
+/**
+ * How each molecule a step gave is first turned, where the step passed it
+ * through - a Filter's, a Tag's, a Rank's, a Repeat's *Out* - its atoms
+ * where they were (docs/WORKFLOWS.md, *Results*): as the molecule it came
+ * from is turned, so that what the chemist saw face-on one card before is
+ * face-on in the next. Unset where no entry has its atoms where they are -
+ * a molecule a step moved, or made: seen as it is first seen.
+ */
+export function viewKept(
+  molecules: readonly Pick<Molecule3D, "atoms" | "frames">[],
+  entries: readonly SetEntry[],
+  turnOf: (e: SetEntry) => Turn3D | undefined,
+): (Turn3D | undefined)[] {
+  return molecules.map((m) => {
+    const xyz = frameXyz(m, framesOf(m) - 1);
+    const from = entries.find((e) => e.atoms.length === m.atoms.length && e.atoms.every((a, i) => a.el === m.atoms[i].el) && e.xyz.every((v, k) => Math.abs(v - xyz[k]) <= KEPT_AT));
+    return from ? turnOf(from) : undefined;
+  });
+}
+
 /**
  * `doc` with a step's results - its molecules in 3D, those it set aside,
  * and what kind of set they make - as the entries of its result set: made

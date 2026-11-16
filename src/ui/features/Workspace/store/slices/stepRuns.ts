@@ -50,7 +50,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
@@ -261,7 +261,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno" && step.kind === "check-structures") return checkDrawn(id, at);
     if (by === "meno" && step.kind === "stereoisomers") return stereoDrawn(id, at);
-    if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
+    if (by === "meno") {
+      const d0 = doc.getState();
+      const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
+      doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
+      return void viewsKept(d0, id, before);
+    }
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
     // (a plugin stopped - one it uses not added, or not of a version it works with - runs nothing, saying why)
@@ -523,7 +528,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what came in changed meanwhile - an edit, an undo, its set deleted: its results are of what came in when it started, put in all the same, and the step says it has changed)
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
+    const before = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
     doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
+    viewsKept(d, id, before);
   }
 
   /**
@@ -651,12 +658,35 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
   }
 
-  /** How a step's results are first turned, where they are what came in worked out: each laid over what it was worked out from, turned as that is (workflow/run `laidOver`). */
+  /**
+   * How a step's results are first turned: where they are what came in worked out, each laid over what it was worked out from, turned as
+   * that is (workflow/run `laidOver`); where the step passed them through, its atoms where they were, turned as the molecule each came from
+   * is (`viewKept`) - one a step moved or made seen as it is first seen.
+   */
   function turnsFor(d: WorkspaceDocument, id: number, kind: StepKind, results: RunResults): (Turn3D | undefined)[] | undefined {
     const input = inputOf(d, id);
-    if (!LAID_OVER.includes(kind) || !input || input.holds === "structures" || results.holds === "conformers") return undefined;
+    if (!input || input.holds === "structures" || results.holds === "conformers") return undefined;
     const turns = get().turns3d;
-    return laidOver(results.molecules, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    const entries = setEntries(input.molecules, input.holds);
+    const turnOf = (e: SetEntry) => (e.from != null ? turns[e.from] : undefined);
+    return LAID_OVER.includes(kind) ? laidOver(results.molecules, entries, turnOf) : viewKept(results.molecules, entries, turnOf);
+  }
+
+  /**
+   * Each molecule a run of step `id` put down - none of `before` - that the step passed through, its atoms where they were in what came
+   * in (as `d` had it), turned as the molecule it came from is (workflow/run `viewKept`): face-on one card before, face-on in the next.
+   */
+  function viewsKept(d: WorkspaceDocument, id: number, before: ReadonlySet<number>) {
+    const input = inputOf(d, id);
+    if (!input || input.holds === "structures") return;
+    const made = (doc.getState().molecules3d ?? []).filter((m) => !before.has(m.id));
+    if (!made.length) return;
+    const turns = get().turns3d;
+    const kept = viewKept(made, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    made.forEach((m, i) => {
+      const turn = kept[i];
+      if (turn && !turns[m.id]) get().setTurn3d(m.id, turn);
+    });
   }
 
   /** Molecules new on the page, in the order they were put down, turned as `turns` says. */

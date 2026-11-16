@@ -2257,6 +2257,13 @@ orientation* shows it as the output has it. Its room in the result set
 is made for it turned. A program that keeps the input's orientation is
 laid over it as it is.
 
+Results a step passed through, their atoms where they were - a
+*Filter*'s, a *Tag*'s, a *Rank*'s - are put down turned as the molecule
+each came from is (run `viewKept`): a water seen face-on in what came in
+is seen face-on in the step's set, never edge-on as if its geometry had
+changed. A molecule a step moved or made, and one whose source was never
+turned, is seen as it is first seen.
+
 - **By the view's turn**, not by turning the coordinates, which would
   part them from the output they were read from (its vibrations, the
   surfaces asked of it later). A run shown again from *Runs* is laid over
