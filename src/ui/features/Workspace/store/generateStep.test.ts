@@ -86,6 +86,16 @@ function page() {
 }
 
 describe("Generate: a step that takes nothing in", () => {
+  it("refuses to run with an option taken from a property: nothing comes in to take it from - and never runs on the step's own value instead", async () => {
+    const { st } = page();
+    const step = st().addStep("generate", "molgen", 0, 0);
+    st().updateStep(step, { options: { count: 3, seed: 7 } });
+    st().updateStep(step, { bound: { count: "n" } });
+    await st().runStep(step);
+    expect(run).not.toHaveBeenCalled();
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("takes its options as given on its card, not from a property") });
+  });
+
   beforeEach(() => {
     run.mockReset();
     asked.length = 0;

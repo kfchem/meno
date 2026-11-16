@@ -30,6 +30,8 @@ export const CONCEPTS: Record<string, RegExp> = {
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
   // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
   "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
+  // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
+  "aromatic tests": /^(?:export )?(?:function|const) (aromaticRing|aromaticBonds|isFlat)\b/,
 };
 
 /**
@@ -64,14 +66,6 @@ export const STILL_APART: Copy[] = [
   { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
   { concept: "valence", file: "lib/chem/abbreviations.ts", name: "CARRIERS", part: 12 },
-  // permutation parity and signed volume from places
-  { concept: "parity", file: "lib/layout/canonical.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
-  { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },
-  { concept: "volume", file: "lib/layout/cage.ts", name: "handedness", part: 4 },
-  { concept: "volume", file: "lib/steps/compareBonding.ts", name: "handedness", part: 4 },
   // the types for a centre, a double bond, an axis, a whole configuration
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "StereoElement", part: 14 },
   { concept: "stereo types", file: "lib/chem/smiles.ts", name: "Configuration", part: 14 },
@@ -83,6 +77,12 @@ export const STILL_APART: Copy[] = [
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Axial", part: 14, why: "re-exported from the core, as Tetrahedral" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Cumulated", part: 14, why: "re-exported from the core, as Tetrahedral (part 14 A)" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
+  // tests of a ring as aromatic that are not Meno's rule nor its two forms (perception/aromatic.ts): each answers a question of its own
+  { concept: "aromatic tests", file: "lib/chem/aromaticSides.ts", name: "aromaticRing", part: "stays", why: "display, by design: a ring drawn with its double bonds in turn, for the side its second lines are drawn on" },
+  { concept: "aromatic tests", file: "lib/chem/contract.ts", name: "aromaticBonds", part: "stays", why: "by design, of a drawing: a six-ring drawn alternating, matched as a group's ring when Clean-up writes groups by their labels" },
+  { concept: "aromatic tests", file: "lib/chem/reactionMap.ts", name: "aromaticBonds", part: "stays", why: "a use of the core's aromaticForm, not a rule: its bonds of order 4 as a set of atom pairs" },
+  { concept: "aromatic tests", file: "lib/chem/ordersFromGeometry.ts", name: "isFlat", part: "stays", why: "from geometry, by design: a ring flat in space, where orders are read from 3D coordinates" },
+  { concept: "aromatic tests", file: "lib/chem/protonation.ts", name: "isFlat", part: "stays", why: "by its bonds, by design: a five- or six-ring each of whose atoms has a multiple bond or is N, O or S - flat, for where an H goes; no count of electrons" },
 ];
 
 /** The top-level declarations in a file's text that a concept's pattern names: name and line. */
@@ -153,6 +153,7 @@ describe("the ratchet's own reading, so that it bites", () => {
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
     expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
+    expect(declarationsIn("function aromaticRing(ring) {}\nconst isFlatter = 1;\n", CONCEPTS["aromatic tests"])).toEqual([{ name: "aromaticRing", line: 1 }]);
   });
 
   it("leaves a use, a local and an import alone: only a declaration counts", () => {

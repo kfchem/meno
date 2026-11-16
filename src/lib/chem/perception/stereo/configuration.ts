@@ -6,6 +6,7 @@
  *
  * What goes to the plugin is the centres and double bonds (`sentOf`): the groups are Meno's, and Meno says what it made of them.
  */
+import { parity } from "./geometry";
 
 /** A centre's configuration: its neighbours, in the order named, and the sign of the volume the first three span seen from it. */
 export type ConfiguredCentre = { atom: number; neighbours: number[]; sense: 1 | -1 };
@@ -42,9 +43,8 @@ export function configurationKey(c: IsomerConfiguration): string {
     .sort((p, q) => p.atom - q.atom)
     .map((x) => {
       const sorted = [...x.neighbours].sort((p, q) => p - q);
-      // (the swaps that put the neighbours in order, counted as inversions)
-      let odd = false;
-      for (let i = 0; i < x.neighbours.length; i++) for (let j = i + 1; j < x.neighbours.length; j++) if (x.neighbours[i] > x.neighbours[j]) odd = !odd;
+      // (the swaps that put the neighbours in order)
+      const odd = parity(x.neighbours) === -1;
       return [x.atom, sorted, odd ? -x.sense : x.sense];
     });
   const doubles = [...c.doubles].sort((p, q) => p.bond - q.bond).map((x) => [x.bond, [...x.ends].sort((p, q) => p - q), x.cis]);

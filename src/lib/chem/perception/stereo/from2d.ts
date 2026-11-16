@@ -47,7 +47,9 @@
 import { lonePairCentres, pyramidal } from "../../lonePairCentres";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
+import { parity } from "./geometry";
 import { factsOf } from "../facts";
+import { ofTheStructure } from "../graph";
 
 /** A pair of atoms as one key, the lower first. */
 const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -78,6 +80,8 @@ export type DrawnBond = {
   wedge?: { narrow: number; stereo: "up" | "down" };
   /** A wavy bond: either configuration, so none is read at its ends. */
   either?: boolean;
+  /** A hydrogen bond: no bond of the structure (perception/graph `ofTheStructure`), so read as if it were not there. */
+  hydrogen?: boolean;
 };
 
 export type DrawnStereo = {
@@ -251,6 +255,10 @@ function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x
  * (`LayoutAtom.linear`), so that what it lays out leaves the bond unsaid too.
  */
 export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
+  return straightEndsOf(atoms, structureOf(bonds).bonds);
+}
+
+function straightEndsOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -287,6 +295,12 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
  * centres the first reading fixed held.
  */
 export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): DrawnStereo {
+  const kept = structureOf(bonds);
+  const read = readStereoOf(atoms, kept.bonds, fit);
+  return { ...read, cisTrans: new Map([...read.cisTrans].map(([i, c]) => [kept.at(i), c])) };
+}
+
+function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter): DrawnStereo {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -511,6 +525,10 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * or else wedges and hashes that cancel, saying neither way round.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
+  return unreadWhyOf(atoms, structureOf(bonds).bonds, c);
+}
+
+function unreadWhyOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
   const mine = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c));
   const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
   const atom = atoms[c];
@@ -564,6 +582,12 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * configuration read as readStereo reads it, from its three groups.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
+  const kept = structureOf(bonds);
+  const unsure = unsureStereoOf(atoms, kept.bonds);
+  return { atoms: unsure.atoms, bonds: unsure.bonds.map(kept.at) };
+}
+
+function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -782,18 +806,21 @@ export function sameConfiguration(
   const a = p.neighbours.map(as);
   const b = q.neighbours.map(as);
   if (a.length !== b.length || a.some((n) => !b.includes(n))) return false;
-  const perm = a.map((n) => b.indexOf(n));
-  let swaps = 0;
-  const seen = perm.map(() => false);
-  for (let i = 0; i < perm.length; i++) {
-    let len = 0;
-    for (let j = i; !seen[j]; j = perm[j]) {
-      seen[j] = true;
-      len++;
-    }
-    if (len) swaps += len - 1;
-  }
-  return (swaps % 2 === 0) === (p.volume === q.volume);
+  // (the parity of the permutation taking one order to the other: geometry's)
+  return (parity(a.map((n) => b.indexOf(n))) === 1) === (p.volume === q.volume);
+}
+
+/**
+ * The drawing's bonds of the structure (perception/graph `ofTheStructure`: a hydrogen bond is none), which every reading here takes in place
+ * of the caller's, and `at`, which gives a kept bond's index in the caller's list back - so what is said of bonds is said in its numbering.
+ */
+function structureOf(bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]; at: (i: number) => number } {
+  if (bonds.every(ofTheStructure)) return { bonds, at: (i) => i };
+  const at: number[] = [];
+  bonds.forEach((b, i) => {
+    if (ofTheStructure(b)) at.push(i);
+  });
+  return { bonds: at.map((i) => bonds[i]), at: (i) => at[i] };
 }
 
 /** The smallest ring a double bond in which has a cis or trans to state: eight atoms - one in a ring of seven or fewer is held cis. */

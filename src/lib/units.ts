@@ -32,14 +32,14 @@ export const GAS_CONSTANT_HARTREE = BOLTZMANN_J / HARTREE_J;
 export const ROOM_TEMPERATURE = 298.15;
 
 /** What a unit measures. A number converts only to a unit of its own dimension. */
-export type Dimension = "energy" | "temperature" | "length" | "angle" | "molar mass" | "area";
+export type Dimension = "energy" | "temperature" | "length" | "angle" | "molar mass" | "area" | "torsion force constant" | "distance force constant";
 
 /**
  * The units Meno knows. Energies per molecule (Eh, eV, cm⁻¹) and per mole
  * (kcal/mol, kJ/mol) are one dimension, as chemists use them: a mole's
  * worth of a molecule's energy.
  */
-export type Unit = "Eh" | "kcal/mol" | "kJ/mol" | "eV" | "cm-1" | "K" | "°C" | "Å" | "bohr" | "nm" | "pm" | "°" | "g/mol" | "Å2";
+export type Unit = "Eh" | "kcal/mol" | "kJ/mol" | "eV" | "cm-1" | "K" | "°C" | "Å" | "bohr" | "nm" | "pm" | "°" | "g/mol" | "Å2" | "kcal/mol/rad2" | "kJ/mol/rad2" | "kcal/mol/Å2" | "kJ/mol/Å2";
 
 type UnitInfo = {
   dimension: Dimension;
@@ -67,11 +67,23 @@ export const UNITS: Readonly<Record<Unit, UnitInfo>> = {
   // (a molecule's mass per mole, and a surface's area: a descriptor's - molecular weight, polar surface area)
   "g/mol": { dimension: "molar mass", scale: 1, label: "g/mol" },
   "Å2": { dimension: "area", scale: 1, label: "Å²" },
+  // (a restraint's strength: an energy per mole over an angle or a distance squared - a torsion's, a distance's - as a restraint's
+  // row writes it; kcal and kJ by the thermochemical calorie)
+  "kcal/mol/rad2": { dimension: "torsion force constant", scale: 1, label: "kcal/mol/rad\u00b2" },
+  "kJ/mol/rad2": { dimension: "torsion force constant", scale: 1 / CALORIE_J, label: "kJ/mol/rad\u00b2" },
+  "kcal/mol/Å2": { dimension: "distance force constant", scale: 1, label: "kcal/mol/\u00c5\u00b2" },
+  "kJ/mol/Å2": { dimension: "distance force constant", scale: 1 / CALORIE_J, label: "kJ/mol/\u00c5\u00b2" },
 };
 
 /** Whether a text names one of Meno's units. */
 export function isUnit(u: string): u is Unit {
   return Object.prototype.hasOwnProperty.call(UNITS, u);
+}
+
+/** A unit as typed or shown: by Meno's name for it ("cm-1") or as it is written ("cm⁻¹"); none where it is neither. */
+export function unitNamed(u: string): Unit | undefined {
+  if (isUnit(u)) return u;
+  return (Object.keys(UNITS) as Unit[]).find((k) => UNITS[k].label === u);
 }
 
 /** Whether two units measure the same thing, and so convert. */

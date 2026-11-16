@@ -315,7 +315,7 @@ export default function QuickAdd({
             <button
               key={c.id}
               aria-label={c.name}
-              title={c.name}
+              data-tip={c.name}
               aria-expanded={opens(c.id) ? open === c.id : undefined}
               onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : c.id === "arrow" && onArrow ? (e) => e.button === 0 && onArrow(e) : undefined}
               onClick={
@@ -343,7 +343,7 @@ export default function QuickAdd({
           <button
             aria-label="Calculations"
             aria-expanded={calcOpen}
-            title="Calculations"
+            data-tip="Calculations"
             onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
             className={`meno-press rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
@@ -587,7 +587,7 @@ function RowIcon({ name, icon, onClick, onPointerDown }: { name: string; icon: R
   return (
     <button
       aria-label={name}
-      title={name}
+      data-tip={name}
       onClick={onClick}
       onPointerDown={onPointerDown}
       className="meno-press rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"

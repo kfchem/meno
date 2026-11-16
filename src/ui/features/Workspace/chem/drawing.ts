@@ -119,6 +119,8 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
         // (either configuration: a wavy bond's at its ends, and a double bond's own - a MOL file's crossed one, V2000's 3, V3000's
         //  CFG=2 - whose cis or trans is not known, however its ends happen to lie)
         ...(b.stereo === "wavy" || (b.order === 2 && b.stereo === "either") ? { either: true } : {}),
+        // (a hydrogen bond: kept, in its place, and read as no bond of the structure)
+        ...(b.hydrogen ? { hydrogen: true } : {}),
       },
     ];
   });
