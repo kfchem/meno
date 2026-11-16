@@ -34,6 +34,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { givenOf } from "./givenConfiguration";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
@@ -43,7 +44,7 @@ import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
 import { isomersToMake, withChosen, withOwnCip, type OpenStereo, type ToMake } from "./openStereo";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
-import type { Configuration } from "../../../../lib/chem/stereoOpen";
+import type { Configuration, IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { groupName, sentOf } from "../../../../lib/chem/perception/stereo/configuration";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "./partsApart";
@@ -1020,9 +1021,10 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * not (lib/chem/skeleton).
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
-  const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
-  // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
-  const model = await laidOut(drawn, style, undefined, undefined, true).catch(() => arrangementsMarked(drawn));
+  const { drawn, ordersUnknown, configuration } = await drawnOf(chem, m, frame);
+  // (its coordinates nobody's drawing: laid out as new, from the configuration the plugin read of it in 3D where it sends it - not from
+  //  its drawing's wedges - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
+  const model = await laidOut(drawn, style, givenOf(undefined, configuration), undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
@@ -1038,7 +1040,7 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, 
  * atom is protonated, and a skeleton does not (lib/chem/skeleton).
  */
 export type Drawable = Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom" | "biopolymer" | "bondOrders" | "unknownOrders" | "chainOrders" | "wholeWithoutH">;
-export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean }> {
+export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean; configuration?: IsomerConfiguration }> {
   if (isSkeleton(m)) throw new Error(skeletonWhy());
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);
@@ -1046,9 +1048,9 @@ export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Pro
   // (with the bonds that frame has, where they go frame by frame)
   const bonds = bondsAt(m, frame);
   const wanted = bonds.length > 0 && bonds.every((b) => b.order === 1);
-  const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, bonds), perceive: wanted });
+  const { molblock, perceived, configuration } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
-  return { drawn, ordersUnknown: wanted && !perceived };
+  return { drawn, ordersUnknown: wanted && !perceived, ...(configuration ? { configuration } : {}) };
 }
 
 /** Where a formula drawn of a molecule in 3D goes: beside it, to its left, level with it. */

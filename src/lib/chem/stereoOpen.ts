@@ -250,7 +250,7 @@ export function distinctIsomers<T extends { configured: IsomerConfiguration }>(i
 
 /** What the plugin made of a structure's stereoisomers, as Meno asked for them (Workspace/chem/openStereo `stereoisomersOf`). */
 export type IsomersMade =
-  | { isomers: { configured: IsomerConfiguration; smiles: string; molblock?: string; error?: string }[]; free: boolean }
+  | { isomers: { configured: IsomerConfiguration; smiles: string; molblock?: string; configuration?: IsomerConfiguration; error?: string }[]; free: boolean }
   | { tooMany: { counted: number; bound: number } }
   | { tooLong: true };
 
