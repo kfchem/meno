@@ -201,6 +201,20 @@ describe("what gives no label, and why", () => {
     expect(three("F[CH+]Cl")).toEqual(["C1:unsure"]);
   });
 
+  it("takes three bonds and two lone pairs for no centre: a three-bonded halogen is T-shaped, its ligands in one plane with it", () => {
+    // (an aryl-lambda3-iodane ArI(OAc)(OBz), and a three-bonded Cl and Br, each with three different ligands, given a configuration
+    //  as a wedge would give it: no R or S, the same words as for three bonds and an empty place; a sulfonium's S, of one lone
+    //  pair, beside them keeps its label)
+    const given = (smiles: string, at: number, neighbours: number[]) => {
+      const input = cipInput(smiles);
+      return cipSaid({ ...input, atoms: input.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: 1 as const } } : a)) });
+    };
+    expect(given("CC(=O)O[I](OC(=O)c1ccccc1)c1ccccc1", 4, [3, 5, 14])).toEqual(["I4:unsure"]);
+    expect(given("F[Cl](Br)C", 1, [0, 2, 3])).toEqual(["Cl1:unsure"]);
+    expect(given("F[Br](Cl)C", 1, [0, 2, 3])).toEqual(["Br1:unsure"]);
+    expect(given("C[S+](CC)c1ccccc1", 1, [0, 2, 4])[0]).toMatch(/^S1:[RS]$/);
+  });
+
   it("6, the 2018 proposal: a spiro atom between two rings each with an N and a C=O - its N alike, its C alike - R or S, the other in the mirror image", () => {
     expect(cipOf("O=C1CCN[C@@]12NCCC2=O")).toEqual(["C5:R"]);
     expect(cipOf("O=C1CCN[C@]12NCCC2=O")).toEqual(["C5:S"]);

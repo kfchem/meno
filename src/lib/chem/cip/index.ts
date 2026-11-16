@@ -27,7 +27,7 @@ import { parity, Ranker, RULE_5, Unknown } from "./rank";
  *   drawing - a charged or radical mesomeric system whose usual structures
  *   give different labels, or more of them than `MOST_VARIANTS`, a metal, a
  *   star - or it is no centre the rules can complement (three bonds and no
- *   lone pair);
+ *   lone pair, or two: T-shaped, its ligands in one plane);
  * - `large`: its digraph grows past what is worked out.
  */
 export type CipWhy = "alike" | "open" | "unsure" | "large";
@@ -79,7 +79,7 @@ function tied(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]
   return back.length >= 3 ? RULE_6_ASKED : no("alike");
 }
 
-/** Whether a centre is one the rules complement as it is configured: its ligands its neighbours and H, and a lone pair where it has three. */
+/** Whether a centre is one the rules complement as it is configured: its ligands its neighbours and H, and its one lone pair where it has three. */
 function refusedCentre(p: Prepared, c: number): boolean {
   const t = p.input.atoms[c].tetra!;
   if (p.unsure[c] || p.dups[c].length) return true;
@@ -89,8 +89,9 @@ function refusedCentre(p: Prepared, c: number): boolean {
   const hs = t.neighbours.length - drawn.length;
   if (hs !== p.hs[c] || drawn.length !== p.around[c].length || drawn.some((n) => !p.around[c].includes(n))) return true;
   if (t.neighbours.length === 4) return false;
-  // (three, and the fourth its lone pair: an atom with one - not a B, nor a C+)
-  return t.neighbours.length !== 3 || lonePairs(p, c) < 1;
+  // (three, and the fourth its lone pair: an atom with exactly one - not a B, nor a C+, nor an atom with two, which is T-shaped
+  //  with its three ligands in one plane, as a three-bonded halogen's I in ArI(OAc)2 or Cl in ClF3: no centre)
+  return t.neighbours.length !== 3 || lonePairs(p, c) !== 1;
 }
 
 function centre(p: Prepared, c: number): Said {
