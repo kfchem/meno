@@ -22,7 +22,7 @@ Point at an atom, and it lights up: what comes next is done to it.
 - Lead a bond onto an atom already there, and it closes the ring.
 - Point at a bond and press 1, 2 or 3 to make it single, double or triple. Press 1 again on a single bond for a wedge, again for a hashed wedge, and again for a plain bond; the next wedge then has its narrow end at the other atom. Press 2 again on a double bond to move its second line. A key changes only the bond under the pointer.
 - Double-click a bond to make it double; triple-click it to make it triple.
-- A click on a bond only chooses it: it never changes the bond.
+- Click a bond to turn it: a double or triple bond becomes single; a single bond goes round wedge, hashed wedge, and plain with its other end narrow.
 
 ## Chains and rings {#chains}
 
@@ -47,7 +47,7 @@ Right-click an atom or a bond for what can be done to it: a row of icons, each s
 
 ## Choosing what to work on {#selecting}
 
-- Click an atom or a bond to choose it alone. Hold ⌘ (Ctrl on Windows) and click to add or take out an atom or a bond, or hold Shift and click to take everything along the bonds from the last atom chosen to this one.
+- Click an atom to choose it alone. Hold ⌘ (Ctrl on Windows) and click to add or take out an atom or a bond, or hold Shift and click to take everything along the bonds from the last atom chosen to this one. A bond is chosen with ⌘ (Ctrl), a box or a lasso.
 - Press and hold on an atom or a bond to choose its whole structure; drag from there to move it.
 - Press and hold on empty space, then drag, to choose what a box holds - with Option (Alt on Windows) held, what a lasso encloses.
 - ⌘A (Ctrl+A) chooses everything; a click on empty space, or Escape, nothing.

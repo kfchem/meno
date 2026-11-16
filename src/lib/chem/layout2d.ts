@@ -16,6 +16,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
+import { runsOf } from "./perception/stereo/runs";
 import { greatest, least, pushAll } from "./lists";
 import { groupDepths, type DrawnAtom, type DrawnBond } from "../layout/drawn";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
@@ -4441,13 +4442,27 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
     !b.coordination &&
     !b.query &&
     (b.display ?? "plain") === "plain";
+  const otherEnd = (k: number, x: number) => (bonds[k].a1 === x ? bonds[k].a2 : bonds[k].a1);
+  // (its runs of cumulated double bonds, as the reader takes them: perception/stereo/runs - a carbon, or an N+, between two double bonds
+  //  and bonded to nothing else, a run goes on through; a sulfur's C=S=C is bent, no run)
+  const runs = runsOf({ atoms, bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+  /** The run of cumulated double bonds from `from` on through `to`, to its end: that end, the atom before it, and the double bonds walked past `from`-`to`. */
+  const runEnd = (from: number, to: number): [number, number, number] => {
+    const run = runs.from(from, to);
+    return [run[run.length - 1], run[run.length - 2], run.length - 2];
+  };
   bonds.forEach((d, i) => {
     if (d.order !== 2 || d.stereo !== "either") return;
-    const ends = [
+    // (an odd cumulene's either is across its run - a butatriene's: the bond's ends are the run's far ends; an allene's run, even, has an
+    //  axis instead, and its bond is taken as one of no run)
+    const pairs = [
       [d.a1, d.a2],
       [d.a2, d.a1],
-    ].map(([end, other]) => {
-      const subs = (at.get(end) ?? []).filter((k) => k !== i);
+    ];
+    const walked = pairs.map(([end, other]) => runEnd(other, end));
+    const odd = (1 + walked[0][2] + walked[1][2]) % 2 === 1;
+    const ends = (odd ? walked : pairs).map(([end, other]) => {
+      const subs = (at.get(end) ?? []).filter((k) => k !== i && !(otherEnd(k, end) === other && bonds[k].order === 2));
       const far = (k: number) => (bonds[k].a1 === end ? bonds[k].a2 : bonds[k].a1);
       // straight on from the double bond: within ten degrees of it
       const straight =

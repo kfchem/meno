@@ -299,16 +299,22 @@ held still before it is let go stays where it was put. (It used to glide on
 by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
-**A click keeps each view's own meaning**: in 2D a click selects what is
-under the pointer, an atom or a bond alike - a bond with its two atoms,
-alone, what was selected let go - and a single click never changes the
-compound (the maintainer, 2026-11-14: a click on a bond had gone round its
-kinds, and a click meant to select it could put a wedge in, a statement of
-configuration, with nothing said). Cmd or Ctrl and a click adds a bond or
-takes it out; Shift and a click, the box and the lasso are as before. A
+**A click keeps each view's own meaning**: in 2D a click on an atom selects
+it, and a click on a bond turns its kind as the key 1 does - a double or
+triple bond made single; a single bond round its wedge, its hashed wedge
+and plain with its other end narrow - once no second click has come (the
+maintainer, 2026-11-17, giving back the click of 2026-09-27; from
+2026-11-14 to 2026-11-17 a click selected the bond and changed nothing). A
+bond is selected by Cmd or Ctrl and a click, which adds it or takes it
+out, by the box and by the lasso; Shift and a click are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click
-having selected it, which stays selected. A bond's kind is otherwise set by
+turning nothing; a slower one, its second click within a double-click's time
+of the first but after the first had turned the bond, takes that turn back
+and makes the bond double from what it was, as one step. A click is never
+lost: one still waiting is turned at once as the next press lands anywhere
+but on its bond, or as a drag begins (`turnTakenBack`, `flushesClick`, the
+maintainer, 2026-11-17). A bond's kind is otherwise set by
 the bond keys (*Bond keys*, below) and by its right-click menu, which
 chooses its kind outright (2026-10-14), for every bond selected at once, as
 one step. In the menu's row of kinds, the icon of the kind the bond already
@@ -342,7 +348,7 @@ again they go on round, 2026-11-04). With the pointer on a bond, 1, 2
 and 3 set its kind, and a key pressed again goes on round:
 - **1** makes a double or triple bond single; on a single bond it goes round
   - wedge, hashed wedge, plain with the other end narrow (`singleRoundPatch`;
-  a click on a bond went this round until 2026-11-14).
+  a click on a bond goes this round too).
 - **2** makes a bond double; on a double bond it moves the second line to
   the next side as a double-click does - its own side, the middle, the
   other side (`doubleClickPatch`, shared with the double-click).
@@ -548,11 +554,37 @@ missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
 plugin that reads SMILES refuses it). A bond written with no symbol between
 two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
 joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
-is single, and each ring is read as its own. Text is
+is single, and each ring is read as its own. A bond written aromatic
+outside any ring (":") takes a form of single and double bonds as
+one in a ring does, each atom by the room its valence, its H and its
+charge leave (lib/chem/perception/kekule): CC(:O):O is acetic acid, one
+C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
+An atom whose H is written in its brackets has its valence fixed by
+what is written: CC(:N):[NH2+] is the acetamidinium, its [NH2+] taking
+the C=N. Where more than one end may take the one double bond a centre
+needs, it goes to O first, then S and Se, then N, then C: CC(:O):N is
+acetamide, never the imidic acid; CC(:S):N is thioacetamide; NC(:O):N is
+urea. Between two of one element - an amidine's two N - Meno draws one
+form, the same however it is written, with no claim of which is the
+more stable.
+Where no such form closes them, the SMILES is refused, never read by
+adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
+2, 3 and 4) have no form with single and double bonds: is a charge
+missing?" (`outsideRingRefusal`). It errs on the side of refusing: a lone
+C:O between two atoms that both have room - oxalate written
+[O-]C(:O)C(:O)[O-] - and a chain marked aromatic throughout (C:C:C:C)
+are refused, though one form would close them; write their double
+bonds. Where such a bond is read and not refused - from a file - a lone
+one between two atoms that both have room is read as single for now.
+Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
-an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
+an atom by the same label reader, kept a label. A quadruple bond ("$")
+is refused where Meno reads the SMILES itself - a group typed with its
+"*" - in words: "a quadruple bond, which Meno does not draw"
+(lib/chem/smiles); Meno has no bond of that order, and never reads it
+as another. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
@@ -1332,7 +1364,7 @@ All hover-based, as above.
     mirror image (seqCis, seqTrans) says so there too. A protonated
     amine's N (R3NH+) has none: it gives its H up and takes one back,
     turning over as it does - but where its amine's N keeps its
-    configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
+    configuration, a small cage's bridgehead (lib/chem/perception/stereo/lonePairs).
     An axis's Ra or Sa - a biaryl's, an allene's, asked for on a bond of
     it - and an odd cumulene's E or Z are Meno's too (docs/CIP.md, *Axes
     and odd cumulenes*).
@@ -2234,7 +2266,32 @@ lipids each have their own way of being drawn, which it should know.
      the text gives E or Z is drawn as given. A double bond drawn straight
      on carries no other mark of being open - not a plugin's either
      configuration for it - so Clean-up keeps it straight, as it keeps any
-     double bond drawn so.
+     double bond drawn so. An odd cumulene (a butatriene's run of three
+     double bonds, or five) has its cis or trans across the run's two
+     ends, and is drawn open the same way when the text gives it none:
+     each end's one group straight on from the run, or a wavy bond on a
+     group of an end, an end of one group first. Clean-up keeps such a
+     run's ends straight too. An end of one group and no H (an N's) has
+     none to state, as the reader takes a run, and is left as it is. A run
+     in a ring of seven or fewer is held cis; in a ring of eight or more it
+     is drawn open, though the smallest ring a run can be trans in is
+     larger than a double bond's: there Meno may leave open what only cis
+     can be, never state the other isomer. A structure drawn from a
+     plugin's MOL block - a SMILES's, a step's, the formula of a molecule
+     in 3D - shows no run's cis or trans but one Meno's own reading of its
+     text gives (of a molecule in 3D, of its places: each allene's axis and
+     odd cumulene's cis or trans as it stands, an H at a run's end standing
+     for the end's other group, which the formula draws): a MOL block
+     cannot say one, so what the plugin's picture
+     shows of a run is chance. Laid out, any other run is drawn open, as
+     above, and stays so through Clean-up; kept as it came, not laid out, a
+     run it shows otherwise is marked with a wavy bond. Where Meno's own
+     reader does not take the text, no run is given, and every odd run is
+     so drawn open. An allene's run (two double
+     bonds, or four) has an axis instead, which nothing draws open: a
+     bond of it marked either is drawn as a double bond of no run, so no
+     wavy bond goes on an end's groups for it. An odd run's bond marked
+     either - any of its bonds - goes to the run's two far ends.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the
@@ -2271,7 +2328,7 @@ lipids each have their own way of being drawn, which it should know.
      and Clean-up says so rather than lose it. A SMILES's [P@H] is
      still refused: where its H and its lone pair each go in the text's
      order is not yet measured against the reading libraries.
-     An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
+     An amine's N keeps none. One rule (`lib/chem/perception/stereo/lonePairs.ts`)
      says which such atoms a drawing's wedge is read at, which a SMILES's @
      is read at, which centres a structure leaves open, and which a
      molecule in 3D has read from its geometry (docs/PLUGINS.md,
