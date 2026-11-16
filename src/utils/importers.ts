@@ -11,7 +11,12 @@ import {
   type ParsedAtom,
 } from "../lib/chem/molecule";
 import {
+  labelBox,
+  labelSetOf,
   layoutMolecule,
+  pxToWorld,
+  type LabelSet,
+  type TextItem,
   type Atom as LayoutAtom,
   type Bond as LayoutBond,
 } from "../lib/chem/layout2d";
@@ -304,10 +309,55 @@ export function computeScaleForMols(mols: ParsedMol[]): number {
 /**
  * How far a structure reaches as it is drawn - its labels and what its bonds
  * draw, not only its atoms - in Meno's own style, whose labels are as large
- * against the bond as any preset's.
+ * against the bond as any preset's. `own`, by id: how far those of its atoms
+ * reach, drawn beside the rest - a structure a hydrogen bond joins to
+ * another, its labels laid out toward that bond, as the page draws them
+ * (a water's OH2 hanging away from the O...H it takes part in), not as
+ * they would be alone.
  */
-export function drawnBox(model: EditorModel): { minX: number; maxX: number; minY: number; maxY: number } {
+export function drawnBox(model: EditorModel, own?: ReadonlySet<number>): { minX: number; maxX: number; minY: number; maxY: number } {
   if (!model.atoms.length) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  // (some of a drawing's atoms, drawn beside the rest: their atoms and what their own bonds draw, and their labels as the whole lays them
+  //  out - not as they would be alone, on the other side)
+  if (own) {
+    const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+    const take = (x: number, y: number, r = 0) => {
+      box.minX = Math.min(box.minX, x - r);
+      box.maxX = Math.max(box.maxX, x + r);
+      box.minY = Math.min(box.minY, y - r);
+      box.maxY = Math.max(box.maxY, y + r);
+    };
+    const takeText = (t: TextItem, fontSize: number, set: LabelSet) => {
+      const { left, right, top, bottom } = labelBox(t, fontSize, set);
+      box.minX = Math.min(box.minX, t.x - left);
+      box.maxX = Math.max(box.maxX, t.x + right);
+      box.minY = Math.min(box.minY, t.y - bottom);
+      box.maxY = Math.max(box.maxY, t.y + top);
+    };
+    const atoms = model.atoms.filter((a) => own.has(a.id));
+    for (const a of atoms) take(a.x, a.y);
+    const aloneOf = layoutOf({ atoms, bonds: model.bonds.filter((b) => own.has(b.a) && own.has(b.b)) });
+    const alone = aloneOf.layout;
+    for (const l of alone.lines) {
+      const half = pxToWorld(l.widthPx, alone.zoom) / 2;
+      take(l.x1, l.y1, half);
+      take(l.x2, l.y2, half);
+    }
+    for (const p of alone.polys) for (const q of p.points) take(q.x, q.y);
+    for (const c of [...alone.circles, ...alone.fills]) take(c.c.x, c.c.y, c.r);
+    // (what is written of the structure rather than of one atom - a stereo group's note, a bracket's label, a bond's tag - is put by its
+    //  own atoms and bonds: as the structure alone has it)
+    for (const t of alone.texts) if (t.atom == null) takeText(t, aloneOf.fontSize, aloneOf.set);
+    const { layout, fontSize, set } = layoutOf(model);
+    for (const t of layout.texts) if (t.atom != null && own.has(model.atoms[t.atom]?.id)) takeText(t, fontSize, set);
+    return box;
+  }
+  const { bounds } = layoutOf(model).layout;
+  return { minX: bounds.min.x, maxX: bounds.max.x, minY: bounds.min.y, maxY: bounds.max.y };
+}
+
+/** A drawing laid out as the page lays it out, in Meno's style at its nominal bond length, and the size and set its labels are measured in. */
+function layoutOf(model: EditorModel) {
   const index = new Map(model.atoms.map((a, i) => [a.id, i]));
   const atoms: LayoutAtom[] = model.atoms.map((a) => ({
     id: a.id,
@@ -337,8 +387,7 @@ export function drawnBox(model: EditorModel): { minX: number; maxX: number; minY
     });
   }
   const opts = layoutOptionsFor(MENO, NOMINAL_BOND_LENGTH, { units: "world" });
-  const { bounds } = layoutMolecule(atoms, bonds, opts, 50);
-  return { minX: bounds.min.x, maxX: bounds.max.x, minY: bounds.min.y, maxY: bounds.max.y };
+  return { layout: layoutMolecule(atoms, bonds, opts, 50), fontSize: opts.fontPx, set: labelSetOf(opts) };
 }
 
 /**

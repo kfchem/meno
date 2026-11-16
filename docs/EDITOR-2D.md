@@ -462,7 +462,19 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 
 **Quick Add** (the maintainer, 2026-10-08). A double-click on empty space
 opens, up and to the right of it, what can be put down there, each an
-icon - named as the pointer rests on it - and none in words: a bond
+icon - named as the pointer rests on it - and none in words. A key typed
+with none of them chosen opens the SMILES field with it (2026-11-14: a
+first-time chemist types, and nothing happened): its letter is the field's
+first, the caret after it; from an input method the field opens for it to
+compose in. Under the field, one line says where chemistry stands while it
+is not ready, in the words the chip at the workspace's corner says it in
+(one phrase for both, `chemistryStep` in Workspace/quickAddSmiles): the
+step its set-up is at - "Setting up chemistry: downloading <plugin> (42%)."
+as its files come, how far where that is reported, rounded, "Setting up
+chemistry: setting up <plugin>'s environment." as that is set up - and,
+where a SMILES typed waits for it, "This is drawn when it is ready."; and
+"Starting <plugin>. The first one takes a moment." as it starts; a SMILES
+no plugin here reads says what does, as before. The icons: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
 SMILES, text and an arrow (*Arrows* below); then two groups, each with a
 small mark at its corner, each opening a row of its own below the first,
@@ -789,6 +801,40 @@ Both go together, because both touch every layer.
   on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
   plain again with the other end narrow next time round; the wedge's icon
   in its menu, pressed again, turns its narrow end to the other atom.
+- **A bond in front of another.** Where two bonds of one structure drawn
+  by hand cross, the chemist says which is in front: a right-click on
+  either bond, near the crossing, offers *In front* and *Behind*, said of
+  the bond clicked. The bond behind is drawn with a gap where it passes
+  the other (IUPAC 2006 ST-3.1: the front-to-back order of crossing bonds
+  shown by a small discontinuity in the one behind), the gap easing open
+  and closed as the page's changes do. The item that holds is shown as
+  chosen, said of the bond clicked: on the bond behind, *Behind*; on the
+  one in front, *In front* (`chem/crossings.ts` `crossingMenu`). Choosing
+  it again takes the mark away, and the other item turns it round. Each is one step, undone and done again ("Bond in front",
+  "Bond behind").
+  - It is kept on the bond behind, by the other bond's id
+    (`Bond.behind`), never both ways round, and nothing silent ever says
+    it again where nobody said it. While a move goes on it is kept: the
+    bonds dragged apart are drawn whole, and dragged back across, the gap
+    is there again. A move that ENDS with the two no longer crossing takes
+    it away, in the move's own step (undone, both come back), and so does
+    any other edit that takes them from crossing to not crossing - an atom
+    moved by Clean-up or a command, an end given another atom - in its own
+    step. Deleting
+    either bond takes it away. Copied and pasted, it follows the bonds'
+    new ids; a mark whose other bond was not copied is dropped. Turning a
+    structure over exchanges front and behind, as a depth would.
+  - Where all four atoms of the two bonds carry a depth (a cage as
+    Clean-up draws it, a tool's projection), the depth says which bond is
+    behind, and neither item is offered. An edit that gives all four a
+    depth takes the mark away in its own step, and it does not come back
+    if the depth goes. Where only some of the four carry a depth, the
+    mark says it, and the items are offered (`chem/crossings.ts`; the
+    order in `lib/chem/layout2d.ts` `brokenBehind`: the depth, then the
+    mark, else neither broken).
+  - It is a look: the drawing says no configuration by it alone.
+  - One crossing at a time: the items act on the bond clicked, not on a
+    selection.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
@@ -1154,7 +1200,17 @@ All hover-based, as above.
     trans-[Co(en)2Cl2]+, which the layout has no two places across for
     its Cl; a cis-M(gly)2Cl2 with N across N or O across O, which its
     picture could not tell apart; a chelate's two donors drawn opposite -
-    Clean-up lays nothing out and says so: never another isomer.
+    Clean-up lays nothing out and says so: never another isomer. Two
+    metals joined by two bridges (cis- and trans-[Pt2Cl4(NH3)2], the
+    three isomers of a dimer with a Cl and a Br bridge) keep, at each
+    metal, which bridge each of its other donors stands across: the
+    bridges, which carry the other metal, stay where the layout put them,
+    their ring seen a little from above, and each metal's other donors
+    change places round it. In a chain of three, the middle metal's
+    bridges - laid flat - turn or mirror round it with the end metals and
+    all they carry, whose own pairs stay as they were. Two square-planar
+    metals joined by one bridge, each drawn as an upright cross, are
+    refused, saying so.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
@@ -1173,6 +1229,20 @@ All hover-based, as above.
     drawn as a plain line counts alike, from the atom it was drawn from.
     One with too many bonds besides is marked still (chem/marks
     `takesArrows`).
+  - **An arrangement not given**: a square-planar centre (Pt(II), Pd(II),
+    Au(III), Rh(I), Ir(I)) whose donors can lie round it more than one way,
+    laid out by Meno from an input that gives none - a SMILES, a label
+    written out, a Clean-up of one Meno laid out so - is drawn as the
+    upright cross and marked with the dashed ring, "Which donors are next
+    to each other is not given." (`arrangementAs`, docs/LAYOUT-2D.md, *A
+    metal with four bonds*). Moving its donors round - setting which lie
+    next to which - takes the mark away; one the chemist drew carries none.
+    A metal of six donors from such an input is marked the same where its
+    donors could be set round it with other pairs across (cis or trans, fac
+    or mer); one whose SMILES marks its arrangement at the metal (@SP1 to
+    @SP3, @OH1 to @OH30) is drawn as given, unmarked, where the drawing has
+    the pairs the mark states - and marked as above where it has others,
+    or where the mark cannot be read and a chelate joins its donors.
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of

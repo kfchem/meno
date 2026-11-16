@@ -2,6 +2,7 @@ import RoleOffer from "./RoleOffer";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindMenu } from "./utils/bondKinds";
+import { crossingMenu } from "./chem/crossings";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
@@ -141,6 +142,7 @@ import {
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { chemistryStep } from "./quickAddSmiles";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
@@ -266,6 +268,8 @@ import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
 import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
+import EmptyPageLine from "./components/EmptyPageLine";
+import { emptyPageLineShown, pageHoldsNothing } from "./utils/emptyPage";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
@@ -328,6 +332,8 @@ function WorkspaceContent({
     handleWrapperClick,
     dropZone,
     dropping,
+    draggedOver,
+    opened,
     openFilesAt,
     importError,
     dismissImportError,
@@ -373,6 +379,8 @@ function WorkspaceContent({
   setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
+  // (a page that holds nothing at all: its one quiet line - components/EmptyPageLine)
+  const pageEmpty = useEditor(pageHoldsNothing);
   // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
   useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -1804,6 +1812,10 @@ function WorkspaceContent({
       ))}
       </AnimatePresence>
       </div>
+      {/* an empty page: one quiet line in the middle of what is seen - not while the file the tab was opened with is read, a card
+          says what could not be read, Quick Add or a menu is open, something is dragged over, or a talk is given (docs/WORKSPACE.md,
+          *First steps*) */}
+      <EmptyPageLine show={emptyPageLineShown({ active, empty: pageEmpty, opening: !opened, card: !!importError, quickAdd: !!quickAdd, menu: !!menu, draggedOver, dropping: !!dropping, talking })} right={cover} />
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
@@ -1831,11 +1843,10 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
-                {chem.state === "setting-up"
-                  ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
-                  : chem.state === "starting"
-                    ? `Starting ${chem.plugin}…`
-                    : working3d || `Checking ${checkingFiles}'s files…`}
+                {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
+                {chem.state === "setting-up" || chem.state === "starting"
+                  ? `${chemistryStep(chem, chemShare)}…`
+                  : working3d || `Checking ${checkingFiles}'s files…`}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
@@ -2652,6 +2663,8 @@ function WorkspaceContent({
           })()}
           // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
           bondKind={menu.kind === "bond" && menu.id != null ? bondKindMenu(store.getState(), menu.id) : undefined}
+          // (which of two crossing bonds is in front, where no depth says it: at the crossing nearest the pointer - chem/crossings)
+          crossing={menu.kind === "bond" && menu.id != null ? crossingMenu(store.getState().model, menu.id, menu.at, store.getState().orderCrossing) : undefined}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
           onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
