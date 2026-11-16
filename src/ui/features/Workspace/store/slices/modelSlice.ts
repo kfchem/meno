@@ -498,8 +498,8 @@ export const createModelSlice = (
     return true;
   },
 
-  // (clicks on a bond, so many in a row: the first selects it alone - a click never changes the compound (the maintainer,
-  //  2026-11-14) - the second makes it double, a double's second line on its next side as the 2 key does, the third a triple)
+  // (clicks on a bond, so many in a row: one turns it as the 1 key does (the maintainer, 2026-11-17), two make it double, a double's
+  //  second line on its next side as the 2 key does, three a triple)
   bondClicked: (id: number, clicks: number) => {
     const { model } = get();
     const bond = model.bonds.find((b) => b.id === id);
