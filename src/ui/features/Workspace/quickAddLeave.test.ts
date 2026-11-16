@@ -4,6 +4,7 @@ import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
 import { afterAdded, chemistryLine, chemistryStep, readSmiles } from "./quickAddSmiles";
 import { addOffered } from "./offerSteps";
 import { NoPlugin } from "../../../lib/roles/worker";
+import { firstSetUpSaid } from "../../../lib/plugins/firstSetUp";
 import type { CatalogueEntry } from "../../../lib/plugins/catalogue";
 
 /** An event as the window hands it on: its type, where it came from, and whether it was stopped. */
@@ -81,7 +82,7 @@ describe("a SMILES typed in Quick Add that no plugin here reads", () => {
       if (!added) throw new NoPlugin("smiles");
     });
     const first = await readSmiles("CCO", onSmiles);
-    expect(first).toEqual({ error: "Needs a plugin: SMILES to a structure, and back.", needs: "smiles" });
+    expect(first).toEqual({ error: "Needs a plugin: Structures from SMILES, and SMILES from structures.", needs: "smiles" });
     // (the offer's Add: got and set up, then done - Quick Add reads what was typed again: QuickAdd's RoleOffer `done`)
     let again: Awaited<ReturnType<typeof readSmiles>> | undefined;
     const entry = { id: "rdkit", name: "RDKit" } as CatalogueEntry;
@@ -156,9 +157,24 @@ describe("the line under the SMILES field", () => {
     expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, true)).toBe("Starting P. The first one takes a moment.");
     expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, false)).toBe("Starting P. The first one takes a moment.");
   });
+  it("says the first start's card's step while the card sets chemistry up, as the card says it: no worker started yet", () => {
+    const plugin = { id: "p", name: "P", licence: "MIT", size: "1 MB" };
+    expect(chemistryLine({ state: "idle" }, undefined, true, { phase: "going", step: "list" })).toBe("Setting up chemistry: listing the plugins online. This is drawn when it is ready.");
+    expect(chemistryLine({ state: "idle" }, 0.5, false, { phase: "going", step: "files", plugin })).toBe("Setting up chemistry: downloading P (50%).");
+    expect(chemistryLine({ state: "idle" }, undefined, true, { phase: "going", step: "environment", plugin })).toBe(`${firstSetUpSaid("environment", "P")} This is drawn when it is ready.`);
+    expect(chemistryLine({ state: "idle" }, undefined, false, { phase: "failed", why: "x" })).toBeNull();
+  });
   it("says nothing where chemistry is ready, not yet asked for, or failed (said as before)", () => {
     expect(chemistryLine({ state: "ready", plugin: "P", version: "1" }, undefined, true)).toBeNull();
     expect(chemistryLine({ state: "idle" }, undefined, false)).toBeNull();
     expect(chemistryLine({ state: "failed", message: "x" }, undefined, true)).toBeNull();
+  });
+});
+
+describe("one phrase for where chemistry's set-up stands", () => {
+  it("the corner chip and the Quick Add line say the card's words, step for step", () => {
+    const setting = { state: "setting-up" as const, plugin: "P", id: "p" };
+    expect(`${chemistryStep(setting, 0.42)}.`).toBe(firstSetUpSaid("files", "P", 0.42));
+    expect(`${chemistryStep(setting, undefined)}.`).toBe(firstSetUpSaid("environment", "P"));
   });
 });

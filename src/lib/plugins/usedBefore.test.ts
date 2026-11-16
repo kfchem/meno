@@ -239,7 +239,7 @@ describe("the plugins set up before they came online, got again", () => {
     expect(r.asked[0].title).toBe("Get these 3 again?");
     expect(r.asked[0].detail).toContain("2 were set up here: Alpha interface and Beta interface.");
     expect(r.asked[0].detail).toContain("With them, what brings presets for one of them, apart from it now: Alpha presets, for Alpha interface.");
-    expect(r.asked[0].detail).toContain("Not got again: Later: It is for a newer Meno; WFX reader: Meno reads these files itself now; gone: no longer among the plugins online.");
+    expect(r.asked[0].detail).toContain("Not added again: Later: It is for a newer Meno; WFX reader: Meno reads these files itself now; gone: no longer among the plugins online.");
     expect(r.asked[0].parts?.map((p) => [p.name, p.detail])).toEqual([
       ["Alpha interface", "Its files: 39 KB."],
       ["Beta interface", "Its files: 2.4 MB."],
@@ -261,7 +261,7 @@ describe("the plugins set up before they came online, got again", () => {
     await getUsedBefore(r.say, r.d);
     expect(r.asked).toEqual([]);
     expect(r.listed()).toBe(0);
-    expect(r.said).toEqual(["Plugins used before: None of them is got again: WFX reader: Meno reads these files itself now."]);
+    expect(r.said).toEqual(["Plugins used before: None of them is added again: WFX reader: Meno reads these files itself now."]);
     expect(asked()).toBe(true);
   });
 
@@ -270,7 +270,7 @@ describe("the plugins set up before they came online, got again", () => {
     const r = deps({ stamps: ["later", "gone"] });
     await getUsedBefore(r.say, r.d);
     expect(r.asked).toEqual([]);
-    expect(r.said).toEqual(["Plugins used before: None of them is got again: Later: It is for a newer Meno; gone: no longer among the plugins online."]);
+    expect(r.said).toEqual(["Plugins used before: None of them is added again: Later: It is for a newer Meno; gone: no longer among the plugins online."]);
     expect(asked()).toBe(true);
   });
 
