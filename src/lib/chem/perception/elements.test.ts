@@ -5,7 +5,6 @@ import {
   bridgesToMetal,
   drawnRoundMetal,
   inValenceSums,
-  inValenceSumsFromGeometry,
   ionic,
   labelNotElement,
   mainGroupMetal,
@@ -51,7 +50,7 @@ describe("what kind of element: each set by hand, against the periodic table", (
   });
 
   it("puts nothing that is no element's symbol in any set", () => {
-    const sets = [transitionMetal, mainGroupMetal, metal, notMetal, drawnRoundMetal, bridgesToMetal, alwaysIonic, inValenceSums, inValenceSumsFromGeometry];
+    const sets = [transitionMetal, mainGroupMetal, metal, notMetal, drawnRoundMetal, bridgesToMetal, alwaysIonic, inValenceSums];
     for (const s of sets) expect([...s].filter((el) => !symbols.includes(el))).toEqual([]);
     for (const s of sets) for (const x of notSymbols) expect(s.has(x), x).toBe(false);
     expect([...ionic.keys()].filter((el) => !symbols.includes(el))).toEqual([]);
@@ -75,9 +74,8 @@ describe("what kind of element: each set by hand, against the periodic table", (
     for (const el of alwaysIonic) expect(ionic.get(el), el).toBe(1);
   });
 
-  it("counts the bonds of hydrogen, the nonmetals and the metalloids in a valence, and Sb's in protonation only", () => {
+  it("counts the bonds of hydrogen, the nonmetals and the metalloids in a valence, Sb's among them, one set for both readers", () => {
     expect(sorted(inValenceSums)).toEqual(sorted("H B C N O F Si P S Cl Ge As Se Br Sb Te I".split(" ")));
-    expect(sorted(inValenceSums).filter((el) => !inValenceSumsFromGeometry.has(el))).toEqual(["Sb"]);
     expect([...inValenceSums].filter((el) => metal.has(el))).toEqual([]);
   });
 });
@@ -123,9 +121,9 @@ describe("each caller takes the set that was its list: nothing moved", () => {
     expect(differ((el) => old.ionic.get(el), (el) => ionic.get(el))).toEqual([]);
     expect(differ((el) => old.condensed.has(el), (el) => alwaysIonic.has(el))).toEqual([]);
   });
-  it("counts the same elements' bonds in a valence, each of the two as it did", () => {
+  it("counts the same elements' bonds in a valence - but Sb, which the geometry's reading now counts too, B3's fix", () => {
     expect(differ((el) => old.protonation.has(el), (el) => inValenceSums.has(el))).toEqual([]);
-    expect(differ((el) => old.geometry.has(el), (el) => inValenceSumsFromGeometry.has(el))).toEqual([]);
+    expect(differ((el) => old.geometry.has(el), (el) => inValenceSums.has(el))).toEqual(["Sb"]);
   });
   it("reads the same elements as no metals but Ts and Og, which join At and Rn so that every element is one or the other", () => {
     expect(differ((el) => old.notMetals.has(el), (el) => notMetal.has(el))).toEqual(["Ts", "Og"]);
