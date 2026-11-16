@@ -345,7 +345,8 @@ describe("cleanUp", () => {
       const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
       expect(overlapsMade(drawn, moved)).toEqual([]);
     }
-  });
+    // (a drawing cleaned up and every placement checked: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_900));
 
   it("lays out the rest when it must leave one structure as drawn, and names that one by its formula and why", async () => {
     // the made-up bridged macrocycle drawn round a circle (the engine lays an atom on a bond there), and a butane

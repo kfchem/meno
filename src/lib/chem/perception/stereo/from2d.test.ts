@@ -1111,7 +1111,8 @@ describe("an axis inside a ring, drawn", () => {
     expect(read[0].sense).toBe(given.sense);
     // (2,2'-bipyridine-PdCl2, its N bound to Pd written as N+, Pd as 2-, so that its rings are aromatic as drawn)
     expect(readBack("Cl[Pd-2]1(Cl)[n+]2ccccc2-c2cccc[n+]21", [8, 9]).read).toEqual([]);
-  });
+    // (BINAP and bipyridine complexes laid out and read: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(600));
 
   it("reads one on a biaryl bond in no ring: 2,2',6,6'-tetramethylbiphenyl's", () => {
     const { given, read } = readBack("Cc1cccc(C)c1-c1c(C)cccc1C", [7, 8]);
