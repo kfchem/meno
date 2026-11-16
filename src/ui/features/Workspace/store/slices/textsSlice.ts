@@ -1,5 +1,6 @@
 import type { StoreApi } from "zustand";
 import { pointOfStyle } from "../../restyle";
+import { sheetRoom } from "../../utils/textSheets";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
@@ -69,7 +70,14 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
     },
     riseText: (id: number) => set({ textFlight: { id, to: "column", start: performance.now() } }),
     endTextFlight: () => set({ textFlight: null }),
-    setTextIcon: (id: number, icon: boolean) => doc.edit(icon ? "minimize text" : "expand text", (d) => ops.setTextIcon(d, id, icon)),
+    // (shown full size again, and taken into view, as a PDF is - docs/PDF.md, *A text*)
+    setTextIcon: (id: number, icon: boolean) => {
+      const done = doc.edit(icon ? "minimize text" : "expand text", (d) => ops.setTextIcon(d, id, icon));
+      const t = !icon && done ? doc.getState().texts?.find((x) => x.id === id) : undefined;
+      const room = t && sheetRoom(t);
+      if (room) getState().requestShow(room);
+      return done;
+    },
     setTextOf: (id: number, of: TextOf) => doc.amend((d) => ops.setTextOf(d, id, of)),
     setHoveredText: (id: number | null) => set((prev: EditorState) => (prev.hoveredText === id ? prev : { ...prev, hoveredText: id })),
     // (only sheets on the page, as pictures)

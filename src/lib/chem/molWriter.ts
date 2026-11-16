@@ -2,7 +2,8 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import { COORDINATION_BOND, mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
+import { COORDINATION_BOND, type AbbreviationStructure, type AtomChem, type BondChem, type SgroupMark } from "./molecule";
+import { mostBonds, valenceOrder, type Radical } from "./perception/hydrogens";
 import { ELEMENTS } from "./elements";
 import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
@@ -877,7 +878,9 @@ export function writeMolfile3d(
 ): string {
   const version = options.version ?? "auto";
   const head = [titleLine(options.title), PROGRAM_LINE_3D, ""];
-  // (each atom's bonds' orders summed, for one whose valence is written: an aromatic bond one and a half, a coordination or hydrogen bond none)
+  // (each atom's bonds' orders summed, for one whose valence is written: an aromatic bond one and a half, a coordination or hydrogen bond none.
+  // Not the core's count, which takes an aromatic bond by its Kekule order (perception/hydrogens `hydrogenCounts`): on an aromatic N-H's
+  // nitrogen the two differ, three here and two bonds and one H there; kept so in the core's move, part 12's fixes say which is meant)
   const valence = new Float64Array(atoms.length);
   for (const b of bonds) {
     const order = b.order >= 1 && b.order <= 3 ? b.order : b.order === 4 ? 1.5 : 0;

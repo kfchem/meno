@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { ABBREVIATIONS } from "../abbreviations";
 import { ELEMENTS } from "../elements";
 import {
   alwaysIonic,
   bridgesToMetal,
   drawnRoundMetal,
   inValenceSums,
-  inValenceSumsFromGeometry,
   ionic,
   labelNotElement,
   mainGroupMetal,
@@ -51,17 +51,20 @@ describe("what kind of element: each set by hand, against the periodic table", (
   });
 
   it("puts nothing that is no element's symbol in any set", () => {
-    const sets = [transitionMetal, mainGroupMetal, metal, notMetal, drawnRoundMetal, bridgesToMetal, alwaysIonic, inValenceSums, inValenceSumsFromGeometry];
+    const sets = [transitionMetal, mainGroupMetal, metal, notMetal, drawnRoundMetal, bridgesToMetal, alwaysIonic, inValenceSums];
     for (const s of sets) expect([...s].filter((el) => !symbols.includes(el))).toEqual([]);
     for (const s of sets) for (const x of notSymbols) expect(s.has(x), x).toBe(false);
     expect([...ionic.keys()].filter((el) => !symbols.includes(el))).toEqual([]);
   });
 
-  it("draws ligands round the transition metals, the actinoids among them, but Pr, propyl's label, and Rf to Cn", () => {
-    expect(sorted(labelNotElement)).toEqual(["Pr"]);
-    expect(drawnRoundMetal.size).toBe(58);
-    for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Nd", "Lu", "Hg", "Ac", "Th", "U", "Lr"]) expect(drawnRoundMetal.has(el), el).toBe(true);
-    for (const el of ["Pr", "Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
+  it("draws ligands round the transition metals, the actinoids among them, but Pr, Ac and Fm, groups' labels, and Rf to Cn", () => {
+    expect(sorted(labelNotElement)).toEqual(["Ac", "At", "Fm", "Pr", "Ts"]);
+    // (every label or other name of the abbreviations' table that is an element's symbol, and no other: a label added there is a label here)
+    const isSymbol = new Set(symbols);
+    expect(sorted(new Set(ABBREVIATIONS.flatMap((a) => [a.label, ...(a.also ?? [])]).filter((l) => isSymbol.has(l))))).toEqual(sorted(labelNotElement));
+    expect(drawnRoundMetal.size).toBe(56);
+    for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Nd", "Lu", "Hg", "Th", "U", "Lr"]) expect(drawnRoundMetal.has(el), el).toBe(true);
+    for (const el of ["Pr", "Ac", "Fm", "Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
     expect([...drawnRoundMetal].filter((el) => !transitionMetal.has(el))).toEqual([]);
   });
 
@@ -75,9 +78,8 @@ describe("what kind of element: each set by hand, against the periodic table", (
     for (const el of alwaysIonic) expect(ionic.get(el), el).toBe(1);
   });
 
-  it("counts the bonds of hydrogen, the nonmetals and the metalloids in a valence, and Sb's in protonation only", () => {
+  it("counts the bonds of hydrogen, the nonmetals and the metalloids in a valence, Sb's among them, one set for both readers", () => {
     expect(sorted(inValenceSums)).toEqual(sorted("H B C N O F Si P S Cl Ge As Se Br Sb Te I".split(" ")));
-    expect(sorted(inValenceSums).filter((el) => !inValenceSumsFromGeometry.has(el))).toEqual(["Sb"]);
     expect([...inValenceSums].filter((el) => metal.has(el))).toEqual([]);
   });
 });
@@ -111,7 +113,7 @@ describe("each caller takes the set that was its list: nothing moved", () => {
   const differ = (was: (el: string) => unknown, is: (el: string) => unknown) => every.filter((el) => was(el) !== is(el));
 
   it("draws round the same metals, and a complex's formula reads the same ones - but the actinoids, B1's fix", () => {
-    expect(differ((el) => old.drawnRound.has(el), (el) => drawnRoundMetal.has(el))).toEqual(["Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr"]);
+    expect(differ((el) => old.drawnRound.has(el), (el) => drawnRoundMetal.has(el))).toEqual(["Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Md", "No", "Lr"]);
   });
   it("holds the same metals by their d count", () => {
     expect(differ(old.dOrF, (el) => transitionMetal.has(el))).toEqual([]);
@@ -123,9 +125,9 @@ describe("each caller takes the set that was its list: nothing moved", () => {
     expect(differ((el) => old.ionic.get(el), (el) => ionic.get(el))).toEqual([]);
     expect(differ((el) => old.condensed.has(el), (el) => alwaysIonic.has(el))).toEqual([]);
   });
-  it("counts the same elements' bonds in a valence, each of the two as it did", () => {
+  it("counts the same elements' bonds in a valence - but Sb, which the geometry's reading now counts too, B3's fix", () => {
     expect(differ((el) => old.protonation.has(el), (el) => inValenceSums.has(el))).toEqual([]);
-    expect(differ((el) => old.geometry.has(el), (el) => inValenceSumsFromGeometry.has(el))).toEqual([]);
+    expect(differ((el) => old.geometry.has(el), (el) => inValenceSums.has(el))).toEqual(["Sb"]);
   });
   it("reads the same elements as no metals but Ts and Og, which join At and Rn so that every element is one or the other", () => {
     expect(differ((el) => old.notMetals.has(el), (el) => notMetal.has(el))).toEqual(["Ts", "Og"]);

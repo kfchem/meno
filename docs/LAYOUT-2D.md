@@ -950,8 +950,10 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 
 The metals ligands are drawn round are the transition metals - the d
 block with the lanthanoids and actinoids, IUPAC's inner transition
-elements - but Pr, whose label on a drawing is propyl's, and Rf to Cn,
-whose complexes are not made (lib/chem/perception/elements
+elements - but Pr, Ac and Fm, whose labels on a drawing are propyl's,
+acetyl's and 9-fluorenylmethyl's (a group named as an element is the
+group: the maintainer, 2026-10-10), and Rf to Cn, whose complexes are not
+made (lib/chem/perception/elements
 `drawnRoundMetal`). So uranocene and thorocene are sandwiches as
 ferrocene is, and an H on U is a hydride, kept as an atom as on Pd
 (foundation part 3, B1, 2026-11-16; before, the actinoids were not drawn

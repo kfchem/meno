@@ -199,7 +199,9 @@ its own only where nothing is lost or guessed:
     its id, its identity and its properties as columns;
   - numbers between units of one dimension that Meno's units table knows
     (Eh, kcal/mol, kJ/mol, eV, cm⁻¹; K and °C; nm and eV on a spectrum's
-    axis), converted where they are read;
+    axis; a restraint's strength, kcal/mol/rad² and kJ/mol/rad² for a
+    torsion's, kcal/mol/Å² and kJ/mol/Å² for a distance's), converted
+    where they are read;
 - **never implicit**: molecules to 3D (decision 18); frames to one geometry
   (*Take frames* says which); a table to molecules; a table to a number;
   across dimensions; a model to anything.
@@ -1152,10 +1154,22 @@ space: the group goes where the hydrogen was.
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads
   a drawing, and each configuration of the template, at its atoms, mapped,
-  is held to it. A product that would change one, lose one, or say one the
-  template does not, is never made: the step stops, naming it (*Position 1
-  (C4) = Me: would change the configuration at C4*). This holds one at a
-  time and together, and for groups with configurations of their own.
+  is held to it: each stereocentre, each double bond's side (an odd run of
+  cumulated double bonds' too) and each axis (a biaryl's, an allene's). A
+  product that would change one, lose one, or say one the template does
+  not, is never made: the step stops, naming it (*Position 1 (C4) = Me:
+  would change the configuration at C4*; a double bond as *C4=C5*, an axis
+  as *the axis C4-C5*). This holds one at a time and together, and for
+  groups with configurations of their own. It is the one comparison of two
+  drawings' configurations (lib/chem/perception/stereo/compare), which
+  Clean-up's own check uses too: an H drawn as an atom on a centre and the
+  centre's H not drawn are the same neighbour (an H with a mass number, a
+  charge or a map number is a group of its own); an H replaced in place by
+  a group keeps the arrangement.
+- **A centre that is no longer one** - its R group or its new group is an H,
+  or two of its groups are now alike (F[C@H](R1)Cl with R1 = H or Cl) - stops
+  nothing: there is no configuration left to change. Its bond is drawn
+  plain, since a wedge there would state nothing.
 - **Tested against RDKit** by a differential in the fixture: stereo-rich
   templates, every atom with an undrawn hydrogen in turn, each with several
   groups, the compound for each made by RDKit by putting the group in that
