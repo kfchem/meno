@@ -48,21 +48,8 @@ const angleOf = (p: Point, q: Point) => Math.atan2(q.y - p.y, q.x - p.x);
 const turn = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const apart = (a: number, b: number) => Math.abs(turn(a - b));
 
-/** How far from parallel two opposite bonds of a ring drawn as a chair may be. */
-const PARALLEL = Math.sin(12 * DEG);
-
-/**
- * Whether a ring of six, its atoms in order round it, is drawn as a chair - in perspective, as a textbook draws one: each of
- * its three pairs of opposite bonds parallel, its outline not convex (a flat hexagon's opposite sides are parallel too).
- */
-export function drawnAsChair(ring: readonly Point[]): boolean {
-  if (ring.length !== 6) return false;
-  const e = ring.map((p, i) => ({ x: ring[(i + 1) % 6].x - p.x, y: ring[(i + 1) % 6].y - p.y }));
-  const cross = (u: Point, v: Point) => u.x * v.y - u.y * v.x;
-  const parallel = [0, 1, 2].every((i) => Math.abs(cross(e[i], e[i + 3])) <= PARALLEL * Math.hypot(e[i].x, e[i].y) * Math.hypot(e[i + 3].x, e[i + 3].y));
-  const turns = e.map((u, i) => Math.sign(cross(u, e[(i + 1) % 6])));
-  return parallel && turns.some((t) => t > 0) && turns.some((t) => t < 0);
-}
+import { drawnAsChair } from "../chem/perception/projection/recognise";
+export { drawnAsChair };
 
 /** A ring's atoms in order round it. */
 function roundRing(mol: Molecule, ring: readonly number[]): number[] {

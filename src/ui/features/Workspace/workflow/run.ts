@@ -97,7 +97,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const [p, q] = ["molecules", "reference"].map((port) => inputOf(doc, id, port));
     if (!p) return fail("Nothing comes into Molecules");
     const of = (x: NonNullable<typeof p>) => setEntries(x.molecules, x.holds as Holds3D);
-    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values), key, w);
+    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values, step.bound), key, w);
   }
   // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
   if (step.kind === "onto-structures") {

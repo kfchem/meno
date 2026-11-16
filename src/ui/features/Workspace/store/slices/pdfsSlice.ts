@@ -1,5 +1,6 @@
 import { gestureStep } from "../../../../../lib/doc/document";
 import { pointOfStyle } from "../../restyle";
+import { pdfRoom } from "../../../../../lib/pdf/layout";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -114,9 +115,14 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) =>
       doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), gesture ? gestureStep(`pdf-page:${id}:${page}:${gesture}`) : {}),
     pdfPagesInRows: (id: number) => doc.edit("put pages in rows", (d) => ops.updatePdf(d, id, { placed: null })),
-    // (made an icon, its pages gathered first)
-    iconPdf: (id: number, icon: boolean) =>
-      doc.edit(icon ? "minimize PDF" : "expand PDF", (d) => ops.updatePdf(d, id, { icon, ...(icon ? { spread: false } : {}) })),
+    // (made an icon, its pages gathered first; shown full size again, and taken into view - docs/PDF.md, *A PDF*, *On the page*)
+    iconPdf: (id: number, icon: boolean) => {
+      const was = !!doc.getState().pdfs?.find((x) => x.id === id)?.icon;
+      const done = doc.edit(icon ? "minimize PDF" : "expand PDF", (d) => ops.updatePdf(d, id, { icon, ...(icon ? { spread: false } : {}) }));
+      const p = !icon && was && done ? doc.getState().pdfs?.find((x) => x.id === id) : undefined;
+      if (p) get().requestShow(pdfRoom(p));
+      return done;
+    },
     removePdf: (id: number) => {
       if (doc.edit("delete PDF", (d) => ops.removePdf(d, id))) set((prev: EditorState) => ({ ...prev, hoveredPdf: prev.hoveredPdf === id ? null : prev.hoveredPdf }));
     },

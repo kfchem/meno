@@ -23,7 +23,8 @@ import { factsOf } from "./perception/facts";
 import { sharesMoreThanABond } from "./perception/rings";
 import { readMolfile } from "./ctfile";
 import { aromaticIn } from "./aromaticity";
-import { implicitHydrogens, mostBonds } from "./molecule";
+import { implicitHydrogens } from "./molecule";
+import { metal } from "./perception/elements";
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -62,13 +63,6 @@ export const MOST_CONFORMERS = 5000;
 
 const heavy = (a: SoughtAtom | undefined) => a != null && a.el !== "H" && a.el !== "*";
 
-/**
- * A metal, to a ring bound to one (`flatRingAtoms`): a heavy atom with no
- * most bonds (./molecule `mostBonds`). Not the core's `metal`
- * (lib/chem/perception/elements): Ge, As, Sb, Te, At, Ts and the noble
- * gases are metals here, which foundation part 3 (B4) mends.
- */
-const metalByBonds = (a: SoughtAtom) => heavy(a) && mostBonds(a.el) === null;
 
 /** Each atom's bonds, as [other atom, order]. */
 function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): [number, number][][] {
@@ -214,13 +208,16 @@ export function flatRingAtoms(
   held: readonly (readonly number[])[] = [],
 ): Set<number> {
   const around = neighboursOf(atoms, bonds);
-  const metal = (i: number) => metalByBonds(atoms[i]);
+  // (a metal as the core says one is - lib/chem/perception/elements `metal`, Al among them; before, any heavy atom with no most bonds
+  //  was, Ge, As, Sb, Te, At, Ts and the noble gases too, so a ring each of whose atoms is bonded to one Ge or Te was held flat as if
+  //  on a metal: foundation part 3, B4)
+  const isMetal = (i: number) => metal.has(atoms[i].el);
   const aromatic = aromaticIn(atoms, bonds, rings);
   const out = new Set<number>();
   for (const ring of rings) {
     const order = (x: number, y: number) => around[x].find(([j]) => j === y)?.[1];
     const ringBondsOf = ring.map((x, k) => order(x, ring[(k + 1) % ring.length]));
-    const bound = ring.every((x) => around[x].some(([j]) => metal(j))) && around[ring[0]].some(([m]) => metal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
+    const bound = ring.every((x) => around[x].some(([j]) => isMetal(j))) && around[ring[0]].some(([m]) => isMetal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
     const centred = held.some((h) => ring.every((x) => h.includes(x)));
     if (bound || centred || ringBondsOf.every((o) => o === 4) || ring.every((x) => aromatic.has(x))) for (const x of ring) out.add(x);
   }

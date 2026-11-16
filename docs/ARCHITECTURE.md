@@ -1735,6 +1735,13 @@ to be able to work with nothing going out at all.
   Settings › Network holds the allowed purposes and the record. While a
   talk is given in the window (docs/PRESENTING.md), the cards and the
   question wait until it ends; the record is kept as ever.
+- **Which question goes where.** A question that answers the user's own
+  click comes over the page (`ConsentDialog`), one at a time. A question
+  Meno asks of its own accord comes on a card at the edge of the window,
+  which takes no key and holds up no other question: setting chemistry up
+  as Meno first starts (`lib/plugins/firstSetUp`, docs/PLUGINS.md, *First
+  start*). The card's yes allows only what it named before the click
+  (`allowAnswered`); anything beyond stops it, asking in its place.
 
 - **Meno keeping itself up to date** (`src-tauri/src/update.rs`,
   `lib/update.ts`) is such a task, of its own: its requests - latest.json

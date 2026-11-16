@@ -69,3 +69,17 @@ describe("aromatic rings, by each ring and each pair of rings fused at a bond", 
     expect(read("c1ccn2cccc2c1").not).toEqual([]);
   });
 });
+
+describe("a ring with no pi bond and no empty p orbital, its atoms' lone pairs alone (backlog 182)", () => {
+  it("is not aromatic, whatever its lone pairs count: As4, P4, a triaziridine, P3H3, P5H5", () => {
+    for (const smiles of ["[As]12[As]3[As]1[As]23", "P12P3P1P23", "N1NN1", "P1PP1", "P1PPPP1"]) {
+      expect(read(smiles).aromatic, smiles).toEqual([]);
+    }
+  });
+
+  it("leaves the rings a pi bond or an empty p orbital makes as they were: pyrrole, furan, thiophene, the cyclopropenyl cation, borazine, benzene, the pentaphospholide anion", () => {
+    for (const smiles of ["c1cc[nH]c1", "c1ccoc1", "c1ccsc1", "C1=C[CH+]1", "B1NBNBN1", "c1ccccc1", "[P-]1P=PP=P1"]) {
+      expect(read(smiles).not, smiles).toEqual([]);
+    }
+  });
+});

@@ -2306,7 +2306,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   are those, of all the shapes allow, that fit the lengths best with the
   most aromatic rings: a search over each conjugated part. A sulfonyl
   has two S=O and a phosphate one P=O, to its shortest oxygens; a nitro
-  group's charges are N+ and O-. Bonds to metals stay single. Where an
+  group's charges are N+ and O-. Bonds to metals stay single; a
+  metalloid's (B, Si, Ge, As, Sb, Te) count in its neighbours' valences
+  as a nonmetal's do, so SbPh3's rings are aromatic and nothing on them
+  charged, as AsPh3's (foundation part 3, B3, 2026-11-16; before, Sb's
+  bonds were taken as a metal's here). Where an
   atom's shape asks for a double bond it cannot have, nothing is changed
   and the orders stay unknown. Otherwise they are drawn - with no mark
   but on a skeleton, which says its protonation is unknown (below) - and

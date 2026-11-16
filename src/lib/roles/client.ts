@@ -27,7 +27,8 @@ export type ChemRequests = {
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
-  from_smiles: { args: { smiles: string }; result: { molblock: string } };
+  /** A SMILES read: its drawing, and - from a plugin that sends it - the configuration it read, by the block's own atom and bond numbers (Meno lays its drawing out from that, not from the block's wedges). */
+  from_smiles: { args: { smiles: string }; result: { molblock: string; configuration?: Configuration } };
   /** What the toolkit makes of a SMILES, as facts - whether it reads, whether it parses at all, the problems its own check finds (lib/chem/smilesWhy): Meno says why in words. */
   smiles_read: { args: { smiles: string }; result: SmilesRead };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
@@ -98,7 +99,7 @@ export type ChemRequests = {
    * they are not known (`perceive`) - and whether they were (`perceived`):
    * never without hydrogens, which they are found by.
    */
-  drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; perceived?: boolean } };
+  drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; configuration?: Configuration; perceived?: boolean } };
   /**
    * A molecule in 3D whose file gives no bond orders given them from a
    * SMILES of the same molecule: its
