@@ -23,7 +23,7 @@ import { identityInputOf } from "../chem/identityOf";
 import { undrawnHydrogens, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
-import { alikePlain, changedAt, rewedged, unitName } from "./stereoKept";
+import { changedOf, changesFrom, plainWhereAlike, rewedged, unitName } from "./stereoKept";
 import type { ConfigurationUnit } from "../../../../lib/chem/perception/stereo/compare";
 import { joined, MOST_COMBINATIONS, readOption, type Enumerated, type Made, type OptionProblem, type OptionRead } from "./enumerate";
 
@@ -196,13 +196,17 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     let drawn = wedgesHeld(joined(model, given.map((k) => [k + 1, [at.get(k)!], choice[k]!] as const), style), template);
     // (a heavy atom's undrawn H taken: the group in its place among the centre's neighbours)
     const took = new Map(given.filter((k) => !positions[k].drawnH).map((k) => [positions[k].id, at.get(k)!]));
-    for (const u of changedAt(template, drawn, took)) {
+    let differences = changesFrom(template, drawn, took);
+    let again = false;
+    for (const u of changedOf(differences)) {
       if (u.kind !== "centre" || !took.has(u.at)) continue;
-      const again = rewedged(template, drawn, u.at, took);
-      if (again) drawn = again;
+      const wedged = rewedged(template, drawn, u.at, took);
+      if (wedged) [drawn, again] = [wedged, true];
     }
+    // (read again only where a centre was wedged anew)
+    if (again) differences = changesFrom(template, drawn, took);
     // (a centre no longer one, two of its groups now alike: drawn plain)
-    return { drawn: alikePlain(template, drawn, took), changed: changedAt(template, drawn, took) };
+    return { drawn: plainWhereAlike(drawn, differences), changed: changedOf(differences) };
   };
   const combinations: { choice: (OptionRead | null)[]; how: string }[] = [];
   if (combine === "one") {

@@ -21,7 +21,7 @@ import { identityInputOf } from "../chem/identityOf";
 import { degrees, narrowEnd, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
 import { resolve, type Reading } from "../chem/resolve";
-import { alikePlain, changedAt, unitName } from "./stereoKept";
+import { changedOf, changesFrom, plainWhereAlike, unitName } from "./stereoKept";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
 export const MOST_COMBINATIONS = 10_000;
@@ -241,11 +241,12 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
     // (each wedge narrow where it was, and the product's configurations read back and held to the template's: stereoKept)
     const held = wedgesHeld(joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style), template);
     const how = numbers.map((n, k) => `R${n} = ${label(options[k][choice[k]])}`).join(", ");
-    const changed = changedAt(template, held, new Map());
-    // (a centre no longer one, two of its groups now alike: drawn plain)
-    const drawnNow = alikePlain(template, held, new Map());
+    const differences = changesFrom(template, held, new Map());
+    const changed = changedOf(differences);
     if (changed.length) refused.push(`${how}: would change the configuration at ${changed.map((u) => unitName(template, u)).join(", ")}`);
     else {
+      // (a centre no longer one, two of its groups now alike: drawn plain)
+      const drawnNow = plainWhereAlike(held, differences);
       const found = identity(identityInputOf(drawnNow).input);
       if (!found.complete) missed++;
       const first = seen.get(found.text);
