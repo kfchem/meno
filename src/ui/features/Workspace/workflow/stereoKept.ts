@@ -5,12 +5,17 @@
  * bond's side, mapped - and none the template does not, at the template's
  * atoms. Read back from the product's drawing as the canvas reads it
  * (lib/layout/drawn `readStereo`), so whatever the join did to the wedges
- * is checked, not assumed.
+ * is checked, not assumed. A double bond the product has no cis or trans
+ * at - its group on an end now alike with the end's other, F/C=C/C made
+ * F/C=C(C)C - keeps nothing and loses nothing: it is no stereo unit there
+ * (lib/chem/perception/symmetry `settingCisTrans`).
  */
 import { readStereo } from "../../../../lib/layout/drawn";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, narrowEnd } from "../chem/drawing";
 import { parity } from "../../../../lib/chem/perception/stereo/geometry";
+import { drawnGraph } from "../../../../lib/chem/perception/stereo/from2d";
+import { settingCisTrans } from "../../../../lib/chem/perception/symmetry";
 
 /** A centre's neighbours by atom id ("H" for its undrawn hydrogen), in the order read, and the sign of the volume they span. */
 type Centre = { around: (number | "H")[]; volume: 1 | -1 };
@@ -61,7 +66,7 @@ export function changedAt(template: Model, product: Model, took: ReadonlyMap<num
     const p = now.sides.get(b);
     const bond = ends(template.bonds, b);
     if (!p) {
-      changed.add(bond.a);
+      if (!noneThere(product, b, s)) changed.add(bond.a);
       continue;
     }
     // (a ref on one end other than the template's is the other neighbour there - the group in its H's place among them: the side flips with each)
@@ -73,6 +78,22 @@ export function changedAt(template: Model, product: Model, took: ReadonlyMap<num
     if (bond && !was.sides.has(b)) changed.add(bond.a);
   }
   return [...changed].sort((p, q) => p - q);
+}
+
+/**
+ * Whether the double bond `id` of `product`, given the side `side` (its refs by atom id), sets nothing there - the rest as its
+ * drawing says it (perception/symmetry `settingCisTrans`): its cis or trans is no configuration, so none read is none lost.
+ */
+function noneThere(product: Model, id: number, side: { refs: [number, number]; cis: boolean }): boolean {
+  const k = product.bonds.findIndex((x) => x.id === id);
+  const index = new Map(product.atoms.map((a, i) => [a.id, i]));
+  const refs = side.refs.map((r) => index.get(r));
+  if (k < 0 || refs[0] == null || refs[1] == null) return false;
+  const d = drawingOf(product);
+  const read = readStereo(d.atoms, d.bonds);
+  const { graph, bondAt } = drawnGraph(d.atoms, d.bonds, { ...read, cisTrans: new Map(read.cisTrans).set(k, { refs: [refs[0], refs[1]], cis: side.cis }) });
+  const j = bondAt.indexOf(k);
+  return j >= 0 && !settingCisTrans(graph).bonds[j].stereo;
 }
 
 /**

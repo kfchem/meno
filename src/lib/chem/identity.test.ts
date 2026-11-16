@@ -385,16 +385,17 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     expect(one("C/C=C1/CCCCC1", "C/C=C1\\CCCCC1", "CC=C1CCCCC1")).toBe(true);
   });
 
-  it("tells apart, on the safe side, writings that leave one thing unsaid in two ways: (4-methylcyclohexylidene)ethane", () => {
+  it("is one structure however a writing leaves its one thing unsaid, and two enantiomers where both are written: (4-methylcyclohexylidene)ethane", () => {
     // (its centre alone sets nothing, and its double bond alone; once either is written the other decides between
     // the two enantiomers. Drawn with its double bond, with its centre, or with neither: each means "either
-    // enantiomer", and nothing is filled in the first two. The third is filled in the canonical order - as one of
-    // them. Alike told apart, never unlike joined, and only where no single compound is stated: found in the chemistry check)
-    const [bond, centre, neither] = ["C/C=C1/CCC(C)CC1", "C[C@H]1CCC(=CC)CC1", "CC=C1CCC(C)CC1"].map((x) => identityText(fromSmiles(x)));
-    expect(bond).not.toBe(centre);
-    expect([bond, centre]).toContain(neither);
-    expect(one("C/C=C1/CCC(C)CC1", "C/C=C1\\CCC(C)CC1")).toBe(true);
-    expect(one("C[C@H]1CCC(=CC)CC1", "C[C@@H]1CCC(=CC)CC1")).toBe(true);
+    // enantiomer" - its double bond's cis or trans, set against its ring's arms while the centre is open, is none
+    // (perception/symmetry `settingCisTrans`), and is never filled in, so no fill of the centre makes the two together
+    // one of the enantiomers. Found in the chemistry check)
+    expect(one("C/C=C1/CCC(C)CC1", "C/C=C1\\CCC(C)CC1", "C[C@H]1CCC(=CC)CC1", "C[C@@H]1CCC(=CC)CC1", "CC=C1CCC(C)CC1")).toBe(true);
+    // (both written: the two enantiomers apart, each the same written with both turned)
+    expect(one("C/C=C1/CC[C@H](C)CC1", "C/C=C1/CC[C@@H](C)CC1")).toBe(false);
+    expect(one("C/C=C1/CC[C@H](C)CC1", "C/C=C1\\CC[C@@H](C)CC1")).toBe(true);
+    expect(one("C/C=C1/CC[C@H](C)CC1", "CC=C1CCC(C)CC1")).toBe(false);
   });
 
   it("keeps every stereo unit: a centre's two alike arms set apart by another configuration, a pseudoasymmetric centre, E and Z", () => {

@@ -22,7 +22,7 @@ const slash = (p: string) => p.split(sep).join("/");
 export const ALLOWED_OUTSIDE: { path: string; why: string }[] = [
   { path: "lib/chem/elements", why: "the element table: data" },
   // (the one rule the reader of a drawing still asks outside the core: which atoms of three bonds keep a configuration by their lone pair)
-  { path: "lib/chem/lonePairCentres", why: "the reader of a drawing (stereo/from2d) asks it which atoms keep a configuration by their lone pair: until part 14 B moves it in" },
+  { path: "lib/chem/lonePairCentres", why: "the reader of a drawing (stereo/from2d) asks it which atoms keep a configuration by their lone pair, and the symmetry (`settingCisTrans`) whether a double bond's end of three has a lone pair: until part 14 B moves it in" },
 ];
 
 /** The module names a file's code imports, from its static `import`s and `export ... from`s and its dynamic `import()`s, comments left out: string-literal module names only. */
