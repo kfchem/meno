@@ -758,11 +758,29 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
     relayout(doc, change).model,
     {
       centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
-      doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated]),
+      doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated, ...boundRingDoubles(part, job)]),
       axes,
     },
     job.given || job.opened?.length ? { doubles: new Set([...(job.given ? cumulated : []), ...(job.opened ?? [])]), axes: job.given ? axes : new Set<string>() } : undefined,
   );
+}
+
+/**
+ * The double bonds of each ring bound to its metal through every one of its atoms, drawn atom by atom (`LayoutJob.bound`: uranocene's
+ * eight-rings drawn with a bond from U to each carbon, ferrocene's five-rings): a pair of ids each. Such a ring's double bonds have no cis
+ * or trans - the ring is held flat and face-on by its metal, its double bonds one Kekule form of it - so a layout that draws the ring free
+ * of its metal's bonds, as a haptic drawing is, states none of them (backlog 178, CHEM 11-16). A ring of which only some atoms are bound
+ * (an eta-4 cyclooctatetraene) and a ring with no metal keep the rule of any ring: an eight-ring's double bond may be trans.
+ */
+function boundRingDoubles(part: Model, job: Pick<LayoutJob, "bound">): string[] {
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  return (job.bound ?? []).flatMap((sys) => {
+    const inSys = new Set(sys.atoms);
+    const own = part.bonds.filter((b) => inSys.has(b.a) && inSys.has(b.b));
+    // (a ring: as many bonds among its atoms as atoms, each atom on two of them - not a chain, an allyl's or a diene's)
+    const ring = sys.atoms.length >= 3 && own.length === sys.atoms.length && sys.atoms.every((id) => own.filter((b) => b.a === id || b.b === id).length === 2);
+    return ring ? own.filter((b) => b.order === 2).map((b) => pair(b.a, b.b)) : [];
+  });
 }
 
 /**
