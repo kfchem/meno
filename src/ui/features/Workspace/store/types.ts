@@ -11,6 +11,7 @@ import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
+import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
@@ -1003,6 +1004,8 @@ export type StepJob = {
   reused?: true;
   /** A job taken up again: what it gave when it was first read, as one digest - what it gives now must be the same. */
   gave?: string;
+  /** Its options, where they are not its run's: a step whose options its entries take from a property, one job's group's (lib/boundOptions `boundGroups`). */
+  options?: OptionValues;
 };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
@@ -1037,6 +1040,8 @@ export type WorkflowStep = {
   y: number;
   by?: string;
   options?: OptionValues;
+  /** Its options each entry takes from a property it carries, by option id: the property's name (lib/boundOptions; docs/WORKFLOWS.md, *Options from a property*). */
+  bound?: Bound;
   ran?: StepRan;
   /** Its earlier runs, newest first. */
   runs?: StepRunKept[];
@@ -1849,7 +1854,7 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
-  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
+  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
   removeStep: (id: number, asked?: boolean) => void;
@@ -2129,6 +2134,8 @@ export type EditorState = {
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
+  /** Before a turn of the selection: the depth worked out for a ring in perspective drawn with none stored on its atoms, in the turn's own step (chem/depthHeld), so that the turn keeps the compound. */
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => void;
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */

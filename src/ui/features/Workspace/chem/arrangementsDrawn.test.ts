@@ -61,6 +61,16 @@ describe("a metal's donors across, read from a drawing", () => {
     expect(identityOfDrawn(drawn("Pt", square(["N", "Cl", "N", "Cl"], 45), [2, 0, 3, 1])).text).toBe(trans);
   });
 
+  it("a hydrogen bond drawn to the metal is no donor: cisplatin drawn as the X with one is still cis, the identity of cisplatin and a water apart", () => {
+    const cis = drawn("Pt", square(["Cl", "Cl", "N", "N"], 45));
+    const water = (hBond: boolean): Model => ({
+      atoms: [...cis.atoms, { id: 50, x: 0.4, y: -1.6, r: 0.9, el: "H" }, { id: 51, x: 0.9, y: -2.4, r: 0.9, el: "O" }] as Model["atoms"],
+      bonds: [...cis.bonds, { id: 150, a: 50, b: 51, order: 1, stereo: "none" }, ...(hBond ? [{ id: 151, a: 1, b: 50, order: 1, stereo: "none", hydrogen: true }] : [])] as Model["bonds"],
+    });
+    expect(arrangementsDrawn(drawingOf(water(true)), water(true))).toEqual(arrangementsDrawn(drawingOf(cis), cis));
+    expect(identityOfDrawn(water(true)).text).toBe(identityOfDrawn(water(false)).text);
+  });
+
   it("a chemist's upright cross on a metal surely square planar states its pairs (ST-2.6's acceptable form); Meno's marked cross, none", () => {
     // (cisplatin: Pt(II), its two NH3 drawn as ammines)
     const cross = (els: string[]) => drawn("Pt", square(els, 0));

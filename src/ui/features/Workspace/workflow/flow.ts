@@ -355,7 +355,8 @@ function keyTexts(m: Molecule3D): readonly string[] {
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const values = stepValues(step, by);
   // (and, a Render's, the plugins its look and studio are of, by version)
-  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values);
+  // (and the options taken from a property, each by the property's name: what each entry takes is in its properties, keyed below)
+  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values) + (step.bound && Object.keys(step.bound).length ? `|bound${JSON.stringify(Object.entries(step.bound).sort())}` : "");
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
