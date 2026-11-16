@@ -54,7 +54,9 @@ title, its first line; the record's data items are not kept:
   back.
 - **Collections** (V3000): enhanced stereo (MDLV30/STEABS, STERACn,
   STERELn, and the bond collections STEBABS, STEBRACn, STEBRELn),
-  highlighting, a file's own.
+  highlighting, a file's own. An AND or OR group of centres is made in
+  3D, and by *Stereoisomers*, as each of its halves; a group on a bond is
+  made as drawn, said so (WORKFLOWS.md, *Stereoisomers is Meno's*).
 - **The chiral flag**, link atoms, Rgroup definitions and their logic.
 - **Rxnfiles**, V2000 (`$MOL` blocks) and V3000 (BEGIN REACTANT / PRODUCT /
   REAGENT blocks), their molecules in the file's order: reactants,
