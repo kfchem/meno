@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ABBREVIATIONS } from "../abbreviations";
 import { ELEMENTS } from "../elements";
 import {
   alwaysIonic,
@@ -58,7 +59,10 @@ describe("what kind of element: each set by hand, against the periodic table", (
   });
 
   it("draws ligands round the transition metals, the actinoids among them, but Pr, Ac and Fm, groups' labels, and Rf to Cn", () => {
-    expect(sorted(labelNotElement)).toEqual(["Ac", "Fm", "Pr"]);
+    expect(sorted(labelNotElement)).toEqual(["Ac", "At", "Fm", "Pr", "Ts"]);
+    // (every label or other name of the abbreviations' table that is an element's symbol, and no other: a label added there is a label here)
+    const isSymbol = new Set(symbols);
+    expect(sorted(new Set(ABBREVIATIONS.flatMap((a) => [a.label, ...(a.also ?? [])]).filter((l) => isSymbol.has(l))))).toEqual(sorted(labelNotElement));
     expect(drawnRoundMetal.size).toBe(56);
     for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Nd", "Lu", "Hg", "Th", "U", "Lr"]) expect(drawnRoundMetal.has(el), el).toBe(true);
     for (const el of ["Pr", "Ac", "Fm", "Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
