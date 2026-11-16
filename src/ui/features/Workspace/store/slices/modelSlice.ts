@@ -16,6 +16,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import { depthStored, recognisedDepthOf } from "../../chem/depthHeld";
 import { renumbered } from "../../chem/atomMap";
+import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
@@ -210,7 +211,8 @@ export const createModelSlice = (
   },
 
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
-    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
+    // (a frame of a drag or a turn: a mark between bonds it leaves apart kept until it ends - `settleMove`)
+    whileMoving(() => doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`)));
   },
 
   dropMoveAtoms: (gesture: string) => {
@@ -221,6 +223,14 @@ export const createModelSlice = (
     // (a ring in perspective with no depth, about to be turned: its worked-out depth stored first, in the same step - chem/depthHeld)
     const held = recognisedDepthOf(get().model, atoms);
     if (held.size) doc.edit("move atoms", (d) => depthStored(d, held), gestureStep(`move-atoms:${gesture}`));
+  },
+
+  settleMove: (gesture: string, atoms: Iterable<number>) => {
+    // (a mark between two bonds the move has left apart - one with an atom it moved - taken away, in the move's own step: chem/crossings
+    // `crossingsApart`)
+    const moved = new Set(atoms);
+    if (!moved.size || crossingsApart(get().model, moved) === get().model) return;
+    doc.edit("move atoms", (d) => ({ ...d, model: crossingsApart(d.model, moved) }), gestureStep(`move-atoms:${gesture}`));
   },
 
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
@@ -453,6 +463,11 @@ export const createModelSlice = (
 
   updateBond: (id: number, patch: Partial<Bond>) => {
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
+  },
+
+  // (which of two crossing bonds is in front, said from the right-click menu: one step, named for what was done - chem/crossings)
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => {
+    doc.edit(how === "front" ? "bond in front" : "bond behind", (d) => ops.orderCrossing(d, bondId, otherId, how));
   },
 
   // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's

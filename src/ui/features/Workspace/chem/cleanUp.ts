@@ -13,9 +13,11 @@ import { emptyWorkspaceDocument, endpointsHeld, relayout, writtenAsLabels, type 
 import type { EditorStore } from "../store";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
-import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayout";
+import { layoutJob, nextFree, relayoutFrom, statedOf, stereoOf, type LayoutJob } from "./engineLayout";
+import { openDoubleBonds, sameConfiguration } from "../../../../lib/layout/drawn";
 import { layOut } from "./layOut";
-import type { Axial, Cumulated } from "../../../../lib/layout/stereo";
+import { cisTransOfGiven, tetraOfGiven, type Given } from "./givenConfiguration";
+import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
 
@@ -291,20 +293,146 @@ export function partFormula(part: Model): string {
   return formulaOf(atoms) + (charge ? `${Math.abs(charge) > 1 ? ` ${Math.abs(charge)}` : ""}${charge > 0 ? "+" : "-"}` : "");
 }
 
-/** An allene's axes and an odd cumulene's cis or trans, as a structure's own text gives them (lib/chem/smiles), by atom index. */
-export type GivenRuns = { axes: readonly Axial[]; cumulated: readonly Cumulated[] };
-
 /** Whether `given`'s atom indices are the job's: none of the drawing's atoms folded into another's. */
 const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === model.atoms.length;
+
+/**
+ * `job` given what the structure's source says of its configuration (`Given`) in place of what its drawing says: the text's axes and odd
+ * cumulenes, and - where the plugin sent its reading beside the drawing - its centres and double bonds, each as given and the drawing's own
+ * reading of them set aside. A centre whose fourth place is a lone pair is given only where Meno's own rules hold one there
+ * (lib/chem/lonePairCentres); one whose atoms are not the drawing's is not given. The drawing laid out is then held to the whole of it
+ * (`LayoutJob.stated`).
+ */
+function withGiven(job: LayoutJob, model: Model, given: Given, ungivenDoubles: "kept" | "dropped" = "kept"): LayoutJob {
+  const input = { ...job.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) };
+  const c = given.configuration;
+  if (!c) return { ...job, given: true, stated: true, input };
+  const n = job.ids.length;
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const bondsThere = new Set(input.bonds.map((b) => pair(b.a, b.b)));
+  const bonded = (x: number, y: number) => bondsThere.has(pair(x, y));
+  const around = new Map<number, number[]>();
+  for (const b of input.bonds) for (const [x, y] of [[b.a, b.b], [b.b, b.a]]) around.set(x, [...(around.get(x) ?? []), y]);
+  const drawing = drawingOf(model);
+  const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
+  const centres = new Map(
+    c.centres
+      .filter((x) => x.atom < n && x.neighbours.every((k) => k < n && bonded(x.atom, k)) && (x.neighbours.length === 4 || (input.atoms[x.atom].hs ?? 0) > 0 || keepsPyramid(x.atom)))
+      .map((x) => [x.atom, tetraOfGiven(x, x.neighbours.length === 3 && !((input.atoms[x.atom].hs ?? 0) > 0))] as const),
+  );
+  // (a double bond by its atoms: the block's bond numbers are the drawing's, as it was read)
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const doubles = new Map(
+    c.doubles.flatMap((d) => {
+      const b = model.bonds[d.bond];
+      return b ? [[pair(index.get(b.a)!, index.get(b.b)!), d] as const] : [];
+    }),
+  );
+  return {
+    ...job,
+    given: true,
+    stated: true,
+    input: {
+      ...input,
+      atoms: input.atoms.map((a, k) => {
+        const { tetra: _drawn, ...rest } = a;
+        const t = centres.get(k);
+        return t ? { ...rest, tetra: t } : rest;
+      }),
+      bonds: input.bonds.map((b) => {
+        const d = doubles.get(pair(b.a, b.b));
+        // (a double bond the plugin gives nothing of, which the drawing reads cis or trans - an aromatic macrocycle's, which Meno's own
+        //  rules read and the toolkit's do not: as the drawing reads it, as before; the two are listed in the differential)
+        if (!d && ungivenDoubles === "kept") return b;
+        if (!d) {
+          const { stereo: _drawn, ...bare } = b;
+          return bare;
+        }
+        const { stereo: _drawn, ...rest } = b;
+        const ct = b.order === 2 ? cisTransOfGiven(d, b.a, b.b, (x) => around.get(x) ?? []) : null;
+        return ct ? { ...rest, stereo: ct } : rest;
+      }),
+    },
+  };
+}
 
 /**
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
  * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
- * given - as Clean-up lays one out.
+ * given - as Clean-up lays one out. `open`: the double bonds its text leaves
+ * open (`OpenDoubles`). `asNew`: a drawing nobody made - a
+ * plugin's coordinates - whose forms are not kept as a chemist's are (a
+ * four-bond metal's cross or X: docs/LAYOUT-2D.md, *A metal with four
+ * bonds*), but laid out as from a SMILES; `arranged`, of such a drawing, the
+ * metals (by id) whose arrangement its input gave: their donors kept
+ * opposite each other as it has them, and not marked as not given.
  */
-export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns, open?: OpenDoubles): Promise<Model> {
+/**
+ * How much of what a structure's source gives (`Given`) its drawing `model` does not show, read by the one reader: of its stereocentres, its
+ * double bonds' cis or trans, and its axes, how many are not shown, of how many given. None where the given cannot be laid on the drawing's
+ * atoms. For a drawing kept as it came (fromSmiles `drawingOf`), so that what it leaves out is said.
+ */
+export function notShownOf(model: Model, given: Given): { centres: [number, number]; doubles: [number, number]; axes: [number, number] } | null {
+  const read = layoutJob(model, new Set(given.configuration?.centres.map((c) => c.atom) ?? []));
+  if (!givenFits(read, model)) return null;
+  const stated = statedOf(withGiven(read, model, given), model);
+  const now = stereoOf(model);
+  const centres = [...stated.centres].filter(([c, t]) => !now.centres.get(c) || !sameConfiguration(t, now.centres.get(c)!)).length;
+  const doubles = [...stated.doubles].filter(([key, d]) => {
+    const e = now.doubles.get(key);
+    return !e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]));
+  }).length;
+  const axes = [...stated.axes].filter(([key, sense]) => now.axes.get(key) !== sense).length;
+  return { centres: [centres, stated.centres.size], doubles: [doubles, stated.doubles.size], axes: [axes, stated.axes.size] };
+}
+
+/**
+ * The double bonds of a structure whose source gave its configuration beside its drawing (`Given`) that could be cis or trans and that it
+ * does not name: open, so drawn that they state neither - each end straight on, or a wavy bond on a group (Brecher 2006, ST-4.4), as the
+ * layout's own test has them (lib/layout/drawn `openDoubleBonds`). Read from what was given and the drawing alone: nothing of Meno's own
+ * reading of a SMILES. None where the plugin sent no configuration, or its atoms are not the drawing's.
+ */
+export function openOfField(model: Model, given: Given): OpenDoubles | null {
+  if (!given.configuration) return null;
+  const read = layoutJob(model, new Set(given.configuration.centres.map((c) => c.atom)));
+  if (!givenFits(read, model)) return null;
+  // (what was given held, the drawing's own cis or trans of every other double bond set aside: what is left that could have one is open)
+  return openDoubleBonds(withGiven(read, model, given, "dropped").input);
+}
+
+/**
+ * A drawing kept as it came (fromSmiles `drawingOf`, where Meno's layout could not be made) with its open double bonds - the text's, and the
+ * field's - drawn so that they state neither: a wavy bond on each (its ends cannot be put straight on without a layout). Else it would state
+ * whatever the plugin's picture shows.
+ */
+export function openAsCame(model: Model, given: Given | undefined, open: OpenDoubles | undefined): Model {
+  const all = bothOpen(open, given ? openOfField(model, given) : null);
+  if (!all) return model;
+  const ends = new Set(all.straight.map((i) => model.atoms[i]?.id));
+  const either = new Set(all.either);
+  return { ...model, bonds: model.bonds.map((b, i) => (b.order === 2 && (either.has(i) || (ends.has(b.a) && ends.has(b.b))) ? { ...b, stereo: "either" as const } : b)) };
+}
+
+/** Two sets of open double bonds as one: the text's, where Meno read it, and the field's. */
+function bothOpen(p: OpenDoubles | null | undefined, q: OpenDoubles | null | undefined): OpenDoubles | undefined {
+  if (!p) return q ?? undefined;
+  if (!q) return p;
+  return { straight: [...new Set([...p.straight, ...q.straight])], either: [...new Set([...p.either, ...q.either])] };
+}
+
+export async function laidOut(
+  model: Model,
+  style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle),
+  given?: Given,
+  open?: OpenDoubles,
+  asNew = false,
+  arranged: ReadonlySet<number> = new Set(),
+): Promise<Model> {
   if (!model.bonds.length) return model;
+  // (and one the plugin's reading leaves open, where it sent one: open whatever Meno could read of the text - a SMILES its own reader
+  //  refuses gives no list of its own, and its open double bonds would else be drawn bent, stating what nobody gave)
+  open = given?.configuration ? bothOpen(open, openOfField(model, given)) : open;
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
   // (one left open with one group at each end, its ends kept straight on below: the plugin's own mark of either configuration taken off it,
@@ -326,9 +454,15 @@ export async function laidOut(model: Model, style: DrawingStyle = styleOf(useApp
           }),
         }
       : model;
-  const read = layoutJob(m);
-  // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
-  let job: LayoutJob = given && givenFits(read, m) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
+  const job0 = layoutJob(m, new Set(given?.configuration?.centres.map((c) => c.atom) ?? []));
+  // (a drawing nobody made keeps no metal's form - but one whose arrangement its input gave keeps the form it carries, the X of a square-planar centre so arranged)
+  const read = asNew
+    ? { ...job0, asNew: true as const, ...(arranged.size ? { arranged } : {}), input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm, ...a }, i) => (fourForm && arranged.has(job0.ids[i]) ? { ...a, fourForm } : a)) } }
+    : job0;
+  // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block
+  //  has no way to say them - and the centres and double bonds the plugin read, which its drawing may not state: a ring of 36 or more - by
+  //  atom, in the drawing's order)
+  let job: LayoutJob = given && givenFits(read, m) ? withGiven(read, m, given) : read;
   // (and one left open with one group at each end: each end kept straight on from it, so that it states neither cis nor trans - ST-4.4 -
   //  whatever the plugin's drawing of it said)
   if (straight.size) {

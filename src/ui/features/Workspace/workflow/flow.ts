@@ -8,7 +8,7 @@ import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, W
 import { recordsWithRoles } from "./schemeRoles";
 import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAmong, readingOrder, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
-import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type ConstitutionOf, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, presetsStamp, setName, stepValues, takesBy, takesNothingBy } from "./doers";
@@ -282,7 +282,7 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
  * imaginary frequencies. None where what comes in is a table, structures
  * drawn, or nothing.
  */
-export function moleculesSeen(doc: Flow, step: number, port?: string): { table: Table; entries: SetEntry[] } | null {
+export function moleculesSeen(doc: Flow, step: number, port?: string, constitutionOf?: ConstitutionOf): { table: Table; entries: SetEntry[] } | null {
   if (tableWired(doc, step, port)) return null;
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
@@ -308,6 +308,7 @@ export function moleculesSeen(doc: Flow, step: number, port?: string): { table: 
       const how = e.from != null ? by.get(e.from) : undefined;
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
     }),
+    constitutionOf,
   );
   // (said after the row's id)
   return { table: { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) }, entries };
@@ -342,7 +343,7 @@ function keyTexts(m: Molecule3D): readonly string[] {
       // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
       m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
       `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
-      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}`,
+      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}${m.partsAlone ? "|alone" : ""}`,
       JSON.stringify(m.properties ?? null),
     ];
     keyed.set(m, texts);

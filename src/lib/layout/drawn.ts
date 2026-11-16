@@ -23,7 +23,9 @@ import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
 import { factsOf } from "../chem/perception/facts";
 import { withRecognisedDepth } from "./recognised";
-import { placeStereo, type Stereo } from "./stereo";
+import { placeStereo, type Stereo, type Wedge } from "./stereo";
+import type { Point } from "./geometry";
+import { IN_LINE, sameConfiguration, unsureStereo } from "../chem/perception/stereo/from2d";
 
 export { IN_LINE, sameConfiguration, straightEnds, unreadWhy, unsureStereo } from "../chem/perception/stereo/from2d";
 export type { DrawnAtom, DrawnBond, DrawnStereo };
@@ -120,8 +122,131 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
   const pos = new Map(atoms.map((a, i) => [i, { x: a.x / k, y: a.y / k }]));
   // (on a bond no other centre's wedge is on: two on one bond, one is lost)
   const taken = new Set(bonds.flatMap((b) => (b.wedge ? [key(b.a, b.b)] : [])));
-  const { wedges, hydrogens } = placeStereo(mol, pos, shown, taken);
-  return { wedges, hydrogens: hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } })) };
+  const placed = placeStereo(mol, pos, shown, taken);
+  return hydrogensWhereUnread(atoms, bonds, shown, { wedges: placed.wedges, hydrogens: placed.hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } })) }, k);
+}
+
+/** How far an H drawn at a centre keeps from every other atom - its label - and from every bond, in bonds: past these it is clear. */
+const H_CLEAR_ATOM = 0.75;
+const H_CLEAR_BOND = 0.4;
+
+/** How far `p` is from the segment `u`-`v`. */
+function toSegment(p: Point, u: Point, v: Point): number {
+  const dx = v.x - u.x;
+  const dy = v.y - u.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - u.x) * dx + (p.y - u.y) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (u.x + t * dx), p.y - (u.y + t * dy));
+}
+
+/** How far apart two directions are, 0 to pi. */
+const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u)));
+
+
+/**
+ * The wedges and H's `placed` for the centres `shown`, where a centre's
+ * wedge does not say it - left unread, or read only by luck: two of its
+ * bonds in one line, as a cage's projection can leave them (epibatidine's
+ * C2) or a flat drawing's ring (doxorubicin's C1 of its sugar) - with its
+ * H drawn in the widest gap round it, `k` out, and wedged instead, the way
+ * that says its configuration; where that reads no surer, or the centre
+ * has no H of its own, as placed. Read as a reader of wedges alone reads
+ * them: the drawing's depth, where it has one, is not read - it says no
+ * centre without the wedges' own drawing in space, which the page's atoms
+ * carry and these do not.
+ */
+export function hydrogensWhereUnread(
+  atoms: readonly DrawnAtom[],
+  bonds: readonly DrawnBond[],
+  shown: ReadonlyMap<number, Tetrahedral>,
+  placed: Stereo,
+  k: number,
+): Stereo {
+  const wedges = [...placed.wedges];
+  const hydrogens = [...placed.hydrogens];
+  // (a centre its wedge does not say read flat - left unread, or read only by luck: two of its bonds in one line, as a cage's
+  // projection can leave them, epibatidine's - its H drawn in the widest gap round it and wedged instead, the way that says its
+  // configuration; where that reads no surer, as placed)
+  const flatOf = (ws: Wedge[], hs: { on: number; at: Point }[]) => {
+    const fa: DrawnAtom[] = atoms.map(({ x, y, el, charge, hs: h }, i) => ({ x, y, el, ...(charge ? { charge } : {}), hs: h - hs.filter((q) => q.on === i).length }));
+    const fb: DrawnBond[] = bonds.map(({ a, b, order, wedge, either }) => ({ a, b, order, ...(wedge ? { wedge } : {}), ...(either ? { either } : {}) }));
+    hs.forEach((q) => {
+      fa.push({ x: q.at.x, y: q.at.y, el: "H", hs: 0 });
+      fb.push({ a: q.on, b: fa.length - 1, order: 1 });
+    });
+    for (const w of ws) {
+      const to = w.to === -1 ? atoms.length + hs.findIndex((q) => q.on === w.from) : w.to;
+      const i = fb.findIndex((b) => (b.a === w.from && b.b === to) || (b.b === w.from && b.a === to));
+      if (i >= 0) fb[i] = { ...fb[i], wedge: { narrow: w.from, stereo: w.stereo } };
+    }
+    return { atoms: fa, bonds: fb };
+  };
+  // (where in the gap round `c` - about its middle `mid`, `gap` wide - its H stands clearest of every other atom, H and bond: the middle at
+  // a bond's length where that is clear, else the place the farthest from them, turned within the gap up to 25 degrees short of its
+  // bonds - an H laid on another label, or on a bond, reads as another's: GR-2.1.6, GR-4.3. Always a bond long: a shorter H's wedge,
+  // its label's room taken off, reads as a speck)
+  const clearestIn = (c: number, mid: number, gap: number): Point => {
+    const at = atoms[c];
+    const others = [...atoms.flatMap((a, i) => (i === c ? [] : [a])), ...hydrogens.map((q) => q.at)];
+    const segs = bonds.filter(({ a, b }) => a !== c && b !== c).map(({ a, b }) => [atoms[a], atoms[b]] as const);
+    const room = (p: Point) => Math.min(...others.map((o) => Math.hypot(o.x - p.x, o.y - p.y) / (H_CLEAR_ATOM * k)), ...segs.map(([u, v]) => toSegment(p, u, v) / (H_CLEAR_BOND * k)));
+    const spot = (turn: number) => ({ x: at.x + k * Math.cos(mid + turn), y: at.y + k * Math.sin(mid + turn) });
+    let best = { p: spot(0), r: room(spot(0)) };
+    if (best.r >= 1) return best.p;
+    const most = Math.max(0, gap / 2 - (25 * Math.PI) / 180);
+    for (let deg = 5; deg <= 90; deg += 5) {
+      const turn = (deg * Math.PI) / 180;
+      if (turn > most + 1e-9) break;
+      for (const t of [turn, -turn]) {
+        const r = room(spot(t));
+        if (r > best.r + 1e-9) best = { p: spot(t), r };
+      }
+    }
+    return best.p;
+  };
+  const first = flatOf(wedges, hydrogens);
+  const byLuck = new Set(unsureStereo(first.atoms, first.bonds).atoms);
+  const readFirst = readStereo(first.atoms, first.bonds).tetra;
+  // (a centre with an H placed already is as placed: its H is no other centre's, and a wedge on it says the centre)
+  const says = (c: number, t: Tetrahedral) => {
+    const r = readFirst.get(c);
+    return !!r && sameConfiguration(r, t);
+  };
+  // (a centre of three bonds whose wedge stands in line with another of its bonds, within IN_LINE: read or not, a form the text grades
+  // not acceptable - Brecher 2006, ST-1.2.4 - which a drawing of Meno's own is not to show)
+  const inLine = (c: number) => {
+    const near = bonds.flatMap(({ a, b }) => (a === c ? [b] : b === c ? [a] : []));
+    if (near.length !== 3) return false;
+    const way = (n: number) => Math.atan2(atoms[n].y - atoms[c].y, atoms[n].x - atoms[c].x);
+    return wedges.some((w) => w.from === c && w.to >= 0 && near.some((n) => n !== w.to && apart(way(n), way(w.to)) > Math.PI - IN_LINE));
+  };
+  for (const [c, t] of shown) {
+    // (a centre with no H of its own gets none: drawn, it would have five bonds, which reads as no centre)
+    if (hydrogens.some((q) => q.on === c) || (says(c, t) && !byLuck.has(c) && !inLine(c)) || atoms[c].hs < 1) continue;
+    const at = atoms[c];
+    const dirs = bonds.flatMap(({ a, b }) => (a === c ? [b] : b === c ? [a] : [])).map((n) => Math.atan2(atoms[n].y - at.y, atoms[n].x - at.x)).sort((p, q) => p - q);
+    let gap = -1;
+    let mid = 0;
+    dirs.forEach((d, i) => {
+      const next = i + 1 < dirs.length ? dirs[i + 1] : dirs[0] + 2 * Math.PI;
+      if (next - d > gap) [gap, mid] = [next - d, (d + next) / 2];
+    });
+    const h = { on: c, at: clearestIn(c, mid, gap) };
+    const others = wedges.filter((w) => w.from !== c);
+    for (const stereo of ["up", "down"] as const) {
+      const ws = [...others, { from: c, to: -1, stereo }];
+      const hs = [...hydrogens, h];
+      const f = flatOf(ws, hs);
+      const read = readStereo(f.atoms, f.bonds).tetra.get(c);
+      const hIndex = atoms.length + hs.length - 1;
+      if (!read || !sameConfiguration(read, t, (n) => (n === hIndex ? -1 : n))) continue;
+      if (new Set(unsureStereo(f.atoms, f.bonds).atoms).has(c)) break;
+      wedges.splice(0, wedges.length, ...ws);
+      hydrogens.push(h);
+      break;
+    }
+  }
+  return { wedges, hydrogens };
 }
 
 /**

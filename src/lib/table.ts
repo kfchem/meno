@@ -9,7 +9,7 @@
  * counted and said, cell by cell - never left out unsaid.
  */
 import { geometryKey, stereoIdentity, type At, type By, type Entry, type Property } from "./entry";
-import { identityKey } from "./chem/identity";
+import { constitutionKey, type IdentityInput } from "./chem/identity";
 import { isUnit, type Unit } from "./units";
 
 /**
@@ -270,9 +270,18 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
 }
 
 /**
+ * What a table writes in its constitution column: the structure's `constitutionKey` - or, where it is worked out elsewhere and not
+ * yet answered, the words that say so (`NOT_YET`).
+ */
+export type ConstitutionOf = (input: IdentityInput) => string;
+
+/** A cell whose value is being worked out, off the drawing thread: not given yet, and last in a sort (`noValue`). */
+export const NOT_YET = "not worked out: still being worked out";
+
+/**
  * Molecules seen as a table (FOUNDATION: "molecules into a port that takes
  * a table, as a view"): one row per entry, in order - its id; its
- * constitution (`identityKey` of its atoms, charges and bonds; isotopes
+ * constitution (`constitutionKey` of its atoms, charges and bonds; isotopes
  * are not part of it); its configuration (`stereoIdentity`; "not known"
  * where not perceived, or an element left unspecified); and each property
  * a column. A property whose values were worked out in more than one way -
@@ -281,7 +290,7 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
  * that is no number, text or true or false is left, and said; one with no
  * value, or not worked out, is missing in its row, and counted.
  */
-export function moleculesAsTable(entries: readonly Entry[]): Table {
+export function moleculesAsTable(entries: readonly Entry[], constitutionOf: ConstitutionOf = constitutionKey): Table {
   const columns: TableColumn[] = [
     { name: "id", kind: "entry" },
     { name: "constitution", kind: "text" },
@@ -339,7 +348,7 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   }
   const rows = entries.map((e): Cell[] => [
     e.id,
-    identityKey({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
+    constitutionOf({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
     stereoIdentity(e.stereo) ?? "not known",
     ...keys.map(({ name, variant }) => {
       const given = e.properties[name];

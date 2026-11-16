@@ -69,17 +69,23 @@ export function structureBox(model: Model, byId: ReadonlyMap<number, Atom>, ids:
   const seen = new Set<number>();
   const at = bondsByAtom(model.bonds);
   const bonds: Bond[] = [];
+  // (and a bond to an atom of another structure - a hydrogen bond, which joins two entries on the page - with that atom: the structure's
+  //  labels are drawn toward it, so its box is worked out beside it)
+  const beside: Atom[] = [];
   for (const id of ids)
     for (const b of at.get(id) ?? []) {
-      if (seen.has(b.id) || !own.has(b.a) || !own.has(b.b)) continue;
+      if (seen.has(b.id)) continue;
       seen.add(b.id);
       bonds.push(b);
+      const other = own.has(b.a) ? (own.has(b.b) ? null : b.b) : b.a;
+      if (other != null && byId.has(other) && !beside.includes(byId.get(other)!)) beside.push(byId.get(other)!);
     }
+  const drawn = [...atoms, ...beside];
   const was = drawnAs.get(atoms[0]);
-  if (was && was.atoms.length === atoms.length && was.bonds.length === bonds.length && was.atoms.every((a, i) => a === atoms[i]) && was.bonds.every((b, i) => b === bonds[i])) return was.box;
-  const b = drawnBox({ atoms: atoms as Atom[], bonds });
+  if (was && was.atoms.length === drawn.length && was.bonds.length === bonds.length && was.atoms.every((a, i) => a === drawn[i]) && was.bonds.every((b, i) => b === bonds[i])) return was.box;
+  const b = drawnBox({ atoms: drawn, bonds }, beside.length ? own : undefined);
   const box = { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
-  drawnAs.set(atoms[0], { atoms, bonds, box });
+  drawnAs.set(atoms[0], { atoms: drawn, bonds, box });
   return box;
 }
 
@@ -337,7 +343,7 @@ export function pushedOut(doc: WorkspaceDocument, down: WorkspaceDocument, exten
     const m = easedOut(box, most);
     return m.dx || m.dy ? m : null;
   };
-  for (const ids of structuresOf(doc.model)) {
+  for (const ids of structuresOf(doc.model, true)) {
     if (ids.some((id) => held.atoms.has(id))) continue;
     const changed = ids.some((id) => wasAtom.get(id) !== nowAtom.get(id));
     const m = ease(on.structure(ids), changed);
