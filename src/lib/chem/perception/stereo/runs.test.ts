@@ -132,6 +132,12 @@ describe("the atom an end runs on through", () => {
     expect(runsThrough(around(g, 1), 2)).toBe(2);
   });
 
+  it("an end whose bond on is a triple one: the atom across it, as across a double (any order of two or more)", () => {
+    // (C-C#C-C: from atom 1, which is not bonded to atom 3, on across its triple bond to atom 2)
+    const g = chain(["C", "C", "C", "C"], [1, 3, 1]);
+    expect(runsThrough(around(g, 1), 3)).toBe(2);
+  });
+
   it("none where the end has neither: each caller says what stands in", () => {
     expect(runsThrough(around(chain(["C", "C"], [1]), 0))).toBeUndefined();
   });
