@@ -650,7 +650,9 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
  * A centre with a lone pair for its fourth group - a sulfoxide's S, a
  * phosphine's P (lib/chem/lonePairCentres) - is asked so too: its
- * configuration read as readStereo reads it, from its three groups.
+ * configuration read as readStereo reads it, from its three groups. A
+ * double bond with no cis or trans to show - an end of two alike groups -
+ * is none, however it is drawn.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
@@ -712,7 +714,17 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     const cumulated = runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a);
     if (groups && !cumulated && (inLine(a, b) || inLine(b, a))) doubles.push(i);
   });
-  return { atoms: centres, bonds: doubles };
+  // (none at a double bond that has no cis or trans to show - an end of two alike groups: perception/symmetry
+  //  `settingCisTrans`, asked as readStereo asks it, with the bond given one, every other configuration as read)
+  if (!doubles.length) return { atoms: centres, bonds: doubles };
+  const read = readStereo(atoms, bonds);
+  const unit = doubles.filter((i) => {
+    const { a, b } = bonds[i];
+    const refs: [number, number] = [neighbours[a].find((n) => n !== b)!, neighbours[b].find((n) => n !== a)!];
+    const { graph, bondAt } = drawnGraph(atoms, bonds, { ...read, cisTrans: new Map(read.cisTrans).set(i, { refs, cis: true }) });
+    return !!settingCisTrans(graph).bonds[bondAt.indexOf(i)].stereo;
+  });
+  return { atoms: centres, bonds: unit };
 }
 
 /**

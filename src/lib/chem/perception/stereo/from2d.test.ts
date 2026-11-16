@@ -323,6 +323,30 @@ describe("what a drawing says of its stereochemistry only by luck", () => {
     expect(closed(3)).toEqual([]);
     expect(closed(4)).toEqual([0]);
   });
+
+  it("is no double bond with an end of two alike groups, however near in line one is drawn: it has no cis or trans to leave to luck", () => {
+    // (the far end C1 with a second group at -120 degrees: a methyl - 2-methylbut-2-ene, none - or an ethyl, its cis or trans by luck)
+    const gem = (ethyl: boolean) => {
+      const atoms: DrawnAtom[] = [
+        { x: 0, y: 0, hs: 1 },
+        { x: 1, y: 0, hs: 0 },
+        { x: -0.5, y: 0.87, hs: 3 },
+        { x: 1 + Math.cos((5 * Math.PI) / 180), y: Math.sin((5 * Math.PI) / 180), hs: 3 },
+        { x: 1.5, y: -0.87, hs: ethyl ? 2 : 3 },
+        ...(ethyl ? [{ x: 2.5, y: -0.87, hs: 3 }] : []),
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 0, b: 1, order: 2 },
+        { a: 0, b: 2, order: 1 },
+        { a: 1, b: 3, order: 1 },
+        { a: 1, b: 4, order: 1 },
+        ...(ethyl ? [{ a: 4, b: 5, order: 1 }] : []),
+      ];
+      return unsureStereo(atoms, bonds).bonds;
+    };
+    expect(gem(false)).toEqual([]);
+    expect(gem(true)).toEqual([0]);
+  });
 });
 
 describe("a centre with a lone pair for its fourth group", () => {
