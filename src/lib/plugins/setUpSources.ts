@@ -20,7 +20,7 @@ export type SetUpFile = { name: string; url: string };
 export type SetUpReach = { sources: string[]; hosts: string[] };
 
 /** One line of it, and the hosts the line names. */
-type Source = { line: string; hosts: readonly string[] };
+export type Source = { line: string; hosts: readonly string[] };
 
 const reach = (sources: readonly Source[]): SetUpReach => ({
   sources: sources.map((s) => s.line),
@@ -58,10 +58,10 @@ export function lockedUrls(lockText: string): { name: string; url: string }[] {
 const fromIndex = (lockText: string) => /^[A-Za-z0-9_.-]+==/m.test(lockText);
 
 /** uv and the Python it installs: Astral's releases (lib.rs/tools.rs fetch uv there; uv fetches Python there). */
-const UV: Source = { line: "uv the first time, and Python itself, from Astral, who make uv (releases.astral.sh)", hosts: ["releases.astral.sh"] };
+export const UV: Source = { line: "uv the first time, and Python itself, from Astral, who make uv (releases.astral.sh)", hosts: ["releases.astral.sh"] };
 /** The Python Package Index: its pages, and its files. */
 const PYPI_HOSTS = ["pypi.org", "files.pythonhosted.org"];
-const pypi = (what: string): Source => ({ line: `${what}, from the Python Package Index (${PYPI_HOSTS.join(", ")})`, hosts: PYPI_HOSTS });
+export const pypi = (what: string): Source => ({ line: `${what}, from the Python Package Index (${PYPI_HOSTS.join(", ")})`, hosts: PYPI_HOSTS });
 /** pixi: its makers' releases on GitHub, which hand the file on. */
 const PIXI: Source = {
   line: "pixi the first time, from its makers' releases (github.com, which hands it on to release-assets.githubusercontent.com)",
