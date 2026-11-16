@@ -277,10 +277,10 @@ describe("the guard: a product's configurations read back against its template's
     const template = drawnFromSmiles("F[C@H](Cl)Br");
     expect(changedAt(template, template, new Map())).toEqual([]);
     const flipped = { ...template, bonds: template.bonds.map((b) => (b.stereo === "up" ? { ...b, stereo: "down" as const } : b.stereo === "down" ? { ...b, stereo: "up" as const } : b)) };
-    expect(changedAt(template, flipped, new Map())).toEqual([2]);
+    expect(changedAt(template, flipped, new Map())).toEqual([{ kind: "centre", at: 2 }]);
     const lost = { ...template, bonds: template.bonds.map(({ stereo: _s, ...b }) => b) };
-    expect(changedAt(template, lost, new Map())).toEqual([2]);
+    expect(changedAt(template, lost, new Map())).toEqual([{ kind: "centre", at: 2 }]);
     const plain = drawnFromSmiles("FC(Cl)Br");
-    expect(changedAt(plain, template, new Map())).toEqual([2]);
+    expect(changedAt(plain, template, new Map())).toEqual([{ kind: "centre", at: 2 }]);
   });
 });

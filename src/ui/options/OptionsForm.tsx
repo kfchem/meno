@@ -1,4 +1,5 @@
 import { firstUnset, MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+import { LinkIcon } from "@heroicons/react/24/outline";
 import Checkbox from "../controls/Checkbox";
 import NumberField from "../controls/NumberField";
 import RadioGroup from "../controls/Radio";
@@ -172,17 +173,13 @@ export default function OptionsForm({
                     title="From a property"
                     aria-label="From a property"
                     aria-pressed={binds.bound[o.id] != null}
-                    tabIndex={-1}
                     onClick={(e) => {
                       e.preventDefault();
                       binds.onBind(o.id, binds.bound[o.id] != null ? null : (binds.offered[0] ?? ""));
                     }}
                     className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${binds.bound[o.id] != null ? "bg-accel-base/10 text-accel-base" : "text-gh-gray hover:bg-gh-base hover:text-gh-black"}`}
                   >
-                    {/* (two links of a chain: Heroicons' outline "link") */}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                    </svg>
+                    <LinkIcon className="h-4 w-4" aria-hidden="true" />
                   </button>
                 )}
               </span>

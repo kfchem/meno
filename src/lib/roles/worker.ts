@@ -88,11 +88,20 @@ onWorkerStopped((id) => {
   if ("plugin" in now && now.plugin === pluginById(id)?.name) useChem.setState({ state: "idle" });
 });
 
+/**
+ * The set-up of chemistry from the first start's card under way, where one is (lib/plugins/firstSetUp, which sets
+ * this): what a role asked of meanwhile, with no plugin here to fill it, waits for - not refused as wanting a plugin.
+ */
+export const firstSetUpWait: { now: () => Promise<void> | null } = { now: () => null };
+
 /** The worker of the plugin that fills `role`, started the first time it is asked for. */
 export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
   const plugin = rolePlugin(role);
   const undecided = plugin ? [] : roleUndecided(role);
   if (undecided.length) return Promise.reject(new Error(`${undecided.map((p) => p.name).join(" and ")} each do this: ${ROLES[role].name} - choose which in Settings.`));
+  // (a SMILES typed while the card sets chemistry up: answered when it is ready, done or not - then as ever)
+  const setUp = plugin ? null : firstSetUpWait.now();
+  if (setUp) return setUp.then(() => chemWorker(role));
   if (!plugin) {
     useRoleOffer.setState({ role });
     return Promise.reject(new NoPlugin(role));

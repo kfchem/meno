@@ -2142,6 +2142,8 @@ export type EditorState = {
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
+  /** Before a turn of the selection: the depth worked out for a ring in perspective drawn with none stored on its atoms, in the turn's own step (chem/depthHeld), so that the turn keeps the compound. */
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => void;
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */

@@ -16,6 +16,7 @@
  */
 import type { LayoutInput } from "./perceive";
 import type { Layout2D } from "./engine";
+import { parity } from "../chem/perception/stereo/geometry";
 
 /**
  * Each atom's place in the molecule's own order (old index to new). `way`
@@ -504,11 +505,3 @@ function ranksOf(keys: readonly string[]): number[] {
 
 const classes = (r: readonly number[]) => new Set(r).size;
 
-/** The sign of the permutation that sorts `xs` (distinct) ascending. */
-function parity(xs: readonly number[]): 1 | -1 {
-  let sign: 1 | -1 = 1;
-  const a = [...xs];
-  for (let i = 0; i < a.length; i++)
-    for (let j = i + 1; j < a.length; j++) if (a[i] > a[j]) sign = sign === 1 ? -1 : 1;
-  return sign;
-}

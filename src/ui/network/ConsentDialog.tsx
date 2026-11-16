@@ -91,7 +91,7 @@ export function ConsentWords({ asking }: { asking: ConsentRequest }) {
 }
 
 /** Where a question's downloads come from, a line each. */
-function Sources({ sources }: { sources: readonly string[] }) {
+export function Sources({ sources }: { sources: readonly string[] }) {
   if (!sources.length) return null;
   return (
     <ul className="mt-2 space-y-0.5 text-gh-black">

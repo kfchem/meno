@@ -1,4 +1,5 @@
 import RoleOffer from "./RoleOffer";
+import IconTips from "./components/IconTips";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindMenu } from "./utils/bondKinds";
@@ -2024,6 +2025,9 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* the names of Quick Add's and the menus' icons, as the pointer rests on one (components/IconTips) - by the workspace in
+          front alone: every tab stays mounted, and its listeners are the window's */}
+      {active && <IconTips />}
       {/* a double-click on empty space: what can be put down there */}
       <AnimatePresence>
         {quickAdd && (
