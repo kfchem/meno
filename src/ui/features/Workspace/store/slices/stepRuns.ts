@@ -52,7 +52,8 @@ import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDr
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
+import { runMenoInTurns } from "../../workflow/meno";
+import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
@@ -388,6 +389,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * its valence was checked and by what - never claiming a check not made.
    */
   async function enumerateChecked(id: number, at: number): Promise<void> {
+    // (said to be running at once - its valence checked, its products made in their worker - so that Stop is seen to be
+    //  offered from the first moment: a clock until its products are counted, `leftOpen`'s count after)
+    set((prev) => ({ ...prev, menoWorking: { ...prev.menoWorking, [id]: { since: at, total: 0, done: 0 } } }));
+    try {
+      await enumerateMade(id, at);
+    } finally {
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    }
+  }
+
+  async function enumerateMade(id: number, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, "meno");
@@ -414,11 +430,23 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const now = doc.getState();
     if (!stepOf(now, id)) return;
     // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
-    const made = runMenoDrawn("enumerate", entries, own, now.style, [checked]);
+    // (its products made off the drawing thread - laid out and told apart, a long list takes seconds: workflow/enumerateOff)
+    // (a Stop ends this run's work in the worker - `enumerateStopped` - rather than waiting for products it would throw away; another step's run goes on)
+    menoKills.set(id, () => enumerateStopped(id));
+    let made: Awaited<ReturnType<typeof runMenoDrawnOff>> | null = null;
+    try {
+      made = await runMenoDrawnOff("enumerate", entries, own, now.style, [checked], id);
+    } catch (e) {
+      if (!(e instanceof Error) || e.message !== ENUMERATE_STOPPED) throw e;
+    } finally {
+      menoKills.delete(id);
+    }
+    // (stopped while they were made: nothing put in, and said so as below; the step taken away: nothing at all)
+    const stopped = menoStops.has(id) || !made;
     menoStops.delete(id);
-    const open = made.ok ? await leftOpen(id, at, made.kept) : "";
-    // (stopped while its products were asked about: nothing put in, and the step says so, as Meno's say it)
-    if (open == null) {
+    const open = stopped || !made ? null : made.ok ? await leftOpen(id, at, made.kept) : "";
+    // (stopped while its products were made or asked about: nothing put in, and the step says so, as Meno's say it)
+    if (open == null || !made) {
       menoStops.delete(id);
       const still = stepOf(doc.getState(), id);
       if (!still) return;
@@ -1119,9 +1147,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let read: { molblock: string; configuration?: IsomerConfiguration };
+        let block: { molblock: string; configuration?: IsomerConfiguration };
         try {
-          read = await molblockOfSmiles(smiles, g.smiles);
+          block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
           notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;
@@ -1130,7 +1158,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
         let unset: number | null = null;
         try {
-          const { left } = await openStereo(stereo, [read.molblock]);
+          const { left } = await openStereo(stereo, [block.molblock]);
           unset = left.atoms.length + left.bonds.length;
         } catch {
           unexamined++;
@@ -1148,7 +1176,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
         // (laid out from what the plugin read of the SMILES, and the text's own axes, as a SMILES typed is)
-        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, read, style)), record });
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, block, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);

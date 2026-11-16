@@ -11,10 +11,12 @@ import { centreFrom, plainPicture } from "./testdata/givenPictures";
  */
 
 describe("the check after the layout: what was given, and none more (stereoAgainst)", () => {
-  const shown = (centres: number[], doubles: [string, [number, number], boolean][] = [], axes: [string, number][] = []): StereoShown => ({
+  const shown = (centres: number[], doubles: [string, [number, number], boolean][] = [], axes: [string, 1 | -1][] = []): StereoShown => ({
     centres: new Map(centres.map((c) => [c, { neighbours: [c + 1, c + 2, c + 3, -1], volume: 1 as const }])),
     doubles: new Map(doubles.map(([k, refs, cis]) => [k, { refs, cis }])),
     axes: new Map(axes),
+    hydrogens: new Map(),
+    plain: new Set(),
   });
 
   it("finds a centre, a double bond or an axis shown that was not given: gained", () => {

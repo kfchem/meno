@@ -11,6 +11,7 @@ import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { asCameSaid } from "./fromSmiles";
 import { cisTransOfGiven } from "./givenConfiguration";
 import { centreFrom, configurationOf, plainPicture, polygon } from "./testdata/givenPictures";
+import { measured } from "../../../../testing/timeouts";
 
 /**
  * A structure laid out from the configuration its source gives beside its drawing (backlog 106 B; chem/givenConfiguration): the plugin's
@@ -76,7 +77,8 @@ describe("a macrocycle given beside the plugin's polygon", () => {
       const laid = await laidOut(polygon(smi), MENO, { axes: [], cumulated: [], configuration: configurationOf(smi) });
       expect(identityOfDrawn(laid).text, smi).toBe(identity(smilesInput(smi)).text);
     }
-  });
+    // (a ring-36 macrolide laid out: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_800));
 
   it("takes a centre given beside the drawing, though the polygon's wedge at it - its ring bonds in line - says nothing: no 'unread wedge'", async () => {
     // (a ring of 40: its ring bonds at an atom 171 degrees apart, in line - a ring of 36 stands on the 170 degrees of the line itself)

@@ -6,7 +6,7 @@
  */
 import {
   fitLinear,
-  OPEN_RING,
+  groupDepths as groupDepthsFrom2d,
   readStereo as readFrom2d,
   type CageFit,
   type DrawnAtom,
@@ -15,12 +15,14 @@ import {
   type Vec3,
 } from "../chem/perception/stereo/from2d";
 import type { Tetrahedral } from "../chem/perception/stereo/types";
-import { solidOf } from "./cage";
+import { isCage, solidOf } from "./cage";
 import { key, perceive, type LayoutInput } from "./perceive";
 import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
-import { factsOf } from "../chem/perception/facts";
+import { factsOf, OPEN_RING } from "../chem/perception/facts";
+import { sharesThreeAtoms } from "../chem/perception/rings";
+import { withRecognisedDepth } from "./recognised";
 import { placeStereo, type Stereo, type Wedge } from "./stereo";
 import type { Point } from "./geometry";
 import { IN_LINE, sameConfiguration, unsureStereo } from "../chem/perception/stereo/from2d";
@@ -28,9 +30,18 @@ import { IN_LINE, sameConfiguration, unsureStereo } from "../chem/perception/ste
 export { IN_LINE, sameConfiguration, straightEnds, unreadWhy, unsureStereo } from "../chem/perception/stereo/from2d";
 export type { DrawnAtom, DrawnBond, DrawnStereo };
 
-/** The stereochemistry a drawing shows (lib/chem/perception/stereo/from2d `readStereo`), a cage in perspective read against its solid. */
+/**
+ * The stereochemistry a drawing shows (lib/chem/perception/stereo/from2d `readStereo`): a ring drawn in perspective with no depth given
+ * has its depth worked out first (lib/chem/perception/projection/recognise, as `withRecognisedDepth` asks it), and a bridged system or a
+ * cage in perspective is read against its solid.
+ */
 export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): DrawnStereo {
-  return readFrom2d(atoms, bonds, cageFits);
+  return readFrom2d(withRecognisedDepth(atoms, bonds), bonds, cageFits);
+}
+
+/** The depth of each group drawn out of a ring in perspective, for where its bond passes behind another (from2d `groupDepths`), a bridged system or a cage read against its solid. */
+export function groupDepths(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Map<number, number> {
+  return groupDepthsFrom2d(atoms, bonds, cageFits);
 }
 
 const sub3 = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
@@ -55,6 +66,10 @@ function cageFits(
   });
   for (const sys of mol.systems) {
     if (sys.atoms.length < 4 || sys.atoms.some((a) => atoms[a].z == null)) continue;
+    // (the engine's solid is the right one for a bridged system or a cage, wrong for chairs fused - a decalin's is a chair and a twist-boat - and no
+    //  use for a single ring, a Haworth ring drawn flat: every other system with depth is read from its own ring bonds as drawn, which says nothing of
+    //  which solid was drawn. A system both bridged and carrying fused chairs is read through the fit: no tool makes one)
+    if (!isCage(mol, sys) && !bridged(mol.rings, sys.rings)) continue;
     const solid = solidOf(mol, sys);
     const from = sys.atoms.map((a) => solid.get(a)!);
     const to = sys.atoms.map((a): Vec3 => [atoms[a].x, atoms[a].y, atoms[a].z!]);
@@ -75,18 +90,27 @@ function cageFits(
   return out;
 }
 
+/** Whether two rings of a system share three atoms or more: it is bridged (perception/rings `sharesThreeAtoms`). */
+function bridged(rings: readonly (readonly number[])[], of: readonly number[]): boolean {
+  return of.some((r, i) => of.some((q, j) => j > i && sharesThreeAtoms(rings[r], rings[q])));
+}
+
 /**
  * What a drawing that shows some of its stereochemistry in perspective
  * needs to say it to a reader that knows only wedges - a MOL file, RDKit,
  * another program: a wedge on a bond out of each centre the perspective
  * shows (and an H, where the centre has no other bond to put it on, drawn
  * where the engine would), read as flat. A centre with a wedge of its own
- * says it already. The drawing is left as it is.
+ * says it already. A ring in perspective drawn with no depth, recognised as
+ * one (`withRecognisedDepth`), shows its centres as one drawn with depth
+ * does: 3D and a file take the configuration read, never the shape drawn.
+ * The drawing is left as it is.
  */
 export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Stereo {
   const { tetra } = readStereo(atoms, bonds);
+  const seen = withRecognisedDepth(atoms, bonds);
   const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [b.wedge.narrow] : [])));
-  const shown = new Map([...tetra].filter(([c]) => atoms[c].z != null && !wedged.has(c)));
+  const shown = new Map([...tetra].filter(([c]) => seen[c].z != null && !wedged.has(c)));
   if (!shown.size) return { wedges: [], hydrogens: [] };
   const mol = perceive({
     atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })),
@@ -234,9 +258,22 @@ export function hydrogensWhereUnread(
  * have one is the reader's own test (`readStereo`): a group on each end, not in a ring of seven atoms or fewer, not cumulated, not a bond of
  * a Hückel ring (an aromatic macrocycle's: `huckelBonds`), not a C=N whose E/Z is none of its own (`movingCN`: an amidine's) - and not an
  * end with two groups that are alike (`symmetryOrbits`), which has none either way. One given a configuration (`LayoutBond.stereo`) is left
- * as it is.
+ * as it is. An odd cumulene's cis or trans, across its run's two ends, is open as a double bond's is, by its ends' groups (a run given one,
+ * `LayoutInput.cumulated`, left as it is); an allene's axis is not a double bond's to open.
  */
 export function openDoubleBonds(input: LayoutInput): { straight: number[]; either: number[] } {
+  return openOf(input, true);
+}
+
+/**
+ * The odd cumulenes alone of `openDoubleBonds` (a butatriene's): those of a structure that `input.cumulated` does not give, open. For a
+ * drawing nobody made - a plugin's, from a MOL block, which cannot say a run's cis or trans: what its picture shows of one is chance.
+ */
+export function openRuns(input: LayoutInput): { straight: number[]; either: number[] } {
+  return openOf(input, false);
+}
+
+function openOf(input: LayoutInput, doubles: boolean): { straight: number[]; either: number[] } {
   const n = input.atoms.length;
   const neighbours: number[][] = Array.from({ length: n }, () => []);
   const order = new Map<string, number>();
@@ -259,7 +296,7 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
   const straight = new Set<number>();
   const either: number[] = [];
   input.bonds.forEach((b, i) => {
-    if (b.order !== 2 || b.stereo) return;
+    if (!doubles || b.order !== 2 || b.stereo) return;
     const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
     const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
     if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;
@@ -273,5 +310,40 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
       straight.add(b.b);
     } else either.push(i);
   });
+  // an odd cumulene's (a butatriene's: an odd number of double bonds end to end, its run drawn straight through) cis or trans across its
+  // two ends, as the reader takes it (`readStereo`), open as a double bond's is where nothing gives it (`LayoutInput.cumulated`): each end
+  // with one group kept straight on, or a wavy bond on a group of an end (`either`, on that end's double bond)
+  const middle = (x: number) => {
+    const el = input.atoms[x].el ?? "C";
+    const linear = el === "C" || (el === "N" && (input.atoms[x].charge ?? 0) === 1);
+    return linear && neighbours[x].length === 2 && neighbours[x].every((m) => order.get(key(x, m)) === 2);
+  };
+  const given = new Set((input.cumulated ?? []).map((c) => key(c.atoms[0], c.atoms[1])));
+  for (let i = 0; i < n; i++) {
+    if (middle(i)) continue;
+    for (const m of neighbours[i]) {
+      if (order.get(key(i, m)) !== 2 || !middle(m)) continue;
+      const run = [i, m];
+      while (middle(run[run.length - 1]) && run.length <= n) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const j = run[run.length - 1];
+      // (once for each run, from its lower end; an even run of double bonds - an allene's - has an axis, not a cis or trans)
+      if (j <= i || run.length % 2 === 1 || given.has(key(i, j))) continue;
+      const [ga, gb] = [neighbours[i].filter((x) => x !== m), neighbours[j].filter((x) => x !== run[run.length - 2])];
+      // (each end with two groups, an H among them at most: the reader's test of a run's end - an N's end of one group has none to state)
+      if (!ga.length || !gb.length || ga.length + (input.atoms[i].hs ?? 0) !== 2 || gb.length + (input.atoms[j].hs ?? 0) !== 2) continue;
+      const first = bondOf(i, m);
+      if (facts.inRingSmallerThan(first, OPEN_RING)) continue;
+      if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) continue;
+      if (ga.length === 1 && gb.length === 1 && !facts.inRing[first]) {
+        straight.add(i);
+        straight.add(j);
+        continue;
+      }
+      // (the wavy bond at an end of one group, where there is one - `unspecifiedDoubles` takes the run's far end as the bond's other)
+      const [e, f] = ga.length === 1 || gb.length !== 1 ? [i, m] : [j, run[run.length - 2]];
+      const k = input.bonds.findIndex((b) => b.order === 2 && key(b.a, b.b) === key(e, f));
+      if (k >= 0) either.push(k);
+    }
+  }
   return { straight: [...straight], either };
 }

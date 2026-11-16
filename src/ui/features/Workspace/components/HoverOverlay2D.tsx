@@ -6,7 +6,7 @@ import { COLORS, ALPHA } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lineHalfOf, type BondReach } from "../../../../lib/chem/layout2d";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { bandAround } from "./hoverBand";
+import { bandAround, bandStep, type BandClock } from "./hoverBand";
 import { allylCurveOf } from "../chem/eta";
 
 /** A band `half` wide either side of a line through `pts`, as an outline: along one side, then back along the other. */
@@ -42,6 +42,8 @@ type Band = {
   drawnAt: string;
   /** The layout its bond was last found in, and where: its atoms' places, and its own (-1 where it is not there). */
   found: { in: unknown; i1: number; i2: number; k: number } | null;
+  /** Its own clock: its motion counted in the time between its own frames (`bandStep`). */
+  clock: BandClock;
 };
 
 /**
@@ -81,7 +83,7 @@ export default function HoverOverlay2D() {
   const [, setFrame] = useState(0);
 
   const hb = hovered.bondId;
-  if (hb != null && !bands.current.has(hb)) bands.current.set(hb, { u: 0, pulse: 0, mesh: null, drawnAt: "", found: null });
+  if (hb != null && !bands.current.has(hb)) bands.current.set(hb, { u: 0, pulse: 0, mesh: null, drawnAt: "", found: null, clock: { last: null } });
   // a pulse on the hovered bond runs from its start, the band where it is
   if (hoverPulse.nonce !== pulsed.current) {
     pulsed.current = hoverPulse.nonce;
@@ -90,8 +92,9 @@ export default function HoverOverlay2D() {
   }
   useEffect(() => () => bands.current.forEach((b) => b.mesh?.geometry.dispose()), []);
 
-  useFrame((_, dt) => {
+  useFrame(() => {
     let moving = false;
+    const now = performance.now();
     const L = NOMINAL_BOND_LENGTH;
     const targetWorld = THICKNESS_RATIO * L;
     // (as wide as the bonds are drawn: at the zoom they were laid out at)
@@ -101,8 +104,10 @@ export default function HoverOverlay2D() {
     const ext = 0.04 * L;
     for (const [id, band] of bands.current) {
       const inward = id === hovered.bondId;
+      // (its own time, not the frame's: a first frame after a zoom or a pause starts it, and never takes it in at once)
+      const dt = bandStep(band.clock, now, (inward ? band.u < 1 : band.u > 0) || band.pulse > 0);
       const u = Math.min(1, Math.max(0, band.u + (inward ? dt / DUR_IN : -dt / DUR_OUT)));
-      if (u !== band.u) {
+      if (u !== band.u || band.clock.last != null) {
         band.u = u;
         moving = true;
       }

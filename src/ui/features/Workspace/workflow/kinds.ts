@@ -12,6 +12,7 @@ import { cardHigh } from "./look";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import { boundSaid, type Bound } from "../../../../lib/boundOptions";
+import { REPEAT_IN, REPEAT_OPTIONS, REPEAT_OUT, repeatHow, repeatNeeds } from "./repeat";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 import { keptNames, takeFramesHow, type Which } from "./takeFrames";
@@ -53,7 +54,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto" | "torsions";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto" | "torsions" | "repeat";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -144,6 +145,8 @@ export type KindInfo = {
   how?: (values: Record<string, string | number | boolean>, bound?: Bound) => string;
   /** What it still needs of its options before it can run, where it cannot as they are: said on its card where *Ready* would be (`needsOf`), as its run would refuse. */
   needs?: (values: Record<string, string | number | boolean>, bound?: Bound) => string | undefined;
+  /** Not among the kinds a step is chosen from - Quick Add's, a card's *Calculation*, a conversation's - but made otherwise: a Repeat, round steps. */
+  apart?: true;
   /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
   whole?: true;
 };
@@ -1244,6 +1247,27 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => ensembleHow(v),
     needs: (v) => ensembleNeeds(v),
+  },
+  {
+    // (a frame round steps, run pass by pass: what comes into In goes into This pass, inside, for its first steps; what its steps give
+    //  is wired to Again, to go round once more, or to Done; Out holds what reached Done over all its passes - workflow/repeat)
+    kind: "repeat",
+    name: "Repeat",
+    icon: "repeat", family: "structures",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "This pass",
+    apart: true,
+    inputs: [
+      { id: REPEAT_IN, name: "In", takes: ["molecules", "conformers"] },
+      { id: "again", name: "Again", takes: ["molecules", "conformers"], optional: true },
+      { id: "done", name: "Done", takes: ["molecules", "conformers"], optional: true },
+    ],
+    others: [{ id: REPEAT_OUT, name: "Out", gives: "same" }],
+    options: REPEAT_OPTIONS,
+    how: (v) => repeatHow(v),
+    needs: (v) => repeatNeeds(v),
   },
 ];
 

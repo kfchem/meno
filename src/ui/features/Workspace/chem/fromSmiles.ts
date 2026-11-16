@@ -3,7 +3,7 @@ import type { ChemClient } from "../../../../lib/roles/client";
 import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
-import { laidOut, notShownOf, openAsCame, type OpenDoubles } from "./cleanUp";
+import { laidOut, notShownOf, openAsCame, runsAsCame, type OpenDoubles } from "./cleanUp";
 import { givenOf, type Given } from "./givenConfiguration";
 import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { arrangementsMarked } from "./arrangementsMarked";
@@ -143,8 +143,9 @@ export async function drawingOf(
     // (and what that drawing does not show of what was given, read by the one reader: said, with the count - and a square-planar centre
     //  nobody gave the arrangement of marked so, as it would be laid out: the plugin's drawing says none)
     const lost = given ? notShownOf(drawn, given) : null;
-    // (and its open double bonds - the text's and the field's - drawn so that they state neither: what nobody gave is not shown)
-    return { ...arrangementsMarked(openAsCame(drawn, given, open), arranged), asCame: e instanceof Error ? e.message : String(e), ...(lost ? { notShown: lost } : {}) };
+    // (and its open double bonds - the text's and the field's - drawn so that they state neither: what nobody gave is not shown; and an
+    //  odd cumulene's cis or trans it shows by chance marked unsaid, unless the text gives that one: a MOL block cannot say it)
+    return { ...arrangementsMarked(runsAsCame(openAsCame(drawn, given, open), given), arranged), asCame: e instanceof Error ? e.message : String(e), ...(lost ? { notShown: lost } : {}) };
   });
   return marksKept(laid, byIds);
 }

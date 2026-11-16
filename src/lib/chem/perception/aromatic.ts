@@ -53,8 +53,11 @@ const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
 /** The most pi electrons a ring or pair is taken as aromatic with: 4n + 2 for n = 5, as far as Hückel's rule is generally held to go (Müller, Pure Appl. Chem. 66, 1077, 1994, p. 1122). */
 export const MOST_PI = 22;
 
-/** The elements whose atom, with no double bond in its ring system, gives the ring a lone pair: two electrons. */
-const LONE_PAIR = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
+/**
+ * The elements whose atom, with no double bond in its ring system, gives the ring a lone pair: two electrons. A five-ring is drawn as aromatic
+ * (lib/chem/aromaticSides) by this same list, so that a ring this rule calls aromatic is drawn so: an arsole's and a tellurophene's too.
+ */
+export const RING_LONE_PAIR: ReadonlySet<string> = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
 /** The elements a ring carbon's double bond may leave its ring system to, its electron then taken: none. */
 const TAKES = new Set(["O", "N", "S", "Se", "Te"]);
 
@@ -79,7 +82,7 @@ export function piElectrons(s: PiState): number | null {
   if (s.outTo != null) return s.el === "C" && TAKES.has(s.outTo) ? 0 : null;
   if (s.el === "C") return s.charge < 0 ? 2 : s.charge > 0 ? 0 : null;
   if (s.el === "B") return s.degree > 3 ? null : s.charge < 0 ? 1 : s.charge === 0 ? 0 : null;
-  if (LONE_PAIR.has(s.el) && s.charge <= 0) return 2;
+  if (RING_LONE_PAIR.has(s.el) && s.charge <= 0) return 2;
   return null;
 }
 
@@ -87,18 +90,26 @@ export function piElectrons(s: PiState): number | null {
  * The atoms that lie on an aromatic ring (above), by index: of `rings` (the
  * smallest set) each, and each two that share a bond, whose atoms'
  * electrons (`electrons`, null where not known) add up to 4n + 2, at most
- * `MOST_PI`.
+ * `MOST_PI` - but never a ring or pair each of whose atoms gives a lone
+ * pair, two: with no pi bond in it and no empty p orbital (a C+, a B of
+ * three bonds), there is no pi system for lone pairs to complete, and its
+ * atoms stay pyramidal - As4's and P4's three-rings, a triaziridine,
+ * cyclotriphosphane (backlog 182). Lone pairs complete a pi
+ * system; they never make one alone.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {
   const out = new Set<number>();
   const huckel = (atoms: Iterable<number>) => {
     let sum = 0;
+    let pi = false;
     for (const a of atoms) {
       const e = electrons(a);
       if (e == null) return false;
       sum += e;
+      // (an atom of a pi bond, one; of an empty p orbital, none: a ring with neither is lone pairs alone)
+      if (e !== 2) pi = true;
     }
-    return sum % 4 === 2 && sum <= MOST_PI;
+    return pi && sum % 4 === 2 && sum <= MOST_PI;
   };
   const edges = rings.map((r) => new Set(r.map((x, k) => pairKey(x, r[(k + 1) % r.length]))));
   rings.forEach((r, i) => {
