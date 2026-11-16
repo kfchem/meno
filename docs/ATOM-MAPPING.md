@@ -452,15 +452,16 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   so each shows other numbers; maps that differ only in where the
   hydrogens go, which the drawing does not show, are not stepped through.
   `mapReaction` gives all of them, as ACCeL does.
-- **Renumber atoms** numbers the reactants' atoms by the drawing's order:
-  their heavy atoms as they are drawn, in the order of the drawing's atoms,
-  then each heavy atom's hydrogens in its turn; the products' atoms take
-  their partners' numbers, on the drawing, on the molecules in 3D and in
-  the export alike. One undo step. Without it, the heavy atoms are numbered
-  as the map holds them and the hydrogens after them. Only a complete map
-  is renumbered: a partial one's menu says it needs every atom mapped. (The
-  maintainer's reading of *Renumber* is still to come; this is the one
-  recommended, `renumbered` in chem/atomMap the one place it is chosen.)
+- **Renumber atoms** numbers each reactant as IUPAC numbers the parent of
+  its name (*IUPAC numbering*, below), the reactants one after another in
+  the drawing's order, then each heavy atom's hydrogens in its turn; the
+  products' atoms take their partners' numbers, on the drawing, on the
+  molecules in 3D and in the export alike. One undo step. Without it, the
+  heavy atoms are numbered as the map holds them and the hydrogens after
+  them. Only a complete map is renumbered: a partial one's menu says it
+  needs every atom mapped. (`renumbered` in chem/atomMap is the one place
+  the order is chosen; the maintainer, 2026-11-06: IUPAC's numbering
+  instead of the drawing's order. Undo gives the old numbers back.)
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
   reactants' numbering, each atom written at its number's place, as a
@@ -537,7 +538,7 @@ offers *Atom map*.
     chem/structureMaps are the one place it is set.)
 - **From a structure's menu** in a map: *Show / Hide atom map* (of all the
   maps it is in), *Other map* ("2 of 4", stepping each of them), *Renumber
-  atoms* (Before's atoms by the drawing's order, as above), and *Export
+  atoms* (Before's atoms in IUPAC's numbering, as above), and *Export
   reaction in 3D...* (Before and the first After, as above).
 - **Partial** is as an arrow's: a map whose atoms do not all pair numbers
   those that do - on the drawing and on the molecules in 3D - and names the
@@ -549,6 +550,67 @@ offers *Atom map*.
   back. The structure's menu says *Atom map of the structure before its
   edit* and offers *Map again*: made again between the structures as they
   are now, in the old map's place.
+
+## IUPAC numbering
+
+*Renumber atoms* numbers each molecule as the 2013 IUPAC recommendations
+number the parent of its name, as far as rules that need no name reach
+(foundation part 16, level 1: the skeleton's own numbering;
+lib/chem/perception/locants). It names nothing: the name is not made.
+
+**The parent** (P-44.1 to P-44.4). The senior element in a place that
+counts - any element in a ring, an acyclic P, Si, B and the like, an N
+only in an N-N chain - chooses it (P-44.1.2: tetramethylsilane's Si, a
+silyl ether's Si, triphenylphosphane's P); then a ring system before a
+chain; among ring systems a heterocycle, one with nitrogen, the senior
+heteroatom, more rings, more atoms, more heteroatoms (P-44.2.1); then
+their kind - spiro, fused, bridged fused, von Baeyer, ring assembly
+(P-44.2.2.2) - and among fused systems the larger ring first (azulene
+before naphthalene); then more multiple bonds (P-44.4.1). With no ring,
+the longest chain of acyclic carbons (P-44.3). Identical ring parents in
+one symmetry orbit of the molecule are both parents, the second primed
+(P-45.1.1, P-51.3.1: 1,1'-methylenedibenzene); a chain never is.
+
+**The parent's own numbering** (P-14.4), by its kind:
+- one ring: its heteroatoms low, the senior one 1 (P-22.2);
+- two fused rings of five or more atoms: round the edge from beside a
+  fusion atom, a fusion carbon lettered (4a), a fusion heteroatom numbered
+  in its turn (P-25.3.3);
+- larger fused systems and the exceptions: a table of 27 numbered by
+  hand, cited by IUPAC's tables (anthracene, phenanthrene, purine,
+  pyrene's interior atoms 3a and 5a each with a superscript 1, and the
+  rest; lib/chem/perception/locantParents);
+- bridged systems by von Baeyer's rules, built as a search (P-23.2);
+- spiro systems of single rings (P-24.2);
+- ring assemblies: each ring its own way, the junctions low; two rings,
+  the second primed (P-28.2.1); three to six, composite locants - the
+  ring's number with the atom's locant as a superscript (P-28.3.1);
+- a chain from either end.
+Then, in order (P-14.4 (b) to (j)): indicated hydrogen, saturation (the
+fewest compound locants first in a von Baeyer system or a chain,
+P-31.1.4), the substituents as one set, isotopes, configuration.
+
+**Seen.** The parent's atoms show their locants: naphthalene 1 to 8 with
+4a and 8a, biphenyl's second ring 1' to 6'. Every other atom shows its
+number in the order.
+
+**The order 1 to N** (Meno's own; the recommendations number a parent, not
+a molecule): the parent's atoms with plain-number locants at their numbers
+(C5 is the fifth atom); then its lettered, primed and interior atoms, in
+the order of their locants (naphthalene's 4a ninth, 8a tenth; biphenyl's
+1' to 6' seventh to twelfth); then each group hanging from the parent,
+whole, in the order of the locants it hangs from - two on one atom, a ring
+before a chain, the larger first - each numbered from its point of
+attachment (P-29.2). The export carries these numbers.
+
+**Not built, and said** (the menu's line names the atoms whose numbers are
+Meno's own): what needs the name - the alphabet of prefixes (P-14.4 (g),
+P-45.2.3) - added hydrogen, nonstandard valence, the orientation of fused
+systems of three or more rings not in the table, bridged fused systems,
+spiro systems with fused or bridged parts, branched ring assemblies,
+identical parents not in one orbit, chains named by replacement, and units
+holding a metal. Level 2 - the principal characteristic group leading - is
+part 16's second half.
 
 ## For a workflow's *Atom map* step
 
