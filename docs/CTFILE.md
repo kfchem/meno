@@ -119,9 +119,7 @@ enol's identity as it is drawn apart; and it takes no place round an atom,
 so an amine's N it is drawn to keeps three bonds and no configuration. It is
 kept, drawn and laid out as before: Clean-up gives it to the layout as a
 bond. Until 2026-11-15 a hydrogen bond drawn so hid the double bond's cis or
-trans, and the molecules it joined had one identity and were one part to
-*Check structures*, which now counts parts by the structure's bonds too
-(the plugin is still given the drawing as written, the hydrogen bond in it).
+trans, and the molecules it joined had one identity.
 
 Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
 way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
