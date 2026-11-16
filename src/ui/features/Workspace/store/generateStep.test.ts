@@ -44,13 +44,19 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 }));
 
 /** A drawing of a block, as Meno's engine lays one out: here a carbon labelled with the block, and an oxygen. */
-vi.mock("../chem/fromSmiles", async (actual) => ({
-  ...(await actual<typeof import("../chem/fromSmiles")>()),
-  drawingOf: async (block: string): Promise<Model> => ({
+vi.mock("../chem/fromSmiles", async (actual) => {
+  const drawingOf = async (block: string): Promise<Model> => ({
     atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block.split("\n")[0] } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
     bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
-  }),
-}));
+  });
+  // (and the step's two ways of drawing what it made, each through that drawing)
+  return {
+    ...(await actual<typeof import("../chem/fromSmiles")>()),
+    drawingOf,
+    madeDrawn: (a: { made: readonly string[] }) => Promise.all(a.made.map((block) => drawingOf(block))),
+    smilesMadeDrawn: (_smiles: string, read: { molblock: string }) => drawingOf(read.molblock),
+  };
+});
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";

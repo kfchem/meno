@@ -17,7 +17,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, molblockOfSmiles, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { madeDrawn, molblockOfSmiles, smilesMadeDrawn, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -26,7 +26,7 @@ import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, molecul
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
-import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
+import { EXAMINE_MS, type Configuration } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
@@ -34,7 +34,7 @@ import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
-import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, whenDrawnKnown, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -57,7 +57,7 @@ import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { DrawnRecord, EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { DrawnModel, DrawnRecord, EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, CANVAS_LOOK, finishEntry, looksOffered } from "../../render/renderOptions";
 import { handOff, stepRefused, withPresets } from "../../render/presets";
 import { progressOf, SCENE } from "../../render/renders";
@@ -609,11 +609,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     //  for a run again to start from)
     if (!worked.length && !aside.length && !asideDrawn.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
     const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said, ...(asideDrawn.length ? { asideDrawn } : {}) };
-    const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
-    doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
-    atTheirEnds(before);
-    turnNew(before, turns);
-    listsShown(before);
+    const results = resultsOf(outcome, ran.kind ?? step.kind);
+    const turns = turnsFor(d, id, ran.kind ?? step.kind, results);
+    // (the structures it draws, their identities known first - off the drawing thread, workflow/entries `whenDrawnKnown` - so
+    //  that putting them down works none out)
+    whenDrawnKnown(recorded(results), () => {
+      doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
+      atTheirEnds(before);
+      turnNew(before, turns);
+      listsShown(before);
+    });
+  }
+
+  /** The drawings a step's results give that carry a record (workflow/entries `placedRecord`): what is to be known before they are put down. */
+  function recorded(results: ReturnType<typeof resultsOf>): DrawnModel[] {
+    return [...(results.drawn?.made ?? []), ...(results.drawn?.rest ?? [])].filter((m) => m.record);
   }
 
   /** Molecules new on the page with a list to be opened at once - NCI's surfaces - shown with it open, its row chosen. */
@@ -977,7 +987,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
         try {
-          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: withoutStereoOpen(await drawingOf(block, style)) }))));
+          // (each laid out from the configuration it was made with, where the plugin sends it)
+          made.push((await madeDrawn(a, style)).map((drawn) => ({ place: 0, drawn: withoutStereoOpen(drawn) })));
         } catch {
           made.push([]);
           answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
@@ -1101,9 +1112,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let block: string;
+        let read: { molblock: string; configuration?: Configuration };
         try {
-          block = await molblockOfSmiles(smiles, g.smiles);
+          read = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
           notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;
@@ -1112,7 +1123,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
         let unset: number | null = null;
         try {
-          const { left } = await openStereo(stereo, [block]);
+          const { left } = await openStereo(stereo, [read.molblock]);
           unset = left.atoms.length + left.bonds.length;
         } catch {
           unexamined++;
@@ -1129,7 +1140,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(seed?.from?.length ? { from: seed.from } : {}),
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
-        kept.push({ place: kept.length, drawn: withoutStereoOpen(await drawingOf(block, style)), record });
+        // (laid out from what the plugin read of the SMILES, and the text's own axes, as a SMILES typed is)
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, read, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -2028,11 +2040,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     },
     keepRunOf: (id: number, index: number, keep: boolean) => doc.edit(keep ? "keep run" : "keep run no longer", (x) => keptRun(x, id, index, keep)),
     showRun: (id: number, index: number) => {
-      const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
-      let turns: (Turn3D | undefined)[] | undefined;
-      doc.edit("show run", (x) => showRun(x, id, index, w, (results, kind) => (turns = turnsFor(x, id, kind, results))));
-      atTheirEnds(was);
-      turnNew(was, turns);
+      const shown = stepOf(doc.getState(), id)?.runs?.[index]?.results;
+      whenDrawnKnown(shown ? recorded(shown) : [], () => {
+        const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
+        let turns: (Turn3D | undefined)[] | undefined;
+        doc.edit("show run", (x) => showRun(x, id, index, w, (results, kind) => (turns = turnsFor(x, id, kind, results))));
+        atTheirEnds(was);
+        turnNew(was, turns);
+      });
     },
     showStepLog: async (id: number) => {
       const step = stepOf(doc.getState(), id);

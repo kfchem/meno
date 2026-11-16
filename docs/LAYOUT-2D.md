@@ -536,9 +536,15 @@ they hang from.
   isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
   donors are joined other than through it, a chelate or a bridge: there the
   plugin's picture was found not to carry the pairs the mark states
-  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac), and until the
-  pairs are read from the mark itself it is laid out as new, never an
-  isomer the input did not write: a chelated metal marked as not given
+  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac). So the pairs
+  are read from the mark itself (`metalPairsIn`: the OpenSMILES shapes and
+  table, by the neighbours' written order), and a marked metal - chelated
+  or not - is taken as given only where the finished drawing has those
+  pairs; where it has others, it is marked as not given (`marksKept`),
+  never an isomer the input did not write. Where Meno cannot read the
+  mark (an H written in the metal's bracket, a mark that would put a
+  small chelate's two ends across), a chelated metal is laid out as new
+  and marked as not given
   where its donors could lie more ways than one, as above - two metals
   held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
   dimers differ only together, each marked alike (a bridge's charge
@@ -888,6 +894,24 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   bridgehead often has them so), read from the angles two of them and the
   wedge would say one thing and the other two the opposite
   (`drawnVolume`). With three drawn and the H left out, the angles are read.
+- And where the layout leaves two of a centre's three bonds in one line,
+  within 10 degrees, and its wedge on one of them - doxorubicin's and
+  ouabain's sugar C1, ginkgolide B's C23, bilobalide's C10, vinblastine's
+  C5 - a form the text grades not acceptable (Brecher 2006, ST-1.2.4)
+  however a reader reads it: such a centre with an H has the H drawn in
+  the widest gap round it and wedged instead (ST-1.1.4's form), the way
+  Meno's reader reads as given (`hydrogensWhereUnread`, as a cage's
+  wedges for a flat reader are); with no H, or where that reads no
+  surer, it is left as placed. The H stands clear of every other atom -
+  three quarters of a bond - and every bond - 0.4 of one - at the gap's
+  middle where that is clear, else turned within the gap, up to 25
+  degrees short of its bonds, where it is clearest (GR-2.1.6: a label
+  clear of all else; an H on another label reads as that label's). It is
+  always a bond long, as every H Meno draws: drawn shorter, its wedge, the
+  H label's room taken off, reads as a speck - worse than an H near
+  another atom. ST-1.2.4 grades so every wedge 180
+  degrees or more from one of its plain neighbours; the layout catches
+  the ones in line, within 10 degrees: those are the ones it leaves.
 - An axis of chirality - a biaryl's bond, BINAP's C1-C1' - is shown by
   one wedge out of an end of it, narrow there, on the single bond to the
   neighbour that stands out of the page for the sense the axis has (or on
@@ -1071,6 +1095,41 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   system - and each star put afterwards at the centre of its system's
   atoms (a ring's is there already; a C=C's, cod's, is not), so a complex
   expanded and then cleaned up does not move.
+
+## A structure from a plugin
+
+A structure a plugin hands Meno - a SMILES it read, a stereoisomer it
+made, a molecule in 3D it drew - comes as a drawing block and, where the
+plugin sends it, the configuration it read beside it (PLUGINS.md, *A
+drawing's configuration beside it*). Meno's engine lays it out from that
+configuration, not from the block's wedges: the block is only places, and
+a lossy carrier (a ring of 36 or more comes as a regular polygon, its
+centres stating nothing). So a large ring comes out as Meno draws large
+rings - its re-entrant angles, a group at a re-entrant atom inward, never
+round (Brecher 2008, GR-3.3.2; Brecher 2006, ST-1.4) - with every centre
+and double bond given, a ring double bond as given (ST-4.3).
+
+The drawing laid out is read back by the one reader, and must state every
+centre, double bond, axis and odd cumulene given, each as given, and none
+more; else it is refused, and the drawing is kept as it came. Where a
+drawing kept as it came states less than was given, what it leaves out is
+said with the count: "Drawn as it came: it could not be laid out. 4 of its
+12 stereocentres are not shown by this drawing." A centre whose fourth
+place is a lone pair is given only where Meno's own rules hold one there;
+a wedge at a given centre is no reading of it - what is given is - so a
+wedge the drawing's own reading could not keep does not stop the layout.
+What is given goes to the engine in one fixed form (a centre's neighbours
+rising, a double bond's group on each end the lowest-numbered), so that
+the drawing Meno makes does not depend on who gave it. A double bond the
+plugin gives nothing of that could be cis or trans is open: drawn so that
+it states neither, each end straight on or a wavy bond on a group (ST-4.4),
+worked out from what was given and the drawing alone - so a SMILES Meno's
+own reader refuses (a metal's mark, a sense written at an aziridine's N)
+still has its open double bonds open; and a drawing kept as it came has a
+wavy bond on each. One that is no stereo unit, which Meno's rules read from
+the drawing (an aromatic macrocycle's, a guanidine's), is laid out as the
+drawing reads it, as before.
+A plugin that sends no configuration is read as before.
 
 ## How the engine goes about it
 

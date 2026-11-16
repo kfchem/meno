@@ -120,7 +120,11 @@ drawn apart is; one inside a molecule - an enol's own - is left out of it, so
 the H is placed by the molecule's own bonds. *Check structures* counts such
 a pair two parts, and a set round it holds two entries, each with its own
 identity; a structure's own hydrogen bond is not in its identity. Moved out
-of a frame's way, the pair moves together, as it is drawn. To take such a
+of a frame's way, the pair moves together, as it is drawn; and the frame
+round the two entries holds each one's labels as the page draws them,
+toward the hydrogen bond (a water's OH2 with its H2 away from it), and
+what is written of each beside its atoms (a stereo group's note, a
+bracket's label) where the structure alone would have it. To take such a
 pair as one entry - a complex, a salt - select both and *Make one
 structure* (EDITOR-2D.md, *One structure of several parts*): it is then one
 structure of two parts, one identity. Until 2026-11-15 the hydrogen bond went to the plugin as
@@ -421,9 +425,14 @@ as the one given (tested). A cage's, shown by its perspective with no
 wedge, is written to a MOL or SD file - and copied, and sent to RDKit,
 for its R/S and its SMILES and to be made in 3D (`chem/make3d.ts#blocksOf`) -
 with a wedge that says it, as any cage Clean-up draws is: on a bond out of
-the centre, or - where it has none to take one - on an explicit H atom
-added to the file for it, after every atom there is
-(`chem/drawing.ts#forFlatReaders`; docs/EDITOR-2D.md). The depth itself is
+the centre, or - where it has none to take one, or where a wedge on one
+would not say it read flat, two of the centre's bonds lying in one line
+as the projection left them (epibatidine's C2, its pyridyl straight on
+from a bridgehead) - on an explicit H atom added to the file for it, in
+the widest gap round the centre, after every atom there is
+(`chem/drawing.ts#forFlatReaders`, lib/layout/drawn `wedgesForFlat`;
+docs/EDITOR-2D.md). Each such wedge is checked by Meno's own reader to say
+the configuration the drawing shows. The depth itself is
 not written, so the cage opens again flat, its configuration wedged.
 
 **Hydrogens drawn as said.** Where a structure says an atom has more H
