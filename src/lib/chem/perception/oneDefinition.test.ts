@@ -30,7 +30,7 @@ export const CONCEPTS: Record<string, RegExp> = {
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
   "depth read": /^(?:export )?(?:function|const) (withRecognisedDepth|recogniseChair|recogniseHaworth)\b/,
   // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
-  "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
+  "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI|RING_LONE_PAIR)\b/,
   // an atom's hydrogens that are no atoms of their own, counted over its bonds (perception/hydrogens.ts `hydrogenCounts`)
   "hydrogen count": /^(?:export )?(?:function|const) (implicitOf|hydrogensOf|undrawnHydrogens|hydrogenCounts)\b/,
   // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
