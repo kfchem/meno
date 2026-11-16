@@ -4453,8 +4453,11 @@ const groupText = (g: StereoGroup) => (g.kind === "abs" ? "abs" : `${g.kind}${g.
 /**
  * Which enhanced stereo groups are labelled at their centres: in a
  * structure (a connected part of the drawing) whose centres are not all of
- * one group. One that is says so once, beneath it (`structureNotes`), as
- * IUPAC's ST-6.3 would have it - and an absolute one needs nothing said.
+ * one group - a centre drawn with a wedge and in no group among them, as
+ * drawn (an ether's (S) side chain beside a racemic ring: its two forms
+ * diastereomers, no enantiomers). One that is says so once, beneath it
+ * (`structureNotes`), as IUPAC's ST-6.3 would have it - and an absolute
+ * one needs nothing said.
  */
 function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bonds: Set<number>; notes: { atoms: number[]; text: string }[] } {
   const parts = components(atoms.length, bonds);
@@ -4467,6 +4470,14 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     const p = b.stereoGroup ? partOf.get(b.a1) : undefined;
     if (p != null) grouped[p].push(k);
   });
+  // (a centre drawn with a wedge and in no group: a centre of the structure not of its group)
+  const deg = degreeMap(bonds);
+  const ungrouped = new Set<number>();
+  for (const b of bonds) {
+    if (b.stereo !== "up" && b.stereo !== "down") continue;
+    const c = wedgeNarrowAtom(b, deg);
+    if (!atoms[c]?.stereoGroup) ungrouped.add(c);
+  }
   for (const [p, part] of parts.entries()) {
     const groups = new Set<string>();
     const ats = part.filter((i) => atoms[i].stereoGroup);
@@ -4476,7 +4487,7 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     if (!groups.size) continue;
     const [only] = groups;
     if (groups.size === 1 && only === "abs") continue;
-    if (groups.size === 1 && !bds.length) {
+    if (groups.size === 1 && !bds.length && !part.some((i) => ungrouped.has(i))) {
       out.notes.push({ atoms: part, text: only.startsWith("and") ? "and enantiomer" : "or enantiomer" });
       continue;
     }

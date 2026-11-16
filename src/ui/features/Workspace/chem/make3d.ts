@@ -223,6 +223,30 @@ export function openIn(block: Block, made: { open: OpenStereo; count: number }):
   };
 }
 
+/**
+ * What the card that asks before 3D is made says (Ask3D): its title, and why the structure can be more than one stereoisomer - its stereo
+ * drawn without a configuration, and its AND and OR groups, each named as it is drawn - and how many it can be.
+ */
+export function askWords(open: readonly Open[]): { title: string; said: string; isomers: number } {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const centres = open.reduce((n, o) => n + o.atoms.length, 0);
+  const bonds = open.reduce((n, o) => n + o.bonds.length, 0);
+  const isomers = open.reduce((n, o) => n + o.isomers, 0);
+  const what = [centres ? plural(centres, "stereocentre", "stereocentres") : "", bonds ? plural(bonds, "double bond", "double bonds") : ""].filter(Boolean).join(" and ");
+  const groups = [...new Map(open.flatMap((o) => o.groups).map((g) => [g.name, g])).values()];
+  const ands = groups.filter((g) => g.kind === "and").map((g) => g.name);
+  const ors = groups.filter((g) => g.kind === "or").map((g) => g.name);
+  const listed = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]);
+  const said = [
+    what ? `${what} ${centres + bonds === 1 ? "is" : "are"} drawn without a configuration` : "",
+    ands.length ? `${listed(ands)} ${ands.length === 1 ? "stands" : "stand"} for both of ${ands.length === 1 ? "its" : "their"} forms` : "",
+    ors.length ? `${listed(ors)} ${ors.length === 1 ? "is" : "are"} one of two forms, not known which` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return { title: what ? "Stereo not drawn" : "Stereo drawn as a group", said, isomers };
+}
+
 /** Whether making a structure in 3D asks first which of its stereoisomers: some of its stereo drawn without a configuration, or a group with more than one half. */
 export const asksFirst = (o: Open) => o.atoms.length + o.bonds.length > 0 || (o.groups.length > 0 && o.isomers > 1);
 

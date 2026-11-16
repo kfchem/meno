@@ -167,7 +167,7 @@ large as its labels (GR-11.3).
 | Not a reacting centre (-1) | A small cross on the bond's middle. | Meno's own. |
 | A reacting centre otherwise (1), or no change (2) | "rc", "nc" beside the bond's middle. | Meno's own. |
 | An enhanced stereo group taking in all a structure's centres | Racemic (AND): "and enantiomer" beneath it; relative (OR): "or enantiomer"; absolute: nothing. | ST-6.3 prefers text beside the diagram; ST-6.5 rules out "rac" and "rel" as labels; ST-6.2: a diagram with no indicator shows the configuration drawn. |
-| Groups that do not (more than one in a structure, or of stereo bonds) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
+| Groups that do not (more than one in a structure, or of stereo bonds, or one beside a centre drawn with a wedge and in no group: its forms then diastereomers, no enantiomers) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
 
 A file with stereo bonds and the chiral flag set but no collections has
 each of its stereocentres (where a wedge starts) taken as absolute, as the

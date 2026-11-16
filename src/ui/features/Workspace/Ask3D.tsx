@@ -1,9 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
-import type { Open } from "./chem/make3d";
+import { askWords, type Open } from "./chem/make3d";
 import { useInFront } from "../../layouts/inFront";
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Asked before a structure is made in 3D when some of its stereo is drawn
@@ -41,22 +39,7 @@ export default function Ask3D({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel, inFront]);
-  const centres = open.reduce((n, o) => n + o.atoms.length, 0);
-  const bonds = open.reduce((n, o) => n + o.bonds.length, 0);
-  const isomers = open.reduce((n, o) => n + o.isomers, 0);
-  const what = [centres ? plural(centres, "stereocentre", "stereocentres") : "", bonds ? plural(bonds, "double bond", "double bonds") : ""]
-    .filter(Boolean)
-    .join(" and ");
-  // (the AND and OR groups whose halves are made: each named as it is drawn)
-  const groups = [...new Map(open.flatMap((o) => o.groups).map((g) => [g.name, g])).values()];
-  const ands = groups.filter((g) => g.kind === "and").map((g) => g.name);
-  const ors = groups.filter((g) => g.kind === "or").map((g) => g.name);
-  const listed = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]);
-  const grouped = [
-    ands.length ? `${listed(ands)} ${ands.length === 1 ? "stands" : "stand"} for both of ${ands.length === 1 ? "its" : "their"} forms` : "",
-    ors.length ? `${listed(ors)} ${ors.length === 1 ? "is" : "are"} one of two forms, not known which` : "",
-  ].filter(Boolean);
-  const said = [what ? `${what} ${centres + bonds === 1 ? "is" : "are"} drawn without a configuration` : "", ...grouped].join("; ");
+  const { title, said, isomers } = askWords(open);
   return (
     <motion.div
       role="dialog"
@@ -69,7 +52,7 @@ export default function Ask3D({
       onClick={(e) => e.stopPropagation()}
     >
       <h2 id="ask-3d-title" className="font-semibold mb-1">
-        {what ? "Stereo not drawn" : "Stereo drawn as a group"}
+        {title}
       </h2>
       <p className="text-gh-gray mb-3">
         {said}, so the structure can be any of {isomers} stereoisomers.

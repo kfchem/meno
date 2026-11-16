@@ -15,7 +15,7 @@ import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appS
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
 import { growingJudge } from "./growing";
-import { asksFirst, bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, growOn, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { askWords, asksFirst, bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, growOn, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -961,6 +961,14 @@ describe("a hydrogen bond drawn, made in 3D", () => {
 });
 
 describe("a configuration's groups on the page (foundation part 7)", () => {
+  it("says on the card that asks what a group stands for, and what is drawn without a configuration, each once, nothing before them", () => {
+    const and1 = { kind: "and" as const, name: "and1" };
+    const or1 = { kind: "or" as const, name: "or1" };
+    expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Stereo drawn as a group", said: "and1 stands for both of its forms", isomers: 2 });
+    expect(askWords([{ atoms: [], bonds: [], groups: [or1], isomers: 2 }]).said).toBe("or1 is one of two forms, not known which");
+    expect(askWords([{ atoms: [4], bonds: [], groups: [and1], isomers: 4 }])).toEqual({ title: "Stereo not drawn", said: "1 stereocentre is drawn without a configuration; and1 stands for both of its forms", isomers: 4 });
+  });
+
   it("asks first, one or all, for a group with more than one half; not for one with one and nothing open", () => {
     const and1 = { kind: "and" as const, name: "and1" };
     expect(asksFirst({ atoms: [], bonds: [], groups: [and1], isomers: 2 })).toBe(true);
