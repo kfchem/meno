@@ -86,7 +86,7 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
     const toLookUp = ids.filter((id) => !retired.some((r) => r.id === id));
     // (only those no longer offered: nothing to look up, nor to ask - said once, with why)
     if (!toLookUp.length) {
-      say(TITLE, `None of them is got again: ${notGotAgain(ids, [], [], retired).join("; ")}.`);
+      say(TITLE, `None of them is added again: ${notGotAgain(ids, [], [], retired).join("; ")}.`);
       return answered();
     }
     const lookUp: ConsentRequest = {
@@ -117,7 +117,7 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
     .map((o) => o.entry);
   const entries = [...again, ...presets];
   if (!entries.length) {
-    if (notAgain.length) say(TITLE, `None of them is got again: ${notAgain.join("; ")}.`);
+    if (notAgain.length) say(TITLE, `None of them is added again: ${notAgain.join("; ")}.`);
     return answered();
   }
   // (2: whether to get them, each by its name and its files' size - their environments' said as each is set up, where one is fetched)
@@ -128,7 +128,7 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
     detail:
       `${setUpHere(again.map((e) => e.name))}` +
       (presets.length ? ` With them, what brings presets for one of them, apart from it now: ${listSaid(presets.map((e) => `${e.name}, for ${forName(e)}`))}.` : "") +
-      (notAgain.length ? ` Not got again: ${notAgain.join("; ")}.` : "") +
+      (notAgain.length ? ` Not added again: ${notAgain.join("; ")}.` : "") +
       " Where a plugin's environment is the one it needs, it is kept, nothing of it fetched again. No, and you can add them in Settings, Plugins.",
     sources: CATALOGUE_REQUEST.sources,
     hosts: CATALOGUE_HOSTS,

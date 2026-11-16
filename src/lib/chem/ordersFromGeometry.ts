@@ -25,7 +25,7 @@
  * is Meno's own.)
  */
 import { elementOf } from "./elements";
-import { inValenceSumsFromGeometry } from "./perception/elements";
+import { inValenceSums } from "./perception/elements";
 
 export type GeoAtom = { el: string; x: number; y: number; z: number };
 export type GeoBond = { a1: number; a2: number };
@@ -204,7 +204,7 @@ export const work = { steps: 0 };
  * conjugated part where the estimate is not decided.
  */
 export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly GeoBond[]): GeometryOrders {
-  const counted = (i: number) => inValenceSumsFromGeometry.has(atoms[i].el);
+  const counted = (i: number) => inValenceSums.has(atoms[i].el);
   const hydrogens = atoms.some((a) => a.el === "H");
   const near: number[][] = atoms.map(() => []);
   bonds.forEach((b) => {

@@ -1012,5 +1012,37 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
     // in perspective, as Haworth drew rings: some edges bold
     expect(laid.bonds.some((b) => b.display === "bold")).toBe(true);
   });
+
+  it("uranocene drawn with haptic bonds is laid out as the same sandwich: an actinoid's rings round it as iron's (foundation part 3, B1)", async () => {
+    const octagon = (cy: number, from: number) =>
+      Array.from({ length: 8 }, (_, i) => ({ id: from + i, x: 1.1 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 8), y: cy + 0.45 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 8), r: 0.9, el: "C" }));
+    const eight = (from: number, id0: number): Bond[] =>
+      Array.from({ length: 8 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 1 : 2, stereo: "none" }) as Bond);
+    const uranocene: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "U" }, ...octagon(1.6, 2), ...octagon(-1.6, 10), { id: 18, x: 0, y: 1.6, r: 0.9, el: "*" }, { id: 19, x: 0, y: -1.6, r: 0.9, el: "*" }],
+      bonds: [
+        ...eight(2, 20),
+        ...eight(10, 30),
+        { id: 40, a: 1, b: 18, order: 1, stereo: "none", endpoints: [2, 3, 4, 5, 6, 7, 8, 9] } as Bond,
+        { id: 41, a: 1, b: 19, order: 1, stereo: "none", endpoints: [10, 11, 12, 13, 14, 15, 16, 17] } as Bond,
+      ],
+    };
+    const laid = await laidOut(uranocene);
+    // its two haptic bonds, to stars at the rings' centres
+    const eta = laid.bonds.filter((b) => b.endpoints?.length);
+    expect(eta.map((b) => [...b.endpoints!].sort((p, q) => p - q))).toEqual(
+      expect.arrayContaining([
+        [2, 3, 4, 5, 6, 7, 8, 9],
+        [10, 11, 12, 13, 14, 15, 16, 17],
+      ]),
+    );
+    expect(eta.every((b) => b.a === 1)).toBe(true);
+    expect(laid.bonds.filter((b) => (b.a === 1 || b.b === 1) && !b.endpoints)).toEqual([]);
+    const at = new Map(laid.atoms.map((a) => [a.id, a]));
+    const middle = (ids: number[]) => ({ x: ids.reduce((s, i) => s + at.get(i)!.x, 0) / ids.length, y: ids.reduce((s, i) => s + at.get(i)!.y, 0) / ids.length });
+    const [u, top, bottom] = [at.get(1)!, middle([2, 3, 4, 5, 6, 7, 8, 9]), middle([10, 11, 12, 13, 14, 15, 16, 17])];
+    expect(Math.sign(top.y - u.y)).toBe(-Math.sign(bottom.y - u.y));
+    expect(Math.abs(top.x - u.x)).toBeLessThan(0.2 * NOMINAL_BOND_LENGTH);
+  });
 });
 

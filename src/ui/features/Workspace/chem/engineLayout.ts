@@ -17,7 +17,8 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
-import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
+import { readStereo, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
+import { againstLowest, compared, saidOf, type Difference, type Said, type SaidCentre } from "../../../../lib/chem/perception/stereo/compare";
 import { pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
@@ -821,10 +822,11 @@ export function sameStereo(was: Model, after: Model): boolean {
 }
 
 /**
- * How a drawing `after` differs in stereochemistry from `was`, by atom id:
- * "changed" where a configuration `was` shows is lost or turned, "gained"
- * where `after` shows one `was` does not state - a centre, a double bond or
- * an axis drawn so that it says none (readStereo), and not in `asked` -
+ * How a drawing `after` differs in stereochemistry from `was`, by atom id
+ * (lib/chem/perception/stereo/compare `compared`): "changed" where a
+ * configuration `was` shows is lost, turned or no longer a unit, "gained"
+ * where `after` shows one `was` does not state - a centre, a double bond
+ * or an axis drawn so that it says none (readStereo), and not in `asked` -
  * which would be the layout's choice, not the structure's; null where it
  * shows the same. Only where `was` is drawn: atoms not yet placed - all on
  * one point, a SMILES's before it is laid out - state nothing to keep.
@@ -832,41 +834,35 @@ export function sameStereo(was: Model, after: Model): boolean {
 function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }, given?: { doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
   const place = new Map(was.atoms.map((a) => [a.id, a]));
   const drawnApart = (...ids: number[]) => ids.some((id) => ids.some((other) => Math.hypot(place.get(id)!.x - place.get(other)!.x, place.get(id)!.y - place.get(other)!.y) > 1e-6));
-  const before = stereoOf(was);
   const now = stereoOf(after);
-  for (const [c, t] of before.centres) {
-    const u = now.centres.get(c);
-    if (!u || !sameConfiguration(t, u)) return "changed";
-  }
-  for (const [key, d] of before.doubles) {
-    // (an odd cumulene's cis or trans the structure's own text gives: what its drawing said of it is not kept)
-    if (given?.doubles.has(key)) continue;
-    const e = now.doubles.get(key);
-    // (read against the other group on an end, the reading turns)
-    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
-  }
-  for (const [key, sense] of before.axes) if (!given?.axes.has(key) && now.axes.get(key) !== sense) return "changed";
-  const ends = (key: string) => key.split(",").map(Number).filter((id) => place.has(id));
-  for (const [c, t] of now.centres) if (!before.centres.has(c) && !asked?.centres.has(c) && place.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
-  for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !asked?.doubles.has(key) && drawnApart(...ends(key))) return "gained";
-  for (const key of now.axes.keys()) if (!before.axes.has(key) && !asked?.axes.has(key) && drawnApart(...ends(key))) return "gained";
-  return null;
+  const differences = compared(stereoOf(was), now);
+  const key = (d: Difference) => (d.kind === "centre" ? "" : `${Math.min(...d.at)},${Math.max(...d.at)}`);
+  // (an odd cumulene's cis or trans, an axis, the structure's own text gives: what its drawing said of it is not kept)
+  const givenHere = (d: Difference) => (d.kind === "double" ? given?.doubles.has(key(d)) : d.kind === "axis" ? given?.axes.has(key(d)) : false);
+  if (differences.some((d) => d.how !== "closed" && !givenHere(d))) return "changed";
+  const gained = differences.some((d) => {
+    if (d.how !== "closed") return false;
+    if (d.kind === "centre") return !asked?.centres.has(d.at) && place.has(d.at) && drawnApart(d.at, ...now.centres.get(d.at)!.neighbours.filter((n) => place.has(n)));
+    const ends = d.at.filter((id) => place.has(id));
+    return !(d.kind === "double" ? asked?.doubles : asked?.axes)?.has(key(d)) && drawnApart(...ends);
+  });
+  return gained ? "gained" : null;
 }
 
-export type StereoShown = ReturnType<typeof stereoOf>;
+export type StereoShown = Said;
 
 /**
  * The configuration a job gives the engine (`LayoutJob.stated`), by atom id, as `stereoOf` gives a drawing's: each centre's neighbours by id
  * (-1 its H or lone pair not drawn), each double bond's groups from its lower id's end first, each axis's sense against the lowest-id
- * neighbour at each end - of `part`, whose atoms the job's are.
+ * neighbour at each end - of `part`, whose atoms the job's are; with `part`'s hydrogens.
  */
 export function statedOf(job: LayoutJob, part: Model): StereoShown {
   const n = job.ids.length;
   const id = (k: number) => (k === -1 ? -1 : job.ids[k]);
-  const centres = new Map<number, Tetrahedral>(
-    job.input.atoms.flatMap((a, k) => (k < n && a.tetra ? [[job.ids[k], { neighbours: a.tetra.neighbours.map(id), volume: a.tetra.volume }] as [number, Tetrahedral]] : [])),
+  const centres = new Map<number, SaidCentre>(
+    job.input.atoms.flatMap((a, k) => (k < n && a.tetra ? [[job.ids[k], { neighbours: a.tetra.neighbours.map(id), volume: a.tetra.volume }] as [number, SaidCentre]] : [])),
   );
-  const doubles = new Map<string, { refs: [number, number]; cis: boolean }>();
+  const doubles = new Map<string, { refs: readonly [number, number]; cis: boolean }>();
   const keyed = (a: number, b: number, r: readonly [number, number], cis: boolean) => {
     const [x, z] = [id(a), id(b)];
     doubles.set(x < z ? `${x},${z}` : `${z},${x}`, { refs: x < z ? [id(r[0]), id(r[1])] : [id(r[1]), id(r[0])], cis });
@@ -874,84 +870,32 @@ export function statedOf(job: LayoutJob, part: Model): StereoShown {
   for (const b of job.input.bonds) if (b.stereo) keyed(b.a, b.b, b.stereo.refs, b.stereo.cis);
   for (const x of job.input.cumulated ?? []) keyed(x.atoms[0], x.atoms[1], x.refs, x.cis);
   const d = drawingOf(part);
-  const axes = new Map<string, number>();
+  const ids = part.atoms.map((a) => a.id);
+  const axes = new Map<string, 1 | -1>();
   for (const ax of job.input.axes ?? []) {
     const [i, j] = ax.atoms;
-    axes.set(id(i) < id(j) ? `${id(i)},${id(j)}` : `${id(j)},${id(i)}`, axisAgainstLowest(d, part.atoms.map((a) => a.id), ax));
+    axes.set(id(i) < id(j) ? `${id(i)},${id(j)}` : `${id(j)},${id(i)}`, againstLowest(d.bonds, ids, ax));
   }
-  return { centres, doubles, axes };
+  const drawn = stereoOf(part);
+  return { centres, doubles, axes, hydrogens: drawn.hydrogens, plain: new Set() };
 }
 
-/** How the stereochemistry `now` shows differs from `stated`, each unit by atom id: "changed" where one is lost or turned, "gained" where `now` shows one not stated. */
+/** How the stereochemistry `now` shows differs from `stated` (lib/chem/perception/stereo/compare `compared`): "changed" where a unit is lost, turned or no longer one, "gained" where `now` shows one not stated. */
 export function stereoAgainst(stated: StereoShown, now: StereoShown): "changed" | "gained" | null {
-  for (const [c, t] of stated.centres) {
-    const u = now.centres.get(c);
-    if (!u || !sameConfiguration(t, u)) return "changed";
-  }
-  for (const [key, d] of stated.doubles) {
-    const e = now.doubles.get(key);
-    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
-  }
-  for (const [key, sense] of stated.axes) if (now.axes.get(key) !== sense) return "changed";
-  for (const c of now.centres.keys()) if (!stated.centres.has(c)) return "gained";
-  for (const key of now.doubles.keys()) if (!stated.doubles.has(key)) return "gained";
-  for (const key of now.axes.keys()) if (!stated.axes.has(key)) return "gained";
-  return null;
+  const differences = compared(stated, now);
+  return differences.some((d) => d.how !== "closed") ? "changed" : differences.length ? "gained" : null;
 }
 
 /**
- * The stereochemistry `m` shows, by atom id: an H drawn on its own on a
- * centre counted as the centre's H (-1), each double bond's groups given
+ * The stereochemistry `m` shows, by atom id (lib/chem/perception/stereo/compare
+ * `saidOf`): an H drawn on its own is a plain H where it is only an H (no
+ * mass number, charge or anything more), each double bond's groups given
  * from its lower id's end first, and each axis's sense taken against the
  * lowest-id neighbour at each end.
  */
-export function stereoOf(m: Model) {
+export function stereoOf(m: Model): Said {
   const d = drawingOf(m);
-  const ids = m.atoms.map((a) => a.id);
-  const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
-  const degree = degrees(m.bonds);
-  // (an H that is more than an H - a 2H, a 3H - is an atom of its own here too: two on one centre told apart)
-  const asId = (n: number) => (n === -1 || (plainH(m.atoms[n]) && degree.get(ids[n]) === 1) ? -1 : ids[n]);
-  const centres = new Map<number, Tetrahedral>(
-    [...tetra].map(([c, t]) => [ids[c], { neighbours: t.neighbours.map(asId), volume: t.volume }]),
-  );
-  const doubles = new Map<string, { refs: [number, number]; cis: boolean }>();
-  for (const [k, ct] of cisTrans) {
-    const b = d.bonds[k];
-    const [a, z] = [ids[b.a], ids[b.b]];
-    const refs: [number, number] = a < z ? [ids[ct.refs[0]], ids[ct.refs[1]]] : [ids[ct.refs[1]], ids[ct.refs[0]]];
-    doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: ct.cis });
-  }
-  // (an odd cumulene's as a double bond's, by its ends)
-  for (const x of cumulated) {
-    const [a, z] = [ids[x.atoms[0]], ids[x.atoms[1]]];
-    const refs: [number, number] = a < z ? [ids[x.refs[0]], ids[x.refs[1]]] : [ids[x.refs[1]], ids[x.refs[0]]];
-    doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: x.cis });
-  }
-  const axes = new Map<string, number>();
-  for (const ax of drawnAxes) {
-    const [i, j] = ax.atoms;
-    axes.set(ids[i] < ids[j] ? `${ids[i]},${ids[j]}` : `${ids[j]},${ids[i]}`, axisAgainstLowest(d, ids, ax));
-  }
-  return { centres, doubles, axes };
-}
-
-/** An axis's sense taken against the lowest-id neighbour at each end (`ids` the drawing's atoms' ids, by place): against the other neighbour at an end, the sense turns. */
-function axisAgainstLowest(d: { bonds: readonly { a: number; b: number; order: number }[] }, ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: number }): number {
-  // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
-  const bonded = (x: number, y: number) => d.bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
-  const through = (x: number, end: number) => {
-    if (bonded(x, end)) return end;
-    const run = d.bonds.find((b) => b.order >= 2 && (b.a === x || b.b === x));
-    return run ? (run.a === x ? run.b : run.a) : end;
-  };
-  const others = (x: number, end: number) => {
-    const skip = through(x, end);
-    return d.bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));
-  };
-  const lowest = (x: number, not: number) => others(x, not).reduce((p, q) => (ids[p] < ids[q] ? p : q));
-  const [i, j] = ax.atoms;
-  return ax.sense * (ax.refs[0] === lowest(i, j) ? 1 : -1) * (ax.refs[1] === lowest(j, i) ? 1 : -1);
+  return saidOf(d.atoms, d.bonds, m.atoms.map((a) => a.id), (i) => plainH(m.atoms[i]), readStereo(d.atoms, d.bonds));
 }
 
 /** The first id no atom or bond of `model` has. */
