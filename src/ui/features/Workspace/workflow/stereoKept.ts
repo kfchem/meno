@@ -10,6 +10,7 @@
 import { readStereo } from "../../../../lib/layout/drawn";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, narrowEnd } from "../chem/drawing";
+import { parity } from "../../../../lib/chem/perception/stereo/geometry";
 
 /** A centre's neighbours by atom id ("H" for its undrawn hydrogen), in the order read, and the sign of the volume they span. */
 type Centre = { around: (number | "H")[]; volume: 1 | -1 };
@@ -30,21 +31,10 @@ export function saidOf(model: Model): Said {
 }
 
 /** The parity of the permutation taking `from` to `to` (the same items): +1 even, -1 odd; 0 where they are not the same items. */
-function parity<T>(from: readonly T[], to: readonly T[]): 1 | -1 | 0 {
+function parityBetween<T>(from: readonly T[], to: readonly T[]): 1 | -1 | 0 {
   if (from.length !== to.length || from.some((x) => !to.includes(x))) return 0;
-  const p = from.map((x) => to.indexOf(x));
-  let sign: 1 | -1 = 1;
-  const seen = new Array<boolean>(p.length).fill(false);
-  for (let i = 0; i < p.length; i++) {
-    if (seen[i]) continue;
-    let len = 0;
-    for (let j = i; !seen[j]; j = p[j]) {
-      seen[j] = true;
-      len++;
-    }
-    if (len % 2 === 0) sign = sign === 1 ? -1 : 1;
-  }
-  return sign;
+  // (the sign of the permutation of places taking one to the other: the one parity - perception/stereo/geometry - and the 0 above is this caller's own)
+  return parity(from.map((x) => to.indexOf(x)));
 }
 
 /**
@@ -61,7 +51,7 @@ export function changedAt(template: Model, product: Model, took: ReadonlyMap<num
   const at = (c: number, n: number | "H") => (n === "H" && took.has(c) ? took.get(c)! : n);
   for (const [c, t] of was.centres) {
     const p = now.centres.get(c);
-    const sign = p ? parity(t.around.map((n) => at(c, n)), p.around) : 0;
+    const sign = p ? parityBetween(t.around.map((n) => at(c, n)), p.around) : 0;
     if (!p || !sign || t.volume * sign !== p.volume) changed.add(c);
   }
   // (a centre read now at a template atom that had none: one nobody chose)

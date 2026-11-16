@@ -62,7 +62,8 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
     let live = true;
     const t = setTimeout(() => {
       const asked = stereoAskedOf(model);
-      const molblock = chemMolblock(forFlatReaders(model));
+      // (the marks ask the valence only: a ring in perspective with no depth is not read for them)
+      const molblock = chemMolblock(forFlatReaders(model, false));
       void chemWorker("checks")
         .then((c) => c.request("analyse", { molblock }))
         .then((r) => {
