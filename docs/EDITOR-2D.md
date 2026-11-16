@@ -541,7 +541,7 @@ plugin that reads SMILES refuses it). A bond written with no symbol between
 two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
 joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
 is single, and each ring is read as its own. A bond written aromatic
-outside any ring (":" or "$") takes a form of single and double bonds as
+outside any ring (":") takes a form of single and double bonds as
 one in a ring does, each atom by the room its valence, its H and its
 charge leave (lib/chem/perception/kekule): CC(:O):O is acetic acid, one
 C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
