@@ -62,3 +62,19 @@ describe("a result set grown as its step runs again, a frame not run yet below i
     expect(overlap(setOf(grown, upper), setOf(grown, lower))).toBe(false);
   });
 });
+
+describe("every frame of both steps, a result set grown as its step runs again", () => {
+  /** Every two frames on the page that overlap, by step and exit. */
+  const overlaps = (doc: WorkspaceDocument) => {
+    const s = doc.sets ?? [];
+    const hits: string[] = [];
+    for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) if (overlap(s[i], s[j])) hits.push(`${s[i].made?.step}/${s[i].made?.exit} x ${s[j].made?.step}/${s[j].made?.exit}`);
+    return hits;
+  };
+
+  it("overlaps no other: the grown step's later exit, kept under it, is never put where the other's was pushed (found in review)", () => {
+    const { doc } = page();
+    expect(overlaps(doc)).toEqual([]);
+    expect(overlaps(placeResults(doc, doc.steps![0], drawn(19), W))).toEqual([]);
+  });
+});

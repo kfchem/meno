@@ -13,7 +13,7 @@ import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { cardHighOf, exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
-import { unseenSets } from "./onPage";
+import { isHeld, unseenSets } from "./onPage";
 import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, inputLead, nearWire, portDown, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
@@ -230,13 +230,25 @@ export function roomMadeFor(doc: WorkspaceDocument, step: { id: number; x: numbe
   const self: Self = { set: was.id, sets: siblings, step: step.id };
   const there = frameAt(was.x0, was.y1, width, height);
   if (clearOf(doc, there, self)) return doc;
-  const near = (b: Frame) => b.x0 < there.x1 + BETWEEN && there.x0 < b.x1 + BETWEEN && b.y0 < there.y1 + BETWEEN && there.y0 < b.y1 + BETWEEN;
+  // (the grown set and, under it, where its step's later exits' frames go as they are kept under it (run `keepExitsUnder`): what is
+  //  pushed goes below them all, never onto one of them - found in review)
+  const kind = (doc.steps ?? []).find((x) => x.id === step.id)?.kind;
+  // (each kept under it whether or not it is drawn - an empty exit for what its step sets aside too - but one held off the page)
+  const block: Frame[] = [there];
+  for (const e of kind ? exitsOf(kind).slice(1) : []) {
+    const b = (doc.sets ?? []).find((x) => x.made?.step === step.id && x.made.exit === e.id);
+    if (!b || b.id === was.id || isHeld(doc, b)) continue;
+    const top = block[block.length - 1].y0 - BETWEEN;
+    block.push(frameAt(b.x0, top, b.x1 - b.x0, b.y1 - b.y0));
+  }
+  const foot = Math.min(...block.map((f) => f.y0));
+  const near = (b: Frame) => block.some((f) => b.x0 < f.x1 + BETWEEN && f.x0 < b.x1 + BETWEEN && b.y0 < f.y1 + BETWEEN && f.y0 < b.y1 + BETWEEN);
   const inWay = (doc.sets ?? []).filter((b) => b.id !== was.id && !siblings.has(b.id) && notRunYet(b) && near(b));
   if (!inWay.length) return doc;
-  // (the grown set where it was, then each frame in its way pushed down just clear of it - the highest first)
+  // (the grown set where it was, then each frame in its way pushed down just clear of it and its step's later exits - the highest first)
   let d = framed(doc, was.id, there);
   for (const b of [...inWay].sort((p, q) => q.y1 - p.y1)) {
-    const f = placeBelow(d, b.x0, Math.min(b.y1, there.y0 - BETWEEN), b.x1 - b.x0, b.y1 - b.y0, { set: b.id });
+    const f = placeBelow(d, b.x0, Math.min(b.y1, foot - BETWEEN), b.x1 - b.x0, b.y1 - b.y0, { set: b.id });
     d = framed(d, b.id, f);
   }
   return clearOf(d, there, self) ? framed(d, was.id, doc.sets!.find((b) => b.id === was.id) ?? was) : doc;
