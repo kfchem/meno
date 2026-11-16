@@ -442,7 +442,8 @@ function SmilesField({
   const chem = useChem();
   // (the first start's card, where it sets chemistry up: said here too, as the card says it)
   const card = useFirstSetUp();
-  const share = useDownloads((d) => (chem.state === "setting-up" ? d[chem.id] : undefined));
+  // (its files' share as they download: the worker's set-up's, or the card's plugin's while the card sets it up)
+  const share = useDownloads((d) => (chem.state === "setting-up" ? d[chem.id] : card.phase === "going" && card.plugin ? d[card.plugin.id] : undefined));
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
   const readings = useMemo(() => (named ? resolve(text, "molecule").readings : []), [text, named]);

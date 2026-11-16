@@ -1874,8 +1874,11 @@ page works whether or not it is answered.
   starts, with no question. A plugin whose files are here already but
   which was not added - its set-up failed after its files came - is the
   one set up, by *Try again* and as Meno next starts, its files not got
-  again. While the card sets chemistry up, the line under the SMILES field
-  says its step in the card's words.
+  again; one here at another version than the list's is not, and the card
+  shows what the list offers to add instead. A plugin the chemist took away
+  in Settings counts as their answer: the card is not offered. While the
+  card sets chemistry up, the line under the SMILES field says its step in
+  the card's words, with its share as the files download.
   *Stop* ends it for good. A step under way (a download, uv building the
   environment) runs to its end, as nothing can cut it short today.
 

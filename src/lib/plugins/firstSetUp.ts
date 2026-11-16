@@ -31,7 +31,7 @@ import { create } from "zustand";
 import { allowAnswered, formatBytes, useNetwork, type ConsentRequest } from "../net/network";
 import { useAppSettings } from "../settings/appSettings";
 import { ALL_PLUGINS, anyPluginById, manifestOf, pluginsFilling, pluginsUsedBy, runs } from "../calc/catalog";
-import { addPlugin, useReaders } from "../calc/workers";
+import { addedReaders, addPlugin, useReaders } from "../calc/workers";
 import { setUpQuestions } from "../pyEnv";
 import { CATALOGUE_HOSTS, CATALOGUE_PURPOSE, offeredFor, offersOf, type Catalogue, type CatalogueEntry } from "./catalogue";
 import { systemHere } from "./here";
@@ -109,8 +109,11 @@ export type SetUpPlan = {
 export type FirstSetUpDeps = {
   /** The plugins whose environments were set up here before, by id (installed.rs `set_up_before`). */
   setUpBefore(): Promise<string[]>;
-  /** Whether a plugin here and added fills the role. */
-  filledHere(): boolean;
+  /**
+   * Whether a plugin here fills the role and is added - each looked at first, as Meno starts (lib/calc/workers `addedReaders`), not
+   * read off a state not yet known - or was taken away by the chemist (Settings, *Plugins*): their own choice, asked nothing of again.
+   */
+  filledHere(): boolean | Promise<boolean>;
   /**
    * The plugins on the list that fill the role and are here already at the list's version, but not added - their files got,
    * their set-up not finished: the one to set up, its files not got again.
@@ -153,7 +156,7 @@ firstSetUpWait.now = firstSetUpUnderWay;
  */
 export async function offerFirstSetUp(deps: FirstSetUpDeps): Promise<void> {
   const answered = useAppSettings.getState().plugins.firstSetUp;
-  if (answered === "no" || answered === "done" || deps.filledHere()) return;
+  if (answered === "no" || answered === "done" || (await deps.filledHere())) return;
   if (useNetwork.getState().offline) return;
   // (an upgraded Meno whose plugins were set up here before: its own flow, lib/plugins/usedBefore)
   if (!answered && (await deps.setUpBefore()).length) return;
@@ -277,7 +280,13 @@ function gotHere(entry: CatalogueEntry) {
 
 export const DEPS: FirstSetUpDeps = {
   setUpBefore: () => invoke<string[]>("plugins_set_up_before"),
-  filledHere: () => pluginsFilling(FIRST_ROLE).some((p) => useReaders.getState().state[p.id] === "added"),
+  filledHere: async () => {
+    const filling = pluginsFilling(FIRST_ROLE);
+    const removed = useAppSettings.getState().plugins.removed;
+    if (filling.some((p) => removed.includes(p.id))) return true;
+    const added = await addedReaders(filling);
+    return filling.some((p) => added.has(p.id));
+  },
   here: (catalogue) => {
     const added = useReaders.getState().state;
     const notAdded = new Map(pluginsFilling(FIRST_ROLE).filter((p) => added[p.id] !== "added").map((p) => [p.id, p.version]));
