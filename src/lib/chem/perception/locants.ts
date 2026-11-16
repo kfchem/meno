@@ -1,0 +1,679 @@
+/**
+ * A molecule's atoms numbered as IUPAC numbers the parent of its name, as far as rules without a name reach (foundation part 16, level 1:
+ * the skeleton's own numbering). The 2013 recommendations, cited by rule number: P-14.3.5 (the lowest locants), P-14.4 (the order in which
+ * features take them), P-22.2 (one ring with heteroatoms), P-29.2 (a substituent's free valence), P-31.1.4 (multiple bonds), P-44.1 to
+ * P-44.4 (the parent), P-45.2 (still tied).
+ *
+ * What it gives, for one connected molecule's heavy atoms:
+ * - `order`: the atoms in the order 1 to N - the parent's atoms with plain-number locants at their numbers, its lettered and primed atoms
+ *   after them, then each substituent whole, in the order of the parent's atoms they hang from (Meno's own convention: docs/ATOM-MAPPING.md,
+ *   *IUPAC numbering*);
+ * - `locant`: each parent atom's locant within its unit, as a base and an optional superscript - never one string;
+ * - `shown`: what the drawing shows: a parent atom its locant, any other atom its place in `order`;
+ * - `own`: the atoms a rule did not place, each with why.
+ *
+ * The core takes no symmetry search of its own (lib/chem/identity is outside it): the molecule's orbits come in with it, as do the CIP
+ * descriptors where it has them. Without orbits every tie a rule cannot break is said (`own`), never guessed as a symmetry.
+ */
+import type { ChemAtom, ChemBond } from "./graph";
+import { factsOf } from "./facts";
+import { valencesAt } from "./hydrogens";
+import { kekuleOrders, AROMATIC_BOND } from "./kekule";
+
+/** A locant as written: its base ("1", "4a", "2'") and a superscript where it has one (pyrene's 3a with a superscript 1). */
+export type Locant = { base: string; sup?: string };
+
+/** Why an atom's number is Meno's own and no rule's. */
+export type OwnWhy = "needs the name" | "not built" | "over the budget";
+
+export type LocantAtom = ChemAtom & { isotope?: number };
+
+export type LocantsInput = {
+  atoms: readonly LocantAtom[];
+  bonds: readonly ChemBond[];
+  /**
+   * Each atom's orbit under the molecule's symmetry - of its aromatic form, its configuration kept (lib/chem/identity `symmetryOrbits`):
+   * two atoms in one orbit have the same number. Left out, no tie is taken for a symmetry.
+   */
+  orbits?: readonly number[];
+  /** Each atom's CIP descriptor where it has one (R, S, r, s), and each double bond's by its index (E, Z): P-14.4 (j). */
+  descriptors?: { atoms?: ReadonlyMap<number, string>; bonds?: ReadonlyMap<number, string> };
+};
+
+export type Locants = {
+  order: number[];
+  locant: (Locant | null)[];
+  shown: Locant[];
+  own: { atom: number; why: OwnWhy }[];
+};
+
+/** The order of the heteroatoms for numbering (P-14.4, P-22.2.3.2, P-31.1.4.2.4): earlier is more senior. */
+const NUMBERING_SENIORITY = ["F", "Cl", "Br", "I", "O", "S", "Se", "Te", "N", "P", "As", "Sb", "Bi", "Si", "Ge", "Sn", "Pb", "B", "Al", "Ga", "In", "Tl"];
+/** The order of the heteroatoms for a ring system's seniority (P-44.2.1 (c)): N first, then as for numbering. */
+const RING_SENIORITY = ["N", "F", "Cl", "Br", "I", "O", "S", "Se", "Te", "P", "As", "Sb", "Bi", "Si", "Ge", "Sn", "Pb", "B", "Al", "Ga", "In", "Tl"];
+/** The order of P-44.2.1 (g): N after Te. */
+const RING_COUNT_SENIORITY = NUMBERING_SENIORITY;
+/** P-44.1.2: the element a parent is chosen by, earliest first (carbon last). */
+const PARENT_ELEMENTS = ["N", "P", "As", "Sb", "Bi", "Si", "Ge", "Sn", "Pb", "B", "Al", "Ga", "In", "Tl", "O", "S", "Se", "Te", "C"];
+/** Of those, the ones an acyclic atom counts for (P-44.1.2; N only in an N-N chain: class 21). */
+const ACYCLIC_PARENT = new Set(["P", "As", "Sb", "Bi", "Si", "Ge", "Sn", "Pb", "B", "Al", "Ga", "In", "Tl"]);
+/** Elements that never hold a ring double bond (K2): their ring bonds use all they have. */
+const NEVER_DOUBLE = new Set(["O", "S", "Se", "Te"]);
+
+const rank = (list: readonly string[], el: string) => {
+  const k = list.indexOf(el);
+  return k < 0 ? list.length : k;
+};
+
+/** A locant's place in the order of P-14.3.5: its number, then its letter (4 before 4a before 5), then its primes, then its superscript. */
+type Key = readonly number[];
+
+const compareKeys = (p: Key, q: Key): number => {
+  for (let k = 0; k < Math.max(p.length, q.length); k++) {
+    const d = (p[k] ?? -1) - (q[k] ?? -1);
+    if (d) return d;
+  }
+  return 0;
+};
+
+/** Two sets of locants compared term by term, each sorted; the first point of difference decides (P-14.3.5). Negative where `p` is lower. */
+function compareSets(p: readonly Key[], q: readonly Key[]): number {
+  const a = [...p].sort(compareKeys);
+  const b = [...q].sort(compareKeys);
+  for (let k = 0; k < Math.min(a.length, b.length); k++) {
+    const d = compareKeys(a[k], b[k]);
+    if (d) return d;
+  }
+  return a.length - b.length;
+}
+
+/** A plain locant. */
+const plain = (n: number): { key: Key; locant: Locant } => ({ key: [n], locant: { base: String(n) } });
+
+/** One way of numbering a unit: its atoms in order, each with its locant and the key it is compared by. */
+type Candidate = { atoms: number[]; keys: Key[]; locants: Locant[] };
+
+/** A unit of the molecule (A2): a ring system, a carbon chain, or one acyclic atom that is not carbon. */
+type Unit = { kind: "ring" | "chain" | "atom"; atoms: number[]; ringSystem?: number };
+
+type Ctx = {
+  input: LocantsInput;
+  heavy: boolean[];
+  around: number[][];
+  bondIndex: (a: number, b: number) => number;
+  orders: number[];
+  inRing: boolean[];
+  systemOf: number[];
+  systems: readonly { atoms: number[]; rings: number[] }[];
+  rings: readonly (readonly number[])[];
+};
+
+function contextOf(input: LocantsInput): Ctx {
+  const f = factsOf(input);
+  const heavy = input.atoms.map((a) => a.el !== "H");
+  const around = f.around.map((ns, i) => (heavy[i] ? ns.filter((j) => heavy[j]) : []));
+  // (aromatic bonds given as one Kekule form: saturation is read on single and double bonds)
+  const orders = input.bonds.some((b) => b.order === AROMATIC_BOND)
+    ? kekuleOrders(
+        input.atoms,
+        input.bonds.map((b) => ({ a1: b.a, a2: b.b, order: b.order })),
+      )
+    : input.bonds.map((b) => b.order);
+  const systemOf = input.atoms.map(() => -1);
+  f.ringSystems.forEach((s, k) => s.atoms.forEach((i) => (systemOf[i] = k)));
+  const inRing = input.atoms.map((_, i) => systemOf[i] >= 0);
+  return { input, heavy, around, bondIndex: (a, b) => f.bondBetween(a, b), orders, inRing, systemOf, systems: f.ringSystems, rings: f.rings };
+}
+
+const orderOf = (c: Ctx, a: number, b: number) => {
+  const k = c.bondIndex(a, b);
+  return k < 0 ? 0 : c.orders[k];
+};
+
+// ---------------------------------------------------------------- the units' own numberings (A4)
+
+/** A ring's atoms in order round it, from a start, either way: the ring's candidates (A4.1). */
+function ringCandidates(ring: readonly number[]): Candidate[] {
+  const out: Candidate[] = [];
+  const n = ring.length;
+  for (let s = 0; s < n; s++) {
+    for (const dir of [1, -1]) {
+      const atoms = Array.from({ length: n }, (_, k) => ring[(s + dir * k + n * 2) % n]);
+      out.push({ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) });
+    }
+  }
+  return out;
+}
+
+/** A chain's two candidates, one from each end (A4.8). */
+function chainCandidates(chain: readonly number[]): Candidate[] {
+  const one = (atoms: number[]): Candidate => ({ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) });
+  return chain.length === 1 ? [one([...chain])] : [one([...chain]), one([...chain].reverse())];
+}
+
+/** Those of `cands` whose `score` is least (compared by `cmp`), all of them where every one ties. */
+function keepLeast<T>(cands: Candidate[], score: (c: Candidate) => T, cmp: (p: T, q: T) => number): Candidate[] {
+  if (cands.length < 2) return cands;
+  const scored = cands.map((c) => ({ c, s: score(c) }));
+  let best = scored[0].s;
+  for (const x of scored) if (cmp(x.s, best) < 0) best = x.s;
+  return scored.filter((x) => cmp(x.s, best) === 0).map((x) => x.c);
+}
+
+const keyIn = (c: Candidate) => {
+  const m = new Map<number, Key>();
+  c.atoms.forEach((a, k) => m.set(a, c.keys[k]));
+  return m;
+};
+
+/** One ring with heteroatoms (P-22.2.2.1.3, P-22.2.3.2): 1 to the senior heteroatom, then all as a set, then by seniority (A4.2). */
+function heteroRingRules(c: Ctx, cands: Candidate[]): Candidate[] {
+  const el = (a: number) => c.input.atoms[a].el;
+  const hetero = cands[0].atoms.filter((a) => el(a) !== "C");
+  if (!hetero.length) return cands;
+  const senior = Math.min(...hetero.map((a) => rank(NUMBERING_SENIORITY, el(a))));
+  let left = cands.filter((cd) => rank(NUMBERING_SENIORITY, el(cd.atoms[0])) === senior && el(cd.atoms[0]) !== "C");
+  if (!left.length) left = cands;
+  left = keepLeast(left, (cd) => { const k = keyIn(cd); return hetero.map((a) => k.get(a)!); }, compareSets);
+  return bySeniorityOrder(c, left, hetero);
+}
+
+/** The lower locants to the more senior heteroatoms, element by element (P-22.2.3.2, P-25.3.3.1.2 (b), P-23.3.2.2). */
+function bySeniorityOrder(c: Ctx, cands: Candidate[], hetero: readonly number[]): Candidate[] {
+  const els = [...new Set(hetero.map((a) => c.input.atoms[a].el))].sort((p, q) => rank(NUMBERING_SENIORITY, p) - rank(NUMBERING_SENIORITY, q));
+  let left = cands;
+  for (const e of els) {
+    const of = hetero.filter((a) => c.input.atoms[a].el === e);
+    left = keepLeast(left, (cd) => { const k = keyIn(cd); return of.map((a) => k.get(a)!); }, compareSets);
+  }
+  return left;
+}
+
+// ---------------------------------------------------------------- A5: the rest of P-14.4, on the candidates left
+
+/** Whether a ring atom of a system could hold a ring double bond (K2): its standard valence less its ring bonds in the system is 1 or more. */
+function couldHoldDouble(c: Ctx, a: number, sys: ReadonlySet<number>): boolean {
+  const el = c.input.atoms[a].el;
+  if (NEVER_DOUBLE.has(el)) return false;
+  const v = valencesAt(el, c.input.atoms[a].charge ?? 0)[0];
+  if (v == null) return false;
+  const ringBonds = c.around[a].filter((b) => sys.has(b)).length;
+  return v - ringBonds >= 1;
+}
+
+/** Whether a ring system is named as its fully unsaturated form with hydro prefixes (mancude-named), not with "ene" (A5). */
+function mancudeNamed(c: Ctx, atoms: readonly number[], rings: number): boolean {
+  if (rings > 1) return false; // (fused systems are mancude-named; their numbering is not built in this slice)
+  const n = atoms.length;
+  const els = atoms.map((a) => c.input.atoms[a].el);
+  const hetero = els.some((e) => e !== "C");
+  if (!hetero) return isBenzene(c, atoms);
+  if (n < 3 || n > 10) return false;
+  // (Hantzsch-Widman: mancude-named unless fully saturated)
+  return atoms.some((a) => c.around[a].some((b) => atoms.includes(b) && orderOf(c, a, b) >= 2));
+}
+
+function isBenzene(c: Ctx, atoms: readonly number[]): boolean {
+  if (atoms.length !== 6 || atoms.some((a) => c.input.atoms[a].el !== "C")) return false;
+  const doubles = atoms.filter((a) => c.around[a].some((b) => atoms.includes(b) && orderOf(c, a, b) === 2)).length;
+  return doubles === 6;
+}
+
+/** A system's saturated positions (K2): atoms that could hold a ring double bond and have none to an atom of the system. */
+function saturatedPositions(c: Ctx, atoms: readonly number[]): number[] {
+  const sys = new Set(atoms);
+  return atoms.filter((a) => couldHoldDouble(c, a, sys) && !c.around[a].some((b) => sys.has(b) && orderOf(c, a, b) === 2));
+}
+
+/** Whether the atoms of `atoms` that could hold a ring double bond, `out` left out, can all be paired along the system's bonds. */
+function pairable(c: Ctx, atoms: readonly number[], out: ReadonlySet<number>): boolean {
+  const sys = new Set(atoms);
+  const free = atoms.filter((a) => !out.has(a) && couldHoldDouble(c, a, sys));
+  const freeSet = new Set(free);
+  const mate = new Map<number, number>();
+  const tryAugment = (u: number, seen: Set<number>): boolean => {
+    for (const v of c.around[u]) {
+      if (!freeSet.has(v) || seen.has(v)) continue;
+      seen.add(v);
+      const w = mate.get(v);
+      if (w == null || tryAugment(w, seen)) {
+        mate.set(v, u);
+        mate.set(u, v);
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const u of free) if (!mate.has(u) && !tryAugment(u, new Set([u]))) return false;
+  return true;
+}
+
+/** The count k of indicated hydrogens a mancude-named system needs (K2): its atoms that could hold a double bond and cannot be paired. */
+function indicatedCount(c: Ctx, atoms: readonly number[]): number {
+  const sys = new Set(atoms);
+  const can = atoms.filter((a) => couldHoldDouble(c, a, sys));
+  for (let k = 0; k <= can.length; k++) {
+    for (const out of subsets(can, k)) if (pairable(c, atoms, new Set(out))) return k;
+  }
+  return can.length;
+}
+
+function* subsets<T>(xs: readonly T[], k: number, from = 0): Generator<T[]> {
+  if (k === 0) {
+    yield [];
+    return;
+  }
+  for (let i = from; i <= xs.length - k; i++) for (const rest of subsets(xs, k - 1, i + 1)) yield [xs[i], ...rest];
+}
+
+/** The lowest set of k saturated positions that, left out, lets every other atom be paired (A5 step 1), as keys; null where none does. */
+function indicatedSet(c: Ctx, atoms: readonly number[], cand: Candidate, k: number): Key[] | null {
+  if (!k) return [];
+  const key = keyIn(cand);
+  const sat = saturatedPositions(c, atoms).sort((p, q) => compareKeys(key.get(p)!, key.get(q)!));
+  for (const out of subsets(sat, k)) if (pairable(c, atoms, new Set(out))) return out.map((a) => key.get(a)!);
+  return null;
+}
+
+/** A multiple bond's locant in an ane-named unit: its lower-numbered atom's, compound where its atoms are not numbered one after the other. */
+function multipleBonds(c: Ctx, cand: Candidate, unit: ReadonlySet<number>): { key: Key; compound: boolean; triple: boolean }[] {
+  const key = keyIn(cand);
+  const place = new Map(cand.atoms.map((a, k) => [a, k]));
+  const out: { key: Key; compound: boolean; triple: boolean }[] = [];
+  for (const a of cand.atoms) {
+    for (const b of c.around[a]) {
+      if (!unit.has(b) || place.get(b)! < place.get(a)!) continue;
+      const o = orderOf(c, a, b);
+      if (o < 2) continue;
+      out.push({ key: key.get(a)!, compound: place.get(b)! - place.get(a)! !== 1, triple: o === 3 });
+    }
+  }
+  return out;
+}
+
+/** P-31.1.4.2, P-31.1.4.3 (K1): fewest compound locants; the set without the parentheses; with them; then the double bonds alone. */
+function compareMultiple(p: ReturnType<typeof multipleBonds>, q: ReturnType<typeof multipleBonds>): number {
+  const compound = (x: typeof p) => x.filter((m) => m.compound).length;
+  const d1 = compound(p) - compound(q);
+  if (d1) return d1;
+  const d2 = compareSets(p.map((m) => m.key), q.map((m) => m.key));
+  if (d2) return d2;
+  // (with the second atom's number in parentheses: the compound ones last, which keeps the comparison where it was)
+  const withSecond = (x: typeof p) => x.map((m) => [...m.key, m.compound ? 1 : 0]);
+  const d3 = compareSets(withSecond(p), withSecond(q));
+  if (d3) return d3;
+  if (p.some((m) => m.triple) || q.some((m) => m.triple)) return compareSets(p.filter((m) => !m.triple).map((m) => m.key), q.filter((m) => !m.triple).map((m) => m.key));
+  return 0;
+}
+
+/**
+ * A short text of what hangs from `from` away from `parent` (its atoms, their elements, bonds and charges, walked outward and sorted): two
+ * groups with the same text are taken as the same group (A5 step 5). A refinement of each atom's neighbourhood, as the canonical ranking's
+ * first rounds are; enough to tell apart the groups a molecule carries side by side.
+ */
+function groupText(c: Ctx, from: number, parent: ReadonlySet<number>): string {
+  const atoms: number[] = [];
+  const seen = new Set<number>([from]);
+  const queue = [from];
+  while (queue.length) {
+    const u = queue.shift()!;
+    atoms.push(u);
+    for (const v of c.around[u]) if (!seen.has(v) && !parent.has(v)) seen.add(v), queue.push(v);
+  }
+  const inG = new Set(atoms);
+  const atomText = (a: number) => {
+    const x = c.input.atoms[a];
+    return `${x.el}${x.charge ?? 0}${x.isotope ?? ""}${a === from ? "*" : ""}`;
+  };
+  let label = new Map(atoms.map((a) => [a, atomText(a)]));
+  for (let round = 0; round < atoms.length; round++) {
+    const next = new Map(atoms.map((a) => [a, `${label.get(a)}(${c.around[a].filter((b) => inG.has(b)).map((b) => `${orderOf(c, a, b)}${label.get(b)}`).sort().join(",")})`]));
+    // (compressed to the rank of each text, so that the texts stay short)
+    const ranks = [...new Set(next.values())].sort();
+    label = new Map(atoms.map((a) => [a, `${atomText(a)}#${ranks.indexOf(next.get(a)!)}`]));
+  }
+  return [...label.values()].sort().join(";");
+}
+
+/** The atoms hanging from the parent (A5 step 4): each atom bonded to it and not in it, by the parent atom it hangs from. */
+function hangers(c: Ctx, parent: ReadonlySet<number>): { on: number; first: number }[] {
+  const out: { on: number; first: number }[] = [];
+  for (const a of parent) for (const b of c.around[a]) if (!parent.has(b)) out.push({ on: a, first: b });
+  return out;
+}
+
+/**
+ * A5: on the candidates left after a unit's own rules, P-14.4 (b) to (j) - indicated hydrogen, saturation, substituents, (the first-cited
+ * prefix: not built), isotopes, configuration. Returns those left and, where they still differ by more than a symmetry, the atoms whose
+ * number would differ (`own`).
+ */
+function a5(
+  c: Ctx,
+  cands: Candidate[],
+  unit: { atoms: readonly number[]; mancude: boolean; indicated: number },
+  parent: ReadonlySet<number>,
+  from = 1,
+): { left: Candidate[]; own: { atoms: number[]; why: OwnWhy } | null } {
+  let left = cands;
+  const set = new Set(unit.atoms);
+  if (from <= 1 && unit.mancude && unit.indicated) {
+    left = keepLeast(left, (cd) => indicatedSet(c, unit.atoms, cd, unit.indicated), (p, q) => (p && q ? compareSets(p, q) : p ? -1 : q ? 1 : 0));
+  }
+  if (from <= 3) {
+    left = unit.mancude
+      ? keepLeast(left, (cd) => { const k = keyIn(cd); return saturatedPositions(c, unit.atoms).map((a) => k.get(a)!); }, compareSets)
+      : keepLeast(left, (cd) => multipleBonds(c, cd, set), compareMultiple);
+  }
+  const hang = hangers(c, parent);
+  left = keepLeast(left, (cd) => { const k = keyIn(cd); return hang.map((h) => k.get(h.on)!); }, compareSets);
+  if (left.length > 1) {
+    // (g) the first-cited prefix: different groups at the tied locants need the alphabet - not built
+    const texts = (cd: Candidate) => {
+      const k = keyIn(cd);
+      return hang.map((h) => `${k.get(h.on)!.join(".")}:${groupText(c, h.first, parent)}`).sort().join("|");
+    };
+    const t0 = texts(left[0]);
+    if (left.some((cd) => texts(cd) !== t0)) return { left, own: { atoms: differing(c, left), why: "needs the name" } };
+  }
+  // (i) isotopes: the atoms with a mass number, as a set; then the heavier nuclide
+  const labelled = unit.atoms.filter((a) => c.input.atoms[a].isotope);
+  if (labelled.length) {
+    left = keepLeast(left, (cd) => { const k = keyIn(cd); return labelled.map((a) => k.get(a)!); }, compareSets);
+    left = keepLeast(left, (cd) => [...cd.atoms].filter((a) => c.input.atoms[a].isotope).map((a) => -(c.input.atoms[a].isotope ?? 0)), (p, q) => compareKeys(p, q));
+  }
+  // (j) configuration: R before S, Z before E, r before s, at the first point of difference
+  const desc = c.input.descriptors?.atoms;
+  if (desc && left.length > 1) {
+    const order = (d: string | undefined) => (d === "R" || d === "r" || d === "Z" ? 0 : d ? 1 : 2);
+    left = keepLeast(left, (cd) => cd.atoms.map((a) => order(desc.get(a))), (p, q) => compareKeys(p, q));
+  }
+  if (left.length > 1 && !sameUnderSymmetry(c, left)) return { left, own: { atoms: differing(c, left), why: "needs the name" } };
+  return { left, own: null };
+}
+
+/** Whether every candidate left numbers atoms of one orbit alike at each place: the same numbering, the molecule turned. */
+function sameUnderSymmetry(c: Ctx, cands: readonly Candidate[]): boolean {
+  const orbits = c.input.orbits;
+  if (!orbits) return false;
+  return cands.every((cd) => cd.atoms.every((a, k) => orbits[a] === orbits[cands[0].atoms[k]]));
+}
+
+/** The atoms whose place differs between the candidates left. */
+function differing(_c: Ctx, cands: readonly Candidate[]): number[] {
+  const out = new Set<number>();
+  for (const cd of cands.slice(1)) cd.atoms.forEach((a, k) => a !== cands[0].atoms[k] && (out.add(a), out.add(cands[0].atoms[k])));
+  return [...out];
+}
+
+// ---------------------------------------------------------------- the parent (A3)
+
+/** The acyclic carbon atoms of the molecule, taken apart into chains: the longest path through each tree of them (A3 step 4). */
+function longestChains(c: Ctx, atoms: readonly number[], allowed: (a: number) => boolean): number[][] {
+  const ok = new Set(atoms.filter(allowed));
+  const paths: number[][] = [];
+  let best = 0;
+  // (every simple path by a walk from each atom: the trees are small, and the longest wins)
+  for (const s of ok) {
+    const walk = (path: number[]) => {
+      const u = path[path.length - 1];
+      let grew = false;
+      for (const v of c.around[u]) {
+        if (!ok.has(v) || path.includes(v)) continue;
+        grew = true;
+        walk([...path, v]);
+      }
+      if (!grew) {
+        if (path.length > best) {
+          best = path.length;
+          paths.length = 0;
+        }
+        if (path.length === best) paths.push(path);
+      }
+    };
+    walk([s]);
+  }
+  // (each path once, not once from each end)
+  const seen = new Set<string>();
+  return paths.filter((p) => {
+    const k = [p.join(","), [...p].reverse().join(",")].sort()[0];
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+type ParentPick = { unit: Unit; own: OwnWhy | null };
+
+/** A ring system's facts for P-44.2.1 (a) to (g). */
+function ringFacts(c: Ctx, s: { atoms: number[]; rings: number[] }): number[] {
+  const els = s.atoms.map((a) => c.input.atoms[a].el);
+  const hetero = els.filter((e) => e !== "C");
+  const seniorRank = hetero.length ? Math.min(...hetero.map((e) => rank(RING_SENIORITY, e))) : RING_SENIORITY.length;
+  const counts = RING_COUNT_SENIORITY.map((e) => -hetero.filter((x) => x === e).length);
+  // (each lower first: a heterocycle; with N; the senior heteroatom; more rings; more atoms; more heteroatoms; more of the senior kinds)
+  return [hetero.length ? 0 : 1, hetero.includes("N") ? 0 : 1, seniorRank, -s.rings.length, -s.atoms.length, -hetero.length, ...counts];
+}
+
+/** P-44.4.1 (a), (b): more multiple bonds, then more double bonds, in the unit's atoms (lower first). */
+function unsaturation(c: Ctx, atoms: readonly number[]): number[] {
+  const set = new Set(atoms);
+  let multiple = 0;
+  let double = 0;
+  for (const a of atoms) for (const b of c.around[a]) if (b > a && set.has(b)) {
+    const o = orderOf(c, a, b);
+    if (o >= 2) multiple++;
+    if (o === 2) double++;
+  }
+  return [-multiple, -double];
+}
+
+/** The parent (A3, level 1). */
+function parentOf(c: Ctx, atoms: readonly number[]): ParentPick {
+  const el = (a: number) => c.input.atoms[a].el;
+  const ringSystems = [...new Set(atoms.filter((a) => c.inRing[a]).map((a) => c.systemOf[a]))];
+  // step 0: the senior element in a place that counts
+  const counts = (a: number) => c.inRing[a] || ACYCLIC_PARENT.has(el(a)) || (el(a) === "N" && c.around[a].some((b) => el(b) === "N" && !c.inRing[b]));
+  const present = atoms.filter(counts).map(el);
+  const senior = PARENT_ELEMENTS.find((e) => present.includes(e)) ?? "C";
+  const inARing = atoms.some((a) => c.inRing[a] && el(a) === senior);
+  if (senior !== "C" && !inARing && !ringSystems.length) {
+    // (the senior element only outside rings, and no ring at all: its acyclic unit)
+    return acyclicElementParent(c, atoms, senior);
+  }
+  if (senior !== "C" && !inARing && ringSystems.length) return acyclicElementParent(c, atoms, senior);
+  if (ringSystems.length) {
+    // steps 1, 2: a ring system before any chain; among them, P-44.2.1 then P-44.4.1 (a), (b)
+    let best = ringSystems;
+    best = leastBy(best, (k) => ringFacts(c, c.systems[k]));
+    best = leastBy(best, (k) => unsaturation(c, c.systems[k].atoms));
+    const unit = (k: number): Unit => ({ kind: "ring", atoms: c.systems[k].atoms, ringSystem: k });
+    if (best.length === 1) return { unit: unit(best[0]), own: null };
+    return tiedParents(c, best.map(unit));
+  }
+  // step 4: the principal chain - the longest chain of acyclic carbons; then P-44.4.1 (a), (b)
+  let chains = longestChains(c, atoms, (a) => el(a) === "C" && !c.inRing[a]);
+  if (!chains.length) {
+    // (no carbon chain: the first heavy atom alone)
+    return { unit: { kind: "atom", atoms: [atoms[0]] }, own: atoms.length > 1 ? "not built" : null };
+  }
+  chains = leastByList(chains, (p) => unsaturation(c, p));
+  if (chains.length === 1) return { unit: { kind: "chain", atoms: chains[0] }, own: null };
+  return tiedParents(c, chains.map((p) => ({ kind: "chain", atoms: p }) as Unit));
+}
+
+/** Step 0's parent where its element sits only outside rings (A3 step 0): one atom, or an unbranched chain of that element. */
+function acyclicElementParent(c: Ctx, atoms: readonly number[], senior: string): ParentPick {
+  const el = (a: number) => c.input.atoms[a].el;
+  // (a unit holding a d- or f-block metal is not built; nor chains of alternating elements: a disiloxane)
+  let chains = longestChains(c, atoms, (a) => el(a) === senior && !c.inRing[a]);
+  chains = leastByList(chains, (p) => unsaturation(c, p));
+  const alternating = atoms.some((a) => el(a) === senior && c.around[a].some((b) => el(b) !== senior && el(b) !== "C" && el(b) !== "H" && c.around[b].some((x) => x !== a && el(x) === senior)));
+  if (alternating) return { unit: { kind: chains[0].length > 1 ? "chain" : "atom", atoms: chains[0] }, own: "not built" };
+  if (chains.length === 1) return { unit: { kind: chains[0].length > 1 ? "chain" : "atom", atoms: chains[0] }, own: null };
+  return tiedParents(c, chains.map((p) => ({ kind: p.length > 1 ? "chain" : "atom", atoms: p }) as Unit));
+}
+
+/** Of `xs`, those with the least `score` (compared as keys). */
+function leastBy(xs: number[], score: (x: number) => number[]): number[] {
+  const s = xs.map((x) => ({ x, k: score(x) }));
+  let best = s[0].k;
+  for (const y of s) if (compareKeys(y.k, best) < 0) best = y.k;
+  return s.filter((y) => compareKeys(y.k, best) === 0).map((y) => y.x);
+}
+function leastByList(xs: number[][], score: (x: number[]) => number[]): number[][] {
+  const s = xs.map((x) => ({ x, k: score(x) }));
+  let best = s[0].k;
+  for (const y of s) if (compareKeys(y.k, best) < 0) best = y.k;
+  return s.filter((y) => compareKeys(y.k, best) === 0).map((y) => y.x);
+}
+
+/**
+ * Parents still tied (A3 step 5): P-45.2.1, the one with more substituents; P-45.2.2, the lower locants for them; still tied and the
+ * parents one orbit apart, either (the same numbering, the molecule turned); otherwise Meno's own.
+ */
+function tiedParents(c: Ctx, units: Unit[]): ParentPick {
+  const scored = units.map((u) => {
+    const set = new Set(u.atoms);
+    const numbered = numberUnit(c, u, set);
+    const hang = hangers(c, set);
+    const key = keyIn(numbered.cand);
+    return { u, n: hang.length, locs: hang.map((h) => key.get(h.on)!) };
+  });
+  const most = Math.max(...scored.map((s) => s.n));
+  let left = scored.filter((s) => s.n === most);
+  let best = left[0].locs;
+  for (const s of left) if (compareSets(s.locs, best) < 0) best = s.locs;
+  left = left.filter((s) => compareSets(s.locs, best) === 0);
+  if (left.length === 1) return { unit: left[0].u, own: null };
+  const orbits = c.input.orbits;
+  const oneOrbit = !!orbits && left.every((s) => s.u.atoms.length === left[0].u.atoms.length) && sameOrbitSets(orbits, left.map((s) => s.u.atoms));
+  // (in one orbit: either, nothing said; else the first in the molecule's order, said)
+  const first = [...left].sort((p, q) => Math.min(...p.u.atoms) - Math.min(...q.u.atoms))[0];
+  return { unit: first.u, own: oneOrbit ? null : "needs the name" };
+}
+
+function sameOrbitSets(orbits: readonly number[], sets: readonly (readonly number[])[]): boolean {
+  const sig = (s: readonly number[]) => s.map((a) => orbits[a]).sort((p, q) => p - q).join(",");
+  return sets.every((s) => sig(s) === sig(sets[0]));
+}
+
+// ---------------------------------------------------------------- numbering a unit
+
+/**
+ * A unit numbered by its own rules (A4) and then A5, within the molecule: `parent` is the set whose hanging atoms count as its substituents.
+ * `attach`, for a substituent's unit: its atom of attachment, given the lowest locant its numbering allows (P-29.2) before A5's step 3.
+ */
+function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: number): { cand: Candidate; own: { atoms: number[]; why: OwnWhy } | null } {
+  let cands: Candidate[];
+  let mancude = false;
+  let indicated = 0;
+  let ownAll: OwnWhy | null = null;
+  if (unit.kind === "ring") {
+    const sys = c.systems[unit.ringSystem!];
+    if (sys.rings.length === 1) {
+      const ring = c.rings[sys.rings[0]];
+      cands = heteroRingRules(c, ringCandidates(ring));
+      mancude = mancudeNamed(c, ring, 1);
+      indicated = mancude ? indicatedCount(c, ring) : 0;
+    } else {
+      // (a system of several rings: its kind's rules come in later slices; meanwhile the system in the molecule's order, said)
+      const atoms = [...sys.atoms].sort((p, q) => p - q);
+      cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
+      ownAll = "not built";
+    }
+  } else if (unit.kind === "chain") {
+    cands = chainCandidates(unit.atoms);
+  } else {
+    cands = chainCandidates(unit.atoms);
+  }
+  if (attach != null && cands.length > 1) cands = keepLeast(cands, (cd) => [keyIn(cd).get(attach)!], compareSets);
+  if (ownAll) return { cand: cands[0], own: { atoms: [...cands[0].atoms], why: ownAll } };
+  // (a substituent's unit has no indicated-hydrogen step of its own before its free valence: P-29.2 puts the free valence first)
+  const r = a5(c, cands, { atoms: unit.atoms, mancude, indicated }, parent, attach != null ? 3 : 1);
+  return { cand: r.left[0], own: r.own };
+}
+
+// ---------------------------------------------------------------- A6: the order 1 to N
+
+/**
+ * The atoms of a substituent, from its atom of attachment `x`, in order (A6.3): its own unit - the ring system holding x, the longest chain of
+ * acyclic carbons holding x, or x alone - numbered with x as low as it allows, then its own substituents in turn.
+ */
+function substituentOrder(c: Ctx, x: number, taken: Set<number>, own: { atom: number; why: OwnWhy }[]): number[] {
+  const el = (a: number) => c.input.atoms[a].el;
+  let unit: Unit;
+  if (c.inRing[x]) unit = { kind: "ring", atoms: c.systems[c.systemOf[x]].atoms, ringSystem: c.systemOf[x] };
+  else if (el(x) === "C") {
+    // (the longest chain of acyclic carbons that holds x, more multiple bonds on a tie)
+    let chains = longestChains(c, [...allFrom(c, x, taken)], (a) => el(a) === "C" && !c.inRing[a] && !taken.has(a)).filter((p) => p.includes(x));
+    if (!chains.length) chains = [[x]];
+    chains = leastByList(chains, (p) => unsaturation(c, p));
+    unit = { kind: "chain", atoms: chains[0] };
+  } else unit = { kind: "atom", atoms: [x] };
+  const set = new Set(unit.atoms);
+  for (const a of unit.atoms) taken.add(a);
+  const r = numberUnit(c, unit, set, x);
+  if (r.own) for (const a of r.own.atoms) own.push({ atom: a, why: r.own.why });
+  return [...r.cand.atoms, ...hangingOrder(c, r.cand, set, taken, own)];
+}
+
+/** The atoms reachable from `x` through atoms not yet taken. */
+function allFrom(c: Ctx, x: number, taken: ReadonlySet<number>): Set<number> {
+  const seen = new Set([x]);
+  const queue = [x];
+  while (queue.length) {
+    const u = queue.shift()!;
+    for (const v of c.around[u]) if (!seen.has(v) && !taken.has(v)) seen.add(v), queue.push(v);
+  }
+  return seen;
+}
+
+/** A unit's substituents in order (A6.2): by the locant they hang from; two on one atom, a ring before a chain, the larger first. */
+function hangingOrder(c: Ctx, cand: Candidate, unit: ReadonlySet<number>, taken: Set<number>, own: { atom: number; why: OwnWhy }[]): number[] {
+  const out: number[] = [];
+  for (const a of cand.atoms) {
+    const firsts = c.around[a].filter((b) => !unit.has(b) && !taken.has(b));
+    const sized = firsts.map((b) => ({ b, ring: c.inRing[b] ? 0 : 1, size: allFrom(c, b, new Set([...taken, ...unit])).size, text: groupText(c, b, new Set([...taken, ...unit])) }));
+    sized.sort((p, q) => p.ring - q.ring || q.size - p.size || (p.text < q.text ? -1 : p.text > q.text ? 1 : p.b - q.b));
+    for (const { b } of sized) {
+      if (taken.has(b)) continue;
+      out.push(...substituentOrder(c, b, taken, own));
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- the whole
+
+/**
+ * The locants of one connected molecule (`input`; its hydrogens are left out of `order` and show nothing here: the map numbers them after
+ * the heavy atoms, by the atom each is on). `level` 1: the skeleton's own numbering; level 2 is not built in this part.
+ */
+export function locants(input: LocantsInput, level: 1 | 2 = 1): Locants {
+  void level;
+  const c = contextOf(input);
+  const heavyAtoms = input.atoms.map((_, i) => i).filter((i) => c.heavy[i]);
+  const own: { atom: number; why: OwnWhy }[] = [];
+  const locant: (Locant | null)[] = input.atoms.map(() => null);
+  if (!heavyAtoms.length) return { order: [], locant, shown: [], own };
+  const pick = parentOf(c, heavyAtoms);
+  const parentSet = new Set(pick.unit.atoms);
+  const numbered = numberUnit(c, pick.unit, parentSet);
+  if (pick.own) for (const a of heavyAtoms) own.push({ atom: a, why: pick.own });
+  if (numbered.own) for (const a of numbered.own.atoms) own.push({ atom: a, why: numbered.own.why });
+  numbered.cand.atoms.forEach((a, k) => (locant[a] = numbered.cand.locants[k]));
+  // (A6.1: plain-number locants at their numbers, the rest after them in the order of their keys)
+  const parentAtoms = numbered.cand.atoms.map((a, k) => ({ a, key: numbered.cand.keys[k], plain: /^\d+$/.test(numbered.cand.locants[k].base) && !numbered.cand.locants[k].sup }));
+  const plainOnes = parentAtoms.filter((p) => p.plain).sort((p, q) => compareKeys(p.key, q.key));
+  const others = parentAtoms.filter((p) => !p.plain).sort((p, q) => compareKeys(p.key, q.key));
+  const taken = new Set(parentSet);
+  const order = [...plainOnes.map((p) => p.a), ...others.map((p) => p.a), ...hangingOrder(c, numbered.cand, parentSet, taken, own)];
+  // (anything left - a part the walk did not reach - after, in the molecule's order)
+  for (const a of heavyAtoms) if (!order.includes(a)) order.push(a);
+  const place = new Map(order.map((a, k) => [a, k + 1]));
+  const shown = input.atoms.map((_, i) => locant[i] ?? { base: String(place.get(i) ?? 0) });
+  // (each atom once, its first reason)
+  const seenOwn = new Set<number>();
+  const ownOnce = own.filter((o) => !seenOwn.has(o.atom) && (seenOwn.add(o.atom), true));
+  return { order, locant, shown, own: ownOnce };
+}
