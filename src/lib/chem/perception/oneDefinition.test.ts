@@ -33,6 +33,8 @@ export const CONCEPTS: Record<string, RegExp> = {
   "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
   // an atom's hydrogens that are no atoms of their own, counted over its bonds (perception/hydrogens.ts `hydrogenCounts`)
   "hydrogen count": /^(?:export )?(?:function|const) (implicitOf|hydrogensOf|undrawnHydrogens|hydrogenCounts)\b/,
+  // a plain hydrogen, the one test, and the one fold of them into the atoms they are on (perception/fold.ts)
+  "plain hydrogen": /^(?:export )?(?:function|const) (isPlainH|plainH|plainHydrogen|plainHydrogenAtoms|hydrogensFolded|foldedOf)\b/,
   // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
   "aromatic tests": /^(?:export )?(?:function|const) (aromaticRing|aromaticBonds|isFlat)\b/,
 };
@@ -62,6 +64,10 @@ export const STILL_APART: Copy[] = [
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "hydrogensOf", part: 12, why: "implicitOf's count and the hydrogen atoms bonded: goes with implicitOf" },
   { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: 12, why: "a P and an S at their higher valences where the bonds pass the lower: part 12b" },
   { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
+  // a plain hydrogen: each a variant for its own question, named, or onto the core's test in its file's queue
+  { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "isPlainH", part: 12, why: "a match ignores a map number (a named variant); takes a bridging H and one on a metal as plain, which the core's test does not: part 12c with those two fixes" },
+  { concept: "plain hydrogen", file: "ui/features/Workspace/workflow/substituents.ts", name: "isPlainH", part: 12, why: "an option typed as H, not a drawn atom: an H, not D or T, with no charge - a question of its own: part 12c" },
+  { concept: "plain hydrogen", file: "ui/features/Workspace/chem/engineLayout.ts", name: "plainH", part: 12, why: "an H with no chemistry, one on a metal too, which the core's test keeps an atom: onto the core's with that fix, its own change" },
   // the types for a centre, a double bond, an axis, a whole configuration
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredCentre", part: 14 },
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredDouble", part: 14 },
@@ -148,13 +154,14 @@ describe("one definition per concept: the ratchet", () => {
 });
 
 describe("the ratchet's own reading, so that it bites", () => {
-  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a hydrogen count", () => {
+  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a hydrogen count, a plain hydrogen", () => {
     expect(declarationsIn("export function ringThrough(g, a) {}\nconst x = 1;\n", CONCEPTS.rings)).toEqual([{ name: "ringThrough", line: 1 }]);
     expect(declarationsIn("const METALS = new Set([]);\n", CONCEPTS.metals)).toEqual([{ name: "METALS", line: 1 }]);
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
     expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
     expect(declarationsIn("function implicitOf(atoms, bonds) {}\nconst hydrogensOfThem = 1;\n", CONCEPTS["hydrogen count"])).toEqual([{ name: "implicitOf", line: 1 }]);
+    expect(declarationsIn("const isPlainH = (a) => a.el === 'H';\nconst plainHydrogens = 1;\n", CONCEPTS["plain hydrogen"])).toEqual([{ name: "isPlainH", line: 1 }]);
     expect(declarationsIn("function aromaticRing(ring) {}\nconst isFlatter = 1;\n", CONCEPTS["aromatic tests"])).toEqual([{ name: "aromaticRing", line: 1 }]);
   });
 
