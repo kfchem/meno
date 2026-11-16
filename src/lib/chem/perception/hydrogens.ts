@@ -13,7 +13,7 @@
  * label's (`LABEL_VALENCES`) how many bonds an element of a typed group takes, so that "SnBu3" leaves one bond out; a carrier's
  * (`CARRIERS`) how many of one group an atom takes but its bond out (PPh2); OpenSMILES's organic subset (`NORMAL_VALENCES`: that
  * specification's table) the hydrogens a SMILES's plain atom is filled to. Moved here unchanged (part 12d), each imported back by the
- * file whose table it is: OpenSMILES's (lib/chem/smiles), the lone pair's valence electrons (`PYRAMID_VALENCE`, lib/chem/lonePairCentres)
+ * file whose table it is: OpenSMILES's (lib/chem/smiles), the lone pair's valence electrons (`PYRAMID_VALENCE`, perception/stereo/lonePairs)
  * and the CIP's (`VALENCE_ELECTRONS`, `D_ORBITAL_VALENCE`, `octetValence`, lib/chem/cip/prepare) - electrons, not valences, so not in the
  * table below. One more stays where it is, named, read by part 12c: a figure's bonds left (lib/figure/read `BONDS_LEFT`).
  *
@@ -233,7 +233,7 @@ export const NORMAL_VALENCES: Record<string, number[]> = {
   B: [3], C: [4], N: [3, 5], O: [2], P: [3, 5], S: [2, 4, 6], F: [1], Cl: [1], Br: [1], I: [1],
 };
 
-/** The valence electrons of the elements whose atom of three neighbours can have a lone pair: groups 15 and 16 (lib/chem/lonePairCentres). */
+/** The valence electrons of the elements whose atom of three neighbours can have a lone pair: groups 15 and 16 (perception/stereo/lonePairs). */
 export const PYRAMID_VALENCE: ReadonlyMap<string, number> = new Map([
   ["N", 5],
   ["P", 5],

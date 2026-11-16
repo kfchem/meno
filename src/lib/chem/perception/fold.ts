@@ -7,6 +7,7 @@ import type { ChemAtom, ChemBond } from "./graph";
 import type { Axial, Cumulated, Tetrahedral } from "./stereo/types";
 import type { Radical } from "./hydrogens";
 import { drawnRoundMetal } from "./elements";
+import { runsThrough } from "./stereo/runs";
 
 /** An atom the fold reads: the core's, and what keeps a hydrogen an atom of its own - one isotope in particular, unpaired electrons, a map to a reaction's atom. */
 export type FoldedAtom = ChemAtom & { isotope?: number; radical?: Radical; mapped?: true };
@@ -101,8 +102,8 @@ export function hydrogensFolded<I extends FoldedInput>(input: I): I {
     }
     return [{ ...bond, stereo: { refs: [at.get(p)!, at.get(q)!], cis } }];
   });
-  // (the atom an axis's or a cumulene's end runs on through: its cumulated double bond's)
-  const runsOn = (end: number) => around[end].find((e) => e.order >= 2)?.to ?? -1;
+  // (the atom an axis's or a cumulene's end runs on through: its cumulated double bond's - ./stereo/runs)
+  const runsOn = (end: number) => runsThrough(around[end]) ?? -1;
   const axes = (input.axes ?? []).flatMap((x): Axial[] => {
     const refs = [...x.refs];
     let sense = x.sense;
@@ -110,7 +111,7 @@ export function hydrogensFolded<I extends FoldedInput>(input: I): I {
       if (!folded[refs[k]]) continue;
       // (the other end, a biaryl's; an allene's end runs on through its cumulated double bond)
       const end = x.atoms[k];
-      const by = instead(end, refs[k], around[end].some((e) => e.to === x.atoms[1 - k]) ? x.atoms[1 - k] : runsOn(end));
+      const by = instead(end, refs[k], runsThrough(around[end], x.atoms[1 - k]) ?? -1);
       if (by == null) return [];
       refs[k] = by;
       sense = -sense as 1 | -1;
