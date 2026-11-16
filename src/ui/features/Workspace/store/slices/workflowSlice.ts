@@ -157,6 +157,12 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       if (put && optionsNeed(put)) get().setWorkflowView({ openStep: id });
       return id;
     },
+    repeatSteps: (ids: readonly number[]) => {
+      const before = doc.getState();
+      const id = before.nextWorkflowId ?? 1;
+      doc.edit("repeat steps", (d) => wf.repeatAround(d, ids));
+      return doc.getState().steps?.some((s) => s.id === id && s.kind === "repeat") ? id : null;
+    },
     moveStep: (id: number, x: number, y: number, gesture?: string) => doc.edit("move step", (d) => wf.moveStep(d, id, x, y), coalesce("step-move", id, gesture)),
     updateStep: (id: number, patch: { options?: Record<string, string | number | boolean>; kind?: StepKind; bound?: Bound }) => {
       const step = doc.getState().steps?.find((s) => s.id === id);

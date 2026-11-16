@@ -234,6 +234,7 @@ export default function PartMenu({
   onReadStructure,
   text,
   onSaveProcedure,
+  onRepeatSteps,
   keepInFile,
   shownOnPage,
   onOpenAsTable,
@@ -389,6 +390,8 @@ export default function PartMenu({
   text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void; onTable?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
+  /** *Repeat these steps*: a Repeat made round the step pointed at - or round every step chosen, where it is among them (workflow/model `repeatAround`). */
+  onRepeatSteps?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
   keepInFile?: { kept: boolean; set: (keep: boolean) => void };
   /** A step's result set whose exit is wired on (workflow/held) - the set right-clicked, or the one a wire right-clicked comes from: shown on the page, opened, or held off it; and shown or held as asked. */
@@ -958,6 +961,7 @@ export default function PartMenu({
           ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
+          ...(onRepeatSteps ? [{ name: "Repeat these steps", keys: "", run: onRepeatSteps }] : []),
           ...(step?.keepRaw
             ? [{ name: "Don't keep raw outputs", keys: "", run: () => step.keepRaw!.set(!step.keepRaw!.kept), checked: !step.keepRaw.kept, divider: true }]
             : []),

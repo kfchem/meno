@@ -2280,6 +2280,15 @@ function WorkspaceContent({
           onStepOptions={() => {
             if (menu.kind === "step" && menu.id != null) store.getState().setWorkflowView({ openStep: menu.id });
           }}
+          onRepeatSteps={(() => {
+            if (menu.kind !== "step" || menu.id == null) return undefined;
+            const st = store.getState();
+            const pointed = st.steps.find((s) => s.id === menu.id);
+            // (not a Repeat's own card, nor a step a Repeat holds already)
+            if (!pointed || pointed.kind === "repeat" || st.steps.some((s) => s.kind === "repeat" && s.holds?.includes(pointed.id))) return undefined;
+            const chosen = st.selFlow.steps.has(pointed.id) ? [...st.selFlow.steps] : [pointed.id];
+            return () => void store.getState().repeatSteps(chosen);
+          })()}
           onSaveProcedure={(menu.kind === "step" || menu.kind === "set") && menu.id != null ? () => {
             const st = store.getState();
             const start = menu.kind === "step" ? { step: menu.id! } : { set: menu.id! };

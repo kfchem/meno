@@ -8,6 +8,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
 import { setMolecules } from "../workflow/entries";
 import { PASS, RAN_OUT, TIMES_ROUND } from "../workflow/repeatRun";
+import { offeredSteps } from "../workflow/offered";
 
 /** The page: two waters in a set, wired into a Repeat whose frame holds a Filter (pass < 3): its kept to Again, its rest to Done. */
 function page(options: Record<string, string | number>) {
@@ -94,3 +95,46 @@ describe("a Repeat run pass by pass", () => {
     expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, said: "Nothing is wired to Again: wire what is to go round once more, or repeat a number of times" });
   });
 });
+
+describe("a Repeat made", () => {
+  it("round a step (Repeat these steps): its frame round it, and the wires that crossed its edge routed through it, in one undo step", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const input = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const f = st().addStep("filter", "meno", 400, 300);
+    const t = st().addStep("tag", "meno", 900, 300);
+    const exit = (step: number, id: string) => st().sets.find((b) => b.made?.step === step && b.made.exit === id)!.id;
+    st().connect({ set: input }, f);
+    st().connect({ set: exit(f, "out") }, t);
+    const r = st().repeatSteps([f])!;
+    const step = st().steps.find((s) => s.id === r)!;
+    expect(step.kind).toBe("repeat");
+    expect(step.holds).toEqual([f]);
+    const ends = st().wires.map((w) => [st().sets.find((b) => b.id === w.from.set)?.made ?? "input", w.to.step, w.to.port]);
+    expect(ends).toEqual(
+      expect.arrayContaining([
+        ["input", r, "in"],
+        [{ step: r, exit: "out" }, f, "in"],
+        [{ step: f, exit: "out" }, r, "done"],
+        [{ step: r, exit: "reached" }, t, "in"],
+      ]),
+    );
+    expect(st().wires).toHaveLength(4);
+    // (undone at once, as it was made: the Repeat gone, the wires as they were)
+    expect(doc.undo()).toBe(true);
+    expect(st().steps.some((s) => s.id === r)).toBe(false);
+    expect(st().wires).toHaveLength(2);
+  });
+
+  it("is offered in Quick Add's Meno row, put down alone - never from a wire, which a step takes", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const flow = { ...doc.getState() } as never;
+    const meno = (g: ReturnType<typeof offeredSteps>) => g.find((x) => x.by === "meno")?.steps.map((x) => x.kind) ?? [];
+    expect(meno(offeredSteps(flow))).toContain("repeat");
+  });
+});
+

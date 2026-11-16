@@ -193,7 +193,9 @@ export function removeSet(doc: WorkspaceDocument, id: number): WorkspaceDocument
 /** `doc` with a step of `kind`, done by `by` - Meno, or a plugin - whose card's top left is at (x, y); it is numbered `nextWorkflowId`. */
 export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: number, options?: OptionValues, by?: string): WorkspaceDocument {
   const id = idOf(doc);
-  const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}) };
+  // (a Repeat put down alone: an empty frame of room for a few steps, its card at its top left - steps dragged in join it)
+  const frame = kind === "repeat" ? { frame: { w: REPEAT_EMPTY.w, h: REPEAT_EMPTY.h } } : {};
+  const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}), ...frame };
   return withExits({ ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] }, id);
 }
 
@@ -358,6 +360,47 @@ export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?
 export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const wires = (doc.wires ?? []).filter((w) => w.id !== id);
   return wires.length === (doc.wires ?? []).length ? doc : { ...doc, wires };
+}
+
+/** A Repeat's frame put down alone: room for three cards across and two down, beside its own. */
+const REPEAT_EMPTY = { w: 4 * CARD_W + 5 * GAP, h: 3 * CARD_H + 4 * GAP };
+
+/**
+ * `doc` with a Repeat made round steps `ids` (*Repeat these steps*): its card to the left of them, its frame round them all, and each wire
+ * that crossed their edge routed through it in the same edit - a wire into one's first input from outside goes to *In*, and *This pass*
+ * to that step; one from a set of theirs to a step outside lands on *Done*, and *Out* goes to that step. A later input - a Reference -
+ * keeps its wire from outside, read the same every pass. Where what comes in is more than one set, or none of the steps is left, nothing.
+ */
+export function repeatAround(doc: WorkspaceDocument, ids: readonly number[]): WorkspaceDocument {
+  const inner = (doc.steps ?? []).filter((s) => ids.includes(s.id) && s.kind !== "repeat");
+  if (!inner.length || (doc.steps ?? []).some((s) => s.kind === "repeat" && s.holds?.some((h) => ids.includes(h)))) return doc;
+  const held = new Set(inner.map((s) => s.id));
+  const made = new Map((doc.sets ?? []).flatMap((b) => (b.made ? [[b.id, b.made.step] as const] : [])));
+  const insideSet = (set: number) => held.has(made.get(set) ?? -1);
+  const wires = doc.wires ?? [];
+  const firstOf = (step: number) => {
+    const s = doc.steps!.find((x) => x.id === step)!;
+    return inputsFor(s.kind, byOf(s))[0]?.id ?? ONE_INPUT;
+  };
+  const comingIn = wires.filter((w) => held.has(w.to.step) && !insideSet(w.from.set) && w.to.port === firstOf(w.to.step));
+  if (new Set(comingIn.map((w) => w.from.set)).size > 1) return doc;
+  const goingOut = wires.filter((w) => !held.has(w.to.step) && insideSet(w.from.set));
+  // (its card to the left of theirs, its frame round all of them)
+  const x0 = Math.min(...inner.map((s) => s.x)) - CARD_W - 2 * GAP;
+  const y0 = Math.min(...inner.map((s) => s.y)) - GAP;
+  const x1 = Math.max(...inner.map((s) => s.x + CARD_W)) + GAP;
+  const y1 = Math.max(...inner.map((s) => s.y + cardHighOf(s.kind))) + 2 * GAP;
+  const id = idOf(doc);
+  let d = addStep(doc, "repeat", x0, y0, undefined, "meno");
+  d = { ...d, steps: d.steps!.map((s) => (s.id === id ? { ...s, frame: { w: x1 - x0, h: Math.max(y1 - y0, cardHighOf("repeat") + 2 * GAP) }, holds: inner.map((x) => x.id) } : s)) };
+  const exit = (e: string) => d.sets!.find((b) => b.made?.step === id && b.made.exit === e)!.id;
+  // (what crossed its edge taken away, then routed through it)
+  for (const w of [...comingIn, ...goingOut]) d = removeWire(d, w.id);
+  if (comingIn.length) d = connect(d, { set: comingIn[0].from.set }, id, "in");
+  for (const w of comingIn) d = connect(d, { set: exit("out") }, w.to.step, w.to.port);
+  for (const set of new Set(goingOut.map((w) => w.from.set))) d = connect(d, { set }, id, "done");
+  for (const w of goingOut) d = connect(d, { set: exit("reached") }, w.to.step, w.to.port);
+  return d;
 }
 
 /**
