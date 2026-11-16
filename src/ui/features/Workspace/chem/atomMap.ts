@@ -5,6 +5,8 @@ import { bondChanges, type ReactionMap } from "../../../../lib/chem/reactionMap"
 import { arrowEnds, reactionMeant, reactionRoles } from "../../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowAtomMap, Model, Plus, EditorState } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
+import { symmetryOrbits } from "../../../../lib/chem/identity";
+import { locants, type Locant } from "../../../../lib/chem/perception/locants";
 
 /**
  * A drawn reaction's atom map (docs/ATOM-MAPPING.md, *On a drawn scheme*):
@@ -269,14 +271,12 @@ export function beforeNumbers(map: ArrowAtomMap): number[] {
 }
 
 /**
- * Before's numbers by the drawing's order (*Renumber atoms*, docs/ATOM-MAPPING.md):
- * its heavy atoms as they are drawn - in the order of the drawing's atoms -
- * then each heavy atom's hydrogens, in its turn; an atom drawn by none
- * after those that are, as it was. The one place the order is chosen.
+ * Before's heavy atoms in IUPAC's order (foundation part 16a; lib/chem/perception/locants): each molecule's parent numbered as its name
+ * numbers it and its groups after it, the molecules one after another in the drawing's order (by the first place any of its atoms has
+ * there). Each atom's text where it is not its number - a parent's 4a, 1', 3a with a superscript - and the atoms whose number is Meno's own.
  */
-export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): number[] {
+export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): { order: number[]; texts: Map<number, Locant>; own: number[] } {
   const atoms = map.reactant.atoms;
-  const n = atoms.length;
   const around: number[][] = atoms.map(() => []);
   for (const b of map.reactant.bonds) {
     around[b.a1].push(b.a2);
@@ -286,10 +286,60 @@ export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, nu
     const id = map.reactant.drawnFrom[i];
     return id != null && drawnOrder.has(id) ? drawnOrder.get(id)! : Infinity;
   };
-  const heavy = atoms.map((_, i) => i).filter((i) => atoms[i].el !== "H");
-  // (by place, then by their own order - two with no place alike, compared so: Infinity less Infinity is no number)
+  // (the molecules: the connected pieces, each by the earliest place of its atoms in the drawing)
+  const seen = new Set<number>();
+  const pieces: number[][] = [];
+  for (let i = 0; i < atoms.length; i++) {
+    if (seen.has(i)) continue;
+    const piece = [i];
+    seen.add(i);
+    for (let k = 0; k < piece.length; k++) {
+      for (const j of around[piece[k]]) {
+        if (seen.has(j)) continue;
+        seen.add(j);
+        piece.push(j);
+      }
+    }
+    pieces.push(piece.sort((p, q) => p - q));
+  }
+  const first = (piece: number[]) => Math.min(...piece.map(place));
+  pieces.sort((p, q) => (first(p) === first(q) ? p[0] - q[0] : first(p) - first(q)));
+  const order: number[] = [];
+  const texts = new Map<number, Locant>();
+  const own: number[] = [];
+  for (const piece of pieces) {
+    const at = new Map(piece.map((i, k) => [i, k]));
+    const input = {
+      atoms: piece.map((i) => ({ el: atoms[i].el, ...(atoms[i].charge ? { charge: atoms[i].charge } : {}) })),
+      bonds: map.reactant.bonds.filter((b) => at.has(b.a1) && at.has(b.a2)).map((b) => ({ a: at.get(b.a1)!, b: at.get(b.a2)!, order: b.order })),
+    };
+    const r = locants({ ...input, orbits: symmetryOrbits(input).orbit });
+    const offset = order.length;
+    r.order.forEach((k) => order.push(piece[k]));
+    r.order.forEach((k, n) => {
+      const l = r.locant[k];
+      // (a parent's atom shows its locant where that is not its number)
+      if (l && (l.sup || l.base !== String(offset + n + 1))) texts.set(piece[k], l);
+    });
+    for (const o of r.own) own.push(piece[o.atom]);
+  }
+  return { order, texts, own };
+}
+
+/**
+ * Before's numbers (*Renumber atoms*, docs/ATOM-MAPPING.md): its heavy atoms in IUPAC's order (`iupacNumbering`), then each heavy atom's
+ * hydrogens, in its turn; an atom in no molecule numbered after those that are, as it was. The one place the order is chosen.
+ */
+export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): number[] {
+  const atoms = map.reactant.atoms;
+  const n = atoms.length;
+  const around: number[][] = atoms.map(() => []);
+  for (const b of map.reactant.bonds) {
+    around[b.a1].push(b.a2);
+    around[b.a2].push(b.a1);
+  }
   const by = (key: (i: number) => number) => (p: number, q: number) => (key(p) === key(q) ? p - q : key(p) - key(q));
-  heavy.sort(by(place));
+  const heavy = iupacNumbering(map, drawnOrder).order.filter((i) => atoms[i].el !== "H");
   const number = new Array<number>(n).fill(0);
   heavy.forEach((i, k) => (number[i] = k + 1));
   // (each H after the heavy atoms, by the number of the atom it is on; one on none, or on another H, last)

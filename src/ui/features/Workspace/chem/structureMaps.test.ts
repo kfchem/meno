@@ -409,21 +409,24 @@ describe("an atom map renumbered", () => {
   };
   const named = (numbers: readonly number[]) => Object.fromEntries(R_NAMES.map((k, i) => [k, numbers[i]]));
 
-  it("numbers Before's heavy atoms in the drawing's order, then each one's hydrogens in its turn - every number once", () => {
+  it("numbers Before's heavy atoms in IUPAC's order, then each one's hydrogens in its turn - every number once, however it was drawn", () => {
     const { kept } = page();
-    // (as drawn: C1 to C6 are 1 to 6, then C1's two H, C2's, C3's, C4's two, C5's two and C6's two)
-    expect(named(renumbered(kept, drawnOrder()))).toMatchObject({ C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6, H1a: 7, H1b: 8, H2: 9, H3: 10, H4a: 11, H4b: 12, H5a: 13, H6b: 16 });
-    // (Before's carbons drawn the other way round: C6 first, its hydrogens first after the heavy atoms)
-    expect(named(renumbered(kept, drawnOrder(true)))).toMatchObject({ C6: 1, C5: 2, C4: 3, C1: 6, H6a: 7, H6b: 8, H1b: 16 });
+    // (Before is butadiene, C1=C2-C3=C4, and ethylene, C5=C6: each molecule numbered as IUPAC numbers it - foundation part 16a - the
+    //  molecules in the drawing's order)
+    const sorted = (xs: number[]) => xs.sort((p, q) => p - q);
+    const n = named(renumbered(kept, drawnOrder()));
+    expect(sorted([n.C1, n.C4])).toEqual([1, 4]);
+    expect(sorted([n.C2, n.C3])).toEqual([2, 3]);
+    expect(sorted([n.C5, n.C6])).toEqual([5, 6]);
+    // (drawn the other way round: ethylene first)
+    const r = named(renumbered(kept, drawnOrder(true)));
+    expect(sorted([r.C5, r.C6])).toEqual([1, 2]);
+    expect(sorted([r.C1, r.C4])).toEqual([3, 6]);
+    // (the hydrogens after the heavy atoms, by the number of the atom each is on: those on 1 first)
+    const onOne = r.C5 === 1 ? ["H5a", "H5b"] : ["H6a", "H6b"];
+    expect(sorted(onOne.map((k) => r[k]))).toEqual([7, 8]);
     const all = renumbered(kept, drawnOrder(true));
     expect([...all].sort((p, q) => p - q)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1));
-    // (heavy atoms with no place in the drawing - none here has one - in their own order, after any that have)
-    const atoms = kept.reactant.atoms;
-    const heavy = atoms.flatMap((a, i) => (a.el === "H" ? [] : [i]));
-    const unplaced = renumbered(kept, new Map());
-    expect(heavy.map((i) => unplaced[i])).toEqual(heavy.map((_, k) => k + 1));
-    const two = renumbered(kept, new Map([[kept.reactant.drawnFrom[heavy[3]]!, 0]]));
-    expect(heavy.map((i) => two[i])).toEqual([2, 3, 4, 1, 5, 6]);
     // (numbers kept on the map, but not one for each of Before's atoms: not taken - the map's own instead)
     const own = beforeNumbers({ ...kept, numbers: undefined });
     expect(beforeNumbers({ ...kept, numbers: [1, 2] })).toEqual(own);
@@ -438,12 +441,13 @@ describe("an atom map renumbered", () => {
     const n = sideNumbers(map);
     const mapping = map.maps[map.chosen];
     n.after.forEach((k, j) => expect(k).toBe(numbers[mapping[j]]));
-    // (on the drawing: C6 numbered 1)
-    expect(mapMarks(map, page().doc.model).numbers.get(R_ID.C6)).toBe(1);
-    // (in the export, C6 written first, where it is in 3D)
+    // (on the drawing: the atom numbered 1 shows 1)
+    const one = R_NAMES[numbers.indexOf(1)] as keyof typeof R_ID;
+    expect(mapMarks(map, page().doc.model).numbers.get(R_ID[one])).toBe(1);
+    // (in the export, the atom numbered 1 written first, where it is in 3D)
     const records = readSDfile(mappedPairSdf(map, "da"));
-    const c6 = kept.reactant.atoms[R_NAMES.indexOf("C6")];
-    expect([records[0].atoms[0].x, records[0].atoms[0].y, records[0].atoms[0].z]).toEqual([c6.x, c6.y, c6.z].map((v) => Number(v.toFixed(4))));
+    const first = kept.reactant.atoms[numbers.indexOf(1)];
+    expect([records[0].atoms[0].x, records[0].atoms[0].y, records[0].atoms[0].z]).toEqual([first.x, first.y, first.z].map((v) => Number(v.toFixed(4))));
     // (a partial map keeps its own: those it pairs, as it holds them)
     expect(beforeNumbers({ ...partial, numbers })).toEqual(beforeNumbers(partial));
   });
