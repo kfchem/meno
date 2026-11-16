@@ -7,7 +7,7 @@ import { laidOut } from "./cleanUp";
 import { cipMarksOf } from "./cipMarks";
 import { drawingOf } from "./drawing";
 import { layoutJob } from "./engineLayout";
-import { drawnBlocksOf, drawnPartsOf } from "./make3d";
+import { drawnBlocksOf } from "./make3d";
 import { identityInputOf, identityOfDrawn } from "./identityOf";
 
 // A hydrogen bond drawn (a file's type 10, dotted) is no bond of the structure: it closes no ring, joins no two molecules, and is laid out
@@ -126,19 +126,15 @@ describe("Check structures' parts, by the structure's bonds", () => {
   };
   const salt: Model = { atoms: [{ ...atom(1, [0, 0], "Na"), charge: 1 }, { ...atom(2, [2, 0], "Cl"), charge: -1 }], bonds: [] };
 
-  it("counts the enol alone one part, the enol and a water it binds two, an acid dimer two, a complex one, a salt two", () => {
-    expect(drawnPartsOf(enol(true), all(enol(true)))).toBe(1);
-    const bound = withWater(enol(true), 8, true);
-    expect(drawnPartsOf(bound, all(bound))).toBe(2);
-    expect(drawnPartsOf(dimer(true), all(dimer(true)))).toBe(2);
-    expect(drawnPartsOf(platin, all(platin))).toBe(1);
-    expect(drawnPartsOf(salt, all(salt))).toBe(2);
-  });
-
-  it("counts as many parts as the plugin is given structures, where no hydrogen bond is drawn", () => {
+  it("gives Check structures the enol alone as one part, the enol and a water it binds as two, an acid dimer two, a complex one, a salt two", () => {
+    // (its parts are the structures the plugin is given - chem/make3d `blocksOf` splits by the structure's bonds alone)
+    const parts = (m: Model) => drawnBlocksOf(m, all(m)).length;
+    expect(parts(enol(true))).toBe(1);
+    expect(parts(withWater(enol(true), 8, true))).toBe(2);
+    expect(parts(dimer(true))).toBe(2);
+    expect(parts(platin)).toBe(1);
+    expect(parts(salt)).toBe(2);
     // (and a label standing alone, which stands for no structure: none)
-    const label: Model = { atoms: [...salt.atoms, atom(3, [4, 0], "R")], bonds: [] };
-    for (const m of [enol(false), withWater(enol(false), 8, false), dimer(false), platin, salt, label]) expect(drawnPartsOf(m, all(m))).toBe(drawnBlocksOf(m, all(m)).length);
-    expect(drawnPartsOf(label, all(label))).toBe(2);
+    expect(parts({ atoms: [...salt.atoms, atom(3, [4, 0], "R")], bonds: [] })).toBe(2);
   });
 });
