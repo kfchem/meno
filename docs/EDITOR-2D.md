@@ -552,7 +552,11 @@ is single, and each ring is read as its own. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
-an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
+an atom by the same label reader, kept a label. A quadruple bond ("$")
+is refused where Meno reads the SMILES itself - a group typed with its
+"*" - in words: "a quadruple bond, which Meno does not draw"
+(lib/chem/smiles); Meno has no bond of that order, and never reads it
+as another. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
