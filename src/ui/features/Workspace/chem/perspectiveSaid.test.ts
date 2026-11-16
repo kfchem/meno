@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { cipMarksOf, cipSaid } from "./cipMarks";
 import { unsureOf } from "./drawing";
+import { identityOfDrawn } from "./identityOf";
 import { chair, haworth } from "../../../../lib/layout/testdata/projections";
 import type { DrawnAtom, DrawnBond } from "../../../../lib/layout/drawn";
 import { NOT_MARKED } from "../../../../lib/chem/perception/projection/recognise";
@@ -75,3 +76,34 @@ describe("a ring taken for one drawn in perspective but not read, nothing asked"
   });
 });
 
+
+describe("a chair drawn steep and the textbook chair, the same compound", () => {
+  // trans-4-methylcyclohexanol, made up, its OH and methyl equatorial, ring atoms 0-5, the OH's O at 6 on 0 and the methyl at 7 on 3: drawn as
+  // seen from about 20 degrees above the ring's mean plane (long ring bonds about twice the short ones), and as the textbook chair (ring
+  // bonds alike)
+  const bonds: DrawnBond[] = [...[...Array(6)].map((_, k) => ({ a: k, b: (k + 1) % 6, order: 1 as const })), { a: 0, b: 6, order: 1 }, { a: 3, b: 7, order: 1 }];
+  const els = ["C", "C", "C", "C", "C", "C", "O", "C"];
+  const atomsAt = (xy: number[][]): DrawnAtom[] => xy.map(([x, y], i) => ({ x, y, el: els[i] }));
+  const steep = {
+    atoms: atomsAt([[1.45, -0.2349], [0.725, 0.6644], [-0.725, 0.1946], [-1.45, 0.2349], [-0.725, -0.6644], [0.725, -0.1946], [2.8922, 0.245], [-2.8922, -0.245]]),
+    bonds,
+  };
+  const textbook = {
+    atoms: atomsAt([[1.8239, 0.6495], [0.375, 0.2613], [-1.0739, 0.6495], [-1.8239, -0.6495], [-0.375, -0.2613], [1.0739, -0.6495], [3.2728, 0.2613], [-3.2728, -0.2613]]),
+    bonds,
+  };
+
+  it("reads r at both centres either way, and gives one identity", () => {
+    for (const [name, d] of [["steep", steep], ["textbook", textbook]] as const) {
+      const m = cipMarksOf(modelOf(d, [0, 3]));
+      expect([m.centres.get(1), m.centres.get(4)], name).toEqual(["r", "r"]);
+    }
+    const a = identityOfDrawn(modelOf(steep, []));
+    const b = identityOfDrawn(modelOf(textbook, []));
+    expect(a.complete && b.complete).toBe(true);
+    expect(a.text).toBe(b.text);
+    // (and it says the configuration: the same compound drawn as a flat hexagon, no configuration drawn, is another identity)
+    const hexagon = { atoms: atomsAt([...[...Array(6)].map((_, k) => [Math.cos((k * Math.PI) / 3), Math.sin((k * Math.PI) / 3)]), [2, 0], [-2, 0]]), bonds };
+    expect(identityOfDrawn(modelOf(hexagon, [])).text).not.toBe(a.text);
+  });
+});
