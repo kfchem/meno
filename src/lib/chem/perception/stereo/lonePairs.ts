@@ -181,7 +181,9 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
  * The other lists of which atoms have a lone pair to give, share or keep: each its caller's own, said here with its user and its
  * reason, and each caller taking the list it had (foundation part 14 B). None is merged with another or with the rule above:
  * where two are meant as one is the chemistry check's question, with the differences side by side. Meno's rule for an aromatic
- * ring keeps its own list, of the atoms that give a ring two electrons (perception/aromatic `LONE_PAIR`).
+ * ring keeps its own list, of the atoms that give a ring two electrons (perception/aromatic `LONE_PAIR`); the CIP keeps its own
+ * count of an atom's lone pairs (lib/chem/cip/prepare `lonePairs`), for describing a configuration given - a carbanion's too -
+ * not for which atoms keep one.
  */
 
 /**

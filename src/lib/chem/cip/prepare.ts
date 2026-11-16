@@ -232,6 +232,14 @@ export function prepared(input: IdentityInput, asDrawn: ReadonlySet<number> = ne
   return { input, z, mass, hs, around, charge, order, bondAt, blended, dups, unsure, systems, systemOf };
 }
 
+/** An atom's lone pairs after the conventions, from its valence electrons, charge and bonds: none for an element not listed. */
+export function lonePairs(p: Prepared, a: number): number {
+  const ve = VALENCE_ELECTRONS[p.input.atoms[a].el];
+  if (ve == null) return 0;
+  // (each bond once, and each of its duplicates for the orders past the first)
+  const bonded = p.around[a].length + p.hs[a] + p.dups[a].length;
+  return Math.max(0, Math.floor((ve - p.charge[a] - bonded) / 2));
+}
 
 /**
  * The atoms of each mesomeric system whose usual structures the drawing

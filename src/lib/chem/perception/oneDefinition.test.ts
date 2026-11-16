@@ -59,6 +59,8 @@ export const STILL_APART: Copy[] = [
   { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "D_ORBITAL_VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
+  // the lone pair: the CIP's own count stands apart by design
+  { concept: "lone pair", file: "lib/chem/cip/prepare.ts", name: "lonePairs", part: "14 B", why: "the conventions' count, for describing a configuration given (a carbanion's lone pair counted with its charge, its fourth place a phantom): not which atoms keep one - the core's rule would refuse a carbanion's label (cip.test.ts)" },
   // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "hydrogensOf", part: 12, why: "implicitOf's count and the hydrogen atoms bonded: goes with implicitOf" },
