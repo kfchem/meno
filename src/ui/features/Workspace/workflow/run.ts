@@ -46,7 +46,13 @@ import { addedSet, numberOf } from "./addStep";
  * page about its middle - left, right, down and up - in any of its frames,
  * turned by `turn`, where it is; who does a step; and the time.
  */
-export type RunWith = { extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame; byOf: (step: WorkflowStep) => string; now: number };
+export type RunWith = {
+  extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame;
+  byOf: (step: WorkflowStep) => string;
+  now: number;
+  /** How a step's results will be turned, where the caller knows (the store, by the views of what came in): their room in the set is made for them so turned. */
+  turnsOf?: (doc: WorkspaceDocument, id: number, kind: StepKind, results: RunResults) => readonly (Turn3D | undefined)[] | undefined;
+};
 
 /** What each kind of set is called, where a step says what it takes. */
 const SET_NAMES: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "conformer sets", table: "a table", number: "a number" };
@@ -167,7 +173,9 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   if (!step) return doc;
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
-  return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
+  // (its room made for each molecule as it will be turned - as what it came from is, where it passed through: the caller's `turnsOf`)
+  const turns = w.turnsOf?.(doc, id, step.kind, resultsOf(outcome, step.kind));
+  return setRan(withResults(keepRun(doc, step), step, outcome, w, turns), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
 }
 
 /**
@@ -757,10 +765,14 @@ export function viewKept(
   entries: readonly SetEntry[],
   turnOf: (e: SetEntry) => Turn3D | undefined,
 ): (Turn3D | undefined)[] {
+  // (each entry taken once, in order: copies of one molecule, its atoms where the other's are, each turned as its own was - found in review)
+  const taken = new Set<number>();
   return molecules.map((m) => {
     const xyz = frameXyz(m, framesOf(m) - 1);
-    const from = entries.find((e) => e.atoms.length === m.atoms.length && e.atoms.every((a, i) => a.el === m.atoms[i].el) && e.xyz.every((v, k) => Math.abs(v - xyz[k]) <= KEPT_AT));
-    return from ? turnOf(from) : undefined;
+    const k = entries.findIndex((e, i) => !taken.has(i) && e.atoms.length === m.atoms.length && e.atoms.every((a, j) => a.el === m.atoms[j].el) && e.xyz.every((v, j) => Math.abs(v - xyz[j]) <= KEPT_AT));
+    if (k < 0) return undefined;
+    taken.add(k);
+    return turnOf(entries[k]);
   });
 }
 

@@ -265,7 +265,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno") {
       const d0 = doc.getState();
       const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
-      doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
+      doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at, turnsOf: turnsFor }));
       return void viewsKept(d0, id, before);
     }
     const plugin = pluginById(by);
@@ -557,7 +557,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
     const before = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
-    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
+    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at, turnsOf: turnsFor }));
     viewsKept(d, id, before);
   }
 
