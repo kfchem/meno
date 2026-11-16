@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { HEXAGON, v3000 } from "../../../../lib/chem/testdata/v3000";
 import { drawnGroupsOf, type ConfiguredCentre, type IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
-import { groupsIn, halves, inverted, stereoGroupNamed } from "../../../../lib/chem/perception/stereo/configuration";
+import { configurationKey, groupsIn, halves, inverted, stereoGroupNamed } from "../../../../lib/chem/perception/stereo/configuration";
 import { isomersToMake } from "./openStereo";
 import { stereoRows } from "./make3d";
 
@@ -175,6 +175,17 @@ describe("a configuration's groups: the halves made (known answers)", () => {
     expect(m.count).toBe(1);
     expect(m.said).toEqual([]);
     expect(words(m)).toEqual([["and1 as drawn"]]);
+    // (the toolkit keeping the TURNED half of the one compound - as RDKit's does: the half as drawn all the same, made so, its words
+    //  the drawn half's; as or1, no "one of the two", there being one compound)
+    const turnedOnly = await isomersToMake(plugin(block, [isomer(block, [1, 2])]).chem, block, undefined, "all");
+    expect([turnedOnly.count, turnedOnly.said]).toEqual([1, []]);
+    expect(words(turnedOnly)).toEqual([["and1 as drawn"]]);
+    const drawn = drawnGroupsOf([block])!.read;
+    const key = (c: ConfiguredCentre) => configurationKey({ centres: [c], doubles: [] });
+    expect(turnedOnly.isomers[0].centres.map(key)).toEqual([...drawn.values()].map(key));
+    const or = blockOf(MESO, [{ name: "STEREL1", atoms: [1, 2] }]);
+    const orTurned = await isomersToMake(plugin(or, [isomer(or, [1, 2])]).chem, or, undefined, "all");
+    expect(words(orTurned)).toEqual([["or1 as drawn"]]);
   });
 
   it("5, 13: a half the plugin did not make: said, the count one less, never silent", async () => {
@@ -247,6 +258,30 @@ describe("a configuration's groups: the halves made (known answers)", () => {
     const m = await isomersToMake(plugin(block, [isomer(block, []), isomer(block, [0, 1])]).chem, block, undefined, "all");
     expect(m.said).toContain("its and1 on a bond is made as drawn: a bond's configuration is not turned");
     expect(m.count).toBe(2);
+  });
+
+  it("asks for every half whole, and refuses a structure of more than the most: never some of them", async () => {
+    const block = blockOf(TRANS, [{ name: "STERAC1", atoms: [0, 1] }]);
+    const p = plugin(block, [isomer(block, []), isomer(block, [0, 1])]);
+    await isomersToMake(p.chem, block, undefined, "all");
+    expect((p.asked.find((a) => a.op === "stereoisomers")!.args as { whole?: boolean; most: number })).toMatchObject({ whole: true, most: 32 });
+    const many = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [0, 1].map((at) => ({ kind: "centre", at, state: "specified" })) } : { tooMany: { counted: 33, bound: 64 } }) } as unknown as ChemClient;
+    await expect(isomersToMake(many, block, undefined, "all")).rejects.toThrow("more than the 32 stereoisomers made of one");
+  });
+
+  it("reads a group in the second part of a structure by that part's atoms, numbered on from the first's", () => {
+    const first = blockOf(MESO, []);
+    const second = blockOf(TRANS, [{ name: "STERAC1", atoms: [0, 1] }]);
+    const g = drawnGroupsOf([first, second])!;
+    expect(g.groups).toEqual([{ kind: "and", n: 1, centres: [MESO.atoms.length, MESO.atoms.length + 1] }]);
+  });
+
+  it("takes no half for a mirror image where the structure has a metal, which a reflection would turn too: each searched", async () => {
+    // (TRANS with its O bound to an Fe)
+    const block = v3000([...TRANS.atoms, { el: "Fe", x: 0, y: 4.5 }], [...TRANS.bonds, { a: 6, b: 8, order: 1 }], [{ name: "STERAC1", atoms: [0, 1] }]);
+    const m = await isomersToMake(plugin(block, [isomer(block, []), isomer(block, [0, 1])]).chem, block, undefined, "all");
+    expect(m.count).toBe(2);
+    expect(m.halves?.map((h) => h?.mirrorOf)).toEqual([undefined, undefined]);
   });
 
   it("14: the plugin's turned half first: the half as drawn still first", async () => {

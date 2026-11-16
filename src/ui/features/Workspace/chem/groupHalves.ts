@@ -21,8 +21,8 @@ import type { DrawnGroups, StereoLeft } from "../../../../lib/chem/stereoOpen";
  */
 export type Half = { turned: number[]; name: string; plain: string; words: string; mirrorOf?: number; mirrorName?: string };
 
-/** The halves made, each its configuration and which half it is, in Meno's order - and what is said of the structure. */
-export type Halves = { made: { configured: Configuration; half?: Half }[]; said: string[] };
+/** The halves made, each its configuration, which half it is and the place of the plugin's isomer it is made of (`from`), in Meno's order - and what is said of the structure. */
+export type Halves = { made: { configured: Configuration; half?: Half; from: number }[]; said: string[] };
 
 /** Whether two configurations of one centre are the same, whatever order their neighbours are named in. */
 const agrees = (a: ConfiguredCentre, b: ConfiguredCentre) => configurationKey({ centres: [a], doubles: [] }) === configurationKey({ centres: [b], doubles: [] });
@@ -101,9 +101,9 @@ export function halvesOf(
   const groupsGiven: ConfiguredGroup[] = turnable;
   const baseKey = (c: IsomerConfiguration) =>
     configurationKey({ centres: c.centres.filter((x) => open.has(x.atom)), doubles: c.doubles.filter((x) => left.bonds.includes(x.bond)) });
-  type Kept = { configured: IsomerConfiguration; mask: number };
+  type Kept = { configured: IsomerConfiguration; mask: number; index: number };
   const bases = new Map<string, Map<number, Kept>>();
-  for (const i of isomers) {
+  for (const [index, i] of isomers.entries()) {
     if (!asDrawnOutside(i.configured)) continue;
     let mask = 0;
     groups.groups.forEach((g) => {
@@ -116,7 +116,7 @@ export function halvesOf(
     const key = baseKey(i.configured);
     if (!bases.has(key)) bases.set(key, new Map());
     const halves = bases.get(key)!;
-    if (!halves.has(mask)) halves.set(mask, { configured: i.configured, mask });
+    if (!halves.has(mask)) halves.set(mask, { configured: i.configured, mask, index });
   }
   const turnedOf = (mask: number) => turnable.flatMap((_, k) => ((mask >> k) & 1 ? [k] : []));
   // (a half turned from another: its groups' centres turned where the masks differ)
@@ -129,19 +129,28 @@ export function halvesOf(
   const missing = new Set<string>();
   for (const halves of bases.values()) {
     const some = [...halves.values()][0];
-    const present = [...halves.values()].map((k) => identity(k.configured));
-    for (let mask = 0; mask < 2 ** turnable.length; mask++) {
-      const k = halves.get(mask);
-      if (!k) {
-        // (not made: one Meno's identity takes for one that was made is that one - a meso form's - else it cannot be made in 3D)
-        if (!present.includes(identity(turnedFrom(some, mask)))) missing.add(`${halfName(turnable, turnedOf(mask))} cannot be made in 3D`);
+    const masks = Array.from({ length: 2 ** turnable.length }, (_, mask) => mask);
+    // (each half's compound, by Meno's identity: worked out from any half made, its groups turned where the masks differ)
+    const compound = masks.map((mask) => identity(turnedFrom(some, mask)));
+    const made_ = [...halves.values()].map((k) => ({ k, id: identity(k.configured) }));
+    // (halves all one compound - a meso form whose two centres are one group: no "one of the two" for an OR group)
+    const one = new Set(compound).size === 1;
+    for (const mask of masks) {
+      // (the same compound as a half listed before it: that one, nothing said - whichever of the two the plugin's toolkit kept)
+      if (compound.indexOf(compound[mask]) < mask) continue;
+      const got = halves.get(mask) ?? made_.find((m) => m.id === compound[mask])?.k;
+      if (!got) {
+        missing.add(`${halfName(turnable, turnedOf(mask))} cannot be made in 3D`);
         continue;
       }
+      // (made as this half: where the toolkit kept another half of the same compound, its groups turned back to this one's)
+      const configured = got.mask === mask ? got.configured : turnedFrom(got, mask);
       const name = halfName(turnable, turnedOf(mask));
-      const half: Half = { turned: turnedOf(mask), name, plain: halfWords(turnable, name), words: halfWords(turnable, name) };
+      const plain = one ? name : halfWords(turnable, name);
+      const half: Half = { turned: turnedOf(mask), name, plain, words: plain };
       // (the mirror image of one listed before it: made as its reflection, where a reflection is told by the centres alone)
       if (mirrorable && mask) {
-        const theirs = identity(mirrored(k.configured));
+        const theirs = identity(mirrored(configured));
         const j = keys.indexOf(theirs);
         if (j >= 0) {
           const other = made[j].half;
@@ -150,8 +159,8 @@ export function halvesOf(
           half.words = halfWords(turnable, name, other?.turned.length ? `the half with ${other.name}` : "the half as drawn");
         }
       }
-      made.push({ configured: { ...k.configured, groups: groupsGiven }, ...(turnable.length ? { half } : {}) });
-      keys.push(identity(k.configured));
+      made.push({ configured: { ...configured, groups: groupsGiven }, ...(turnable.length ? { half } : {}), from: got.index });
+      keys.push(identity(configured));
     }
   }
   return { made, said: [...said, ...missing] };

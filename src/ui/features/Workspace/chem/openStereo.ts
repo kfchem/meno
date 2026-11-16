@@ -148,9 +148,8 @@ export function halvesMade<T extends { configured: IsomerConfiguration }>(open: 
   };
   const mirrorable = !!graph && !open.perceived.handed && !graph.atoms.some((a) => isMetal(a.el));
   const halves = halvesOf(isomers, open.groups, open.drawn, identity, mirrorable);
-  // (each made one, its own isomer as the plugin answered it: matched by its configuration)
-  const of = (c: IsomerConfiguration) => isomers.find((i) => i.configured.centres === c.centres && i.configured.doubles === c.doubles)!;
-  return { made: halves.made.map((h) => ({ isomer: of(h.configured), configured: h.configured, half: h.half })), said: halves.said };
+  // (each made one, the plugin's isomer it is made of - by its place: a meso form's half as drawn may be made of the half the toolkit kept)
+  return { made: halves.made.map((h) => ({ isomer: isomers[h.from], configured: h.configured, half: h.half })), said: halves.said };
 }
 
 /** What a structure's 3D is made of: its open stereo, how many, whether none holds, the configurations - and, of one with groups, which half each is and what is said of them. */

@@ -79,7 +79,8 @@ export type StereoCollection = { name: string; atoms: readonly number[]; bonds: 
 /**
  * What a V3000 collection's name says of the stereo of what it holds ("CTfile Formats", *Enhanced stereochemistry*): `MDLV30/STEABS`, the
  * configurations as drawn (absolute); `MDLV30/STERACn`, group n of AND (racemic: both); `MDLV30/STERELn`, group n of OR (relative: one of
- * the two, not known which) - and the same with `STEB` for one of bonds. Null for any other collection.
+ * the two, not known which) - and the same with `STEB` for one of bonds, as Meno's reader has always taken such names (the CTfile keeps a
+ * group's bonds in its collection's own `BONDS=`, which `groupsIn` reads too). Null for any other collection.
  */
 export function stereoGroupNamed(name: string): { kind: "abs" | "and" | "or"; n: number; onBonds: boolean } | null {
   const m = /^MDLV30\/STE(B?)(ABS|RAC|REL)(\d*)$/i.exec(name);

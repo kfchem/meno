@@ -15,7 +15,7 @@ import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appS
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
 import { growingJudge } from "./growing";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, growOn, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { asksFirst, bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, growOn, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -961,6 +961,14 @@ describe("a hydrogen bond drawn, made in 3D", () => {
 });
 
 describe("a configuration's groups on the page (foundation part 7)", () => {
+  it("asks first, one or all, for a group with more than one half; not for one with one and nothing open", () => {
+    const and1 = { kind: "and" as const, name: "and1" };
+    expect(asksFirst({ atoms: [], bonds: [], groups: [and1], isomers: 2 })).toBe(true);
+    expect(asksFirst({ atoms: [], bonds: [], groups: [and1], isomers: 1 })).toBe(false);
+    expect(asksFirst({ atoms: [3], bonds: [], groups: [], isomers: 2 })).toBe(true);
+    expect(asksFirst({ atoms: [], bonds: [], groups: [], isomers: 1 })).toBe(false);
+  });
+
   // (trans-2-methylcyclohexan-1-ol, its two centres and1: a racemate)
   const hexagon = HEXAGON.map((p, k) => ({ id: 100 + k, ...p, r: 0.9, el: "C", stereoGroup: k < 2 ? { kind: "and" as const, n: 1 } : undefined }));
   const racemate: Model = {
