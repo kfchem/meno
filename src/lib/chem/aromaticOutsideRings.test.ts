@@ -42,6 +42,12 @@ describe("a structure typed with bonds marked aromatic outside a ring", () => {
     expect(structureProblem("*C(:O):O")).toBeNull();
   });
 
+  it("refuses CO2 written O:C:O and a sulfone written CS(:O)(:O)C: a centre needing two double bonds, never read as formic acid or a diol", () => {
+    expect(() => smilesInput("O:C:O")).toThrow("have no form with single and double bonds");
+    expect(() => smilesInput("CS(:O)(:O)C")).toThrow("have no form with single and double bonds");
+    expect(() => smilesInput("OP(:O)(:O)O")).toThrow("have no form with single and double bonds");
+  });
+
   it("leaves rings as they were: benzoic acid written all aromatic reads as benzoic acid", () => {
     expect(formulaOf("c1ccccc1C(:O):O")).toBe("C7H6O2");
     expect(formulaOf("c1ccccc1")).toBe("C6H6");

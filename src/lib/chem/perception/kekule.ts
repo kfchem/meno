@@ -148,9 +148,19 @@ export function outsideRingRefusal(atoms: readonly KekuleAtom[], bonds: readonly
   const groups = new Map<number, number[]>();
   for (const k of outside) groups.set(find(bonds[k].a1), [...(groups.get(find(bonds[k].a1)) ?? []), k]);
   const chain = chainAtoms(atoms, bonds);
+  // (a centre of two or more such bonds with room still left once its form is given - one that needs more than one double bond, CO2
+  //  written O:C:O, which one double bond to an atom cannot close: never filled with an H, which would make another compound)
+  const roomLeft = (a: number) => {
+    let sum = atoms[a]?.hs ?? 0;
+    bonds.forEach((b, k) => {
+      if (b.a1 === a || b.a2 === a) sum += b.order === AROMATIC_BOND ? orders[k] : b.order >= 1 && b.order <= 3 ? b.order : 0;
+    });
+    return implicitHydrogens(canonical(atoms[a]?.el ?? ""), sum, atoms[a]?.charge ?? 0) > 0;
+  };
   for (const ks of groups.values()) {
     const at = [...new Set(ks.flatMap((k) => [bonds[k].a1, bonds[k].a2]))].sort((p, q) => p - q);
-    if (ks.some((k) => orders[k] === 2) && !at.some((a) => chain.has(a) && left.includes(a))) continue;
+    const centreOpen = at.some((a) => (chain.get(a) ?? 0) >= 2 && (left.includes(a) || roomLeft(a)));
+    if (ks.some((k) => orders[k] === 2) && !centreOpen) continue;
     const listed = at.length === 1 ? String(at[0] + 1) : `${at.slice(0, -1).map((a) => a + 1).join(", ")} and ${at[at.length - 1] + 1}`;
     return `its bonds marked aromatic outside a ring (atoms ${listed}) have no form with single and double bonds: is a charge missing?`;
   }
