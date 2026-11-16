@@ -1924,7 +1924,18 @@ lipids each have their own way of being drawn, which it should know.
      its wedge and laid out like any other, on one wedge. A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
-     the ring is drawn. Nor does a double bond cumulated with another - an
+     the ring is drawn. Nor does a double bond with an end whose two other
+     groups are alike, however it is drawn: turned over, it is the same
+     molecule (2-methylbut-2-ene's, a prenyl's, a cyclohexylidene's, whose
+     ring's two arms are alike), so no cis or trans is read there, and none
+     is kept or laid out as one. "Alike" counts the rest of what the
+     drawing shows: (4-methylcyclohexylidene)acetic acid's ring arms are
+     alike while its C4 has no wedge, and its C=C is then read as none;
+     with C4 wedged they are not, and the two together state one
+     enantiomer. A mass number tells two groups apart (a (13C)methyl from
+     a methyl). One test, the symmetry's (`perception/symmetry.ts`
+     `settingCisTrans`), for the reader and every canonical reading
+     alike. Nor does a double bond cumulated with another - an
      azide's N=N, an allene's C=C - whose shared atom is straight through:
      it has no cis or trans, however a drawing bends it (phenyl azide from
      a SMILES was refused, 2026-10-13). A chain of three cumulated double

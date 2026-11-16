@@ -17,7 +17,7 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`).
  */
-import { canonicalSearched, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "./perception/symmetry";
+import { canonicalSearched, canonicalWritten, settingCisTrans, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "./perception/symmetry";
 import { lonePairCentres } from "./lonePairCentres";
 import { CHELATE_RING } from "./chelateRing";
 import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
@@ -520,12 +520,15 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * (a rule of the chemistry check): nothing drawn is ever taken out, but
  * at a centre or double bond two of whose groups are alike - two ends, or
  * two whole groups (`groupsAlike`) - which sets nothing however the rest is
- * given: there no configuration is written, drawn or not. A
+ * given: there no configuration is written, drawn or not; and a double
+ * bond's or an odd cumulene's cis or trans that sets nothing with the rest
+ * as given (perception/symmetry `settingCisTrans`) is taken off. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
- * nothing, so writing it changes no compound - an isopropyl's CH, a
- * prenyl's C=C(CH3)2, the third centre of the cis,trans
- * 1,2,3-trimethylcyclopropane written with its trans pair. A place whose
+ * nothing, so writing it changes no compound - an isopropyl's CH, the
+ * third centre of the cis,trans 1,2,3-trimethylcyclopropane written with
+ * its trans pair; a double bond or an odd cumulene so is left with none,
+ * and asked no more (below). A place whose
  * two senses write two texts is open, and stays so: the cis pair's third
  * centre, which decides between two compounds.
  *
@@ -538,11 +541,18 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * came in. That this order gives one form for every structure is not
  * proved: it is held by the chemistry check's known answers and, over every writing of
  * fourteen structures, by the tests: never one identity for two meanings,
- * and a writing that states one compound has that compound's text. Some
+ * and a writing that states one compound has that compound's text. Where
  * writings that leave the same thing unsaid in different ways get two
- * identities (that acid, drawn with its double bond bent and with nothing
- * at all): alike told apart, never two unlike joined, and only where no
- * single compound is stated.
+ * identities, they are alike told apart, never two unlike joined, and only
+ * where no single compound is stated. A double bond or an odd cumulene
+ * that sets nothing is left with none, never filled: a cis or trans given
+ * there is none to every canonical reading (perception/symmetry
+ * `settingCisTrans`) while the rest stays open, so filled, it would turn
+ * into a configuration again once another place was filled - that acid
+ * with its double bond filled and then its centre would have one
+ * enantiomer's text, though it states neither. So that acid drawn with its
+ * double bond bent, with its centre wedged, or with nothing at all is one
+ * structure.
  *
  * A metal of four or six donors whose arrangement is not given - which of
  * its donors are across from each other - is such a place too, its values
@@ -564,7 +574,9 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * and wrote two, that place is left as it is, and `complete` says so.
  */
 export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string; searches: number; settledMetals: number[] } {
-  let g = input;
+  // (a cis or trans given where it sets nothing, the rest as given - a cyclohexylidene's with its ring's C4 left open - taken
+  //  off: perception/symmetry `settingCisTrans`, as every canonical reading takes it)
+  let g = settingCisTrans(input);
   let complete = true;
   // (how many canonical searches the fill made - its cost, the same for the same structure whatever its atoms' order)
   let searches = 0;
@@ -598,8 +610,15 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   if (plainMetal.size) g = { ...g, arrangements: (g.arrangements ?? []).filter((x) => !plainMetal.has(x.metal)) };
   // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
   const settledMetals = [...plainMetal];
+  // (a double bond or an odd cumulene found to set nothing below: left with none, never given one - a cis or trans given there
+  //  would be taken off by every canonical reading while its place stays open, and become a configuration again once
+  //  another place was filled: (4-methylcyclohexylidene)acetic acid's C=C filled and then its C4, one enantiomer's text for
+  //  a writing that states neither)
+  const leftNone = new Set<string>();
+  const noneKey = (b: Blank) => (b.kind === "bond" ? `b${b.at}` : b.kind === "cumulated" ? `c${b.ends.join(",")}` : null);
   // (the places left: those not settled so)
-  const open = (b: Blank) => !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at)) && !(b.kind === "metal" && plainMetal.has(b.at));
+  const open = (b: Blank) =>
+    !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at)) && !(b.kind === "metal" && plainMetal.has(b.at)) && !leftNone.has(noneKey(b) ?? "");
   // (an axis or a cumulene of alike end atoms: filled, as before)
   for (const b of blanksOf(g)) if ((b.kind === "axis" || b.kind === "cumulated") && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
@@ -631,7 +650,9 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
       // (a symmetry of the structure that keeps the place and turns it over - two of a centre's groups swapped, or the two
       //  on one end of a double bond: its two senses are one structure, so it sets nothing, with no writing)
       if (b.kind !== "biaryl" && b.kind !== "metal" && turnedOver(b, searched().automorphisms)) {
-        next = given(g, b, true);
+        const none = noneKey(b);
+        if (none) leftNone.add(none);
+        next = none ? g : given(g, b, true);
         text = undefined;
         break;
       }
@@ -653,8 +674,10 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
       }
       // (one text is one structure, whether the search finished or not: it writes the whole of it)
       if (!d) {
-        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : values[0];
-        text = b.kind === "biaryl" ? undefined : u.complete ? u.text : undefined;
+        const none = noneKey(b);
+        if (none) leftNone.add(none);
+        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : none ? g : values[0];
+        text = b.kind === "biaryl" || none ? undefined : u.complete ? u.text : undefined;
         break;
       }
       if (!u.complete || !d.complete) complete = false;

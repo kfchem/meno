@@ -15,6 +15,8 @@
  *   of its budget (`complete` false) some orbits may be split. Where symmetry is meant, orbits, not classes.
  * - the canonical text (`canonicalText`, `canonicalWritten`, `canonicalSearched`): equal for two orders of one structure when
  *   the search was complete; never equal for two structures.
+ * - a cis or trans that sets nothing is read as none (`settingCisTrans`): a double bond with an end whose two other groups are
+ *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there.
  *
  * What an orbit is NOT:
  * - not "atoms alike to a chemist". An automorphism here keeps every centre's sense, so orbits are the homotopic sets: right for
@@ -84,12 +86,13 @@ const piLinks = (input: SymmetryInput) => {
  * (`first`) and the refinement, for `canonicalRanks` to part them on.
  */
 function classed(input: SymmetryInput): Classed {
-  const known = classedOnce.get(input) ?? classedNow(input);
+  const known = classedOnce.get(input) ?? classedNow(settingCisTrans(input));
   classedOnce.set(input, known);
   return { ...known, rank: [...known.rank] };
 }
 
-type Classed = { rank: number[]; first: string[]; withStereo: (r: number[]) => number[] };
+/** What `classed` works out: the ranks, what each atom is, the refinement, and the input they are of (`settingCisTrans`'s). */
+type Classed = { rank: number[]; first: string[]; withStereo: (r: number[]) => number[]; input: SymmetryInput };
 
 /**
  * `classed` worked out once for each input, as it is (inputs are not
@@ -191,7 +194,7 @@ function classedNow(input: SymmetryInput): Classed {
       r = next;
     }
   };
-  return { rank: withStereo(refine(rank)), first, withStereo };
+  return { rank: withStereo(refine(rank)), first, withStereo, input };
 }
 
 /**
@@ -220,7 +223,11 @@ export function symmetryClasses(input: SymmetryInput): number[] {
  * orbits split - finer, never wrongly joined.
  */
 export function symmetryOrbits(input: SymmetryInput): { orbit: number[]; automorphisms: number[][]; complete: boolean } {
-  const { rank, first, withStereo } = classed(input);
+  return orbitsOf(classed(input));
+}
+
+/** `symmetryOrbits` of what `classed` or `classedNow` worked out. */
+function orbitsOf({ rank, first, withStereo, input }: Classed): { orbit: number[]; automorphisms: number[][]; complete: boolean } {
   const n = input.atoms.length;
   const found = search(rank, n, withStereo, (r) => written(input, first, r));
   const root = Array.from({ length: n }, (_, i) => i);
@@ -240,7 +247,7 @@ export function symmetryOrbits(input: SymmetryInput): { orbit: number[]; automor
  * every one of its own orders (`walkOrder`), so worked out once for all.
  */
 export function canonicalRanks(input: SymmetryInput): number[] {
-  const { rank, first, withStereo } = classed(input);
+  const { rank, first, withStereo, input: own } = classed(input);
   // Atoms still alike: each of the lowest such class taken first in turn,
   // the ranks refined again, and so on until every atom stands alone; of
   // the orders that gives, the one that writes the molecule first (its
@@ -250,7 +257,7 @@ export function canonicalRanks(input: SymmetryInput): number[] {
   // same show a symmetry of it, and the atoms it takes onto each other are
   // not tried again: a tert-butyl's three methyls, alike in every way, are
   // tried once.
-  return settled(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
+  return settled(rank, input.atoms.length, withStereo, (r) => written(own, first, r));
 }
 
 /**
@@ -271,9 +278,9 @@ export function canonicalText(input: SymmetryInput): string {
  * molecule written out, so two molecules are never written the same.
  */
 export function canonicalWritten(input: SymmetryInput): { text: string; complete: boolean } {
-  const { rank, first, withStereo } = classed(input);
-  const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
-  return { text: written(input, first, found.r), complete: !found.cut };
+  const { rank, first, withStereo, input: own } = classed(input);
+  const found = search(rank, input.atoms.length, withStereo, (r) => written(own, first, r));
+  return { text: written(own, first, found.r), complete: !found.cut };
 }
 
 /**
@@ -282,10 +289,116 @@ export function canonicalWritten(input: SymmetryInput): { text: string; complete
  * the input's order), the symmetries met on the way (`symmetryOrbits`'), and whether the search was complete.
  */
 export function canonicalSearched(input: SymmetryInput): { text: string; ranks: number[]; automorphisms: number[][]; complete: boolean } {
-  const { rank, first, withStereo } = classed(input);
-  const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
-  return { text: written(input, first, found.r), ranks: found.r, automorphisms: found.symmetries, complete: !found.cut };
+  const { rank, first, withStereo, input: own } = classed(input);
+  const found = search(rank, input.atoms.length, withStereo, (r) => written(own, first, r));
+  return { text: written(own, first, found.r), ranks: found.r, automorphisms: found.symmetries, complete: !found.cut };
 }
+
+/**
+ * `input` with each cis or trans that sets nothing taken off - a double bond's, an odd cumulene's: where, with that unit left
+ * out and every other configuration kept, a symmetry of the structure holds both its ends and the groups on one end where
+ * they are and swaps the two groups on the other. Turned over, it is then the same structure, so it states nothing: a
+ * 2-methylbut-2-ene's C=C, a prenyl's, a cyclohexylidene's (its ring's two arms alike). Written as it stands, it would part
+ * those two groups by which one the search took first - two orbits for 2,7-dimethylocta-2,6-diene's alike methyls, found in
+ * the chemistry check - so it is read as none, by every reading here and by the drawing's reader
+ * (perception/stereo/from2d `readStereo`), from this one test.
+ *
+ * - Every other configuration kept: two groups alike in constitution but not in configuration are not alike.
+ *   (4-methylcyclohexylidene)acetic acid's ring arms are alike while its C4 is open, and its C=C then sets nothing; with C4
+ *   set they are not, and the two together set the molecule's axis (its two enantiomers). An end with an (R)- and an
+ *   (S)-sec-butyl likewise keeps its cis or trans.
+ * - The other end's groups held: a symmetry that swaps the groups on both ends turns the unit twice, and leaves it as it was
+ *   (a C=C shared by two rings of one size, as in bicyclo[8.8.0]octadec-1(10)-ene, mirrored through its own plane).
+ * - Two end atoms alike - each bonded to the end alone, of one element, charge and H count, by bonds of one order (a
+ *   gem-dimethyl's, an isopropylidene's) - are swapped by a symmetry whatever else is given: alike, with no search.
+ * - Classes of the constitution (no configuration at all) are a prefilter only: an end whose two groups they part has them
+ *   apart in every orbit. Orbits decide, as classes can join atoms no symmetry joins.
+ * - A symmetry found is one, so two groups found alike are, whether the search ran its course or not; where it ran out of
+ *   steps without finding them alike, the unit is kept as given.
+ * Each unit is asked of `input` with it alone left out; none is taken off before the others are asked.
+ */
+export function settingCisTrans<T extends SymmetryInput>(input: T): T {
+  const units = [
+    ...input.bonds.flatMap((b, k) => (b.stereo ? [{ bond: k }] : [])),
+    ...(input.cumulated ?? []).map((_, k) => ({ run: k })),
+  ];
+  if (!units.length) return input;
+  const adj = adjacency(input);
+  // (each end of a unit and the atom it goes on through to the other end: a double bond's other end, a run's next atom)
+  const endsOf = (u: (typeof units)[number]): [number, number][] => {
+    if ("bond" in u) {
+      const { a, b } = input.bonds[u.bond];
+      return [
+        [a, b],
+        [b, a],
+      ];
+    }
+    const [p, q] = input.cumulated![u.run].atoms;
+    return [
+      [p, across(adj, p, q)],
+      [q, across(adj, q, p)],
+    ];
+  };
+  const others = (end: number, on: number) => adj[end].map((e) => e.to).filter((t) => t !== on);
+  // (what an atom bonded to `end` alone is, as the ranks first read it: element, charge, H count, its bond's order; none where
+  //  it is a star's, a metal's donor across from another, or an axis's or a run's own)
+  const placed = new Set([
+    ...(input.arrangements ?? []).flatMap((x) => x.pairs.flat()),
+    ...[...(input.axes ?? []), ...(input.cumulated ?? [])].flatMap((x) => x.atoms),
+    ...input.atoms.flatMap((a) => a.pi ?? []),
+  ]);
+  const endAtom = (x: number, end: number): string | null => {
+    const a = input.atoms[x];
+    if (a.pi?.length || a.tetra || placed.has(x)) return null;
+    return [a.el, a.charge ?? 0, a.hs ?? -1, adj[end].find((t) => t.to === x)!.order].join("|");
+  };
+  let constitution: number[] | null = null;
+  const setsNothing = (u: (typeof units)[number]): boolean => {
+    const [[p, pn], [q, qn]] = endsOf(u);
+    const left: SymmetryInput =
+      "bond" in u
+        ? { ...input, bonds: input.bonds.map((b, k) => (k === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) }
+        : { ...input, cumulated: input.cumulated!.filter((_, k) => k !== u.run) };
+    for (const [e, en, f, fn] of [
+      [p, pn, q, qn],
+      [q, qn, p, pn],
+    ]) {
+      const two = others(e, en);
+      if (two.length !== 2) continue;
+      // (two end atoms alike - a gem-dimethyl's, an isopropylidene's: swapping them keeps all else, with no search)
+      if (two.every((x) => adj[x].length === 1)) {
+        const [p0, p1] = two.map((x) => endAtom(x, e));
+        if (p0 != null && p0 === p1) return true;
+      }
+      constitution ??= classedNow(unconfigured(input)).rank;
+      if (constitution[two[0]] !== constitution[two[1]]) continue;
+      // (both ends, and the other end's groups, each held in place by a mark of its own, for this search only)
+      const held = new Map<number, string>([
+        [e, "end"],
+        [f, "far"],
+        ...others(f, fn).map((x, k): [number, string] => [x, `far${k}`]),
+      ]);
+      const { orbit } = orbitsOf(classedNow({ ...left, atoms: left.atoms.map((a, i) => (held.has(i) ? { ...a, el: `${a.el}\u0001${held.get(i)}` } : a)) }));
+      if (orbit[two[0]] === orbit[two[1]]) return true;
+    }
+    return false;
+  };
+  const empty = units.filter(setsNothing);
+  if (!empty.length) return input;
+  const bonds = new Set(empty.flatMap((u) => ("bond" in u ? [u.bond] : [])));
+  const runs = new Set(empty.flatMap((u) => ("run" in u ? [u.run] : [])));
+  return {
+    ...input,
+    bonds: input.bonds.map((b, k) => (bonds.has(k) ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)),
+    ...(input.cumulated ? { cumulated: input.cumulated.filter((_, k) => !runs.has(k)) } : {}),
+  };
+}
+
+/** The structure with no configuration at all - its constitution, a star's pi system kept: `settingCisTrans`' prefilter. */
+const unconfigured = (input: SymmetryInput): SymmetryInput => ({
+  atoms: input.atoms.map(({ tetra: _tetra, ...a }) => a),
+  bonds: input.bonds.map(({ stereo: _stereo, ...b }) => b),
+});
 
 /**
  * The most search steps `settled` takes for a molecule of `n` atoms; past
