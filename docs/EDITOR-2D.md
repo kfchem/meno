@@ -548,11 +548,37 @@ missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
 plugin that reads SMILES refuses it). A bond written with no symbol between
 two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
 joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
-is single, and each ring is read as its own. Text is
+is single, and each ring is read as its own. A bond written aromatic
+outside any ring (":") takes a form of single and double bonds as
+one in a ring does, each atom by the room its valence, its H and its
+charge leave (lib/chem/perception/kekule): CC(:O):O is acetic acid, one
+C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
+An atom whose H is written in its brackets has its valence fixed by
+what is written: CC(:N):[NH2+] is the acetamidinium, its [NH2+] taking
+the C=N. Where more than one end may take the one double bond a centre
+needs, it goes to O first, then S and Se, then N, then C: CC(:O):N is
+acetamide, never the imidic acid; CC(:S):N is thioacetamide; NC(:O):N is
+urea. Between two of one element - an amidine's two N - Meno draws one
+form, the same however it is written, with no claim of which is the
+more stable.
+Where no such form closes them, the SMILES is refused, never read by
+adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
+2, 3 and 4) have no form with single and double bonds: is a charge
+missing?" (`outsideRingRefusal`). It errs on the side of refusing: a lone
+C:O between two atoms that both have room - oxalate written
+[O-]C(:O)C(:O)[O-] - and a chain marked aromatic throughout (C:C:C:C)
+are refused, though one form would close them; write their double
+bonds. Where such a bond is read and not refused - from a file - a lone
+one between two atoms that both have room is read as single for now.
+Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
-an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
+an atom by the same label reader, kept a label. A quadruple bond ("$")
+is refused where Meno reads the SMILES itself - a group typed with its
+"*" - in words: "a quadruple bond, which Meno does not draw"
+(lib/chem/smiles); Meno has no bond of that order, and never reads it
+as another. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,

@@ -1048,6 +1048,10 @@ export type WorkflowStep = {
   running?: StepRunning;
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
+  /** A Repeat's frame (workflow/repeat): how wide and how high from its card's top left, in the page's units. */
+  frame?: { w: number; h: number };
+  /** A Repeat's steps: those whose cards' middles lie inside its frame, in reading order (workflow/model `repeatsSettled`). */
+  holds?: number[];
 };
 /** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
