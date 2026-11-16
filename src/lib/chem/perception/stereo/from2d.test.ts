@@ -537,6 +537,17 @@ describe("a centre with a lone pair for its fourth group", () => {
       ["ST-1.1.19, the plain bonds more than half a turn apart, the wedges between them", [[0, 0], [60, 1], [120, 1], [200, 0]]],
       ["ST-1.1.16, three plain, the wedge not in their wide space", [[0, 0], [60, 1], [120, 0], [300, 0]]],
       ["ST-1.1.17, two wedges and two hashes, like by like", [[0, 1], [90, 1], [180, -1], [270, -1]]],
+      // (all four bonds within half the page, whatever their kinds: ST-1.1.12's figure, and arrangements the text gives no number)
+      ["ST-1.1.12, the figure's first drawing: a wedge and hashes in line, a wedge and a plain bond below", [[0, 1], [180, -1], [240, 1], [300, 0]]],
+      ["ST-1.1.12, the figure's third drawing: a wedge and a plain bond in line, a wedge and hashes below", [[0, 1], [180, 0], [240, 1], [300, -1]]],
+      ["two like wedges in line, the other wedge and a plain bond below", [[0, 1], [180, 1], [240, -1], [300, 0]]],
+      ["one plain, two like wedges side by side and the other, within a third of a turn", [[0, 0], [40, 1], [80, 1], [120, -1]]],
+      ["three like wedges within half the page, the plain bond among them", [[0, 1], [40, 0], [80, 1], [120, 1]]],
+      ["two plain side by side, the wedge and the hashes on their side", [[0, 0], [60, 0], [100, 1], [140, -1]]],
+      ["two like wedges and two plain, like by like, the wide gap not the plain pair's", [[0, 1], [30, 0], [60, 0], [100, 1]]],
+      ["three plain and the wedge within half the page", [[0, 0], [30, 0], [60, 0], [90, 1]]],
+      ["wedge, plain, wedge, plain within half the page", [[0, 1], [30, 0], [60, 1], [90, 0]]],
+      ["the largest gap 175 degrees: within the band", [[0, 0], [100, 0], [150, 1], [185, -1]]],
     ];
     for (const [form, bonds] of open) {
       const d = drawing(bonds);
@@ -547,7 +558,13 @@ describe("a centre with a lone pair for its fourth group", () => {
       ["ST-1.1.1, two plain side by side, a wedge and hashes on the far side", [[0, 0], [120, 0], [210, 1], [300, -1]]],
       ["ST-1.1.13's line at 165 degrees: side by side under half a turn, read", [[0, 0], [165, 0], [240, 1], [300, -1]]],
       ["ST-1.1.4, three plain, the wedge in their wide space", [[0, 0], [90, 0], [180, 0], [270, 1]]],
-      ["ST-1.1.12, one plain, two alike with the other between them", [[0, 0], [90, 1], [180, -1], [270, 1]]],
+      // (the upright cross, two like wedges across from each other: its volume has one sign whatever the wedges' heights)
+      ["the upright cross, one plain, two like wedges across from each other", [[0, 0], [90, 1], [180, -1], [270, 1]]],
+      // (each a neighbour of a drawing above that opens, its bonds on both sides)
+      ["ST-1.1.8, beside the drawing within a third of a turn", [[0, 0], [90, 1], [180, 1], [270, -1]]],
+      ["ST-1.1.5, beside the three like wedges within half the page", [[0, 1], [60, 0], [120, 1], [240, 1]]],
+      ["ST-1.1.6 with its bonds all round", [[0, 1], [60, 0], [180, 1], [240, 0]]],
+      ["the largest gap 165 degrees: clear of the band", [[0, 0], [100, 0], [150, 1], [195, -1]]],
     ];
     for (const [form, bonds] of read) {
       const d = drawing(bonds);
@@ -1179,8 +1196,8 @@ describe("a hydrogen bond is no bond of the structure", () => {
   it("gives every reading of a drawing's bonds the same answer with the hydrogen bond drawn - each such function, whatever it is named", async () => {
     // (every function this file exports that takes a drawing's atoms and bonds, found in its source: one added later is asked too)
     const source = readFileSync(new URL("./from2d.ts", import.meta.url), "utf8");
-    const names = [...source.matchAll(/^export function (\w+)\(atoms: readonly DrawnAtom\[\], bonds: readonly DrawnBond\[\]/gm)].map((m) => m[1]);
-    expect(names.length).toBeGreaterThanOrEqual(4);
+    const names = [...source.matchAll(/^export function (\w+)\(\w+: readonly DrawnAtom\[\], \w+: readonly DrawnBond\[\]/gm)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThanOrEqual(5);
     const core = (await import("./from2d")) as unknown as Record<string, (...args: unknown[]) => unknown>;
     // (Maps and Sets as lists, so that answers compare as values)
     const plain = (x: unknown): unknown =>
