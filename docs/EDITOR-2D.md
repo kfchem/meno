@@ -2081,9 +2081,11 @@ lipids each have their own way of being drawn, which it should know.
      axis, however it is wedged: its mirror image is the molecule itself
      (2-methylpenta-2,3-diene's two methyls, a cyclohexylidene's two ring
      arms), so none is read there, by the same test as a double bond's
-     (`settingCisTrans`, above), and a wedge at such an end is said to state
-     nothing - *an end of these double bonds carries two alike groups* -
-     as a wedge at a terminal allene's end is. Drawn from a SMILES or from a
+     (`settingCisTrans`, above), and a wedge at either end of it, its CH's
+     as its CMe2's, carries the unread mark and is said to state nothing -
+     *an end of these double bonds carries two alike groups* - as a wedge
+     at a terminal allene's end is; Clean-up keeps it rather than drop it
+     unsaid. Drawn from a SMILES or from a
      molecule in 3D, such an axis gets no wedge. "Alike" counts
      the rest of what the drawing shows, as for a double bond:
      (4-methylcyclohexylidene)allene's axis is none while its C4 is plain,
