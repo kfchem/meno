@@ -548,7 +548,11 @@ C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
 Where no such form closes them, the SMILES is refused, never read by
 adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
 2, 3 and 4) have no form with single and double bonds: is a charge
-missing?" (`outsideRingRefusal`). Text is
+missing?" (`outsideRingRefusal`). It errs on the side of refusing: a lone
+C:O between two atoms that both have room - oxalate written
+[O-]C(:O)C(:O)[O-] - and a chain marked aromatic throughout (C:C:C:C)
+are refused, though one form would close them; write their double
+bonds. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
