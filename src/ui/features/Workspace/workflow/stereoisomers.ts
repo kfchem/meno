@@ -1,8 +1,9 @@
 import { EXAMINE_MS, MOST_ISOMERS } from "../../../../lib/chem/stereoOpen";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { ChemClient } from "../../../../lib/roles/client";
-import { anyOpen, openStereo, StereoNotRead, stereoisomersOf } from "../chem/openStereo";
-import { MADE_OF_ONE, type DrawnAnswer } from "./programs";
+import { anyGroup, anyOpen, halvesMade, openStereo, StereoNotRead, stereoisomersOf } from "../chem/openStereo";
+import { onBondSaid } from "../chem/groupHalves";
+import { MADE_OF_ONE, type DrawnAnswer, type DrawnValue } from "./programs";
 
 /**
  * *Stereoisomers*' options, Meno's: what is done with a structure that
@@ -43,19 +44,35 @@ export async function stereoisomersAnswer(chem: ChemClient, molblocks: readonly 
     return { aside: e.message, kind: e.problem != null ? "valence" : "unreadable" };
   }
   const said = open.drawn.said;
-  const note = said ? { properties: { stereo_not_enumerated: { value: said, unit: "none" as const, method: "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)" } } } : {};
-  if (!anyOpen(open.left)) return { as: "drawn", ...note };
+  const bonds = open.groups.onBonds.map(onBondSaid);
+  const groupsNote = (lines: string[]): Record<string, DrawnValue> =>
+    lines.length ? { stereo_groups: { value: lines.join("; "), unit: "none", method: "AND and OR groups (V3000 enhanced stereo), each turned as a whole" } } : {};
+  const note = (lines: string[] = bonds): { properties?: Record<string, DrawnValue> } => {
+    const properties: Record<string, DrawnValue> = {
+      ...(said ? { stereo_not_enumerated: { value: said, unit: "none" as const, method: "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)" } } : {}),
+      ...groupsNote(lines),
+    };
+    return Object.keys(properties).length ? { properties } : {};
+  };
+  const grouped = anyGroup(open);
+  if (!anyOpen(open.left) && !grouped) return { as: "drawn", ...note() };
   if (open.left.cumulenes.length) return { aside: "an allene's axis left open, which a drawing in 2D cannot give", kind: "axis" };
-  const aside = options.open === "aside";
+  // (set aside is for stereo left open: a group's halves, drawn as such, are made)
+  const aside = options.open === "aside" && anyOpen(open.left);
   // (a request's own two minutes past the time it is given: the plugin looks at the time between its tries, never within one)
   const made = await stereoisomersOf(chem, molblocks, open, { most, whole: true, withinMs: within * 1000, drawings: !aside }, within * 1000 + 2 * 60_000);
   if ("tooMany" in made) return { aside: `more than the ${most} stereoisomers made of one (up to ${made.tooMany.bound})`, kind: "too many" };
   if ("tooLong" in made) return { aside: `took more than ${within} s to examine`, kind: "too long" };
-  if (made.isomers.length <= 1) return { as: "drawn", ...note };
-  if (aside) return { aside: `stereo left open: ${made.isomers.length} stereoisomers`, kind: "stereo open" };
   const sorted = [...made.isomers].sort((p, q) => (p.smiles < q.smiles ? -1 : p.smiles > q.smiles ? 1 : 0));
+  // (of a structure with groups: its halves, in Meno's order - each that is left open by SMILES, within it the half as drawn first -
+  //  what is said of them on each: chem/groupHalves)
+  const halves = grouped ? halvesMade(open, molblocks, sorted) : null;
+  const ordered = halves ? halves.made.map((h) => h.isomer) : sorted;
+  const lines = halves ? [...(halves.made.some((h) => h.half) ? [`in order: ${halves.made.map((h) => h.half?.plain).join("; ")}`] : []), ...halves.said, ...bonds] : bonds;
+  if (ordered.length <= 1) return { as: "drawn", ...note(halves ? [...halves.said, ...bonds] : bonds) };
+  if (aside) return { aside: `stereo left open: ${ordered.length} stereoisomers`, kind: "stereo open" };
   // (an adduct's drawing that cannot be written back as drawn: set aside, in the plugin's words)
-  const failed = sorted.find((i) => i.error != null || i.molblock == null);
+  const failed = ordered.find((i) => i.error != null || i.molblock == null);
   if (failed) return { aside: failed.error ?? "what it was made into could not be drawn", kind: "drawing" };
-  return { made: sorted.map((i) => i.molblock!), smiles: sorted.map((i) => i.smiles), ...note };
+  return { made: ordered.map((i) => i.molblock!), smiles: ordered.map((i) => i.smiles), ...note(lines) };
 }

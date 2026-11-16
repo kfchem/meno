@@ -10,7 +10,7 @@
  */
 import type { OptionValues } from "../options";
 import type { SmilesRead } from "../chem/smilesWhy";
-import type { Configuration, IsomersMade, StereoElement } from "../chem/stereoOpen";
+import type { IsomerConfiguration, IsomersMade, StereoElement } from "../chem/stereoOpen";
 import type { MetalHolds } from "../chem/metalHolds";
 import { counter, type Watch } from "../calc/client";
 
@@ -54,7 +54,7 @@ export type ChemRequests = {
     args: {
       molblocks: string[];
       open: { atoms: number[]; bonds: number[] };
-      configured?: Configuration;
+      configured?: IsomerConfiguration;
       notEnumerated: number[];
       most: number;
       whole?: boolean;
@@ -89,7 +89,7 @@ export type ChemRequests = {
      * only to a plugin whose role says it takes draws (lib/plugins/manifest
      * `draws`).
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
+    args: { molblock: string; isomers?: IsomerConfiguration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**

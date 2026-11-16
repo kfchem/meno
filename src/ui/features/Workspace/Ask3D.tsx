@@ -47,6 +47,16 @@ export default function Ask3D({
   const what = [centres ? plural(centres, "stereocentre", "stereocentres") : "", bonds ? plural(bonds, "double bond", "double bonds") : ""]
     .filter(Boolean)
     .join(" and ");
+  // (the AND and OR groups whose halves are made: each named as it is drawn)
+  const groups = [...new Map(open.flatMap((o) => o.groups).map((g) => [g.name, g])).values()];
+  const ands = groups.filter((g) => g.kind === "and").map((g) => g.name);
+  const ors = groups.filter((g) => g.kind === "or").map((g) => g.name);
+  const listed = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]);
+  const grouped = [
+    ands.length ? `${listed(ands)} ${ands.length === 1 ? "stands" : "stand"} for both of ${ands.length === 1 ? "its" : "their"} forms` : "",
+    ors.length ? `${listed(ors)} ${ors.length === 1 ? "is" : "are"} one of two forms, not known which` : "",
+  ].filter(Boolean);
+  const said = [what ? `${what} ${centres + bonds === 1 ? "is" : "are"} drawn without a configuration` : "", ...grouped].join("; ");
   return (
     <motion.div
       role="dialog"
@@ -59,11 +69,10 @@ export default function Ask3D({
       onClick={(e) => e.stopPropagation()}
     >
       <h2 id="ask-3d-title" className="font-semibold mb-1">
-        Stereo not drawn
+        {what ? "Stereo not drawn" : "Stereo drawn as a group"}
       </h2>
       <p className="text-gh-gray mb-3">
-        {what} {centres + bonds === 1 ? "is" : "are"} drawn without a configuration, so the structure can be any of{" "}
-        {isomers} stereoisomers.
+        {said}, so the structure can be any of {isomers} stereoisomers.
       </p>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">

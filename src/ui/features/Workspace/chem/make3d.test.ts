@@ -1,4 +1,6 @@
 import { readMolfile } from "../../../../lib/chem/ctfile";
+import { HEXAGON } from "../../../../lib/chem/testdata/v3000";
+import { drawnGroupsOf } from "../../../../lib/chem/stereoOpen";
 import { describe, expect, it, vi } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -955,5 +957,76 @@ describe("a hydrogen bond drawn, made in 3D", () => {
       expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure.");
     }
     expect(drawnBlocksOf(salt(true), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3], [4]]);
+  });
+});
+
+describe("a configuration's groups on the page (foundation part 7)", () => {
+  // (trans-2-methylcyclohexan-1-ol, its two centres and1: a racemate)
+  const hexagon = HEXAGON.map((p, k) => ({ id: 100 + k, ...p, r: 0.9, el: "C", stereoGroup: k < 2 ? { kind: "and" as const, n: 1 } : undefined }));
+  const racemate: Model = {
+    atoms: [...hexagon.map(({ stereoGroup, ...a }) => (stereoGroup ? { ...a, stereoGroup } : a)), { id: 106, x: 0, y: 3, r: 0.9, el: "O" }, { id: 107, x: 2.598, y: 1.5, r: 0.9, el: "C" }],
+    bonds: [
+      ...[0, 1, 2, 3, 4, 5].map((k) => ({ id: 200 + k, a: 100 + k, b: 100 + ((k + 1) % 6), order: 1 as const })),
+      { id: 206, a: 100, b: 106, order: 1 as const, stereo: "up" as const },
+      { id: 207, a: 101, b: 107, order: 1 as const, stereo: "down" as const },
+    ],
+  };
+  // (one conformer of the half as drawn: the ring a little puckered, the OH above it, the methyl below)
+  const zs = [0.25, -0.25, 0.25, -0.25, 0.25, -0.25, 1.2, -1.2];
+  const frame = [...HEXAGON, { x: 0, y: 3 }, { x: 2.598, y: 1.5 }].flatMap((p, i) => [p.x, p.y, zs[i]]);
+  const volume = (f: number[], c: number, [a, b, d]: number[]) => {
+    const v = (i: number) => [f[3 * i] - f[3 * c], f[3 * i + 1] - f[3 * c + 1], f[3 * i + 2] - f[3 * c + 2]];
+    const [p, q, r] = [v(a), v(b), v(d)];
+    return Math.sign(p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0]));
+  };
+
+  it("makes the half that is the mirror image of the one before it as that one's reflection, never asked for: its energies kept, said so", async () => {
+    const [block] = blocksOf(racemate, racemate.atoms.map((a) => a.id));
+    const read = drawnGroupsOf([block.molblock])!.read;
+    const centres = [...read.values()];
+    const asIs = { centres, doubles: [] };
+    const turned = { centres: centres.map((c) => ({ ...c, sense: c.sense > 0 ? (-1 as const) : (1 as const) })), doubles: [] };
+    const stereo = {
+      request: async (op: string) =>
+        op === "stereo_elements"
+          ? { read: true, elements: centres.map((c) => ({ kind: "centre", at: c.atom, state: "specified" })) }
+          : { isomers: [{ configured: turned, smiles: "b" }, { configured: asIs, smiles: "a" }], free: false },
+    } as unknown as ChemClient;
+    const asked: { isomers: unknown[] }[] = [];
+    const chem = {
+      request: async (_op: string, args: { isomers: unknown[] }) => (
+        asked.push(args),
+        {
+          isomers: args.isomers.map(() => ({
+            atoms: racemate.atoms.map((a) => ({ el: a.el, charge: 0 })),
+            bonds: racemate.bonds.map((b) => ({ a1: b.a - 100, a2: b.b - 100, order: 1 })),
+            frames: [frame],
+            energies: [-0.25],
+            field: "MMFF94",
+            how: [{ label: "Field", text: "MMFF94" }],
+            cip: { atoms: {}, bonds: {} },
+            smiles: "C[C@@H]1CCCC[C@H]1O",
+          })),
+        }
+      ),
+    } as unknown as ChemClient;
+    const made = await conformersOf(chem, stereo, block, "all");
+    // (one search, of the half as drawn; the other made of it)
+    expect(asked).toHaveLength(1);
+    expect(asked[0].isomers).toEqual([{ centres: asIs.centres, doubles: [] }]);
+    expect(made).toHaveLength(2);
+    expect(made[1].energies).toEqual(made[0].energies);
+    expect(made[0].how?.filter((h) => h.label === "Stereo").map((h) => h.text)).toEqual(["and1 as drawn"]);
+    expect(made[1].how?.filter((h) => h.label === "Stereo").map((h) => h.text)).toEqual([
+      "and1 turned over: the mirror image of the half as drawn (same energies)",
+      "made as the mirror image of and1 as drawn: not calculated",
+    ]);
+    // (each centre the other way round in it: its mirror image, by its places)
+    for (const c of centres) {
+      const ns = c.neighbours.slice(0, 3);
+      expect(volume(made[1].frames[0], c.atom, ns)).toBe(-volume(made[0].frames[0], c.atom, ns));
+    }
+    // (its SMILES the mirror image's)
+    expect(made[1].smiles).toBe("C[C@H]1CCCC[C@@H]1O");
   });
 });

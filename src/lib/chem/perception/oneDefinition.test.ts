@@ -73,9 +73,6 @@ export const STILL_APART: Copy[] = [
   { concept: "volume", file: "lib/layout/cage.ts", name: "handedness", part: 4 },
   { concept: "volume", file: "lib/steps/compareBonding.ts", name: "handedness", part: 4 },
   // the types for a centre, a double bond, an axis, a whole configuration
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredCentre", part: 14 },
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredDouble", part: 14 },
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "Configuration", part: 14 },
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "StereoElement", part: 14 },
   { concept: "stereo types", file: "lib/chem/smiles.ts", name: "Configuration", part: 14 },
   { concept: "stereo types", file: "lib/entry.ts", name: "StereoElement", part: 14 },
