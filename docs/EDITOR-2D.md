@@ -1974,8 +1974,8 @@ lipids each have their own way of being drawn, which it should know.
        kept), mirrored in the page with the depth as it was (the mirror
        image); an atom dragged keeps its depth.
      - **A chair recognised where the drawing gives no depth**: a six-ring
-       on its own, drawn as a chair (opposite bonds parallel, its outline not convex) with no wedge at its atoms, is a
-       ring in perspective; its depth is worked out by fitting the chair's
+       on its own, drawn as a chair (opposite bonds parallel, its outline
+       not convex) with no wedge at its atoms, is a ring in perspective; its depth is worked out by fitting the chair's
        solid (`lib/chem/perception/projection`) to the drawn places, and its
        centres are read in space as a tool's drawing is. Near and far, in
        this order: a bold or near-edge ring bond marks which edge is the
@@ -2054,6 +2054,30 @@ lipids each have their own way of being drawn, which it should know.
        such a ring, not read, is never silent: each of its atoms that
        carries a group has the unread mark a crossed wedge has, unasked,
        its words the same.
+     - **The recognition's bounds** (`lib/chem/perception/projection/recognise`).
+       No text gives a number for any of them. All were set on the corpus
+       of the tests - every chair view of the solid, turned and jittered,
+       and every flat ring the engine draws - so that each chair is read
+       as the solid it was or not at all, and no flat ring is read. The
+       three that guard against another reading - `PARALLEL`, `MARGIN` and
+       `LEVEL_ANGLE` - are each asked just inside and just outside by a
+       test (`recogniseBounds.test.ts`):
+       - `PARALLEL`, 12 degrees: how far from parallel two opposite bonds of
+         a ring drawn as a chair may be.
+       - `MOST_MISS` (0.02 of a bond length, squared, on average),
+         `MOST_UNEQUAL` (0.25) and `MOST_SKEW` (20 degrees): how far the
+         fit may miss the drawn places, and how far its two directions may
+         differ in scale and stand off a right angle - generous, as a
+         textbook chair is drawn the way textbooks do, not exactly as seen.
+       - `MARGIN`, 3: the guard against the mirror image. Another reading
+         that takes the ring as another shape must fit at least three
+         times worse than the best, or the ring is unread.
+       - `LEVEL_ANGLE`, 30 degrees: how near level a ring's long axis, and
+         the whole system's turn from its textbook form, must lie for the
+         lower atoms to be the nearer. ST-3.1 speaks of a mostly-horizontal
+         ring and gives no angle: a convention, so that a chair stood
+         further on its side is unread rather than read as its mirror
+         image. A mark reads the ring at any angle.
      - **Meno's moves keep the compound:** a ring read this way follows
        the page - its lower atoms the nearer - so before Meno turns it on
        the page, or turns it over, the depth the reading worked out is
