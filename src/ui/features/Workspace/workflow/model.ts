@@ -397,10 +397,12 @@ export function repeatMade(doc: WorkspaceDocument, ids: readonly number[]): { do
   const goingOut = wires.filter((w) => !held.has(w.to.step) && insideSet(w.from.set));
   // (its card above theirs, at the frame's top left - never out to their left, where what comes in to them stands - and its frame
   //  round all of them, no wider than they are and a gap: the page's y runs up, a card's top its y, its foot below it)
+  //  (the sets their exits give round with them: what they make is inside it, found in the GUI check)
+  const theirs = (doc.sets ?? []).filter((b) => insideSet(b.id));
   const x0 = Math.min(...inner.map((s) => s.x)) - GAP;
-  const top = Math.max(...inner.map((s) => s.y)) + 2 * GAP + cardHighOf("repeat");
-  const x1 = Math.max(x0 + CARD_W + 2 * GAP, ...inner.map((s) => s.x + CARD_W + GAP));
-  const foot = Math.min(...inner.map((s) => s.y - cardHighOf(s.kind))) - 2 * GAP;
+  const top = Math.max(...inner.map((s) => s.y), ...theirs.map((b) => b.y1)) + 2 * GAP + cardHighOf("repeat");
+  const x1 = Math.max(x0 + CARD_W + 2 * GAP, ...inner.map((s) => s.x + CARD_W + GAP), ...theirs.map((b) => b.x1 + GAP));
+  const foot = Math.min(...inner.map((s) => s.y - cardHighOf(s.kind)), ...theirs.map((b) => b.y0)) - 2 * GAP;
   const id = idOf(doc);
   let d = addStep(doc, "repeat", x0, top, undefined, "meno");
   d = { ...d, steps: d.steps!.map((s) => (s.id === id ? { ...s, frame: { w: x1 - x0, h: Math.max(top - foot, cardHighOf("repeat") + 2 * GAP) }, holds: inner.map((x) => x.id) } : s)) };
@@ -409,6 +411,9 @@ export function repeatMade(doc: WorkspaceDocument, ids: readonly number[]): { do
     return { why: `What comes into these steps cannot go into a Repeat: ${wireRefusal(d, { set: comingIn[0].from.set }, id, "in") ?? "In does not take it"}` };
   }
   const exit = (e: string) => d.sets!.find((b) => b.made?.step === id && b.made.exit === e)!.id;
+  // (its Out outside its frame, to the right of it, level with its card - never across its edge, found in the GUI check)
+  const out = d.sets!.find((b) => b.id === exit("reached"))!;
+  d = resizeSet(d, out.id, placeBelow(d, x1 + GAP, top, out.x1 - out.x0, out.y1 - out.y0, { set: out.id }));
   // (what crossed its edge taken away, then routed through it)
   for (const w of [...comingIn, ...goingOut]) d = removeWire(d, w.id);
   if (comingIn.length) d = connect(d, { set: comingIn[0].from.set }, id, "in");

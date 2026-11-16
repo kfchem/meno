@@ -142,6 +142,9 @@ describe("a Repeat made", () => {
     expect(held.y).toBeLessThan(step.y - cardHighOf("repeat"));
     expect([held.x >= box.x0, held.x + CARD_W <= box.x1, held.y - cardHighOf("filter") > box.y0]).toEqual([true, true, true]);
     expect(box.x0).toBeGreaterThan(st().sets.find((b) => b.id === input)!.x1);
+    // (the sets the step it holds gives, inside the frame; its own Out wholly outside it, to its right)
+    for (const b of st().sets.filter((x) => x.made?.step === f)) expect([b.x0 >= box.x0, b.x1 <= box.x1, b.y0 >= box.y0, b.y1 <= box.y1]).toEqual([true, true, true, true]);
+    expect(st().sets.find((b) => b.made?.step === r && b.made.exit === "reached")!.x0).toBeGreaterThan(box.x1);
     expect(step.kind).toBe("repeat");
     expect(step.holds).toEqual([f]);
     const ends = st().wires.map((w) => [st().sets.find((b) => b.id === w.from.set)?.made ?? "input", w.to.step, w.to.port]);
