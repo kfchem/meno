@@ -24,7 +24,7 @@ export type Copy = { concept: string; file: string; name: string; part: number |
 export const CONCEPTS: Record<string, RegExp> = {
   rings: /^(?:export )?(?:async )?(?:function|const) (inSmallRing|ringThrough|ringsThrough|smallRings|ringBonds|ringParts|smallestRings|ringsAlike|withSmallRings|smallestSets|ringSetsToTry|sixCycles|ringsOf)\b/,
   metals: /^(?:export )?(?:function|const) (METALS|isMetal|NOT_METALS|IONIC|COUNTED|BRIDGED_TO)\b/,
-  valence: /^(?:export )?(?:function|const) (VALENCE|VALENCES|HIGHER|OUTER|HIGHEST|PYRAMID_VALENCE|VALENCE_ELECTRONS|D_ORBITAL_VALENCE|NORMAL_VALENCES|BONDS_LEFT|CARRIERS)\b/,
+  valence: /^(?:export )?(?:function|const) (VALENCE|VALENCES|HIGHER|OUTER|HIGHEST|PYRAMID_VALENCE|VALENCE_ELECTRONS|D_ORBITAL_VALENCE|NORMAL_VALENCES|BONDS_LEFT|CARRIERS|octetValence|SECOND_PERIOD)\b/,
   parity: /^(?:export )?(?:function|const) (parity|permutationParity)\b/,
   volume: /^(?:export )?(?:function|const) (drawnVolume|volumeSign|handedness|signedVolume)\b/,
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
@@ -56,10 +56,6 @@ export const STILL_APART: Copy[] = [
   // metals: every list in one file under its name (perception/elements.ts); what stands apart is a name for a set of it, or a test of its own
   { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
   // valence tables: one count, one table (hydrogens and valence)
-  { concept: "valence", file: "lib/chem/lonePairCentres.ts", name: "PYRAMID_VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "VALENCE_ELECTRONS", part: 12 },
-  { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "D_ORBITAL_VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
   // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },

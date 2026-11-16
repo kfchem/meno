@@ -18,6 +18,7 @@ import { lonePairCentres } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
 import { isMetal } from "../layout/perceive";
 import { CHELATE_RING } from "./chelateRing";
+import { NORMAL_VALENCES } from "./perception/hydrogens";
 
 export type SmilesAtom = {
   el: string;
@@ -510,11 +511,6 @@ function bracketAtom(body: string): { atom: SmilesAtom; mark: string } {
 
 /** An atom to write: its element ("*" for an attachment), and what a bracket says of it. */
 export type SmilesAtomOut = { el: string; charge?: number; isotope?: number; hs: number };
-
-/** The valences an organic-subset atom may have, as OpenSMILES fills its hydrogens to. */
-const NORMAL_VALENCES: Record<string, number[]> = {
-  B: [3], C: [4], N: [3, 5], O: [2], P: [3, 5], S: [2, 4, 6], F: [1], Cl: [1], Br: [1], I: [1],
-};
 
 /** The hydrogens OpenSMILES gives an organic-subset atom written plainly, for bonds summing to `sum`. */
 function plainHydrogens(el: string, sum: number): number | null {
