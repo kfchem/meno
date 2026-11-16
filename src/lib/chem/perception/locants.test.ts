@@ -179,6 +179,15 @@ describe("von Baeyer (A4.3)", () => {
     expect(m2[1]).toBe("2");
   });
 
+  it("3,6,8-trioxabicyclo[3.2.2]nonane, not 3,7,9; bicyclo[4.1.0]hepta-1,3,5-triene: its CH2 7", () => {
+    expect(at("C12COCC(OC1)CO2", 2, 5, 8).sort()).toEqual(["3", "6", "8"]);
+    expect(at("C1C2=CC=CC=C12", 0)).toEqual(["7"]);
+  });
+
+  it("tricyclo[4.4.0.0(3,8)]decane: von Baeyer, as the text names it - no two of its smallest rings share exactly one bond, so nothing said (M)", () => {
+    expect(ownOf("C12CC3CCC1CC3CC2")).toEqual([]);
+  });
+
   it("adamantane, cubane: von Baeyer, nothing said (M); 1,2,3,4-tetrahydro-1,4-methanonaphthalene: Meno's own, whole system (M)", () => {
     expect(ownOf("C1C2CC3CC1CC(C2)C3")).toEqual([]);
     expect(ownOf("C12C3C4C1C5C2C3C45")).toEqual([]);

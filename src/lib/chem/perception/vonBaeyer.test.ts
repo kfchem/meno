@@ -25,6 +25,8 @@ describe("von Baeyer descriptors", () => {
     // (the text's own: two secondary bridges, and the forms the rules turn down)
     ["C12C3CCC(CC3)C(CC2)CC1", "tricyclo[4.2.2.2(2,5)]"],
     ["C1CC2CC1C1CCCC2C1", "tricyclo[4.3.1.1(2,5)]"],
+    ["C12C(C3)C4C3CC4C(CC2)CCC1", "tetracyclo[5.3.2.1(2,4).0(3,6)]"],
+    ["C12CC3CCC1CC3CC2", "tricyclo[4.4.0.0(3,8)]"],
   ])("%s is %s", (smiles, name) => {
     expect(descriptorOf(smiles)).toEqual([name]);
   });
