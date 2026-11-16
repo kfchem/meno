@@ -1287,7 +1287,9 @@ All hover-based, as above.
     configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
     An axis's Ra or Sa - a biaryl's, an allene's, asked for on a bond of
     it - and an odd cumulene's E or Z are Meno's too (docs/CIP.md, *Axes
-    and odd cumulenes*).
+    and odd cumulenes*). A run of cumulated double bonds is one unit,
+    asked once and marked once, on its middle double bond, however many
+    of its bonds are asked and whichever way each is drawn.
   - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
     before, one switch showed them all). Hidden unless asked for. The
     right-click menu of an atom that can be a stereocentre says *Show

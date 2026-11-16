@@ -97,8 +97,11 @@ export function oneForEachRun(input: IdentityInput, asked: readonly { at: number
       continue;
     }
     const run = runOf(unit.at);
-    if (kept.has(run[0])) continue;
-    kept.add(run[0]);
+    // (the run known by its lowest bond: its bonds in order run from either end, by the way the asked bond is listed - a
+    //  butatriene's C0=C1, C2=C1, C2=C3 walked from C2=C1 starts at C2=C3 - but they are the same bonds)
+    const key = Math.min(...run);
+    if (kept.has(key)) continue;
+    kept.add(key);
     // (the middle of the run, among those asked: the one nearest the middle of the run's bonds)
     const middle = (run.length - 1) / 2;
     const ofRun = asked.filter((u) => run.includes(u.at));
