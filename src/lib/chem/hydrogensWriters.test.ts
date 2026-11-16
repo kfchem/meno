@@ -1,5 +1,5 @@
 /**
- * The writers against the core's one hydrogen count (foundation part 12a, CORR's order: what is written to a file first). A skeleton's
+ * The writers against the core's one hydrogen count (foundation part 12a, the order's: what is written to a file first). A skeleton's
  * test (./skeleton) and the valence a 3D molfile writes for an atom with no hydrogens beyond its bonds (./molWriter) both sum an aromatic
  * bond as one and a half; the core (perception/hydrogens `hydrogenCounts`) takes it by its Kekule order. This holds them side by side over
  * every atom of a thousand analogues and their cores (lib/layout/testdata/analogues) and a set of heteroaromatics, each read with no
