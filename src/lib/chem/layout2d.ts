@@ -17,6 +17,7 @@ import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, rev
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
 import { greatest, least, pushAll } from "./lists";
+import { groupDepths, type DrawnAtom, type DrawnBond } from "../layout/drawn";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
@@ -3768,6 +3769,8 @@ export function buildAllPrimitives(
   crowded: Crowded[];
 } {
   bonds = allylsSingle(atoms, bonds);
+  // (each atom's depth: as drawn, or a group's out of a ring in perspective as its ring atom is read to send it - for where a bond passes behind another)
+  const depthOf = depthsOf(atoms, bonds);
   const lines: LineSeg[] = [];
   const polys: Poly[] = [];
   const circles: Circle[] = [];
@@ -3993,7 +3996,7 @@ export function buildAllPrimitives(
   const breakWith = { zoom, round: roundJoins, raster: (opts.minLinePx ?? 1) > 0 };
   for (const b of bonds) {
     const r = drawn.get(b)!;
-    const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith);
+    const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith, depthOf);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
     lines.push(...behind.lines.map(tint));
     polys.push(...behind.polys.map(tint));
@@ -4101,6 +4104,37 @@ function perspectiveCorners(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, z
     }
   }
   return out;
+}
+
+/**
+ * Each atom's depth, by index, where the structure is drawn in perspective: its own `z`, or - a group drawn out of a ring in perspective - the
+ * depth the way its ring atom is read to send it gives it (lib/layout/drawn `groupDepths`). Nothing kept: asked again as the drawing is drawn.
+ */
+function depthsOf(atoms: Atom[], bonds: Bond[]): (i: number) => number | undefined {
+  const own = (i: number) => atoms[i]?.z;
+  const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
+  // (no bond from an atom with depth to one without: no group's depth to work out)
+  if (!drawn.some((b) => (atoms[b.a1].z == null) !== (atoms[b.a2].z == null))) return own;
+  const orderSum = new Map<number, number>();
+  for (const b of drawn) for (const i of [b.a1, b.a2]) orderSum.set(i, (orderSum.get(i) ?? 0) + (b.dative ? 0 : b.order));
+  const deg = degreeMap(drawn);
+  const drawnAtoms: DrawnAtom[] = atoms.map((a, i) => ({
+    x: a.x,
+    y: a.y,
+    el: a.el,
+    hs: a.valence != null ? Math.max(0, a.valence - (orderSum.get(i) ?? 0)) : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
+    ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.z != null ? { z: a.z } : {}),
+  }));
+  const drawnBonds: DrawnBond[] = drawn.map((b) => ({
+    a: b.a1,
+    b: b.a2,
+    order: b.order,
+    ...(b.stereo === "up" || b.stereo === "down" ? { wedge: { narrow: wedgeNarrowAtom(b, deg), stereo: b.stereo } } : {}),
+    ...(b.stereo === "wavy" ? { either: true } : {}),
+  }));
+  const worked = groupDepths(drawnAtoms, drawnBonds);
+  return (i) => atoms[i]?.z ?? worked.get(i);
 }
 
 /**
@@ -4214,15 +4248,17 @@ function lineShape(l: LineSeg, half: number): Vec2[] {
 }
 
 /**
- * Whether `bond` (from `a` to `c`) passes behind `o` (from `e` to `f`) where they cross, at `t` along the one and `u` along the other - in one
- * place, three sources in turn: where all four atoms carry a depth, the depth says it (a ring drawn in perspective, a cage as Clean-up draws
- * it); else the chemist's mark, where `bond` names `o` among those it is behind (`Bond.behind`); else neither is behind - a crossing drawn by
- * hand is drawn whole until it is said.
+ * Whether `bond` passes behind `o` where they cross, at `t` along the one and `u` along the other - in one place, three sources in turn:
+ * where all four atoms have a depth (`depths`: `bond`'s two ends, then `o`'s - each atom's own `z`, or a group's out of a ring in
+ * perspective, `depthsOf`), the depth says it (a ring drawn in perspective, a cage as Clean-up draws it); else the chemist's mark,
+ * where `bond` names `o` among those it is behind (`Bond.behind`); else neither is behind - a crossing drawn by hand is drawn whole until
+ * it is said.
  */
-export function passesBehind(bond: Bond, a: Atom, c: Atom, o: Bond, e: Atom, f: Atom, t: number, u: number): boolean {
-  if (a.z != null && c.z != null && e.z != null && f.z != null) {
-    const mine = a.z + (c.z - a.z) * t;
-    const theirs = e.z + (f.z - e.z) * u;
+export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | undefined)[], t: number, u: number): boolean {
+  const [az, cz, ez, fz] = depths;
+  if (az != null && cz != null && ez != null && fz != null) {
+    const mine = az + (cz - az) * t;
+    const theirs = ez + (fz - ez) * u;
     return mine < theirs - 1e-6;
   }
   return o.id != null && !!bond.behind?.includes(o.id);
@@ -4249,15 +4285,18 @@ function brokenBehind(
   drawn: Map<Bond, Built>,
   halfWidth: number,
   how: { zoom: number; round: boolean; raster: boolean },
+  /** Each atom's depth (`depthsOf`): its own `z`, or a group's out of a ring in perspective. */
+  depthOf: (i: number) => number | undefined = (i) => atoms[i]?.z,
 ): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
   const { lines, polys } = built;
   const a = atoms[bond.a1];
   const c = atoms[bond.a2];
+  const [az, cz] = [depthOf(bond.a1), depthOf(bond.a2)];
   // (a bond to a pi system's centre goes into its ring, not over or under
   // its edges: neither is broken for the other)
   if (!a || !c || bond.endpoints?.length) return { lines, polys, ends: [] };
   // (nothing can put it behind: no depth at its ends, and nothing said of it)
-  if ((a.z == null || c.z == null) && !bond.behind?.length) return { lines, polys, ends: [] };
+  if ((az == null || cz == null) && !bond.behind?.length) return { lines, polys, ends: [] };
   const lineWidth = 2 * halfWidth;
   const halfWidthOf = (l: LineSeg) => pxToWorld(l.widthPx, how.zoom) / 2;
   const clear = Math.max(CROSSING_CLEAR * lineWidth, how.raster ? pxToWorld(CROSSING_CLEAR_FLOOR_PX, how.zoom) : 0);
@@ -4275,6 +4314,7 @@ function brokenBehind(
     const e = atoms[o.a1];
     const f = atoms[o.a2];
     if (!e || !f) continue;
+    const [ez, fz] = [depthOf(o.a1), depthOf(o.a2)];
     const q = { x: e.x, y: e.y };
     const g = { x: f.x - e.x, y: f.y - e.y };
     const den = vcross(d, g);
@@ -4282,7 +4322,7 @@ function brokenBehind(
     const t = vcross(vsub(q, p), g) / den;
     const u = vcross(vsub(q, p), d) / den;
     if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue;
-    if (!passesBehind(bond, a, c, o, e, f, t, u)) continue;
+    if (!passesBehind(bond, o, [az, cz, ez, fz], t, u)) continue;
     const frontLength = vlen(g);
     const fd = { x: g.x / frontLength, y: g.y / frontLength };
     // (the angle between the two bonds: all but along each other, nothing is cut)

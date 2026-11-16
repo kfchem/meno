@@ -21,6 +21,12 @@ export type ChemAtom = {
 /** A bond between two atoms, by index, of an order - 4 is an aromatic bond, made only by the aromatic forms - and, a double bond, its configuration. */
 export type ChemBond = { a: number; b: number; order: number; stereo?: CisTrans };
 
+/**
+ * Whether a drawn bond is a bond of the structure: a covalent bond is, and a coordination bond; a hydrogen bond, drawn between a donor's H
+ * and an acceptor (dotted, GR-1.8), is not - it closes no ring, joins no two molecules into one, and takes no place round an atom.
+ */
+export const ofTheStructure = (b: { hydrogen?: boolean }): boolean => !b.hydrogen;
+
 export type ChemGraph = {
   atoms: readonly ChemAtom[];
   bonds: readonly ChemBond[];

@@ -31,6 +31,8 @@ import {
 } from "./layout2d";
 import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "./acs";
 import { advanceEm, inkHullEm } from "./arial";
+import { chair as chairSolid } from "./perception/projection/solids";
+import { drawn } from "./perception/projection/views";
 
 const opts = (over: Partial<LayoutOptions> = {}): LayoutOptions =>
   acsWorldOptions([], [], { units: "world", ...over });
@@ -2565,6 +2567,35 @@ describe("a cage in perspective", () => {
   it("draws crossing bonds whole where nothing says which is in front", () => {
     const { lines } = buildAllPrimitives(atoms(false), bonds, opts(), 40);
     expect(lines).toHaveLength(2);
+  });
+  // cyclohexane's chair as the textbook draws it, a methyl straight up or down the page from each ring atom (its axial bond), the methyls with no depth
+  const axialChair = (withDepth: boolean, form: 0 | 1 = 0): { atoms: Atom[]; bonds: Bond[] } => {
+    const ring = drawn(chairSolid(), form)!.atoms;
+    const atoms: Atom[] = ring.map((p, k) => ({ id: k, x: p.x, y: p.y, el: "C", ...(withDepth ? { z: p.z } : {}) }));
+    const bonds: Bond[] = ring.map((_, k) => ({ a1: k, a2: (k + 1) % 6, order: 1 as const }));
+    ring.forEach((p, k) => {
+      const up = Math.sign(p.y - (ring[(k + 1) % 6].y + ring[(k + 5) % 6].y) / 2);
+      atoms.push({ id: 6 + k, x: p.x, y: p.y + up, el: "C" });
+      bonds.push({ a1: k, a2: 6 + k, order: 1 });
+    });
+    return { atoms, bonds };
+  };
+
+  it("breaks a group's bond, and a ring bond, where the group's worked-out depth puts it behind or before: exactly two in a chair's axial bonds", () => {
+    for (const form of [0, 1] as const) {
+      const flat = axialChair(false, form);
+      const deep = axialChair(true, form);
+      const whole = buildAllPrimitives(flat.atoms, flat.bonds, opts(), 40);
+      const broken = buildAllPrimitives(deep.atoms, deep.bonds, opts(), 40);
+      expect(whole.lines).toHaveLength(12);
+      // (two bonds broken, each in two pieces, each piece drawn as the shape it fills: one ring bond behind a near atom's axial bond, one
+      //  far atom's axial bond behind a ring bond; the other ten whole, five of each kind - the shapes beside are the corners' joins)
+      expect(broken.lines, `form ${form}`).toHaveLength(10);
+      expect(broken.polys.length - whole.polys.length, `form ${form}`).toBe(4);
+      const lines = (vertical: boolean) => broken.lines.filter((l) => (Math.abs(l.x2 - l.x1) < 1e-9) === vertical).length;
+      expect(lines(true)).toBe(5);
+      expect(lines(false)).toBe(5);
+    }
   });
 });
 
