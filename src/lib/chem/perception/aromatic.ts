@@ -85,18 +85,26 @@ export function piElectrons(s: PiState): number | null {
  * The atoms that lie on an aromatic ring (above), by index: of `rings` (the
  * smallest set) each, and each two that share a bond, whose atoms'
  * electrons (`electrons`, null where not known) add up to 4n + 2, at most
- * `MOST_PI`.
+ * `MOST_PI` - but never a ring or pair each of whose atoms gives a lone
+ * pair, two: with no pi bond in it and no empty p orbital (a C+, a B of
+ * three bonds), there is no pi system for lone pairs to complete, and its
+ * atoms stay pyramidal - As4's and P4's three-rings, a triaziridine,
+ * cyclotriphosphane (backlog 182, CHEM 11-16). Lone pairs complete a pi
+ * system; they never make one alone.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {
   const out = new Set<number>();
   const huckel = (atoms: Iterable<number>) => {
     let sum = 0;
+    let pi = false;
     for (const a of atoms) {
       const e = electrons(a);
       if (e == null) return false;
       sum += e;
+      // (an atom of a pi bond, one; of an empty p orbital, none: a ring with neither is lone pairs alone)
+      if (e !== 2) pi = true;
     }
-    return sum % 4 === 2 && sum <= MOST_PI;
+    return pi && sum % 4 === 2 && sum <= MOST_PI;
   };
   const edges = rings.map((r) => new Set(r.map((x, k) => pairKey(x, r[(k + 1) % r.length]))));
   rings.forEach((r, i) => {
