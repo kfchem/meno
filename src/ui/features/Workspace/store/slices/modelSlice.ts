@@ -504,7 +504,11 @@ export const createModelSlice = (
     const { model } = get();
     const bond = model.bonds.find((b) => b.id === id);
     if (!bond) return;
-    if (clicks <= 1) return get().clickSelectBond(id);
+    // (one click: the key 1's round - a double or triple made single, a single round its wedge, hashed wedge, the other end narrow)
+    if (clicks <= 1) {
+      get().bondKey(id, 1);
+      return;
+    }
     if (clicks === 2) {
       const patch = doubleClickPatch(bond, model.atoms, model.bonds);
       if (bond.order === 2) get().setBondDoubleMode(id, patch.doubleMode!);

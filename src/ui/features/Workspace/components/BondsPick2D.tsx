@@ -357,11 +357,11 @@ export default function BondsPick2D() {
           st.timer = null;
         }
         if (st.count === 1) {
-          // A click: the bond selected, alone, at once - it never changes the compound (the maintainer, 2026-11-14); a
-          // double-click's second click then makes it double, the bond staying selected (docs/EDITOR-2D.md, *How it is worked*)
-          store.getState().bondClicked(b.id, 1);
+          // A click turns the bond's kind as the key 1 does - once no second click has come, so a double-click only makes it
+          // double (the maintainer, 2026-11-17, as it was until 2026-11-14; docs/EDITOR-2D.md, *How it is worked*)
           const delay1 = SINGLE_DELAY_MS;
           st.timer = window.setTimeout(() => {
+            if (st.bondId != null) store.getState().bondClicked(st.bondId, 1);
             try {
               if (st.pointerId != null) endPanHold(st.pointerId);
               else endPanHold(null);
