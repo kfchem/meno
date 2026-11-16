@@ -177,6 +177,9 @@ describe("texts on the page", () => {
     state().setTextIcon(t.id, false);
     expect(state().showRequest?.n).toBe(before + 1);
     expect(state().showRequest?.box).toEqual(sheetRoom(state().texts[0]));
+    // (full size already: not asked again)
+    state().setTextIcon(t.id, false);
+    expect(state().showRequest?.n).toBe(before + 1);
     // (made an icon again: nothing asked)
     state().setTextIcon(t.id, true);
     expect(state().showRequest?.n).toBe(before + 1);
