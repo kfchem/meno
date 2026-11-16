@@ -54,8 +54,12 @@ const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const key = (p: number, q: number) => (p < q ? `${p}-${q}` : `${q}-${p}`);
 
-/** The sign of the volume a centre's first three neighbours make about it, exactly (perception/stereo/geometry `volumeSign`). */
-const wayRound = (xyz: readonly number[], c: number, n: readonly number[]) => volumeSign(at(xyz, n[0]), at(xyz, n[1]), at(xyz, n[2]), at(xyz, c), EXACT);
+/**
+ * The sign of the volume a centre's first three neighbours make about it, exactly (perception/stereo/geometry `volumeSign`): (n0 x n1) . n2,
+ * the same as n2 . (n0 x n1), so asked in the order n2, n0, n1 - the order this has always been worked out in, so that a centre flat to
+ * the last bit is called flat or not as before (found in review).
+ */
+const wayRound = (xyz: readonly number[], c: number, n: readonly number[]) => volumeSign(at(xyz, n[2]), at(xyz, n[0]), at(xyz, n[1]), at(xyz, c), EXACT);
 
 /** Whether the first neighbours of a double bond's two ends stand cis: the dihedral between them under 90 degrees. */
 function cis(xyz: readonly number[], a: number, p: number, q: number, b: number): boolean {
