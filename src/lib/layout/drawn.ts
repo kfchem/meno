@@ -22,6 +22,7 @@ import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
 import { factsOf } from "../chem/perception/facts";
+import { sharesThreeAtoms } from "../chem/perception/rings";
 import { withRecognisedDepth } from "./recognised";
 import { placeStereo, type Stereo, type Wedge } from "./stereo";
 import type { Point } from "./geometry";
@@ -90,9 +91,9 @@ function cageFits(
   return out;
 }
 
-/** Whether two rings of a system share three atoms or more: it is bridged (F2a's `sharesThreeAtoms`, to be that one's when it lands). */
+/** Whether two rings of a system share three atoms or more: it is bridged (perception/rings `sharesThreeAtoms`). */
 function bridged(rings: readonly (readonly number[])[], of: readonly number[]): boolean {
-  return of.some((r, i) => of.some((q, j) => j > i && rings[r].filter((a) => rings[q].includes(a)).length >= 3));
+  return of.some((r, i) => of.some((q, j) => j > i && sharesThreeAtoms(rings[r], rings[q])));
 }
 
 /**

@@ -166,7 +166,7 @@ export function recogniseByViews(
 /** The best turn, scale and shift of the chair as drawn (each way round, from each atom, in either textbook form) onto the drawn places: its fit, with the depth it gives (sign not yet chosen), in the drawing's units. */
 function conventionFits(ring: readonly Pt[]): Fit[] {
   const out: Fit[] = [];
-  // (both textbook chairs: F9's `drawn`, form 0 and form 1 - the chair seen from either side of its mirror plane)
+  // (both textbook chairs: views `drawn`, form 0 and form 1 - the chair seen from either side of its mirror plane)
   for (const form of [0, 1]) {
     const solid = drawn(chair(), form)!.atoms;
     for (const dir of [1, -1]) {
@@ -249,7 +249,7 @@ function fusedOn(key: string, solid: Solid, bond: number, how: (typeof FUSIONS)[
 }
 
 /**
- * Chairs fused on bonds, fitted as one: every way F9 fuses chairs on the drawing's bonds - each fusion trans, or cis on either face - drawn as
+ * Chairs fused on bonds, fitted as one: every way projection/solids fuses chairs on the drawing's bonds - each fusion trans, or cis on either face - drawn as
  * the textbook draws them (`drawn`, both forms), each laid on the drawn places from each atom of the first ring and both ways round, by the best
  * turn, scale and shift of the whole system. So a trans or a cis fusion is read from the drawing, never assumed. Null where the rings are not
  * fused one to the next on a bond each (a spiro join, a bridge, a ring apart).
@@ -467,7 +467,7 @@ export const HAWORTH_HEIGHT = 0.87;
 export const VERTICAL = Math.sin(15 * DEG);
 /**
  * The eye's height over a Haworth ring's plane, as its sine (rule (H) of the design, from Brecher 2006's figure: a regular ring seen so is 1.155
- * level bonds tall): the depth a ring drawn by hand is given from its height on the page. F9's own constant when its view is changed to it.
+ * level bonds tall): the depth a ring drawn by hand is given from its height on the page. projection/views' own constant when its view is changed to it.
  */
 export const HAWORTH_SIN = 2 / 3;
 

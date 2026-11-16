@@ -8,6 +8,7 @@
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseChairs, recogniseHaworth, recogniseByViews, type Recognised } from "../chem/perception/projection/recognise";
 import { isCage, projectCage, tiedViews, type CageView } from "./cage";
 import { key, perceive } from "./perceive";
+import { ofTheStructure } from "../chem/perception/graph";
 import type { DrawnAtom, DrawnBond } from "./drawn";
 
 export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): readonly DrawnAtom[] {
@@ -37,7 +38,9 @@ function recognition(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): 
   return got;
 }
 
-function recognise(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Recognition {
+function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[]): Recognition {
+  // (the structure's bonds alone: a hydrogen bond drawn closes no ring - between two groups of a chair it would make it a bridged system)
+  const bonds = drawn.filter(ofTheStructure);
   const said = new Map<number, string>();
   if (atoms.length < 5 || !bonds.length) return { atoms, said };
   const mol = perceive({ atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) });

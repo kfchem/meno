@@ -23,7 +23,7 @@ function bare(d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }, scale = 1): Model {
   };
 }
 
-/** A decalin as F9 draws it, with a methyl on one free place. */
+/** A decalin as projection/views draws it, with a methyl on one free place. */
 function decalin(how: "trans" | { cis: 1 | -1 }, at: number): Model {
   const s = fused(solidChair(), 0, "chair", how);
   const d = drawnByRule(s, 0)!;

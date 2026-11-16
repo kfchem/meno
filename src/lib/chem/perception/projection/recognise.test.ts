@@ -20,7 +20,7 @@ function drawn(view = standardView(chair()), turn = 0, jitter = 0, rand = seeded
   return { places, z: s.map((p) => scale * p.z) };
 }
 
-/** The chair as the textbook draws it (F9's `drawn`, `form` 0 or 1: the two textbook chairs), turned, jittered and scaled as `drawn` above does the true view. */
+/** The chair as the textbook draws it (projection/views `drawn`, `form` 0 or 1: the two textbook chairs), turned, jittered and scaled as `drawn` above does the true view. */
 function conventional(turn = 0, jitter = 0, rand = seeded(1), scale = 40, form: 0 | 1 = 0) {
   const base = drawnByRule(chair(), form)!.atoms;
   const c = Math.cos((turn * Math.PI) / 180);
@@ -37,7 +37,7 @@ const agrees = (got: number[], want: number[]) => {
 };
 
 describe("the chair as the textbook draws it", () => {
-  it("is F9's (`drawn`): in both forms every bond one long, the lower atoms the nearer - what the recognition fits a drawing to", () => {
+  it("is the textbook chair (projection/views `drawn`): in both forms every bond one long, the lower atoms the nearer - what the recognition fits a drawing to", () => {
     for (const form of [0, 1]) {
       const d = drawnByRule(chair(), form)!.atoms;
       for (let k = 0; k < 6; k++) expect(Math.hypot(d[(k + 1) % 6].x - d[k].x, d[(k + 1) % 6].y - d[k].y)).toBeCloseTo(1, 9);
@@ -176,7 +176,7 @@ describe("a chair recognised where the drawing gives no depth", () => {
 
 describe("chairs fused, recognised as one solid", () => {
   const bondIndex = (s: Solid, a: number, b: number) => s.bonds.findIndex(([x, y]) => x === a && y === b);
-  /** A solid of chairs as F9 draws it: its places, the depths it had, and its rings in order round each (the first chair, then each ring fused on). */
+  /** A solid of chairs as projection/views draws it: its places, the depths it had, and its rings in order round each (the first chair, then each ring fused on). */
   function system(s: Solid, form = 0) {
     const d = drawnByRule(s, form)!;
     const rings: number[][] = [[0, 1, 2, 3, 4, 5]];

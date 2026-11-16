@@ -1913,7 +1913,7 @@ lipids each have their own way of being drawn, which it should know.
      or a chair opened again, or pasted, is drawn and read as it was, its
      bonds broken where they were; only files for other programs are given
      wedges in its place.
-   - **Drawn in perspective** (F8, 2026-11-13): any centre of a drawing with
+   - **Drawn in perspective**: any centre of a drawing with
      depth is read in space, not only a cage's - a chair, a Haworth ring, a
      Newman projection - by one reader (`lib/layout/drawn`, `volumeInSpace`).
      The model is said once: an atom's depth (`Atom.z`, nearer is larger);
@@ -1921,9 +1921,8 @@ lipids each have their own way of being drawn, which it should know.
      (every atom of a projection that has depth; whether it is a stereo
      unit is asked afterwards, by identity); a ring bond's near-edge look
      (`display`). Nothing records what kind of projection a ring is.
-     Brecher 2006 (ST-3.2): "Perspective drawings must always be interpreted
-     as representing absolute configuration at all stereogenic centers
-     without attached wavy bonds".
+     A drawing in perspective states the absolute configuration of every
+     stereocentre that has no wavy bond at it (Brecher 2006, ST-3.2).
      - A ring atom with depth, its two ring neighbours with depth, one or
        two groups without: each group takes the free direction it is drawn
        nearer to (a chair's axial or equatorial, a Haworth ring's up or
@@ -1942,7 +1941,7 @@ lipids each have their own way of being drawn, which it should know.
        at its rim (the circle stands for the nearer atom; Moss 1996). Two
        groups of one atom drawn within twice `BETWEEN` of each other say
        nothing, and the atom is unread. The reader goes by the places
-       alone: the bond seen end-on is the look's (F10), not the reader's.
+       alone: the bond seen end-on is the look's (the projection tools'), not the reader's.
      - A group drawn within `BETWEEN` (12 degrees, by convention after the
        turn a wedge's bond may be moved by: no text gives a number) of half
        way between its two nearest free positions as seen - or between two
@@ -1974,9 +1973,8 @@ lipids each have their own way of being drawn, which it should know.
        turned over (the page mirrored and the depth turned: the compound is
        kept), mirrored in the page with the depth as it was (the mirror
        image); an atom dragged keeps its depth.
-     - **A chair recognised where the drawing gives no depth** (F11,
-       2026-11-13): a six-ring on its own, drawn as a chair (opposite bonds
-       parallel, its outline not convex) with no wedge at its atoms, is a
+     - **A chair recognised where the drawing gives no depth**: a six-ring
+       on its own, drawn as a chair (opposite bonds parallel, its outline not convex) with no wedge at its atoms, is a
        ring in perspective; its depth is worked out by fitting the chair's
        solid (`lib/chem/perception/projection`) to the drawn places, and its
        centres are read in space as a tool's drawing is. Near and far, in

@@ -300,9 +300,9 @@ describe("chairs fused, read from their ring bonds with depth (not through the e
 });
 
 /**
- * A solid as the textbook draws it (F9's `drawn`: the convention's places, the true view's depths), its ring atoms with depth and each a centre,
+ * A solid as the textbook draws it (projection/views `drawn`: the convention's places, the true view's depths), its ring atoms with depth and each a centre,
  * and a group one bond long on each free position asked for (by index in `solid.free`), drawn along that position's drawn direction, with no
- * depth. `form` 0 or 1, F9's two textbook pictures; `turn` the page turned, depth as it is; `depthScale` the depths alone scaled.
+ * depth. `form` 0 or 1, its two textbook pictures; `turn` the page turned, depth as it is; `depthScale` the depths alone scaled.
  * `truth` the solid's own volume of the bonds at an atom, in the order given (its H, -1, where it has one left: the free position not drawn).
  */
 function asDrawn(
@@ -353,7 +353,7 @@ function conventionChair(
 }
 
 /**
- * Chairs fused, as F9 builds and draws them: the 18 two-ring systems (a fusion on each of the six bonds, trans and cis on either face), and the 81
+ * Chairs fused, as projection/solids builds and views draws them: the 18 two-ring systems (a fusion on each of the six bonds, trans and cis on either face), and the 81
  * three-ring ones - those of the first three bonds fused again on each bond of the new ring between two atoms of it alone, each way.
  */
 function fusedSystems(): { two: [string, Solid][]; three: [string, Solid][]; both: [string, Solid][] } {
@@ -416,7 +416,7 @@ describe("known answer 12: the chair as the convention draws it, read through re
   });
 });
 
-describe("known answer 12: chairs fused, as F9 draws them, read through readStereo", () => {
+describe("known answer 12: chairs fused, as the textbook draws them, read through readStereo", () => {
   /** Every group at every atom of two ring bonds - on each position alone and both - of each system, both forms, turned, at every depth scale, read and set against the solid: the ones read otherwise. */
   const readAll = (systems: [string, Solid][]) => {
     let tried = 0;

@@ -195,9 +195,9 @@ describe("a chair or a Haworth ring drawn bond by bond, one centre left open", (
 });
 
 describe("chairs fused, drawn bond by bond, read as the compound they show", () => {
-  // (the corpus: every system of chairs F9 fuses - trans-decalin, cis-decalin on either face and on other bonds, perhydrophenanthrene
+  // (the corpus: every system of chairs projection/solids fuses - trans-decalin, cis-decalin on either face and on other bonds, perhydrophenanthrene
   // trans-anti-trans, perhydroanthracene trans-syn-trans, a trans-cis-cis tricycle - in both textbook forms, with no group or one methyl on a
-  // free place, as F9 draws it with depth; then that drawing with its depth taken away, as drawn, turned in the page and moved a little, and
+  // free place, as projection/views draws it with depth; then that drawing with its depth taken away, as drawn, turned in the page and moved a little, and
   // mirrored. The depth worked out must read as the depth drawn did, or not at all: never another compound)
   const bondIndex = (s: Solid, a: number, b: number) => s.bonds.findIndex(([x, y]) => x === a && y === b);
   const c = solidChair();
@@ -213,7 +213,7 @@ describe("chairs fused, drawn bond by bond, read as the compound they show", () 
     ["trans, cis, cis", fused(decalin, bondIndex(decalin, 7, 8), "chair", { cis: -1 })],
   ];
   const BOND = 1.5;
-  /** The system as F9 draws it, `form` 0 or 1, with a methyl on free place `at` (none for -1): every ring atom with its depth, the methyl with none. */
+  /** The system as projection/views draws it, `form` 0 or 1, with a methyl on free place `at` (none for -1): every ring atom with its depth, the methyl with none. */
   function drawing(s: Solid, form: number, at: number) {
     const d = drawnByRule(s, form)!;
     const atoms: DrawnAtom[] = d.atoms.map((p) => ({ x: BOND * p.x, y: BOND * p.y, z: BOND * p.z, centre: true, hs: 0 }));
