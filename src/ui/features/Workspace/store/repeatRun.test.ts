@@ -48,7 +48,7 @@ function page(options: Record<string, string | number>) {
   st().connect({ set: exit(r, "out") }, f);
   st().connect({ set: exit(f, "out") }, r, "again");
   st().connect({ set: exit(f, "rest") }, r, "done");
-  return { st, r, f, exit, doc, input };
+  return { st, r, f, exit, doc, input, store };
 }
 
 const props = (m: { properties?: Record<string, { value: unknown }>[] }, name: string) => m.properties?.[0]?.[name]?.value;
@@ -90,6 +90,40 @@ describe("a Repeat run pass by pass", () => {
       [2, "yes"],
       [2, "yes"],
     ]);
+  });
+
+  it("says the pass under way on its tab as it runs - pass 1 of 3, 2, 3 - and none once it has ended", async () => {
+    const { st, r, store } = page({ repeat: "times", times: 3 });
+    const seen: string[] = [];
+    const off = store.subscribe((now) => {
+      const p = now.repeatPasses[r];
+      const said = p ? `${p.pass}${p.of ? ` of ${p.of}` : ""}${p.stopping ? " stopping" : ""}` : "";
+      if (said && seen[seen.length - 1] !== said) seen.push(said);
+    });
+    await st().runStep(r);
+    off();
+    expect(seen).toEqual(["1 of 3", "2 of 3", "3 of 3"]);
+    expect(st().repeatPasses[r]).toBeUndefined();
+  });
+
+  it("stopped as a pass begins: says it is stopping at once, makes no pass after it, and says how many it made", async () => {
+    const { st, r, store } = page({ repeat: "times", times: 3 });
+    const seen: string[] = [];
+    let pressed = false;
+    const off = store.subscribe((now) => {
+      const p = now.repeatPasses[r];
+      if (!p) return;
+      seen.push(`${p.pass}${p.stopping ? " stopping" : ""}`);
+      if (p.pass === 2 && !pressed) {
+        pressed = true;
+        queueMicrotask(() => st().stopStep(r));
+      }
+    });
+    await st().runStep(r);
+    off();
+    expect(seen).toContain("2 stopping");
+    expect(seen.some((x) => x.startsWith("3"))).toBe(false);
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ said: expect.stringMatching(/^Stopped after 2 passes/) });
   });
 
   it("with its cap reached until none goes again: the cap's passes, the rest out by Out, marked", async () => {
