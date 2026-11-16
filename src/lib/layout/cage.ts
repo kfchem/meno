@@ -25,6 +25,7 @@ import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
 import { byStructure } from "./ranks";
 import { freeCorners } from "../chem/perception/stereo/senses";
 import { ringsAlike } from "./rings";
+import { parity, volumeSign } from "../chem/perception/stereo/geometry";
 
 export type Vec3 = [number, number, number];
 
@@ -203,9 +204,7 @@ function orderedCentre(mol: Molecule, c: number): { neighbours: number[]; volume
     const [a, b] = [t.neighbours[p], t.neighbours[q]];
     return a < 0 || b < 0 ? (a < 0 ? 1 : 0) - (b < 0 ? 1 : 0) : same(a, b);
   });
-  let sign = 1;
-  for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) if (at[i] > at[j]) sign = -sign;
-  return { neighbours: at.map((k) => t.neighbours[k]), volume: t.volume * sign };
+  return { neighbours: at.map((k) => t.neighbours[k]), volume: t.volume * parity(at) };
 }
 
 /** A stereocentre held the way round it is given while a solid is eased: its index, three neighbours' and the sign of the volume they span from it. */
@@ -533,7 +532,7 @@ function embedAnew(mol: Molecule, atoms: number[], index: Map<number, number>): 
     let X = k ? rough.map((_, i) => [0, 1, 2].map((c) => scatter(i, c)) as Vec3) : rough;
     // the solid is found from distances, which cannot tell a shape from
     // its mirror image: the one whose stereocentres are as given is taken
-    if (handedness(mol, atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
+    if (handedVote(mol, atoms, index, X) < 0) X = X.map(([x, y, z]) => [x, y, -z] as Vec3);
     X = rightCentres(mol, atoms, index, settle(X, T, holds(mol, atoms, index)), T);
     const m = miss(X, T);
     if (m < bestMiss - 1e-9) {
@@ -1725,7 +1724,7 @@ function holds(mol: Molecule, atoms: readonly number[], index: Map<number, numbe
  * bonds the cage itself fixes, three of them inside it - are as their
  * configurations say (+1), the mirror image (-1), or have none to say (0).
  */
-function handedness(mol: Molecule, atoms: number[], index: Map<number, number>, X: Vec3[]): number {
+function handedVote(mol: Molecule, atoms: number[], index: Map<number, number>, X: Vec3[]): number {
   let vote = 0;
   atoms.forEach((a, i) => {
     const t = orderedCentre(mol, a);
@@ -1742,8 +1741,7 @@ function handedness(mol: Molecule, atoms: number[], index: Map<number, number>, 
       const k = out.indexOf(n);
       return k >= 0 ? dirs[k] : dirs[0];
     });
-    const vol = dotV(v[0], crossV(v[1], v[2]));
-    vote += Math.sign(vol) === t.volume ? 1 : -1;
+    vote += volumeSign(v[0], v[1], v[2]) === t.volume ? 1 : -1;
   });
   return Math.sign(vote);
 }

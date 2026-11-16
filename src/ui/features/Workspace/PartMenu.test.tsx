@@ -96,7 +96,7 @@ describe("a bond's kinds in its menu", () => {
   });
 
   it("show each kind's key only where the menu acts on the one bond, and the bond's own kind drawn as it lies", () => {
-    const keys = (html: string) => [...html.matchAll(/aria-label="(Single bond|Double bond|Triple bond)"[^>]*title="([^"]+)"/g)].map((m) => m[2]);
+    const keys = (html: string) => [...html.matchAll(/aria-label="(Single bond|Double bond|Triple bond)"[^>]*data-tip="([^"]+)"/g)].map((m) => m[2]);
     const lie = { narrowLeft: false, side: "center" as const };
     const one = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: true, choose: none } }).html;
     expect(keys(one)).toEqual(["Single bond (1)", "Double bond (2)", "Triple bond (3)"]);
@@ -211,6 +211,9 @@ describe("the right-click menu", () => {
     const { html } = menu(target({ kind: "pdf", id: 1 }), { pdf });
     expect(html).toMatch(/aria-label="Previous page"[^>]*disabled=""/);
     expect(html).not.toMatch(/aria-label="Next page"[^>]*disabled=""/);
+    // (named from round it, as a disabled button is not sent the pointer in every engine; the one to be pressed, from itself)
+    expect(html).toMatch(/<span data-tip="Previous page \(←\)"[^>]*><button[^>]*aria-label="Previous page"(?![^>]*data-tip)[^>]*disabled=""/);
+    expect(html).toMatch(/<button[^>]*aria-label="Next page"[^>]*data-tip="Next page \(→\)"/);
   });
 
   it("offers a PDF's pages spread, some in places of their own, put back in their rows", () => {

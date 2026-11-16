@@ -375,6 +375,14 @@ was asked for). What is done most to the thing right-clicked comes first,
 each an icon at Quick Add's size, named as the pointer rests on it (with
 its key, if it has one), and Delete at the row's right end, always; the
 rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
+An icon's name - of a menu's rows, the menu on empty space and Quick
+Add's - is shown in Meno's own look, as the page's tip is: under the icon,
+or over it where there is no room under it, once the pointer has rested on
+it 0.45 s, so that passing over a row shows none; gone as the pointer
+leaves, presses, a key is pressed, the view scrolls or the icon goes
+(`IconTips`, by the workspace in front alone; a row's keys are said to a
+screen reader too; 2026-11-14: the system's own tooltip had been asked for,
+which looks like no other part of Meno and was not shown in every view).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|

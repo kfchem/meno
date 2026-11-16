@@ -11,6 +11,7 @@ import { MOST_PAIRS } from "./mostPairs";
 import { cardHigh } from "./look";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
+import { boundSaid, type Bound } from "../../../../lib/boundOptions";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 import { keptNames, takeFramesHow, type Which } from "./takeFrames";
@@ -140,9 +141,9 @@ export type KindInfo = {
   /** Its exits beyond the first, which is `made`, in order: entries it sets aside (*rest*), or could not do (*failed*) - at most one such - and anything else it gives. */
   others?: readonly StepExit[];
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
-  how?: (values: Record<string, string | number | boolean>) => string;
+  how?: (values: Record<string, string | number | boolean>, bound?: Bound) => string;
   /** What it still needs of its options before it can run, where it cannot as they are: said on its card where *Ready* would be (`needsOf`), as its run would refuse. */
-  needs?: (values: Record<string, string | number | boolean>) => string | undefined;
+  needs?: (values: Record<string, string | number | boolean>, bound?: Bound) => string | undefined;
   /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
   whole?: true;
 };
@@ -1024,10 +1025,10 @@ export const KINDS: readonly KindInfo[] = [
         ],
         default: "strength",
       },
-      { id: "strength", label: "Strength, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP), when: { id: "hold", in: ["strength"] } },
+      { id: "strength", label: "Strength, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP), unit: "kcal/mol/rad\u00b2", fromProperty: true, when: { id: "hold", in: ["strength"] } },
     ],
-    how: (v) => torsionsHow(v),
-    needs: (v) => torsionsNeeds(v),
+    how: (v, bound) => torsionsHow(v, bound),
+    needs: (v, bound) => torsionsNeeds(v, bound),
   },
   {
     // (each entry against its reference, in one numbering: how many torsions across the reference's double bonds are unlike here - trans
@@ -1315,11 +1316,13 @@ export function torsionsTyped(text: string): { torsions: number[][] } | { why: s
 }
 
 /** A Torsion restraints step's options as read from its card: what it makes - typed torsions and their angle, or those from the reference - how each is held, and the property each row names its molecule by; or why they do not read. */
-export function torsionsRead(v: OptionValues): { on: string; hold: { strength: number } | { exact: true } } & ({ typed: number[][]; target: number } | { from: "trans" | "own"; property?: string }) | { why: string } {
+export function torsionsRead(v: OptionValues, bound?: Bound): { on: string; hold: TorsionHoldRead } & ({ typed: number[][]; target: number } | { from: "trans" | "own"; property?: string }) | { why: string } {
   const on = String(v.on ?? "").trim();
   if (!on) return { why: "Name the property each row is for (an ID a Tag wrote)" };
-  let hold: { strength: number } | { exact: true } = { exact: true };
-  if (v.hold !== "exact") {
+  let hold: TorsionHoldRead = { exact: true };
+  // (its strength taken from a property, entry by entry: read at its run, each entry's own - lib/boundOptions)
+  if (v.hold !== "exact" && bound?.strength) hold = { strengthFrom: bound.strength };
+  else if (v.hold !== "exact") {
     const k = aboveZero(String(v.strength ?? TORSION_STEP), "The strength");
     if (k == null) return { why: "Set the strength" };
     if (typeof k === "object") return k;
@@ -1339,17 +1342,20 @@ export function torsionsRead(v: OptionValues): { on: string; hold: { strength: n
   return { on, hold, typed: typed.torsions, target };
 }
 
+/** How a Torsion restraints step holds each torsion, as its card reads: by a strength, exactly, or by the strength each entry's property gives. */
+export type TorsionHoldRead = { strength: number } | { exact: true } | { strengthFrom: string };
+
 /** What a Torsion restraints step still needs of its options. */
-export function torsionsNeeds(v: OptionValues): string | undefined {
-  const r = torsionsRead(v);
+export function torsionsNeeds(v: OptionValues, bound?: Bound): string | undefined {
+  const r = torsionsRead(v, bound);
   return "why" in r ? r.why : undefined;
 }
 
 /** A Torsion restraints step's line: what it holds, at what, how, and what each row is for. */
-export function torsionsHow(v: OptionValues): string {
-  const r = torsionsRead(v);
+export function torsionsHow(v: OptionValues, bound?: Bound): string {
+  const r = torsionsRead(v, bound);
   if ("why" in r) return r.why;
-  const how = "exact" in r.hold ? "exactly" : `${r.hold.strength} kcal/mol/rad\u00b2`;
+  const how = "exact" in r.hold ? "exactly" : `${"strengthFrom" in r.hold ? boundSaid(r.hold.strengthFrom) : r.hold.strength} kcal/mol/rad\u00b2`;
   const what =
     "typed" in r
       ? `${r.typed.length} ${r.typed.length === 1 ? "torsion" : "torsions"} at ${angleIn(r.target)}\u00b0`
@@ -1507,9 +1513,9 @@ export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind =
 export const STEP_FAMILIES = ["structures", "energies", "paths", "charts"] as const;
 export type StepFamily = (typeof STEP_FAMILIES)[number];
 /** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
-export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
+export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean>; bound?: Bound }): string | undefined => {
   const info = kindInfo(s.kind);
-  return info.needs?.(optionsOf(info.options ?? [], s.options));
+  return info.needs?.(optionsOf(info.options ?? [], s.options), s.bound);
 };
 
 /** Whether a step of `kind` takes a set that holds `holds`. */
@@ -1548,9 +1554,10 @@ export function howOf(
   options: readonly Option[],
   own: Record<string, string | number | boolean> | undefined,
   said?: KindInfo["how"],
+  bound?: Bound,
 ): string {
   const values = optionsOf(options, own);
-  if (said) return said(values);
+  if (said) return said(values, bound);
   const shown = shownOptions(options, values);
   // (each choice's value as said, and how many choices say it)
   const chosen = (o: Option) => (o.type === "choice" && values[o.id] !== "none" ? (o.choices.find((c) => c.value === values[o.id])?.label ?? String(values[o.id])) : null);
@@ -1568,6 +1575,9 @@ export function howOf(
   return [...shown.filter((o) => !many(o)), ...shown.filter(many)]
     .flatMap((o) => {
       const v = values[o.id];
+      // (one taken from a property: by the property's name, "= k", with its unit)
+      const from = bound?.[o.id];
+      if (from && (o.type === "number" || o.type === "text")) return [`${boundSaid(from)}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "choice") {
         const c = chosen(o);
