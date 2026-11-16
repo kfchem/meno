@@ -133,6 +133,59 @@ describe("fused, the table (A4.5)", () => {
   });
 });
 
+describe("von Baeyer (A4.3)", () => {
+  const at = (smiles: string, ...idx: number[]) => idx.map((i) => shownOf(smiles)[i]);
+  it("bicyclo[2.2.1]heptane: bridgeheads 1, 4, the bridge 7 (M); bicyclo[2.2.1]hept-2-ene: C=C 2, 3 (M)", () => {
+    // (C0..C6: C2 and C5 the bridgeheads, C6 the one-atom bridge)
+    expect(at("C1CC2CCC1C2", 2, 5, 6).map(String).sort()).toEqual(["1", "4", "7"]);
+    expect(at("C1CC2CCC1C2", 6)).toEqual(["7"]);
+    const s = at("C1=CC2CCC1C2", 0, 1);
+    expect(s.sort()).toEqual(["2", "3"]);
+  });
+
+  it("bicyclo[3.2.1]octane: 1; 2, 3, 4; 5; 6, 7; 8", () => {
+    // (C2 and C4 the bridgeheads: C1, C0, C5 the three-atom segment, C6, C7 the two-atom one, C3 the bridge)
+    const s = shownOf("C1CC2CC(C1)CC2");
+    expect([s[2], s[4]].sort()).toEqual(["1", "5"]);
+    expect([s[1], s[0], s[5]].sort()).toEqual(["2", "3", "4"]);
+    expect([s[6], s[7]].sort()).toEqual(["6", "7"]);
+    expect(s[3]).toBe("8");
+  });
+
+  it("3-oxabicyclo[3.2.1]octane; 2-selenabicyclo[2.2.1]heptane", () => {
+    // (O in the middle of the three-atom segment)
+    expect(at("C1OCC2CCC1C2", 1)).toEqual(["3"]);
+    expect(at("C1[Se]C2CCC1C2", 1)).toEqual(["2"]);
+  });
+
+  it("bicyclo[4.2.0]oct-6-ene, not 1(8); bicyclo[4.2.0]oct-7-ene (M)", () => {
+    // (a bridgehead's C=C into the four-ring: 6, 7, the fewest compound locants)
+    expect(at("C1CCC2=CCC2C1", 3, 4).sort()).toEqual(["6", "7"]);
+    // (the four-ring's two CH: 7, 8)
+    expect(at("C1CCC2C=CC2C1", 4, 5).sort()).toEqual(["7", "8"]);
+  });
+
+  it("bicyclo[4.2.0]octa-1,3,5-triene and its 2-methyl compound, each drawn in both Kekule forms: the same numbers on the same atoms (M)", () => {
+    // (benzocyclobutene: the two forms of the benzene ring)
+    const a = shownOf("C1CC2=CC=CC=C12");
+    const b = shownOf("C1CC2=C1C=CC=C2");
+    // (in both: the four-ring's CH2s are 7 and 8)
+    expect([a[0], a[1]].sort()).toEqual(["7", "8"]);
+    expect([b[0], b[1]].sort()).toEqual(["7", "8"]);
+    const m1 = shownOf("CC1=CC=CC2=C1CC2");
+    const m2 = shownOf("CC1=C2CCC2=CC=C1");
+    // (the methyl's carbon on 2 either way)
+    expect(m1[1]).toBe("2");
+    expect(m2[1]).toBe("2");
+  });
+
+  it("adamantane, cubane: von Baeyer, nothing said (M); 1,2,3,4-tetrahydro-1,4-methanonaphthalene: Meno's own, whole system (M)", () => {
+    expect(ownOf("C1C2CC3CC1CC(C2)C3")).toEqual([]);
+    expect(ownOf("C12C3C4C1C5C2C3C45")).toEqual([]);
+    expect(ownOf("C1CC2CC1c1ccccc12").length).toBe(11);
+  });
+});
+
 describe("chains", () => {
   it("2-methylpentane, not 4 (M); 2,3,5-trimethylhexane, not 2,4,5 (M)", () => {
     const s = shownOf("CC(C)CCC");

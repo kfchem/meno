@@ -20,6 +20,7 @@ import { factsOf } from "./facts";
 import { valencesAt } from "./hydrogens";
 import { kekuleOrders, AROMATIC_BOND } from "./kekule";
 import { LOCANT_PARENTS, type EntryLocant } from "./locantParents";
+import { vonBaeyer } from "./vonBaeyer";
 
 /** A locant as written: its base ("1", "4a", "2'") and a superscript where it has one (pyrene's 3a with a superscript 1). */
 export type Locant = { base: string; sup?: string };
@@ -247,6 +248,34 @@ function twoRingFused(c: Ctx, sys: { atoms: number[]; rings: number[] }): Candid
   return out;
 }
 
+/**
+ * Whether a ring system is named as von Baeyer names one (A4.3): every bridged system - two of its smallest rings sharing three atoms or
+ * more - and a system of rings sharing bonds of which fewer than two have five members or more (P-52.2.4.1: bicyclo[4.2.0]octane). A
+ * bridged system holding two rings of five or more that share exactly one bond is a bridged FUSED system in the text (P-25.4.1.1,
+ * P-44.2.2.2): numbered von Baeyer's way here and said (`bridged fused`). Null for a fused or spiro system.
+ */
+function vonBaeyerKind(c: Ctx, sys: { atoms: number[]; rings: number[] }): "von Baeyer" | "bridged fused" | null {
+  const rings = sys.rings.map((k) => c.rings[k]);
+  const sharedAtoms = (r: readonly number[], s: readonly number[]) => r.filter((a) => s.includes(a)).length;
+  let bridged = false;
+  let fusedLarge = false;
+  let sharesBond = false;
+  for (let i = 0; i < rings.length; i++) {
+    for (let j = i + 1; j < rings.length; j++) {
+      const n = sharedAtoms(rings[i], rings[j]);
+      if (n >= 3) bridged = true;
+      if (n === 2) {
+        sharesBond = true;
+        if (rings[i].length >= 5 && rings[j].length >= 5) fusedLarge = true;
+      }
+    }
+  }
+  const large = rings.filter((r) => r.length >= 5).length;
+  if (bridged) return fusedLarge ? "bridged fused" : "von Baeyer";
+  if (sharesBond && large < 2) return "von Baeyer";
+  return null;
+}
+
 /** P-25.3.3.1.2 (a) to (d), on a fused system's candidates: heteroatoms as a set; by seniority; fusion carbons low; a fusion heteroatom low. */
 function fusedRules(c: Ctx, cands: Candidate[], atoms: readonly number[]): Candidate[] {
   const hetero = atoms.filter((a) => c.input.atoms[a].el !== "C");
@@ -406,19 +435,50 @@ function indicatedSet(c: Ctx, atoms: readonly number[], cand: Candidate, k: numb
 }
 
 /** A multiple bond's locant in an ane-named unit: its lower-numbered atom's, compound where its atoms are not numbered one after the other. */
-function multipleBonds(c: Ctx, cand: Candidate, unit: ReadonlySet<number>): { key: Key; compound: boolean; triple: boolean }[] {
+function multipleBonds(c: Ctx, cand: Candidate, unit: ReadonlySet<number>, ord: (a: number, b: number) => number = (a, b) => orderOf(c, a, b)): { key: Key; compound: boolean; triple: boolean }[] {
   const key = keyIn(cand);
   const place = new Map(cand.atoms.map((a, k) => [a, k]));
   const out: { key: Key; compound: boolean; triple: boolean }[] = [];
   for (const a of cand.atoms) {
     for (const b of c.around[a]) {
       if (!unit.has(b) || place.get(b)! < place.get(a)!) continue;
-      const o = orderOf(c, a, b);
+      const o = ord(a, b);
       if (o < 2) continue;
       out.push({ key: key.get(a)!, compound: place.get(b)! - place.get(a)! !== 1, triple: o === 3 });
     }
   }
   return out;
+}
+
+/**
+ * A benzene ring inside an ane-named unit is compared over its Kekule forms, never the drawn one (K1; P-31.1.4.2.4's
+ * bicyclo[4.1.0]hepta-1,3,5-triene): each form of each such ring tried, the best kept. The drawn bonds are not changed.
+ */
+function bestOverForms(c: Ctx, cand: Candidate, unit: ReadonlySet<number>): ReturnType<typeof multipleBonds> {
+  const benzenes = c.rings.filter((r) => r.length === 6 && r.every((a) => unit.has(a) && c.input.atoms[a].el === "C") && isBenzene(c, r));
+  let best: ReturnType<typeof multipleBonds> | null = null;
+  const flips = Math.min(benzenes.length, 4);
+  for (let mask = 0; mask < 1 << flips; mask++) {
+    const turned = new Map<number, number>();
+    for (let k = 0; k < flips; k++) {
+      if (!(mask & (1 << k))) continue;
+      const r = benzenes[k];
+      r.forEach((a, i) => {
+        const b = r[(i + 1) % 6];
+        const bi = c.bondIndex(a, b);
+        turned.set(bi, (turned.get(bi) ?? c.orders[bi]) === 2 ? 1 : 2);
+      });
+    }
+    const ord = (a: number, b: number) => {
+      const bi = c.bondIndex(a, b);
+      return bi < 0 ? 0 : (turned.get(bi) ?? c.orders[bi]);
+    };
+    // (a form in which an atom has two double bonds, or none where it had one, is no Kekule form)
+    if (turned.size && [...unit].some((a) => c.around[a].filter((b) => unit.has(b) && ord(a, b) === 2).length > 1)) continue;
+    const m = multipleBonds(c, cand, unit, ord);
+    if (!best || compareMultiple(m, best) < 0) best = m;
+  }
+  return best ?? multipleBonds(c, cand, unit);
 }
 
 /** P-31.1.4.2, P-31.1.4.3 (K1): fewest compound locants; the set without the parentheses; with them; then the double bonds alone. */
@@ -496,7 +556,7 @@ function a5(
   if (from <= 3) {
     left = unit.mancude
       ? keepLeast(left, (cd) => { const k = keyIn(cd); return saturatedPositions(c, unit.atoms).map((a) => k.get(a)!); }, compareSets)
-      : keepLeast(left, (cd) => multipleBonds(c, cd, set), compareMultiple);
+      : keepLeast(left, (cd) => bestOverForms(c, cd, set), compareMultiple);
   }
   const hang = hangers(c, parent);
   left = keepLeast(left, (cd) => { const k = keyIn(cd); return hang.map((h) => k.get(h.on)!); }, compareSets);
@@ -718,15 +778,29 @@ function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: nu
     } else {
       const table = tableCandidates(c, sys.atoms);
       const two = table.length ? [] : twoRingFused(c, sys);
+      const bridged = !table.length && !two.length ? vonBaeyerKind(c, sys) : null;
       if (table.length) cands = table;
       else if (two.length) cands = fusedRules(c, two, sys.atoms);
-      else {
+      else if (bridged) {
+        const found = vonBaeyer(sys.atoms, (a) => c.around[a]);
+        if (found && found.length) {
+          cands = found.map((f) => ({ atoms: f.order, keys: f.order.map((_, k) => plain(k + 1).key), locants: f.order.map((_, k) => plain(k + 1).locant) }));
+          // (heteroatoms after the hydrocarbon's numbering: the set, then by seniority - P-23.3.2.1, .2)
+          const hetero = sys.atoms.filter((a) => c.input.atoms[a].el !== "C");
+          cands = bySeniorityOrder(c, keepLeast(cands, (cd) => { const k = keyIn(cd); return hetero.map((a) => k.get(a)!); }, compareSets), hetero);
+          if (bridged === "bridged fused") ownAll = "not built";
+        } else {
+          const atoms = [...sys.atoms].sort((p, q) => p - q);
+          cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
+          ownAll = found ? "not built" : "over the budget";
+        }
+      } else {
         // (a system of another kind: its kind's rules come in later slices; meanwhile the system in the molecule's order, said)
         const atoms = [...sys.atoms].sort((p, q) => p - q);
         cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
         ownAll = "not built";
       }
-      if (!ownAll) {
+      if (!ownAll && !bridged) {
         mancude = true;
         indicated = indicatedCount(c, sys.atoms);
       }
