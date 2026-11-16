@@ -53,8 +53,11 @@ const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
 /** The most pi electrons a ring or pair is taken as aromatic with: 4n + 2 for n = 5, as far as Hückel's rule is generally held to go (Müller, Pure Appl. Chem. 66, 1077, 1994, p. 1122). */
 export const MOST_PI = 22;
 
-/** The elements whose atom, with no double bond in its ring system, gives the ring a lone pair: two electrons. */
-const LONE_PAIR = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
+/**
+ * The elements whose atom, with no double bond in its ring system, gives the ring a lone pair: two electrons. A five-ring is drawn as aromatic
+ * (lib/chem/aromaticSides) by this same list, so that a ring this rule calls aromatic is drawn so: an arsole's and a tellurophene's too.
+ */
+export const RING_LONE_PAIR: ReadonlySet<string> = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
 /** The elements a ring carbon's double bond may leave its ring system to, its electron then taken: none. */
 const TAKES = new Set(["O", "N", "S", "Se", "Te"]);
 
@@ -79,7 +82,7 @@ export function piElectrons(s: PiState): number | null {
   if (s.outTo != null) return s.el === "C" && TAKES.has(s.outTo) ? 0 : null;
   if (s.el === "C") return s.charge < 0 ? 2 : s.charge > 0 ? 0 : null;
   if (s.el === "B") return s.degree > 3 ? null : s.charge < 0 ? 1 : s.charge === 0 ? 0 : null;
-  if (LONE_PAIR.has(s.el) && s.charge <= 0) return 2;
+  if (RING_LONE_PAIR.has(s.el) && s.charge <= 0) return 2;
   return null;
 }
 

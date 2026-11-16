@@ -29,7 +29,7 @@ export const CONCEPTS: Record<string, RegExp> = {
   volume: /^(?:export )?(?:function|const) (drawnVolume|volumeSign|handedness|signedVolume)\b/,
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
   // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
-  "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
+  "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI|RING_LONE_PAIR)\b/,
   // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
   "aromatic tests": /^(?:export )?(?:function|const) (aromaticRing|aromaticBonds|isFlat)\b/,
 };
