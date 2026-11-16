@@ -812,6 +812,19 @@ function ringFacts(c: Ctx, s: { atoms: number[]; rings: number[] }): number[] {
   return [hetero.length ? 0 : 1, hetero.includes("N") ? 0 : 1, seniorRank, -s.rings.length, -s.atoms.length, -hetero.length, ...counts];
 }
 
+/** A ring unit's kind as P-44.2.2.2 ranks them (lower first): spiro, fused (one ring with them), bridged fused, von Baeyer, assembly. */
+function kindOf(c: Ctx, u: Unit): number[] {
+  if (u.kind === "assembly") return [4];
+  const sys = c.systems[u.ringSystem!];
+  if (sys.rings.length === 1) return [1];
+  const bridged = vonBaeyerKind(c, sys);
+  if (bridged === "bridged fused") return [2];
+  if (bridged) return [3];
+  const rings = sys.rings.map((k) => c.rings[k]);
+  const spiro = rings.every((r, i) => rings.every((q, j) => i === j || r.filter((a) => q.includes(a)).length <= 1));
+  return [spiro ? 0 : 1];
+}
+
 /** P-44.4.1 (a), (b): more multiple bonds, then more double bonds, in the unit's atoms (lower first). */
 function unsaturation(c: Ctx, atoms: readonly number[]): number[] {
   const set = new Set(atoms);
@@ -850,6 +863,9 @@ function parentOf(c: Ctx, atoms: readonly number[]): ParentPick {
     const ringsOf = (u: Unit) => (u.systems ?? [u.ringSystem!]).flatMap((k) => c.systems[k].rings);
     let best = units.map((_, i) => i);
     best = leastBy(best, (i) => ringFacts(c, { atoms: units[i].atoms, rings: ringsOf(units[i]) }));
+    // (the kind, P-44.2.2.2: spiro, fused, bridged fused, von Baeyer, assembly; within fused, the larger ring at the first difference)
+    best = leastBy(best, (i) => kindOf(c, units[i]));
+    best = leastBy(best, (i) => (kindOf(c, units[i])[0] === 1 ? ringsOf(units[i]).map((k) => -c.rings[k].length).sort((p, q) => p - q) : []));
     best = leastBy(best, (i) => unsaturation(c, units[i].atoms));
     if (best.length === 1) return { unit: units[best[0]], own: null };
     return tiedParents(c, best.map((i) => units[i]));

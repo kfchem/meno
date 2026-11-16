@@ -345,6 +345,57 @@ describe("ring assemblies and multiplied parents (A3.3, A3.5, A4.7)", () => {
   });
 });
 
+describe("the parent among rings (A3 steps 0 to 2)", () => {
+  it("2-[(naphthalen-2-yl)methyl]pyridine: pyridine the parent, its N 1; then the CH2", () => {
+    const { r } = run("n1ccccc1Cc1ccc2ccccc2c1");
+    expect(r.shown[0].base).toBe("1");
+    expect(r.shown[6].base).toBe("7");
+  });
+
+  it("1-(trimethylsilyl)-1H-imidazole and 2-hydrazinylpyridine: the ring, N before Si and before the acyclic N", () => {
+    expect(shownOf("C[Si](C)(C)n1ccnc1")[4]).toBe("1");
+    expect(shownOf("NNc1ccccn1")[7]).toBe("1");
+  });
+
+  it("2-[(phosphinin-2-yl)phosphanyl]furan: furan, chosen among all the rings, not the ring that holds P", () => {
+    // (furan's O, atom 13, is its 1)
+    expect(shownOf("c1ccc(pc1)Pc1ccco1")[11]).toBe("1");
+  });
+
+  it("1-(2H-pyran-3-yl)-2-(silolan-2-yl)hydrazine: the N chain, 1 and 2", () => {
+    const s = shownOf("C1OC=CC(=C1)NNC1CCC[SiH2]1");
+    expect([s[6], s[7]].sort()).toEqual(["1", "2"]);
+  });
+
+  it("an azulene and a naphthalene joined by CH2: azulene the parent (M); 8-azaspiro[4.5]decane against quinoline: the spiro system (M)", () => {
+    const az = shownOf("c1cc2cccccc2c1Cc1ccc2ccccc2c1");
+    expect([az[2], az[8]].sort()).toEqual(["3a", "8a"]);
+    const sp = shownOf("C12(CCCC1)CCN(CC2)Cc1ccc2ncccc2c1");
+    expect(sp[0]).toBe("5");
+    expect(sp[7]).toBe("8");
+  });
+});
+
+describe("isotopes and configuration (A5 steps 6, 7)", () => {
+  it("(2-14C)butane, not 3", () => {
+    const g = fromSmiles("CCCC");
+    const r = locants({ atoms: g.atoms.map((a, i) => (i === 2 ? { ...a, isotope: 14 } : a)), bonds: g.bonds });
+    expect(r.shown[2].base).toBe("2");
+  });
+
+  it("(2R,4S)-2,4-difluoropentane: R at 2", () => {
+    const g = fromSmiles("CC(F)CC(F)C");
+    const descriptors = { atoms: new Map([[1, "S"], [4, "R"]]) };
+    const r = locants({ atoms: g.atoms, bonds: g.bonds, descriptors });
+    expect(r.shown[4].base).toBe("2");
+    expect(r.own).toEqual([]);
+  });
+
+  it("1-methyl-4-nitronaphthalene: Meno's own (the alphabet would decide)", () => {
+    expect(ownOf("Cc1ccc([N+](=O)[O-])c2ccccc12").length).toBeGreaterThan(0);
+  });
+});
+
 describe("said as Meno's own", () => {
   it("3-chlorocyclohexan-1-ol: the set 1, 3 either way; the atoms whose numbers differ are own", () => {
     const own = ownOf("OC1CC(Cl)CCC1");
