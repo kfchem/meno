@@ -51,6 +51,7 @@ export const STEP_KINDS = [
   "barrier",
   "ensemble",
   "onto-structures",
+  "repeat",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
@@ -65,6 +66,7 @@ export type StepKind = (typeof STEP_KINDS)[number];
  * makes (workflow/stereoisomers).
  */
 export const MENO_ONLY: readonly StepKind[] = [
+  "repeat",
   "energy-window",
   "duplicates",
   "populations",

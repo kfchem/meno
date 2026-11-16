@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { DrawnRecord, Model } from "../store/types";
 import { drawingOf } from "../chem/drawing";
-import { identityOfDrawn } from "../chem/identityOf";
+import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
+import { identityText } from "../../../../lib/chem/identity";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { template } from "./testdata/enumerationCases";
 import { enumerated, listsReadAs, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
@@ -260,6 +261,34 @@ describe("Enumerate as a step", () => {
   /** What each member's record says (`numberedRecord`): its number, how it was made and, where it was set aside, why. */
   const said = (r: DrawnRecord | undefined) => (r ? { number: recordNumber(r), how: recordHow(r), ...(recordWhy(r) ? { why: recordWhy(r) } : {}) } : undefined);
   const entries = (doc: WorkspaceDocument, step: number, exit: string) => (resultOf(doc, step, exit)!.members ?? []).map((m) => ("structure" in m ? said(m.record) : undefined));
+
+  it("reads an R typed with its number - a star of a SMILES, [*:1], its number the atom's map - as that R: the products of R1 and R2 drawn", () => {
+    // (the template as a typed SMILES comes onto the page: each star an atom "*" with its map number, as the plugin reads [*:1])
+    const drawnR = template("*c1ccc(*)cc1");
+    let k = 0;
+    const typed: Model = { ...drawnR, atoms: drawnR.atoms.map((a) => (a.el === "R#" ? { ...a, el: "*", rgroups: undefined, map: ++k } : a)) };
+    expect(templateRs(typed)).toEqual(templateRs(drawnR));
+    const lists = "R1: Me\nCl\nH\nOMe\nR2: Me\nCl\nH";
+    const made = (m: Model) => {
+      const r = enumerated(m, lists);
+      return r.ok ? { made: r.made.map((x) => [x.number, x.how, identityText(identityInputOf(x.drawn).input)]), aside: r.aside.map((x) => [x.number, x.why]) } : r;
+    };
+    expect(made(typed)).toEqual(made(drawnR));
+    // (nothing put in a typed R's place keeps its number as a map: toluene made as R1 = Me, R2 = H is Meno's toluene)
+    const products = enumerated(typed, lists);
+    expect(products.ok && products.made.every((x) => x.drawn.atoms.every((a) => a.map == null))).toBe(true);
+    const toluene = products.ok ? products.made.find((x) => x.how === "R1 = Me, R2 = H") : undefined;
+    expect(toluene && identityText(identityInputOf(toluene.drawn).input)).toBe(identityText(identityInputOf(drawnFromSmiles("Cc1ccccc1")).input));
+    // (a map on one of the template's own atoms stays)
+    const mapped: Model = { ...typed, atoms: typed.atoms.map((a, i) => (i === 1 ? { ...a, map: 7 } : a)) };
+    const kept = enumerated(mapped, lists);
+    expect(kept.ok && kept.made.every((x) => x.drawn.atoms.some((a) => a.map === 7))).toBe(true);
+    // (and an R typed as "R" with its number, as some toolkits write it)
+    const asR: Model = { ...typed, atoms: typed.atoms.map((a) => (a.el === "*" ? { ...a, el: "R" } : a)) };
+    expect(made(asR)).toEqual(made(drawnR));
+    // (an R typed with no number is still said to have none)
+    expect(templateRs({ ...asR, atoms: asR.atoms.map((a) => (a.el === "R" ? { ...a, map: undefined } : a)) }).problems).toContain("An R has no number: number each, as R1, R2");
+  });
 
   it("is wired from a set of structures drawn, and makes its products into its sets - each with its number and how it was made, those aside with why", () => {
     const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
