@@ -44,7 +44,7 @@
  * The core's (lib/chem/perception): it imports nothing of the layout's. The
  * layout's `lib/layout/drawn` reads through it with its cage fit handed in.
  */
-import { lonePairCentres, pyramidal } from "../../lonePairCentres";
+import { lonePairCentres, pyramidal } from "./lonePairs";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
 import { factsOf } from "../facts";

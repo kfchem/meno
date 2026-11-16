@@ -1284,7 +1284,7 @@ All hover-based, as above.
     mirror image (seqCis, seqTrans) says so there too. A protonated
     amine's N (R3NH+) has none: it gives its H up and takes one back,
     turning over as it does - but where its amine's N keeps its
-    configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
+    configuration, a small cage's bridgehead (lib/chem/perception/stereo/lonePairs).
     An axis's Ra or Sa - a biaryl's, an allene's, asked for on a bond of
     it - and an odd cumulene's E or Z are Meno's too (docs/CIP.md, *Axes
     and odd cumulenes*).
@@ -2026,7 +2026,7 @@ lipids each have their own way of being drawn, which it should know.
      and Clean-up says so rather than lose it. A SMILES's [P@H] is
      still refused: where its H and its lone pair each go in the text's
      order is not yet measured against the reading libraries.
-     An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
+     An amine's N keeps none. One rule (`lib/chem/perception/stereo/lonePairs.ts`)
      says which such atoms a drawing's wedge is read at, which a SMILES's @
      is read at, which centres a structure leaves open, and which a
      molecule in 3D has read from its geometry (docs/PLUGINS.md,

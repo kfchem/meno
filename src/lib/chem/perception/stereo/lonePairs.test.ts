@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { lonePairCentres, protonatedAmineHeld, pyramidal, type PyramidAtom, type PyramidBond } from "./lonePairCentres";
-import { readSmiles } from "./smiles";
+import {
+  FIVE_RING_SHOWN_AROMATIC,
+  GIVES_A_METAL_A_PAIR,
+  HELD_FLAT_BY_AN_ACYL,
+  lonePairCentres,
+  protonatedAmineHeld,
+  pyramidal,
+  SHARED_WITH_A_DOUBLE_BOND,
+  type PyramidAtom,
+  type PyramidBond,
+} from "./lonePairs";
+import * as before from "../../lonePairCentres";
+import { readSmiles } from "../../smiles";
 
 /** A structure from its SMILES, as the rule reads it: bracket atoms' hydrogens as written, the rest by Meno's SMILES reader. */
 function graph(smiles: string): { atoms: PyramidAtom[]; bonds: PyramidBond[] } {
@@ -93,6 +104,11 @@ describe("lonePairCentres", () => {
     //  two paths that share an atom then the first two it walks)
     expect(centres("C1CC2CN12")).toEqual([]);
     expect(centres("N12CC1CCC2")).toEqual([]);
+  });
+
+  it("keeps no amide's N, its lone pair shared with its carbonyl: N-ethyl-N-methylformamide's, N-methyl-N-phenylacetamide's", () => {
+    expect(centres("O=CN(C)CC")).toEqual([]);
+    expect(centres("CC(=O)N(C)c1ccccc1")).toEqual([]);
   });
 
   it("keeps no atom without a lone pair", () => {
@@ -191,5 +207,22 @@ describe("protonatedAmineHeld", () => {
     expect(held("C[N+](C)(C)C", 1)).toBeNull();
     expect(held("C=[NH+]C", 1)).toBeNull();
     expect(held("CN(C)C", 1)).toBeNull();
+  });
+});
+
+describe("the other lists of atoms with a lone pair, each its caller's own (part 14 B: gathered, none merged)", () => {
+  it("holds each list as its caller had it", () => {
+    expect([...HELD_FLAT_BY_AN_ACYL]).toEqual(["N", "O", "S"]);
+    expect([...SHARED_WITH_A_DOUBLE_BOND]).toEqual(["N", "O"]);
+    expect([...FIVE_RING_SHOWN_AROMATIC]).toEqual(["N", "O", "S", "Se", "P"]);
+    expect([...GIVES_A_METAL_A_PAIR]).toEqual(["N", "P", "As", "O", "S", "Se", "Te"]);
+  });
+});
+
+describe("the rule's old home", () => {
+  it("re-exports the core's rule unchanged: the same functions", () => {
+    expect(before.lonePairCentres).toBe(lonePairCentres);
+    expect(before.pyramidal).toBe(pyramidal);
+    expect(before.protonatedAmineHeld).toBe(protonatedAmineHeld);
   });
 });

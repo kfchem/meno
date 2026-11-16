@@ -51,6 +51,7 @@
  */
 import { implicitHydrogens, type Radical } from "./molecule";
 import { inValenceSums } from "./perception/elements";
+import { GIVES_A_METAL_A_PAIR } from "./perception/stereo/lonePairs";
 
 export type ProtonAtom = { el: string; charge?: number; radical?: Radical };
 export type ProtonBond = { a1: number; a2: number; order: number };
@@ -128,7 +129,7 @@ export function hydrogensOf(a: ProtonAtom, sum: number): number {
  * can say (a site of its own, `"metal bond"`). Any other's - a carbon's on
  * tin or lithium, a chlorine's on mercury - counts in its valence.
  */
-const DONORS = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
+const DONORS = GIVES_A_METAL_A_PAIR;
 
 /** Whether an element's bonds count in its neighbours' valences (the core's `inValenceSums`): not a metal's. */
 export const countsInValence = (el: string) => inValenceSums.has(el);

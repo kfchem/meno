@@ -16,10 +16,12 @@
  * nothing.
  */
 import { smallestRings } from "../layout/rings";
+import { FIVE_RING_SHOWN_AROMATIC } from "./perception/stereo/lonePairs";
 
 type RingBond = { a1: number; a2: number; order: number };
 
-const LONE_PAIR = new Set(["N", "O", "S", "Se", "P"]);
+/** The atom left over that makes a five-ring of two double bonds show as aromatic (perception/stereo/lonePairs). */
+const LONE_PAIR = FIVE_RING_SHOWN_AROMATIC;
 
 /** More shared bonds than this and the choice is made one bond at a time. */
 const EXHAUSTIVE = 14;

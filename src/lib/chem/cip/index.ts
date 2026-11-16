@@ -16,7 +16,8 @@
 import { isMetal } from "../../layout/perceive";
 import type { IdentityInput } from "../identity";
 import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Budget, type CipNode } from "./digraph";
-import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
+import { MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
+import { lonePairOfThree } from "../perception/stereo/lonePairs";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
 
 /**
@@ -89,8 +90,9 @@ function refusedCentre(p: Prepared, c: number): boolean {
   const hs = t.neighbours.length - drawn.length;
   if (hs !== p.hs[c] || drawn.length !== p.around[c].length || drawn.some((n) => !p.around[c].includes(n))) return true;
   if (t.neighbours.length === 4) return false;
-  // (three, and the fourth its lone pair: an atom with one - not a B, nor a C+)
-  return t.neighbours.length !== 3 || lonePairs(p, c) < 1;
+  // (three, and the fourth its lone pair: an atom with one by the core's rule - not a B, nor a C+ - its bonds single here, none
+  //  duplicated: perception/stereo/lonePairs `lonePairOfThree`)
+  return t.neighbours.length !== 3 || !lonePairOfThree(p.input.atoms[c].el, p.charge[c], p.around[c].length, p.around[c].length, p.hs[c]);
 }
 
 function centre(p: Prepared, c: number): Said {
