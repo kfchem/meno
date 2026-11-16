@@ -32,6 +32,8 @@ export const CONCEPTS: Record<string, RegExp> = {
   runs: /^(?:export )?(?:function|const) (cumulatedRuns|runsThrough|runsOfDrawing|linearMiddle)\b/,
   // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
   "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
+  // a structure's symmetry and canonical order: the one refinement and search (perception/symmetry.ts, part 6)
+  symmetry: /^(?:export )?(?:function|const) (symmetryClasses|symmetryOrbits|canonicalRanks|canonicalText|canonicalWritten|canonicalSearched|settleBudget|withStereo|isomorphisms|coreMatches|matchedAtoms)\b/,
 };
 
 /**
@@ -80,6 +82,16 @@ export const STILL_APART: Copy[] = [
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Axial", part: 14, why: "re-exported from the core, as Tetrahedral" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Cumulated", part: 14, why: "re-exported from the core, as Tetrahedral (part 14 A)" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
+  // symmetry: the layout's ranks and the Kekule ranker onto the core's refinement and search (parts 6a, 6b); the orbits of the aromatic form
+  // identity's until part 13; and the matchers of two graphs, which are not the symmetry of one
+  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "canonicalRanks", part: "6b", why: "the layout's own ranks of its Molecule: onto the core's refinement and search in part 6b (part 6a first)" },
+  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "withStereo", part: "6b", why: "the layout's ranks' stereo refinement: onto the core's in part 6b" },
+  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "settleBudget", part: "6b", why: "the layout's ranks' search budget: goes with its search in part 6b" },
+  { concept: "symmetry", file: "lib/chem/kekulize.ts", name: "canonicalRanks", part: "6b", why: "the Kekule ranker: onto the core's refinement in part 6b" },
+  { concept: "symmetry", file: "lib/chem/identity.ts", name: "symmetryOrbits", part: 13, why: "the orbits of the aromatic form, over the core's orbits as drawn: identity's own until part 13" },
+  { concept: "symmetry", file: "lib/chem/accelMapper.ts", name: "isomorphisms", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
+  { concept: "symmetry", file: "lib/layout/scaffold.ts", name: "coreMatches", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
+  { concept: "symmetry", file: "lib/layout/morph.ts", name: "matchedAtoms", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
   { concept: "runs", file: "lib/chem/stereoOpen.ts", name: "cumulatedRuns", part: "by design", why: "groups the double bonds a structure leaves open by the runs they are in: written over the core's runs (part 4), not a second finder of them" },
 ];
 
@@ -145,12 +157,13 @@ describe("one definition per concept: the ratchet", () => {
 });
 
 describe("the ratchet's own reading, so that it bites", () => {
-  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule", () => {
+  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a symmetry search", () => {
     expect(declarationsIn("export function ringThrough(g, a) {}\nconst x = 1;\n", CONCEPTS.rings)).toEqual([{ name: "ringThrough", line: 1 }]);
     expect(declarationsIn("const METALS = new Set([]);\n", CONCEPTS.metals)).toEqual([{ name: "METALS", line: 1 }]);
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
     expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
+    expect(declarationsIn("export function symmetryOrbits(g) {}\nconst settleBudgets = 1;\n", CONCEPTS.symmetry)).toEqual([{ name: "symmetryOrbits", line: 1 }]);
   });
 
   it("leaves a use, a local and an import alone: only a declaration counts", () => {

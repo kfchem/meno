@@ -66,7 +66,9 @@ src/
                           types for a centre, a double bond, an axis and an odd cumulene), stereo/from2d.ts (the reader of a drawing's
                           configuration: wedges, depth, the lines that say none; a cage's solid fitted to the drawing is the layout's, handed
                           in by lib/layout/drawn, which keeps every name it had), stereo/senses.ts (a volume and an axis's turn as drawn, a
-                          tetrahedron's free corners; the layout imports them back). Two rules, each kept by a test: it imports nothing of the layout's,
+                          tetrahedron's free corners; the layout imports them back), symmetry.ts (a structure's symmetry classes,
+                          its orbits under the automorphisms found, and its canonical ranks and text: the one refinement and search,
+                          which identity and the layout's own orders (lib/layout/canonical) take). Two rules, each kept by a test: it imports nothing of the layout's,
                           the UI's or any other lib/chem file but the element table (boundary.test.ts), and a concept it is to define
                           has no new copy outside it (oneDefinition.test.ts: the copies still standing are listed, each with the part
                           that moves it, and the list only shrinks). The layout and the rest of lib/chem import from it, never the reverse.

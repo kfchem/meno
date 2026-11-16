@@ -1225,7 +1225,7 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
   (`crowded`, in words). Of the ways the part can be set down, the one
   nearest the rest's atoms is taken, then the one that reads best by the
   engine's own measure.
-- **In any order.** The molecule is worked in its own order (`canonical.ts`),
+- **In any order.** The molecule is worked in its own order (`canonical.ts`, over the core's ranks),
   as `layout2D` is, and every choice goes by the drawing or by that order;
   placements are compared to a millionth, and of two that read alike the
   one taken goes by each element where it lies, not by how the atoms are

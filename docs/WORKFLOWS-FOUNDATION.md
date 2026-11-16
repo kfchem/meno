@@ -989,7 +989,7 @@ drawn, aromatic rings as one form.* What that means, plainly:
   `identityKey`, checks each one against the change, and adds a test
   where the change matters to it;
 - **the canonical search has a budget** (`settleBudget` in
-  `src/lib/layout/canonical.ts`). A very large, very symmetric structure
+  `src/lib/chem/perception/symmetry.ts`). A very large, very symmetric structure
   that exhausts it can be written two ways, so a duplicate can be missed.
   It never judges two different structures the same, except by the rules
   above (Kekulé structures, bond-shift isomers, hydrogens folded in): the
