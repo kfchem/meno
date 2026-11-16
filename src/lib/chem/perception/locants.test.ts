@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fromSmiles } from "../../layout/testdata/fromSmiles";
-import { symmetryOrbits } from "../identity";
+import { aromaticForm, symmetryOrbits } from "../identity";
 import { locants, type Locants, type LocantsInput } from "./locants";
 
 // Foundation part 16, level 1: known answers of the brief's section C - the 2013 recommendations' own names, and Meno's plain cases (M),
@@ -365,5 +365,51 @@ describe("the whole", () => {
       const texts = r.shown.map((s) => `${s.base}^${s.sup ?? ""}`);
       expect(new Set(texts).size, smiles).toBe(texts.length);
     }
+  });
+});
+
+describe("any order (D)", () => {
+  /**
+   * The graph written in `order`: each atom's element and what it shows, each bond by the two places and its order in the aromatic form
+   * (the numbering is the same whichever Kekule form a ring was drawn in).
+   */
+  const written = (g: LocantsInput, r: Locants) => {
+    const place = new Map(r.order.map((a, k) => [a, k]));
+    const atoms = r.order.map((a) => `${g.atoms[a].el}:${r.shown[a].base}^${r.shown[a].sup ?? ""}`);
+    const bonds = aromaticForm(g as never).bonds.map((b) => [place.get(b.a)!, place.get(b.b)!].sort((p, q) => p - q).join("-") + `:${b.order}`).sort();
+    return `${atoms.join(" ")} | ${bonds.join(" ")}`;
+  };
+  /** The same molecule with its atoms in another order. */
+  const shuffled = (g: LocantsInput, seed: number): LocantsInput => {
+    const n = g.atoms.length;
+    const perm = Array.from({ length: n }, (_, i) => i);
+    let x = seed;
+    for (let i = n - 1; i > 0; i--) {
+      x = (x * 1103515245 + 12345) % 2147483648;
+      const j = x % (i + 1);
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    const to = new Map(perm.map((old, k) => [old, k]));
+    return {
+      atoms: perm.map((old) => g.atoms[old]),
+      bonds: g.bonds.map((b) => ({ ...b, a: to.get(b.a)!, b: to.get(b.b)! })),
+    };
+  };
+  it.each([
+    "c1ccc2ccccc2c1",
+    "c1ccccc1CCCCCCC",
+    "C1CC2CC(C1)CC2",
+    "C12(CCCC1)OCCCC2",
+    "c1ccccc1-c1ccccc1",
+    "Brc1ccc(cc1)Oc1ccc(Br)cc1",
+    "c1ccc2c(c1)[nH]c1ccccc12",
+    "C1C2CC3CC1CC(C2)C3",
+    "CC(C)C(C)CC(C)C",
+    "c1ncc2[nH]cnc2n1",
+  ])("%s: the same numbered molecule, its atoms shuffled", (smiles) => {
+    const g = fromSmiles(smiles);
+    const once = (h: LocantsInput) => written(h, locants({ ...h, orbits: symmetryOrbits(h as never).orbit }));
+    const want = once(g);
+    for (const seed of [7, 1234567]) expect(once(shuffled(g, seed))).toBe(want);
   });
 });
