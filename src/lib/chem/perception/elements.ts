@@ -34,16 +34,18 @@ export const metal: ReadonlySet<string> = new Set([...transitionMetal, ...mainGr
 export const notMetal: ReadonlySet<string> = new Set("H He B C N O F Ne Si P S Cl Ar Ge As Se Br Kr Sb Te I Xe At Rn Ts Og".split(" "));
 
 /**
- * What a drawing's label is that is also an element's symbol: "Pr" on a drawing is propyl's label. A fact about labels, not about praseodymium,
- * which is a lanthanoid and a `transitionMetal` all the same.
+ * What a drawing's label is that is also a transition metal's symbol (the maintainer's rule, 2026-10-10: a group named as an element is the
+ * group): "Pr" is propyl's label, "Ac" acetyl's, "Fm" 9-fluorenylmethyl's. A fact about labels, not about praseodymium, actinium or
+ * fermium, which are a lanthanoid and actinoids, `transitionMetal`s all the same (foundation part 3, B2, is whether the drawing can tell
+ * the label from the element).
  */
-export const labelNotElement: ReadonlySet<string> = new Set(["Pr"]);
+export const labelNotElement: ReadonlySet<string> = new Set(["Pr", "Ac", "Fm"]);
 
 /**
  * The metals ligands are drawn round (lib/layout/perceive `isMetal`, docs/LAYOUT-2D.md section 7), and a complex's formula is read for
- * (lib/chem/ligands): the `transitionMetal`s, the actinoids among them (Ac to Lr: uranocene is a sandwich as ferrocene is, and an H on U is a
- * hydride kept, as on Pd - foundation part 3, B1), but for two gaps. Pr, its label being propyl's (`labelNotElement`). And Rf to Cn, the
- * seventh row's d block, whose complexes are not made: not listed, as before.
+ * (lib/chem/ligands): the `transitionMetal`s, the actinoids among them (Th to Lr: uranocene is a sandwich as ferrocene is, and an H on U is a
+ * hydride kept, as on Pd - foundation part 3, B1), but for two gaps. Pr, Ac and Fm, their labels being propyl's, acetyl's and
+ * 9-fluorenylmethyl's (`labelNotElement`). And Rf to Cn, the seventh row's d block, whose complexes are not made: not listed, as before.
  */
 export const drawnRoundMetal: ReadonlySet<string> = ((notMade) =>
   new Set([...transitionMetal].filter((el) => !labelNotElement.has(el) && !notMade.has(el))))(byNumber([104, 112]));
