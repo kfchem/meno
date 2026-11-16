@@ -16,7 +16,8 @@
  * - the canonical text (`canonicalText`, `canonicalWritten`, `canonicalSearched`): equal for two orders of one structure when
  *   the search was complete; never equal for two structures.
  * - a cis or trans that sets nothing is read as none (`settingCisTrans`): a double bond with an end whose two other groups are
- *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there.
+ *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there; nor
+ *   is one with an end that is no trigonal-planar centre (a sulfonium or sulfoxonium ylide's S, a sulfoximine's, a metal).
  *
  * What an orbit is NOT:
  * - not "atoms alike to a chemist". An automorphism here keeps every centre's sense, so orbits are the homotopic sets: right for
@@ -32,6 +33,8 @@ import type { ChemGraph } from "./graph";
 import type { Cumulated } from "./stereo/types";
 import { parity } from "./stereo/geometry";
 import { runsThrough } from "./stereo/runs";
+import { metal } from "./elements";
+import { lonePairOfThree } from "../lonePairCentres";
 
 /**
  * What the symmetry reads: the core's graph, with an odd run of cumulated double bonds set cis or trans (a butatriene's), and
@@ -316,6 +319,15 @@ export function canonicalSearched(input: SymmetryInput): { text: string; ranks: 
  * - A symmetry found is one, so two groups found alike are, whether the search ran its course or not; where it ran out of
  *   steps without finding them alike, the unit is kept as given.
  * Each unit is asked of `input` with it alone left out; none is taken off before the others are asked.
+ *
+ * Nor does a cis or trans set anything where an end is no trigonal-planar centre (`trigonal`): only where each end's
+ * neighbours, its hydrogens and its lone pairs make three (VSEPR) do the double bond and the groups on its ends lie in one
+ * plane, which a cis or trans needs. A C=C's, a C=N's, an N=N's, a silene's or a disilene's ends are; so is a sulfine's S (two
+ * neighbours and a lone pair: its E and Z are two compounds). A sulfonium ylide's S (three neighbours and a lone pair), a
+ * sulfoxonium ylide's or a sulfoximine's S (four neighbours), a phosphorus ylide's P (four) and a metal carbene's metal are
+ * not: their "double bond" is ylidic or dative, with no planar pi bond to hold a cis or trans, so none is read or written
+ * there, however it was given. The lone pairs are counted as the CIP counts them (lib/chem/lonePairCentres
+ * `lonePairOfThree`: the valence electrons less the charge, the bonds' orders and the hydrogens).
  */
 export function settingCisTrans<T extends SymmetryInput>(input: T): T {
   const units = [
@@ -340,6 +352,17 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
     ];
   };
   const others = (end: number, on: number) => adj[end].map((e) => e.to).filter((t) => t !== on);
+  // (an end that is a trigonal-planar centre: no metal, and its neighbours, hydrogens and lone pairs three at most)
+  const trigonal = (end: number): boolean => {
+    const a = input.atoms[end];
+    // (the element alone: a reader's graph writes a mass number or unpaired electrons after it - perception/stereo/from2d `drawnGraph`)
+    const el = a.el.replace(/[\^.].*$/, "");
+    if (metal.has(el)) return false;
+    const hs = Math.max(0, a.hs ?? 0);
+    const groups = adj[end].length + hs;
+    if (groups > 3) return false;
+    return !(groups === 3 && lonePairOfThree(el, a.charge ?? 0, adj[end].length, adj[end].reduce((t, e) => t + e.order, 0), hs));
+  };
   // (what an atom bonded to `end` alone is, as the ranks first read it: element, charge, H count, its bond's order; none where
   //  it is a star's, a metal's donor across from another, or an axis's or a run's own)
   const placed = new Set([
@@ -355,6 +378,7 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
   let constitution: number[] | null = null;
   const setsNothing = (u: (typeof units)[number]): boolean => {
     const [[p, pn], [q, qn]] = endsOf(u);
+    if (!trigonal(p) || !trigonal(q)) return true;
     const left: SymmetryInput =
       "bond" in u
         ? { ...input, bonds: input.bonds.map((b, k) => (k === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) }

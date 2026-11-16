@@ -24,7 +24,9 @@
  *   turned over, it is the same molecule (2-methylbut-2-ene's, a prenyl's,
  *   a cyclohexylidene's), so none is read there - and an odd cumulene's
  *   likewise - by the symmetry's one test (perception/symmetry
- *   `settingCisTrans`), the rest of what the drawing shows kept.
+ *   `settingCisTrans`), the rest of what the drawing shows kept. Nor one
+ *   with an end that is no trigonal-planar centre (an ylide's S or P, a
+ *   sulfoximine's S, a metal), by the same test.
  * - An axis of chirality - a single bond in no ring, each end with two
  *   other neighbours (a biaryl's) - shows how it turns by a wedge out of an
  *   end, narrow there: that neighbour out of the page (or behind it, on

@@ -1226,6 +1226,12 @@ describe("a double bond with an end of two alike groups, drawn: none read, howev
     expect(read("C/C=C/CC=C(C)C")).toEqual(["1=2"]);
   });
 
+  it("a double bond with an end that is no trigonal-planar centre - a sulfoxonium ylide's S, a sulfoximine's, a sulfonium ylide's - drawn: none; a sulfine's C=S and a disilene's Si=Si: read", () => {
+    for (const smiles of ["C/C=S(/CC)(=O)C", "C/N=S(/CC)(=O)C", "C/C=S(/CC)C"]) expect(read(smiles), smiles).toEqual([]);
+    expect(read("CC/C=S/O")).toEqual(["2=3"]);
+    expect(read("C/[Si](CC)=[Si](/C)CC")).toEqual(["1=4"]);
+  });
+
   it("an end of a (13C)methyl and a methyl, drawn: read, either way - the isotope tells the two apart", () => {
     const [up, down] = [methylbutene(true, false, 13), methylbutene(false, false, 13)];
     expect(up.cisTrans.size).toBe(1);
