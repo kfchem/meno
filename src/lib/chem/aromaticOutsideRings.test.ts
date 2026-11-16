@@ -1,5 +1,5 @@
 /**
- * Bonds marked aromatic outside any ring, read by the typed routes (perception/kekule `outsideRingRefusal`; CHEM's rule: such a bond takes
+ * Bonds marked aromatic outside any ring, read by the typed routes (perception/kekule `outsideRingRefusal`; such a bond takes
  * its Kekulé form by the same matching as one in a ring): a carboxyl written C(:O):O is acetic acid, never ethane-1,1-diol; where no form
  * closes them, refused in words, never filled with an H.
  */
@@ -52,5 +52,9 @@ describe("a structure typed with bonds marked aromatic outside a ring", () => {
     expect(formulaOf("c1ccccc1C(:O):O")).toBe("C7H6O2");
     expect(formulaOf("c1ccccc1")).toBe("C6H6");
     expect(formulaOf("c1cc[nH]c1")).toBe("C4H5N");
+  });
+
+  it("refuses a ring atom bonded to an atom outside its ring by a bond marked aromatic: a phenol written c1ccccc1:O (found in review)", () => {
+    expect(() => smilesInput("c1ccccc1:O")).toThrow(/marked aromatic outside a ring/);
   });
 });

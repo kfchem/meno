@@ -110,6 +110,10 @@ function isMetalEl(el: string | undefined): boolean {
   return /^[A-Z][a-z]?$/.test(s) && !notMetal.has(s) && !QUERY_ATOMS.has(s);
 }
 
+/** Which end of a centre of aromatic bonds outside a ring takes its double bond first, by its element: O, then S and Se, then N, then C. */
+const END_ORDER: Record<string, number> = { O: 0, S: 1, Se: 2, N: 3, C: 4 };
+const endOrder = (el: string | undefined): number => END_ORDER[canonical(el ?? "")] ?? 5;
+
 /** The aromatic bonds that lie in no ring of the molecule, by index. */
 function outsideRings(atoms: number, bonds: readonly KekuleBond[]): number[] {
   const inRing = new Set(ringParts(atoms, bonds.map((b) => [b.a1, b.a2] as const)).flatMap((p) => p.edges));
@@ -135,8 +139,8 @@ function chainAtoms(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]):
 /**
  * Why a structure's bonds marked aromatic outside any ring cannot be read: where a group of them, joined at their atoms, has no form
  * with single and double bonds as its atoms' valences, H and charges stand - a nitro written N(:O):O with no charges - in words; none
- * where each has one (a carboxyl's C(:O):O: one C=O). Never filled with an H nobody wrote (CHEM's rule: an aromatic bond outside a ring
- * takes its Kekulé form by the same matching as one in a ring).
+ * where each has one (a carboxyl's C(:O):O: one C=O). Never filled with an H nobody wrote: an aromatic bond outside a ring takes its
+ * Kekulé form by the same matching as one in a ring.
  */
 export function outsideRingRefusal(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): string | null {
   const outside = outsideRings(atoms.length, bonds);
@@ -148,8 +152,9 @@ export function outsideRingRefusal(atoms: readonly KekuleAtom[], bonds: readonly
   const groups = new Map<number, number[]>();
   for (const k of outside) groups.set(find(bonds[k].a1), [...(groups.get(find(bonds[k].a1)) ?? []), k]);
   const chain = chainAtoms(atoms, bonds);
-  // (a centre of two or more such bonds with room still left once its form is given - one that needs more than one double bond, CO2
-  //  written O:C:O, which one double bond to an atom cannot close: never filled with an H, which would make another compound)
+  // (an atom left without the double bond it needs - a centre of two or more such bonds, or an end whose H is stated - or a centre
+  //  with room still left once its form is given - one that needs more than one double bond, CO2 written O:C:O, which one double bond
+  //  to an atom cannot close: never filled with an H, which would make another compound)
   const roomLeft = (a: number) => {
     let sum = atoms[a]?.hs ?? 0;
     bonds.forEach((b, k) => {
@@ -159,7 +164,7 @@ export function outsideRingRefusal(atoms: readonly KekuleAtom[], bonds: readonly
   };
   for (const ks of groups.values()) {
     const at = [...new Set(ks.flatMap((k) => [bonds[k].a1, bonds[k].a2]))].sort((p, q) => p - q);
-    const centreOpen = at.some((a) => (chain.get(a) ?? 0) >= 2 && (left.includes(a) || roomLeft(a)));
+    const centreOpen = at.some((a) => left.includes(a) || ((chain.get(a) ?? 0) >= 2 && roomLeft(a)));
     if (ks.some((k) => orders[k] === 2) && !centreOpen) continue;
     const listed = at.length === 1 ? String(at[0] + 1) : `${at.slice(0, -1).map((a) => a + 1).join(", ")} and ${at[at.length - 1] + 1}`;
     return `its bonds marked aromatic outside a ring (atoms ${listed}) have no form with single and double bonds: is a charge missing?`;
@@ -242,12 +247,20 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
   const chain = chainAtoms(atoms, bonds);
   const chainRole = (i: number): Role => {
     if (hasMultiple[i]) return "never";
-    let sum = atoms[i]?.hs ?? 0;
+    const hs = atoms[i]?.hs;
+    let sum = hs ?? 0;
     for (const b of bonds) if (b.a1 === i || b.a2 === i) sum += b.order === AROMATIC_BOND ? 1 : b.order >= 1 && b.order <= 3 ? b.order : 0;
     if (implicitHydrogens(canonical(atoms[i]?.el ?? ""), sum, atoms[i]?.charge ?? 0) <= 0) return "never";
-    return (chain.get(i) ?? 0) >= 2 ? "needs" : "may";
+    // (at an end, an atom whose H is stated - a bracket's [NH2+], [OH+] - has its valence fixed by what is written: the room it has
+    //  left is a double bond it needs; one whose H is left to its valence may take the double or carry an H in its place)
+    return (chain.get(i) ?? 0) >= 2 || hs != null ? "needs" : "may";
   };
   const roles = atoms.map((_, i) => (chain.has(i) ? chainRole(i) : role(i)));
+  // (where a centre of such bonds needs one double and more than one of its ends may take it, the double goes to O first, then S and Se,
+  //  then N, then C: an amide written CC(:O):N is the amide, C=O, never the imidic acid; a thioamide C=S, a urea C=O. Between two of
+  //  one element - an amidine's two N - by rank alone, which makes no claim of which form is the more stable)
+  const endsFirst = (centre: number, p: number, q: number): number =>
+    chain.has(centre) && chain.has(p) && chain.has(q) ? endOrder(atoms[p]?.el) - endOrder(atoms[q]?.el) : 0;
 
   // Each atom's rank by what it is and where it stands, not where the file
   // put it: choices between equals are made in this order, so that a
@@ -398,7 +411,7 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     }
     options.sort(
       (p, q) =>
-        Number(roles[p.other] !== "needs") - Number(roles[q.other] !== "needs") || byRank(p.other, q.other),
+        Number(roles[p.other] !== "needs") - Number(roles[q.other] !== "needs") || endsFirst(pick, p.other, q.other) || byRank(p.other, q.other),
     );
     for (const p of options) {
       matched[pick] = p.bond;
