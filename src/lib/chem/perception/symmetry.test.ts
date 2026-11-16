@@ -4,7 +4,7 @@ import { symmetryOrbits as aromaticOrbits } from "../identity";
 import { fromSmiles } from "../../layout/testdata/fromSmiles";
 import { shuffled, tiedCages } from "../../layout/testdata/shuffled";
 
-// What perception/symmetry's header promises a caller, by known answers (CHEM's, measured on the code as it stood before the move):
+// What perception/symmetry's header promises a caller, by known answers (the chemistry check's, measured on the code as it stood before the move):
 // orbit sizes of the carbons, as drawn; classes coarser only in rare cages; the canonical text one for one structure and another for
 // any other. Orbits are the homotopic sets: a map that turns every centre (a reflection) is none.
 
