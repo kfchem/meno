@@ -18,6 +18,7 @@ import { torsionSense, type Axial, type Cumulated } from "../../layout/stereo";
 import { configuredFrom, type Place } from "../stereoOpen";
 import { cipLabels } from "./index";
 import { factsOf, OPEN_RING } from "../perception/facts";
+import { runsOf } from "../perception/stereo/runs";
 
 /** The elements of the third period on whose double bonds convention (b) takes as single (prepare.ts). */
 const D_ORBITAL: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
@@ -118,14 +119,16 @@ function runsIn3d(
   const orderOf = new Map(bonds.map((b, i) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, i]));
   const bondOf = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`);
   const order = (a: number, b: number) => bonds[bondOf(a, b) ?? -1]?.order ?? 0;
-  const middle = (x: number) => around[x].length === 2 && around[x].every((n) => order(x, n) === 2);
+  // (its runs of cumulated double bonds: perception/stereo/runs - here any atom bonded by its two double bonds alone, its places saying
+  //  whether it is in line)
+  const runs = runsOf({ atoms: around.map(() => ({})), bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }, "bondedByTwo");
+  const { middle } = runs;
   const out = { axes: [] as Axial[], cumulated: [] as Cumulated[], shownOn: { axes: [] as number[], cumulated: [] as number[] } };
   around.forEach((_, i) => {
     if (middle(i)) return;
     for (const m of around[i]) {
       if (order(i, m) !== 2 || !middle(m)) continue;
-      const run = [i, m];
-      while (middle(run[run.length - 1]) && run.length <= around.length) run.push(around[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const run = runs.from(i, m);
       const j = run[run.length - 1];
       if (j < i) continue;
       const near = around[i].filter((n) => n !== run[1]);

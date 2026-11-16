@@ -12,6 +12,7 @@ import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
 import { FLAT_VOLUME_3D, sideOfLine, signedVolume } from "./perception/stereo/geometry";
+import { runsOf } from "./perception/stereo/runs";
 import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
 import { readStereo, type DrawnAtom, type DrawnBond } from "./perception/stereo/from2d";
 
@@ -126,16 +127,39 @@ export function movingSaid(whys: readonly MovingWhy[]): string | null {
   return `E/Z of ${whys.length} C=N not enumerated: ${[...new Set(whys)].map((w) => MOVING_CN[w]).join("; ")} - no configuration of its own`;
 }
 
-/** The double bonds `open` (by index, all cumulated) as the runs they make, each run's bonds in order of index: two that share an atom are of one run. */
+/**
+ * The double bonds `open` (by index, all cumulated) as the runs they make, each run's bonds in order of index: two that share an atom are
+ * of one run. The runs are the core's (perception/stereo/runs, on through each atom with two double bonds); of each, the open bonds one
+ * after another along it are one group. (Two open double bonds that meet at an atom of three or more double bonds are no run's here, and
+ * two groups: no carbon has three.)
+ */
 export function cumulatedRuns(bonds: readonly StereoBond[], open: readonly number[]): number[][] {
-  const runs: number[][] = [];
-  for (const i of [...open].sort((p, q) => p - q)) {
-    const ends = new Set([bonds[i].a, bonds[i].b]);
-    const joined = runs.filter((r) => r.some((j) => ends.has(bonds[j].a) || ends.has(bonds[j].b)));
-    for (const r of joined) runs.splice(runs.indexOf(r), 1);
-    runs.push([...new Set([i, ...joined.flat()])].sort((p, q) => p - q));
+  const isOpen = new Set(open);
+  const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
+  const index = new Map<string, number>();
+  for (const i of [...isOpen].sort((p, q) => p - q)) if (!index.has(key(bonds[i].a, bonds[i].b))) index.set(key(bonds[i].a, bonds[i].b), i);
+  const atoms = Array.from({ length: bonds.reduce((n, b) => Math.max(n, b.a + 1, b.b + 1), 0) }, () => ({}));
+  const runs = runsOf({ atoms, bonds }, "twoDoubles");
+  const groups: number[][] = [];
+  const placed = new Set<number>();
+  for (const i of [...isOpen].sort((p, q) => p - q)) {
+    if (placed.has(i)) continue;
+    const along = runs.of(bonds[i].a, bonds[i].b).atoms;
+    // (the open bonds along the run, split where one between them is not open)
+    let group: number[] = [];
+    for (let k = 1; k < along.length; k++) {
+      const j = index.get(key(along[k - 1], along[k]));
+      if (j == null) {
+        if (group.includes(i)) break;
+        group = [];
+        continue;
+      }
+      group.push(j);
+    }
+    for (const j of group) placed.add(j);
+    groups.push([...new Set([i, ...group])].sort((p, q) => p - q));
   }
-  return runs.sort((p, q) => p[0] - q[0]);
+  return groups.sort((p, q) => p[0] - q[0]);
 }
 
 /** Of the open double bonds (by index), those of cumulated double bonds - an allene's - whose stereoisomers are an axis's. */

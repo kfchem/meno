@@ -48,6 +48,7 @@ import { lonePairCentres, pyramidal } from "./lonePairs";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
 import { parity } from "./geometry";
+import { runsOf } from "./runs";
 import { factsOf, OPEN_RING } from "../facts";
 import { ofTheStructure } from "../graph";
 
@@ -282,15 +283,16 @@ function straightEndsOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
     bondOf.set(key(b.a, b.b), b);
   });
   const inRingUnder = ringsOfDrawing(atoms, bonds);
+  // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
+  const runs = runsOf({ atoms, bonds });
   const out = new Set<number>();
-  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
   const straightOn = (end: number, other: number, n: number) =>
     apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
   for (const bond of bonds) {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) continue;
     const { a, b } = bond;
     const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
-    if (!groups(a, b).length || !groups(b, a).length || inRingUnder(a, b, OPEN_RING) || cumulated(a, b) || cumulated(b, a)) continue;
+    if (!groups(a, b).length || !groups(b, a).length || inRingUnder(a, b, OPEN_RING) || runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a)) continue;
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
     for (const [end, other] of [
       [a, b],
@@ -302,7 +304,7 @@ function straightEndsOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
   }
   // (and the ends of an odd cumulene's run - a butatriene's: its cis or trans across the run, read from its ends' groups as a double
   //  bond's are - by the same tests, an end's group straight on from the run)
-  const { middle, runFrom } = runsOfDrawing(atoms, neighbours, bondOf);
+  const { middle, from: runFrom } = runs;
   atoms.forEach((_, i) => {
     if (middle(i)) return;
     for (const m of neighbours[i]) {
@@ -422,7 +424,8 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
   const inRingUnder = ringsOfDrawing(atoms, bonds);
 
   const cisTrans = new Map<number, CisTrans>();
-  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
+  // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
+  const runs = runsOf({ atoms, bonds });
   bonds.forEach((bond, i) => {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
     const { a, b } = bond;
@@ -435,7 +438,7 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
     // (an end with a second double bond, or a triple one - an azide's
     // middle N, an allene's middle C - is straight through, and the bond
     // has no cis or trans of its own, however the drawing bends it)
-    if (cumulated(a, b) || cumulated(b, a)) return;
+    if (runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a)) return;
     // a wavy bond at either end: either configuration
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) return;
     const along = { x: atoms[b].x - atoms[a].x, y: atoms[b].y - atoms[a].y };
@@ -450,8 +453,8 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
     cisTrans.set(i, { refs: [ra, rb], cis: sa === sb });
   });
 
-  // a run of cumulated double bonds (`runsOfDrawing`)
-  const { middle, runFrom } = runsOfDrawing(atoms, neighbours, bondOf);
+  // a run of cumulated double bonds
+  const { middle, from: runFrom } = runs;
   // (an end of a run of an even number of double bonds - an allene's, a ketenimine's: a wedge out of it is the run's)
   const endsAnAllene = (i: number) =>
     !middle(i) && neighbours[i].some((m) => bondOf.get(key(i, m))!.order === 2 && middle(m) && runFrom(i, m).length % 2 === 1);
@@ -642,6 +645,7 @@ function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
     bondOf.set(key(b.a, b.b), b);
   });
   const inRingUnder = ringsOfDrawing(atoms, bonds);
+  const runs = runsOf({ atoms, bonds });
   const lift = (c: number, n: number) => {
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
@@ -688,7 +692,7 @@ function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
         });
     const groups = neighbours[a].some((n) => n !== b) && neighbours[b].some((n) => n !== a);
     // (nor one cumulated with another, which has none: readStereo)
-    const cumulated = [a, b].some((end) => neighbours[end].some((n) => n !== (end === a ? b : a) && bondOf.get(key(end, n))!.order >= 2));
+    const cumulated = runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a);
     if (groups && !cumulated && (inLine(a, b) || inLine(b, a))) doubles.push(i);
   });
   return { atoms: centres, bonds: doubles };
@@ -988,18 +992,3 @@ function ringsOfDrawing(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
   return (a, b, n) => facts.inRingSmallerThan(facts.bondBetween(a, b), n);
 }
 
-/**
- * A drawing's runs of cumulated double bonds: `middle`, whether an atom is one a run goes on through - a carbon, or an N+, between two
- * double bonds (a sulfur's C=S=C is bent, no axis - the rule the restraints' linear-by-bonds has); `runFrom`, the atoms along the run from
- * end `i` through its double bond to `m`, to the run's other end.
- */
-function runsOfDrawing(atoms: readonly DrawnAtom[], neighbours: readonly number[][], bondOf: ReadonlyMap<string, DrawnBond>) {
-  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
-  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
-  const runFrom = (i: number, m: number) => {
-    const run = [i, m];
-    while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
-    return run;
-  };
-  return { middle, runFrom };
-}
