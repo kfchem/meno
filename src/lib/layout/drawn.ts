@@ -7,7 +7,6 @@
 import {
   fitLinear,
   groupDepths as groupDepthsFrom2d,
-  OPEN_RING,
   readStereo as readFrom2d,
   type CageFit,
   type DrawnAtom,
@@ -21,7 +20,7 @@ import { key, perceive, type LayoutInput } from "./perceive";
 import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
-import { factsOf } from "../chem/perception/facts";
+import { factsOf, OPEN_RING } from "../chem/perception/facts";
 import { sharesThreeAtoms } from "../chem/perception/rings";
 import { withRecognisedDepth } from "./recognised";
 import { placeStereo, type Stereo, type Wedge } from "./stereo";
@@ -259,9 +258,22 @@ export function hydrogensWhereUnread(
  * have one is the reader's own test (`readStereo`): a group on each end, not in a ring of seven atoms or fewer, not cumulated, not a bond of
  * a Hückel ring (an aromatic macrocycle's: `huckelBonds`), not a C=N whose E/Z is none of its own (`movingCN`: an amidine's) - and not an
  * end with two groups that are alike (`symmetryOrbits`), which has none either way. One given a configuration (`LayoutBond.stereo`) is left
- * as it is.
+ * as it is. An odd cumulene's cis or trans, across its run's two ends, is open as a double bond's is, by its ends' groups (a run given one,
+ * `LayoutInput.cumulated`, left as it is); an allene's axis is not a double bond's to open.
  */
 export function openDoubleBonds(input: LayoutInput): { straight: number[]; either: number[] } {
+  return openOf(input, true);
+}
+
+/**
+ * The odd cumulenes alone of `openDoubleBonds` (a butatriene's): those of a structure that `input.cumulated` does not give, open. For a
+ * drawing nobody made - a plugin's, from a MOL block, which cannot say a run's cis or trans: what its picture shows of one is chance.
+ */
+export function openRuns(input: LayoutInput): { straight: number[]; either: number[] } {
+  return openOf(input, false);
+}
+
+function openOf(input: LayoutInput, doubles: boolean): { straight: number[]; either: number[] } {
   const n = input.atoms.length;
   const neighbours: number[][] = Array.from({ length: n }, () => []);
   const order = new Map<string, number>();
@@ -284,7 +296,7 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
   const straight = new Set<number>();
   const either: number[] = [];
   input.bonds.forEach((b, i) => {
-    if (b.order !== 2 || b.stereo) return;
+    if (!doubles || b.order !== 2 || b.stereo) return;
     const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
     const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
     if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;
@@ -298,5 +310,40 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
       straight.add(b.b);
     } else either.push(i);
   });
+  // an odd cumulene's (a butatriene's: an odd number of double bonds end to end, its run drawn straight through) cis or trans across its
+  // two ends, as the reader takes it (`readStereo`), open as a double bond's is where nothing gives it (`LayoutInput.cumulated`): each end
+  // with one group kept straight on, or a wavy bond on a group of an end (`either`, on that end's double bond)
+  const middle = (x: number) => {
+    const el = input.atoms[x].el ?? "C";
+    const linear = el === "C" || (el === "N" && (input.atoms[x].charge ?? 0) === 1);
+    return linear && neighbours[x].length === 2 && neighbours[x].every((m) => order.get(key(x, m)) === 2);
+  };
+  const given = new Set((input.cumulated ?? []).map((c) => key(c.atoms[0], c.atoms[1])));
+  for (let i = 0; i < n; i++) {
+    if (middle(i)) continue;
+    for (const m of neighbours[i]) {
+      if (order.get(key(i, m)) !== 2 || !middle(m)) continue;
+      const run = [i, m];
+      while (middle(run[run.length - 1]) && run.length <= n) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const j = run[run.length - 1];
+      // (once for each run, from its lower end; an even run of double bonds - an allene's - has an axis, not a cis or trans)
+      if (j <= i || run.length % 2 === 1 || given.has(key(i, j))) continue;
+      const [ga, gb] = [neighbours[i].filter((x) => x !== m), neighbours[j].filter((x) => x !== run[run.length - 2])];
+      // (each end with two groups, an H among them at most: the reader's test of a run's end - an N's end of one group has none to state)
+      if (!ga.length || !gb.length || ga.length + (input.atoms[i].hs ?? 0) !== 2 || gb.length + (input.atoms[j].hs ?? 0) !== 2) continue;
+      const first = bondOf(i, m);
+      if (facts.inRingSmallerThan(first, OPEN_RING)) continue;
+      if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) continue;
+      if (ga.length === 1 && gb.length === 1 && !facts.inRing[first]) {
+        straight.add(i);
+        straight.add(j);
+        continue;
+      }
+      // (the wavy bond at an end of one group, where there is one - `unspecifiedDoubles` takes the run's far end as the bond's other)
+      const [e, f] = ga.length === 1 || gb.length !== 1 ? [i, m] : [j, run[run.length - 2]];
+      const k = input.bonds.findIndex((b) => b.order === 2 && key(b.a, b.b) === key(e, f));
+      if (k >= 0) either.push(k);
+    }
+  }
   return { straight: [...straight], either };
 }

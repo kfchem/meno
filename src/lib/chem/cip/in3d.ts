@@ -17,13 +17,10 @@ import { lonePairsIn3d } from "../lonePairsIn3d";
 import { torsionSense, type Axial, type Cumulated } from "../../layout/stereo";
 import { configuredFrom, type Place } from "../stereoOpen";
 import { cipLabels } from "./index";
-import { factsOf } from "../perception/facts";
+import { factsOf, OPEN_RING } from "../perception/facts";
 
 /** The elements of the third period on whose double bonds convention (b) takes as single (prepare.ts). */
 const D_ORBITAL: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
-
-/** The smallest ring a double bond in which has a cis or trans of its own: eight atoms (rank.ts `OPEN_RING`). */
-const OPEN_RING = 8;
 
 /** A molecule in 3D as this reads it: its atoms, its bonds by their atoms' numbers from 0, and its places (x, y, z for each atom, in its order). */
 export type In3d = { atoms: readonly { el: string; charge?: number; isotope?: number }[]; bonds: readonly { a1: number; a2: number; order: number }[]; xyz: readonly number[] };
@@ -78,6 +75,28 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
   return { atoms: labels(r.centres), bonds: { ...labels(r.bonds), ...runs } };
 }
 
+/**
+ * How near flat an allene in 3D is taken to have no hand: its two ends' groups turned about the run by less than this sine of the angle
+ * from one plane - within a sixth of a half turn of none or of half a turn - as an odd run turned within the same of a quarter turn has no
+ * cis or trans (`runsIn3d`). The hand changes where the two ends' planes are one, so there the sign of a torsion is noise; an open-chain
+ * allene is square, and an allene bent and twisted by a small ring stays well clear of the bound, while a geometry this near flat lies far
+ * up the allene's own barrier to turning into its mirror image: what is found there is a bad geometry, not either hand.
+ */
+const FLAT_ALLENE = 0.5;
+
+/** Each allene's axis and each odd cumulene's cis or trans of a molecule in 3D, read from where its atoms are (`runsIn3d`), by atom number. */
+export function runsIn3dOf(m: In3d): { axes: Axial[]; cumulated: Cumulated[] } {
+  const around: number[][] = m.atoms.map(() => []);
+  m.bonds.forEach((b) => {
+    around[b.a1]?.push(b.a2);
+    around[b.a2]?.push(b.a1);
+  });
+  const places: Record<number, Place> = {};
+  for (let i = 0; i < m.atoms.length; i++) places[i] = [m.xyz[3 * i], m.xyz[3 * i + 1], m.xyz[3 * i + 2]];
+  const { axes, cumulated } = runsIn3d(around, m.bonds, places);
+  return { axes, cumulated };
+}
+
 /** An axis's descriptor as the page shows it (docs/CIP.md, *Axes*): M is Ra, P is Sa. */
 const AXIS_SHOWN: Record<string, string | undefined> = { M: "Ra", P: "Sa", m: "ra", p: "sa" };
 
@@ -116,15 +135,7 @@ function runsIn3d(
       if ([p, i, j, q].some((x) => !places[x])) continue;
       const [P, I, J, Q] = [places[p], places[i], places[j], places[q]];
       const first = bondOf(i, m)!;
-      if (run.length % 2 === 1) {
-        const sense = torsionSense(P, I, J, Q);
-        if (sense) {
-          out.axes.push({ atoms: [i, j], refs: [p, q], sense });
-          out.shownOn.axes.push(first);
-        }
-        continue;
-      }
-      // (the two groups off the run's line: the same side, cis)
+      // (each end's group off the run's line)
       const axis = [J[0] - I[0], J[1] - I[1], J[2] - I[2]];
       const off = (X: Place, from: Place) => {
         const v = [X[0] - from[0], X[1] - from[1], X[2] - from[2]];
@@ -133,6 +144,18 @@ function runsIn3d(
       };
       const [u, w] = [off(P, I), off(Q, J)];
       const dot = u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
+      if (run.length % 2 === 1) {
+        // (an allene's ends' planes one plane - its groups' turn about the run near none or half a turn: no hand, as an odd run
+        //  twisted near a quarter turn has no cis or trans)
+        const cross = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]);
+        const sense = cross < FLAT_ALLENE * Math.hypot(...u) * Math.hypot(...w) ? 0 : torsionSense(P, I, J, Q);
+        if (sense) {
+          out.axes.push({ atoms: [i, j], refs: [p, q], sense });
+          out.shownOn.axes.push(first);
+        }
+        continue;
+      }
+      // (the two groups on the same side of the run: cis)
       if (Math.abs(dot) < 0.5 * Math.hypot(...u) * Math.hypot(...w)) continue;
       out.cumulated.push({ atoms: [i, j], refs: [p, q], cis: dot > 0 });
       out.shownOn.cumulated.push(first);
