@@ -560,7 +560,7 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     every atom of it lying on an aromatic six-ring; and so, whatever its
     count, is a ring drawn with aromatic bonds or bound to a metal through
     all its atoms (a metallocene's) - a metal as the core's elements say
-    one is, Al among them, never Ge, As, Sb, Te or a noble gas (foundation
+    one is, Al among them, never Ge, As, Sb, Te, At, Ts or a noble gas (foundation
     part 3, B4, 2026-11-16; before, any heavy atom with no most bonds
     was). Cyclopentadiene's
     CH2 and cyclooctatetraene's eight pi electrons leave theirs free to

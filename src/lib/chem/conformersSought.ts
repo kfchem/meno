@@ -209,7 +209,8 @@ export function flatRingAtoms(
 ): Set<number> {
   const around = neighboursOf(atoms, bonds);
   // (a metal as the core says one is - lib/chem/perception/elements `metal`, Al among them; before, any heavy atom with no most bonds
-  //  was, Ge, As, Sb, Te and the noble gases too, so As4's rings were held flat as if on a metal: foundation part 3, B4)
+  //  was, Ge, As, Sb, Te, At, Ts and the noble gases too, so a ring each of whose atoms is bonded to one Ge or Te was held flat as if
+  //  on a metal: foundation part 3, B4)
   const isMetal = (i: number) => metal.has(atoms[i].el);
   const aromatic = aromaticIn(atoms, bonds, rings);
   const out = new Set<number>();

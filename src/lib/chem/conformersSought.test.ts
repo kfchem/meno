@@ -112,6 +112,8 @@ describe("a ring on a metal, held flat (foundation part 3, B4)", () => {
     expect(flat("C12C3C1[Ge]23")).toBe(0);
     expect(flat("C12C3C1[Te]23")).toBe(0);
     expect(flat("C12C3C1[Al]23")).toBe(3);
+    // (each of the thirteen a heavy atom with no most bonds made a metal before: none is one now)
+    for (const el of ["Ge", "As", "Sb", "Te", "At", "Ts", "He", "Ne", "Ar", "Kr", "Xe", "Rn", "Og"]) expect(flat(`C12C3C1[${el}]23`), el).toBe(0);
   });
   it("judges arsole's and tellurophene's rings by the aromatic rule alone, as any ring's", () => {
     expect(flat("[AsH]1C=CC=C1")).toBe(flat("N1C=CC=C1") ? 5 : 0);
