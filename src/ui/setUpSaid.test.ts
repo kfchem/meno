@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // (a set-up that fails as its download is declined, one that succeeds)
-vi.mock("../lib/plugins/process", () => ({ stopWorker: async () => undefined, workerOf: async () => ({}) }));
+vi.mock("../lib/plugins/process", () => ({ stopWorker: async () => undefined, workerOf: async () => ({}), onWorkerStopped: () => () => undefined }));
 vi.mock("../lib/pyEnv", () => ({
   ensurePyEnv: async (profile: string) => {
     if (profile === "plugin-fragswap") throw new Error("Setting up Fragswap needs the network, and was not allowed it.");
