@@ -9,7 +9,7 @@ import { drawnOf } from "../fileActions";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { readDrawn, recordText } from "../utils/copyPaste";
-import { cleanUp } from "./cleanUp";
+import { cleanUp, partFormula } from "./cleanUp";
 import { drawingOf, forFlatReaders, readAs } from "./drawing";
 import { etaRingAt } from "./eta";
 import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "./identityOf";
@@ -139,6 +139,21 @@ describe("a group typed as an element's symbol is the group; the element from a 
       expect(isMetal(readAs(a)), label).toBe(false);
       expect(isName(readAs(a)), label).toBe(true);
     }
+  });
+
+  it("typed on the atom it hangs from, each is its group, by its formula: TsCl C7H7ClO2S, HOAt C5H4N4O, FmOH C14H12O", () => {
+    const typedOn = (el: string, label: string) => {
+      const e = editor();
+      const x = e.state().addAtom(0, 0, el);
+      const g = e.state().addAtomBonded(x, L, 0, "C", 1);
+      e.state().beginLabelEdit(g, label.toLowerCase());
+      e.state().setLabelEditValue(label);
+      e.state().commitLabelEdit(label.toLowerCase());
+      return partFormula(labelsDrawnOut(e.state().model));
+    };
+    expect(typedOn("Cl", "Ts")).toBe("C7H7ClO2S");
+    expect(typedOn("O", "At")).toBe("C5H4N4O");
+    expect(typedOn("O", "Fm")).toBe("C14H12O");
   });
 
   it("a Pr saved with nothing held - before this version, or from a file - opens as praseodymium", () => {
