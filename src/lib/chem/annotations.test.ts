@@ -52,6 +52,17 @@ describe("reaction properties", () => {
     expect(model.bonds[0].reactingCentre).toBe(12);
   });
 
+  it("show a mapping number as its IUPAC locant where it has one: 4a for 9, and 3a with a superscript 1 (foundation part 16)", () => {
+    const atoms = zig([{ map: 9, mapText: { base: "4a" } }, { map: 16, mapText: { base: "3a", sup: "1" } }, { map: 3 }]);
+    const items = layoutMolecule(atoms, zigBonds, opts(), 40).texts;
+    const t = items.map((x) => x.text);
+    expect(t).toContain("4a");
+    expect(t).not.toContain("9");
+    expect(t).toContain("3");
+    const sup = items.find((x) => x.runs?.[0]?.text === "3a")!;
+    expect(sup.runs!.map((r) => [r.text, !!r.sup])).toEqual([["3a", false], ["1", true]]);
+  });
+
   it("are said small beside each atom: its mapping number, inv or ret, exact", () => {
     const atoms = zig([{ map: 1 }, { map: 2, invRet: "invert" }, { exactChange: true }]);
     const t = texts(atoms, zigBonds);

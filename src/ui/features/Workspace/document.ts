@@ -1562,9 +1562,10 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
-    if (n === a.map) return a;
-    const { map: _m, ...rest } = a;
-    return n ? { ...rest, map: n } : rest;
+    const t = n ? marks?.texts.get(a.id) : undefined;
+    if (n === a.map && JSON.stringify(t) === JSON.stringify(a.mapText)) return a;
+    const { map: _m, mapText: _t, ...rest } = a;
+    return n ? { ...rest, map: n, ...(t ? { mapText: t } : {}) } : rest;
   });
   const bonds = doc.model.bonds.map((b) => {
     if (!inside.has(b.a) || !inside.has(b.b)) return b;
@@ -1596,18 +1597,21 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
   const inside = new Set<number>([...before, ...maps].flatMap((m) => [...mapAtoms(m.map)]));
   const numbers = new Map<number, number>();
   const centres = new Map<number, number>();
+  const texts = new Map<number, { base: string; sup?: string }>();
   for (const { map } of maps) {
     if (!map.shown || !mapShows(mapStanding({ atomMap: map }, doc.model))) continue;
     const marks = mapMarks(map, doc.model);
     for (const [id, n] of marks.numbers) numbers.set(id, n);
     for (const [id, c] of marks.centres) centres.set(id, c);
+    for (const [id, t] of marks.texts) texts.set(id, t);
   }
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = numbers.get(a.id);
-    if (n === a.map) return a;
-    const { map: _m, ...rest } = a;
-    return n ? { ...rest, map: n } : rest;
+    const t = n ? texts.get(a.id) : undefined;
+    if (n === a.map && JSON.stringify(t) === JSON.stringify(a.mapText)) return a;
+    const { map: _m, mapText: _t, ...rest } = a;
+    return n ? { ...rest, map: n, ...(t ? { mapText: t } : {}) } : rest;
   });
   const bonds = doc.model.bonds.map((b) => {
     if (!inside.has(b.a) || !inside.has(b.b)) return b;

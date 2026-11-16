@@ -208,11 +208,16 @@ export function unpairedSaid(map: ArrowAtomMap, sides: readonly [string, string]
  * atom given its reactant atom's - and each bond's reacting centre, CTfile
  * Formats' code: 4 for one made or broken, 8 for one whose order changes.
  */
-export function mapMarks(map: ArrowAtomMap, model: Pick<Model, "bonds">): { numbers: Map<number, number>; centres: Map<number, number> } {
+export function mapMarks(
+  map: ArrowAtomMap,
+  model: Pick<Model, "bonds">,
+): { numbers: Map<number, number>; centres: Map<number, number>; texts: Map<number, { base: string; sup?: string }> } {
   const numbers = new Map<number, number>();
   const mapping = map.maps[map.chosen] ?? map.maps[0];
   const centres = new Map<number, number>();
-  if (!mapping) return { numbers, centres };
+  // (what a renumbered map's atoms show for their numbers, where not the number: a product's atom its partner's)
+  const texts = new Map<number, { base: string; sup?: string }>();
+  if (!mapping) return { numbers, centres, texts };
   // (a partial map: only the atoms it pairs numbered, and no bond's change told - which bonds change is the whole map's to say)
   const paired = pairedOf(map, mapping);
   const number = beforeNumbers(map);
@@ -220,13 +225,17 @@ export function mapMarks(map: ArrowAtomMap, model: Pick<Model, "bonds">): { numb
     const id = map.reactant.drawnFrom[i];
     if (a.el === "H" || id == null || !paired.has(i) || !number[i]) return;
     numbers.set(id, number[i]);
+    const t = map.complete && map.numbers ? map.texts?.[i] : null;
+    if (t) texts.set(id, t);
   });
   mapping.forEach((r, j) => {
     const id = map.product.drawnFrom[j];
     if (id == null || r < 0 || map.product.atoms[j].el === "H" || !number[r]) return;
     numbers.set(id, number[r]);
+    const t = map.complete && map.numbers ? map.texts?.[r] : null;
+    if (t) texts.set(id, t);
   });
-  if (!map.complete) return { numbers, centres };
+  if (!map.complete) return { numbers, centres, texts };
   // the bonds' changes, in the reactants' numbering, back to the drawn bonds
   const changes = bondChanges(map.reactant as Molecule, map.product as Molecule, mapping);
   const productOf = new Array<number>(map.reactant.atoms.length).fill(-1);
@@ -246,7 +255,7 @@ export function mapMarks(map: ArrowAtomMap, model: Pick<Model, "bonds">): { numb
   for (const c of changes.orderChanged) {
     for (const b of [onReactant(c.a1, c.a2), onProduct(c.a1, c.a2)]) if (b) centres.set(b.id, 8);
   }
-  return { numbers, centres };
+  return { numbers, centres, texts };
 }
 
 /**
@@ -314,16 +323,22 @@ export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number
       bonds: map.reactant.bonds.filter((b) => at.has(b.a1) && at.has(b.a2)).map((b) => ({ a: at.get(b.a1)!, b: at.get(b.a2)!, order: b.order })),
     };
     const r = locants({ ...input, orbits: symmetryOrbits(input).orbit });
-    const offset = order.length;
     r.order.forEach((k) => order.push(piece[k]));
-    r.order.forEach((k, n) => {
+    r.order.forEach((k) => {
       const l = r.locant[k];
-      // (a parent's atom shows its locant where that is not its number)
-      if (l && (l.sup || l.base !== String(offset + n + 1))) texts.set(piece[k], l);
+      // (a parent's atom shows its locant where that is no plain number - 4a, 1', 3a with a superscript; a plain locant is its number
+      //  in the first molecule, and in the next ones the number shows, so that a product's atoms never show two partners alike)
+      if (l && (l.sup || !/^\d+$/.test(l.base))) texts.set(piece[k], l);
     });
     for (const o of r.own) own.push(piece[o.atom]);
   }
   return { order, texts, own };
+}
+
+/** What Before's atoms show for their numbers once renumbered (`iupacNumbering`'s texts), by its atom: null where an atom shows its number. */
+export function renumberedTexts(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): ({ base: string; sup?: string } | null)[] {
+  const { texts } = iupacNumbering(map, drawnOrder);
+  return map.reactant.atoms.map((_, i) => texts.get(i) ?? null);
 }
 
 /**

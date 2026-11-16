@@ -4665,8 +4665,10 @@ function atomNotes(
     }
   }
   atoms.forEach((a, i) => {
+    // (a mapping number shown as its IUPAC locant, where it has one: 4a, 1' - a superscript after it, smaller and higher, where it has one)
+    const supOf = a.map ? a.mapText?.sup : undefined;
     const parts = [
-      a.map ? String(a.map) : "",
+      a.map ? (a.mapText?.base ?? String(a.map)) : "",
       a.invRet === "invert" ? "inv" : a.invRet === "retain" ? "ret" : "",
       a.exactChange ? "exact" : "",
       groupsAt.has(i) && a.stereoGroup ? groupText(a.stereoGroup) : "",
@@ -4674,7 +4676,11 @@ function atomNotes(
     if (!parts.length) return;
     const text = parts.join(" ");
     const label = labels.find((t) => t.atom === i && !t.beside);
-    const item = besideVertex(a, ways.get(i) ?? [], [{ text, sup: true }], { fontPx }, (dir) => {
+    // (with a superscript: the rest set at the size a note's letters have, the superscript after the locant's own letters)
+    const runs: TextRun[] = supOf
+      ? [{ text: parts[0] }, { text: supOf, sup: true }, ...(parts.length > 1 ? [{ text: ` ${parts.slice(1).join(" ")}` }] : [])]
+      : [{ text, sup: true }];
+    const item = besideVertex(a, ways.get(i) ?? [], runs, { fontPx: supOf ? fontPx * set.subscriptSize : fontPx }, (dir) => {
       // clear of its label's letters, or of the bare vertex, by half a capital
       let far = 0;
       if (label) {

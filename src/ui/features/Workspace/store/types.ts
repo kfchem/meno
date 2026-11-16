@@ -214,6 +214,11 @@ export type ArrowAtomMap = {
    */
   numbers?: number[];
   /**
+   * What Before's atoms show for their numbers where that is not the number - a parent's IUPAC locant, 4a, 1', 3a with a superscript 1
+   * (*Renumber atoms*, chem/atomMap `iupacNumbering`) - by its atom; null for one that shows its number. Kept with `numbers`.
+   */
+  texts?: ({ base: string; sup?: string } | null)[];
+  /**
    * The conformers paired (*Pair conformers*, chem/structureMaps): Before's
    * frames and After's, each with each - frame 0 a molecule's own - to be
    * written a pair of records each.

@@ -9,7 +9,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readSDfile } from "../../../../lib/chem/ctfile";
-import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, unpairedSaid } from "./atomMap";
+import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, renumberedTexts, unpairedSaid } from "./atomMap";
 import { conformerPairs, conformersSaid, MOST_PAIRS, numbers3d, pairedCounts, pairedSdf, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -450,6 +450,23 @@ describe("an atom map renumbered", () => {
     expect([records[0].atoms[0].x, records[0].atoms[0].y, records[0].atoms[0].z]).toEqual([first.x, first.y, first.z].map((v) => Number(v.toFixed(4))));
     // (a partial map keeps its own: those it pairs, as it holds them)
     expect(beforeNumbers({ ...partial, numbers })).toEqual(beforeNumbers(partial));
+  });
+
+  it("shows a renumbered map's texts - a parent's locants where they are not the numbers - on Before's atoms and their partners", () => {
+    const { kept } = page();
+    const numbers = renumbered(kept, drawnOrder());
+    // (butadiene and ethylene: every locant is its number, so none shown otherwise)
+    expect(renumberedTexts(kept, drawnOrder()).every((t) => t == null)).toBe(true);
+    // (a text given to C1: shown on it and on the product atom it becomes)
+    const c1 = R_NAMES.indexOf("C1");
+    const texts = kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "4a" } : null));
+    const marks = mapMarks({ ...kept, numbers, texts }, page().doc.model);
+    expect(marks.texts.get(R_ID.C1)).toEqual({ base: "4a" });
+    const mapping = kept.maps[kept.chosen];
+    const j = mapping.indexOf(c1);
+    expect(marks.texts.get(kept.product.drawnFrom[j]!)).toEqual({ base: "4a" });
+    // (not renumbered: no texts, whatever the map holds)
+    expect(mapMarks({ ...kept, numbers: undefined, texts }, page().doc.model).texts.size).toBe(0);
   });
 
   it("is kept in the workspace's file, and numbers that are not each of 1 to n once are left out", () => {
