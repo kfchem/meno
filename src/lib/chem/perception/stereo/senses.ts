@@ -5,6 +5,7 @@
  * (lib/layout/stereo, which imports them back) both go by them.
  */
 import type { Axial } from "./types";
+import { torsionSense } from "./geometry";
 
 type Point = { x: number; y: number };
 type Vec3 = [number, number, number];
@@ -62,15 +63,8 @@ export function drawnVolume(
   return 0;
 }
 
-/** The sign of the torsion p-q-r-s, IUPAC's: + where, looking from q to r, p turns clockwise onto s. */
-export function torsionSense(p: readonly number[], q: readonly number[], r: readonly number[], s: readonly number[]): 1 | -1 | 0 {
-  const b1 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-  const b2 = [r[0] - q[0], r[1] - q[1], r[2] - q[2]];
-  const b3 = [s[0] - r[0], s[1] - r[1], s[2] - r[2]];
-  const c = [b2[1] * b3[2] - b2[2] * b3[1], b2[2] * b3[0] - b2[0] * b3[2], b2[0] * b3[1] - b2[1] * b3[0]];
-  const v = b1[0] * c[0] + b1[1] * c[1] + b1[2] * c[2];
-  return Math.abs(v) < 1e-9 ? 0 : v > 0 ? 1 : -1;
-}
+/** The sign of the torsion p-q-r-s, IUPAC's (./geometry): + where, looking from q to r, p turns clockwise onto s. */
+export { torsionSense };
 
 /**
  * How an axis drawn flat - `pos` - turns, where `lifted`, a neighbour of
