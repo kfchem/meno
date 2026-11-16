@@ -2377,6 +2377,11 @@ function besideVertex(
   reach?: (dir: Vec2) => number,
   /** The way it would rather go, in degrees: a charge's 45, above and to the right. */
   prefer = 45,
+  /**
+   * How many things it would cover set out along `dir`, `out` from the atom - bonds, labels - where the way its bonds leave
+   * is not enough to tell: a way that covers fewer goes before any that covers more, whatever its angle.
+   */
+  covers?: (dir: Vec2, out: number) => number,
 ): TextItem {
   const deg = Math.PI / 180;
   let best = prefer * deg;
@@ -2389,7 +2394,13 @@ function besideVertex(
       room = Math.min(room, d);
     }
     const off = Math.abs(Math.atan2(Math.sin(t - prefer * deg), Math.cos(t - prefer * deg)));
-    const score = Math.min(room, 70 * deg) - 0.15 * off;
+    // (each thing covered outweighs every angle: those score under 2)
+    let covered = 0;
+    if (covers) {
+      const d = { x: Math.cos(t), y: Math.sin(t) };
+      covered = covers(d, reach ? reach(d) : 0);
+    }
+    const score = Math.min(room, 70 * deg) - 0.15 * off - 10 * covered;
     if (score > bestScore + 1e-9) {
       bestScore = score;
       best = t;
@@ -4600,6 +4611,38 @@ function centreStrokes(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
   return out;
 }
 
+/** A box by its sides. */
+type Box2 = { minX: number; maxX: number; minY: number; maxY: number };
+
+/** The box a note set `beside` takes, its letters `halfW` either side of its middle and `halfH` above and below. */
+function textBox(t: TextItem, halfW: number, halfH: number): Box2 {
+  return { minX: t.x - halfW, maxX: t.x + halfW, minY: t.y - halfH, maxY: t.y + halfH };
+}
+
+/** Whether the line from `p` to `q` meets the box `b` (Liang-Barsky clipping). */
+export function segmentMeetsBox(p: Vec2, q: Vec2, b: Box2): boolean {
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [den, num] of [
+    [-dx, p.x - b.minX],
+    [dx, b.maxX - p.x],
+    [-dy, p.y - b.minY],
+    [dy, b.maxY - p.y],
+  ]) {
+    if (Math.abs(den) < 1e-12) {
+      if (num < 0) return false;
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
 /**
  * What is said about an atom, set small in the most open space beside it:
  * its atom-atom mapping number, its configuration inverted or retained, the
@@ -4635,6 +4678,16 @@ function atomNotes(
       }
     }
   }
+  // what a note is kept off: the bonds as lines, the labels' boxes, and the notes put before it
+  const segments: [Vec2, Vec2][] = [];
+  for (const b of bonds) if (b.a1 !== b.a2 && atoms[b.a1] && atoms[b.a2]) segments.push([atoms[b.a1], atoms[b.a2]]);
+  // (its own atom's label is kept clear of already, by how far out it goes)
+  const taken: (Box2 & { of?: number })[] = labels.map((t) => {
+    const box = labelBox(t, font, set);
+    return { minX: t.x - box.left, maxX: t.x + box.right, minY: t.y - box.bottom, maxY: t.y + box.top, of: t.atom ?? t.markOf };
+  });
+  // (a little room either side of its letters: touching is not clear)
+  const pad = font * 0.08;
   atoms.forEach((a, i) => {
     const parts = [
       a.map ? String(a.map) : "",
@@ -4645,19 +4698,39 @@ function atomNotes(
     if (!parts.length) return;
     const text = parts.join(" ");
     const label = labels.find((t) => t.atom === i && !t.beside);
-    const item = besideVertex(a, ways.get(i) ?? [], [{ text, sup: true }], { fontPx }, (dir) => {
-      // clear of its label's letters, or of the bare vertex, by half a capital
-      let far = 0;
-      if (label) {
-        for (const hull of labelHulls(label, font, set, true)) for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
-      }
-      // and of its own letters: half their extent that way
-      const size = font * ANNOTATION_SIZE * set.subscriptSize;
-      const half = Math.abs(dir.x) * size * 0.3 * text.length + Math.abs(dir.y) * size * 0.4;
-      return far + font * 0.25 + half;
+    // (its own letters' half width and half height, near enough to place it by)
+    const size = font * ANNOTATION_SIZE * set.subscriptSize;
+    const halfW = size * 0.3 * text.length;
+    const halfH = size * 0.4;
+    const item = besideVertex(
+      a,
+      ways.get(i) ?? [],
+      [{ text, sup: true }],
+      { fontPx },
+      (dir) => {
+        // clear of its label's letters, or of the bare vertex, by half a capital
+        let far = 0;
+        if (label) {
+          for (const hull of labelHulls(label, font, set, true)) for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
+        }
+        // and of its own letters: half their extent that way
+        return far + font * 0.25 + Math.abs(dir.x) * halfW + Math.abs(dir.y) * halfH;
+      },
       // (above, where it can: beside a label's right, a small number reads
       // as a charge's or a count's - GR-11.1)
-    }, 90);
+      90,
+      // and off every bond, label and note near it: a word as long as "and1" set between two bonds may reach a third, a ring's
+      // across the ring (GR-11.1: clear of the drawing, close to its atom)
+      (dir, far) => {
+        const c = { x: a.x + dir.x * far, y: a.y + dir.y * far };
+        const box = { minX: c.x - halfW - pad, maxX: c.x + halfW + pad, minY: c.y - halfH - pad, maxY: c.y + halfH + pad };
+        let n = 0;
+        for (const s of segments) if (segmentMeetsBox(s[0], s[1], box)) n++;
+        for (const r of taken) if (r.of !== i && r.minX < box.maxX && box.minX < r.maxX && r.minY < box.maxY && box.minY < r.maxY) n++;
+        return n;
+      },
+    );
+    taken.push(textBox(item, halfW, halfH));
     out.push(item);
   });
   return out;

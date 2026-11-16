@@ -14,6 +14,7 @@ import {
   MARKS_APART,
   STEREO_GAP,
   marksReadAt,
+  notesBoxes,
   stereoPlaces,
   stereoTextEms,
   stereoTextItem,
@@ -114,6 +115,11 @@ export default function ChemMarks2D({
     }
     return out;
   }, [wanted, layout, atoms, opts, labelZoom]);
+  // (and what is set beside the drawing - an atom's "and1", its map number - for R and S to keep off as well)
+  const notes = useMemo(
+    () => (wanted ? notesBoxes(layout.texts, (t) => (labelZoom != null ? t.fontPx / Math.max(labelZoom, 1e-6) : t.fontPx), labelSetOf(opts)) : []),
+    [wanted, layout, opts, labelZoom],
+  );
 
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
@@ -179,9 +185,10 @@ export default function ChemMarks2D({
       off: gap * labelFont,
       bond: NOMINAL_BOND_LENGTH,
       fixed,
+      notes,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fontPx, z: as far as they make markSize
-  }, [marks, drawn, boxes, markSize, parentheses, labelFont, gap, fixed]);
+  }, [marks, drawn, boxes, notes, markSize, parentheses, labelFont, gap, fixed]);
 
   // Each mark where it goes, in the page's units: a valence problem's box
   // round its atom's label (or a ring round its atom), and the
