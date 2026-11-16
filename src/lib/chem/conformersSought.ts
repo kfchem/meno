@@ -19,10 +19,12 @@
  */
 import type { Option, OptionValues } from "../options";
 import { symmetryOrbits } from "../layout/canonical";
-import { smallestRings } from "../layout/rings";
+import { factsOf } from "./perception/facts";
+import { sharesMoreThanABond } from "./perception/rings";
 import { readMolfile } from "./ctfile";
 import { aromaticIn } from "./aromaticity";
-import { implicitHydrogens, mostBonds } from "./molecule";
+import { implicitHydrogens } from "./molecule";
+import { metal } from "./perception/elements";
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -61,6 +63,7 @@ export const MOST_CONFORMERS = 5000;
 
 const heavy = (a: SoughtAtom | undefined) => a != null && a.el !== "H" && a.el !== "*";
 
+
 /** Each atom's bonds, as [other atom, order]. */
 function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): [number, number][][] {
   const out: [number, number][][] = atoms.map(() => []);
@@ -72,44 +75,10 @@ function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]
   return out;
 }
 
-/** The bonds that lie in a ring - those whose ends stay joined without them - by index. */
-function ringBonds(n: number, bonds: readonly SoughtBond[]): Set<number> {
-  // (the bonds no cycle passes through are a graph's bridges: found by depth-first search, each bond's lowest reach)
-  const adj: [number, number][][] = Array.from({ length: n }, () => []);
-  bonds.forEach((b, i) => {
-    if (b.a === b.b || b.a >= n || b.b >= n) return;
-    adj[b.a].push([b.b, i]);
-    adj[b.b].push([b.a, i]);
-  });
-  const seen = new Array<number>(n).fill(-1);
-  const low = new Array<number>(n).fill(0);
-  const bridges = new Set<number>();
-  let time = 0;
-  for (let root = 0; root < n; root++) {
-    if (seen[root] >= 0) continue;
-    // (iterative: a chain of thousands of atoms is no recursion's)
-    const stack: { v: number; via: number; k: number }[] = [{ v: root, via: -1, k: 0 }];
-    seen[root] = low[root] = time++;
-    while (stack.length) {
-      const top = stack[stack.length - 1];
-      if (top.k < adj[top.v].length) {
-        const [w, i] = adj[top.v][top.k++];
-        if (i === top.via) continue;
-        if (seen[w] < 0) {
-          seen[w] = low[w] = time++;
-          stack.push({ v: w, via: i, k: 0 });
-        } else low[top.v] = Math.min(low[top.v], seen[w]);
-      } else {
-        stack.pop();
-        const up = stack[stack.length - 1];
-        if (up) {
-          low[up.v] = Math.min(low[up.v], low[top.v]);
-          if (low[top.v] > seen[up.v]) bridges.add(top.via);
-        }
-      }
-    }
-  }
-  return new Set(bonds.flatMap((_, i) => (bridges.has(i) ? [] : [i])));
+/** The bonds that lie in a ring - those whose ends stay joined without them - by index: the core's (lib/chem/perception/rings). */
+export function bondsInRings(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): Set<number> {
+  const { inRing } = factsOf({ atoms, bonds });
+  return new Set(bonds.flatMap((_, i) => (inRing[i] ? [i] : [])));
 }
 
 /**
@@ -146,7 +115,7 @@ function ringBonds(n: number, bonds: readonly SoughtBond[]): Set<number> {
  */
 export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): number[] {
   const around = neighboursOf(atoms, bonds);
-  const inRing = ringBonds(atoms.length, bonds);
+  const inRing = bondsInRings(atoms, bonds);
   const heavyAround = (i: number) => around[i].filter(([j]) => heavy(atoms[j]));
   const end = (i: number) => heavyAround(i).length === 1;
   const linear = (i: number) => around[i].some(([, o]) => o === 3);
@@ -239,13 +208,16 @@ export function flatRingAtoms(
   held: readonly (readonly number[])[] = [],
 ): Set<number> {
   const around = neighboursOf(atoms, bonds);
-  const metal = (i: number) => heavy(atoms[i]) && mostBonds(atoms[i].el) === null;
+  // (a metal as the core says one is - lib/chem/perception/elements `metal`, Al among them; before, any heavy atom with no most bonds
+  //  was, Ge, As, Sb, Te, At, Ts and the noble gases too, so a ring each of whose atoms is bonded to one Ge or Te was held flat as if
+  //  on a metal: foundation part 3, B4)
+  const isMetal = (i: number) => metal.has(atoms[i].el);
   const aromatic = aromaticIn(atoms, bonds, rings);
   const out = new Set<number>();
   for (const ring of rings) {
     const order = (x: number, y: number) => around[x].find(([j]) => j === y)?.[1];
     const ringBondsOf = ring.map((x, k) => order(x, ring[(k + 1) % ring.length]));
-    const bound = ring.every((x) => around[x].some(([j]) => metal(j))) && around[ring[0]].some(([m]) => metal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
+    const bound = ring.every((x) => around[x].some(([j]) => isMetal(j))) && around[ring[0]].some(([m]) => isMetal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
     const centred = held.some((h) => ring.every((x) => h.includes(x)));
     if (bound || centred || ringBondsOf.every((o) => o === 4) || ring.every((x) => aromatic.has(x))) for (const x of ring) out.add(x);
   }
@@ -263,15 +235,11 @@ export function flatRingAtoms(
  * each sugar of a cyclodextrin lies on its macrocycle.
  */
 export function canFlip(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[], held: readonly (readonly number[])[] = []): boolean {
-  const rings = smallestRings(
-    atoms.length,
-    bonds.filter((b) => b.a !== b.b && atoms[b.a] && atoms[b.b]).map((b) => [b.a, b.b] as const),
-  );
+  const rings = factsOf({ atoms, bonds }).rings;
   const flat = flatRingAtoms(atoms, bonds, rings, held);
-  const edges = rings.map((r) => new Set(r.map((x, k) => (x < r[(k + 1) % r.length] ? `${x},${r[(k + 1) % r.length]}` : `${r[(k + 1) % r.length]},${x}`))));
   return rings.some((ring, i) => {
     if (ring.length < 5 || ring.every((x) => flat.has(x))) return false;
-    const bridged = rings.some((other, j) => j !== i && other.length <= ring.length && [...edges[i]].filter((e) => edges[j].has(e)).length > 1);
+    const bridged = rings.some((other, j) => j !== i && sharesMoreThanABond(ring, other));
     return !bridged;
   });
 }

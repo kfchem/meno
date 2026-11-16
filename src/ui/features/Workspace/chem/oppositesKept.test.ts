@@ -8,6 +8,8 @@ import { drawingOf } from "./drawing";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { identityOfDrawn } from "./identityOf";
+import { drawingOf as drawingFromBlock } from "./fromSmiles";
 
 // Clean-up keeps a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin, not
 // cisplatin - a different compound - whatever order its atoms were drawn in, as an X or upright (chem/engineLayout `oppositesKept`).
@@ -99,7 +101,7 @@ describe("a four-bond metal cleaned up", () => {
     expect(opposites(await laidOut(m, MENO), [Cl, NH3, Cl, NH3])).toEqual(["Cl-Cl", "NH3-NH3"]);
   });
 
-  it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-, and each of PtBrCl(NH3)(py)'s three arrangements", { timeout: 120000 }, async () => {
+  it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-, and each of PtBrCl(NH3)(py)'s three arrangements - as the X it was drawn as", { timeout: 120000 }, async () => {
     forgetLaidOut();
     for (const [metal, donors, want] of [
       [{ el: "Pt", charge: -2 }, [Cl, Br, Cl, Br], ["Br-Br", "Cl-Cl"]],
@@ -111,6 +113,13 @@ describe("a four-bond metal cleaned up", () => {
     ] as const) {
       const out = await laidOut(drawn(metal, donors, 45), MENO);
       expect(opposites(out, donors), want.join(", ")).toEqual(want);
+      // (the X, though its pyridine goes on: its four bonds on the diagonals)
+      const m = out.atoms.find((a) => a.id === 1)!;
+      for (const b of out.bonds.filter((x) => x.a === 1 || x.b === 1)) {
+        const o = out.atoms.find((a) => a.id === (b.a === 1 ? b.b : b.a))!;
+        const t = (Math.atan2(o.y - m.y, o.x - m.x) * 180) / Math.PI;
+        expect(Math.abs((((t % 90) + 90) % 90) - 45), want.join(", ")).toBeLessThan(1);
+      }
     }
   });
 
@@ -691,3 +700,180 @@ function configurations(model: Model) {
   for (const [c, t] of readStereo(d.atoms, d.bonds).tetra) out.set(ids[c], { neighbours: t.neighbours.map((n) => (n < 0 ? -1 : ids[n])), volume: t.volume });
   return out;
 }
+
+/**
+ * Two metals joined by two bridges, drawn by hand as the usual diamond: the metals left and right, the bridges `br` above and below,
+ * each metal's two other donors splayed out - the left one's `left` at 135 and 225 degrees, the right one's `right` at 45 and 315
+ * ("CO" a carbonyl, "NH3" an ammine) - all turned by `turn` degrees, the atoms written backwards where `reverse`.
+ */
+function bridged(metal: string, br: [string, string], left: [string, string], right: [string, string], turn = 0, reverse = false): Model {
+  const h = Math.SQRT1_2;
+  const atoms: [string, number, number][] = [[metal, -h, 0], [metal, h, 0], [br[0], 0, h], [br[1], 0, -h]];
+  const bonds: [number, number, number][] = [[0, 2, 1], [0, 3, 1], [1, 2, 1], [1, 3, 1]];
+  const end = (on: number, what: string, deg: number) => {
+    const [x, y] = [atoms[on][1] + Math.cos((deg * Math.PI) / 180), atoms[on][2] + Math.sin((deg * Math.PI) / 180)];
+    atoms.push([what === "CO" ? "C" : what === "NH3" ? "N" : what, x, y]);
+    bonds.push([on, atoms.length - 1, 1]);
+    if (what === "CO") {
+      atoms.push(["O", x + x - atoms[on][1], y + y - atoms[on][2]]);
+      bonds.push([atoms.length - 2, atoms.length - 1, 3]);
+    }
+  };
+  end(0, left[0], 135);
+  end(0, left[1], 225);
+  end(1, right[0], 45);
+  end(1, right[1], 315);
+  const t = (turn * Math.PI) / 180;
+  const n = atoms.length;
+  const at = (i: number) => (reverse ? n - 1 - i : i);
+  const placed = atoms.map(([el, x, y], i) => ({ id: at(i) + 1, x: 1.5 * (x * Math.cos(t) - y * Math.sin(t)), y: 1.5 * (x * Math.sin(t) + y * Math.cos(t)), r: 0.9, el, ...(el === "N" ? { valence: 4 } : {}) }));
+  return {
+    atoms: placed.sort((p, q) => p.id - q.id),
+    bonds: bonds.map(([a, b, order], i) => ({ id: 100 + i, a: at(a) + 1, b: at(b) + 1, order, stereo: "none" })),
+  } as unknown as Model;
+}
+
+/** For each metal, the bridge each of its donors of element `el` (not a bridge) stands across, by angle: "<bridge>@<its id>", sorted. */
+function acrossBridges(m: Model, metal: string, el: string): string[] {
+  const nbs = (id: number) => m.bonds.filter((b) => b.a === id || b.b === id).map((b) => m.atoms.find((a) => a.id === (b.a === id ? b.b : b.a))!);
+  const metals = m.atoms.filter((a) => a.el === metal);
+  const bridges = (mt: (typeof metals)[number]) => nbs(mt.id).filter((a) => metals.every((o) => nbs(o.id).some((b) => b.id === a.id)));
+  const out: string[] = [];
+  for (const mt of metals) {
+    const angle = (a: { x: number; y: number }) => Math.atan2(a.y - mt.y, a.x - mt.x);
+    const off = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle(p) - angle(q)), Math.cos(angle(p) - angle(q)))));
+    for (const d of nbs(mt.id).filter((a) => a.el === el && !bridges(mt).includes(a))) {
+      const across = nbs(mt.id).filter((a) => a.id !== d.id).reduce((b, a) => (off(d, a) < off(d, b) ? a : b));
+      out.push(`${bridges(mt).includes(across) ? across.el : "no bridge"}@${across.id}`);
+    }
+  }
+  return out.sort();
+}
+
+describe("two metals bridged, drawn by hand", () => {
+  it("keeps which bridge each donor stands across as drawn: cis and trans [Pt2Cl4(NH3)2] however turned or written, [Rh2Cl2(CO)2(NH3)2], and the three [Pt2(Cl)(Br)Cl2(NH3)2]", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const cases: [string, Model, string][] = [
+      ["trans-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"]), "N"],
+      ["cis-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"]), "N"],
+      ["cis-[Pt2Cl4(NH3)2], turned 37", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"], 37), "N"],
+      ["cis-[Pt2Cl4(NH3)2], written backwards", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"], 0, true), "N"],
+      ["trans-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["CO", "NH3"]), "N"],
+      ["cis-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["NH3", "CO"]), "N"],
+      ["[Pt2(Cl)(Br)Cl2(NH3)2], both N across Br", bridged("Pt", ["Cl", "Br"], ["NH3", "Cl"], ["NH3", "Cl"]), "N"],
+      ["[Pt2(Cl)(Br)Cl2(NH3)2], both N across Cl", bridged("Pt", ["Cl", "Br"], ["Cl", "NH3"], ["Cl", "NH3"]), "N"],
+      ["[Pt2(Cl)(Br)Cl2(NH3)2], one across each", bridged("Pt", ["Cl", "Br"], ["NH3", "Cl"], ["Cl", "NH3"]), "N"],
+    ];
+    for (const [name, m, el] of cases) {
+      const metal = m.atoms.find((a) => a.el === "Pt" || a.el === "Rh")!.el;
+      const drawnSo = acrossBridges(m, metal, el);
+      expect(acrossBridges(await laidOut(m, MENO), metal, el), name).toEqual(drawnSo);
+    }
+  });
+});
+
+describe("two metals bridged, drawn by hand, and Clean-up", () => {
+  it("leaves each the structure it was: cis and trans [Pt2Cl4(NH3)2] two structures before and after, each its own after as before", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const cases: [string, Model][] = [
+      ["trans-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"])],
+      ["cis-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"])],
+      ["cis-[Pt2Cl4(NH3)2], turned 37", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"], 37)],
+      ["trans-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["CO", "NH3"])],
+      ["cis-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["NH3", "CO"])],
+    ];
+    const before: string[] = [];
+    for (const [name, m] of cases) {
+      const was = identityOfDrawn(m).text;
+      before.push(was);
+      expect([name, identityOfDrawn(await laidOut(m, MENO)).text], name).toEqual([name, was]);
+    }
+    // (cis and trans: two structures, turned or not)
+    expect(before[0]).not.toBe(before[1]);
+    expect(before[2]).toBe(before[1]);
+    expect(before[3]).not.toBe(before[4]);
+    // (and typed with nothing given - laid out as a SMILES's drawing is, marked at both metals - it is neither)
+    const typed = drawnFromSmiles("[NH3][Pt]1(Cl)[Cl][Pt]([NH3])(Cl)[Cl]1");
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const index = new Map(typed.atoms.map((a, i) => [a.id, i + 1]));
+    const block = ["", "  test", "", `${String(typed.atoms.length).padStart(3)}${String(typed.bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      // (an ammine's N written with its valence of four - the block's vvv field - as the hand drawing has it)
+      ...typed.atoms.map((a) => `${f(a.x)}${f(-a.y)}${f(0)} ${a.el.padEnd(3)} 0  0  0  0  0${String(a.el === "N" ? 4 : 0).padStart(3)}  0  0  0  0  0  0`),
+      ...typed.bonds.map((b) => `${String(index.get(b.a)).padStart(3)}${String(index.get(b.b)).padStart(3)}${String(b.order).padStart(3)}  0`), "M  END", ""].join("\n");
+    const given = identityOfDrawn(await drawingFromBlock(block, MENO)).text;
+    expect(given.split("||")[0]).toBe(before[0].split("||")[0]);
+    expect([given === before[0], given === before[1]]).toEqual([false, false]);
+  });
+
+});
+
+describe("two metals bridged, alike bridges, the metals told apart", () => {
+  it("are one structure whatever the order of their atoms: trans and cis [PtPdCl4(NH3)2], and [Pt2Cl4(NH3)(PMe3)]'s N on one Pt", () => {
+    // (each order a turn of the atoms' list and of the bonds', one way or reversed: the bridges' ranks were taken in the order
+    //  the input listed the metals - found in the chemistry check)
+    const orders = (m: Model): Model[] =>
+      Array.from({ length: 12 }, (_, k) => {
+        const turn = <T,>(xs: readonly T[]) => [...xs.slice(k % xs.length), ...xs.slice(0, k % xs.length)];
+        const atoms = turn(m.atoms);
+        const bonds = turn(m.bonds);
+        return { ...m, atoms: k % 2 ? atoms.reverse() : atoms, bonds: k % 3 ? bonds.map((b) => ({ ...b, a: b.b, b: b.a })) : bonds } as Model;
+      });
+    const pd = (m: Model) => ({ ...m, atoms: m.atoms.map((a, i) => (a.el === "Pt" && i === m.atoms.findIndex((x) => x.el === "Pt") ? { ...a, el: "Pd" } : a)) }) as Model;
+    const texts = (m: Model) => new Set(orders(m).map((o) => identityOfDrawn(o).text));
+    const trans = texts(pd(bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"])));
+    const cis = texts(pd(bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"])));
+    expect([trans.size, cis.size]).toEqual([1, 1]);
+    expect([...trans][0]).not.toBe([...cis][0]);
+    const mixed = bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"]);
+    const p = { ...mixed, atoms: mixed.atoms.map((a) => (a.el === "N" && a.x > 0 ? { ...a, el: "P", valence: undefined } : a)) } as Model;
+    expect(texts(p).size).toBe(1);
+  });
+});
+
+/**
+ * Three metals in a chain, each two joined by two bridges of `br`, drawn by hand: the middle one at the centre, all its bonds bridges;
+ * the left one's other donors `left` at 135 and 225 degrees, the right one's `right` at 45 and 315 - all turned by `turn` degrees.
+ */
+function chainOfThree(metal: string, br: string, left: [string, string], right: [string, string], turn = 0): Model {
+  const h = Math.SQRT1_2;
+  const atoms: [string, number, number][] = [[metal, -2 * h, 0], [metal, 0, 0], [metal, 2 * h, 0], [br, -h, h], [br, -h, -h], [br, h, h], [br, h, -h]];
+  const bonds: [number, number][] = [[0, 3], [0, 4], [1, 3], [1, 4], [1, 5], [1, 6], [2, 5], [2, 6]];
+  const end = (on: number, what: string, deg: number) => {
+    atoms.push([what === "NH3" ? "N" : what, atoms[on][1] + Math.cos((deg * Math.PI) / 180), atoms[on][2] + Math.sin((deg * Math.PI) / 180)]);
+    bonds.push([on, atoms.length - 1]);
+  };
+  end(0, left[0], 135);
+  end(0, left[1], 225);
+  end(2, right[0], 45);
+  end(2, right[1], 315);
+  const t = (turn * Math.PI) / 180;
+  return {
+    atoms: atoms.map(([el, x, y], i) => ({ id: i + 1, x: 1.5 * (x * Math.cos(t) - y * Math.sin(t)), y: 1.5 * (x * Math.sin(t) + y * Math.cos(t)), r: 0.9, el, ...(el === "N" ? { valence: 4 } : {}) })),
+    bonds: bonds.map(([a, b], i) => ({ id: 100 + i, a: a + 1, b: b + 1, order: 1, stereo: "none" })),
+  } as unknown as Model;
+}
+
+/** At each atom of element `metal`, each donor and the one nearest straight across it, by id: "metal:donor-across", sorted. */
+function pairsAtMetals(m: Model, metal: string): string[] {
+  const out: string[] = [];
+  for (const mt of m.atoms.filter((a) => a.el === metal)) {
+    const nbs = m.bonds.filter((b) => b.a === mt.id || b.b === mt.id).map((b) => m.atoms.find((a) => a.id === (b.a === mt.id ? b.b : b.a))!);
+    const angle = (a: { x: number; y: number }) => Math.atan2(a.y - mt.y, a.x - mt.x);
+    const off = (p: (typeof nbs)[number], q: (typeof nbs)[number]) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle(p) - angle(q)), Math.cos(angle(p) - angle(q)))));
+    for (const d of nbs) out.push(`${mt.id}:${d.id}-${nbs.filter((a) => a.id !== d.id).reduce((b, a) => (off(d, a) < off(d, b) ? a : b)).id}`);
+  }
+  return out.sort();
+}
+
+describe("three metals in a chain, bridged, drawn by hand", () => {
+  it("keeps every metal's pairs as drawn - the middle one's bridges with the ends' metals turned or mirrored round it as any donors: [Pd3Cl6(NH3)2] cis and trans, turned", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    for (const turn of [0, 30, 75])
+      for (const [name, m] of [
+        ["trans", chainOfThree("Pd", "Cl", ["NH3", "Cl"], ["Cl", "NH3"], turn)],
+        ["cis", chainOfThree("Pd", "Cl", ["NH3", "Cl"], ["NH3", "Cl"], turn)],
+      ] as const) {
+        expect(pairsAtMetals(await laidOut(m, MENO), "Pd"), `${name}, turned ${turn}`).toEqual(pairsAtMetals(m, "Pd"));
+      }
+  });
+});

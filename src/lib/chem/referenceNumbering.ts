@@ -39,6 +39,7 @@ import { aromaticForm, symmetryOrbits } from "./identity";
 import { AROMATIC_BOND } from "./kekulize";
 import type { EntryAtom, EntryBond } from "../entry";
 import type { Molecule } from "./molecule";
+import { EXACT, volumeSign } from "./perception/stereo/geometry";
 
 /** A structure as its numbering is matched: its atoms and bonds, in the reference's numbering. */
 export type NumberedStructure = { atoms: readonly EntryAtom[]; bonds: readonly EntryBond[] };
@@ -55,11 +56,10 @@ const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-/** Whether the volume four atoms span, taken in the order of their numbers, is positive. */
-function volumeSign(place: (i: number) => V, atoms: readonly number[]): boolean {
-  const [o, ...rest] = [...atoms].sort((p, q) => p - q).map(place);
-  const [u, v, w] = rest.map((x) => sub(x, o));
-  return dot(u, cross(v, w)) > 0;
+/** Whether the volume four atoms span, taken in the order of their numbers - the three highest seen from the lowest - is positive: exactly 0 counts as not (perception/stereo/geometry `volumeSign`, `EXACT`). */
+function positiveInNumberOrder(place: (i: number) => V, atoms: readonly number[]): boolean {
+  const [o, a, b, c] = [...atoms].sort((p, q) => p - q).map(place);
+  return volumeSign(a, b, c, o, EXACT) > 0;
 }
 
 /** Whether the torsion a-b-c-d is beyond 90° either way. */
@@ -71,7 +71,7 @@ function across(place: (i: number) => V, [a, b, c, d]: readonly number[]): boole
 }
 
 function read(centre: Pick<NumberingCentre, "kind" | "atoms">, place: (i: number) => V): boolean {
-  return centre.kind === "double bond" ? across(place, centre.atoms) : volumeSign(place, centre.atoms);
+  return centre.kind === "double bond" ? across(place, centre.atoms) : positiveInNumberOrder(place, centre.atoms);
 }
 
 /** Whether `g` takes every bond onto a bond of the same order. */
@@ -202,7 +202,7 @@ export function numberingCentres(s: NumberedStructure, referenceXyz: readonly nu
       const pairs = alike(ns.flatMap((u, i) => ns.slice(i + 1).map((v) => [u, v] as [number, number])));
       // (four alike: any two swapped turn it, as any two others do - read as ConfoTS reads it, not at all)
       if (!pairs.length || pairs.length > 3) continue;
-      centres.push({ atom: c, kind: "tetrahedral", atoms: [...ns], reference: volumeSign(place, ns), swaps: pairs.map((p) => p.g) });
+      centres.push({ atom: c, kind: "tetrahedral", atoms: [...ns], reference: positiveInNumberOrder(place, ns), swaps: pairs.map((p) => p.g) });
       continue;
     }
     if (ns.length !== 3) continue;
@@ -219,7 +219,7 @@ export function numberingCentres(s: NumberedStructure, referenceXyz: readonly nu
       const end = doubles(partner).find((x) => x !== c)!;
       const four = [...singles(c), ...singles(end)];
       if (four.length !== 4) continue;
-      centres.push({ atom: c, kind: "allene", atoms: four, reference: volumeSign(place, four), swaps });
+      centres.push({ atom: c, kind: "allene", atoms: four, reference: positiveInNumberOrder(place, four), swaps });
       continue;
     }
     const beyond = nbrs[partner].filter((x) => x !== c);

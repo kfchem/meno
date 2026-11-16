@@ -7,14 +7,16 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKeyPatch, bondKindPatch, bondKindStepPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { newBondFrom } from "../../utils/geometry";
 import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
+import { depthStored, recognisedDepthOf } from "../../chem/depthHeld";
 import { renumbered } from "../../chem/atomMap";
+import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
@@ -209,11 +211,26 @@ export const createModelSlice = (
   },
 
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
-    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
+    // (a frame of a drag or a turn: a mark between bonds it leaves apart kept until it ends - `settleMove`)
+    whileMoving(() => doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`)));
   },
 
   dropMoveAtoms: (gesture: string) => {
     doc.drop(`move-atoms:${gesture}`);
+  },
+
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => {
+    // (a ring in perspective with no depth, about to be turned: its worked-out depth stored first, in the same step - chem/depthHeld)
+    const held = recognisedDepthOf(get().model, atoms);
+    if (held.size) doc.edit("move atoms", (d) => depthStored(d, held), gestureStep(`move-atoms:${gesture}`));
+  },
+
+  settleMove: (gesture: string, atoms: Iterable<number>) => {
+    // (a mark between two bonds the move has left apart - one with an atom it moved - taken away, in the move's own step: chem/crossings
+    // `crossingsApart`)
+    const moved = new Set(atoms);
+    if (!moved.size || crossingsApart(get().model, moved) === get().model) return;
+    doc.edit("move atoms", (d) => ({ ...d, model: crossingsApart(d.model, moved) }), gestureStep(`move-atoms:${gesture}`));
   },
 
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
@@ -226,11 +243,14 @@ export const createModelSlice = (
     const words = among.captions;
     // (all of it - and the pictures, texts' sheets, PDFs, slides, shapes and molecules in 3D selected with it - about the middle of all it moves, which so stays where it was)
     const mid = turnOverMiddle(get(), { arrows: among.arrows, pluses: among.pluses, captions: words })!;
-    const over = turnedOver(model, sel.atoms, axis, mid);
+    // (a ring in perspective with no depth: its worked-out depth stored first, so that it is turned over as one drawn with depth is - the
+    //  same compound seen from its other side, not its mirror image: chem/depthHeld)
+    const held = recognisedDepthOf(model, sel.atoms);
+    const over = turnedOver(held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model, sel.atoms, axis, mid);
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)
-    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
@@ -456,6 +476,11 @@ export const createModelSlice = (
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
   },
 
+  // (which of two crossing bonds is in front, said from the right-click menu: one step, named for what was done - chem/crossings)
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => {
+    doc.edit(how === "front" ? "bond in front" : "bond behind", (d) => ops.orderCrossing(d, bondId, otherId, how));
+  },
+
   // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's
   //  round, about itself, where the kind is the right-clicked bond's own: utils/bondKinds `bondKindStepPatch`; nothing, where
   //  it would change nothing)
@@ -482,6 +507,22 @@ export const createModelSlice = (
     if (patchChangesNothing(bond, patch)) return false;
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
     return true;
+  },
+
+  // (clicks on a bond, so many in a row: the first selects it alone - a click never changes the compound (the maintainer,
+  //  2026-11-14) - the second makes it double, a double's second line on its next side as the 2 key does, the third a triple)
+  bondClicked: (id: number, clicks: number) => {
+    const { model } = get();
+    const bond = model.bonds.find((b) => b.id === id);
+    if (!bond) return;
+    if (clicks <= 1) return get().clickSelectBond(id);
+    if (clicks === 2) {
+      const patch = doubleClickPatch(bond, model.atoms, model.bonds);
+      if (bond.order === 2) get().setBondDoubleMode(id, patch.doubleMode!);
+      else get().updateBond(id, patch);
+      return;
+    }
+    get().updateBond(id, { order: 3, stereo: "none" });
   },
 
   setBondOrder: (id: number, order: Bond["order"]) => {

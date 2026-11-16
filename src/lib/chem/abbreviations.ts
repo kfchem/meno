@@ -25,8 +25,10 @@ import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, rea
 import { aromaticRefusal, kekuleOrders } from "./kekulize";
 import { typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
-import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
+import { ELEMENTS as TABLE } from "./elements";
+import { notMetal } from "./perception/elements";
 import { VALENCE } from "./formula";
+import { CARRIERS } from "./perception/hydrogens";
 import { movedBond } from "./structureBonds";
 
 export type Abbreviation = {
@@ -382,21 +384,6 @@ function moleculeOf(label: string): GroupStructure | null {
 }
 
 /**
- * Atoms that take as many of one group as fill their valence but the bond
- * out (PPh2, PCy2, NBn2): each one's valence, and the word its group's name
- * ends in.
- */
-const CARRIERS: Record<string, { valence: number; word: string }> = {
-  B: { valence: 3, word: "boranyl" },
-  N: { valence: 3, word: "amino" },
-  P: { valence: 3, word: "phosphanyl" },
-  As: { valence: 3, word: "arsanyl" },
-  Si: { valence: 4, word: "silyl" },
-  Ge: { valence: 4, word: "germyl" },
-  Sn: { valence: 4, word: "stannyl" },
-};
-
-/**
  * Atoms that carry halogens as a group, by the valence each is read at -
  * its bond out, its H and its halogens - and what the group is called after
  * it: CF3 trifluoromethyl, SiCl3 trichlorosilyl, SF5 pentafluoro-λ6-sulfanyl.
@@ -547,7 +534,7 @@ function prefixedGroupOf(label: string): Abbreviation | undefined {
 function carriesOf(el: string): number | null {
   const v = VALENCE[el];
   const e = TABLE.find((x) => x.symbol === el);
-  if (v == null || v < 3 || !e || !NOT_METALS.has(el)) return null;
+  if (v == null || v < 3 || !e || !notMetal.has(el)) return null;
   return v - 2;
 }
 
@@ -642,6 +629,7 @@ export function setCustomAbbreviations(list: readonly CustomAbbreviation[]): voi
   }
   COMPOSED_SEEN.clear();
   GROUP_SEEN.clear();
+  NOTHING_SEEN.clear();
   forgetComplexReadings();
   GROUP_LABELS_SORTED = null;
   setUnits();
@@ -855,6 +843,28 @@ function setUnits(): void {
   }
 }
 setUnits();
+
+/**
+ * Whether a label reads as nothing - no element, no group, ligand, reagent or complex Meno knows (the dictionary, the label
+ * grammar, the user's own), no Rgroup, no symbol for a kind of group or a point of variability: words, kept as typed and drawn
+ * in the order typed (docs/EDITOR-2D.md, *Labels read as they are meant*, rule 5).
+ */
+export function readsAsNothing(label: string): boolean {
+  const seen = NOTHING_SEEN.get(label);
+  if (seen != null) return seen;
+  const nothing =
+    !TABLE.some((e) => e.symbol === label) &&
+    label !== "R#" &&
+    !/^R\d+$/.test(label) &&
+    !GENERIC_SYMBOLS.has(label) &&
+    !VARIABLE_NAMES.has(label) &&
+    // (a name the dictionary does not have reads as nothing at once; one it has is asked for its structure)
+    (abbreviationOf(label) == null || abbreviationStructure(label) == null);
+  NOTHING_SEEN.set(label, nothing);
+  return nothing;
+}
+/** What `readsAsNothing` has answered, by label: asked again as a drawing is laid out, and forgotten as the user's own change. */
+const NOTHING_SEEN = new Map<string, boolean>();
 
 /** The names labels are read into - the groups', the user's own among them, ligands', reagents' and the symbols for a kind of group - as they are written. */
 export function labelUnitNames(): readonly string[] {

@@ -373,6 +373,8 @@ export default function Selection2D() {
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
     const gesture = `turn-${performance.now()}`;
+    // (a ring in perspective with no depth: its depth stored as the turn begins, so the turn keeps the compound - chem/depthHeld)
+    if (st.sel.atoms.size) store.getState().holdRecognisedDepth(st.sel.atoms, gesture);
     // (the steps are the drawing's own: from the direction of a bond of it)
     const reference = turnReference(st.model, st.sel.atoms);
     let pause: number | null = null;
@@ -456,6 +458,8 @@ export default function Selection2D() {
       window.removeEventListener("keydown", onKey, true);
       selectionMoving.active = false;
       const s = store.getState();
+      // (a mark between two bonds the turn has left apart taken away, in its own step - chem/crossings)
+      if (!carried.length) s.settleMove(gesture, from.map((a) => a.id));
       s.endPanHold(ev.pointerId);
       // (and its end is no click on nothing, which would let it go)
       s.suppressDoubleClick(DOUBLE_CLICK_MS);

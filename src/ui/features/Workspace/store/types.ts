@@ -11,6 +11,7 @@ import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
+import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
@@ -142,6 +143,11 @@ export type Bond = BondChem & {
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
   dative?: boolean;
+  /**
+   * The bonds (by id) it passes behind where they cross on the page, said by the chemist: drawn with a gap there (chem/crossings). A look; kept
+   * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
+   */
+  behind?: number[];
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
@@ -583,6 +589,14 @@ export type Molecule3D = {
    */
   partOf?: true;
   /**
+   * Its conformers a structure of several parts', each part searched alone
+   * (docs/WORKSPACE.md, *A structure of several parts*): each frame one
+   * part's conformer, the others at their lowest - its frames weighed as one
+   * compound's conformers would be shares of nothing. No share is shown of
+   * it, and Populations and Ensemble refuse it, saying why.
+   */
+  partsAlone?: true;
+  /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
    * its energies are (`energies`), where it gave them: the force field's
@@ -990,6 +1004,8 @@ export type StepJob = {
   reused?: true;
   /** A job taken up again: what it gave when it was first read, as one digest - what it gives now must be the same. */
   gave?: string;
+  /** Its options, where they are not its run's: a step whose options its entries take from a property, one job's group's (lib/boundOptions `boundGroups`). */
+  options?: OptionValues;
 };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
@@ -1024,6 +1040,8 @@ export type WorkflowStep = {
   y: number;
   by?: string;
   options?: OptionValues;
+  /** Its options each entry takes from a property it carries, by option id: the property's name (lib/boundOptions; docs/WORKFLOWS.md, *Options from a property*). */
+  bound?: Bound;
   ran?: StepRan;
   /** Its earlier runs, newest first. */
   runs?: StepRunKept[];
@@ -1844,7 +1862,7 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
-  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
+  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
   removeStep: (id: number, asked?: boolean) => void;
@@ -2074,14 +2092,20 @@ export type EditorState = {
    */
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
-  /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**
-   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it and of
-   * every bond selected where it is among them, as one step. False where it would change nothing.
+   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it alone,
+   * selected or not, as one step. False where it would change nothing.
    */
   bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
+  /**
+   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): the first selects it alone (`clickSelectBond`) and
+   * changes nothing; the second makes it double, or a double's second line its next side; the third, a triple.
+   */
+  bondClicked: (id: number, clicks: number) => void;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
@@ -2121,10 +2145,14 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
+  settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
+  /** Before a turn of the selection: the depth worked out for a ring in perspective drawn with none stored on its atoms, in the turn's own step (chem/depthHeld), so that the turn keeps the compound. */
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => void;
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */

@@ -10,7 +10,7 @@ How to draw structures on the page with the pointer: bonds out of atoms, chains 
 
 ## Starting on empty space {#quick-add}
 
-Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked.
+Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked. Or just type a SMILES: it goes into the SMILES field. The first SMILES takes a moment.
 
 ## Bonds and atoms {#bonds}
 
@@ -43,7 +43,7 @@ With atoms chosen, just type: the label goes to every chosen atom, wherever the 
 Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list. A right-click chooses what it is on; the menu's first line says what it acts on - *This atom*, or *3 atoms, 2 bonds* when you right-click one of several chosen. Then an atom's charge, or a bond's kind, is set on every chosen atom or bond at once, and *Cut* and *Copy* take everything chosen.
 
 - An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Electron-pushing arrow*, *Fishhook arrow*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here*, *Unpaired electron*, *Select this structure* and *Magnification*.
-- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* which opens a second row of *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*, and *Delete bond*. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
+- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* opens a second row: *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*. *Delete bond* is last. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
 
 ## Choosing what to work on {#selecting}
 

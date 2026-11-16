@@ -64,7 +64,7 @@ describe("Plugins in Settings, with the list online", () => {
     expect(html).toContain("Online, not here yet");
     expect(html).toContain("Sketch interface <span");
     expect(html).toContain("Draws a structure from its name.");
-    expect(html).toContain("SMILES to a structure, and back.");
+    expect(html).toContain("Structures from SMILES, and SMILES from structures.");
     expect(html).toContain("Apache-2.0 · 240 KB to download");
     expect(html).toContain("Terms: Free for academic use.");
     expect(html).toContain("Cite: A. Author, J. Chem. 1 (2020) 1.");

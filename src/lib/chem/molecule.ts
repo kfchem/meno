@@ -1,5 +1,10 @@
 import type { CtMolecule } from "./ctfile";
-import { elementOf, NOT_METALS } from "./elements";
+import { elementOf } from "./elements";
+import { notMetal } from "./perception/elements";
+import { valenceOrder, type Radical } from "./perception/hydrogens";
+
+// (hydrogens and valence are the core's - perception/hydrogens, foundation part 12a - under the names their importers use)
+export { canTakeBond, implicitHydrogens, mostBonds, valenceOrder, valencesAt, type Radical } from "./perception/hydrogens";
 
 /**
  * What an atom is, chemically - the one place it is said, for every kind of
@@ -7,12 +12,6 @@ import { elementOf, NOT_METALS } from "./elements";
  * drawing is made of, the one written out. Each adds where the atom is and
  * whatever else it needs; none says what the atom is any other way.
  */
-
-/**
- * An atom with electrons of its own unpaired: one (a doublet, the usual
- * radical: CH3•) or two, paired (a singlet carbene) or not (a triplet).
- */
-export type Radical = "doublet" | "singlet" | "triplet";
 
 /** An atom list: the atom is one of `symbols`, or with `not`, none of them. */
 export type AtomList = { not: boolean; symbols: string[] };
@@ -100,6 +99,12 @@ export type AtomChem = {
   stereoGroup?: StereoGroup;
   /** The Sgroups it is in. */
   sgroups?: SgroupMark[];
+  /**
+   * A carbon written out, with its hydrogens - CH2, H2C on a bond's left -
+   * where the chemist typed it so: drawn labelled, not as a bare vertex. The
+   * hydrogens are its bonds' to give, as for any atom.
+   */
+  shown?: true;
 };
 
 /**
@@ -188,18 +193,6 @@ export function bondChem(b: BondChem): BondChem {
 }
 
 /**
- * How much of an atom's valence a bond takes: its order - none for a dative
- * bond, which lends a pair, nor for a coordination or a hydrogen bond. But
- * a carbon at either end of a dative or a coordination bond is the one
- * that lends it - a carbene's, an NHC's, CO's - and the pair it lends is
- * two of its valence: it carries no H for it.
- */
-export function valenceOrder(b: BondChem & { order: number; dative?: boolean }, el?: string): number {
-  if (b.dative || b.coordination) return el === "C" ? 2 : 0;
-  return b.hydrogen ? 0 : b.order;
-}
-
-/**
  * How much of a valence a file sets on an atom of `el` (CTfile VAL) a bond
  * takes: as `valenceOrder` - but a dative or a coordination bond at a metal
  * counts its order, as the file's own valence counts it: cisplatin's Pt is
@@ -208,7 +201,7 @@ export function valenceOrder(b: BondChem & { order: number; dative?: boolean }, 
  * two H nobody wrote.)
  */
 export function setValenceOrder(b: BondChem & { order: number; dative?: boolean }, el?: string): number {
-  if ((b.dative || b.coordination) && el && elementOf(el) && !NOT_METALS.has(el)) return b.order || 1;
+  if ((b.dative || b.coordination) && el && elementOf(el) && !notMetal.has(el)) return b.order || 1;
   return valenceOrder(b, el);
 }
 
@@ -240,100 +233,6 @@ export type Molecule = {
   ct?: CtMolecule;
 };
 
-/**
- * Valences used to work out how many hydrogens an atom carries, for the
- * elements that take them; any other carries none it is not drawn with.
- */
-const VALENCE: Record<string, { valence: number; group: number }> = {
-  B: { valence: 3, group: 13 },
-  C: { valence: 4, group: 14 },
-  Si: { valence: 4, group: 14 },
-  N: { valence: 3, group: 15 },
-  P: { valence: 3, group: 15 },
-  O: { valence: 2, group: 16 },
-  S: { valence: 2, group: 16 },
-  Se: { valence: 2, group: 16 },
-  F: { valence: 1, group: 17 },
-  Cl: { valence: 1, group: 17 },
-  Br: { valence: 1, group: 17 },
-  I: { valence: 1, group: 17 },
-};
-
-/**
- * The hydrogens an atom carries that are not drawn as atoms, for bonds
- * whose orders sum to `bondOrderSum`. A charge moves the valence the way
- * the electrons do: to the right of carbon a positive charge adds a bond
- * (NH4+, H3O+) and a negative one takes one away (O-, NH2-); carbon loses
- * one either way (CH3+, CH3-); boron, to its left, gains one with a
- * negative charge (BH4-). An unpaired electron takes a bond's place, and a
- * carbene's pair two.
- */
-export function implicitHydrogens(
-  el: string,
-  bondOrderSum: number,
-  charge = 0,
-  radical?: Radical,
-): number {
-  const v = VALENCE[el];
-  if (!v) return 0;
-  return Math.max(0, valenceAs(v, v.valence, charge, radical) - bondOrderSum);
-}
-
-/**
- * The valences an atom of `el` takes at its charge, as `implicitHydrogens`
- * counts them - its element's own and, below the second row, its highest
- * (`HIGHEST`) - or none where Meno has no valence for the element.
- */
-export function valencesAt(el: string, charge = 0, radical?: Radical): number[] {
-  const v = VALENCE[el];
-  if (!v) return [];
-  const own = valenceAs(v, v.valence, charge, radical);
-  const most = HIGHEST[el] != null ? valenceAs(v, HIGHEST[el], charge, radical) : null;
-  return most != null && most !== own ? [own, most] : [own];
-}
-
-/** A valence as a charge and an unpaired electron leave it, as `implicitHydrogens` counts them. */
-function valenceAs(v: { group: number }, valence: number, charge: number, radical?: Radical): number {
-  if (v.group >= 15) valence += charge;
-  else if (v.group === 14) valence -= Math.abs(charge);
-  else valence -= charge;
-  if (radical === "doublet") valence -= 1;
-  else if (radical) valence -= 2;
-  return valence;
-}
-
-/** The highest valence an element below the second row takes, past its own: P(V), S(VI), I(VII). */
-const HIGHEST: Record<string, number> = { P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
-
-/**
- * The most an atom's bonds' orders can sum to: its element's valence as its
- * charge and an unpaired electron leave it, counted as `implicitHydrogens`
- * counts them - or a heavier one's highest (P(V), S(VI), I(VII)), a charge
- * either way taking it further (PF6-), and a silicon's one more for each
- * negative charge, to six (SiF6 2-); null for an element with no valence
- * here, a metal.
- */
-export function mostBonds(el: string, charge = 0, radical?: Radical): number | null {
-  const v = VALENCE[el];
-  if (!v) return null;
-  // (a silicon's four, and one more for each negative charge, to six: a siliconate's five, SiF6 2-'s six - a neutral one none past four)
-  if (el === "Si") return Math.min(6, 4 + Math.max(0, -charge)) - (radical === "doublet" ? 1 : radical ? 2 : 0);
-  // (a heavier one's highest, its charge either way taking it further: PF6-'s six, a sulfonium's)
-  const highest = HIGHEST[el];
-  return highest != null ? highest + Math.abs(charge) - (radical === "doublet" ? 1 : radical ? 2 : 0) : valenceAs(v, v.valence, charge, radical);
-}
-
-/**
- * Whether an atom can take another bond: its element's valence, as its
- * charge and unpaired electron leave it, is not yet met by bonds whose
- * orders sum to `bondOrderSum`. An element with no valence here - a metal -
- * always can; hydrogen takes one.
- */
-export function canTakeBond(el: string, bondOrderSum: number, charge = 0, radical?: Radical): boolean {
-  if (el === "H") return bondOrderSum < 1;
-  return VALENCE[el] ? implicitHydrogens(el, bondOrderSum, charge, radical) > 0 : true;
-}
-
 /** A charge as a formula writes it: +, 2+, − (a minus sign, not a hyphen), 3−. */
 export function chargeText(charge: number): string {
   if (!charge) return "";
@@ -358,5 +257,6 @@ export function chemistry(a: AtomChem): Omit<AtomChem, "el"> {
     ...(a.exactChange ? { exactChange: true } : {}),
     ...(a.stereoGroup ? { stereoGroup: a.stereoGroup } : {}),
     ...(a.sgroups?.length ? { sgroups: a.sgroups } : {}),
+    ...(a.shown ? { shown: true } : {}),
   };
 }
