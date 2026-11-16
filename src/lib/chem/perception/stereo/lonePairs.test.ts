@@ -78,9 +78,10 @@ describe("lonePairCentres", () => {
     expect(centres("ClN1C(=C)C1")).toEqual([]);
   });
 
-  it("reads an aromatic bond as a pi system's, of order one and a half: an N-aryl oxaziridine's and diaziridine's N, the aryl's bonds aromatic, keep none", () => {
-    // (each N's lone pair is shared with its aryl, as an N-aryl aziridine's is: read as single bonds, the aryl would be no pi system and
-    //  the N a centre, its ring's O or N next to it)
+  it("reads an aromatic bond as a pi system's, of order one and a half: as the rule stands, an N-aryl oxaziridine's and diaziridine's N, the aryl's bonds aromatic, are no centres", () => {
+    // (the rule takes an N bonded to a pi system for one that shares its lone pair, as with an N-aryl aziridine; read as single bonds,
+    //  the aryl would be no pi system and the N a centre, its ring's O or N next to it. This pins the rule's reading of an aromatic
+    //  bond, not a measured barrier: the ring's O or N raises an N's barrier and an aryl lowers it, and for these the net is not known)
     expect(centres("c1ccccc1N1OC1")).toEqual([]);
     expect(centres("c1ccccc1N1NC1")).toEqual([]);
   });
