@@ -96,7 +96,7 @@ const plain = (n: number): { key: Key; locant: Locant } => ({ key: [n], locant: 
 type Candidate = { atoms: number[]; keys: Key[]; locants: Locant[] };
 
 /** A unit of the molecule (A2): a ring system, a carbon chain, or one acyclic atom that is not carbon. */
-type Unit = { kind: "ring" | "chain" | "atom"; atoms: number[]; ringSystem?: number };
+type Unit = { kind: "ring" | "chain" | "atom" | "assembly"; atoms: number[]; ringSystem?: number; systems?: number[]; parts?: number[][] };
 
 type Ctx = {
   input: LocantsInput;
@@ -638,21 +638,36 @@ function hangers(c: Ctx, parent: ReadonlySet<number>): { on: number; first: numb
 function a5(
   c: Ctx,
   cands: Candidate[],
-  unit: { atoms: readonly number[]; mancude: boolean; indicated: number },
+  unit: { atoms: readonly number[]; mancude: boolean; indicated: number; parts?: readonly number[][] },
   parent: ReadonlySet<number>,
   from = 1,
 ): { left: Candidate[]; own: { atoms: number[]; why: OwnWhy } | null } {
   let left = cands;
   const set = new Set(unit.atoms);
-  if (from <= 1 && unit.mancude && unit.indicated) {
-    left = keepLeast(left, (cd) => indicatedSet(c, unit.atoms, cd, unit.indicated), (p, q) => (p && q ? compareSets(p, q) : p ? -1 : q ? 1 : 0));
+  // (an assembly's rings each its own system: their double bonds and saturated positions are each ring's)
+  const parts = unit.parts ?? [unit.atoms];
+  if (from <= 1 && unit.mancude) {
+    const counts = unit.parts ? parts.map((p) => indicatedCount(c, p)) : [unit.indicated];
+    if (counts.some((k) => k)) {
+      const sets = (cd: Candidate) => {
+        const all: Key[] = [];
+        for (let i = 0; i < parts.length; i++) {
+          const one = indicatedSet(c, parts[i], cd, counts[i]);
+          if (!one) return null;
+          all.push(...one);
+        }
+        return all;
+      };
+      left = keepLeast(left, sets, (p, q) => (p && q ? compareSets(p, q) : p ? -1 : q ? 1 : 0));
+    }
   }
   if (from <= 3) {
     left = unit.mancude
-      ? keepLeast(left, (cd) => { const k = keyIn(cd); return saturatedPositions(c, unit.atoms).map((a) => k.get(a)!); }, compareSets)
+      ? keepLeast(left, (cd) => { const k = keyIn(cd); return parts.flatMap((p) => saturatedPositions(c, p)).map((a) => k.get(a)!); }, compareSets)
       : keepLeast(left, (cd) => bestOverForms(c, cd, set), compareMultiple);
   }
-  const hang = hangers(c, parent);
+  // (what hangs from this unit's atoms: a multiplied parent's twin and what hangs from it are not its own)
+  const hang = hangers(c, parent).filter((h) => set.has(h.on));
   left = keepLeast(left, (cd) => { const k = keyIn(cd); return hang.map((h) => k.get(h.on)!); }, compareSets);
   if (left.length > 1) {
     // (g) the first-cited prefix: different groups at the tied locants need the alphabet - not built
@@ -736,7 +751,56 @@ function longestChains(c: Ctx, atoms: readonly number[], allowed: (a: number) =>
   });
 }
 
-type ParentPick = { unit: Unit; own: OwnWhy | null };
+type ParentPick = { unit: Unit; own: OwnWhy | null; multiplied?: Unit[] };
+
+/** A ring system's skeleton as text - its atoms, their elements and its ring bonds, saturation not looked at: two systems alike have one text. */
+function skeletonText(c: Ctx, atoms: readonly number[]): string {
+  const set = new Set(atoms);
+  let label = new Map(atoms.map((a) => [a, c.input.atoms[a].el]));
+  for (let round = 0; round < atoms.length; round++) {
+    const next = new Map(atoms.map((a) => [a, `${label.get(a)}(${c.around[a].filter((b) => set.has(b)).map((b) => label.get(b)).sort().join(",")})`]));
+    const ranks = [...new Set(next.values())].sort();
+    label = new Map(atoms.map((a) => [a, `${c.input.atoms[a].el}#${ranks.indexOf(next.get(a)!)}`]));
+  }
+  return [...label.values()].sort().join(";");
+}
+
+/**
+ * The ring assemblies among `systems` (A3 step 3; P-28.2.1, P-28.3.1, P-31.2.3.3.5, P-54.3): two to six ring systems of one skeleton joined in
+ * an unbranched row by single bonds, hydrogenated or not - but a benzene ring joined to a fully saturated six-ring (cyclohexylbenzene). Each
+ * as its systems in row order; a system in none is left out.
+ */
+function assembliesOf(c: Ctx, systems: readonly number[]): number[][] {
+  const text = new Map(systems.map((k) => [k, skeletonText(c, c.systems[k].atoms)]));
+  const saturated = (k: number) => c.systems[k].atoms.every((a) => c.around[a].every((b) => c.systemOf[b] !== k || orderOf(c, a, b) === 1));
+  const benzene = (k: number) => c.systems[k].rings.length === 1 && isBenzene(c, c.systems[k].atoms);
+  const linked = new Map<number, number[]>(systems.map((k) => [k, []]));
+  for (const k of systems) {
+    for (const a of c.systems[k].atoms) {
+      for (const b of c.around[a]) {
+        const j = c.systemOf[b];
+        if (j < 0 || j === k || !linked.has(j) || orderOf(c, a, b) !== 1 || text.get(j) !== text.get(k)) continue;
+        if ((benzene(k) && saturated(j)) || (benzene(j) && saturated(k))) continue;
+        if (!linked.get(k)!.includes(j)) linked.get(k)!.push(j);
+      }
+    }
+  }
+  const out: number[][] = [];
+  const seen = new Set<number>();
+  for (const k of systems) {
+    if (seen.has(k) || !linked.get(k)!.length) continue;
+    // (the connected set; kept only as a row: no system with three partners, no ring of systems, two to six in all)
+    const group = [k];
+    for (let i = 0; i < group.length; i++) for (const j of linked.get(group[i])!) if (!group.includes(j)) group.push(j);
+    group.forEach((x) => seen.add(x));
+    const ends = group.filter((x) => linked.get(x)!.length === 1);
+    if (group.some((x) => linked.get(x)!.length > 2) || ends.length !== 2 || group.length > 6) continue;
+    const row = [ends[0]];
+    while (row.length < group.length) row.push(linked.get(row[row.length - 1])!.find((j) => !row.includes(j))!);
+    out.push(row);
+  }
+  return out;
+}
 
 /** A ring system's facts for P-44.2.1 (a) to (g). */
 function ringFacts(c: Ctx, s: { atoms: number[]; rings: number[] }): number[] {
@@ -776,13 +840,19 @@ function parentOf(c: Ctx, atoms: readonly number[]): ParentPick {
   }
   if (senior !== "C" && !inARing && ringSystems.length) return acyclicElementParent(c, atoms, senior);
   if (ringSystems.length) {
-    // steps 1, 2: a ring system before any chain; among them, P-44.2.1 then P-44.4.1 (a), (b)
-    let best = ringSystems;
-    best = leastBy(best, (k) => ringFacts(c, c.systems[k]));
-    best = leastBy(best, (k) => unsaturation(c, c.systems[k].atoms));
-    const unit = (k: number): Unit => ({ kind: "ring", atoms: c.systems[k].atoms, ringSystem: k });
-    if (best.length === 1) return { unit: unit(best[0]), own: null };
-    return tiedParents(c, best.map(unit));
+    // steps 1 to 3: a ring system or assembly before any chain; among them, P-44.2.1 then P-44.4.1 (a), (b); an assembly one parent
+    const assemblies = assembliesOf(c, ringSystems);
+    const inAssembly = new Set(assemblies.flat());
+    const units: Unit[] = [
+      ...assemblies.map((row): Unit => ({ kind: "assembly", atoms: row.flatMap((k) => c.systems[k].atoms), systems: row, parts: row.map((k) => c.systems[k].atoms) })),
+      ...ringSystems.filter((k) => !inAssembly.has(k)).map((k): Unit => ({ kind: "ring", atoms: c.systems[k].atoms, ringSystem: k })),
+    ];
+    const ringsOf = (u: Unit) => (u.systems ?? [u.ringSystem!]).flatMap((k) => c.systems[k].rings);
+    let best = units.map((_, i) => i);
+    best = leastBy(best, (i) => ringFacts(c, { atoms: units[i].atoms, rings: ringsOf(units[i]) }));
+    best = leastBy(best, (i) => unsaturation(c, units[i].atoms));
+    if (best.length === 1) return { unit: units[best[0]], own: null };
+    return tiedParents(c, best.map((i) => units[i]));
   }
   // step 4: the principal chain - the longest chain of acyclic carbons; then P-44.4.1 (a), (b)
   let chains = longestChains(c, atoms, (a) => el(a) === "C" && !c.inRing[a]);
@@ -826,6 +896,15 @@ function leastByList(xs: number[][], score: (x: number[]) => number[]): number[]
  * parents one orbit apart, either (the same numbering, the molecule turned); otherwise Meno's own.
  */
 function tiedParents(c: Ctx, units: Unit[]): ParentPick {
+  // (identical ring parents in one orbit of the molecule: multiplied - P-45.1.1, P-51.3.1 - each numbered alike; never a chain)
+  const orbits = c.input.orbits;
+  const rings = units.every((u) => u.kind === "ring" || u.kind === "assembly");
+  if (rings && orbits && units.every((u) => u.atoms.length === units[0].atoms.length) && sameOrbitSets(orbits, units.map((u) => u.atoms))) {
+    const first = [...units].sort((p, q) => Math.min(...p.atoms) - Math.min(...q.atoms));
+    return { unit: first[0], own: null, multiplied: first };
+  }
+  // (some of them alike but not all: the text would multiply a set of them (P-15.3.3.2.1) - Meno's own)
+  const someAlike = rings && !!orbits && units.some((u, i) => units.some((v, j) => j > i && u.atoms.length === v.atoms.length && sameOrbitSets(orbits, [u.atoms, v.atoms])));
   const scored = units.map((u) => {
     const set = new Set(u.atoms);
     const numbered = numberUnit(c, u, set);
@@ -838,8 +917,7 @@ function tiedParents(c: Ctx, units: Unit[]): ParentPick {
   let best = left[0].locs;
   for (const s of left) if (compareSets(s.locs, best) < 0) best = s.locs;
   left = left.filter((s) => compareSets(s.locs, best) === 0);
-  if (left.length === 1) return { unit: left[0].u, own: null };
-  const orbits = c.input.orbits;
+  if (left.length === 1) return { unit: left[0].u, own: someAlike ? "needs the name" : null };
   const oneOrbit = !!orbits && left.every((s) => s.u.atoms.length === left[0].u.atoms.length) && sameOrbitSets(orbits, left.map((s) => s.u.atoms));
   // (in one orbit: either, nothing said; else the first in the molecule's order, said)
   const first = [...left].sort((p, q) => Math.min(...p.u.atoms) - Math.min(...q.u.atoms))[0];
@@ -853,66 +931,123 @@ function sameOrbitSets(orbits: readonly number[], sets: readonly (readonly numbe
 
 // ---------------------------------------------------------------- numbering a unit
 
+type SystemNumbering = { cands: Candidate[]; mancude: boolean; indicated: number; ownAll: OwnWhy | null };
+
+/** A ring system's candidates by its kind's own rules (A4.1 to A4.6), whether it is mancude-named, and its count of indicated hydrogen. */
+function systemNumbering(c: Ctx, k: number): SystemNumbering {
+  const sys = c.systems[k];
+  const inOrder = (): Candidate[] => {
+    const atoms = [...sys.atoms].sort((p, q) => p - q);
+    return [{ atoms, keys: atoms.map((_, i) => plain(i + 1).key), locants: atoms.map((_, i) => plain(i + 1).locant) }];
+  };
+  const heteroFirst = (cands: Candidate[]) => {
+    const hetero = sys.atoms.filter((a) => c.input.atoms[a].el !== "C");
+    return bySeniorityOrder(c, keepLeast(cands, (cd) => { const key = keyIn(cd); return hetero.map((a) => key.get(a)!); }, compareSets), hetero);
+  };
+  if (sys.rings.length === 1) {
+    const ring = c.rings[sys.rings[0]];
+    const mancude = mancudeNamed(c, ring, 1);
+    return { cands: heteroRingRules(c, ringCandidates(ring)), mancude, indicated: mancude ? indicatedCount(c, ring) : 0, ownAll: null };
+  }
+  const table = tableCandidates(c, sys.atoms);
+  if (table.length) return { cands: table, mancude: true, indicated: indicatedCount(c, sys.atoms), ownAll: null };
+  const two = twoRingFused(c, sys);
+  if (two.length) return { cands: fusedRules(c, two, sys.atoms), mancude: true, indicated: indicatedCount(c, sys.atoms), ownAll: null };
+  const bridged = vonBaeyerKind(c, sys);
+  if (bridged) {
+    const found = vonBaeyer(sys.atoms, (a) => c.around[a]);
+    if (!found || !found.length) return { cands: inOrder(), mancude: false, indicated: 0, ownAll: found ? "not built" : "over the budget" };
+    // (heteroatoms after the hydrocarbon's numbering: the set, then by seniority - P-23.3.2.1, .2)
+    const cands = heteroFirst(found.map((f) => ({ atoms: f.order, keys: f.order.map((_, i) => plain(i + 1).key), locants: f.order.map((_, i) => plain(i + 1).locant) })));
+    return { cands, mancude: false, indicated: 0, ownAll: bridged === "bridged fused" ? "not built" : null };
+  }
+  const spiro = spiroCandidates(c, sys);
+  if (spiro && spiro.length) return { cands: heteroFirst(spiro), mancude: false, indicated: 0, ownAll: null };
+  // (a system of another kind - fused rings past the table, a spiro system with a fused or bridged part: not built)
+  return { cands: inOrder(), mancude: false, indicated: 0, ownAll: "not built" };
+}
+
+/** A locant primed `primes` times (P-28.2.1, P-15.3: an assembly's second ring, a multiplied parent's second). */
+function primed(cands: Candidate[], primes: number): Candidate[] {
+  if (!primes) return cands;
+  return cands.map((cd) => ({
+    atoms: cd.atoms,
+    locants: cd.locants.map((l) => ({ ...l, base: l.base + "'".repeat(primes) })),
+    keys: cd.keys.map((k) => [k[0], k[1] ?? 0, primes, k[3] ?? 0]),
+  }));
+}
+
+/**
+ * A ring assembly numbered (A4.7; P-28.2.1, P-28.3.1): each ring its usual way with its junctions as low as its numbering allows; two rings,
+ * the first unprimed and the second primed (which is which left to A5); three to six, composite locants - the ring's number along the row,
+ * the atom's own locant as a superscript - both directions along the row tried.
+ */
+function assemblyCandidates(c: Ctx, parts: readonly number[][], systems: readonly number[]): { cands: Candidate[]; numberings: SystemNumbering[] } {
+  const numberings = systems.map((k) => systemNumbering(c, k));
+  const own = parts.map((part, i) => {
+    const set = new Set(part);
+    const junctions = part.filter((a) => c.around[a].some((b) => !set.has(b) && parts.some((q, j) => j !== i && q.includes(b))));
+    return keepLeast(numberings[i].cands, (cd) => { const key = keyIn(cd); return junctions.map((a) => key.get(a)!); }, compareSets).slice(0, 8);
+  });
+  const out: Candidate[] = [];
+  if (parts.length === 2) {
+    for (const [first, second] of [[0, 1], [1, 0]]) {
+      for (const a of own[first]) for (const b of primed(own[second], 1)) out.push({ atoms: [...a.atoms, ...b.atoms], keys: [...a.keys, ...b.keys], locants: [...a.locants, ...b.locants] });
+    }
+    return { cands: out, numberings };
+  }
+  for (const row of [parts.map((_, i) => i), parts.map((_, i) => parts.length - 1 - i)]) {
+    let combos: Candidate[] = [{ atoms: [], keys: [], locants: [] }];
+    row.forEach((i, ringNo) => {
+      const next: Candidate[] = [];
+      for (const base of combos) {
+        for (const cd of own[i]) {
+          next.push({
+            atoms: [...base.atoms, ...cd.atoms],
+            keys: [...base.keys, ...cd.keys.map((k) => [ringNo + 1, k[0], k[1] ?? 0, k[3] ?? 0])],
+            locants: [...base.locants, ...cd.locants.map((l) => ({ base: String(ringNo + 1), sup: l.base }))],
+          });
+        }
+      }
+      combos = next.slice(0, 4096);
+    });
+    out.push(...combos);
+  }
+  return { cands: out, numberings };
+}
+
 /**
  * A unit numbered by its own rules (A4) and then A5, within the molecule: `parent` is the set whose hanging atoms count as its substituents.
  * `attach`, for a substituent's unit: its atom of attachment, given the lowest locant its numbering allows (P-29.2) before A5's step 3.
+ * `link`, for a multiplied parent: the atom the linking group hangs from, as low as its numbering allows (P-15.3.1.3) before A5; `primes`,
+ * its primes.
  */
-function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: number): { cand: Candidate; own: { atoms: number[]; why: OwnWhy } | null } {
+function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: number, link?: number, primes = 0): { cand: Candidate; own: { atoms: number[]; why: OwnWhy } | null } {
   let cands: Candidate[];
   let mancude = false;
   let indicated = 0;
   let ownAll: OwnWhy | null = null;
+  let parts: number[][] | undefined;
   if (unit.kind === "ring") {
-    const sys = c.systems[unit.ringSystem!];
-    if (sys.rings.length === 1) {
-      const ring = c.rings[sys.rings[0]];
-      cands = heteroRingRules(c, ringCandidates(ring));
-      mancude = mancudeNamed(c, ring, 1);
-      indicated = mancude ? indicatedCount(c, ring) : 0;
-    } else {
-      const table = tableCandidates(c, sys.atoms);
-      const two = table.length ? [] : twoRingFused(c, sys);
-      const bridged = !table.length && !two.length ? vonBaeyerKind(c, sys) : null;
-      const spiro = !table.length && !two.length && !bridged ? spiroCandidates(c, sys) : null;
-      if (table.length) cands = table;
-      else if (spiro && spiro.length) {
-        const hetero = sys.atoms.filter((a) => c.input.atoms[a].el !== "C");
-        cands = bySeniorityOrder(c, keepLeast(spiro, (cd) => { const k = keyIn(cd); return hetero.map((a) => k.get(a)!); }, compareSets), hetero);
-      }
-      else if (two.length) cands = fusedRules(c, two, sys.atoms);
-      else if (bridged) {
-        const found = vonBaeyer(sys.atoms, (a) => c.around[a]);
-        if (found && found.length) {
-          cands = found.map((f) => ({ atoms: f.order, keys: f.order.map((_, k) => plain(k + 1).key), locants: f.order.map((_, k) => plain(k + 1).locant) }));
-          // (heteroatoms after the hydrocarbon's numbering: the set, then by seniority - P-23.3.2.1, .2)
-          const hetero = sys.atoms.filter((a) => c.input.atoms[a].el !== "C");
-          cands = bySeniorityOrder(c, keepLeast(cands, (cd) => { const k = keyIn(cd); return hetero.map((a) => k.get(a)!); }, compareSets), hetero);
-          if (bridged === "bridged fused") ownAll = "not built";
-        } else {
-          const atoms = [...sys.atoms].sort((p, q) => p - q);
-          cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
-          ownAll = found ? "not built" : "over the budget";
-        }
-      } else {
-        // (a system of another kind: its kind's rules come in later slices; meanwhile the system in the molecule's order, said)
-        const atoms = [...sys.atoms].sort((p, q) => p - q);
-        cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
-        ownAll = "not built";
-      }
-      if (!ownAll && !bridged && !spiro) {
-        mancude = true;
-        indicated = indicatedCount(c, sys.atoms);
-      }
-    }
-  } else if (unit.kind === "chain") {
-    cands = chainCandidates(unit.atoms);
+    const n = systemNumbering(c, unit.ringSystem!);
+    ({ cands, mancude, indicated, ownAll } = n);
+  } else if (unit.kind === "assembly") {
+    parts = unit.parts!;
+    const a = assemblyCandidates(c, parts, unit.systems!);
+    cands = a.cands;
+    // (named as its components are: a biphenyl that keeps a benzene ring is mancude-named)
+    mancude = a.numberings.some((n) => n.mancude);
+    ownAll = a.numberings.find((n) => n.ownAll)?.ownAll ?? null;
+    if (parts.length > 6) ownAll = "not built";
   } else {
     cands = chainCandidates(unit.atoms);
   }
+  cands = primed(cands, primes);
   if (attach != null && cands.length > 1) cands = keepLeast(cands, (cd) => [keyIn(cd).get(attach)!], compareSets);
+  if (link != null && cands.length > 1) cands = keepLeast(cands, (cd) => [keyIn(cd).get(link)!], compareSets);
   if (ownAll) return { cand: cands[0], own: { atoms: [...cands[0].atoms], why: ownAll } };
   // (a substituent's unit has no indicated-hydrogen step of its own before its free valence: P-29.2 puts the free valence first)
-  const r = a5(c, cands, { atoms: unit.atoms, mancude, indicated }, parent, attach != null ? 3 : 1);
+  const r = a5(c, cands, { atoms: unit.atoms, mancude, indicated, parts }, parent, attach != null ? 3 : 1);
   return { cand: r.left[0], own: r.own };
 }
 
@@ -984,8 +1119,20 @@ export function locants(input: LocantsInput, level: 1 | 2 = 1): Locants {
   const locant: (Locant | null)[] = input.atoms.map(() => null);
   if (!heavyAtoms.length) return { order: [], locant, shown: [], own };
   const pick = parentOf(c, heavyAtoms);
-  const parentSet = new Set(pick.unit.atoms);
-  const numbered = numberUnit(c, pick.unit, parentSet);
+  const units = pick.multiplied ?? [pick.unit];
+  const parentSet = new Set(units.flatMap((u) => u.atoms));
+  // (multiplied parents: each numbered alike, the link's point of attachment as low as it allows, the second primed, the third twice)
+  const each = units.map((u, i) => {
+    const mine = new Set(u.atoms);
+    // (the atom the linking group hangs from: the one whose group outside reaches the other parents)
+    const others = new Set(units.filter((v) => v !== u).flatMap((v) => v.atoms));
+    const link = units.length > 1 ? u.atoms.find((a) => c.around[a].some((b) => !mine.has(b) && [...allFrom(c, b, mine)].some((x) => others.has(x)))) : undefined;
+    return numberUnit(c, u, parentSet, undefined, link, units.length > 1 ? i : 0);
+  });
+  const numbered = {
+    cand: { atoms: each.flatMap((e) => e.cand.atoms), keys: each.flatMap((e) => e.cand.keys), locants: each.flatMap((e) => e.cand.locants) },
+    own: each.find((e) => e.own)?.own ?? null,
+  };
   if (pick.own) for (const a of heavyAtoms) own.push({ atom: a, why: pick.own });
   if (numbered.own) for (const a of numbered.own.atoms) own.push({ atom: a, why: numbered.own.why });
   numbered.cand.atoms.forEach((a, k) => (locant[a] = numbered.cand.locants[k]));

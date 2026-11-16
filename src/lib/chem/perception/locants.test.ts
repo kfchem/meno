@@ -275,6 +275,76 @@ describe("the parent and its groups", () => {
   });
 });
 
+describe("ring assemblies and multiplied parents (A3.3, A3.5, A4.7)", () => {
+  it("1,1'-biphenyl: 1 to 6, then 1' to 6', the junction 1 and 1'; seventh to twelfth in the order", () => {
+    const { r } = run("c1ccccc1-c1ccccc1");
+    const s = r.shown.map((x) => x.base);
+    expect([s[5], s[6]].sort()).toEqual(["1", "1'"]);
+    expect(s.filter((x) => x.endsWith("'")).length).toBe(6);
+    expect(r.order.slice(6).every((a) => s[a].endsWith("'"))).toBe(true);
+    expect(r.own).toEqual([]);
+  });
+
+  it("2,2'-bipyridine: N1, the junction C2, N1'", () => {
+    const s = shownOf("n1ccccc1-c1ccccn1");
+    expect([s[0], s[11]].sort()).toEqual(["1", "1'"]);
+    expect([s[5], s[6]].sort()).toEqual(["2", "2'"]);
+  });
+
+  it("2-methyl-1,1'-biphenyl: the methyl's ring unprimed (M)", () => {
+    const s = shownOf("Cc1ccccc1-c1ccccc1");
+    expect(s[1]).toBe("2");
+    expect(s[6]).toBe("1");
+  });
+
+  it("1-phenylcyclohexene: an assembly, 2,3,4,5-tetrahydro-1,1'-biphenyl, the saturated ring unprimed (M)", () => {
+    // (C0=C1 the cyclohexene's double bond, C1 the junction)
+    const s = shownOf("C1=C(CCCC1)c1ccccc1");
+    expect(s[1]).toBe("1");
+    expect([s[2], s[3], s[4], s[5]].sort()).toEqual(["2", "3", "4", "5"]);
+    expect(s[0]).toBe("6");
+  });
+
+  it("cyclohexylbenzene: benzene the parent, NOT an assembly", () => {
+    const s = shownOf("C1CCCCC1c1ccccc1");
+    expect(s.filter((x) => x.endsWith("'"))).toEqual([]);
+    expect(s[6]).toBe("1");
+  });
+
+  it("1,1':4',1''-terphenyl (M): composite locants, the rings 1, 2, 3; the middle ring's junctions its 1 and 4", () => {
+    const { r } = run("c1ccccc1-c1ccc(cc1)-c1ccccc1");
+    const sh = r.shown;
+    // (the middle ring: ring 2, its junctions the superscripts 1 and 4)
+    expect([sh[6], sh[9]].map((x) => `${x.base}^${x.sup}`).sort()).toEqual(["2^1", "2^4"]);
+    expect(sh.every((x) => !!x.sup)).toBe(true);
+  });
+
+  it("1,1'-methylenedibenzene and 1,1'-oxydibenzene: both rings parents, the second primed, the junction 1 and 1'; then the link", () => {
+    for (const smiles of ["c1ccccc1Cc1ccccc1", "c1ccccc1Oc1ccccc1"]) {
+      const { r } = run(smiles);
+      const s = r.shown.map((x) => x.base);
+      expect([s[5], s[7]].sort(), smiles).toEqual(["1", "1'"]);
+      expect(s[6], smiles).toBe("13");
+      expect(r.own, smiles).toEqual([]);
+    }
+  });
+
+  it("1,1'-oxybis(4-bromobenzene): each ring's link at 1, its Br at 4", () => {
+    const s = shownOf("Brc1ccc(cc1)Oc1ccc(Br)cc1");
+    expect([s[4], s[8]].sort()).toEqual(["1", "1'"]);
+    expect([s[1], s[11]].sort()).toEqual(["4", "4'"]);
+  });
+
+  it("1-propoxypropane: not multiplied - a chain never is; one propane, nothing said", () => {
+    const s = shownOf("CCCOCCC");
+    expect(s.filter((x) => x.endsWith("'"))).toEqual([]);
+  });
+
+  it("1,4-dibenzylbenzene: Meno's own - the alike rings are not all the tied ones (M)", () => {
+    expect(ownOf("c1ccccc1Cc1ccc(cc1)Cc1ccccc1").length).toBeGreaterThan(0);
+  });
+});
+
 describe("said as Meno's own", () => {
   it("3-chlorocyclohexan-1-ol: the set 1, 3 either way; the atoms whose numbers differ are own", () => {
     const own = ownOf("OC1CC(Cl)CCC1");
