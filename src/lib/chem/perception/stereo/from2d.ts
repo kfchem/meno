@@ -47,6 +47,7 @@
 import { lonePairCentres, pyramidal } from "../../lonePairCentres";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
+import { parity } from "./geometry";
 import { factsOf } from "../facts";
 import { ofTheStructure } from "../graph";
 
@@ -936,18 +937,8 @@ export function sameConfiguration(
   const a = p.neighbours.map(as);
   const b = q.neighbours.map(as);
   if (a.length !== b.length || a.some((n) => !b.includes(n))) return false;
-  const perm = a.map((n) => b.indexOf(n));
-  let swaps = 0;
-  const seen = perm.map(() => false);
-  for (let i = 0; i < perm.length; i++) {
-    let len = 0;
-    for (let j = i; !seen[j]; j = perm[j]) {
-      seen[j] = true;
-      len++;
-    }
-    if (len) swaps += len - 1;
-  }
-  return (swaps % 2 === 0) === (p.volume === q.volume);
+  // (the parity of the permutation taking one order to the other: geometry's)
+  return (parity(a.map((n) => b.indexOf(n))) === 1) === (p.volume === q.volume);
 }
 
 /**
