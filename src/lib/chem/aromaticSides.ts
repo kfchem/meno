@@ -6,8 +6,10 @@
  *
  * A ring counts as aromatic, as drawn, when its double bonds alternate all
  * the way round - a six-membered ring with three - or when a five-membered
- * ring has two and the atom left over is an N, O, S, Se or P (a pyrrole, a
- * furan, a thiophene). Among the ways the shared double bonds can go, the
+ * ring has two and the atom left over is one that gives the ring a lone pair
+ * by Meno's aromatic rule (lib/chem/perception/aromatic, `RING_LONE_PAIR`):
+ * an N, P, As, O, S, Se or Te (a pyrrole, a furan, a thiophene, an arsole, a
+ * tellurophene). Among the ways the shared double bonds can go, the
  * one that shows the most aromatic rings wins; between those showing as
  * many, the one whose rings are larger - indole shows its benzene ring.
  *
@@ -16,10 +18,9 @@
  * nothing.
  */
 import { smallestRings } from "../layout/rings";
+import { RING_LONE_PAIR } from "./perception/aromatic";
 
 type RingBond = { a1: number; a2: number; order: number };
-
-const LONE_PAIR = new Set(["N", "O", "S", "Se", "P"]);
 
 /** More shared bonds than this and the choice is made one bond at a time. */
 const EXHAUSTIVE = 14;
@@ -51,7 +52,7 @@ function aromaticRing(
   if (ring.length === 6 && doubles.length === 3) return doubles;
   if (ring.length === 5 && doubles.length === 2) {
     const left = ring.find((a) => !inDouble.has(a));
-    return left != null && LONE_PAIR.has(elements[left]) ? doubles : null;
+    return left != null && RING_LONE_PAIR.has(elements[left]) ? doubles : null;
   }
   return null;
 }

@@ -16,6 +16,8 @@
  */
 import type { LayoutInput } from "./perceive";
 import type { Layout2D } from "./engine";
+import { parity } from "../chem/perception/stereo/geometry";
+import { runsThrough } from "../chem/perception/stereo/runs";
 
 /**
  * Each atom's place in the molecule's own order (old index to new). `way`
@@ -53,14 +55,8 @@ const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: num
   return Math.sign(r[other] - r[ref]) || 0;
 };
 
-/**
- * The atom an axis's or a cumulene's end runs on through to its other end:
- * that end, a biaryl's, bonded to it; else its cumulated double bond's
- * other atom, an allene's or a butatriene's - so that its own groups are
- * the rest of its neighbours.
- */
-const across = (adj: ReturnType<typeof adjacency>, end: number, other: number): number =>
-  adj[end].some((e) => e.to === other) ? other : (adj[end].find((e) => e.order >= 2)?.to ?? other);
+/** The atom an axis's or a cumulene's end runs on through to its other end (perception/stereo/runs `runsThrough`); the other end where none. */
+const across = (adj: ReturnType<typeof adjacency>, end: number, other: number): number => runsThrough(adj[end], other) ?? other;
 
 /** Each star's pi system and each atom's stars (`LayoutAtom.pi`), both ways: what tells a haptic ring's atoms from others. */
 const piLinks = (input: LayoutInput) => {
@@ -504,11 +500,3 @@ function ranksOf(keys: readonly string[]): number[] {
 
 const classes = (r: readonly number[]) => new Set(r).size;
 
-/** The sign of the permutation that sorts `xs` (distinct) ascending. */
-function parity(xs: readonly number[]): 1 | -1 {
-  let sign: 1 | -1 = 1;
-  const a = [...xs];
-  for (let i = 0; i < a.length; i++)
-    for (let j = i + 1; j < a.length; j++) if (a[i] > a[j]) sign = sign === 1 ? -1 : 1;
-  return sign;
-}
