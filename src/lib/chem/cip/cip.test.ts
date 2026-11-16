@@ -215,6 +215,31 @@ describe("what gives no label, and why", () => {
     expect(given("C[S+](CC)c1ccccc1", 1, [0, 2, 4])[0]).toMatch(/^S1:[RS]$/);
   });
 
+  it("takes four bonds for a centre only with no lone pair: a see-saw (one) or a square (two) is no tetrahedron", () => {
+    // (each atom of four given a configuration on its four neighbours, as a wedge would give it: a sulfurane SR4, SF4's form, and
+    //  IF4-'s and XeF4's, each with four different groups, name none; a sulfoximine's S, a phosphonate's P, an ammonium N+, a
+    //  borate B- and a silane's Si - four and no lone pair - keep their R or S)
+    const four = (smiles: string, el: string) => {
+      const input = cipInput(smiles);
+      const at = input.atoms.findIndex((a) => a.el === el);
+      const neighbours = input.bonds.flatMap((b) => (b.a === at ? [b.b] : b.b === at ? [b.a] : []));
+      expect(neighbours, smiles).toHaveLength(4);
+      return cipSaid({ ...input, atoms: input.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: 1 as const } } : a)) });
+    };
+    expect(four("CS(CC)(OC)c1ccccc1", "S")).toEqual(["S1:unsure"]);
+    expect(four("F[I-](Cl)(Br)C", "I")).toEqual(["I1:unsure"]);
+    expect(four("F[Xe](Cl)(Br)C", "Xe")).toEqual(["Xe1:unsure"]);
+    for (const [smiles, el] of [
+      ["CS(=O)(=NC)c1ccccc1", "S"],
+      ["CP(=O)(OC)OCC", "P"],
+      ["C[N+](CC)(CCC)c1ccccc1", "N"],
+      ["C[B-](CC)(CCC)c1ccccc1", "B"],
+      ["C[Si](CC)(CCC)c1ccccc1", "Si"],
+    ]) {
+      expect(four(smiles, el)[0], smiles).toMatch(new RegExp(`^${el}\\d+:[RS]$`));
+    }
+  });
+
   it("6, the 2018 proposal: a spiro atom between two rings each with an N and a C=O - its N alike, its C alike - R or S, the other in the mirror image", () => {
     expect(cipOf("O=C1CCN[C@@]12NCCC2=O")).toEqual(["C5:R"]);
     expect(cipOf("O=C1CCN[C@]12NCCC2=O")).toEqual(["C5:S"]);
