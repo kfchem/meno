@@ -30,6 +30,8 @@ export const CONCEPTS: Record<string, RegExp> = {
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
   // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
   "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI)\b/,
+  // an atom's hydrogens that are no atoms of their own, counted over its bonds (perception/hydrogens.ts `hydrogenCounts`)
+  "hydrogen count": /^(?:export )?(?:function|const) (implicitOf|hydrogensOf|undrawnHydrogens|hydrogenCounts)\b/,
 };
 
 /**
@@ -52,18 +54,16 @@ export const STILL_APART: Copy[] = [
   { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
   { concept: "metals", file: "lib/chem/conformersSought.ts", name: "metalByBonds", part: 3, why: "a test of its own (no most bonds), not a list: it becomes the core's metal in part 3's fixes (B4)" },
   // valence tables: one count, one table (hydrogens and valence)
-  { concept: "valence", file: "lib/chem/molecule.ts", name: "VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/molecule.ts", name: "HIGHEST", part: 12 },
-  { concept: "valence", file: "lib/chem/formula.ts", name: "VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/formula.ts", name: "HIGHER", part: 12 },
-  { concept: "valence", file: "lib/chem/formula.ts", name: "OUTER", part: 12 },
-  { concept: "valence", file: "lib/chem/chain.ts", name: "VALENCES", part: 12 },
   { concept: "valence", file: "lib/chem/lonePairCentres.ts", name: "PYRAMID_VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "VALENCE_ELECTRONS", part: 12 },
   { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "D_ORBITAL_VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
-  { concept: "valence", file: "lib/chem/abbreviations.ts", name: "CARRIERS", part: 12 },
+  // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
+  { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },
+  { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "hydrogensOf", part: 12, why: "implicitOf's count and the hydrogen atoms bonded: goes with implicitOf" },
+  { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: 12, why: "a P and an S at their higher valences where the bonds pass the lower: part 12b" },
+  { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
   // permutation parity and signed volume from places
   { concept: "parity", file: "lib/layout/canonical.ts", name: "parity", part: 4 },
   { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
@@ -150,12 +150,13 @@ describe("one definition per concept: the ratchet", () => {
 });
 
 describe("the ratchet's own reading, so that it bites", () => {
-  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule", () => {
+  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a hydrogen count", () => {
     expect(declarationsIn("export function ringThrough(g, a) {}\nconst x = 1;\n", CONCEPTS.rings)).toEqual([{ name: "ringThrough", line: 1 }]);
     expect(declarationsIn("const METALS = new Set([]);\n", CONCEPTS.metals)).toEqual([{ name: "METALS", line: 1 }]);
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
     expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
+    expect(declarationsIn("function implicitOf(atoms, bonds) {}\nconst hydrogensOfThem = 1;\n", CONCEPTS["hydrogen count"])).toEqual([{ name: "implicitOf", line: 1 }]);
   });
 
   it("leaves a use, a local and an import alone: only a declaration counts", () => {
