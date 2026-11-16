@@ -237,6 +237,32 @@ describe("a click on a bond", () => {
   });
 });
 
+describe("a slow double-click on a bond (the maintainer, 2026-11-17)", () => {
+  it("its first click's turn taken back and the bond made double from what it was, as one step in all", () => {
+    const { doc, st, ab } = chain();
+    const bond = () => st().model.bonds.find((x) => x.id === ab)!;
+    const depth = doc.history().undoDepth;
+    // (the first click turned it - a wedge - and its second came after the wait, within a double-click's time)
+    st().bondClicked(ab, 1);
+    expect(bondKindOf(bond())).toBe("wedge");
+    expect(st().takeBackTurn(st().model)).toBe(true);
+    st().bondClicked(ab, 2);
+    expect(bondKindOf(bond())).toBe("double");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(bondKindOf(bond())).toBe("single");
+  });
+
+  it("takes nothing back where the drawing has changed since the turn", () => {
+    const { st, ab, bc } = chain();
+    st().bondClicked(ab, 1);
+    const after = st().model;
+    st().updateBond(bc, { order: 2 });
+    expect(st().takeBackTurn(after)).toBe(false);
+    expect(bondKindOf(st().model.bonds.find((x) => x.id === ab)!)).toBe("wedge");
+  });
+});
+
 describe("a bond's own kind chosen again from its menu", () => {
   it("goes one step on in that kind's round: a wedge narrow at its other end, a double bond's second line on its next side; a single as it was, no step", () => {
     const { doc, st, ab } = chain();

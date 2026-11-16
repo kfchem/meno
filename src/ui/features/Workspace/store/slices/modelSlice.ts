@@ -518,6 +518,13 @@ export const createModelSlice = (
     get().updateBond(id, { order: 3, stereo: "none" });
   },
 
+  // (a click's turn of a bond taken back - where the drawing is still the one it made - so that the second click of a slow
+  //  double-click makes the bond double from what it was, as one step: utils/press `turnTakenBack`)
+  takeBackTurn: (after: unknown) => {
+    if (get().model !== after) return false;
+    return doc.undo();
+  },
+
   setBondOrder: (id: number, order: Bond["order"]) => {
     doc.edit("change bond order", (d) => ops.updateBond(d, id, { order }));
   },

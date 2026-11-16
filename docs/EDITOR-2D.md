@@ -309,7 +309,12 @@ bond is selected by Cmd or Ctrl and a click, which adds it or takes it
 out, by the box and by the lasso; Shift and a click are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click
-turning nothing. A bond's kind is otherwise set by
+turning nothing; a slower one, its second click within a double-click's time
+of the first but after the first had turned the bond, takes that turn back
+and makes the bond double from what it was, as one step. A click is never
+lost: one still waiting is turned at once as the next press lands anywhere
+but on its bond, or as a drag begins (`turnTakenBack`, `flushesClick`, the
+maintainer, 2026-11-17). A bond's kind is otherwise set by
 the bond keys (*Bond keys*, below) and by its right-click menu, which
 chooses its kind outright (2026-10-14), for every bond selected at once, as
 one step. In the menu's row of kinds, the icon of the kind the bond already

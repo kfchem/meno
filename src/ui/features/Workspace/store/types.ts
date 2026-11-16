@@ -2092,6 +2092,8 @@ export type EditorState = {
    * double's second line its next side; three, a triple.
    */
   bondClicked: (id: number, clicks: number) => void;
+  /** A click's turn of a bond taken back where the drawing is still `after`, the one it made (utils/press `turnTakenBack`); false where it is not. */
+  takeBackTurn: (after: unknown) => boolean;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
