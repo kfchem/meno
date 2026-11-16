@@ -21,7 +21,8 @@ export type EnumerateAsked =
 type Answer = { id: number; ok: true; made: Enumerated } | { id: number; ok: false; error: string };
 let worker: Worker | null = null;
 let sent = 0;
-const waiting = new Map<number, { done: (made: Enumerated) => void; fail: (e: Error) => void }>();
+/** What the worker was asked and has not answered, by message, in the order sent: the first is the one it is making now. */
+const waiting = new Map<number, { run: number; asked: EnumerateAsked; done: (made: Enumerated) => void; fail: (e: Error) => void }>();
 
 /**
  * How the worker is made, given by the app as it starts (main.tsx `enumerateWorkerMade`): named here, its URL would put the
@@ -60,34 +61,44 @@ function started(): Worker {
 export const ENUMERATE_STOPPED = "Enumerate was stopped";
 
 /**
- * The worker ended now, whatever it was making - a Stop ends the work, rather than waiting for products it would only
- * throw away: what it was asked fails, said stopped (`ENUMERATE_STOPPED`). Made again the next time it is asked.
+ * Run `run` stopped: what it asked fails, said stopped (`ENUMERATE_STOPPED`), and no other run's. Where the worker is making its
+ * products now, the worker is ended - a Stop ends the work, rather than waiting for products it would only throw away - and what
+ * the other runs asked is asked again of a worker made anew; where it is only waiting its turn, it is taken out of the queue.
  */
-export function enumerateStopped(): void {
+export function enumerateStopped(run: number): void {
+  const now = waiting.keys().next().value;
+  const ours = [...waiting].filter(([, w8]) => w8.run === run);
+  if (!ours.length) return;
+  for (const [id, w8] of ours) {
+    waiting.delete(id);
+    w8.fail(new Error(ENUMERATE_STOPPED));
+  }
+  if (!ours.some(([id]) => id === now)) return;
   worker?.terminate();
   worker = null;
-  for (const w8 of waiting.values()) w8.fail(new Error(ENUMERATE_STOPPED));
-  waiting.clear();
+  if (!waiting.size) return;
+  const again = started();
+  for (const [id, w8] of waiting) again.postMessage({ id, asked: w8.asked });
 }
 
-/** Enumerate's products for `asked`: made in the worker, or here where there are no workers. */
-export function enumeratedOff(asked: EnumerateAsked): Promise<Enumerated> {
+/** Enumerate's products for `asked`, for run `run` (the step's, whose Stop stops it alone): made in the worker, or here where there are no workers. */
+export function enumeratedOff(asked: EnumerateAsked, run = 0): Promise<Enumerated> {
   if (!make || typeof Worker === "undefined")
     return Promise.resolve().then(() => (asked.way === "substituents" ? substituted(asked.template, asked.positions, asked.text, asked.combine, asked.style) : enumerated(asked.template, asked.text, asked.style)));
   return new Promise((done, fail) => {
     const id = ++sent;
-    waiting.set(id, { done, fail });
+    waiting.set(id, { run, asked, done, fail });
     started().postMessage({ id, asked });
   });
 }
 
 /**
  * `runMenoDrawn`, with Enumerate's products made off the drawing thread (here): laid out and told apart, a long list
- * takes seconds. Any other kind as `runMenoDrawn` does it.
+ * takes seconds; `run` is the step's, whose Stop stops it alone. Any other kind as `runMenoDrawn` does it.
  */
-export async function runMenoDrawnOff(kind: StepKind, entries: readonly DrawnEntry[], own?: OptionValues, style?: StyleChoice, said: readonly string[] = []): Promise<DrawnOutcome> {
+export async function runMenoDrawnOff(kind: StepKind, entries: readonly DrawnEntry[], own?: OptionValues, style?: StyleChoice, said: readonly string[] = [], run = 0): Promise<DrawnOutcome> {
   if (kind !== "enumerate" || !entries.length) return runMenoDrawn(kind, entries, own, style, said);
   const asked = enumerateAsked(entries, own, style);
   if ("said" in asked) return asked;
-  return enumerateOutcome(await enumeratedOff(asked), entries, said);
+  return enumerateOutcome(await enumeratedOff(asked, run), entries, said);
 }

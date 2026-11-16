@@ -430,11 +430,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!stepOf(now, id)) return;
     // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
     // (its products made off the drawing thread - laid out and told apart, a long list takes seconds: workflow/enumerateOff)
-    // (a Stop ends the worker itself - `enumerateStopped` - rather than waiting for products it would throw away)
-    menoKills.set(id, enumerateStopped);
+    // (a Stop ends this run's work in the worker - `enumerateStopped` - rather than waiting for products it would throw away; another step's run goes on)
+    menoKills.set(id, () => enumerateStopped(id));
     let made: Awaited<ReturnType<typeof runMenoDrawnOff>> | null = null;
     try {
-      made = await runMenoDrawnOff("enumerate", entries, own, now.style, [checked]);
+      made = await runMenoDrawnOff("enumerate", entries, own, now.style, [checked], id);
     } catch (e) {
       if (!(e instanceof Error) || e.message !== ENUMERATE_STOPPED) throw e;
     } finally {
