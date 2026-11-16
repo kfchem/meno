@@ -60,5 +60,8 @@ describe("R and S keep off what is written beside the drawing", () => {
     const or1 = layout.texts.find((t) => t.text === "or1")!;
     const b = labelBox(or1, or1.fontPx, set);
     expect(boxes[0]).toEqual({ minX: or1.x - b.left, maxX: or1.x + b.right, minY: or1.y - b.bottom, maxY: or1.y + b.top });
+    // (a text not set beside - a label - is no note, whether or not it has an atom)
+    expect(notesBoxes([{ x: 0, y: 0, text: "OH", fontPx: 10 }], (t) => t.fontPx, set)).toEqual([]);
+    expect(notesBoxes([{ x: 0, y: 0, text: "1", fontPx: 10, beside: true, atom: 2 }], (t) => t.fontPx, set)).toEqual([]);
   });
 });

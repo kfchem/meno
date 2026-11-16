@@ -587,8 +587,9 @@ export function stereoPlaces(o: {
 
 /**
  * Where the drawing's notes are, as boxes: each text the layout sets beside the drawing rather than on an atom - an atom's
- * enhanced stereo group ("and1"), its map number, a charge beside a vertex, what is said of a bond or a whole structure -
- * for R, S, E and Z to keep off (`stereoPlaces` `notes`). `size` is the size a text is measured at.
+ * enhanced stereo group ("and1"), its map number, a charge beside a vertex, what is said of a bond - for R, S, E and Z to keep
+ * off (`stereoPlaces` `notes`); what is said of a whole structure stands beneath it, in no text here. `size` is the size a text is
+ * measured at.
  */
 export function notesBoxes(texts: readonly TextItem[], size: (t: TextItem) => number, set: ReturnType<typeof labelSetOf>): Rect[] {
   const out: Rect[] = [];

@@ -117,3 +117,34 @@ describe("segmentMeetsBox", () => {
     expect(segmentMeetsBox({ x: 1.5, y: -1 }, { x: 1.5, y: 2 }, box)).toBe(false);
   });
 });
+
+describe("what is said beside an atom, among labels and other notes", () => {
+  const zigzag = (n: number, map = true): { atoms: Atom[]; bonds: Bond[] } => ({
+    atoms: Array.from({ length: n }, (_, i) => ({ id: i + 1, x: i * L * 0.866, y: i % 2 ? L / 2 : 0, el: i === 3 ? "O" : "C", ...(map ? { map: i + 1 } : {}) })),
+    bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 as const })),
+  });
+
+  it("keeps a mapping number off a label beside it and off its neighbours' notes, long ones too", () => {
+    // (each note long - a map number, inv, exact - so that two neighbours set the same way would meet)
+    const { atoms: plainAtoms, bonds } = zigzag(8);
+    const atoms = plainAtoms.map((a, i) => ({ ...a, map: 10 + i, invRet: "invert" as const, exactChange: true }));
+    const o = opts();
+    const texts = layoutMolecule(atoms, bonds, o, 40).texts;
+    const notes = texts.filter((t) => t.beside && t.atom == null);
+    const labelsOnly = texts.filter((t) => t.atom != null);
+    for (const n of notes) {
+      const box = boxOf(n, o);
+      for (const lab of labelsOnly) expect(meet(box, boxOf(lab, o)), `${n.text} on ${lab.text}`).toBe(false);
+      for (const m of notes) if (m !== n) expect(meet(box, boxOf(m, o)), `${n.text} on ${m.text}`).toBe(false);
+    }
+  });
+
+  it("is placed by what lies near it alone: the start of a long chain's notes is as the same start of a short one's", () => {
+    const place = (n: number) =>
+      layoutMolecule(zigzag(n).atoms, zigzag(n).bonds, opts(), 40)
+        .texts.filter((t) => t.beside && t.atom == null)
+        .slice(0, 10)
+        .map((t) => `${t.text}@${t.x.toFixed(6)},${t.y.toFixed(6)}`);
+    expect(place(400)).toEqual(place(20));
+  });
+});
