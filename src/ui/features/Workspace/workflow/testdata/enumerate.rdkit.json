@@ -79,7 +79,7 @@
   },
   {
    "name": "a stereocentre's R1 #4",
-   "molfile": "3eb6da2abe138b0b1483a6957a0336741eec0953dc86eb7c8fa95a44637e58be",
+   "molfile": "2541797d7d541170f747263924d4d93f35fd30e395ddae8feb32177c0aefe72b",
    "smiles": "FCCl",
    "expected": "FCCl"
   },
@@ -433,7 +433,7 @@
   },
   {
    "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #10",
-   "molfile": "bd2001a08b252ebf28d93ed262de7fc3dfb0102b56671f3429402f11960ddf21",
+   "molfile": "b960aaf93f37ad0b3c89e7f1b7375236824e256ecfac6d808671e7a1264f49e4",
    "smiles": "CC(C)(O)[C@H](N)C(=O)O",
    "expected": "CC(C)(O)[C@H](N)C(=O)O"
   },
@@ -523,7 +523,7 @@
   },
   {
    "name": "differential: CC[C@H](C)[C@@H](C)O #7",
-   "molfile": "c0391b915880ff144ce2642bfa18e7d7f8889d3da64a36f0ab4fa554ee67a0ba",
+   "molfile": "7091482e180086f1ef1fc575ea4efffca693f90c52caff753ec2c29d19a9a884",
    "smiles": "CCC(C)(C)[C@@H](C)O",
    "expected": "CCC(C)(C)[C@@H](C)O"
   },
@@ -541,7 +541,7 @@
   },
   {
    "name": "differential: CC[C@H](C)[C@@H](C)O #10",
-   "molfile": "4301b79686cceab1a3f39f1f03a30ae7d9c62905efd761011db009f5c59d78c8",
+   "molfile": "f42e096df1e6f55857a64251d87ca6d1c29c0e0bb946ec2ea5f25d084591437e",
    "smiles": "CCC(CC)[C@@H](C)O",
    "expected": "CCC(CC)[C@@H](C)O"
   },
@@ -559,7 +559,7 @@
   },
   {
    "name": "differential: CC[C@H](C)[C@@H](C)O #13",
-   "molfile": "9a6ce648844eeaf1c763c3f9b223cf7ac759e11a0f08490ee9f76707c5d20f85",
+   "molfile": "89b65a3be395d61719f4878d98cdeaae51cb2edc855cf209af1c6163cb631c14",
    "smiles": "CC[C@H](C)C(C)(C)O",
    "expected": "CC[C@H](C)C(C)(C)O"
   },
@@ -919,7 +919,7 @@
   },
   {
    "name": "differential: C[C@@H](O)c1ccccc1 #4",
-   "molfile": "2a6697c1d3fe9ba77f898f85adc719a9271314f7c20791adc65024d988cfc1e3",
+   "molfile": "9f6484f5a3a8d9b6df4758ce408f4d39ef233fb5d9f28421a5f47a2d8a81baea",
    "smiles": "CC(C)(O)c1ccccc1",
    "expected": "CC(C)(O)c1ccccc1"
   },

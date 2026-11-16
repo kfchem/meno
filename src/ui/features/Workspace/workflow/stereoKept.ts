@@ -7,72 +7,95 @@
  * (lib/layout/drawn `readStereo`), so whatever the join did to the wedges
  * is checked, not assumed.
  */
-import { readStereo } from "../../../../lib/layout/drawn";
 import type { Bond, Model } from "../store/types";
-import { degrees, drawingOf, narrowEnd } from "../chem/drawing";
-import { parity } from "../../../../lib/chem/perception/stereo/geometry";
+import { degrees, narrowEnd } from "../chem/drawing";
+import { symmetryClasses } from "../../../../lib/layout/canonical";
+import { stereoOf } from "../chem/engineLayout";
+import { compared, type Alike, type ConfigurationUnit, type Difference, type Said } from "../../../../lib/chem/perception/stereo/compare";
+import { identityInputOf } from "../chem/identityOf";
 
-/** A centre's neighbours by atom id ("H" for its undrawn hydrogen), in the order read, and the sign of the volume they span. */
-type Centre = { around: (number | "H")[]; volume: 1 | -1 };
-/** What a drawing says of configurations: its centres by atom id, its double bonds' sides by bond id (an atom on each end, and whether they are on one side). */
-export type Said = { centres: Map<number, Centre>; sides: Map<number, { refs: [number, number]; cis: boolean }> };
-
-/** The configurations `model`'s drawing says. */
+/** What `model`'s drawing says of configurations, by atom id, as the canvas reads it (chem/engineLayout `stereoOf`). */
 export function saidOf(model: Model): Said {
-  const d = drawingOf(model);
-  const read = readStereo(d.atoms, d.bonds);
-  const id = (i: number) => model.atoms[i].id;
-  const centres = new Map<number, Centre>();
-  for (const [c, t] of read.tetra) centres.set(id(c), { around: t.neighbours.map((n) => (n === -1 ? "H" : id(n))), volume: t.volume });
-  // (drawingOf keeps every bond of a whole model, in order)
-  const sides = new Map<number, { refs: [number, number]; cis: boolean }>();
-  for (const [b, s] of read.cisTrans) sides.set(model.bonds[b].id, { refs: [id(s.refs[0]), id(s.refs[1])], cis: s.cis });
-  return { centres, sides };
+  return stereoOf(model);
 }
 
-/** The parity of the permutation taking `from` to `to` (the same items): +1 even, -1 odd; 0 where they are not the same items. */
-function parityBetween<T>(from: readonly T[], to: readonly T[]): 1 | -1 | 0 {
-  if (from.length !== to.length || from.some((x) => !to.includes(x))) return 0;
-  // (the sign of the permutation of places taking one to the other: the one parity - perception/stereo/geometry - and the 0 above is this caller's own)
-  return parity(from.map((x) => to.indexOf(x)));
+/** Where two of an atom's groups in `model` are alike, by their classes (lib/layout/canonical `symmetryClasses`, the configurations read with them), its carried H a group too. */
+function alikeIn(model: Model): Alike {
+  const { input } = identityInputOf(model);
+  const classes = symmetryClasses(input);
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const around: number[][] = input.atoms.map(() => []);
+  for (const b of input.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  return (at, besides) => {
+    const i = index.get(at);
+    if (i == null) return false;
+    const not = besides == null ? -1 : (index.get(besides) ?? -1);
+    const groups = around[i].filter((j) => j !== not).map((j) => classes[j]);
+    for (let h = 0; h < (input.atoms[i].hs ?? 0); h++) groups.push(-1);
+    return new Set(groups).size < groups.length;
+  };
 }
 
 /**
- * Where `product` says other than `template` of the template's atoms:
- * each atom (by id) whose configuration it changes, loses, or gains - a
- * centre, or a double bond's end. `took` maps each template atom whose
- * undrawn hydrogen a group took to that group's attach atom; every other
- * template atom keeps its id. Empty where every configuration is kept.
+ * How `product` differs in configuration from `template`, at the
+ * template's atoms (lib/chem/perception/stereo/compare `compared`): each
+ * unit inverted, opened, closed, or no longer one because two of its
+ * groups are now alike. `took` maps each template atom whose undrawn
+ * hydrogen a group took to that group's attach atom; every other template
+ * atom keeps its id. Empty where every configuration is kept.
  */
-export function changedAt(template: Model, product: Model, took: ReadonlyMap<number, number>): number[] {
-  const was = saidOf(template);
-  const now = saidOf(product);
-  const changed = new Set<number>();
-  const at = (c: number, n: number | "H") => (n === "H" && took.has(c) ? took.get(c)! : n);
-  for (const [c, t] of was.centres) {
-    const p = now.centres.get(c);
-    const sign = p ? parityBetween(t.around.map((n) => at(c, n)), p.around) : 0;
-    if (!p || !sign || t.volume * sign !== p.volume) changed.add(c);
-  }
-  // (a centre read now at a template atom that had none: one nobody chose)
-  for (const c of now.centres.keys()) if (template.atoms.some((a) => a.id === c) && !was.centres.has(c)) changed.add(c);
-  const ends = (bonds: readonly Bond[], id: number) => bonds.find((b) => b.id === id)!;
-  for (const [b, s] of was.sides) {
-    const p = now.sides.get(b);
-    const bond = ends(template.bonds, b);
-    if (!p) {
-      changed.add(bond.a);
-      continue;
-    }
-    // (a ref on one end other than the template's is the other neighbour there - the group in its H's place among them: the side flips with each)
-    const flips = [0, 1].filter((k) => p.refs[k] !== s.refs[k]).length;
-    if ((s.cis !== p.cis) !== (flips % 2 === 1)) changed.add(bond.a);
-  }
-  for (const b of now.sides.keys()) {
-    const bond = template.bonds.find((x) => x.id === b);
-    if (bond && !was.sides.has(b)) changed.add(bond.a);
-  }
-  return [...changed].sort((p, q) => p - q);
+export function changesFrom(template: Model, product: Model, took: ReadonlyMap<number, number>): Difference[] {
+  const atoms = new Set(template.atoms.map((a) => a.id));
+  const ours = (d: Difference) => (d.kind === "centre" ? atoms.has(d.at) : atoms.has(d.at[0]) && atoms.has(d.at[1]));
+  // (a unit closed at the template's atoms only: one a group brings, drawn as the group was given, is the group's)
+  return compared(saidOf(template), saidOf(product), took, { was: alikeIn(template), now: alikeIn(product) }).filter((d) => d.how !== "closed" || ours(d));
+}
+
+/**
+ * The units whose configuration `product` changes from `template`'s -
+ * turned, lost, or made up at a template atom (`changesFrom`); a unit that
+ * is no longer one, two of its groups alike, is not among them: there is
+ * no configuration left there to change.
+ */
+export function changedAt(template: Model, product: Model, took: ReadonlyMap<number, number>): ConfigurationUnit[] {
+  return changesFrom(template, product, took)
+    .filter((d) => d.how !== "alike")
+    .map((d) => (d.kind === "centre" ? { kind: d.kind, at: d.at } : { kind: d.kind, at: d.at }));
+}
+
+/** A unit as a step's card names it, by the template's atoms: a centre "C3", a double bond "C4=C5", an axis "the axis C4-C5". */
+export function unitName(template: Model, u: ConfigurationUnit): string {
+  const name = (id: number) => {
+    const i = template.atoms.findIndex((a) => a.id === id);
+    return `${template.atoms[i].el}${i + 1}`;
+  };
+  if (u.kind === "centre") return name(u.at);
+  const [p, q] = [...u.at].sort((x, y) => template.atoms.findIndex((a) => a.id === x) - template.atoms.findIndex((a) => a.id === y));
+  return u.kind === "double" ? `${name(p)}=${name(q)}` : `the axis ${name(p)}-${name(q)}`;
+}
+
+/**
+ * `product` with no wedge at a centre that is no longer one (`changesFrom`
+ * `alike`): it states nothing there, and Meno does not draw a mark it knows
+ * states nothing. Unchanged where there is none.
+ */
+export function alikePlain(template: Model, product: Model, took: ReadonlyMap<number, number>): Model {
+  const gone = new Set(changesFrom(template, product, took).flatMap((d) => (d.kind === "centre" && d.how === "alike" ? [d.at] : [])));
+  if (!gone.size) return product;
+  const degree = degrees(product.bonds);
+  return {
+    ...product,
+    bonds: product.bonds.map((b) => {
+      if ((b.stereo !== "up" && b.stereo !== "down") || !gone.has(narrowEnd(b, degree))) return b;
+      const { stereo: _s, narrow: _n, ...rest } = b;
+      void _s;
+      void _n;
+      return rest as typeof b;
+    }),
+  };
 }
 
 /**
@@ -102,7 +125,7 @@ export function rewedged(template: Model, product: Model, c: number, took: Reado
     if (saidOf(template).centres.has(other)) continue;
     for (const stereo of ["up", "down"] as const) {
       const tried: Model = { ...product, bonds: plain.map((x) => (x.id === b.id ? { ...x, stereo, narrow: c } : x)) };
-      if (!changedAt(template, tried, took).includes(c)) return tried;
+      if (!changedAt(template, tried, took).some((u) => u.kind === "centre" && u.at === c)) return tried;
     }
   }
   return null;
