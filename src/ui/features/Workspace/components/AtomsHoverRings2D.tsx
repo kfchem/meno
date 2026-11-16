@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import { bandStep, type BandClock } from "./hoverBand";
 import { useEditor } from "../store";
 import { COLORS, ALPHA } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -32,7 +33,7 @@ export default function AtomsHoverRings2D() {
   const drawn = useDrawnLayout();
   const invalidate = useThree((s) => s.invalidate);
   // each ring: how far in it is (0 out, 1 in), and where its atom was last
-  const rings = useRef(new Map<number, { u: number; x: number; y: number }>());
+  const rings = useRef(new Map<number, { u: number; x: number; y: number; clock: BandClock }>());
   const [, setFrame] = useState(0);
   // (each ring's atom looked for by itself - one or two of them - not a
   // map of every atom made at every frame of a drag)
@@ -50,17 +51,18 @@ export default function AtomsHoverRings2D() {
   const id = hovered.atomId !== writing ? hovered.atomId : null;
   if (id != null && !rings.current.has(id)) {
     const a = at.get(id);
-    if (a) rings.current.set(id, { u: 0, x: a.x, y: a.y });
+    if (a) rings.current.set(id, { u: 0, x: a.x, y: a.y, clock: { last: null } });
   }
 
-  useFrame((_, dt) => {
+  useFrame(() => {
     let moving = false;
+    const now = performance.now();
     for (const [k, r] of rings.current) {
       const inward = k === id;
-      // (a frame slow to come - the canvas busy, a label begun - taking it no further than a 30th of a second would)
-      const d = Math.min(dt, 1 / 30);
+      // (its own time, as a bond's band counts it - components/hoverBand `bandStep`: a first frame after a zoom or a pause starts it)
+      const d = bandStep(r.clock, now, inward ? r.u < 1 : r.u > 0);
       const u = Math.min(1, Math.max(0, r.u + (inward ? d / DUR_IN : -d / DUR_OUT)));
-      if (u !== r.u) {
+      if (u !== r.u || r.clock.last != null) {
         r.u = u;
         moving = true;
       }

@@ -31,6 +31,14 @@ describe("Stereoisomers, Meno's", () => {
     expect(asked.map((a) => a.op)).toEqual(["stereo_elements"]);
   });
 
+  it("gives each one the configuration the plugin made it with, in the same order as its drawing - sorted by SMILES with it", async () => {
+    const second = { centres: [{ atom: 1, neighbours: [0, 2, 4], sense: 1 }], doubles: [] };
+    const first = { centres: [{ atom: 1, neighbours: [0, 2, 4], sense: -1 }], doubles: [] };
+    const made = { isomers: [{ configured: none, smiles: "C[C@H](O)CC", molblock: "second", configuration: second }, { configured: none, smiles: "C[C@@H](O)CC", molblock: "first", configuration: first }], free: false };
+    const { chem } = plugin(CENTRE, made);
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"], configurations: [first, second] });
+  });
+
   it("asks for them whole, as many as its options allow, in their time - each as a drawing - and gives them in the order of their SMILES", async () => {
     const made = { isomers: [{ configured: none, smiles: "C[C@H](O)CC", molblock: "second" }, { configured: none, smiles: "C[C@@H](O)CC", molblock: "first" }], free: false };
     const { chem, asked } = plugin(CENTRE, made);

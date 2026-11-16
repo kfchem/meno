@@ -18,7 +18,7 @@
  * not meet it, and says which it has not.
  */
 import type { Entry, Property } from "../entry";
-import { isUnit, UNITS, type Unit } from "../units";
+import { unitNamed, type Unit } from "../units";
 import { entries as count, numberIn, setAside, unitLabel, unreadable, type NodeOutcome } from "./base";
 
 /** A comparison: less than, at most, more than, at least, equal to, other than. Text and true/false compare by = and ≠ alone. */
@@ -224,12 +224,6 @@ function linesOf(text: string): string[] | null {
   return out;
 }
 
-/** A unit as typed: by Meno's name for it ("cm-1") or as it is written ("cm⁻¹"); none where it is neither. */
-function unitTyped(u: string): Unit | undefined {
-  if (isUnit(u)) return u;
-  return (Object.keys(UNITS) as Unit[]).find((k) => UNITS[k].label === u);
-}
-
 /**
  * Conditions as a chemist types them, one to a line or each after a
  * semicolon (one inside double quotes is a text's): a property, a
@@ -261,7 +255,7 @@ export function conditionsIn(text: string): { conditions: Condition[] } | { why:
     const number = /^([-+−]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*(.*)$/.exec(value);
     if (number) {
       const unitText = number[2].trim();
-      const unit = unitText ? unitTyped(unitText) : "none";
+      const unit = unitText ? unitNamed(unitText) : "none";
       if (!unit) return { why: `"${line}": ${unitText} is no unit Meno knows` };
       conditions.push({ property, compare, value: Number(number[1].replace("−", "-")), unit });
     } else if (/^its\s/.test(value)) {

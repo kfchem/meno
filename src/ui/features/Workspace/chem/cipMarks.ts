@@ -12,6 +12,7 @@
  * `cipMarksFrom` puts the answers back on its atoms and bonds by id.
  */
 import { cipLabels, type CipResult, type CipWhy } from "../../../../lib/chem/cip";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 import type { IdentityInput } from "../../../../lib/chem/identity";
 import { protonatedAmineHeld } from "../../../../lib/chem/lonePairCentres";
 import type { Model } from "../store/types";
@@ -20,8 +21,11 @@ import { fragmentsHolding } from "./cleanUp";
 import { identityInputOf, labelsDrawnOut } from "./identityOf";
 import { runsOf } from "../../../../lib/chem/perception/stereo/runs";
 
-/** One structure to work out: its input, and the indices in it of the units asked for, with the ids they are on the drawing. */
-export type CipJob = { input: IdentityInput; centres: { at: number; id: number }[]; bonds: { at: number; id: number }[] };
+/**
+ * One structure to work out: its input, and the indices in it of the units asked for, with the ids they are on the drawing - a centre in a
+ * ring drawn in perspective with no depth with what the reading of that ring says (`perspective`: lib/layout/recognised `recognisedSaid`).
+ */
+export type CipJob = { input: IdentityInput; centres: { at: number; id: number; perspective?: string }[]; bonds: { at: number; id: number }[] };
 
 /** What the drawing's R and S, E and Z come to, by atom and bond id. */
 export type CipMarks = {
@@ -60,9 +64,10 @@ export function cipJobsOf(model: Model): CipJob[] {
   return parts.map((gathered) => {
     // (a haptic bond whose ring is not all in the part binds none in it: document endpointsHeld, as cleanUp `partOf`)
     const part = labelsDrawnOut(endpointsHeld(gathered));
-    const { input } = identityInputOf(part);
-    const centres = part.atoms.flatMap((a, at) => (askedAtoms.has(a.id) ? [{ at, id: a.id }] : []));
-    const asked = part.bonds.flatMap((b, at) => (askedBonds.has(b.id) ? [{ at, id: b.id }] : []));
+    const { input, bondAt, perspective } = identityInputOf(part);
+    const centres = part.atoms.flatMap((a, at) => (askedAtoms.has(a.id) ? [{ at, id: a.id, ...(perspective.has(at) ? { perspective: perspective.get(at)! } : {}) }] : []));
+    // (by its place among the input's bonds, which a hydrogen bond is not among)
+    const asked = part.bonds.flatMap((b, k) => (askedBonds.has(b.id) && bondAt[k] >= 0 ? [{ at: bondAt[k], id: b.id }] : []));
     return { input, centres, bonds: oneForEachRun(input, asked) };
   });
 }
@@ -154,7 +159,10 @@ export function cipMarksFrom(jobs: readonly CipJob[], answers: readonly (readonl
       if (!r) return;
       if ("label" in r) {
         if (r.label === "R" || r.label === "S" || r.label === "r" || r.label === "s") out.centres.set(c.id, r.label);
-      } else out.said.set(`centre-${c.id}`, cipSaid(r.why, "centre"));
+        // (read from a ring drawn in perspective with no depth: said, as the reading is not drawn)
+        if (c.perspective && READ_FROM.has(c.perspective)) out.said.set(`centre-${c.id}`, sentence(c.perspective));
+      } else if (r.why === "undrawn" && c.perspective && !READ_FROM.has(c.perspective)) out.said.set(`centre-${c.id}`, `No R or S: ${c.perspective}.`);
+      else out.said.set(`centre-${c.id}`, cipSaid(r.why, "centre"));
     });
     job.bonds.forEach((b, k) => {
       const r = a[job.centres.length + k];
@@ -177,6 +185,10 @@ export function cipMarksOf(model: Model): CipMarks {
   const jobs = cipJobsOf(model);
   return cipMarksFrom(jobs, jobs.map(cipAnswersOf));
 }
+
+/** The recognition's words for a centre it read (lib/chem/perception/projection/recognise): the rest are why it read none. */
+const READ_FROM = new Set([READ_IN_PERSPECTIVE, READ_AS_HAWORTH]);
+const sentence = (words: string) => `${words[0].toUpperCase()}${words.slice(1)}.`;
 
 /** Why a unit has no descriptor, as its tip says it. */
 export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string {

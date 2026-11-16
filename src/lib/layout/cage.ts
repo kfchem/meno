@@ -24,6 +24,7 @@ import { ringShape } from "./conformation";
 import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
 import { byStructure } from "./ranks";
 import { freeCorners } from "../chem/perception/stereo/senses";
+import { SHARED_WITH_A_DOUBLE_BOND } from "../chem/perception/stereo/lonePairs";
 import { ringsAlike } from "./rings";
 import { parity, volumeSign } from "../chem/perception/stereo/geometry";
 
@@ -350,7 +351,7 @@ function bondAngle(mol: Molecule, a: number): number {
   const orders = mol.neighbours[a].map((b) => orderOf(mol, a, b));
   if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2 || mol.straight.has(a)) return Math.PI;
   if (orders.includes(2)) return (2 * Math.PI) / 3;
-  const lonePair = (mol.el[a] === "N" || mol.el[a] === "O") && mol.neighbours[a].length <= 3;
+  const lonePair = SHARED_WITH_A_DOUBLE_BOND.has(mol.el[a]) && mol.neighbours[a].length <= 3;
   if (lonePair && mol.neighbours[a].some((b) => mol.neighbours[b].some((c) => orderOf(mol, b, c) === 2))) return (2 * Math.PI) / 3;
   return Math.acos(-1 / 3);
 }

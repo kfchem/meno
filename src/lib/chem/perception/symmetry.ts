@@ -34,7 +34,7 @@ import type { Cumulated } from "./stereo/types";
 import { parity } from "./stereo/geometry";
 import { runsThrough } from "./stereo/runs";
 import { metal } from "./elements";
-import { lonePairOfThree } from "../lonePairCentres";
+import { lonePairOfThree } from "./stereo/lonePairs";
 
 /**
  * What the symmetry reads: the core's graph, with an odd run of cumulated double bonds set cis or trans (a butatriene's), and

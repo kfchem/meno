@@ -359,6 +359,14 @@ describe("a hydrogen atom kept an atom in a structure's identity", () => {
     expect(hydrogensFolded(g).atoms).toHaveLength(2);
     expect(identityText(g)).not.toBe(identityText({ atoms: [{ el: "Pd", hs: 1 }], bonds: [] }));
   });
+
+  it("on an actinide: a hydride on U or Th is kept, as on Pd (foundation part 3, B1)", () => {
+    for (const el of ["U", "Th"]) {
+      const g = fromSmiles(`[${el}][H]`);
+      expect(hydrogensFolded(g).atoms, el).toHaveLength(2);
+      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+    }
+  });
 });
 
 describe("a structure's identity, as found", () => {
