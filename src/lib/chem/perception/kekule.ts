@@ -30,6 +30,8 @@
 
 import { piElectrons } from "./aromatic";
 import { notMetal } from "./elements";
+import { implicitHydrogens } from "./hydrogens";
+import { ringParts } from "./rings";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -108,6 +110,53 @@ function isMetalEl(el: string | undefined): boolean {
   return /^[A-Z][a-z]?$/.test(s) && !notMetal.has(s) && !QUERY_ATOMS.has(s);
 }
 
+/** The aromatic bonds that lie in no ring of the molecule, by index. */
+function outsideRings(atoms: number, bonds: readonly KekuleBond[]): number[] {
+  const inRing = new Set(ringParts(atoms, bonds.map((b) => [b.a1, b.a2] as const)).flatMap((p) => p.edges));
+  return bonds.flatMap((b, k) => (b.order === AROMATIC_BOND && !inRing.has(k) ? [k] : []));
+}
+
+/** The atoms whose aromatic bonds all lie in no ring, each with how many it has. */
+function chainAtoms(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): Map<number, number> {
+  const outside = new Set(outsideRings(atoms.length, bonds));
+  const count = new Map<number, number>();
+  const inside = new Set<number>();
+  bonds.forEach((b, k) => {
+    if (b.order !== AROMATIC_BOND) return;
+    for (const a of [b.a1, b.a2]) {
+      if (outside.has(k)) count.set(a, (count.get(a) ?? 0) + 1);
+      else inside.add(a);
+    }
+  });
+  for (const a of inside) count.delete(a);
+  return count;
+}
+
+/**
+ * Why a structure's bonds marked aromatic outside any ring cannot be read: where a group of them, joined at their atoms, has no form
+ * with single and double bonds as its atoms' valences, H and charges stand - a nitro written N(:O):O with no charges - in words; none
+ * where each has one (a carboxyl's C(:O):O: one C=O). Never filled with an H nobody wrote (CHEM's rule: an aromatic bond outside a ring
+ * takes its Kekulé form by the same matching as one in a ring).
+ */
+export function outsideRingRefusal(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): string | null {
+  const outside = outsideRings(atoms.length, bonds);
+  if (!outside.length) return null;
+  const { orders, left } = kekulized(atoms, bonds);
+  const root = Array.from({ length: atoms.length }, (_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+  for (const k of outside) root[find(bonds[k].a1)] = find(bonds[k].a2);
+  const groups = new Map<number, number[]>();
+  for (const k of outside) groups.set(find(bonds[k].a1), [...(groups.get(find(bonds[k].a1)) ?? []), k]);
+  const chain = chainAtoms(atoms, bonds);
+  for (const ks of groups.values()) {
+    const at = [...new Set(ks.flatMap((k) => [bonds[k].a1, bonds[k].a2]))].sort((p, q) => p - q);
+    if (ks.some((k) => orders[k] === 2) && !at.some((a) => chain.has(a) && left.includes(a))) continue;
+    const listed = at.length === 1 ? String(at[0] + 1) : `${at.slice(0, -1).map((a) => a + 1).join(", ")} and ${at[at.length - 1] + 1}`;
+    return `its bonds marked aromatic outside a ring (atoms ${listed}) have no form with single and double bonds: is a charge missing?`;
+  }
+  return null;
+}
+
 /** The aromatic bonds by ring system: those joined at their atoms, by bond index. */
 function aromaticSystems(n: number, bonds: readonly KekuleBond[]): Set<number>[] {
   const root = Array.from({ length: n }, (_, i) => i);
@@ -177,7 +226,18 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return "may";
     return "never";
   };
-  const roles = atoms.map((_, i) => role(i));
+  // (an atom whose aromatic bonds all lie outside any ring - a carboxyl written C(:O):O, a nitro N(:O):O - takes its form by the same
+  //  matching, by the room its valence leaves with its H and its charge: two or more such bonds, it needs a double bond; at an end, it
+  //  may take one; no room, none. Never a ring's count of electrons, and never an H to fill what no form closes: `outsideRingRefusal`)
+  const chain = chainAtoms(atoms, bonds);
+  const chainRole = (i: number): Role => {
+    if (hasMultiple[i]) return "never";
+    let sum = atoms[i]?.hs ?? 0;
+    for (const b of bonds) if (b.a1 === i || b.a2 === i) sum += b.order === AROMATIC_BOND ? 1 : b.order >= 1 && b.order <= 3 ? b.order : 0;
+    if (implicitHydrogens(canonical(atoms[i]?.el ?? ""), sum, atoms[i]?.charge ?? 0) <= 0) return "never";
+    return (chain.get(i) ?? 0) >= 2 ? "needs" : "may";
+  };
+  const roles = atoms.map((_, i) => (chain.has(i) ? chainRole(i) : role(i)));
 
   // Each atom's rank by what it is and where it stands, not where the file
   // put it: choices between equals are made in this order, so that a
@@ -204,7 +264,7 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
   // lone pair, so how many are is chosen by the electrons: below)
   const willing = atoms
     .map((_, i) => i)
-    .filter((i) => roles[i] === "may" && !QUERY_ATOMS.has(atoms[i]?.el ?? "") && partners[i].length > 0)
+    .filter((i) => roles[i] === "may" && !chain.has(i) && !QUERY_ATOMS.has(atoms[i]?.el ?? "") && partners[i].length > 0)
     .sort(byRank);
 
   // Each atom's pi electrons are counted as Meno counts them for its rule on

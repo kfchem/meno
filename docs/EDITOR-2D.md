@@ -540,7 +540,15 @@ missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
 plugin that reads SMILES refuses it). A bond written with no symbol between
 two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
 joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
-is single, and each ring is read as its own. Text is
+is single, and each ring is read as its own. A bond written aromatic
+outside any ring (":" or "$") takes a form of single and double bonds as
+one in a ring does, each atom by the room its valence, its H and its
+charge leave (lib/chem/perception/kekule): CC(:O):O is acetic acid, one
+C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
+Where no such form closes them, the SMILES is refused, never read by
+adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
+2, 3 and 4) have no form with single and double bonds: is a charge
+missing?" (`outsideRingRefusal`). Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
