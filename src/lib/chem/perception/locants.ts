@@ -19,6 +19,7 @@ import type { ChemAtom, ChemBond } from "./graph";
 import { factsOf } from "./facts";
 import { valencesAt } from "./hydrogens";
 import { kekuleOrders, AROMATIC_BOND } from "./kekule";
+import { LOCANT_PARENTS, type EntryLocant } from "./locantParents";
 
 /** A locant as written: its base ("1", "4a", "2'") and a superscript where it has one (pyrene's 3a with a superscript 1). */
 export type Locant = { base: string; sup?: string };
@@ -187,6 +188,135 @@ function bySeniorityOrder(c: Ctx, cands: Candidate[], hetero: readonly number[])
     left = keepLeast(left, (cd) => { const k = keyIn(cd); return of.map((a) => k.get(a)!); }, compareSets);
   }
   return left;
+}
+
+// ---------------------------------------------------------------- fused systems (A4.4, A4.5)
+
+/** A lettered or interior locant's key (P-14.3.5): its number, its letter (a 1, b 2, ...), no primes, its superscript. */
+function keyOfText(base: string, sup?: string): Key {
+  const m = /^(\d+)([a-z]?)$/.exec(base)!;
+  return [Number(m[1]), m[2] ? m[2].charCodeAt(0) - 96 : 0, 0, sup ? Number(sup) : 0];
+}
+
+/**
+ * Two rings sharing one bond, each of five or more atoms (A4.4; P-25.3.3.1.1 with P-25.3.2.3): the four candidates - from a non-fusion atom
+ * next to a fusion atom, round the edge away from it; a fusion carbon takes the number before it with a letter (4a), a fusion heteroatom
+ * is numbered in its turn (indolizine's N4).
+ */
+function twoRingFused(c: Ctx, sys: { atoms: number[]; rings: number[] }): Candidate[] {
+  if (sys.rings.length !== 2) return [];
+  const [r, s] = sys.rings.map((k) => c.rings[k]);
+  if (r.length < 5 || s.length < 5) return [];
+  const shared = r.filter((a) => s.includes(a));
+  if (shared.length !== 2 || c.bondIndex(shared[0], shared[1]) < 0) return [];
+  // (the periphery: every atom of the system once, round its edge)
+  const next = new Map<number, number[]>();
+  for (const ring of [r, s]) {
+    ring.forEach((a, k) => {
+      const b = ring[(k + 1) % ring.length];
+      if (shared.includes(a) && shared.includes(b)) return;
+      next.set(a, [...(next.get(a) ?? []), b]);
+      next.set(b, [...(next.get(b) ?? []), a]);
+    });
+  }
+  const out: Candidate[] = [];
+  for (const f of shared) {
+    for (const start of next.get(f)!) {
+      const atoms = [start];
+      let prev = f;
+      while (atoms.length < sys.atoms.length) {
+        const here = atoms[atoms.length - 1];
+        const on = next.get(here)!.find((x) => x !== prev)!;
+        prev = here;
+        atoms.push(on);
+      }
+      let n = 0;
+      let letter = 0;
+      const locs = atoms.map((a) => {
+        if (shared.includes(a) && c.input.atoms[a].el === "C") {
+          letter++;
+          return { base: `${n}${String.fromCharCode(96 + letter)}` };
+        }
+        n++;
+        letter = 0;
+        return { base: String(n) };
+      });
+      out.push({ atoms, locants: locs, keys: locs.map((l) => keyOfText(l.base)) });
+    }
+  }
+  return out;
+}
+
+/** P-25.3.3.1.2 (a) to (d), on a fused system's candidates: heteroatoms as a set; by seniority; fusion carbons low; a fusion heteroatom low. */
+function fusedRules(c: Ctx, cands: Candidate[], atoms: readonly number[]): Candidate[] {
+  const hetero = atoms.filter((a) => c.input.atoms[a].el !== "C");
+  let left = keepLeast(cands, (cd) => { const k = keyIn(cd); return hetero.map((a) => k.get(a)!); }, compareSets);
+  left = bySeniorityOrder(c, left, hetero);
+  const fusion = (cd: Candidate) => cd.atoms.filter((_a, k) => /[a-z]/.test(cd.locants[k].base));
+  left = keepLeast(left, (cd) => { const k = keyIn(cd); return fusion(cd).map((a) => k.get(a)!); }, compareSets);
+  return left;
+}
+
+/**
+ * A fused system matched to an entry of the table (A4.5): its skeleton - atoms, elements, the system's bonds; saturation not looked at - the
+ * entry's; each way the entry lies on it (each symmetry of the skeleton) a candidate.
+ */
+function tableCandidates(c: Ctx, atoms: readonly number[]): Candidate[] {
+  const set = new Set(atoms);
+  const nb = (a: number) => c.around[a].filter((b) => set.has(b));
+  for (const e of LOCANT_PARENTS) {
+    if (e.atoms.length !== atoms.length) continue;
+    const label = (l: EntryLocant) => (l.sup ? `${l.base}^${l.sup}` : l.base);
+    const index = new Map(e.atoms.map((l, k) => [label(l), k]));
+    const peri = e.atoms.filter((l) => !l.sup).length;
+    const adj: number[][] = e.atoms.map(() => []);
+    const link = (p: number, q: number) => {
+      adj[p].push(q);
+      adj[q].push(p);
+    };
+    for (let k = 0; k < peri; k++) link(k, (k + 1) % peri);
+    for (const [p, q] of e.across) link(index.get(p)!, index.get(q)!);
+    const el = (k: number) => e.atoms[k].el ?? "C";
+    // (the system's atoms by element and degree: a quick refusal before the search)
+    const sig = (xs: string[]) => xs.sort().join(",");
+    if (sig(e.atoms.map((_, k) => `${el(k)}${adj[k].length}`)) !== sig(atoms.map((a) => `${c.input.atoms[a].el}${nb(a).length}`))) continue;
+    const found: number[][] = [];
+    const map: number[] = e.atoms.map(() => -1);
+    const used = new Set<number>();
+    // (entry atoms in an order that walks the skeleton: each after one of its neighbours)
+    const orderE: number[] = [0];
+    for (let i = 0; i < orderE.length; i++) for (const q of adj[orderE[i]]) if (!orderE.includes(q)) orderE.push(q);
+    const search = (i: number) => {
+      if (found.length > 24) return;
+      if (i === orderE.length) {
+        found.push([...map]);
+        return;
+      }
+      const k = orderE[i];
+      const placedNb = adj[k].filter((q) => map[q] >= 0);
+      const pool = placedNb.length ? nb(map[placedNb[0]]) : atoms;
+      for (const a of pool) {
+        if (used.has(a) || c.input.atoms[a].el !== el(k) || nb(a).length !== adj[k].length) continue;
+        if (!placedNb.every((q) => c.bondIndex(a, map[q]) >= 0)) continue;
+        map[k] = a;
+        used.add(a);
+        search(i + 1);
+        used.delete(a);
+        map[k] = -1;
+      }
+    };
+    search(0);
+    if (!found.length) continue;
+    return found.map((m) => {
+      const order = e.atoms.map((_, k) => k).sort((p, q) => compareKeys(keyOfText(e.atoms[p].base, e.atoms[p].sup), keyOfText(e.atoms[q].base, e.atoms[q].sup)));
+      return {
+        atoms: order.map((k) => m[k]),
+        locants: order.map((k) => ({ base: e.atoms[k].base, ...(e.atoms[k].sup ? { sup: e.atoms[k].sup } : {}) })),
+        keys: order.map((k) => keyOfText(e.atoms[k].base, e.atoms[k].sup)),
+      };
+    });
+  }
+  return [];
 }
 
 // ---------------------------------------------------------------- A5: the rest of P-14.4, on the candidates left
@@ -586,10 +716,20 @@ function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: nu
       mancude = mancudeNamed(c, ring, 1);
       indicated = mancude ? indicatedCount(c, ring) : 0;
     } else {
-      // (a system of several rings: its kind's rules come in later slices; meanwhile the system in the molecule's order, said)
-      const atoms = [...sys.atoms].sort((p, q) => p - q);
-      cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
-      ownAll = "not built";
+      const table = tableCandidates(c, sys.atoms);
+      const two = table.length ? [] : twoRingFused(c, sys);
+      if (table.length) cands = table;
+      else if (two.length) cands = fusedRules(c, two, sys.atoms);
+      else {
+        // (a system of another kind: its kind's rules come in later slices; meanwhile the system in the molecule's order, said)
+        const atoms = [...sys.atoms].sort((p, q) => p - q);
+        cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
+        ownAll = "not built";
+      }
+      if (!ownAll) {
+        mancude = true;
+        indicated = indicatedCount(c, sys.atoms);
+      }
     }
   } else if (unit.kind === "chain") {
     cands = chainCandidates(unit.atoms);

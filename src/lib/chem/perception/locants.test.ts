@@ -74,6 +74,65 @@ describe("one ring", () => {
   });
 });
 
+describe("fused, two rings (A4.4)", () => {
+  it("naphthalene: 1 to 8 round the edge; the fusion atoms shown 4a and 8a, ninth and tenth in the order", () => {
+    const { r } = run("c1ccc2ccccc2c1");
+    const s = r.shown.map((x) => x.base);
+    expect([s[3], s[8]].sort()).toEqual(["4a", "8a"]);
+    expect(s.filter((x) => /^\d+$/.test(x)).sort((p, q) => Number(p) - Number(q))).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+    expect([r.order[8], r.order[9]].sort()).toEqual([3, 8]);
+    expect(r.own).toEqual([]);
+  });
+
+  const at = (smiles: string, ...idx: number[]) => idx.map((i) => shownOf(smiles)[i]);
+  it("quinoline N1, isoquinoline N2, 1H-indole N1 with 3a and 7a, 1-benzofuran O1 (M)", () => {
+    expect(at("c1ccc2ncccc2c1", 4)).toEqual(["1"]);
+    expect(at("c1ccc2cnccc2c1", 5)).toEqual(["2"]);
+    expect(at("c1ccc2[nH]ccc2c1", 4, 3, 7)).toEqual(["1", "7a", "3a"]);
+    expect(at("c1ccc2occc2c1", 4)).toEqual(["1"]);
+  });
+
+  it("1,3-benzothiazole S1 N3; 1H-benzimidazole the NH 1; quinazoline 1, 3; quinoxaline 1, 4; pteridine 1, 3, 5, 8 (M)", () => {
+    expect(at("c1ccc2scnc2c1", 4, 6)).toEqual(["1", "3"]);
+    expect(at("c1ccc2[nH]cnc2c1", 4, 6)).toEqual(["1", "3"]);
+    expect(at("c1ccc2ncncc2c1", 4, 6).sort()).toEqual(["1", "3"]);
+    expect(at("c1ccc2nccnc2c1", 4, 7).sort()).toEqual(["1", "4"]);
+    expect(at("c1cnc2ncncc2n1", 2, 4, 6, 9).sort()).toEqual(["1", "3", "5", "8"]);
+  });
+
+  it("indolizine N4; azulene 3a and 8a, not 5a; 1H-indene its CH2 1 (M)", () => {
+    expect(at("c1ccn2cccc2c1", 3)).toEqual(["4"]);
+    expect(at("c1cc2cccccc2c1", 2, 8).sort()).toEqual(["3a", "8a"]);
+    expect(at("C1C=Cc2ccccc12", 0)).toEqual(["1"]);
+  });
+
+  it("6-fluoro-1,2,3,4-tetrahydronaphthalene: saturated 1 to 4, F on 6", () => {
+    const s = shownOf("C1CCc2cc(F)ccc2C1");
+    expect([s[0], s[1], s[2], s[10]].sort()).toEqual(["1", "2", "3", "4"]);
+    expect(s[5]).toBe("6");
+  });
+});
+
+describe("fused, the table (A4.5)", () => {
+  const at = (smiles: string, ...idx: number[]) => idx.map((i) => shownOf(smiles)[i]);
+  it("anthracene 9 and 10 the middle CH; phenanthrene 9, 10; 9H-fluorene its CH2 9; 9H-carbazole N9; acridine N10", () => {
+    expect(at("c1ccc2cc3ccccc3cc2c1", 4, 11).sort()).toEqual(["10", "9"]);
+    expect(at("c1ccc2c(c1)ccc1ccccc12", 6, 7).sort()).toEqual(["10", "9"]);
+    expect(at("C1c2ccccc2-c2ccccc12", 0)).toEqual(["9"]);
+    expect(at("c1ccc2c(c1)[nH]c1ccccc12", 6)).toEqual(["9"]);
+    expect(at("c1ccc2nc3ccccc3cc2c1", 4)).toEqual(["10"]);
+  });
+
+  it("7H-purine: N1, C2, N3, C4, C5, N7, C8, N9", () => {
+    expect(at("c1ncc2[nH]cnc2n1", 0, 1, 2, 3, 4, 5, 6, 7, 8)).toEqual(["2", "1", "6", "5", "7", "8", "9", "4", "3"]);
+  });
+
+  it("pyrene: its two interior atoms 3a and 5a, each with a superscript 1", () => {
+    const s = shownOf("c1cc2ccc3cccc4ccc(c1)c2c34");
+    expect([s[14], s[15]].sort()).toEqual(["3a^1", "5a^1"]);
+  });
+});
+
 describe("chains", () => {
   it("2-methylpentane, not 4 (M); 2,3,5-trimethylhexane, not 2,4,5 (M)", () => {
     const s = shownOf("CC(C)CCC");
