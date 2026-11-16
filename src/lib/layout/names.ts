@@ -24,7 +24,8 @@ export const isName = (el: string) => el !== "*" && !ELEMENT_SYMBOLS.has(el);
  * Set after a group's label that is also an element's symbol - Pr, propyl's; Ac, acetyl's; Ts, Fm, At - where the drawing holds it as the
  * group (the maintainer, 2026-10-10 and 2026-11-16: a typed Pr is propyl; a file's, a SMILES's or 3D's Pr is praseodymium): the label so
  * marked is no element's symbol, so that every reader of elements takes it for the name it is (`isName`), never for the element. A
- * word joiner: no letter, nothing drawn, no width (`nameBox`).
+ * word joiner: no letter, nothing drawn, no width (`nameBox`). It is for the readers alone: it never reaches a text a person reads or a
+ * file keeps - a formula, a message, a saved drawing - which write the label as it is.
  */
 export const HELD_NAME = "\u2060";
 

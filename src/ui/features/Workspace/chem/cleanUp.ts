@@ -284,7 +284,8 @@ export function partFormula(part: Model): string {
   const atoms: { el: string }[] = [];
   for (const a of part.atoms) {
     if (a.el === "*") continue;
-    atoms.push({ el: readAs(a) });
+    // (a held group's label written as it reads - the reader's mark stays out of a text a person sees; counted as the name it is)
+    atoms.push({ el: a.el });
     // (a label not an element - an abbreviation - carries none counted here)
     const h = implicitHydrogens(readAs(a), used.get(a.id) ?? 0, a.charge ?? 0, a.radical);
     for (let k = 0; k < h; k++) atoms.push({ el: "H" });

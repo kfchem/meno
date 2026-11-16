@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
-import { isName } from "../../../../lib/layout/names";
+import { HELD_NAME, heldName, isName, nameBox } from "../../../../lib/layout/names";
 import { isMetal } from "../../../../lib/layout/perceive";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument } from "../document";
@@ -154,6 +154,14 @@ describe("a group typed as an element's symbol is the group; the element from a 
     expect(typedOn("Cl", "Ts")).toBe("C7H7ClO2S");
     expect(typedOn("O", "At")).toBe("C5H4N4O");
     expect(typedOn("O", "Fm")).toBe("C14H12O");
+  });
+
+  it("a formula written for a person carries the label as it reads, never the readers' mark; the mark has no width", () => {
+    const typed = benzeneWith("Pr").state().model;
+    const f = partFormula(typed);
+    expect(f).toContain("Pr");
+    expect(f).not.toContain(HELD_NAME);
+    expect(nameBox(heldName("Pr"), false)).toEqual(nameBox("Pn", false));
   });
 
   it("a Pr saved with nothing held - before this version, or from a file - opens as praseodymium", () => {
