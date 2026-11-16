@@ -20,8 +20,9 @@
  * role, or none for this system: the card shows each to add, or why not.
  *
  * *Not now*: never asked again of itself. A failure: said on the card, with
- * *Try again*. A yes whose set-up did not finish is taken up again as Meno next
- * starts, with no question. *Stop* ends it for good: nothing more is fetched -
+ * *Try again* (*Dismiss* there is *Not now*). A yes whose set-up did not finish
+ * is taken up again as Meno next starts, with no question; a plugin here whose
+ * set-up did not finish is the one set up, its files not got again. *Stop* ends it for good: nothing more is fetched -
  * a step under way (a download, uv building the environment) runs to its end,
  * as nothing can cut it short today.
  */
@@ -53,7 +54,7 @@ export const CARD_HOSTS: readonly string[] = [...new Set([...CATALOGUE_HOSTS, ..
 export const CARD_TITLE = "Set up chemistry?";
 export const CARD_DETAIL = "Meno draws structures from SMILES, and writes SMILES, with a plugin it gets from the list of plugins online and sets up once. Nothing else is fetched without asking.";
 
-/** A question the card shows in its place, where the set-up needs more than the card named (point 3 of the brief). */
+/** A question the card shows in its place, where the set-up needs more than the card named. */
 export type CardQuestion = { title: string; detail: string; sources: readonly string[] };
 
 /**
@@ -108,8 +109,13 @@ export type SetUpPlan = {
 export type FirstSetUpDeps = {
   /** The plugins whose environments were set up here before, by id (installed.rs `set_up_before`). */
   setUpBefore(): Promise<string[]>;
-  /** Whether a plugin here fills the role. */
+  /** Whether a plugin here and added fills the role. */
   filledHere(): boolean;
+  /**
+   * The plugins on the list that fill the role and are here already at the list's version, but not added - their files got,
+   * their set-up not finished: the one to set up, its files not got again.
+   */
+  here(catalogue: Catalogue): CatalogueEntry[];
   /** Purposes allowed by the card's yes (lib/net/network `allowAnswered`); false offline. */
   allow(purposes: readonly string[]): Promise<boolean>;
   /** The list of plugins online, fetched now; null and why where it could not be. */
@@ -206,14 +212,18 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
     const listed = await deps.list();
     if (stopped) return end();
     if ("problem" in listed) return failed(listed.problem);
-    const offered = deps.offered(listed.catalogue);
+    // (one here already, its files got and its set-up not finished: that one, set up - else what the list offers to add)
+    const here = deps.here(listed.catalogue);
+    const offered = here.length === 1 ? here : deps.offered(listed.catalogue);
     // (none, or more than one: the chemist chooses - each to add, or why not - as where the role is asked of)
     if (offered.length !== 1) return void useFirstSetUp.setState({ phase: "choose" }, true);
     const entry = offered[0];
     const plugin = { id: entry.id, name: entry.name, licence: entry.licence, size: formatBytes(entry.source.bytes) };
-    going("files", plugin);
-    await deps.get(entry);
-    if (stopped) return end();
+    if (here.length !== 1) {
+      going("files", plugin);
+      await deps.get(entry);
+      if (stopped) return end();
+    }
     const plan = await deps.plan(entry);
     if (stopped) return end();
     const beyond = beyondCard(entry, plan);
@@ -267,7 +277,12 @@ function gotHere(entry: CatalogueEntry) {
 
 export const DEPS: FirstSetUpDeps = {
   setUpBefore: () => invoke<string[]>("plugins_set_up_before"),
-  filledHere: () => pluginsFilling(FIRST_ROLE).length > 0,
+  filledHere: () => pluginsFilling(FIRST_ROLE).some((p) => useReaders.getState().state[p.id] === "added"),
+  here: (catalogue) => {
+    const added = useReaders.getState().state;
+    const notAdded = new Map(pluginsFilling(FIRST_ROLE).filter((p) => added[p.id] !== "added").map((p) => [p.id, p.version]));
+    return catalogue.plugins.filter((e) => e.roles.includes(FIRST_ROLE) && notAdded.get(e.id) === e.version);
+  },
   allow: allowAnswered,
   list: async () => {
     await listOnline(true);

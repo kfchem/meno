@@ -45,6 +45,7 @@ function deps(over: Partial<FirstSetUpDeps> & { planned?: SetUpPlan; offering?: 
   const d: FirstSetUpDeps = {
     setUpBefore: async () => stamps ?? [],
     filledHere: () => filled ?? false,
+    here: () => [],
     allow: async (purposes) => {
       if (useNetwork.getState().offline) return false;
       allowed.push([...purposes]);

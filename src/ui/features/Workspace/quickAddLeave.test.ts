@@ -157,6 +157,13 @@ describe("the line under the SMILES field", () => {
     expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, true)).toBe("Starting P. The first one takes a moment.");
     expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, false)).toBe("Starting P. The first one takes a moment.");
   });
+  it("says the first start's card's step while the card sets chemistry up, as the card says it: no worker started yet", () => {
+    const plugin = { id: "p", name: "P", licence: "MIT", size: "1 MB" };
+    expect(chemistryLine({ state: "idle" }, undefined, true, { phase: "going", step: "list" })).toBe("Setting up chemistry: listing the plugins online. This is drawn when it is ready.");
+    expect(chemistryLine({ state: "idle" }, 0.5, false, { phase: "going", step: "files", plugin })).toBe("Setting up chemistry: downloading P (50%).");
+    expect(chemistryLine({ state: "idle" }, undefined, true, { phase: "going", step: "environment", plugin })).toBe(`${firstSetUpSaid("environment", "P")} This is drawn when it is ready.`);
+    expect(chemistryLine({ state: "idle" }, undefined, false, { phase: "failed", why: "x" })).toBeNull();
+  });
   it("says nothing where chemistry is ready, not yet asked for, or failed (said as before)", () => {
     expect(chemistryLine({ state: "ready", plugin: "P", version: "1" }, undefined, true)).toBeNull();
     expect(chemistryLine({ state: "idle" }, undefined, false)).toBeNull();

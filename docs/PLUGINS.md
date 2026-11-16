@@ -1853,8 +1853,14 @@ page works whether or not it is answered.
   is ready, while Quick Add stays open.
 - **Not now** is kept: never asked again of itself. Chemistry is then set
   up from the line under the SMILES field, or in Settings, *Plugins*.
-- **A failure** is said on the card, with *Try again*. A yes whose set-up
-  did not finish is taken up again as Meno next starts, with no question.
+- **A failure** is said on the card, with *Try again* - on the card alone,
+  not again in a notice. *Dismiss* there is *Not now*. A yes whose set-up
+  did not finish (Meno closed while it ran) is taken up again as Meno next
+  starts, with no question. A plugin whose files are here already but
+  which was not added - its set-up failed after its files came - is the
+  one set up, by *Try again* and as Meno next starts, its files not got
+  again. While the card sets chemistry up, the line under the SMILES field
+  says its step in the card's words.
   *Stop* ends it for good. A step under way (a download, uv building the
   environment) runs to its end, as nothing can cut it short today.
 

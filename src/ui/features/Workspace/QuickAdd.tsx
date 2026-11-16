@@ -11,6 +11,7 @@ import { listWidth } from "./quickAddLabel";
 import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
 import { startAhead, useChem } from "../../../lib/roles/worker";
+import { useFirstSetUp } from "../../../lib/plugins/firstSetUp";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
@@ -439,6 +440,8 @@ function SmilesField({
   const [busy, setBusy] = useState(false);
   // (where chemistry stands while it is got ready or started: one line under the field - a SMILES typed meanwhile waits, and is drawn)
   const chem = useChem();
+  // (the first start's card, where it sets chemistry up: said here too, as the card says it)
+  const card = useFirstSetUp();
   const share = useDownloads((d) => (chem.state === "setting-up" ? d[chem.id] : undefined));
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
@@ -524,9 +527,9 @@ function SmilesField({
       />
       {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
       {/* (where chemistry stands, while it is got ready or started - many seconds on a first start: said here, where it is typed) */}
-      {!error && !needs && chemistryLine(chem, share, busy) && (
+      {!error && !needs && chemistryLine(chem, share, busy, card) && (
         <div role="status" className="meno-fade-in px-0.5 pt-1 text-[11px] leading-snug text-gh-gray">
-          {chemistryLine(chem, share, busy)}
+          {chemistryLine(chem, share, busy, card)}
         </div>
       )}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}

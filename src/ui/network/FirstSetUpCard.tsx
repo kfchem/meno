@@ -130,7 +130,8 @@ export function CardBody({ card, share }: { card: FirstSetUpCardState; share?: n
         <p className="font-semibold">Chemistry was not set up</p>
         <p className="mt-1 text-gh-gray">{card.why}</p>
         <div className="mt-2 flex justify-end gap-2">
-          <CardButton onClick={() => useFirstSetUp.setState({ phase: "none" }, true)}>Dismiss</CardButton>
+          {/* (a failure seen and put away: not now - set up later from the line under the SMILES field, or Settings) */}
+          <CardButton onClick={notNow}>Dismiss</CardButton>
           <CardButton main onClick={() => void setUpChemistry(DEPS)}>
             Try again
           </CardButton>
