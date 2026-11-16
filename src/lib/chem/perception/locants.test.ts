@@ -195,6 +195,32 @@ describe("von Baeyer (A4.3)", () => {
   });
 });
 
+describe("spiro (A4.6)", () => {
+  const at = (smiles: string, ...idx: number[]) => idx.map((i) => shownOf(smiles)[i]);
+  it("spiro[4.5]decane: 1 to 4 in the five-ring, the spiro atom 5; spiro[4.4]nonane", () => {
+    // (C0 the spiro atom; C1..C4 the five-ring, C5..C9 the six-ring)
+    const s = shownOf("C12(CCCC1)CCCCC2");
+    expect(s[0]).toBe("5");
+    expect([s[1], s[2], s[3], s[4]].sort()).toEqual(["1", "2", "3", "4"]);
+    expect(shownOf("C12(CCCC1)CCCC2")[0]).toBe("5");
+  });
+
+  it("6-oxaspiro[4.5]decane, not 10-oxa; 9-oxa-6-azaspiro[4.5]decane; 7-thia-9-azaspiro[4.5]decane", () => {
+    expect(at("C12(CCCC1)OCCCC2", 5)).toEqual(["6"]);
+    expect(at("C12(CCCC1)NCCOC2", 5, 8)).toEqual(["6", "9"]);
+    expect(at("C12(CCCC1)CSCNC2", 6, 8)).toEqual(["7", "9"]);
+  });
+
+  it("dispiro[4.1.4(7).2(5)]tridecane, not [4.2.4(8).1(5)]; dispiro[3.2.3(7).2(4)]dodecane", () => {
+    // (two five-rings on a five-ring at its 1 and 3: the spiro atoms 5 and 7)
+    const s = shownOf("C12(CCCC1)CC1(CCCC1)CC2");
+    expect([s[0], s[6]].sort()).toEqual(["5", "7"]);
+    // (two four-rings on a six-ring at its 1 and 4: the spiro atoms 4 and 7)
+    const t = shownOf("C12(CCC1)CCC1(CCC1)CC2");
+    expect([t[0], t[6]].sort()).toEqual(["4", "7"]);
+  });
+});
+
 describe("chains", () => {
   it("2-methylpentane, not 4 (M); 2,3,5-trimethylhexane, not 2,4,5 (M)", () => {
     const s = shownOf("CC(C)CCC");

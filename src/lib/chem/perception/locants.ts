@@ -276,6 +276,100 @@ function vonBaeyerKind(c: Ctx, sys: { atoms: number[]; rings: number[] }): "von 
   return null;
 }
 
+/**
+ * A spiro system whose every component is a single ring, its rings in a row (A4.6; P-24.2.1 to P-24.2.3): from a terminal ring - the
+ * smaller - at an atom next to its spiro atom, round it, through the spiro atom, by the shorter way round each ring to the next spiro atom,
+ * round the far terminal ring, and back the other way through the rest. Kept: the spiro atoms' locants as low as they can be
+ * (P-24.2.2.1, P-24.2.3.1), then the descriptor's numbers in the order cited (P-24.2.2.2, P-24.2.3.2). Null where the system is no spiro
+ * system of single rings in a row; empty where it is one of another shape (branched: not built).
+ */
+function spiroCandidates(c: Ctx, sys: { atoms: number[]; rings: number[] }): Candidate[] | null {
+  const rings = sys.rings.map((k) => c.rings[k]);
+  if (rings.length < 2) return null;
+  const meets = (r: readonly number[], q: readonly number[]) => r.filter((a) => q.includes(a));
+  for (let i = 0; i < rings.length; i++) for (let j = i + 1; j < rings.length; j++) if (meets(rings[i], rings[j]).length > 1) return null;
+  // (the rings as a row: each meets at most two others, through one atom each)
+  const links = rings.map((r, i) => rings.map((q, j) => (i !== j && meets(r, q).length === 1 ? j : -1)).filter((j) => j >= 0));
+  if (links.some((l) => l.length > 2)) return [];
+  const ends = links.map((l, i) => (l.length === 1 ? i : -1)).filter((i) => i >= 0);
+  if (ends.length !== 2) return [];
+  const row: number[] = [ends[0]];
+  while (row.length < rings.length) row.push(links[row[row.length - 1]].find((j) => !row.includes(j))!);
+  const out: Candidate[] = [];
+  const sizes = [rings[row[0]].length, rings[row[row.length - 1]].length];
+  for (const order of [row, [...row].reverse()]) {
+    // (from the smaller terminal ring; from either where they are alike)
+    if (rings[order[0]].length > rings[order[order.length - 1]].length && sizes[0] !== sizes[1]) continue;
+    const spiroAt = order.slice(0, -1).map((r, k) => meets(rings[r], rings[order[k + 1]])[0]);
+    // (each middle ring's way: the shorter arc there, the longer back; both tried where alike - and the first ring's start, either side)
+    const choices = order.length;
+    for (let mask = 0; mask < 1 << choices; mask++) {
+      const atoms: number[] = [];
+      const arc = (ring: readonly number[], from: number, to: number, dir: 1 | -1) => {
+        const n = ring.length;
+        const out2: number[] = [];
+        // (from the atom after `from`, up to `to` and not it: all the way round where the two are one)
+        let k = (ring.indexOf(from) + dir + n) % n;
+        while (ring[k] !== to) {
+          out2.push(ring[k]);
+          k = (k + dir + n) % n;
+        }
+        return out2;
+      };
+      const firstRing = rings[order[0]];
+      const s0 = spiroAt[0];
+      const dir0: 1 | -1 = mask & 1 ? 1 : -1;
+      // (round the first ring from the spiro atom's neighbour, all the way, to the spiro atom)
+      atoms.push(...arc(firstRing, s0, s0, dir0), s0);
+      const back: number[][] = [];
+      for (let k = 1; k < order.length; k++) {
+        const ring = rings[order[k]];
+        const from = spiroAt[k - 1];
+        if (k === order.length - 1) {
+          const dir: 1 | -1 = mask & (1 << k) ? 1 : -1;
+          atoms.push(...arc(ring, from, from, dir));
+          break;
+        }
+        const to = spiroAt[k];
+        const a1 = arc(ring, from, to, 1);
+        const a2 = arc(ring, from, to, -1);
+        const [short, long] = a1.length < a2.length ? [a1, a2] : a2.length < a1.length ? [a2, a1] : mask & (1 << k) ? [a1, a2] : [a2, a1];
+        atoms.push(...short, to);
+        back.push([...long].reverse());
+      }
+      for (let k = back.length - 1; k >= 0; k--) atoms.push(...back[k]);
+      if (new Set(atoms).size !== sys.atoms.length || atoms.length !== sys.atoms.length) continue;
+      out.push({ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) });
+    }
+  }
+  if (!out.length) return [];
+  const spiroAtoms = sys.atoms.filter((a) => rings.filter((r) => r.includes(a)).length > 1);
+  let left = keepLeast(out, (cd) => { const k = keyIn(cd); return spiroAtoms.map((a) => k.get(a)!); }, compareSets);
+  // (the descriptor's numbers in the order cited: the runs of atoms between the spiro atoms, in the numbering's order)
+  const runs = (cd: Candidate) => {
+    const isSpiro = new Set(spiroAtoms);
+    const r: number[] = [];
+    let n = 0;
+    for (const a of cd.atoms) {
+      if (isSpiro.has(a)) {
+        r.push(n);
+        n = 0;
+      } else n++;
+    }
+    r.push(n);
+    return r;
+  };
+  left = keepLeast(left, runs, compareKeys);
+  // (each candidate once)
+  const seen = new Set<string>();
+  return left.filter((cd) => {
+    const k = cd.atoms.join(",");
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 /** P-25.3.3.1.2 (a) to (d), on a fused system's candidates: heteroatoms as a set; by seniority; fusion carbons low; a fusion heteroatom low. */
 function fusedRules(c: Ctx, cands: Candidate[], atoms: readonly number[]): Candidate[] {
   const hetero = atoms.filter((a) => c.input.atoms[a].el !== "C");
@@ -779,7 +873,12 @@ function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: nu
       const table = tableCandidates(c, sys.atoms);
       const two = table.length ? [] : twoRingFused(c, sys);
       const bridged = !table.length && !two.length ? vonBaeyerKind(c, sys) : null;
+      const spiro = !table.length && !two.length && !bridged ? spiroCandidates(c, sys) : null;
       if (table.length) cands = table;
+      else if (spiro && spiro.length) {
+        const hetero = sys.atoms.filter((a) => c.input.atoms[a].el !== "C");
+        cands = bySeniorityOrder(c, keepLeast(spiro, (cd) => { const k = keyIn(cd); return hetero.map((a) => k.get(a)!); }, compareSets), hetero);
+      }
       else if (two.length) cands = fusedRules(c, two, sys.atoms);
       else if (bridged) {
         const found = vonBaeyer(sys.atoms, (a) => c.around[a]);
@@ -800,7 +899,7 @@ function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: nu
         cands = [{ atoms, keys: atoms.map((_, k) => plain(k + 1).key), locants: atoms.map((_, k) => plain(k + 1).locant) }];
         ownAll = "not built";
       }
-      if (!ownAll && !bridged) {
+      if (!ownAll && !bridged && !spiro) {
         mancude = true;
         indicated = indicatedCount(c, sys.atoms);
       }
