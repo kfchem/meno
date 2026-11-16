@@ -61,7 +61,8 @@ describe("a ring taken for one drawn in perspective but not read, nothing asked"
   it("shows the unread mark on each of its atoms that carries a group, its words saying what to draw - and none on its bare CH2s", () => {
     const u = unsureOf(modelOf(onItsSide, []));
     expect([...u.atoms].sort((p, q) => p - q)).toEqual([1, 2]);
-    expect(u.said.get(1)).toBe(`${NOT_MARKED[0].toUpperCase()}${NOT_MARKED.slice(1)}.`);
+    // (the same words as the R or S asked of it: "No R or S:" and why)
+    expect(u.said.get(1)).toBe(`No R or S: ${NOT_MARKED}.`);
   });
 
   it("shows nothing where the ring is read, nor on a ring drawn flat", () => {
