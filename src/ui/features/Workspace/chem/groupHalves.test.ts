@@ -7,7 +7,7 @@ import { isomersToMake } from "./openStereo";
 import { stereoRows } from "./make3d";
 
 /**
- * The known answers of a configuration's groups (foundation part 7; CHEM's, signed 11-13, and route (a), ruled 11-16): what the plugin
+ * The known answers of a configuration's groups (foundation part 7, and route (a)): what the plugin
  * that finds stereoisomers makes is scripted here as its toolkit makes it - each AND or OR group turned whole, each tried in 3D - and
  * which halves there are, which is drawn, which is a mirror image and what is said are Meno's.
  */
