@@ -56,6 +56,18 @@ const adjacency = (input: SymmetryInput) => {
 };
 
 /**
+ * A double bond's two refs, the one on its first atom (`b.a`) first: found
+ * by the end each is bonded to, not by its place in `refs`, so that a bond
+ * whose atoms are listed the other way round, its refs as they were, is
+ * read as the same configuration (a ref bonded to both ends, in a
+ * three-membered ring, is taken as given).
+ */
+const refsByEnd = (adj: ReturnType<typeof adjacency>, b: { a: number; b: number; stereo?: { refs: readonly [number, number] } }): [number, number] => {
+  const [p, q] = b.stereo!.refs;
+  return p !== b.b && adj[b.a].some((e) => e.to === p) ? [p, q] : [q, p];
+};
+
+/**
  * How a double bond's or an axis's end is set against its reference
  * neighbour: 1 where the reference is the end's lower-ranked other
  * neighbour (or its only one), -1 where it is the higher-ranked, 0 where
@@ -177,7 +189,7 @@ function classedNow(input: SymmetryInput): Classed {
     }
     // (each end's reference against its other neighbour: endSet)
     for (const b of stereoAt[i]) {
-      const [p, q] = b.stereo!.refs;
+      const [p, q] = refsByEnd(adj, b);
       parts.push((b.stereo!.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, p) * endSet(adj, r, b.b, b.a, q));
     }
     // (and an axis of chirality's sense, likewise)
@@ -522,7 +534,8 @@ function written(input: SymmetryInput, what: readonly string[], r: readonly numb
     .map((b) => {
       const [p, q] = r[b.a] < r[b.b] ? [b.a, b.b] : [b.b, b.a];
       // (cis or trans as its ends' lower-ranked neighbours have it, whichever neighbours it was given against: endSet)
-      const st = b.stereo ? `:${(b.stereo.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, b.stereo.refs[0]) * endSet(adj, r, b.b, b.a, b.stereo.refs[1]) > 0 ? "c" : "t"}` : "";
+      const refs = b.stereo ? refsByEnd(adj, b) : null;
+      const st = b.stereo && refs ? `:${(b.stereo.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, refs[0]) * endSet(adj, r, b.b, b.a, refs[1]) > 0 ? "c" : "t"}` : "";
       return `${pad(r[p])}${pad(r[q])}:${b.order}${st}`;
     })
     .sort();
