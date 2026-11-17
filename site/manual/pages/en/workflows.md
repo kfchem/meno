@@ -73,7 +73,7 @@ The template uses the RDKit plugin (conformers, minimisation, descriptors) and t
 - **Failed entries.** An entry a step could not do leaves by its *Failed* exit. To run it again with other options, wire *Failed* into a copy of the step (copy and paste it, change what you want) and merge its results with the first step's: a chain of runs again is yours to add where you meet the failures.
 - **Your own.** Right-click any step and choose *Save as procedure…*: it is offered under *Calculations* from then on, to put down again.
 - **Not in it.** An IRC at the DFT level, and the share of the reaction through each path, are not in either file. The template takes one reactant structure (or reactants drawn as one).
-- **On the example, the forward direction gives no path.** One saddle point's frequencies fail in xTB's SCF, one reaction path does not converge and is set aside (one that does not converge is not kept yet), and the other returns to the reactant at both ends. The diagram's saddle points there come from the backward direction.
+- **A reaction path that does not converge gives no ends yet.** A reaction path one of whose sides stops before its end leaves by *Failed*, saying why, and gives no ends; so a direction can end with no path. Keeping such a path's frames comes next.
 
 ## Saving and sharing {#saving}
 
