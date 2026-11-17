@@ -20,7 +20,8 @@ import { measured, measurementName, measurementsTyped } from "../../../../lib/st
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
 import { keyNow, NONE_FOUND, NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
-import { atomMapNeeds, compareTorsionsNeeds, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
+import { atomMapNeeds, compareTorsionsNeeds, kindInfo, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
+import { boundValue, type Bound } from "../../../../lib/boundOptions";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
 import { MODE_NAMES, modeOnAtomsEntry } from "../../../../lib/steps/modeOnAtoms";
 import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
@@ -408,6 +409,16 @@ function referencesOf(es: readonly Entry[], rs: readonly Entry[], property?: str
   return es.map(() => ({ index: 0 }));
 }
 
+/** The strength an entry's property `name` gives a Torsion restraints step, in kcal/mol/rad² (lib/boundOptions) - above 0, or why it cannot be held so. */
+function strengthOf(e: Entry, name: string): { strength: number } | { why: string } {
+  const option = kindInfo("torsion-restraints").options?.find((o) => o.id === "strength");
+  if (!option) return { why: "Torsion restraints has no strength to take" };
+  const got = boundValue(option, name, e.properties[name]);
+  if ("why" in got) return got;
+  const n = Number(got.value);
+  return n > 0 ? { strength: n } : { why: `Its ${name}, ${got.value} kcal/mol/rad\u00b2, is no strength: it must be above 0` };
+}
+
 /**
  * *Torsion restraints*: a table of torsion restraints (lib/steps
  * `torsionRowsTyped`, `torsionRowsFromReference`), a row for each, each for
@@ -418,8 +429,8 @@ function referencesOf(es: readonly Entry[], rs: readonly Entry[], property?: str
  * cannot make rows for - no ID, an ID another has too, no reference, three
  * atoms on a line - out of *Failed*, saying why.
  */
-export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[] | null, holds: Holds3D, v: OptionValues): Outcome3D {
-  const r = torsionsRead(v);
+export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[] | null, holds: Holds3D, v: OptionValues, bound?: Bound): Outcome3D {
+  const r = torsionsRead(v, bound);
   if ("why" in r) return { ok: false, said: r.why };
   if ("from" in r && !references) return { ok: false, said: "Nothing comes into Reference: wire the reference, or type the torsions" };
   if ("typed" in r && references) return { ok: false, said: "A reference is wired, and the torsions are typed: choose From the reference, or take its wire away" };
@@ -441,7 +452,10 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
     if (shared.has(id)) return refuse(`Its ${r.on}, ${id}, is another entry's here too: rows made for it would be both's`);
     const m = matched[i];
     if ("why" in m) return refuse(m.why);
-    const made = "typed" in r ? torsionRowsTyped(es[i], r.typed, r.target, r.hold) : torsionRowsFromReference(es[i], rs[m.index], r.from, r.hold);
+    // (its strength taken from its own property, where the step's is: lib/boundOptions - one it cannot take refused, saying why)
+    const hold = "strengthFrom" in r.hold ? strengthOf(es[i], r.hold.strengthFrom) : r.hold;
+    if ("why" in hold) return refuse(hold.why);
+    const made = "typed" in r ? torsionRowsTyped(es[i], r.typed, r.target, hold) : torsionRowsFromReference(es[i], rs[m.index], r.from, hold);
     if ("failed" in made) return refuse(made.failed);
     if ("notHeld" in made && made.notHeld) notHeld++;
     // (none to hold - not one with something found that cannot be held here: that one is no "nothing to hold", and is refused)

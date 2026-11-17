@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as canonical from "../layout/canonical";
+import * as canonical from "./perception/symmetry";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import type { LayoutInput } from "../layout/perceive";
 import { identity, identityText } from "./identity";
@@ -10,9 +10,9 @@ import { identity, identityText } from "./identity";
 // enough to test - the classes tell apart every such group met, and a
 // search that runs out on a place runs out on the whole - so it is told so
 // here.
-const real = await vi.importActual<typeof import("../layout/canonical")>("../layout/canonical");
-vi.mock("../layout/canonical", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../layout/canonical")>();
+const real = await vi.importActual<typeof import("./perception/symmetry")>("./perception/symmetry");
+vi.mock("./perception/symmetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./perception/symmetry")>();
   return { ...actual, symmetryClasses: vi.fn(actual.symmetryClasses), canonicalWritten: vi.fn(actual.canonicalWritten), canonicalSearched: vi.fn(actual.canonicalSearched) };
 });
 afterEach(() => {

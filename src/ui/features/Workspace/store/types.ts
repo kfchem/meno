@@ -11,6 +11,7 @@ import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
+import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
@@ -588,6 +589,14 @@ export type Molecule3D = {
    */
   partOf?: true;
   /**
+   * Its conformers a structure of several parts', each part searched alone
+   * (docs/WORKSPACE.md, *A structure of several parts*): each frame one
+   * part's conformer, the others at their lowest - its frames weighed as one
+   * compound's conformers would be shares of nothing. No share is shown of
+   * it, and Populations and Ensemble refuse it, saying why.
+   */
+  partsAlone?: true;
+  /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
    * its energies are (`energies`), where it gave them: the force field's
@@ -995,6 +1004,8 @@ export type StepJob = {
   reused?: true;
   /** A job taken up again: what it gave when it was first read, as one digest - what it gives now must be the same. */
   gave?: string;
+  /** Its options, where they are not its run's: a step whose options its entries take from a property, one job's group's (lib/boundOptions `boundGroups`). */
+  options?: OptionValues;
 };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
@@ -1029,12 +1040,18 @@ export type WorkflowStep = {
   y: number;
   by?: string;
   options?: OptionValues;
+  /** Its options each entry takes from a property it carries, by option id: the property's name (lib/boundOptions; docs/WORKFLOWS.md, *Options from a property*). */
+  bound?: Bound;
   ran?: StepRan;
   /** Its earlier runs, newest first. */
   runs?: StepRunKept[];
   running?: StepRunning;
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
+  /** A Repeat's frame (workflow/repeat): how wide and how high from its card's top left, in the page's units. */
+  frame?: { w: number; h: number };
+  /** A Repeat's steps: those whose cards' middles lie inside its frame, in reading order (workflow/model `repeatsSettled`). */
+  holds?: number[];
 };
 /** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
@@ -1841,7 +1858,7 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
-  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
+  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
   removeStep: (id: number, asked?: boolean) => void;
@@ -2074,10 +2091,13 @@ export type EditorState = {
    */
   bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
   /**
-   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): the first selects it alone (`clickSelectBond`) and
-   * changes nothing; the second makes it double, or a double's second line its next side; the third, a triple.
+   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): one turns its kind as the key 1 does - a double or
+   * triple made single, a single round its wedge, hashed wedge and plain with the other end narrow; two make it double, or a
+   * double's second line its next side; three, a triple.
    */
   bondClicked: (id: number, clicks: number) => void;
+  /** A click's turn of a bond taken back where the drawing is still `after`, the one it made (utils/press `turnTakenBack`); false where it is not. */
+  takeBackTurn: (after: unknown) => boolean;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
@@ -2091,8 +2111,6 @@ export type EditorState = {
    * selection as it was, its shade drawn back in (`clickTakeBack`).
    */
   clickSelectAtom: (id: number) => void;
-  /** A click on a bond: it selected, alone, with its atoms (docs/EDITOR-2D.md, *How it is worked*). */
-  clickSelectBond: (id: number) => void;
   /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
   clickTakeBack: (id: number) => boolean;
   /**
@@ -2121,6 +2139,8 @@ export type EditorState = {
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
+  /** Before a turn of the selection: the depth worked out for a ring in perspective drawn with none stored on its atoms, in the turn's own step (chem/depthHeld), so that the turn keeps the compound. */
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => void;
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */

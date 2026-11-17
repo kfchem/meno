@@ -28,6 +28,11 @@ export type Facts = {
   readonly inRing: readonly boolean[];
   /** The size of the smallest ring through a bond, by its index in the graph's bonds: 0 where it is in none. A smallest set holds one of that size for every bond (rings.ts). */
   sizeThrough(bond: number): number;
+  /**
+   * Whether a bond, by its index in the graph's bonds, is in a ring of fewer than `n` atoms - its smallest ring under `n`: false where it is
+   * in none (`sizeThrough` is 0 there, which is no ring of any size). The question a double bond's cis or trans and a drawn axis ask.
+   */
+  inRingSmallerThan(bond: number, n: number): boolean;
   /** The size of the smallest ring through an atom: 0 where it is in none. */
   sizeAt(atom: number): number;
   /** The ring systems: rings sharing an atom, each with its atoms and its rings by index, in the order of their first rings. */
@@ -38,6 +43,12 @@ export type Facts = {
 
 /** A pair of atoms as one key, the lower first. */
 const keyOf = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
+
+/**
+ * The smallest ring a double bond can be in and have a cis or trans to state: eight atoms - one in a ring of seven or fewer is held cis. What
+ * the reader of a drawing, the layout's open double bonds and the CIP each ask of `inRingSmallerThan`.
+ */
+export const OPEN_RING = 8;
 
 const made = new WeakMap<ChemGraph, Facts>();
 
@@ -82,6 +93,10 @@ export function factsOf(g: ChemGraph): Facts {
     sizeThrough: (bond) => {
       const b = g.bonds[bond];
       return b ? (ringed().bondSize.get(keyOf(b.a, b.b)) ?? 0) : 0;
+    },
+    inRingSmallerThan: (bond, n) => {
+      const size = facts.sizeThrough(bond);
+      return size > 0 && size < n;
     },
     sizeAt: (atom) => ringed().atomSize[atom] ?? 0,
     get ringSystems() {

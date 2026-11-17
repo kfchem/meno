@@ -409,6 +409,11 @@ matcher). A structure the matcher could not finish is said to be one it
 could not tell (`couldNotTell`), never one that does not hold it. A SMILES
 Meno does not read is said to be one.
 
+Each structure is read as a record's key reads it (`structureInputOf` in
+`workflow/entries.ts`): a hydrogen bond drawn in it, such as an enol's own
+O-H...O=C, is no bond of it. So an enol drawn with its hydrogen bond is the
+compound its SMILES names, and holds no O-O bond.
+
 ### The tools that change (2026-11-05)
 
 Given only where the person has let the conversation propose changes

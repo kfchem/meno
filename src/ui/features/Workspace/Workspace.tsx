@@ -1,4 +1,5 @@
 import RoleOffer from "./RoleOffer";
+import IconTips from "./components/IconTips";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindMenu } from "./utils/bondKinds";
@@ -25,6 +26,7 @@ import {
   JoinCaps2D,
   BondsPick2D,
   AtomsHoverRings2D,
+  StrokeStart2D,
   ExtendPreview2D,
   ClickBondPreview2D,
   HoldProgress2D,
@@ -142,6 +144,7 @@ import {
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { chemistryStep } from "./quickAddSmiles";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
@@ -221,7 +224,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, growOn, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { asksFirst, bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, growOn, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -267,6 +270,8 @@ import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
 import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
+import EmptyPageLine from "./components/EmptyPageLine";
+import { emptyPageLineShown, pageHoldsNothing } from "./utils/emptyPage";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
@@ -329,6 +334,8 @@ function WorkspaceContent({
     handleWrapperClick,
     dropZone,
     dropping,
+    draggedOver,
+    opened,
     openFilesAt,
     importError,
     dismissImportError,
@@ -374,6 +381,8 @@ function WorkspaceContent({
   setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
+  // (a page that holds nothing at all: its one quiet line - components/EmptyPageLine)
+  const pageEmpty = useEditor(pageHoldsNothing);
   // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
   useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -677,7 +686,8 @@ function WorkspaceContent({
           ),
         );
         // (stereo drawn without a configuration: asked what to make first)
-        if (open.some((o) => o.atoms.length || o.bonds.length)) setAsk3d({ blocks, open, replacing });
+        // (or drawn in a group with more than one half: asked the same - chem/make3d `asksFirst`)
+        if (open.some(asksFirst)) setAsk3d({ blocks, open, replacing });
         else await build3d(blocks, "one", replacing);
       } catch (e: unknown) {
         setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
@@ -1805,6 +1815,10 @@ function WorkspaceContent({
       ))}
       </AnimatePresence>
       </div>
+      {/* an empty page: one quiet line in the middle of what is seen - not while the file the tab was opened with is read, a card
+          says what could not be read, Quick Add or a menu is open, something is dragged over, or a talk is given (docs/WORKSPACE.md,
+          *First steps*) */}
+      <EmptyPageLine show={emptyPageLineShown({ active, empty: pageEmpty, opening: !opened, card: !!importError, quickAdd: !!quickAdd, menu: !!menu, draggedOver, dropping: !!dropping, talking })} right={cover} />
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
@@ -1832,11 +1846,10 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
-                {chem.state === "setting-up"
-                  ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
-                  : chem.state === "starting"
-                    ? `Starting ${chem.plugin}…`
-                    : working3d || `Checking ${checkingFiles}'s files…`}
+                {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
+                {chem.state === "setting-up" || chem.state === "starting"
+                  ? `${chemistryStep(chem, chemShare)}…`
+                  : working3d || `Checking ${checkingFiles}'s files…`}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
@@ -2014,6 +2027,9 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* the names of Quick Add's and the menus' icons, as the pointer rests on one (components/IconTips) - by the workspace in
+          front alone: every tab stays mounted, and its listeners are the window's */}
+      {active && <IconTips />}
       {/* a double-click on empty space: what can be put down there */}
       <AnimatePresence>
         {quickAdd && (
@@ -2915,6 +2931,7 @@ function WorkspaceContent({
           <PushDraw2D />
           {/* Atom hover rings */}
           <AtomsHoverRings2D />
+          <StrokeStart2D />
           {/* what is selected, the box or lasso selecting, the handle turning it */}
           <Selection2D />
           {/* a press held, for a long press: the selection spreading, or a ring */}

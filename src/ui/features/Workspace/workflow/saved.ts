@@ -11,6 +11,7 @@ import { numberIn, tableIn } from "../../../../lib/table";
 import { chartIn } from "../../../../lib/chart";
 import { diagramIn } from "../../../../lib/energyDiagram";
 import type { OptionValues } from "../../../../lib/options";
+import type { Bound } from "../../../../lib/boundOptions";
 import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
@@ -308,6 +309,8 @@ function readRunning(v: unknown): StepRunning | undefined {
             ...(isJobKey((j as { key?: unknown }).key) ? { key: (j as { key: string }).key } : {}),
             ...((j as { reused?: unknown }).reused === true ? { reused: true as const } : {}),
             ...(isJobKey((j as { gave?: unknown }).gave) ? { gave: (j as { gave: string }).gave } : {}),
+            // (its group's options, where its entries took some from a property)
+            ...((j as { options?: unknown }).options && typeof (j as { options?: unknown }).options === "object" ? { options: optionsIn((j as { options?: unknown }).options) } : {}),
           }
       : null;
   }, "job");
@@ -338,10 +341,22 @@ function readRunning(v: unknown): StepRunning | undefined {
     : undefined;
 }
 
+/** A step's options taken from a property, as a file keeps them: each option id and a property's name, both short texts. */
+function boundIn(v: unknown): Bound {
+  const bound: Record<string, string> = {};
+  if (v && typeof v === "object" && !Array.isArray(v))
+    for (const [k, name] of Object.entries(v)) if (typeof name === "string" && name.trim() && name.length <= 80 && k.length <= 80) bound[k] = name.trim();
+  return bound;
+}
+
 function readStep(v: unknown): WorkflowStep | null {
   const s = v as Partial<Record<keyof WorkflowStep, unknown>> | null;
   if (!s || !isId(s.id) || !KINDS.some((k) => k.kind === s.kind) || !isNum(s.x) || !isNum(s.y)) return null;
   const options = optionsIn(s.options);
+  const bound = boundIn(s.bound);
+  // (a Repeat's frame and the steps it holds: settled again by where the cards stand - workflow/model `repeatsSettled`)
+  const frame = s.kind === "repeat" && s.frame && typeof s.frame === "object" && isNum((s.frame as { w?: unknown }).w) && isNum((s.frame as { h?: unknown }).h) && (s.frame as { w: number }).w > 0 && (s.frame as { h: number }).h > 0 ? { w: (s.frame as { w: number }).w, h: (s.frame as { h: number }).h } : undefined;
+  const holds = s.kind === "repeat" && Array.isArray(s.holds) ? [...new Set(s.holds.filter(isId))] : [];
   const ran = readRan(s.ran);
   const running = readRunning(s.running);
   const runs = readEach(s.runs, readKept, "run");
@@ -352,10 +367,13 @@ function readStep(v: unknown): WorkflowStep | null {
     y: s.y,
     ...(typeof s.by === "string" && /^[a-z0-9-]{1,40}$/.test(s.by) ? { by: s.by } : {}),
     ...(Object.keys(options).length ? { options } : {}),
+    ...(Object.keys(bound).length ? { bound } : {}),
     ...(ran ? { ran } : {}),
     ...(runs.length ? { runs } : {}),
     ...(running ? { running } : {}),
     ...(s.keepRaw === false ? { keepRaw: false as const } : {}),
+    ...(frame ? { frame } : {}),
+    ...(holds.length ? { holds } : {}),
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cipIn3d } from "./in3d";
+import { cipIn3d, runsIn3dOf } from "./in3d";
 
 /** Four groups round a C at the corners of a tetrahedron: CHFClBr, H, F, Cl, Br in that order of places. */
 const tetrahedron = [
@@ -44,6 +44,14 @@ describe("R and S, E and Z of a molecule in 3D, read from its places", () => {
     // (a ring of four closed through the two Cl, as a cyclobutene's: none)
     const ring = dichloroethene(true);
     expect(cipIn3d({ ...ring, bonds: [...ring.bonds, { a1: 0, a2: 3, order: 1 }] }).bonds).toEqual({});
+    // (its Cl made C and closed through a chain of carbons: a ring of seven, none; of eight, its Z)
+    const closed = (k: number) => ({
+      atoms: [{ el: "C" }, ...ring.atoms.slice(1, 3), { el: "C" }, ...ring.atoms.slice(4), ...Array.from({ length: k }, () => ({ el: "C" }))],
+      bonds: [...ring.bonds, ...Array.from({ length: k + 1 }, (_, i) => ({ a1: i === 0 ? 0 : 5 + i, a2: i === k ? 3 : 6 + i, order: 1 }))],
+      xyz: [...ring.xyz, ...Array.from({ length: k }, (_, i) => [i - 1, 4, 0]).flat()],
+    });
+    expect(cipIn3d(closed(3)).bonds).toEqual({});
+    expect(cipIn3d(closed(4)).bonds).toEqual({ "1": "Z" });
   });
 
   it("gives a protonated amine's N none, its H coming and going: four groups round it all different", () => {
@@ -100,6 +108,35 @@ describe("an allene's axis and an odd cumulene's cis or trans in 3D, read from i
     const other = cipIn3d(allene(-1)).bonds;
     expect(Object.keys(one)).toEqual(["1"]);
     expect(new Set([one["1"], other["1"]])).toEqual(new Set(["Ra", "Sa"]));
+  });
+
+  it("reads no hand of an allene whose two ends' planes are one plane - 1,3-difluoroallene flat, its F's half a turn apart or together (as 2,4-difluoropenta-2,3-diene embedded flat) - and reads one turned from it by more than a sixth of a half turn", () => {
+    // (along x: F 0 on C1 1, C2 2, C3 3 with F 4; the H's 5 on C1 and 6 on C3. C1's groups in the plane z = 0; C3's turned about x by `deg`)
+    const flat = (deg: number) => {
+      const t = (deg * Math.PI) / 180;
+      const turn = (y: number) => [Math.cos(t) * y, Math.sin(t) * y];
+      const [fy, fz] = turn(1.2);
+      const [my, mz] = turn(-1.2);
+      return {
+        atoms: [{ el: "F" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "F" }, { el: "H" }, { el: "H" }],
+        bonds: [
+          { a1: 0, a2: 1, order: 1 },
+          { a1: 1, a2: 2, order: 2 },
+          { a1: 2, a2: 3, order: 2 },
+          { a1: 3, a2: 4, order: 1 },
+          { a1: 1, a2: 5, order: 1 },
+          { a1: 3, a2: 6, order: 1 },
+        ],
+        xyz: [-0.8, 1.2, 0, 0, 0, 0, 1.3, 0, 0, 2.6, 0, 0, 3.4, fy, fz, -0.8, -1.2, 0, 3.4, my, mz],
+      };
+    };
+    // (C3's F turned by half a turn - F-C...C-F at 180 - or none: one plane, no hand)
+    for (const deg of [180, 0, 175, 5]) expect(cipIn3d(flat(deg)).bonds, `${deg}`).toEqual({});
+    expect(runsIn3dOf(flat(180)).axes).toEqual([]);
+    // (a quarter turn, the allene's own: a hand; and either side of the bound, a sixth of a half turn from flat)
+    for (const deg of [90, 270, 35, 145]) expect(Object.values(cipIn3d(flat(deg)).bonds), `${deg}`).toHaveLength(1);
+    for (const deg of [25, 155]) expect(cipIn3d(flat(deg)).bonds, `${deg}`).toEqual({});
+    expect(cipIn3d(flat(90)).bonds["1"]).not.toBe(cipIn3d(flat(270)).bonds["1"]);
   });
 
   it("reads an odd cumulene's E or Z from its ends' groups on one side of it or the two, and no cumulated C=C's own", () => {

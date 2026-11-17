@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
+import { smallestRings } from "../layout/rings";
 import { factor, GAS_CONSTANT_HARTREE } from "../units";
-import { canFlip, conformersSought, conformersSoughtOf, FEW_CONFORMERS, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber, soughtOptions, turningBonds, WITHIN_GUIDE, WITHIN_NEEDED, type SoughtAtom, type SoughtBond } from "./conformersSought";
+import { canFlip, conformersSought, conformersSoughtOf, FEW_CONFORMERS, flatRingAtoms, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber, soughtOptions, turningBonds, WITHIN_GUIDE, WITHIN_NEEDED, type SoughtAtom, type SoughtBond } from "./conformersSought";
 
 /** A molecule as the count reads it, from SMILES written with its double bonds (a Kekulé structure, as Meno draws one). */
 function mol(smiles: string): { atoms: SoughtAtom[]; bonds: SoughtBond[] } {
@@ -97,6 +98,26 @@ describe("the bonds that turn", () => {
     // (an allene's end is on no line - its ethyl turns - nor is a sulfonyl's S, of two double bonds)
     expect(turns("CC=C=CCC")).toBe(1);
     expect(turns("C1=CC=C(C=C1)S(=O)(=O)NC")).toBe(2);
+  });
+});
+
+describe("a ring on a metal, held flat (foundation part 3, B4)", () => {
+  const flat = (smiles: string) => {
+    const m = mol(smiles);
+    return flatRingAtoms(m.atoms, m.bonds, smallestRings(m.atoms.length, m.bonds.map((b) => [b.a, b.b] as const))).size;
+  };
+  it("takes a metal as the core says one is: a ring each of whose atoms is bonded to one Ge or Te is not on a metal, one on Al is", () => {
+    // (a carbon three-ring capped by Ge or Te, each ring carbon bonded to it - before, Ge and Te were metals here and the ring held flat;
+    //  capped by Al, a main-group metal, it is still)
+    expect(flat("C12C3C1[Ge]23")).toBe(0);
+    expect(flat("C12C3C1[Te]23")).toBe(0);
+    expect(flat("C12C3C1[Al]23")).toBe(3);
+    // (each of the thirteen a heavy atom with no most bonds made a metal before: none is one now)
+    for (const el of ["Ge", "As", "Sb", "Te", "At", "Ts", "He", "Ne", "Ar", "Kr", "Xe", "Rn", "Og"]) expect(flat(`C12C3C1[${el}]23`), el).toBe(0);
+  });
+  it("judges arsole's and tellurophene's rings by the aromatic rule alone, as any ring's", () => {
+    expect(flat("[AsH]1C=CC=C1")).toBe(flat("N1C=CC=C1") ? 5 : 0);
+    expect(flat("[Te]1C=CC=C1")).toBe(flat("S1C=CC=C1") ? 5 : 0);
   });
 });
 

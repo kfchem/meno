@@ -2,7 +2,9 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import { COORDINATION_BOND, mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
+import { COORDINATION_BOND, type AbbreviationStructure, type AtomChem, type BondChem, type SgroupMark } from "./molecule";
+import { mostBonds, valenceOrder, type Radical } from "./perception/hydrogens";
+import { valenceOrders } from "./perception/kekule";
 import { ELEMENTS } from "./elements";
 import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
@@ -877,14 +879,17 @@ export function writeMolfile3d(
 ): string {
   const version = options.version ?? "auto";
   const head = [titleLine(options.title), PROGRAM_LINE_3D, ""];
-  // (each atom's bonds' orders summed, for one whose valence is written: an aromatic bond one and a half, a coordination or hydrogen bond none)
+  // (each atom's bonds' orders summed, for one whose valence is written: an aromatic bond by the order a Kekule structure gives it, as
+  // the core counts it (perception/kekule `valenceOrders`; perception/hydrogens `hydrogenCounts`), a coordination or hydrogen bond none -
+  // a pyrrole's N with its H, three; without it, two, which its file says, never three as one and a half each would)
   const valence = new Float64Array(atoms.length);
-  for (const b of bonds) {
-    const order = b.order >= 1 && b.order <= 3 ? b.order : b.order === 4 ? 1.5 : 0;
+  const orders = valenceOrders(atoms, bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })));
+  bonds.forEach((b, k) => {
+    const order = orders[k] >= 1 && orders[k] <= 3 ? orders[k] : 0;
     valence[b.a1] += order;
     valence[b.a2] += order;
-  }
-  const valenceOf = (i: number) => Math.round(valence[i]);
+  });
+  const valenceOf = (i: number) => valence[i];
   if (version === "V3000" || (version === "auto" && needsV3000In3d(atoms, bonds))) {
     const lines = [
       ...head,
