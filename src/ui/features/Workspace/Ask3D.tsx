@@ -1,9 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
-import type { Open } from "./chem/make3d";
+import { askWords, type Open } from "./chem/make3d";
 import { useInFront } from "../../layouts/inFront";
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Asked before a structure is made in 3D when some of its stereo is drawn
@@ -41,12 +39,7 @@ export default function Ask3D({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel, inFront]);
-  const centres = open.reduce((n, o) => n + o.atoms.length, 0);
-  const bonds = open.reduce((n, o) => n + o.bonds.length, 0);
-  const isomers = open.reduce((n, o) => n + o.isomers, 0);
-  const what = [centres ? plural(centres, "stereocentre", "stereocentres") : "", bonds ? plural(bonds, "double bond", "double bonds") : ""]
-    .filter(Boolean)
-    .join(" and ");
+  const { title, said, isomers } = askWords(open);
   return (
     <motion.div
       role="dialog"
@@ -59,11 +52,10 @@ export default function Ask3D({
       onClick={(e) => e.stopPropagation()}
     >
       <h2 id="ask-3d-title" className="font-semibold mb-1">
-        Stereo not drawn
+        {title}
       </h2>
       <p className="text-gh-gray mb-3">
-        {what} {centres + bonds === 1 ? "is" : "are"} drawn without a configuration, so the structure can be any of{" "}
-        {isomers} stereoisomers.
+        {said}, so the structure can be any of {isomers} stereoisomers.
       </p>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">

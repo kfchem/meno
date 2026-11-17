@@ -21,6 +21,10 @@ vi.mock("../workflow/meno", async (actual) => {
     runMenoInTurns: (...a: Parameters<typeof meno.runMenoInTurns>) => (given.push({ kind: a[0], own: a[3] }), meno.runMenoInTurns(a[0], a[1], a[2], a[3], a[4], { ...a[5], slice: 0, tell: 0 }, a[6])),
   };
 });
+vi.mock("../workflow/enumerateOff", async (actual) => {
+  const off = await actual<typeof import("../workflow/enumerateOff")>();
+  return { ...off, runMenoDrawnOff: (...a: Parameters<typeof off.runMenoDrawnOff>) => (given.push({ kind: a[0], own: a[2] }), off.runMenoDrawnOff(...a)) };
+});
 vi.mock("../workflow/configurations", async (actual) => ({
   ...(await actual<typeof import("../workflow/configurations")>()),
   perceiveStereo: async (entries: readonly unknown[]) => void perceived.push(entries.length),
@@ -115,6 +119,15 @@ describe("a step with no options of its own, run", () => {
     const { st, step } = page("enumerate", { drawn: true });
     await st().runStep(step);
     expect(given.find((g) => g.kind === "enumerate")?.own).toMatchObject({ way: "rgroups", lists: "R1: C" });
+  });
+
+  it("Enumerate: said to be running from the moment it starts, its products made in their worker, and no longer once done", async () => {
+    settings("enumerate", { way: "rgroups", lists: "R1: C" });
+    const { st, step } = page("enumerate", { drawn: true });
+    const running = st().runStep(step);
+    expect(st().menoWorking[step]).toMatchObject({ total: 0, done: 0 });
+    await running;
+    expect(st().menoWorking[step]).toBeUndefined();
   });
 
   it("Atom map: planned with Settings' values", async () => {

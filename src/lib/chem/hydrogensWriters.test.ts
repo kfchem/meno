@@ -1,10 +1,10 @@
 /**
- * The writers against the core's one hydrogen count (foundation part 12a, the order's: what is written to a file first). A skeleton's
- * test (./skeleton) and the valence a 3D molfile writes for an atom with no hydrogens beyond its bonds (./molWriter) both sum an aromatic
- * bond as one and a half; the core (perception/hydrogens `hydrogenCounts`) takes it by its Kekule order. This holds them side by side over
- * every atom of a thousand analogues and their cores (lib/layout/testdata/analogues) and a set of heteroaromatics, each read with no
- * hydrogens given, as a molecule in 3D has them: they differ on an aromatic N-H's nitrogen and nowhere else. A move changes no answer, so
- * neither writer is moved onto the core here; the difference is named where each sums (`halfOrderSums`) and is for part 12's fixes.
+ * The writers against the core's one hydrogen count (foundation part 12, the order's: what is written to a file first). A skeleton's test
+ * (./skeleton) sums an aromatic bond as one and a half; the core (perception/hydrogens `hydrogenCounts`) takes it by its Kekule order.
+ * This holds them side by side over every atom of a thousand analogues and their cores (lib/layout/testdata/analogues) and a set of
+ * heteroaromatics, each read with no hydrogens given, as a molecule in 3D has them: they differ on an aromatic N-H's nitrogen and nowhere
+ * else, which is part 12's fix of the skeleton's sum, to come (`halfOrderSums`). The valence a 3D molfile writes for an atom with no
+ * hydrogens beyond its bonds (./molWriter) is the core's count: an aromatic bond by its Kekule order.
  */
 import { describe, expect, it } from "vitest";
 import { analogues, CORE_SMILES } from "../layout/testdata/analogues";
@@ -55,13 +55,36 @@ describe("a skeleton's count against the core's", () => {
   });
 });
 
-describe("the valence a 3D molfile writes against the core's count", () => {
-  it("writes a pyrrole's nitrogen, its H not there, valence three: its aromatic bonds as one and a half each, where the core sums two", () => {
-    const { atoms, bonds } = asIn3d("c1cc[nH]c1");
+describe("the valence a 3D molfile writes, by the core's count", () => {
+  /** The valence written on each atom of `smiles` read as a molecule in 3D, each atom taking no hydrogens beyond its bonds, and the H atoms given where asked. */
+  const written = (smiles: string) => {
+    const { atoms, bonds } = asIn3d(smiles);
     const file = writeMolfile3d(atoms.map((a, i) => ({ ...a, x: i, y: 0, z: 0, noImplicitH: true })), bonds, { version: "V2000" });
-    const atomLines = file.split("\n").slice(4, 4 + atoms.length);
+    return { atoms, vvv: file.split("\n").slice(4, 4 + atoms.length).map((l) => Number(l.slice(48, 51))) };
+  };
+
+  it("writes a pyrrole's nitrogen without its H as two: its bonds by their Kekule orders, never three, one and a half each", () => {
+    const { atoms, vvv } = written("c1cc[nH]c1");
     const n = atoms.findIndex((a) => a.el === "N");
-    expect(Number(atomLines[n].slice(48, 51))).toBe(3);
-    expect(hydrogenCounts(atoms, bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })))[n]).toBe(1);
+    expect(vvv[n]).toBe(2);
+    expect(vvv.filter((_, i) => i !== n)).toEqual([3, 3, 3, 3]);
+  });
+
+  it("writes it with its H as three, its usual valence - not four", () => {
+    const { atoms, vvv } = written("c1ccn([H])c1");
+    const n = atoms.findIndex((a) => a.el === "N");
+    expect(vvv[n]).toBe(3);
+  });
+
+  it("writes indole's, imidazole's and the purine's nitrogens as the Kekule structure has them, pyridine's as three", () => {
+    for (const smiles of ["c1ccc2[nH]ccc2c1", "c1c[nH]cn1", "c1ncc2nc[nH]c2n1", "c1ccncc1"]) {
+      const { atoms, vvv } = written(smiles);
+      const { bonds } = asIn3d(smiles);
+      const hs = hydrogenCounts(atoms, bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })));
+      // (each N's valence and the H the core gives it make its usual three: what is written says what is there)
+      atoms.forEach((a, i) => {
+        if (a.el === "N") expect([smiles, i, vvv[i] + hs[i]]).toEqual([smiles, i, 3]);
+      });
+    }
   });
 });

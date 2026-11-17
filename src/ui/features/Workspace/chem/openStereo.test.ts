@@ -34,7 +34,7 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     const two = { configured: { centres: [{ atom: 1, neighbours: [0, 2, 4], sense: -1 }], doubles: [] }, smiles: "b" };
     const both = plugin({ isomers: [one, two], free: false });
     expect(await isomersToMake(both.chem, BUTANOL, undefined, "one")).toMatchObject({ count: 2, free: false, isomers: [one.configured] });
-    expect((await isomersToMake(both.chem, BUTANOL, undefined, "all")).isomers).toEqual([one.configured, two.configured]);
+    expect((await isomersToMake(both.chem, BUTANOL, undefined, "all")).isomers).toEqual([{ ...one.configured, groups: [] }, { ...two.configured, groups: [] }]);
     // (and refused, where it cannot be read)
     const unread = { request: async () => ({ read: false }) } as unknown as ChemClient;
     await expect(isomersToMake(unread, BUTANOL, undefined, "one")).rejects.toThrow("The plugin could not read it");
@@ -46,9 +46,9 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     const four = plugin({ isomers: [at(1), at(-1), at(1), at(-1)].map((c, i) => ({ ...c, smiles: `s${i}` })), free: false });
     const all = await isomersToMake(four.chem, BUTANOL, undefined, "all");
     expect(all.count).toBe(2);
-    expect(all.isomers).toEqual([at(1).configured, at(-1).configured]);
+    expect(all.isomers).toEqual([{ ...at(1).configured, groups: [] }, { ...at(-1).configured, groups: [] }]);
     const one = await isomersToMake(four.chem, BUTANOL, undefined, "one");
-    expect([one.count, one.isomers]).toEqual([2, [at(1).configured]]);
+    expect([one.count, one.isomers]).toEqual([2, [{ ...at(1).configured, groups: [] }]]);
   });
 
   it("keeps the isomers that differ where a configuration does not tell: a centre and an allene's axis give four, not two", async () => {
