@@ -148,3 +148,78 @@ describe("what is said beside an atom, among labels and other notes", () => {
     expect(place(400)).toEqual(place(20));
   });
 });
+
+describe("placing every note of a large mapped drawing", () => {
+  /** How many times longer `run` takes on `large` than on `small`, by the CPU time of the least of several tries (as cleanUp.test's). */
+  function slower<T>(small: T, large: T, run: (x: T) => void): number {
+    const least = [Infinity, Infinity];
+    run(small);
+    run(large);
+    for (let k = 0; k < 5; k++) {
+      [small, large].forEach((x, i) => {
+        const started = process.cpuUsage();
+        let times = 0;
+        let spent = 0;
+        do {
+          run(x);
+          times++;
+          const used = process.cpuUsage(started);
+          spent = used.user + used.system;
+        } while (spent < 50_000);
+        least[i] = Math.min(least[i], spent / times);
+      });
+    }
+    return least[1] / least[0];
+  }
+
+  it("takes time as its notes do: a chain three times as long takes well under nine times as long", () => {
+    const chain = (n: number) => ({
+      atoms: Array.from({ length: n }, (_, i) => ({ id: i + 1, x: i * L * 0.866, y: i % 2 ? L / 2 : 0, el: "C", map: i + 1 })) as Atom[],
+      bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 as const })) as Bond[],
+    });
+    const o = opts();
+    expect(slower(chain(300), chain(900), (c) => layoutMolecule(c.atoms, c.bonds, o, 40))).toBeLessThan(6);
+  });
+});
+
+describe("the notes of a crowded drawing, as every bond and label looked at once placed them", () => {
+  /** A made-up grid of atoms, some O and N, most mapped, a few charged, a few in a group; bonds across and, most, up: a fixed seed. */
+  const grid = (w: number, h: number): { atoms: Atom[]; bonds: Bond[] } => {
+    const atoms: Atom[] = [];
+    const bonds: Bond[] = [];
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const r = rnd();
+        atoms.push({
+          id: i + 1,
+          x: x * L * 0.9 + (y % 2) * L * 0.45,
+          y: y * L * 0.8,
+          el: r < 0.2 ? "O" : r < 0.3 ? "N" : "C",
+          ...(r < 0.7 ? { map: i + 1 } : {}),
+          ...(r > 0.9 ? { charge: 1 } : {}),
+          ...(r > 0.45 && r < 0.55 ? { stereoGroup: { kind: "and" as const, n: 1 } } : {}),
+        });
+        if (x) bonds.push({ a1: i - 1, a2: i, order: 1 });
+        if (y && rnd() < 0.8) bonds.push({ a1: i - w, a2: i, order: 1 });
+      }
+    }
+    return { atoms, bonds };
+  };
+
+  it("are where they were: the search near each atom gives what the search over the whole drawing gave", () => {
+    const { atoms, bonds } = grid(5, 4);
+    const notes = layoutMolecule(atoms, bonds, opts(), 40)
+      .texts.filter((t) => t.beside || /and|or|\d/.test(t.text))
+      .map((t) => `${t.text}@${t.x.toFixed(2)},${t.y.toFixed(2)}`);
+    // (as the whole scan placed them, before the search was kept near each atom)
+    const was = [
+      ["+", 5.04, 0.66], ["+", 2.61, 2.1], ["+", 4.4, 2.04], ["1", 0, 0.61], ["2", 1.3, -1.19], ["3", 2.9, 0.59], ["5", 7.07, -0.16],
+      ["6", 1.15, 2.03], ["9", 5.95, 2.48], ["10", 8.19, 2.34], ["11", -0.9, 3.78], ["12", 1.22, 3.57], ["14", 5.76, 3.78], ["15", 6.88, 3.57],
+      ["18", 4.05, 5.34], ["and enantiomer", 3.65, -2.22],
+    ] as const;
+    expect(notes).toEqual(was.map(([t, x, y]) => `${t}@${x.toFixed(2)},${y.toFixed(2)}`));
+  });
+});
