@@ -264,7 +264,10 @@ export function moveStep(doc: WorkspaceDocument, id: number, x: number, y: numbe
   if (was?.kind === "repeat" && was.holds?.length && (was.x !== x || was.y !== y)) {
     const [dx, dy] = [x - was.x, y - was.y];
     const held = new Set(was.holds);
-    return { ...doc, steps: doc.steps!.map((s) => (s.id === id ? { ...s, x, y } : held.has(s.id) ? { ...s, x: s.x + dx, y: s.y + dy } : s)) };
+    let d: WorkspaceDocument = { ...doc, steps: doc.steps!.map((s) => (s.id === id ? { ...s, x, y } : held.has(s.id) ? { ...s, x: s.x + dx, y: s.y + dy } : s)) };
+    // (and the sets those steps give, with what they hold: inside its frame as they were - found in review)
+    for (const b of doc.sets ?? []) if (b.made && held.has(b.made.step)) d = moveSet(d, b.id, dx, dy);
+    return d;
   }
   return withStep(doc, id, (s) => (s.x === x && s.y === y ? s : { ...s, x, y }));
 }

@@ -290,7 +290,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const { go, spent } = passEntries(current, r, pass);
       out.push(...spent.map(ranOut));
       ranOutCount += spent.length;
-      if (!go.length) break;
+      // (every entry spent at the top of a pass: those already in Out - none of them still going round, found in review)
+      if (!go.length) {
+        again = [];
+        break;
+      }
       // (the pass under way, said on its tab - Stop pressed meanwhile kept)
       set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { pass, ...(r.repeat !== "until" ? { of: r.passes } : {}), ...(prev.repeatPasses[id]?.stopping ? { stopping: true as const } : {}) } } }));
       doc.amend((x) => (stepOf(x, id) ? fillExit(x, stepOf(x, id)!, THIS_PASS, go, holds, undefined, w) : x), { unsaved: true });

@@ -162,6 +162,53 @@ describe("a Repeat run with the page round it (found in review)", () => {
     expect(labels.filter((l) => l === "run")).toHaveLength(3);
   });
 
+  it("puts each entry in Out once where its values run out at the top of a pass", async () => {
+    const { st, r, doc, exit } = page({ repeat: "over", variable: "k", values: "1\n2\n3", counted: "entry", startsOver: "last" });
+    // (each water come in having gone round once already - as another Repeat's Out has them)
+    doc.edit("count", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m) => ({ ...m, properties: [{ [TIMES_ROUND]: { value: 1, unit: "none", status: "computed", label: true } }] })) }));
+    await st().runStep(r);
+    expect(setMolecules(st(), st().sets.find((b) => b.id === exit(r, "reached"))!)).toHaveLength(2);
+    expect(st().steps.find((s) => s.id === r)!.ran?.said).not.toContain("4 still going round");
+  });
+
+  it("moved, takes the sets of the steps it holds with them: still inside its frame", async () => {
+    const doc = createWorkspaceDocument();
+    for (const x of [0, 2])
+      doc.edit("water", (d) =>
+        addMolecule3d(d, {
+          atoms: [
+            { el: "O", x, y: 0, z: 0 },
+            { el: "H", x, y: 0.76, z: 0.59 },
+            { el: "H", x, y: -0.76, z: 0.59 },
+          ],
+          bonds: [
+            { a1: 0, a2: 1, order: 1 },
+            { a1: 0, a2: 2, order: 1 },
+          ],
+          at: { x: x - 1, y: 0 },
+        }),
+      );
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const input = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const f = st().addStep("filter", "meno", 400, 0);
+    st().updateStep(f, { options: { conditions: "number ≥ 1", match: "all" } });
+    st().connect({ set: input }, f);
+    await st().runStep(f);
+    st().repeatSteps([f]);
+    const r = st().steps.find((s) => s.kind === "repeat")!;
+    const box = () => {
+      const now = st().steps.find((s) => s.id === r.id)!;
+      return repeatBox({ x: now.x, y: now.y, frame: now.frame! });
+    };
+    const inside = () => st().sets.filter((b) => b.made?.step === f && !unseenSets(st() as never).has(b.id)).map((b) => b.x0 >= box().x0 && b.x1 <= box().x1 && b.y0 >= box().y0 && b.y1 <= box().y1);
+    expect(inside().every(Boolean)).toBe(true);
+    st().moveStep(r.id, r.x + 1500, r.y - 400);
+    expect(inside().every(Boolean)).toBe(true);
+    expect(inside().length).toBeGreaterThan(0);
+  });
+
   it("says where a step inside failed, and ends there: never as run well", async () => {
     const { st, r, f } = page({ repeat: "until", most: 4 });
     st().updateStep(f, { options: { conditions: "this is no condition (((" } });

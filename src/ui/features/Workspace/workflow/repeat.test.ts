@@ -146,7 +146,8 @@ describe("the steps a Repeat holds", () => {
 
   it("are held by their card's middle, not its top: a card whose top lies outside the frame and its middle inside is held", () => {
     const r = step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
-    const a = step(A, "tag", 300, cardHighOf("tag") / 2 - 20);
+    // (its top above the frame's top, its middle below it: a quarter of its height above - found in review)
+    const a = step(A, "tag", 300, cardHighOf("tag") / 4);
     expect(repeatsSettled(doc([r, a])).steps!.find((s) => s.id === R)!.holds).toEqual([A]);
   });
 
