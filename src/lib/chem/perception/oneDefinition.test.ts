@@ -74,9 +74,6 @@ export const STILL_APART: Copy[] = [
   { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: 12, why: "a P and an S at their higher valences where the bonds pass the lower: part 12b" },
   { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
   // the types for a centre, a double bond, an axis, a whole configuration
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredCentre", part: 14 },
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredDouble", part: 14 },
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "Configuration", part: 14 },
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "StereoElement", part: 14 },
   { concept: "stereo types", file: "lib/chem/smiles.ts", name: "Configuration", part: 14 },
   { concept: "stereo types", file: "lib/entry.ts", name: "StereoElement", part: 14 },
