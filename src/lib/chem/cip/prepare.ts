@@ -40,7 +40,7 @@ import { elementOf } from "../elements";
 import { aromaticForm, type IdentityInput } from "../identity";
 import { isotopeMass, standardWeight } from "../isotopes";
 
-/** Each element's valence electrons, for those of the main groups the conventions ask about. */
+/** Each element's valence electrons, for those of the main groups the conventions and the lone pairs ask about. */
 const VALENCE_ELECTRONS: Record<string, number> = {
   H: 1,
   B: 3,
@@ -66,6 +66,9 @@ const VALENCE_ELECTRONS: Record<string, number> = {
   Tl: 3,
   Pb: 4,
   Bi: 5,
+  // (a noble gas's, for the lone pairs of a xenon or krypton fluoride: no centre - index.ts `refusedCentre`)
+  Kr: 8,
+  Xe: 8,
 };
 
 /** The elements convention (b) reads, each with its valence uncharged: the third period on, groups 15 to 17. */

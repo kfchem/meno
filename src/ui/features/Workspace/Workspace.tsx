@@ -224,7 +224,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, growOn, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { asksFirst, bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, growOn, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -688,7 +688,8 @@ function WorkspaceContent({
           ),
         );
         // (stereo drawn without a configuration: asked what to make first)
-        if (open.some((o) => o.atoms.length || o.bonds.length)) setAsk3d({ blocks, open, replacing });
+        // (or drawn in a group with more than one half: asked the same - chem/make3d `asksFirst`)
+        if (open.some(asksFirst)) setAsk3d({ blocks, open, replacing });
         else await build3d(blocks, "one", replacing);
       } catch (e: unknown) {
         setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
