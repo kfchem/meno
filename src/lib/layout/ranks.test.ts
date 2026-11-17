@@ -77,6 +77,15 @@ describe("a double bond's cis or trans, given against either neighbour of an end
     }
   });
 
+  it("gives beta-carotene the same ranks with a stereo bond's atoms listed the other way round, its refs as they were", () => {
+    // (the ref on the bond's first atom is found by the end it is on, not by its place in the refs)
+    const g = fromSmiles(carotene);
+    for (const k of [20, 24]) {
+      const turned = { ...g, bonds: g.bonds.map((x, j) => (j === k ? { ...x, a: x.b, b: x.a } : x)) };
+      expect(canonicalRanks(perceive(turned)), `bond ${k}`).toEqual(canonicalRanks(perceive(g)));
+    }
+  });
+
   it("gives every fixture with a stereo double bond the same ranks, each end of each such bond exchanged in turn", () => {
     const fixtures = ["molecules.json", "heldout.json"].flatMap(
       (f) => (JSON.parse(readFileSync(resolve(__dirname, "../../../scripts/layout", f), "utf8")).molecules as { smiles?: string }[]).flatMap((m) => (m.smiles ? [m.smiles] : [])),
