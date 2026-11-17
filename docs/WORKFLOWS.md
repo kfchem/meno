@@ -365,7 +365,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number, in the order the step before gave them (a conformer search's, as its program made them; a *Rank* step's, as it ranked them); the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a ring, ticked (drawn) | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it. Meno's, on what the plugin that does the checks makes of each structure (PLUGINS.md, `structure_facts`): what that toolkit alone could not read or make sense of is said in its name and words ("RDKit could not read it (SANITIZE_KEKULIZE)") |
-| Stereoisomers | the letters R/S, as a drawing writes them | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than *At most* stereoisomers (32 unless changed: whole, never some of them - counted only as far as one past it, saying the most its open stereo could give), one that takes longer than its *Time for one* to look at (30 s unless changed: alone, the rest as they are), or - as the option says - all that leave stereo open. Meno's, on what the plugin that finds stereoisomers perceives and makes (*Stereoisomers is Meno's*, below) |
+| Stereoisomers | the letters R/S, as a drawing writes them | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); each with AND or OR groups as each of its halves that can be made in 3D, the half as drawn first, said on each (*Stereoisomers is Meno's*, below); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than *At most* stereoisomers (32 unless changed: whole, never some of them - counted only as far as one past it, saying the most its open stereo could give), one that takes longer than its *Time for one* to look at (30 s unless changed: alone, the rest as they are), or - as the option says - all that leave stereo open. Meno's, on what the plugin that finds stereoisomers perceives and makes (*Stereoisomers is Meno's*, below) |
 | Descriptors | a ring and the lines of what is worked out for it (drawn) | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus and a minus, each in a circle (drawn) | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
@@ -831,6 +831,101 @@ step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere
 else (decided: 17).
+
+### Options from a property
+
+A step's number or text option can take its value entry by entry, from
+a property each entry carries, rather than one value for all (the
+maintainer's ruling on loops: a general loop that steps a property,
+which any option can name; `lib/boundOptions`).
+
+- **Where.** On a step's open card, a small button at the right end of
+  the option's field (two links of a chain), named on hover *From a
+  property*, and reached by the Tab key as the card's other controls are. It is offered on every number and text option of a
+  plugin's step that takes entries in (not on one that makes them from
+  nothing, nor Render's), and on those of Meno's own steps that are an
+  entry's own to take: *Torsion restraints*' strength. A chemist who
+  never presses it never meets it.
+- **Taken.** Pressed, the field becomes the property's name, the names
+  the entries coming in carry offered as it is typed; the option's own
+  value is kept underneath, and pressed again it is back. Each change
+  is one undo step, a name typed as one. Pointing at the name says
+  whether the entries coming in carry it. Until a name is typed, the
+  card says so where *Ready* would be ("Name the property its strength
+  is taken from").
+- **Said.** The step's line says the option as `= k`, with its unit
+  ("1 torsion at 180°, = k kcal/mol/rad²; for each start").
+- **Units.** The value is taken in the option's unit, converted within
+  its dimension (`lib/units`: a k in kJ/mol/rad² held as kcal/mol/rad²).
+  A restraint's strength is k as in E = k x²/2, as Meno's restraint rows
+  state it: a k from a program that writes E = k x², without the half, is
+  a factor of 2 off, which no unit can catch.
+  An entry whose property is not there, was not worked out, is of
+  another dimension ("Its k is in kcal/mol; its strength is in
+  kcal/mol/rad²"), has no unit where the option has one or one where it
+  has none, is out of the option's range, or - a strength - is not
+  above 0, goes out of the step's *Failed*, saying why. Never the
+  option's own value instead, never a guess. An option whose unit is
+  not in Meno's table is not converted: an entry asked for it is
+  refused, saying so.
+- **Run.** A step Meno runs takes each entry's value as it makes that
+  entry's rows. A plugin's step run as jobs, or in its worker at once,
+  groups the entries by the values they take and asks its plugin once
+  for each group, with that group's values; its line says how many
+  ("2 calls, one for each value taken from a property"). A step that
+  judges its entries against each other judges each group apart. A
+  plugin's step that runs on structures drawn, makes from nothing, or
+  renders takes its options as given on its card, and run with one
+  taken from a property, says so and runs nothing.
+- **Kept.** Which options are taken from which property is the step's
+  own, saved with it in the workspace's file (`bound`), and part of
+  what says it has changed since its run.
+
+### Repeat
+
+A *Repeat* is a frame round steps that runs them pass by pass (the
+maintainer's ruling on loops: a general loop that steps a property, which
+any option can name - *Options from a property*). Its frame, the steps it
+holds and the wires it lets cross its edge are built; its passes, and the
+ways to make one (Quick Add's *Repeat*, *Repeat these steps* on a
+selection's menu), come with its runs. Until then none is made, and one
+read from a file says its passes are not run in this version.
+
+- **What it is.** A step of its own kind (`workflow/repeat`), whose card
+  stands at its frame's top left. *In* is its input from outside. Inside
+  its frame, *This pass* is the set its first steps take, and *Again* and
+  *Done* are the inputs what its steps give lands on: *Again* to go round
+  once more, *Done* when an entry is finished. Outside, *Out* holds what
+  reached *Done* over all its passes.
+- **The steps it holds** are those whose cards' middles lie inside its
+  frame, in reading order: a step dragged in joins it, one dragged out
+  leaves (`repeatsSettled`), as a set's members do. A Repeat holds no
+  Repeat.
+- **Its edge is crossed by its ports alone.** What comes in goes into
+  *In*; its steps take from *This pass* and from one another; what leaves
+  goes by *Again* or *Done*, then *Out*. A wire that would cross it
+  otherwise is not made, and the step's card says why ("This step is
+  inside a Repeat: wire it into the Repeat's In, and This pass to this
+  step").
+- **No loop.** What lands on *Again* or *Done* is read by the Repeat as a
+  pass ends, never a way back in the flow (`landing`): the steps before a
+  Repeat are those before its *In*, and the steps after one of its steps
+  run down through it to what is after it.
+- **Its options**:
+  - *Repeat*: a number of times (3, a starting value with no basis of its
+    own: set the passes the work needs), until none goes again (at most
+    10 passes, unless set), or over values;
+  - *Variable*: a name, with *From* and *Step*, or the values one to a
+    line, and a unit from Meno's table;
+  - *Counted*: per entry (each entry's value starts at *From* and steps
+    each time it goes round) or per pass;
+  - *Each pass starts*: from where restraints were first held (over values,
+    from the last pass), from the last pass, or from what came in.
+  
+  Its line says them: "3 passes; k from 50 by 50 kcal/mol/rad², counted
+  per entry".
+- **Kept** in the workspace's file with its step: its frame (`frame`) and
+  the steps it holds (`holds`), settled again by where the cards stand.
 
 ## Compound sets and conformer sets
 
@@ -2208,6 +2303,15 @@ orientation* shows it as the output has it. Its room in the result set
 is made for it turned. A program that keeps the input's orientation is
 laid over it as it is.
 
+Results a step passed through, their atoms where they were - a
+*Filter*'s, a *Tag*'s, a *Rank*'s - are put down turned as the molecule
+each came from is (run `viewKept`): a water seen face-on in what came in
+is seen face-on in the step's set, never edge-on as if its geometry had
+changed. Its room in the set is made for it so turned, and copies of
+one molecule are each turned as their own source was. A molecule a step
+moved or made, and one whose source was never turned, is seen as it is
+first seen; so, for now, is one in a set held off the page.
+
 - **By the view's turn**, not by turning the coordinates, which would
   part them from the output they were read from (its vibrations, the
   surfaces asked of it later). A run shown again from *Runs* is laid over
@@ -3269,6 +3373,35 @@ those left open, *Generate*'s, and a SMILES pasted.
   it is set aside alone - a camphor's take some 10 s, its bridgeheads
   left open, so 30 s is three of those; up to ten minutes, the most a
   step on structures drawn waits at once.
+- **AND and OR groups** (foundation part 7, 2026-11-16): centres a
+  drawing puts in an AND group (V3000's STERACn: both ways are present, a
+  racemate) or an OR group (STERELn: one of the two, not known which) are
+  known only relative to each other. Each such group is a structure's two
+  halves, as drawn and turned over; with G groups, 2^G. The toolkit turns
+  each group as a whole and tries each half in 3D, as it reads them in
+  the block; which halves there are, which is drawn, and what is said are
+  Meno's (Workspace/chem/groupHalves):
+  - the half as drawn comes first, by Meno's own reading of the wedges;
+  - a group is turned whole or not at all. One whose centre the drawing
+    does not read, or that comes back turned in part, is made as drawn,
+    said with its atom ("and1 is made as drawn: its configuration does not
+    read at atom 2"), and none of its halves is called one;
+  - a half that is the same compound as one made (a meso form whose two
+    centres are one group) is that one, nothing said; one that cannot be
+    made in 3D is said ("and1 turned over cannot be made in 3D"), never
+    left out unseen;
+  - a group that holds a bond is not turned there ("its and1 on a bond is
+    made as drawn: a bond's configuration is not turned");
+  - an OR group's halves are made as an AND group's, both being what a
+    chemist needs to see; only the words differ ("or1 as drawn: one of the
+    two, not known which").
+  *Stereoisomers* makes each half as a drawing, each with its whole
+  configuration and no group left on it, the half as drawn first, and
+  says on each which they are, in order; *Set aside* is for stereo left
+  open, not for a group. The page and a *Conformers* step: below and
+  WORKSPACE.md, *Stage 2, as built*. How identity, and so *Duplicates*,
+  takes a structure drawn with a group against the same drawn absolute is
+  not changed here (foundation part 13).
 - **Words**: one the toolkit could not read, or make sense of, is set
   aside in its name and words, as *Check structures* says it ("RDKit
   could not read it (SANITIZE_PROPERTIES)"; before, "RDKit cannot make

@@ -5,6 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
+import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { isId, type SolvationDecl } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
@@ -953,7 +954,7 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
  */
 export type DrawnAnswer =
   | { as: "drawn"; properties?: Record<string, DrawnValue> }
-  | { made: string[]; smiles?: string[]; properties?: Record<string, DrawnValue> }
+  | { made: string[]; smiles?: string[]; configurations?: (IsomerConfiguration | undefined)[]; properties?: Record<string, DrawnValue> }
   | { aside: string; kind: string };
 /** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
 export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };

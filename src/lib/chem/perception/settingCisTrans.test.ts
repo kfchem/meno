@@ -213,3 +213,48 @@ describe("an allene's axis that sets something: kept", () => {
     expect(one("CC=C=C1CCC(C)CC1", r)).toBe(false);
   });
 });
+
+// Backlog 193, the chemistry check's ruling: a cis or trans needs two trigonal-planar ends - each end's neighbours, hydrogens
+// and lone pairs three (VSEPR). An ylidic or dative "double bond" (a sulfonium or sulfoxonium ylide's S, a sulfoximine's N=S,
+// a phosphorus ylide's P, a metal carbene's metal) has none, however it was given; a sulfine's and a disilene's keep theirs.
+describe("a cis or trans needs two trigonal-planar ends", () => {
+  it("a sulfoxonium ylide, an N-methyl sulfoximine's N=S, a sulfonium ylide given either way: none, one identity with the structure given none", () => {
+    for (const [a, b, none] of [
+      ["C/C=S(/CC)(=O)C", "C/C=S(\\CC)(=O)C", "CC=S(CC)(=O)C"],
+      ["C/N=S(/CC)(=O)C", "C/N=S(\\CC)(=O)C", "CN=S(CC)(=O)C"],
+      ["C/C=S(/CC)C", "C/C=S(\\CC)C", "CC=S(CC)C"],
+    ]) {
+      expect(given(settingCisTrans(fromSmiles(a))), a).toBe(0);
+      expect(text(fromSmiles(a)), a).toBe(text(fromSmiles(b)));
+      expect(one(a, b, none), a).toBe(true);
+    }
+  });
+
+  it("a phosphorus ylide and a ruthenium carbene (a Grubbs catalyst's Ru=CHPh): none to the symmetry too, one identity as before", () => {
+    for (const [a, b] of [
+      ["C/C=P(/C)(C)C", "C/C=P(\\C)(C)C"],
+      ["Cl[Ru](Cl)(P(C)(C)C)(P(C)(C)C)=C/c1ccccc1", "Cl[Ru](Cl)(P(C)(C)C)(P(C)(C)C)=C\\c1ccccc1"],
+    ]) {
+      expect(given(settingCisTrans(fromSmiles(a))), a).toBe(0);
+      expect(one(a, b), a).toBe(true);
+    }
+  });
+
+  it("(E)- and (Z)-propanethial S-oxide (a sulfine: its S of two neighbours and a lone pair), a disilene, a C=C, an N=N and a C=N: kept, two identities each", () => {
+    for (const [a, b] of [
+      ["CC/C=S/O", "CC/C=S\\O"],
+      ["C/[Si](c1ccccc1)=[Si](/C)c1ccccc1", "C/[Si](c1ccccc1)=[Si](\\C)c1ccccc1"],
+      ["C/C=C/C", "C/C=C\\C"],
+      ["C/N=N/C", "C/N=N\\C"],
+      ["C/C=N/O", "C/C=N\\O"],
+    ]) {
+      expect(given(settingCisTrans(fromSmiles(a))), a).toBe(1);
+      expect(one(a, b), a).toBe(false);
+    }
+  });
+
+  it("an end's lone pairs counted with its charge: an iminium's N+ (three neighbours, no lone pair) kept, the two forms two identities", () => {
+    expect(given(settingCisTrans(fromSmiles("C/C=[N+](/C)CC")))).toBe(1);
+    expect(one("C/C=[N+](/C)CC", "C/C=[N+](\\C)CC")).toBe(false);
+  });
+});

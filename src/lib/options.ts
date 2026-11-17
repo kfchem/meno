@@ -28,6 +28,12 @@ type OptionBase = {
    * (docs/CONVERSATIONS.md, *Meno's tools*).
    */
   person?: true;
+  /**
+   * That a step's value for it may be taken, entry by entry, from a property the entry carries (docs/WORKFLOWS.md, *Options from
+   * a property*) - Meno's own options' alone, each that is its entry's own to take (a torsion's strength); a plugin's number and
+   * text options each may (lib/boundOptions `bindable`).
+   */
+  fromProperty?: true;
 };
 /** The parts of Render's card, in its order: what the molecules look like, how it is rendered, the scene round them, a film's motion. */
 export const OPTION_SECTIONS = ["look", "render", "scene", "motion"] as const;
@@ -65,7 +71,8 @@ export type NumberOption = OptionBase & {
   from?: Known;
   unset?: number;
 };
-export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
+/** `unit`: the unit a number typed in it is in, where it is one (a strength's) - Meno's units table's name or label - so that one taken from a property is converted to it. */
+export type TextOption = OptionBase & { type: "text"; default: string; from?: Known; unit?: string };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
  * Lines of text, one item to a line - Meno's own kinds' alone: a plugin's

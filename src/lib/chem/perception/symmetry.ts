@@ -16,8 +16,9 @@
  * - the canonical text (`canonicalText`, `canonicalWritten`, `canonicalSearched`): equal for two orders of one structure when
  *   the search was complete; never equal for two structures.
  * - a cis or trans that sets nothing is read as none (`settingCisTrans`): a double bond with an end whose two other groups are
- *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there; an
- *   allene's axis with such an end likewise.
+ *   alike is no stereo unit, so whichever way it was given, every reading here is that of the structure given none there; nor
+ *   is one with an end that is no trigonal-planar centre (a sulfonium or sulfoxonium ylide's S, a sulfoximine's, a metal); an
+ *   allene's axis with an end of two alike groups likewise.
  *
  * What an orbit is NOT:
  * - not "atoms alike to a chemist". An automorphism here keeps every centre's sense, so orbits are the homotopic sets: right for
@@ -33,6 +34,8 @@ import type { ChemGraph } from "./graph";
 import type { Cumulated } from "./stereo/types";
 import { parity } from "./stereo/geometry";
 import { runsThrough } from "./stereo/runs";
+import { metal } from "./elements";
+import { lonePairOfThree } from "./stereo/lonePairs";
 
 /**
  * What the symmetry reads: the core's graph, with an odd run of cumulated double bonds set cis or trans (a butatriene's), and
@@ -62,13 +65,24 @@ const adjacency = (input: SymmetryInput) => {
  * whichever neighbour a drawing or a reading took for its reference, one
  * configuration is written one way.
  */
-const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: number, partner: number, ref: number): number => {
-  const others = adj[at].filter((e) => e.to !== partner).map((e) => e.to);
+const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: number, partner: number, ref: number): number =>
+  setAgainst(
+    adj[at].filter((e) => e.to !== partner).map((e) => e.to),
+    r,
+    ref,
+  );
+
+/**
+ * `endSet` for an end whose neighbours other than its partner are
+ * `others`, ranked by `r`: 1 where `ref` is the lower-ranked of them (or
+ * the only one), -1 the higher, 0 where they share a rank.
+ */
+function setAgainst(others: readonly number[], r: readonly number[], ref: number): number {
   if (others.length < 2) return 1;
   const other = others.find((o) => o !== ref);
   if (other == null) return 1;
   return Math.sign(r[other] - r[ref]) || 0;
-};
+}
 
 /** The atom an axis's or a cumulene's end runs on through to its other end (perception/stereo/runs `runsThrough`); the other end where none. */
 const across = (adj: ReturnType<typeof adjacency>, end: number, other: number): number => runsThrough(adj[end], other) ?? other;
@@ -132,11 +146,11 @@ function classedNow(input: SymmetryInput): Classed {
   const rank = ranksOf(first);
   const refine = (r: number[]): number[] => {
     for (;;) {
-      const keys = r.map((v, i) =>
-        [v, ...adj[i].map((e) => `${r[e.to]}:${e.order}`).sort(), ...pis[i].map((m) => `${r[m]}:pi`).sort()].join(","),
+      const now = r;
+      const { next, after, before } = parted(now, (i) =>
+        [now[i], ...adj[i].map((e) => `${now[e.to]}:${e.order}`).sort(), ...pis[i].map((m) => `${now[m]}:pi`).sort()].join(","),
       );
-      const next = ranksOf(keys.map((k, i) => `${String(r[i]).padStart(6, "0")}/${k}`));
-      if (classes(next) === classes(r)) return next;
+      if (after === before) return next;
       r = next;
     }
   };
@@ -155,42 +169,42 @@ function classedNow(input: SymmetryInput): Classed {
       partnerOf.set(p, [...(partnerOf.get(p) ?? []), q]);
       partnerOf.set(q, [...(partnerOf.get(q) ?? []), p]);
     }
-  const stereoKeys = (r: number[]): string[] =>
-    input.atoms.map((a, i) => {
-      const parts: (number | string)[] = [];
-      if (a.tetra) {
-        const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
-        parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
-      }
-      // (each end's reference against its other neighbour: endSet)
-      for (const b of stereoAt[i]) {
-        const [p, q] = b.stereo!.refs;
-        parts.push((b.stereo!.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, p) * endSet(adj, r, b.b, b.a, q));
-      }
-      // (and an axis of chirality's sense, likewise)
-      for (const x of input.axes ?? []) {
-        if (!x.atoms.includes(i)) continue;
-        const [p, q] = x.refs;
-        const [u, v] = x.atoms;
-        parts.push(x.sense * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
-      }
-      // (and an odd cumulene's cis or trans, as a double bond's, at its ends)
-      for (const x of input.cumulated ?? []) {
-        if (!x.atoms.includes(i)) continue;
-        const [p, q] = x.refs;
-        const [u, v] = x.atoms;
-        parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
-      }
-      // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N. A
-      //  bridge is a donor of two metals, across one donor at each: those ranks in order, not in the order the input lists the
-      //  metals - else the bridges of a dimer ranked by the order of its atoms, two texts for one structure: found in the chemistry check)
-      for (const v of (partnerOf.get(i) ?? []).map((q) => r[q]).sort((p, q) => p - q)) parts.push(`x${v}`);
-      return parts.join(",");
-    });
+  const stereoKey = (r: number[], i: number): string => {
+    const a = input.atoms[i];
+    const parts: (number | string)[] = [];
+    if (a.tetra) {
+      const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
+      parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
+    }
+    // (each end's reference against its other neighbour: endSet)
+    for (const b of stereoAt[i]) {
+      const [p, q] = b.stereo!.refs;
+      parts.push((b.stereo!.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, p) * endSet(adj, r, b.b, b.a, q));
+    }
+    // (and an axis of chirality's sense, likewise)
+    for (const x of input.axes ?? []) {
+      if (!x.atoms.includes(i)) continue;
+      const [p, q] = x.refs;
+      const [u, v] = x.atoms;
+      parts.push(x.sense * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
+    }
+    // (and an odd cumulene's cis or trans, as a double bond's, at its ends)
+    for (const x of input.cumulated ?? []) {
+      if (!x.atoms.includes(i)) continue;
+      const [p, q] = x.refs;
+      const [u, v] = x.atoms;
+      parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
+    }
+    // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N. A
+    //  bridge is a donor of two metals, across one donor at each: those ranks in order, not in the order the input lists the
+    //  metals - else the bridges of a dimer ranked by the order of its atoms, two texts for one structure: found in the chemistry check)
+    for (const v of (partnerOf.get(i) ?? []).map((q) => r[q]).sort((p, q) => p - q)) parts.push(`x${v}`);
+    return parts.join(",");
+  };
   const withStereo = (r: number[]): number[] => {
     for (;;) {
-      const keys = stereoKeys(r);
-      const next = refine(ranksOf(r.map((v, i) => `${String(v).padStart(6, "0")}/${keys[i]}`)));
+      const now = r;
+      const next = refine(parted(now, (i) => stereoKey(now, i)).next);
       if (classes(next) === classes(r)) return next;
       r = next;
     }
@@ -319,6 +333,15 @@ export function canonicalSearched(input: SymmetryInput): { text: string; ranks: 
  * - A symmetry found is one, so two groups found alike are, whether the search ran its course or not; where it ran out of
  *   steps without finding them alike, the unit is kept as given.
  * Each unit is asked of `input` with it alone left out; none is taken off before the others are asked.
+ *
+ * Nor does a cis or trans set anything where an end is no trigonal-planar centre (`trigonal`): only where each end's
+ * neighbours, its hydrogens and its lone pairs make three (VSEPR) do the double bond and the groups on its ends lie in one
+ * plane, which a cis or trans needs. A C=C's, a C=N's, an N=N's, a silene's or a disilene's ends are; so is a sulfine's S (two
+ * neighbours and a lone pair: its E and Z are two compounds). A sulfonium ylide's S (three neighbours and a lone pair), a
+ * sulfoxonium ylide's or a sulfoximine's S (four neighbours), a phosphorus ylide's P (four) and a metal carbene's metal are
+ * not: their "double bond" is ylidic or dative, with no planar pi bond to hold a cis or trans, so none is read or written
+ * there, however it was given. The lone pairs are counted as the CIP counts them (lib/chem/lonePairCentres
+ * `lonePairOfThree`: the valence electrons less the charge, the bonds' orders and the hydrogens).
  */
 export function settingCisTrans<T extends SymmetryInput>(input: T): T {
   const units = [
@@ -346,6 +369,17 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
     ];
   };
   const others = (end: number, on: number) => adj[end].map((e) => e.to).filter((t) => t !== on);
+  // (an end that is a trigonal-planar centre: no metal, and its neighbours, hydrogens and lone pairs three at most)
+  const trigonal = (end: number): boolean => {
+    const a = input.atoms[end];
+    // (the element alone: a reader's graph writes a mass number or unpaired electrons after it - perception/stereo/from2d `drawnGraph`)
+    const el = a.el.replace(/[\^.].*$/, "");
+    if (metal.has(el)) return false;
+    const hs = Math.max(0, a.hs ?? 0);
+    const groups = adj[end].length + hs;
+    if (groups > 3) return false;
+    return !(groups === 3 && lonePairOfThree(el, a.charge ?? 0, adj[end].length, adj[end].reduce((t, e) => t + e.order, 0), hs));
+  };
   // (what an atom bonded to `end` alone is, as the ranks first read it: element, charge, H count, its bond's order; none where
   //  it is a star's, a metal's donor across from another, or an axis's or a run's own)
   const placed = new Set([
@@ -361,6 +395,7 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
   let constitution: number[] | null = null;
   const setsNothing = (u: (typeof units)[number]): boolean => {
     const [[p, pn], [q, qn]] = endsOf(u);
+    if (!trigonal(p) || !trigonal(q)) return true;
     const left: SymmetryInput =
       "bond" in u
         ? { ...input, bonds: input.bonds.map((b, k) => (k === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) }
@@ -456,7 +491,7 @@ function search(start: number[], n: number, refined: (r: number[]) => number[], 
         break;
       }
       budget--;
-      const leaf = search(refined(ranksOf(r.map((v, i) => `${String(v).padStart(6, "0")}/${i === m ? 0 : 1}`))));
+      const leaf = search(refined(parted(r, (i) => (i === m ? "0" : "1")).next));
       tried.push(m);
       for (const g of leaf.symmetries) {
         symmetries.push(g);
@@ -525,6 +560,35 @@ function written(input: SymmetryInput, what: readonly string[], r: readonly numb
     .map((x) => `${pad(r[x.metal])}:${x.pairs.map(([p, q]) => (r[p] < r[q] ? pad(r[p]) + pad(r[q]) : pad(r[q]) + pad(r[p]))).sort().join(".")}`)
     .sort();
   return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}${cumulated.length ? `|${cumulated.join(" ")}` : ""}${arranged.length ? `|m${arranged.join(" ")}` : ""}`;
+}
+
+/**
+ * Each atom's rank (`r`) parted by what `key` says of it: `ranksOf` of the keys `${r[i]} padded to six}/${key(i)}` - the ranks
+ * first, then the keys within each, sorted - with a key asked only of an atom whose rank it shares with another, so that a
+ * refinement pays only for the atoms still alike. With how many ranks there are after, and before.
+ */
+function parted(r: readonly number[], key: (i: number) => string): { next: number[]; after: number; before: number } {
+  const members = new Map<number, number[]>();
+  r.forEach((v, i) => {
+    const m = members.get(v);
+    if (m) m.push(i);
+    else members.set(v, [i]);
+  });
+  const next = new Array<number>(r.length);
+  let rank = 0;
+  for (const v of [...members.keys()].sort((p, q) => p - q)) {
+    const atoms = members.get(v)!;
+    if (atoms.length === 1) {
+      next[atoms[0]] = rank++;
+      continue;
+    }
+    const keys = atoms.map(key);
+    const distinct = [...new Set(keys)].sort();
+    const at = new Map(distinct.map((k, i) => [k, rank + i]));
+    atoms.forEach((a, i) => (next[a] = at.get(keys[i])!));
+    rank += distinct.length;
+  }
+  return { next, after: rank, before: members.size };
 }
 
 /** Each key's rank among the distinct keys, in sorted order. */

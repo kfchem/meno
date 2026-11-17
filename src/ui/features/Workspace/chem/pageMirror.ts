@@ -14,7 +14,7 @@
  */
 import type { IdentityInput } from "../../../../lib/chem/identity";
 import { identitiesAsked } from "./identityOff";
-import type { Configuration } from "../../../../lib/chem/stereoOpen";
+import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
@@ -31,8 +31,8 @@ export function mirroredPart(part: Model): Model {
 }
 
 /** A configuration seen in a mirror: each centre's sense turned; a double bond's cis or trans as it is. */
-export function mirroredConfiguration(c: Configuration): Configuration {
-  return { centres: c.centres.map((x) => ({ ...x, sense: x.sense > 0 ? -1 : 1 })), doubles: c.doubles };
+export function mirroredConfiguration<C extends IsomerConfiguration>(c: C): C {
+  return { ...c, centres: c.centres.map((x) => ({ ...x, sense: x.sense > 0 ? -1 : 1 })) };
 }
 
 /**
@@ -45,7 +45,7 @@ export function mirroredConfiguration(c: Configuration): Configuration {
  * not read, a label written out, a ring bound to a metal through a star -
  * so that nothing is taken for a mirror image that is not one.
  */
-export async function madeAs(part: Model, isomer: Configuration): Promise<"itself" | "mirror"> {
+export async function madeAs(part: Model, isomer: IsomerConfiguration): Promise<"itself" | "mirror"> {
   if (part.atoms.some((a) => !isElementSymbol(a.el) || a.abbrev) || part.bonds.some((b) => b.endpoints?.length)) return "itself";
   const { input, unread } = identityInputOf(part);
   if (unread.length) return "itself";
@@ -57,7 +57,7 @@ export async function madeAs(part: Model, isomer: Configuration): Promise<"itsel
 }
 
 /** `input` with `isomer`'s centres and double bonds given their configurations - none where one names an atom or bond it does not have. */
-function withConfiguration(input: IdentityInput, isomer: Configuration): IdentityInput | null {
+export function withConfiguration(input: IdentityInput, isomer: IsomerConfiguration): IdentityInput | null {
   const atoms = input.atoms.map((a) => ({ ...a }));
   for (const c of isomer.centres) {
     const a = atoms[c.atom];
@@ -113,7 +113,7 @@ export function reflectedConformers<C extends Omit<Conformers, "chosen">>(c: C):
  * (a reflection that did not give the stereoisomer after all) says it is
  * to be made itself.
  */
-export function hasConfiguration(c: Pick<Conformers, "frames">, part: Model, isomer: Configuration): boolean {
+export function hasConfiguration(c: Pick<Conformers, "frames">, part: Model, isomer: IsomerConfiguration): boolean {
   const { input } = identityInputOf(part);
   const own = withConfiguration(input, isomer);
   if (!own) return false;

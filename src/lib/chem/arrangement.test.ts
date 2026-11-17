@@ -12,6 +12,7 @@ import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { ACROSS_FOUR, arrangementKey, arrangementsIn3d, pairingDrawn, pairingIn3d } from "./arrangement";
 import { arrangementOpen, constitutionKey, filledIn, identityText } from "./identity";
 import { symmetryClasses } from "../layout/canonical";
+import { measured } from "../../testing/timeouts";
 
 /** The structure's one metal, and its donors in the order of its bonds. */
 function metalOf(g: LayoutInput): { m: number; donors: number[] } {
@@ -233,7 +234,8 @@ describe("a metal's donors across, in identity", () => {
       const given = { ...g, arrangements: [{ metal: m, pairs: pairings(donors.length)[0].map(([p, q]) => [donors[p], donors[q]] as const) }] };
       expect(identityText(given)).toBe(identityText(g));
     }
-  });
+    // (PdCl2(PPh3)2, Pd(PPh3)4 and their kin settled: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_400));
 
   it("each metal of a structure is asked on its own: an open one and one not, whichever is asked first", () => {
     // (a hexaammine Co, never open, beside a Pt(NH3)2Cl2 with none given, open: in either order of the parts, and of asking)
@@ -264,6 +266,57 @@ describe("a metal's donors across, in identity", () => {
     expect(across(written, true)).toBe(across(plain, true));
     expect(across(written, false)).toBe(across(plain, false));
     expect(across(written, true)).not.toBe(across(written, false));
+  });
+
+  it("a ligand held flat sets its donors across: a porphyrin, terpyridine and its kin closed; cyclam, dien, salen and CH2 pincers open", () => {
+    // (each ligand from its SMILES, every donor - by `pick` - bonded to the metal, its H given up; then single donors)
+    const complex = (el: string, ligands: [string, (g: LayoutInput, i: number) => boolean][], extra: string[]) => {
+      const atoms: LayoutInput["atoms"][number][] = [];
+      const bonds: LayoutInput["bonds"][number][] = [];
+      const donors: number[] = [];
+      for (const [smiles, pick] of ligands) {
+        const l = fromSmiles(smiles);
+        const at = atoms.length;
+        atoms.push(...l.atoms.map((a) => ({ ...a })));
+        bonds.push(...l.bonds.map((b) => ({ ...b, a: b.a + at, b: b.b + at })));
+        l.atoms.forEach((_, i) => pick(l, i) && donors.push(i + at));
+      }
+      const m = atoms.length;
+      atoms.push({ el, hs: 0 } as LayoutInput["atoms"][number]);
+      for (const d of donors) {
+        if (atoms[d].hs) atoms[d] = { ...atoms[d], hs: atoms[d].hs! - 1 };
+        bonds.push({ a: m, b: d, order: 1 } as LayoutInput["bonds"][number]);
+      }
+      for (const x of extra) {
+        bonds.push({ a: m, b: atoms.length, order: 1 } as LayoutInput["bonds"][number]);
+        atoms.push({ el: x, hs: 0 } as LayoutInput["atoms"][number]);
+      }
+      return arrangementOpen({ atoms, bonds } as LayoutInput, m);
+    };
+    const n = (g: LayoutInput, i: number) => g.atoms[i].el === "N";
+    const nOrMinusO = (g: LayoutInput, i: number) => g.atoms[i].el === "N" || (g.atoms[i].el === "O" && g.atoms[i].charge === -1);
+    const nOrP = (g: LayoutInput, i: number) => g.atoms[i].el === "N" || g.atoms[i].el === "P";
+    const terpy = "c1ccc(-c2cccc(-c3ccccn3)n2)nc1";
+    const bpy = "c1ccc(-c2ccccn2)nc1";
+    const closed: [string, ReturnType<typeof complex>][] = [
+      ["Fe(porphine)Cl2", complex("Fe", [["c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)[nH]5)n4)[nH]3", n]], ["Cl", "Cl"])],
+      ["Ru(terpy)Cl3", complex("Ru", [[terpy, n]], ["Cl", "Cl", "Cl"])],
+      ["[Ru(terpy)2]2+", complex("Ru", [[terpy, n], [terpy, n]], [])],
+      ["[Ru(terpy)(bpy)Cl]+", complex("Ru", [[terpy, n], [bpy, n]], ["Cl"])],
+      ["a 2,6-bis(imino)pyridine's CoCl3", complex("Co", [["CC(=NC)c1cccc(C(C)=NC)n1", n]], ["Cl", "Cl", "Cl"])],
+      ["dipicolinate's CoCl3", complex("Co", [["[O-]C(=O)c1cccc(n1)C(=O)[O-]", nOrMinusO]], ["Cl", "Cl", "Cl"])],
+    ];
+    for (const [name, open] of closed) expect([name, open]).toEqual([name, false]);
+    const left: [string, ReturnType<typeof complex>][] = [
+      ["[Co(cyclam)Cl2]+", complex("Co", [["C1CNCCNCCCNCCNC1", n]], ["Cl", "Cl"])],
+      ["Co(dien)Cl3", complex("Co", [["NCCNCCN", n]], ["Cl", "Cl", "Cl"])],
+      ["Ru(bpy)2Cl2", complex("Ru", [[bpy, n], [bpy, n]], ["Cl", "Cl"])],
+      ["a PNP pincer's with CH2 arms, Cl3", complex("Co", [["CP(C)Cc1cccc(CP(C)C)n1", nOrP]], ["Cl", "Cl", "Cl"])],
+      ["[Fe(salen)Cl2]-", complex("Fe", [["[O-]c1ccccc1C=NCCN=Cc1ccccc1[O-]", nOrMinusO]], ["Cl", "Cl"])],
+      // (an NH between the rings on each arm: a link of single bonds, not held flat for sure - fac or mer)
+      ["a 2,6-bis(2-pyridylamino)pyridine's CoCl3", complex("Co", [["c1ccc(Nc2cccc(Nc3ccccn3)n2)nc1", (g, i) => g.atoms[i].el === "N" && !g.atoms[i].hs]], ["Cl", "Cl", "Cl"])],
+    ];
+    for (const [name, open] of left) expect([name, open]).toEqual([name, true]);
   });
 
   it("a structure with no metal of four or six donors is written as it always was", () => {

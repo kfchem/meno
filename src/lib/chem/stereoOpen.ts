@@ -11,8 +11,13 @@ import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
-import { FLAT_VOLUME_3D, parity, sideOfLine, signedVolume } from "./perception/stereo/geometry";
+import { FLAT_VOLUME_3D, sideOfLine, signedVolume } from "./perception/stereo/geometry";
 import { runsOf } from "./perception/stereo/runs";
+import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
+import { readStereo, type DrawnAtom, type DrawnBond } from "./perception/stereo/from2d";
+
+// (a configuration's types and key: the core's, one definition - perception/stereo/configuration)
+export { configurationKey, NO_CONFIGURATION, type Configuration, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredDouble, type ConfiguredGroup } from "./perception/stereo/configuration";
 
 /** An atom as the rules read it: its element and charge, and its hydrogens where they are given (else by its valence). */
 export type StereoAtom = { el: string; charge?: number; hs?: number };
@@ -31,7 +36,7 @@ export const MOVING_CN = {
 export type MovingWhy = keyof typeof MOVING_CN;
 
 /** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule), aromatic bonds as a Kekulé structure has them (lib/chem/kekulize `valenceOrders`). */
-function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
+export function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
   const sum = atoms.map(() => 0);
   const orders = valenceOrders(atoms, bonds);
   bonds.forEach((b, k) => {
@@ -183,7 +188,7 @@ export function configuredFrom(
   places: Readonly<Record<number, Place>>,
   openAtoms: readonly number[],
   openBonds: readonly number[],
-): { centres: { atom: number; neighbours: number[]; sense: 1 | -1 }[]; doubles: { bond: number; ends: [number, number]; cis: boolean }[] } {
+): IsomerConfiguration {
   const around = new Map<number, number[]>();
   for (const b of bonds) {
     around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
@@ -227,40 +232,13 @@ export const EXAMINE_MS = 30_000;
 /** An element that could be stereogenic, as the toolkit perceives it: its kind, the atom or bond it is on, and how its configuration is drawn - given, not given, or drawn as not known (a wavy bond, a double bond of either). */
 export type StereoElement = { kind: "centre" | "double" | "axis" | "cumulene" | "other"; at: number; state: "specified" | "unspecified" | "unknown" };
 
-/** A centre's configuration: its neighbours, in the order named, and the sign of the volume the first three span seen from it. */
-export type ConfiguredCentre = { atom: number; neighbours: number[]; sense: 1 | -1 };
-/** A double bond's: an atom bonded to each end, and whether the two are on the same side. */
-export type ConfiguredDouble = { bond: number; ends: [number, number]; cis: boolean };
-/** Some of a structure's elements given configurations, in Meno's terms: the plugin makes them its own toolkit's. */
-export type Configuration = { centres: ConfiguredCentre[]; doubles: ConfiguredDouble[] };
-
-/**
- * One configuration, as a string that two of the same give: each centre by
- * its atom and its sense taken over its neighbours in ascending order (the
- * sense turns with the parity of the order they were named in), each double
- * bond by its bond, its ends (in ascending order: a pair has no first) and
- * whether they are cis - the elements in the order of their atoms and bonds.
- */
-export function configurationKey(c: Configuration): string {
-  const centres = [...c.centres]
-    .sort((p, q) => p.atom - q.atom)
-    .map((x) => {
-      const sorted = [...x.neighbours].sort((p, q) => p - q);
-      // (the swaps that put the neighbours in order)
-      const odd = parity(x.neighbours) === -1;
-      return [x.atom, sorted, odd ? -x.sense : x.sense];
-    });
-  const doubles = [...c.doubles].sort((p, q) => p.bond - q.bond).map((x) => [x.bond, [...x.ends].sort((p, q) => p - q), x.cis]);
-  return JSON.stringify([centres, doubles]);
-}
-
 /**
  * Whether a configuration tells apart all that the plugin enumerates
  * (`open`: the centres and double bonds it was asked of): every open centre
  * and every open double bond has its configuration in it - but an axis's
  * (`cumulenes`), which a configuration never gives.
  */
-function configuresAllOf(c: Configuration, open: Pick<StereoLeft, "atoms" | "bonds" | "cumulenes">): boolean {
+function configuresAllOf(c: IsomerConfiguration, open: Pick<StereoLeft, "atoms" | "bonds" | "cumulenes">): boolean {
   if (!c.centres.length && !c.doubles.length) return false;
   const atoms = new Set(c.centres.map((x) => x.atom));
   const bonds = new Set(c.doubles.map((x) => x.bond));
@@ -271,15 +249,15 @@ function configuresAllOf(c: Configuration, open: Pick<StereoLeft, "atoms" | "bon
  * Stereoisomers each once, by their configuration, the first of each kept:
  * the toolkit enumerates what Meno does not see, by its own rules, and its
  * isomers then differ only there: a lone pair's inversion at an aziridine's
- * N, with a carbon centre beside it, and the inversion of an enhanced
- * stereo group (AND, OR: its atoms are specified, so a configuration never
- * shows them; made as drawn). An
+ * N, with a carbon centre beside it. The halves of an AND or OR group stay
+ * apart: their centres are in the configuration read back where a
+ * structure has groups (Workspace/chem/openStereo `stereoisomersOf`). An
  * isomer whose configuration leaves some of what the toolkit enumerates
  * out (`open`: an allene's axis, or a centre it gives none of) is kept
  * whatever - the others could differ there, and merged would be dropped
  * unseen - and so is one that gives no configuration at all.
  */
-export function distinctIsomers<T extends { configured: Configuration }>(isomers: readonly T[], open: Pick<StereoLeft, "atoms" | "bonds" | "cumulenes">): T[] {
+export function distinctIsomers<T extends { configured: IsomerConfiguration }>(isomers: readonly T[], open: Pick<StereoLeft, "atoms" | "bonds" | "cumulenes">): T[] {
   const seen = new Set<string>();
   return isomers.filter((i) => {
     if (!configuresAllOf(i.configured, open)) return true;
@@ -292,7 +270,7 @@ export function distinctIsomers<T extends { configured: Configuration }>(isomers
 
 /** What the plugin made of a structure's stereoisomers, as Meno asked for them (Workspace/chem/openStereo `stereoisomersOf`). */
 export type IsomersMade =
-  | { isomers: { configured: Configuration; smiles: string; molblock?: string; error?: string }[]; free: boolean }
+  | { isomers: { configured: IsomerConfiguration; smiles: string; molblock?: string; configuration?: IsomerConfiguration; error?: string }[]; free: boolean }
   | { tooMany: { counted: number; bound: number } }
   | { tooLong: true };
 
@@ -331,7 +309,7 @@ export function stereoLeft(elements: readonly StereoElement[], atoms: readonly S
 }
 
 /** What is still left open once `configured` gives some of it a configuration: the rest, its cumulated ones and their runs again. */
-export function leftOver(left: StereoLeft, configured: Configuration, bonds: readonly StereoBond[]): StereoLeft {
+export function leftOver(left: StereoLeft, configured: IsomerConfiguration, bonds: readonly StereoBond[]): StereoLeft {
   const centres = new Set(configured.centres.map((c) => c.atom));
   const doubles = new Set(configured.doubles.map((d) => d.bond));
   const rest = left.bonds.filter((i) => !doubles.has(i));
@@ -368,4 +346,65 @@ export function stereoGraphOf(molblocks: readonly string[]): { atoms: StereoAtom
     });
   }
   return { atoms, bonds };
+}
+
+/**
+ * A structure's AND and OR groups as its drawing has them (lib/chem/perception/stereo/configuration `groupsIn`), its parts' MOL blocks read
+ * as one: each group whose every centre the drawing's wedges read (lib/chem/perception/stereo/from2d, Meno's reading), to be turned as a
+ * whole (`groups`), and each of those centres as drawn (`drawn`); each group one of whose centres does not read, with that atom (`held`:
+ * made as drawn, never turned in part); the groups that hold a bond (`onBonds`: a bond's configuration is not turned); and every centre the
+ * drawing reads (`read`), by atom. Null where a block cannot be read.
+ */
+export type DrawnGroups = {
+  groups: ConfiguredGroup[];
+  drawn: ConfiguredCentre[];
+  held: { group: ConfiguredGroup; atom: number }[];
+  onBonds: GroupOnBond[];
+  read: Map<number, ConfiguredCentre>;
+};
+
+/** No group. */
+export const NO_GROUPS: DrawnGroups = { groups: [], drawn: [], held: [], onBonds: [], read: new Map() };
+
+export function drawnGroupsOf(molblocks: readonly string[]): DrawnGroups | null {
+  const graph = stereoGraphOf(molblocks);
+  if (!graph) return null;
+  const all: ConfiguredGroup[] = [];
+  const onBonds: GroupOnBond[] = [];
+  const atoms: DrawnAtom[] = [];
+  const bonds: DrawnBond[] = [];
+  const hs = implicitOf(graph.atoms, graph.bonds);
+  for (const block of molblocks) {
+    const ct = readMolfile(block);
+    if (!ct) return null;
+    const at = atoms.length;
+    const found = groupsIn(ct.collections, at);
+    // (a group of the same kind and number in two parts is two groups: each part's own)
+    all.push(...found.groups);
+    for (const g of found.onBonds) if (!onBonds.some((x) => x.kind === g.kind && x.n === g.n)) onBonds.push(g);
+    ct.atoms.forEach((a, i) => atoms.push({ x: a.x, y: a.y, el: a.symbol, ...(a.charge ? { charge: a.charge } : {}), hs: hs[at + i] ?? 0 }));
+    for (const b of ct.bonds) {
+      if (b.endpoints?.length) continue;
+      bonds.push({
+        a: b.a1 + at,
+        b: b.a2 + at,
+        order: b.type,
+        ...(b.stereo === "up" || b.stereo === "down" ? { wedge: { narrow: b.a1 + at, stereo: b.stereo } } : {}),
+        ...(b.stereo === "either" ? { either: true } : {}),
+      });
+    }
+  }
+  if (!all.length && !onBonds.length) return NO_GROUPS;
+  // (a flat drawing's wedges, as Meno reads them; one drawn in perspective is not read here, and its group is made as drawn)
+  const tetra = readStereo(atoms, bonds).tetra;
+  const read = new Map<number, ConfiguredCentre>();
+  for (const [atom, t] of tetra) read.set(atom, { atom, neighbours: t.neighbours.filter((n) => n >= 0), sense: t.volume });
+  const groups: ConfiguredGroup[] = [];
+  const held: DrawnGroups["held"] = [];
+  for (const g of all) {
+    const unread = g.centres.find((c) => !read.has(c));
+    if (unread != null) held.push({ group: g, atom: unread });
+    else groups.push(g);
+  }
+  return { groups, drawn: groups.flatMap((g) => g.centres.map((c) => read.get(c)!)), held, onBonds, read };
 }

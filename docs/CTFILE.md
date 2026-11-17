@@ -54,7 +54,9 @@ title, its first line; the record's data items are not kept:
   back.
 - **Collections** (V3000): enhanced stereo (MDLV30/STEABS, STERACn,
   STERELn, and the bond collections STEBABS, STEBRACn, STEBRELn),
-  highlighting, a file's own.
+  highlighting, a file's own. An AND or OR group of centres is made in
+  3D, and by *Stereoisomers*, as each of its halves; a group on a bond is
+  made as drawn, said so (WORKFLOWS.md, *Stereoisomers is Meno's*).
 - **The chiral flag**, link atoms, Rgroup definitions and their logic.
 - **Rxnfiles**, V2000 (`$MOL` blocks) and V3000 (BEGIN REACTANT / PRODUCT /
   REAGENT blocks), their molecules in the file's order: reactants,
@@ -111,6 +113,16 @@ holds whole: the file is read (before, either failed as it was read).
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
 atoms at its ends, as a dative bond does not: an ammine stays NH3.
 
+Nor is a hydrogen bond a bond of the structure for anything Meno reads of
+it (`ofTheStructure`, lib/chem/perception/graph): it closes no ring, so the
+double bond of an enol it closes a ring of six round keeps its cis or trans;
+it joins no two molecules, so a water bound to an enol by one leaves the
+enol's identity as it is drawn apart; and it takes no place round an atom,
+so an amine's N it is drawn to keeps three bonds and no configuration. It is
+kept, drawn and laid out as before: Clean-up gives it to the layout as a
+bond. Until 2026-11-15 a hydrogen bond drawn so hid the double bond's cis or
+trans, and the molecules it joined had one identity.
+
 Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
 way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
 joins - an enol and a water, an acid's dimer - is two structures, made side
@@ -120,7 +132,11 @@ drawn apart is; one inside a molecule - an enol's own - is left out of it, so
 the H is placed by the molecule's own bonds. *Check structures* counts such
 a pair two parts, and a set round it holds two entries, each with its own
 identity; a structure's own hydrogen bond is not in its identity. Moved out
-of a frame's way, the pair moves together, as it is drawn. To take such a
+of a frame's way, the pair moves together, as it is drawn; and the frame
+round the two entries holds each one's labels as the page draws them,
+toward the hydrogen bond (a water's OH2 with its H2 away from it), and
+what is written of each beside its atoms (a stereo group's note, a
+bracket's label) where the structure alone would have it. To take such a
 pair as one entry - a complex, a salt - select both and *Make one
 structure* (EDITOR-2D.md, *One structure of several parts*): it is then one
 structure of two parts, one identity. Until 2026-11-15 the hydrogen bond went to the plugin as
@@ -161,7 +177,7 @@ large as its labels (GR-11.3).
 | Not a reacting centre (-1) | A small cross on the bond's middle. | Meno's own. |
 | A reacting centre otherwise (1), or no change (2) | "rc", "nc" beside the bond's middle. | Meno's own. |
 | An enhanced stereo group taking in all a structure's centres | Racemic (AND): "and enantiomer" beneath it; relative (OR): "or enantiomer"; absolute: nothing. | ST-6.3 prefers text beside the diagram; ST-6.5 rules out "rac" and "rel" as labels; ST-6.2: a diagram with no indicator shows the configuration drawn. |
-| Groups that do not (more than one in a structure, or of stereo bonds) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
+| Groups that do not (more than one in a structure, or of stereo bonds, or one beside a centre drawn with a wedge and in no group: its forms then diastereomers, no enantiomers) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
 
 A file with stereo bonds and the chiral flag set but no collections has
 each of its stereocentres (where a wedge starts) taken as absolute, as the

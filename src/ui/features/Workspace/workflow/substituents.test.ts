@@ -277,11 +277,11 @@ describe("the guard: a product's configurations read back against its template's
     const template = drawnFromSmiles("F[C@H](Cl)Br");
     expect(changedAt(template, template, new Map())).toEqual([]);
     const flipped = { ...template, bonds: template.bonds.map((b) => (b.stereo === "up" ? { ...b, stereo: "down" as const } : b.stereo === "down" ? { ...b, stereo: "up" as const } : b)) };
-    expect(changedAt(template, flipped, new Map())).toEqual([2]);
+    expect(changedAt(template, flipped, new Map())).toEqual([{ kind: "centre", at: 2 }]);
     const lost = { ...template, bonds: template.bonds.map(({ stereo: _s, ...b }) => b) };
-    expect(changedAt(template, lost, new Map())).toEqual([2]);
+    expect(changedAt(template, lost, new Map())).toEqual([{ kind: "centre", at: 2 }]);
     const plain = drawnFromSmiles("FC(Cl)Br");
-    expect(changedAt(plain, template, new Map())).toEqual([2]);
+    expect(changedAt(plain, template, new Map())).toEqual([{ kind: "centre", at: 2 }]);
   });
 
   it("takes a double bond's cis or trans that a product has no more - an end of two alike groups - for none lost, and one turned for one changed", () => {
@@ -291,6 +291,6 @@ describe("the guard: a product's configurations read back against its template's
     const methyl = { id: 99, x: template.atoms[2].x, y: template.atoms[2].y - 1, el: "C" } as (typeof template.atoms)[number];
     const made = { ...template, atoms: [...template.atoms, methyl], bonds: [...template.bonds, { ...template.bonds[0], id: 98, a: id(2), b: 99, order: 1 as const }] };
     expect(changedAt(template, made, new Map())).toEqual([]);
-    expect(changedAt(template, drawnFromSmiles("F/C=C\\C"), new Map())).toEqual([id(1)]);
+    expect(changedAt(template, drawnFromSmiles("F/C=C\\C"), new Map())).toEqual([{ kind: "double", at: [id(1), id(2)] }]);
   });
 });

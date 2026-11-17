@@ -43,7 +43,7 @@ import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/cal
 import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { membersSettled } from "./workflow/model";
+import { membersSettled, repeatsSettled } from "./workflow/model";
 import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
@@ -135,8 +135,14 @@ export type WorkspaceDocument = {
   nextConversationId?: number;
 };
 
-/** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
-export function isBlankDocument(doc: WorkspaceDocument): boolean {
+/** What `isBlankDocument` looks at: every kind of thing a page holds. */
+export type PageHeld = Pick<
+  WorkspaceDocument,
+  "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "texts" | "textsLost" | "pdfs" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "conversations" | "sets" | "steps"
+>;
+
+/** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no conversation, no workflow. */
+export function isBlankDocument(doc: PageHeld): boolean {
   return (
     !doc.model.atoms.length &&
     !doc.arrows.length &&
@@ -231,7 +237,7 @@ export function createWorkspaceDocument(
       const extentOf = extentIn?.(next);
       const held = heldSettled(next, before, extentOf);
       // (members as the edit leaves them, then each frame its members' room - where none is being dragged: workflow/fitFrames)
-      const members = membersSettled(withOneMagnification(held, before), before);
+      const members = repeatsSettled(membersSettled(withOneMagnification(held, before), before));
       return framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf);
     },
     cost: stepCost,

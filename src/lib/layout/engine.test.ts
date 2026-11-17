@@ -1037,7 +1037,8 @@ describe("a macrocycle through a block of fused rings", () => {
         expect(side(ra, b.a, b.b) === side(rb, b.a, b.b), smiles).toBe(b.stereo!.cis);
       }
     }
-  });
+    // (a long chain laid out round a block: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_800));
 
   it("draws rifampicin's naphthalene regular, its ansa chain round it, the hydrazone outside", () => {
     // started from the macrocycle, the naphthalene was squashed to fit it;
