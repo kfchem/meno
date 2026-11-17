@@ -1349,7 +1349,9 @@ All hover-based, as above.
   - Where: opposite the stereocentre's wedge or hash where it has one,
     in the widest gap between its bonds (GR-11.1); an E or Z beside its
     bond's middle (GR-11.2); and each a little way off the others, so that
-    two side by side do not read as one.
+    two side by side do not read as one, and off what the drawing says
+    beside its atoms - an enhanced stereo group's "and1", a mapping
+    number, a charge beside a vertex.
   - How far off its atom: a setting of the drawing style, *R and S:
     distance from the atom*, from the atom to the nearest of the letters,
     as a share of the labels' size. IUPAC puts them about half a capital's
