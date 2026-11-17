@@ -1,15 +1,15 @@
 /**
  * A structure's configuration as its source gives it, beside its drawing (docs/LAYOUT-2D.md, *A structure from a plugin*): a plugin's
  * reading of a SMILES, of a stereoisomer it made, of a molecule in 3D - each centre and double bond it holds one for, by the drawing block's
- * own atom and bond numbers (lib/chem/stereoOpen `Configuration`) - and Meno's own reading of a SMILES's allene axes and odd cumulenes. Meno
+ * own atom and bond numbers (lib/chem/stereoOpen `IsomerConfiguration`) - and Meno's own reading of a SMILES's allene axes and odd cumulenes. Meno
  * lays its drawing out from this, not from the plugin's picture: the picture is only places for Meno's engine to lay out again, and a lossy
  * one (a ring of 36 or more comes as a regular polygon, its centres stating nothing).
  */
-import type { Configuration, ConfiguredCentre, ConfiguredDouble } from "../../../../lib/chem/stereoOpen";
+import type { IsomerConfiguration, ConfiguredCentre, ConfiguredDouble } from "../../../../lib/chem/stereoOpen";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "../../../../lib/chem/perception/stereo/types";
 
 /** What a structure's source gives of its configuration: the plugin's centres and double bonds, where it sent them, and the text's axes and odd cumulenes. */
-export type Given = { axes: readonly Axial[]; cumulated: readonly Cumulated[]; configuration?: Configuration };
+export type Given = { axes: readonly Axial[]; cumulated: readonly Cumulated[]; configuration?: IsomerConfiguration };
 
 /**
  * The handedness of the drawing's frame, against the field's: a given centre's `sense` is +1 where det(n1 - c, n2 - c, n3 - c) is positive in
@@ -55,7 +55,7 @@ export function cisTransOfGiven(d: ConfiguredDouble, a: number, b: number, neigh
  * What a structure's source gives of its configuration : the text's axes and odd cumulenes, where it has any, and
  * the plugin's reading, where it sent one. None where there is neither: the drawing is then read, as a file's is.
  */
-export function givenOf(runs: Given | undefined, configuration: Configuration | undefined): Given | undefined {
+export function givenOf(runs: Given | undefined, configuration: IsomerConfiguration | undefined): Given | undefined {
   if (!runs && !configuration) return undefined;
   return { axes: runs?.axes ?? [], cumulated: runs?.cumulated ?? [], ...(configuration ? { configuration } : {}) };
 }
