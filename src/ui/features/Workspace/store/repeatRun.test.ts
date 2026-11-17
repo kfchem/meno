@@ -142,6 +142,36 @@ describe("a Repeat run pass by pass", () => {
   });
 });
 
+describe("a Repeat run with the page round it (found in review)", () => {
+  /** The labels of the document's edits from here on: each step's run is one "run". */
+  const counting = (doc: unknown) => {
+    const labels: string[] = [];
+    const d = doc as { edit: (label: string, fn: unknown, ...rest: unknown[]) => unknown };
+    const orig = d.edit.bind(d);
+    d.edit = (label: string, fn: unknown, ...rest: unknown[]) => {
+      labels.push(label);
+      return orig(label, fn, ...rest);
+    };
+    return labels;
+  };
+
+  it("Run all runs a step inside once per pass, none after the passes: the Repeat runs it", async () => {
+    const { st, doc } = page({ repeat: "until", most: 10 });
+    const labels = counting(doc);
+    await st().runAll();
+    expect(labels.filter((l) => l === "run")).toHaveLength(3);
+  });
+
+  it("says where a step inside failed, and ends there: never as run well", async () => {
+    const { st, r, f } = page({ repeat: "until", most: 4 });
+    st().updateStep(f, { options: { conditions: "this is no condition (((" } });
+    await st().runStep(r);
+    expect(st().steps.find((s) => s.id === f)!.ran?.ok).toBe(false);
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, said: expect.stringMatching(/^Filter failed in pass 1: /) });
+    expect(st().repeatPasses[r]).toBeUndefined();
+  });
+});
+
 describe("a Repeat whose frame a wire crosses", () => {
   it("refuses to run where a card was dragged into its frame with a wire from outside on it, saying why (found in review)", async () => {
     const { st, r, doc, input } = page({ repeat: "times", times: 2 });

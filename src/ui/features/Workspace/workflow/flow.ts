@@ -549,5 +549,13 @@ export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [..
 /** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
 export function allToRun(doc: Flow): number[] {
   const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
-  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
+  return heldByRepeats(doc, stale.flatMap((id) => [id, ...stepsAfter(doc, id)]));
+}
+
+/**
+ * Steps to run, each a Repeat holds taken as that Repeat, once: the Repeat runs the steps it holds, pass by pass, and none of them is
+ * run again on its own after it (found in review).
+ */
+export function heldByRepeats(doc: Flow, ids: readonly number[]): number[] {
+  return [...new Set(ids.map((id) => repeatHolding(doc, id) ?? id))];
 }

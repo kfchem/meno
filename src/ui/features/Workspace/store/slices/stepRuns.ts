@@ -43,7 +43,7 @@ import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from 
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, landing, repeatCrossing, repeatHolding, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
+import { allToRun, allWiresInto, chainTo, findSet, heldByRepeats, inputKey, inputOf, landing, repeatCrossing, repeatHolding, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
 import { REPEAT_IN, REPEAT_OUT, repeatRead, THIS_PASS } from "../../workflow/repeat";
 import { lastPass, passEntries, ranOut, startsFrom } from "../../workflow/repeatRun";
 import { setMolecules } from "../../workflow/entries";
@@ -284,6 +284,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const out: Omit<Molecule3D, "id" | "at">[] = [];
     let pass = 0;
     let ranOutCount = 0;
+    let broken: string | null = null;
     menoStops.delete(id);
     for (pass = 1; ; pass++) {
       const { go, spent } = passEntries(current, r, pass);
@@ -296,8 +297,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const s of inner) {
         if (menoStops.has(id) || !stepOf(doc.getState(), s)) break;
         await runOnce(s);
+        // (a step inside that failed ends the passes, and the Repeat says which and why - never read as a pass run well: found in review)
+        const ran = stepOf(doc.getState(), s)?.ran;
+        if (ran && !ran.ok && !menoStops.has(id)) {
+          broken = `${kindInfo(stepOf(doc.getState(), s)!.kind).name} failed in pass ${pass}: ${ran.said}`;
+          break;
+        }
       }
-      if (menoStops.has(id)) break;
+      if (menoStops.has(id) || broken) break;
       out.push(...landed("done"));
       again = landed("again");
       if (lastPass(r, pass, again.length)) break;
@@ -309,6 +316,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const { [id]: _done, ...rest } = prev.repeatPasses;
       return { ...prev, repeatPasses: rest };
     });
+    if (broken) return void fail(id, broken, at, key);
     // (still going round as its passes ran out - or as it was stopped: left by Out, marked so)
     const left = r.repeat === "until" && !again.length ? [] : again;
     out.push(...left.map(ranOut));
@@ -2177,7 +2185,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     menoWorking: {} as Record<number, { since: number; done: number; total: number }>,
     repeatPasses: {} as Record<number, { pass: number; of?: number; stopping?: true }>,
     runStep: (id: number) => runSteps([id]),
-    runFrom: (id: number) => runSteps([id, ...stepsAfter(doc.getState(), id)]),
+    runFrom: (id: number) => runSteps(heldByRepeats(doc.getState(), [id, ...stepsAfter(doc.getState(), id)])),
     runAll: () => runSteps(allToRun(doc.getState())),
     stopStep: (id: number) => {
       if (get().menoWorking[id]) menoStops.add(id);
