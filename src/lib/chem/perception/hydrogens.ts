@@ -11,9 +11,11 @@
  * Each answers another question: the count (`VALENCE`, `HIGHEST`) says how many hydrogens an under-bonded DRAWN atom silently carries; a
  * formula's (`FORMULA_VALENCE`, `FORMULA_HIGHER`) how many bonds an element takes in a formula read as a salt or a complex's ion; a
  * label's (`LABEL_VALENCES`) how many bonds an element of a typed group takes, so that "SnBu3" leaves one bond out; a carrier's
- * (`CARRIERS`) how many of one group an atom takes but its bond out (PPh2). Three more stay where they are, named, read by part 12's later
- * steps: OpenSMILES's organic subset (lib/chem/smiles `NORMAL_VALENCES`: that specification's table), a figure's bonds left
- * (lib/figure/read `BONDS_LEFT`) and the lone-pair and CIP tables (lib/chem/lonePairCentres, lib/chem/cip/prepare).
+ * (`CARRIERS`) how many of one group an atom takes but its bond out (PPh2); OpenSMILES's organic subset (`NORMAL_VALENCES`: that
+ * specification's table) the hydrogens a SMILES's plain atom is filled to. Moved here unchanged (part 12d), each imported back by the
+ * file whose table it is: OpenSMILES's (lib/chem/smiles), the lone pair's valence electrons (`PYRAMID_VALENCE`, perception/stereo/lonePairs)
+ * and the CIP's (`VALENCE_ELECTRONS`, `D_ORBITAL_VALENCE`, `octetValence`, lib/chem/cip/prepare) - electrons, not valences, so not in the
+ * table below. One more stays where it is, named, read by part 12c: a figure's bonds left (lib/figure/read `BONDS_LEFT`).
  *
  * | element | the count | a formula's | a label's | a carrier's | OpenSMILES | a figure's |
  * |---|---|---|---|---|---|---|
@@ -225,3 +227,66 @@ export const CARRIERS: Record<string, { valence: number; word: string }> = {
   Ge: { valence: 4, word: "germyl" },
   Sn: { valence: 4, word: "stannyl" },
 };
+
+/** The valences an organic-subset atom may have, as OpenSMILES fills its hydrogens to (lib/chem/smiles): that specification's table. */
+export const NORMAL_VALENCES: Record<string, number[]> = {
+  B: [3], C: [4], N: [3, 5], O: [2], P: [3, 5], S: [2, 4, 6], F: [1], Cl: [1], Br: [1], I: [1],
+};
+
+/** The valence electrons of the elements whose atom of three neighbours can have a lone pair: groups 15 and 16 (perception/stereo/lonePairs). */
+export const PYRAMID_VALENCE: ReadonlyMap<string, number> = new Map([
+  ["N", 5],
+  ["P", 5],
+  ["As", 5],
+  ["Sb", 5],
+  ["Bi", 5],
+  ["O", 6],
+  ["S", 6],
+  ["Se", 6],
+  ["Te", 6],
+]);
+
+/** Each element's valence electrons, for those of the main groups the CIP's conventions and the lone pairs ask about (lib/chem/cip/prepare). */
+export const VALENCE_ELECTRONS: Record<string, number> = {
+  H: 1,
+  B: 3,
+  C: 4,
+  N: 5,
+  O: 6,
+  F: 7,
+  Al: 3,
+  Si: 4,
+  P: 5,
+  S: 6,
+  Cl: 7,
+  Ga: 3,
+  Ge: 4,
+  As: 5,
+  Se: 6,
+  Br: 7,
+  In: 3,
+  Sn: 4,
+  Sb: 5,
+  Te: 6,
+  I: 7,
+  Tl: 3,
+  Pb: 4,
+  Bi: 5,
+  // (a noble gas's, for the lone pairs of a xenon or krypton fluoride: no centre - lib/chem/cip/index `refusedCentre`)
+  Kr: 8,
+  Xe: 8,
+};
+
+/** The elements the CIP's convention (b) reads, each with its valence uncharged: the third period on, groups 15 to 17 (lib/chem/cip/prepare). */
+export const D_ORBITAL_VALENCE: Record<string, number> = { P: 3, As: 3, Sb: 3, Bi: 3, S: 2, Se: 2, Te: 2, Cl: 1, Br: 1, I: 1 };
+
+/** The second period's, whose bonds an octet bounds (`octetValence`). */
+export const SECOND_PERIOD = new Set(["B", "C", "N", "O", "F"]);
+
+/** The most bonds an atom of the second period takes by its octet: B 3, C 4, N 3, O 2, with its charge (N+ 4, C+ 3, O- 1) - the CIP's (lib/chem/cip/prepare). */
+export function octetValence(el: string, charge: number): number | null {
+  const ve = VALENCE_ELECTRONS[el];
+  if (ve == null || !SECOND_PERIOD.has(el)) return null;
+  const e = ve - charge;
+  return Math.min(e, 8 - e);
+}
