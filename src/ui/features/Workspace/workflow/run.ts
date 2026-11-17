@@ -20,7 +20,7 @@ import { isHeld } from "./onPage";
 import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, comeTogether, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { byOf, doerName, inputsFor, MENO, stepValues, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -272,17 +272,19 @@ const isValueKind = (h: SetHolds): h is ValueKind => (VALUE_KINDS as readonly st
 /**
  * Why what several wires bring into one input - `port`, of a step of
  * several; its one, where none is named - is not one input's: sets of
- * different kinds, which one set's entries never are, or more than one
- * number. None where it is, or one wire or none comes in.
+ * different kinds, which one set's entries never are (molecules in 3D and
+ * conformer sets come in together where it reads them as a table:
+ * kinds `comeTogether`), or more than one number. None where it is, or
+ * one wire or none comes in.
  */
-function severalWhyNot(doc: WorkspaceDocument, step: number, port?: StepPort): string | null {
+function severalWhyNot(doc: WorkspaceDocument, step: number, kind: StepKind, port?: StepPort): string | null {
   // (an empty set adds nothing, of no kind)
   const sources = sourcesInto(doc, step, port?.id);
   if (sources.length < 2) return null;
   const gives = sources.map(({ wire, set }) => (emptyNow(doc, set) ? null : givesOf(doc, wire.from)));
   if (gives.includes("number")) return `${port ? port.name : "It"} takes one number: ${sources.length} are wired into it`;
   const k = gives.findIndex((g) => g != null);
-  const j = gives.findIndex((g) => g != null && g !== gives[k]);
+  const j = gives.findIndex((g) => g != null && !comeTogether(kind, port?.id ?? ONE_INPUT, g, gives[k]!));
   if (j < 0) return null;
   const [a, b] = [gives[k]!, gives[j]!];
   const words = (g: SetHolds) => (isValueKind(g) ? SET_NAMES[g] : g);
@@ -304,7 +306,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const first = severalInputs(ports) ? ports[0] : undefined;
   // (several wires into one input: sets of one kind, and one number alone)
   for (const port of ports) {
-    const several = severalWhyNot(doc, step.id, ports.length > 1 ? port : undefined);
+    const several = severalWhyNot(doc, step.id, step.kind, ports.length > 1 ? port : undefined);
     if (several) return several;
   }
   const input = inputOf(doc, step.id, first?.id);
