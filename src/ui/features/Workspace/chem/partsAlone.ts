@@ -86,6 +86,8 @@ export function configurationIn(c: Configuration, part: Pick<PartAlone, "atoms" 
     doubles: c.doubles
       .filter((x) => bond.has(x.bond) && x.ends.every((n) => atom.has(n)))
       .map((x) => ({ ...x, bond: bond.get(x.bond)!, ends: [atom.get(x.ends[0])!, atom.get(x.ends[1])!] as [number, number] })),
+    // (a group the part holds whole: one with a centre in another part is that whole's, not the part's)
+    groups: c.groups.filter((g) => g.centres.every((a) => atom.has(a))).map((g) => ({ ...g, centres: g.centres.map((a) => atom.get(a)!) })),
   };
 }
 

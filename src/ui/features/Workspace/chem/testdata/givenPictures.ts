@@ -1,4 +1,4 @@
-import type { ConfiguredCentre, Configuration } from "../../../../../lib/chem/stereoOpen";
+import type { ConfiguredCentre, IsomerConfiguration } from "../../../../../lib/chem/stereoOpen";
 import { smilesInput } from "../../../../../lib/layout/smilesInput";
 import type { Model } from "../../store/types";
 import { drawnFromSmiles } from "../../utils/smilesDrawn";
@@ -54,7 +54,7 @@ export function polygon(smiles: string): Model {
 }
 
 /** The configuration the SMILES states, as the plugin would send it: Meno's own reading of the text, in the field's terms (each centre's named neighbours and its sense). */
-export function configurationOf(smiles: string): Configuration {
+export function configurationOf(smiles: string): IsomerConfiguration {
   const input = smilesInput(smiles);
   return {
     centres: input.atoms.flatMap((a, i) => {

@@ -43,9 +43,10 @@ import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
-import { isomersToMake, withChosen, withOwnCip, type OpenStereo } from "./openStereo";
+import { isomersToMake, withChosen, withOwnCip, type OpenStereo, type ToMake } from "./openStereo";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
-import type { Configuration } from "../../../../lib/chem/stereoOpen";
+import type { Configuration, IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
+import { groupName, sentOf } from "../../../../lib/chem/perception/stereo/configuration";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "./partsApart";
 
@@ -207,17 +208,48 @@ export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
   return blocksOf(model, atoms, asDrawn);
 }
 
-/** What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, and how many stereoisomers they make. */
-export type Open = { atoms: number[]; bonds: number[]; isomers: number };
+/**
+ * What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, the AND and OR groups whose halves
+ * are made (by name: "and1"), and how many stereoisomers they make.
+ */
+export type Open = { atoms: number[]; bonds: number[]; groups: { kind: "and" | "or"; name: string }[]; isomers: number };
 
 /** What a block leaves open (chem/openStereo `isomersToMake`), in the drawing's ids. */
 export function openIn(block: Block, made: { open: OpenStereo; count: number }): Open {
   return {
     atoms: made.open.left.atoms.map((i) => block.atoms[i]).filter((id) => id != null),
     bonds: made.open.left.bonds.map((i) => block.bonds[i]).filter((id) => id != null),
+    groups: made.open.groups.groups.map((g) => ({ kind: g.kind, name: groupName(g) })),
     isomers: made.count,
   };
 }
+
+/**
+ * What the card that asks before 3D is made says (Ask3D): its title, and why the structure can be more than one stereoisomer - its stereo
+ * drawn without a configuration, and its AND and OR groups, each named as it is drawn - and how many it can be.
+ */
+export function askWords(open: readonly Open[]): { title: string; said: string; isomers: number } {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const centres = open.reduce((n, o) => n + o.atoms.length, 0);
+  const bonds = open.reduce((n, o) => n + o.bonds.length, 0);
+  const isomers = open.reduce((n, o) => n + o.isomers, 0);
+  const what = [centres ? plural(centres, "stereocentre", "stereocentres") : "", bonds ? plural(bonds, "double bond", "double bonds") : ""].filter(Boolean).join(" and ");
+  const groups = [...new Map(open.flatMap((o) => o.groups).map((g) => [g.name, g])).values()];
+  const ands = groups.filter((g) => g.kind === "and").map((g) => g.name);
+  const ors = groups.filter((g) => g.kind === "or").map((g) => g.name);
+  const listed = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]);
+  const said = [
+    what ? `${what} ${centres + bonds === 1 ? "is" : "are"} drawn without a configuration` : "",
+    ands.length ? `${listed(ands)} ${ands.length === 1 ? "stands" : "stand"} for both of ${ands.length === 1 ? "its" : "their"} forms` : "",
+    ors.length ? `${listed(ors)} ${ors.length === 1 ? "is" : "are"} one of two forms, not known which` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return { title: what ? "Stereo not drawn" : "Stereo drawn as a group", said, isomers };
+}
+
+/** Whether making a structure in 3D asks first which of its stereoisomers: some of its stereo drawn without a configuration, or a group with more than one half. */
+export const asksFirst = (o: Open) => o.atoms.length + o.bonds.length > 0 || (o.groups.length > 0 && o.isomers > 1);
 
 /**
  * A stereoisomer's conformers as a molecule in 3D: the lowest's coordinates
@@ -616,6 +648,23 @@ export function partRounds(rounds: PageRounds, part: Pick<Block, "molblock">): P
   return own && !("needs" in own) ? { ...rounds, first: own.first } : rounds;
 }
 
+/** The label of a 3D structure's rows on its stereo, as it is made (chem/groupHalves). */
+export const STEREO_ROW = "Stereo";
+
+/**
+ * What a 3D structure made of a drawing says of its stereo (chem/openStereo `isomersToMake`), as rows of how it was made: which half of
+ * its AND or OR groups it is, what is said of the structure (a half that cannot be made, a group made as drawn), and - made as another's
+ * reflection - that it was not calculated.
+ */
+export function stereoRows(made: Pick<ToMake, "halves" | "said">, i: number): { label: string; text: string }[] {
+  const h = made.halves?.[i];
+  return [
+    ...(h ? [{ label: STEREO_ROW, text: h.words }] : []),
+    ...made.said.map((text) => ({ label: STEREO_ROW, text })),
+    ...(h?.mirrorName != null ? [{ label: STEREO_ROW, text: `made as the mirror image of ${h.mirrorName}: not calculated` }] : []),
+  ];
+}
+
 /**
  * Each stereoisomer asked for, its conformers made for the page - which
  * ones, Meno's (chem/openStereo `isomersToMake`, asked of `stereo`, the
@@ -657,12 +706,12 @@ export async function conformersOf(
   };
   const once = async (molblock: string, isomers: Configuration[]) => {
     const holds = held(molblock);
-    if (!rounds) return (await chem.request("conformers", { molblock, isomers, ...tries, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
+    if (!rounds) return (await chem.request("conformers", { molblock, isomers: isomers.map(sentOf), ...tries, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
     // (in rounds: each alone, as many as it needs, in what is left of the time the search takes at most - its first round always)
     const out: Omit<Conformers, "chosen">[] = [];
     for (const iso of isomers) {
       const ask = async (n: number, draw: number) => {
-        const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
+        const [c] = (await chem.request("conformers", { molblock, isomers: [sentOf(iso)], count: n, draw, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
         if (!c) throw new Error("the search gave nothing for a round");
         return c as Conformers;
       };
@@ -679,25 +728,33 @@ export async function conformersOf(
     const got = await once(molblock, isomers);
     return got.length === isomers.length || isomers.length === 1 ? got : Promise.all(isomers.map(async (iso) => (await once(molblock, [iso]))[0]));
   };
+  // (a group's half that is the mirror image of one before it: that one's conformers reflected, not searched again - chem/groupHalves)
+  const searched = made.isomers.flatMap((iso, i) => (made.halves?.[i]?.mirrorOf == null ? [iso] : []));
   // (of two enantiomers, the one whose identity comes first made, the other its mirror image's reflection; one
   //  whose reflection does not have its configuration after all made itself - chem/pageMirror)
-  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
-  const mine = made.isomers.filter((_, i) => as[i] === "itself");
-  const twins = made.isomers.filter((_, i) => as[i] === "mirror");
+  const as = await Promise.all(searched.map((iso) => madeAs(block.part, iso)));
+  const mine = searched.filter((_, i) => as[i] === "itself");
+  const twins = searched.filter((_, i) => as[i] === "mirror");
   const own = await ask(block.molblock, mine);
   const mirrorBlock = twins.length ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
   const reflected = (await ask(mirrorBlock, twins.map(mirroredConfiguration))).map((c) => c && reflectedConformers(c));
   const missed = twins.filter((iso, k) => !reflected[k] || !hasConfiguration(reflected[k]!, block.part, iso));
   const again = await ask(block.molblock, missed);
   let [o, r, m] = [0, 0, 0];
-  // (in the order asked for: each the plugin answered)
-  const got = made.isomers
-    .map((iso, i) => {
-      if (as[i] === "itself") return own[o++];
-      const c = reflected[r++];
-      return missed.includes(iso) ? again[m++] : c;
-    })
-    .filter((c): c is Omit<Conformers, "chosen"> => c != null);
+  // (in the order asked for: each the plugin answered, each with what is said of its stereo - and a half made as another's reflection)
+  const answered = searched.map((iso, i) => {
+    if (as[i] === "itself") return own[o++];
+    const c = reflected[r++];
+    return missed.includes(iso) ? again[m++] : c;
+  });
+  const each: (Omit<Conformers, "chosen"> | undefined)[] = [];
+  let k = 0;
+  for (const [i] of made.isomers.entries()) {
+    const twin = made.halves?.[i]?.mirrorOf;
+    const c = twin == null ? answered[k++] : each[twin] && reflectedConformers(each[twin]!);
+    each.push(c);
+  }
+  const got = each.flatMap((c, i) => (c ? [{ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i)] }] : []));
   // (which of each one's stand, by the drawing's checks - a reflection's lengths and angles are its twin's; and a structure of
   //  more than one part, its parts side by side - chem/partsApart)
   const holds = held(block.molblock);
@@ -783,7 +840,7 @@ export async function conformersGrowing(
   const start = async (molblock: string, iso: Configuration, reflect: boolean, own?: Live["w"], r: PageRounds = rounds): Promise<Live> => {
     const asked = metalHoldsOf(molblock);
     const ask = async (n: number, draw: number) => {
-      const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(asked ? { holds: asked } : {}), options: sent }, CONFORMERS_MS)).isomers;
+      const [c] = (await chem.request("conformers", { molblock, isomers: [sentOf(iso)], count: n, draw, ...(asked ? { holds: asked } : {}), options: sent }, CONFORMERS_MS)).isomers;
       if (!c) throw new Error("the search gave nothing for a round");
       return c as Conformers;
     };
@@ -819,13 +876,32 @@ export async function conformersGrowing(
   const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...l.rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
   // (each stereoisomer: its searches - one; or, of several parts, one for each part not alike to one before and not one atom - each
   //  shown as it stands (`shown`), and put together as the page shows the whole)
-  type Unit = { searches: Live[]; shown: Map<Live, Conformers>; whole: () => Conformers };
+  type Unit = { searches: Live[]; shown: Map<Live, Conformers>; whole: () => Conformers; twinOf?: number };
   const units: Unit[] = [];
+  // (what is said of each one's stereo, its rows of how it was made - chem/groupHalves)
+  const withRows = (c: Conformers, i: number): Conformers => ({ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i)] });
+  // (a group's half that is the mirror image of one before it: that one as the page shows it, reflected - its R and S read anew - never
+  //  searched again; shown again each time that one grows)
+  const mirrorUnit = (twin: number, i: number): Unit => ({
+    searches: [],
+    shown: new Map(),
+    twinOf: twin,
+    whole: () => {
+      const theirs = units[twin].whole();
+      const c = withRows(withChosen(withOwnCip(reflectedConformers(theirs)), made.open), i);
+      return "partsAlone" in theirs ? { ...c, partsAlone: true as const } : c;
+    },
+  });
   try {
     if (parts) {
       // (a part on its own: none of the whole's open elements its own to choose, its own checks; one atom, no search)
       const NONE = { drawn: { atoms: [], bonds: [] }, configured: { centres: [], doubles: [] }, left: { atoms: [], bonds: [] } } as unknown as OpenStereo;
-      for (const iso of made.isomers) {
+      for (const [i, iso] of made.isomers.entries()) {
+        const twin = made.halves?.[i]?.mirrorOf;
+        if (twin != null) {
+          units.push(mirrorUnit(twin, i));
+          continue;
+        }
         const each: (Live | Conformers | number)[] = [];
         const configs = parts.map((p) => configurationIn(iso, p));
         for (const [k, p] of parts.entries()) {
@@ -844,15 +920,20 @@ export async function conformersGrowing(
             const of = (x: Live | Conformers | number): Conformers => (typeof x === "number" ? of(each[x]) : "search" in x ? unit.shown.get(x)! : x);
             const whole = wholeOf(block, parts.map((p, k) => ({ part: typeof each[k] === "number" ? { ...p } : { ...p, alike: undefined }, c: of(each[k]) })));
             const side = partsSideBySide(withChosen(withOwnCip(whole), made.open), partsOf(whole.atoms, whole.bonds));
-            return { ...side, partsAlone: true as const };
+            return { ...withRows(side, i), partsAlone: true as const };
           },
         };
         units.push(unit);
       }
     } else {
-      const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
+      const as = await Promise.all(made.isomers.map((iso, i) => (made.halves?.[i]?.mirrorOf != null ? ("itself" as const) : madeAs(block.part, iso))));
       const mirrorBlock = as.includes("mirror") ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
       for (const [i, iso] of made.isomers.entries()) {
+        const twin = made.halves?.[i]?.mirrorOf;
+        if (twin != null) {
+          units.push(mirrorUnit(twin, i));
+          continue;
+        }
         let l: Live;
         if (as[i] === "itself") l = await start(block.molblock, iso, false);
         else {
@@ -865,7 +946,7 @@ export async function conformersGrowing(
             l = await start(block.molblock, iso, false);
           }
         }
-        const unit: Unit = { searches: [l], shown: new Map(), whole: () => unit.shown.get(l)! };
+        const unit: Unit = { searches: [l], shown: new Map(), whole: () => withRows(unit.shown.get(l)!, i) };
         units.push(unit);
       }
     }
@@ -880,6 +961,11 @@ export async function conformersGrowing(
   const rest = async (grown: (k: number, c: Conformers) => void) => {
     if (ran) return;
     ran = true;
+    // (one grown, and each half made as its reflection with it)
+    const grownWith = (k: number) => {
+      grown(k, units[k].whole());
+      units.forEach((m, j) => m.twinOf === k && grown(j, m.whole()));
+    };
     for (const [k, u] of units.entries()) {
       for (const l of u.searches) {
         try {
@@ -887,7 +973,7 @@ export async function conformersGrowing(
             try {
               while (await l.search.next()) {
                 u.shown.set(l, await shownOf(l, [searchingRow(l.search)]));
-                grown(k, u.whole());
+                grownWith(k);
               }
             } catch (e) {
               // (a round that failed ends it there, what came kept: stopped, where it was asked to stop - its plugin stopped with
@@ -896,7 +982,7 @@ export async function conformersGrowing(
               if (l.search.ended === "failed") console.warn("Meno: a 3D structure's search ended: a round failed.", e);
             }
             u.shown.set(l, await shownOf(l, [said(l)]));
-            grown(k, u.whole());
+            grownWith(k);
           }
         } finally {
           l.let();
@@ -984,7 +1070,7 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, 
  * atom is protonated, and a skeleton does not (lib/chem/skeleton).
  */
 export type Drawable = Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom" | "biopolymer" | "bondOrders" | "unknownOrders" | "chainOrders" | "wholeWithoutH">;
-export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean; configuration?: Configuration }> {
+export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean; configuration?: IsomerConfiguration }> {
   if (isSkeleton(m)) throw new Error(skeletonWhy());
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);

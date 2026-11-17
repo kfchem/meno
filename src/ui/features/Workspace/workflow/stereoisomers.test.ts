@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { v2000 } from "../../../../lib/chem/testdata/v2000";
+import { HEXAGON, v3000 } from "../../../../lib/chem/testdata/v3000";
+import { drawnGroupsOf } from "../../../../lib/chem/stereoOpen";
 import { STEREO_OPTIONS, stereoisomersAnswer } from "./stereoisomers";
 import { optionsOf } from "./kinds";
 
@@ -98,5 +100,40 @@ describe("Stereoisomers, Meno's", () => {
   it("sets aside one the plugin cannot read, or make sense of, naming the toolkit", async () => {
     expect(await stereoisomersAnswer(plugin({ read: false }).chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "RDKit could not read it", kind: "unreadable" });
     expect(await stereoisomersAnswer(plugin({ read: true, problem: "SANITIZE_PROPERTIES" }).chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "RDKit could not read it (SANITIZE_PROPERTIES)", kind: "valence" });
+  });
+});
+
+describe("Stereoisomers of a structure with AND and OR groups (foundation part 7)", () => {
+  // (trans-2-methylcyclohexan-1-ol, its two centres and1 - and its O-sec-butyl ether, the side chain's centre drawn as it is)
+  const ring = HEXAGON.map((p) => ({ el: "C", ...p }));
+  const ringBonds = [0, 1, 2, 3, 4, 5].map((k) => ({ a: k, b: (k + 1) % 6, order: 1 }));
+  const atoms = [...ring, { el: "O", x: 0, y: 3 }, { el: "C", x: 2.598, y: 1.5 }];
+  const bonds = [...ringBonds, { a: 0, b: 6, order: 1, stereo: "up" as const }, { a: 1, b: 7, order: 1, stereo: "down" as const }];
+  const RACEMATE = v3000(atoms, bonds, [{ name: "STERAC1", atoms: [0, 1] }]);
+  const read = [...drawnGroupsOf([RACEMATE])!.read.values()];
+  const elements = { read: true, elements: read.map((c) => ({ kind: "centre", at: c.atom, state: "specified" })) };
+  const half = (turn: boolean, molblock: string, smiles: string) => ({
+    configured: { centres: read.map((c) => (turn ? { ...c, sense: c.sense > 0 ? -1 : 1 } : c)), doubles: [] },
+    smiles,
+    molblock,
+  });
+
+  it("makes each half, the half as drawn first, each as a drawing - though nothing is left open - and says which they are", async () => {
+    const { chem, asked } = plugin(elements, { isomers: [half(true, "turned", "a"), half(false, "drawn", "b")], free: false });
+    const answer = await stereoisomersAnswer(chem, [RACEMATE], DEFAULTS, "RDKit");
+    expect(answer).toMatchObject({ made: ["drawn", "turned"] });
+    expect("made" in answer && answer.properties?.stereo_groups?.value).toBe("in order: and1 as drawn; and1 turned over");
+    // (the groups' centres asked back; nothing open, so set aside never applies to them)
+    expect((asked[1].args.open as { atoms: number[] }).atoms).toEqual([0, 1]);
+    const aside = await stereoisomersAnswer(plugin(elements, { isomers: [half(true, "turned", "a"), half(false, "drawn", "b")], free: false }).chem, [RACEMATE], optionsOf(STEREO_OPTIONS, { open: "aside" }), "RDKit");
+    expect(aside).toMatchObject({ made: ["drawn", "turned"] });
+  });
+
+  it("keeps it as drawn where the turned half cannot be made, and says so", async () => {
+    const { chem } = plugin(elements, { isomers: [half(false, "drawn", "b")], free: false });
+    expect(await stereoisomersAnswer(chem, [RACEMATE], DEFAULTS, "RDKit")).toMatchObject({
+      as: "drawn",
+      properties: { stereo_groups: { value: "and1 turned over cannot be made in 3D" } },
+    });
   });
 });

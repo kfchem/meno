@@ -5,7 +5,7 @@ import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
 import { laidOut, notShownOf, openAsCame, runsAsCame, type OpenDoubles } from "./cleanUp";
 import { givenOf, type Given } from "./givenConfiguration";
-import type { Configuration } from "../../../../lib/chem/stereoOpen";
+import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { smilesInput } from "../../../../lib/layout/smilesInput";
 import { openDoubleBonds } from "../../../../lib/layout/drawn";
@@ -52,7 +52,7 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
  * Meno's words (lib/chem/smilesWhy), from the SMILES itself and what the plugin says its toolkit made of it
  * (`smiles_read`); any other refusal is passed on as it came.
  */
-export async function molblockOfSmiles(c: ChemClient, smiles: string): Promise<{ molblock: string; configuration?: Configuration }> {
+export async function molblockOfSmiles(c: ChemClient, smiles: string): Promise<{ molblock: string; configuration?: IsomerConfiguration }> {
   try {
     return await c.request("from_smiles", { smiles });
   } catch (e) {
@@ -209,7 +209,7 @@ export function metalPairsIn(smiles: string, molblock: string): MarkedArrangemen
  * The structures a step's plugin made (a `DrawnAnswer`'s `made`), each drawn as Meno draws a SMILES's: laid out from the configuration it
  * was made with, the `k`th's its own, where the plugin sends them.
  */
-export function madeDrawn(answer: { made: readonly string[]; configurations?: readonly (Configuration | undefined)[] }, style?: DrawingStyle): Promise<(Model & { asCame?: string; notShown?: NotShown })[]> {
+export function madeDrawn(answer: { made: readonly string[]; configurations?: readonly (IsomerConfiguration | undefined)[] }, style?: DrawingStyle): Promise<(Model & { asCame?: string; notShown?: NotShown })[]> {
   return Promise.all(answer.made.map((block, k) => drawingOf(block, style, givenOf(undefined, answer.configurations?.[k]))));
 }
 
@@ -217,7 +217,7 @@ export function madeDrawn(answer: { made: readonly string[]; configurations?: re
  * A structure a step made as a SMILES, drawn as a SMILES typed is: laid out from what the plugin read of it beside its block
  * (`molblockOfSmiles`), and the text's own axes and odd cumulenes.
  */
-export function smilesMadeDrawn(smiles: string, read: { molblock: string; configuration?: Configuration }, style?: DrawingStyle): Promise<Model & { asCame?: string; notShown?: NotShown }> {
+export function smilesMadeDrawn(smiles: string, read: { molblock: string; configuration?: IsomerConfiguration }, style?: DrawingStyle): Promise<Model & { asCame?: string; notShown?: NotShown }> {
   return drawingOf(read.molblock, style, givenOf(givenRunsOf(smiles, read.molblock)?.runs, read.configuration));
 }
 
