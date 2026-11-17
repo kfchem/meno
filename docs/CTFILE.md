@@ -168,7 +168,10 @@ large as its labels (GR-11.3). What is said beside an atom is kept off every
 bond, every label and what was said before it: of the ways out from its
 atom, one where its letters cover nothing goes first, then the most open, so
 a word as long as "and1" at a ring's centre goes outside the ring, not across
-it. R, S, E and Z keep off it in turn.
+it. A group's label stands outside the ring its centre is on wherever a
+clear place outside is - inside, it would read as the ring's, beside
+another centre's R or S (the maintainer, 2026-11-17). R, S, E and Z keep
+off it in turn.
 
 | What | How | Why |
 |---|---|---|

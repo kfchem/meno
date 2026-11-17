@@ -62,6 +62,23 @@ describe("an atom's enhanced stereo group, written at its centre (GR-11.1)", () 
     }
   });
 
+  it("stands outside the ring its centre is on, where a clear place outside is: inside, it would read as the ring's", () => {
+    const { atoms, bonds } = ether();
+    const ring = atoms.slice(0, 6);
+    // (a point inside the ring's polygon, by the crossings of a ray from it)
+    const inside = (p: { x: number; y: number }) => {
+      let odd = false;
+      for (let k = 0, j = ring.length - 1; k < ring.length; j = k++) {
+        const [u, v] = [ring[k], ring[j]];
+        if (u.y > p.y !== v.y > p.y && p.x < ((v.x - u.x) * (p.y - u.y)) / (v.y - u.y) + u.x) odd = !odd;
+      }
+      return odd;
+    };
+    const groups = layoutMolecule(atoms, bonds, opts(), 40).texts.filter((t) => t.text === "and1");
+    expect(groups).toHaveLength(2);
+    for (const g of groups) expect(inside(g), `${g.x},${g.y}`).toBe(false);
+  });
+
   it("stays close to its atom: within a bond's length", () => {
     const { atoms, bonds } = ether();
     const layout = layoutMolecule(atoms, bonds, opts(), 40);

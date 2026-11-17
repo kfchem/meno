@@ -16,6 +16,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
+import { factsOf } from "./perception/facts";
 import { runsOf } from "./perception/stereo/runs";
 import { greatest, least, pushAll } from "./lists";
 import { groupDepths, type DrawnAtom, type DrawnBond } from "../layout/drawn";
@@ -4771,6 +4772,27 @@ function atomNotes(
     });
     return { segs: [...segs], boxes: [...boxes] };
   };
+  // (the rings an atom is on, as the way to each ring's middle and how near to it the ring's own bonds point: a way nearer is inside)
+  let facts: ReturnType<typeof factsOf> | null = null;
+  const ringsInward = (i: number): { x: number; y: number; least: number }[] => {
+    facts ??= factsOf({ atoms: atoms.map((x) => ({ el: x.el })), bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+    return facts.ringsAt[i].flatMap((k) => {
+      const ring = facts!.rings[k];
+      const mx = ring.reduce((t, j) => t + atoms[j].x, 0) / ring.length - atoms[i].x;
+      const my = ring.reduce((t, j) => t + atoms[j].y, 0) / ring.length - atoms[i].y;
+      const len = Math.hypot(mx, my);
+      if (len < 1e-9) return [];
+      const c = { x: mx / len, y: my / len };
+      const at = ring.indexOf(i);
+      const near = [ring[(at + 1) % ring.length], ring[(at - 1 + ring.length) % ring.length]].map((j) => {
+        const dx = atoms[j].x - atoms[i].x;
+        const dy = atoms[j].y - atoms[i].y;
+        const d = Math.hypot(dx, dy) || 1;
+        return (dx * c.x + dy * c.y) / d;
+      });
+      return [{ ...c, least: Math.min(...near) }];
+    });
+  };
   // (each atom's own label, found once)
   const labelOf = new Map<number, TextItem>();
   for (const t of labels) if (t.atom != null && !t.beside && !labelOf.has(t.atom)) labelOf.set(t.atom, t);
@@ -4792,6 +4814,10 @@ function atomNotes(
     const lb = label ? labelBox(label, font, set) : null;
     const reachMost = (lb ? Math.hypot(Math.max(lb.left, lb.right), Math.max(lb.top, lb.bottom)) : 0) + font * 0.35 + 2 * (halfW + halfH + pad);
     const around = near(a, reachMost);
+    // (a group's label - and1, or1 - reads as the ring's where it stands inside the ring its centre is on, beside another centre's R
+    //  or S: a way pointing into such a ring costs half a thing covered, so that it goes inside only where nothing outside is clear -
+    //  the maintainer's call, 2026-11-17)
+    const insideRings = groupsAt.has(i) && a.stereoGroup ? ringsInward(i) : [];
     const item = besideVertex(
       a,
       ways.get(i) ?? [],
@@ -4816,6 +4842,7 @@ function atomNotes(
         const box = { minX: c.x - halfW - pad, maxX: c.x + halfW + pad, minY: c.y - halfH - pad, maxY: c.y + halfH + pad };
         let n = 0;
         for (const k of around.segs) if (segmentMeetsBox(segments[k][0], segments[k][1], box)) n++;
+        if (insideRings.some((r) => dir.x * r.x + dir.y * r.y > r.least)) n += 0.5;
         for (const k of around.boxes) {
           const r = taken[k];
           if (r.of !== i && r.minX < box.maxX && box.minX < r.maxX && r.minY < box.maxY && box.minY < r.maxY) n++;
