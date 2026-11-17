@@ -2095,10 +2095,13 @@ export type EditorState = {
    */
   bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
   /**
-   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): the first selects it alone (`clickSelectBond`) and
-   * changes nothing; the second makes it double, or a double's second line its next side; the third, a triple.
+   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): one turns its kind as the key 1 does - a double or
+   * triple made single, a single round its wedge, hashed wedge and plain with the other end narrow; two make it double, or a
+   * double's second line its next side; three, a triple.
    */
   bondClicked: (id: number, clicks: number) => void;
+  /** A click's turn of a bond taken back where the drawing is still `after`, the one it made (utils/press `turnTakenBack`); false where it is not. */
+  takeBackTurn: (after: unknown) => boolean;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
@@ -2112,8 +2115,6 @@ export type EditorState = {
    * selection as it was, its shade drawn back in (`clickTakeBack`).
    */
   clickSelectAtom: (id: number) => void;
-  /** A click on a bond: it selected, alone, with its atoms (docs/EDITOR-2D.md, *How it is worked*). */
-  clickSelectBond: (id: number) => void;
   /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
   clickTakeBack: (id: number) => boolean;
   /**

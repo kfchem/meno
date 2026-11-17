@@ -16,6 +16,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
+import { runsOf } from "./perception/stereo/runs";
 import { greatest, least, pushAll } from "./lists";
 import { groupDepths, type DrawnAtom, type DrawnBond } from "../layout/drawn";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
@@ -4441,13 +4442,27 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
     !b.coordination &&
     !b.query &&
     (b.display ?? "plain") === "plain";
+  const otherEnd = (k: number, x: number) => (bonds[k].a1 === x ? bonds[k].a2 : bonds[k].a1);
+  // (its runs of cumulated double bonds, as the reader takes them: perception/stereo/runs - a carbon, or an N+, between two double bonds
+  //  and bonded to nothing else, a run goes on through; a sulfur's C=S=C is bent, no run)
+  const runs = runsOf({ atoms, bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+  /** The run of cumulated double bonds from `from` on through `to`, to its end: that end, the atom before it, and the double bonds walked past `from`-`to`. */
+  const runEnd = (from: number, to: number): [number, number, number] => {
+    const run = runs.from(from, to);
+    return [run[run.length - 1], run[run.length - 2], run.length - 2];
+  };
   bonds.forEach((d, i) => {
     if (d.order !== 2 || d.stereo !== "either") return;
-    const ends = [
+    // (an odd cumulene's either is across its run - a butatriene's: the bond's ends are the run's far ends; an allene's run, even, has an
+    //  axis instead, and its bond is taken as one of no run)
+    const pairs = [
       [d.a1, d.a2],
       [d.a2, d.a1],
-    ].map(([end, other]) => {
-      const subs = (at.get(end) ?? []).filter((k) => k !== i);
+    ];
+    const walked = pairs.map(([end, other]) => runEnd(other, end));
+    const odd = (1 + walked[0][2] + walked[1][2]) % 2 === 1;
+    const ends = (odd ? walked : pairs).map(([end, other]) => {
+      const subs = (at.get(end) ?? []).filter((k) => k !== i && !(otherEnd(k, end) === other && bonds[k].order === 2));
       const far = (k: number) => (bonds[k].a1 === end ? bonds[k].a2 : bonds[k].a1);
       // straight on from the double bond: within ten degrees of it
       const straight =
@@ -4493,8 +4508,11 @@ const groupText = (g: StereoGroup) => (g.kind === "abs" ? "abs" : `${g.kind}${g.
 /**
  * Which enhanced stereo groups are labelled at their centres: in a
  * structure (a connected part of the drawing) whose centres are not all of
- * one group. One that is says so once, beneath it (`structureNotes`), as
- * IUPAC's ST-6.3 would have it - and an absolute one needs nothing said.
+ * one group - a centre drawn with a wedge and in no group among them, as
+ * drawn (an ether's (S) side chain beside a racemic ring: its two forms
+ * diastereomers, no enantiomers). One that is says so once, beneath it
+ * (`structureNotes`), as IUPAC's ST-6.3 would have it - and an absolute
+ * one needs nothing said.
  */
 function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bonds: Set<number>; notes: { atoms: number[]; text: string }[] } {
   const parts = components(atoms.length, bonds);
@@ -4507,6 +4525,14 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     const p = b.stereoGroup ? partOf.get(b.a1) : undefined;
     if (p != null) grouped[p].push(k);
   });
+  // (a centre drawn with a wedge and in no group: a centre of the structure not of its group)
+  const deg = degreeMap(bonds);
+  const ungrouped = new Set<number>();
+  for (const b of bonds) {
+    if (b.stereo !== "up" && b.stereo !== "down") continue;
+    const c = wedgeNarrowAtom(b, deg);
+    if (!atoms[c]?.stereoGroup) ungrouped.add(c);
+  }
   for (const [p, part] of parts.entries()) {
     const groups = new Set<string>();
     const ats = part.filter((i) => atoms[i].stereoGroup);
@@ -4516,7 +4542,7 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     if (!groups.size) continue;
     const [only] = groups;
     if (groups.size === 1 && only === "abs") continue;
-    if (groups.size === 1 && !bds.length) {
+    if (groups.size === 1 && !bds.length && !part.some((i) => ungrouped.has(i))) {
       out.notes.push({ atoms: part, text: only.startsWith("and") ? "and enantiomer" : "or enantiomer" });
       continue;
     }

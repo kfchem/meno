@@ -22,9 +22,9 @@ import { symmetryOrbits } from "../layout/canonical";
 import { factsOf } from "./perception/facts";
 import { sharesMoreThanABond } from "./perception/rings";
 import { readMolfile } from "./ctfile";
-import { aromaticIn } from "./aromaticity";
+import { flatRingAtoms, neighboursOf } from "./perception/flatRings";
+import { HELD_FLAT_BY_AN_ACYL } from "./perception/stereo/lonePairs";
 import { implicitHydrogens } from "./molecule";
-import { metal } from "./perception/elements";
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -62,18 +62,6 @@ export const BY_TURNS: readonly (readonly [number, number])[] = [
 export const MOST_CONFORMERS = 5000;
 
 const heavy = (a: SoughtAtom | undefined) => a != null && a.el !== "H" && a.el !== "*";
-
-
-/** Each atom's bonds, as [other atom, order]. */
-function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): [number, number][][] {
-  const out: [number, number][][] = atoms.map(() => []);
-  for (const b of bonds) {
-    if (b.a === b.b || !atoms[b.a] || !atoms[b.b]) continue;
-    out[b.a].push([b.b, b.order]);
-    out[b.b].push([b.a, b.order]);
-  }
-  return out;
-}
 
 /** The bonds that lie in a ring - those whose ends stay joined without them - by index: the core's (lib/chem/perception/rings). */
 export function bondsInRings(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): Set<number> {
@@ -126,7 +114,7 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
     const kind = (j: number) => `${atoms[j].el}${atoms[j].charge ?? 0}`;
     return rest.every(([j]) => kind(j) === kind(first[0]));
   };
-  const lonePair = (i: number) => ["N", "O", "S"].includes(atoms[i].el) && (atoms[i].charge ?? 0) <= 0;
+  const lonePair = (i: number) => HELD_FLAT_BY_AN_ACYL.has(atoms[i].el) && (atoms[i].charge ?? 0) <= 0;
   const acyl = (i: number) => atoms[i].el === "C" && around[i].some(([j, o]) => o === 2 && ["O", "N", "S"].includes(atoms[j].el));
   // (a lone pair's atom carrying two alike - in one orbit of the symmetries that keep the flat bond itself in place: one of
   //  them swaps the two, so the bond's two forms are one shape. The bond's own atoms marked apart from every other atom, so
@@ -189,40 +177,8 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
   return out.sort((x, y) => x - y);
 }
 
-/**
- * The atoms that lie on a ring held flat, by index: each ring (the smallest
- * set) every atom of which is aromatic under Meno's rule (lib/chem/
- * aromaticity: Hückel's 4n + 2, of each ring and each pair of rings fused
- * at a bond) - a benzene's, a pyrrole's, a tropone's, azulene's two, and a
- * fluoranthene's five-ring, which is not aromatic itself but every atom of
- * which lies on an aromatic ring (the rule's 22 electrons at most is the
- * rule's alone). So, whatever its count, is one every bond of which is
- * drawn aromatic, and one every atom of which is bound to one metal (a
- * ferrocene's, eta) - by a bond each, or through a star at its centre
- * (`held`: each such bond's atoms) - as its metal holds it.
- */
-export function flatRingAtoms(
-  atoms: readonly SoughtAtom[],
-  bonds: readonly SoughtBond[],
-  rings: readonly (readonly number[])[],
-  held: readonly (readonly number[])[] = [],
-): Set<number> {
-  const around = neighboursOf(atoms, bonds);
-  // (a metal as the core says one is - lib/chem/perception/elements `metal`, Al among them; before, any heavy atom with no most bonds
-  //  was, Ge, As, Sb, Te, At, Ts and the noble gases too, so a ring each of whose atoms is bonded to one Ge or Te was held flat as if
-  //  on a metal: foundation part 3, B4)
-  const isMetal = (i: number) => metal.has(atoms[i].el);
-  const aromatic = aromaticIn(atoms, bonds, rings);
-  const out = new Set<number>();
-  for (const ring of rings) {
-    const order = (x: number, y: number) => around[x].find(([j]) => j === y)?.[1];
-    const ringBondsOf = ring.map((x, k) => order(x, ring[(k + 1) % ring.length]));
-    const bound = ring.every((x) => around[x].some(([j]) => isMetal(j))) && around[ring[0]].some(([m]) => isMetal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
-    const centred = held.some((h) => ring.every((x) => h.includes(x)));
-    if (bound || centred || ringBondsOf.every((o) => o === 4) || ring.every((x) => aromatic.has(x))) for (const x of ring) out.add(x);
-  }
-  return out;
-}
+/** The atoms that lie on a ring held flat, by index: worked out in the core (perception/flatRings `flatRingAtoms`, part 14 B). */
+export { flatRingAtoms };
 
 /**
  * Whether a molecule has a ring with more than one shape of its own: a ring

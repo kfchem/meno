@@ -94,7 +94,7 @@ export function piElectrons(s: PiState): number | null {
  * pair, two: with no pi bond in it and no empty p orbital (a C+, a B of
  * three bonds), there is no pi system for lone pairs to complete, and its
  * atoms stay pyramidal - As4's and P4's three-rings, a triaziridine,
- * cyclotriphosphane (backlog 182, CHEM 11-16). Lone pairs complete a pi
+ * cyclotriphosphane (backlog 182). Lone pairs complete a pi
  * system; they never make one alone.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {

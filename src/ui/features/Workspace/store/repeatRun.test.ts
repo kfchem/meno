@@ -162,6 +162,16 @@ describe("a Repeat run with the page round it (found in review)", () => {
     expect(labels.filter((l) => l === "run")).toHaveLength(3);
   });
 
+  it("shows what leaves by Out as it came into In: a water turned there, turned the same in Out", async () => {
+    const { st, r, exit } = page({ repeat: "until", most: 10 });
+    const [first] = st().molecules3d.map((m) => m.id);
+    const faceOn: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    st().setTurn3d(first, faceOn);
+    await st().runStep(r);
+    const out = setMolecules(st(), st().sets.find((b) => b.id === exit(r, "reached"))!);
+    expect(out.map((m) => st().turns3d[m.id])).toContainEqual(faceOn);
+  });
+
   it("puts each entry in Out once where its values run out at the top of a pass", async () => {
     const { st, r, doc, exit } = page({ repeat: "over", variable: "k", values: "1\n2\n3", counted: "entry", startsOver: "last" });
     // (each water come in having gone round once already - as another Repeat's Out has them)
