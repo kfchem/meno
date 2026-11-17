@@ -13,7 +13,7 @@ import type { Bound } from "../../../../lib/boundOptions";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, type Frame } from "./entries";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
 import { canWire, resultOf, wiresInto } from "./flow";
-import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
+import { cardHighOf, exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 import { frameAt, placeBelow, placeCard, placeNext } from "./place";
@@ -351,6 +351,35 @@ export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?
 export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const wires = (doc.wires ?? []).filter((w) => w.id !== id);
   return wires.length === (doc.wires ?? []).length ? doc : { ...doc, wires };
+}
+
+/**
+ * Each Repeat's steps as its frame now holds them (workflow/repeat): a step whose card's middle lies inside the frame - from the
+ * Repeat's card's top left, `frame` wide and high - in reading order, no Repeat among them (one inside another is not made). Dragged
+ * into the frame, a step joins it; dragged out, it leaves - as a set's members do.
+ */
+export function repeatsSettled(doc: WorkspaceDocument): WorkspaceDocument {
+  const steps = doc.steps ?? [];
+  if (!steps.some((s) => s.kind === "repeat" && s.frame)) return doc;
+  let changed = false;
+  const next = steps.map((r) => {
+    if (r.kind !== "repeat" || !r.frame) return r;
+    const { w, h } = r.frame;
+    const inside = steps
+      .filter((s) => s.kind !== "repeat")
+      .filter((s) => {
+        const mx = s.x + CARD_W / 2;
+        const my = s.y + cardHighOf(s.kind) / 2;
+        return mx > r.x && mx < r.x + w && my > r.y && my < r.y + h;
+      })
+      .sort((a, b) => a.y - b.y || a.x - b.x)
+      .map((s) => s.id);
+    if (JSON.stringify(inside) === JSON.stringify(r.holds ?? [])) return r;
+    changed = true;
+    const { holds: _was, ...rest } = r;
+    return inside.length ? { ...rest, holds: inside } : rest;
+  });
+  return changed ? { ...doc, steps: next } : doc;
 }
 
 /**

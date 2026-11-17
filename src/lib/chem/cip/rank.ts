@@ -64,7 +64,7 @@
 import { HYDROGEN, PHANTOM, rootwardOf, TooLarge, type Budget, type CipNode } from "./digraph";
 import type { Prepared } from "./prepare";
 import { parity } from "../perception/stereo/geometry";
-import { factsOf } from "../perception/facts";
+import { factsOf, OPEN_RING } from "../perception/facts";
 
 /** The rules in their order: 1a, 1b, 2, 3, 4a, 4b, 4c, 5, and the proposed 6. */
 export const RULES = ["1a", "1b", "2", "3", "4a", "4b", "4c", "5", "6"] as const;
@@ -99,9 +99,6 @@ export type Aux = { kind: "centre" | "double" | "axis"; up: boolean; chiral: boo
 
 /** A unit's descriptor before it is told chiral or not: its sense, and the last rule its ligands needed. */
 type Letter = { kind: "centre" | "double" | "axis"; up: boolean; rule: number } | null;
-
-/** The smallest ring a double bond in which has no cis or trans to be told: one of seven atoms or fewer is held cis. */
-const OPEN_RING = 8;
 
 const pair = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
 

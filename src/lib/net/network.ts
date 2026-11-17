@@ -91,6 +91,8 @@ export function purposeName(purpose: string): string {
   if (purpose === "python-code") return "Python run in the console";
   if (purpose === "web-view") return "The window";
   if (purpose === "app-update") return "Keeping Meno up to date";
+  // (the list of plugins online - lib/plugins/catalogue `CATALOGUE_PURPOSE`)
+  if (purpose === "plugin-catalogue") return "Looking up plugins online";
   if (purpose === "ccd") return "Chemical components from the wwPDB's dictionary";
   if (purpose === "python-env:console")
     return "Setting up Python for the console";
@@ -215,6 +217,16 @@ async function grant(purpose: string): Promise<void> {
       ? s
       : { granted: [...s.granted, purpose].sort() },
   );
+}
+
+/**
+ * Purposes allowed by a yes given on a card of Meno's own (lib/plugins/firstSetUp), where the card named, before the
+ * click, all they fetch and every host: remembered as any yes is. Not offline: no leave is given while Meno is.
+ */
+export async function allowAnswered(purposes: readonly string[]): Promise<boolean> {
+  if (useNetwork.getState().offline) return false;
+  await Promise.allSettled(purposes.map(grant));
+  return true;
 }
 
 /** The questions waiting their turn: the last's answer, the next asked after it - and each purpose's, while it is asked or waits. */

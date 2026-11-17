@@ -64,7 +64,8 @@ export default function ChemMarks2D({
   read,
 }: {
   marks: ChemMarks | null;
-  unsure?: { atoms: Set<number>; bonds: Set<number> };
+  /** What the drawing shows only by luck, by id - and, for an atom of a ring drawn in perspective that is not read, its own words. */
+  unsure?: { atoms: Set<number>; bonds: Set<number>; said?: Map<number, string> };
   /** What Meno was unsure of as it read parts from a figure, still as read: each with what it says (utils/figures `readMarks`). */
   read?: { atoms: Map<number, string>; bonds: Map<number, string> };
 }) {
@@ -218,7 +219,7 @@ export default function ChemMarks2D({
   // a centre - its box as a valence problem's - or a double bond, a ring
   // at its middle (the maintainer, 2026-10-11: never shown as if certain)
   // (an atom read from a figure says what was unsure of it; a stereocentre otherwise)
-  const atomsSaid = new Map<number, string>([...(unsure?.atoms ?? [])].map((id) => [id, "This stereocentre can be read either way as drawn."]));
+  const atomsSaid = new Map<number, string>([...(unsure?.atoms ?? [])].map((id) => [id, unsure?.said?.get(id) ?? "This stereocentre can be read either way as drawn."]));
   for (const [id, said] of read?.atoms ?? []) atomsSaid.set(id, said);
   const bondsSaid = new Map<number, string>([...(unsure?.bonds ?? [])].map((id) => [id, "This double bond can be read as cis or trans as drawn."]));
   for (const [id, said] of read?.bonds ?? []) bondsSaid.set(id, said);

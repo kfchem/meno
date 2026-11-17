@@ -881,6 +881,52 @@ which any option can name; `lib/boundOptions`).
   own, saved with it in the workspace's file (`bound`), and part of
   what says it has changed since its run.
 
+### Repeat
+
+A *Repeat* is a frame round steps that runs them pass by pass (the
+maintainer's ruling on loops: a general loop that steps a property, which
+any option can name - *Options from a property*). Its frame, the steps it
+holds and the wires it lets cross its edge are built; its passes, and the
+ways to make one (Quick Add's *Repeat*, *Repeat these steps* on a
+selection's menu), come with its runs. Until then none is made, and one
+read from a file says its passes are not run in this version.
+
+- **What it is.** A step of its own kind (`workflow/repeat`), whose card
+  stands at its frame's top left. *In* is its input from outside. Inside
+  its frame, *This pass* is the set its first steps take, and *Again* and
+  *Done* are the inputs what its steps give lands on: *Again* to go round
+  once more, *Done* when an entry is finished. Outside, *Out* holds what
+  reached *Done* over all its passes.
+- **The steps it holds** are those whose cards' middles lie inside its
+  frame, in reading order: a step dragged in joins it, one dragged out
+  leaves (`repeatsSettled`), as a set's members do. A Repeat holds no
+  Repeat.
+- **Its edge is crossed by its ports alone.** What comes in goes into
+  *In*; its steps take from *This pass* and from one another; what leaves
+  goes by *Again* or *Done*, then *Out*. A wire that would cross it
+  otherwise is not made, and the step's card says why ("This step is
+  inside a Repeat: wire it into the Repeat's In, and This pass to this
+  step").
+- **No loop.** What lands on *Again* or *Done* is read by the Repeat as a
+  pass ends, never a way back in the flow (`landing`): the steps before a
+  Repeat are those before its *In*, and the steps after one of its steps
+  run down through it to what is after it.
+- **Its options**:
+  - *Repeat*: a number of times (3, a starting value with no basis of its
+    own: set the passes the work needs), until none goes again (at most
+    10 passes, unless set), or over values;
+  - *Variable*: a name, with *From* and *Step*, or the values one to a
+    line, and a unit from Meno's table;
+  - *Counted*: per entry (each entry's value starts at *From* and steps
+    each time it goes round) or per pass;
+  - *Each pass starts*: from where restraints were first held (over values,
+    from the last pass), from the last pass, or from what came in.
+  
+  Its line says them: "3 passes; k from 50 by 50 kcal/mol/rad², counted
+  per entry".
+- **Kept** in the workspace's file with its step: its frame (`frame`) and
+  the steps it holds (`holds`), settled again by where the cards stand.
+
 ## Compound sets and conformer sets
 
 ![A set of conformers through a workflow](workflows/7-conformers.svg)
@@ -2256,6 +2302,15 @@ anything read from its output stay as the program gave them, and *Reset
 orientation* shows it as the output has it. Its room in the result set
 is made for it turned. A program that keeps the input's orientation is
 laid over it as it is.
+
+Results a step passed through, their atoms where they were - a
+*Filter*'s, a *Tag*'s, a *Rank*'s - are put down turned as the molecule
+each came from is (run `viewKept`): a water seen face-on in what came in
+is seen face-on in the step's set, never edge-on as if its geometry had
+changed. Its room in the set is made for it so turned, and copies of
+one molecule are each turned as their own source was. A molecule a step
+moved or made, and one whose source was never turned, is seen as it is
+first seen; so, for now, is one in a set held off the page.
 
 - **By the view's turn**, not by turning the coordinates, which would
   part them from the output they were read from (its vibrations, the

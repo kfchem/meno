@@ -33,8 +33,9 @@ import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
-import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
-import { givenOf } from "./givenConfiguration";
+import { fragmentsHolding, laidOut, partOf, runsAsCame } from "./cleanUp";
+import { runsIn3dOf } from "../../../../lib/chem/cip/in3d";
+import { givenOf, type Given } from "./givenConfiguration";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
@@ -1046,12 +1047,17 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown, configuration } = await drawnOf(chem, m, frame);
-  // (its coordinates nobody's drawing: laid out as new, from the configuration the plugin read of it in 3D where it sends it - not from
-  //  its drawing's wedges - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
-  const model = await laidOut(drawn, style, givenOf(undefined, configuration), undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
-  const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
+  const at = m.atoms.map((a) => (a.el === "H" ? null : drawn.atoms[k] ? k++ : null));
+  const link = at.map((i) => (i == null ? null : drawn.atoms[i].id));
+  // (its allenes' axes and odd cumulenes' cis or trans, which the plugin's block cannot carry, read from its places - and given to the
+  //  layout as a SMILES's own reading gives them: else every such run would be drawn open, the molecule's own configuration lost)
+  // (and the configuration the plugin read of it in 3D, where it sends it - not its drawing's wedges)
+  const given = givenOf(runsGivenIn3d(m, frame, drawn, at), configuration);
+  // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout
+  //  would mark them, and a run it shows other than the places give marked unsaid)
+  const model = await laidOut(drawn, style, given, undefined, true).catch(() => arrangementsMarked(runsAsCame(drawn, given)));
   return { model, link, ordersUnknown };
 }
 
@@ -1075,6 +1081,56 @@ export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Pro
   const { molblock, perceived, configuration } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
   return { drawn, ordersUnknown: wanted && !perceived, ...(configuration ? { configuration } : {}) };
+}
+
+/**
+ * A molecule in 3D's allene axes and odd cumulenes' cis or trans (cip/in3d `runsIn3dOf`), by the drawing's atoms - `at`, each 3D atom's
+ * index in the drawing, none for an H, which the drawing leaves out. Its bonds' orders the drawing's, where the 3D molecule's are all
+ * single (as a file of coordinates gives them, its orders found by the plugin). A group at a run's end that is an H stands for the end's
+ * other group, turned: the other side, so cis is trans and an axis's sense the other. None where none is read, or a run's end has no
+ * group drawn.
+ */
+export function runsGivenIn3d(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">, frame: number, drawn: Model, at: readonly (number | null)[]): Given | undefined {
+  const xyz = placesOf(m, frame);
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const index = new Map(drawn.atoms.map((a, i) => [a.id, i]));
+  const drawnOrder = new Map(drawn.bonds.map((b) => [pair(index.get(b.a)!, index.get(b.b)!), b.order]));
+  const bonds = bondsAt(m, frame).map((b) => {
+    const [p, q] = [at[b.a1], at[b.a2]];
+    return { a1: b.a1, a2: b.a2, order: p != null && q != null ? (drawnOrder.get(pair(p, q)) ?? b.order) : b.order };
+  });
+  const read = runsIn3dOf({ atoms: m.atoms, bonds, xyz });
+  if (!read.axes.length && !read.cumulated.length) return undefined;
+  const around: number[][] = m.atoms.map(() => []);
+  for (const b of bonds) {
+    around[b.a1].push(b.a2);
+    around[b.a2].push(b.a1);
+  }
+  /** A run's ends and their two groups in the drawing's atoms, and whether one group was turned to the other of its end. */
+  const mapped = (atoms: readonly [number, number], refs: readonly [number, number]) => {
+    let turned = false;
+    const ends = atoms.map((e) => at[e]);
+    const groups = refs.map((r, k) => {
+      if (at[r] != null) return at[r];
+      // (the end's other group, beside the H: not the run's next atom)
+      const end = atoms[k];
+      const other = around[end].find((x) => x !== r && at[x] != null && !atoms.includes(x) && bonds.some((b) => pair(b.a1, b.a2) === pair(end, x) && b.order !== 2));
+      if (other == null) return null;
+      turned = !turned;
+      return at[other];
+    });
+    if (ends.some((e) => e == null) || groups.some((g) => g == null)) return null;
+    return { atoms: ends as [number, number], refs: groups as [number, number], turned };
+  };
+  const axes = read.axes.flatMap((a) => {
+    const t = mapped(a.atoms, a.refs);
+    return t ? [{ atoms: t.atoms, refs: t.refs, sense: (t.turned ? -a.sense : a.sense) as typeof a.sense }] : [];
+  });
+  const cumulated = read.cumulated.flatMap((c) => {
+    const t = mapped(c.atoms, c.refs);
+    return t ? [{ atoms: t.atoms, refs: t.refs, cis: t.turned ? !c.cis : c.cis }] : [];
+  });
+  return axes.length || cumulated.length ? { axes, cumulated } : undefined;
 }
 
 /** Where a formula drawn of a molecule in 3D goes: beside it, to its left, level with it. */

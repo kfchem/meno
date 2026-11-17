@@ -12,15 +12,20 @@
  * `cipMarksFrom` puts the answers back on its atoms and bonds by id.
  */
 import { cipLabels, type CipResult, type CipWhy } from "../../../../lib/chem/cip";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 import type { IdentityInput } from "../../../../lib/chem/identity";
 import { protonatedAmineHeld } from "../../../../lib/chem/lonePairCentres";
 import type { Model } from "../store/types";
 import { endpointsHeld } from "../document";
 import { fragmentsHolding } from "./cleanUp";
 import { identityInputOf, labelsDrawnOut } from "./identityOf";
+import { runsOf } from "../../../../lib/chem/perception/stereo/runs";
 
-/** One structure to work out: its input, and the indices in it of the units asked for, with the ids they are on the drawing. */
-export type CipJob = { input: IdentityInput; centres: { at: number; id: number }[]; bonds: { at: number; id: number }[] };
+/**
+ * One structure to work out: its input, and the indices in it of the units asked for, with the ids they are on the drawing - a centre in a
+ * ring drawn in perspective with no depth with what the reading of that ring says (`perspective`: lib/layout/recognised `recognisedSaid`).
+ */
+export type CipJob = { input: IdentityInput; centres: { at: number; id: number; perspective?: string }[]; bonds: { at: number; id: number }[] };
 
 /** What the drawing's R and S, E and Z come to, by atom and bond id. */
 export type CipMarks = {
@@ -59,8 +64,8 @@ export function cipJobsOf(model: Model): CipJob[] {
   return parts.map((gathered) => {
     // (a haptic bond whose ring is not all in the part binds none in it: document endpointsHeld, as cleanUp `partOf`)
     const part = labelsDrawnOut(endpointsHeld(gathered));
-    const { input, bondAt } = identityInputOf(part);
-    const centres = part.atoms.flatMap((a, at) => (askedAtoms.has(a.id) ? [{ at, id: a.id }] : []));
+    const { input, bondAt, perspective } = identityInputOf(part);
+    const centres = part.atoms.flatMap((a, at) => (askedAtoms.has(a.id) ? [{ at, id: a.id, ...(perspective.has(at) ? { perspective: perspective.get(at)! } : {}) }] : []));
     // (by its place among the input's bonds, which a hydrogen bond is not among)
     const asked = part.bonds.flatMap((b, k) => (askedBonds.has(b.id) && bondAt[k] >= 0 ? [{ at: bondAt[k], id: b.id }] : []));
     return { input, centres, bonds: oneForEachRun(input, asked) };
@@ -73,22 +78,18 @@ export function cipJobsOf(model: Model): CipJob[] {
  * double bonds. A bond that is in no run is its own.
  */
 export function oneForEachRun(input: IdentityInput, asked: readonly { at: number; id: number }[]): { at: number; id: number }[] {
-  const doubles = (x: number) => input.bonds.flatMap((d, k) => (d.order === 2 && (d.a === x || d.b === x) ? [k] : []));
-  // (the bonds of the run a double bond is in, in order from one end: each atom between two double bonds, with no others, passes it on)
+  // (the run a double bond is in: perception/stereo/runs, on through each atom with two double bonds)
+  const runs = runsOf(input, "twoDoubles");
+  const doubleOf = new Map<string, number>();
+  input.bonds.forEach((d, k) => {
+    const key = d.a < d.b ? `${d.a},${d.b}` : `${d.b},${d.a}`;
+    if (d.order === 2 && !doubleOf.has(key)) doubleOf.set(key, k);
+  });
+  // (the bonds of the run a double bond is in, in order from the end beyond its first atom)
   const runOf = (at: number): number[] => {
-    // (from atom `x`, having come from `from`: on through each atom with two double bonds and no others)
-    const walk = (from: number, x: number): number[] => {
-      const out: number[] = [];
-      for (let steps = 0; doubles(x).length === 2 && steps < input.atoms.length; steps++) {
-        const k = doubles(x).find((d) => (input.bonds[d].a === x ? input.bonds[d].b : input.bonds[d].a) !== from);
-        if (k == null) break;
-        out.push(k);
-        [from, x] = [x, input.bonds[k].a === x ? input.bonds[k].b : input.bonds[k].a];
-      }
-      return out;
-    };
     const { a, b } = input.bonds[at];
-    return [...walk(b, a).reverse(), at, ...walk(a, b)];
+    const atoms = [...runs.from(b, a).reverse(), ...runs.from(a, b).slice(2)];
+    return atoms.slice(1).map((y, i) => (y === b && atoms[i] === a ? at : doubleOf.get(atoms[i] < y ? `${atoms[i]},${y}` : `${y},${atoms[i]}`)!));
   };
   const kept = new Set<number>();
   const out: { at: number; id: number }[] = [];
@@ -98,8 +99,11 @@ export function oneForEachRun(input: IdentityInput, asked: readonly { at: number
       continue;
     }
     const run = runOf(unit.at);
-    if (kept.has(run[0])) continue;
-    kept.add(run[0]);
+    // (the run known by its lowest bond: its bonds in order run from either end, by the way the asked bond is listed - a
+    //  butatriene's C0=C1, C2=C1, C2=C3 walked from C2=C1 starts at C2=C3 - but they are the same bonds)
+    const key = Math.min(...run);
+    if (kept.has(key)) continue;
+    kept.add(key);
     // (the middle of the run, among those asked: the one nearest the middle of the run's bonds)
     const middle = (run.length - 1) / 2;
     const ofRun = asked.filter((u) => run.includes(u.at));
@@ -115,20 +119,13 @@ export function cipAnswersOf(job: CipJob): CipAnswer[] {
   // (a bond that is an axis - a biaryl's - or one of a run of cumulated double bonds - an allene's, a butatriene's -
   // asked for as its axis or its cis or trans: the run's ends)
   // (the run a bond is in: its two ends, and how many double bonds it has - a plain bond's run itself, one)
+  const cumulated = runsOf(job.input, "twoDoubles");
   const runOf = (at: number): { ends: [number, number]; doubles: number } => {
     const { a, b, order } = job.input.bonds[at];
     if (order !== 2) return { ends: [a, b], doubles: 1 };
-    const doubles = (x: number) => job.input.bonds.filter((d) => d.order === 2 && (d.a === x || d.b === x));
-    const walk = (from: number, x: number): [number, number] => {
-      let steps = 0;
-      for (; doubles(x).length === 2 && steps < job.input.atoms.length; steps++) {
-        const next = doubles(x).map((d) => (d.a === x ? d.b : d.a)).find((y) => y !== from)!;
-        [from, x] = [x, next];
-      }
-      return [x, steps];
-    };
-    const [[p, s], [q, t]] = [walk(b, a), walk(a, b)];
-    return { ends: [p, q], doubles: s + t + 1 };
+    // (on from each of its atoms, away from the other: perception/stereo/runs, through each atom with two double bonds)
+    const [there, back] = [cumulated.from(b, a), cumulated.from(a, b)];
+    return { ends: [there[there.length - 1], back[back.length - 1]], doubles: there.length + back.length - 3 };
   };
   const ends = (at: number) => runOf(at).ends;
   // (an even run of cumulated double bonds - an allene's - is an axis, whether or not one is drawn)
@@ -165,7 +162,10 @@ export function cipMarksFrom(jobs: readonly CipJob[], answers: readonly (readonl
       if (!r) return;
       if ("label" in r) {
         if (r.label === "R" || r.label === "S" || r.label === "r" || r.label === "s") out.centres.set(c.id, r.label);
-      } else out.said.set(`centre-${c.id}`, cipSaid(r.why, "centre"));
+        // (read from a ring drawn in perspective with no depth: said, as the reading is not drawn)
+        if (c.perspective && READ_FROM.has(c.perspective)) out.said.set(`centre-${c.id}`, sentence(c.perspective));
+      } else if (r.why === "undrawn" && c.perspective && !READ_FROM.has(c.perspective)) out.said.set(`centre-${c.id}`, `No R or S: ${c.perspective}.`);
+      else out.said.set(`centre-${c.id}`, cipSaid(r.why, "centre"));
     });
     job.bonds.forEach((b, k) => {
       const r = a[job.centres.length + k];
@@ -188,6 +188,10 @@ export function cipMarksOf(model: Model): CipMarks {
   const jobs = cipJobsOf(model);
   return cipMarksFrom(jobs, jobs.map(cipAnswersOf));
 }
+
+/** The recognition's words for a centre it read (lib/chem/perception/projection/recognise): the rest are why it read none. */
+const READ_FROM = new Set([READ_IN_PERSPECTIVE, READ_AS_HAWORTH]);
+const sentence = (words: string) => `${words[0].toUpperCase()}${words.slice(1)}.`;
 
 /** Why a unit has no descriptor, as its tip says it. */
 export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string {
