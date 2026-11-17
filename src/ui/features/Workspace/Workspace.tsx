@@ -1389,7 +1389,8 @@ function WorkspaceContent({
     y: number;
     down: boolean;
     moved: boolean;
-    pending: MenuTarget | null;
+    /** The menu to open on the way up, made then: what it selects is selected only as it opens - never by a right-drag that pans. */
+    pending: (() => MenuTarget) | null;
   } | null>(null);
   // The buttons held, as the last pointer event had them: a right press
   // while the primary button is held - an atom, the selection or the view
@@ -1426,7 +1427,7 @@ function WorkspaceContent({
     const r = rightPress.current;
     if (e.button !== 2 || !r) return;
     r.down = false;
-    if (r.pending && !r.moved) setMenu(r.pending);
+    if (r.pending && !r.moved) setMenu(r.pending());
     r.pending = null;
   };
   const openMenu = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1445,16 +1446,21 @@ function WorkspaceContent({
     };
     const kind = hoveredPart();
     const r = rightPress.current;
-    const open = (target: MenuTarget) => {
-      if (r?.down) r.pending = target; // macOS: open on the way up
-      else if (!r?.moved) setMenu(target); // Windows, or a Ctrl-click on a Mac
+    // (the menu made as it opens, and only if it opens: a right-drag that pans the view - the system asks for a menu for it too -
+    //  opens none, and so selects nothing)
+    const open = (target: MenuTarget | (() => MenuTarget)) => {
+      const made = typeof target === "function" ? target : () => target;
+      if (r?.down) r.pending = made; // macOS: open on the way up
+      else if (!r?.moved) setMenu(made()); // Windows, or a Ctrl-click on a Mac
     };
     // (the menu of the thing right-clicked, always its kind's; not in the selection, it is selected alone first - whatever was
     //  selected let go, as a file browser does - so that the menu acts on it and says so (the maintainer, 2026-11-14:
     //  docs/EDITOR-2D.md, *Selecting*); the selection moves as the right-click comes, not when an item is chosen)
     const onThing = (thing: SelectableKind, id: number, selected: boolean, more: Partial<MenuTarget> = {}) => {
-      if (!selected) store.getState().selectAlone(thing, id);
-      open({ kind: thing, id, selection: "here", drawing: selectedOf(store.getState()).drawing, ...more, ...place });
+      open(() => {
+        if (!selected) store.getState().selectAlone(thing, id);
+        return { kind: thing, id, selection: "here", drawing: selectedOf(store.getState()).drawing, ...more, ...place };
+      });
     };
     // over a measurement's value, on a molecule in 3D: its own menu
     if (hoveredMeasure3d) {
