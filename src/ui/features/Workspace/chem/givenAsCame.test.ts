@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MENO } from "../../../../lib/chem/style";
-import type { Configuration } from "../../../../lib/chem/stereoOpen";
+import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { asCameSaid, drawingOf } from "./fromSmiles";
 import { centreFrom, configurationOf, molblockOf, plainPicture } from "./testdata/givenPictures";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
@@ -13,7 +13,7 @@ vi.mock("./layOut", async (actual) => ({ ...(await actual<typeof import("./layOu
  * given is said with the count, and its double bonds left open come with a wavy bond.
  */
 
-const given = (configuration: Configuration) => ({ axes: [], cumulated: [], configuration });
+const given = (configuration: IsomerConfiguration) => ({ axes: [], cumulated: [], configuration });
 /** The 1,2-diol C0 C1(O2) C3(O4) C5, its two centres named by the field: drawn plain, it shows neither. */
 const DIOL = molblockOf(plainPicture("CC(O)C(O)C"));
 const c1 = centreFrom(1, [{ at: 0, deg: 330 }, { at: 2, deg: 90 }, { at: 3, deg: 210 }]);

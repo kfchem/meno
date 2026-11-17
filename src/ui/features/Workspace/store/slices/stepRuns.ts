@@ -22,11 +22,12 @@ import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
+import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf, stereoRows } from "../../chem/make3d";
+import { sentOf } from "../../../../../lib/chem/perception/stereo/configuration";
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
-import { EXAMINE_MS, type Configuration } from "../../../../../lib/chem/stereoOpen";
+import { EXAMINE_MS, type IsomerConfiguration } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { boundGroups } from "../../../../../lib/boundOptions";
@@ -50,7 +51,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoInTurns } from "../../workflow/meno";
 import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
@@ -262,7 +263,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno" && step.kind === "check-structures") return checkDrawn(id, at);
     if (by === "meno" && step.kind === "stereoisomers") return stereoDrawn(id, at);
-    if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
+    if (by === "meno") {
+      const d0 = doc.getState();
+      const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
+      doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at, turnsOf: turnsFor }));
+      return void viewsKept(d0, id, before);
+    }
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
     // (a plugin stopped - one it uses not added, or not of a version it works with - runs nothing, saying why)
@@ -551,7 +557,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what came in changed meanwhile - an edit, an undo, its set deleted: its results are of what came in when it started, put in all the same, and the step says it has changed)
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
-    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
+    const before = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
+    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at, turnsOf: turnsFor }));
+    viewsKept(d, id, before);
   }
 
   /**
@@ -679,12 +687,37 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
   }
 
-  /** How a step's results are first turned, where they are what came in worked out: each laid over what it was worked out from, turned as that is (workflow/run `laidOver`). */
+  /**
+   * How a step's results are first turned: where they are what came in worked out, each laid over what it was worked out from, turned as
+   * that is (workflow/run `laidOver`); where the step passed them through, its atoms where they were, turned as the molecule each came from
+   * is (`viewKept`) - one a step moved or made seen as it is first seen.
+   */
   function turnsFor(d: WorkspaceDocument, id: number, kind: StepKind, results: RunResults): (Turn3D | undefined)[] | undefined {
     const input = inputOf(d, id);
-    if (!LAID_OVER.includes(kind) || !input || input.holds === "structures" || results.holds === "conformers") return undefined;
+    if (!input || input.holds === "structures" || results.holds === "conformers") return undefined;
     const turns = get().turns3d;
-    return laidOver(results.molecules, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    const entries = setEntries(input.molecules, input.holds);
+    const turnOf = (e: SetEntry) => (e.from != null ? turns[e.from] : undefined);
+    // (those it gave, then those it set aside: the turns of both, in the order they are put down)
+    const all = [...results.molecules, ...results.rest];
+    return LAID_OVER.includes(kind) ? laidOver(all, entries, turnOf) : viewKept(all, entries, turnOf);
+  }
+
+  /**
+   * Each molecule a run of step `id` put down - none of `before` - that the step passed through, its atoms where they were in what came
+   * in (as `d` had it), turned as the molecule it came from is (workflow/run `viewKept`): face-on one card before, face-on in the next.
+   */
+  function viewsKept(d: WorkspaceDocument, id: number, before: ReadonlySet<number>) {
+    const input = inputOf(d, id);
+    if (!input || input.holds === "structures") return;
+    const made = (doc.getState().molecules3d ?? []).filter((m) => !before.has(m.id));
+    if (!made.length) return;
+    const turns = get().turns3d;
+    const kept = viewKept(made, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    made.forEach((m, i) => {
+      const turn = kept[i];
+      if (turn && !turns[m.id]) get().setTurn3d(m.id, turn);
+    });
   }
 
   /** Molecules new on the page, in the order they were put down, turned as `turns` says. */
@@ -867,7 +900,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
-            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options: { ...options, threads: threadsOf(useAppSettings.getState().calculations) } }, CONFORMERS_MS)).isomers[0];
+            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers.map(sentOf), ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options: { ...options, threads: threadsOf(useAppSettings.getState().calculations) } }, CONFORMERS_MS)).isomers[0];
           let got = rounds ? undefined : await ask(tries);
           if (rounds) {
             const round = async (n: number, draw: number) => {
@@ -878,7 +911,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             const { made: all, run } = await inRounds(round, { ...rounds, draws: true }, (first) => roundsJudge(first, rounds.window));
             got = { ...all, how: [...(all.how ?? []), { label: "Rounds", text: roundsSaid(run, rounds) }] };
           }
-          made = got && partsSideBySide(keptMade(withChosen(withOwnCip(got), which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
+          // (what is said of its stereo: the half of its groups made, and what is said of the structure - chem/groupHalves)
+          made = got && partsSideBySide(keptMade(withChosen(withOwnCip({ ...got, how: [...(got.how ?? []), ...stereoRows(which, 0)] }), which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
@@ -1145,7 +1179,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let block: { molblock: string; configuration?: Configuration };
+        let block: { molblock: string; configuration?: IsomerConfiguration };
         try {
           block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
