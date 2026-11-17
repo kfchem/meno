@@ -10,8 +10,9 @@ import type { OptionValues } from "../../src/lib/options";
 import type { StepKind } from "../../src/ui/features/Workspace/workflow/kinds";
 
 /**
- * The options each plugin's steps take, by kind, as their manifests say (kfchem/meno-plugins, 2026-11-12: orca 0.5.7, gaussian 0.6.1, rdkit 0.1.24; the manifests are read
- * where the plugin is installed, so the test holds the recipe to this list): a recipe naming an option a plugin has not is caught here, not on a card.
+ * The options each plugin's steps take, by kind, as their manifests said when this list was written (kfchem/meno-plugins: orca 0.5.7, gaussian 0.6.1, rdkit 0.1.24). The
+ * manifests are read only where the plugin is installed, so the test holds the recipe to this list, not to the manifests: a recipe naming an option
+ * not on it is caught here, not on a card, but a plugin whose options change is not noticed until the list is brought up to date by hand.
  */
 export const PLUGIN_OPTIONS: Record<string, Record<string, readonly string[]>> = {
   orca: {
@@ -67,7 +68,7 @@ const STAGES = {
 
 /**
  * Words on the page beside a stage's heading: what a chemist opening the template needs to read there. The difference from the program the template
- * is of is said now, in these words (CHEM, 2026-11-11); no equivalence of numbers is claimed.
+ * is of is said now, in these words; no equivalence of numbers is claimed.
  */
 /**
  * The Conformers steps' own options, set on each card: a step keeps the options it was put down with, so none is left to Settings

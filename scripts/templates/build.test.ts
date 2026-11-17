@@ -56,7 +56,7 @@ describe.each([
     expect(doc.wires).toHaveLength(wanted);
   });
 
-  it("names, for each plugin's step, only the options that plugin's manifest has, and its steps' kinds (checked against the manifests as read)", () => {
+  it("names, for each plugin's step, only the options on that plugin's list, and its steps' kinds (the list written from the manifests, not the manifests themselves)", () => {
     for (const r of recipe.filter((x) => x.by)) {
       const known = PLUGIN_OPTIONS[r.by!]?.[r.kind];
       expect([r.key, known !== undefined]).toEqual([r.key, true]);

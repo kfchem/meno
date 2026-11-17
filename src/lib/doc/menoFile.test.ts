@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { strToU8, unzipSync, zipSync } from "fflate";
 import { createHash } from "node:crypto";
 import { DamagedMenoFile, isMenoFile, MENO_MEDIA_TYPE, menoFileBytes, menoKindOf, MOST_FILE, MOST_FILES, MOST_WORKSPACE, NotMenoFile, readMenoFile, readStyleFile, styleFileBytes } from "./menoFile";
@@ -86,6 +86,20 @@ describe("a workspace file", () => {
     expect(took).toBeLessThan(1500);
     expect(file.data("0".repeat(64))).toBeNull();
   }, measured(450));
+
+  it("stamped, is the same bytes when made again later from the same parts - the files it keeps as well", () => {
+    const parts = [{ sha256: sha(picture), name: "figure.png", media: "image/png", data: picture }];
+    const stamp = new Date(Date.UTC(2026, 0, 1));
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(Date.UTC(2026, 3, 1)));
+      const first = menoFileBytes(WORKSPACE, parts, [], stamp);
+      vi.setSystemTime(new Date(Date.UTC(2026, 6, 1)));
+      expect(menoFileBytes(WORKSPACE, parts, [], stamp)).toEqual(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("is written the same off the page", async () => {
     const written = await writeMenoFile(WORKSPACE, [{ sha256: sha(output), name: "job.log", media: "text/plain", data: output }]);
