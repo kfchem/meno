@@ -1,7 +1,7 @@
 /**
  * A structure's identity and symmetry (docs/WORKFLOWS-FOUNDATION.md, PR 2),
- * from the canonical numbering Clean-up writes its layouts by
- * (src/lib/layout/canonical.ts):
+ * from the canonical numbering of the core (perception/symmetry), which
+ * Clean-up writes its layouts by too:
  * - its identity: the structure written in its own order - the same for
  *   the same structure however its atoms are numbered, another for any
  *   other, a chiral one's mirror image included - and a short key of it;
@@ -17,7 +17,7 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`).
  */
-import { canonicalSearched, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
+import { canonicalSearched, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "./perception/symmetry";
 import { lonePairCentres } from "./lonePairCentres";
 import { CHELATE_RING } from "./chelateRing";
 import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
