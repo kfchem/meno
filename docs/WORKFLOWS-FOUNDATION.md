@@ -915,7 +915,9 @@ are its out,out-or-in,in and its in,out); both said beside a count. A cage
 ties its bridgeheads' senses to each other: where an open bridgehead's two
 senses are one structure (norbornane's, adamantane's, cubane's) it is no
 place to give and the count stands; where they are not (norbornan-2-ol,
-camphor, tropan-3-ol, twistane), no count is given, and that is said - a
+camphor, tropan-3-ol, twistane), no count is given, and that is said; so
+too for a cage's N of three unlike groups whose sense identity does not yet
+keep (Troeger's base: two, a resolved pair, once it does) - a
 bridgehead being one joined to another atom by three paths with three
 atoms or fewer between (decalin's ring junctions are none; their bridges
 have four). Past 1024 ways (ten open places), none is written and the

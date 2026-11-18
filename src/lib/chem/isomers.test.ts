@@ -90,6 +90,12 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
     expect(count("C1CCC2CCCCC2C1")).toBe(2);
   });
 
+  it("gives Troeger's base no count, said: its N's senses identity does not yet keep (two, a resolved pair); a quinuclidine's N and an aziridine's as before", () => {
+    expect(isomersOf(smilesInput("Cc1ccc2c(c1)CN3c4ccc(C)cc4CN2C3") as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_CAGE });
+    expect(count("OC1CN2CCC1CC2")).toBe(2);
+    expect(count("CC1CN1C")).toBe(2);
+  });
+
   it(`says how many ways there were past the most it writes`, () => {
     expect(isomersOf(smilesInput("CC(O)CC(O)CC(O)C") as unknown as IdentityInput, 4)).toEqual({ tooMany: 8 });
   });
