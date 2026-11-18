@@ -292,6 +292,22 @@ describe("a ring bound to a metal atom by atom, as drawn by hand", () => {
     atoms: [{ el: "Fe" }, ...Array.from({ length: 10 }, () => ({ el: "C" }))],
     bonds: [...ring(1), ...ring(6), ...Array.from({ length: 10 }, (_, i) => ({ a: 0, b: i + 1, order: 1 }))],
   };
+  it("is found round an actinide as round iron: uranocene's and thorocene's two eight-rings (foundation part 3, B1)", async () => {
+    const { ringsBondedAtomByAtom } = await import("./perceive");
+    const eight = (from: number) => Array.from({ length: 8 }, (_, i) => ({ a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 1 : 2 }));
+    for (const el of ["U", "Th"]) {
+      const actinocene = {
+        atoms: [{ el }, ...Array.from({ length: 16 }, () => ({ el: "C" }))],
+        bonds: [...eight(1), ...eight(9), ...Array.from({ length: 16 }, (_, i) => ({ a: 0, b: i + 1, order: 1 }))],
+      };
+      const found = ringsBondedAtomByAtom(actinocene);
+      expect(found.map((r) => [r.metal, r.ring.length]), el).toEqual([
+        [0, 8],
+        [0, 8],
+      ]);
+    }
+  });
+
   it("is found: each ring, its metal, and the bonds from the metal to its atoms", async () => {
     const { ringsBondedAtomByAtom } = await import("./perceive");
     const found = ringsBondedAtomByAtom(ferrocene);

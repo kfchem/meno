@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { readAs } from "../chem/drawing";
 import { Suspense, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
@@ -65,7 +66,7 @@ function morphOf(model: Model, from: Map<number, { x: number; y: number }>, to: 
   const drawing = (ids: readonly number[], place: (id: number) => { x: number; y: number }): MatchDrawing => {
     const index = new Map(ids.map((id, k) => [id, k]));
     return {
-      atoms: ids.map((id) => ({ el: at.get(id)!.el, ...(at.get(id)!.charge ? { charge: at.get(id)!.charge } : {}), ...place(id) })),
+      atoms: ids.map((id) => ({ el: readAs(at.get(id)!), ...(at.get(id)!.charge ? { charge: at.get(id)!.charge } : {}), ...place(id) })),
       bonds: model.bonds.flatMap((b) => (index.has(b.a) && index.has(b.b) ? [{ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }] : [])),
     };
   };

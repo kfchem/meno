@@ -19,7 +19,9 @@ const slash = (p: string) => p.split(sep).join("/");
  * What a core file may import from outside it, by its path from `src/`: data tables, each with why. A new entry is a decision, made in a review.
  * `lib/chem/elements` is the element table (symbol, number, name, radii): data, imported by name.
  */
-export const ALLOWED_OUTSIDE: { path: string; why: string }[] = [{ path: "lib/chem/elements", why: "the element table: data" }];
+export const ALLOWED_OUTSIDE: { path: string; why: string }[] = [
+  { path: "lib/chem/elements", why: "the element table: data" },
+];
 
 /** The module names a file's code imports, from its static `import`s and `export ... from`s and its dynamic `import()`s, comments left out: string-literal module names only. */
 export function importsOf(code: string): string[] {

@@ -140,6 +140,23 @@ describe("an allene's axis and an odd cumulene's cis or trans", () => {
   });
 });
 
+describe("a double bond in a ring: E or Z only in a ring of eight atoms or more, and in none", () => {
+  it("labels one in no ring, as (E)-but-2-ene's, and one in a ring of eight, as (E)-cyclooctene's; none in a ring of six, as cyclohexene's", () => {
+    expect(cipOf("C/C=C/C")).toEqual(["C1=C2:E"]);
+    expect(cipOf(String.raw`C/C=C\C`)).toEqual(["C1=C2:Z"]);
+    expect(cipOf("C1CCC/C=C/CC1")).toEqual(["C4=C5:E"]);
+    expect(cipOf("C1CCC=CC1")).toEqual([]);
+  });
+
+  it("tells a centre's (Z)-cyclooct-1-enyl from its (E)-cyclooct-1-enyl by rule 3: their double bonds, in rings of eight, each a unit", () => {
+    expect(cipOf(String.raw`O[C@H](/C1=C\CCCCCC1)/C1=C/CCCCCC1`)).toEqual(["C1:S", "C2=C3:Z", "C10=C11:E"]);
+  });
+
+  it("tells none apart at a centre whose two cyclohept-1-enyls are written one each way: in rings of seven, their double bonds are no units", () => {
+    expect(cipOf(String.raw`O[C@H](/C1=C\CCCCC1)/C1=C/CCCCC1`)[0]).toBe("C1:alike");
+  });
+});
+
 describe("what gives no label, and why", () => {
   it("says a ligand's double bond left open in the drawing, by its bond", () => {
     const input = cipInput("CC=C[C@H](O)/C=C/C");
@@ -182,6 +199,45 @@ describe("what gives no label, and why", () => {
     };
     expect(three("F[CH-]Cl")).toEqual(["C1:R"]);
     expect(three("F[CH+]Cl")).toEqual(["C1:unsure"]);
+  });
+
+  it("takes three bonds and two lone pairs for no centre: a three-bonded halogen is T-shaped, its ligands in one plane with it", () => {
+    // (an aryl-lambda3-iodane ArI(OAc)(OBz), and a three-bonded Cl and Br, each with three different ligands, given a configuration
+    //  as a wedge would give it: no R or S, the same words as for three bonds and an empty place; a sulfonium's S, of one lone
+    //  pair, beside them keeps its label)
+    const given = (smiles: string, at: number, neighbours: number[]) => {
+      const input = cipInput(smiles);
+      return cipSaid({ ...input, atoms: input.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: 1 as const } } : a)) });
+    };
+    expect(given("CC(=O)O[I](OC(=O)c1ccccc1)c1ccccc1", 4, [3, 5, 14])).toEqual(["I4:unsure"]);
+    expect(given("F[Cl](Br)C", 1, [0, 2, 3])).toEqual(["Cl1:unsure"]);
+    expect(given("F[Br](Cl)C", 1, [0, 2, 3])).toEqual(["Br1:unsure"]);
+    expect(given("C[S+](CC)c1ccccc1", 1, [0, 2, 4])[0]).toMatch(/^S1:[RS]$/);
+  });
+
+  it("takes four bonds for a centre only with no lone pair: a see-saw (one) or a square (two) is no tetrahedron", () => {
+    // (each atom of four given a configuration on its four neighbours, as a wedge would give it: a sulfurane SR4, SF4's form, and
+    //  IF4-'s and XeF4's, each with four different groups, name none; a sulfoximine's S, a phosphonate's P, an ammonium N+, a
+    //  borate B- and a silane's Si - four and no lone pair - keep their R or S)
+    const four = (smiles: string, el: string) => {
+      const input = cipInput(smiles);
+      const at = input.atoms.findIndex((a) => a.el === el);
+      const neighbours = input.bonds.flatMap((b) => (b.a === at ? [b.b] : b.b === at ? [b.a] : []));
+      expect(neighbours, smiles).toHaveLength(4);
+      return cipSaid({ ...input, atoms: input.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: 1 as const } } : a)) });
+    };
+    expect(four("CS(CC)(OC)c1ccccc1", "S")).toEqual(["S1:unsure"]);
+    expect(four("F[I-](Cl)(Br)C", "I")).toEqual(["I1:unsure"]);
+    expect(four("F[Xe](Cl)(Br)C", "Xe")).toEqual(["Xe1:unsure"]);
+    for (const [smiles, el] of [
+      ["CS(=O)(=NC)c1ccccc1", "S"],
+      ["CP(=O)(OC)OCC", "P"],
+      ["C[N+](CC)(CCC)c1ccccc1", "N"],
+      ["C[B-](CC)(CCC)c1ccccc1", "B"],
+      ["C[Si](CC)(CCC)c1ccccc1", "Si"],
+    ]) {
+      expect(four(smiles, el)[0], smiles).toMatch(new RegExp(`^${el}\\d+:[RS]$`));
+    }
   });
 
   it("6, the 2018 proposal: a spiro atom between two rings each with an N and a C=O - its N alike, its C alike - R or S, the other in the mirror image", () => {

@@ -11,6 +11,7 @@ import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
+import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
@@ -142,6 +143,11 @@ export type Bond = BondChem & {
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
   dative?: boolean;
+  /**
+   * The bonds (by id) it passes behind where they cross on the page, said by the chemist: drawn with a gap there (chem/crossings). A look; kept
+   * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
+   */
+  behind?: number[];
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
@@ -583,6 +589,14 @@ export type Molecule3D = {
    */
   partOf?: true;
   /**
+   * Its conformers a structure of several parts', each part searched alone
+   * (docs/WORKSPACE.md, *A structure of several parts*): each frame one
+   * part's conformer, the others at their lowest - its frames weighed as one
+   * compound's conformers would be shares of nothing. No share is shown of
+   * it, and Populations and Ensemble refuse it, saying why.
+   */
+  partsAlone?: true;
+  /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
    * its energies are (`energies`), where it gave them: the force field's
@@ -990,6 +1004,8 @@ export type StepJob = {
   reused?: true;
   /** A job taken up again: what it gave when it was first read, as one digest - what it gives now must be the same. */
   gave?: string;
+  /** Its options, where they are not its run's: a step whose options its entries take from a property, one job's group's (lib/boundOptions `boundGroups`). */
+  options?: OptionValues;
 };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
@@ -1024,12 +1040,18 @@ export type WorkflowStep = {
   y: number;
   by?: string;
   options?: OptionValues;
+  /** Its options each entry takes from a property it carries, by option id: the property's name (lib/boundOptions; docs/WORKFLOWS.md, *Options from a property*). */
+  bound?: Bound;
   ran?: StepRan;
   /** Its earlier runs, newest first. */
   runs?: StepRunKept[];
   running?: StepRunning;
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
+  /** A Repeat's frame (workflow/repeat): how wide and how high from its card's top left, in the page's units. */
+  frame?: { w: number; h: number };
+  /** A Repeat's steps: those whose cards' middles lie inside its frame, in reading order (workflow/model `repeatsSettled`). */
+  holds?: number[];
 };
 /** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
@@ -1521,6 +1543,10 @@ export type EditorState = {
   togglePdfSel: (id: number) => void;
   /** A PDF's pages spread out, or gathered again. */
   spreadPdf: (id: number, spread: boolean) => void;
+  /** PDFs spread or gathered together, one step (a menu's item reaching the PDFs selected). */
+  spreadPdfs: (ids: readonly number[], spread: boolean) => void;
+  /** PDFs made icons or full size together, one step. */
+  iconPdfs: (ids: readonly number[], icon: boolean) => void;
   /** A page of a PDF spread put in a place of its own, its middle at (x, y) on the page, on top of the others: one step for a drag (`gesture`). */
   placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) => void;
   /** A PDF's pages spread put back in their rows, none in a place of its own. */
@@ -1603,6 +1629,8 @@ export type EditorState = {
   addCycle: (cycle: Omit<Cycle, "id">) => number | null;
   /** A cycle turned round, given arrows coming in and going out, or a colour - the words by its arrows put where `captions` says - one step, or one a gesture's changes make together. */
   updateCycle: (id: number, patch: CyclePatch, gesture?: string, captions?: { id: number; x: number; y: number }[]) => void;
+  /** Cycles given the same patch, one step. */
+  updateCycles: (ids: readonly number[], patch: CyclePatch) => void;
   removeCycle: (id: number) => void;
   /**
    * The arrows and "+" signs selected for themselves - one standing alone,
@@ -1728,6 +1756,8 @@ export type EditorState = {
     patch: CaptionPatch,
     gesture?: string,
   ) => void;
+  /** Words each given their own patch, one step named `label` (a menu's item reaching the words selected). */
+  updateCaptions: (patches: readonly (readonly [number, CaptionPatch])[], label: string) => void;
   removeCaption: (id: number) => void;
   /** All the letters of the words `ids` in a colour, or (null) in none of their own - a gesture's changes one step. */
   colourWords: (ids: number[], color: string | null, gesture?: string) => void;
@@ -1836,7 +1866,7 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
-  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
+  updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
   removeStep: (id: number, asked?: boolean) => void;
@@ -1952,6 +1982,11 @@ export type EditorState = {
     grow?: boolean;
     /** Begun with what it says selected: the atom's menu's *Edit label* on a carbon drawn as a corner. */
     selectAll?: boolean;
+    /**
+     * Begun on the selection's atoms - a letter typed with atoms selected, wherever the pointer is: every atom it is written on,
+     * the one with the caret among them (docs/EDITOR-2D.md, *Labels typed in place*). Unset, the one atom's alone.
+     */
+    atoms?: number[];
   };
   /**
    * How the last label edit ended: kept and changed (`kept`),
@@ -2044,6 +2079,8 @@ export type EditorState = {
   stepCharges: (ids: Iterable<number>, step: 1 | -1) => void;
   /** An atom's unpaired electron given, or taken away. */
   toggleRadical: (id: number) => void;
+  /** An unpaired electron given to every atom of `ids`, or taken from each, one step. */
+  setRadicals: (ids: Iterable<number>, on: boolean) => void;
   deleteAtom: (id: number) => void;
   deleteBond: (id: number) => void;
   /**
@@ -2061,16 +2098,21 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**
    * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it alone,
    * selected or not, as one step. False where it would change nothing.
    */
   bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
   /**
-   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): the first selects it alone (`clickSelectBond`) and
-   * changes nothing; the second makes it double, or a double's second line its next side; the third, a triple.
+   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): one turns its kind as the key 1 does - a double or
+   * triple made single, a single round its wedge, hashed wedge and plain with the other end narrow; two make it double, or a
+   * double's second line its next side; three, a triple.
    */
   bondClicked: (id: number, clicks: number) => void;
+  /** A click's turn of a bond taken back where the drawing is still `after`, the one it made (utils/press `turnTakenBack`); false where it is not. */
+  takeBackTurn: (after: unknown) => boolean;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
@@ -2084,8 +2126,6 @@ export type EditorState = {
    * selection as it was, its shade drawn back in (`clickTakeBack`).
    */
   clickSelectAtom: (id: number) => void;
-  /** A click on a bond: it selected, alone, with its atoms (docs/EDITOR-2D.md, *How it is worked*). */
-  clickSelectBond: (id: number) => void;
   /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
   clickTakeBack: (id: number) => boolean;
   /**
@@ -2101,6 +2141,8 @@ export type EditorState = {
   selectStructure: (id: number) => void;
   selectAll: () => void;
   clearSel: () => void;
+  /** The thing right-clicked, selected alone, whatever was selected let go (docs/EDITOR-2D.md, *Selecting*). */
+  selectAlone: (kind: import("./slices/selectionSlice").SelectableKind, id: number) => void;
   setBoxSelect: (box: EditorState["boxSelect"]) => void;
   /** Atoms moved together - a selection dragged or turned - the moves of one gesture one undo step. */
   /**
@@ -2108,10 +2150,14 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
+  settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
   turnSelectionOver: (axis: "vertical" | "horizontal") => void;
+  /** Before a turn of the selection: the depth worked out for a ring in perspective drawn with none stored on its atoms, in the turn's own step (chem/depthHeld), so that the turn keeps the compound. */
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => void;
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
@@ -2314,7 +2360,7 @@ export type EditorState = {
     excludeId?: number | null,
   ) => number | null;
   /** An atom's label opened to be written: as it is, or begun with `initial`, a letter typed over it. */
-  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean }) => void;
+  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean; atoms?: readonly number[] }) => void;
   setLabelEditValue: (value: string) => void;
   /** The label written kept; `typed`, what was typed for it, where it is read as something else; `byEnter`, where Enter kept it. */
   commitLabelEdit: (typed?: string, byEnter?: boolean) => void;

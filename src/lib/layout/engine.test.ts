@@ -1037,7 +1037,8 @@ describe("a macrocycle through a block of fused rings", () => {
         expect(side(ra, b.a, b.b) === side(rb, b.a, b.b), smiles).toBe(b.stereo!.cis);
       }
     }
-  });
+    // (a long chain laid out round a block: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_800));
 
   it("draws rifampicin's naphthalene regular, its ansa chain round it, the hydrazone outside", () => {
     // started from the macrocycle, the naphthalene was squashed to fit it;
@@ -1106,13 +1107,12 @@ describe("a tert-butyl, and the other tridents", () => {
   };
 
   it("has its methyls fanned 60 degrees apart about the line of the bond into it", () => {
-    // (an ester's, a carbamate's, an alcohol's, on a ring, and a
-    // trimethylsilyl's - grown from its middle atom, too - and the other
-    // tridents: choline's trimethylammonium, a CF3, a CCl3)
+    // (an ester's, a carbamate's, on a ring, and a trimethylsilyl's -
+    // grown from its middle atom, too - and the other tridents: choline's
+    // trimethylammonium, a CF3, a CCl3; each a group on a skeleton)
     for (const smiles of [
       "CC(=O)OC(C)(C)C",
       "CC(C)(C)OC(=O)NCC(=O)O",
-      "CC(C)(C)O",
       "CC1=CC(=C(C(=C1)C(C)(C)C)O)C(C)(C)C",
       "C[Si](C)(C)C#C",
       "C[N+](C)(C)CCO",
@@ -1129,8 +1129,8 @@ describe("a tert-butyl, and the other tridents", () => {
     }
   });
 
-  it("is not neopentane, nor CF4: four like ends make a cross", () => {
-    for (const smiles of ["CC(C)(C)C", "FC(F)(F)F"]) {
+  it("is not neopentane, nor CF4, nor tert-butanol or CFCl3: four ends make a cross", () => {
+    for (const smiles of ["CC(C)(C)C", "FC(F)(F)F", "CC(C)(C)O", "FC(Cl)(Cl)Cl"]) {
       const g = input(smiles);
       const { x, y } = layout2D(g);
       const ts = around(g, 1)

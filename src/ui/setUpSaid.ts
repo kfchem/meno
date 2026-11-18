@@ -7,12 +7,16 @@
  * off a change of state.
  */
 import { onSetUpFailed } from "../lib/calc/workers";
+import { useFirstSetUp } from "../lib/plugins/firstSetUp";
 import type { Say } from "../lib/plugins/usedBefore";
 import { useNotices } from "./notices";
 
 /** Says each set-up that fails from now on (`useNotices`, one that stays); the returned function stops it. */
 export function sayFailedSetUps(): () => void {
   return onSetUpFailed((p, why) => {
+    // (the plugin the first start's card sets up: said on the card, with Try again - not twice; any other said as ever)
+    const card = useFirstSetUp.getState();
+    if (card.phase === "going" && card.plugin?.id === p.id) return;
     // (staying, it is put away by its own button - the notices' action, dismissing it once done)
     useNotices.getState().show({ id: `set-up ${p.id}`, title: "Plugin not added", text: why, stays: true, action: { label: "OK", run: () => undefined } });
   });
