@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Atom, Bond, Model } from "../store/types";
+import { identityOfDrawn } from "../chem/identityOf";
+import { identityText } from "../../../../lib/chem/identity";
+import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { angleFrom, isEndOn, newmanDrawing, newmanExtension, newmansIn, newmanTurn, setOf, spokeAngles, turnedAbout, turnedTo, turnOf } from "./newman";
 
 const pair = (at = { x: 0, y: 0 }) => newmanDrawing({ at, firstId: 1, firstBondId: 100 });
@@ -150,5 +153,47 @@ describe("a spoke dragged round the circle", () => {
     expect(newmanTurn(m, 99, polar(100))).toBeNull();
     const odd = withGroups([[2, 33]]);
     expect(newmanTurn(odd, 10, polar(100))).toBeNull();
+  });
+});
+
+describe("a Newman pair read as Meno reads a drawing (known answers)", () => {
+  /** A staggered Newman pair with the groups given at the front's spokes (90, 210, 330) and the back's (30, 150, 270), an H left undrawn. */
+  function pair(front: string[], back: string[]): Model {
+    const d = newmanDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 });
+    const atoms: Atom[] = [...d.atoms];
+    const bonds: Bond[] = [...d.bonds];
+    let id = 10;
+    const put = (els: string[], on: number, angles: number[]) =>
+      els.forEach((el, k) => {
+        if (el === "H") return;
+        const t = (angles[k] * Math.PI) / 180;
+        atoms.push({ id, el, r: 0.9, x: L * Math.cos(t), y: L * Math.sin(t) });
+        bonds.push({ id: 100 + id, a: on, b: id, order: 1 });
+        id++;
+      });
+    put(front, 1, spokeAngles("A", false, false));
+    put(back, 2, spokeAngles("B", true, false));
+    return { atoms, bonds };
+  }
+
+  it("reads 1,2-dichloro-1,2-difluoroethane: groups in one order front and back, the meso form; the back's two swapped, one of the chiral pair", () => {
+    const MESO = "F[C@H](Cl)[C@@H](F)Cl";
+    // (the meso form is its own mirror image)
+    expect(identityText(fromSmiles(MESO))).toBe(identityText(fromSmiles("F[C@@H](Cl)[C@H](F)Cl")));
+    const meso = identityOfDrawn(pair(["F", "Cl", "H"], ["F", "Cl", "H"]));
+    const chiral = identityOfDrawn(pair(["F", "Cl", "H"], ["Cl", "F", "H"]));
+    expect([meso.complete, chiral.complete]).toEqual([true, true]);
+    expect(meso.text).toBe(identityText(fromSmiles(MESO)));
+    expect([identityText(fromSmiles("F[C@H](Cl)[C@H](F)Cl")), identityText(fromSmiles("F[C@@H](Cl)[C@@H](F)Cl"))]).toContain(chiral.text);
+  });
+
+  it("is the same compound after a spoke is turned round the circle: a turn changes the conformation, not the configuration", () => {
+    const m = pair(["F", "Cl", "H"], ["Cl", "F", "H"]);
+    const back = m.atoms.find((a) => a.id === 12)!;
+    const moves = newmanTurn(m, back.id, turnedAbout({ x: back.x, y: back.y }, { x: 0, y: 0 }, 120))!;
+    expect(moves).not.toBeNull();
+    const moved = new Map(moves.map((p) => [p.id, p]));
+    const turned = { atoms: m.atoms.map((a) => (moved.has(a.id) ? { ...a, ...moved.get(a.id)! } : a)), bonds: m.bonds };
+    expect(identityOfDrawn(turned).text).toBe(identityOfDrawn(m).text);
   });
 });

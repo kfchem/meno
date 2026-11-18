@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanUp } from "../chem/cleanUp";
+import { cleanUp, CleanUpRefused } from "../chem/cleanUp";
 import { identityOfDrawn } from "../chem/identityOf";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";

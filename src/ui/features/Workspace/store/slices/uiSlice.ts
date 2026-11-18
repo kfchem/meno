@@ -18,7 +18,6 @@ import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
 import { abbreviationOf, readsAsNothing } from "../../../../../lib/chem/abbreviations";
 import { implicitHydrogens } from "../../../../../lib/chem/molecule";
-import { useNotices } from "../../../../notices";
 import { restyledDocument } from "../../restyle";
 import { easeStyle } from "../../styleEase";
 

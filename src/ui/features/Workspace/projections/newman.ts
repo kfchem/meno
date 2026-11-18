@@ -1,5 +1,5 @@
 /**
- * The Newman tool's drawing (docs/EDITOR-2D.md, *Projections*; foundation part 10): two carbons on the line of sight - the front atom nearer - drawn at
+ * The Newman tool's drawing (docs/EDITOR-2D.md, *Projections*): two carbons on the line of sight - the front atom nearer - drawn at
  * ONE place on the page, with the circle round it. The front atom's bonds meet at the circle's centre and the back atom's start at its rim (Moss 1996,
  * *Newman Projection*: the circle stands for the nearer atom - so say only that, never "the back atom is the circle"). The central bond is seen
  * end-on: it has no drawn length and no direction. Three free positions on each atom, *spokes*, staggered; a spoke's end dragged round the circle
@@ -9,7 +9,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isEndOn } from "../../../../lib/chem/layout2d";
 import { CHAIR_R, ECLIPSED_OFFSET_DEG, newman } from "../../../../lib/chem/perception/projection/solids";
-import { standardView } from "../../../../lib/chem/perception/projection/views";
+import { seen, seenFree, standardView } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond } from "../store/types";
 import type { ChairDrawing } from "./chair";
 
@@ -30,7 +30,10 @@ export function newmanDrawing(opts: { at: { x: number; y: number }; firstId: num
   const scale = newmanScale(opts.length);
   const atoms: Atom[] = solid.atoms.map((p, k) => ({ id: opts.firstId + k, el: "C", r: 0.9, x: opts.at.x, y: opts.at.y, z: p[2] * scale, stereoCentre: true, stereoShown: true }));
   const bonds: Bond[] = [{ id: opts.firstBondId, a: atoms[0].id, b: atoms[1].id, order: 1 }];
-  return { atoms, bonds, ring: atoms.map((a) => a.id), solid, view: standardView(solid), scale };
+  // (its drawing is its true view, end-on: each spoke where the view puts its direction)
+  const view = standardView(solid);
+  const drawing = { atoms: seen(solid, view), free: seenFree(solid, view).map(({ free, seen: s }) => ({ free, x: s.x, y: s.y, z: s.z })) };
+  return { atoms, bonds, ring: atoms.map((a) => a.id), solid, scale, drawing };
 }
 
 /** Whether a bond is seen end-on: its two atoms at one place on the page, one nearer than the other (a Newman's central bond): lib/chem/layout2d's, the one place that says so. */

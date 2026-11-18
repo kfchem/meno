@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { chairOf, depthRings } from "./chair";
+import { centredAt } from "../utils/copyPaste";
 
 /** A page, its store and document. */
 function page() {
