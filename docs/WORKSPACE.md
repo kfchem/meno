@@ -2321,7 +2321,7 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   are those, of all the shapes allow, that fit the lengths best with the
   most aromatic rings: a search over each conjugated part. A sulfonyl
   has two S=O and a phosphate one P=O, to its shortest oxygens, as an
-  arsine oxide its As=O and a stibine oxide its Sb=O (backlog 183); a nitro
+  arsine oxide its As=O and a stibine oxide its Sb=O; a nitro
   group's charges are N+ and O-. Bonds to metals stay single; a
   metalloid's (B, Si, Ge, As, Sb, Te) count in its neighbours' valences
   as a nonmetal's do, so SbPh3's rings are aromatic and nothing on them
