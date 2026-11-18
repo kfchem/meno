@@ -4,19 +4,24 @@
  * its best, the same from the other side, those tied with it, and the next few. The reading is the core's; these views are the engine's.
  */
 import type { CageViewsOf, ViewPoint } from "../chem/perception/projection/depth";
-import { isCage, projectCage, tiedViews, type CageView } from "./cage";
-import { perceive } from "./perceive";
+import { CAGE_MOST_ATOMS, isCage, projectCage, tiedViews, type CageView } from "./cage";
+import { perceive, type Molecule } from "./perceive";
 import { ofTheStructure } from "../chem/perception/graph";
 
 /** The engine's views of a drawing's ring systems, for `withRecognisedDepth` and `recognisedSaid` (lib/chem/perception/projection/depth). */
 export const cageViews: CageViewsOf = (atoms, drawn) => {
-  const bonds = drawn.filter(ofTheStructure);
-  const mol = perceive({ atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) });
+  // (the drawing perceived by the engine once, and only where a system is asked of that could be a cage: a flake of many fused rings never)
+  let mol: Molecule | null = null;
+  const perceived = () =>
+    (mol ??= perceive({ atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: drawn.filter(ofTheStructure).map(({ a, b, order }) => ({ a, b, order })) }));
   return (system) => {
-    // (the engine's ring system holding these atoms: its own ring set, the same atoms)
-    const sys = mol.systems.find((s) => s.atoms.length === system.length && system.every((i) => s.atoms.includes(i)));
+    // (no cage is larger than the engine takes one to be - its own test, `isCage` - and a bridged system so large has no views of its own)
+    if (system.length > CAGE_MOST_ATOMS) return { cage: false, views: () => [] };
+    // (the engine's ring system holding these atoms - its own ring set; it may hold more, a metal's star atoms round a ring bound to it)
+    const m = perceived();
+    const sys = m.systems.find((s) => system.every((i) => s.atoms.includes(i)));
     if (!sys) return { cage: false, views: () => [] };
-    return { cage: isCage(mol, sys), views: () => viewsOf(mol, sys, system) };
+    return { cage: isCage(m, sys), views: () => viewsOf(m, sys, system) };
   };
 };
 
