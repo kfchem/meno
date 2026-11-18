@@ -6,7 +6,7 @@ import type { Watch } from "../../../../lib/calc/client";
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true, invoke: () => Promise.reject(new Error("no app in tests")) }));
 vi.mock("./pictures", () => ({ picturePng: () => Promise.resolve(new Uint8Array([137, 80, 78, 71])), pngPixels: () => Promise.resolve({ width: 1, height: 1, data: [255, 255, 255, 255] }) }));
 const worker = vi.hoisted(() => ({ current: null as ChemClient | null }));
-vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: () => Promise.resolve(worker.current), rolePlugin: () => undefined }));
+vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: () => Promise.resolve(worker.current), rolePlugin: () => undefined, roleChosen: () => undefined }));
 
 import { FIRST_READ_MS, READ_MS, readPicture } from "./figures";
 
@@ -40,7 +40,7 @@ describe("a picture read by its plugin", () => {
   it("gives the first picture a worker reads time to load the plugin's model", async () => {
     const w = fakeWorker();
     worker.current = w.chem;
-    const read = outcome(readPicture(PICTURE));
+    const read = outcome(readPicture(PICTURE, "plugin"));
     await vi.advanceTimersByTimeAsync(READ_MS + 1000);
     expect(w.overdue).toEqual([]);
     w.answer();
@@ -50,11 +50,11 @@ describe("a picture read by its plugin", () => {
   it("gives up on a later picture that takes far longer than a picture is read in, saying so, and lets its worker be started afresh", async () => {
     const w = fakeWorker();
     worker.current = w.chem;
-    const first = outcome(readPicture(PICTURE));
+    const first = outcome(readPicture(PICTURE, "plugin"));
     await vi.advanceTimersByTimeAsync(0);
     w.answer();
     await first;
-    const later = outcome(readPicture(PICTURE));
+    const later = outcome(readPicture(PICTURE, "plugin"));
     await vi.advanceTimersByTimeAsync(READ_MS + 1);
     expect(await later).toBe("Reading the picture took too long, so nothing was read from it.");
     // (the question its worker was held on given up: the worker stopped, to be started afresh when next asked - lib/plugins/queue)
@@ -65,13 +65,13 @@ describe("a picture read by its plugin", () => {
   it("gives a worker started afresh the time to load the model again", async () => {
     const before = fakeWorker();
     worker.current = before.chem;
-    const first = outcome(readPicture(PICTURE));
+    const first = outcome(readPicture(PICTURE, "plugin"));
     await vi.advanceTimersByTimeAsync(0);
     before.answer();
     await first;
     const fresh = fakeWorker();
     worker.current = fresh.chem;
-    const read = outcome(readPicture(PICTURE));
+    const read = outcome(readPicture(PICTURE, "plugin"));
     await vi.advanceTimersByTimeAsync(READ_MS + 1000);
     expect(fresh.overdue).toEqual([]);
     fresh.answer();

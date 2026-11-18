@@ -19,7 +19,8 @@ import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
 import { fitToPicture } from "../../../../lib/figure/inkFit";
 import { boxPicture } from "../../../../lib/pdf/reader";
 import { setAtomLabel } from "../../../../lib/pdf/figures";
-import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
+import { chemWorker, roleChosen, rolePlugin } from "../../../../lib/roles/worker";
+import { pictureReadOff } from "./pictureOff";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
@@ -118,8 +119,8 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
   return drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C") || p.d.filter((s) => s[0] === "L").length >= 6));
 }
 
-/** Why a figure gave no structure: what to say. */
-export type Unread = { none: string };
+/** Why a figure gave no structure: what to say - and, a picture Meno read nothing from, the plugin chosen to read pictures, by name, to offer. */
+export type Unread = { none: string; plugin?: string };
 
 /** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
 export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes - what to say of them. */ left?: string };
@@ -129,16 +130,58 @@ export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where st
  * where the figure has them - its middle at naught, a bond as long as Meno
  * draws one - each tied to where it was drawn; or why it gave none.
  */
-export async function readBox(sha256: string, page: number, box: Box, working?: (what: string) => void): Promise<FigureResult | Unread> {
+export async function readBox(sha256: string, page: number, box: Box, working?: (what: string) => void, by?: "plugin"): Promise<FigureResult | Unread> {
   if (!isTauri()) return { none: "Figures are read in the app." };
   const drawn = await invoke<FigureDrawn>("pdf_figure", { sha: sha256, page, box });
+  if (by === "plugin") return readBoxPicture(sha256, page, box);
   const read = figureFrom(drawn, sha256, page);
-  // (a figure that is a picture: the picture read, by the plugin that reads them)
+  // (a figure that is a picture: the picture read by Meno, traced - the PDF's letters over it read as written; where Meno reads
+  // nothing, the plugin chosen to read pictures offered by name, never run unasked)
   if ("none" in read && drawn.pictures.length) {
     working?.("Reading the picture…");
-    return readBoxPicture(sha256, page, box);
+    const shot = await boxPicture(sha256, page, box, PICTURE_DPI);
+    const pixels = await pngPixels(shot.png);
+    // (a pixel is 72/dpi of a point, from the box's top left as the reader drew it: whole pixels)
+    const k = 72 / shot.dpi;
+    const at = { scale: k, x: Math.floor(box[0] / k) * k, y: Math.floor(box[1] / k) * k };
+    return withPluginOffered(await ownPicture(pixels, at, drawn.letters, (x, y, bond) => ({ sha256, page, x, y, bond })));
   }
   return read;
+}
+
+/** How finely a figure that is a picture is drawn to be traced: as Meno's own picture reader was measured (docs/PDF.md, *A picture traced*). */
+const PICTURE_DPI = 300;
+
+/**
+ * A picture read by Meno's own reader, in a worker (pictureOff.ts): its structure, each atom tied to its place - `spot` - or why none.
+ * A structure with an atom with more bonds than it takes is left out and said, as a figure's is; what is left must hold a bond: a
+ * lone atom is no structure read (the ring of a charge, read as an O, once its structure is left out).
+ */
+async function ownPicture(pixels: ImageData, at: { scale: number; x: number; y: number }, letters: FigureDrawn["letters"], spot: (x: number, y: number, bond: number) => FigureSpot): Promise<FigureResult | Unread> {
+  const data = pixels.data.buffer.slice(pixels.data.byteOffset, pixels.data.byteOffset + pixels.data.byteLength) as ArrayBuffer;
+  const read = await pictureReadOff({ width: pixels.width, height: pixels.height, data, at, known: systemGlyphs(), letters: [...letters] });
+  if ("none" in read) return read;
+  return pictureResult(read, (x, y) => spot(x, y, read.bond));
+}
+
+/**
+ * A picture's figure as read made a structure, each atom tied to its place - `spot`: a structure with an atom with more bonds than it
+ * takes left out and said, as a figure's is; what is left must hold a bond - a lone atom is no structure read (the ring of a charge
+ * read as an O, once its structure is left out). Or why none.
+ */
+export function pictureResult(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): FigureResult | Unread {
+  const model = modelOf(read, spot, about);
+  const { kept, left } = withoutOverBonded(model);
+  if (!kept.bonds.length) return { none: overBondedWhy(model) ?? "No structure was found in the picture." };
+  const said = left ? `${left === 1 ? "A structure of this picture was" : `${left} structures of this picture were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  return { model: kept, ...(said ? { left: said } : {}) };
+}
+
+/** Where Meno read nothing from a picture: the plugin chosen to read pictures, by name, to offer - none where none is chosen. */
+function withPluginOffered(read: FigureResult | Unread): FigureResult | Unread {
+  if (!("none" in read)) return read;
+  const plugin = roleChosen("pictures");
+  return plugin ? { ...read, plugin: plugin.name } : read;
 }
 
 /** How finely a figure that is a picture is drawn to be read: enough for its letters, more than a picture's reader looks at. */
@@ -169,7 +212,7 @@ async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
   }
 }
 
-/** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page. */
+/** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page: asked for, where Meno read nothing. */
 async function readBoxPicture(sha256: string, page: number, box: Box): Promise<FigureResult | Unread> {
   const shot = await boxPicture(sha256, page, box, READ_DPI);
   const read = await readByPlugin(shot.png);
@@ -180,11 +223,15 @@ async function readBoxPicture(sha256: string, page: number, box: Box): Promise<F
   return { model: modelOf(onPage, (x, y) => ({ sha256, page, x, y, bond: onPage.bond })) };
 }
 
-/** A picture on the page read by the plugin that reads pictures, each atom tied to its place in the picture, in its pixels. */
-export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">): Promise<FigureResult | Unread> {
+/**
+ * A picture on the page read, each atom tied to its place in the picture, in its pixels: by Meno, traced - or, `by` the plugin that
+ * reads pictures, where Meno read nothing and the chemist asks for it.
+ */
+export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">, by?: "plugin"): Promise<FigureResult | Unread> {
   if (!isTauri()) return { none: "Pictures are read in the app." };
   const png = await picturePng(picture);
   if (!png) return { none: "A film is not read as a structure." };
+  if (by !== "plugin") return withPluginOffered(await ownPicture(await pngPixels(png), { scale: 1, x: 0, y: 0 }, [], (x, y, bond) => ({ sha256: picture.sha256, x, y, bond })));
   const read = await readByPlugin(png);
   if ("none" in read) return read;
   return { model: modelOf(read, (x, y) => ({ sha256: picture.sha256, x, y, bond: read.bond })) };

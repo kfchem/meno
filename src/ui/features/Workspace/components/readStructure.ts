@@ -1,7 +1,8 @@
 /**
  * *Read as structure* (docs/PDF.md, *Stage 5*): the figure in a box drawn on
  * a PDF's page, or a picture cut out of one - its lines read by Meno, or,
- * where it is a picture, the picture by the plugin that reads them - or any
+ * where it is a picture, the picture traced and read by Meno, the plugin
+ * chosen to read pictures offered by name where Meno reads nothing - or any
  * picture on the page, read as a structure - with a scheme's arrows, "+"
  * signs and words, where the figure has them - and put on the page beside
  * the PDF or the picture - clear of what lies there - as one step,
@@ -36,14 +37,17 @@ export async function readStructure(
   store: EditorStore,
   source: FigureSource,
   region: Region,
-  ui: { working: (what: string | null) => void; say: (why: string | null) => void },
+  ui: { working: (what: string | null) => void; say: (why: string | null) => void; offer?: (what: string, run: () => void) => void },
+  by?: "plugin",
 ): Promise<void> {
-  ui.working("picture" in source ? "Reading the picture…" : "Reading the figure…");
+  ui.working(by === "plugin" ? "Reading the picture with the plugin…" : "picture" in source ? "Reading the picture…" : "Reading the figure…");
   ui.say(null);
   try {
-    const read = "picture" in source ? await readPicture(source.picture) : await readBox(source.sha256, source.page, source.box, ui.working);
+    const read = "picture" in source ? await readPicture(source.picture, by) : await readBox(source.sha256, source.page, source.box, ui.working, by);
     if ("none" in read) {
       ui.say(read.none);
+      // (a picture Meno read nothing from: the plugin chosen to read pictures offered by name - run only when the chemist asks)
+      if (read.plugin && by !== "plugin") ui.offer?.(`Read with ${read.plugin}`, () => void readStructure(store, source, region, ui, "plugin"));
       return;
     }
     const st = store.getState();
