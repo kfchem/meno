@@ -16,6 +16,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
+import { factsOf } from "./perception/facts";
 import { runsOf } from "./perception/stereo/runs";
 import { greatest, least, pushAll } from "./lists";
 import { groupDepths, type DrawnAtom, type DrawnBond } from "../layout/drawn";
@@ -2379,6 +2380,11 @@ function besideVertex(
   reach?: (dir: Vec2) => number,
   /** The way it would rather go, in degrees: a charge's 45, above and to the right. */
   prefer = 45,
+  /**
+   * How many things it would cover set out along `dir`, `out` from the atom - bonds, labels - where the way its bonds leave
+   * is not enough to tell: a way that covers fewer goes before any that covers more, whatever its angle.
+   */
+  covers?: (dir: Vec2, out: number) => number,
 ): TextItem {
   const deg = Math.PI / 180;
   let best = prefer * deg;
@@ -2391,7 +2397,13 @@ function besideVertex(
       room = Math.min(room, d);
     }
     const off = Math.abs(Math.atan2(Math.sin(t - prefer * deg), Math.cos(t - prefer * deg)));
-    const score = Math.min(room, 70 * deg) - 0.15 * off;
+    // (each thing covered outweighs every angle: those score under 2)
+    let covered = 0;
+    if (covers) {
+      const d = { x: Math.cos(t), y: Math.sin(t) };
+      covered = covers(d, reach ? reach(d) : 0);
+    }
+    const score = Math.min(room, 70 * deg) - 0.15 * off - 10 * covered;
     if (score > bestScore + 1e-9) {
       bestScore = score;
       best = t;
@@ -4655,6 +4667,38 @@ function centreStrokes(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
   return out;
 }
 
+/** A box by its sides. */
+type Box2 = { minX: number; maxX: number; minY: number; maxY: number };
+
+/** The box a note set `beside` takes, its letters `halfW` either side of its middle and `halfH` above and below. */
+function textBox(t: TextItem, halfW: number, halfH: number): Box2 {
+  return { minX: t.x - halfW, maxX: t.x + halfW, minY: t.y - halfH, maxY: t.y + halfH };
+}
+
+/** Whether the line from `p` to `q` meets the box `b` (Liang-Barsky clipping). */
+export function segmentMeetsBox(p: Vec2, q: Vec2, b: Box2): boolean {
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [den, num] of [
+    [-dx, p.x - b.minX],
+    [dx, b.maxX - p.x],
+    [-dy, p.y - b.minY],
+    [dy, b.maxY - p.y],
+  ]) {
+    if (Math.abs(den) < 1e-12) {
+      if (num < 0) return false;
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
 /**
  * What is said about an atom, set small in the most open space beside it:
  * its atom-atom mapping number, its configuration inverted or retained, the
@@ -4690,6 +4734,68 @@ function atomNotes(
       }
     }
   }
+  // what a note is kept off: the bonds as lines, the labels' boxes, and the notes put before it
+  const segments: [Vec2, Vec2][] = [];
+  for (const b of bonds) if (b.a1 !== b.a2 && atoms[b.a1] && atoms[b.a2]) segments.push([atoms[b.a1], atoms[b.a2]]);
+  // (its own atom's label is kept clear of already, by how far out it goes)
+  const taken: (Box2 & { of?: number })[] = labels.map((t) => {
+    const box = labelBox(t, font, set);
+    return { minX: t.x - box.left, maxX: t.x + box.right, minY: t.y - box.bottom, maxY: t.y + box.top, of: t.atom ?? t.markOf };
+  });
+  // (a little room either side of its letters: touching is not clear)
+  const pad = font * 0.08;
+  // (what a note is kept off, filed by cells about a bond long: each note looks only at what lies near its atom, so placing every note of
+  //  a large mapped drawing takes time as its notes do, not as their number times the drawing's size)
+  const lengths = segments.map(([p, q]) => Math.hypot(q.x - p.x, q.y - p.y)).filter((d) => d > 1e-9).sort((p, q) => p - q);
+  const cell = Math.max(lengths[lengths.length >> 1] ?? 0, font * 2);
+  const grid = new Map<string, { segs: number[]; boxes: number[] }>();
+  const cellsOf = (b: Box2, visit: (key: string) => void) => {
+    for (let x = Math.floor(b.minX / cell); x <= Math.floor(b.maxX / cell); x++) for (let y = Math.floor(b.minY / cell); y <= Math.floor(b.maxY / cell); y++) visit(`${x},${y}`);
+  };
+  const filed = (key: string) => {
+    let c = grid.get(key);
+    if (!c) grid.set(key, (c = { segs: [], boxes: [] }));
+    return c;
+  };
+  segments.forEach(([p, q], k) => cellsOf({ minX: Math.min(p.x, q.x), maxX: Math.max(p.x, q.x), minY: Math.min(p.y, q.y), maxY: Math.max(p.y, q.y) }, (key) => filed(key).segs.push(k)));
+  const fileBox = (k: number) => cellsOf(taken[k], (key) => filed(key).boxes.push(k));
+  taken.forEach((_, k) => fileBox(k));
+  /** The bonds and boxes filed in the cells a box `r` about `p` reaches, each once. */
+  const near = (p: Vec2, r: number) => {
+    const segs = new Set<number>();
+    const boxes = new Set<number>();
+    cellsOf({ minX: p.x - r, maxX: p.x + r, minY: p.y - r, maxY: p.y + r }, (key) => {
+      const c = grid.get(key);
+      if (!c) return;
+      for (const k of c.segs) segs.add(k);
+      for (const k of c.boxes) boxes.add(k);
+    });
+    return { segs: [...segs], boxes: [...boxes] };
+  };
+  // (the rings an atom is on, as the way to each ring's middle and how near to it the ring's own bonds point: a way nearer is inside)
+  let facts: ReturnType<typeof factsOf> | null = null;
+  const ringsInward = (i: number): { x: number; y: number; least: number }[] => {
+    facts ??= factsOf({ atoms: atoms.map((x) => ({ el: x.el })), bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+    return facts.ringsAt[i].flatMap((k) => {
+      const ring = facts!.rings[k];
+      const mx = ring.reduce((t, j) => t + atoms[j].x, 0) / ring.length - atoms[i].x;
+      const my = ring.reduce((t, j) => t + atoms[j].y, 0) / ring.length - atoms[i].y;
+      const len = Math.hypot(mx, my);
+      if (len < 1e-9) return [];
+      const c = { x: mx / len, y: my / len };
+      const at = ring.indexOf(i);
+      const near = [ring[(at + 1) % ring.length], ring[(at - 1 + ring.length) % ring.length]].map((j) => {
+        const dx = atoms[j].x - atoms[i].x;
+        const dy = atoms[j].y - atoms[i].y;
+        const d = Math.hypot(dx, dy) || 1;
+        return (dx * c.x + dy * c.y) / d;
+      });
+      return [{ ...c, least: Math.min(...near) }];
+    });
+  };
+  // (each atom's own label, found once)
+  const labelOf = new Map<number, TextItem>();
+  for (const t of labels) if (t.atom != null && !t.beside && !labelOf.has(t.atom)) labelOf.set(t.atom, t);
   atoms.forEach((a, i) => {
     const parts = [
       a.map ? String(a.map) : "",
@@ -4699,20 +4805,53 @@ function atomNotes(
     ].filter(Boolean);
     if (!parts.length) return;
     const text = parts.join(" ");
-    const label = labels.find((t) => t.atom === i && !t.beside);
-    const item = besideVertex(a, ways.get(i) ?? [], [{ text, sup: true }], { fontPx }, (dir) => {
-      // clear of its label's letters, or of the bare vertex, by half a capital
-      let far = 0;
-      if (label) {
-        for (const hull of labelHulls(label, font, set, true)) for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
-      }
-      // and of its own letters: half their extent that way
-      const size = font * ANNOTATION_SIZE * set.subscriptSize;
-      const half = Math.abs(dir.x) * size * 0.3 * text.length + Math.abs(dir.y) * size * 0.4;
-      return far + font * 0.25 + half;
+    const label = labelOf.get(i);
+    // (its own letters' half width and half height, near enough to place it by)
+    const size = font * ANNOTATION_SIZE * set.subscriptSize;
+    const halfW = size * 0.3 * text.length;
+    const halfH = size * 0.4;
+    // (as far as its box can reach from its atom, whichever way it goes: its label's letters, the gap, and its own letters twice over)
+    const lb = label ? labelBox(label, font, set) : null;
+    const reachMost = (lb ? Math.hypot(Math.max(lb.left, lb.right), Math.max(lb.top, lb.bottom)) : 0) + font * 0.35 + 2 * (halfW + halfH + pad);
+    const around = near(a, reachMost);
+    // (a group's label - and1, or1 - reads as the ring's where it stands inside the ring its centre is on, beside another centre's R
+    //  or S: a way pointing into such a ring costs half a thing covered, so that it goes inside only where nothing outside is clear -
+    //  the maintainer's call, 2026-11-17)
+    const insideRings = groupsAt.has(i) && a.stereoGroup ? ringsInward(i) : [];
+    const item = besideVertex(
+      a,
+      ways.get(i) ?? [],
+      [{ text, sup: true }],
+      { fontPx },
+      (dir) => {
+        // clear of its label's letters, or of the bare vertex, by half a capital
+        let far = 0;
+        if (label) {
+          for (const hull of labelHulls(label, font, set, true)) for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
+        }
+        // and of its own letters: half their extent that way
+        return far + font * 0.25 + Math.abs(dir.x) * halfW + Math.abs(dir.y) * halfH;
+      },
       // (above, where it can: beside a label's right, a small number reads
       // as a charge's or a count's - GR-11.1)
-    }, 90);
+      90,
+      // and off every bond, label and note near it: a word as long as "and1" set between two bonds may reach a third, a ring's
+      // across the ring (GR-11.1: clear of the drawing, close to its atom)
+      (dir, far) => {
+        const c = { x: a.x + dir.x * far, y: a.y + dir.y * far };
+        const box = { minX: c.x - halfW - pad, maxX: c.x + halfW + pad, minY: c.y - halfH - pad, maxY: c.y + halfH + pad };
+        let n = 0;
+        for (const k of around.segs) if (segmentMeetsBox(segments[k][0], segments[k][1], box)) n++;
+        if (insideRings.some((r) => dir.x * r.x + dir.y * r.y > r.least)) n += 0.5;
+        for (const k of around.boxes) {
+          const r = taken[k];
+          if (r.of !== i && r.minX < box.maxX && box.minX < r.maxX && r.minY < box.maxY && box.minY < r.maxY) n++;
+        }
+        return n;
+      },
+    );
+    taken.push(textBox(item, halfW, halfH));
+    fileBox(taken.length - 1);
     out.push(item);
   });
   return out;

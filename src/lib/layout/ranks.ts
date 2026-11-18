@@ -19,6 +19,7 @@
  */
 import { orderOf, type Molecule } from "./perceive";
 import { parity } from "../chem/perception/stereo/geometry";
+import { setAgainst } from "../chem/perception/symmetry";
 
 type Ranked = { classes: number[]; canonical?: number[] };
 
@@ -249,7 +250,6 @@ function settled(start: number[], n: number, refined: (r: number[]) => number[],
 function written(mol: Molecule, what: readonly string[], r: readonly number[]): string {
   const at = new Array<number>(r.length);
   r.forEach((p, a) => (at[p] = a));
-  const pad = (v: number) => String(v).padStart(6, "0");
   const atoms = at.map((a) => {
     const t = mol.tetra.get(a);
     return t ? `${what[a]}@${t.volume * parity(t.neighbours.map((m) => (m < 0 ? Infinity : r[m])))}` : what[a];
@@ -257,12 +257,38 @@ function written(mol: Molecule, what: readonly string[], r: readonly number[]): 
   const bonds = mol.bonds
     .map((b) => {
       const [p, q] = r[b.a] < r[b.b] ? [b.a, b.b] : [b.b, b.a];
-      const st = b.stereo && b.order === 2 ? `:${b.stereo.cis ? "c" : "t"}${pad(r[b.stereo.refs[p === b.a ? 0 : 1]])}${pad(r[b.stereo.refs[p === b.a ? 1 : 0]])}` : "";
-      return `${pad(r[p])}${pad(r[q])}:${b.order}${st}`;
+      return `${pad(r[p])}${pad(r[q])}:${b.order}${b.stereo && b.order === 2 ? `:${sides(mol, b, r)}` : ""}`;
     })
     .sort();
   return `${atoms.join(";")}|${bonds.join(" ")}`;
 }
+
+/**
+ * A stereo double bond's cis or trans as its ends' lower-ranked other
+ * neighbours have it (perception/symmetry `setAgainst`, as the core writes
+ * it): one configuration given against either neighbour of an end is
+ * written one way, so the least text - and the rank it gives atoms the
+ * classes leave alike - does not hang on which neighbour a drawing or a
+ * reader took for its reference. "c" or "t"; "-" where an end's two others
+ * share a rank, so that the ranks say nothing of it yet; and the rank of
+ * the ref at an end with more than two others.
+ */
+function sides(mol: Molecule, b: Molecule["bonds"][number], r: readonly number[]): string {
+  const refs = b.stereo!.refs;
+  // (the ref on the bond's first atom first, as withStereo takes them)
+  const [p, q] = mol.neighbours[b.a].includes(refs[0]) && refs[0] !== b.b ? refs : [refs[1], refs[0]];
+  // (an end with more than two others - a metal's, Grubbs II's Ru=CHPh - has no one other neighbour to say it against: its ref's own
+  //  rank is written, as the given configuration has it)
+  const end = (at: number, partner: number, ref: number) => {
+    const others = mol.neighbours[at].filter((v) => v !== partner);
+    return others.length > 2 ? { set: 1, ref: pad(r[ref]) } : { set: setAgainst(others, r, ref), ref: "" };
+  };
+  const [x, y] = [end(b.a, b.b, p), end(b.b, b.a, q)];
+  const set = (b.stereo!.cis ? 1 : -1) * x.set * y.set;
+  return `${set > 0 ? "c" : set < 0 ? "t" : "-"}${x.ref}${y.ref}`;
+}
+
+const pad = (v: number) => String(v).padStart(6, "0");
 
 /** Each key's rank among the distinct keys, in sorted order. */
 function ranksOf(keys: readonly string[]): number[] {

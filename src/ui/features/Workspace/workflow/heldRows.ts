@@ -12,7 +12,8 @@
  *   the molecule is refused. Where a row lies on the page decides nothing.
  * - A row reaches a molecule only in the numbering it was made in: one Atom
  *   map has numbered anew since (lib/steps `NUMBERING`) is refused, never
- *   held on what are now other atoms.
+ *   held on what are now other atoms; one numbered as the molecule its rows
+ *   were made for is in that one's numbering (lib/steps `oneNumbering`).
  * - A molecule no row is for, a row naming an atom it has not, a row of a
  *   kind its plugin does not hold - restrained or exact, never swapped -
  *   refused with why before anything is sent.
@@ -32,10 +33,10 @@
  */
 import type { Restraint } from "../../../../lib/entry";
 import type { HeldKind } from "../../../../lib/plugins/steps";
-import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
+import { oneNumbering, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import { findSet, repeatHolding, stepsBefore, type Flow } from "./flow";
 import { kindInfo, RESTRAINTS_INPUT, type StepKind } from "./kinds";
-import type { SetEntry } from "./entries";
+import { numberingOf, type SetEntry } from "./entries";
 
 /** What a minimisation's plugin holds where its manifest names none: what *Minimise with restraints* is for - distances and torsions by their strengths, atoms fixed (docs/PLUGINS.md). Every other kind holds only what its plugin names. */
 const MINIMISE_HOLDS: readonly HeldKind[] = ["fixed", "distance", "dihedral"];
@@ -74,11 +75,6 @@ function idOf(e: SetEntry, on: string): string | null {
   return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
 }
 
-/** The numbering an entry is in now (lib/steps `NUMBERING`). */
-export function numberingOf(e: SetEntry): string {
-  const n = e.properties?.[NUMBERING];
-  return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
-}
 
 /** Two rows that hold alike: the same target and strength, or both exact - one held, nothing to choose. */
 const alike = (a: Restraint, b: Restraint) => a.value === b.value && a.strength === b.strength && !!a.exact === !!b.exact && (a.kind !== "fixed" || a.atoms.length === b.atoms.length);
@@ -142,7 +138,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   let carriedOver = 0;
   const each = entries.map((e): { rows: Restraint[] } | { why: string } => {
     const carried = inRepeat ? carriedOf(e) : null;
-    if (carried && carried.rows.length && carried.numbering !== numberingOf(e)) return { why: RENUMBERED_WHY };
+    if (carried && carried.rows.length && !oneNumbering(carried.numbering, numberingOf(e))) return { why: RENUMBERED_WHY };
     const earlier = carried?.rows ?? [];
     const mine = wired.filter((w) => idOf(e, w.row.on) === w.row.for);
     // (its rows are for a molecule that came in, held or not)
@@ -152,7 +148,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
     const found = nothing.map((table) => table.find((x) => idOf(e, x.on) === x.for));
     const silent = wires.findIndex((_, t) => !found[t] && !mine.some((w) => w.table === t));
     if (silent >= 0) return { why: silentWhy(silent) };
-    if (found.some((x) => x && x.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
+    if (found.some((x) => x && !oneNumbering(x.numbering, numberingOf(e)))) return { why: RENUMBERED_WHY };
     if (!mine.length) {
       // (held in an earlier pass, nothing new this one: its earlier rows, held again)
       if (earlier.length) {
@@ -163,7 +159,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
       heldNothing++;
       return { rows: [] };
     }
-    if (mine.some((w) => w.row.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
+    if (mine.some((w) => !oneNumbering(w.row.numbering, numberingOf(e)))) return { why: RENUMBERED_WHY };
     const n = e.atoms.length;
     const out = mine.find((w) => w.row.restraint.atoms.some((a) => a >= n));
     if (out) return { why: `A row holds ${restraintSaid(out.row.restraint)}, and it has atoms 1 to ${n}` };

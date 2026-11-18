@@ -1246,7 +1246,10 @@ The same for every plugin and for Meno's own parts:
     the folder its jobs' PATH begins with (2026-10-31);
   - a job `prepare` gives may take fewer cores than it was given
     (`"cores": 1`): ORCA's, where the computer has no MPI to run its
-    processes with. Meno
+    processes with - and, on every computer, where ORCA computes a
+    Hessian numerically at its own xTB (frequencies, and a saddle
+    point's first Hessian "computed"), which it runs serially (ORCA
+    plugin 0.5.9: WORKFLOWS.md, *ORCA in parallel*). Meno
     asks for it at that many, never more than Settings gives, and the
     queue counts it so (2026-10-31);
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The

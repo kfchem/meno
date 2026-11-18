@@ -1543,6 +1543,10 @@ export type EditorState = {
   togglePdfSel: (id: number) => void;
   /** A PDF's pages spread out, or gathered again. */
   spreadPdf: (id: number, spread: boolean) => void;
+  /** PDFs spread or gathered together, one step (a menu's item reaching the PDFs selected). */
+  spreadPdfs: (ids: readonly number[], spread: boolean) => void;
+  /** PDFs made icons or full size together, one step. */
+  iconPdfs: (ids: readonly number[], icon: boolean) => void;
   /** A page of a PDF spread put in a place of its own, its middle at (x, y) on the page, on top of the others: one step for a drag (`gesture`). */
   placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) => void;
   /** A PDF's pages spread put back in their rows, none in a place of its own. */
@@ -1625,6 +1629,8 @@ export type EditorState = {
   addCycle: (cycle: Omit<Cycle, "id">) => number | null;
   /** A cycle turned round, given arrows coming in and going out, or a colour - the words by its arrows put where `captions` says - one step, or one a gesture's changes make together. */
   updateCycle: (id: number, patch: CyclePatch, gesture?: string, captions?: { id: number; x: number; y: number }[]) => void;
+  /** Cycles given the same patch, one step. */
+  updateCycles: (ids: readonly number[], patch: CyclePatch) => void;
   removeCycle: (id: number) => void;
   /**
    * The arrows and "+" signs selected for themselves - one standing alone,
@@ -1750,6 +1756,8 @@ export type EditorState = {
     patch: CaptionPatch,
     gesture?: string,
   ) => void;
+  /** Words each given their own patch, one step named `label` (a menu's item reaching the words selected). */
+  updateCaptions: (patches: readonly (readonly [number, CaptionPatch])[], label: string) => void;
   removeCaption: (id: number) => void;
   /** All the letters of the words `ids` in a colour, or (null) in none of their own - a gesture's changes one step. */
   colourWords: (ids: number[], color: string | null, gesture?: string) => void;
@@ -1978,6 +1986,11 @@ export type EditorState = {
     grow?: boolean;
     /** Begun with what it says selected: the atom's menu's *Edit label* on a carbon drawn as a corner. */
     selectAll?: boolean;
+    /**
+     * Begun on the selection's atoms - a letter typed with atoms selected, wherever the pointer is: every atom it is written on,
+     * the one with the caret among them (docs/EDITOR-2D.md, *Labels typed in place*). Unset, the one atom's alone.
+     */
+    atoms?: number[];
   };
   /**
    * How the last label edit ended: kept and changed (`kept`),
@@ -2070,6 +2083,8 @@ export type EditorState = {
   stepCharges: (ids: Iterable<number>, step: 1 | -1) => void;
   /** An atom's unpaired electron given, or taken away. */
   toggleRadical: (id: number) => void;
+  /** An unpaired electron given to every atom of `ids`, or taken from each, one step. */
+  setRadicals: (ids: Iterable<number>, on: boolean) => void;
   deleteAtom: (id: number) => void;
   deleteBond: (id: number) => void;
   /**
@@ -2130,6 +2145,8 @@ export type EditorState = {
   selectStructure: (id: number) => void;
   selectAll: () => void;
   clearSel: () => void;
+  /** The thing right-clicked, selected alone, whatever was selected let go (docs/EDITOR-2D.md, *Selecting*). */
+  selectAlone: (kind: import("./slices/selectionSlice").SelectableKind, id: number) => void;
   setBoxSelect: (box: EditorState["boxSelect"]) => void;
   /** Atoms moved together - a selection dragged or turned - the moves of one gesture one undo step. */
   /**
@@ -2347,7 +2364,7 @@ export type EditorState = {
     excludeId?: number | null,
   ) => number | null;
   /** An atom's label opened to be written: as it is, or begun with `initial`, a letter typed over it. */
-  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean }) => void;
+  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean; atoms?: readonly number[] }) => void;
   setLabelEditValue: (value: string) => void;
   /** The label written kept; `typed`, what was typed for it, where it is read as something else; `byEnter`, where Enter kept it. */
   commitLabelEdit: (typed?: string, byEnter?: boolean) => void;

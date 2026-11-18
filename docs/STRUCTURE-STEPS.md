@@ -130,7 +130,10 @@ Each is a text, to read in the set's table and to filter on.
 
 Two sets of one kind made one (`merge`, `lib/nodes/merge.ts`): *First*'s
 entries, then *Second*'s. A set of molecules and a conformer set are not
-merged; the step says so. A conformer set's compounds stay apart: *Second*'s
+merged: a wire into one input of the other kind than the other's is
+refused as it is drawn, and one wired so all the same is said before it
+runs. (An *Energy diagram*'s *Levels* takes both, each wired in: it reads
+them as a table.) A conformer set's compounds stay apart: *Second*'s
 are numbered on after *First*'s. *Keep* is *All*, or *One of each* value of
 a property: the first met is kept, and each later one is set aside, naming
 the one kept ("the same start as a #1, which was kept"). One with no value
@@ -217,6 +220,10 @@ references, the first it is bonded as (`matchingReference`).
   its one reference, or "bonded as none of the 3 references"), or why it
   was not compared (another numbering, frames, nothing to pair with). Its
   line counts them apart: "12 same · 3 different · 1 not compared".
+  Matched on a property with more than one reference, it says too how
+  many came out the same for each, and a reference none did as none: "2
+  same · 4 different · 2 for product x, none for product y" - ends made
+  for two products, of which the second kept none.
   *Pass over atoms* are typed from 1 on the card.
 
 - **Bonds read from the geometry** as Meno reads any geometry given no bonds
