@@ -325,8 +325,10 @@ oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
 and two M-Cl, UO2Cl2 is uranyl's O=U=O with two chlorides, WOCl4, VOCl3,
 VO(acac)2, MeReO3 and ReO3Me - each element written with its count, as an
 inorganic formula is, never a group read across it; an O that begins a
-group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O is bound to each metal it bridges by
-a single bond. A part of several metals with an oxo not marked μ is not
+group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O
+is bound to each metal it bridges by a single bond. A part with an oxo
+made twice ([MoO2Cl2]2) is bridged by its halide, its oxo M=O on each
+metal. A part of several metals with an oxo not marked μ is not
 read (Re2O7: which O bridge, the formula does not say). A ligand in
 brackets may have its descriptor: RuCl[(S,S)-TsDPEN](p-cymene),
 RuCl2[(S)-BINAP][(S,S)-DPEN]. Where one part
