@@ -264,8 +264,10 @@ function composedOf(label: string): Abbreviation | undefined {
   if (salt === "unread") return undefined;
   if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
+  if (complex && bondsUnwrittenOO(label, complex)) return undefined;
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
+  if (made && bondsUnwrittenOO(label, made)) return undefined;
   if (made) return { label, name: made.name, smiles: "", kind: "reagent" };
   // (last of all, after every group and every formula read whole: an atom with its H and the groups it carries,
   // its other bonds the drawing's - SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
@@ -333,7 +335,32 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
   if (ion) return ion;
   const salt = metalSaltStructure(label, groupStructure);
   if (salt === "unread") return null;
-  return salt ?? condensedStructure(label, groupLabels(), groupStructure);
+  const read = salt ?? condensedStructure(label, groupLabels(), groupStructure);
+  return read && bondsUnwrittenOO(label, read) ? null : read;
+}
+
+/** Why a label is not read, where one of its formula's readers refused it (`bondsUnwrittenOO`), by label. */
+const REFUSED = new Map<string, string>();
+
+/** The words of a label's formula read as two O bonded that it does not write so. */
+const UNWRITTEN_OO = "it would bond two O the label does not bond";
+
+/**
+ * Whether a structure read from a label's formula bonds two O that the label does not write together - "OO" (OOH, OOtBu) or O2 as a
+ * peroxo ligand in brackets ((O2), (η2-O2)): not read, and said (`labelRefused`). MoO2NO3 is no compound; read across it is three O-O-N=O.
+ * A peroxide, a superoxide or a peracid from the tables (H2O2, mCPBA, TBHP) is no formula's reading, so never asked.
+ */
+function bondsUnwrittenOO(label: string, s: GroupStructure): boolean {
+  if (!s.bonds.some((b) => s.atoms[b.a1]?.el === "O" && s.atoms[b.a2]?.el === "O")) return false;
+  if (/OO|\((?:[μη]2?-)?O2\)/.test(label)) return false;
+  REFUSED.set(label, UNWRITTEN_OO);
+  return true;
+}
+
+/** Why `label`, typed, is not read - where a reader refused it rather than finding nothing - or undefined. */
+export function labelRefused(label: string): string | undefined {
+  abbreviationOf(label);
+  return REFUSED.get(label.trim());
 }
 
 /**

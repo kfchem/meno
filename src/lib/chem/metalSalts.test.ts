@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { abbreviationOf, abbreviationStructure } from "./abbreviations";
+import { abbreviationOf, abbreviationStructure, labelRefused } from "./abbreviations";
 import { structureFormula, type GroupStructure } from "./ligands";
 
 // A metal's salt of an oxoanion, typed as a label, read as its ions: the metal's cation and the anion of the charge its formula makes.
@@ -72,5 +72,22 @@ describe("a metal's salt of an oxoanion", () => {
     expect(abbreviationOf("AgOTf")?.kind).toBe("complex");
     expect(abbreviationOf("Cu(OAc)2")?.kind).toBe("complex");
     expect(abbreviationOf("MoO2Cl2")?.kind).toBe("complex");
+  });
+});
+
+describe("a formula read as two O bonded that it does not write together", () => {
+  it("is not read, and says why: MoO2NO3 and VO2NO3 - no compounds - would be three O-O-N=O", () => {
+    for (const label of ["MoO2NO3", "VO2NO3"]) {
+      expect([abbreviationOf(label) ?? null, abbreviationStructure(label)], label).toEqual([null, null]);
+      expect(labelRefused(label), label).toBe("it would bond two O the label does not bond");
+    }
+  });
+
+  it("leaves every formula read without an O-O as it was, and refuses nothing it finds no structure for", () => {
+    for (const label of ["AgNO3", "Cu(NO3)2", "MoO2Cl2", "UO2Cl2", "Pd(OAc)2", "NaNO3", "KMnO4", "OsO4"]) {
+      expect(abbreviationStructure(label), label).not.toBeNull();
+      expect(labelRefused(label), label).toBeUndefined();
+    }
+    expect(labelRefused("CH2CH2")).toBeUndefined();
   });
 });

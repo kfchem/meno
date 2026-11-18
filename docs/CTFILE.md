@@ -423,8 +423,13 @@ Read by rule, besides, as whole molecules:
   (`metalSaltStructure`, `src/lib/chem/condensed.ts`). Mercury(I) is the
   Hg2²⁺ ion, its two Hg bonded, each +1 (Hg2(NO3)2, Hg2SO4); Hg(NO3)2 is
   Hg²⁺. HgNO3, mercury(I)'s empirical formula, is left unread: one Hg⁺
-  alone is no ion, and the formula does not say the pair. A halide
-  (CuCl2), a
+  alone is no ion, and the formula does not say the pair. A formula that
+  one of these readers would read as two O bonded, where the label does
+  not write them together (OO, or O2 as a peroxo ligand in brackets), is
+  not read, and that is said as the label is typed: MoO2NO3 is no
+  compound, and read across it would be three O-O-N=O. A peroxide or a
+  peracid from the tables (H2O2, mCPBA, TBHP) is never such a reading. A
+  halide (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
 - an ion written alone, a counter-ion set beside a complex or a salt: an
