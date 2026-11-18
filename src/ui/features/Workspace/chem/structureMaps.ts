@@ -263,6 +263,21 @@ function numbersRead(v: unknown, n: number): boolean {
   return Array.isArray(v) && v.length === n && new Set(v).size === n && v.every((k) => Number.isInteger(k) && k >= 1 && k <= n);
 }
 
+/** What Before's atoms show for their numbers, as a file keeps it: one for each atom, a locant's text or null. */
+function textsRead(v: unknown, n: number): boolean {
+  const text = (t: unknown) => {
+    if (t === null) return true;
+    const l = t as { base?: unknown; sup?: unknown } | undefined;
+    return typeof l?.base === "string" && l.base.length > 0 && (l.sup === undefined || typeof l.sup === "string");
+  };
+  return Array.isArray(v) && v.length === n && v.every(text);
+}
+
+/** Before's atoms whose numbers are Meno's own, as a file keeps them: each an atom's index, none twice. */
+function ownRead(v: unknown, n: number): boolean {
+  return Array.isArray(v) && new Set(v).size === v.length && v.every((k) => Number.isInteger(k) && k >= 0 && k < n);
+}
+
 /** The maps between structures a workspace's file keeps (`structureMaps`), each read whole or left out; numbered from 1, in order. */
 export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: number } {
   const maps: StructureMap[] = [];
@@ -294,6 +309,9 @@ export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: num
         shown: m.shown !== false,
         // (Before's numbers, where renumbered: each atom one of 1 to n, none twice - else as it holds them)
         ...(numbersRead(m.numbers, reactant!.atoms.length) ? { numbers: m.numbers as number[] } : {}),
+        // (and with them what its atoms show for them - 4a, 1' - and those Meno's own order numbered: each kept only with the numbers)
+        ...(numbersRead(m.numbers, reactant!.atoms.length) && textsRead(m.texts, reactant!.atoms.length) ? { texts: m.texts as ArrowAtomMap["texts"] } : {}),
+        ...(numbersRead(m.numbers, reactant!.atoms.length) && ownRead(m.own, reactant!.atoms.length) ? { own: m.own as number[] } : {}),
         // (its conformers paired, by frame: kept where each is a frame's number, a frame not there said so when it is written)
         ...(pairsRead(m.pairs) ? { pairs: m.pairs as { before: number[]; after: number[] } } : {}),
       },

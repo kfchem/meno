@@ -536,6 +536,23 @@ describe("an atom map renumbered", () => {
     expect(readStructureMaps([{ map: { ...kept, numbers: numbers.map(() => 1) } }]).maps[0].map.numbers).toBeUndefined();
     expect(readStructureMaps([{ map: { ...kept, numbers: numbers.slice(1) } }]).maps[0].map.numbers).toBeUndefined();
   });
+
+  it("keeps what its atoms show for their numbers and those Meno's own order numbered, with the numbers only, each read whole or left out", () => {
+    const { kept } = page();
+    const c1 = R_NAMES.indexOf("C1");
+    const done = { ...kept, ...renumbering(kept, drawnOrder()), texts: kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "3a", sup: "1" } : null)), own: [2, 0] };
+    const back = readStructureMaps(JSON.parse(JSON.stringify([{ map: done }]))).maps[0].map;
+    expect(back.texts).toEqual(done.texts);
+    expect(back.own).toEqual([2, 0]);
+    expect(numberingSaid(back)).toBe(numberingSaid(done));
+    // (without numbers, neither; a text of another shape, or an atom not there, leaves that one out)
+    const bare = readStructureMaps([{ map: { ...done, numbers: undefined } }]).maps[0].map;
+    expect([bare.texts, bare.own]).toEqual([undefined, undefined]);
+    expect(readStructureMaps([{ map: { ...done, texts: done.texts!.slice(1) } }]).maps[0].map.texts).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...done, texts: done.texts!.map((t) => (t ? { base: 4 } : t)) } }]).maps[0].map.texts).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...done, own: [kept.reactant.atoms.length] } }]).maps[0].map.own).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...done, own: [1, 1] } }]).maps[0].map.own).toBeUndefined();
+  });
 });
 
 describe("an atom map's conformers paired", () => {
