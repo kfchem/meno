@@ -20,6 +20,8 @@ const READ_ALREADY: Record<string, number> = {
   "ui/features/Workspace/chem/fromSmiles.ts": 2,
   // (the drawing read, `drawingOf`, made through readAs)
   "ui/features/Workspace/chem/identityOf.ts": 2,
+  // (the atoms of the MOL blocks the plugin made of a structure, halvesMade: a file's atoms, each an element - a held group went out written through readAs)
+  "ui/features/Workspace/chem/openStereo.ts": 1,
 };
 
 function files(dir: string): string[] {
