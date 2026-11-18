@@ -56,7 +56,8 @@ export type ReadBond = {
 
 /** A figure read: its atoms and bonds, how long its bonds are drawn, in points, and the letters in it not read as labels. */
 /** A figure read: its atoms and bonds, how long its bonds are drawn, the letters no atom took - and the cells of a table drawn in it (`tableLines`), where one is. */
-export type FigureRead = { atoms: ReadAtom[]; bonds: ReadBond[]; bond: number; left: { letters: FigureLetter[] }; table?: Box[] };
+/** `left.lines`: lone single lines about a bond long, not read as ethane (`withoutStrays`). */
+export type FigureRead = { atoms: ReadAtom[]; bonds: ReadBond[]; bond: number; left: { letters: FigureLetter[]; lines?: number }; table?: Box[] };
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 const len = (s: { a: Point; b: Point }) => dist(s.a, s.b);
@@ -812,14 +813,21 @@ const CAPITAL: readonly [number, number] = [0.55, 0.85];
 /** How far a line alone may be from the figure's bond, as a part of it, and still be a bond: a fifth. */
 const ALONE_WITHIN = 0.2;
 
+/** What is said of a double or triple line alone about a bond long, kept as ethylene or ethyne. */
+export const LONE_DOUBLE = "A double line alone: read as ethylene.";
+export const LONE_TRIPLE = "A triple line alone: read as ethyne.";
+
 /**
  * A figure's atoms and bonds without what stands alone and is no structure:
  * a point with no label and no bond, and one line - single or multiple, two
  * ends with no label - not about a bond long (within `ALONE_WITHIN`): a
  * chart's level, a dagger's or a numeral's strokes, a letter drawn as lines.
- * A line a bond long alone - an ethylene drawn as its double bond - stays.
+ * A double or triple line a bond long alone stays, said: a scheme draws an
+ * ethylene or an ethyne so, beside a "+". A single line a bond long alone is
+ * left out too, and counted (`lone`): in a figure it is a dash, a minus, a
+ * rule or a letter, and an ethane is all but never drawn so.
  */
-export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBond[], bond: number): { atoms: ReadAtom[]; bonds: ReadBond[] } {
+export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBond[], bond: number): { atoms: ReadAtom[]; bonds: ReadBond[]; lone: number } {
   const bare = (a: ReadAtom) => !a.label && !a.el && !a.marked && !a.dots && !a.repeat;
   const count = atoms.map(() => 0);
   for (const b of bonds) {
@@ -830,12 +838,23 @@ export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBo
   atoms.forEach((a, i) => {
     if (bare(a) && !count[i]) out.add(i);
   });
+  let lone = 0;
+  const said = new Map<ReadBond, string>();
   for (const b of bonds) {
     const [p, q] = [atoms[b.a], atoms[b.b]];
     if (count[b.a] !== 1 || count[b.b] !== 1 || !bare(p) || !bare(q)) continue;
-    if (Math.abs(Math.hypot(p.x - q.x, p.y - q.y) - bond) > ALONE_WITHIN * bond) out.add(b.a).add(b.b);
+    const long = Math.abs(Math.hypot(p.x - q.x, p.y - q.y) - bond) <= ALONE_WITHIN * bond;
+    if (long && b.order > 1) said.set(b, b.order === 2 ? LONE_DOUBLE : LONE_TRIPLE);
+    else {
+      out.add(b.a).add(b.b);
+      if (long) lone++;
+    }
   }
-  if (!out.size) return { atoms: [...atoms], bonds: [...bonds] };
+  const told = (b: ReadBond): ReadBond => {
+    const s = said.get(b);
+    return s && !b.unsure?.includes(s) ? { ...b, unsure: [...(b.unsure ?? []), s] } : b;
+  };
+  if (!out.size) return { atoms: [...atoms], bonds: bonds.map(told), lone };
   const to = new Map<number, number>();
   const kept: ReadAtom[] = [];
   atoms.forEach((a, i) => {
@@ -843,7 +862,7 @@ export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBo
     to.set(i, kept.length);
     kept.push(a);
   });
-  return { atoms: kept, bonds: bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...b, a: to.get(b.a)!, b: to.get(b.b)! })) };
+  return { atoms: kept, bonds: bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...told(b), a: to.get(b.a)!, b: to.get(b.b)! })), lone };
 }
 
 /** Whether a line is set level: a hyphen, an ='s lines. */
@@ -1626,8 +1645,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   }
   // (each repeat unit in brackets: a whole count's unit marked to be read so many times, else the atoms its brackets cross saying why not)
   repeatsRead(repeats.pairs, atoms, bonds, bond, from);
-  const kept = withoutStrays(atoms, bonds, bond);
-  return { ...kept, bond, left: { letters: left }, ...(tableCells.length ? { table: tableCells } : {}) };
+  const { lone, ...kept } = withoutStrays(atoms, bonds, bond);
+  return { ...kept, bond, left: { letters: left, ...(lone ? { lines: lone } : {}) }, ...(tableCells.length ? { table: tableCells } : {}) };
 }
 
 /**
