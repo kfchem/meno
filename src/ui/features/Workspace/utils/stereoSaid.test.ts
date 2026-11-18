@@ -16,7 +16,7 @@ describe("what a molecule in 3D says of the units it shows no R or S on (backlog
     const m = chain(8, { atoms: { 1: "R" }, bonds: {}, shown: { atoms: [1], bonds: [] }, said });
     expect(stereoSaidRows(m)).toEqual([
       { label: "C1, C4", text: "No R or S: its groups lie nearly in a plane here." },
-      { label: "N3", text: "No R or S: this N gives up its H and takes one back, turning over as it does." },
+      { label: "N3", text: "No R or S: this N does not keep a configuration." },
       { label: "C5=C6", text: "No E or Z: its groups are turned nearly square to it here." },
     ]);
     // (in its card, a group of its own)
