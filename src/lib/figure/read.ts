@@ -1167,7 +1167,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const lines = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
-  const joined = joinedAcross([...lines, ...loose], bond);
+  // (the line in front may be a wedge, or a bond drawn bold and read as one: a perspective drawing's near edge)
+  const joined = joinedAcross([...lines, ...loose], bond, shapes.wedges.map((w) => ({ a: w.tip, b: w.base })));
   // (a line lying along another - the same middle line, within a sixteenth of a bond, as long as the other or shorter, within its stretch -
   // is that line: a bold bar has a hairline drawn along it. It is never a second line of a multiple bond)
   const along = (s: Stroke, t: Stroke) => {
@@ -1545,13 +1546,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
 /**
  * Lines broken where another passes in front - a bridge drawn behind a
  * ring's bond, the gap left round it - joined again: two lines on one line,
- * a little apart, with a third crossing the gap.
+ * a little apart, with a third crossing the gap: a line, or one of `front` -
+ * a wedge, a bold bond - drawn in front.
  */
-function joinedAcross(lines: readonly Stroke[], bond: number): Stroke[] {
+function joinedAcross(lines: readonly Stroke[], bond: number, front: readonly { a: Point; b: Point }[] = []): Stroke[] {
   const out = [...lines];
   for (let i = 0; i < out.length; i++) {
     for (let j = i + 1; j < out.length; j++) {
-      const whole = brokenAcross(out[i], out[j], out, bond);
+      const whole = brokenAcross(out[i], out[j], out, bond, front);
       if (!whole) continue;
       out[i] = { ...whole, w: Math.max(out[i].w, out[j].w) };
       out.splice(j, 1);
@@ -1561,8 +1563,8 @@ function joinedAcross(lines: readonly Stroke[], bond: number): Stroke[] {
   return out;
 }
 
-/** Two lines on one line, a little apart, a third of `all` crossing the gap: one line broken where another passes in front - its ends, or none. */
-function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number): { a: Point; b: Point } | null {
+/** Two lines on one line, a little apart, a third of `all` or of `front` crossing the gap: one line broken where another passes in front - its ends, or none. */
+function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number, front: readonly { a: Point; b: Point }[] = []): { a: Point; b: Point } | null {
   const u = unit(s.a, s.b);
   if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((4 * Math.PI) / 180)) return null;
   if (Math.abs(cross(u, { x: t.a.x - s.a.x, y: t.a.y - s.a.y })) > 0.03 * bond) return null;
@@ -1580,7 +1582,7 @@ function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number
   // (it must lie between them, not past one: the far ends further apart than the near ones)
   if (dist(far0, far1) < dist(near0, near1) + len(s) + len(t) - 0.01 * bond) return null;
   const m = mid(near0, near1);
-  return all.some((o) => o !== s && o !== t && segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
+  return [...all.filter((o) => o !== s && o !== t), ...front].some((o) => segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
 }
 
 /** Whether a line passes across the gap between two points, near its middle. */

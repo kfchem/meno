@@ -684,6 +684,29 @@ describe("a figure read as a structure", () => {
     expect(s.atoms).toHaveLength(6);
   });
 
+  it("joins a bond broken where a wedge passes in front of it, as a perspective drawing's near edge does", () => {
+    const a: P = [40, 40];
+    const b: P = [40 + 2 * L, 40];
+    const gap = 2.6;
+    const m: P = [40 + L, 40];
+    // (the wedge in front, crossing the gap, from its narrow end above to its wide end below; it and the bonds round it a structure)
+    const tip: P = [m[0] - 0.3 * L, 40 - 0.6 * L];
+    const base: P = [m[0] + 0.3 * L, 40 + 0.6 * L];
+    const s = read(
+      figure([
+        stroke(step(a, 150), a),
+        stroke(a, [m[0] - gap, 40]),
+        stroke([m[0] + gap, 40], b),
+        stroke(b, step(b, 30)),
+        stroke(step(tip, 120), tip),
+        wedge(tip, base),
+      ]),
+    );
+    // (one bond from a to b, not two pieces each ending at nothing: four plain bonds and the wedge, seven atoms)
+    expect(s.bonds.filter((x) => !x.stereo)).toHaveLength(4);
+    expect(s.atoms).toHaveLength(7);
+  });
+
   it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
     // (as a turned page's letters may be read: lower case, or smaller than the word)
     const w: P = [80, 60];

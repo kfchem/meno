@@ -1338,7 +1338,8 @@ it where it lies out of view.
     is carried on to the bond end it points at, under half a bond on -
     such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's, a
+  - a bond broken where another passes in front of it - a line, or a wedge
+    (a perspective drawing's near edge is often one) - a bridge's, a
     cage's back edge, a double bond's two lines - is joined again, however
     short one of its pieces, and its pieces are never a hash's lines; its
     gap may be near half a bond (nine twentieths), as a figure with many
