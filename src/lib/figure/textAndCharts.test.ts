@@ -97,6 +97,11 @@ describe("an I drawn as a line on a line of text", () => {
     expect(own(read)).toEqual([]);
   });
 
+  it("is a bond where it is as tall as the letters' size, standing on the same baseline: a capital is under nine tenths of it", () => {
+    const read = readFigure(figure([line([209.5, 294], [209.5, 303])], letters));
+    expect(own(read)).toHaveLength(1);
+  });
+
   it("is a bond where it is a bond long: no capital is so tall", () => {
     const read = readFigure(figure([line([209.5, 295.8], [209.5, 295.8 + L])], letters));
     expect(own(read)).toHaveLength(1);
