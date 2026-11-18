@@ -1705,7 +1705,11 @@ as drawn. So is everything in 29 more figures drawn many ways:
   steps one after the other.
 
 Not yet:
-- **A curved arrow** (an electron-pushing arrow's curve) is not read.
+- **A curved arrow** (an electron-pushing arrow's curve) is not read as
+  an arrow. It is kept out of the structure it is drawn over: its curve,
+  stroked or drawn as a filled outline, and its head - a dart, four
+  corners, the fourth cut in from its wide end, the curve's end there -
+  are no bond, no wedge and no label (a wedge has no corner cut in).
 - **An equilibrium drawn with corners** is read as its two arrows, each
   a reaction's. One whose lines differ in length, one way favoured, is
   read as a plain equilibrium.

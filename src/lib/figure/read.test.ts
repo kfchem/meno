@@ -684,6 +684,65 @@ describe("a figure read as a structure", () => {
     expect(s.atoms).toHaveLength(6);
   });
 
+  describe("a curved arrow - an electron-pushing arrow - drawn over a structure", () => {
+    // (a ring of six, and an arrow's curve over it: an arc of a third of a bond's radius, its head a dart at its end, as a mechanism draws one)
+    const ring: P[] = Array.from({ length: 6 }, (_, i) => step([80, 80], 60 * i));
+    const lines = ring.map((p, i) => stroke(p, ring[(i + 1) % 6]));
+    const c: P = [80 + 0.5 * L, 80 - 0.9 * L];
+    const r = 0.35 * L;
+    const on = (rad: number, deg: number): P => [c[0] + rad * Math.cos((deg * Math.PI) / 180), c[1] - rad * Math.sin((deg * Math.PI) / 180)];
+    const degs = Array.from({ length: 13 }, (_, k) => 200 - 10 * k);
+    // (the dart at the arc's end, 80 degrees: its notch there, its tip half a bond on along the arc's way, cut in a sixth)
+    const end = on(r, degs[degs.length - 1]);
+    const way: P = [Math.sin((80 * Math.PI) / 180), Math.cos((80 * Math.PI) / 180)];
+    const tip: P = [end[0] + 5 * way[0], end[1] + 5 * way[1]];
+    const back: P = [tip[0] - 6 * way[0], tip[1] - 6 * way[1]];
+    const dart = filled([back[0] - 2 * way[1], back[1] + 2 * way[0]], end, [back[0] + 2 * way[1], back[1] - 2 * way[0]], tip);
+    it("is no part of the structure, its curve drawn as a thin filled outline: its head no wedge", () => {
+      const outline: FigurePath = { fill: "#000000ff", stroke: null, width: 0, d: [...degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r + 0.4, d)]), ...[...degs].reverse().map((d): PathStep => ["C", ...on(r - 0.4, d)]), ["Z"]] };
+      const s = read(figure([...lines, outline, dart]));
+      expect(s.bonds).toHaveLength(6);
+      expect(s.bonds.some((b) => b.stereo)).toBe(false);
+      expect(s.atoms).toHaveLength(6);
+    });
+    it("is no part of the structure, its curve stroked", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      const s = read(figure([...lines, curve, dart]));
+      expect(s.bonds).toHaveLength(6);
+      expect(s.bonds.some((b) => b.stereo)).toBe(false);
+    });
+    it("takes the curve and its head out of the shapes, a tight curve too, filling a third of its box: no letter of it", () => {
+      // (an arc of an eighth of a bond's radius, 0.8 thick, over 120 degrees - as tight as a short arrow over a bond: it fills 0.4 of its box)
+      const r2 = 0.12 * L;
+      const at = (rad: number, deg: number): P => [c[0] + rad * Math.cos((deg * Math.PI) / 180), c[1] - rad * Math.sin((deg * Math.PI) / 180)];
+      const ds = Array.from({ length: 13 }, (_, k) => 200 - 10 * k);
+      const e = at(r2, 80);
+      const tp: P = [e[0] + 5 * way[0], e[1] + 5 * way[1]];
+      const bk: P = [tp[0] - 6 * way[0], tp[1] - 6 * way[1]];
+      const head = filled([bk[0] - 2 * way[1], bk[1] + 2 * way[0]], e, [bk[0] + 2 * way[1], bk[1] - 2 * way[0]], tp);
+      const outline: FigurePath = { fill: "#000000ff", stroke: null, width: 0, d: [...ds.map((d, k): PathStep => [k ? "C" : "M", ...at(r2 + 0.4, d)]), ...[...ds].reverse().map((d): PathStep => ["C", ...at(r2 - 0.4, d)]), ["Z"]] };
+      const shapes = shapesOf(figure([...lines, outline, head]));
+      expect(shapes.wedges).toHaveLength(0);
+      expect(shapes.blobs).toHaveLength(0);
+      expect(shapes.strokes).toHaveLength(6);
+    });
+    it("leaves a wedge a wedge where its wide end, cut in a little where it meets two bonds, meets a curve", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (its wide end 4 wide, cut in a twentieth of its length at the middle)
+      const [ux, uy] = unit(ring[1], end);
+      const l = Math.hypot(end[0] - ring[1][0], end[1] - ring[1][1]);
+      const notched = filled(ring[1], [end[0] - uy * 2, end[1] + ux * 2], [end[0] - ux * 0.05 * l, end[1] - uy * 0.05 * l], [end[0] + uy * 2, end[1] - ux * 2]);
+      const s = read(figure([...lines, curve, notched]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+    it("leaves a wedge a wedge where its wide end meets a curve: a wedge has no corner cut in", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (a wedge out of the ring's top corner, its wide end at the curve's end)
+      const s = read(figure([...lines, curve, wedge(ring[1], end)]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+  });
+
   it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
     // (as a turned page's letters may be read: lower case, or smaller than the word)
     const w: P = [80, 60];
