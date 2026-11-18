@@ -7,9 +7,6 @@ import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
-
-/** A note of a change of configuration on the page (configuration/watch): its words, the place it stands by, when it came. */
-export type ConfigurationNote = { id: number; text: string; at: { x: number; y: number }; since: number };
 import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -170,6 +167,9 @@ export type Bond = BondChem & {
 
 import type { FlowParts } from "../workflow/parts";
 import type { GuideMarks } from "../presenting/guides";
+
+/** A note of a change of configuration on the page (configuration/watch): its words, the place it stands by, when it came. */
+export type ConfigurationNote = { id: number; text: string; at: { x: number; y: number }; since: number };
 
 export type Sel = { atoms: Set<number>; bonds: Set<number> };
 /** A workflow's parts selected, as the drawing's are (docs/WORKFLOWS.md, *Copying*): sets and steps, by id - the wires among them with them. */

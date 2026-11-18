@@ -18,8 +18,8 @@ import { gestureUnderWay } from "../store/gesture";
 import type { ConfigurationNote, Model } from "../store/types";
 import { cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
-import { changeWords, changesAgainstKept, unitAtoms, type ConfigurationChange } from "./changes";
-import { withKept } from "./kept";
+import { changeWords, changesAgainstKept, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
+import { keptFrom, withKept } from "./kept";
 
 /**
  * Meno's own moves, by the name of the step each makes (docs/EDITOR-2D.md): each keeps every configuration as it was, and says so where it
@@ -93,8 +93,13 @@ const IDLE_WITHIN_MS = 400;
  * stops it.
  */
 export function watchConfiguration(store: EditorStore, doc: DocumentStore<WorkspaceDocument>, ask: typeof cipMarksAsked = cipMarksAsked): () => void {
+  /** A step made since the last look: its drawing before and after, its name, the document it came to, and the state its undo goes back to. */
+  type Step = { before: Model; after: Model; label: string | undefined; state: WorkspaceDocument; undoTo: WorkspaceDocument | undefined };
   let stable: Model = doc.getState().model;
+  let steps: Step[] = [];
   let waiting = false;
+  // (what is kept being written: no change of the chemist's to look at)
+  let keeping = false;
   let timer: (() => void) | null = null;
   const run = () => {
     timer = null;
@@ -103,59 +108,98 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
       return;
     }
     waiting = false;
-    const before = stable;
-    const read = doc.getState().model;
-    stable = read;
-    if (before === read) return;
-    const found = changesAgainstKept(before, read);
-    if (!found) return;
-    const step = doc.history().undoLabel;
-    // (what the touched structures state now, kept on their atoms and bonds - in the step that made it, so that an undo takes it back
-    //  with the drawing; not where there is no step - a file just opened keeps it with the first change made to it)
-    const keeping = withKept(read, found.ids, found.kept);
-    if (keeping !== read && doc.history().undoDepth > 0) doc.edit(step ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, found.ids, found.kept) }), { joinTop: true });
-    const state = doc.getState();
-    const after = state.model;
-    stable = after;
-    const changes = found.changes;
-    if (!changes.length) return;
-    const by = step ? MENO_MOVES[step] : undefined;
-    // (one of Meno's moves changed what the drawing states: never silent - said, and logged: ui/lib log `KNOWN`)
-    if (by) console.warn(`Meno: ${by} changed a configuration`);
-    void notesOf(before, after, changes, by, ask).then(
-      (notes) => {
-        // (the drawing changed again meanwhile: what they say is gone with it)
-        if (!notes.length || doc.getState().model !== after) return;
-        // (the chemist's step named with what it did - "move atoms: C3: R, now S" - where it is still the step undo would take back; a
-        //  move of Meno's keeps its own name)
-        if (!by && step) doc.named(`${step}: ${notes.map((n) => n.text).join("; ")}`, state);
-        const since = performance.now();
-        store.setState((s) => ({ configurationNotes: [...s.configurationNotes, ...notes.map((n) => ({ ...n, id: nextNote++, since }))] }));
-      },
-      () => {},
-    );
+    const taken = steps;
+    steps = [];
+    if (!taken.length) return;
+    // (each step on its own, against what is kept: what it did said as its own - a chemist's turn never taken for the Clean-up after it)
+    const found = taken.map((step) => (step.before === step.after ? null : changesAgainstKept(step.before, step.after)));
+    // (what the structures every step touched state now, kept on their atoms and bonds - in the step that is undo's now, so that an undo
+    //  takes it back with the drawing; not where there is no step - a file just opened keeps it with the first change made to it)
+    const last = taken[taken.length - 1];
+    const ids = new Set(found.flatMap((f) => (f ? [...f.ids] : [])));
+    if (ids.size && doc.getState() === last.state && doc.history().undoDepth > 0) {
+      const model = doc.getState().model;
+      const kept = keptFrom({ atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) }, readingOf({ atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) }));
+      if (withKept(model, ids, kept) !== model) {
+        keeping = true;
+        try {
+          doc.edit(last.label ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, ids, kept) }), { joinTop: true });
+        } finally {
+          keeping = false;
+        }
+        last.state = doc.getState();
+        last.after = last.state.model;
+      }
+    }
+    stable = last.after;
+    const now = stable;
+    // (a unit's change said once in a look: two steps against one thing kept wrongly say it once, by the first)
+    const said = new Set<string>();
+    taken.forEach((step, k) => {
+      const changes = (found[k]?.changes ?? []).filter((c) => {
+        const key = `${c.unit.kind}:${JSON.stringify(c.unit.at)}:${c.how}`;
+        if (said.has(key)) return false;
+        said.add(key);
+        return true;
+      });
+      if (!changes.length) return;
+      const by = step.label ? MENO_MOVES[step.label] : undefined;
+      // (one of Meno's moves changed what the drawing states: never silent - said, and logged: ui/lib log `KNOWN`)
+      if (by) console.warn(`Meno: ${by} changed a configuration`);
+      void notesOf(step.before, step.after, changes, by, ask).then(
+        (notes) => {
+          // (the drawing changed again meanwhile: what they say is gone with it)
+          if (!notes.length || doc.getState().model !== now) return;
+          // (the chemist's step named with what it did - "move atoms: C3: R, now S" - where it is still the step undo would take back; a
+          //  move of Meno's keeps its own name)
+          if (!by && step.label) doc.named(`${step.label}: ${notes.map((n) => n.text).join("; ")}`, step.state);
+          const since = performance.now();
+          store.setState((st) => ({ configurationNotes: [...st.configurationNotes, ...notes.map((n) => ({ ...n, id: nextNote++, since }))] }));
+        },
+        () => {},
+      );
+    });
   };
-  // (in a moment the page is idle, where it has such moments: never in the way of the next frame or of what the chemist does next)
+  // (in a moment the page is idle, where it has such moments - else after the next frame: never in the way of that frame, nor of what
+  //  the chemist does next)
   const later = () => {
     if (timer != null) return;
     if (typeof requestIdleCallback === "function") {
       const asked = requestIdleCallback(run, { timeout: IDLE_WITHIN_MS });
       timer = () => cancelIdleCallback(asked);
+    } else if (typeof requestAnimationFrame === "function") {
+      let inner: ReturnType<typeof setTimeout> | null = null;
+      const frame = requestAnimationFrame(() => (inner = setTimeout(run, 0)));
+      timer = () => {
+        cancelAnimationFrame(frame);
+        if (inner != null) clearTimeout(inner);
+      };
     } else {
       const asked = setTimeout(run, 0);
       timer = () => clearTimeout(asked);
     }
   };
   const offDoc = doc.subscribe(() => {
-    // (undone or redone: the drawing and its configuration as they were - nothing to say)
-    if (doc.travelled()) {
-      stable = doc.getState().model;
+    if (keeping) return;
+    const state = doc.getState();
+    // (undone or redone, a file opened, the history rewritten: the drawing as it now is, with nothing to say - only an edit is said)
+    if (doc.lastChange() !== "edit") {
+      stable = state.model;
+      steps = [];
       return;
     }
+    const top = steps[steps.length - 1];
+    const was = top ? top.after : stable;
+    if (state.model === was) return;
+    const undoTo = doc.peek("undo");
+    const label = doc.history().undoLabel;
+    // (an edit gone on with - a drag's next frame: the same step, its drawing now this)
+    if (top && top.undoTo === undoTo) Object.assign(top, { after: state.model, label, state });
+    else steps.push({ before: was, after: state.model, label, state, undoTo });
     later();
   });
-  const offStore = store.subscribe((s) => {
-    if (waiting && !gestureUnderWay(s)) later();
+  const offStore = store.subscribe((st) => {
+    if (waiting && !gestureUnderWay(st)) later();
   });
   return () => {
     offDoc();

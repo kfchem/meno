@@ -1454,7 +1454,8 @@ All hover-based, as above.
   new (a wedge just drawn), gone with its atom or with one of its groups,
   or no longer a unit because two of its groups are now alike; nor while
   a gesture is still going (a drag says it once, as it ends), nor for undo
-  or redo, which give a drawing back with its configuration. Another
+  or redo, which give a drawing back with its configuration, nor for a
+  file opened, a drawing put in anew. Another
   centre's R or S may follow a turned one without its own configuration
   changing (its groups' ranks moved): its mark changes, and no note calls
   it changed. The note asks nothing and stops nothing: the drawing wins,
@@ -1465,7 +1466,8 @@ All hover-based, as above.
   every configuration; where one did not, that is Meno's fault: the same
   note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
   Meno's log records which move. The structures are read in a moment the
-  page is idle after the change, only those it touched
+  page is idle after the change (where the page has no such moments, after
+  the next frame), only those it touched, each step said as its own
   (`Workspace/configuration`: `configurationChanges`, `watchConfiguration`;
   `components/ConfigurationNotes2D`).
   **The configuration kept.** What a structure states is kept on its own
