@@ -875,6 +875,30 @@ which is the same in every product.
 
 #### Duplicates, and what judges them
 
+**Which atoms and bonds can carry a configuration are Meno's own**
+(`src/lib/chem/perception/stereo/candidates.ts`), by their shape alone -
+whether their groups are alike is identity's question, below:
+- an atom of B, C, Si, Ge, Sn, Pb, N, P, As, Sb, Bi, S, Se or Te with four
+  groups round it, at most one of them a hydrogen, whatever the orders of
+  its bonds (IUPAC 2013 P-93.2); or with three and a lone pair that keeps
+  its configuration (Meno's lone-pair rule: a sulfoxide's S, a
+  phosphine's P, never an amine's N);
+- a double bond with a group besides the other end on each end, in no
+  ring of seven atoms or fewer (P-93.5.1.4.1: there it is cis; for fused
+  and bridged rings Meno takes the smallest ring through the bond), and
+  not a C=N whose E/Z is none of its own (*Which C=N*, docs/WORKFLOWS.md);
+- a run of cumulated double bonds between two carbons, each with a group:
+  even, an axis (an allene's), odd, a cis or trans. Both ends carbon is
+  Meno's cautious rule, not a text's;
+- an axis of hindered rotation only where the drawing states one.
+Not candidates: a metal of the d or f block, or Al, Ga, In or Tl (their
+four groups are not surely tetrahedral); an N+ with an H among its four,
+which loses its configuration through the free amine (Meno's rule, no
+text's - a P+ or As+ with an H is a candidate); planar and helical
+chirality; a metal's own geometry. Each candidate says why it is one, and
+a place asked of that is none says why not, in the words the page shows.
+No reader, step or mark takes them yet: each will, in its own change.
+
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);

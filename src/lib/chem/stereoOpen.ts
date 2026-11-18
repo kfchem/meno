@@ -5,8 +5,6 @@
  * another. The plugin enumerates and embeds as it is asked; what is open,
  * and what is never chosen, are Meno's.
  */
-import { smallestRings } from "../layout/rings";
-import { flatRingAtoms } from "./conformersSought";
 import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
@@ -16,6 +14,10 @@ import { runsOf } from "./perception/stereo/runs";
 import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
 import { readStereo, type DrawnAtom, type DrawnBond } from "./perception/stereo/from2d";
 
+// (the C=N bonds whose E/Z is none of their own, with why: the core's - perception/stereo/movingCN)
+export { MOVING_CN, movingCN, type MovingWhy } from "./perception/stereo/movingCN";
+import { MOVING_CN, movingCN, type MovingWhy } from "./perception/stereo/movingCN";
+
 // (a configuration's types and key: the core's, one definition - perception/stereo/configuration)
 export { configurationKey, NO_CONFIGURATION, type Configuration, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredDouble, type ConfiguredGroup } from "./perception/stereo/configuration";
 
@@ -24,16 +26,6 @@ export type StereoAtom = { el: string; charge?: number; hs?: number };
 /** A bond as the rules read it: its atoms and order (4 aromatic). */
 export type StereoBond = { a: number; b: number; order: number };
 
-/**
- * Why a C=N's E/Z is no configuration of its own (`movingCN`), as the InChI
- * Technical Manual (v1.04, 2011) takes such bonds.
- */
-export const MOVING_CN = {
-  shift: "its double bond moves with a hydrogen on an N, O or S beside it (an amidine, a guanidine, an imidic acid)",
-  nh: "its N carries a hydrogen",
-  cation: "an amidinium or guanidinium bond, shared with the N beside it",
-} as const;
-export type MovingWhy = keyof typeof MOVING_CN;
 
 /** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule), aromatic bonds as a Kekulé structure has them (lib/chem/kekulize `valenceOrders`). */
 export function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
@@ -70,55 +62,6 @@ function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]):
     bonds.filter((b) => b.order === 4 || (b.order >= 1 && b.order <= 3)),
   );
   return (at) => lonePairOfThree(atoms[at].el, atoms[at].charge ?? 0, around[at], orders[at], hs[at]) && !keeps(at);
-}
-
-/** Each atom's hydrogens: those given, or those its valence leaves (`implicitOf`), and the hydrogen atoms bonded to it. */
-function hydrogensOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
-  const explicit = atoms.map(() => 0);
-  for (const b of bonds) {
-    if (atoms[b.a]?.el === "H") explicit[b.b]++;
-    if (atoms[b.b]?.el === "H") explicit[b.a]++;
-  }
-  return implicitOf(atoms, bonds).map((n, i) => n + explicit[i]);
-}
-
-/**
- * The C=N double bonds whose E/Z is no configuration of their own, by bond
- * index, each with why (`MOVING_CN`): never enumerated, never chosen, nor
- * counted as left open (docs/WORKFLOWS.md, *C=N double bonds whose E/Z is
- * none of their own*). As the InChI Technical Manual (v1.04, 2011) takes
- * them: a hydrogen on an N, O or S bonded to the C=N's carbon moves to its
- * N, and the double bond with it - the 1,3-shift of its mobile H (IV.b,
- * Table 6), a bond it presumes rotatable (Appendix 5b) - an amidine's, a
- * guanidine's, an N-acyl amidine's, an imidic acid's. And a C=N whose N
- * bears a hydrogen, and an amidinium or guanidinium C=N+, its double bond
- * shared with an amino N beside it, one in no ring held flat. An imine
- * whose N bears a carbon, an oxime and a hydrazone keep theirs. A C=N in a
- * ring held flat (lib/chem/conformersSought `flatRingAtoms`: a pyridine's,
- * an imidazole's) is no double bond of its own.
- */
-export function movingCN(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): Map<number, MovingWhy> {
-  const hs = hydrogensOf(atoms, bonds);
-  const around: number[][] = atoms.map(() => []);
-  for (const b of bonds) {
-    around[b.a]?.push(b.b);
-    around[b.b]?.push(b.a);
-  }
-  const rings = smallestRings(atoms.length, bonds.map((b) => [b.a, b.b] as const));
-  const flat = flatRingAtoms(atoms, bonds, rings);
-  const inFlatRing = (x: number, y: number) => rings.some((r) => r.includes(x) && r.includes(y) && r.every((k) => flat.has(k)));
-  const out = new Map<number, MovingWhy>();
-  bonds.forEach((b, k) => {
-    if (b.order !== 2) return;
-    const [x, y] = [atoms[b.a], atoms[b.b]];
-    if (!x || !y || [x.el, y.el].sort().join() !== "C,N" || inFlatRing(b.a, b.b)) return;
-    const [c, n] = x.el === "C" ? [b.a, b.b] : [b.b, b.a];
-    const others = around[c].filter((j) => j !== n);
-    if (others.some((j) => ["N", "O", "S"].includes(atoms[j].el) && hs[j] > 0)) out.set(k, "shift");
-    else if (hs[n] > 0) out.set(k, "nh");
-    else if ((atoms[n].charge ?? 0) > 0 && others.some((j) => atoms[j].el === "N" && !(atoms[j].charge ?? 0) && !flat.has(j))) out.set(k, "cation");
-  });
-  return out;
 }
 
 /** What a structure's C=N bonds left open whose E/Z is none of their own are, in a line - each reason once - or null. */
