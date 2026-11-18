@@ -6,7 +6,7 @@ import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
-import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+import type { AtomNumberKind, AtomNumbersShown, MapText } from "../utils/atomNumbers";
 import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -647,6 +647,11 @@ export type Molecule3D = {
    * where its numbering could not be resolved, and it shows none.
    */
   mapFrames?: (number[] | null)[];
+  /**
+   * The atom-map numbers an atom map on the page shows as IUPAC locants rather than as themselves (4a, 1' - chem/atomMap
+   * `iupacNumbering`), by number: in every frame alike, as the drawing shows them.
+   */
+  mapTexts?: [number, MapText][];
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**

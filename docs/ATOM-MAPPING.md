@@ -598,7 +598,11 @@ shows its locant only where that is no plain number - 4a, 1', 3a with a
 superscript 1 - and its map number otherwise; and a lettered locant is
 shown in the first reactant that has it only: a second naphthalene shows
 its numbers there too. No text repeats in a reaction, and a product's
-atom, which shows its partner's, never shows two partners alike.
+atom, which shows its partner's, never shows two partners alike. The
+molecules in 3D show the same on their balls (or where the sticks meet),
+in every conformer by the number (`Molecule3D.mapTexts`); a ball writes
+digits, the letters a to f, primes and a superscript of digits, four
+glyphs at most, and shows the map number where a locant needs more.
 
 **The order 1 to N** (Meno's own; the recommendations number a parent, not
 a molecule): the parent's atoms with plain-number locants at their numbers

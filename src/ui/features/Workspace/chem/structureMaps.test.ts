@@ -9,6 +9,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readSDfile } from "../../../../lib/chem/ctfile";
+import { atomGlyphsOf, glyphCode, glyphsWidth } from "../utils/atomNumbers";
 import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, renumberedTexts, unpairedSaid } from "./atomMap";
 import { conformerPairs, conformersSaid, MOST_PAIRS, numbers3d, pairedCounts, pairedSdf, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
@@ -480,6 +481,27 @@ describe("an atom map renumbered", () => {
     expect(shown).toEqual(["4a", "8a"]);
     // (not renumbered: no texts, whatever the map holds)
     expect(mapMarks({ ...kept, numbers: undefined, texts }, page().doc.model).texts.size).toBe(0);
+  });
+
+  it("shows the same texts on the molecules in 3D, by number, Before's and After's alike - and takes them off with the map", () => {
+    const { doc, kept } = page();
+    const numbers = renumbered(kept, drawnOrder());
+    const c1 = R_NAMES.indexOf("C1");
+    const texts = kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "4a" } : null));
+    const map = { ...kept, numbers, texts };
+    const { doc: shown } = ops.addStructureMaps(doc, [map]);
+    const [before3d, after3d] = shown.molecules3d!;
+    expect(before3d.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    expect(after3d.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    // (drawn so on the balls: the atom numbered as C1 shows 4a, the rest their numbers)
+    const glyphs = atomGlyphsOf(before3d, "map");
+    expect(glyphsWidth(glyphs[c1])).toBe(2);
+    expect(glyphs[c1]).toBe(glyphCode(numbers[c1], { base: "4a" }));
+    const other = numbers.findIndex((k, i) => i !== c1 && k >= 10);
+    expect(glyphs[other]).toBe(glyphCode(numbers[other]));
+    // (hidden: no texts left on them)
+    const hidden = ops.setStructureMaps(shown, [{ id: 1, map: { ...map, shown: false } }]);
+    expect(hidden.molecules3d!.every((m) => m.mapTexts == null)).toBe(true);
   });
 
   it("is kept in the workspace's file, and numbers that are not each of 1 to n once are left out", () => {

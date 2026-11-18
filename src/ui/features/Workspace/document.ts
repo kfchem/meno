@@ -1620,7 +1620,13 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
     const { reactingCentre: _c, ...rest } = b;
     return c ? { ...rest, reactingCentre: c } : rest;
   });
-  // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on)
+  // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on -
+  //  where the drawing shows a number as its IUPAC locant, 4a, the same: by number, as a conformer's frames number alike atoms anew)
+  const textOf = new Map<number, { base: string; sup?: string }>();
+  for (const [id, t] of texts) {
+    const n = numbers.get(id);
+    if (n) textOf.set(n, t);
+  }
   const molecules = doc.molecules3d ?? [];
   const now = numbers3d(maps, molecules, doc.model);
   const touched = new Set([...numbers3d(before, molecules, doc.model).touched, ...now.touched]);
@@ -1633,10 +1639,18 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
       const { map: _m, ...rest } = a;
       return k ? { ...rest, map: k } : rest;
     });
-    const { atomNumbers: shownBefore, mapFrames: _f, ...rest } = m;
+    const { atomNumbers: shownBefore, mapFrames: _f, mapTexts: _t, ...rest } = m;
     const atomNumbers = n ? { kind: "map" as const } : shownBefore?.kind === "map" ? undefined : shownBefore;
+    const has = new Set(n ? [...n.first, ...n.rest.flatMap((f) => f ?? [])] : []);
+    const mapTexts = [...textOf].filter(([k]) => has.has(k)).sort((a, b) => a[0] - b[0]);
     // (each frame after the first numbered as its own: chem/structureMaps `framesNumbered`)
-    return { ...rest, atoms: atoms3d, ...(atomNumbers ? { atomNumbers } : {}), ...(n?.rest.length ? { mapFrames: n.rest } : {}) };
+    return {
+      ...rest,
+      atoms: atoms3d,
+      ...(atomNumbers ? { atomNumbers } : {}),
+      ...(n?.rest.length ? { mapFrames: n.rest } : {}),
+      ...(mapTexts.length ? { mapTexts } : {}),
+    };
   });
   const { structureMaps: _s, ...restDoc } = doc;
   return {

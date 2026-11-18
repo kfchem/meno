@@ -10,7 +10,7 @@
  * high, and by how far each is shown.
  */
 import * as THREE from "three";
-import { DIGIT_CELL, digitAtlas, NUMBER_DIGITS_MOST, NUMBER_LEAST_PX } from "./atomNumbers";
+import { DIGIT_CELL, digitAtlas, glyphsGlsl, NUMBER_LEAST_PX } from "./atomNumbers";
 
 /** How high a number's digits stand where the sticks meet, in ångströms: as a carbon's on its ball, ball and stick. */
 export const JOINT_NUMBER_A = 0.27;
@@ -48,9 +48,10 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
       varying float vShown;
       varying float vPx;
       varying vec3 vInk;
+      ${glyphsGlsl(null)}
       void main() {
         float num = floor( jointNumber + 0.5 );
-        float digits = num < 10.0 ? 1.0 : num < 100.0 ? 2.0 : num < 1000.0 ? 3.0 : num < ${10 ** NUMBER_DIGITS_MOST}.0 ? ${NUMBER_DIGITS_MOST}.0 : 0.0;
+        float digits = glyphsWidth( num );
         vNumber = num;
         vDigits = digits;
         vShown = jointShown;
@@ -64,7 +65,7 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
         at.xy += position.xy * vec2( h * ( digits * ${DIGIT_CELL.toFixed(3)} + 2.0 * ${RING.toFixed(3)} ) / ( 1.0 + 2.0 * ${RING.toFixed(3)} ), h );
         vPx = height * scale * pxPer;
         gl_Position = projectionMatrix * at;
-        if ( digits < 1.0 || jointShown <= 0.0 ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
+        if ( digits <= 0.0 || jointShown <= 0.0 ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
       }`,
     fragmentShader: `
       uniform sampler2D atlas;
@@ -75,18 +76,11 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
       varying float vShown;
       varying float vPx;
       varying vec3 vInk;
-      // (how much the digits cover at a point, in their own units: x across all of them, 0 to the count, y up one)
-      // (sampled by how fast q moves across the screen, as on a ball - not by the digit's own coordinates, which jump at each digit's edge)
-      // (read wherever it is asked, the point held within the digits and what lies outside them let go after, as on a ball: utils/occlusionMaterial)
+      ${glyphsGlsl("atlas")}
+      // (how much the glyphs cover at a point, in their own units: x across all of them in cells, y up one)
+      // (sampled by how fast q moves across the screen, as on a ball - not by the glyph's own coordinates, which jump at each glyph's edge)
       float cover( vec2 q, vec2 dx, vec2 dy ) {
-        float inside = q.x >= 0.0 && q.x < vDigits && q.y >= 0.0 && q.y <= 1.0 ? 1.0 : 0.0;
-        vec2 qc = vec2( clamp( q.x, 0.0, vDigits - 1e-4 ), clamp( q.y, 0.0, 1.0 ) );
-        float d = floor( qc.x );
-        float place = 1.0;
-        for ( int k = 0; k < ${NUMBER_DIGITS_MOST - 1}; k++ ) if ( float( k ) < vDigits - 1.0 - d ) place *= 10.0;
-        float value = mod( floor( vNumber / place + 1e-4 ), 10.0 );
-        vec2 per = vec2( 0.1, 1.0 );
-        return textureGrad( atlas, vec2( ( value + fract( qc.x ) ) / 10.0, qc.y ), dx * per, dy * per ).a * inside;
+        return glyphsCover( vNumber, q, dx, dy );
       }
       void main() {
         float ring = ${RING.toFixed(3)};
