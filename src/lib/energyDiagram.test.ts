@@ -184,6 +184,8 @@ describe("an energy diagram's levels as Levels lists them", () => {
     expect(referenceNeed(names, "R = HCN", "R")).toBeUndefined();
     expect(referenceNeed(names, "", " P ")).toBeUndefined();
     expect([referenceNeed(names, "", ""), referenceNeed(names, "", undefined)]).toEqual([undefined, undefined]);
+    // (nothing come in yet - a template's diagram before its steps have run: nothing it could name, so nothing said)
+    expect(referenceNeed([], "", "species-1")).toBeUndefined();
     // (the same as the diagram's own refusal, where it is drawn from those levels)
     expect(diagramOf(opened, { reference: "Zed" })).toEqual({ why: referenceNeed(["R", "TS", "P"], "", "Zed") });
     // (levels that cannot be shown as listed: the diagram says why, not this)

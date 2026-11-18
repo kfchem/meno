@@ -11,7 +11,7 @@ import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAm
 import type { Property } from "../../../../lib/entry";
 import { moleculesAsTable, WHAT_COLUMN, type ConstitutionOf, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { comeTogether, exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, presetsStamp, setName, stepValues, takesBy, takesNothingBy } from "./doers";
 
 export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
@@ -188,11 +188,20 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
     const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
     return `It takes ${wants}, not ${SET_WORDS[holds]}`;
   }
-  // (several wires into one input: what they give one kind, as one set's entries are - and a number, one alone; an empty set adds nothing, of no kind)
+  // (Merge: its other input's kind, where it is known - two sets of one kind made one)
+  if (step.kind === "merge" && (port === "first" || port === "second")) {
+    const other = inputs.find((p) => p.id === (port === "first" ? "second" : "first"))!;
+    const there = wiresInto(doc, to, other.id)
+      .map((w) => givesOf(doc, w.from))
+      .find((g): g is ValueKind => g != null && g !== holds && g in SET_WORDS);
+    if (there) return `It gives ${SET_WORDS[holds]}, and ${other.name} ${SET_WORDS[there]}: Merge makes one set of two of one kind`;
+  }
+  // (several wires into one input: what they give one kind, as one set's entries are - molecules and conformer sets together where it
+  //  reads them as a table - and a number, one alone; an empty set adds nothing, of no kind)
   const others = wiresInto(doc, to, port).filter((w) => w.from.set !== from.set && !emptyNow(doc, findSet(doc, w.from.set)!));
   if (!others.length || emptyNow(doc, set)) return null;
   if (holds === "number") return "It takes one number: one is wired into it already";
-  const there = others.map((w) => givesOf(doc, w.from)).find((g): g is ValueKind => g != null && g !== holds && g in SET_WORDS);
+  const there = others.map((w) => givesOf(doc, w.from)).find((g): g is ValueKind => g != null && !comeTogether(step.kind, port, g, holds) && g in SET_WORDS);
   return there ? `It gives ${SET_WORDS[holds]}, and what is wired into it already ${SET_WORDS[there]}: an input takes one kind` : null;
 }
 

@@ -455,7 +455,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     const set = labelSetOf(opts);
     const letters = (text: string) => writtenLetters(text, opts.fontPx, set).items;
     const editing = labelEdit.active && labelEdit.atomId != null && labelEdit.n != null ? labelEdit.atomId : null;
-    if (editing != null) {
+    // (begun on the selection's atoms: each it is written on makes room for it, as the one with the caret does)
+    const editingIds = editing != null ? [editing, ...(labelEdit.atoms ?? []).filter((x) => x !== editing)] : [];
+    for (const editing of editingIds) {
       const entry = map.get(editing);
       const text = labelEdit.value;
       if (!entry || entry.n !== labelEdit.n) {
@@ -475,7 +477,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       }
     }
     for (const [id, entry] of map) {
-      if (id === editing) continue;
+      if (editingIds.includes(id)) continue;
       // (kept or let go: back to its label as drawn, from what was written)
       if (entry.step.text != null) {
         map.set(id, { n: entry.n, step: { n: nextWriteStep(), since: now, was: entry.step, hidden: false } });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalWritten, symmetryClasses, symmetryOrbits, type SymmetryInput } from "./symmetry";
+import { canonicalRanks, canonicalWritten, symmetryClasses, symmetryOrbits, type SymmetryInput } from "./symmetry";
 import { symmetryOrbits as aromaticOrbits } from "../identity";
 import { fromSmiles } from "../../layout/testdata/fromSmiles";
 import { shuffled, tiedCages } from "../../layout/testdata/shuffled";
@@ -101,6 +101,18 @@ describe("symmetry: the canonical text", () => {
     const own = canonicalWritten(given([p, q], b.stereo!.cis)).text;
     expect(canonicalWritten(given([p, other], !b.stereo!.cis)).text).toBe(own);
     expect(canonicalWritten(given([p, q], !b.stereo!.cis)).text).not.toBe(own);
+  });
+
+  it("ranks and writes a double bond one way with its atoms listed the other way round, its refs as they were: beta-carotene", () => {
+    // (each ref is found by the end it is bonded to, not by its place in the refs; read by place, two of beta-carotene's bonds
+    //  turned so rank its atoms otherwise)
+    const g = fromSmiles("CC1=C(C(CCC1)(C)C)/C=C/C(=C/C=C/C(=C/C=C/C=C(/C=C/C=C(/C=C/C2=C(CCCC2(C)C)C)\\C)\\C)/C)/C");
+    g.bonds.forEach((b, k) => {
+      if (!b.stereo) return;
+      const turned: SymmetryInput = { ...g, bonds: g.bonds.map((x, j) => (j === k ? { ...x, a: x.b, b: x.a } : x)) };
+      expect(canonicalRanks(turned), `bond ${k}`).toEqual(canonicalRanks(g));
+      expect(canonicalWritten(turned).text, `bond ${k}`).toBe(canonicalWritten(g).text);
+    });
   });
 
   it("writes a double bond with an end of two alike groups one way, given cis or trans: 2-methylbut-2-ene has no configuration to write", () => {

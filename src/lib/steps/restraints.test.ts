@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { valueFault, type Entry, type EntryBond, type Restraint } from "../entry";
 import { speciesOf } from "../io/writers";
-import { angleIn, EXACT, isTrans, linearBy, OWN_NUMBERING, restraintKey, restraintRows, NONE_FOUND, NOTHING_KIND, restraintRowsIn, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, transTorsions, type RestraintRow } from "./restraints";
+import { angleIn, EXACT, isTrans, linearBy, oneNumbering, OWN_NUMBERING, restraintKey, restraintRows, NONE_FOUND, NOTHING_KIND, restraintRowsIn, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, transTorsions, type RestraintRow } from "./restraints";
 
 /** Restraints from entries whose distances and dihedrals are set by hand, and radii as published. */
 
@@ -501,5 +501,19 @@ describe("Torsion restraints", () => {
     if ("failed" in own) throw new Error(own.failed);
     expect(own.rows.map((x) => x.restraint)).toEqual([{ kind: "dihedral", atoms: [0, 1, 2, 3], value: expect.closeTo(0, 9), exact: true }]);
     expect(own.notHeld).toBe(0);
+  });
+});
+
+describe("one numbering (`oneNumbering`)", () => {
+  it("is the same label, two entries' own, or the same key now - the last map's, or an entry's own - and nothing else", () => {
+    expect(oneNumbering("as a (k1)", "as a (k1)")).toBe(true);
+    expect(oneNumbering(OWN_NUMBERING, `${OWN_NUMBERING} (k1)`)).toBe(true);
+    expect(oneNumbering(`${OWN_NUMBERING} (k1)`, "as reactant (k1)")).toBe(true);
+    expect(oneNumbering("as b (k0), then as reactant (k1)", `${OWN_NUMBERING} (k1)`)).toBe(true);
+    expect(oneNumbering(`${OWN_NUMBERING} (k1)`, "as reactant (k2)")).toBe(false);
+    expect(oneNumbering("as reactant (k1), then as b (k2)", `${OWN_NUMBERING} (k1)`)).toBe(false);
+    // (a label with no key - a table read from a file that says its own, bare - is one numbering with no other label)
+    expect(oneNumbering(OWN_NUMBERING, "as reactant (k1)")).toBe(false);
+    expect(oneNumbering(OWN_NUMBERING, "as reactant")).toBe(false);
   });
 });
