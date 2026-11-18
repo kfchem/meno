@@ -102,6 +102,12 @@ const dotOver = (dot: Box, stem: Box) => {
 /** A letter read from its shape: the letter, how sure, the others it might be, likeliest first, and the shapes it was drawn with. */
 export type ShapeLetter = FigureLetter & { sure: number; alts: string[]; from: object[] };
 
+/** The colour a letter's shapes are drawn in, where they have one and it is one: none, else. */
+function colourOf(from: readonly object[]): { ink?: string } {
+  const inks = new Set(from.map((f) => (f as { ink?: string }).ink).filter((k): k is string => !!k));
+  return inks.size === 1 ? { ink: [...inks][0] } : {};
+}
+
 /** How sure a reading must be to be taken as one; and how near a second reading must come to be offered besides. */
 const TAKEN = 0.55;
 const NEAR = 0.08;
@@ -219,6 +225,8 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
         .map((s) => s.k.c)
         .filter((c, i, all) => c !== best.k.c && all.indexOf(c) === i),
       from: g.from,
+      // (its colour, its shapes' where they have one: a locant set in red beside a black label is no letter of it - `wordsOf`)
+      ...colourOf(g.from),
     });
   }
   // (a letter whose small form is its capital made smaller - c C, o O, s S, v V, w W, x X, z Z - is told by the capitals beside it on its

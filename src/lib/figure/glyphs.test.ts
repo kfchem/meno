@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigurePath, PathStep, Point } from "./drawn";
 import { shapesOf } from "./drawn";
 import { GRID, glyphShape, inkOf, shapeLetters, type GlyphShape } from "./glyphs";
-import { readFigure } from "./read";
+import { readFigure, wordsOf } from "./read";
 import { readDrawnLabel, structureOf, type LabelReader } from "./structure";
 
 // A small typeface of the test's own, in ems, y down, the line at naught,
@@ -71,6 +71,20 @@ describe("letters drawn as their outlines", () => {
     const read = shapeLetters(shapesOf(f), 14.4, KNOWN);
     expect([...read].sort((p, q) => p.box[0] - q.box[0]).map((l) => l.c).join("")).toBe("NOH");
     expect(read.every((l) => l.sure > 0.8)).toBe(true);
+  });
+
+  it("gives each letter its shapes' colour, and joins letters of two colours into no word: a locant in red by a black label", () => {
+    const red = (p: FigurePath): FigurePath => ({ ...p, fill: "#ff0000ff" });
+    const [o, h] = [outlined("O", 100, 100), outlined("H", 107.8, 100).map(red)];
+    const read = shapeLetters(shapesOf({ paths: [...o, ...h], letters: [], pictures: [] }), 14.4, KNOWN).sort((p, q) => p.box[0] - q.box[0]);
+    expect(read.map((l) => [l.c, l.ink])).toEqual([
+      ["O", "#000000ff"],
+      ["H", "#ff0000ff"],
+    ]);
+    expect(wordsOf(read).map((w) => w.letters.map((l) => l.c).join(""))).toEqual(["O", "H"]);
+    // (both black, as before: one word)
+    const black = shapeLetters(shapesOf({ paths: outlined("OH", 100, 100), letters: [], pictures: [] }), 14.4, KNOWN);
+    expect(wordsOf(black).map((w) => w.letters.map((l) => l.c).join(""))).toEqual(["OH"]);
   });
 
   it("reads a figure whose labels are outlines: OH on a chain, N in a ring", () => {
