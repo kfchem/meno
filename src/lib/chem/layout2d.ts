@@ -4552,9 +4552,10 @@ function centresLabelled(atoms: Atom[], bonds: Bond[], held = false): { atoms: S
   const wedged = bonds.filter((b) => (b.stereo === "up" || b.stereo === "down") && !atoms[wedgeNarrowAtom(b, deg)]?.stereoGroup);
   if (wedged.length && (atoms.some((a) => a.stereoGroup) || bonds.some((b) => b.stereoGroup))) {
     const narrows = wedged.map((w) => wedgeNarrowAtom(w, deg));
-    // (while a gesture lasts - an atom dragged - taken as last read where the drawing has the same atoms and wedges: read again once it
-    //  ends, never at each frame of it; and worked out once for a drawing as it stands: laid out again unchanged, a zoom, a redraw)
-    const shape = `${atoms.length}|${narrows.join(",")}`;
+    // (while a gesture lasts - an atom dragged - taken as last read where it was read of this structure, by its first atom, with the same
+    //  atoms and wedges: read again once it ends, never at each frame of it; and worked out once for a drawing as it stands: laid out
+    //  again unchanged, a zoom, a redraw)
+    const shape = `${atoms[0]?.id ?? ""}|${atoms.length}|${narrows.join(",")}`;
     if (!(held && wedgedRead?.shape === shape)) {
       const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
       const d = drawnOf(atoms, drawn);
