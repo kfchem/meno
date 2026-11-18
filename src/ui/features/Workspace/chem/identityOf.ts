@@ -12,7 +12,8 @@ import { isMetal, squarePlanarMetal, type Arranged } from "../../../../lib/layou
 import { valencesAt } from "../../../../lib/chem/molecule";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { readStereo } from "../../../../lib/layout/drawn";
-import { recognisedSaid } from "../../../../lib/layout/recognised";
+import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
+import { cageViews } from "../../../../lib/layout/recognised";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
@@ -29,7 +30,7 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
  * hold - and, for each of the drawing's bonds by its place, its place among
  * the input's bonds: -1 for a hydrogen bond, which the input leaves out -
  * and, by the atom's place, what the reading of a ring drawn in
- * perspective with no depth says of it (lib/layout/recognised
+ * perspective with no depth says of it (lib/chem/perception/projection/depth
  * `recognisedSaid`): read from the ring, read as a Haworth ring, or why not.
  */
 export function identityInputOf(part: Model): { input: IdentityInput; unread: number[]; bondAt: number[]; perspective: ReadonlyMap<number, string> } {
@@ -69,7 +70,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     return texts.size === 1 ? ways[0] : null;
   };
   const arrangements = arrangementsDrawn(drawing, part, oneOf);
-  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds) };
+  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds, cageViews) };
 }
 
 /** A structure drawn's identity (lib/chem `identity`), and the atoms whose wedges it could not read (`identityInputOf`). */
