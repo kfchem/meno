@@ -179,6 +179,12 @@ export interface DocumentStore<T> {
   markSaved(state?: T): void;
   history(): HistoryInfo;
   /**
+   * The step that came to `state` named `label` anew - what it is said to have done, known only once it is done (a change of
+   * configuration it made: Workspace/configuration). Only the step undo would take back, and only while it is still the one that came to
+   * `state`: false, and nothing named, otherwise.
+   */
+  named(label: string, state: T): boolean;
+  /**
    * Whether the present state was gone back or forward to - an undo, a
    * redo, a gesture dropped - rather than made by an edit: what was on the
    * page may have moved without the pointer moving.
@@ -445,6 +451,12 @@ export function createDocument<T>(
     },
 
     travelled: () => travelled,
+
+    named(label, state) {
+      if (!past.length || !Object.is(present.state, state)) return false;
+      present = { ...present, label };
+      return true;
+    },
 
     history() {
       return {

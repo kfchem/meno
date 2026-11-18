@@ -46,6 +46,8 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-1");
     await vi.runAllTimersAsync();
     expect(notes()).toEqual(["C1: R, now S"]);
+    // (the step named with what it did: the note's words, as an undo would take it back)
+    expect(doc.history().undoLabel).toBe("move atoms: C1: R, now S");
     doc.undo();
     await vi.runAllTimersAsync();
     expect(notes()).toEqual(["C1: R, now S"]);
@@ -172,6 +174,8 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     doc.edit("turn over", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, x: -a.x })) } }));
     await vi.runAllTimersAsync();
     expect(notes()).toEqual(["changed by Turn over: C1: R, now S"]);
+    // (a move of Meno's keeps its own step's name)
+    expect(doc.history().undoLabel).toBe("turn over");
     expect(warn).toHaveBeenCalledWith("Meno: Turn over changed a configuration");
     expect(MENO_MOVES["clean up"]).toBe("Clean-up");
     warn.mockRestore();

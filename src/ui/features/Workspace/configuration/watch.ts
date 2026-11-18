@@ -103,7 +103,8 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     }
     waiting = false;
     const before = stable;
-    const after = doc.getState().model;
+    const state = doc.getState();
+    const after = state.model;
     stable = after;
     if (before === after) return;
     const changes = configurationChanges(before, after);
@@ -116,6 +117,9 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
       (notes) => {
         // (the drawing changed again meanwhile: what they say is gone with it)
         if (!notes.length || doc.getState().model !== after) return;
+        // (the chemist's step named with what it did - "move atoms: C3: R, now S" - where it is still the step undo would take back; a
+        //  move of Meno's keeps its own name)
+        if (!by && step) doc.named(`${step}: ${notes.map((n) => n.text).join("; ")}`, state);
         const since = performance.now();
         store.setState((s) => ({ configurationNotes: [...s.configurationNotes, ...notes.map((n) => ({ ...n, id: nextNote++, since }))] }));
       },
