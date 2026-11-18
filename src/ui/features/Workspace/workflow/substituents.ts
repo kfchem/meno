@@ -19,7 +19,7 @@ import type { StyleChoice } from "../../../../lib/chem/style";
 import { isMetal } from "../../../../lib/layout/perceive";
 import type { LineRead } from "../../../../lib/options";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
-import { identityInputOf } from "../chem/identityOf";
+import { identityInputOf, withGroups } from "../chem/identityOf";
 import { undrawnHydrogens, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
@@ -236,7 +236,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     const { drawn: drawnNow, changed } = product(choice);
     // (a product that would say another configuration than its template's: never made - the step stops, naming it)
     if (changed.length) return void refused.push(`${how}: would change the configuration at ${changed.map((u) => unitName(template, u)).join(", ")}`);
-    const found = identity(identityInputOf(drawnNow).input);
+    const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
     if (!found.complete) missed++;
     const first = seen.get(found.text);
     if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
