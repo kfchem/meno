@@ -100,7 +100,7 @@ export const longestGroup =
  *
  * A second-row centre has no more than four bonds: no CF5. Nitrate is the
  * one oxoanion that keeps it so by a charge of its own: NO3, of one charge,
- * is its N+ with one N=O and two O- (the IUPAC Red Book's nitrate).
+ * is its N with one N=O and two N-O-, the N +1.
  */
 export function anionOf(parts: readonly Part[], charge: number): GroupStructure | null {
   const is = (el: string) => (p: Part) => p.kind === "element" && p.el === el;

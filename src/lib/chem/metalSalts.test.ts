@@ -48,9 +48,23 @@ describe("a metal's salt of an oxoanion", () => {
     }
     const two = of("Hg(NO3)2");
     expect([ions(two)[0], hgHg(two), charge(two)]).toEqual(["Hg+2", [], 0]);
+    // (one Hg+ alone, HgNO3 - mercury(I)'s empirical formula, its stoichiometry no different - is one cation; two Hg2+ are not bonded)
+    const one = of("HgNO3");
+    expect([ions(one)[0], one.bonds.filter((b) => one.atoms[b.a1].el === "Hg" || one.atoms[b.a2].el === "Hg")]).toEqual(["Hg+1", []]);
+    expect([ions(of("Hg2(SO4)2")).slice(0, 2), hgHg(of("Hg2(SO4)2"))]).toEqual([["Hg+2", "Hg+2"], []]);
     // (another metal's two +1 cations stay two ions: silver carbonate)
     expect(hgHg(of("Ag2CO3"))).toEqual([]);
     expect(of("Ag2CO3").bonds.some((b) => of("Ag2CO3").atoms[b.a1].el === "Ag")).toBe(false);
+  });
+
+  it("gives the metal a charge of one to four, a whole one: Ce(NO3)4 Ce4+; Ca2(NO3)3, whose calcium would be 1.5+, not read", () => {
+    expect([ions(of("Ce(NO3)4"))[0], charge(of("Ce(NO3)4"))]).toEqual(["Ce+4", 0]);
+    expect(abbreviationStructure("Ca2(NO3)3")).toBeNull();
+  });
+
+  it("reads a nitrate of each metal on its list (the formula as written, its metal's charge the one it makes)", () => {
+    const listed = ["Be", "Mg", "Ca", "Sr", "Ba", "Zn", "Cd", "Hg", "Al", "Ga", "In", "Tl", "Sn", "Pb", "Bi", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Y", "Zr", "Nb", "Mo", "Ru", "Rh", "Pd", "Ag", "La", "Ce", "Nd", "Sm", "Eu", "Gd", "Yb", "Lu", "Hf", "W", "Os", "Ir", "Pt", "Au", "U"];
+    for (const el of listed) expect([ions(of(`${el}(NO3)2`))[0], charge(of(`${el}(NO3)2`))], el).toEqual([`${el}+2`, 0]);
   });
 
   it("leaves a halide, a group bound by one bond and a complex's formula as they were read: CuCl2, AgOTf, Cu(OAc)2, MoO2Cl2", () => {
