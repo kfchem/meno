@@ -1405,9 +1405,11 @@ it where it lies out of view.
     drawing's bonds are most of what it is drawn with - `barBond`,
     `outlineChains`, lib/figure/read; the scheme reader tells them before it
     reads anything of them, and the figure's own bond, for all else, is that of
-    what is drawn besides its chains, whether they are kept or not): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), every bar
+    what is drawn besides its chains, whether they are kept or not): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), or
+    1.1 where one of its bars is a whole bond (0.85 to 1.15 bonds) - a chain whose end bars are cut short where its labels are set, as a dioxolane's
+    O-CH2-CH2-O is, 1.2 to 1.3 across - every bar
     from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
-    speck, a letter's stems (under 1.3 bonds across), a frame, an arrow
+    speck, a letter's stems (under 1.3 bonds across, and none of them a whole bond, or under 1.1), a frame, an arrow
     of one polygon, a big letter's stems (they meet at no corner) are none, and
     the polygon is read as it was before;
   - short strokes side by side across a line, evenly spaced - a

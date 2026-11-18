@@ -34,22 +34,24 @@ export const metal: ReadonlySet<string> = new Set([...transitionMetal, ...mainGr
 export const notMetal: ReadonlySet<string> = new Set("H He B C N O F Ne Si P S Cl Ar Ge As Se Br Kr Sb Te I Xe At Rn Ts Og".split(" "));
 
 /**
- * What a drawing's label is that is also an element's symbol (the maintainer's rule, 2026-10-10: a group named as an element is the group):
- * "Pr" propyl's, "Ac" acetyl's, "Ts" tosyl's, "Fm" 9-fluorenylmethyl's, "At" 7-azabenzotriazol-1-yl's. A fact about labels, not about
- * the elements, each its kind all the same (foundation part 3, B2, is whether the drawing can tell the label from the element). Every
- * label and other name of the abbreviations' table (lib/chem/abbreviations) that is an element's symbol, and no other: held so by a
- * test, the core taking no table but the elements'.
+ * What a label typed or written is that is also an element's symbol (the maintainer's rule, 2026-10-10: a group named as an element is the
+ * group): "Pr" propyl's, "Ac" acetyl's, "Ts" tosyl's, "Fm" 9-fluorenylmethyl's, "At" 7-azabenzotriazol-1-yl's. A fact about labels, not
+ * about the elements: what a typed label is read as, and what a label's text holds (Ac in HoAc, acetyl's - lib/chem/ligands). A drawing's
+ * atom so typed holds its group, and is given to every reader of elements as the group's name, never as the element (foundation part 3,
+ * B2, the maintainer's choice of 2026-11-16); an atom with the symbol and nothing held - from a file's element column, a SMILES, 3D - is
+ * the element. Every label and other name of the abbreviations' table (lib/chem/abbreviations) that is an element's symbol, and no other:
+ * held so by a test, the core taking no table but the elements'.
  */
 export const labelNotElement: ReadonlySet<string> = new Set(["Pr", "Ac", "Ts", "Fm", "At"]);
 
 /**
  * The metals ligands are drawn round (lib/layout/perceive `isMetal`, docs/LAYOUT-2D.md section 7), and a complex's formula is read for
  * (lib/chem/ligands): the `transitionMetal`s, the actinoids among them (Th to Lr: uranocene is a sandwich as ferrocene is, and an H on U is a
- * hydride kept, as on Pd - foundation part 3, B1), but for two gaps. Pr, Ac and Fm, their labels being propyl's, acetyl's and
- * 9-fluorenylmethyl's (`labelNotElement`; its Ts and At are no transition metals). And Rf to Cn, the seventh row's d block, whose complexes are not made: not listed, as before.
+ * hydride kept, as on Pd - foundation part 3, B1), praseodymium, actinium and fermium with them: a drawing's propyl, acetyl or
+ * 9-fluorenylmethyl typed as Pr, Ac or Fm is given to these readers as the group's name, never as the element (`labelNotElement`; B2). But
+ * Rf to Cn, the seventh row's d block, whose complexes are not made: not listed, as before.
  */
-export const drawnRoundMetal: ReadonlySet<string> = ((notMade) =>
-  new Set([...transitionMetal].filter((el) => !labelNotElement.has(el) && !notMade.has(el))))(byNumber([104, 112]));
+export const drawnRoundMetal: ReadonlySet<string> = ((notMade) => new Set([...transitionMetal].filter((el) => !notMade.has(el))))(byNumber([104, 112]));
 
 /**
  * Nine metals of groups 1, 2, 12 and 13 bridged to a transition metal by two atoms as a second transition metal is - the Tebbe reagent's
