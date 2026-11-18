@@ -150,6 +150,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
+import { fischerCentres } from "./utils/fischer";
 import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -2644,6 +2645,12 @@ function WorkspaceContent({
             return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
           stereo={stereoAtMenu ? { name: stereoAtMenu.name, run: () => showStereo(stereoAtMenu) } : undefined}
+          fischer={(() => {
+            // (the structure right-clicked drawn as a Fischer projection: read so, on the chemist's word - one step)
+            if (menu.kind !== "atom" && menu.kind !== "bond") return undefined;
+            const at = structureAt(menu.kind, menu.id);
+            return at != null && fischerCentres(store.getState().model, at).length ? { run: () => void store.getState().readFischer(at) } : undefined;
+          })()}
           numbers={(() => {
             const st = store.getState();
             const got = numbersItemsFor(st, menu);

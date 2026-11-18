@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
+import { FISCHER_CROSS } from "./structure";
 import { bondLength, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
@@ -1220,6 +1221,21 @@ describe("a stereocentre whose configuration the figure does not show", () => {
   const marked = (f: FigureDrawn) => read(f).atoms.filter((a) => a.unsure?.includes(NOT_DRAWN)).length;
 
   it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
+    expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("drawn as a cross of plain bonds on the page's axes - a Fischer projection's - says so, and that it is read as one only when asked", () => {
+    // (a centre at (100, 100): a methyl up, an ethyl down, OH right and Br left, each bond a plain line on an axis)
+    const c: P = [100, 100];
+    const [up, down, right, left] = [step(c, 90), step(c, -90), step(c, 0), step(c, 180)];
+    const f = figure(
+      [stroke(c, up), stroke(c, down), stroke(down, step(down, -30)), stroke(c, along(c, right, 0.7)), stroke(c, along(c, left, 0.7))],
+      [...word("OH", [right[0] + 3.4, right[1]]), ...word("Br", [left[0] - 9, left[1]])],
+    );
+    const centre = read(f).atoms.find((a) => a.unsure?.includes(FISCHER_CROSS));
+    expect(centre).toBeDefined();
+    expect(centre!.unsure).not.toContain(NOT_DRAWN);
+    // (the same kind of centre, its bonds off the axes: no cross, the plain words)
     expect(marked(drawn(false))).toBe(1);
   });
 
