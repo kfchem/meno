@@ -73,8 +73,10 @@ export function placeOf(model: Model, change: ConfigurationChange): { x: number;
   const angles = model.bonds.flatMap((b) => {
     const [p, q] = own.has(b.a) ? [b.a, b.b] : own.has(b.b) ? [b.b, b.a] : [null, null];
     if (p == null || q == null) return [];
-    const to = own.has(q) ? byId.get(p)! : byId.get(q)!;
-    return to.x === middle.x && to.y === middle.y ? [] : [Math.atan2(to.y - middle.y, to.x - middle.x)];
+    // (a bond of the unit's own - a double bond's - points from its middle both ways, to each end; any other, to its far atom)
+    const ends = own.has(q) ? [byId.get(p)!, byId.get(q)!] : [byId.get(q)!];
+    // (an atom at the middle itself - an allene's or an axis's middle atom - gives no direction)
+    return ends.filter((to) => to.x !== middle.x || to.y !== middle.y).map((to) => Math.atan2(to.y - middle.y, to.x - middle.x));
   });
   // (none: above it; else the middle of the widest gap between them, round the circle)
   let toward = Math.PI / 2;
