@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { lonePairCentres, protonatedAmineHeld, pyramidal, type PyramidAtom, type PyramidBond } from "./lonePairCentres";
-import { readSmiles } from "./smiles";
+import {
+  GIVES_A_METAL_A_PAIR,
+  HELD_FLAT_BY_AN_ACYL,
+  lonePairCentres,
+  protonatedAmineHeld,
+  pyramidal,
+  SHARED_WITH_A_DOUBLE_BOND,
+  type PyramidAtom,
+  type PyramidBond,
+} from "./lonePairs";
+import * as before from "../../lonePairCentres";
+import { readSmiles } from "../../smiles";
 
 /** A structure from its SMILES, as the rule reads it: bracket atoms' hydrogens as written, the rest by Meno's SMILES reader. */
 function graph(smiles: string): { atoms: PyramidAtom[]; bonds: PyramidBond[] } {
@@ -68,6 +78,14 @@ describe("lonePairCentres", () => {
     expect(centres("ClN1C(=C)C1")).toEqual([]);
   });
 
+  it("reads an aromatic bond as a pi system's, of order one and a half: as the rule stands, an N-aryl oxaziridine's and diaziridine's N, the aryl's bonds aromatic, are no centres", () => {
+    // (the rule takes an N bonded to a pi system for one that shares its lone pair, as with an N-aryl aziridine; read as single bonds,
+    //  the aryl would be no pi system and the N a centre, its ring's O or N next to it. This pins the rule's reading of an aromatic
+    //  bond, not a measured barrier: the ring's O or N raises an N's barrier and an aryl lowers it, and for these the net is not known)
+    expect(centres("c1ccccc1N1OC1")).toEqual([]);
+    expect(centres("c1ccccc1N1NC1")).toEqual([]);
+  });
+
   it("keeps a bridgehead N of a small bridged ring system, every bridge of three atoms or fewer: Tröger's base's two, a quinuclidine's, a manxine's", () => {
     // (Tröger's base, C17H18N2: its two N joined by a CH2 and by two bridges of three atoms each)
     expect(centres("CC1=CC2=C(C=C1)N3CC4=C(C=CC(=C4)C)N(C2)C3")).toEqual(["N7", "N16"]);
@@ -93,6 +111,11 @@ describe("lonePairCentres", () => {
     //  two paths that share an atom then the first two it walks)
     expect(centres("C1CC2CN12")).toEqual([]);
     expect(centres("N12CC1CCC2")).toEqual([]);
+  });
+
+  it("keeps no amide's N, its lone pair shared with its carbonyl: N-ethyl-N-methylformamide's, N-methyl-N-phenylacetamide's", () => {
+    expect(centres("O=CN(C)CC")).toEqual([]);
+    expect(centres("CC(=O)N(C)c1ccccc1")).toEqual([]);
   });
 
   it("keeps no atom without a lone pair", () => {
@@ -191,5 +214,21 @@ describe("protonatedAmineHeld", () => {
     expect(held("C[N+](C)(C)C", 1)).toBeNull();
     expect(held("C=[NH+]C", 1)).toBeNull();
     expect(held("CN(C)C", 1)).toBeNull();
+  });
+});
+
+describe("the other lists of atoms with a lone pair, each its caller's own (part 14 B: gathered, none merged)", () => {
+  it("holds each list as its caller had it", () => {
+    expect([...HELD_FLAT_BY_AN_ACYL]).toEqual(["N", "O", "S"]);
+    expect([...SHARED_WITH_A_DOUBLE_BOND]).toEqual(["N", "O"]);
+    expect([...GIVES_A_METAL_A_PAIR]).toEqual(["N", "P", "As", "O", "S", "Se", "Te"]);
+  });
+});
+
+describe("the rule's old home", () => {
+  it("re-exports the core's rule unchanged: the same functions", () => {
+    expect(before.lonePairCentres).toBe(lonePairCentres);
+    expect(before.pyramidal).toBe(pyramidal);
+    expect(before.protonatedAmineHeld).toBe(protonatedAmineHeld);
   });
 });

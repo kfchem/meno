@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SetEntry } from "./entries";
+import { wireRefusal } from "./flow";
 import { kindInfo } from "./kinds";
 import { runMenoPair } from "./meno";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
@@ -150,6 +151,19 @@ describe("Compare bonding, as a step", () => {
     );
     expect(paired.kept).toHaveLength(1);
     expect(text(paired.aside[0], "bonding")).toBe("not compared: no entry of Reference has its id, y");
+    // (one reference: its line as ever)
+    expect(paired.said).toBe("1 same · 0 different · 1 not compared");
+  });
+
+  it("says, paired on a property with more than one reference, how many came out the same for each - one none did, plainly", () => {
+    // (ends made for two products: x's two ends both its own; y's one end bonded otherwise; z, a reference none came for)
+    const refs = [tagged(water(1), "product", "x"), tagged(water(1), "product", "y"), tagged(water(1), "product", "z")];
+    const ends = [tagged(water(1), "product", "x"), tagged(water(2), "product", "x"), tagged(water(1, 0, 2.5), "product", "y")];
+    const o = ok(runMenoPair("compare-bonding", { entries: ends, holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product" }));
+    expect(o.said).toBe("2 same · 1 different · 2 for product x, none for product y, none for product z");
+    // (a reference with no value of it is named by its place)
+    const unnamed = ok(runMenoPair("compare-bonding", { entries: [tagged(water(1), "product", "x")], holds: "molecules" }, { entries: [tagged(water(1), "product", "x"), water(1)], holds: "molecules" }, { reference: "property", property: "product" }));
+    expect(unnamed.said).toBe("1 same · 0 different · 1 for product x, none for reference 2");
   });
 
   it("passes over atoms counted from 1, and refuses ones that are not", () => {
@@ -372,7 +386,7 @@ describe("Compare bonding's reach", () => {
 });
 
 describe("Merge of two kinds of set", () => {
-  it("is refused, saying what each input holds: a conformer set and molecules are not made one", () => {
+  it("is refused, saying what each input holds: a conformer set and molecules are not made one - as the wire is drawn, and before it runs", () => {
     const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
     const water3d = (x: number, conformers: boolean): Omit<Molecule3D, "id"> => ({
       at: { x, y: 0 },
@@ -395,7 +409,11 @@ describe("Merge of two kinds of set", () => {
     doc = addSet(doc, { x0: 17, y0: -3, x1: 23, y1: 3 });
     const step = doc.nextWorkflowId!;
     doc = addStep(doc, "merge", 40, 0);
-    doc = connect(connect(doc, { set: a }, step, "first"), { set: b }, step, "second");
+    doc = connect(doc, { set: a }, step, "first");
+    expect(wireRefusal(doc, { set: b }, step, "second")).toBe("It gives molecules in 3D, and First a conformer set: Merge makes one set of two of one kind");
+    expect(connect(doc, { set: b }, step, "second")).toBe(doc);
+    // (wired so all the same - as a set may come to hold another kind after it is wired)
+    doc = { ...doc, wires: [...doc.wires!, { id: 999, from: { set: b }, to: { step, port: "second" } }] };
     const s = doc.steps!.find((x) => x.id === step)!;
     expect(whyNot(doc, s, "meno")).toBe("First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind");
     expect(runStep(doc, step, W).steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: "First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind" });

@@ -192,6 +192,27 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     expect(whyNot(two, two.steps!.find((s) => s.id === sum)!, "meno")).toBe("Number takes one number: 2 are wired into it");
   });
 
+  it("into an input that reads them as a table take molecules and conformer sets together - an energy diagram's minima and saddle points - where Merge's two inputs are one kind", () => {
+    const { doc: d0, low } = twoRounds();
+    const conf = waterAt(d0, 0, -20, "Conformers", { conformerSet: true });
+    // (Levels: the conformer set and the molecules each wired in, and the step asks nothing of what they are)
+    let doc = addStep(conf.doc, "energy-diagram", 40, 0);
+    const diagram = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(doc, { set: conf.set }, diagram, "levels");
+    expect(wireRefusal(doc, { set: low }, diagram, "levels")).toBeNull();
+    doc = connect(doc, { set: low }, diagram, "levels");
+    expect(wiresInto(doc, diagram, "levels")).toHaveLength(2);
+    expect(whyNot(doc, doc.steps!.find((s) => s.id === diagram)!, "meno")).toBeNull();
+    // (Merge: a conformer set into First, molecules into Second - refused as the wire is drawn, and said before it runs where wired all the same)
+    let merge = addStep(conf.doc, "merge", 40, 0);
+    const m = merge.steps![merge.steps!.length - 1].id;
+    merge = connect(merge, { set: conf.set }, m, "first");
+    expect(wireRefusal(merge, { set: low }, m, "second")).toBe("It gives molecules in 3D, and First a conformer set: Merge makes one set of two of one kind");
+    expect(wireRefusal(merge, { set: conf.set }, m, "second")).toBeNull();
+    const mixed = { ...merge, wires: [...merge.wires!, { id: 997, from: { set: low }, to: { step: m, port: "second" } }] };
+    expect(whyNot(mixed, mixed.steps!.find((s) => s.id === m)!, "meno")).toBe("First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind");
+  });
+
   it("into a Path search's Start, paired In order, count all their entries, in order", () => {
     let doc = waterAt(emptyWorkspaceDocument(), 0, 10, "Start 1").doc;
     doc = waterAt(doc, 0, 0, "Start 2").doc;

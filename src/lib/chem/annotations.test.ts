@@ -136,6 +136,23 @@ describe("enhanced stereo", () => {
     expect(texts(abs, zigBonds).filter((t) => /abs|enantiomer/.test(t))).toEqual([]);
   });
 
+  it("beside plain atoms with no wedge, a group of all the centres is still said once beneath: a CH2 or a methyl counts for nothing", () => {
+    // (the group on the two wedged centres; atom 0 a plain CH2 with a methyl on it, its bonds plain - more bonds than the methyl, so
+    //  the narrow end a plain bond would have, were it a wedge)
+    const atoms = [...zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), { id: 7, x: -L * 0.866, y: L / 2, el: "C" }];
+    const t = texts(atoms, [...zigBonds, { a1: 0, a2: 6, order: 1 }]);
+    expect(t).toContain("and enantiomer");
+    expect(t.filter((x) => x === "and1")).toEqual([]);
+  });
+
+  it("beside a centre drawn with a wedge and in no group, is said at each of its centres: its forms are no enantiomers", () => {
+    // (and1 on two centres, a third wedged as drawn: as an (S) side chain beside a racemic ring - diastereomers, not an enantiomer)
+    const wedged: Bond[] = zigBonds.map((b, k) => (k === 0 ? { ...b, stereo: "up" as const, narrow: 0 } : b));
+    const t = texts(zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), wedged);
+    expect(t.filter((x) => x === "and1")).toHaveLength(2);
+    expect(t.some((x) => /enantiomer/.test(x))).toBe(false);
+  });
+
   it("in more than one group, is said at each centre", () => {
     const mixed = zig([{}, { stereoGroup: { kind: "abs" } }, { stereoGroup: { kind: "and", n: 1 } }]);
     const t = texts(mixed, zigBonds);
