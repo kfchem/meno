@@ -15,6 +15,7 @@
 import type { IdentityInput } from "../../../../lib/chem/identity";
 import { identitiesAsked } from "./identityOff";
 import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
+import type { ConfiguredAxis, ConfiguredRun } from "../../../../lib/chem/perception/stereo/configuration";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
@@ -145,5 +146,55 @@ export function notKept(c: Pick<Conformers, "frames">, part: Model, isomer: Isom
     if (!st) return;
     if (!c.frames.every((f) => sideOfLine(at(f, b.a), at(f, b.b), at(f, st.refs[0]), at(f, st.refs[1])) > 0 === st.cis)) out.push(`${name(b.a)}=${name(b.b)}`);
   });
+  // (an axis's and a run's, Meno's own: read from each frame's torsion about them)
+  for (const x of isomer.axes ?? []) if (!c.frames.every((f) => axisHeld(f, x))) out.push(`${name(x.atoms[0])}~${name(x.atoms[1])}`);
+  for (const x of isomer.cumulated ?? []) if (!c.frames.every((f) => runHeld(f, x))) out.push(`${name(x.atoms[0])}=..=${name(x.atoms[1])}`);
   return out;
+}
+
+/** The sign of the torsion p-a-b-q in a frame (IUPAC's: + where, looking from a to b, p turns clockwise onto q). */
+function torsionSign(f: readonly number[], p: number, a: number, b: number, q: number): number {
+  const at = (i: number) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
+  const sub = (u: number[], v: number[]) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+  const cross = (u: number[], v: number[]) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const dot = (u: number[], v: number[]) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const [b1, b2, b3] = [sub(at(a), at(p)), sub(at(b), at(a)), sub(at(q), at(b))];
+  return Math.sign(Math.hypot(...b2) * dot(b1, cross(b2, b3)));
+}
+/** Whether a frame has an axis's configuration (`ConfiguredAxis`): the torsion of its refs about it of its sense. */
+const axisHeld = (f: readonly number[], x: ConfiguredAxis) => torsionSign(f, x.refs[0], x.atoms[0], x.atoms[1], x.refs[1]) === x.sense;
+/** Whether a frame has a run's cis or trans (`ConfiguredRun`): its refs' torsion about its ends under 90 degrees, or over. */
+function runHeld(f: readonly number[], x: ConfiguredRun): boolean {
+  const at = (i: number) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
+  const sub = (u: number[], v: number[]) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+  const dot = (u: number[], v: number[]) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  // (the two refs on one side of the run where they point the same way across it: each one's direction from its end, its part
+  //  along the run taken off - what is left points the same way, cis, or opposite, trans)
+  const u = sub(at(x.atoms[1]), at(x.atoms[0]));
+  const across = (v: number[]) => {
+    const k = dot(v, u) / dot(u, u);
+    return [v[0] - k * u[0], v[1] - k * u[1], v[2] - k * u[2]];
+  };
+  return dot(across(sub(at(x.refs[0]), at(x.atoms[0]))), across(sub(at(x.refs[1]), at(x.atoms[1])))) > 0 === x.cis;
+}
+
+/**
+ * Of conformers made of a stereoisomer that gives an axis or an odd run its configuration (Meno's own, never the plugin's to give:
+ * its toolkit embeds either way), those whose frames have it - each frame kept or not with its energies - and how many were set aside,
+ * said; null where none has it: that stereoisomer cannot be made in 3D. `c` itself where it gives none.
+ */
+export function bySense<T extends Pick<Conformers, "frames" | "energies" | "modelEnergies" | "how">>(c: T, isomer: IsomerConfiguration): T | null {
+  if (!isomer.axes?.length && !isomer.cumulated?.length) return c;
+  const keep = c.frames.map((f) => (isomer.axes ?? []).every((x) => axisHeld(f, x)) && (isomer.cumulated ?? []).every((x) => runHeld(f, x)));
+  const kept = keep.filter(Boolean).length;
+  if (!kept) return null;
+  const pick = <V,>(xs: readonly V[] | undefined) => xs && xs.filter((_, k) => keep[k]);
+  const aside = c.frames.length - kept;
+  return {
+    ...c,
+    frames: pick(c.frames)!,
+    ...(c.energies ? { energies: pick(c.energies) } : {}),
+    ...(c.modelEnergies ? { modelEnergies: pick(c.modelEnergies) } : {}),
+    how: [...(c.how ?? []), ...(aside ? [{ label: "Stereo", text: `${aside} of ${c.frames.length} embedded with the other configuration at its axis or run: set aside` }] : [])],
+  };
 }

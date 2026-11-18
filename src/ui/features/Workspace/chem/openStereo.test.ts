@@ -50,13 +50,13 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     expect(made.isomers.map((c) => c.centres.map((x) => x.atom))).toEqual([[3], [3]]);
   });
 
-  it("makes the stereoisomers that differ only at an allene's axis as one, and says the rest cannot be made in 3D", async () => {
+  it("makes each of the stereoisomers that differ only at an allene's axis, its axis with it", async () => {
     // (CH3-CH(OH)-CH=C=CH-CH3: atom 1 a centre, bonds 2 and 3 an allene's axis, open: four by Meno's count, the axis given to no plugin)
     const ALLENE = v2000(["C", "C", "C", "C", "C", "C", "O"], [[0, 1, 1], [1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1], [1, 6, 1]]);
     expect((await openStereo(plugin().chem, [ALLENE])).drawn.cumulenes).toEqual([2, 3]);
     const all = await isomersToMake(plugin(true).chem, ALLENE, undefined, "all");
-    expect(all.count).toBe(2);
-    expect(all.said).toContain("2 stereoisomers differing only at an axis or a cumulated run cannot be made in 3D");
+    expect(all.count).toBe(4);
+    expect(all.isomers.filter((c) => c.axes?.length)).toHaveLength(4);
   });
 
   it("says which configurations were chosen: the CIP labels of the elements the drawing leaves open, no others", async () => {

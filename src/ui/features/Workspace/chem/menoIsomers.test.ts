@@ -7,7 +7,7 @@ import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { NOT_COUNTED_CAGE } from "../../../../lib/chem/isomers";
 import { v2000 } from "../../../../lib/chem/testdata/v2000";
 import type { ChemClient } from "../../../../lib/roles/client";
-import { asGiven, blocksRead, HANDED_NOT_MADE, isomersByMeno, leftByMeno } from "./menoIsomers";
+import { asGiven, blocksRead, isomersByMeno, leftByMeno } from "./menoIsomers";
 import { drawnFromSmiles } from "./testdata/identityCases";
 import { isomersOf } from "../../../../lib/chem/isomers";
 
@@ -112,13 +112,15 @@ describe("Meno's stereoisomers, each made whole", () => {
     expect(await isomersByMeno(chem, [camphor], blocksRead([camphor])!, { atoms: [], bonds: [] }, [], { most: 32 })).toEqual({ notCounted: NOT_COUNTED_CAGE });
   });
 
-  it("makes as one those that differ only at an allene's axis, and says the rest cannot be made in 3D", async () => {
-    // (CH3-CH(OH)-CH=C=CH-CH3: its centre and its axis open, four by Meno's count - two given, the axis to none)
+  it("gives each of those that differ only at an allene's axis whole, its axis with it - Meno's own, the plugin given none", async () => {
+    // (CH3-CH(OH)-CH=C=CH-CH3: its centre and its axis open, four by Meno's count)
     const b = v2000(["C", "C", "C", "C", "C", "C", "O"], [[0, 1, 1], [1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1], [1, 6, 1]]);
     const { chem, asked } = plugin();
     const made = await isomersByMeno(chem, [b], blocksRead([b])!, { atoms: [1], bonds: [] }, [], { most: 32 });
-    expect("made" in made && "isomers" in made.made && made.made.isomers.length).toBe(2);
-    expect(asked).toHaveLength(2);
-    expect("said" in made && made.said).toEqual([HANDED_NOT_MADE(2)]);
+    if ("notCounted" in made || !("isomers" in made.made)) throw new Error("not made");
+    expect(made.made.isomers).toHaveLength(4);
+    expect(made.made.isomers.map((i) => i.configured.axes?.map((x) => [x.atoms, x.sense]))).toEqual(expect.arrayContaining([[[[2, 4], 1]], [[[2, 4], -1]]]));
+    // (the plugin given the centre alone, each time)
+    expect(asked.every((a) => !("axes" in a.configured))).toBe(true);
   });
 });

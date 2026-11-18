@@ -129,17 +129,19 @@ export function asGiven(read: BlocksRead, molblocks: readonly string[], isomer: 
     const k = b.stereo ? blockBond.get(pair(inputAt[b.a], inputAt[b.b])) : undefined;
     return k == null || !b.stereo ? [] : [{ bond: k, ends: [inputAt[b.stereo.refs[0]], inputAt[b.stereo.refs[1]]] as [number, number], cis: b.stereo.cis }];
   });
-  return { configuration: { centres, doubles }, handed: !!(g.axes?.length || g.cumulated?.length) };
+  // (an axis's and a run's, by the blocks' places: Meno's own, never given to the plugin - kept among what it makes, chem/make3d)
+  const pairOf = (x: { atoms: readonly [number, number]; refs: readonly [number, number] }) => ({ atoms: [inputAt[x.atoms[0]], inputAt[x.atoms[1]]] as [number, number], refs: [inputAt[x.refs[0]], inputAt[x.refs[1]]] as [number, number] });
+  const axes = (g.axes ?? []).map((x) => ({ ...pairOf(x), sense: x.sense }));
+  const cumulated = (g.cumulated ?? []).map((x) => ({ ...pairOf(x), cis: x.cis }));
+  return { configuration: { centres, doubles, ...(axes.length ? { axes } : {}), ...(cumulated.length ? { cumulated } : {}) }, handed: !!(axes.length || cumulated.length) };
 }
 
-/** What is said where stereoisomers that differ only at an axis or a cumulene are made as one: what is made, not how. */
-export const HANDED_NOT_MADE = (n: number) => `${n} stereoisomer${n === 1 ? "" : "s"} differing only at an axis or a cumulated run cannot be made in 3D`;
 
 /**
  * A structure's stereoisomers made in 3D as Meno counts them: each given whole to the plugin (`stereoisomers`, its configuration
- * `configured`, one asked), those it cannot make left out - none made, `free`; at most `most`, refused whole past it where `whole`;
- * those differing only at an axis or a cumulene made as the first of them, the rest said (`HANDED_NOT_MADE`). A structure Meno
- * does not count (`isomersOf`: a cage left open) is said so.
+ * `configured`, one asked), those it cannot make left out - none made, `free`; at most `most`, refused whole past it where `whole`.
+ * An axis's or a run's configuration goes with each, Meno's own: the plugin is not given it, and chem/make3d keeps among the
+ * conformers made those that have it. A structure Meno does not count (`isomersOf`: a cage left open) is said so.
  */
 export async function isomersByMeno(
   chem: ChemClient,
@@ -153,15 +155,8 @@ export async function isomersByMeno(
   const counted = isomersOf(read.input);
   if ("notCounted" in counted) return counted;
   if ("tooMany" in counted) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
-  const given = counted.isomers.map((i) => asGiven(read, molblocks, i));
-  // (those differing only where the plugin is given nothing - an axis, a cumulene: the first made, the rest said)
-  const seen = new Set<string>();
-  const kept = given.filter((x) => {
-    const key = JSON.stringify(x.configuration);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // (each whole: an axis's and a run's are Meno's to keep among what is made - chem/make3d - never the plugin's to give)
+  const kept = counted.isomers.map((i) => asGiven(read, molblocks, i));
   if (asked.whole && kept.length > asked.most) return { made: { tooMany: { counted: asked.most + 1, bound: kept.length } }, said: [] };
   const started = Date.now();
   const isomers: Extract<IsomersMade, { isomers: unknown }>["isomers"] = [];
@@ -182,5 +177,5 @@ export async function isomersByMeno(
     );
     if ("isomers" in made && made.isomers.length) isomers.push({ ...made.isomers[0], configured: x.configuration });
   }
-  return { made: { isomers, free: !isomers.length }, said: given.length > kept.length ? [HANDED_NOT_MADE(given.length - kept.length)] : [] };
+  return { made: { isomers, free: !isomers.length }, said: [] };
 }
