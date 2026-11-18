@@ -306,7 +306,8 @@ and plain with its other end narrow - once no second click has come (the
 maintainer, 2026-11-17, giving back the click of 2026-09-27; from
 2026-11-14 to 2026-11-17 a click selected the bond and changed nothing). A
 bond is selected by Cmd or Ctrl and a click, which adds it or takes it
-out, by the box and by the lasso; Shift and a click are as before. A
+out, by a right-click, which selects what it is on as it opens its menu,
+by the box and by the lasso; Shift and a click are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click
 turning nothing; a slower one, its second click within a double-click's time
@@ -395,7 +396,7 @@ which looks like no other part of Meno and was not shown in every view).
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
 | A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in, its icons as large as the first row's: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
-| The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
+| The selection - added to the menu of any thing in it, and of empty space (*Selecting*, below) | cut, copy, a second row; where the thing's own items do not reach the selection, and on empty space: clean up, 3D, colour; Delete selection | copy as SMILES, export, render, turn over left to right and top to bottom, slide around these, box around these, combine into one PDF, use as input, save as abbreviation - each where it applies |
 | Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
@@ -644,10 +645,41 @@ molecule in 3D or a picture.
   Ctrl/⌘+Shift+K cleans up every structure it is in, and + or - steps the
   charge of each of its atoms, as one step (until 2026-10-13 they changed
   the atom under the pointer: `stepCharges`).
-- A right-click on something selected, or on empty space, opens the
-  selection's menu (above): among its items *Delete selection*, *Turn
-  over left to right*, *Turn over top to bottom*, *Clean up these
-  structures* and *Export…*, which writes what is selected. Turning over is seeing
+- **A right-click opens the menu of the thing under the pointer** (the
+  maintainer, 2026-11-14: a right-click on an atom had done one thing
+  selected and another not): always that kind's menu, its icons in their
+  places, its first line saying what it acts on.
+  - A thing not selected is selected by the right-click, alone - whatever
+    was selected let go, as a file browser does - as the menu opens; it
+    stays selected if the menu is closed with nothing chosen. That is no
+    step of the document: Undo does not bring the old selection back. Its
+    first line: "This atom", "This bond", "This shape".
+  - On a thing selected with more, its menu is the same, and its first
+    line counts the selection by kind ("3 atoms, 2 bonds"). Its kind's own
+    items reach every selected thing of that kind, one step: an atom's
+    charge and unpaired electron (*Charge one up on 3 atoms*), a bond's
+    kind, a shape's line and its place among the shapes, an arrow's kind,
+    heads, dashes and weight, words' size, line spacing, typeface, bold,
+    italic, raising and lowering and list, a catalytic cycle's gap, a
+    PDF's pages spread or gathered and its icon, a molecule in 3D's other
+    look, its turn reset and its one turn round. What is about the one
+    thing stays its own: an arrow from this atom, *Expand abbreviation*,
+    *Select this structure*, a rectangle's corners, a cycle's arrows and
+    its turn, a PDF's pages turned, read or printed, a picture's copy and
+    save. Clean up, 3D, colour and Delete reach the whole selection
+    (*Clean up these structures*, *Delete selection*).
+  - The selection's own are added to every such menu: *Cut* and *Copy* as
+    a second row of icons, and under a line its listed items, each where
+    it applies: *Copy as SMILES*, *Export…* (what is selected written),
+    *Render…*, *Turn over left to right*, *Turn over top to bottom*, *Slide
+    around these*, *Box around these*, *Use as input*, *Save as
+    abbreviation…*.
+  - On empty space, the page's menu, the selection kept: where something
+    is selected, its first line counts it, and the selection's own are
+    added - *Cut*, *Copy*, *Clean up these structures*, *3D structures*,
+    *Colour…*, *Delete selection* and its listed items.
+  - Its keys keep the ruling of 2026-10-13 (above); a key shown beside an
+    item is shown only where the item acts on what the key does. Turning over is seeing
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
   each stereocentre keeps its configuration.
@@ -1006,13 +1038,23 @@ All hover-based, as above.
   that an input method's candidates show there - an input method's
   full-width letters are taken as the ordinary ones once it gives them;
   Cut, Copy, Paste and Select All work on its letters as on words.
-  - **Over an atom selected with others** (2026-11-11), a letter typed
-    begins the label, and the label kept is written on every atom selected,
-    as one undo step: atoms alone - a bond, words or a picture selected with
-    them has none. Typed over an atom that is not selected, or selected
-    alone, or begun from a menu (*Edit label*), it is that atom's alone; the
+  - **A letter typed goes to the selection's atoms, wherever the pointer
+    is** (the maintainer, 2026-11-14; 2026-11-11 had it so only with the
+    pointer on one of them): one atom selected, its label opens with the
+    letter; several, the label is typed once and written on every one of
+    them as one undo step ("label 3 atoms: OMe"), the letters shown on each
+    as they are typed, their bonds drawing back for them, the caret on the
+    one nearest the pointer, and the count beside it ("3 atoms", those out
+    of view counted too). With atoms selected and the pointer on another
+    atom, the selected ones take it. Only with no atom selected does the
+    atom under the pointer take it, as before. Begun on several, the pointer
+    moving does nothing to it: Enter keeps it, a press elsewhere keeps it,
+    Escape lets it go. *Edit label* on a selected atom's menu writes on
+    every atom selected, the field opened on that atom. Atoms alone take
+    it - bonds, words or a picture selected with them have none - and the
     keys that already mean something - Delete, + and -, the bond keys - mean
-    it still.
+    it still. A bond selected brings its two atoms into the selection, so a
+    letter typed with bonds selected goes to their atoms.
   - A space typed is seen (2026-10-19: spaces typed were not, and piled
     up unseen): one between letters is set as typed, a run of them as
     wide as it is - a label may be a reagent's name, Grubbs II - and
@@ -1020,8 +1062,7 @@ All hover-based, as above.
     each, so that the letters stay where they are. Kept, it is kept
     without those at its ends: nothing drawn moves.
   - Begun by a letter typed over an atom - O, then the pointer moved on,
-    is O - or from the atom's menu, *Edit label* (on the selection's menu
-    too, where the atom is selected alone: 2026-10-21), holding what it says,
+    is O - or from the atom's menu, *Edit label*, holding what it says,
     the caret at its end; a carbon drawn as a corner opens with a C,
     selected, to be typed over. A click on an atom no longer begins one.
   - Nothing jumps (the maintainer, 2026-10-18). Begun by a letter, the
@@ -1308,7 +1349,9 @@ All hover-based, as above.
   - Where: opposite the stereocentre's wedge or hash where it has one,
     in the widest gap between its bonds (GR-11.1); an E or Z beside its
     bond's middle (GR-11.2); and each a little way off the others, so that
-    two side by side do not read as one.
+    two side by side do not read as one, and off what the drawing says
+    beside its atoms - an enhanced stereo group's "and1", a mapping
+    number, a charge beside a vertex.
   - How far off its atom: a setting of the drawing style, *R and S:
     distance from the atom*, from the atom to the nearest of the letters,
     as a share of the labels' size. IUPAC puts them about half a capital's
@@ -2316,7 +2359,10 @@ lipids each have their own way of being drawn, which it should know.
      molecule in 3D has read from its geometry (docs/PLUGINS.md,
      *Configurations*). A wedge at a
      pyramid of three that keeps none - an O+ - is read as no axis's end
-     either: Clean-up refuses it rather than lose it. An N's wedge may
+     either: Clean-up refuses it rather than lose it. Its bonds are
+     counted by a Kekule structure's orders, an aromatic bond not as one
+     and a half: a 1-arylphosphole's P, two ring bonds and its aryl, keeps
+     its lone pair and is such a pyramid, its bond to the aryl no axis. An N's wedge may
      still be an axis's, where its lone pair lies in a ring or a carbonyl
      beside it (an N-aryl pyrrole, an anilide). A wedge out of an
      allene's end - narrow there, on either of its groups - states the

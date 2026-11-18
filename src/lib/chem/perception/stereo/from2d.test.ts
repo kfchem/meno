@@ -1422,3 +1422,38 @@ describe("a hydrogen bond is no bond of the structure", () => {
     expect(unsureStereo(pts, [{ a: 4, b: 2, order: 1, hydrogen: true }, ...plainBonds]).bonds).toEqual([1]);
   });
 });
+
+describe("an axis's end asked whether it is a pyramid of three, its bonds by a Kekule structure's orders", () => {
+  /**
+   * `smiles` laid out by the engine, its bonds as the SMILES gives them (aromatic ones of order 4, as a file can carry them), with one
+   * wedge narrow at atom `at` on its bond to `to`: what the reader reads.
+   */
+  const drawn = (smiles: string, at: number, to: number) => {
+    const read = readSmiles(smiles);
+    const l = layout2D(fromSmiles(smiles));
+    const atoms: DrawnAtom[] = read.atoms.map((a, i) => ({ x: l.x[i], y: l.y[i], el: a.el, hs: a.hs ?? 0 }));
+    const bonds: DrawnBond[] = read.bonds.map((b) =>
+      (b.a1 === at && b.a2 === to) || (b.a1 === to && b.a2 === at)
+        ? { a: b.a1, b: b.a2, order: b.order, wedge: { narrow: at, stereo: "up" as const } }
+        : { a: b.a1, b: b.a2, order: b.order },
+    );
+    return core(atoms, bonds);
+  };
+
+  it("reads no axis about a 1-phenylphosphole's P-aryl bond from a wedge at its P: the P, 1 + 1 + 1 by its Kekule orders, is a pyramid", () => {
+    // (P 0, its ring 1-4, the phenyl's ipso C 5; aromatic, the P's two ring bonds 1.5 each would leave it no lone pair)
+    expect(readSmiles("p1(cccc1)-c1ccccc1").bonds.filter((b) => b.order === 4).length).toBeGreaterThan(0);
+    expect(drawn("p1(cccc1)-c1ccccc1", 0, 1).axes).toEqual([]);
+  });
+
+  it("reads a 2-methyl-1-phenylphosphole's wedge at its P as about the P's pyramid, never as an axis (whether the P keeps a configuration is the lone-pair rule's)", () => {
+    const read = drawn("p1(c(C)ccc1)-c1ccccc1", 0, 1);
+    expect(read.axes).toEqual([]);
+  });
+
+  it("leaves a 1-phenylphosphinine's P and a 1-(2-methylphenyl)pyrrole's N as they were", () => {
+    // (a six-ring's P of two ring bonds and none out: no axis's end; a pyrrole's N is planar, and its bond to the aryl an axis where wedged)
+    expect(drawn("c1ccpcc1", 3, 2).axes).toEqual([]);
+    expect(drawn("n1(cccc1)-c1ccccc1C", 0, 1).axes).toHaveLength(1);
+  });
+});

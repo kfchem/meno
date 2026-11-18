@@ -1673,6 +1673,14 @@ export const readsAsTable = (kind: StepKind, port: string): boolean => {
   return !!p.asTable || p.takes.includes("table");
 };
 
+/**
+ * Whether sets of the kinds `a` and `b`, wired into one input of `kind`, may come in together: one kind, as one set's entries are - or
+ * molecules in 3D and conformer sets into an input that reads them as a table, each molecule as it is (`readsAsTable`), as it takes one
+ * set mixing them: an energy diagram's minima, conformer sets, and its saddle points, molecules.
+ */
+export const comeTogether = (kind: StepKind, port: string, a: SetHolds, b: SetHolds): boolean =>
+  a === b || (readsAsTable(kind, port) && (a === "molecules" || a === "conformers") && (b === "molecules" || b === "conformers"));
+
 /** The exit of `kind` named `exit`, or its first where `exit` is not one of its own. */
 export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
