@@ -73,7 +73,7 @@ The template uses the RDKit plugin (conformers, minimisation, descriptors) and t
 - **Failed entries.** An entry a step could not do leaves by its *Failed* exit. To run it again with other options, wire *Failed* into a copy of the step (copy and paste it, change what you want) and merge its results with the first step's: a chain of runs again is yours to add where you meet the failures.
 - **Your own.** Right-click any step and choose *Save as procedure…*: it is offered under *Calculations* from then on, to put down again.
 - **Not in it.** An IRC at the DFT level, and the share of the reaction through each path, are not in either file. The template takes one reactant structure (or reactants drawn as one).
-- **A reaction path that does not converge gives its ends as reached.** A reaction path one of whose sides stops before its end is kept as far as it came, and the step's line says so ("1 not converged, its ends taken as reached"). Its ends are optimised and their bonding compared, as every path's are: whether the path joins the reactant and the product it was made for, those decide.
+- **A reaction path that does not converge is kept as far as it came.** A reaction path one of whose sides stops before its end is kept as far as it came, and the step's line says so ("1 not converged, kept as far as it came"). Its ends are optimised and their bonding compared, as every path's are: whether the path joins the reactant and the product it was made for, those decide.
 
 ## Saving and sharing {#saving}
 

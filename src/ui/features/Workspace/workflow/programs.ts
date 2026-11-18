@@ -608,7 +608,7 @@ function singlePointWorked(entry: SetEntry, last: number[], energies: readonly n
  * with its energy, its entry the point it started from (the run's one
  * converged geometry), between them. A side that stopped before its end -
  * its program's iteration cap reached - leaves the path as far as it came,
- * its ends taken as reached (`stopped`, its program's words): the steps
+ * its ends where it stopped (`stopped`, its program's words): the steps
  * after it - the ends optimised, their bonding compared - decide what they
  * are, as ConfoTS does, and the step's line says so. The path
  * is one only at the level its start was found at - a saddle point at one

@@ -1984,7 +1984,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         kind === "conformers"
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
-      // (reaction paths one of whose sides stopped before its end: kept, their ends taken as reached - said, their warnings with it)
+      // (reaction paths one of whose sides stopped before its end: kept, their ends where they stopped - said, their warnings with it)
       const stopped = worked.filter((w) => w.stopped).length;
       const warned = worked.filter((w) => w.calc?.warnings?.length && !w.stopped).length;
       // (those it started from a failed run's geometry - Runs again: said, as its start was no result)

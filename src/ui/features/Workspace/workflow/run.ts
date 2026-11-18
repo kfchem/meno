@@ -679,7 +679,7 @@ export type Worked = SetEntry & {
   after?: number[][];
   afterEnergies?: number[];
   /**
-   * A reaction path one of whose sides stopped before its end, in its program's words: kept whole, its ends taken as reached, for the
+   * A reaction path one of whose sides stopped before its end, in its program's words: kept whole, its ends where it stopped, for the
    * steps after it - their ends' optimisation and the bonding checks - to decide what they are (as ConfoTS does). Said on the step's line.
    */
   stopped?: string;

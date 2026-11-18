@@ -41,7 +41,7 @@ describe("Follow the reaction path", () => {
     expect(ends.ok && ends.kept.map((e) => e.xyz[3])).toEqual([0.74]);
   });
 
-  it("keeps a path one of whose sides stopped before its end, as far as it came, its ends taken as reached - for the steps after it to decide", () => {
+  it("keeps a path one of whose sides stopped before its end, as far as it came, its ends where it stopped - for the steps after it to decide", () => {
     const why = "The forward side stopped at ORCA's iteration cap before reaching an end";
     const w = workedOf("reaction-path", h2(), irc(why), ["orca"]) as Worked;
     // (no failure: the path whole, said as stopped, in its program's words)
@@ -52,8 +52,8 @@ describe("Follow the reaction path", () => {
     const first = takeFrames([m], "first");
     const last = takeFrames([m], "last");
     expect([first.ok && first.kept.map((e) => e.xyz[3]), last.ok && last.kept.map((e) => e.xyz[3])]).toEqual([[0.74], [1.1]]);
-    expect(stoppedSaid(1)).toBe("1 not converged, its ends taken as reached");
-    expect(stoppedSaid(2)).toBe("2 not converged, their ends taken as reached");
+    expect(stoppedSaid(1)).toBe("1 not converged, kept as far as it came");
+    expect(stoppedSaid(2)).toBe("2 not converged, kept as far as they came");
   });
 
   it("is a path only at the level its start was found at: else it fails, naming both", () => {
