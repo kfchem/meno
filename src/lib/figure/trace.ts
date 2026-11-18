@@ -18,14 +18,17 @@
  * no use to the reader, its centre lines are - each bond a line from one
  * join to the next.
  *
- * Written from the papers, no program's code: the threshold between ink
- * and paper by the histogram's two classes (Otsu 1979); patches by two
- * passes over the pixels (Rosenfeld and Pfaltz 1966); how far each pixel
- * of ink is from the paper exactly (./inkFit `distances`); centre lines by
- * thinning (Zhang and Suen 1984: T. Y. Zhang, C. Y. Suen, Commun. ACM 27
+ * Written from the papers, no program's code (each named exactly in
+ * docs/PDF.md, *A picture traced*): the threshold between ink and paper by
+ * the histogram's two classes (Otsu 1979); patches by two passes over the
+ * pixels (Rosenfeld and Pfaltz 1966); how far each pixel of ink is from
+ * the paper exactly (./inkFit `distances`; Felzenszwalb and Huttenlocher
+ * 2012); centre lines by thinning (T. Y. Zhang, C. Y. Suen, Commun. ACM 27
  * (1984) 236-239, as Lü and Wang amend it: H. E. Lü, P. S. P. Wang,
  * Commun. ACM 29 (1986) 239-242); each line fitted by straight pieces
- * (Ramer 1972; Douglas and Peucker 1973). How wide a line is is read from
+ * (Ramer 1972; Douglas and Peucker 1973); a wedge told by the rank
+ * correlation of its widths (Kendall 1938) and its ends' widths by the
+ * median of slopes (Theil 1950; Sen 1968). How wide a line is is read from
  * how much ink lies across it, so to a fraction of a pixel. Every
  * tolerance is in the drawing's own line width or bond, none in pixels.
  *
