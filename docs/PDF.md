@@ -1491,14 +1491,16 @@ it where it lies out of view.
   no label and no bond, and a line alone - single, double or triple, both
   its ends bare, no other bond at either - more than a fifth off the
   figure's bond: a chart's energy level, a dagger's strokes, a numeral or
-  a letter drawn as lines (II, III). A double or triple line about a bond
-  long stays, marked unsure ("A double line alone: read as ethylene."): a
-  scheme draws an ethylene or an ethyne so, beside a "+", and losing it
-  would lose a reactant. A single line about a bond long is left out too,
-  and the figure says so ("A line standing alone was not read as ethane."):
-  a bare line that long in a figure is a dash, a minus, a rule or a
-  letter, and an ethane is all but never drawn as one line. A line bonded
-  to anything is read as before. (Ruled in review, 2026-11-18.)
+  a letter drawn as lines (II, III). A double line about a bond long
+  stays, marked unsure ("A double line alone: read as ethylene."): a
+  scheme draws an ethylene so, beside a "+", and losing it would lose a
+  reactant. A single or a triple line about a bond long is left out too,
+  and the figure says so ("A line standing alone was not read as ethane.",
+  "A triple line standing alone was not read as ethyne."): a bare line
+  that long in a figure is a dash, a minus, a rule or a letter, a bare
+  triple line a sign of equivalence or a separator, and an ethane or an
+  ethyne is all but never drawn so. A line bonded to anything is read as
+  before. (Ruled in review, 2026-11-18.)
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - **a repeat unit in brackets, counted** (2026-11-05), where it is not

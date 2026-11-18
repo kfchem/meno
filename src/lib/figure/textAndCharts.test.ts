@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { LONE_DOUBLE, LONE_TRIPLE, readFigure, withoutStrays, type ReadAtom } from "./read";
+import { LONE_DOUBLE, readFigure, withoutStrays, type ReadAtom } from "./read";
 
 // Made samples (bonds 14.4 points, lines 0.6 thick, 10-point letters): the text and the charts set by a figure's structures - a
 // hyphen, a comma, the = of an R' = OH, an I drawn as a line, a chart's levels and a dagger's strokes - each read as no structure,
@@ -145,7 +145,7 @@ describe("a line alone by the structures", () => {
     expect(own(read)).toEqual([]);
   });
 
-  it("is a structure a bond long, double or triple, and said: an ethylene, an ethyne beside a scheme's +", () => {
+  it("is a structure a bond long and double, and said: an ethylene beside a scheme's +; a triple one is none, counted to be said", () => {
     const read = readFigure(
       figure([
         line([200, 300], [200 + L, 300]),
@@ -155,10 +155,9 @@ describe("a line alone by the structures", () => {
         line([200, 340 - 0.18 * L], [200 + L, 340 - 0.18 * L]),
       ]),
     );
-    expect(own(read).map((b) => [b.order, b.unsure])).toEqual([
-      [2, [LONE_DOUBLE]],
-      [3, [LONE_TRIPLE]],
-    ]);
+    // (the triple a sign of equivalence or a separator far more often than an ethyne)
+    expect(own(read).map((b) => [b.order, b.unsure])).toEqual([[2, [LONE_DOUBLE]]]);
+    expect(read.left.triples).toBe(1);
     expect(read.left.lines).toBeUndefined();
   });
 
@@ -166,6 +165,7 @@ describe("a line alone by the structures", () => {
     const read = readFigure(figure([line([200, 300], [200 + L, 300]), line([200, 340], [200 + L, 340])]));
     expect(own(read)).toEqual([]);
     expect(read.left.lines).toBe(2);
+    expect(read.left.triples).toBeUndefined();
     // (the ring by them is read as it is)
     expect(read.bonds).toHaveLength(6);
   });
@@ -195,7 +195,7 @@ describe("withoutStrays", () => {
     ]);
   });
 
-  it("counts a bare single line alone a bond long, left out; keeps a double or triple one, said; a line bonded on is as it was", () => {
+  it("counts a bare single or triple line alone a bond long, left out; keeps a double one, said; a line bonded on is as it was", () => {
     const atoms = [at(0, 0), at(10, 0), at(100, 0), at(109, 0), at(200, 0), at(211, 0), at(300, 0), at(310, 0), at(320, 0), at(400, 0), at(410, 0, { label: "O" })];
     const bonds = [
       { a: 0, b: 1, order: 1 as const },
@@ -206,18 +206,17 @@ describe("withoutStrays", () => {
       { a: 9, b: 10, order: 2 as const },
     ];
     const kept = withoutStrays(atoms, bonds, 10);
-    expect(kept.lone).toBe(1);
+    expect([kept.lone, kept.triples]).toEqual([1, 1]);
     expect(kept.bonds).toEqual([
       { a: 0, b: 1, order: 2, unsure: [LONE_DOUBLE] },
-      { a: 2, b: 3, order: 3, unsure: ["Drawn twice over: read as one bond.", LONE_TRIPLE] },
-      { a: 4, b: 5, order: 1 },
-      { a: 5, b: 6, order: 1 },
-      { a: 7, b: 8, order: 2 },
+      { a: 2, b: 3, order: 1 },
+      { a: 3, b: 4, order: 1 },
+      { a: 5, b: 6, order: 2 },
     ]);
     // (said once, read again)
     expect(withoutStrays(kept.atoms, kept.bonds, 10).bonds[0].unsure).toEqual([LONE_DOUBLE]);
     // (none left out: the lines said all the same, none counted)
-    expect(withoutStrays(atoms.slice(2, 4), [{ a: 0, b: 1, order: 2 }], 10)).toEqual({ atoms: atoms.slice(2, 4), bonds: [{ a: 0, b: 1, order: 2, unsure: [LONE_DOUBLE] }], lone: 0 });
+    expect(withoutStrays(atoms.slice(2, 4), [{ a: 0, b: 1, order: 2 }], 10)).toEqual({ atoms: atoms.slice(2, 4), bonds: [{ a: 0, b: 1, order: 2, unsure: [LONE_DOUBLE] }], lone: 0, triples: 0 });
   });
 
   it("keeps a point alone that has a label, a charge drawn by it, or a radical's dot", () => {

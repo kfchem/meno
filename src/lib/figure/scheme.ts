@@ -961,7 +961,7 @@ export function readScheme(
   const inTable = (w: SchemeWords) => w.arrow == null && dataCells.some((b) => inside({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 }, b));
   const words = all.filter((w) => !molecules.includes(w) && !inTable(w));
   const { table: _table, ...read } = figure;
-  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [], ...(read.left.lines ? { lines: read.left.lines } : {}) } }, arrows, pluses: signed, words, bond: atBond };
+  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [], ...(read.left.lines ? { lines: read.left.lines } : {}), ...(read.left.triples ? { triples: read.left.triples } : {}) } }, arrows, pluses: signed, words, bond: atBond };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */

@@ -14,7 +14,7 @@ import { saysChargeTooMuch } from "../../../../lib/figure/structure";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { atomAs, atomAtSpot, bondAs, figureFrom, LONE_LINE, LONE_LINES, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, LONE_LINE, LONE_LINES, LONE_TRIPLE_LINE, LONE_TRIPLE_LINES, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
 import { measured } from "../../../../testing/timeouts";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { identityOfDrawn } from "../chem/identityOf";
@@ -134,6 +134,16 @@ describe("a figure read as a structure for the page", () => {
     const two = figureFrom({ ...by, paths: [...by.paths, stroke([200, 260], [200 + L, 260]), stroke([200, 300], [200 + L, 300])] }, SHA, 0) as FigureResult;
     expect(two.left).toBe(LONE_LINES);
     expect((figureFrom(by, SHA, 0) as FigureResult).left).toBeUndefined();
+  });
+
+  it("says a triple line alone, a bond long, is not read as ethyne - a sign, a separator - one or more, with a single line alone too", () => {
+    const triple = (y: number) => [0, -0.18, 0.18].map((d) => stroke([200, y + d * L], [200 + L, y + d * L]));
+    expect(figureFrom({ paths: triple(100), letters: [], pictures: [] }, SHA, 0)).toEqual({ none: LONE_TRIPLE_LINE });
+    const by = drawn();
+    const both = figureFrom({ ...by, paths: [...by.paths, ...triple(260), stroke([200, 320], [200 + L, 320])] }, SHA, 0) as FigureResult;
+    expect(both.model.atoms).toHaveLength(5);
+    expect(both.left).toBe(`${LONE_LINE} ${LONE_TRIPLE_LINE}`);
+    expect((figureFrom({ ...by, paths: [...by.paths, ...triple(260), ...triple(320)] }, SHA, 0) as FigureResult).left).toBe(LONE_TRIPLE_LINES);
   });
 
   it("says why there is nothing to read: no lines, or a picture", () => {
