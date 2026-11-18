@@ -147,6 +147,38 @@ describe("complexes' formulas", () => {
     expect(formula(of("CuI"))).toBe("CuI");
   });
 
+  it("read an O with its count, or before a halide, a bracket or the end, as an oxo: M=O, never a group read across it", () => {
+    // (each metal's oxo ligands by a double bond, its halides by single ones - found in review: UO2Cl2 was read as uranium with two O2Cl)
+    const bondsOf = (label: string) => {
+      const s = of(label);
+      const m = s.atoms.findIndex((a) => a.el !== "O" && a.el !== "Cl" && a.el !== "C" && a.el !== "H" && a.el !== "P");
+      return s.bonds
+        .filter((b) => b.a1 === m || b.a2 === m)
+        .map((b) => `${s.atoms[b.a1 === m ? b.a2 : b.a1].el}${b.order}`)
+        .sort();
+    };
+    expect(bondsOf("MoO2Cl2")).toEqual(["Cl1", "Cl1", "O2", "O2"]);
+    expect(bondsOf("CrO2Cl2")).toEqual(["Cl1", "Cl1", "O2", "O2"]);
+    expect(bondsOf("UO2Cl2")).toEqual(["Cl1", "Cl1", "O2", "O2"]);
+    expect(bondsOf("WOCl4")).toEqual(["Cl1", "Cl1", "Cl1", "Cl1", "O2"]);
+    expect(bondsOf("VOCl3")).toEqual(["Cl1", "Cl1", "Cl1", "O2"]);
+    expect(formula(of("MoO2Cl2"))).toBe("Cl2MoO2");
+    expect(formula(of("ReOCl3(PPh3)2"))).toBe("C36H30Cl3OP2Re");
+    expect(formula(of("VO(acac)2"))).toBe("C10H14O5V");
+    expect(formula(of("MeReO3"))).toBe("CH3O3Re");
+    expect(bondsOf("ReO3Me")).toEqual(["C1", "O2", "O2", "O2"]);
+    expect(abbreviationOf("MoO2Cl2")?.name).toBe("molybdenum, 2 oxo, 2 Cl");
+    // (an O that begins a group stays the group's: acetate, triflate, isopropoxide)
+    expect(formula(of("Pd(OAc)2"))).toBe("C4H6O4Pd");
+    expect(formula(of("Ti(OiPr)4"))).toBe("C12H28O4Ti");
+    expect(bondsOf("Ti(OiPr)4")).toEqual(["O1", "O1", "O1", "O1"]);
+    // (a μ-O bound singly to each metal it bridges; several metals with oxo not so marked, not read)
+    const fe2 = of("Fe2Cl6(μ-O)");
+    const o = fe2.atoms.findIndex((a) => a.el === "O");
+    expect(fe2.bonds.filter((b) => b.a1 === o || b.a2 === o).map((b) => b.order)).toEqual([1, 1]);
+    expect(abbreviationStructure("Re2O7")).toBeNull();
+  });
+
   it("share ligands among several metals, make a part in brackets as often as its count, and balance charges", () => {
     const pd2 = of("Pd2(dba)3");
     expect(formula(pd2)).toBe("C51H42O3Pd2");
