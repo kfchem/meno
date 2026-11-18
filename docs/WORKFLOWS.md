@@ -352,7 +352,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy | a level against an energy axis, measured up to (drawn) | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | two atoms on a spring (drawn) | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
-| Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below); one whose side stopped before its end, or whose job failed, out of its second exit, *Failed*, saying why |
+| Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below) - one whose side stopped before its end kept as far as it came, its ends where it stopped, said on the step's line; one whose job failed out of its second exit, *Failed*, saying why |
 | Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin; *Restraints*, where wanted: restraints tables (*Restraints wired in*) | **molecules in 3D**: each guess optimised by its program towards a saddle point, holding the restraints wired in for it as its plugin holds them, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
@@ -556,9 +556,13 @@ after it. Meno calls none of it a saddle point or a minimum.
   from"). Its entry frame, which a set and the next step take, is the
   point it started from.
 - **A side that stopped before its end** - its program's iteration cap
-  reached - leaves the path as far as it came out of *Failed*, in its
-  program's words: that end is no minimum. *Take frames* on *Failed*, and
-  an *Optimise*, carry on from it where the chemist wires them.
+  reached - leaves the path as far as it came, kept with the others, its
+  ends where it stopped (the parity with ConfoTS, which does the same):
+  the step's line says so ("1 not converged, kept as far as it came"),
+  and the molecule keeps its program's words. That end is no minimum: the
+  steps after it - *Take frames*, the ends' *Optimise*, *Compare bonding*
+  against what the path is to join - decide what each end is, as they do
+  for every path.
 - **At its start's level.** A saddle point at one level is no stationary
   point at another, so the path's own level, as its output says it, must be
   the one its start was found at (its frequencies', say): else it fails,
@@ -4192,7 +4196,7 @@ term.
 - **Stages are rows**, each headed by words on the page: the reaction, 3D for each species, conformers of each species, the pairs and the paths in each direction (both are wired; none is chosen), the xTB diagram, and DFT. Where the recipe differs from the protocol it follows, the words beside the heading say so, and no equivalence of numbers is claimed.
 - **Starting values** are the chemist's to change: windows of 10 and 5 kcal/mol, at most 64 conformers, 8 images, three rounds of torsions held again (50, 100, 150: counted per entry), a window of 10 and at most 16 saddle points of each path. Each plugin's options are those its manifest has (ORCA 0.5.7, Gaussian 0.6.1, RDKit 0.1.24, as `PLUGIN_OPTIONS` records).
 - **Not in them:** *Runs again* chains (the manual says how to add them), an IRC at the DFT level, and the share of the reaction through each path (*Populations* takes minima, and refuses a saddle point; Meno has no step for it yet). The template takes one reactant structure. The torsion rounds hold each end on an ID of its own (a *Tag* after *Re-bond*): every end of one product shares the product's, and every end of one start the start's.
-- **A reaction path that does not converge gives no ends yet.** A reaction path one of whose sides stops before its end leaves by *Failed*, saying why, and gives no ends; so a direction can end with no path. Keeping such a path's frames comes next.
+- **A reaction path that does not converge is kept as far as it came.** A reaction path one of whose sides stops before its end is kept as far as it came, the step's line saying so, and its ends go on to be optimised and their bonding compared as every path's do: whether the path joins what it is to join, those decide.
 
 ### Ensemble energy (2026-10-30)
 
