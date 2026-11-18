@@ -107,9 +107,12 @@ function readBack(open: OpenStereo): { atoms: number[]; bonds: number[] } {
 export async function stereoisomersOf(chem: ChemClient, molblocks: readonly string[], open: OpenStereo, asked: IsomersAsked, ms?: number): Promise<IsomersMade & { said?: string[] }> {
   // (no group: Meno's stereoisomers, each made whole by the plugin - chem/menoIsomers. A structure Meno does not count - a cage left
   //  open - and one with groups, whose halves the plugin's toolkit turns: its enumeration, as before)
+  // (one Meno does not count is made as the toolkit enumerates it, and said so on what is made: never one hand unsaid)
+  let notCounted: string[] = [];
   if (!anyGroup(open) && !open.configured.centres.length && !open.configured.doubles.length) {
     const byMeno = await isomersByMeno(chem, molblocks, open.read, readBack(open), open.drawn.notEnumerated, asked, ms);
     if (!("notCounted" in byMeno)) return { ...byMeno.made, ...(byMeno.said.length ? { said: byMeno.said } : {}) };
+    notCounted = [byMeno.notCounted];
   }
   const made = await chem.request(
     "stereoisomers",
@@ -128,7 +131,7 @@ export async function stereoisomersOf(chem: ChemClient, molblocks: readonly stri
   );
   // (each configuration once: the plugin's toolkit may enumerate what Meno's rules leave out, an aziridine's N - but isomers differing where
   //  a configuration does not tell stay, and so do the halves of a group: their centres are in the configuration read back)
-  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers, open.drawn) } : made;
+  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers, open.drawn), ...(notCounted.length ? { said: notCounted } : {}) } : made;
 }
 
 /**

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { v2000 } from "../../../../lib/chem/testdata/v2000";
 import { isomersToMake, openStereo, withChosen } from "./openStereo";
+import { writeMolfile } from "../../../../lib/chem/molWriter";
+import { NOT_COUNTED_CAGE } from "../../../../lib/chem/isomers";
+import { drawnFromSmiles } from "./testdata/identityCases";
 
 /** Butan-2-ol, drawn flat: its carbinol carbon open - its neighbours, in its bonds' order, C0, C2 and O4. */
 const BUTANOL = v2000(["C", "C", "C", "C", "O"], [[0, 1, 1], [1, 2, 1], [2, 3, 1], [1, 4, 1]]);
@@ -76,5 +79,11 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     const open = await openStereo(doubles, [allene], like as never);
     expect(open.configured.doubles).toEqual([]);
     expect(open.left).toMatchObject({ bonds: [1, 2], cumulenes: [1, 2], cumulated: [[1, 2]] });
+  });
+
+  it("says a structure whose stereoisomers Meno does not count is made as the toolkit gives it: Troeger's base, never one hand unsaid", async () => {
+    const troeger = writeMolfile(drawnFromSmiles("Cc1ccc2c(c1)CN3c4ccc(C)cc4CN2C3"));
+    const made = await isomersToMake(plugin().chem, troeger, undefined, "all");
+    expect(made.said).toContain(NOT_COUNTED_CAGE);
   });
 });
