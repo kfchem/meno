@@ -36,7 +36,7 @@ Double-click empty space and choose *Chain* from the icons, or choose *Chain fro
 
 Double-click empty space and open *Projections*, then choose *Chair*: a cyclohexane chair is put down where you double-clicked, drawn as a chair is drawn, seen from above and from the right, every bond plain.
 
-- Click *Chair* again, before doing anything else, for the view from the other side; again, and it comes back. Each is one step to undo.
+- For the view from the other side, double-click on the chair you just put down, before doing anything else, and choose *Chair* again; again, and it comes back. Each is one step to undo. Opened anywhere else, *Chair* puts down another chair there.
 
 - Double-click an atom of the chair and drag out a bond: it goes to one of the atom's two places, axial or equatorial, whichever is nearer the pointer, and says which. It cannot be left between the two. Where a group makes a stereocentre, its R or S is shown.
 - Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* keeps the chair as it is drawn and tidies the groups on it.

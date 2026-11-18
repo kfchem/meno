@@ -172,7 +172,7 @@ const PROJECTIONS: typeof ROW = [
     id: "chair",
     name: "Chair",
     // (what it does a second time, said as the pointer rests on it: the view from the other side)
-    tip: "Chair. Click again for the view from the other side",
+    tip: "Chair. Chosen again on the chair just put down: the view from the other side",
     // (a chair as it is first put down, seen from the right: its up end at the left, every bond plain)
     icon: <path d="M3.4 9 L6.7 8.7 L13.3 6.5 L16.6 11 L13.3 11.3 L6.7 13.5 Z" />,
   },

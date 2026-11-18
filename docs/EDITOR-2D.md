@@ -598,9 +598,10 @@ solid of lib/chem/perception/projection drawn as the textbook draws it (`drawn`:
 the axial ones vertical), as ordinary atoms and bonds that carry the depth of its true view (`Atom.z`, nearer larger) and the flag that their
 configuration is the drawing's (`stereoCentre`). Every bond is plain: a ring in perspective is drawn with plain bonds (IUPAC 2006 ST-3.3). After
 that it is a drawing like any other - nothing remembers that a tool made it - and what Meno does with a structure works on it through its depth
-(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; a second click on
-the icon, while the chair it put down is as it was with nothing done since, turns it to form 0, the view from the other side, as one step, and a
-third back (`putChair`; the icon's tip says so: "Click again for the view from the other side"). Built so far: the **chair**
+(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; the icon chosen
+again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
+was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
+"Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
 (`Workspace/projections/`: `chair`, `extend`, `flip`); the Haworth ring and the Newman projection follow.
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is

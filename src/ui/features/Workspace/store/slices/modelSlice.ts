@@ -134,6 +134,9 @@ const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
 type ChairPut = { ids: number[]; at: { x: number; y: number }; form: 0 | 1; length: number };
 const chairPuts = new WeakMap<Model, ChairPut>();
 
+/** How near the chair just put down Quick Add is opened for its icon to turn that chair, in bonds from its ring's middle: on it, not beside it. */
+const CHAIR_TURN_REACH = 2;
+
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
   set: SetState,
@@ -729,9 +732,10 @@ export const createModelSlice = (
   },
 
   putChair: (at: { x: number; y: number }) => {
-    // (the chair just put down, unchanged: turned to its other form - the view from the other side - as one step; again, back)
+    // (the chair just put down, unchanged, and Quick Add opened on it - within two bonds of its ring's middle: turned to its other form, the
+    //  view from the other side, as one step; again, back. Opened anywhere else, another chair is put down there)
     const was = chairPuts.get(get().model);
-    if (was) {
+    if (was && Math.hypot(at.x - was.at.x, at.y - was.at.y) <= CHAIR_TURN_REACH * was.length) {
       const form: 0 | 1 = was.form === 1 ? 0 : 1;
       const d = chairDrawing({ at: was.at, form, firstId: 1, firstBondId: 1, length: was.length });
       const moves = was.ids.map((id, k) => ({ id, x: d.atoms[k].x, y: d.atoms[k].y, z: d.atoms[k].z }));
