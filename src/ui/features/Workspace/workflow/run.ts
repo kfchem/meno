@@ -17,7 +17,7 @@ import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMe
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { isHeld } from "./onPage";
-import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
+import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, landing, moleculesSeen, repeatHolding, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
 import { asideExit, comeTogether, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
@@ -293,10 +293,14 @@ function severalWhyNot(doc: WorkspaceDocument, step: number, kind: StepKind, por
 }
 
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
-  // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
+  // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs; a Repeat's own steps inside,
+  //  whose sets land on its Again and Done, are none before it: it runs them, and a failure of theirs mended runs again - flow `landing`;
+  //  nor is the Repeat round it, which is what runs it)
+  const holder = repeatHolding(doc, step.id);
   const failed = allWiresInto(doc, step.id).some((wire) => {
+    if (landing(doc, wire)) return false;
     const before = findSet(doc, wire.from.set)?.made?.step;
-    return before != null && stepOf(doc, before)?.ran?.ok === false;
+    return before != null && before !== holder && stepOf(doc, before)?.ran?.ok === false;
   });
   if (failed) return "The step before it failed";
   // (a step that takes nothing in needs only someone to do it)

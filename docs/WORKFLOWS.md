@@ -956,6 +956,14 @@ any option can name - *Options from a property*).
   says so: "2 passes · 0 done · 2 still going round, out by Out".
 - **Stop** on its tab or card: the steps running finish, no next pass
   starts, and its tab says so at once ("Stopping after the jobs running").
+  Between two steps inside, Stop is looked at before the next one starts.
+  A Repeat stopped reads as not run well ("Stopped after 2 passes"), so
+  nothing after it runs on from it.
+- **A step inside that fails** ends the passes, and the Repeat fails with
+  it, saying which and in which pass ("Filter failed in pass 1: ...").
+  Mended, the Repeat runs again: neither its own steps' failure (what they
+  give lands on *Again* and *Done*) nor its own last run holds it or them
+  back (workflow/run `whyNot`).
 - **A step inside takes its entries** from *This pass* or a step inside.
   A later input of it - a *Reference*, *Restraints* - may take a set from
   outside the frame, read the same in every pass; a *Torsion restraints*

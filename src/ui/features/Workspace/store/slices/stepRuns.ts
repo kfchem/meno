@@ -264,7 +264,6 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (r.repeat === "until" && !wired("again").length) return void fail(id, "Nothing is wired to Again: wire what is to go round once more, or repeat a number of times", at, key);
     const input = inputOf(d0, id, REPEAT_IN);
     if (!input || !input.molecules.length) return void fail(id, "Nothing comes into In", at, key);
-    if (input.holds === "structures") return void fail(id, "A Repeat takes molecules in 3D or conformer sets: make them in 3D first", at, key);
     const holds = input.holds as Holds3D;
     // (its steps, each after those inside it that it takes from: by how many of them come before it)
     const inside = step.holds ?? [];

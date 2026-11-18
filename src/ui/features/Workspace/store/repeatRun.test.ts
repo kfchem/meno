@@ -14,6 +14,9 @@ import { repeatBox } from "../workflow/repeat";
 import { cardHighOf } from "../workflow/kinds";
 import { CARD_W, GAP } from "../workflow/look";
 import { unseenSets } from "../workflow/onPage";
+import { style3dOf } from "../style3d";
+import { reachOverFrames } from "../utils/molecule3d";
+import type { Turn3D } from "./types";
 
 /** The page: two waters in a set, wired into a Repeat whose frame holds a Filter (pass < 3): its kept to Again, its rest to Done. */
 function page(options: Record<string, string | number>) {
@@ -123,7 +126,8 @@ describe("a Repeat run pass by pass", () => {
     off();
     expect(seen).toContain("2 stopping");
     expect(seen.some((x) => x.startsWith("3"))).toBe(false);
-    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ said: expect.stringMatching(/^Stopped after 2 passes/) });
+    // (never read as run well: a run after it down the chain would go on from a Repeat stopped short)
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, stopped: true, said: expect.stringMatching(/^Stopped after 2 passes/) });
   });
 
   it("with its cap reached until none goes again: the cap's passes, the rest out by Out, marked", async () => {
@@ -331,3 +335,141 @@ describe("a Repeat made", () => {
   });
 });
 
+
+describe("a Repeat whose step inside failed, then mended (found in review)", () => {
+  it("runs again once the step inside is mended: never refused for its own step having failed, nor that step for the Repeat round it", async () => {
+    const { st, r, f } = page({ repeat: "until", most: 4 });
+    st().updateStep(f, { options: { conditions: "this is no condition (((" } });
+    await st().runStep(r);
+    expect(st().steps.find((s) => s.id === r)!.ran?.ok).toBe(false);
+    st().updateStep(f, { options: { conditions: "pass < 3" } });
+    await st().runStep(r);
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: true, said: "3 passes · 2 done" });
+    expect(st().steps.find((s) => s.id === f)!.ran?.ok).toBe(true);
+  });
+});
+
+describe("what leaves a Repeat by Out, turned as it came into In (found in review)", () => {
+  type Box = { x0: number; x1: number; y0: number; y1: number };
+  const overlap = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  /** A chain of seven atoms along x: some 11 A long on the page, 1 A tall - standing, once turned a quarter about the line of sight. */
+  const chain = (x: number) => ({
+    atoms: Array.from({ length: 7 }, (_, i) => ({ el: "C", x: x + 1.5 * i, y: (i % 2) * 0.3, z: 0 })),
+    bonds: Array.from({ length: 6 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
+  });
+
+  it("is made room as it is turned: none over another, none out of Out's frame", async () => {
+    const doc = createWorkspaceDocument();
+    for (const x of [0, 14, 28]) doc.edit("add", (d) => addMolecule3d(d, { ...chain(x), at: { x: x + 4, y: 0 } }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const input = st().addSet({ x0: -3, y0: -6, x1: 40, y1: 6 });
+    const r = st().addStep("repeat", "meno", 100, 0);
+    const f = st().addStep("filter", "meno", 400, 300);
+    doc.edit("place", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === r ? { ...s, x: 100, y: 0, frame: { w: 3000, h: 2000 } } : s.id === f ? { ...s, x: 600, y: -600 } : s)) }));
+    st().updateStep(r, { options: { repeat: "times", times: 2 } });
+    st().updateStep(f, { options: { conditions: "pass < 3" } });
+    const exit = (step: number, id: string) => st().sets.find((b) => b.made?.step === step && b.made.exit === id)!.id;
+    st().connect({ set: input }, r, "in");
+    st().connect({ set: exit(r, "out") }, f);
+    st().connect({ set: exit(f, "out") }, r, "again");
+    st().connect({ set: exit(f, "rest") }, r, "done");
+    const ids = st().molecules3d.map((m) => m.id);
+    const standing: Turn3D = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+    st().setTurn3d(ids[0], standing);
+    st().setTurn3d(ids[1], standing);
+    await st().runStep(r);
+    const set = st().sets.find((b) => b.id === exit(r, "reached"))!;
+    const out = setMolecules(st(), set);
+    expect(out).toHaveLength(3);
+    const seen: Box[] = out.map((m) => {
+      const e = reachOverFrames({ ...m, id: 0, at: { x: 0, y: 0 } } as never, style3dOf(st()), st().turns3d[m.id]);
+      return { x0: m.at.x + e.x0, x1: m.at.x + e.x1, y0: m.at.y + e.y0, y1: m.at.y + e.y1 };
+    });
+    const hits: string[] = [];
+    for (let i = 0; i < seen.length; i++) for (let j = i + 1; j < seen.length; j++) if (overlap(seen[i], seen[j])) hits.push(`${i} x ${j}`);
+    expect(hits).toEqual([]);
+    expect(seen.map((b, i) => (b.x0 < set.x0 || b.x1 > set.x1 || b.y0 < set.y0 || b.y1 > set.y1 ? i : -1)).filter((i) => i >= 0)).toEqual([]);
+  });
+});
+
+describe("a Repeat's run, each of its parts asked (found in review)", () => {
+  it("refuses to run with nothing wired to Again or Done, saying so", async () => {
+    const { st, r } = page({ repeat: "times", times: 2 });
+    for (const w of st().wires.filter((x) => x.to.step === r && x.to.port !== "in")) st().removeWire(w.id);
+    await st().runStep(r);
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, said: "Nothing is wired to Again or Done: wire what the steps inside give to them" });
+  });
+
+  it("starts each pass after the first where *Each pass starts* says: from where its restraints were first held", async () => {
+    const { st, r, exit, doc } = page({ repeat: "until", most: 10, starts: "held" });
+    // (each water carrying the places its restraints were first held at: 5 A along x from where it stands)
+    const start = (m: { atoms: { x: number; y: number; z: number }[] }) => m.atoms.flatMap((a) => [a.x + 5, a.y, a.z]);
+    doc.edit("held", (d) => ({
+      ...d,
+      molecules3d: d.molecules3d!.map((m) => ({ ...m, properties: [{ restraints: { value: { restraints: [], start: start(m) }, unit: "none", status: "computed" } }] })),
+    }));
+    const cameIn = st().molecules3d.map((m) => m.atoms.map((a) => a.x));
+    await st().runStep(r);
+    const out = setMolecules(st(), st().sets.find((b) => b.id === exit(r, "reached"))!);
+    expect(out).toHaveLength(2);
+    // (pass 1 as it came in; passes 2 and 3 from the held places: what reached Done in the third stands there)
+    expect(out.map((m) => m.atoms.map((a) => a.x)).sort()).toEqual(cameIn.map((xs) => xs.map((x) => x + 5)).sort());
+  });
+
+  it("looks at Stop between two steps inside: pressed as the first ends, the second never runs", async () => {
+    const { st, r, f, exit, doc, store } = page({ repeat: "times", times: 3 });
+    // (a second Filter inside, after the first: the first's kept into it, its kept to Again, its rest to Done)
+    const g = st().addStep("filter", "meno", 1200, -600);
+    doc.edit("place", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === g ? { ...s, x: 1200, y: -600 } : s.id === r ? { ...s, holds: [f, g] } : s)) }));
+    st().updateStep(g, { options: { conditions: "pass < 3" } });
+    for (const w of st().wires.filter((x) => x.to.step === r && x.to.port === "again")) st().removeWire(w.id);
+    st().connect({ set: exit(f, "out") }, g);
+    st().connect({ set: exit(g, "out") }, r, "again");
+    st().connect({ set: exit(g, "rest") }, r, "done");
+    let pressed = false;
+    const off = store.subscribe((now) => {
+      if (!pressed && now.steps.find((s) => s.id === f)?.ran) {
+        pressed = true;
+        st().stopStep(r);
+      }
+    });
+    await st().runStep(r);
+    off();
+    expect(pressed).toBe(true);
+    expect(st().steps.find((s) => s.id === g)!.ran).toBeUndefined();
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: false, stopped: true, said: expect.stringMatching(/^Stopped after 1 pass/) });
+  });
+
+  it("runs before a step after its Out, never waiting on the steps inside it: they give to it, it runs them", async () => {
+    const { st, r, exit } = page({ repeat: "until", most: 10 });
+    const after = st().addStep("filter", "meno", 4000, 0);
+    st().updateStep(after, { options: { conditions: "pass > 0" } });
+    st().connect({ set: exit(r, "reached") }, after);
+    const ran = st().runStep(after);
+    const late = await Promise.race([ran.then(() => false), new Promise<boolean>((go) => setTimeout(() => go(true), 4000))]);
+    expect(late).toBe(false);
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: true, said: "3 passes · 2 done" });
+    expect(st().steps.find((s) => s.id === after)!.ran?.ok).toBe(true);
+  });
+});
+
+describe("a Repeat not made (found in review)", () => {
+  it("round steps two sets come into: says a Repeat takes one, by its In, and nothing changes", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const a = st().addSet({ x0: 0, y0: 0, x1: 100, y1: 100 });
+    const b = st().addSet({ x0: 0, y0: 400, x1: 100, y1: 500 });
+    const f = st().addStep("filter", "meno", 400, 100);
+    const g = st().addStep("filter", "meno", 400, 500);
+    st().connect({ set: a }, f);
+    st().connect({ set: b }, g);
+    const steps = st().steps.length;
+    expect(st().repeatSteps([f, g])).toEqual({ why: "More than one set comes into these steps: a Repeat takes one, by its In" });
+    expect(st().steps).toHaveLength(steps);
+    expect(st().wires).toHaveLength(2);
+  });
+});

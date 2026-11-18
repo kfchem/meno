@@ -398,6 +398,42 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
+  it("inside a Repeat, carries the rows each molecule was held with on what it made, in its numbering: its next pass holds them again (found in review)", async () => {
+    // (water tagged, a Restraints table fixing atoms 1 and 3 by its ID, and a minimisation with restraints by Sketchkit holding them -
+    //  made into a Repeat of one pass by Repeat these steps, the table's wire kept from outside, what it makes wired to Done)
+    useReaders.setState({ state: { tightbind: "added", sketchkit: "added" }, problem: {} });
+    const made = editor();
+    const st = made.st;
+    const t = st().addStep("tag", "meno", 3, 0);
+    st().updateStep(t, { options: { name: "start" } });
+    st().connect({ set: st().sets[0].id }, t);
+    await st().runStep(t);
+    const tagged = st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+    const r0 = st().addStep("restraints", "meno", 5, 0);
+    st().updateStep(r0, { options: { on: "start", coordination: false, fixed: "1, 3" } });
+    st().connect({ set: tagged }, r0);
+    await st().runStep(r0);
+    const table = st().sets.find((b) => b.made?.step === r0 && b.made.exit === "out")!;
+    const step = st().addStep("minimise", "sketchkit", 2000, 0);
+    st().connect({ set: tagged }, step);
+    st().connect({ set: table.id }, step, RESTRAINTS_INPUT.id);
+    const r = st().repeatSteps([step]) as number;
+    expect(typeof r).toBe("number");
+    st().updateStep(r, { options: { repeat: "times", times: 1 } });
+    st().connect({ set: st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.id }, r, "done");
+    const ran = st().runStep(r);
+    for (let i = 0; i < 6 && !worker.prepare.mock.calls.length; i++) await settle();
+    const [sent] = worker.prepare.mock.lastCall![1] as { restraints?: { kind: string; atoms: number[] }[] }[];
+    expect(sent.restraints).toEqual([{ kind: "fixed", atoms: [0, 2] }]);
+    end(1);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === r)!.ran).toMatchObject({ ok: true, said: "1 pass · 1 done" });
+    const out = setMolecules(st(), st().sets.find((b) => b.made?.step === r && b.made.exit === "reached")!);
+    expect(out).toHaveLength(1);
+    expect(out[0].properties?.[0]?.restraints?.value).toMatchObject({ restraints: [{ kind: "fixed", atoms: [0, 2] }], numbering: expect.any(String) });
+  });
+
   it("holds a distance exactly where its plugin says it can - its molecule no stationary point after - and fails one whose distance ended off its value", async () => {
     // (water tagged, given a Restraints table, its row then made one holding O-H exactly - as a table read from a file
     //  says one - and optimised by Tightbind, whose optimisation holds a distance exactly; the test's program moves every
