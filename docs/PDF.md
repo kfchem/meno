@@ -481,8 +481,15 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   letters stand up to four fifths of its bond where its bonds are drawn
   short). One upright line alone, free at both ends and as tall as a
   letter, is a letter where a letter as tall stands beside it on its line
-  - the l of Cl, the 1 of 13 - and a line where none does. Every tolerance
-  is in the drawing's own line width or bond.
+  - the l of Cl, the 1 of 13 - and a line where none does. A patch up to
+  a bond across of two such pieces bent at a corner, no line of a patch
+  larger than a letter within three tenths of a bond of it - a 7, a 1
+  with its flag, standing apart - is matched as a letter first, among the
+  picture's other letters, and is a letter where the matcher reads it
+  surely, else lines (2026-11-19): a compound's number, a yield's digits
+  are words, not bonds. One straight line alone never is: a bond from a
+  label to its free end, a methyl's, is one, and read so it was an l or
+  an I - an iodine on the round trip. Every tolerance is in the drawing's own line width or bond.
 - **Not read** (2026-11-18): a picture whose bond is under 25 of its
   pixels is drawn too small to read, and is said to be: the round trip
   read such pictures wrong, with no mark, more often than it said them
@@ -497,6 +504,25 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   unsure, and says so. A label the matcher cannot read, or whose bond was
   lost, would otherwise be left out with what it holds, and what is left
   can be a whole structure that is not the picture's.
+- **A small piece of carbons alone** (2026-11-19): read from a picture,
+  a piece - atoms joined by bonds - of six atoms or fewer, all of them
+  carbons with no label, is unsure and says that it may be a number or
+  letters read as bonds: a digit or a letter the matcher does not read
+  is traced as a line or two. So is such a piece holding a carbon with
+  no label beside a larger one, saying it may be part of the structure,
+  its bond not read: an OH come off with a stray carbon, a tert-butyl
+  with its CH-OH. Neither is ever left out - a cyclohexane or a hexane
+  drawn alone is such a piece, and comes through said. Six is inferred,
+  not measured on papers: set on Meno's made pictures, above every stray
+  piece of carbons read there, and so that a cyclohexane or a hexane
+  drawn alone is said.
+- **Two bonds in line at a carbon** (2026-11-19): read from a picture, a
+  carbon with no label and exactly two bonds, both single, lying within
+  ten degrees of a line, is unsure and says one bond may have been read
+  as two: a skeletal drawing sets carbons in line only on a triple bond
+  or cumulated double bonds, and a bond traced broken reads so - an extra
+  CH2 in a chain or a ring. Ethyne's, a nitrile's, an allene's and a
+  cumulene's straight carbons are not said.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes

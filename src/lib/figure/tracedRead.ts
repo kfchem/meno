@@ -34,7 +34,7 @@ export function readTracedPicture(
 ): FigureRead | PictureUnread {
   // (where the given letters lie, in the picture's pixels)
   const drop = letters.map((l) => [(l.box[0] - at.x) / at.scale, (l.box[1] - at.y) / at.scale, (l.box[2] - at.x) / at.scale, (l.box[3] - at.y) / at.scale] as Box);
-  const t = tracePicture(pixels, drop);
+  const t = tracePicture(pixels, drop, known);
   if ("none" in t) return t;
   measured?.({ line: t.line, bond: t.bond, shaded: t.shaded });
   const shapes = onPage(t.shapes, at.scale, at.x, at.y);
@@ -42,7 +42,60 @@ export function readTracedPicture(
   if (!read.atoms.length || !read.bonds.length) return { none: "No structure was found in the picture." };
   // (ink beside the structure read as nothing: the atom nearest it said)
   for (const [i, said] of unreadInk(read, shapes, known)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];
+  // (a small piece of carbons alone, no label in it: said - a number or a letter traced may read so - never left out)
+  for (const { atoms, apart } of tinyPieces(read)) for (const i of atoms) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), apart ? APART_SAID : TINY_SAID];
+  // (a carbon between two single bonds in line: a skeleton draws carbons in line only on a triple bond or cumulated double bonds - one
+  //  bond traced broken in two reads so)
+  for (const i of inLineCarbons(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), IN_LINE_SAID];
   return read;
+}
+
+/** How near straight two single bonds at a carbon may be before it is said (`inLineCarbons`): within ten degrees of a line. */
+export const IN_LINE_BONDS = (10 * Math.PI) / 180;
+export const IN_LINE_SAID = "Its two bonds lie in line: one bond may have been read as two.";
+
+/**
+ * The carbons of a read - no label - with exactly two bonds, both single, lying in line within `IN_LINE_BONDS`: a skeletal drawing sets
+ * carbons in line only on a triple bond or cumulated double bonds (ethyne, a nitrile, an allene, a cumulene), so such a carbon is a bond
+ * traced as two.
+ */
+export function inLineCarbons(read: Pick<FigureRead, "atoms" | "bonds">): number[] {
+  const at = read.atoms.map((): FigureRead["bonds"] => []);
+  for (const b of read.bonds) for (const e of [b.a, b.b]) at[e].push(b);
+  return read.atoms.flatMap((a, i) => {
+    if (a.label || (a.el && a.el !== "C") || at[i].length !== 2 || at[i].some((b) => b.order !== 1)) return [];
+    const [p, q] = at[i].map((b) => read.atoms[b.a === i ? b.b : b.a]);
+    const turn = Math.abs(Math.atan2((p.x - a.x) * (q.y - a.y) - (p.y - a.y) * (q.x - a.x), (p.x - a.x) * (q.x - a.x) + (p.y - a.y) * (q.y - a.y)));
+    return Math.PI - turn <= IN_LINE_BONDS ? [i] : [];
+  });
+}
+
+/**
+ * A piece of a picture read - atoms joined by bonds - of this many atoms or fewer is said where all of it is carbons with no label: a
+ * compound's number or a letter traced may read as such bonds (a 1 or a 7 as a line, a % as a few); and where it holds such a carbon and
+ * lies beside a larger piece: a group whose bond to the structure was not read (an OH with a stray carbon, a tert-butyl with its CH-OH).
+ * Never left out: a cyclohexane or a hexane drawn alone is such a piece, and comes through said. Inferred from made pictures (docs/PDF.md,
+ * *A picture traced*).
+ */
+export const TINY_PIECE = 6;
+export const TINY_SAID = "A small piece of carbons alone: it may be a number or letters read as bonds.";
+export const APART_SAID = "A small piece apart from the structure: it may be part of it, its bond not read.";
+
+/** The pieces of a read that are `TINY_PIECE`'s: each its atoms, and whether it is said for lying beside a larger piece. */
+export function tinyPieces(read: Pick<FigureRead, "atoms" | "bonds">): { atoms: number[]; apart: boolean }[] {
+  const up = read.atoms.map((_, i) => i);
+  const root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i])));
+  for (const b of read.bonds) up[root(b.a)] = root(b.b);
+  const pieces = new Map<number, number[]>();
+  read.atoms.forEach((_, i) => (pieces.get(root(i)) ?? pieces.set(root(i), []).get(root(i))!).push(i));
+  const bare = (i: number) => !read.atoms[i].label && (!read.atoms[i].el || read.atoms[i].el === "C");
+  const all = [...pieces.values()];
+  const larger = all.some((p) => p.length > TINY_PIECE);
+  return all.flatMap((p): { atoms: number[]; apart: boolean }[] => {
+    if (p.length > TINY_PIECE || !p.some(bare)) return [];
+    if (p.every(bare)) return [{ atoms: p, apart: false }];
+    return larger ? [{ atoms: p, apart: true }] : [];
+  });
 }
 
 /**
