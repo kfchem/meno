@@ -44,7 +44,7 @@ import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
 import { isomersToMake, withChosen, withOwnCip, type OpenStereo, type ToMake } from "./openStereo";
-import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
+import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, notKept, reflectedConformers } from "./pageMirror";
 import type { Configuration, IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { groupName, sentOf } from "../../../../lib/chem/perception/stereo/configuration";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
@@ -666,6 +666,16 @@ export function stereoRows(made: Pick<ToMake, "halves" | "said">, i: number): { 
 }
 
 /**
+ * The row that says where conformers made of `part` do not have a configuration `isomer` asks for, or its drawing shows
+ * (chem/pageMirror `notKept`): read back from every frame, so that what the plugin's toolkit could not keep is said where it is -
+ * never passed by. None where every one is kept.
+ */
+export function notKeptRows(c: Pick<Conformers, "frames">, part: Model, isomer: IsomerConfiguration): { label: string; text: string }[] {
+  const missed = notKept(c, part, isomer) ?? [];
+  return missed.length ? [{ label: STEREO_ROW, text: `configuration at ${missed.join(", ")} not kept in 3D` }] : [];
+}
+
+/**
  * Each stereoisomer asked for, its conformers made for the page - which
  * ones, Meno's (chem/openStereo `isomersToMake`, asked of `stereo`, the
  * plugin that finds stereoisomers): the first, or each - `count` tried
@@ -754,7 +764,7 @@ export async function conformersOf(
     const c = twin == null ? answered[k++] : each[twin] && reflectedConformers(each[twin]!);
     each.push(c);
   }
-  const got = each.flatMap((c, i) => (c ? [{ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i)] }] : []));
+  const got = each.flatMap((c, i) => (c ? [{ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i), ...notKeptRows(c, block.part, made.isomers[i])] }] : []));
   // (which of each one's stand, by the drawing's checks - a reflection's lengths and angles are its twin's; and a structure of
   //  more than one part, its parts side by side - chem/partsApart)
   const holds = held(block.molblock);
@@ -879,7 +889,7 @@ export async function conformersGrowing(
   type Unit = { searches: Live[]; shown: Map<Live, Conformers>; whole: () => Conformers; twinOf?: number };
   const units: Unit[] = [];
   // (what is said of each one's stereo, its rows of how it was made - chem/groupHalves)
-  const withRows = (c: Conformers, i: number): Conformers => ({ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i)] });
+  const withRows = (c: Conformers, i: number): Conformers => ({ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i), ...notKeptRows(c, block.part, made.isomers[i])] });
   // (a group's half that is the mirror image of one before it: that one as the page shows it, reflected - its R and S read anew - never
   //  searched again; shown again each time that one grows)
   const mirrorUnit = (twin: number, i: number): Unit => ({
