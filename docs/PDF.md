@@ -1401,7 +1401,9 @@ it where it lies out of view.
   letters.
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
-  from two sides; and an end by both ends of a bond shorter than ends lie
+  from two sides - unless they lie together, a tenth of a bond apart, as
+  a bold bar's end and a wedge's do at a ring's corner set just over a
+  Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
   word (one so short both its ends lie in the word's box, its other end

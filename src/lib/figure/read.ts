@@ -799,6 +799,9 @@ function boxGap(a: Box, b: Box): number {
   return Math.hypot(Math.max(0, a[0] - b[2], b[0] - a[2]), Math.max(0, a[1] - b[3], b[1] - a[3]));
 }
 
+/** How near two bonds' ends lie, in bonds, at the most, to meet each other even where both point into one label. */
+const TOGETHER = 0.1;
+
 /** How many bonds an element in a label takes, its hydrogens and charge aside: an NH2's N one, an OH's O one. */
 const BONDS_LEFT: Record<string, number> = { N: 3, O: 2, S: 2, P: 3, B: 3, Si: 4, Se: 2 };
 
@@ -1233,10 +1236,13 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       return [e, words.flatMap((w, k) => (reaches(e.p, out, w.box, bond) ? [k] : []))];
     }),
   );
+  // (but two ends at one point - a tenth of a bond apart: a bold bar's and a wedge's at a ring's corner set just over a label - meet
+  // there, a carbon: bonds drawn short of a metal from two sides end the label's width apart)
+  const together = (e: End, f: End) => dist(e.p, f.p) < TOGETHER * bond;
   // (and an end by both ends of a bond shorter than that - a hash to an H set close - meets the nearer)
   const otherEnd = (e: End) => (e.side === 0 ? drawnBonds[e.bond].b : drawnBonds[e.bond].a);
   for (const e of ends)
-    meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && dist(f.p, e.p) <= dist(f.p, otherEnd(e)) && !into.get(e)!.some((k) => into.get(f)!.includes(k))).length);
+    meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && dist(f.p, e.p) <= dist(f.p, otherEnd(e)) && (together(e, f) || !into.get(e)!.some((k) => into.get(f)!.includes(k)))).length);
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
   const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w, reads)));
