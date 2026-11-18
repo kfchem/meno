@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ReaderOutput } from "../../../../lib/calc/output";
 import type { Molecule3D } from "../store/types";
 import { setEntries, startedFrame, type SetEntry } from "./entries";
-import { isFailure, workedOf } from "./programs";
+import { isFailure, STOPPED_SAID, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
 import { takeFrames } from "./takeFrames";
 import { stoppedSaid } from "./failures";
@@ -31,6 +31,8 @@ describe("Follow the reaction path", () => {
   it("gives each point its path, one end to the other, its entry the point it started from - its calculation on it", () => {
     const w = workedOf("reaction-path", h2(), irc(), ["orca"]) as Worked;
     expect(isFailure(w)).toBe(false);
+    // (a path that reached its ends: none said stopped)
+    expect(w.stopped).toBeUndefined();
     const m = molecule(w);
     expect([m.frames?.length, m.entryFrames, m.energies]).toEqual([3, [2], [-1.17, -1.1, -1.09, -1.12]]);
     expect(startedFrame(m)).toBe(2);
@@ -52,6 +54,11 @@ describe("Follow the reaction path", () => {
     const first = takeFrames([m], "first");
     const last = takeFrames([m], "last");
     expect([first.ok && first.kept.map((e) => e.xyz[3]), last.ok && last.kept.map((e) => e.xyz[3])]).toEqual([[0.74], [1.1]]);
+    // (its program's words kept on its calculation, as they came)
+    expect(w.calc?.warnings?.map((x) => x.text)).toEqual([why]);
+    // (where its program gave none: Meno's words, on the line and on the molecule alike)
+    const silent = workedOf("reaction-path", h2(), { ...irc(), optimised: false } as ReaderOutput, ["orca"]) as Worked;
+    expect([silent.stopped, silent.calc?.warnings]).toEqual([STOPPED_SAID, [{ kind: "other", text: STOPPED_SAID }]]);
     expect(stoppedSaid(1)).toBe("1 not converged, kept as far as it came");
     expect(stoppedSaid(2)).toBe("2 not converged, kept as far as they came");
   });
