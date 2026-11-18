@@ -40,6 +40,19 @@ describe("a metal's salt of an oxoanion", () => {
     }
   });
 
+  it("reads mercury(I) as the Hg2 2+ ion, its two Hg bonded, each +1, and mercury(II) as Hg2+: Hg2(NO3)2, Hg2SO4, Hg(NO3)2", () => {
+    const hgHg = (s: GroupStructure) => s.bonds.filter((b) => s.atoms[b.a1].el === "Hg" && s.atoms[b.a2].el === "Hg").map((b) => b.order);
+    for (const label of ["Hg2(NO3)2", "Hg2SO4"]) {
+      const s = of(label);
+      expect([ions(s).slice(0, 2), hgHg(s), charge(s)], label).toEqual([["Hg+1", "Hg+1"], [1], 0]);
+    }
+    const two = of("Hg(NO3)2");
+    expect([ions(two)[0], hgHg(two), charge(two)]).toEqual(["Hg+2", [], 0]);
+    // (another metal's two +1 cations stay two ions: silver carbonate)
+    expect(hgHg(of("Ag2CO3"))).toEqual([]);
+    expect(of("Ag2CO3").bonds.some((b) => of("Ag2CO3").atoms[b.a1].el === "Ag")).toBe(false);
+  });
+
   it("leaves a halide, a group bound by one bond and a complex's formula as they were read: CuCl2, AgOTf, Cu(OAc)2, MoO2Cl2", () => {
     expect(abbreviationOf("CuCl2")?.kind).toBe("complex");
     expect(abbreviationOf("AgOTf")?.kind).toBe("complex");

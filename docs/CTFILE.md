@@ -420,7 +420,9 @@ Read by rule, besides, as whole molecules:
   complex's formula would read its oxygens across: the anion of the least
   charge its formula makes (NO3⁻, ClO4⁻, SO4²⁻, CO3²⁻, PO4³⁻), and the
   metal's charge as many as balance them, one to four
-  (`metalSaltStructure`, `src/lib/chem/condensed.ts`). A halide (CuCl2), a
+  (`metalSaltStructure`, `src/lib/chem/condensed.ts`). Mercury(I) is the
+  Hg2²⁺ ion, its two Hg bonded, each +1 (Hg2(NO3)2, Hg2SO4); Hg(NO3)2 is
+  Hg²⁺. A halide (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
 - an ion written alone, a counter-ion set beside a complex or a salt: an

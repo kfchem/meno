@@ -131,6 +131,8 @@ export function metalSaltStructure(label: string, groupOf: (label: string) => Gr
     if (!Number.isInteger(q) || q < 1 || q > 4) return null;
     const atoms: SmilesAtom[] = Array.from({ length: metals }, () => ({ el: m[1], hs: 0, charge: q }));
     const bonds: StructureBond[] = [];
+    // (mercury(I) is the Hg2 2+ ion, its two Hg bonded, each +1: Hg2(NO3)2, Hg2SO4)
+    if (m[1] === "Hg" && metals === 2 && q === 1) bonds.push({ a1: 0, a2: 1, order: 1 });
     for (let k = 0; k < anions; k++) {
       const at = atoms.length;
       atoms.push(...ion.atoms.map((a) => ({ ...a })));
