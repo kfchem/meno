@@ -8,7 +8,6 @@ import {
 } from "react";
 import type { Conversation } from "../conversation/types";
 import type { DocumentStore } from "../../../../lib/doc";
-import { watchConfiguration } from "../configuration/watch";
 import { createWorkspaceDocument, opensReadingFilled, type WorkspaceDocument } from "../document";
 import { extentIn } from "../style3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -477,9 +476,14 @@ export function storeOf(doc: DocumentStore<WorkspaceDocument>): EditorStore {
   if (!store) {
     store = createEditorStore(doc);
     storesOf.set(doc, store);
+    docsOf.set(store, doc);
   }
   return store;
 }
+
+const docsOf = new WeakMap<EditorStore, DocumentStore<WorkspaceDocument>>();
+/** The document a store was made for (`storeOf`): none for a store made otherwise. */
+export const documentOf = (store: EditorStore): DocumentStore<WorkspaceDocument> | undefined => docsOf.get(store);
 
 /** The store a document is drawn from, where one has been made: none for a document never drawn. */
 export const madeStoreOf = (doc: DocumentStore<WorkspaceDocument>): EditorStore | undefined => storesOf.get(doc);
@@ -532,8 +536,6 @@ export function EditorProvider({
   // reloaded after it failed - finds the store as it was.
   const store = useMemo(() => storeOf(doc), [doc]);
   useEffect(() => connectStoreToDocument(store, doc), [store, doc]);
-  // (each change's effect on the configurations the drawing states, said where it turned one: configuration/watch)
-  useEffect(() => watchConfiguration(store, doc), [store, doc]);
   return (
     <EditorStoreContext.Provider value={store}>
       {children}
