@@ -4553,36 +4553,11 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
   if (wedged.length && (atoms.some((a) => a.stereoGroup) || bonds.some((b) => b.stereoGroup))) {
     const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
     const d = drawnOf(atoms, drawn);
-    // (read once for a drawing as it is: laid out again as it stands - a zoom, a redraw - it is not read again)
-    const key = JSON.stringify([d.atoms, d.bonds]);
-    if (wedgedRead?.key !== key) wedgedRead = { key, read: readStereo(d.atoms, d.bonds) };
-    const read = wedgedRead.read;
-    const ends = new Set(read.axes.flatMap((ax) => [...ax.atoms]));
-    // (a centre the reader reads whose groups are not two alike - an isopropyl's two methyls are, its CH is no centre - by the atoms'
-    //  symmetry classes: of the constitution first, and where two are alike there, again with every other centre's and double bond's
-    //  configuration kept, as read: a pseudoasymmetric centre's two arms - pentane-2,3,4-triol's C3 between an R and an S - are not
-    //  alike, though a cis-1,4-dimethylcyclohexane's ring carbon's two ring branches are)
-    const base = d.atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, ...(a.charge ? { charge: a.charge } : {}) }));
-    const plainBonds = d.bonds.map(({ a, b, order }) => ({ a, b, order }));
-    let constitution: number[] | null = null;
-    const twoAlike = (classes: readonly number[], c: number) => {
-      const groups = d.bonds.flatMap((x) => (x.a === c ? [classes[x.b]] : x.b === c ? [classes[x.a]] : []));
-      for (let h = 0; h < d.atoms[c].hs; h++) groups.push(-1);
-      return new Set(groups).size < groups.length;
-    };
-    const alike = (c: number) => {
-      constitution ??= symmetryClasses({ atoms: base, bonds: plainBonds });
-      if (!twoAlike(constitution, c)) return false;
-      const configured = symmetryClasses({
-        atoms: base.map((a, i) => (i !== c && read.tetra.has(i) ? { ...a, tetra: read.tetra.get(i)! } : a)),
-        bonds: plainBonds.map((b, k) => (read.cisTrans.has(k) ? { ...b, stereo: read.cisTrans.get(k)! } : b)),
-      });
-      return twoAlike(configured, c);
-    };
-    for (const b of wedged) {
-      const c = wedgeNarrowAtom(b, deg);
-      if ((read.tetra.has(c) && !alike(c)) || ends.has(c)) ungrouped.add(c);
-    }
+    const narrows = wedged.map((w) => wedgeNarrowAtom(w, deg));
+    // (worked out once for a drawing as it stands: laid out again unchanged - a zoom, a redraw - it is taken as it was)
+    const key = JSON.stringify([d.atoms, d.bonds, narrows]);
+    if (wedgedRead?.key !== key) wedgedRead = { key, centres: centresInNoGroup(d, narrows) };
+    for (const c of wedgedRead.centres) ungrouped.add(c);
   }
   for (const [p, part] of parts.entries()) {
     const groups = new Set<string>();
@@ -4603,8 +4578,70 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
   return out;
 }
 
-/** The last drawing `centresLabelled` read for its wedges, and what the reader made of it. */
-let wedgedRead: { key: string; read: ReturnType<typeof readStereo> } | null = null;
+/** The last drawing `centresLabelled` read for its wedges, and the centres it found among them. */
+let wedgedRead: { key: string; centres: number[] } | null = null;
+
+/**
+ * Of the atoms at the narrow ends of wedges (`narrows`), those that are centres of the drawing `d`: each the reader reads as a centre whose
+ * groups are not two alike - an isopropyl's two methyls are, its CH is no centre - or an axis's end. Groups are compared by the atoms'
+ * symmetry classes, within the structure the centre is in: of the constitution first, and where two are alike there, again with every
+ * other centre's and double bond's configuration kept, as read - a pseudoasymmetric centre's two arms, pentane-2,3,4-triol's C3 between
+ * an R and an S, are not alike, though a cis-1,4-dimethylcyclohexane's ring carbon's two ring branches are.
+ */
+function centresInNoGroup(d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }, narrows: readonly number[]): number[] {
+  const read = readStereo(d.atoms, d.bonds);
+  const ends = new Set(read.axes.flatMap((ax) => [...ax.atoms]));
+  // (the structure each atom is in, by its first atom: its classes worked out once for it)
+  const around: number[][] = d.atoms.map(() => []);
+  d.bonds.forEach((x, k) => {
+    around[x.a].push(k);
+    around[x.b].push(k);
+  });
+  const pieceOf = new Map<number, number[]>();
+  const piece = (c: number): number[] => {
+    const known = pieceOf.get(c);
+    if (known) return known;
+    const out = [c];
+    const seen = new Set(out);
+    for (let i = 0; i < out.length; i++)
+      for (const k of around[out[i]]) {
+        const o = d.bonds[k].a === out[i] ? d.bonds[k].b : d.bonds[k].a;
+        if (!seen.has(o)) {
+          seen.add(o);
+          out.push(o);
+        }
+      }
+    out.sort((p, q) => p - q);
+    for (const x of out) pieceOf.set(x, out);
+    return out;
+  };
+  const classesIn = (atoms: number[], configured: number | null): Map<number, number> => {
+    const at = new Map(atoms.map((x, i) => [x, i]));
+    const bonds = d.bonds.flatMap((x, k) => (at.has(x.a) && at.has(x.b) ? [{ k, a: at.get(x.a)!, b: at.get(x.b)!, order: x.order }] : []));
+    const classes = symmetryClasses({
+      atoms: atoms.map((x) => ({
+        el: d.atoms[x].el ?? "C",
+        hs: d.atoms[x].hs,
+        ...(d.atoms[x].charge ? { charge: d.atoms[x].charge } : {}),
+        ...(configured != null && x !== configured && read.tetra.has(x) ? { tetra: { ...read.tetra.get(x)!, neighbours: read.tetra.get(x)!.neighbours.map((n) => (n < 0 ? n : at.get(n)!)) } } : {}),
+      })),
+      bonds: bonds.map(({ k, a, b, order }) => ({ a, b, order, ...(configured != null && read.cisTrans.has(k) ? { stereo: { ...read.cisTrans.get(k)!, refs: read.cisTrans.get(k)!.refs.map((n) => at.get(n)!) as [number, number] } } : {}) })),
+    });
+    return new Map(atoms.map((x, i) => [x, classes[i]]));
+  };
+  const constitution = new Map<number[], Map<number, number>>();
+  const twoAlike = (classes: ReadonlyMap<number, number>, c: number) => {
+    const groups = around[c].map((k) => classes.get(d.bonds[k].a === c ? d.bonds[k].b : d.bonds[k].a)!);
+    for (let h = 0; h < d.atoms[c].hs; h++) groups.push(-1);
+    return new Set(groups).size < groups.length;
+  };
+  const alike = (c: number) => {
+    const atoms = piece(c);
+    if (!constitution.has(atoms)) constitution.set(atoms, classesIn(atoms, null));
+    return twoAlike(constitution.get(atoms)!, c) && twoAlike(classesIn(atoms, c), c);
+  };
+  return narrows.filter((c) => (read.tetra.has(c) && !alike(c)) || ends.has(c));
+}
 
 /** The drawing's connected parts, as atom indices. */
 function components(n: number, bonds: Bond[]): number[][] {
