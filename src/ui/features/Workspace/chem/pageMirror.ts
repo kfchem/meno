@@ -20,7 +20,7 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { identityInputOf } from "./identityOf";
-import { EXACT, sideOfLine, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
+import { EXACT, sideOfLine, torsionSense, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
 
 /** A drawing seen in a mirror: each wedge turned over (up for down), each depth turned (a cage drawn in perspective). */
 export function mirroredPart(part: Model): Model {
@@ -152,31 +152,12 @@ export function notKept(c: Pick<Conformers, "frames">, part: Model, isomer: Isom
   return out;
 }
 
-/** The sign of the torsion p-a-b-q in a frame (IUPAC's: + where, looking from a to b, p turns clockwise onto q). */
-function torsionSign(f: readonly number[], p: number, a: number, b: number, q: number): number {
-  const at = (i: number) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
-  const sub = (u: number[], v: number[]) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
-  const cross = (u: number[], v: number[]) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-  const dot = (u: number[], v: number[]) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-  const [b1, b2, b3] = [sub(at(a), at(p)), sub(at(b), at(a)), sub(at(q), at(b))];
-  return Math.sign(Math.hypot(...b2) * dot(b1, cross(b2, b3)));
-}
-/** Whether a frame has an axis's configuration (`ConfiguredAxis`): the torsion of its refs about it of its sense. */
-const axisHeld = (f: readonly number[], x: ConfiguredAxis) => torsionSign(f, x.refs[0], x.atoms[0], x.atoms[1], x.refs[1]) === x.sense;
-/** Whether a frame has a run's cis or trans (`ConfiguredRun`): its refs' torsion about its ends under 90 degrees, or over. */
-function runHeld(f: readonly number[], x: ConfiguredRun): boolean {
-  const at = (i: number) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
-  const sub = (u: number[], v: number[]) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
-  const dot = (u: number[], v: number[]) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-  // (the two refs on one side of the run where they point the same way across it: each one's direction from its end, its part
-  //  along the run taken off - what is left points the same way, cis, or opposite, trans)
-  const u = sub(at(x.atoms[1]), at(x.atoms[0]));
-  const across = (v: number[]) => {
-    const k = dot(v, u) / dot(u, u);
-    return [v[0] - k * u[0], v[1] - k * u[1], v[2] - k * u[2]];
-  };
-  return dot(across(sub(at(x.refs[0]), at(x.atoms[0]))), across(sub(at(x.refs[1]), at(x.atoms[1])))) > 0 === x.cis;
-}
+/** A frame's place of atom `i`. */
+const placeOf = (f: readonly number[], i: number): [number, number, number] => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
+/** Whether a frame has an axis's configuration (`ConfiguredAxis`): the torsion of its refs about it of its sense - the core's torsion, identity's (geometry `torsionSense`). */
+const axisHeld = (f: readonly number[], x: ConfiguredAxis) => torsionSense(placeOf(f, x.refs[0]), placeOf(f, x.atoms[0]), placeOf(f, x.atoms[1]), placeOf(f, x.refs[1])) === x.sense;
+/** Whether a frame has a run's cis or trans (`ConfiguredRun`): its refs on one side of the line of its ends, or on two - the core's rule for a double bond (geometry `sideOfLine`). */
+const runHeld = (f: readonly number[], x: ConfiguredRun) => sideOfLine(placeOf(f, x.atoms[0]), placeOf(f, x.atoms[1]), placeOf(f, x.refs[0]), placeOf(f, x.refs[1])) > 0 === x.cis;
 
 /**
  * Of conformers made of a stereoisomer that gives an axis or an odd run its configuration (Meno's own, never the plugin's to give:
