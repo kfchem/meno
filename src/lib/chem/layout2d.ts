@@ -4534,7 +4534,7 @@ const groupText = (g: StereoGroup) => (g.kind === "abs" ? "abs" : `${g.kind}${g.
  * (`structureNotes`), as IUPAC's ST-6.3 would have it - and an absolute
  * one needs nothing said.
  */
-function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bonds: Set<number>; notes: { atoms: number[]; text: string }[] } {
+function centresLabelled(atoms: Atom[], bonds: Bond[], held = false): { atoms: Set<number>; bonds: Set<number>; notes: { atoms: number[]; text: string }[] } {
   const parts = components(atoms.length, bonds);
   const out = { atoms: new Set<number>(), bonds: new Set<number>(), notes: [] as { atoms: number[]; text: string }[] };
   // (each part's bonds in a group, by the part their first atom is in)
@@ -4551,12 +4551,16 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
   const ungrouped = new Set<number>();
   const wedged = bonds.filter((b) => (b.stereo === "up" || b.stereo === "down") && !atoms[wedgeNarrowAtom(b, deg)]?.stereoGroup);
   if (wedged.length && (atoms.some((a) => a.stereoGroup) || bonds.some((b) => b.stereoGroup))) {
-    const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
-    const d = drawnOf(atoms, drawn);
     const narrows = wedged.map((w) => wedgeNarrowAtom(w, deg));
-    // (worked out once for a drawing as it stands: laid out again unchanged - a zoom, a redraw - it is taken as it was)
-    const key = JSON.stringify([d.atoms, d.bonds, narrows]);
-    if (wedgedRead?.key !== key) wedgedRead = { key, centres: centresInNoGroup(d, narrows) };
+    // (while a gesture lasts - an atom dragged - taken as last read where the drawing has the same atoms and wedges: read again once it
+    //  ends, never at each frame of it; and worked out once for a drawing as it stands: laid out again unchanged, a zoom, a redraw)
+    const shape = `${atoms.length}|${narrows.join(",")}`;
+    if (!(held && wedgedRead?.shape === shape)) {
+      const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
+      const d = drawnOf(atoms, drawn);
+      const key = JSON.stringify([d.atoms, d.bonds, narrows]);
+      if (wedgedRead?.key !== key) wedgedRead = { key, shape, centres: centresInNoGroup(d, narrows) };
+    }
     for (const c of wedgedRead.centres) ungrouped.add(c);
   }
   for (const [p, part] of parts.entries()) {
@@ -4579,7 +4583,7 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
 }
 
 /** The last drawing `centresLabelled` read for its wedges, and the centres it found among them. */
-let wedgedRead: { key: string; centres: number[] } | null = null;
+let wedgedRead: { key: string; shape: string; centres: number[] } | null = null;
 
 /**
  * Of the atoms at the narrow ends of wedges (`narrows`), those that are centres of the drawing `d`: each the reader reads as a centre whose
@@ -5100,7 +5104,9 @@ export function layoutMolecule(
   drawn: Atom[],
   given: Bond[],
   opts: LayoutOptions,
-  zoom: number
+  zoom: number,
+  /** A gesture under way on the drawing (a drag): what is read of its configuration kept as last read, read again once it ends (`centresLabelled`). */
+  held = false,
 ): Layout {
   const bonds = unspecifiedDoubles(drawn, given);
   const atoms = cumulatedShown(chargesAsDrawn(drawn, bonds), bonds);
@@ -5112,7 +5118,7 @@ export function layoutMolecule(
   });
   const prim = buildAllPrimitives(atoms, bonds, opts, zoom, labels);
   // what is said about bonds, atoms and whole structures (IUPAC GR-11)
-  const groups = centresLabelled(atoms, bonds);
+  const groups = centresLabelled(atoms, bonds, held);
   // (each list put on as it is, not spread into one call: one may be as long as the drawing's atoms - lib/chem/lists)
   pushAll(prim.lines, centreStrokes(atoms, bonds, opts, zoom));
   const sgroups = sgroupDrawing(atoms, bonds, opts, zoom);
