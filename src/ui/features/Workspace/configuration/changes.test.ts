@@ -64,14 +64,14 @@ describe("what an edit did to a drawing's configurations (part 15, phase 2)", ()
   });
 
   it("takes the widest gap round the circle, the one across the first direction too", () => {
-    // (a centre's bonds at 100, 170 and 250 degrees: the widest gap runs from 250 round past 0 to 100 - its middle at 355 degrees)
+    // (a centre's bonds at 10, 80 and 150 degrees: the widest gap runs from 150 round past the half turn to 10 - its middle at 260 degrees)
     const at = (id: number, deg: number) => ({ id, x: L * Math.cos((deg * Math.PI) / 180), y: L * Math.sin((deg * Math.PI) / 180), r: 0.9, el: "C" });
     const m: Model = {
-      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "C" }, at(2, 100), at(3, 170), at(4, 250)],
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "C" }, at(2, 10), at(3, 80), at(4, 150)],
       bonds: [2, 3, 4].map((b, k) => ({ id: 10 + k, a: 1, b, order: 1 as const })),
     };
     const p = placeOf(m, { unit: { kind: "centre", at: 1 }, how: "inverted" })!;
-    expect((Math.atan2(p.y, p.x) * 180) / Math.PI).toBeCloseTo(-5, 6);
+    expect((Math.atan2(p.y, p.x) * 180) / Math.PI).toBeCloseTo(-100, 6);
   });
 
   it("puts a centre's note in the widest gap between its bonds, a bond out - never on the label of a group drawn above it", () => {
