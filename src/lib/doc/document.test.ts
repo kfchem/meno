@@ -642,6 +642,9 @@ describe("what a document's last change was", () => {
     expect(doc.lastChange()).toBe("travel");
     doc.amend((s) => ({ n: s.n + 10 }));
     expect(doc.lastChange()).toBe("amend");
+    doc.edit("add", (s) => ({ n: s.n + 1 }));
+    doc.takeBackTo(1, { n: 0 });
+    expect(doc.lastChange()).toBe("travel");
     doc.reset({ n: 5 });
     expect(doc.lastChange()).toBe("reset");
   });

@@ -181,6 +181,20 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     expect(configurationChanges(butanol(), t)).toEqual([{ unit: { kind: "centre", at: 1 }, how: "opened" }]);
   });
 
+  it("says nothing of an edit undone before the page was idle, and one note for a drag's frames, one step", async () => {
+    const { store, doc, notes, stop } = page(butanol());
+    store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-7");
+    doc.undo();
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual([]);
+    // (two frames of one drag - one step, gone on with: said once)
+    store.getState().moveAtoms([{ id: 2, x: L * 0.5, y: L * 0.2 }], "drag-8");
+    store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-8");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["C1: R, now S"]);
+    stop();
+  });
+
   it("says nothing after Clean-up, which keeps every configuration", async () => {
     const { store, notes, stop } = page(butanol());
     vi.useRealTimers();
