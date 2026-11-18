@@ -46,7 +46,8 @@ export type Blank = (
  * alone (the candidates; no symmetry asked): an atom of B, C, Si, Ge,
  * Sn, Pb, N, P, As, Sb, Bi, S, Se or Te with four groups, at most one of
  * them a plain hydrogen, or three and a lone pair it keeps
- * (./lonePairCentres); a double bond, each end with a group but the other
+ * (./lonePairCentres) - an H among the three for a P, As, Sb or Bi (a
+ * secondary phosphine's P); a double bond, each end with a group but the other
  * end and no other double bond, in no ring of `SMALL_RING` or fewer; and a
  * run of cumulated double bonds between two carbons, each with a group -
  * even, an axis; odd, a cis or trans. A biaryl's axis is none: only a
@@ -76,7 +77,9 @@ export function blanksOf(g: SymmetryInput): Blank[] {
   for (let i = 0; i < n; i++) {
     if (g.atoms[i].tetra || !CENTRES.has(element(i)) || hs(i) > 1) continue;
     if (around[i].length + hs(i) === 4) out.push({ kind: "centre", at: i, neighbours: [...around[i], ...(hs(i) ? [-1] : [])], own: [i], sides: [around[i]] });
-    else if (around[i].length === 3 && !hs(i) && pyramid(i)) out.push({ kind: "centre", at: i, neighbours: [...around[i]], own: [i], sides: [around[i]] });
+    // (three groups and a lone pair it keeps - with an H among the three, carried, a P's, As's, Sb's or Bi's as it is without one: a
+    //  secondary phosphine's P, the maintainer's ruling of 2026-11-06, ./lonePairs; its H last, the lone pair understood)
+    else if (around[i].length + hs(i) === 3 && pyramid(i)) out.push({ kind: "centre", at: i, neighbours: [...around[i], ...(hs(i) ? [-1] : [])], own: [i], sides: [around[i]] });
   }
   // (whether a and b are joined but through their own bond within `most` bonds: a ring of `most` + 1 atoms or fewer)
   const near = (a: number, b: number, most: number) => {

@@ -8,7 +8,8 @@
  *   their four groups are not surely tetrahedral (P-93.3 takes them by their polyhedra). Not an N+ with an H among its four: it
  *   loses its configuration through the free amine - Meno's rule, no text's (P+ and As+ with an H are candidates: their free forms
  *   keep theirs).
- * - A centre of three groups and a lone pair it keeps (./lonePairs, Meno's rule; P-93.3.3.2 takes them with a phantom atom).
+ * - A centre of three groups and a lone pair it keeps (./lonePairs, Meno's rule; P-93.3.3.2 takes them with a phantom atom): with an H
+ *   among the three, a P, As, Sb or Bi as without one (a secondary phosphine's P, the maintainer's ruling of 2026-11-06).
  * - A double bond with a group besides the other end on each end, in no ring of `SMALL_RING` atoms or fewer (P-93.5.1.4.1: there it
  *   is cis and states nothing; the text says monocycles, Meno takes the smallest ring through the bond for fused and bridged ones,
  *   its own extension), and not a C=N whose E/Z is none of its own (./movingCN).
@@ -129,7 +130,8 @@ function centreWhyNot(g: SymmetryInput, r: Read, i: number): string | null {
   if (groups < 3) return NOT_CANDIDATE.few;
   if (NOT_TETRAHEDRAL.has(el)) return NOT_CANDIDATE.metal;
   if (!CENTRE_ELEMENTS.has(el)) return NOT_CANDIDATE.element;
-  if (groups === 3) return r.hs(i) === 0 && r.pyramid(i) ? null : NOT_CANDIDATE.three;
+  // (with an H among its three, a P, As, Sb or Bi as without one - a secondary phosphine's P; never an N, S, Se or Te: ./lonePairs)
+  if (groups === 3) return r.hs(i) <= 1 && r.pyramid(i) ? null : NOT_CANDIDATE.three;
   if (r.hs(i) > 1) return NOT_CANDIDATE.hydrogens;
   if (el === "N" && (g.atoms[i].charge ?? 0) > 0 && r.hs(i) > 0) return NOT_CANDIDATE.ammonium;
   return null;

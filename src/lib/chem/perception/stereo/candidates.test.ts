@@ -53,6 +53,12 @@ describe("centres of three groups and a lone pair", () => {
     expect(found("CP(CC)c1ccccc1")).toContain("centre 1");
     expect(whyNotCentre("CN(CC)CCC", 1)).toBe(NOT_CANDIDATE.three);
   });
+
+  it("a secondary phosphine's P with its H among its three is a candidate (the maintainer's ruling, 2026-11-06); an N's or an S+'s with an H none", () => {
+    expect(found("C[PH]c1ccccc1")).toContain("centre 1");
+    expect(whyNotCentre("C[NH]CC", 1)).toBe(NOT_CANDIDATE.three);
+    expect(whyNotCentre("C[SH+]CC", 1)).toBe(NOT_CANDIDATE.three);
+  });
 });
 
 describe("double bonds", () => {

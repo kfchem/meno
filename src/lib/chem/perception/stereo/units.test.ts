@@ -36,3 +36,35 @@ describe("what U2 is to change: end chalcogens on P, As, Sb, S, Se, Te (KNOWN WR
     expect(double === charged ? "one identity" : "two identities").toBe("two identities");
   });
 });
+
+describe("a secondary phosphine's P: a centre with its H among its three, as without one (the maintainer's ruling, 2026-11-06)", () => {
+  type Input = Parameters<typeof identity>[0];
+  /** Methyl(R)phosphine with its H carried, not an atom (as a drawing of two bonds has it): P's neighbours C1, then R, its H last. */
+  const carried = (r: "methyl" | "ethyl", volume?: 1 | -1): Input => ({
+    atoms: [
+      { el: "C", hs: 3 },
+      { el: "P", hs: 1, ...(volume ? { tetra: { neighbours: [0, 2, -1], volume } } : {}) },
+      { el: "C", hs: r === "methyl" ? 3 : 2 },
+      ...(r === "ethyl" ? [{ el: "C", hs: 3 }] : []),
+    ],
+    bonds: [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 1 },
+      ...(r === "ethyl" ? [{ a: 2, b: 3, order: 1 }] : []),
+    ],
+  }) as unknown as Input;
+  const text = (g: Input) => identity(g).text;
+
+  it("its H carried: its two hands two identities, neither the one with none given; two alike groups on it, it sets nothing", () => {
+    expect(new Set([text(carried("ethyl", 1)), text(carried("ethyl", -1)), text(carried("ethyl"))]).size).toBe(3);
+    expect(new Set([text(carried("methyl", 1)), text(carried("methyl", -1)), text(carried("methyl"))]).size).toBe(1);
+  });
+
+  it("its H drawn as an atom: its hands two, each one of the carried ones; two alike groups, one with none given", () => {
+    const drawn = [id("C[P@]([H])CC"), id("C[P@@]([H])CC")];
+    expect(new Set(drawn).size).toBe(2);
+    expect(new Set([...drawn, text(carried("ethyl", 1)), text(carried("ethyl", -1))]).size).toBe(2);
+    expect(id("C[P@]([H])C")).toBe(id("CPC"));
+    expect(id("C[P@@]([H])C")).toBe(id("CPC"));
+  });
+});

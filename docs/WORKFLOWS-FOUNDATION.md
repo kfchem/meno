@@ -882,7 +882,10 @@ whether their groups are alike is identity's question, below:
   groups round it, at most one of them a hydrogen, whatever the orders of
   its bonds (IUPAC 2013 P-93.2); or with three and a lone pair that keeps
   its configuration (Meno's lone-pair rule: a sulfoxide's S, a
-  phosphine's P, never an amine's N);
+  phosphine's P, never an amine's N) - an H among the three for a P, As,
+  Sb or Bi as without one (a secondary phosphine's P, the maintainer's
+  ruling of 2026-11-06), never for an N, S, Se or Te. Identity fills such
+  a P as any centre: with two alike groups on it, a wedge sets nothing;
 - a double bond with a group besides the other end on each end, in no
   ring of seven atoms or fewer (P-93.5.1.4.1: there it is cis; for fused
   and bridged rings Meno takes the smallest ring through the bond), and
