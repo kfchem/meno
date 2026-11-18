@@ -18,8 +18,9 @@ import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
 import { factsOf } from "./perception/facts";
 import { runsOf } from "./perception/stereo/runs";
+import { symmetryClasses } from "./perception/symmetry";
 import { greatest, least, pushAll } from "./lists";
-import { groupDepths, type DrawnAtom, type DrawnBond } from "../layout/drawn";
+import { groupDepths, readStereo, type DrawnAtom, type DrawnBond } from "../layout/drawn";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
@@ -4128,26 +4129,33 @@ function depthsOf(atoms: Atom[], bonds: Bond[]): (i: number) => number | undefin
   const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
   // (no bond from an atom with depth to one without: no group's depth to work out)
   if (!drawn.some((b) => (atoms[b.a1].z == null) !== (atoms[b.a2].z == null))) return own;
+  const { atoms: drawnAtoms, bonds: drawnBonds } = drawnOf(atoms, drawn);
+  const worked = groupDepths(drawnAtoms, drawnBonds);
+  return (i) => atoms[i]?.z ?? worked.get(i);
+}
+
+/** The drawing's atoms and `drawn` bonds as the one reader takes them (lib/layout/drawn): each atom's H as its bonds leave them, each wedge by its narrow end. */
+function drawnOf(atoms: Atom[], drawn: Bond[]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } {
   const orderSum = new Map<number, number>();
   for (const b of drawn) for (const i of [b.a1, b.a2]) orderSum.set(i, (orderSum.get(i) ?? 0) + (b.dative ? 0 : b.order));
   const deg = degreeMap(drawn);
-  const drawnAtoms: DrawnAtom[] = atoms.map((a, i) => ({
-    x: a.x,
-    y: a.y,
-    el: a.el,
-    hs: a.valence != null ? Math.max(0, a.valence - (orderSum.get(i) ?? 0)) : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
-    ...(a.charge ? { charge: a.charge } : {}),
-    ...(a.z != null ? { z: a.z } : {}),
-  }));
-  const drawnBonds: DrawnBond[] = drawn.map((b) => ({
-    a: b.a1,
-    b: b.a2,
-    order: b.order,
-    ...(b.stereo === "up" || b.stereo === "down" ? { wedge: { narrow: wedgeNarrowAtom(b, deg), stereo: b.stereo } } : {}),
-    ...(b.stereo === "wavy" ? { either: true } : {}),
-  }));
-  const worked = groupDepths(drawnAtoms, drawnBonds);
-  return (i) => atoms[i]?.z ?? worked.get(i);
+  return {
+    atoms: atoms.map((a, i) => ({
+      x: a.x,
+      y: a.y,
+      el: a.el,
+      hs: a.valence != null ? Math.max(0, a.valence - (orderSum.get(i) ?? 0)) : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
+      ...(a.charge ? { charge: a.charge } : {}),
+      ...(a.z != null ? { z: a.z } : {}),
+    })),
+    bonds: drawn.map((b) => ({
+      a: b.a1,
+      b: b.a2,
+      order: b.order,
+      ...(b.stereo === "up" || b.stereo === "down" ? { wedge: { narrow: wedgeNarrowAtom(b, deg), stereo: b.stereo } } : {}),
+      ...(b.stereo === "wavy" ? { either: true } : {}),
+    })),
+  };
 }
 
 /**
@@ -4537,13 +4545,29 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     const p = b.stereoGroup ? partOf.get(b.a1) : undefined;
     if (p != null) grouped[p].push(k);
   });
-  // (a centre drawn with a wedge and in no group: a centre of the structure not of its group)
+  // (a centre drawn with a wedge and in no group: a centre of the structure not of its group - only one the reader reads as a centre or an
+  //  axis's end, not a wedge that sets none, an isopropyl's CH, an unread one; read only where a group is drawn at all)
   const deg = degreeMap(bonds);
   const ungrouped = new Set<number>();
-  for (const b of bonds) {
-    if (b.stereo !== "up" && b.stereo !== "down") continue;
-    const c = wedgeNarrowAtom(b, deg);
-    if (!atoms[c]?.stereoGroup) ungrouped.add(c);
+  const wedged = bonds.filter((b) => (b.stereo === "up" || b.stereo === "down") && !atoms[wedgeNarrowAtom(b, deg)]?.stereoGroup);
+  if (wedged.length && (atoms.some((a) => a.stereoGroup) || bonds.some((b) => b.stereoGroup))) {
+    const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
+    const d = drawnOf(atoms, drawn);
+    const read = readStereo(d.atoms, d.bonds);
+    const ends = new Set(read.axes.flatMap((ax) => [...ax.atoms]));
+    // (a centre the reader reads whose groups are not two alike - by the atoms' symmetry classes, of the constitution: an isopropyl's
+    //  two methyls are, its CH is no centre)
+    let classes: number[] | null = null;
+    const alike = (c: number) => {
+      classes ??= symmetryClasses({ atoms: d.atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, ...(a.charge ? { charge: a.charge } : {}) })), bonds: d.bonds.map(({ a, b, order }) => ({ a, b, order })) });
+      const groups = d.bonds.flatMap((x) => (x.a === c ? [classes![x.b]] : x.b === c ? [classes![x.a]] : []));
+      for (let h = 0; h < d.atoms[c].hs; h++) groups.push(-1);
+      return new Set(groups).size < groups.length;
+    };
+    for (const b of wedged) {
+      const c = wedgeNarrowAtom(b, deg);
+      if ((read.tetra.has(c) && !alike(c)) || ends.has(c)) ungrouped.add(c);
+    }
   }
   for (const [p, part] of parts.entries()) {
     const groups = new Set<string>();
