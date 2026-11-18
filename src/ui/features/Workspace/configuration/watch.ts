@@ -16,6 +16,7 @@ import type { WorkspaceDocument } from "../document";
 import type { EditorStore } from "../store";
 import { gestureUnderWay } from "../store/gesture";
 import type { ConfigurationNote, Model } from "../store/types";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
 import { changeWords, changesAgainstKept, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
@@ -55,11 +56,44 @@ function unitsAsked(model: Model, changes: readonly ConfigurationChange[]): { at
   return { atoms: centres, bonds };
 }
 
-/** Where a unit's note stands: by its atom, or between a double bond's or an axis's two. */
-function placeOf(model: Model, change: ConfigurationChange): { x: number; y: number } | null {
-  const at = unitAtoms(change.unit).map((id) => model.atoms.find((a) => a.id === id));
+/** How far from its unit a note stands, in bonds: past the labels of the atoms bound to it. */
+const NOTE_OUT = 1;
+
+/**
+ * Where a unit's note stands: by its atom, or by the middle of a double bond's or an axis's two - in the widest gap between the bonds there,
+ * `NOTE_OUT` bonds out, so that it covers no bond and no label of an atom bound to it.
+ */
+export function placeOf(model: Model, change: ConfigurationChange): { x: number; y: number } | null {
+  const ids = unitAtoms(change.unit);
+  const at = ids.map((id) => model.atoms.find((a) => a.id === id));
   if (at.some((a) => !a)) return null;
-  return { x: at.reduce((t, a) => t + a!.x, 0) / at.length, y: at.reduce((t, a) => t + a!.y, 0) / at.length };
+  const middle = { x: at.reduce((t, a) => t + a!.x, 0) / at.length, y: at.reduce((t, a) => t + a!.y, 0) / at.length };
+  // (every bond out of the unit's atoms, as a direction from its middle - a double bond's own two ends counted)
+  const own = new Set(ids);
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const angles = model.bonds.flatMap((b) => {
+    const [p, q] = own.has(b.a) ? [b.a, b.b] : own.has(b.b) ? [b.b, b.a] : [null, null];
+    if (p == null || q == null) return [];
+    // (a bond of the unit's own - a double bond's - points from its middle both ways, to each end; any other, to its far atom)
+    const ends = own.has(q) ? [byId.get(p)!, byId.get(q)!] : [byId.get(q)!];
+    // (an atom at the middle itself - an allene's or an axis's middle atom - gives no direction)
+    return ends.filter((to) => to.x !== middle.x || to.y !== middle.y).map((to) => Math.atan2(to.y - middle.y, to.x - middle.x));
+  });
+  // (none: above it; else the middle of the widest gap between them, round the circle)
+  let toward = Math.PI / 2;
+  if (angles.length) {
+    const sorted = [...angles].sort((p, q) => p - q);
+    let widest = -1;
+    sorted.forEach((a, k) => {
+      const next = k + 1 < sorted.length ? sorted[k + 1] : sorted[0] + 2 * Math.PI;
+      if (next - a > widest) {
+        widest = next - a;
+        toward = a + widest / 2;
+      }
+    });
+  }
+  const out = NOTE_OUT * NOMINAL_BOND_LENGTH;
+  return { x: middle.x + out * Math.cos(toward), y: middle.y + out * Math.sin(toward) };
 }
 
 /**

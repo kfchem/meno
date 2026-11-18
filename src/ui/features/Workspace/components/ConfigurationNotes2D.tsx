@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import type { ConfigurationNote } from "../store/types";
@@ -14,7 +13,7 @@ export const NOTE_STAYS_MS = 2600;
 
 /**
  * The notes of changes of configuration (configuration/watch; docs/EDITOR-2D.md, *When an edit turns a configuration*): each by its unit,
- * half a bond above it - "C3: R, now S" - easing in, staying a moment, easing out, then let go. They never ask anything nor take the
+ * in the widest gap between its bonds, past their labels (configuration/watch `placeOf`) - "C3: R, now S" - easing in, staying a moment, easing out, then let go. They never ask anything nor take the
  * pointer: the drawing wins. A mark of Meno's, never in a picture of the drawing.
  */
 export default function ConfigurationNotes2D() {
@@ -45,7 +44,7 @@ export default function ConfigurationNotes2D() {
 
 function ConfigurationNote2D({ note, leaving }: { note: ConfigurationNote; leaving: boolean }) {
   return (
-    <group position={[note.at.x, note.at.y + NOMINAL_BOND_LENGTH * 0.5, 0]}>
+    <group position={[note.at.x, note.at.y, 0]}>
       <PageHtml zIndexRange={[34, 24]}>
         <div
           className="meno-fade-in"

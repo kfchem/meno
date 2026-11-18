@@ -1436,8 +1436,9 @@ All hover-based, as above.
   the structures it touched are read again with the one reader (with depth
   and the cage fit) and compared with what they stated before, unit by
   unit (part 14 C's one comparison). Where the edit turned, opened or
-  closed a configuration, a short note by that atom or bond eases in,
-  stays a moment and eases out:
+  closed a configuration, a short note by that atom or bond - in the
+  widest gap between the bonds there, a bond out, clear of every label of
+  an atom bound to it (`placeOf`) - eases in, stays a moment and eases out:
   - "C3: R, now S" where a centre turned (an atom dragged across its
     centre's other bond; a wedge made a hash), "C4=C5: E, now Z" for a
     double bond, its descriptors before and after (Meno's own CIP, worked
