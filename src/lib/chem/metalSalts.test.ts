@@ -57,6 +57,21 @@ describe("a metal's salt of an oxoanion", () => {
     expect(of("Ag2CO3").bonds.some((b) => of("Ag2CO3").atoms[b.a1].el === "Ag")).toBe(false);
   });
 
+  it("reads mercury(I)'s halides and acetate as X-Hg-Hg-X - its pair bonded, a group on each - and mercury(II)'s with no Hg-Hg bond", () => {
+    const hgHg = (s: GroupStructure) => s.bonds.filter((b) => s.atoms[b.a1].el === "Hg" && s.atoms[b.a2].el === "Hg").length;
+    // (each Hg bonded to the other Hg and to one group, no more)
+    const eachOne = (s: GroupStructure) =>
+      s.atoms.flatMap((a, i) => (a.el === "Hg" ? [s.bonds.filter((b) => (b.a1 === i || b.a2 === i) && s.atoms[b.a1 === i ? b.a2 : b.a1].el !== "Hg").length] : []));
+    for (const label of ["Hg2Cl2", "Hg2Br2", "Hg2I2", "Hg2(OAc)2"]) {
+      const s = of(label);
+      expect([hgHg(s), eachOne(s), charge(s)], label).toEqual([1, [1, 1], 0]);
+    }
+    for (const label of ["HgCl2", "Hg(OAc)2", "Hg2Cl4"]) expect(hgHg(of(label)), label).toBe(0);
+    // (another metal's two of one kind are not bonded: copper(I) chloride written Cu2Cl2)
+    expect(hgHg(of("Cu2Cl2"))).toBe(0);
+    expect(of("Cu2Cl2").bonds.some((b) => of("Cu2Cl2").atoms[b.a1].el === "Cu" && of("Cu2Cl2").atoms[b.a2].el === "Cu")).toBe(false);
+  });
+
   it("gives the metal a charge of one to four, a whole one: Ce(NO3)4 Ce4+; Ca2(NO3)3, whose calcium would be 1.5+, not read", () => {
     expect([ions(of("Ce(NO3)4"))[0], charge(of("Ce(NO3)4"))]).toEqual(["Ce+4", 0]);
     expect(abbreviationStructure("Ca2(NO3)3")).toBeNull();

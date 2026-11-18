@@ -423,7 +423,10 @@ Read by rule, besides, as whole molecules:
   (`metalSaltStructure`, `src/lib/chem/condensed.ts`). Mercury(I) is the
   Hg2²⁺ ion, its two Hg bonded, each +1 (Hg2(NO3)2, Hg2SO4); Hg(NO3)2 is
   Hg²⁺. HgNO3, mercury(I)'s empirical formula, is left unread: one Hg⁺
-  alone is no ion, and the formula does not say the pair. A halide
+  alone is no ion, and the formula does not say the pair. Mercury(I)'s
+  halides and its acetate, read as a complex's formula, are X-Hg-Hg-X:
+  Hg2Cl2 (calomel) and Hg2(OAc)2 have the Hg-Hg bond, one group on each
+  Hg (`complexStructure`, `src/lib/chem/ligands.ts`). A halide
   (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
