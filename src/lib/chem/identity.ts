@@ -131,6 +131,45 @@ export function identity(input: IdentityInput): { text: string; complete: boolea
   return { text: found.text, complete: found.complete && filled.complete };
 }
 
+/** A configuration given in identity's input: a centre's by its atom, a double bond's by its bond, an axis's or an odd cumulene's by its place in its list. */
+export type GivenPlace = { kind: "centre" | "bond" | "axis" | "cumulated"; at: number };
+
+/**
+ * Which configurations given in `input` set something - its units (foundation part 13): turned over, the structure writes
+ * another identity. One that sets nothing (a wedge at an isopropyl's CH, a cis or trans drawn on a CH=C(CH3)2) writes the
+ * same. The structure as drawn is written once,
+ * on the first ask; each ask writes it turned. Where a search was not complete two texts may be one structure, so a place is
+ * then taken to set something: never the other way.
+ */
+export function unitsOf(input: IdentityInput): (place: GivenPlace) => boolean {
+  let drawn: string | null = null;
+  return (place) => {
+    const turned = turnedAt(input, place);
+    if (!turned) return false;
+    drawn ??= identity(input).text;
+    return identity(turned).text !== drawn;
+  };
+}
+
+/** `input` with the configuration at `place` turned over, or null where none is given there. */
+function turnedAt(input: IdentityInput, place: GivenPlace): IdentityInput | null {
+  const at = place.at;
+  if (place.kind === "centre") {
+    const t = input.atoms[at]?.tetra;
+    return t ? { ...input, atoms: input.atoms.map((a, i) => (i === at ? { ...a, tetra: { ...t, volume: t.volume > 0 ? -1 : 1 } } : a)) } : null;
+  }
+  if (place.kind === "bond") {
+    const st = input.bonds[at]?.stereo;
+    return st ? { ...input, bonds: input.bonds.map((b, i) => (i === at ? { ...b, stereo: { ...st, cis: !st.cis } } : b)) } : null;
+  }
+  if (place.kind === "axis") {
+    const x = input.axes?.[at];
+    return x ? { ...input, axes: input.axes!.map((y, i) => (i === at ? { ...y, sense: x.sense > 0 ? -1 : 1 } : y)) } : null;
+  }
+  const c = input.cumulated?.[at];
+  return c ? { ...input, cumulated: input.cumulated!.map((y, i) => (i === at ? { ...y, cis: !c.cis } : y)) } : null;
+}
+
 /**
  * The structure written in its own order (`identity`): the same text for the
  * same structure, whatever order its atoms are in. It does not say whether

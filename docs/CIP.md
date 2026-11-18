@@ -271,7 +271,7 @@ A unit with no label always says why; none is ever guessed.
 
 | Why | What it means |
 |---|---|
-| alike | Two of its ligands are alike by every rule, rule 6 with them: no centre, or no E/Z. |
+| alike | Two of its ligands are alike by every rule, rule 6 with them: no centre, or no E/Z. Or its configuration sets nothing by Meno's identity: turned over, the structure is the same structure (lib/chem/identity `unitsOf`, the one test of a unit), so a label goes only on a unit. Measured on the validation suite, the ranking and identity agree on every labelled unit. |
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement, which takes a tetrahedron: three bonds and no lone pair; three bonds and two lone pairs (a three-bonded halogen such as the I of an aryl-lambda3-iodane or the Cl of ClF3 is T-shaped, its three ligands in one plane with it); four bonds and a lone pair (SF4, a sulfurane SR4, TeCl4: a see-saw, whose configuration is a five-coordinate polyhedron's, not R or S's); four bonds and two lone pairs (IF4-, XeF4: square planar). |
 | large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |

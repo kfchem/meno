@@ -8,13 +8,13 @@
  * that turn in the mirror image (`turns`). A tie only an axis's M or P
  * could break is said not worked out, never guessed.
  *
- * Which atoms and bonds are units is the configuration's to say (what
- * perception reads): this ranks what it is given, and tells whether the
- * ranking gives a descriptor at all - a wedge on C(CH3)2Br is a
- * configuration, and no centre.
+ * Which atoms and bonds are units is Meno's identity's to say
+ * (lib/chem/identity `unitsOf`, foundation part 13): this ranks what it is
+ * given, and gives a descriptor only on a unit - a wedge on C(CH3)2Br is a
+ * configuration, and no centre, by the ranking and by identity alike.
  */
 import { isMetal } from "../../layout/perceive";
-import type { IdentityInput } from "../identity";
+import { unitsOf, type GivenPlace, type IdentityInput } from "../identity";
 import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Budget, type CipNode } from "./digraph";
 import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
@@ -368,23 +368,27 @@ export function cipLabels(
       return q;
     });
   };
+  // (a label only on a unit: a configuration that sets nothing - turned over, the same identity - is alike, whatever the ranking
+  //  says. Asked only of a place the ranking labels)
+  const unit = unitsOf(input);
+  const onUnit = (r: CipResult, place: GivenPlace): CipResult => ("label" in r && !unit(place) ? no("alike") : r);
   const centres = new Map<number, CipResult>();
   const bonds = new Map<number, CipResult>();
   const atomsAsked = ask?.centres ? [...ask.centres] : input.atoms.map((_, i) => i);
   const bondsAsked = ask?.bonds ? [...ask.bonds] : input.bonds.map((_, i) => i);
   for (const c of atomsAsked) {
-    if (input.atoms[c]?.tetra) centres.set(c, agreed(p, (q) => centre(q, c), variants));
+    if (input.atoms[c]?.tetra) centres.set(c, onUnit(agreed(p, (q) => centre(q, c), variants), { kind: "centre", at: c }));
   }
   for (const i of bondsAsked) {
-    if (input.bonds[i]?.stereo) bonds.set(i, agreed(p, (q) => doubleBond(q, i), variants));
+    if (input.bonds[i]?.stereo) bonds.set(i, onUnit(agreed(p, (q) => doubleBond(q, i), variants), { kind: "bond", at: i }));
   }
   const axes = new Map<number, CipResult>();
   for (const k of ask?.axes ? [...ask.axes] : (input.axes ?? []).map((_, k) => k)) {
-    if (input.axes?.[k]) axes.set(k, agreed(p, (q) => axis(q, k), variants));
+    if (input.axes?.[k]) axes.set(k, onUnit(agreed(p, (q) => axis(q, k), variants), { kind: "axis", at: k }));
   }
   const cumulated = new Map<number, CipResult>();
   for (const k of ask?.cumulated ? [...ask.cumulated] : (input.cumulated ?? []).map((_, k) => k)) {
-    if (input.cumulated?.[k]) cumulated.set(k, agreed(p, (q) => cumulene(q, k), variants));
+    if (input.cumulated?.[k]) cumulated.set(k, onUnit(agreed(p, (q) => cumulene(q, k), variants), { kind: "cumulated", at: k }));
   }
   return { centres, bonds, axes, cumulated };
 }
