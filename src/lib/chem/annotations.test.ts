@@ -190,6 +190,26 @@ describe("enhanced stereo", () => {
     expect(texts(atoms, bonds)).toContain("and enantiomer");
   });
 
+  it("beside a 1,4-disubstituted cyclohexane wedged, cis or trans, is still said once beneath: its ring carbons' two branches are alike", () => {
+    // (the and1 pair's chain bonded at its start to a ring carbon R1, wedged; a methyl on R4 wedged the same way or the other)
+    const p = (deg: number, cx: number, cy: number) => ({ x: cx + L * Math.cos((deg * Math.PI) / 180), y: cy + L * Math.sin((deg * Math.PI) / 180) });
+    const cx = -L * 0.866 - L;
+    const cy = 0;
+    for (const methyl of ["up", "down"] as const) {
+      const ring = [0, 60, 120, 180, 240, 300].map((deg, k) => ({ id: 20 + k, ...p(deg, cx, cy), el: "C" }));
+      const me = { id: 30, ...p(180, cx - L, cy), el: "C" };
+      const atoms = [...zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), ...ring, me];
+      // (R1 is index 6, its partner R4 index 9; the methyl index 12)
+      const bonds: Bond[] = [
+        ...zigBonds,
+        ...[0, 1, 2, 3, 4, 5].map((k) => ({ a1: 6 + k, a2: 6 + ((k + 1) % 6), order: 1 as const })),
+        { a1: 6, a2: 0, order: 1, stereo: "up", narrow: 6 },
+        { a1: 9, a2: 12, order: 1, stereo: methyl, narrow: 9 },
+      ];
+      expect(texts(atoms, bonds), methyl).toContain("and enantiomer");
+    }
+  });
+
   it("in more than one group, is said at each centre", () => {
     const mixed = zig([{}, { stereoGroup: { kind: "abs" } }, { stereoGroup: { kind: "and", n: 1 } }]);
     const t = texts(mixed, zigBonds);
