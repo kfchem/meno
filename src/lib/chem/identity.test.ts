@@ -367,6 +367,14 @@ describe("a hydrogen atom kept an atom in a structure's identity", () => {
       expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
     }
   });
+
+  it("on praseodymium, actinium or fermium as elements: kept as on any of the f block (foundation part 3, B2)", () => {
+    for (const el of ["Pr", "Ac", "Fm"]) {
+      const g = fromSmiles(`[${el}][H]`);
+      expect(hydrogensFolded(g).atoms, el).toHaveLength(2);
+      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+    }
+  });
 });
 
 describe("a structure's identity, as found", () => {
