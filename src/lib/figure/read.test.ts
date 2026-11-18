@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
+import { bondLength, DASHED_ROW, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import atp from "./fixtures/atp-rdkit.json";
@@ -682,6 +682,52 @@ describe("a figure read as a structure", () => {
     );
     expect(s.bonds).toHaveLength(4);
     expect(s.atoms).toHaveLength(6);
+  });
+
+  describe("a row of dashes along a line - a bond forming or breaking, a weak bond", () => {
+    /** Dashes from `p` to `q`: `n` of them, each `long` points, evenly spaced, filled bars as some programs draw them. */
+    const dashes = (p: P, q: P, n: number, long: number): FigurePath[] => {
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const [ux, uy] = [(q[0] - p[0]) / d, (q[1] - p[1]) / d];
+      const gap = (d - n * long) / (n - 1);
+      return Array.from({ length: n }, (_, k) => {
+        const s = k * (long + gap);
+        const a: P = [p[0] + ux * s, p[1] + uy * s];
+        const b: P = [a[0] + ux * long, a[1] + uy * long];
+        return filled([a[0] - uy * 0.3, a[1] + ux * 0.3], [b[0] - uy * 0.3, b[1] + ux * 0.3], [b[0] + uy * 0.3, b[1] - ux * 0.3], [a[0] + uy * 0.3, a[1] - ux * 0.3]);
+      });
+    };
+    // (two chains of three, the end of one a bond from the end of the other)
+    const left: P[] = [[40, 60], step([40, 60], 30), step(step([40, 60], 30), -30)];
+    const right: P[] = [[left[2][0] + L, left[2][1]], [left[2][0] + L + L * 0.866, left[2][1] - L / 2], [left[2][0] + L + 2 * L * 0.866, left[2][1]]];
+    const chains = [stroke(left[0], left[1]), stroke(left[1], left[2]), stroke(right[0], right[1]), stroke(right[1], right[2])];
+    it("is no bond between the atoms at its ends, and each says so: two structures, not one", () => {
+      const f = readFigure(figure([...chains, ...dashes([left[2][0] + 0.12 * L, left[2][1]], [right[0][0] - 0.12 * L, right[0][1]], 4, 0.13 * L)]));
+      expect(f.bonds).toHaveLength(4);
+      expect(f.atoms).toHaveLength(6);
+      const marked = f.atoms.filter((a) => a.unsure?.includes(DASHED_ROW));
+      expect(marked.map((a) => [Math.round(a.x), Math.round(a.y)])).toEqual([left[2], right[0]].map((p) => p.map(Math.round)));
+    });
+    it("is no chain of short bonds where a chart draws its line dashed: forty dashes, none of them a bond", () => {
+      const f = readFigure(figure([...chains, ...dashes([60, 200], [60 + 12 * L, 200 - 3 * L], 40, 0.2 * L)]));
+      expect(f.bonds).toHaveLength(4);
+    });
+    it("is not two dashes: a line broken once, where another passes, is joined as before", () => {
+      const f = readFigure(figure([...chains, ...dashes([left[2][0] + 0.12 * L, left[2][1]], [right[0][0] - 0.12 * L, right[0][1]], 2, 0.3 * L)]));
+      expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
+    });
+    it("is not a row whose gaps differ: three short lines, gaps of 0.06 and 0.15 of a bond, stay as they were", () => {
+      const p: P = [left[2][0] + 0.12 * L, left[2][1]];
+      const bits = [stroke(p, [p[0] + 0.2 * L, p[1]]), stroke([p[0] + 0.26 * L, p[1]], [p[0] + 0.46 * L, p[1]]), stroke([p[0] + 0.61 * L, p[1]], [p[0] + 0.81 * L, p[1]])];
+      const f = readFigure(figure([...chains, ...bits]));
+      expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
+    });
+    it("is not a line drawn in pieces end to end, a fiftieth of a bond apart: no dashed line is said", () => {
+      const p: P = left[2];
+      const bits = [0, 1, 2, 3].map((k) => stroke([p[0] + k * 0.25 * L, p[1]], [p[0] + (k * 0.25 + 0.23) * L, p[1]]));
+      const f = readFigure(figure([...chains, ...bits]));
+      expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
+    });
   });
 
   describe("a curved arrow - an electron-pushing arrow - drawn over a structure", () => {
