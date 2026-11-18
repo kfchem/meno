@@ -14,7 +14,7 @@ vi.mock("../../../../lib/roles/worker", () => ({
   roleChosen: () => chosen.current,
 }));
 
-import { readPicture } from "./figures";
+import { readPicture } from "./readFigure";
 
 type Pt = [number, number];
 /** A picture `side` square of lines `w` wide, black on white, each pixel as much ink as of it is covered (sixteen samples). */

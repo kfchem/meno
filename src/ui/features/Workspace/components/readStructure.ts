@@ -12,7 +12,8 @@ import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { styleOf } from "../../../../lib/chem/style";
 import { pageBoxes } from "../utils/freePlace";
-import { placedBeside, readBox, readPicture } from "../utils/figures";
+import { placedBeside } from "../utils/figures";
+import { readBox, readPicture } from "../utils/readFigure";
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 

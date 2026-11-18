@@ -13,8 +13,8 @@ const read: FigureResult = {
 };
 // (or, a picture Meno reads nothing from, why, with the plugin chosen to read pictures: what the box gives, and how it was asked)
 const box = vi.hoisted(() => ({ gives: null as { none: string; plugin?: string } | null, asked: [] as (string | undefined)[] }));
-vi.mock("../utils/figures", async (actual) => ({
-  ...(await actual<typeof import("../utils/figures")>()),
+vi.mock("../utils/readFigure", async (actual) => ({
+  ...(await actual<typeof import("../utils/readFigure")>()),
   readBox: (_sha: string, _page: number, _box: unknown, _working: unknown, by?: string) => {
     box.asked.push(by);
     return Promise.resolve(box.gives && by !== "plugin" ? box.gives : read);

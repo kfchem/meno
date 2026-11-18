@@ -8,7 +8,7 @@ vi.mock("./pictures", () => ({ picturePng: () => Promise.resolve(new Uint8Array(
 const worker = vi.hoisted(() => ({ current: null as ChemClient | null }));
 vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: () => Promise.resolve(worker.current), rolePlugin: () => undefined, roleChosen: () => undefined }));
 
-import { FIRST_READ_MS, READ_MS, readPicture } from "./figures";
+import { FIRST_READ_MS, READ_MS, readPicture } from "./readFigure";
 
 /** A worker played by the test: what it was asked, a way to answer, and what its queue heard given up on. */
 function fakeWorker() {
