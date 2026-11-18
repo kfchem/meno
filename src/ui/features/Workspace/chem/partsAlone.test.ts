@@ -135,8 +135,13 @@ describe("a structure's parts, each searched alone", () => {
 
   it("each take the whole's configuration of what is theirs, by their own places", () => {
     const part = { atoms: [4, 5, 6, 7], bonds: [3, 4] };
-    const c = { centres: [{ atom: 5, neighbours: [4, 6, 7], sense: 1 as const }, { atom: 1, neighbours: [0, 2, 3], sense: -1 as const }], doubles: [{ bond: 4, ends: [4, 7] as [number, number], cis: true }] };
-    expect(configurationIn(c, part)).toEqual({ centres: [{ atom: 1, neighbours: [0, 2, 3], sense: 1 }], doubles: [{ bond: 1, ends: [0, 3], cis: true }] });
+    const c = {
+      centres: [{ atom: 5, neighbours: [4, 6, 7], sense: 1 as const }, { atom: 1, neighbours: [0, 2, 3], sense: -1 as const }],
+      doubles: [{ bond: 4, ends: [4, 7] as [number, number], cis: true }],
+      groups: [{ kind: "and" as const, n: 1, centres: [5, 6] }, { kind: "and" as const, n: 2, centres: [5, 1] }],
+    };
+    // (a group it holds whole, by its own places; one with a centre in another part, not its own)
+    expect(configurationIn(c, part)).toEqual({ centres: [{ atom: 1, neighbours: [0, 2, 3], sense: 1 }], doubles: [{ bond: 1, ends: [0, 3], cis: true }], groups: [{ kind: "and", n: 1, centres: [1, 2] }] });
   });
 });
 

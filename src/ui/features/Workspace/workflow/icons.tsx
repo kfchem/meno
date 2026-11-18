@@ -1,4 +1,5 @@
 import {
+  ArrowPathIcon,
   CloudIcon,
   CpuChipIcon,
   CursorArrowRaysIcon,
@@ -26,6 +27,8 @@ type Icon = ComponentType<SVGProps<SVGSVGElement>>;
  */
 const ICONS: Record<StepIcon, Icon | ReactNode> = {
   rings: Square3Stack3DIcon,
+  // (steps gone round again: a Repeat's)
+  repeat: ArrowPathIcon,
   // (a ball at the bottom of an energy well, an arrow down into it)
   curve: (
     <>

@@ -354,6 +354,9 @@ function readStep(v: unknown): WorkflowStep | null {
   if (!s || !isId(s.id) || !KINDS.some((k) => k.kind === s.kind) || !isNum(s.x) || !isNum(s.y)) return null;
   const options = optionsIn(s.options);
   const bound = boundIn(s.bound);
+  // (a Repeat's frame and the steps it holds: settled again by where the cards stand - workflow/model `repeatsSettled`)
+  const frame = s.kind === "repeat" && s.frame && typeof s.frame === "object" && isNum((s.frame as { w?: unknown }).w) && isNum((s.frame as { h?: unknown }).h) && (s.frame as { w: number }).w > 0 && (s.frame as { h: number }).h > 0 ? { w: (s.frame as { w: number }).w, h: (s.frame as { h: number }).h } : undefined;
+  const holds = s.kind === "repeat" && Array.isArray(s.holds) ? [...new Set(s.holds.filter(isId))] : [];
   const ran = readRan(s.ran);
   const running = readRunning(s.running);
   const runs = readEach(s.runs, readKept, "run");
@@ -369,6 +372,8 @@ function readStep(v: unknown): WorkflowStep | null {
     ...(runs.length ? { runs } : {}),
     ...(running ? { running } : {}),
     ...(s.keepRaw === false ? { keepRaw: false as const } : {}),
+    ...(frame ? { frame } : {}),
+    ...(holds.length ? { holds } : {}),
   };
 }
 

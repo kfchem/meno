@@ -503,6 +503,21 @@ Taken on 2026-10-13:
   reflections, each checked to have the configuration drawn - one whose
   drawing Meno cannot read whole (a wedge it does not read, a label
   written out, a ring bound to a metal through a star) made itself.
+- **Centres in AND and OR groups** (foundation part 7, 2026-11-16). A
+  structure whose centres are drawn in a group ("and1", "or1") is its
+  halves (WORKFLOWS.md, *Stereoisomers is Meno's*), and Meno asks first,
+  as for stereo left open: *Make all* makes each half that can be made in
+  3D as a molecule of its own, the half as drawn first, each saying which
+  it is on its rows of how it was made ("and1 as drawn", "and1 turned
+  over"); *Make one*, the half as drawn, saying "and1 as drawn only". A
+  half that is the mirror image of one before it (one group and nothing
+  else with a hand: a racemate) is not searched again: every conformer of
+  the other is reflected through one plane, its energies kept and its R
+  and S read anew, and it says "and1 turned over: the mirror image of the
+  half as drawn (same energies)" and "made as the mirror image of and1 as
+  drawn: not calculated". Where the structure has an axis, a cumulene or
+  a metal, which a reflection would turn too, each half is searched. A
+  *Conformers* step makes the half as drawn, said so.
 - **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
   gives every conformer it made, as it made them (PLUGINS.md); the page
   makes them its own (`chem/pageConformers`), in a worker of its own so
@@ -2520,8 +2535,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   refuses it), which would say how every atom is protonated. A plugin's
   writer, given the molecule with its charge and spin, is not given it;
   Export says so before a file is asked for. An SD file or a copy writes
-  it as a skeleton - each atom's valence its bonds' orders summed (the
-  atom block's vvv, 15 for none; V3000's VAL, -1 for none, "CTfile
+  it as a skeleton - each atom's valence its bonds' orders summed, an
+  aromatic bond by the order a Kekulé structure gives it (a pyrrole's N
+  without its H is written 2, never 3 as one and a half each would say;
+  the atom block's vvv, 15 for none; V3000's VAL, -1 for none, "CTfile
   Formats"), so that no reader adds hydrogens - and an XYZ or PDB file as
   it is, Export saying it has none. Estimated orders on a skeleton say so
   over it, their formal charges only those its heavy atoms set (a nitro

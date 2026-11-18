@@ -22,7 +22,7 @@ import { anionStructure, condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
-import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "./kekulize";
 import { typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
 import { ELEMENTS as TABLE } from "./elements";
@@ -679,6 +679,8 @@ export function structureProblem(smiles: string): string | null {
   }
   const refused = aromaticRefusal(read.atoms, read.bonds);
   if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused)}`;
+  const outside = outsideRingRefusal(read.atoms, read.bonds);
+  if (outside) return `The SMILES cannot be read: ${outside}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));
   if (stars.length !== 1) return 'Mark where it is attached with one "*".';
   if (read.atoms.length < 2) return "Give it at least one atom besides the *.";

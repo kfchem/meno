@@ -16,7 +16,7 @@ import { useDrawingStyle } from "../useDrawingStyle";
 import { needsFallback, useTypefaces } from "../../../fonts/typefaces";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DrawnLayoutContext, DrawnZoomContext, drawnZoomOf } from "./drawnLayoutContext";
-import { NEW_ATOM, type StrokeNode } from "../utils/stroke";
+import { NEW_ATOM, startAlone, type StrokeNode } from "../utils/stroke";
 import { ChainGrow } from "../utils/chainGrow";
 import { CHAIN_EASE } from "../constants";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -194,8 +194,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       if (!l) kept.set(a, (l = layoutAtomOf(a)));
       return l;
     });
-    // (a stroke on empty space: its own new atom where it starts)
-    if (stroke && stroke.baseId === NEW_ATOM && stroke.start) {
+    // (a stroke on empty space: its own new atom where it starts - once it has a bond: alone, it is a bare vertex with its mark, never a
+    //  lone CH4 - StrokeStart2D)
+    if (stroke && stroke.baseId === NEW_ATOM && stroke.start && !startAlone(stroke, preview)) {
       out.push({ id: STROKE_START_ID, x: stroke.start.x, y: stroke.start.y, el: "C" });
     }
     (grownNodes ?? stroke?.nodes.map((n, i) => ({ node: n, i, x: n.x, y: n.y })) ?? []).forEach(({ node: n, i, x, y }) => {
@@ -454,7 +455,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     const set = labelSetOf(opts);
     const letters = (text: string) => writtenLetters(text, opts.fontPx, set).items;
     const editing = labelEdit.active && labelEdit.atomId != null && labelEdit.n != null ? labelEdit.atomId : null;
-    if (editing != null) {
+    // (begun on the selection's atoms: each it is written on makes room for it, as the one with the caret does)
+    const editingIds = editing != null ? [editing, ...(labelEdit.atoms ?? []).filter((x) => x !== editing)] : [];
+    for (const editing of editingIds) {
       const entry = map.get(editing);
       const text = labelEdit.value;
       if (!entry || entry.n !== labelEdit.n) {
@@ -474,7 +477,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       }
     }
     for (const [id, entry] of map) {
-      if (id === editing) continue;
+      if (editingIds.includes(id)) continue;
       // (kept or let go: back to its label as drawn, from what was written)
       if (entry.step.text != null) {
         map.set(id, { n: entry.n, step: { n: nextWriteStep(), since: now, was: entry.step, hidden: false } });

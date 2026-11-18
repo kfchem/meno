@@ -10,7 +10,7 @@ import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
-import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
+import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf, runsAsCame } from "./cleanUp";
 import { overlapsMade, sameStereo } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
@@ -19,6 +19,7 @@ import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
 import { identityOfDrawn } from "./identityOf";
+import { drawingOf as drawnFromBlock } from "./fromSmiles";
 import { blocksOf } from "./make3d";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 import { measured } from "../../../../testing/timeouts";
@@ -344,7 +345,8 @@ describe("cleanUp", () => {
       const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
       expect(overlapsMade(drawn, moved)).toEqual([]);
     }
-  });
+    // (a drawing cleaned up and every placement checked: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_900));
 
   it("lays out the rest when it must leave one structure as drawn, and names that one by its formula and why", async () => {
     // the made-up bridged macrocycle drawn round a circle (the engine lays an atom on a bond there), and a butane
@@ -607,6 +609,154 @@ describe("cleanUp", () => {
       }
     }, 120000);
 
+    it("lays out hexa-2,3,4-triene from CC=C=C=CC with its run's ends straight on, read as no cis or trans, and keeps it so through Clean-up", async () => {
+      const s = "CC=C=C=CC";
+      const cumulated = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated.length;
+      };
+      const m = arrived(s);
+      // (as it came: bent, read as one of them)
+      expect(cumulated(m)).toBe(1);
+      const open = openDoubleBonds(fromSmiles(s));
+      const laid = await laidOut(m, undefined, undefined, open);
+      expect(cumulated(laid)).toBe(0);
+      // (each end's methyl straight on from the run: C1 from C2, C4 from C3)
+      const id = (i: number) => m.atoms[i].id;
+      expect(angleAt(laid, id(1), id(2), id(0))).toBeLessThan(10);
+      expect(angleAt(laid, id(4), id(3), id(5))).toBeLessThan(10);
+      const was = identityOfDrawn(laid).text;
+      expect(was).not.toBe(identityOfDrawn(m).text);
+      const { store } = canvas(laid);
+      for (const time of [1, 2]) {
+        await cleanUp(store);
+        const now = store.getState().model;
+        expect(cumulated(now), `${time}`).toBe(0);
+        expect(identityOfDrawn(now).text, `${time}`).toBe(was);
+      }
+    }, 60000);
+
+    it("lays out a run the SMILES writes beside a run it leaves open: the written one as written, the open one open", async () => {
+      for (const [s, cis] of [
+        ["C/C=C=C=C/CC=C=C=CC", false],
+        ["C/C=C=C=C/CCCC=C=C=CC", false],
+        ["C/C=C=C=C/[C@H](F)C=C=C=CC", false],
+        [String.raw`C/C=C=C=C\CC=C=C=CC`, true],
+      ] as const) {
+        const own = readSmiles(s);
+        const given = { axes: own.axes ?? [], cumulated: own.cumulated ?? [] };
+        expect(given.cumulated, s).toHaveLength(1);
+        // (the plugin's drawing as it may come: both runs bent, the written one either way - a MOL block cannot say it)
+        const came = arrived(s.replace(/[/\\]/g, ""));
+        const laid = await laidOut(came, undefined, given, openDoubleBonds(fromSmiles(s)));
+        const d = drawingOf(laid);
+        const read = readStereo(d.atoms, d.bonds).cumulated;
+        expect(read.map((r) => [[...r.atoms].sort((p, q) => p - q), r.cis]), s).toEqual([[[1, 4], cis]]);
+      }
+    }, 60000);
+
+    it("marks unsaid a run a drawing kept as it came shows other than its text gives: none given, or the other isomer; one shown as given stays", () => {
+      const came = arrived("CC=C=C=CC");
+      const shownOf = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated;
+      };
+      const [shown] = shownOf(came);
+      expect(shown).toBeDefined();
+      const run = (cis: boolean) => ({ axes: [], cumulated: [{ atoms: [1, 4] as const, refs: [0, 5] as const, cis }] });
+      for (const given of [undefined, run(!shown.cis)]) {
+        const marked = runsAsCame(came, given);
+        const either = marked.bonds.filter((b) => b.stereo === "either");
+        expect(either, `${given?.cumulated[0].cis}`).toHaveLength(1);
+        expect(either[0].order).toBe(2);
+        // (the run's own double bond, at an end: C1=C2 or C3=C4)
+        const ids = [either[0].a, either[0].b].map((id) => came.atoms.findIndex((a) => a.id === id)).sort();
+        expect([[1, 2], [3, 4]]).toContainEqual(ids);
+        expect(shownOf(marked)).toEqual([]);
+      }
+      expect(runsAsCame(came, run(shown.cis))).toBe(came);
+      // (an allene's run, and a drawing that shows no run, as they are)
+      const allene = arrived("CC=C=CC");
+      expect(runsAsCame(allene, undefined)).toBe(allene);
+    });
+
+    describe("a run in a drawing nobody made - a plugin's, from a MOL block - that Meno's reading of the text does not give", () => {
+      const runsOf = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated;
+      };
+      /** The picture as a plugin's MOL block carries it, read as the app reads one. */
+      const blockOf = (m: Model) => structureFileText(drawnOf({ ...emptyWorkspaceDocument(), model: m, nextId: 1000 } as never), "came.mol");
+
+      it("is laid out open, and stays open through Clean-up, where nothing is given: the text not read by Meno, or a step's block", async () => {
+        for (const s of ["CC=C=C=CC", "CC=C=C=CC[C@H]1CN1C", "CC=C=C=CCO[S](=O)c1ccccc1"]) {
+          const came = arrived(s);
+          expect(runsOf(came), s).toHaveLength(1);
+          const laid = await laidOut(came, MENO, undefined, undefined, true);
+          expect(runsOf(laid), s).toEqual([]);
+          const { store } = canvas(laid);
+          for (const time of [1, 2]) {
+            await cleanUp(store);
+            expect(runsOf(store.getState().model), `${s} ${time}`).toEqual([]);
+          }
+        }
+      }, 120000);
+
+      it("is drawn so through the route a plugin's block takes (fromSmiles drawingOf)", async () => {
+        for (const s of ["CC=C=C=CC", "CC=C=C=CC[C@H]1CN1C"]) {
+          const laid = await drawnFromBlock(blockOf(arrived(s)), MENO);
+          expect(laid.asCame, s).toBeUndefined();
+          expect(runsOf(laid), s).toEqual([]);
+        }
+      }, 60000);
+
+      it("is drawn as given where Meno's reading gives it, either way", async () => {
+        for (const [s, cis] of [["C/C=C=C=C/C", false], [String.raw`C/C=C=C=C\C`, true]] as const) {
+          const own = readSmiles(s);
+          const laid = await laidOut(arrived("CC=C=C=CC"), MENO, { axes: [], cumulated: own.cumulated ?? [] }, undefined, true);
+          expect(runsOf(laid).map((r) => r.cis), s).toEqual([cis]);
+        }
+      }, 60000);
+
+      it("is kept as drawn in a drawing someone made: Clean-up's own laying out keeps what a chemist drew", async () => {
+        const came = arrived("CC=C=C=CC");
+        const [was] = runsOf(came);
+        const laid = await laidOut(came, MENO);
+        expect(runsOf(laid).map((r) => r.cis)).toEqual([was.cis]);
+      });
+    });
+
+    it("marks the run of a drawing read from a MOL block, as a plugin's comes: its bonds carry no mark, 'none'", () => {
+      const came = arrived("CC=C=C=CC");
+      const s = { ...emptyWorkspaceDocument(), model: came, nextId: 100 };
+      const text = structureFileText(drawnOf(s as never), "came.mol");
+      const read = editorModelOf(moleculesToEditorModel(readMoleculesFromText(text, "mol")).model);
+      expect(read.bonds.some((b) => b.stereo === "none")).toBe(true);
+      const d0 = drawingOf(read);
+      expect(readStereo(d0.atoms, d0.bonds).cumulated).toHaveLength(1);
+      const marked = runsAsCame(read, undefined);
+      expect(marked.bonds.filter((b) => b.stereo === "either")).toHaveLength(1);
+      const d = drawingOf(marked);
+      expect(readStereo(d.atoms, d.bonds).cumulated).toEqual([]);
+    });
+
+    it("gives 2-methylhepta-2,3,4-triene from a SMILES with no marks a wavy bond: its run's double bond 'either', read as no cis or trans", async () => {
+      const s = "CC=C=C=C(C)CC";
+      const laid = await laidOut(arrived(s), undefined, undefined, openDoubleBonds(fromSmiles(s)));
+      expect(laid.bonds.filter((b) => b.stereo === "either")).toHaveLength(1);
+      const d = drawingOf(laid);
+      expect(readStereo(d.atoms, d.bonds).cumulated).toEqual([]);
+    });
+
+    it("keeps a double bond the SMILES gives E or Z bent as given where the drawing is laid out as new too (a plugin's block, a step's): its odd runs are opened there, never its double bonds", async () => {
+      for (const s of ["C/C=C/C", "C/C=C\\C", "C/C=C/C=C=C=CC", "C/C=C\\C=C=C=CC"]) {
+        const open = openDoubleBonds(fromSmiles(s));
+        const laid = await laidOut(arrived(s), MENO, undefined, open, true);
+        // (the given double bond is read as one; the run, which the text leaves open, is not)
+        expect(drawingCisTrans(laid), s).toBe(1);
+      }
+    });
+
     it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
       for (const s of ["C/C=C/C", "C/C=C\\C"]) {
         const open = openDoubleBonds(fromSmiles(s));
@@ -862,6 +1012,76 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
     expect(m.overlaps).toBe(0);
     // in perspective, as Haworth drew rings: some edges bold
     expect(laid.bonds.some((b) => b.display === "bold")).toBe(true);
+  });
+
+  it("uranocene drawn atom by atom is laid out as ferrocene so drawn: its eight-rings' double bonds no cis or trans, nothing refused (backlog 178)", async () => {
+    const octagon = (cy: number, from: number) =>
+      Array.from({ length: 8 }, (_, i) => ({ id: from + i, x: 1.1 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 8), y: cy + 0.45 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 8), r: 0.9, el: "C" }));
+    // (the Kekule form on the odd bonds: the ring closed by a double bond from its last atom back to its first, its ids the larger
+    //  first - each pair taken either way round)
+    const eight = (from: number, id0: number): Bond[] =>
+      Array.from({ length: 8 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 8), order: i % 2 ? 2 : 1, stereo: "none" }) as Bond);
+    const uranocene: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "U" }, ...octagon(1.6, 2), ...octagon(-1.6, 10)],
+      bonds: [...eight(2, 20), ...eight(10, 30), ...Array.from({ length: 16 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none" }) as Bond)],
+    };
+    const laid = await laidOut(uranocene);
+    // (as ferrocene's ten Fe-C bonds: two, to stars at the rings' centres - the maintainer, 2026-10-17)
+    const eta = laid.bonds.filter((b) => b.endpoints?.length);
+    expect(eta.map((b) => [...b.endpoints!].sort((p, q) => p - q))).toEqual(
+      expect.arrayContaining([
+        [2, 3, 4, 5, 6, 7, 8, 9],
+        [10, 11, 12, 13, 14, 15, 16, 17],
+      ]),
+    );
+    const at = new Map(laid.atoms.map((a) => [a.id, a]));
+    const middle = (ids: number[]) => ({ x: ids.reduce((s, i) => s + at.get(i)!.x, 0) / ids.length, y: ids.reduce((s, i) => s + at.get(i)!.y, 0) / ids.length });
+    const [u, top, bottom] = [at.get(1)!, middle([2, 3, 4, 5, 6, 7, 8, 9]), middle([10, 11, 12, 13, 14, 15, 16, 17])];
+    expect(Math.sign(top.y - u.y)).toBe(-Math.sign(bottom.y - u.y));
+    // (each ring double bond kept as drawn, as a double bond)
+    expect(laid.bonds.filter((b) => b.order === 2)).toHaveLength(8);
+  });
+
+  it("bis(benzene)chromium drawn atom by atom is laid out so too; an eta-4 cyclooctatetraene is as it was (backlog 178)", async () => {
+    const ngon = (n: number, cy: number, from: number, w = 1) =>
+      Array.from({ length: n }, (_, i) => ({ id: from + i, x: w * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / n), y: cy + 0.4 * w * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / n), r: 0.9, el: "C" }));
+    const ring = (n: number, from: number, id0: number): Bond[] =>
+      Array.from({ length: n }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % n), order: i % 2 ? 1 : 2, stereo: "none" }) as Bond);
+    const chromium: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "Cr" }, ...ngon(6, 1.5, 2), ...ngon(6, -1.5, 8)],
+      bonds: [...ring(6, 2, 20), ...ring(6, 8, 30), ...Array.from({ length: 12 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none" }) as Bond)],
+    };
+    const laid = await laidOut(chromium);
+    expect(laid.bonds.filter((b) => b.endpoints?.length)).toHaveLength(2);
+    // (an eight-ring bound through four of its atoms, as in (eta4-C8H8)Fe(CO)3: what Clean-up does with it is as before this fix)
+    const fe = { id: 1, x: 0, y: -1.2, r: 0.9, el: "Fe" };
+    const cot: Model = {
+      atoms: [fe, ...ngon(8, 0.6, 2, 1.3), ...[0, 1, 2].map((k) => ({ id: 20 + k, x: -1 + k, y: -2.6, r: 0.9, el: "C" })), ...[0, 1, 2].map((k) => ({ id: 30 + k, x: -1.2 + 1.2 * k, y: -3.8, r: 0.9, el: "O" }))],
+      bonds: [
+        ...ring(8, 2, 40),
+        ...[6, 7, 8, 9].map((a, k) => ({ id: 50 + k, a: 1, b: a, order: 1, stereo: "none" }) as Bond),
+        ...[0, 1, 2].flatMap((k) => [{ id: 60 + k, a: 1, b: 20 + k, order: 1, stereo: "none" } as Bond, { id: 70 + k, a: 20 + k, b: 30 + k, order: 3, stereo: "none" } as Bond]),
+      ],
+    };
+    // (refused today for its free double bonds as before this fix - their own question, not a ring bound through every atom)
+    await expect(laidOut(cot)).rejects.toThrow("would show a configuration its drawing does not state");
+  });
+
+  it("a chain bound to its metal through every atom keeps the rule of any double bond: hexa-2,4-diene on Fe as before (backlog 178)", async () => {
+    const at = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
+    const diene: Model = {
+      atoms: [at(1, 0, 1.6, "Fe"), at(2, -2.2, 0), at(3, -0.75, 0.8), at(4, 0.75, 0), at(5, 2.2, 0.8), at(6, -3.6, 0.8), at(7, 3.6, 0)],
+      bonds: [
+        { id: 10, a: 6, b: 2, order: 1, stereo: "none" },
+        { id: 11, a: 2, b: 3, order: 2, stereo: "none" },
+        { id: 12, a: 3, b: 4, order: 1, stereo: "none" },
+        { id: 13, a: 4, b: 5, order: 2, stereo: "none" },
+        { id: 14, a: 5, b: 7, order: 1, stereo: "none" },
+        ...[2, 3, 4, 5].map((b, k) => ({ id: 20 + k, a: 1, b, order: 1, stereo: "none" }) as Bond),
+      ],
+    };
+    // (no ring: its double bonds are not one Kekule form of anything, and it is laid out, or not, as before this fix)
+    await expect(laidOut(diene)).rejects.toThrow("would show a configuration its drawing does not state");
   });
 
   it("uranocene drawn with haptic bonds is laid out as the same sandwich: an actinoid's rings round it as iron's (foundation part 3, B1)", async () => {

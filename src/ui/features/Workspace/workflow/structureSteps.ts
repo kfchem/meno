@@ -18,7 +18,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { NONE_FOUND, NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
+import { keyNow, NONE_FOUND, NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { atomMapNeeds, compareTorsionsNeeds, kindInfo, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
 import { boundValue, type Bound } from "../../../../lib/boundOptions";
@@ -28,7 +28,7 @@ import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
-import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, hash, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, keptRenumbered, numberingKey, numberingOf, setEntryOfEntry, type SetEntry } from "./entries";
 import { convergedOf } from "./converged";
 import { ATOM_MAP_PAIR, matchesOf } from "./pairs";
 import type { Holds3D } from "./kinds";
@@ -300,16 +300,29 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
     notCompared++;
     different(e, `not compared: ${why}`);
   };
+  // (paired on a property, with more than one reference: how many came out the same for each - a reference none did said as none)
+  let each: string | null = null;
   if (o.reference === "property") {
-    const matched = matchedOn(es, rs, o.property.trim(), "Reference");
+    const name = o.property.trim();
+    const matched = matchedOn(es, rs, name, "Reference");
+    const sameFor = rs.map(() => 0);
     entries.forEach((e, i) => {
       const m = matched[i];
       if ("why" in m) return unpaired(e, m.why);
       const r = comparedBonding(es[i], rs[m.index], options);
       if ("failed" in r) return unpaired(e, r.failed);
-      if (r.same) kept.push(e);
-      else different(e, `different: ${r.differences.join(" ")}`);
+      if (r.same) {
+        kept.push(e);
+        sameFor[m.index]++;
+      } else different(e, `different: ${r.differences.join(" ")}`);
     });
+    if (rs.length > 1) {
+      const valueOf = (k: number) => {
+        const p = rs[k].properties[name];
+        return p && p.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? `${name} ${p.value}` : `reference ${k + 1}`;
+      };
+      each = rs.map((_, k) => `${sameFor[k] || "none"} for ${valueOf(k)}`).join(", ");
+    }
   } else {
     const writes = o.writes.trim();
     const from = o.from.trim();
@@ -327,7 +340,7 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
       different(withSaid(e, writes, "none"), one && !one.same ? `different: ${one.differences.join(" ")}` : `bonded as none of the ${rs.length} references`);
     });
   }
-  const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : [])];
+  const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : []), ...(each ? [each] : [])];
   return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
 }
 
@@ -336,10 +349,6 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
 function rowIdOf(e: SetEntry, on: string): string | null {
   const p = e.properties?.[on];
   return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
-}
-function numberingOf(e: SetEntry): string {
-  const n = e.properties?.[NUMBERING];
-  return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
 }
 
 /**
@@ -743,15 +752,19 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
 /**
  * `e`, numbered anew by Atom map in `references`' numbering, with its
  * numbering said (lib/steps `NUMBERING`): the one it had (`was`'s) and,
- * after it, this one - the references by name and by what their atoms and
- * bonds are, so that two references of one compound number alike, and two
- * of different compounds never do. A label: it rides on as an ID does.
+ * after it, this one - the references by name and by the key of the
+ * numbering they are in, so that two references of one compound number
+ * alike, and two of different compounds never do. One reference's key is
+ * the one its own numbering says now: numbered as a reference itself in a
+ * reactant's numbering - a product's conformer as that product - an entry
+ * is in the reactant's numbering too, atom for atom. Several together, the
+ * key of their atoms and bonds. A label: it rides on as an ID does.
  */
 function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[]): SetEntry {
   const n = was.properties?.[NUMBERING];
   const before = n?.status === "computed" && typeof n.value === "string" ? n.value : null;
-  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
-  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${hash(graph).toString(36)})`;
+  const key = (references.length === 1 ? keyNow(numberingOf(references[0])) : null) ?? numberingKey(references);
+  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${key})`;
   return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
 }
 

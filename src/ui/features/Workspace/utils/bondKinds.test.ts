@@ -214,20 +214,52 @@ describe("the bond keys", () => {
 });
 
 describe("a click on a bond", () => {
-  it("selects it, alone, with its atoms - what was selected let go - and never changes the compound (the maintainer, 2026-11-14)", () => {
+  it("turns its kind as the key 1 does, as one undo step, the selection as it was (the maintainer, 2026-11-17, as until 2026-11-14)", () => {
     const { doc, st, ab, bc } = chain();
-    const was = doc.getState().model;
+    const kind = () => bondKindOf(st().model.bonds.find((x) => x.id === ab)!);
+    st().setSel({ atoms: new Set(), bonds: new Set([bc]) });
     const depth = doc.history().undoDepth;
-    const bond = st().model.bonds.find((x) => x.id === bc)!;
-    st().setSel({ atoms: new Set([bond.b]), bonds: new Set([ab]) });
-    st().clickSelectBond(bc);
-    expect([[...st().sel.bonds], [...st().sel.atoms].sort()]).toEqual([[bc], [bond.a, bond.b].sort()]);
-    expect(doc.getState().model).toBe(was);
-    expect(doc.history().undoDepth).toBe(depth);
-    // (and again: the same, still nothing changed)
-    st().clickSelectBond(bc);
+    // (a single bond round: a wedge, a hashed wedge, plain - each one step)
+    st().bondClicked(ab, 1);
+    expect(kind()).toBe("wedge");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    st().bondClicked(ab, 1);
+    expect(kind()).toBe("hashed-wedge");
+    // (a double or a triple made single)
+    st().updateBond(ab, { order: 2, stereo: "none" });
+    st().bondClicked(ab, 1);
+    expect(kind()).toBe("single");
+    st().updateBond(ab, { order: 3, stereo: "none" });
+    st().bondClicked(ab, 1);
+    expect(kind()).toBe("single");
+    // (nothing selected by it: the selection as it was)
     expect([...st().sel.bonds]).toEqual([bc]);
-    expect(doc.getState().model).toBe(was);
+  });
+});
+
+describe("a slow double-click on a bond (the maintainer, 2026-11-17)", () => {
+  it("its first click's turn taken back and the bond made double from what it was, as one step in all", () => {
+    const { doc, st, ab } = chain();
+    const bond = () => st().model.bonds.find((x) => x.id === ab)!;
+    const depth = doc.history().undoDepth;
+    // (the first click turned it - a wedge - and its second came after the wait, within a double-click's time)
+    st().bondClicked(ab, 1);
+    expect(bondKindOf(bond())).toBe("wedge");
+    expect(st().takeBackTurn(st().model)).toBe(true);
+    st().bondClicked(ab, 2);
+    expect(bondKindOf(bond())).toBe("double");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(bondKindOf(bond())).toBe("single");
+  });
+
+  it("takes nothing back where the drawing has changed since the turn", () => {
+    const { st, ab, bc } = chain();
+    st().bondClicked(ab, 1);
+    const after = st().model;
+    st().updateBond(bc, { order: 2 });
+    expect(st().takeBackTurn(after)).toBe(false);
+    expect(bondKindOf(st().model.bonds.find((x) => x.id === ab)!)).toBe("wedge");
   });
 });
 
@@ -291,35 +323,21 @@ describe("a bond's own kind chosen again from its menu", () => {
 });
 
 describe("clicks on a bond, so many in a row", () => {
-  it("the first selects it alone and changes nothing; the second makes it double, again its second line on its next side, the bond still selected; the third a triple", () => {
-    const { doc, st, ab, bc } = chain();
+  it("two make it double - its first click waits, and turns nothing - again its second line on its next side; three a triple", () => {
+    const { st, ab } = chain();
     const bond = () => st().model.bonds.find((x) => x.id === ab)!;
-    st().setSel({ atoms: new Set(), bonds: new Set([bc]) });
-    const was = doc.getState().model;
-    st().bondClicked(ab, 1);
-    expect([...st().sel.bonds]).toEqual([ab]);
-    expect([...st().sel.atoms].sort()).toEqual([bond().a, bond().b].sort());
-    expect(doc.getState().model).toBe(was);
+    // (a double-click: only its second counts - components/BondsPick2D turns the kind on one click once no second has come)
     st().bondClicked(ab, 2);
     expect(bondKindOf(bond())).toBe("double");
-    expect([...st().sel.bonds]).toEqual([ab]);
     const side = bond().doubleMode ?? "auto";
     st().bondClicked(ab, 2);
     expect(bondKindOf(bond())).toBe("double");
     expect(bond().doubleMode ?? "auto").not.toBe(side);
     st().bondClicked(ab, 3);
     expect(bondKindOf(bond())).toBe("triple");
-  });
-
-  it("the first sets where a Shift-click selects along the bonds from: the bond's first atom", () => {
-    const { st, ab, bc } = chain();
-    const [a, b, c] = [st().model.bonds.find((x) => x.id === ab)!.a, st().model.bonds.find((x) => x.id === ab)!.b, st().model.bonds.find((x) => x.id === bc)!.b];
-    st().setSel({ atoms: new Set(), bonds: new Set() }, null);
-    // (ab runs from a: a Shift-click on c then takes the path a to c - both bonds and their three atoms)
+    // (and one click on the triple: single, as the key 1 makes it)
     st().bondClicked(ab, 1);
-    st().selectPathTo(c);
-    expect([...st().sel.bonds].sort()).toEqual([ab, bc].sort());
-    expect([...st().sel.atoms].sort()).toEqual([a, b, c].sort());
+    expect(bondKindOf(bond())).toBe("single");
   });
 });
 

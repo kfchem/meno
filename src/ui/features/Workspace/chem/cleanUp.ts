@@ -14,11 +14,12 @@ import type { EditorStore } from "../store";
 import type { Model } from "../store/types";
 import { drawingOf, readAs } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, statedOf, stereoOf, type LayoutJob } from "./engineLayout";
-import { openDoubleBonds } from "../../../../lib/layout/drawn";
+import { openDoubleBonds, openRuns, readStereo } from "../../../../lib/layout/drawn";
 import { compared } from "../../../../lib/chem/perception/stereo/compare";
 import { layOut } from "./layOut";
 import { cisTransOfGiven, tetraOfGiven, type Given } from "./givenConfiguration";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
+import type { Cumulated } from "../../../../lib/layout/stereo";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
 
@@ -428,9 +429,10 @@ export async function laidOut(
   arranged: ReadonlySet<number> = new Set(),
 ): Promise<Model> {
   if (!model.bonds.length) return model;
-  // (and one the plugin's reading leaves open, where it sent one: open whatever Meno could read of the text - a SMILES its own reader
-  //  refuses gives no list of its own, and its open double bonds would else be drawn bent, stating what nobody gave)
   open = given?.configuration ? bothOpen(open, openOfField(model, given)) : open;
+  // (an odd cumulene's cis or trans in a drawing nobody made that Meno's own reading of the text did not give - a MOL block cannot say one,
+  //  and a text Meno's reader does not take gives none: open, as one the text leaves open is; its picture shows one only by chance)
+  if (asNew) open = bothOpen(open, runsOpenOf(model, given));
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
   // (one left open with one group at each end, its ends kept straight on below: the plugin's own mark of either configuration taken off it,
@@ -457,24 +459,36 @@ export async function laidOut(
   const read = asNew
     ? { ...job0, asNew: true as const, ...(arranged.size ? { arranged } : {}), input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm, ...a }, i) => (fourForm && arranged.has(job0.ids[i]) ? { ...a, fourForm } : a)) } }
     : job0;
-  // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block
-  //  has no way to say them - and the centres and double bonds the plugin read, which its drawing may not state: a ring of 36 or more - by
-  //  atom, in the drawing's order)
   let job: LayoutJob = given && givenFits(read, m) ? withGiven(read, m, given) : read;
+  // (a run so given is drawn as given, not kept straight at its ends as the plugin's drawing of it may have them - a drawing of the
+  //  structure with nothing given, which leaves an odd cumulene open: layout/drawn `openDoubleBonds`)
+  if (job !== read && given?.cumulated.length) {
+    const ends = new Set(given.cumulated.flatMap((c) => c.atoms));
+    job = { ...job, input: { ...job.input, atoms: job.input.atoms.map(({ linear, ...a }, k) => (linear && !ends.has(k) ? { ...a, linear } : a)) } };
+  }
   // (and one left open with one group at each end: each end kept straight on from it, so that it states neither cis nor trans - ST-4.4 -
   //  whatever the plugin's drawing of it said)
   if (straight.size) {
-    const opened = model.bonds.filter(straightOn).map((b) => (b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`));
+    const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
     const linear = new Set(job.ids.flatMap((id, k) => (straight.has(id) ? [k] : [])));
+    // (an odd cumulene's the same, by its run's two ends: the cis or trans the plugin's drawing of it read, its ends now kept straight on)
+    const runOpen = (c: Cumulated) => linear.has(c.atoms[0]) && linear.has(c.atoms[1]);
+    const runs = job.input.cumulated ?? [];
+    // (read from the plugin's drawing, whether or not another run of it is given, which takes the place of what the drawing read)
+    const pictured = [...(read.input.cumulated ?? []), ...runs].filter(runOpen);
+    const opened = [...model.bonds.filter(straightOn).map((b) => pair(b.a, b.b)), ...pictured.map((c) => pair(job.ids[c.atoms[0]], job.ids[c.atoms[1]]))];
+    const { cumulated: _c, ...input } = job.input;
+    const kept = runs.filter((c) => !runOpen(c));
     job = {
       ...job,
       opened,
       input: {
-        ...job.input,
+        ...input,
         atoms: job.input.atoms.map((a, k) => (linear.has(k) ? { ...a, linear: true } : a)),
         // (nor asked of the engine to lay out the cis or trans the plugin's drawing read: with its ends straight on it could show none, and
         //  `opened` keeps it from being taken as the drawing's - so this keeps the engine's input to what the text says, not a case of its own)
         bonds: job.input.bonds.map((b) => (b.stereo && b.order === 2 && linear.has(b.a) && linear.has(b.b) ? { a: b.a, b: b.b, order: b.order } : b)),
+        ...(kept.length ? { cumulated: kept } : {}),
       },
     };
   }
@@ -487,3 +501,47 @@ export async function laidOut(
  * `openDoubleBonds`): the ends to keep straight on, by atom, and the bonds to give a wavy bond, by bond.
  */
 export type OpenDoubles = { straight: readonly number[]; either: readonly number[] };
+
+/**
+ * The odd cumulenes (a butatriene's) of a drawing nobody made that `given` - Meno's own reading of the structure's text - does not give,
+ * open (layout/drawn `openRuns`), by the drawing's indices: none where there are none.
+ */
+function runsOpenOf(model: Model, given: Pick<Given, "cumulated"> | undefined): OpenDoubles | null {
+  const d = drawingOf(model);
+  const o = openRuns({
+    atoms: d.atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, ...(a.charge ? { charge: a.charge } : {}) })),
+    bonds: d.bonds.map(({ a, b, order }) => ({ a, b, order })),
+    ...(given?.cumulated.length ? { cumulated: given.cumulated } : {}),
+  });
+  if (!o.straight.length && !o.either.length) return null;
+  // (the bonds by the model's own, by their atoms)
+  const ids = model.atoms.map((a) => a.id);
+  const either = o.either.flatMap((k) => {
+    const [p, q] = [ids[d.bonds[k].a], ids[d.bonds[k].b]];
+    const i = model.bonds.findIndex((b) => (b.a === p && b.b === q) || (b.a === q && b.b === p));
+    return i >= 0 ? [i] : [];
+  });
+  return { straight: o.straight, either };
+}
+
+/**
+ * A plugin's drawing kept as it came - not laid out (`laidOut` refused) - with each odd cumulene's cis or trans (a butatriene's) it shows
+ * other than the text gives marked unsaid: its double bond at an end of the run "either", drawn with a wavy bond. A MOL block cannot say a
+ * run's cis or trans, so what the plugin's picture shows of one is chance: kept, it would state an isomer the text never wrote, or one it
+ * left open. One the text gives (`given`), shown as given, stays. The same model where there is none.
+ */
+export function runsAsCame(model: Model, given: Pick<Given, "cumulated"> | undefined): Model {
+  const d = drawingOf(model);
+  const shown = readStereo(d.atoms, d.bonds).cumulated;
+  if (!shown.length) return model;
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const told = new Map((given?.cumulated ?? []).map((c) => [pair(c.atoms[0], c.atoms[1]), c.cis]));
+  const ends = new Set(shown.filter((r) => told.get(pair(r.atoms[0], r.atoms[1])) !== r.cis).map((r) => model.atoms[r.atoms[0]].id));
+  if (!ends.size) return model;
+  // (the run's own double bond at that end: an end of a run has no other)
+  return {
+    ...model,
+    // (a bond read from a block carries "none" for no mark)
+    bonds: model.bonds.map((b) => ((ends.has(b.a) || ends.has(b.b)) && b.order === 2 && (b.stereo ?? "none") === "none" ? { ...b, stereo: "either" as const } : b)),
+  };
+}
