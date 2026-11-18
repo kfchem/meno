@@ -902,6 +902,16 @@ chirality; a metal's own geometry. Each candidate says why it is one, and
 a place asked of that is none says why not, in the words the page shows.
 No reader, step or mark takes them yet: each will, in its own change.
 
+**The stereoisomers Meno counts** (`isomersOf`, `src/lib/chem/isomers.ts`):
+every way of giving a configuration to each candidate left open, those
+given kept, each written by Meno's identity; the distinct identities are
+the stereoisomers, each with one way that makes it. Places that depend on
+each other fall out by identity: tartaric acid has three, inositol nine,
+1,3,5-trimethylcyclohexane two, 2,6-dimethylspiro[3.3]heptane two (its
+enantiomers). A biaryl's axis is given only where the drawing states one.
+Past 1024 ways (ten open places), none is written and the count of ways is
+said. No step takes it yet: *Stereoisomers* will, in its own change.
+
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);
