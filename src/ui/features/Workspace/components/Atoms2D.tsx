@@ -285,7 +285,7 @@ export function Atoms2D() {
     // (a haptic bond's star is no atom to pick: no hit area - chem/eta)
     const stars = hapticStars({ atoms, bonds: model.bonds });
     // (a Newman pair's two atoms lie at one place: the front atom's disc is the small one, nearer, taking a press at the centre; the back atom's is
-    // larger - out to the circle's line - and behind, taking a press there: the look owner's choice of handling, not what the circle stands for)
+    // larger - out to the circle's line - and behind, taking a press there: a choice of handling, not what the circle stands for)
     const pairs = newmansIn({ atoms, bonds: model.bonds });
     const frontIds = new Set(pairs.map((p) => p.front));
     const backIds = new Set(pairs.map((p) => p.back));

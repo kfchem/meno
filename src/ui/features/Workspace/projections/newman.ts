@@ -55,7 +55,7 @@ const apart = (p: number, q: number): number => {
 
 /**
  * Where the three spokes of an atom lie on the page: the set `set`, and - on the back atom, where its set is the front's - turned from it by
- * `ECLIPSED_OFFSET_DEG`, so that both show (F9). `eclipsed` says the back's set is the front's.
+ * `ECLIPSED_OFFSET_DEG`, so that both show. `eclipsed` says the back's set is the front's.
  */
 export function spokeAngles(set: SpokeSet, back: boolean, eclipsed: boolean): number[] {
   return spokes(baseOf(set) + (back && eclipsed ? ECLIPSED_OFFSET_DEG : 0));

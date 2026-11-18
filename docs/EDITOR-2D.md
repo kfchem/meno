@@ -658,7 +658,7 @@ on a page), and the **Newman projection** (`newman`).
   with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
   12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
   back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the
-  front atom, a press on the circle's line the back atom - a choice of handling only, for the look owner. A label typed on either atom is refused,
+  front atom, a press on the circle's line the back atom - a choice of handling only, by eye. A label typed on either atom is refused,
   in words that say why: they are drawn at one place and have no room for one; both are carbon. Clean-up leaves it as drawn and says so (a pair
   at one place is no ring a flat layout can keep); *Draw flat* lays it out. The pair is read by its depth, as a ring in perspective is. Known
   answers (`newman.test.ts`): 1,2-dichloro-1,2-difluoroethane with its groups in one order front and back is the meso form, with the back's

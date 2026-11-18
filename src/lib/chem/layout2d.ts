@@ -3768,7 +3768,7 @@ function allylCurvePrimitives(
   return { lines, bends, ends: [points[0], points[points.length - 1]], middle };
 }
 
-/** The radius of a Newman projection's circle, in bond lengths: by eye, the look owner's choice, no basis claimed. A group's atom lies a whole bond length from the centre. */
+/** The radius of a Newman projection's circle, in bond lengths: by eye, no basis claimed. A group's atom lies a whole bond length from the centre. */
 export const NEWMAN_CIRCLE = 0.5;
 
 /**
