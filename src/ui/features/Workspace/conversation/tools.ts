@@ -92,7 +92,8 @@ export function readOne(d: WorkspaceDocument, s: InScope, kind: SeenKind, id: nu
     case "structure": {
       const drawn = structureModel(d, s.structureAtoms.get(id)!);
       return {
-        atoms: drawn.atoms.map((a) => ({ id: a.id, el: a.el, x: a.x, y: a.y, ...(a.charge ? { charge: a.charge } : {}) })),
+        // (an atom holding a group says so: a Pr typed is propyl's label, not praseodymium - chem/drawing `readAs`)
+        atoms: drawn.atoms.map((a) => ({ id: a.id, el: a.el, x: a.x, y: a.y, ...(a.charge ? { charge: a.charge } : {}), ...(a.abbrev ? { group: true } : {}) })),
         bonds: drawn.bonds.map((b) => ({ a: b.a, b: b.b, order: b.order })),
         smiles: drawnSmiles(drawn),
         // (stereo the drawing says, which its SMILES from the drawing does not write)

@@ -19,6 +19,14 @@ build's executable for step 4, `RT_READ` a folder under `.roundtrip` for
 its reads (`compare.py --read=` that folder), and `RT_BOX=page` reads each
 page in a box round all that is on it rather than round the figures found
 there - the figure reader measured apart from finding figures.
+`RT_VARIANTS=upright,serif` reads only those ways of printing. `RT_DPI=300`
+reads each figure as a picture of it instead: its box drawn at that
+resolution by the PDF reader, traced (`lib/figure/trace`, docs/PDF.md
+*A picture traced*), and read from the traced shapes with the PDF's own
+letters as written; a page turned is not traced. Each read records how
+many atoms and bonds it marked unsure, and `compare.py` prints, for each
+style and way of printing, how many were read right, how many were said
+(nothing read, or marked unsure) and how many were wrong with no mark.
 `RT_PRESETS=rdkit,rdkitcg,rdkitacs,rdkitacscg` with `RT_READ=rdkit` reads
 only the structures drawn by RDKit (stage 2b): real papers' figures come
 from many programs, not Meno's alone.

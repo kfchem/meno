@@ -12,7 +12,7 @@ import type { Layout2D } from "../../../../lib/layout/engine";
 import { emptyWorkspaceDocument, endpointsHeld, relayout, writtenAsLabels, type WrittenAsLabel } from "../document";
 import type { EditorStore } from "../store";
 import type { Model } from "../store/types";
-import { drawingOf } from "./drawing";
+import { drawingOf, readAs } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, statedOf, stereoOf, type LayoutJob } from "./engineLayout";
 import { openDoubleBonds, openRuns, readStereo } from "../../../../lib/layout/drawn";
 import { compared } from "../../../../lib/chem/perception/stereo/compare";
@@ -163,7 +163,7 @@ type Cleaned = { labels: WrittenAsLabel[]; part: Model; job: LayoutJob; laid: La
 async function laidOutWithLabels(part: Model, expanded: ReadonlySet<number>): Promise<Cleaned> {
   const index = new Map(part.atoms.map((a, i) => [a.id, i]));
   const graph = contractGraph(
-    part.atoms,
+    part.atoms.map((a) => ({ el: readAs(a), charge: a.charge })),
     part.bonds.map((b) => ({
       a1: index.get(b.a)!,
       a2: index.get(b.b)!,
@@ -285,9 +285,10 @@ export function partFormula(part: Model): string {
   const atoms: { el: string }[] = [];
   for (const a of part.atoms) {
     if (a.el === "*") continue;
+    // (a held group's label written as it reads - the reader's mark stays out of a text a person sees; counted as the name it is)
     atoms.push({ el: a.el });
     // (a label not an element - an abbreviation - carries none counted here)
-    const h = implicitHydrogens(a.el, used.get(a.id) ?? 0, a.charge ?? 0, a.radical);
+    const h = implicitHydrogens(readAs(a), used.get(a.id) ?? 0, a.charge ?? 0, a.radical);
     for (let k = 0; k < h; k++) atoms.push({ el: "H" });
   }
   // (and its charge, as a formula writes one: NH4+, SO4 2-)
