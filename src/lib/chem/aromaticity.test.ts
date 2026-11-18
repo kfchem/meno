@@ -68,6 +68,18 @@ describe("aromatic rings, by each ring and each pair of rings fused at a bond", 
   it("take indolizine whole: its six-ring through the N's lone pair with its five-ring, 10", () => {
     expect(read("c1ccn2cccc2c1").not).toEqual([]);
   });
+
+  it("take two rings together only where they share one bond: a [2.2]paracyclophane-1,9-diene's twelve-ring runs across each benzene along three", () => {
+    // (benzene and the twelve-ring through the bridges share three bonds: their atoms together, 14, are no ring, so no count of one -
+    //  the bridges' four carbons are not aromatic, the two benzene rings are)
+    const { aromatic, not } = read("C1=CC2=CC=C1C=CC1=CC=C(C=C2)C=C1");
+    expect(aromatic).toHaveLength(12);
+    expect(not).toHaveLength(4);
+    const s = readSmiles("C1=CC2=CC=C1C=CC1=CC=C(C=C2)C=C1");
+    const bridge = new Set(not);
+    // (each atom left out is a bridge's: bonded to no more than one benzene carbon)
+    expect(not.every((i) => s.bonds.filter((b) => (b.a1 === i || b.a2 === i) && !bridge.has(b.a1 === i ? b.a2 : b.a1)).length === 1)).toBe(true);
+  });
 });
 
 describe("a ring with no pi bond and no empty p orbital, its atoms' lone pairs alone (backlog 182)", () => {
