@@ -574,7 +574,9 @@ their kind - spiro, fused, bridged fused, von Baeyer, ring assembly
 before naphthalene); then more multiple bonds (P-44.4.1). With no ring,
 the longest chain of acyclic carbons (P-44.3). Identical ring parents in
 one symmetry orbit of the molecule are both parents, the second primed
-(P-45.1.1, P-51.3.1: 1,1'-methylenedibenzene); a chain never is.
+(P-45.1.1, P-51.3.1: 1,1'-methylenedibenzene), and so are step 0's
+chains of a heteroatom (P-15.3: 1,1'-methylenebis(disilane)); a carbon
+chain never is.
 
 **The parent's own numbering** (P-14.4), by its kind:
 - one ring: its heteroatoms low, the senior one 1 (P-22.2);

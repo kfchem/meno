@@ -890,7 +890,8 @@ function acyclicElementParent(c: Ctx, atoms: readonly number[], senior: string):
   const alternating = atoms.some((a) => el(a) === senior && c.around[a].some((b) => el(b) !== senior && el(b) !== "C" && el(b) !== "H" && c.around[b].some((x) => x !== a && el(x) === senior)));
   if (alternating) return { unit: { kind: chains[0].length > 1 ? "chain" : "atom", atoms: chains[0] }, own: "not built" };
   if (chains.length === 1) return { unit: { kind: chains[0].length > 1 ? "chain" : "atom", atoms: chains[0] }, own: null };
-  return tiedParents(c, chains.map((p) => ({ kind: p.length > 1 ? "chain" : "atom", atoms: p }) as Unit));
+  // (step 0's acyclic heteroatom parents are multiplied as ring parents are - 1,1'-methylenebis(disilane), P-15.3; a carbon chain never)
+  return tiedParents(c, chains.map((p) => ({ kind: p.length > 1 ? "chain" : "atom", atoms: p }) as Unit), true);
 }
 
 /** Of `xs`, those with the least `score` (compared as keys). */
@@ -911,10 +912,11 @@ function leastByList(xs: number[][], score: (x: number[]) => number[]): number[]
  * Parents still tied (A3 step 5): P-45.2.1, the one with more substituents; P-45.2.2, the lower locants for them; still tied and the
  * parents one orbit apart, either (the same numbering, the molecule turned); otherwise Meno's own.
  */
-function tiedParents(c: Ctx, units: Unit[]): ParentPick {
-  // (identical ring parents in one orbit of the molecule: multiplied - P-45.1.1, P-51.3.1 - each numbered alike; never a chain)
+function tiedParents(c: Ctx, units: Unit[], heteroatoms = false): ParentPick {
+  // (identical ring parents in one orbit of the molecule - or step 0's acyclic heteroatom parents, `heteroatoms` - multiplied: P-45.1.1,
+  //  P-51.3.1, P-15.3; each numbered alike. Never a carbon chain: P-15.3.1.1 (b))
   const orbits = c.input.orbits;
-  const rings = units.every((u) => u.kind === "ring" || u.kind === "assembly");
+  const rings = heteroatoms || units.every((u) => u.kind === "ring" || u.kind === "assembly");
   if (rings && orbits && units.every((u) => u.atoms.length === units[0].atoms.length) && sameOrbitSets(orbits, units.map((u) => u.atoms))) {
     const first = [...units].sort((p, q) => Math.min(...p.atoms) - Math.min(...q.atoms));
     return { unit: first[0], own: null, multiplied: first };

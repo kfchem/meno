@@ -358,7 +358,7 @@ describe("the parent among rings (A3 steps 0 to 2)", () => {
   });
 
   it("2-[(phosphinin-2-yl)phosphanyl]furan: furan, chosen among all the rings, not the ring that holds P", () => {
-    // (furan's O, atom 13, is its 1)
+    // (furan's O, atom 11, is its 1)
     expect(shownOf("c1ccc(pc1)Pc1ccco1")[11]).toBe("1");
   });
 
@@ -462,5 +462,47 @@ describe("any order (D)", () => {
     const once = (h: LocantsInput) => written(h, locants({ ...h, orbits: symmetryOrbits(h as never).orbit }));
     const want = once(g);
     for (const seed of [7, 1234567]) expect(once(shuffled(g, seed))).toBe(want);
+  });
+});
+
+describe("known answers pinned at the chemistry check (section C)", () => {
+  const at = (smiles: string, ...idx: number[]) => idx.map((i) => shownOf(smiles)[i]);
+  it("1,1'-methylenebis(disilane): both Si chains parents, multiplied - 1, 2 and 1', 2' - the CH2 after them; nothing said", () => {
+    const s = shownOf("[SiH3][SiH2]C[SiH2][SiH3]");
+    // (each disilane numbered from the atom the CH2 hangs from: 1 there, 2 at its end)
+    expect([s[1], s[0]]).toEqual(["1", "2"]);
+    expect([s[3], s[4]]).toEqual(["1'", "2'"]);
+    expect(ownOf("[SiH3][SiH2]C[SiH2][SiH3]")).toEqual([]);
+  });
+
+  it("bicyclo[6.5.1]tetradec-8-ene: C=C 8, 9; the one-atom bridge 14", () => {
+    // (C12CCCCCCC(C2)=CCCCC1: atoms 0 and 7 the bridgeheads, atom 8 - in brackets - the bridge between them, atom 9 the double bond's far end)
+    const s = shownOf("C12CCCCCCC(C2)=CCCCC1");
+    expect([s[0], s[7], s[9]]).toEqual(["1", "8", "9"]);
+    expect(s[8]).toBe("14");
+  });
+
+  it("9H-purine, atom by atom; 4H-quinolizine: its CH2 4, N 5", () => {
+    expect(shownOf("c1ncc2nc[nH]c2n1")).toEqual(["2", "1", "6", "5", "7", "8", "9", "4", "3"]);
+    expect(at("C1C=CC=C2C=CC=CN12", 0, 9)).toEqual(["4", "5"]);
+  });
+
+  it("1,2,3,4,5,6-hexahydro-2,2'-bipyridine: the saturated ring unprimed, N1 and the junction 2; the pyridine's 1' and 2'", () => {
+    const s = shownOf("C1CCNC(C1)c1ccccn1");
+    expect([s[3], s[4]]).toEqual(["1", "2"]);
+    expect([s[11], s[6]]).toEqual(["1'", "2'"]);
+  });
+
+  it("1-oxa-4-selena-11-azacyclotrideca-2,5,7,9,12-pentaene: O 1, Se 4, N 11", () => {
+    expect(at("O1C=C[Se]C=CC=CC=CNC=C1", 0, 3, 10)).toEqual(["1", "4", "11"]);
+  });
+
+  it("perylene: its two interior atoms 3a with a superscript 1 and 6b with a superscript 1", () => {
+    const s = shownOf("c1cc2cccc3c4cccc5cccc(c(c1)c23)c54");
+    expect(s.filter((t) => t.includes("^")).sort()).toEqual(["3a^1", "6b^1"]);
+  });
+
+  it("disiloxane: Meno's own, said", () => {
+    expect(ownOf("[SiH3]O[SiH3]").length).toBeGreaterThan(0);
   });
 });
