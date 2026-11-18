@@ -20,7 +20,7 @@ import { isHeld } from "./onPage";
 import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, comeTogether, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { byOf, doerName, inputsFor, MENO, stepValues, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -46,7 +46,13 @@ import { addedSet, numberOf } from "./addStep";
  * page about its middle - left, right, down and up - in any of its frames,
  * turned by `turn`, where it is; who does a step; and the time.
  */
-export type RunWith = { extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame; byOf: (step: WorkflowStep) => string; now: number };
+export type RunWith = {
+  extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame;
+  byOf: (step: WorkflowStep) => string;
+  now: number;
+  /** How a step's results will be turned, where the caller knows (the store, by the views of what came in): their room in the set is made for them so turned. */
+  turnsOf?: (doc: WorkspaceDocument, id: number, kind: StepKind, results: RunResults) => readonly (Turn3D | undefined)[] | undefined;
+};
 
 /** What each kind of set is called, where a step says what it takes. */
 const SET_NAMES: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "conformer sets", table: "a table", number: "a number" };
@@ -80,6 +86,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const none = emptyIn(doc, step, by);
   if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
+  // (a Repeat runs its steps pass by pass, as a pass of them: not as one step - none is made yet, and one read from a file says so)
+  if (step.kind === "repeat") return fail("A Repeat's passes are not run in this version of Meno");
   // (its options' values: its own, else Settings' for its kind, else each option's default - doers `stepValues`)
   const values = stepValues(step);
   // (a chart: a table's columns, one against the other)
@@ -97,7 +105,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const [p, q] = ["molecules", "reference"].map((port) => inputOf(doc, id, port));
     if (!p) return fail("Nothing comes into Molecules");
     const of = (x: NonNullable<typeof p>) => setEntries(x.molecules, x.holds as Holds3D);
-    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values), key, w);
+    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values, step.bound), key, w);
   }
   // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
   if (step.kind === "onto-structures") {
@@ -165,7 +173,9 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   if (!step) return doc;
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
-  return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
+  // (its room made for each molecule as it will be turned - as what it came from is, where it passed through: the caller's `turnsOf`)
+  const turns = w.turnsOf?.(doc, id, step.kind, resultsOf(outcome, step.kind));
+  return setRan(withResults(keepRun(doc, step), step, outcome, w, turns), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
 }
 
 /**
@@ -262,17 +272,19 @@ const isValueKind = (h: SetHolds): h is ValueKind => (VALUE_KINDS as readonly st
 /**
  * Why what several wires bring into one input - `port`, of a step of
  * several; its one, where none is named - is not one input's: sets of
- * different kinds, which one set's entries never are, or more than one
- * number. None where it is, or one wire or none comes in.
+ * different kinds, which one set's entries never are (molecules in 3D and
+ * conformer sets come in together where it reads them as a table:
+ * kinds `comeTogether`), or more than one number. None where it is, or
+ * one wire or none comes in.
  */
-function severalWhyNot(doc: WorkspaceDocument, step: number, port?: StepPort): string | null {
+function severalWhyNot(doc: WorkspaceDocument, step: number, kind: StepKind, port?: StepPort): string | null {
   // (an empty set adds nothing, of no kind)
   const sources = sourcesInto(doc, step, port?.id);
   if (sources.length < 2) return null;
   const gives = sources.map(({ wire, set }) => (emptyNow(doc, set) ? null : givesOf(doc, wire.from)));
   if (gives.includes("number")) return `${port ? port.name : "It"} takes one number: ${sources.length} are wired into it`;
   const k = gives.findIndex((g) => g != null);
-  const j = gives.findIndex((g) => g != null && g !== gives[k]);
+  const j = gives.findIndex((g) => g != null && !comeTogether(kind, port?.id ?? ONE_INPUT, g, gives[k]!));
   if (j < 0) return null;
   const [a, b] = [gives[k]!, gives[j]!];
   const words = (g: SetHolds) => (isValueKind(g) ? SET_NAMES[g] : g);
@@ -294,7 +306,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const first = severalInputs(ports) ? ports[0] : undefined;
   // (several wires into one input: sets of one kind, and one number alone)
   for (const port of ports) {
-    const several = severalWhyNot(doc, step.id, ports.length > 1 ? port : undefined);
+    const several = severalWhyNot(doc, step.id, step.kind, ports.length > 1 ? port : undefined);
     if (several) return several;
   }
   const input = inputOf(doc, step.id, first?.id);
@@ -739,6 +751,33 @@ export function laidOver(
   });
 }
 
+/** How near, in angstroms, a result's atoms are to an entry's to be where they were: a step that passed it through, not one that moved it. */
+const KEPT_AT = 1e-6;
+
+/**
+ * How each molecule a step gave is first turned, where the step passed it
+ * through - a Filter's, a Tag's, a Rank's, a Repeat's *Out* - its atoms
+ * where they were (docs/WORKFLOWS.md, *Results*): as the molecule it came
+ * from is turned, so that what the chemist saw face-on one card before is
+ * face-on in the next. Unset where no entry has its atoms where they are -
+ * a molecule a step moved, or made: seen as it is first seen.
+ */
+export function viewKept(
+  molecules: readonly Pick<Molecule3D, "atoms" | "frames">[],
+  entries: readonly SetEntry[],
+  turnOf: (e: SetEntry) => Turn3D | undefined,
+): (Turn3D | undefined)[] {
+  // (each entry taken once, in order: copies of one molecule, its atoms where the other's are, each turned as its own was - found in review)
+  const taken = new Set<number>();
+  return molecules.map((m) => {
+    const xyz = frameXyz(m, framesOf(m) - 1);
+    const k = entries.findIndex((e, i) => !taken.has(i) && e.atoms.length === m.atoms.length && e.atoms.every((a, j) => a.el === m.atoms[j].el) && e.xyz.every((v, j) => Math.abs(v - xyz[j]) <= KEPT_AT));
+    if (k < 0) return undefined;
+    taken.add(k);
+    return turnOf(entries[k]);
+  });
+}
+
 /**
  * `doc` with a step's results - its molecules in 3D, those it set aside,
  * and what kind of set they make - as the entries of its result set: made
@@ -763,7 +802,8 @@ export function placeResults(
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
   if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
-  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  // (`turns` are of its molecules and then of those it set aside, in turn: each set's room made for them turned - found in review)
+  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w, turns?.slice(made.length));
   // (a table it gave at a later exit - an Atom map's bond changes - in that exit's set: under the others as they have grown)
   const tables = Object.entries(results.tables ?? {});
   for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);

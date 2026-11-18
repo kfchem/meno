@@ -1,4 +1,5 @@
 import { firstUnset, MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+import { LinkIcon } from "@heroicons/react/24/outline";
 import Checkbox from "../controls/Checkbox";
 import NumberField from "../controls/NumberField";
 import RadioGroup from "../controls/Radio";
@@ -60,6 +61,7 @@ export default function OptionsForm({
   choosing,
   onChoose,
   asks = false,
+  binds,
 }: {
   options: readonly Option[];
   values: OptionValues;
@@ -72,6 +74,12 @@ export default function OptionsForm({
   onChoose?: (id: string | null) => void;
   /** Shown to ask for what it still needs: its first number shown that holds none - a window, the chemist's own - focused as it is shown. */
   asks?: boolean;
+  /**
+   * Options that may take their value from a property, entry by entry (lib/boundOptions): which may (`can`), those that do, by id,
+   * each with the property's name (`bound`), the names the entries coming in carry (`offered`), and an option taken so, or given
+   * its own value back (null). Without it, no option is offered so.
+   */
+  binds?: { can: (o: Option) => boolean; bound: Readonly<Record<string, string>>; offered: readonly string[]; onBind: (id: string, name: string | null) => void };
 }) {
   const set = (id: string, v: string | number | boolean) => {
     // (a choice that fills in others - a preset's parts - sets them with it)
@@ -128,7 +136,27 @@ export default function OptionsForm({
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
               {/* (a number and its unit both within the card: the field narrows to leave the unit room) */}
               <span className="flex items-center gap-1.5">
-                {o.type === "number" ? (
+                {binds && binds.bound[o.id] != null ? (
+                  // (taken from a property: its name, the names coming in offered as it is typed - the option's own value kept underneath)
+                  <>
+                    <span className="shrink-0 text-sm text-gh-gray">=</span>
+                    <input
+                      type="text"
+                      aria-label={`${o.label}: the property it is taken from`}
+                      placeholder="a property"
+                      list={`from-${o.id}`}
+                      value={binds.bound[o.id]}
+                      title={binds.bound[o.id] ? (binds.offered.includes(binds.bound[o.id]) ? `${binds.bound[o.id]}: each entry's own, as it comes in` : `${binds.bound[o.id]}: no entry coming in carries it yet`) : undefined}
+                      onChange={(e) => binds.onBind(o.id, e.target.value)}
+                      className="h-7 w-full min-w-0 max-w-[10rem] rounded-md border border-accel-base/60 bg-white px-2 text-sm text-gh-black"
+                    />
+                    <datalist id={`from-${o.id}`}>
+                      {binds.offered.map((n) => (
+                        <option key={n} value={n} />
+                      ))}
+                    </datalist>
+                  </>
+                ) : o.type === "number" ? (
                   <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} autoFocus={o.id === asked} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
                 ) : (
                   <input
@@ -139,6 +167,21 @@ export default function OptionsForm({
                   />
                 )}
                 {o.type === "number" && o.unit && <span className="shrink-0 whitespace-nowrap text-xs text-gh-gray">{o.unit}</span>}
+                {binds?.can(o) && (
+                  <button
+                    type="button"
+                    title="From a property"
+                    aria-label="From a property"
+                    aria-pressed={binds.bound[o.id] != null}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      binds.onBind(o.id, binds.bound[o.id] != null ? null : (binds.offered[0] ?? ""));
+                    }}
+                    className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${binds.bound[o.id] != null ? "bg-accel-base/10 text-accel-base" : "text-gh-gray hover:bg-gh-base hover:text-gh-black"}`}
+                  >
+                    <LinkIcon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
               </span>
             </label>
           )}

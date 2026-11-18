@@ -12,6 +12,7 @@ import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { ACROSS_FOUR, arrangementKey, arrangementsIn3d, pairingDrawn, pairingIn3d } from "./arrangement";
 import { arrangementOpen, constitutionKey, filledIn, identityText } from "./identity";
 import { symmetryClasses } from "../layout/canonical";
+import { measured } from "../../testing/timeouts";
 
 /** The structure's one metal, and its donors in the order of its bonds. */
 function metalOf(g: LayoutInput): { m: number; donors: number[] } {
@@ -233,7 +234,8 @@ describe("a metal's donors across, in identity", () => {
       const given = { ...g, arrangements: [{ metal: m, pairs: pairings(donors.length)[0].map(([p, q]) => [donors[p], donors[q]] as const) }] };
       expect(identityText(given)).toBe(identityText(g));
     }
-  });
+    // (PdCl2(PPh3)2, Pd(PPh3)4 and their kin settled: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_400));
 
   it("each metal of a structure is asked on its own: an open one and one not, whichever is asked first", () => {
     // (a hexaammine Co, never open, beside a Pt(NH3)2Cl2 with none given, open: in either order of the parts, and of asking)

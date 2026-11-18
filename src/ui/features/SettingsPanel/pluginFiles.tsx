@@ -31,7 +31,7 @@ export function filesView(asked: FilesAsked, act: (a: FilesAct) => void, name: s
     question: asked.asking ? (
       <ConfirmDiscard
         title={`Remove the files of ${name}?`}
-        message={`They are taken off this computer. ${name} can be got again from the plugins online.`}
+        message={`They are taken off this computer. ${name} can be added again from the plugins online.`}
         discardLabel="Remove its files"
         onCancel={() => act({ type: "cancel" })}
         onDiscard={() => act({ type: "remove" })}

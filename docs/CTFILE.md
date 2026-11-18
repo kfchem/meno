@@ -54,7 +54,9 @@ title, its first line; the record's data items are not kept:
   back.
 - **Collections** (V3000): enhanced stereo (MDLV30/STEABS, STERACn,
   STERELn, and the bond collections STEBABS, STEBRACn, STEBRELn),
-  highlighting, a file's own.
+  highlighting, a file's own. An AND or OR group of centres is made in
+  3D, and by *Stereoisomers*, as each of its halves; a group on a bond is
+  made as drawn, said so (WORKFLOWS.md, *Stereoisomers is Meno's*).
 - **The chiral flag**, link atoms, Rgroup definitions and their logic.
 - **Rxnfiles**, V2000 (`$MOL` blocks) and V3000 (BEGIN REACTANT / PRODUCT /
   REAGENT blocks), their molecules in the file's order: reactants,
@@ -101,7 +103,7 @@ holds whole: the file is read (before, either failed as it was read).
 
 | What | How | Why |
 |---|---|---|
-| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
+| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it (on an odd cumulene's double bond, a butatriene's, beside the run's ends): never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |
@@ -110,6 +112,16 @@ holds whole: the file is read (before, either failed as it was read).
 
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
 atoms at its ends, as a dative bond does not: an ammine stays NH3.
+
+Nor is a hydrogen bond a bond of the structure for anything Meno reads of
+it (`ofTheStructure`, lib/chem/perception/graph): it closes no ring, so the
+double bond of an enol it closes a ring of six round keeps its cis or trans;
+it joins no two molecules, so a water bound to an enol by one leaves the
+enol's identity as it is drawn apart; and it takes no place round an atom,
+so an amine's N it is drawn to keeps three bonds and no configuration. It is
+kept, drawn and laid out as before: Clean-up gives it to the layout as a
+bond. Until 2026-11-15 a hydrogen bond drawn so hid the double bond's cis or
+trans, and the molecules it joined had one identity.
 
 Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
 way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
@@ -152,7 +164,14 @@ leaves it its drawing's.
 Annotations are set smaller than labels, close to what they are about and in
 the most open space beside it (IUPAC GR-11.1, GR-11.2); what is said about a
 whole structure is set beneath it, half a bond and more clear of it, as
-large as its labels (GR-11.3).
+large as its labels (GR-11.3). What is said beside an atom is kept off every
+bond, every label and what was said before it: of the ways out from its
+atom, one where its letters cover nothing goes first, then the most open, so
+a word as long as "and1" at a ring's centre goes outside the ring, not across
+it. A group's label stands outside the ring its centre is on wherever a
+clear place outside is - inside, it would read as the ring's, beside
+another centre's R or S (the maintainer, 2026-11-17). R, S, E and Z keep
+off it in turn.
 
 | What | How | Why |
 |---|---|---|
@@ -165,7 +184,7 @@ large as its labels (GR-11.3).
 | Not a reacting centre (-1) | A small cross on the bond's middle. | Meno's own. |
 | A reacting centre otherwise (1), or no change (2) | "rc", "nc" beside the bond's middle. | Meno's own. |
 | An enhanced stereo group taking in all a structure's centres | Racemic (AND): "and enantiomer" beneath it; relative (OR): "or enantiomer"; absolute: nothing. | ST-6.3 prefers text beside the diagram; ST-6.5 rules out "rac" and "rel" as labels; ST-6.2: a diagram with no indicator shows the configuration drawn. |
-| Groups that do not (more than one in a structure, or of stereo bonds) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
+| Groups that do not (more than one in a structure, or of stereo bonds, or one beside a centre drawn with a wedge and in no group: its forms then diastereomers, no enantiomers) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
 
 A file with stereo bonds and the chiral flag set but no collections has
 each of its stereocentres (where a wedge starts) taken as absolute, as the

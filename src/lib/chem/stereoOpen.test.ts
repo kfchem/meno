@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
 import { v2000 } from "./testdata/v2000";
-import { configuredFrom, configurationKey, type Configuration, cumulatedRuns, distinctIsomers, leftOver, movingCN, movingSaid, openCumulenes, stereoGraphOf, stereoLeft, type StereoAtom, type StereoBond } from "./stereoOpen";
+import { configuredFrom, configurationKey, type IsomerConfiguration, cumulatedRuns, distinctIsomers, leftOver, movingCN, movingSaid, openCumulenes, stereoGraphOf, stereoLeft, type StereoAtom, type StereoBond } from "./stereoOpen";
 
 /** A molecule as the rules read it, from SMILES written with its double bonds. */
 function mol(smiles: string): { atoms: StereoAtom[]; bonds: StereoBond[] } {
@@ -176,7 +176,7 @@ describe("stereoisomers each once, by their configuration", () => {
   });
 
   it("merges only where the configuration tells apart all that the toolkit enumerates: an allene's axis, a centre or a bond it gives none of keeps them", () => {
-    const twins = (open: { atoms: number[]; bonds: number[]; cumulenes: number[] }, of: Configuration = centre(1)) => distinctIsomers([{ configured: of, smiles: "a" }, { configured: of, smiles: "b" }], open).length;
+    const twins = (open: { atoms: number[]; bonds: number[]; cumulenes: number[] }, of: IsomerConfiguration = centre(1)) => distinctIsomers([{ configured: of, smiles: "a" }, { configured: of, smiles: "b" }], open).length;
     expect(twins(only)).toBe(1);
     // (an allene's axis, open: its bonds are no cis or trans, so the pair differs where nothing tells)
     expect(twins({ atoms: [1], bonds: [2, 3], cumulenes: [2, 3] })).toBe(2);

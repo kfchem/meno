@@ -948,6 +948,17 @@ its ligands round it, what is three-dimensional shown in perspective. None
 of it is a template - each is a rule, and the drawing is what the rules
 make of the molecule (`hapto.ts`, `assemble.ts`).
 
+The metals ligands are drawn round are the transition metals - the d
+block with the lanthanoids and actinoids, IUPAC's inner transition
+elements - but Pr, Ac and Fm, whose labels on a drawing are propyl's,
+acetyl's and 9-fluorenylmethyl's (a group named as an element is the
+group: the maintainer, 2026-10-10), and Rf to Cn, whose complexes are not
+made (lib/chem/perception/elements
+`drawnRoundMetal`). So uranocene and thorocene are sandwiches as
+ferrocene is, and an H on U is a hydride, kept as an atom as on Pd
+(foundation part 3, B1, 2026-11-16; before, the actinoids were not drawn
+round).
+
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
   the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
@@ -955,7 +966,10 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   those bonds, and lays them out as one bond from the metal to that star,
   as the CTfile's multi-centre bond is, the ring's atoms its endpoints -
   ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
-  2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
+  2026-10-17, `etaBondedAtomByAtom`; such a ring's double bonds, bound
+  face-on through every atom, are one Kekule form of it and have no cis
+  or trans, so uranocene drawn so is laid out as ferrocene is, not refused
+  for its eight-rings' double bonds - backlog 178, 2026-11-16; so too a chain of three atoms or more
   each bonded to the metal, an allyl, but not two, a three-membered ring
   with the metal being how a metallacyclopropane is drawn as well; an
   η3-allyl, once laid out, posed with its middle carbon away from the
@@ -1260,7 +1274,7 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
   (`crowded`, in words). Of the ways the part can be set down, the one
   nearest the rest's atoms is taken, then the one that reads best by the
   engine's own measure.
-- **In any order.** The molecule is worked in its own order (`canonical.ts`),
+- **In any order.** The molecule is worked in its own order (`canonical.ts`, over the core's ranks),
   as `layout2D` is, and every choice goes by the drawing or by that order;
   placements are compared to a millionth, and of two that read alike the
   one taken goes by each element where it lies, not by how the atoms are

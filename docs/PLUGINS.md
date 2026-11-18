@@ -56,7 +56,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Group | Role | Filled today by |
 | --- | --- | --- |
 | Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG); each program's own plugin, for its program's outputs; cclib, as a reading of its own; PySCF - see FILE-IO.md |
-| Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
+| Chemistry (core) | Structures from SMILES, and SMILES from structures | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings (one role since 2026-10-10: one request gives them all). R/S, E/Z and an axis's Ra/Sa are Meno's own (docs/CIP.md), on the drawing and in 3D: what the plugin sends of them is never read | RDKit (`analyse`) |
 | Chemistry (core) | stereoisomers: the elements that could be stereogenic, and the stereoisomers of what Meno says is left open | RDKit (`stereo_elements`, `stereoisomers`) |
 | Workflows | new structures from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set - a whole number from 1 (REINVENT 4 takes 0 as no seed given) - so that the same asking gives the same SMILES; each handed on as sampled, with its NLL and SMILES_state - every one it samples, those it marks a duplicate or could not read among them (its own filter left off, `unique_molecules = false`: which are the same and which are kept are Meno's *Duplicates* and *Filter*), nothing made of it, nothing refused. An option outside what it may be is refused in words, never run as another (2026-11-02) (*Generate*, below) |
@@ -555,11 +555,17 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     (however drawn), none from a
     carbon with a C=O, C=N, C=S, C=Se or C=Te out of it or a carbocation,
     two from a lone pair (pyrrole's N, furan's O, a carbanion), and a ring
-    with any other atom (a CH2, a fulvene's C=CH2) none. So a
+    with any other atom (a CH2, a fulvene's C=CH2) none; nor a ring of lone
+    pairs alone, with no pi bond and no empty p orbital in it (As4's and
+    P4's three-rings, a triaziridine): lone pairs complete a pi system and
+    never make one alone (backlog 182, 2026-11-16). So a
     fluoranthene's five-ring, aromatic in none of its own, is held flat,
     every atom of it lying on an aromatic six-ring; and so, whatever its
     count, is a ring drawn with aromatic bonds or bound to a metal through
-    all its atoms (a metallocene's). Cyclopentadiene's
+    all its atoms (a metallocene's) - a metal as the core's elements say
+    one is, Al among them, never Ge, As, Sb, Te, At, Ts or a noble gas (foundation
+    part 3, B4, 2026-11-16; before, any heavy atom with no most bonds
+    was). Cyclopentadiene's
     CH2 and cyclooctatetraene's eight pi electrons leave theirs free to
     pucker.
   - **a molecule that cannot change shape is worth ten**, the number
@@ -1123,7 +1129,7 @@ The same for every plugin and for Meno's own parts:
     `kind`, the atom or bond it is `at` and its `state`: `specified`,
     `unspecified`, or `unknown`, drawn as not known - none left out; what
     is left open, which atoms of three neighbours are centres by their
-    lone pair (lib/chem/lonePairCentres), which C=N bonds are never
+    lone pair (lib/chem/perception/stereo/lonePairs), which C=N bonds are never
     enumerated and which open double bonds are cumulated are Meno's:
     lib/chem/stereoOpen);
     `stereoisomers {molblocks, open, configured?, notEnumerated, most,
@@ -1240,7 +1246,10 @@ The same for every plugin and for Meno's own parts:
     the folder its jobs' PATH begins with (2026-10-31);
   - a job `prepare` gives may take fewer cores than it was given
     (`"cores": 1`): ORCA's, where the computer has no MPI to run its
-    processes with. Meno
+    processes with - and, on every computer, where ORCA computes a
+    Hessian numerically at its own xTB (frequencies, and a saddle
+    point's first Hessian "computed"), which it runs serially (ORCA
+    plugin 0.5.9: WORKFLOWS.md, *ORCA in parallel*). Meno
     asks for it at that many, never more than Settings gives, and the
     queue counts it so (2026-10-31);
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
@@ -1701,12 +1710,12 @@ comes in its own pull request.
   - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint;
-  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is got again (*Plugins used before*).
+  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is added again (*Plugins used before*).
 
   Beside its plugins, the list may name those no longer offered
   (`retired`), each by its id, its name (at most 60 letters) and why, in
   words, at most 160 ("Meno reads these files itself now"), so that one
-  set up before is said not to be got again, and why. None on offer may be
+  set up before is said not to be added again, and why. None on offer may be
   among them: a plugin is said either not made for here or no longer
   offered, never both.
 - **Read strictly, whole.** The backend checks the signature before
@@ -1786,11 +1795,11 @@ comes in its own pull request.
   added uses - has *Remove its files*, asking first: the version in use
   unnamed, then its folder, as the plugins in place are read (`installed.rs`,
   the backend's one rule for where they are); then they are read again,
-  and it is gone at once. It can be got again from the list.
+  and it is gone at once. It can be added again from the list.
 - **Offered where it is needed** (2026-11-05). Where a role is asked of -
   a SMILES drawn, a structure made in 3D - and no plugin here fills it,
-  the line that says so ("Needs a plugin: SMILES to a structure, and
-  back.") offers the plugins online that fill it, each to
+  the line that says so ("Needs a plugin: Structures from SMILES, and
+  SMILES from structures.") offers the plugins online that fill it, each to
   add: got, then set up as any plugin is, asking first. Where the list is
   not here yet, it offers to list them, asking first too; offline, it says
   the list needs the network. The list is fetched only with the
@@ -1822,7 +1831,7 @@ starts with none in place. As it first starts, it offers to get those again
     window, and asked again as Meno next starts, unless the chemist chooses
     *Don't ask again* there.
   - With the list fetched: whether to get them, each by its name and the
-    size of its files. Those not got again are said in it, each with why:
+    size of its files. Those not added again are said in it, each with why:
     another system's or a newer Meno's, no longer offered as the list says
     (`retired`), or not on it at all; where none is got, that is said
     once. With them is offered what the list says brings presets for one
@@ -1837,6 +1846,50 @@ starts with none in place. As it first starts, it offers to get those again
   where there is nothing to get. Offline, where the list could not be
   fetched, or where one could not be got, it says so and asks again as
   Meno next starts, for those not in place.
+
+### First start
+
+Where no plugin here reads and writes SMILES, nothing was set up here
+before (that is *Plugins used before*), the card was never answered and
+Meno is online, a card at the edge of the window asks once: *Set up
+chemistry?*, with *Set up* and *Not now* (`lib/plugins/firstSetUp`,
+`ui/network/FirstSetUpCard`). It holds up nothing and takes no key: the
+page works whether or not it is answered.
+
+- **Which question goes where.** A question Meno asks of its own accord
+  comes on the card; a question that answers the chemist's own click comes
+  over the page, as ever. A card left unanswered holds up no other
+  question.
+- **What the one yes covers, and nothing more.** The card names, before
+  the click, every host its yes lets the set-up reach: the list of plugins
+  online and the plugin's files (the list's hosts), uv and Python from
+  Astral, the packages from the Python Package Index - one list with the
+  lines it shows (`lib/plugins/setUpSources`). The plugin is found on the
+  list by its role, never by a name in the core; the card names it, its
+  licence and its size once the list has them, and says each step as it
+  goes, with *Stop*.
+- **Anything beyond it stops the card**, which shows that question in its
+  place and waits: a host the card did not name, a file beside the
+  plugin's packages, terms, or another plugin it uses first. Where the list
+  offers more than one plugin for the role here, or none, the card shows
+  each to add, or why not, as the line under the SMILES field does.
+- **A SMILES typed meanwhile waits** for the set-up, and is drawn when it
+  is ready, while Quick Add stays open.
+- **Not now** is kept: never asked again of itself. Chemistry is then set
+  up from the line under the SMILES field, or in Settings, *Plugins*.
+- **A failure** is said on the card, with *Try again* - on the card alone,
+  not again in a notice. *Dismiss* there is *Not now*. A yes whose set-up
+  did not finish (Meno closed while it ran) is taken up again as Meno next
+  starts, with no question. A plugin whose files are here already but
+  which was not added - its set-up failed after its files came - is the
+  one set up, by *Try again* and as Meno next starts, its files not got
+  again; one here at another version than the list's is not, and the card
+  shows what the list offers to add instead. A plugin the chemist took away
+  in Settings counts as their answer: the card is not offered. While the
+  card sets chemistry up, the line under the SMILES field says its step in
+  the card's words, with its share as the files download.
+  *Stop* ends it for good. A step under way (a download, uv building the
+  environment) runs to its end, as nothing can cut it short today.
 
 ## Decided
 

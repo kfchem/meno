@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MENO } from "../../../../lib/chem/style";
 import { identity } from "../../../../lib/chem/identity";
 import { smilesInput } from "../../../../lib/layout/smilesInput";
-import type { ConfiguredCentre, Configuration } from "../../../../lib/chem/stereoOpen";
+import type { ConfiguredCentre, IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import type { Model } from "../store/types";
 import { cipMarksOf } from "./cipMarks";
 import { laidOut, notShownOf, openAsCame } from "./cleanUp";
@@ -11,6 +11,7 @@ import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { asCameSaid } from "./fromSmiles";
 import { cisTransOfGiven } from "./givenConfiguration";
 import { centreFrom, configurationOf, plainPicture, polygon } from "./testdata/givenPictures";
+import { measured } from "../../../../testing/timeouts";
 
 /**
  * A structure laid out from the configuration its source gives beside its drawing (backlog 106 B; chem/givenConfiguration): the plugin's
@@ -21,7 +22,7 @@ import { centreFrom, configurationOf, plainPicture, polygon } from "./testdata/g
 
 
 /** R or S at the atom at `index`, read by Meno's own CIP on what was laid out. */
-async function labelOf(smiles: string, configuration: Configuration, index: number): Promise<string | undefined> {
+async function labelOf(smiles: string, configuration: IsomerConfiguration, index: number): Promise<string | undefined> {
   const laid = await laidOut(plainPicture(smiles), MENO, { axes: [], cumulated: [], configuration });
   const id = laid.atoms[index].id;
   const asked: Model = { ...laid, atoms: laid.atoms.map((a) => (a.id === id ? { ...a, stereoShown: true as const } : a)) };
@@ -76,7 +77,8 @@ describe("a macrocycle given beside the plugin's polygon", () => {
       const laid = await laidOut(polygon(smi), MENO, { axes: [], cumulated: [], configuration: configurationOf(smi) });
       expect(identityOfDrawn(laid).text, smi).toBe(identity(smilesInput(smi)).text);
     }
-  });
+    // (a ring-36 macrolide laid out: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_800));
 
   it("takes a centre given beside the drawing, though the polygon's wedge at it - its ring bonds in line - says nothing: no 'unread wedge'", async () => {
     // (a ring of 40: its ring bonds at an atom 171 degrees apart, in line - a ring of 36 stands on the 170 degrees of the line itself)
@@ -123,7 +125,7 @@ describe("a double bond the field does not name, that could be cis or trans", ()
     const m = drawnFromSmiles("C/C=C/C=C/C");
     return { ...m, bonds: m.bonds.map(({ stereo: _s, narrow: _n, display: _d, ...b }) => b) as Model["bonds"] };
   };
-  const firstOnly: Configuration = { centres: [], doubles: [{ bond: 1, ends: [0, 3], cis: false }] };
+  const firstOnly: IsomerConfiguration = { centres: [], doubles: [{ bond: 1, ends: [0, 3], cis: false }] };
   const stated = (m: Model) => identityOfDrawn(m).text;
 
   it("is laid out open - stating neither - with nothing asked of Meno's own reading of the text: one stated, as given", async () => {

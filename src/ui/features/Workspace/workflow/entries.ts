@@ -17,6 +17,7 @@ import { identitiesAsked, identityKnown } from "../chem/identityOff";
 import { identity } from "../../../../lib/chem/identity";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
+import { NUMBERING, OWN_NUMBERING } from "../../../../lib/steps/restraints";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
@@ -278,11 +279,11 @@ export async function drawnHashesAsked(model: Model, structures: readonly (reado
 
 /**
  * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out): a hydrogen bond in it - an
- * enol's own - no bond of the structure, nor of its identity (`structuresOf`). Each ask and each reading of a structure's identity
- * (`drawnHash`) goes through it, so that what is asked is what is read.
+ * enol's own - is no bond of the structure, nor of its identity, which identity's input leaves out itself. Each ask and each reading of a
+ * structure's identity (`drawnHash`) goes through it, so that what is asked is what is read.
  */
 export function structureInputOf(part: Model): ReturnType<typeof identityInputOf> {
-  return identityInputOf(labelsDrawnOut(part.bonds.some((b) => b.hydrogen) ? { ...part, bonds: part.bonds.filter((b) => !b.hydrogen) } : part));
+  return identityInputOf(labelsDrawnOut(part));
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
@@ -412,6 +413,23 @@ export function recordHow(r: DrawnRecord | undefined): string | undefined {
 export function recordWhy(r: DrawnRecord | undefined): string | undefined {
   const s = r?.status;
   return s && typeof s === "object" && "aside" in s ? s.aside : undefined;
+}
+
+/**
+ * The key of a numbering (lib/steps `NUMBERING`): of the atoms and bonds of
+ * what entries are numbered as - Atom map's references, or an entry itself -
+ * so that two of one compound number alike, and two of different compounds
+ * never do.
+ */
+export function numberingKey(references: readonly Pick<SetEntry, "atoms" | "bonds">[]): string {
+  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
+  return hash(graph).toString(36);
+}
+
+/** The numbering an entry is in now (lib/steps `NUMBERING`): the label Atom map wrote on it - or, never mapped, its own, with the key Atom map would give it as its reference. */
+export function numberingOf(e: SetEntry): string {
+  const n = e.properties?.[NUMBERING];
+  return n?.status === "computed" && typeof n.value === "string" ? n.value : `${OWN_NUMBERING} (${numberingKey([e])})`;
 }
 
 /** FNV-1a over a string: a short key - for what came into a step, and for the structure a record is of. */

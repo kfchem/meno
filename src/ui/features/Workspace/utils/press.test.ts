@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, joinedBy, movePress, onChord, releaseClicksBond, startPress, swallowPress, togglesOn, traceEndedBy } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, releaseClicksBond, startPress, swallowPress, togglesOn, traceEndedBy, flushesClick, turnTakenBack } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -177,5 +177,24 @@ describe("a release on a bond", () => {
     expect(releaseClicksBond(armed, 7, 2)).toBe(false);
     expect(releaseClicksBond(armed, 8, 0)).toBe(false);
     expect(releaseClicksBond({ armed: false, downBondId: null }, 7, 0)).toBe(false);
+  });
+});
+
+describe("a click on a bond, never lost and never in a double-click's way (the maintainer, 2026-11-17)", () => {
+  it("a second click on the same bond soon after the first's turn takes that turn back - a slow double-click makes a double bond", () => {
+    const turned = { id: 7, releasedAt: 1000, after: {} };
+    expect(turnTakenBack(turned, 7, 1300, 350)).toBe(true);
+    expect(turnTakenBack(turned, 7, 1350, 350)).toBe(true);
+    // (too late, another bond, or no turn: none taken back)
+    expect(turnTakenBack(turned, 7, 1351, 350)).toBe(false);
+    expect(turnTakenBack(turned, 8, 1100, 350)).toBe(false);
+    expect(turnTakenBack(null, 7, 1100, 350)).toBe(false);
+  });
+
+  it("a click waiting is turned at once as a press lands elsewhere - another bond, an atom, empty space - and waits on for one on its bond", () => {
+    expect(flushesClick(7, 8)).toBe(true);
+    expect(flushesClick(7, null)).toBe(true);
+    expect(flushesClick(7, 7)).toBe(false);
+    expect(flushesClick(null, 8)).toBe(false);
   });
 });
