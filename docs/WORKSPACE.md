@@ -794,9 +794,8 @@ Taken on 2026-10-13:
   guessed), the drawing's words for an N that exchanges its H and for a
   structure too large to work out; the units of one reason on one row,
   named by their atoms (C4, C7), counted past six. Nothing is said of an
-  atom or a bond that is no unit - two of its groups alike (CHEM's
-  ruling on backlog 190, under the maintainer's rule above;
-  lib/chem/cip/in3d, `utils/stereoSaid`).
+  atom or a bond that is no unit - two of its groups alike (under the
+  maintainer's rule above; lib/chem/cip/in3d, `utils/stereoSaid`).
 - **Measurements' values keep apart.** Each value stands on its point
   while that is clear of the values before it; where another is in its
   way it moves off - square to a distance's line, out from an angle's
