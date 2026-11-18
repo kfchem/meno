@@ -361,11 +361,13 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
   bond-shift isomers, are one structure. A bond made one order there keeps
   no cis or trans of its own - but a double bond between rings does
   (`aromaticForm`): one neither of whose atoms is in a ring of seven atoms
-  or fewer, in a ring system that has such a ring - a
-  [2.2]paracyclophane-1,9-diene's bridge, a cyclic phenylenevinylene's
-  vinylene, dibenzo[a,e]cyclooctatetraene's C=C. Its Z and E are two
-  compounds; an annulene's and a cyclooctatetraene's ring bonds, and
-  porphine's meso C=C (its atoms in five-rings), keep none. Known limit:
+  or fewer, on a larger ring that runs across such a ring - sharing two
+  of its bonds or more, as a phane's: a [2.2]paracyclophane-1,9-diene's
+  bridge, a cyclic phenylenevinylene's vinylene. Its Z and E are two
+  compounds. An annulene's and a cyclooctatetraene's ring bonds keep
+  none, and so do those of one fused to a benzene ring at one bond (a
+  benzannulene, dibenzo[a,e]cyclooctatetraene) and porphine's meso C=C
+  (its atoms in five-rings). Known limit:
   the other Kekulé drawing of such a bond - drawn single, the rings beside
   it quinoid - has no configuration on it, so it is another identity than
   the usual drawing; nobody draws it;

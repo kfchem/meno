@@ -18,32 +18,32 @@ function keepsBonds(g: LayoutInput, p: readonly number[]): boolean {
 
 /** Every Kekule structure of `g`: every way to pair off the atoms that carry a double bond by bonds between them, each drawn. */
 function kekules(g: LayoutInput): LayoutInput[] {
-    const carriers = new Set(g.bonds.filter((b) => b.order === 2).flatMap((b) => [b.a, b.b]));
-    const candidates = g.bonds.map((b, i) => ({ b, i })).filter(({ b }) => b.order <= 2 && carriers.has(b.a) && carriers.has(b.b));
-    const out: LayoutInput[] = [];
-    const chosen = new Set<number>();
-    const used = new Set<number>();
-    const atoms = [...carriers].sort((p, q) => p - q);
-    const walk = (k: number) => {
-      while (k < atoms.length && used.has(atoms[k])) k++;
-      if (k === atoms.length) {
-        out.push({ ...g, bonds: g.bonds.map((b, i) => (candidates.some((c) => c.i === i) ? { ...b, order: chosen.has(i) ? 2 : 1 } : b)) });
-        return;
-      }
-      const a = atoms[k];
-      for (const { b, i } of candidates) {
-        const other = b.a === a ? b.b : b.b === a ? b.a : -1;
-        if (other < 0 || used.has(other)) continue;
-        used.add(a).add(other);
-        chosen.add(i);
-        walk(k + 1);
-        chosen.delete(i);
-        used.delete(a);
-        used.delete(other);
-      }
-    };
-    walk(0);
-    return out;
+  const carriers = new Set(g.bonds.filter((b) => b.order === 2).flatMap((b) => [b.a, b.b]));
+  const candidates = g.bonds.map((b, i) => ({ b, i })).filter(({ b }) => b.order <= 2 && carriers.has(b.a) && carriers.has(b.b));
+  const out: LayoutInput[] = [];
+  const chosen = new Set<number>();
+  const used = new Set<number>();
+  const atoms = [...carriers].sort((p, q) => p - q);
+  const walk = (k: number) => {
+    while (k < atoms.length && used.has(atoms[k])) k++;
+    if (k === atoms.length) {
+      out.push({ ...g, bonds: g.bonds.map((b, i) => (candidates.some((c) => c.i === i) ? { ...b, order: chosen.has(i) ? 2 : 1 } : b)) });
+      return;
+    }
+    const a = atoms[k];
+    for (const { b, i } of candidates) {
+      const other = b.a === a ? b.b : b.b === a ? b.a : -1;
+      if (other < 0 || used.has(other)) continue;
+      used.add(a).add(other);
+      chosen.add(i);
+      walk(k + 1);
+      chosen.delete(i);
+      used.delete(a);
+      used.delete(other);
+    }
+  };
+  walk(0);
+  return out;
 }
 
 describe("a structure's identity", () => {
@@ -704,7 +704,7 @@ describe("a double bond between rings in an aromatic form", () => {
   const EZ = String.raw`OC(=O)C1=CC2=CC=C1/C=C/C1=CC(Br)=C(/C=C\2)C=C1`;
   const OPEN = String.raw`OC(=O)C1=CC2=CC=C1C=CC1=CC(Br)=C(/C=C\2)C=C1`;
 
-  it("keeps its side where neither atom is in a small ring and its ring system has one: a [2.2]paracyclophane-1,9-diene's (Z,Z), (E,Z) and unstated are three", () => {
+  it("keeps its side where neither atom is in a small ring and a large ring through it runs across a small one: a [2.2]paracyclophane-1,9-diene's (Z,Z), (E,Z) and unstated are three", () => {
     expect(new Set([ZZ, EZ, OPEN].map((s) => identityKey(fromSmiles(s)))).size).toBe(3);
     // (still order 4, all eighteen bonds: its Kekule drawings stay one)
     const form = aromaticForm(fromSmiles(ZZ));
@@ -717,9 +717,16 @@ describe("a double bond between rings in an aromatic form", () => {
     expect(identityKey(fromSmiles(ring("/C=C/")))).not.toBe(identityKey(fromSmiles(ring("/C=C\\"))));
   });
 
-  it("keeps dibenzo[a,e]cyclooctatetraene's two C=C Z", () => {
-    const form = aromaticForm(fromSmiles(String.raw`C1=CC=C2C(=C1)/C=C\C1=CC=CC=C1/C=C\2`));
-    expect(form.bonds.filter((b) => b.order === 4 && b.stereo)).toHaveLength(2);
+  it("keeps none where the large ring is fused to a small one at one bond: dibenzo[a,e]cyclooctatetraene, a benzo[18]annulene, as an annulene", () => {
+    // (dibenzo-COT's eight-ring shares one bond with each benzene ring: its C=C say no side, as a cyclooctatetraene's)
+    const cot = aromaticForm(fromSmiles(String.raw`C1=CC=C2C(=C1)/C=C\C1=CC=CC=C1/C=C\2`));
+    expect(cot.bonds.filter((b) => b.order === 4 && b.stereo)).toHaveLength(0);
+    // (a benzo[18]annulene: its Kekule drawings one, and an E/Z pair of its ring one, as on an annulene)
+    const plain = "C1=CC=C2C(=C1)C=CC=CC=CC=CC=CC=CC=CC=C2";
+    expect(new Set(kekules(fromSmiles(plain)).map(identityKey)).size).toBe(1);
+    const allE = String.raw`C1=CC=C2C(=C1)/C=C/C=C/C=C/C=C/C=C/C=C/C=C/C=C/2`;
+    const oneZ = String.raw`C1=CC=C2C(=C1)/C=C\C=C/C=C/C=C/C=C/C=C/C=C/C=C/2`;
+    expect(identityKey(fromSmiles(allE))).toBe(identityKey(fromSmiles(oneZ)));
   });
 
   it("is as it was elsewhere: porphine's Kekule drawings one, [18]annulene's E/Z isomers one, stilbene's two, a metacyclophane-diene's bridges their own", () => {

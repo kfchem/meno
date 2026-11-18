@@ -185,13 +185,15 @@ export type AromaticForm<G extends ChemGraph> = Omit<G, "bonds"> & { bonds: read
  * [14]- or [18]annulene, with E bonds in its ring), configurational
  * isomers that differ by such a bond are one structure, as the rule
  * states. One double bond keeps its side all the same (`keepsSide`): one
- * between rings, neither of its atoms in a ring of seven atoms or fewer,
- * in a ring system that has such a ring - a [2.2]paracyclophane-1,9-diene's
- * bridge, a cyclic phenylenevinylene's vinylene, dibenzo[a,e]cyclooctatetraene's
- * C=C. Its other Kekule structures make the rings beside it quinoid, and
- * its Z and E are two compounds; an annulene's and a cyclooctatetraene's
- * ring bonds, in a ring system with no small ring, and porphine's meso
- * C=C, its atoms in five-rings, say none, as above. The other Kekule
+ * between rings that a large ring runs across - neither of its atoms in a
+ * ring of seven atoms or fewer, and a ring of eight or more of the smallest
+ * set through it sharing two bonds or more with a ring of seven or fewer,
+ * as a phane's: a [2.2]paracyclophane-1,9-diene's bridge, a cyclic
+ * phenylenevinylene's vinylene. Its other Kekule structures make the rings
+ * it crosses quinoid, and its Z and E are two compounds. An annulene's and
+ * a cyclooctatetraene's ring bonds say none, as above - one fused to a
+ * benzene ring at one bond too (a benzannulene, dibenzo[a,e]cyclooctatetraene)
+ * - and so do porphine's meso C=C, their atoms in five-rings. The other Kekule
  * drawing of such a bond - drawn single, the rings beside it quinoid -
  * has no side to keep, so it is another identity than the usual drawing;
  * nobody draws it.
@@ -268,24 +270,19 @@ export function aromaticForm<G extends ChemGraph>(input: G): AromaticForm<G> {
 const SMALL_RING_MOST = 7;
 
 /**
- * Whether a double bond keeps its side in the aromatic form: neither of its atoms in a ring of `SMALL_RING_MOST` atoms or fewer, and its
- * ring system holding such a ring - a C=C between rings, joined into a large ring only through theirs.
+ * Whether a double bond keeps its side in the aromatic form: neither of its atoms in a ring of `SMALL_RING_MOST` atoms or fewer, and a
+ * larger ring of the smallest set through it that shares two bonds or more with such a ring - runs across it, as a phane's, not fused
+ * to it at one bond.
  */
 function keepsSide(n: number, bonds: readonly ChemBond[]): (b: ChemBond) => boolean {
   const rings = smallestRings(n, bonds.map((b) => [b.a, b.b] as const));
-  const inSmall = new Set(rings.filter((r) => r.length <= SMALL_RING_MOST).flat());
-  // (ring systems: rings joined by a shared atom, each atom by its system)
-  const system = new Array<number>(n).fill(-1);
-  const root = rings.map((_, i) => i);
-  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
-  rings.forEach((r, i) =>
-    r.forEach((a) => {
-      if (system[a] >= 0) root[find(i)] = find(system[a]);
-      else system[a] = i;
-    }),
-  );
-  const smallSystem = new Set(rings.flatMap((r, i) => (r.length <= SMALL_RING_MOST ? [find(i)] : [])));
-  return (b) => !inSmall.has(b.a) && !inSmall.has(b.b) && system[b.a] >= 0 && smallSystem.has(find(system[b.a]));
+  const key = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
+  const edges = rings.map((r) => new Set(r.map((x, k) => key(x, r[(k + 1) % r.length]))));
+  const small = rings.flatMap((r, i) => (r.length <= SMALL_RING_MOST ? [i] : []));
+  const inSmall = new Set(small.flatMap((i) => rings[i]));
+  // (a large ring that runs across a small one: two bonds or more of the small ring's its own)
+  const across = rings.map((r, i) => r.length > SMALL_RING_MOST && small.some((j) => [...edges[j]].filter((e) => edges[i].has(e)).length >= 2));
+  return (b) => !inSmall.has(b.a) && !inSmall.has(b.b) && rings.some((_, i) => across[i] && edges[i].has(key(b.a, b.b)));
 }
 
 /**
