@@ -155,7 +155,7 @@ function rangeOf(el: string, around: GeoAtom[], at: GeoAtom, terminals: number, 
     case "P":
     case "As":
     case "Sb": {
-      // (a phosphate's or phosphine oxide's one P=O; an arsine oxide's As=O, a stibine oxide's Sb=O - backlog 183)
+      // (a phosphate's or phosphine oxide's one P=O; an arsine oxide's As=O, a stibine oxide's Sb=O)
       if (deg === 4 && terminals) return { min: 1, max: 1, terminalOnly: true };
       if (hydrogens) return { min: Math.max(0, 3 - deg), max: Math.max(0, 3 - deg), exact: true };
       return deg <= 2 ? { min: 0, max: 1 } : { min: 0, max: 0 };

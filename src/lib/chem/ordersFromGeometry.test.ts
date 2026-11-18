@@ -125,7 +125,7 @@ describe("bond orders estimated from where atoms stand", () => {
       }
   });
 
-  it("gives a stibine oxide its one Sb=O, as an arsine oxide its As=O (backlog 183)", () => {
+  it("gives a stibine oxide its one Sb=O, as an arsine oxide its As=O", () => {
     // (Me3E=O laid out by hand: E at the origin, its O straight up at a double bond's length, its methyls below at a single bond's)
     for (const [el, eo, ec] of [["As", 1.66, 1.95], ["Sb", 1.85, 2.13]] as const) {
       const tilt = (109.5 * Math.PI) / 180;
@@ -141,7 +141,7 @@ describe("bond orders estimated from where atoms stand", () => {
     }
   });
 
-  it("leaves a metal's bond out of what its neighbour counts: acetone bound to Zn through its O keeps its C=O (backlog 183)", () => {
+  it("leaves a metal's bond out of what its neighbour counts: acetone bound to Zn through its O keeps its C=O", () => {
     // (laid out by hand; were Zn's bond counted, the O would have two neighbours and no double bond to give)
     const atoms: GeoAtom[] = [
       { el: "C", x: 0, y: 0, z: 0 },
