@@ -46,6 +46,7 @@
  */
 
 import type { ChemBond, ChemGraph } from "./graph";
+import { smallestRings } from "./rings";
 
 /** Two atoms as one key, the lower first. */
 const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
@@ -183,7 +184,17 @@ export type AromaticForm<G extends ChemGraph> = Omit<G, "bonds"> & { bonds: read
  * order. That holds for a real trans bond too: in a large annulene (a
  * [14]- or [18]annulene, with E bonds in its ring), configurational
  * isomers that differ by such a bond are one structure, as the rule
- * states.
+ * states. One double bond keeps its side all the same (`keepsSide`): one
+ * between rings, neither of its atoms in a ring of seven atoms or fewer,
+ * in a ring system that has such a ring - a [2.2]paracyclophane-1,9-diene's
+ * bridge, a cyclic phenylenevinylene's vinylene, dibenzo[a,e]cyclooctatetraene's
+ * C=C. Its other Kekule structures make the rings beside it quinoid, and
+ * its Z and E are two compounds; an annulene's and a cyclooctatetraene's
+ * ring bonds, in a ring system with no small ring, and porphine's meso
+ * C=C, its atoms in five-rings, say none, as above. The other Kekule
+ * drawing of such a bond - drawn single, the rings beside it quinoid -
+ * has no side to keep, so it is another identity than the usual drawing;
+ * nobody draws it.
  */
 export function aromaticForm<G extends ChemGraph>(input: G): AromaticForm<G> {
   const n = input.atoms.length;
@@ -239,14 +250,42 @@ export function aromaticForm<G extends ChemGraph>(input: G): AromaticForm<G> {
     aromatic.add(key(v, mate[v]));
   }
   if (!aromatic.size) return input;
+  // (a side drawn on a double bond of the form: whether it is kept is asked only where there is one)
+  const sided = input.bonds.some((b) => b.order === 2 && b.stereo && aromatic.has(key(b.a, b.b)));
+  const keeps = sided ? keepsSide(n, input.bonds) : () => false;
   return {
     ...input,
     bonds: input.bonds.map((b) => {
       if (!aromatic.has(key(b.a, b.b))) return b;
+      if (b.order === 2 && b.stereo && keeps(b)) return { ...b, order: AROMATIC };
       const { stereo: _side, ...rest } = b;
       return { ...rest, order: AROMATIC };
     }),
   };
+}
+
+/** Rings of at most this many atoms are the small ones `keepsSide` asks about: a cyclooctatetraene's is not one. */
+const SMALL_RING_MOST = 7;
+
+/**
+ * Whether a double bond keeps its side in the aromatic form: neither of its atoms in a ring of `SMALL_RING_MOST` atoms or fewer, and its
+ * ring system holding such a ring - a C=C between rings, joined into a large ring only through theirs.
+ */
+function keepsSide(n: number, bonds: readonly ChemBond[]): (b: ChemBond) => boolean {
+  const rings = smallestRings(n, bonds.map((b) => [b.a, b.b] as const));
+  const inSmall = new Set(rings.filter((r) => r.length <= SMALL_RING_MOST).flat());
+  // (ring systems: rings joined by a shared atom, each atom by its system)
+  const system = new Array<number>(n).fill(-1);
+  const root = rings.map((_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+  rings.forEach((r, i) =>
+    r.forEach((a) => {
+      if (system[a] >= 0) root[find(i)] = find(system[a]);
+      else system[a] = i;
+    }),
+  );
+  const smallSystem = new Set(rings.flatMap((r, i) => (r.length <= SMALL_RING_MOST ? [find(i)] : [])));
+  return (b) => !inSmall.has(b.a) && !inSmall.has(b.b) && system[b.a] >= 0 && smallSystem.has(find(system[b.a]));
 }
 
 /**
