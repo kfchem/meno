@@ -96,7 +96,7 @@ import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } fr
 import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
-import { unsureOf, type Unsure } from "./chem/drawing";
+import { readAs, unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import CornersCard from "./CornersCard";
@@ -2700,7 +2700,7 @@ function WorkspaceContent({
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             if (!a) return undefined;
             const sum = model.bonds.reduce((n, b) => (b.a === a.id || b.b === a.id ? n + valenceOrder(b, a.el) : n), 0);
-            return canTakeBond(a.el, sum, a.charge ?? 0, a.radical)
+            return canTakeBond(readAs(a), sum, a.charge ?? 0, a.radical)
               ? () => store.getState().startExtend(a.id, "chain", true)
               : undefined;
           })()}

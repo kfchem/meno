@@ -30,7 +30,7 @@ import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
-import { degrees, drawingOf } from "./drawing";
+import { degrees, drawingOf, readAs } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
@@ -143,7 +143,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   const fourForm = new Map<number, "x" | "cross">();
   part.atoms.forEach((a, i) => {
     const mine = bondsOf.get(i) ?? [];
-    if (!isMetal(a.el) || mine.length !== 4) return;
+    if (!isMetal(readAs(a)) || mine.length !== 4) return;
     // (not a chelate's metal - two of its donors joined other than through it: its own rules lay it out)
     const donors = mine.map((k) => (drawing.bonds[k].a === i ? drawing.bonds[k].b : drawing.bonds[k].a));
     const reached = new Set([donors[0]]);
@@ -209,7 +209,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
     atoms: kept.map((i) => {
       const t = configuration(i);
       return {
-        el: part.atoms[i].el,
+        el: readAs(part.atoms[i]),
         ...(part.atoms[i].charge ? { charge: part.atoms[i].charge } : {}),
         hs: drawing.atoms[i].hs + (folded.get(at.get(i)!)?.length ?? 0),
         ...(t ? { tetra: t } : {}),
@@ -629,7 +629,7 @@ function poseAllyls(
       ? labelTrims([{ id: 0, x: 0, y: 0, el: metalEl }, { id: 1, x: u.x, y: u.y, el: "*" }], { a1: 0, a2: 1, order: 1, endpoints: [1] }, opts, zoom).a
       : null;
   const margin = opts ? (opts.labelMarginPx ?? opts.fontPx * 0.16) : 0;
-  const el = new Map(part.atoms.map((a) => [a.id, a.el]));
+  const el = new Map(part.atoms.map((a) => [a.id, readAs(a)]));
   const at = new Map(atoms.map((a, i) => [a.id, i]));
   for (const sys of systems) {
     const chain = allylChain({ endpoints: [...sys.atoms] }, part.bonds);

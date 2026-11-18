@@ -1462,8 +1462,9 @@ end to the other, each with its energy; `converged` true for the point it
 started from alone, which becomes the molecule's entry frame; a frames
 result `path.frame` saying what each frame is, "the point it started from"
 for that one. Where a side stopped before its end, `optimised` false and a
-warning in the program's words: the molecule goes out of *Failed*, the path
-as far as it came.
+warning in the program's words: the molecule is kept with the others, the
+path as far as it came, its ends where it stopped for the steps after it,
+and the step's line says how many.
 
 ### Optimise to a saddle point
 
