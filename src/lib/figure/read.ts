@@ -640,6 +640,13 @@ function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number, r
     for (let i = 0; i < near.length && !pair; i++)
       for (let j = i + 1; j < near.length && !pair; j++) if (dot(unit(c, near[i].c), unit(c, near[j].c)) < -0.5) pair = [near[i], near[j]];
     if (!pair) continue;
+    // (a mark by a word that reads as no label - the colon of a yield's "8: 40%", a dot between two lines of words - is the text's: both
+    // ends of a bond drawn so short are labels)
+    if (pair.some((w) => !reads(labelText(words[w.k], reads)))) continue;
+    // (nor a mark down at the words' foot between two side by side - a comma, "Cs2CO3, acetone": a bond between labels is drawn at their middle)
+    const [p0, p1] = [words[pair[0].k], words[pair[1].k]];
+    const middle = (p0.box[1] + p0.box[3] + p1.box[1] + p1.box[3]) / 4;
+    if (Math.abs(unit(pair[0].c, pair[1].c).x) >= 0.9 && c.y - middle > LOW_MARK * Math.max(p0.size, p1.size)) continue;
     // (a sign between two words of a line of text is none: lineGoesOn)
     const [l, r] = pair[0].c.x < pair[1].c.x ? pair : [pair[1], pair[0]];
     if (Math.abs(unit(l.c, r.c).x) >= 0.9 && lineGoesOn(words[l.k], words, false, reads) && lineGoesOn(words[r.k], words, true, reads)) continue;
@@ -788,6 +795,66 @@ function boxGap(a: Box, b: Box): number {
 
 /** How many bonds an element in a label takes, its hydrogens and charge aside: an NH2's N one, an OH's O one. */
 const BONDS_LEFT: Record<string, number> = { N: 3, O: 2, S: 2, P: 3, B: 3, Si: 4, Se: 2 };
+
+/** How long a sign of a line of text is drawn at most - a hyphen, one line of an = - in its letters' size: an = is about half as wide as they are tall. */
+const SIGN_LONG = 0.6;
+/** How far a variable's = stands from the words either side at most, in their letters' size: a space. */
+const SIGN_GAP = 0.6;
+/** How far a hyphen stands from the word it is set by at most, in its letters' size: it all but touches it. */
+const HYPHEN_GAP = 0.3;
+/** How far under the middle of two words side by side a mark between them lies at the least, in their size, to be at their foot: a comma's, a full stop's. */
+const LOW_MARK = 0.25;
+/** How far a line taken for a letter stands from the letter beside it at most, in its size: a letter's room. */
+const LETTER_GAP = 0.6;
+/** How tall a capital is, in its letters' size, at the least and the most: a line that tall on a line of text may be one. */
+const CAPITAL: readonly [number, number] = [0.55, 0.85];
+
+/** How far a line alone may be from the figure's bond, as a part of it, and still be a bond: a fifth. */
+const ALONE_WITHIN = 0.2;
+
+/**
+ * A figure's atoms and bonds without what stands alone and is no structure:
+ * a point with no label and no bond, and one line - single or multiple, two
+ * ends with no label - not about a bond long (within `ALONE_WITHIN`): a
+ * chart's level, a dagger's or a numeral's strokes, a letter drawn as lines.
+ * A line a bond long alone - an ethylene drawn as its double bond - stays.
+ */
+export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBond[], bond: number): { atoms: ReadAtom[]; bonds: ReadBond[] } {
+  const bare = (a: ReadAtom) => !a.label && !a.el && !a.marked && !a.dots && !a.repeat;
+  const count = atoms.map(() => 0);
+  for (const b of bonds) {
+    count[b.a]++;
+    count[b.b]++;
+  }
+  const out = new Set<number>();
+  atoms.forEach((a, i) => {
+    if (bare(a) && !count[i]) out.add(i);
+  });
+  for (const b of bonds) {
+    const [p, q] = [atoms[b.a], atoms[b.b]];
+    if (count[b.a] !== 1 || count[b.b] !== 1 || !bare(p) || !bare(q)) continue;
+    if (Math.abs(Math.hypot(p.x - q.x, p.y - q.y) - bond) > ALONE_WITHIN * bond) out.add(b.a).add(b.b);
+  }
+  if (!out.size) return { atoms: [...atoms], bonds: [...bonds] };
+  const to = new Map<number, number>();
+  const kept: ReadAtom[] = [];
+  atoms.forEach((a, i) => {
+    if (out.has(i)) return;
+    to.set(i, kept.length);
+    kept.push(a);
+  });
+  return { atoms: kept, bonds: bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...b, a: to.get(b.a)!, b: to.get(b.b)! })) };
+}
+
+/** Whether a line is set level: a hyphen, an ='s lines. */
+const level = (s: Stroke) => Math.abs(s.a.y - s.b.y) <= 0.15 * len(s);
+
+/** Whether a word is a variable's name - R, R', R1, Ar (VARIABLE_NAMES) - its letters as large as its own, its primes and number smaller. */
+function variableName(w: Word): boolean {
+  const own = w.letters.filter((l) => l.size >= 0.85 * w.size);
+  const rest = w.letters.filter((l) => l.size < 0.85 * w.size);
+  return VARIABLE_NAMES.has(own.map((l) => l.c).join("")) && rest.every((l) => /^[\d'\u2032\u2033]$/.test(l.c) || l.box[3] < own[0].box[3] - 0.4 * w.size);
+}
 
 /** How large a radical's dot is drawn at most, in bonds (at least half as wide again as a line). */
 const DOT = 0.16;
@@ -1123,7 +1190,39 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   };
   const stub = (s: Stroke) => len(s) > 0.15 * bond && (outOf(s, s.a, s.b) || outOf(s, s.b, s.a));
   // (a short line between two words of a line of text - a caption's = - is its sign, however long a bond's line it might be)
-  const textSign = (s: Stroke) => len(s) < 0.6 * bond && labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b)) && inText(s);
+  // (or after a variable's name - an R' = OH under a structure, its sign two short lines set level, a space from each word - is its sign:
+  // the line names what R' is, never a double bond)
+  const wordAt = (p: Point, out: Point) => words.find((v) => reaches(p, out, v.box, bond));
+  const naming = (s: Stroke) => {
+    const [l, r] = s.a.x < s.b.x ? [s.a, s.b] : [s.b, s.a];
+    const [w, v] = [wordAt(l, unit(r, l)), wordAt(r, unit(l, r))];
+    return !!w && !!v && level(s) && len(s) < SIGN_LONG * w.size && l.x - w.box[2] < SIGN_GAP * w.size && v.box[0] - r.x < SIGN_GAP * w.size && variableName(w);
+  };
+  const textSign = (s: Stroke) => len(s) < 0.6 * bond && labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b)) && (inText(s) || naming(s));
+  // (a short level line at the side of a word that reads as no label - a hyphen, trans-TS1, t-BuOOH, cis-II - is the text's, at a
+  // word's height and as long as a letter at most: a bond into a label is cut back from it, and longer)
+  const hyphen = (s: Stroke) =>
+    len(s) < 0.45 * bond &&
+    level(s) &&
+    words.some((w) => {
+      const [x0, x1] = [Math.min(s.a.x, s.b.x), Math.max(s.a.x, s.b.x)];
+      const gap = Math.min(Math.abs(x0 - w.box[2]), Math.abs(w.box[0] - x1));
+      const y = (s.a.y + s.b.y) / 2;
+      return len(s) < SIGN_LONG * w.size && y > w.box[1] && y < w.box[3] && gap < HYPHEN_GAP * w.size && !reads(labelText(w, reads));
+    });
+  // (and a line upright by a letter of a line of text, standing on its baseline and as tall as its capitals - an I drawn as a line, the
+  // I of an I2 under an arrow - is that letter: a bond by a label meets it, never stands beside it as tall)
+  const asLetter = (s: Stroke) => {
+    if (Math.abs(s.a.x - s.b.x) > 0.1 * len(s)) return false;
+    const [top, foot] = [Math.min(s.a.y, s.b.y), Math.max(s.a.y, s.b.y)];
+    const x = (s.a.x + s.b.x) / 2;
+    return words.some((w) =>
+      w.letters.some((l) => {
+        const gap = Math.max(l.box[0] - x, x - l.box[2]);
+        return gap > 0 && gap < LETTER_GAP * l.size && Math.abs(foot - l.box[3]) < 0.12 * l.size && foot - top > CAPITAL[0] * l.size && foot - top < CAPITAL[1] * l.size && /[A-Za-z]/.test(l.c);
+      }),
+    );
+  };
   // (and a line more than six bonds long is none - a table's rule, a graph's axis, a frame round a part of the figure: a bond is drawn at
   // about its length, stretched in a large ring to five at most, and an arrow's line is the arrow's)
   const ruled = (s: Stroke) => len(s) > 6 * bond;
@@ -1151,9 +1250,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
   const toLabel = (s: Stroke) =>
     len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
-  const lines = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
+  const ofText = (s: Stroke) => textSign(s) || hyphen(s) || asLetter(s);
+  const lines = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !ofText(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
-  const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
+  const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && !hyphen(s) && !asLetter(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
   // (a line lying along another - the same middle line, within a sixteenth of a bond, as long as the other or shorter, within its stretch -
   // is that line: a bold bar has a hairline drawn along it. It is never a second line of a multiple bond)
@@ -1526,7 +1626,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   }
   // (each repeat unit in brackets: a whole count's unit marked to be read so many times, else the atoms its brackets cross saying why not)
   repeatsRead(repeats.pairs, atoms, bonds, bond, from);
-  return { atoms, bonds, bond, left: { letters: left }, ...(tableCells.length ? { table: tableCells } : {}) };
+  const kept = withoutStrays(atoms, bonds, bond);
+  return { ...kept, bond, left: { letters: left }, ...(tableCells.length ? { table: tableCells } : {}) };
 }
 
 /**

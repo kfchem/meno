@@ -328,7 +328,8 @@ describe("the thresholds of a bold bond and its thin neighbours, each one just o
     const [r, s] = beside(at, end, -0.2);
     const inner = (a: P, b: P): FigurePath => line([a[0] + 0.2 * L, a[1]], [b[0] - 0.2 * L, b[1]], thin);
     const withBold = own(read([bar(at, end, 0.15 * L), inner(p, q), inner(r, s)]));
-    expect(withBold.map((b) => [b.order, !!b.bold]).sort()).toEqual([[1, false], [2, true]]);
+    // (the other thin line, left over, is a line alone well short of a bond: no structure - withoutStrays)
+    expect(withBold.map((b) => [b.order, !!b.bold]).sort()).toEqual([[2, true]]);
     const triple = own(read([line(at, end, thin), line(p, q, thin), line(r, s, thin)]));
     expect(triple.map((b) => b.order)).toEqual([3]);
   });
