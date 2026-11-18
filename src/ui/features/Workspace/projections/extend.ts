@@ -1,6 +1,6 @@
 /**
  * A bond dragged out of an atom of a chair (docs/EDITOR-2D.md, *Projections*: groups are drawn by extension): it goes to one of that atom's free
- * positions as F9 gives them, seen as the chair is seen - the one whose seen direction is nearest the pointer's - and nowhere between, so that
+ * positions as the projection solids give them (lib/chem/perception/projection), seen as the chair is seen - the one whose seen direction is nearest the pointer's - and nowhere between, so that
  * nothing the chair is extended with is left unread. Pure: the model in, where the bond ends and what the place is called out.
  */
 import type { Atom, Bond } from "../store/types";

@@ -234,7 +234,7 @@ describe("cyclohexane's chair with its twelve hydrogens drawn at the tool's plac
     return n;
   }
 
-  it("has exactly two crossings, in either form and either flip (F8's known answer; which of each two is behind is read once a group carries its depth)", () => {
+  it("has exactly two crossings, in either form and either flip (which of each two is behind is read once a group carries its depth)", () => {
     for (const flip of [false, true]) {
       for (const form of [0, 1] as const) {
         const d = draw(flip, form);
