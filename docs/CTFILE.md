@@ -323,9 +323,9 @@ metal, so that the whole is as charged as the formula says. An O with
 its count, or before a halide, a bracket or the end of the formula, is an
 oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
 and two M-Cl, UO2Cl2 is uranyl's O=U=O with two chlorides, WOCl4, VOCl3,
-VO(acac)2, MeReO3 - each element written with its count, as an inorganic
-formula is, never a group read across it; an O that begins a group (OAc,
-OTf, OiPr) is the group's, and a μ-O is bound to each metal it bridges by
+VO(acac)2, MeReO3 and ReO3Me - each element written with its count, as an
+inorganic formula is, never a group read across it; an O that begins a
+group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O is bound to each metal it bridges by
 a single bond. A part of several metals with an oxo not marked μ is not
 read (Re2O7: which O bridge, the formula does not say). A ligand in
 brackets may have its descriptor: RuCl[(S,S)-TsDPEN](p-cymene),

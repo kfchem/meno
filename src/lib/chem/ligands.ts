@@ -593,10 +593,10 @@ function itemsOf(text: string, names: Names): Item[] | null {
 }
 
 /**
- * An oxo where a formula's text has an O with its count, or an O before a halide, a bracket or the end - MoO2Cl2, UO2Cl2, WOCl4,
- * VO(acac)2, MeReO3 - and no group after it: not an O2C of a carboxylate, an OAc or an OMe.
+ * An oxo where a formula's text has an O with its count - MoO2Cl2, UO2Cl2, MeReO3, ReO3Me - but for the O2C of a carboxylate, an O2N or
+ * an O2S, which begin a group; or an O before a halide, a bracket or the end - WOCl4, VO(acac)2: never the O of a group, OAc, OMe.
  */
-const OXO = /^O(?:\d+(?![A-Za-z])|\d*(?=(?:F|Cl|Br|I)(?![a-z])|[[(]|$))/;
+const OXO = /^O(?:\d+(?!C(?!l)|N|S)|(?=(?:F|Cl|Br|I)(?![a-z])|[[(]|$))/;
 
 /** A bridging ligand's mark: μ-Cl, μ-dvtms. */
 const MU = /^(?:μ|mu)2?-(.+)$/;

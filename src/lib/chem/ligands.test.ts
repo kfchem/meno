@@ -166,6 +166,7 @@ describe("complexes' formulas", () => {
     expect(formula(of("ReOCl3(PPh3)2"))).toBe("C36H30Cl3OP2Re");
     expect(formula(of("VO(acac)2"))).toBe("C10H14O5V");
     expect(formula(of("MeReO3"))).toBe("CH3O3Re");
+    expect(bondsOf("ReO3Me")).toEqual(["C1", "O2", "O2", "O2"]);
     expect(abbreviationOf("MoO2Cl2")?.name).toBe("molybdenum, 2 oxo, 2 Cl");
     // (an O that begins a group stays the group's: acetate, triflate, isopropoxide)
     expect(formula(of("Pd(OAc)2"))).toBe("C4H6O4Pd");
