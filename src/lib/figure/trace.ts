@@ -22,7 +22,9 @@
  * and paper by the histogram's two classes (Otsu 1979); patches by two
  * passes over the pixels (Rosenfeld and Pfaltz 1966); how far each pixel
  * of ink is from the paper exactly (./inkFit `distances`); centre lines by
- * thinning (Zhang and Suen 1984); each line fitted by straight pieces
+ * thinning (Zhang and Suen 1984: T. Y. Zhang, C. Y. Suen, Commun. ACM 27
+ * (1984) 236-239, as Lü and Wang amend it: H. E. Lü, P. S. P. Wang,
+ * Commun. ACM 29 (1986) 239-242); each line fitted by straight pieces
  * (Ramer 1972; Douglas and Peucker 1973). How wide a line is is read from
  * how much ink lies across it, so to a fraction of a pixel. Every
  * tolerance is in the drawing's own line width or bond, none in pixels.
@@ -192,7 +194,10 @@ export function patchesOf(ink: Uint8Array, width: number, height: number): { pat
   return { patch, count: number.size };
 }
 
-/** The ink thinned to its centre lines, a pixel wide, joined as it was (Zhang and Suen 1984). */
+/**
+ * The ink thinned to its centre lines, a pixel wide, joined as it was (Zhang and Suen 1984), a pixel taken away only with three to six of
+ * its neighbours inked, not two (Lü and Wang 1986): a slanting line two pixels thick - a bond at 300 dpi - is kept, not thinned away.
+ */
 export function thinned(ink: Uint8Array, width: number, height: number): Uint8Array {
   const s = ink.slice();
   const at = (x: number, y: number) => (x >= 0 && x < width && y >= 0 && y < height ? s[y * width + x] : 0);
@@ -208,7 +213,7 @@ export function thinned(ink: Uint8Array, width: number, height: number): Uint8Ar
         // (round it from above, clockwise: P2 to P9)
         const p = [at(x, y - 1), at(x + 1, y - 1), at(x + 1, y), at(x + 1, y + 1), at(x, y + 1), at(x - 1, y + 1), at(x - 1, y), at(x - 1, y - 1)];
         const b = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
-        if (b < 2 || b > 6) continue;
+        if (b < 3 || b > 6) continue;
         let a = 0;
         for (let k = 0; k < 8; k++) if (!p[k] && p[(k + 1) % 8]) a++;
         if (a !== 1) continue;

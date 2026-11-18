@@ -118,6 +118,19 @@ describe("the ink of a picture", () => {
       expect(n).toBe(1);
     }
   });
+
+  it("keeps a slanting line two pixels thick: thinned to a line its whole length, not to nothing", () => {
+    // (a line at 45 degrees, its ink a staircase two pixels thick - as a bond 2.5 wide is inked at 300 dpi)
+    const [w, h] = [40, 40];
+    const ink = new Uint8Array(w * h);
+    for (let i = 5; i < 35; i++) {
+      ink[i * w + i] = 1;
+      ink[i * w + i + 1] = 1;
+    }
+    const s = thinned(ink, w, h);
+    const rows = Array.from({ length: h }, (_, y) => s.subarray(y * w, (y + 1) * w).some((v) => v));
+    expect(rows.slice(7, 33).every((r) => r)).toBe(true);
+  });
 });
 
 describe("a picture traced", () => {
