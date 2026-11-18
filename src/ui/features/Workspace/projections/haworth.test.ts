@@ -221,7 +221,8 @@ describe("the Haworth icon clicked again", () => {
     nearEdge();
     const where = mid();
     const depth = doc.history().undoDepth;
-    st().putHaworth({ x: 40, y: 40 });
+    // (Quick Add opened on the ring - a little off its middle)
+    st().putHaworth({ x: 4.5, y: -1.6 });
     expect(doc.getState().model.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "C", "O"]);
     expect(doc.getState().model.bonds).toHaveLength(5);
     expect(doc.history().undoDepth).toBe(depth + 1);
@@ -229,15 +230,19 @@ describe("the Haworth icon clicked again", () => {
     nearEdge();
     // (in its place: its middle where the six's was, near enough - a ring of five's middle is not a six's)
     expect(Math.hypot(mid().x - where.x, mid().y - where.y)).toBeLessThan(0.5);
-    st().putHaworth({ x: 0, y: 0 });
+    st().putHaworth({ x: 4, y: -2 });
     expect(doc.getState().model.atoms).toHaveLength(6);
     nearEdge();
     // (undone, the five; clicked from there, the six again)
     doc.undo();
     expect(doc.getState().model.atoms).toHaveLength(5);
     nearEdge();
-    st().putHaworth({ x: 0, y: 0 });
+    st().putHaworth({ x: 4, y: -2 });
     expect(doc.getState().model.atoms).toHaveLength(6);
+    // (Quick Add opened far from it: another ring put down there, this one as it was)
+    st().putHaworth({ x: 40, y: 40 });
+    expect(doc.getState().model.atoms).toHaveLength(12);
+    doc.undo();
     // (anything done since: another ring put down)
     st().addAtom(30, 30, "N");
     st().putHaworth({ x: 20, y: 0 });

@@ -36,14 +36,14 @@ Double-click empty space and choose *Chain* from the icons, or choose *Chain fro
 
 Double-click empty space and open *Projections*, then choose *Chair*: a cyclohexane chair is put down where you double-clicked, drawn as a chair is drawn, seen from above and from the right, every bond plain.
 
-- Click *Chair* again, before doing anything else, for the view from the other side; again, and it comes back. Each is one step to undo.
+- For the view from the other side, double-click on the chair you just put down, before doing anything else, and choose *Chair* again; again, and it comes back. Each is one step to undo. Opened anywhere else, *Chair* puts down another chair there.
 
 - Double-click an atom of the chair and drag out a bond: it goes to one of the atom's two places, axial or equatorial, whichever is nearer the pointer, and says which. It cannot be left between the two. Where a group makes a stereocentre, its R or S is shown.
 - Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* keeps the chair as it is drawn and tidies the groups on it.
 - A chair states the configuration of every centre in it. To leave one open, make its bond wavy.
 - A 3D structure made from a chair takes the drawing's configuration, not the conformation it is drawn in.
 
-Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose); click it again, before doing anything else, for one of five (a furanose). It is seen from slightly above with the ring oxygen behind, its front bond bold and the two bonds beside it wedge-shaped. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which. The next bond out of that group turns aside, so a CH2OH reads as CH2 and OH; make that bond triple and it straightens, as a nitrile is drawn. A group pointing into the ring - such as a CH2OH on C-5 pointing down - has room for one label: type CH2OH on its atom.
+Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose); double-click on the ring you just put down, before doing anything else, and choose it again for one of five (a furanose). It is seen from slightly above with the ring oxygen behind, its front bond bold and the two bonds beside it wedge-shaped. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which. The next bond out of that group turns aside, so a CH2OH reads as CH2 and OH; make that bond triple and it straightens, as a nitrile is drawn. A group pointing into the ring - such as a CH2OH on C-5 pointing down - has room for one label: type CH2OH on its atom.
 
 ## Labels {#labels}
 

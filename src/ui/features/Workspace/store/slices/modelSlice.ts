@@ -7,7 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { centredAt, restyledDrawn } from "../../utils/copyPaste";
 import { chairDrawing, FIRST_FORM } from "../../projections/chair";
-import { haworthDrawing } from "../../projections/haworth";
+import { HAWORTH_SCALE, haworthDrawing } from "../../projections/haworth";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -138,6 +138,9 @@ const chairPuts = new WeakMap<Model, ChairPut>();
 /** A Haworth ring the Quick Add icon put down, by the model it left: its atoms' ids, its middle and its size - the same way as `chairPuts`. */
 type HaworthPut = { ids: number[]; at: { x: number; y: number }; size: 5 | 6 };
 const haworthPuts = new WeakMap<Model, HaworthPut>();
+
+/** How near the chair just put down Quick Add is opened for its icon to turn that chair, in bonds from its ring's middle: on it, not beside it. */
+const CHAIR_TURN_REACH = 2;
 
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
@@ -734,9 +737,10 @@ export const createModelSlice = (
   },
 
   putChair: (at: { x: number; y: number }) => {
-    // (the chair just put down, unchanged: turned to its other form - the view from the other side - as one step; again, back)
+    // (the chair just put down, unchanged, and Quick Add opened on it - within two bonds of its ring's middle: turned to its other form, the
+    //  view from the other side, as one step; again, back. Opened anywhere else, another chair is put down there)
     const was = chairPuts.get(get().model);
-    if (was) {
+    if (was && Math.hypot(at.x - was.at.x, at.y - was.at.y) <= CHAIR_TURN_REACH * was.length) {
       const form: 0 | 1 = was.form === 1 ? 0 : 1;
       const d = chairDrawing({ at: was.at, form, firstId: 1, firstBondId: 1, length: was.length });
       const moves = was.ids.map((id, k) => ({ id, x: d.atoms[k].x, y: d.atoms[k].y, z: d.atoms[k].z }));
@@ -758,8 +762,10 @@ export const createModelSlice = (
   },
 
   putHaworth: (at: { x: number; y: number }) => {
-    // (the ring just put down, unchanged: the other size in its place - a ring of five for one of six, and back - as one step)
-    const was = haworthPuts.get(get().model);
+    // (the ring just put down, unchanged, and Quick Add opened on it - as the chair's, within two of its bonds of its middle: the other size in
+    //  its place - a ring of five for one of six, and back - as one step. Opened anywhere else, another ring is put down there)
+    const put = haworthPuts.get(get().model);
+    const was = put && Math.hypot(at.x - put.at.x, at.y - put.at.y) <= CHAIR_TURN_REACH * HAWORTH_SCALE * NOMINAL_BOND_LENGTH ? put : undefined;
     const size: 5 | 6 = was ? (was.size === 6 ? 5 : 6) : 6;
     const middle = was ? was.at : at;
     const drawing = haworthDrawing({ at: middle, size, firstId: 1, firstBondId: 1 });
