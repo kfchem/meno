@@ -134,6 +134,23 @@ export function endsShared<A extends ChemAtom, B extends ChemBond, G extends Gra
       bonds[bond] = { ...bonds[bond], order: SHARED_END };
       atoms[to] = { ...atoms[to], charge: 0, hs: 0 };
     }
+    // (ends now alike - one element, written the same - are leaves of one centre that any order of them takes onto each other:
+    //  numbered here in the order they come (`^#1`, `^#2`), so that the canonical search need not find their swaps, one centre
+    //  after another - a phytic acid's six phosphates, an oligonucleotide's backbone - each order writing one text, since every
+    //  numbering of them is the same structure (found in review). A configuration at such a centre sets nothing - its two alike
+    //  ends swapped turn it over and leave all else - so it is written with none)
+    const alike = new Map<string, number[]>();
+    for (const { to } of kept) alike.set(atoms[to].el, [...(alike.get(atoms[to].el) ?? []), to]);
+    let numbered = false;
+    for (const ends of alike.values()) {
+      if (ends.length < 2) continue;
+      ends.forEach((y, k) => (atoms[y] = { ...atoms[y], el: `${atoms[y].el}^#${k + 1}` }));
+      numbered = true;
+    }
+    if (numbered && atoms[x].tetra) {
+      const { tetra: _tetra, ...plain } = atoms[x];
+      atoms[x] = plain as A;
+    }
     changed = true;
   }
   return changed ? { ...g, atoms, bonds } : g;
