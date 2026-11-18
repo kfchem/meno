@@ -261,6 +261,7 @@ function composedOf(label: string): Abbreviation | undefined {
   if (group) return group;
   // (a metal's salt of an oxoanion - AgNO3, Cu(NO3)2, CuSO4 - read as its ions, before a complex's formula would read its O across: ./condensed)
   const salt = metalSaltStructure(label, groupStructure);
+  if (salt === "unread") return undefined;
   if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
@@ -328,7 +329,11 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
     }
     return { atoms, bonds, attach: [], ...(axes.length ? { axes } : {}), name: names.join(" · ") };
   }
-  return ionStructure(label) ?? metalSaltStructure(label, groupStructure) ?? condensedStructure(label, groupLabels(), groupStructure);
+  const ion = ionStructure(label);
+  if (ion) return ion;
+  const salt = metalSaltStructure(label, groupStructure);
+  if (salt === "unread") return null;
+  return salt ?? condensedStructure(label, groupLabels(), groupStructure);
 }
 
 /**

@@ -422,8 +422,9 @@ Read by rule, besides, as whole molecules:
   metal's charge as many as balance them, one to four
   (`metalSaltStructure`, `src/lib/chem/condensed.ts`). Mercury(I) is the
   Hg2²⁺ ion, its two Hg bonded, each +1 (Hg2(NO3)2, Hg2SO4); Hg(NO3)2 is
-  Hg²⁺, and HgNO3, mercury(I)'s empirical formula, one Hg⁺: the formula
-  does not say the pair. A halide (CuCl2), a
+  Hg²⁺. HgNO3, mercury(I)'s empirical formula, is left unread: one Hg⁺
+  alone is no ion, and the formula does not say the pair. A halide
+  (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
 - an ion written alone, a counter-ion set beside a complex or a salt: an

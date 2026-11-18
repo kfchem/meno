@@ -48,9 +48,9 @@ describe("a metal's salt of an oxoanion", () => {
     }
     const two = of("Hg(NO3)2");
     expect([ions(two)[0], hgHg(two), charge(two)]).toEqual(["Hg+2", [], 0]);
-    // (one Hg+ alone, HgNO3 - mercury(I)'s empirical formula, its stoichiometry no different - is one cation; two Hg2+ are not bonded)
-    const one = of("HgNO3");
-    expect([ions(one)[0], one.bonds.filter((b) => one.atoms[b.a1].el === "Hg" || one.atoms[b.a2].el === "Hg")]).toEqual(["Hg+1", []]);
+    // (one Hg+ alone is no ion: HgNO3, mercury(I)'s empirical formula, does not say the pair - left unread, by every reader; two Hg2+
+    //  are not bonded)
+    expect([abbreviationOf("HgNO3") ?? null, abbreviationStructure("HgNO3")]).toEqual([null, null]);
     expect([ions(of("Hg2(SO4)2")).slice(0, 2), hgHg(of("Hg2(SO4)2"))]).toEqual([["Hg+2", "Hg+2"], []]);
     // (another metal's two +1 cations stay two ions: silver carbonate)
     expect(hgHg(of("Ag2CO3"))).toEqual([]);

@@ -113,9 +113,10 @@ const SALT_METALS: ReadonlySet<string> = new Set([
  * A metal's salt of one oxoanion, as its formula writes it - the metal and its count, then the anion, in brackets with its count or bare:
  * AgNO3, Cu(NO3)2, Mg(ClO4)2, CuSO4, Ag2CO3, Fe2(SO4)3 - read as its ions: the anion of the least charge its formula makes (`anionOf`:
  * NO3 and ClO4 one, SO4 and CO3 two, PO4 three), and the metal's as many as balance them, one to four. Null for any other label: a
- * halide, a group by one bond (OTf, OAc) - a complex's - and the alkali metals' salts, which a condensed formula reads.
+ * halide, a group by one bond (OTf, OAc) - a complex's - and the alkali metals' salts, which a condensed formula reads. "unread" for
+ * a label no reader is to read: one Hg+ alone (HgNO3).
  */
-export function metalSaltStructure(label: string, groupOf: (label: string) => GroupStructure | null): (GroupStructure & { name: string }) | null {
+export function metalSaltStructure(label: string, groupOf: (label: string) => GroupStructure | null): (GroupStructure & { name: string }) | "unread" | null {
   const m = /^([A-Z][a-z]?)(\d*)(?:\(([A-Za-z0-9]+)\)(\d+)|([A-Za-z0-9]+))$/.exec(label);
   if (!m || !SALT_METALS.has(m[1])) return null;
   const text = m[3] ?? m[5];
@@ -129,6 +130,9 @@ export function metalSaltStructure(label: string, groupOf: (label: string) => Gr
     if (!ion) continue;
     const q = (anions * charge) / metals;
     if (!Number.isInteger(q) || q < 1 || q > 4) return null;
+    // (one Hg+ alone is no ion: mercury(I) is the Hg2 2+ pair, and HgNO3, its empirical formula, does not say the pair - left unread, by
+    // this reader and the readers after it)
+    if (m[1] === "Hg" && metals === 1 && q === 1) return "unread";
     const atoms: SmilesAtom[] = Array.from({ length: metals }, () => ({ el: m[1], hs: 0, charge: q }));
     const bonds: StructureBond[] = [];
     // (mercury(I) is the Hg2 2+ ion, its two Hg bonded, each +1: Hg2(NO3)2, Hg2SO4)
