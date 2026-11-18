@@ -503,6 +503,21 @@ Taken on 2026-10-13:
   reflections, each checked to have the configuration drawn - one whose
   drawing Meno cannot read whole (a wedge it does not read, a label
   written out, a ring bound to a metal through a star) made itself.
+- **Centres in AND and OR groups** (foundation part 7, 2026-11-16). A
+  structure whose centres are drawn in a group ("and1", "or1") is its
+  halves (WORKFLOWS.md, *Stereoisomers is Meno's*), and Meno asks first,
+  as for stereo left open: *Make all* makes each half that can be made in
+  3D as a molecule of its own, the half as drawn first, each saying which
+  it is on its rows of how it was made ("and1 as drawn", "and1 turned
+  over"); *Make one*, the half as drawn, saying "and1 as drawn only". A
+  half that is the mirror image of one before it (one group and nothing
+  else with a hand: a racemate) is not searched again: every conformer of
+  the other is reflected through one plane, its energies kept and its R
+  and S read anew, and it says "and1 turned over: the mirror image of the
+  half as drawn (same energies)" and "made as the mirror image of and1 as
+  drawn: not calculated". Where the structure has an axis, a cumulene or
+  a metal, which a reflection would turn too, each half is searched. A
+  *Conformers* step makes the half as drawn, said so.
 - **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
   gives every conformer it made, as it made them (PLUGINS.md); the page
   makes them its own (`chem/pageConformers`), in a worker of its own so
@@ -582,6 +597,44 @@ Taken on 2026-10-13:
     until its search ends: at most one for each stereoisomer asked for.
   - An atom map's 3D structures are made as before: their search is asked
     to its end, the map waiting on it.
+- **A structure of several parts** (2026-11-13; the chemistry check's ruling, the
+  maintainer's idea) - a salt, a mixture, drawn as one structure: each
+  part's conformers are searched as the part alone, in rounds of its own
+  (`chem/partsAlone`) - its own first round, as the part drawn alone would
+  be asked (a first round set in Settings is kept as set: `partRounds`),
+  its own charge and electrons, its own lowest, Meno's
+  one definition of the same conformer - for nothing between parts is
+  modelled, and a search of the whole found each embedding's parts at a
+  place of their own, every one new, to its most. A part alike to one
+  before it - written alike, atom for atom, and configured alike atom
+  for atom, as its wedges and places say and as the page chose where its
+  drawing leaves anything open - is searched once. (R)- and
+  (S)-butan-2-ol, or (E)- and (Z)-but-2-ene, drawn side by side are each
+  searched; so is a meso compound drawn beside its mirror drawing - one
+  compound, its R and S on each other's atoms. A bare atom with no hydrogens (Na+, Ca2+, Cl-) is not searched
+  at all; a water or a methane drawn as its one O or C is.
+  - Its conformers are put together of its parts': the first every part at
+    its lowest; then, part by part, each other conformer of a part not
+    alike to one before, the rest at their lowest - never every
+    combination. They are set side by side as before (*Parts*: where they
+    lie against each other is not modelled).
+  - Each energy is its parts', summed, and said so (*Energies*: nothing
+    between parts is counted): above the first, a conformer's is its own
+    part's.
+  - No share of the whole is given - on its chip, nor by a *Populations*
+    or *Ensemble* step it goes into, which refuse it, saying why: one part
+    varied at a time, its frames are no compound's population
+    (`Molecule3D.partsAlone`, kept in its file and through the steps it
+    passes).
+  - Its rows say how each part was searched (*Part 1: Rounds*, *Part 2*:
+    "Na+: one atom, no search"; "Ca2+: ...").
+  - Each stereoisomer of the whole the page makes has its parts searched
+    for it: a part configured alike in two of them (the anion of a salt
+    of a chiral cation) is searched once for each.
+  - Searched whole, as before: a structure of several parts one of which
+    holds a ring bound to a metal through all its atoms; one made with a
+    number of conformers of the chemist's own, not in rounds; and a
+    workflow's *Conformers* step.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
@@ -2268,7 +2321,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   are those, of all the shapes allow, that fit the lengths best with the
   most aromatic rings: a search over each conjugated part. A sulfonyl
   has two S=O and a phosphate one P=O, to its shortest oxygens; a nitro
-  group's charges are N+ and O-. Bonds to metals stay single. Where an
+  group's charges are N+ and O-. Bonds to metals stay single; a
+  metalloid's (B, Si, Ge, As, Sb, Te) count in its neighbours' valences
+  as a nonmetal's do, so SbPh3's rings are aromatic and nothing on them
+  charged, as AsPh3's (foundation part 3, B3, 2026-11-16; before, Sb's
+  bonds were taken as a metal's here). Where an
   atom's shape asks for a double bond it cannot have, nothing is changed
   and the orders stay unknown. Otherwise they are drawn - with no mark
   but on a skeleton, which says its protonation is unknown (below) - and
@@ -2478,8 +2535,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   refuses it), which would say how every atom is protonated. A plugin's
   writer, given the molecule with its charge and spin, is not given it;
   Export says so before a file is asked for. An SD file or a copy writes
-  it as a skeleton - each atom's valence its bonds' orders summed (the
-  atom block's vvv, 15 for none; V3000's VAL, -1 for none, "CTfile
+  it as a skeleton - each atom's valence its bonds' orders summed, an
+  aromatic bond by the order a Kekulé structure gives it (a pyrrole's N
+  without its H is written 2, never 3 as one and a half each would say;
+  the atom block's vvv, 15 for none; V3000's VAL, -1 for none, "CTfile
   Formats"), so that no reader adds hydrogens - and an XYZ or PDB file as
   it is, Export saying it has none. Estimated orders on a skeleton say so
   over it, their formal charges only those its heavy atoms set (a nitro
@@ -2521,5 +2580,6 @@ Meno's first steps (`lib/guide`, `ui/guide/GuideCard.tsx`): steps of plain text 
 - **The steps:** double-click on empty space for Quick Add; Chain and SMILES there; press and hold to select a structure; a right-click menu and its row of icons; Save, with Settings beside it; plugins, added in Settings, *Plugins*, each set up only when added, after Meno asks.
 - **Where a step points** (`at`) is a part Meno names, never how the window is built: `page`, `quick-add` (once open), `structure` (the one selected, else the last drawn), `menu` (a right-click menu, once open), `save`, `settings`. None, or a part not there now, and the card sits low in the middle of the page. A step that points at a part, while neither it nor any page is seen (Settings the tab in front), waits out of sight until a workspace is in front again.
 - **What a step waits for** (`until`), Meno names too: `quick-add` opened, a structure `selected`, a `menu` opened. A moment after the chemist does it, the guide goes on by itself; Next does as well.
+- **An empty page says one line** in quiet grey in the middle of what is seen: *Double-click to add something, or drop a file here.* - where the page in view holds nothing at all, eased out as the first thing is put on it and back where it is emptied again; not while the file a tab was opened with is still being read (its page only waits for it), a card says what could not be read, Quick Add or a menu is open, something is dragged over the window, or a talk is given (`components/EmptyPageLine`, `utils/emptyPage`). It is not on the page: never saved, exported, printed, selected or filmed, and still as the page is zoomed or moved. No other tip is shown.
 - **Only when asked:** from Settings, *General*, *First steps* (*Show*), with a workspace brought to the front - never of itself: not on Meno's first start (2026-10-24). They close when gone through or skipped - Skip, or Escape where nothing else takes it (the maintainer, 2026-10-13).
 - **Meno's question about keeping itself up to date** waits until they are closed (it comes after the user's first action: `lib/firstAction.ts`).

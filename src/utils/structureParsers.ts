@@ -1,6 +1,7 @@
 import { ELEMENTS, elementOf, singleBondRadius } from "../lib/chem/elements";
 import type { Molecule, ParsedAtom, ParsedBond, StereoGroup } from "../lib/chem/molecule";
 import { readSDfile, type CtMolecule } from "../lib/chem/ctfile";
+import { stereoGroupNamed } from "../lib/chem/perception/stereo/configuration";
 
 // (a file's molecule is the one in lib/chem/molecule; the names it had here)
 export type { Molecule };
@@ -53,11 +54,11 @@ export function stereoGroupsOf(ct: CtMolecule): { atoms: Map<number, StereoGroup
   const atoms = new Map<number, StereoGroup>();
   const bonds = new Map<number, StereoGroup>();
   for (const c of ct.collections) {
-    const m = /^MDLV30\/STE(B?)(ABS|RAC|REL)(\d*)$/i.exec(c.name);
-    if (!m) continue;
-    const kind = m[2].toUpperCase() === "ABS" ? "abs" : m[2].toUpperCase() === "RAC" ? "and" : "or";
-    const group: StereoGroup = kind === "abs" ? { kind } : { kind, n: Number.parseInt(m[3] || "1", 10) };
-    if (m[1]) for (const b of c.bonds) bonds.set(b, group);
+    // (the core's reading of a collection's name: lib/chem/perception/stereo/configuration)
+    const named = stereoGroupNamed(c.name);
+    if (!named) continue;
+    const group: StereoGroup = named.kind === "abs" ? { kind: "abs" } : { kind: named.kind, n: named.n };
+    if (named.onBonds) for (const b of c.bonds) bonds.set(b, group);
     else for (const a of c.atoms) atoms.set(a, group);
   }
   if (!atoms.size && !bonds.size && ct.chiral) {

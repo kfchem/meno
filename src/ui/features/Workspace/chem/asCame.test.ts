@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { asCameSaid, drawingOf, withoutStereoOpen } from "./fromSmiles";
 import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
+import { measured } from "../../../../testing/timeouts";
 
 /** A MOL block of a structure drawn round a circle, its bonds as SMILES gives them. */
 function roundMolblock(smiles: string): string {
@@ -56,5 +57,6 @@ describe("a plugin's drawing that cannot be laid out", () => {
     expect(asCameSaid(await drawingOf(wedgedAt("S")))).toBeNull();
     // (one laid out says nothing)
     expect(asCameSaid(await drawingOf(roundMolblock("CCCC")))).toBeNull();
-  });
+    // (four drawings laid out, a bridged macrocycle among them: it ran past Vitest's own 5 s on a busy Windows runner)
+  }, measured(1_400));
 });

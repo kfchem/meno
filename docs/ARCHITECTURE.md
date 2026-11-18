@@ -62,11 +62,13 @@ src/
   lib/chem/cip/           R/S and E/Z by Meno's own reading of the CIP rules: prepare.ts (the 1966 conventions), digraph.ts,
                           rank.ts (rules 1a to 5), in3d.ts (a molecule in 3D's) - docs/CIP.md; on the drawing by Workspace/chem/cipMarks (cipWorker.ts)
   lib/chem/perception/    the core of what the chemistry reads of a structure (one definition per concept): graph.ts (the graph the core
-                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), elements.ts (what kind of element: the metals, the elements that are none, and each set a reader takes, under its name), stereo/types.ts (the
+                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), aromatic.ts (Meno's rule for an aromatic ring: an atom's pi electrons, counted 4n + 2 by ring and by pair of rings fused at a bond; its list of the elements that give a ring a lone pair is the one lib/chem/aromaticSides takes for a five-ring drawn as aromatic), elements.ts (what kind of element: the metals, the elements that are none, and each set a reader takes, under its name), hydrogens.ts (an atom's hydrogens that are no atoms of their own, counted once - hydrogenCounts, an aromatic bond by its Kekulé order - the valence they are counted against, and Meno's other valence tables side by side, each under its name - a formula's, a label's, a carrier's, OpenSMILES's, and the lone pair's and the CIP's valence electrons - each imported back by the file whose table it is; lib/chem/molecule re-exports the count), kekule.ts (Kekulé orders for aromatic bonds; lib/chem/kekulize re-exports them), fold.ts (the one test of a plain hydrogen, plainHydrogen, and the one fold of them into the atoms they are on, hydrogensFolded, its configuration carried; lib/chem/identity re-exports the fold), flatRings.ts (the rings a structure holds flat and its aromatic atoms as drawn, by aromatic.ts's rule: what a conformer search, what a structure leaves open and the lone-pair rule ask; lib/chem/aromaticity and lib/chem/conformersSought re-export them), stereo/lonePairs.ts (which atoms of three keep a configuration by their lone pair - Meno's rule, with its known answers - and the other callers' lists of atoms with a lone pair, each under its name; lib/chem/lonePairCentres re-exports the rule), stereo/types.ts (the
                           types for a centre, a double bond, an axis and an odd cumulene), stereo/from2d.ts (the reader of a drawing's
                           configuration: wedges, depth, the lines that say none; a cage's solid fitted to the drawing is the layout's, handed
                           in by lib/layout/drawn, which keeps every name it had), stereo/senses.ts (a volume and an axis's turn as drawn, a
-                          tetrahedron's free corners; the layout imports them back). Two rules, each kept by a test: it imports nothing of the layout's,
+                          tetrahedron's free corners; the layout imports them back), symmetry.ts (a structure's symmetry classes,
+                          its orbits under the automorphisms found, and its canonical ranks and text: the one refinement and search,
+                          which identity and the layout's own orders (lib/layout/canonical) take). Two rules, each kept by a test: it imports nothing of the layout's,
                           the UI's or any other lib/chem file but the element table (boundary.test.ts), and a concept it is to define
                           has no new copy outside it (oneDefinition.test.ts: the copies still standing are listed, each with the part
                           that moves it, and the list only shrinks). The layout and the rest of lib/chem import from it, never the reverse.
@@ -542,7 +544,20 @@ What is left before the editor counts as finished, and in what order, is in
   `ChemMarks2D` (see the chemistry worker below); clean-up and a SMILES's
   layout by Meno's own engine (`src/lib/layout`), run in a web worker
   (`chem/layoutWorker.ts`), what it is given read out of the drawing
-  (`chem/engineLayout.ts`, `lib/layout/drawn.ts`).
+  (`chem/engineLayout.ts`, `lib/layout/drawn.ts`). A structure's identity
+  (`lib/chem/identity`) is worked out in a web worker of its own
+  (`chem/identityWorker.ts`, asked through `chem/identityOff.ts`), each
+  answer kept by the structure's content: on the drawing thread a structure
+  not yet answered is worked out in place only where it is small, and is
+  otherwise pending - a record kept as it stands, a table's cell said to be
+  still worked out, re-made as the answer lands - while a step putting its
+  structures down, a file being written, a 3D make and a conversation's
+  search ask first and wait. A worker that fails, or says nothing for a
+  minute while anything waits on it, is let go and what waited is worked
+  out in place; the minute is counted from its last answer, so structures
+  asked together wait behind each other. Enumerate and Substituents, for each product
+  they make, and the constitution keys a step's grouping uses, still work
+  theirs out on the drawing thread.
 - **Frame loop**: the canvas runs `frameloop="demand"` at a fixed `CANVAS_DPR`
   (2x). React commits (store changes) request a frame automatically; anything
   that animates or mutates the scene imperatively must call `invalidate()`
@@ -1722,6 +1737,13 @@ to be able to work with nothing going out at all.
   Settings › Network holds the allowed purposes and the record. While a
   talk is given in the window (docs/PRESENTING.md), the cards and the
   question wait until it ends; the record is kept as ever.
+- **Which question goes where.** A question that answers the user's own
+  click comes over the page (`ConsentDialog`), one at a time. A question
+  Meno asks of its own accord comes on a card at the edge of the window,
+  which takes no key and holds up no other question: setting chemistry up
+  as Meno first starts (`lib/plugins/firstSetUp`, docs/PLUGINS.md, *First
+  start*). The card's yes allows only what it named before the click
+  (`allowAnswered`); anything beyond stops it, asking in its place.
 
 - **Meno keeping itself up to date** (`src-tauri/src/update.rs`,
   `lib/update.ts`) is such a task, of its own: its requests - latest.json

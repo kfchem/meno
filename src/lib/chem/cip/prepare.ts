@@ -39,40 +39,7 @@ import { isMetal } from "../../layout/perceive";
 import { elementOf } from "../elements";
 import { aromaticForm, type IdentityInput } from "../identity";
 import { isotopeMass, standardWeight } from "../isotopes";
-
-/** Each element's valence electrons, for those of the main groups the conventions ask about. */
-const VALENCE_ELECTRONS: Record<string, number> = {
-  H: 1,
-  B: 3,
-  C: 4,
-  N: 5,
-  O: 6,
-  F: 7,
-  Al: 3,
-  Si: 4,
-  P: 5,
-  S: 6,
-  Cl: 7,
-  Ga: 3,
-  Ge: 4,
-  As: 5,
-  Se: 6,
-  Br: 7,
-  In: 3,
-  Sn: 4,
-  Sb: 5,
-  Te: 6,
-  I: 7,
-  Tl: 3,
-  Pb: 4,
-  Bi: 5,
-};
-
-/** The elements convention (b) reads, each with its valence uncharged: the third period on, groups 15 to 17. */
-const D_ORBITAL_VALENCE: Record<string, number> = { P: 3, As: 3, Sb: 3, Bi: 3, S: 2, Se: 2, Te: 2, Cl: 1, Br: 1, I: 1 };
-
-/** The second period's, whose bonds an octet bounds. */
-const SECOND_PERIOD = new Set(["B", "C", "N", "O", "F"]);
+import { D_ORBITAL_VALENCE, octetValence, SECOND_PERIOD, VALENCE_ELECTRONS } from "../perception/hydrogens";
 
 const pair = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
 
@@ -123,14 +90,6 @@ function valences(n: number, hs: readonly number[], order: ReadonlyMap<string, n
     v[b] += o;
   }
   return v.slice(0, n);
-}
-
-/** The most bonds an atom of the second period takes by its octet: B 3, C 4, N 3, O 2, with its charge (N+ 4, C+ 3, O- 1). */
-function octetValence(el: string, charge: number): number | null {
-  const ve = VALENCE_ELECTRONS[el];
-  if (ve == null || !SECOND_PERIOD.has(el)) return null;
-  const e = ve - charge;
-  return Math.min(e, 8 - e);
 }
 
 /**

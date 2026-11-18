@@ -97,7 +97,8 @@ export default function ChemistrySettings() {
             }}
             className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base meno-fade-in"
           >
-            Set up {name}
+            {/* (named where it is known; else said mid-sentence, never "A plugin") */}
+            Set up {who?.name ?? "the plugin"}
           </button>
         )}
       </div>

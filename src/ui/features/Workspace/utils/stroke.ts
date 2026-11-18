@@ -456,3 +456,13 @@ export function finishStroke(
   if (!target) return s.nodes;
   return lay(s, target).nodes;
 }
+
+/**
+ * Where a stroke begun on empty space starts while its start has no bond yet - no node drawn, no bond in preview - or null: that start is
+ * drawn as a bare vertex with a quiet mark (components/StrokeStart2D), never as a lone CH4, until its first bond is there (the maintainer,
+ * 2026-11-17). An atom put down on its own keeps the lone-atom rule.
+ */
+export function startAlone(stroke: Stroke | null | undefined, preview: unknown): Pt | null {
+  if (!stroke || stroke.baseId !== NEW_ATOM || !stroke.start) return null;
+  return stroke.nodes.length || preview ? null : stroke.start;
+}
