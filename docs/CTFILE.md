@@ -429,8 +429,10 @@ Read by rule, besides, as whole molecules:
   not read, and that is said as the label is typed: MoO2NO3 is no
   compound, and read across it would be three O-O-N=O. A peroxide or a
   peracid from the tables (H2O2, mCPBA, TBHP) is never such a reading. An
-  oxo formula whose oxo count would take its metal past its highest
-  oxidation state (Cr, Mo, W +6; Mn, Re +7; Ru, Os +8) is not read as
+  oxo formula that would take its metal past its highest oxidation state,
+  two for each oxo and one for each other group by a single bond (Ti, Zr,
+  Hf +4; V, Nb, Ta +5; Cr, Mo, W +6; Mn, Tc, Re +7; Ru, Os +8: MoO3Cl2
+  would be Mo +8), is not read as
   written either, and said so: CrO5 is a compound, CrO(O2)2 with two
   peroxo ligands, which the formula's O count does not say. A
   halide (CuCl2), a

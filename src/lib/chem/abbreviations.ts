@@ -359,6 +359,13 @@ function bondsUnwrittenOO(label: string, s: GroupStructure): boolean {
 
 /** The highest oxidation state of the metals an oxo formula is read of, where a count of oxo past it is no reading of what is written. */
 const HIGHEST_STATE: ReadonlyMap<string, number> = new Map([
+  ["Ti", 4],
+  ["Zr", 4],
+  ["Hf", 4],
+  ["V", 5],
+  ["Nb", 5],
+  ["Ta", 5],
+  ["Tc", 7],
   ["Cr", 6],
   ["Mo", 6],
   ["W", 6],
@@ -369,9 +376,10 @@ const HIGHEST_STATE: ReadonlyMap<string, number> = new Map([
 ]);
 
 /**
- * Whether a complex's formula read gives one of `HIGHEST_STATE`'s metals more oxo - O on it by a double bond and on nothing else - than
- * its highest oxidation state has room for, two each: CrO5 read as five oxo would be Cr past +6. Not read as written, and said: CrO5 is a
- * compound, CrO(O2)2 with two peroxo ligands, which a formula's O count does not say.
+ * Whether a complex's formula read takes one of `HIGHEST_STATE`'s metals past its highest oxidation state - two for each oxo (O on it by
+ * a double bond and on nothing else), one for each other group bound to it by a single bond of its own, not lent: CrO5 read as five oxo
+ * would be Cr +10, MoO3Cl2 Mo +8. Not read as written, and said: CrO5 is a compound, CrO(O2)2 with two peroxo ligands, which a formula's
+ * O count does not say.
  */
 function oxoPastHighest(label: string, s: GroupStructure): boolean {
   for (const [i, a] of s.atoms.entries()) {
@@ -382,8 +390,11 @@ function oxoPastHighest(label: string, s: GroupStructure): boolean {
       const o = b.a1 === i ? b.a2 : b.a1;
       return s.atoms[o].el === "O" && s.bonds.filter((c) => c.a1 === o || c.a2 === o).length === 1;
     }).length;
-    if (2 * oxo > most) {
-      REFUSED.set(label, `${oxo} oxo would take ${a.el} past +${most}, its highest oxidation state`);
+    // (each other group by a single bond of its own: a halide, an alkyl, an alkoxide - never a donor's lent bond)
+    const single = s.bonds.filter((b) => b.order === 1 && !b.coordination && (b.a1 === i || b.a2 === i)).length;
+    const state = 2 * oxo + single;
+    if (oxo && state > most) {
+      REFUSED.set(label, `its ${oxo} oxo${single ? ` and ${single} other group${single === 1 ? "" : "s"}` : ""} would take ${a.el} to +${state}, past +${most}, its highest oxidation state`);
       return true;
     }
   }

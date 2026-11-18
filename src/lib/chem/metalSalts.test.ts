@@ -96,12 +96,17 @@ describe("an oxo formula past its metal's highest oxidation state", () => {
   it("is not read as written, and says why: CrO5 and MoO5, five oxo each, past +6", () => {
     for (const [label, el] of [["CrO5", "Cr"], ["MoO5", "Mo"]] as const) {
       expect([abbreviationOf(label) ?? null, abbreviationStructure(label)], label).toEqual([null, null]);
-      expect(labelRefused(label), label).toBe(`5 oxo would take ${el} past +6, its highest oxidation state`);
+      expect(labelRefused(label), label).toBe(`its 5 oxo would take ${el} to +10, past +6, its highest oxidation state`);
     }
   });
 
-  it("reads one at its highest state or below as before: CrO3, MoO3, WO3, OsO4, MoO2Cl2, ReO3Me, CrO2Cl2", () => {
-    for (const label of ["CrO3", "MoO3", "WO3", "OsO4", "MoO2Cl2", "ReO3Me", "CrO2Cl2"]) {
+  it("counts the other groups by a single bond too: MoO3Cl2 (+8), WO2Cl3 (+7), TiO3 (+6) and VO3 (+6) not read as written", () => {
+    expect(labelRefused("MoO3Cl2")).toBe("its 3 oxo and 2 other groups would take Mo to +8, past +6, its highest oxidation state");
+    for (const label of ["WO2Cl3", "TiO3", "VO3"]) expect([abbreviationOf(label) ?? null, labelRefused(label) != null], label).toEqual([null, true]);
+  });
+
+  it("reads one at its highest state or below as before: CrO3, MoO3, WO3, OsO4, MoO2Cl2, ReO3Me, CrO2Cl2, VOCl3, NbOCl3, TiOCl2, MnO3Cl", () => {
+    for (const label of ["CrO3", "MoO3", "WO3", "OsO4", "MoO2Cl2", "ReO3Me", "CrO2Cl2", "VOCl3", "NbOCl3", "TiOCl2", "MnO3Cl"]) {
       expect(abbreviationStructure(label), label).not.toBeNull();
       expect(labelRefused(label), label).toBeUndefined();
     }
