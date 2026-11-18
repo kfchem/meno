@@ -17,7 +17,7 @@ export type LocantParent = {
   atoms: EntryLocant[];
   /** The bonds, by index into `atoms`: the periphery's (each atom to the next, the last to the first) are made from the order; these are the rest. */
   across: [string, string][];
-  /** How the numbers are known (CHEM's check of the brief, K6 and R9). */
+  /** How the numbers are known: read in the recommendations' own numbering of the parent, calculated from their rules, or inferred. */
   known: "read" | "calculated" | "inferred";
 };
 

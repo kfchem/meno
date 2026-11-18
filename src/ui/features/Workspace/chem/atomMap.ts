@@ -330,7 +330,7 @@ export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number
       // (a parent's atom shows its locant where that is no plain number - 4a, 1', 3a with a superscript; a plain locant is its number
       //  in the first molecule, and in the next ones the number shows, so that a product's atoms never show two partners alike)
       // (and only once in a reaction: a later molecule with a parent of the same letters shows its numbers there - the maintainer's
-      //  call through CC, 2026-11-17 - so that no text repeats)
+      //  call, 2026-11-17 - so that no text repeats)
       if (!l || (!l.sup && /^\d+$/.test(l.base))) return;
       const key = `${l.base}^${l.sup ?? ""}`;
       if (shownTexts.has(key)) return;

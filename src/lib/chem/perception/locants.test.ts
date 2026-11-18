@@ -3,7 +3,7 @@ import { fromSmiles } from "../../layout/testdata/fromSmiles";
 import { aromaticForm, symmetryOrbits } from "../identity";
 import { locants, type Locants, type LocantsInput } from "./locants";
 
-// Foundation part 16, level 1: known answers of the brief's section C - the 2013 recommendations' own names, and Meno's plain cases (M),
+// Foundation part 16, level 1: known answers - the 2013 recommendations' own names, and Meno's plain cases (M),
 // each name's numbering read off it. Atoms are named by their place in the SMILES.
 
 function run(smiles: string): { r: Locants; g: LocantsInput } {
@@ -465,7 +465,7 @@ describe("any order (D)", () => {
   });
 });
 
-describe("known answers pinned at the chemistry check (section C)", () => {
+describe("more known answers, each numbered by hand from its name", () => {
   const at = (smiles: string, ...idx: number[]) => idx.map((i) => shownOf(smiles)[i]);
   it("1,1'-methylenebis(disilane): both Si chains parents, multiplied - 1, 2 and 1', 2' - the CH2 after them; nothing said", () => {
     const s = shownOf("[SiH3][SiH2]C[SiH2][SiH3]");
