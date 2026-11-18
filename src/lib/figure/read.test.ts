@@ -540,6 +540,13 @@ describe("a figure read as a structure", () => {
     // (an ethane's: either carbon could be)
     const e = read(figure([stroke(step(c, 150), c, step(c, 30)), ...hashes(c, step(c, -90), true), stroke(step(c, -90), step(step(c, -90), -30)), stroke(step(c, -90), step(step(c, -90), -150))]));
     expect(e.bonds.find((b) => b.stereo === "down")!.unsure).toHaveLength(1);
+    // (the far end a CH2 with both its H drawn as atoms: counted on it, no centre - the narrow end at the branch, sure)
+    const far = step(c, -90);
+    const [h1, h2] = [step(far, -30), step(far, 210)];
+    const ch2 = read(figure([...branch, ...hashes(far, c, true), stroke(far, along(far, h1, 0.7)), stroke(far, along(far, h2, 0.7)), stroke(far, step(far, -90))], [...word("H", h1), ...word("H", h2)]));
+    const hc = ch2.bonds.find((b) => b.stereo === "down")!;
+    expect(ch2.bonds.filter((b) => b.a === hc.a || b.b === hc.a)).toHaveLength(4);
+    expect(hc.unsure).toBeUndefined();
   });
 
   it("reads labels as typed: HO as OH, NH2, a charge set high", () => {
@@ -1221,6 +1228,20 @@ describe("a stereocentre whose configuration the figure does not show", () => {
 
   it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
     expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("is where a configuration can be (the core's candidates): an N+ with an H among its four, which loses its configuration, is not marked", () => {
+    // (an N labelled NH+ - methyl, ethyl and propyl on it - and the same drawn as a carbon with an OH, its groups as unlike)
+    const c: P = [100, 100];
+    const [a, b, d] = [step(c, 90), step(c, -30), step(c, 210)];
+    const arms = [stroke(along(c, a, 0.35), a), stroke(a, step(a, 30)), stroke(along(c, b, 0.35), b), stroke(b, step(b, -90)), stroke(step(b, -90), step(step(b, -90), -30)), stroke(along(c, d, 0.35), d)];
+    // (and a carbon of four whose H is drawn as an atom: its H counted on it, a centre - marked)
+    const h = step([100, 100], -90);
+    const withH = drawn(false);
+    expect(marked(figure([...withH.paths, stroke([100, 100], along([100, 100], h, 0.7))], [...withH.letters, ...word("H", h)]))).toBe(1);
+    const ammonium = read(figure(arms, word("NH^+", c)));
+    expect(ammonium.atoms.find((x) => x.el === "N")?.charge).toBe(1);
+    expect(marked(figure(arms, word("NH^+", c)))).toBe(0);
   });
 
   it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {

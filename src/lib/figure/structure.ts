@@ -9,6 +9,7 @@ import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
+import { candidates } from "../chem/perception/stereo/candidates";
 import { bondLength, type FigureRead } from "./read";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
@@ -214,10 +215,13 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
       ...(multiple[i] ? { multiple: multiple[i] } : {}),
     };
   });
+  // (where a configuration can be, by the core's candidates - lib/chem/perception/stereo/candidates, foundation part 13: an atom
+  //  of four groups, a P=O's or an S=O's too, or of three and a lone pair it keeps, never a metal's nor an N+ with an H - read
+  //  with each H drawn as an atom counted on its atom)
+  const centres = centresOf(read, orders, els, charges, (i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]));
   // a hashed bond whose narrow end is not drawn: at the end that can be a
-  // stereocentre - an atom of four bonds, its hydrogens counted, none of them
-  // double - where only one can; said, where both can or neither
-  const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) === 4;
+  // stereocentre where only one can; said, where both can or neither
+  const centre = (i: number) => centres.has(i);
   const bonds = read.bonds.map((b, i): StructureBond => {
     const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
     if (b.either) {
@@ -248,11 +252,11 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const hs = atoms.map((_, i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) + around[i].filter(lone).length);
   const kinds = atomKinds(atoms, bonds, hs, lone);
   atoms.forEach((a, i) => {
-    // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
-    if (isMetal(els[i]) || shown.has(i) || wavy.has(i)) return;
-    // (four groups, each other than the rest: its hydrogens one group at most)
+    // (where a configuration can be, by the candidates, and none is drawn)
+    if (!centres.has(i) || shown.has(i) || wavy.has(i)) return;
+    // (its groups each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
-    if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
+    if (hs[i] > 1 || new Set(groups).size !== groups.length) return;
     (a.unsure ??= []).push("A stereocentre whose configuration is not drawn: none is read.");
   });
   // a bond's open end - an atom of one bond, with no label - drawn short, as a bond to a label is: a letter there not read (an
@@ -363,4 +367,24 @@ function atomKinds(atoms: readonly StructureAtom[], bonds: readonly StructureBon
     kinds = next;
   }
   return kinds;
+}
+
+/**
+ * The atoms of a figure read where a configuration can be: the core's candidate centres (lib/chem/perception/stereo/candidates),
+ * of the structure with each H drawn as an atom of one bond counted among its atom's hydrogens, as identity reads it.
+ */
+function centresOf(read: FigureRead, orders: readonly number[], els: readonly string[], charges: readonly number[], carried: (i: number) => number): Set<number> {
+  const around: number[][] = read.atoms.map(() => []);
+  read.bonds.forEach((b) => {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  });
+  const plainH = (n: number) => els[n] === "H" && around[n].length === 1 && !charges[n];
+  const kept = read.atoms.flatMap((_, i) => (plainH(i) ? [] : [i]));
+  const at = new Map(kept.map((i, k) => [i, k]));
+  const g = {
+    atoms: kept.map((i) => ({ el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), hs: carried(i) + around[i].filter(plainH).length })),
+    bonds: read.bonds.flatMap((b, k) => (at.has(b.a) && at.has(b.b) ? [{ a: at.get(b.a)!, b: at.get(b.b)!, order: orders[k] === AROMATIC_BOND ? 4 : orders[k] }] : [])),
+  };
+  return new Set(candidates(g).flatMap((c) => (c.kind === "centre" ? [kept[c.at]] : [])));
 }
