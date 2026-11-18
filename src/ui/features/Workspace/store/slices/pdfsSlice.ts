@@ -112,6 +112,11 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), gesture ? gestureStep(`pdf:${id}:${gesture}`) : {}),
     turnPdf: (id: number, page: number) => doc.edit("turn page", (d) => ops.updatePdf(d, id, { page })),
     spreadPdf: (id: number, spread: boolean) => doc.edit(spread ? "spread pages" : "gather pages", (d) => ops.updatePdf(d, id, { spread, ...(spread ? { icon: false } : {}) })),
+    // (PDFs spread or gathered, made icons or full size, together: one step)
+    spreadPdfs: (ids: readonly number[], spread: boolean) =>
+      doc.edit(spread ? "spread pages" : "gather pages", (d) => ids.reduce((acc, id) => ops.updatePdf(acc, id, { spread, ...(spread ? { icon: false } : {}) }), d)),
+    iconPdfs: (ids: readonly number[], icon: boolean) =>
+      doc.edit(icon ? "minimize PDF" : "expand PDF", (d) => ids.reduce((acc, id) => ops.updatePdf(acc, id, { icon, ...(icon ? { spread: false } : {}) }), d)),
     placePdfPage: (id: number, page: number, x: number, y: number, gesture?: string) =>
       doc.edit("move page", (d) => ops.placePdfPage(d, id, page, x, y), gesture ? gestureStep(`pdf-page:${id}:${page}:${gesture}`) : {}),
     pdfPagesInRows: (id: number) => doc.edit("put pages in rows", (d) => ops.updatePdf(d, id, { placed: null })),

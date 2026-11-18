@@ -372,7 +372,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Combine | two lines coming into one (drawn) | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
 | Measure | a distance between two marks (drawn) | molecules in 3D, or a conformer set; and, where wanted, *Atoms*: a table | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them, or each row's of the table wired into *Atoms*, its columns saying how they count them (STRUCTURE-STEPS.md, *Measure*) |
 | Mode on atoms | two atoms moving, a third still (drawn) | molecules in 3D with vibrations, or a conformer set; and, where wanted, *Atoms*: a table | **the same kind of set**, every entry kept: where its lowest, imaginary vibration ranks the reacting atoms - a table's bonds formed or broken, or atoms typed - written on it (`mode.window`, `mode.ranks`, `mode.outside`) for a Filter to choose on (STRUCTURE-STEPS.md, *Mode on atoms*) |
-| Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
+| Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind: a wire of the other kind is refused as it is drawn | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Restraints | atoms held to a wall (drawn) | molecules in 3D, or conformer sets | **a table of restraints**, a row for each, made of each entry from itself - coordination bonds at a factor of their van der Waals radii together (Alvarez 2013), pairs kept at their distance, atoms fixed - each row for its entry by an ID a step wrote on it; the entries are not passed on. One it cannot make rows for out of *Failed*, saying why (STRUCTURE-STEPS.md, *Restraints*) |
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Reference*, where wanted | **a table of torsion restraints**: torsions typed, at the angle typed; or, from the reference, each unlike here at 180° where trans or at the reference's own angle - by a strength or exactly, each row for its entry by an ID; one it cannot make rows for out of *Failed* (STRUCTURE-STEPS.md, *Torsion restraints*) |
@@ -787,7 +787,11 @@ one of the kinds of calculation it does (decided: 16):
 - **One kind**: the sets wired into one input hold one kind, as one set's
   entries do. A wire that gives another kind than the one there is
   refused, and a set that has come to hold another kind since is said
-  before the step runs. An input that takes a number takes one.
+  before the step runs. An input that reads what comes in as a table -
+  an *Energy diagram*'s *Levels* - takes molecules in 3D and conformer
+  sets together, each molecule as it is, as it takes one set that mixes
+  them: the minima, conformer sets, and the saddle points, molecules,
+  each wired in. An input that takes a number takes one.
 - **Tables** wired into one input are read as one: the first's columns,
   then each column a later one adds, by name. A row with no cell in a
   column is empty there.
@@ -1415,10 +1419,19 @@ taller than the rest, its inputs a plain list down its left edge, each named
   the other, or two of one table: the molecule is refused. Where a table
   lies on the page decides nothing.
 - **In the numbering they were made in**: each row says the numbering its
-  molecule was in (*its own*, or the maps *Atom map* numbered it anew by). A
-  molecule numbered anew since is refused - "its restraints were made
-  before Atom map numbered it anew" - never held on what are now other
-  atoms.
+  molecule was in (*its own*, or the maps *Atom map* numbered it anew by),
+  with a key in brackets: the key of the last map's references, or of the
+  molecule's own atoms and bonds. A molecule numbered anew since is
+  refused - "its restraints were made before Atom map numbered it anew" -
+  never held on what are now other atoms. One numbered as the molecule the
+  rows were made for is in that molecule's numbering, and is held: rows
+  made on a reaction's reactant hold on a product *Atom map* wrote in the
+  reactant's numbering, as both keys say. A molecule numbered as one
+  reference takes the key of the numbering that reference is in: a
+  product's conformer numbered as the product, itself in the reactant's
+  numbering, is in the reactant's numbering too, and the reactant's rows
+  hold on it. Numbered as several references together, the key is of
+  their atoms and bonds.
 - **Nothing silent**: a molecule no row is for is refused ("no restraints
   made for it"), and so is one a row names an atom it has not; rows for no
   molecule that came in are counted on the line.
@@ -2253,6 +2266,15 @@ Decided while building it, for the maintainer to confirm:
   applies to every program, and those that need no launcher still take
   it. The failure above stays for a launcher found that ORCA's job then
   cannot run.
+  A Hessian ORCA computes numerically at its own xTB - *Frequencies*, and
+  a saddle point's first Hessian, *Computed* - takes one core on every
+  computer, MPI or not, whatever *Cores for each* says (ORCA plugin
+  0.5.9): no `%pal`, one core asked, as many side by side as there are
+  cores. Run in parallel, a job one of whose displaced geometries' SCF
+  did not converge was seen never to end; run serially, ORCA ends it
+  with its own error, and that entry fails with ORCA's words. The
+  numbers are the same either way; only the time differs. The line says
+  only that it is computed numerically.
 - **The options** are the method and basis set as text - as *Export*'s
   are - the dispersion, the solvation and its solvent, more keywords, the
   memory, and whether to keep the wavefunction (on unless turned off); the
@@ -4156,6 +4178,17 @@ term.
   is set aside saying so; a number wired in of another dimension refuses
   the step.
 
+### The ConfoTS-type templates (2026-11-13)
+
+`templates/confots-xtb.meno` and `templates/confots-dft.meno` hold the whole workflow of a ConfoTS-type study of a reaction - docs/WORKFLOWS-FOUNDATION.md, case F - with a hand-drawn example reaction (an intramolecular Diels-Alder of a nonatriene to its trans- and cis-fused products, drawn in Meno's own units: one reactant, two products), the set round it, every step and wire, and no runs, results or jobs. The second adds the DFT stage after the xTB-level diagram.
+
+- **Made, never edited.** `scripts/templates/recipe.ts` is the one table of steps: each its stage, kind, plugin, options and where each input comes from. `scripts/templates/build.ts` puts it on a page through the workspace's own actions (`addStep`, `connect`, `addSet`, `addCaption`) and writes the `.meno` as Save does, its entries stamped alike so that the same recipe is the same bytes. `npm run templates` writes the files; the tests (`scripts/templates/build.test.ts`, with the other tests) build both again and fail where a file in `templates/` is not what its recipe makes, where any step's own check of its options is not met, where a required input is unwired, where a plugin step names an option its manifest has not, where cards or sets lie over one another, or where the file read back is not the page built.
+- **Barriers** - xTB and DFT alike - set each saddle point against the lowest conformer of the reactant it was made from: matched on its `reactant end`, the reactant's name, which a *Join* of the lowest conformers on themselves puts on each as its own species. Paired each with each, a saddle point would be set against every species' lowest, a product's among them - no barrier - and more than ten pairs refused.
+- **Stages are rows**, each headed by words on the page: the reaction, 3D for each species, conformers of each species, the pairs and the paths in each direction (both are wired; none is chosen), the xTB diagram, and DFT. Where the recipe differs from the protocol it follows, the words beside the heading say so, and no equivalence of numbers is claimed.
+- **Starting values** are the chemist's to change: windows of 10 and 5 kcal/mol, at most 64 conformers, 8 images, three rounds of torsions held again (50, 100, 150: counted per entry), a window of 10 and at most 16 saddle points of each path. Each plugin's options are those its manifest has (ORCA 0.5.7, Gaussian 0.6.1, RDKit 0.1.24, as `PLUGIN_OPTIONS` records).
+- **Not in them:** *Runs again* chains (the manual says how to add them), an IRC at the DFT level, and the share of the reaction through each path (*Populations* takes minima, and refuses a saddle point; Meno has no step for it yet). The template takes one reactant structure. The torsion rounds hold each end on an ID of its own (a *Tag* after *Re-bond*): every end of one product shares the product's, and every end of one start the start's.
+- **A reaction path that does not converge gives no ends yet.** A reaction path one of whose sides stops before its end leaves by *Failed*, saying why, and gives no ends; so a direction can end with no path. Keeping such a path's frames comes next.
+
 ### Ensemble energy (2026-10-30)
 
 *Ensemble energy*, Meno's own, takes a group's members - a compound's
@@ -4272,7 +4305,10 @@ and *Connects*, a table, where wanted (an optional input). It gives a chart in a
 of its own. *Levels* reads what comes in as a table, each molecule as it
 is, so it takes a set that mixes a saddle point's conformer set with
 molecules of one geometry - which a step that works on entries refuses
-(*A wire let go on an input that does not take it*).
+(*A wire let go on an input that does not take it*) - and, wired in side
+by side, a conformer set and molecules (*Several wires into one input*):
+the minima and the saddle points come in so, not made one by a *Merge*,
+which takes one kind.
 - **A level** is the molecules of one name - a molecule's title, else its
   file's name without its extension ("R.out" is R), else its group - and
   stands at its lowest; a level of
@@ -4309,7 +4345,9 @@ molecules of one geometry - which a step that works on entries refuses
   shown by - none picked the first; in kcal/mol, written to a tenth,
   signed. One naming no level that comes in, by either name, is said where
   its card would say *Ready* ("No level is called "Zed"") and refuses its
-  run. A table into *Connects* names levels by either name.
+  run; while no level has come in - the steps before it not yet run -
+  nothing is said, as there is nothing yet it could name. A table into
+  *Connects* names levels by either name.
 - **Which energy** is a list on its card of those its levels carry, each by
   its symbol and what worked it out and where ("ΔG · Gibbs free energy ·
   ORCA · r2SCAN-3c · 298.15 K"); the thermochemistry's corrections are no

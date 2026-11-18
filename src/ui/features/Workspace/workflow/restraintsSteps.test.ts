@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SetEntry } from "./entries";
+import { numberingKey, type SetEntry } from "./entries";
 import { kindInfo, ONE_EXIT } from "./kinds";
 import { NUMBERING, restraintRowsIn } from "../../../../lib/steps/restraints";
 import { runMeno, runMenoPair } from "./meno";
@@ -71,8 +71,8 @@ describe("Restraints, as a step", () => {
     const cl = (cis: boolean) => (cis ? 1.33 + 1.73 : Math.hypot(1.33 + 1.73, 2 * 0.866 * 1.73));
     const rows = rowsGiven(o);
     expect(rows.map((r) => [r.for, r.on, r.numbering, r.restraint.kind, r.restraint.atoms, r.restraint.strength, r.why])).toEqual([
-      ["p1", "start", "its own", "distance", [2, 3], 1000, "typed: kept at its distance here"],
-      ["p2", "start", "its own", "distance", [2, 3], 1000, "typed: kept at its distance here"],
+      ["p1", "start", `its own (${numberingKey([dce(true)])})`, "distance", [2, 3], 1000, "typed: kept at its distance here"],
+      ["p2", "start", `its own (${numberingKey([dce(false)])})`, "distance", [2, 3], 1000, "typed: kept at its distance here"],
     ]);
     expect(rows[0].restraint.value).toBeCloseTo(cl(true), 9);
     expect(rows[1].restraint.value).toBeCloseTo(cl(false), 9);
@@ -168,7 +168,8 @@ describe("Torsion restraints, as a step", () => {
   it("sets aside, saying why, two entries with one ID; and writes in each row the numbering its entry is in", () => {
     const o = torsionsSet([tagged(dce(true), "start", "x"), tagged(dce(false), "start", "x"), tagged(dce(true), "start", "y")], null, "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4", target: "180" });
     if (!o.ok) throw new Error(o.said);
-    expect(rowsGiven(o).map((r) => [r.for, r.numbering])).toEqual([["y", "its own"]]);
+    // (one never mapped: its own, with the key Atom map would give it as its reference)
+    expect(rowsGiven(o).map((r) => [r.for, r.numbering])).toEqual([["y", `its own (${numberingKey([dce(true)])})`]]);
     expect(o.aside.map((e) => e.failed?.why)).toEqual(["Its start, x, is another entry's here too: rows made for it would be both's", "Its start, x, is another entry's here too: rows made for it would be both's"]);
     const mapped = { ...tagged(dce(true), "start", "p1"), properties: { ...tagged(dce(true), "start", "p1").properties, [NUMBERING]: { value: "as a #1 (x)", unit: "none" as const, status: "computed" as const, label: true as const } } };
     expect(rowsGiven(torsionsSet([mapped], null, "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4", target: "180" })).map((r) => r.numbering)).toEqual(["as a #1 (x)"]);

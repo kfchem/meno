@@ -59,6 +59,10 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       );
       return id;
     },
+    // (words each given their own patch, one step: a menu's item reaching the words selected - docs/EDITOR-2D.md, *Selecting*)
+    updateCaptions: (patches: readonly (readonly [number, Parameters<EditorState["updateCaption"]>[1]])[], label: string) => {
+      if (patches.length) doc.edit(label, (d) => patches.reduce((acc, [id, patch]) => ops.updateCaption(acc, id, patch), d));
+    },
     updateCaption: (id: number, patch: Parameters<EditorState["updateCaption"]>[1], gesture?: string) =>
       doc.edit(
         patch.text != null
