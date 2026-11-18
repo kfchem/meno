@@ -211,7 +211,7 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string 
       return unit === "centre" ? "No R or S: no configuration is drawn here." : `No ${what}: none is drawn here.`;
     // (a molecule in 3D whose places give the unit no sense: lib/chem/cip/in3d)
     case "flat":
-      return unit === "centre" ? "No R or S: its groups lie nearly in a plane here." : `No ${what}: its groups are turned nearly square to it here.`;
+      return unit === "centre" ? "No R or S: its groups lie nearly in a plane here." : `No ${what}: it is twisted nearly a right angle here.`;
   }
 }
 

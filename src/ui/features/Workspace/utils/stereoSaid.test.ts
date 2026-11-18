@@ -17,7 +17,7 @@ describe("what a molecule in 3D says of the units it shows no R or S on (backlog
     expect(stereoSaidRows(m)).toEqual([
       { label: "C1, C4", text: "No R or S: its groups lie nearly in a plane here." },
       { label: "N3", text: "No R or S: this N does not keep a configuration." },
-      { label: "C5=C6", text: "No E or Z: its groups are turned nearly square to it here." },
+      { label: "C5=C6", text: "No E or Z: it is twisted nearly a right angle here." },
     ]);
     // (in its card, a group of its own)
     expect(chipDetails({ count: 1, frame: 0, stereoSaid: stereoSaidRows(m) }, 0).find((g) => g.group === "Stereo")?.rows).toHaveLength(3);
