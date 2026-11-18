@@ -3,6 +3,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { HELD_NAME, heldName, isName, nameBox } from "../../../../lib/layout/names";
 import { isMetal } from "../../../../lib/layout/perceive";
+import { stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument } from "../document";
 import { drawnOf } from "../fileActions";
@@ -123,6 +124,17 @@ describe("a group typed as an element's symbol is the group; the element from a 
     // (as the group it holds: a label with its atoms, or its atoms drawn out - either way no element)
     if (pr) expect(pr.abbrev).toBeDefined();
     else expect(back.atoms.filter((a) => a.el === "C")).toHaveLength(9);
+  });
+
+  it("in the MOL blocks a structure's halves are told from, a typed Pr is propyl and no metal; praseodymium bound is a metal", () => {
+    // (openStereo's halvesMade tells a structure's halves as mirror images only where no atom of its blocks is a metal)
+    const typed = writeMolfile(forFlatReaders(drawnOf(benzeneWith("Pr").state())));
+    expect(stereoGraphOf([typed])!.atoms.some((a) => isMetal(a.el))).toBe(false);
+    const at = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
+    const ring = Array.from({ length: 6 }, (_, k) => at(k + 1, L * Math.cos((Math.PI / 3) * k), L * Math.sin((Math.PI / 3) * k)));
+    const bonds = ring.map((_, k) => ({ id: 10 + k, a: k + 1, b: ((k + 1) % 6) + 1, order: (k % 2 ? 1 : 2) as 1 | 2 }));
+    const element = { atoms: [...ring, at(20, 2 * L, 0, "Pr")], bonds: [...bonds, { id: 30, a: 1, b: 20, order: 1 as const }] };
+    expect(stereoGraphOf([writeMolfile(forFlatReaders(element))])!.atoms.some((a) => isMetal(a.el))).toBe(true);
   });
 
   it("copied and pasted, a typed Pr stays propyl", () => {
