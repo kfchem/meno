@@ -722,6 +722,34 @@ describe("a figure read as a structure", () => {
       const f = readFigure(figure([...chains, ...bits]));
       expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
     });
+    /** Short lines on the line from `p` level to the right: each `long` of a bond, `gap` of a bond apart, all but the first turned `deg` about its middle. */
+    const row = (n: number, long: number, gap: number, deg = 0): FigurePath[] => {
+      const p: P = [left[2][0] + 0.12 * L, left[2][1]];
+      return Array.from({ length: n }, (_, k) => {
+        // (the first level: the row's line is its)
+        const [c, s] = [Math.cos(((k ? deg : 0) * Math.PI) / 180), Math.sin(((k ? deg : 0) * Math.PI) / 180)];
+        const m = p[0] + (k * (long + gap) + long / 2) * L;
+        return stroke([m - (c * long * L) / 2, p[1] - (s * long * L) / 2], [m + (c * long * L) / 2, p[1] + (s * long * L) / 2]);
+      });
+    };
+    const said = (paths: FigurePath[]) => readFigure(figure([...chains, ...paths])).atoms.some((a) => a.unsure?.includes(DASHED_ROW));
+    it("is not three pieces of half a bond each, as a line broken twice where two lines pass in front of it: no dashed line is said", () => {
+      expect(said(row(3, 0.5, 0.15))).toBe(false);
+    });
+    it("is not a row of marks under a tenth of a bond long: six of 0.08, 0.06 apart", () => {
+      expect(said(row(6, 0.08, 0.06))).toBe(false);
+    });
+    it("is not a row whose gaps are longer than its dashes: three of 0.15, 0.3 apart", () => {
+      expect(said(row(3, 0.15, 0.3))).toBe(false);
+    });
+    it("is not a row under half a bond long in all: three of 0.12, 0.06 apart", () => {
+      expect(said(row(3, 0.12, 0.06))).toBe(false);
+      expect(said(row(3, 0.14, 0.06))).toBe(true);
+    });
+    it("is not three short lines on one line, the second and third turned 30 degrees from it", () => {
+      expect(said(row(3, 0.15, 0.08, 30))).toBe(false);
+      expect(said(row(3, 0.2, 0.08, 0))).toBe(true);
+    });
     it("is not a line drawn in pieces end to end, a fiftieth of a bond apart: no dashed line is said", () => {
       const p: P = left[2];
       const bits = [0, 1, 2, 3].map((k) => stroke([p[0] + k * 0.25 * L, p[1]], [p[0] + (k * 0.25 + 0.23) * L, p[1]]));
@@ -779,6 +807,25 @@ describe("a figure read as a structure", () => {
       const l = Math.hypot(end[0] - ring[1][0], end[1] - ring[1][1]);
       const notched = filled(ring[1], [end[0] - uy * 2, end[1] + ux * 2], [end[0] - ux * 0.05 * l, end[1] - uy * 0.05 * l], [end[0] + uy * 2, end[1] - ux * 2]);
       const s = read(figure([...lines, curve, notched]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+    it("leaves a dart a wedge where no curve's end meets its cut-in corner: a curve elsewhere", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (a dart out of the ring's lowest corner, pointing into it, its cut-in corner far from the curve over the ring's top)
+      const at = ring[4];
+      const [ox, oy] = unit([80 + 0.5 * L, 80 + 0.87 * L * 0], at);
+      const wide: P = [at[0] + 6 * ox, at[1] + 6 * oy];
+      const notch: P = [at[0] + 5 * ox, at[1] + 5 * oy];
+      const s = read(figure([...lines, curve, filled([wide[0] - 2 * oy, wide[1] + 2 * ox], notch, [wide[0] + 2 * oy, wide[1] - 2 * ox], at)]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+    it("leaves a wedge a wedge whose wide end comes to a point, convex, where it meets a curve: no corner cut in", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (narrow at the ring's top corner, its two wide corners 4 apart, and past them a point a quarter of its length on, at the curve's end)
+      const [ux, uy] = unit(ring[1], end);
+      const l = Math.hypot(end[0] - ring[1][0], end[1] - ring[1][1]);
+      const mid: P = [end[0] - ux * 0.2 * l, end[1] - uy * 0.2 * l];
+      const s = read(figure([...lines, curve, filled(ring[1], [mid[0] - uy * 2, mid[1] + ux * 2], end, [mid[0] + uy * 2, mid[1] - ux * 2])]));
       expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
     });
     it("leaves a wedge a wedge where its wide end meets a curve: a wedge has no corner cut in", () => {
