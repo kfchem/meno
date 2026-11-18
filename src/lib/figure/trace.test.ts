@@ -4,6 +4,7 @@ import { readFigure } from "./read";
 import type { Blob, Point, Shapes } from "./drawn";
 import { closedJoints, widening, inkOf, onPage, patchesOf, shadedOf, thinned, tracePicture, unreadInk, type Piece, type Traced, type Vertex } from "./trace";
 import type { FigureRead } from "./read";
+import { glyphShape, type GlyphShape } from "./glyphs";
 
 type Pt = [number, number];
 /** Whether a point of the picture is inked by a shape. */
@@ -600,5 +601,64 @@ describe("a scheme's picture", () => {
     expect(t.bond).toBeLessThan(35);
     // (each ring's six bonds lines, none taken for a letter)
     expect(t.shapes.blobs).toHaveLength(0);
+  });
+});
+
+describe("a letter-sized patch of one or two lines, standing apart", () => {
+  // (a typeface of the test's own, in ems, y down, the line at naught, its capitals 0.72 tall: a 7, a 1 with its flag, an l, a minus)
+  const FACE: Record<string, Pt[]> = {
+    "7": [[0.05, -0.72], [0.5, -0.72], [0.5, -0.65], [0.23, 0], [0.13, 0], [0.4, -0.63], [0.05, -0.63]],
+    "1": [[0.2, -0.72], [0.28, -0.72], [0.28, 0], [0.19, 0], [0.19, -0.58], [0.06, -0.5], [0.06, -0.59]],
+    l: [[0.07, -0.72], [0.16, -0.72], [0.16, 0], [0.07, 0]],
+    "-": [[0.05, -0.3], [0.5, -0.3], [0.5, -0.24], [0.05, -0.24]],
+  };
+  const KNOWN: GlyphShape[] = Object.entries(FACE).map(([c, ps]) => glyphShape(c, [ps.map(([x, y]) => ({ x, y }))], 0.72));
+  /** A glyph of the face filled, `size` pixels to the em, its line's left at `at`. */
+  const glyph =
+    (c: string, at: Pt, size: number): Shape =>
+    (x, y) => {
+      const ps = FACE[c].map(([u, v]): Pt => [at[0] + u * size, at[1] + v * size]);
+      let inside = false;
+      for (let i = 0, j = ps.length - 1; i < ps.length; j = i++)
+        if (ps[i][1] > y !== ps[j][1] > y && x < ((ps[j][0] - ps[i][0]) * (y - ps[i][1])) / (ps[j][1] - ps[i][1]) + ps[i][0]) inside = !inside;
+      return inside;
+    };
+  const within = (p: Point, box: readonly number[]) => p.x >= box[0] - 2 && p.x <= box[2] + 2 && p.y >= box[1] - 2 && p.y <= box[3] + 2;
+  // (a ring a bond of 40 long, and a 17 under it a bond and more away, as a compound's number is set)
+  const ringLines = hexagon([100, 70], 40).map((p, k, all) => line(p, all[(k + 1) % 6], 3));
+  const number = [glyph("1", [80, 175], 40), glyph("7", [94, 175], 40)];
+  const numberBox = [80, 145, 116, 175];
+
+  it("is read as a letter where the system's letters match it - a compound's number is words, not bonds", { timeout: 30_000 }, () => {
+    const t = traced(tracePicture(picture(200, 190, [...ringLines, ...number]), [], KNOWN));
+    expect(t.shapes.strokes.filter((s) => within(s.a, numberBox) && within(s.b, numberBox))).toHaveLength(0);
+    expect(t.shapes.blobs.filter((b) => within({ x: b.box[0], y: b.box[1] }, numberBox))).toHaveLength(2);
+    // (the ring's six bonds lines still)
+    expect(t.shapes.strokes).toHaveLength(6);
+  });
+
+  it("is lines where no letters are given, as before", { timeout: 30_000 }, () => {
+    const t = traced(tracePicture(picture(200, 190, [...ringLines, ...number])));
+    expect(t.shapes.strokes.filter((s) => within(s.a, numberBox) && within(s.b, numberBox)).length).toBeGreaterThan(0);
+  });
+
+  it("is never one straight line alone - a bond from a label to its free end, as a methyl's is - which would read as an l", { timeout: 30_000 }, () => {
+    // (the ring, and under it a line as long as a bond to a label, upright, alone)
+    const t = traced(tracePicture(picture(200, 190, [...ringLines, line([100, 145], [100, 175], 3)]), [], KNOWN));
+    expect(t.shapes.blobs).toHaveLength(0);
+    expect(t.shapes.strokes).toHaveLength(7);
+  });
+
+  it("is never a double bond's inner line, which lies by its outer one", { timeout: 30_000 }, () => {
+    // (the ring's bottom right bond doubled within it, its inner line shorter, a sixth of a bond in)
+    const corners = hexagon([100, 70], 40);
+    const [p, q] = [corners[2], corners[3]];
+    const m: Pt = [100, 70];
+    const inward = (r: Pt): Pt => [r[0] + (m[0] - r[0]) * 0.2, r[1] + (m[1] - r[1]) * 0.2];
+    const [pi, qi] = [inward(p), inward(q)];
+    const shorten = (a: Pt, b: Pt): Pt => [a[0] + (b[0] - a[0]) * 0.12, a[1] + (b[1] - a[1]) * 0.12];
+    const t = traced(tracePicture(picture(200, 140, [...ringLines, line(shorten(pi, qi), shorten(qi, pi), 3)]), [], KNOWN));
+    expect(t.shapes.blobs).toHaveLength(0);
+    expect(t.shapes.strokes).toHaveLength(7);
   });
 });

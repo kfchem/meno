@@ -37,7 +37,7 @@
  */
 import { distances, type Pixels } from "./inkFit";
 import { boxOf, type Blob, type Box, type Curve, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
-import { shapeLetters, type GlyphShape } from "./glyphs";
+import { shapeLetters, sureEnough, type GlyphShape } from "./glyphs";
 import { figureBond, type FigureRead } from "./read";
 
 /** A picture traced: its shapes, how wide its lines are drawn and how long its bonds, in its pixels. */
@@ -88,6 +88,13 @@ const SHADED = 0.1;
  */
 const LINE_SPAN = 0.75;
 const LINE_REST = 0.35;
+/**
+ * A patch letter-sized, of two short pieces bent at a corner, with no line of a patch larger than a letter within this share of a bond of
+ * it - a 7, a 1 with its flag, standing apart - is matched as a letter first where the system's letters are given; read as one surely, it
+ * is a letter (a compound's number is words, not bonds), else lines. One straight piece alone is never: a bond from a label to its free
+ * end - a methyl's, a CH2OH's - is one, and would be read as an l or an I.
+ */
+const APART = 0.3;
 /** A piece between two joints shorter than this, in the bond, is a joint thinning left open: `closedJoints`. */
 const JOINT_SHORT = 0.35;
 
@@ -793,9 +800,11 @@ function outlinesOf(patch: Int32Array, own: number, width: number, box: [number,
  * A picture traced: the shapes its ink makes, as the figure reader takes a
  * PDF's (see the head of this file); or why it gave none. Ink lying within
  * `drop` - boxes in its pixels, where a PDF's own letters lie over the
- * picture - is left out: those letters are read as written.
+ * picture - is left out: those letters are read as written. `known`, the
+ * system's letters: a patch that may be a letter or lines (`APART`) is
+ * matched against them first.
  */
-export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced | Untraced {
+export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: readonly GlyphShape[] = []): Traced | Untraced {
   const ink = inkOf(pixels);
   if (!ink) return { none: "Nothing is drawn in the picture." };
   const shaded = shadedOf(ink);
@@ -902,6 +911,15 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
   };
   const shapes: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
   const stems: { k: number; box: [number, number, number, number]; stroke: Stroke }[] = [];
+  // (a patch that may be a letter or lines, as `APART`: its lines, for where it is read as no letter)
+  const maybe: { k: number; box: [number, number, number, number]; strokes: Stroke[] }[] = [];
+  const near = (p: Point, l: Laid) => {
+    const [dx, dy] = [l.b.x - l.a.x, l.b.y - l.a.y];
+    const t = Math.max(0, Math.min(1, ((p.x - l.a.x) * dx + (p.y - l.a.y) * dy) / (dx * dx + dy * dy || 1)));
+    return dist(p, { x: l.a.x + t * dx, y: l.a.y + t * dy });
+  };
+  const apart = (k: number, own: readonly number[]) =>
+    lines.every((l) => l.piece.patch === k || extent(l.piece.patch) < LETTER * bond || own.every((i) => [laid[i].a, laid[i].b].every((p) => near(p, l) > APART * bond)));
   for (let k = 0; k < count; k++) {
     if (dropped[k]) continue;
     const own = byPatch.get(k) ?? [];
@@ -939,6 +957,12 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
         continue;
       }
     }
+    // (a 1 with its flag, a 7 standing apart - two pieces meeting at a corner: matched as a letter first, where the letters are given)
+    const bent = own.length === 2 && [laid[own[0]].piece.a, laid[own[0]].piece.b].some((v) => v === laid[own[1]].piece.a || v === laid[own[1]].piece.b);
+    if (known.length && across < LETTER * bond && longest < LETTER_PIECE * bond && bent && apart(k, own)) {
+      maybe.push({ k, box, strokes: own.filter((i) => !gone.has(i)).map((i) => ({ a: laid[i].a, b: laid[i].b, w: profiles[i].length ? median(profiles[i].map((q) => q.w)) : line })) });
+      continue;
+    }
     for (const i of own) {
       if (gone.has(i)) continue;
       const { a, b } = laid[i];
@@ -952,6 +976,20 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
       }
       shapes.strokes.push({ a, b, w });
     }
+  }
+  // (each that may be a letter, matched among the letters traced: a letter where read as one surely, else its lines - before the stems,
+  //  which a letter so read may stand beside)
+  if (maybe.length) {
+    const asBlob = maybe.map(({ k, box }) => {
+      const parts = outlinesOf(patch, k, width, box);
+      return parts.flat().length ? ({ pts: parts.flat(), parts, box: boxOf(parts.flat()), curved: true } satisfies Blob) : null;
+    });
+    const read = new Set(shapeLetters({ ...shapes, blobs: [...shapes.blobs, ...asBlob.flatMap((b) => (b ? [b] : []))] }, bond, known).filter(sureEnough).flatMap((l) => l.from));
+    maybe.forEach((m, i) => {
+      const b = asBlob[i];
+      if (b && read.has(b)) shapes.blobs.push(b);
+      else shapes.strokes.push(...m.strokes);
+    });
   }
   // (a stem beside a letter, as tall as it, on its line - the l of Cl, the 1 of 13 - is a letter too: its outline for the matcher; else a line)
   const letterBoxes = shapes.blobs.map((b) => b.box);
