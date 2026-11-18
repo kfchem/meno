@@ -141,8 +141,8 @@ describe("words and places at the rules' edges", () => {
     expect(q).toMatchObject({ kind: "centre", neighbours: [0, 2, 4, -1] });
   });
 
-  it("a neutral N of four groups with an H is a centre (an N+ with an H is not)", () => {
-    expect(notCandidate(graph("[NH](C)(CC)CCC"), { kind: "centre", at: 0 })).toBeNull();
+  it("a quaternary ammonium of four unlike groups is a centre; an N+ with an H among its four is not", () => {
+    expect(notCandidate(graph("[N+](C)(CC)(CCC)c1ccccc1"), { kind: "centre", at: 0 })).toBeNull();
     expect(notCandidate(graph("[NH+](C)(CC)CCC"), { kind: "centre", at: 0 })).toBe(NOT_CANDIDATE.ammonium);
   });
 });
