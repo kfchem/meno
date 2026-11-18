@@ -20,7 +20,7 @@ export type Role = {
 };
 
 export const ROLES = {
-  smiles: { name: "SMILES to a structure, and back", where: "chemistry" },
+  smiles: { name: "Structures from SMILES, and SMILES from structures", where: "chemistry" },
   checks: { name: "Hydrogens, valence, aromatic rings, R and S, E and Z", where: "chemistry" },
   pictures: { name: "Structures read from pictures", where: "chemistry", unsure: true },
   stereoisomers: { name: "Stereoisomers of what is drawn without a configuration", where: "molecules3d" },

@@ -10,6 +10,7 @@ import { SMILES_DRAWING_COLUMN, SMILES_RECORD_COLUMN, sortedRows } from "./struc
 import { setStructuresTable } from "./run";
 import { ROW_PX } from "./SetTableBody";
 import { DURATION } from "../../../theme/motion";
+import { constitutionKnown, useIdentitiesAnswered } from "../chem/identityOff";
 
 /** How many rows are drawn beyond those in view, each way: none blank as it scrolls. */
 const BEYOND = 8;
@@ -38,7 +39,10 @@ export default function StructuresTableBody({ set }: { set: WorkflowSet }) {
   const steps = useEditor((s) => s.steps);
   const model = useEditor((s) => s.model);
   // (worked out again as the set changes, or the drawing it reads)
-  const table = useMemo(() => setStructuresTable({ ...store.getState(), model }, set), [store, model, set]);
+  // (a structure's record read as it stands now, its identity worked out off the drawing thread: the table made again as each answer lands)
+  const answered = useIdentitiesAnswered((s) => s.answered);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `answered` is what makes it again
+  const table = useMemo(() => setStructuresTable({ ...store.getState(), model }, set, constitutionKnown), [store, model, set, answered]);
   // (its id and what it is, said by # and on pointing: not columns of their own; which structure it is, a number a chart takes, is)
   const shown = useMemo(() => table.columns.map((c, i) => ({ c, i })).filter(({ c }) => c.kind !== "entry" && c.name !== WHAT_COLUMN), [table]);
   const [sort, setSort] = useState<{ at: number; down: boolean } | null>(null);

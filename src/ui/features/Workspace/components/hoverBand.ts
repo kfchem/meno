@@ -54,3 +54,27 @@ export function bandAround(p: P, q: P, reach: BondReach, margin: number, plainHa
   }
   return hull(pts);
 }
+
+/** The longest step one frame takes a band's motion, in seconds: a frame held up mid-way (the canvas busy) takes it no further. */
+export const BAND_STEP_MOST = 1 / 20;
+
+/**
+ * A band's own clock, in milliseconds of the page's time: when it last moved, or null where it is at rest. Its motion is counted in the
+ * time between its own frames - never from a frame drawn long before it began, which after a zoom, a pause or a pinch would bring it in
+ * all at once, faster or slower each time (no abrupt changes: the maintainer, 2026-11-16).
+ */
+export type BandClock = { last: number | null };
+
+/**
+ * How far a band moves this frame, in seconds: none at the first frame of a motion (it starts where it was), then the time since its last
+ * frame, at most `BAND_STEP_MOST`. Its clock is left at rest - null - where `moving` is false, so the next motion starts afresh.
+ */
+export function bandStep(clock: BandClock, now: number, moving: boolean): number {
+  if (!moving) {
+    clock.last = null;
+    return 0;
+  }
+  const dt = clock.last == null ? 0 : Math.min(Math.max(0, (now - clock.last) / 1000), BAND_STEP_MOST);
+  clock.last = now;
+  return dt;
+}

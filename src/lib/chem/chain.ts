@@ -19,14 +19,8 @@
  * it would unbracketed (N(iPr)2). Charges, and readings with an atom at a
  * valence it does not have - CO, CH2 - are none.
  */
+import { LABEL_VALENCES as VALENCES } from "./perception/hydrogens";
 
-/** The valences each element may have in such a group: carbon four, sulfur two, four or six. */
-const VALENCES: Record<string, number[]> = {
-  H: [1], D: [1], F: [1], Cl: [1], Br: [1], I: [1],
-  O: [2], S: [2, 4, 6], Se: [2, 4, 6],
-  N: [3], P: [3, 5], As: [3, 5], B: [3],
-  C: [4], Si: [4], Ge: [4], Sn: [4],
-};
 /** What hangs on the atom before it by one bond, an atom of its own: the halogens, and deuterium - D, written [2H] - wherever an H could stand (CD3, OD). */
 const HANGING = new Set(["F", "Cl", "Br", "I", "D"]);
 const OXO = new Set(["O", "S"]);

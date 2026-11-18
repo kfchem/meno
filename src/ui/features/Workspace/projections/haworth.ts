@@ -1,5 +1,5 @@
 /**
- * The Haworth tool's drawing (docs/EDITOR-2D.md, *Projections*; foundation part 10): a pyranose's ring of six or a furanose's of five, drawn as
+ * The Haworth tool's drawing (docs/EDITOR-2D.md, *Projections*): a pyranose's ring of six or a furanose's of five, drawn as
  * the solids draw one (`drawn`, rule (H): a true view from above, the eye's height the angle whose sine is 2/3, so that the nearer edge is drawn
  * lower, the ring O behind and C-1 at the right-hand end - McNaught 1996, 2-Carb-5.4), larger than the style's bond (`HAWORTH_SCALE`).
  * Ordinary atoms and bonds that carry their depth, like the chair's; the ring O is an atom like any, and can be changed. Free positions: up

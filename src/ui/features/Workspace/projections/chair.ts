@@ -1,5 +1,5 @@
 /**
- * The chair tool's drawing (docs/EDITOR-2D.md, *Projections*; foundation part 10): a chair of the solids (lib/chem/perception/projection) drawn
+ * The chair tool's drawing (docs/EDITOR-2D.md, *Projections*): a chair of the solids (lib/chem/perception/projection) drawn
  * as the textbook draws one (`drawn`: its bonds on four directions, each one bond long, with the depth of its true view), as ordinary atoms and
  * bonds that carry their depth (`z`, nearer larger), the flag that their configuration is the drawing's (`stereoCentre`) and R and S shown where a
  * group makes a centre (`stereoShown`). Every bond plain: a ring in perspective is drawn with plain bonds (Brecher 2006, ST-3.3). Pure: nothing

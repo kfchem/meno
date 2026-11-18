@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { Molecule3D } from "../store/types";
 import { sharesOf } from "../utils/molecule3d";
 import { factor } from "../../../../lib/units";
-import { MARKS_UNREAD, setEntries } from "./entries";
+import { MARKS_UNREAD, PARTS_ALONE_REFUSED, setEntries } from "./entries";
+import { addMolecule3d, emptyWorkspaceDocument } from "../document";
+import { addSet, addStep, connect } from "./model";
+import { inputKey } from "./flow";
+import { readCarried3D } from "../utils/copyPaste";
 import { runMeno } from "./meno";
 import { workedOf } from "./programs";
 import { resultsOf, type RunResults } from "./run";
@@ -113,5 +117,40 @@ describe("a frame's marks", () => {
     expect(marks(made(again))).toEqual({ failed: [{ kind: "not-converged", why: "The optimisation did not converge" }], imaginary: [[-210.4]], marksUnread: undefined });
     // (and where an entry still says frequencies of its own, the new calculation's verdict is the one taken)
     expect("xyz" in again && made({ ...again, imaginary: [-50] }).imaginary).toEqual([[-210.4]]);
+  });
+});
+
+describe("a structure of several parts, each searched alone", () => {
+  // (each frame one part's conformer, the others at their lowest: no compound's population - the chemistry check, 2026-11-13)
+  const alone = () => waters([0, 0.4, 1.2], { partsAlone: true });
+
+  it("is never weighed as one compound's conformers: no shares on the page, Populations and Ensemble refuse it, saying why", () => {
+    expect(sharesOf(alone())).toBeUndefined();
+    const entries = setEntries([alone()], "conformers");
+    expect(entries.every((e) => e.partsAlone)).toBe(true);
+    expect(runMeno("populations", entries, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: PARTS_ALONE_REFUSED });
+    expect(runMeno("ensemble", entries, "conformers", { property: "energy", as: "ensemble energy" })).toEqual({ ok: false, said: PARTS_ALONE_REFUSED });
+    // (a window over its energies is each part's own: kept as any)
+    expect(runMeno("energy-window", entries, "conformers", { window: 5 }).ok).toBe(true);
+  });
+
+  it("is still so after a step it passes through, and when it is read back from a file", () => {
+    const entries = setEntries([alone()], "conformers");
+    // (what a step keeps of it, laid out as its result: still so, each conformer and the set made of them)
+    const results = resultsOf({ ok: true, holds: "conformers", kept: entries, aside: [], said: "" }, "filter");
+    expect(results.molecules.map((m) => m.partsAlone)).toEqual([true]);
+    expect(readCarried3D(JSON.parse(JSON.stringify(alone())))?.partsAlone).toBe(true);
+  });
+
+  it("is another input to a step than the same frames of one compound: a step run on one has not run on the other", () => {
+    const keyOf = (m: Omit<Molecule3D, "id">) => {
+      let d = addSet(addMolecule3d(emptyWorkspaceDocument(), m), { x0: -5, y0: -5, x1: 5, y1: 5 });
+      d = addStep(d, "populations", 20, 0);
+      const step = d.steps![d.steps!.length - 1];
+      return inputKey(connect(d, { set: d.sets![0].id }, step.id), step, "meno");
+    };
+    const { id: _id, ...m } = alone();
+    const { partsAlone: _alone, ...whole } = m;
+    expect(keyOf(m)).not.toBe(keyOf(whole));
   });
 });

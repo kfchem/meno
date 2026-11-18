@@ -18,6 +18,7 @@ import type { IdentityInput } from "../identity";
 import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Budget, type CipNode } from "./digraph";
 import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
+import { runsThrough } from "../perception/stereo/runs";
 
 /**
  * Why a unit has no descriptor:
@@ -27,7 +28,8 @@ import { parity, Ranker, RULE_5, Unknown } from "./rank";
  *   drawing - a charged or radical mesomeric system whose usual structures
  *   give different labels, or more of them than `MOST_VARIANTS`, a metal, a
  *   star - or it is no centre the rules can complement (three bonds and no
- *   lone pair);
+ *   lone pair, or two: T-shaped, its ligands in one plane; four bonds and
+ *   a lone pair or two: a see-saw or a square);
  * - `large`: its digraph grows past what is worked out.
  */
 export type CipWhy = "alike" | "open" | "unsure" | "large";
@@ -79,7 +81,7 @@ function tied(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]
   return back.length >= 3 ? RULE_6_ASKED : no("alike");
 }
 
-/** Whether a centre is one the rules complement as it is configured: its ligands its neighbours and H, and a lone pair where it has three. */
+/** Whether a centre is one the rules complement as it is configured: a tetrahedron of its neighbours and H - four and no lone pair, or three and their one lone pair. */
 function refusedCentre(p: Prepared, c: number): boolean {
   const t = p.input.atoms[c].tetra!;
   if (p.unsure[c] || p.dups[c].length) return true;
@@ -88,9 +90,12 @@ function refusedCentre(p: Prepared, c: number): boolean {
   const drawn = t.neighbours.filter((n) => n >= 0);
   const hs = t.neighbours.length - drawn.length;
   if (hs !== p.hs[c] || drawn.length !== p.around[c].length || drawn.some((n) => !p.around[c].includes(n))) return true;
-  if (t.neighbours.length === 4) return false;
-  // (three, and the fourth its lone pair: an atom with one - not a B, nor a C+)
-  return t.neighbours.length !== 3 || lonePairs(p, c) < 1;
+  // (four, and no lone pair: a tetrahedron. With one - SF4, a sulfurane SR4, TeCl4 - it is a see-saw, and with two - IF4-, XeF4 -
+  //  square planar: no centre R or S names)
+  if (t.neighbours.length === 4) return lonePairs(p, c) !== 0;
+  // (three, and the fourth its lone pair: an atom with exactly one - not a B, nor a C+, nor an atom with two, which is T-shaped
+  //  with its three ligands in one plane, as a three-bonded halogen's I in ArI(OAc)2 or Cl in ClF3: no centre)
+  return t.neighbours.length !== 3 || lonePairs(p, c) !== 1;
 }
 
 function centre(p: Prepared, c: number): Said {
@@ -177,6 +182,9 @@ function doubleBond(p: Prepared, i: number): Said {
   return cisOrTrans(p, [b.a, b.b], [b.b, b.a], b.stereo!);
 }
 
+/** An atom's neighbours with the order of the bond to each (one where none is said), as perception/stereo/runs `runsThrough` takes them. */
+const near = (p: Prepared, end: number) => p.around[end].map((n) => ({ to: n, order: p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1 }));
+
 /**
  * An odd cumulene's E or Z (a butatriene's: CIP 1966 p. 396, its ends'
  * groups in one plane as a double bond's are; the Blue Book via Hanson et
@@ -187,8 +195,7 @@ function doubleBond(p: Prepared, i: number): Said {
 function cumulene(p: Prepared, k: number): Said {
   const c = p.input.cumulated![k];
   const [i, j] = c.atoms;
-  const through = (end: number) => p.around[end].find((n) => (p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1) >= 2);
-  const [ti, tj] = [through(i), through(j)];
+  const [ti, tj] = [runsThrough(near(p, i)), runsThrough(near(p, j))];
   if (ti == null || tj == null) return no("unsure");
   return cisOrTrans(p, [i, j], [ti, tj], c);
 }
@@ -253,8 +260,7 @@ function axis(p: Prepared, k: number): Said {
   const [i, j] = x.atoms;
   if (p.unsure[i] || p.unsure[j]) return no("unsure");
   // (the neighbour each end runs on to the other through: the other end, a biaryl's; its cumulated double bond, an allene's)
-  const through = (end: number, other: number) => (p.around[end].includes(other) ? other : p.around[end].find((n) => (p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1) >= 2));
-  const [ti, tj] = [through(i, j), through(j, i)];
+  const [ti, tj] = [runsThrough(near(p, i), j), runsThrough(near(p, j), i)];
   if (ti == null || tj == null) return no("unsure");
   const budget: Budget = { left: NODE_BUDGET, steps: STEP_BUDGET };
   try {

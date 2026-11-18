@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { layout2D } from "./engine";
 import { perceive, type LayoutInput } from "./perceive";
 import { atomClasses, canonicalRanks } from "./ranks";
 import { fromSmiles } from "./testdata/fromSmiles";
@@ -42,5 +45,66 @@ describe("atom classes and canonical ranks", () => {
     const c = atomClasses(mol);
     expect(new Set([c[0], c[2], c[3]]).size).toBe(1);
     expect(new Set(canonicalRanks(mol)).size).toBe(mol.n);
+  });
+});
+
+/**
+ * `g` with the double bond `k`'s cis or trans given against the other neighbour of its end `end` - the same configuration said the other
+ * way; null where that end has no second neighbour.
+ */
+function exchanged(g: LayoutInput, k: number, end: 0 | 1): LayoutInput | null {
+  const b = g.bonds[k];
+  const [at, partner] = end === 0 ? [b.a, b.b] : [b.b, b.a];
+  const others = g.bonds.flatMap((x) => (x.a === at && x.b !== partner ? [x.b] : x.b === at && x.a !== partner ? [x.a] : []));
+  const other = others.find((o) => o !== b.stereo!.refs[end]);
+  if (others.length !== 2 || other == null) return null;
+  const refs: [number, number] = end === 0 ? [other, b.stereo!.refs[1]] : [b.stereo!.refs[0], other];
+  return { ...g, bonds: g.bonds.map((x, j) => (j === k ? { ...x, stereo: { refs, cis: !b.stereo!.cis } } : x)) };
+}
+
+describe("a double bond's cis or trans, given against either neighbour of an end", () => {
+  // (the smallest molecule of the layout's fixtures whose ranks hung on it, by a search over them all, each end exchanged in turn:
+  //  beta-carotene's two alike halves were told apart by which neighbour a C=C was given against - two such bonds of eighteen)
+  const carotene = "CC1=C(C(CCC1)(C)C)/C=C/C(=C/C=C/C(=C/C=C/C=C(/C=C/C=C(/C=C/C2=C(CCCC2(C)C)C)\\C)\\C)/C)/C";
+
+  it("gives beta-carotene the same canonical ranks, and lays it out the same", () => {
+    const g = fromSmiles(carotene);
+    for (const k of [20, 24]) {
+      const other = exchanged(g, k, 1)!;
+      expect(canonicalRanks(perceive(other))).toEqual(canonicalRanks(perceive(g)));
+      const [p, q] = [layout2D(other), layout2D(g)];
+      expect([p.x, p.y]).toEqual([q.x, q.y]);
+    }
+  });
+
+  it("gives beta-carotene the same ranks with a stereo bond's atoms listed the other way round, its refs as they were", () => {
+    // (the ref on the bond's first atom is found by the end it is on, not by its place in the refs)
+    const g = fromSmiles(carotene);
+    for (const k of [20, 24]) {
+      const turned = { ...g, bonds: g.bonds.map((x, j) => (j === k ? { ...x, a: x.b, b: x.a } : x)) };
+      expect(canonicalRanks(perceive(turned)), `bond ${k}`).toEqual(canonicalRanks(perceive(g)));
+    }
+  });
+
+  it("gives every fixture with a stereo double bond the same ranks, each end of each such bond exchanged in turn", () => {
+    const fixtures = ["molecules.json", "heldout.json"].flatMap(
+      (f) => (JSON.parse(readFileSync(resolve(__dirname, "../../../scripts/layout", f), "utf8")).molecules as { smiles?: string }[]).flatMap((m) => (m.smiles ? [m.smiles] : [])),
+    );
+    let tried = 0;
+    for (const smiles of fixtures) {
+      const g = fromSmiles(smiles);
+      if (!g.bonds.some((b) => b.stereo)) continue;
+      const ranks = canonicalRanks(perceive(g));
+      g.bonds.forEach((b, k) => {
+        if (!b.stereo) return;
+        for (const end of [0, 1] as const) {
+          const other = exchanged(g, k, end);
+          if (!other) continue;
+          tried++;
+          expect(canonicalRanks(perceive(other)), `${smiles} bond ${k} end ${end}`).toEqual(ranks);
+        }
+      });
+    }
+    expect(tried).toBeGreaterThan(10);
   });
 });

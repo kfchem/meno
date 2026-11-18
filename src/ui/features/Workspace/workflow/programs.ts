@@ -5,6 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
+import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { isId, type SolvationDecl } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
@@ -607,11 +608,16 @@ function singlePointWorked(entry: SetEntry, last: number[], energies: readonly n
  * with its energy, its entry the point it started from (the run's one
  * converged geometry), between them. A side that stopped before its end -
  * its program's iteration cap reached - leaves the path as far as it came,
- * out of *Failed*, its program's words on it: its end no minimum. The path
+ * its ends where it stopped (`stopped`, its program's words): the steps
+ * after it - the ends optimised, their bonding compared - decide what they
+ * are, as ConfoTS does, and the step's line says so. The path
  * is one only at the level its start was found at - a saddle point at one
  * level is no stationary point at another - so the path's own level, as
  * its output says it, must be its start's: else it fails, naming both.
  */
+/** What a reaction path one of whose sides stopped says of it, where its program said nothing. */
+export const STOPPED_SAID = "A side stopped before its end";
+
 function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
   const k = out.converged?.length === frames.length ? out.converged.indexOf(true) : -1;
   if (k < 0 || out.converged!.lastIndexOf(true) !== k) return { kind: "no-geometry", why: "It read back no one point the path started from" };
@@ -619,7 +625,9 @@ function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[]
   if (!calc.method) return { kind: "failed", why: "It did not say the path's level: whether it is its start's cannot be told" };
   if (levelKey(calc) !== levelKey(entry.calc))
     return { kind: "failed", why: `The path is at ${levelSaid(calc)}, its start was found at ${levelSaid(entry.calc)}: run it at the start's level` };
-  const stopped = out.optimised === false ? (out.warnings?.map((w) => w.text).join("; ") ?? "") || "A side stopped before its end" : null;
+  const stopped = out.optimised === false ? (out.warnings?.map((w) => w.text).join("; ") ?? "") || STOPPED_SAID : null;
+  // (kept on the molecule too, after the step's line is gone: its program's words, or where it gave none, Meno's)
+  const said = stopped && !calc.warnings?.length ? { ...calc, warnings: [{ kind: "other" as const, text: STOPPED_SAID }] } : calc;
   return {
     ...anew(entry),
     ...keptAnew(entry, frames[k], calc.charge),
@@ -629,8 +637,8 @@ function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[]
     pathEnergies: energies.slice(0, k),
     after: frames.slice(k + 1),
     afterEnergies: energies.slice(k + 1),
-    calc,
-    ...(stopped ? { failed: { kind: "not-converged" as const, why: stopped } } : {}),
+    calc: said,
+    ...(stopped ? { stopped } : {}),
   };
 }
 
@@ -953,7 +961,7 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
  */
 export type DrawnAnswer =
   | { as: "drawn"; properties?: Record<string, DrawnValue> }
-  | { made: string[]; smiles?: string[]; properties?: Record<string, DrawnValue> }
+  | { made: string[]; smiles?: string[]; configurations?: (IsomerConfiguration | undefined)[]; properties?: Record<string, DrawnValue> }
   | { aside: string; kind: string };
 /** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
 export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };
