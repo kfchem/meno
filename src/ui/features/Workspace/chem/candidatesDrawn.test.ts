@@ -59,4 +59,17 @@ describe("where a configuration can be and sets something, drawn", () => {
     expect(offered("CC=C=C=CC").bonds).toEqual(["1-2", "2-3", "3-4"]);
     expect(offered("CC(C)=C=CC").bonds).toEqual([]);
   });
+
+  it("a biaryl's axis drawn with a wedge is offered: 2,2'-dimethyl-6,6'-dinitrobiphenyl", () => {
+    const m: Model = drawnFromSmiles("Cc1cccc([N+](=O)[O-])c1-c1c(C)cccc1[N+](=O)[O-]");
+    // (the axis: the single bond between the rings, atoms 9 and 10; a wedge out of its first end along a single bond of its ring,
+    //  narrow at the end)
+    const id = (i: number) => m.atoms[i].id;
+    const axis = m.bonds.find((b) => [b.a, b.b].sort().join() === [id(9), id(10)].sort().join())!;
+    const out = m.bonds.find((b) => b.id !== axis.id && b.order === 1 && (b.a === id(9) || b.b === id(9)))!;
+    const wedged: Model = { ...m, bonds: m.bonds.map((b) => (b.id === out.id ? { ...b, a: id(9), b: b.a === id(9) ? b.b : b.a, stereo: "up" as const } : b)) };
+    const ask = candidatesDrawn(wedged);
+    expect(ask.bond(axis.id)).toBe(true);
+    expect(candidatesDrawn(m).bond(axis.id)).toBe(false);
+  });
 });
