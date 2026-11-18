@@ -4,7 +4,7 @@ import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled";
 import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
 import type { Axial } from "../layout/stereo";
-import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
+import { aromaticForm, automorphismGroup, filledIn, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
 import { measured } from "../../testing/timeouts";
 
 /** How many distinct values a list has. */
@@ -465,6 +465,39 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
   it("is looked for again after each one taken out: 2,4-dimethylpentan-3-ol's C3 has alike groups only once both isopropyls' CH are", () => {
     const plain = identityText(fromSmiles("CC(C)C(O)C(C)C"));
     for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
+  });
+
+  it("settles a bridgehead two of whose bridges are alike and end at the same atom; one between bridges to different atoms stays a centre", () => {
+    // (bicyclo[2.2.2]octan-2-ol, its two bridgeheads written - each with two CH2CH2 alike to the other: however they are
+    //  written, or not at all, one structure; its C2 a centre, two)
+    const bicyclooctanol = ["O[C@H]1C[C@@H]2CC[C@H]1CC2", "O[C@H]1C[C@H]2CC[C@@H]1CC2", "O[C@H]1C[C@@H]2CC[C@@H]1CC2", "O[C@H]1C[C@H]2CC[C@H]1CC2", "O[C@H]1CC2CCC1CC2"];
+    expect(new Set(bicyclooctanol.map((s) => identityText(fromSmiles(s)))).size).toBe(1);
+    expect(identityText(fromSmiles("O[C@H]1CC2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CC2CCC1CC2")));
+    // (quinuclidin-3-ol likewise at its C4, the N between the same bridges; its C3 a centre, two)
+    expect(new Set(["O[C@H]1CN2CC[C@@H]1CC2", "O[C@H]1CN2CC[C@H]1CC2", "O[C@H]1CN2CCC1CC2"].map((s) => identityText(fromSmiles(s)))).size).toBe(1);
+    expect(identityText(fromSmiles("O[C@H]1CN2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CN2CCC1CC2")));
+    // (a cage with a bridge of four atoms or more lets its bridgeheads stand in or out: in,out- and out,out-bicyclo[4.4.1]undecane
+    //  and bicyclo[4.4.4]tetradecane, two structures each - the bridgeheads' senses to each other written, not settled)
+    for (const [inOut, outOut] of [
+      ["C1CC[C@H]2CCCC[C@@H](C1)C2", "C1CC[C@H]2CCCC[C@H](C1)C2"],
+      ["C1CCC[C@H]2CCCC[C@@H](C1)CCCC2", "C1CCC[C@H]2CCCC[C@H](C1)CCCC2"],
+    ])
+      expect([inOut, identityText(fromSmiles(inOut)) === identityText(fromSmiles(outOut))]).toEqual([inOut, false]);
+    // (tropine and pseudotropine: C3 between C2 to C1 and C4 to C5, bridges to different atoms - two structures)
+    expect(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@@H](O)C2"))).not.toBe(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@H](O)C2")));
+  });
+
+  it("settles a place whose groups are alike but for places of their own that settle first: tri-tert-butylmethanol, with no search", () => {
+    // (each tert-butyl's centre settled by its methyls; then the carbinol's three tert-butyls are alike as wholes - the
+    //  fill complete, and no configuration of it written; the writing's own search of so symmetric a structure may still run
+    //  out of steps: lib/layout/canonical)
+    const g = fromSmiles("CC(C)(C)C(O)(C(C)(C)C)C(C)(C)C");
+    const filled = filledIn(g);
+    expect([filled.complete, filled.searches, filled.input.atoms.filter((a) => a.tetra).length]).toEqual([true, 0, 0]);
+    for (const seed of SHUFFLE_SEEDS.slice(0, 3)) expect(identityText(shuffled(g, seed))).toBe(identityText(g));
+    // (and two such groups unlike - a tert-butyl and a 1,1-dimethylpropyl - leave it to the search, a centre still)
+    const h = fromSmiles("CC(C)(C)[C@@H](O)C(C)(C)CC");
+    expect(identityText(h)).not.toBe(identityText(fromSmiles("CC(C)(C)[C@H](O)C(C)(C)CC")));
   });
 
   it("is the same whatever order a large symmetric structure's atoms come in, where its search runs out of steps: Pd(PPh3)4, PdCl2(PPh3)2", { timeout: measured(10_000) }, () => {

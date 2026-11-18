@@ -330,11 +330,27 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
   const every = blanksOf(unconfigured(g));
   const constitution = symmetryClasses(unconfigured(input));
   const own = new Set(every.flatMap((b) => b.own));
-  const alike = groupsAlike(g, own, constitution);
-  const settled = every.filter((b) => (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
-  const plainAt = new Set(settled.flatMap((b) => (b.kind === "centre" ? [b.at] : [])));
-  const plainBond = new Set(settled.flatMap((b) => (b.kind === "bond" ? [b.at] : [])));
-  g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  const plainAt = new Set<number>();
+  const plainBond = new Set<number>();
+  const settledHere = (b: Blank) => (b.kind === "centre" && plainAt.has(b.at)) || (b.kind === "bond" && plainBond.has(b.at));
+  // (asked again until nothing more settles: a place settled is no place for the groups that hold it - each sense of it one
+  //  structure, so two groups alike but for it are alike - and three tert-butyls on one carbon settle it, their own centres
+  //  settled first: tri-tert-butylmethanol. And a cage's bridgehead two of whose bridges are alike: `bridgesAlike`)
+  for (;;) {
+    const places = new Set(every.filter((b) => !settledHere(b)).flatMap((b) => b.own));
+    const alike = groupsAlike(g, places, constitution);
+    const bridges = bridgesAlike(g, places, constitution);
+    const more = every.filter(
+      (b) => !settledHere(b) && (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side) || bridges(b.own[k] ?? b.own[0], side)),
+    );
+    if (!more.length) break;
+    for (const b of more) {
+      if (b.kind === "centre") plainAt.add(b.at);
+      else if (b.kind === "bond") plainBond.add(b.at);
+    }
+    g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  }
+  const settled = every.filter(settledHere);
   // (a metal all of whose donors, or all but one, are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+, RhCl(PPh3)3,
   //  PtCl3Br 2-: the odd one across any of the others, every pairing one structure, so it carries none, as such a centre
   //  carries no sense: one given taken off, none filled in, and no search - RhCl(PPh3)3's ran out of steps, found in review.
@@ -346,7 +362,7 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
   // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
   const settledMetals = [...plainMetal];
   // (the places left: those not settled so)
-  const open = (b: Blank) => !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at)) && !(b.kind === "metal" && plainMetal.has(b.at));
+  const open = (b: Blank) => !settledHere(b) && !(b.kind === "metal" && plainMetal.has(b.at));
   // (an axis or a cumulene of alike end atoms: filled, as before)
   for (const b of blanksOf(g)) if ((b.kind === "axis" || b.kind === "cumulated") && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
@@ -439,6 +455,101 @@ function turnedOver(b: Exclude<Blank, { kind: "biaryl" | "metal" }>, automorphis
     return swapped(b.sides[0]) !== swapped(b.sides[1]);
   });
 }
+
+/**
+ * Whether `at` is a bridgehead of a cage two of whose bridges are alike: every group of `side` a bridge to one other atom -
+ * cut from `at` and that atom, each its own part - as quinuclidine's three to its N; and two of them alike as wholes, with no
+ * place in them (`places`) and no configuration, written the same with the atoms on each bridgehead marked. Exchanging the
+ * two turns both bridgeheads over and moves nothing else, and a cage's bridgeheads stand only one way to each other, so the
+ * sense at `at` says nothing. Two arms of a ring are no cage (1,4-dimethylcyclohexane's cis and trans), nor are bridges to
+ * different atoms (tropine's C3): a centre still (found in the chemistry check).
+ */
+function bridgesAlike(g: SymmetryInput, places: ReadonlySet<number>, classes: readonly number[]): (at: number, side: readonly number[]) => boolean {
+  const around: number[][] = g.atoms.map(() => []);
+  const order = new Map<string, number>();
+  const key = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+    order.set(key(b.a, b.b), b.order);
+  }
+  const configured = new Set<number>();
+  g.atoms.forEach((a, i) => a.tetra && configured.add(i));
+  for (const b of g.bonds) if (b.stereo) [b.a, b.b].forEach((i) => configured.add(i));
+  for (const x of [...(g.axes ?? []), ...(g.cumulated ?? [])]) x.atoms.forEach((i) => configured.add(i));
+  /** The part reached from `from`, never through `at` or `far`; null past GROUP_MOST atoms. */
+  const part = (from: number, at: number, far: number): number[] | null => {
+    const seen = new Set([at, far, from]);
+    const out = [from];
+    for (let k = 0; k < out.length; k++)
+      for (const y of around[out[k]]) {
+        if (seen.has(y)) continue;
+        if (out.length >= GROUP_MOST) return null;
+        seen.add(y);
+        out.push(y);
+      }
+    return out;
+  };
+  /** How many atoms a bridge has along it: from its atom on `at`'s side (`from`) to the nearest of its atoms on `far`. */
+  const bridgeLength = (group: readonly number[], from: number, far: number): number => {
+    const inGroup = new Set(group);
+    let at = [from];
+    const seen = new Set([from]);
+    for (let d = 1; at.length; d++) {
+      if (at.some((a) => around[a].includes(far))) return d;
+      const next: number[] = [];
+      for (const u of at)
+        for (const v of around[u]) {
+          if (!inGroup.has(v) || seen.has(v)) continue;
+          seen.add(v);
+          next.push(v);
+        }
+      at = next;
+    }
+    return Infinity;
+  };
+  const text = (group: readonly number[], at: number, far: number): string | null => {
+    if (group.some((a) => places.has(a) || configured.has(a))) return null;
+    const index = new Map(group.map((a, i) => [a, i]));
+    const mark = (a: number) => [at, far].map((e, k) => (around[a].includes(e) ? `^${k ? "far" : "on"}${order.get(key(a, e))}` : "")).join("");
+    const atoms = group.map((a) => ({ ...g.atoms[a], el: `${g.atoms[a].el}${mark(a)}` }));
+    const bonds = g.bonds.filter((b) => index.has(b.a) && index.has(b.b)).map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }));
+    return canonicalWritten({ atoms, bonds }).text;
+  };
+  return (at, side) => {
+    if (side.length < 3) return false;
+    // (the other bridgehead: an atom of the first bridge every group of `at` reaches it by, each by its own part)
+    const first = part(side[0], at, -1);
+    if (!first) return false;
+    for (const far of first) {
+      const parts = side.map((n) => (n === far ? null : part(n, at, far)));
+      if (parts.some((q) => !q)) continue;
+      const own = parts as number[][];
+      // (each its own part, apart from the others, and each meeting the far bridgehead)
+      if (own.some((_, k) => own.some((r, l) => l !== k && r.includes(side[k])))) continue;
+      if (!own.every((q) => q.some((a) => around[a].includes(far)))) continue;
+      // (every bridge of BRIDGE_MOST atoms or fewer between the two bridgeheads, along it: a longer one lets the bridgeheads
+      //  stand in or out - in,out-bicyclo[4.4.1]undecane - and their senses to each other say which)
+      if (own.some((q, k) => bridgeLength(q, side[k], far) > BRIDGE_MOST)) continue;
+      for (let p = 0; p < side.length; p++)
+        for (let q = p + 1; q < side.length; q++) {
+          if (classes[side[p]] !== classes[side[q]]) continue;
+          const t = text(own[p], at, far);
+          if (t != null && t === text(own[q], at, far)) return true;
+        }
+      return false;
+    }
+    return false;
+  };
+}
+
+/**
+ * The most atoms a cage's bridge may have, along it, for its bridgeheads to stand only one way to each other (`bridgesAlike`):
+ * with four, in,out isomers begin (bicyclo[4.4.1]undecane's, found in the chemistry check). That none is known with every
+ * bridge of three or fewer is the chemistry check's memory, not a source read: a bound on the safe side - a cage past it is
+ * left to the search, never two compounds joined.
+ */
+const BRIDGE_MOST = 3;
 
 /** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */
 const GROUP_MOST = 64;
