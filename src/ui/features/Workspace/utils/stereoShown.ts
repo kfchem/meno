@@ -2,8 +2,8 @@
  * R and S, E and Z shown on what is asked (docs/EDITOR-2D.md, *R and S*):
  * what "Show" or "Hide" on a menu acts on and what it says, worked out once
  * as the menu opens (Workspace `stereoAtMenu`). In the drawing: the atom or
- * the bond right-clicked, or the selection there - an atom where it could be
- * a stereocentre (three bonds or more), a bond where it is double - "Hide"
+ * the bond right-clicked, or the selection there - an atom or a bond where
+ * it can carry a configuration (the core's candidates: chem/candidatesDrawn) - "Hide"
  * where all of it is shown, else "Show". On a molecule in 3D: the molecule
  * right-clicked, whole - or, right-clicked on an atom or a bond chosen in
  * it, what is chosen there, its count said; or the selection, right-clicked
@@ -11,6 +11,8 @@
  * it is shown, so one press clears what shows, else "Show". The words name
  * only the kinds the target has: R/S, E/Z, or both.
  */
+import { candidatesDrawn } from "../chem/candidatesDrawn";
+import { partOf } from "../chem/cleanUp";
 import { stereoShownOf } from "../document";
 import type { Model, Molecule3D } from "../store/types";
 
@@ -32,15 +34,24 @@ type Held = {
 };
 
 export function stereoItemFor(st: Held, at: StereoMenuAt): StereoItem | null {
-  const degree = new Map<number, number>();
-  for (const b of st.model.bonds) {
-    degree.set(b.a, (degree.get(b.a) ?? 0) + 1);
-    degree.set(b.b, (degree.get(b.b) ?? 0) + 1);
-  }
   const atomById = new Map(st.model.atoms.map((a) => [a.id, a]));
   const bondById = new Map(st.model.bonds.map((b) => [b.id, b]));
-  const centre = (id: number) => (degree.get(id) ?? 0) >= 3;
-  const double = (id: number) => bondById.get(id)?.order === 2;
+  // (where a configuration can be, by the core's candidates: each structure asked of read once, as the menu opens)
+  const root = new Map<number, number>(st.model.atoms.map((a) => [a.id, a.id]));
+  const find = (a: number): number => (root.get(a) === a ? a : (root.set(a, find(root.get(a)!)), root.get(a)!));
+  for (const b of st.model.bonds) if (root.has(b.a) && root.has(b.b)) root.set(find(b.a), find(b.b));
+  const read = new Map<number, ReturnType<typeof candidatesDrawn>>();
+  const candidatesAt = (atom: number) => {
+    const r = find(atom);
+    let c = read.get(r);
+    if (!c) read.set(r, (c = candidatesDrawn(partOf(st.model, new Set(st.model.atoms.filter((a) => find(a.id) === r).map((a) => a.id))))));
+    return c;
+  };
+  const centre = (id: number) => atomById.has(id) && candidatesAt(id).atoms.has(id);
+  const double = (id: number) => {
+    const b = bondById.get(id);
+    return !!b && root.has(b.a) && candidatesAt(b.a).bonds.has(id);
+  };
   const of: StereoOf = { atoms: [], bonds: [], molecules: [] };
   // (what is chosen in a molecule in 3D is the target: its count said)
   let chosen = false;
