@@ -11,7 +11,7 @@ import type { Model } from "../store/types";
 import { readDrawn, recordText } from "../utils/copyPaste";
 import { callTool } from "../conversation/tools";
 import { cleanUp, partFormula } from "./cleanUp";
-import { drawingOf, forFlatReaders, readAs } from "./drawing";
+import { drawingOf, forFlatReaders, readAs, undrawnHydrogens } from "./drawing";
 import { etaRingAt } from "./eta";
 import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "./identityOf";
 
@@ -175,6 +175,14 @@ describe("a group typed as an element's symbol is the group; the element from a 
     expect(read(benzeneWith("Pr").doc)).toEqual([expect.objectContaining({ el: "Pr", group: true })]);
     const file = editor(moleculesToEditorModel(readMoleculesFromText(prCl3, "mol")).model);
     expect(read(file.doc)).toEqual([expect.not.objectContaining({ group: true })]);
+  });
+
+  it("a held group carries no H the drawing does not show, though a file set its atom a valence", () => {
+    const typed = benzeneWith("Pr").state().model;
+    const pr = typed.atoms.find((a) => a.el === "Pr")!;
+    // (a valence on the atom, as a file may set one: the label's group is drawn out with its own H, none carried on the label)
+    const withValence: Model = { ...typed, atoms: typed.atoms.map((a) => (a.id === pr.id ? { ...a, valence: 3 } : a)) };
+    expect(undrawnHydrogens(withValence).get(pr.id)).toBe(0);
   });
 
   it("a Pr saved with nothing held - before this version, or from a file - opens as praseodymium", () => {
