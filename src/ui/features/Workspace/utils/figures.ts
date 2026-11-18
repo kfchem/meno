@@ -24,6 +24,9 @@ import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { abbreviationOf } from "../../../../lib/chem/abbreviations";
+import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
+import { HELD_NAME, heldName } from "../../../../lib/layout/names";
 import { regularised } from "../../../../lib/layout/regularise";
 import { sameStereo } from "../chem/engineLayout";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
@@ -63,6 +66,9 @@ export function wholeLabel(label: string): boolean {
 export const figureLabels: LabelReader = (label) => {
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
+  // (a group's label that is also an element's symbol - Pr, Ac, Ts, Fm, At - is the group, as it is typed: read on as its name, never
+  //  as the element, and held as the group where the structure is made, `modelOf` - foundation part 3, B2)
+  if (r.kind === "element" && r.el === label && abbreviationOf(label)) return { el: heldName(label) };
   if (r.kind === "element") return { el: r.el, charge: r.charge, ...(r.isotope ? { isotope: r.isotope } : {}) };
   if (r.kind === "charge") return { el: "C", charge: r.charge };
   return { el: label };
@@ -338,6 +344,16 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
     const made = { atoms: atoms.map((a, i) => ({ ...a, x: regular[i].x, y: regular[i].y })), bonds };
     if (sameStereo(drawn, made)) made.atoms.forEach((a, i) => (atoms[i] = a));
   }
+  // (a group's label read as its name - Pr, propyl's - made the group it is, held as a typed one is: document `groupHeldAt`)
+  atoms.forEach((a, i) => {
+    if (!a.el.endsWith(HELD_NAME)) return;
+    const label = a.el.slice(0, -HELD_NAME.length);
+    const bond = bonds.find((b) => b.a === a.id || b.b === a.id);
+    const other = bond ? atoms[(bond.a === a.id ? bond.b : bond.a) - 1] : undefined;
+    const toward = other ? { x: other.x - a.x, y: other.y - a.y } : null;
+    const held = placedAbbreviation(label, toward, NOMINAL_BOND_LENGTH);
+    atoms[i] = { ...a, el: label, ...(held ? { abbrev: { ...held, ...(toward ? { toward } : {}) } } : {}) };
+  });
   s.atoms.forEach((a, i) => {
     if (a.unsure) atoms[i].unsure = { said: a.unsure, as: atomAs(atoms[i], bonds) };
   });

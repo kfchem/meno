@@ -135,11 +135,79 @@ describe("enhanced stereo", () => {
   });
 
   it("beside a centre drawn with a wedge and in no group, is said at each of its centres: its forms are no enantiomers", () => {
-    // (and1 on two centres, a third wedged as drawn: as an (S) side chain beside a racemic ring - diastereomers, not an enantiomer)
-    const wedged: Bond[] = zigBonds.map((b, k) => (k === 0 ? { ...b, stereo: "up" as const, narrow: 0 } : b));
-    const t = texts(zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), wedged);
+    // (and1 on two centres, a third wedged as drawn - atom 0 made a CHFCl centre, its F on a wedge: as an (S) side chain beside a racemic
+    //  ring - diastereomers, not an enantiomer)
+    const atoms = [...zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), { id: 7, x: -L * 0.866, y: L / 2, el: "F" }, { id: 8, x: 0, y: -L, el: "Cl" }];
+    const bonds: Bond[] = [...zigBonds, { a1: 0, a2: 6, order: 1, stereo: "up", narrow: 0 }, { a1: 0, a2: 7, order: 1 }];
+    const t = texts(atoms, bonds);
     expect(t.filter((x) => x === "and1")).toHaveLength(2);
     expect(t.some((x) => /enantiomer/.test(x))).toBe(false);
+  });
+
+  it("beside a wedge that sets no centre - an isopropyl's CH, as drawn - is still said once beneath: the wedge is a look, no centre", () => {
+    // (atom 0 made an isopropyl's CH: a second methyl on it, and a wedge to one of its methyls, its narrow end at the CH)
+    const atoms = [...zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), { id: 7, x: -L * 0.866, y: L / 2, el: "C" }, { id: 8, x: 0, y: -L, el: "C" }];
+    const bonds: Bond[] = [...zigBonds, { a1: 0, a2: 6, order: 1, stereo: "up", narrow: 0 }, { a1: 0, a2: 7, order: 1 }];
+    const t = texts(atoms, bonds);
+    expect(t).toContain("and enantiomer");
+    expect(t.filter((x) => x === "and1")).toEqual([]);
+  });
+
+  it("beside a pseudoasymmetric centre in no group, is said at each centre: pentane-2,3,4-triol's C3 between its and1 pair", () => {
+    // (C1 to C5 a zigzag; an OH up from each of C2, C3, C4 - C2's and C4's wedged and in and1, C3's wedged and in no group: turning
+    //  the pair makes C3's r an s, the two forms the two meso diastereomers, no enantiomer)
+    const at = (id: number, x: number, y: number, el = "C", extra = {}) => ({ id, x: x * L * 0.866, y: y * L, el, ...extra });
+    for (const c3 of ["up", "down"] as const) {
+      const atoms = [
+        at(1, 0, 0),
+        at(2, 1, 0.5, "C", { stereoGroup: { kind: "and" as const, n: 1 } }),
+        at(3, 2, 0),
+        at(4, 3, 0.5, "C", { stereoGroup: { kind: "and" as const, n: 1 } }),
+        at(5, 4, 0),
+        at(6, 1, 1.5, "O"),
+        at(7, 2, -1, "O"),
+        at(8, 3, 1.5, "O"),
+      ];
+      const bonds: Bond[] = [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+        { a1: 2, a2: 3, order: 1 },
+        { a1: 3, a2: 4, order: 1 },
+        { a1: 1, a2: 5, order: 1, stereo: "up", narrow: 1 },
+        { a1: 2, a2: 6, order: 1, stereo: c3, narrow: 2 },
+        { a1: 3, a2: 7, order: 1, stereo: "up", narrow: 3 },
+      ];
+      const t = texts(atoms, bonds);
+      expect(t.filter((x) => x === "and1"), c3).toHaveLength(2);
+      expect(t.some((x) => /enantiomer/.test(x)), c3).toBe(false);
+    }
+  });
+
+  it("beside a wedge the reader reads as no centre though its groups differ - from an alkene's carbon - is still said once beneath", () => {
+    // (atom 0 made an alkene's carbon: a CH= with a wedge to a Cl, its narrow end there)
+    const atoms = [...zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), { id: 7, x: -L * 0.866, y: L / 2, el: "C" }, { id: 8, x: 0, y: -L, el: "Cl" }];
+    const bonds: Bond[] = [...zigBonds, { a1: 0, a2: 6, order: 2 }, { a1: 0, a2: 7, order: 1, stereo: "up", narrow: 0 }];
+    expect(texts(atoms, bonds)).toContain("and enantiomer");
+  });
+
+  it("beside a 1,4-disubstituted cyclohexane wedged, cis or trans, is still said once beneath: its ring carbons' two branches are alike", () => {
+    // (the and1 pair's chain bonded at its start to a ring carbon R1, wedged; a methyl on R4 wedged the same way or the other)
+    const p = (deg: number, cx: number, cy: number) => ({ x: cx + L * Math.cos((deg * Math.PI) / 180), y: cy + L * Math.sin((deg * Math.PI) / 180) });
+    const cx = -L * 0.866 - L;
+    const cy = 0;
+    for (const methyl of ["up", "down"] as const) {
+      const ring = [0, 60, 120, 180, 240, 300].map((deg, k) => ({ id: 20 + k, ...p(deg, cx, cy), el: "C" }));
+      const me = { id: 30, ...p(180, cx - L, cy), el: "C" };
+      const atoms = [...zig([{}, { stereoGroup: { kind: "and", n: 1 } }, { stereoGroup: { kind: "and", n: 1 } }]), ...ring, me];
+      // (R1 is index 6, its partner R4 index 9; the methyl index 12)
+      const bonds: Bond[] = [
+        ...zigBonds,
+        ...[0, 1, 2, 3, 4, 5].map((k) => ({ a1: 6 + k, a2: 6 + ((k + 1) % 6), order: 1 as const })),
+        { a1: 6, a2: 0, order: 1, stereo: "up", narrow: 6 },
+        { a1: 9, a2: 12, order: 1, stereo: methyl, narrow: 9 },
+      ];
+      expect(texts(atoms, bonds), methyl).toContain("and enantiomer");
+    }
   });
 
   it("in more than one group, is said at each centre", () => {

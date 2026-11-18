@@ -125,6 +125,36 @@ describe("bond orders estimated from where atoms stand", () => {
       }
   });
 
+  it("gives a stibine oxide its one Sb=O, as an arsine oxide its As=O", () => {
+    // (Me3E=O laid out by hand: E at the origin, its O straight up at a double bond's length, its methyls below at a single bond's)
+    for (const [el, eo, ec] of [["As", 1.66, 1.95], ["Sb", 1.85, 2.13]] as const) {
+      const tilt = (109.5 * Math.PI) / 180;
+      const atoms: GeoAtom[] = [
+        { el, x: 0, y: 0, z: 0 },
+        { el: "O", x: 0, y: 0, z: eo },
+        ...[0, 1, 2].map((k) => ({ el: "C", x: ec * Math.sin(tilt) * Math.cos((2 * Math.PI * k) / 3), y: ec * Math.sin(tilt) * Math.sin((2 * Math.PI * k) / 3), z: ec * Math.cos(tilt) })),
+      ];
+      const r = ordersFromGeometry(atoms, [{ a1: 0, a2: 1 }, { a1: 0, a2: 2 }, { a1: 0, a2: 3 }, { a1: 0, a2: 4 }]);
+      expect(r.decided, el).toBe(true);
+      expect(r.orders, el).toEqual([2, 1, 1, 1]);
+      expect(r.charges.every((c) => c === 0), el).toBe(true);
+    }
+  });
+
+  it("leaves a metal's bond out of what its neighbour counts: acetone bound to Zn through its O keeps its C=O", () => {
+    // (laid out by hand; were Zn's bond counted, the O would have two neighbours and no double bond to give)
+    const atoms: GeoAtom[] = [
+      { el: "C", x: 0, y: 0, z: 0 },
+      { el: "O", x: 0, y: 1.22, z: 0 },
+      { el: "C", x: -1.28, y: -0.74, z: 0 },
+      { el: "C", x: 1.28, y: -0.74, z: 0 },
+      { el: "Zn", x: 0, y: 3.22, z: 0 },
+    ];
+    const r = ordersFromGeometry(atoms, [{ a1: 0, a2: 1 }, { a1: 0, a2: 2 }, { a1: 0, a2: 3 }, { a1: 1, a2: 4 }]);
+    expect(r.decided).toBe(true);
+    expect(r.orders).toEqual([2, 1, 1, 1]);
+  });
+
   it("is not decided where a carbon's shape asks a double bond it cannot have", () => {
     // (a carbon flat among three chlorines: a radical, as drawn, or a cation)
     const atoms: GeoAtom[] = [
