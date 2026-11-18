@@ -1467,9 +1467,22 @@ All hover-based, as above.
   Meno's log records which move. The structures are read in a moment the
   page is idle after the change, only those it touched
   (`Workspace/configuration`: `configurationChanges`, `watchConfiguration`;
-  `components/ConfigurationNotes2D`). In this phase what was stated before
-  is the drawing as it was after the last change; nothing new is saved, and
-  identity, Clean-up, R and S, 3D and the files still read the marks.
+  `components/ConfigurationNotes2D`).
+  **The configuration kept.** What a structure states is kept on its own
+  atoms and bonds, by id (`Atom.config`, `Bond.config`;
+  configuration/kept): each centre's neighbours and sense, each double
+  bond's two refs and whether they are on one side, each axis's sense;
+  "open" where the drawing says it is not known; unread, with why, where
+  its marks say nothing readable. It is kept after each change, in the
+  change's own step, so that undo takes it back with the drawing - and a
+  drawing just opened keeps it with the first change made to it, no step
+  of its own. The note says what an edit changed against what is kept:
+  where keeping went wrong - a copy pasted on new ids, a file read - the
+  note shows it. It is saved in the workspace's file and in a copy, read
+  back only where it is whole and of the drawing's own atoms, and goes
+  with a drawing pasted, on its new ids. Identity, Clean-up, R and S, 3D
+  and the files still read the marks: none of them takes what is kept
+  yet.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

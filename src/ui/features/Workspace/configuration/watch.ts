@@ -18,7 +18,8 @@ import { gestureUnderWay } from "../store/gesture";
 import type { ConfigurationNote, Model } from "../store/types";
 import { cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
-import { changeWords, configurationChanges, unitAtoms, type ConfigurationChange } from "./changes";
+import { changeWords, changesAgainstKept, unitAtoms, type ConfigurationChange } from "./changes";
+import { withKept } from "./kept";
 
 /**
  * Meno's own moves, by the name of the step each makes (docs/EDITOR-2D.md): each keeps every configuration as it was, and says so where it
@@ -103,13 +104,21 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     }
     waiting = false;
     const before = stable;
+    const read = doc.getState().model;
+    stable = read;
+    if (before === read) return;
+    const found = changesAgainstKept(before, read);
+    if (!found) return;
+    const step = doc.history().undoLabel;
+    // (what the touched structures state now, kept on their atoms and bonds - in the step that made it, so that an undo takes it back
+    //  with the drawing; not where there is no step - a file just opened keeps it with the first change made to it)
+    const keeping = withKept(read, found.ids, found.kept);
+    if (keeping !== read && doc.history().undoDepth > 0) doc.edit(step ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, found.ids, found.kept) }), { joinTop: true });
     const state = doc.getState();
     const after = state.model;
     stable = after;
-    if (before === after) return;
-    const changes = configurationChanges(before, after);
+    const changes = found.changes;
     if (!changes.length) return;
-    const step = doc.history().undoLabel;
     const by = step ? MENO_MOVES[step] : undefined;
     // (one of Meno's moves changed what the drawing states: never silent - said, and logged: ui/lib log `KNOWN`)
     if (by) console.warn(`Meno: ${by} changed a configuration`);

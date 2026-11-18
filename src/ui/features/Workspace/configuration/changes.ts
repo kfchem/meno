@@ -19,6 +19,7 @@ import { readStereo } from "../../../../lib/layout/drawn";
 import { drawingOf } from "../chem/drawing";
 import { stereoOf, unreadWedges } from "../chem/engineLayout";
 import { fragmentsHolding } from "../chem/cleanUp";
+import { keepsAny, keptFrom, keptReading, type KeptOf } from "./kept";
 import type { Atom, Bond, Model } from "../store/types";
 
 /** How a unit's configuration changed, as it is said. */
@@ -98,8 +99,25 @@ export function partsTouched(before: Model, after: Model): { was: Model; now: Mo
 export function configurationChanges(before: Model, after: Model): ConfigurationChange[] {
   const parts = partsTouched(before, after);
   if (!parts) return [];
-  const was = readingOf(parts.was);
+  return changesBetween(readingOf(parts.was), readingOf(parts.now), parts.now);
+}
+
+/**
+ * What an edit did, against what the drawing keeps (configuration/kept): the touched structures as they are read now against what their
+ * atoms and bonds kept - or, where they keep nothing yet (a drawing from before this, or new), against how they read before. With what
+ * they are to keep now.
+ */
+export function changesAgainstKept(before: Model, after: Model): { changes: ConfigurationChange[]; ids: Set<number>; kept: KeptOf } | null {
+  const parts = partsTouched(before, after);
+  if (!parts) return null;
   const now = readingOf(parts.now);
+  const was = keepsAny(parts.now) ? keptReading(parts.now, now.said) : readingOf(parts.was);
+  return { changes: changesBetween(was, now, parts.now), ids: new Set(parts.now.atoms.map((a) => a.id)), kept: keptFrom(parts.now, now) };
+}
+
+/** How `now` differs from `was`, as the header says it, of the part `nowPart`. */
+function changesBetween(was: Reading, now: Reading, nowPart: Model): ConfigurationChange[] {
+  const parts = { now: nowPart };
   const atomsNow = new Map(parts.now.atoms.map((a) => [a.id, a]));
   const there = (id: number) => id === -1 || atomsNow.has(id);
   // (a unit whose atoms and groups are all still there: one the edit could have turned or opened - not one gone with an atom)
