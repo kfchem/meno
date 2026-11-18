@@ -21,6 +21,7 @@
  */
 import { boundLigandStructure } from "../../../../lib/chem/boundLigand";
 import { etaBondedAtomByAtom, isMetal, type LayoutInput } from "../../../../lib/layout/perceive";
+import { readAs } from "./drawing";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 
@@ -60,7 +61,7 @@ function withoutStaleValence(m: Model): Model {
       [b.b, b.a],
     ]) {
       const metal = byId.get(x);
-      if (metal?.valence != null && isMetal(metal.el) && (b.endpoints?.length || ligandOf(byId.get(y)))) bound.add(x);
+      if (metal?.valence != null && isMetal(readAs(metal)) && (b.endpoints?.length || ligandOf(byId.get(y)))) bound.add(x);
     }
   }
   if (!bound.size) return m;
@@ -77,7 +78,7 @@ function etaBoundAsDrawn(part: Model): Model {
     const touching = bondsOf(a.id);
     if (touching.length !== 1) return a;
     const other = byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a);
-    if (!other || !isMetal(other.el)) return a;
+    if (!other || !isMetal(readAs(other))) return a;
     const abbrev = boundLigand(a, other);
     if (abbrev?.lends?.[0]) fromDonor.set(touching[0].id, a.id);
     return abbrev ? { ...a, abbrev } : a;
@@ -86,7 +87,7 @@ function etaBoundAsDrawn(part: Model): Model {
   // (rings drawn bond by bond to a metal)
   const index = new Map(part.atoms.map((a, i) => [a.id, i]));
   const input: LayoutInput = {
-    atoms: part.atoms.map((a) => ({ el: a.el })),
+    atoms: part.atoms.map((a) => ({ el: readAs(a) })),
     bonds: part.bonds.map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order })),
   };
   // (a chain of three or more so bonded - an allyl - as well, as Clean-up makes it: chem/eta)

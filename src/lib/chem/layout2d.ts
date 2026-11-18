@@ -16,7 +16,11 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
+import { factsOf } from "./perception/facts";
+import { runsOf } from "./perception/stereo/runs";
+import { symmetryClasses } from "./perception/symmetry";
 import { greatest, least, pushAll } from "./lists";
+import { groupDepths, readStereo, type DrawnAtom, type DrawnBond } from "../layout/drawn";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
 export { implicitHydrogens };
@@ -2377,6 +2381,11 @@ function besideVertex(
   reach?: (dir: Vec2) => number,
   /** The way it would rather go, in degrees: a charge's 45, above and to the right. */
   prefer = 45,
+  /**
+   * How many things it would cover set out along `dir`, `out` from the atom - bonds, labels - where the way its bonds leave
+   * is not enough to tell: a way that covers fewer goes before any that covers more, whatever its angle.
+   */
+  covers?: (dir: Vec2, out: number) => number,
 ): TextItem {
   const deg = Math.PI / 180;
   let best = prefer * deg;
@@ -2389,7 +2398,13 @@ function besideVertex(
       room = Math.min(room, d);
     }
     const off = Math.abs(Math.atan2(Math.sin(t - prefer * deg), Math.cos(t - prefer * deg)));
-    const score = Math.min(room, 70 * deg) - 0.15 * off;
+    // (each thing covered outweighs every angle: those score under 2)
+    let covered = 0;
+    if (covers) {
+      const d = { x: Math.cos(t), y: Math.sin(t) };
+      covered = covers(d, reach ? reach(d) : 0);
+    }
+    const score = Math.min(room, 70 * deg) - 0.15 * off - 10 * covered;
     if (score > bestScore + 1e-9) {
       bestScore = score;
       best = t;
@@ -3768,6 +3783,8 @@ export function buildAllPrimitives(
   crowded: Crowded[];
 } {
   bonds = allylsSingle(atoms, bonds);
+  // (each atom's depth: as drawn, or a group's out of a ring in perspective as its ring atom is read to send it - for where a bond passes behind another)
+  const depthOf = depthsOf(atoms, bonds);
   const lines: LineSeg[] = [];
   const polys: Poly[] = [];
   const circles: Circle[] = [];
@@ -3993,7 +4010,7 @@ export function buildAllPrimitives(
   const breakWith = { zoom, round: roundJoins, raster: (opts.minLinePx ?? 1) > 0 };
   for (const b of bonds) {
     const r = drawn.get(b)!;
-    const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith);
+    const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith, depthOf);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
     lines.push(...behind.lines.map(tint));
     polys.push(...behind.polys.map(tint));
@@ -4101,6 +4118,44 @@ function perspectiveCorners(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, z
     }
   }
   return out;
+}
+
+/**
+ * Each atom's depth, by index, where the structure is drawn in perspective: its own `z`, or - a group drawn out of a ring in perspective - the
+ * depth the way its ring atom is read to send it gives it (lib/layout/drawn `groupDepths`). Nothing kept: asked again as the drawing is drawn.
+ */
+function depthsOf(atoms: Atom[], bonds: Bond[]): (i: number) => number | undefined {
+  const own = (i: number) => atoms[i]?.z;
+  const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
+  // (no bond from an atom with depth to one without: no group's depth to work out)
+  if (!drawn.some((b) => (atoms[b.a1].z == null) !== (atoms[b.a2].z == null))) return own;
+  const { atoms: drawnAtoms, bonds: drawnBonds } = drawnOf(atoms, drawn);
+  const worked = groupDepths(drawnAtoms, drawnBonds);
+  return (i) => atoms[i]?.z ?? worked.get(i);
+}
+
+/** The drawing's atoms and `drawn` bonds as the one reader takes them (lib/layout/drawn): each atom's H as its bonds leave them, each wedge by its narrow end. */
+function drawnOf(atoms: Atom[], drawn: Bond[]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } {
+  const orderSum = new Map<number, number>();
+  for (const b of drawn) for (const i of [b.a1, b.a2]) orderSum.set(i, (orderSum.get(i) ?? 0) + (b.dative ? 0 : b.order));
+  const deg = degreeMap(drawn);
+  return {
+    atoms: atoms.map((a, i) => ({
+      x: a.x,
+      y: a.y,
+      el: a.el,
+      hs: a.valence != null ? Math.max(0, a.valence - (orderSum.get(i) ?? 0)) : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
+      ...(a.charge ? { charge: a.charge } : {}),
+      ...(a.z != null ? { z: a.z } : {}),
+    })),
+    bonds: drawn.map((b) => ({
+      a: b.a1,
+      b: b.a2,
+      order: b.order,
+      ...(b.stereo === "up" || b.stereo === "down" ? { wedge: { narrow: wedgeNarrowAtom(b, deg), stereo: b.stereo } } : {}),
+      ...(b.stereo === "wavy" ? { either: true } : {}),
+    })),
+  };
 }
 
 /**
@@ -4214,15 +4269,17 @@ function lineShape(l: LineSeg, half: number): Vec2[] {
 }
 
 /**
- * Whether `bond` (from `a` to `c`) passes behind `o` (from `e` to `f`) where they cross, at `t` along the one and `u` along the other - in one
- * place, three sources in turn: where all four atoms carry a depth, the depth says it (a ring drawn in perspective, a cage as Clean-up draws
- * it); else the chemist's mark, where `bond` names `o` among those it is behind (`Bond.behind`); else neither is behind - a crossing drawn by
- * hand is drawn whole until it is said.
+ * Whether `bond` passes behind `o` where they cross, at `t` along the one and `u` along the other - in one place, three sources in turn:
+ * where all four atoms have a depth (`depths`: `bond`'s two ends, then `o`'s - each atom's own `z`, or a group's out of a ring in
+ * perspective, `depthsOf`), the depth says it (a ring drawn in perspective, a cage as Clean-up draws it); else the chemist's mark,
+ * where `bond` names `o` among those it is behind (`Bond.behind`); else neither is behind - a crossing drawn by hand is drawn whole until
+ * it is said.
  */
-export function passesBehind(bond: Bond, a: Atom, c: Atom, o: Bond, e: Atom, f: Atom, t: number, u: number): boolean {
-  if (a.z != null && c.z != null && e.z != null && f.z != null) {
-    const mine = a.z + (c.z - a.z) * t;
-    const theirs = e.z + (f.z - e.z) * u;
+export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | undefined)[], t: number, u: number): boolean {
+  const [az, cz, ez, fz] = depths;
+  if (az != null && cz != null && ez != null && fz != null) {
+    const mine = az + (cz - az) * t;
+    const theirs = ez + (fz - ez) * u;
     return mine < theirs - 1e-6;
   }
   return o.id != null && !!bond.behind?.includes(o.id);
@@ -4249,15 +4306,18 @@ function brokenBehind(
   drawn: Map<Bond, Built>,
   halfWidth: number,
   how: { zoom: number; round: boolean; raster: boolean },
+  /** Each atom's depth (`depthsOf`): its own `z`, or a group's out of a ring in perspective. */
+  depthOf: (i: number) => number | undefined = (i) => atoms[i]?.z,
 ): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
   const { lines, polys } = built;
   const a = atoms[bond.a1];
   const c = atoms[bond.a2];
+  const [az, cz] = [depthOf(bond.a1), depthOf(bond.a2)];
   // (a bond to a pi system's centre goes into its ring, not over or under
   // its edges: neither is broken for the other)
   if (!a || !c || bond.endpoints?.length) return { lines, polys, ends: [] };
   // (nothing can put it behind: no depth at its ends, and nothing said of it)
-  if ((a.z == null || c.z == null) && !bond.behind?.length) return { lines, polys, ends: [] };
+  if ((az == null || cz == null) && !bond.behind?.length) return { lines, polys, ends: [] };
   const lineWidth = 2 * halfWidth;
   const halfWidthOf = (l: LineSeg) => pxToWorld(l.widthPx, how.zoom) / 2;
   const clear = Math.max(CROSSING_CLEAR * lineWidth, how.raster ? pxToWorld(CROSSING_CLEAR_FLOOR_PX, how.zoom) : 0);
@@ -4275,6 +4335,7 @@ function brokenBehind(
     const e = atoms[o.a1];
     const f = atoms[o.a2];
     if (!e || !f) continue;
+    const [ez, fz] = [depthOf(o.a1), depthOf(o.a2)];
     const q = { x: e.x, y: e.y };
     const g = { x: f.x - e.x, y: f.y - e.y };
     const den = vcross(d, g);
@@ -4282,7 +4343,7 @@ function brokenBehind(
     const t = vcross(vsub(q, p), g) / den;
     const u = vcross(vsub(q, p), d) / den;
     if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue;
-    if (!passesBehind(bond, a, c, o, e, f, t, u)) continue;
+    if (!passesBehind(bond, o, [az, cz, ez, fz], t, u)) continue;
     const frontLength = vlen(g);
     const fd = { x: g.x / frontLength, y: g.y / frontLength };
     // (the angle between the two bonds: all but along each other, nothing is cut)
@@ -4401,13 +4462,27 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
     !b.coordination &&
     !b.query &&
     (b.display ?? "plain") === "plain";
+  const otherEnd = (k: number, x: number) => (bonds[k].a1 === x ? bonds[k].a2 : bonds[k].a1);
+  // (its runs of cumulated double bonds, as the reader takes them: perception/stereo/runs - a carbon, or an N+, between two double bonds
+  //  and bonded to nothing else, a run goes on through; a sulfur's C=S=C is bent, no run)
+  const runs = runsOf({ atoms, bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+  /** The run of cumulated double bonds from `from` on through `to`, to its end: that end, the atom before it, and the double bonds walked past `from`-`to`. */
+  const runEnd = (from: number, to: number): [number, number, number] => {
+    const run = runs.from(from, to);
+    return [run[run.length - 1], run[run.length - 2], run.length - 2];
+  };
   bonds.forEach((d, i) => {
     if (d.order !== 2 || d.stereo !== "either") return;
-    const ends = [
+    // (an odd cumulene's either is across its run - a butatriene's: the bond's ends are the run's far ends; an allene's run, even, has an
+    //  axis instead, and its bond is taken as one of no run)
+    const pairs = [
       [d.a1, d.a2],
       [d.a2, d.a1],
-    ].map(([end, other]) => {
-      const subs = (at.get(end) ?? []).filter((k) => k !== i);
+    ];
+    const walked = pairs.map(([end, other]) => runEnd(other, end));
+    const odd = (1 + walked[0][2] + walked[1][2]) % 2 === 1;
+    const ends = (odd ? walked : pairs).map(([end, other]) => {
+      const subs = (at.get(end) ?? []).filter((k) => k !== i && !(otherEnd(k, end) === other && bonds[k].order === 2));
       const far = (k: number) => (bonds[k].a1 === end ? bonds[k].a2 : bonds[k].a1);
       // straight on from the double bond: within ten degrees of it
       const straight =
@@ -4453,10 +4528,13 @@ const groupText = (g: StereoGroup) => (g.kind === "abs" ? "abs" : `${g.kind}${g.
 /**
  * Which enhanced stereo groups are labelled at their centres: in a
  * structure (a connected part of the drawing) whose centres are not all of
- * one group. One that is says so once, beneath it (`structureNotes`), as
- * IUPAC's ST-6.3 would have it - and an absolute one needs nothing said.
+ * one group - a centre drawn with a wedge and in no group among them, as
+ * drawn (an ether's (S) side chain beside a racemic ring: its two forms
+ * diastereomers, no enantiomers). One that is says so once, beneath it
+ * (`structureNotes`), as IUPAC's ST-6.3 would have it - and an absolute
+ * one needs nothing said.
  */
-function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bonds: Set<number>; notes: { atoms: number[]; text: string }[] } {
+function centresLabelled(atoms: Atom[], bonds: Bond[], held = false): { atoms: Set<number>; bonds: Set<number>; notes: { atoms: number[]; text: string }[] } {
   const parts = components(atoms.length, bonds);
   const out = { atoms: new Set<number>(), bonds: new Set<number>(), notes: [] as { atoms: number[]; text: string }[] };
   // (each part's bonds in a group, by the part their first atom is in)
@@ -4467,6 +4545,25 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     const p = b.stereoGroup ? partOf.get(b.a1) : undefined;
     if (p != null) grouped[p].push(k);
   });
+  // (a centre drawn with a wedge and in no group: a centre of the structure not of its group - only one the reader reads as a centre or an
+  //  axis's end, not a wedge that sets none, an isopropyl's CH, an unread one; read only where a group is drawn at all)
+  const deg = degreeMap(bonds);
+  const ungrouped = new Set<number>();
+  const wedged = bonds.filter((b) => (b.stereo === "up" || b.stereo === "down") && !atoms[wedgeNarrowAtom(b, deg)]?.stereoGroup);
+  if (wedged.length && (atoms.some((a) => a.stereoGroup) || bonds.some((b) => b.stereoGroup))) {
+    const narrows = wedged.map((w) => wedgeNarrowAtom(w, deg));
+    // (while a gesture lasts - an atom dragged - taken as last read where it was read of this structure, by its first atom, with the same
+    //  atoms and wedges: read again once it ends, never at each frame of it; and worked out once for a drawing as it stands: laid out
+    //  again unchanged, a zoom, a redraw)
+    const shape = `${atoms[0]?.id ?? ""}|${atoms.length}|${narrows.join(",")}`;
+    if (!(held && wedgedRead?.shape === shape)) {
+      const drawn = bonds.filter((b) => atoms[b.a1] && atoms[b.a2] && b.a1 !== b.a2 && !b.endpoints?.length);
+      const d = drawnOf(atoms, drawn);
+      const key = JSON.stringify([d.atoms, d.bonds, narrows]);
+      if (wedgedRead?.key !== key) wedgedRead = { key, shape, centres: centresInNoGroup(d, narrows) };
+    }
+    for (const c of wedgedRead.centres) ungrouped.add(c);
+  }
   for (const [p, part] of parts.entries()) {
     const groups = new Set<string>();
     const ats = part.filter((i) => atoms[i].stereoGroup);
@@ -4476,7 +4573,7 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     if (!groups.size) continue;
     const [only] = groups;
     if (groups.size === 1 && only === "abs") continue;
-    if (groups.size === 1 && !bds.length) {
+    if (groups.size === 1 && !bds.length && !part.some((i) => ungrouped.has(i))) {
       out.notes.push({ atoms: part, text: only.startsWith("and") ? "and enantiomer" : "or enantiomer" });
       continue;
     }
@@ -4484,6 +4581,71 @@ function centresLabelled(atoms: Atom[], bonds: Bond[]): { atoms: Set<number>; bo
     for (const k of bds) out.bonds.add(k);
   }
   return out;
+}
+
+/** The last drawing `centresLabelled` read for its wedges, and the centres it found among them. */
+let wedgedRead: { key: string; shape: string; centres: number[] } | null = null;
+
+/**
+ * Of the atoms at the narrow ends of wedges (`narrows`), those that are centres of the drawing `d`: each the reader reads as a centre whose
+ * groups are not two alike - an isopropyl's two methyls are, its CH is no centre - or an axis's end. Groups are compared by the atoms'
+ * symmetry classes, within the structure the centre is in: of the constitution first, and where two are alike there, again with every
+ * other centre's and double bond's configuration kept, as read - a pseudoasymmetric centre's two arms, pentane-2,3,4-triol's C3 between
+ * an R and an S, are not alike, though a cis-1,4-dimethylcyclohexane's ring carbon's two ring branches are.
+ */
+function centresInNoGroup(d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }, narrows: readonly number[]): number[] {
+  const read = readStereo(d.atoms, d.bonds);
+  const ends = new Set(read.axes.flatMap((ax) => [...ax.atoms]));
+  // (the structure each atom is in, by its first atom: its classes worked out once for it)
+  const around: number[][] = d.atoms.map(() => []);
+  d.bonds.forEach((x, k) => {
+    around[x.a].push(k);
+    around[x.b].push(k);
+  });
+  const pieceOf = new Map<number, number[]>();
+  const piece = (c: number): number[] => {
+    const known = pieceOf.get(c);
+    if (known) return known;
+    const out = [c];
+    const seen = new Set(out);
+    for (let i = 0; i < out.length; i++)
+      for (const k of around[out[i]]) {
+        const o = d.bonds[k].a === out[i] ? d.bonds[k].b : d.bonds[k].a;
+        if (!seen.has(o)) {
+          seen.add(o);
+          out.push(o);
+        }
+      }
+    out.sort((p, q) => p - q);
+    for (const x of out) pieceOf.set(x, out);
+    return out;
+  };
+  const classesIn = (atoms: number[], configured: number | null): Map<number, number> => {
+    const at = new Map(atoms.map((x, i) => [x, i]));
+    const bonds = d.bonds.flatMap((x, k) => (at.has(x.a) && at.has(x.b) ? [{ k, a: at.get(x.a)!, b: at.get(x.b)!, order: x.order }] : []));
+    const classes = symmetryClasses({
+      atoms: atoms.map((x) => ({
+        el: d.atoms[x].el ?? "C",
+        hs: d.atoms[x].hs,
+        ...(d.atoms[x].charge ? { charge: d.atoms[x].charge } : {}),
+        ...(configured != null && x !== configured && read.tetra.has(x) ? { tetra: { ...read.tetra.get(x)!, neighbours: read.tetra.get(x)!.neighbours.map((n) => (n < 0 ? n : at.get(n)!)) } } : {}),
+      })),
+      bonds: bonds.map(({ k, a, b, order }) => ({ a, b, order, ...(configured != null && read.cisTrans.has(k) ? { stereo: { ...read.cisTrans.get(k)!, refs: read.cisTrans.get(k)!.refs.map((n) => at.get(n)!) as [number, number] } } : {}) })),
+    });
+    return new Map(atoms.map((x, i) => [x, classes[i]]));
+  };
+  const constitution = new Map<number[], Map<number, number>>();
+  const twoAlike = (classes: ReadonlyMap<number, number>, c: number) => {
+    const groups = around[c].map((k) => classes.get(d.bonds[k].a === c ? d.bonds[k].b : d.bonds[k].a)!);
+    for (let h = 0; h < d.atoms[c].hs; h++) groups.push(-1);
+    return new Set(groups).size < groups.length;
+  };
+  const alike = (c: number) => {
+    const atoms = piece(c);
+    if (!constitution.has(atoms)) constitution.set(atoms, classesIn(atoms, null));
+    return twoAlike(constitution.get(atoms)!, c) && twoAlike(classesIn(atoms, c), c);
+  };
+  return narrows.filter((c) => (read.tetra.has(c) && !alike(c)) || ends.has(c));
 }
 
 /** The drawing's connected parts, as atom indices. */
@@ -4589,6 +4751,38 @@ function centreStrokes(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
   return out;
 }
 
+/** A box by its sides. */
+type Box2 = { minX: number; maxX: number; minY: number; maxY: number };
+
+/** The box a note set `beside` takes, its letters `halfW` either side of its middle and `halfH` above and below. */
+function textBox(t: TextItem, halfW: number, halfH: number): Box2 {
+  return { minX: t.x - halfW, maxX: t.x + halfW, minY: t.y - halfH, maxY: t.y + halfH };
+}
+
+/** Whether the line from `p` to `q` meets the box `b` (Liang-Barsky clipping). */
+export function segmentMeetsBox(p: Vec2, q: Vec2, b: Box2): boolean {
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [den, num] of [
+    [-dx, p.x - b.minX],
+    [dx, b.maxX - p.x],
+    [-dy, p.y - b.minY],
+    [dy, b.maxY - p.y],
+  ]) {
+    if (Math.abs(den) < 1e-12) {
+      if (num < 0) return false;
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
 /**
  * What is said about an atom, set small in the most open space beside it:
  * its atom-atom mapping number, its configuration inverted or retained, the
@@ -4624,6 +4818,68 @@ function atomNotes(
       }
     }
   }
+  // what a note is kept off: the bonds as lines, the labels' boxes, and the notes put before it
+  const segments: [Vec2, Vec2][] = [];
+  for (const b of bonds) if (b.a1 !== b.a2 && atoms[b.a1] && atoms[b.a2]) segments.push([atoms[b.a1], atoms[b.a2]]);
+  // (its own atom's label is kept clear of already, by how far out it goes)
+  const taken: (Box2 & { of?: number })[] = labels.map((t) => {
+    const box = labelBox(t, font, set);
+    return { minX: t.x - box.left, maxX: t.x + box.right, minY: t.y - box.bottom, maxY: t.y + box.top, of: t.atom ?? t.markOf };
+  });
+  // (a little room either side of its letters: touching is not clear)
+  const pad = font * 0.08;
+  // (what a note is kept off, filed by cells about a bond long: each note looks only at what lies near its atom, so placing every note of
+  //  a large mapped drawing takes time as its notes do, not as their number times the drawing's size)
+  const lengths = segments.map(([p, q]) => Math.hypot(q.x - p.x, q.y - p.y)).filter((d) => d > 1e-9).sort((p, q) => p - q);
+  const cell = Math.max(lengths[lengths.length >> 1] ?? 0, font * 2);
+  const grid = new Map<string, { segs: number[]; boxes: number[] }>();
+  const cellsOf = (b: Box2, visit: (key: string) => void) => {
+    for (let x = Math.floor(b.minX / cell); x <= Math.floor(b.maxX / cell); x++) for (let y = Math.floor(b.minY / cell); y <= Math.floor(b.maxY / cell); y++) visit(`${x},${y}`);
+  };
+  const filed = (key: string) => {
+    let c = grid.get(key);
+    if (!c) grid.set(key, (c = { segs: [], boxes: [] }));
+    return c;
+  };
+  segments.forEach(([p, q], k) => cellsOf({ minX: Math.min(p.x, q.x), maxX: Math.max(p.x, q.x), minY: Math.min(p.y, q.y), maxY: Math.max(p.y, q.y) }, (key) => filed(key).segs.push(k)));
+  const fileBox = (k: number) => cellsOf(taken[k], (key) => filed(key).boxes.push(k));
+  taken.forEach((_, k) => fileBox(k));
+  /** The bonds and boxes filed in the cells a box `r` about `p` reaches, each once. */
+  const near = (p: Vec2, r: number) => {
+    const segs = new Set<number>();
+    const boxes = new Set<number>();
+    cellsOf({ minX: p.x - r, maxX: p.x + r, minY: p.y - r, maxY: p.y + r }, (key) => {
+      const c = grid.get(key);
+      if (!c) return;
+      for (const k of c.segs) segs.add(k);
+      for (const k of c.boxes) boxes.add(k);
+    });
+    return { segs: [...segs], boxes: [...boxes] };
+  };
+  // (the rings an atom is on, as the way to each ring's middle and how near to it the ring's own bonds point: a way nearer is inside)
+  let facts: ReturnType<typeof factsOf> | null = null;
+  const ringsInward = (i: number): { x: number; y: number; least: number }[] => {
+    facts ??= factsOf({ atoms: atoms.map((x) => ({ el: x.el })), bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+    return facts.ringsAt[i].flatMap((k) => {
+      const ring = facts!.rings[k];
+      const mx = ring.reduce((t, j) => t + atoms[j].x, 0) / ring.length - atoms[i].x;
+      const my = ring.reduce((t, j) => t + atoms[j].y, 0) / ring.length - atoms[i].y;
+      const len = Math.hypot(mx, my);
+      if (len < 1e-9) return [];
+      const c = { x: mx / len, y: my / len };
+      const at = ring.indexOf(i);
+      const near = [ring[(at + 1) % ring.length], ring[(at - 1 + ring.length) % ring.length]].map((j) => {
+        const dx = atoms[j].x - atoms[i].x;
+        const dy = atoms[j].y - atoms[i].y;
+        const d = Math.hypot(dx, dy) || 1;
+        return (dx * c.x + dy * c.y) / d;
+      });
+      return [{ ...c, least: Math.min(...near) }];
+    });
+  };
+  // (each atom's own label, found once)
+  const labelOf = new Map<number, TextItem>();
+  for (const t of labels) if (t.atom != null && !t.beside && !labelOf.has(t.atom)) labelOf.set(t.atom, t);
   atoms.forEach((a, i) => {
     const parts = [
       a.map ? String(a.map) : "",
@@ -4633,20 +4889,53 @@ function atomNotes(
     ].filter(Boolean);
     if (!parts.length) return;
     const text = parts.join(" ");
-    const label = labels.find((t) => t.atom === i && !t.beside);
-    const item = besideVertex(a, ways.get(i) ?? [], [{ text, sup: true }], { fontPx }, (dir) => {
-      // clear of its label's letters, or of the bare vertex, by half a capital
-      let far = 0;
-      if (label) {
-        for (const hull of labelHulls(label, font, set, true)) for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
-      }
-      // and of its own letters: half their extent that way
-      const size = font * ANNOTATION_SIZE * set.subscriptSize;
-      const half = Math.abs(dir.x) * size * 0.3 * text.length + Math.abs(dir.y) * size * 0.4;
-      return far + font * 0.25 + half;
+    const label = labelOf.get(i);
+    // (its own letters' half width and half height, near enough to place it by)
+    const size = font * ANNOTATION_SIZE * set.subscriptSize;
+    const halfW = size * 0.3 * text.length;
+    const halfH = size * 0.4;
+    // (as far as its box can reach from its atom, whichever way it goes: its label's letters, the gap, and its own letters twice over)
+    const lb = label ? labelBox(label, font, set) : null;
+    const reachMost = (lb ? Math.hypot(Math.max(lb.left, lb.right), Math.max(lb.top, lb.bottom)) : 0) + font * 0.35 + 2 * (halfW + halfH + pad);
+    const around = near(a, reachMost);
+    // (a group's label - and1, or1 - reads as the ring's where it stands inside the ring its centre is on, beside another centre's R
+    //  or S: a way pointing into such a ring costs half a thing covered, so that it goes inside only where nothing outside is clear -
+    //  the maintainer's call, 2026-11-17)
+    const insideRings = groupsAt.has(i) && a.stereoGroup ? ringsInward(i) : [];
+    const item = besideVertex(
+      a,
+      ways.get(i) ?? [],
+      [{ text, sup: true }],
+      { fontPx },
+      (dir) => {
+        // clear of its label's letters, or of the bare vertex, by half a capital
+        let far = 0;
+        if (label) {
+          for (const hull of labelHulls(label, font, set, true)) for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
+        }
+        // and of its own letters: half their extent that way
+        return far + font * 0.25 + Math.abs(dir.x) * halfW + Math.abs(dir.y) * halfH;
+      },
       // (above, where it can: beside a label's right, a small number reads
       // as a charge's or a count's - GR-11.1)
-    }, 90);
+      90,
+      // and off every bond, label and note near it: a word as long as "and1" set between two bonds may reach a third, a ring's
+      // across the ring (GR-11.1: clear of the drawing, close to its atom)
+      (dir, far) => {
+        const c = { x: a.x + dir.x * far, y: a.y + dir.y * far };
+        const box = { minX: c.x - halfW - pad, maxX: c.x + halfW + pad, minY: c.y - halfH - pad, maxY: c.y + halfH + pad };
+        let n = 0;
+        for (const k of around.segs) if (segmentMeetsBox(segments[k][0], segments[k][1], box)) n++;
+        if (insideRings.some((r) => dir.x * r.x + dir.y * r.y > r.least)) n += 0.5;
+        for (const k of around.boxes) {
+          const r = taken[k];
+          if (r.of !== i && r.minX < box.maxX && box.minX < r.maxX && r.minY < box.maxY && box.minY < r.maxY) n++;
+        }
+        return n;
+      },
+    );
+    taken.push(textBox(item, halfW, halfH));
+    fileBox(taken.length - 1);
     out.push(item);
   });
   return out;
@@ -4816,7 +5105,9 @@ export function layoutMolecule(
   drawn: Atom[],
   given: Bond[],
   opts: LayoutOptions,
-  zoom: number
+  zoom: number,
+  /** A gesture under way on the drawing (a drag): what is read of its configuration kept as last read, read again once it ends (`centresLabelled`). */
+  held = false,
 ): Layout {
   const bonds = unspecifiedDoubles(drawn, given);
   const atoms = cumulatedShown(chargesAsDrawn(drawn, bonds), bonds);
@@ -4828,7 +5119,7 @@ export function layoutMolecule(
   });
   const prim = buildAllPrimitives(atoms, bonds, opts, zoom, labels);
   // what is said about bonds, atoms and whole structures (IUPAC GR-11)
-  const groups = centresLabelled(atoms, bonds);
+  const groups = centresLabelled(atoms, bonds, held);
   // (each list put on as it is, not spread into one call: one may be as long as the drawing's atoms - lib/chem/lists)
   pushAll(prim.lines, centreStrokes(atoms, bonds, opts, zoom));
   const sgroups = sgroupDrawing(atoms, bonds, opts, zoom);

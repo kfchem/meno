@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  startAlone,
   advanceStroke,
   finishStroke,
   holdStroke,
@@ -379,5 +380,24 @@ describe("a bond stroke out of a projection's group", () => {
     for (let f = 0.1; f <= 2.5; f += 0.1) s = advanceStroke(model, s, { x: at.x + f * (at.x - root.x), y: at.y + f * (at.y - root.y) * 2 }, L);
     expect(s.nodes.length).toBeGreaterThanOrEqual(1);
     expect(angleAt(at, root, s.nodes[0])).toBeCloseTo((2 * Math.PI) / 3, 6);
+  });
+});
+
+describe("a stroke's start on empty space, alone (Quick Add's Chain)", () => {
+  const model = { atoms: [], bonds: [] } as never;
+  it("is where it starts until it has a bond - no node, no bond in preview - and then none", () => {
+    const s = startStroke("chain", NEW_ATOM, model, { x: 2, y: 3 }, 1.5);
+    expect(startAlone(s, null)).toEqual({ x: 2, y: 3 });
+    // (a bond in preview from it: it has one, drawn as any atom is)
+    expect(startAlone(s, { x: 3, y: 3 })).toBeNull();
+    // (a node drawn: the same)
+    expect(startAlone({ ...s, nodes: [{ x: 3, y: 3 }] as never }, null)).toBeNull();
+  });
+
+  it("is none for a stroke from an atom, or none at all", () => {
+    expect(startAlone(startStroke("bond", 1), null)).toBeNull();
+    // (from an atom, even with a place of its start given: the atom is there, drawn as it is)
+    expect(startAlone({ ...startStroke("bond", 1), start: { x: 2, y: 3 } }, null)).toBeNull();
+    expect(startAlone(null, null)).toBeNull();
   });
 });
