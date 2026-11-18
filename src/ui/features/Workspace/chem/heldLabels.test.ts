@@ -9,6 +9,7 @@ import { drawnOf } from "../fileActions";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { readDrawn, recordText } from "../utils/copyPaste";
+import { callTool } from "../conversation/tools";
 import { cleanUp, partFormula } from "./cleanUp";
 import { drawingOf, forFlatReaders, readAs } from "./drawing";
 import { etaRingAt } from "./eta";
@@ -162,6 +163,18 @@ describe("a group typed as an element's symbol is the group; the element from a 
     expect(f).toContain("Pr");
     expect(f).not.toContain(HELD_NAME);
     expect(nameBox(heldName("Pr"), false)).toEqual(nameBox("Pn", false));
+  });
+
+  it("read by a conversation, a typed Pr says it holds a group; praseodymium from a file says nothing of one", () => {
+    const read = (doc: ReturnType<typeof editor>["doc"]) => {
+      const listed = callTool(doc.getState(), { page: true }, { tool: "list" });
+      const id = (listed as { value: { things: { id: string }[] } }).value.things.find((t) => t.id.startsWith("structure:"))!.id;
+      const one = callTool(doc.getState(), { page: true }, { tool: "read", args: { id } });
+      return (one as { value: { atoms: { el: string; group?: boolean }[] } }).value.atoms.filter((a) => a.el === "Pr");
+    };
+    expect(read(benzeneWith("Pr").doc)).toEqual([expect.objectContaining({ el: "Pr", group: true })]);
+    const file = editor(moleculesToEditorModel(readMoleculesFromText(prCl3, "mol")).model);
+    expect(read(file.doc)).toEqual([expect.not.objectContaining({ group: true })]);
   });
 
   it("a Pr saved with nothing held - before this version, or from a file - opens as praseodymium", () => {
