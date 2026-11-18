@@ -1486,6 +1486,14 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
+  - a row of dashes along one line - three short lines or more, each a
+    tenth to two fifths of a bond, evenly spaced, the gaps shorter than
+    the dashes and longer than a twentieth of a bond, half a bond long in
+    all: a bond forming or breaking in a transition state, a weak bond, a
+    chart's line drawn dashed. It is read as no bond, and each atom at an
+    end of it (within a third of a bond) says so: "A dashed line meets
+    it - a bond forming or breaking, or a weak bond: read as no bond." A
+    hash's strokes lie across their line, not along it;
   - **a repeat unit in brackets, counted** (2026-11-05), where it is not
     read: a pair of brackets drawn across bonds - square, a line and its
     ticks, or round, a curve - with a count at the foot of one: digits, as
@@ -1717,7 +1725,11 @@ as drawn. So is everything in 29 more figures drawn many ways:
   steps one after the other.
 
 Not yet:
-- **A curved arrow** (an electron-pushing arrow's curve) is not read.
+- **A curved arrow** (an electron-pushing arrow's curve) is not read as
+  an arrow. It is kept out of the structure it is drawn over: its curve,
+  stroked or drawn as a filled outline, and its head - a dart, four
+  corners, the fourth cut in from its wide end, the curve's end there -
+  are no bond, no wedge and no label (a wedge has no corner cut in).
 - **An equilibrium drawn with corners** is read as its two arrows, each
   a reaction's. One whose lines differ in length, one way favoured, is
   read as a plain equilibrium.
