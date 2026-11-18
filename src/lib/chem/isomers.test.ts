@@ -6,11 +6,12 @@ import { describe, expect, it } from "vitest";
 import { smilesInput } from "../layout/smilesInput";
 import type { IdentityInput } from "./identity";
 import { cipInput } from "./cip/testdata/cipFrom";
-import { isomersOf } from "./isomers";
+import { isomersOf, NOT_COUNTED_CAGE } from "./isomers";
 
 const count = (smiles: string) => {
   const r = isomersOf(smilesInput(smiles) as unknown as IdentityInput);
   if ("tooMany" in r) throw new Error(`too many: ${r.tooMany}`);
+  if ("notCounted" in r) throw new Error(r.notCounted);
   return r.isomers.length;
 };
 
@@ -51,7 +52,7 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
     expect(count("C/C=C/C=CC")).toBe(2);
     const given = (smiles: string) => {
       const r = isomersOf(cipInput(smiles));
-      return "tooMany" in r ? -1 : r.isomers.length;
+      return "isomers" in r ? r.isomers.length : -1;
     };
     expect(given("CC=[C@]=CC")).toBe(1);
     expect(given("C/C=C=C=C/C")).toBe(1);
@@ -59,7 +60,7 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
 
   it("gives each stereoisomer a whole configuration: a centre's neighbours in order, its H not drawn last", () => {
     const r = isomersOf(smilesInput("CC(O)CC") as unknown as IdentityInput);
-    if ("tooMany" in r) throw new Error("too many");
+    if (!("isomers" in r)) throw new Error("not counted");
     expect(r.isomers.map((x) => x.input.atoms[1].tetra?.neighbours)).toEqual([
       [0, 2, 3, -1],
       [0, 2, 3, -1],
@@ -72,6 +73,21 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
     expect(count("CC=C=CC")).toBe(2);
     expect(count("CC=C=C=CC")).toBe(2);
     expect(count("CC(C)=C=CC")).toBe(1);
+  });
+
+  it("counts a cage whose bridgeheads set nothing; gives no count, said, where a cage or bridged system is left open otherwise", () => {
+    // (the chemistry check's: each bridgehead's two senses one structure - counted, right)
+    expect(count("C1CC2CCC1C2")).toBe(1);
+    expect(count("OC1CN2CCC1CC2")).toBe(2);
+    expect(count("OC1CC2CCC1CC2")).toBe(2);
+    expect(count("C1C2CC3CC1CC(C2)C3")).toBe(1);
+    expect(count("OC1C2CC3CC(C2)CC1C3")).toBe(1);
+    expect(count("C12C3C4C1C5C2C3C45")).toBe(1);
+    // (norbornan-2-ol, camphor, tropan-3-ol, twistane: bridgeheads whose senses the cage ties - no count, said)
+    for (const caged of ["OC1CC2CCC1C2", "CC1(C)C2CCC1(C)C(=O)C2", "CN1C2CCC1CC(O)C2", "C1CC2CC3CCC1C2CC3"])
+      expect(isomersOf(smilesInput(caged) as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_CAGE });
+    // (a fused system is no cage: decalin's two junctions counted)
+    expect(count("C1CCC2CCCCC2C1")).toBe(2);
   });
 
   it(`says how many ways there were past the most it writes`, () => {

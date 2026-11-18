@@ -908,9 +908,17 @@ given kept, each written by Meno's identity; the distinct identities are
 the stereoisomers, each with one way that makes it. Places that depend on
 each other fall out by identity: tartaric acid has three, inositol nine,
 1,3,5-trimethylcyclohexane two, 2,6-dimethylspiro[3.3]heptane two (its
-enantiomers). A biaryl's axis is given only where the drawing states one.
-Past 1024 ways (ten open places), none is written and the count of ways is
-said. No step takes it yet: *Stereoisomers* will, in its own change.
+enantiomers). A biaryl's axis is given only where the drawing states one,
+so atropisomers are not counted, and that is said beside a count. A cage
+ties its bridgeheads' senses to each other: where an open bridgehead's two
+senses are one structure (norbornane's, adamantane's, cubane's) it is no
+place to give and the count stands; where they are not (norbornan-2-ol,
+camphor, tropan-3-ol, twistane), no count is given, and that is said - a
+bridgehead being one joined to another atom by three paths with three
+atoms or fewer between (decalin's ring junctions are none; their bridges
+have four). Past 1024 ways (ten open places), none is written and the
+count of ways is said. No step takes it yet: *Stereoisomers* will, in its
+own change.
 
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
