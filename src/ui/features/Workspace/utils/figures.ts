@@ -21,7 +21,7 @@ import { boxPicture } from "../../../../lib/pdf/reader";
 import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker, roleChosen, rolePlugin } from "../../../../lib/roles/worker";
 import { pictureReadOff } from "./pictureOff";
-import { pictureDpi } from "../../../../lib/figure/tracedRead";
+import { PICTURE_DPI, PICTURE_DPI_MOST, pictureDpi } from "../../../../lib/figure/tracedRead";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
@@ -150,12 +150,6 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
   return read;
 }
 
-/**
- * How finely a figure that is a picture is drawn to be traced: as finely as its picture is stored, up to the most - else, where the PDF
- * does not say, as Meno's own picture reader was measured at (docs/PDF.md, *A picture traced*).
- */
-const PICTURE_DPI = 300;
-const PICTURE_DPI_MOST = 600;
 
 /**
  * A picture read by Meno's own reader, in a worker (pictureOff.ts): its structure, each atom tied to its place - `spot` - or why none.

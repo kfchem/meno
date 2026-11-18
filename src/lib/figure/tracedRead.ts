@@ -46,6 +46,13 @@ export function readTracedPicture(
 }
 
 /**
+ * How finely a figure that is a picture is drawn to be traced where the PDF does not say how its picture is stored - as Meno's own
+ * picture reader was measured (docs/PDF.md, *A picture traced*) - and at the most.
+ */
+export const PICTURE_DPI = 300;
+export const PICTURE_DPI_MOST = 600;
+
+/**
  * How finely a box of a page holding pictures is drawn to be traced, in dots an inch: as finely as the picture covering most of it is
  * stored - never finer, which would only enlarge its pixels, and hide that it is drawn too small to read - and at most `most`; where the
  * PDF does not say, `otherwise`. A picture's resolution, however it is turned: the square root of its pixels over its area, in inches.

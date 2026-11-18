@@ -14,7 +14,10 @@ import { textHad } from "../../../../lib/pdf/text";
 import type { CompoundLabel, PageStructure } from "./pageStructures";
 import { labelsRead, type PageLabels } from "./compoundIndex";
 import { figureReadOff } from "./structuresOff";
-import type { FigureStructures } from "./structuresRead";
+import type { FigureJob, FigureStructures } from "./structuresRead";
+import { boxPicture } from "../../../../lib/pdf/reader";
+import { pngPixels } from "./pictures";
+import { systemGlyphs } from "./glyphShapes";
 
 export type { FigureStructures } from "./structuresRead";
 
@@ -61,8 +64,11 @@ export function figureStructuresHad(sha256: string, page: number, figures: reado
     if (begun) return;
     begun = true;
     hurried.delete(key);
+    const job = (drawn: ArrayBuffer): FigureJob => ({ objects, text: textHad(sha256, page), figures: [...figures], k, drawn, sha256, page });
     invoke<ArrayBuffer>("pdf_figure_raw", { sha: sha256, page, box: figures[k] })
-      .then((drawn) => figureReadOff({ objects, text: textHad(sha256, page), figures: [...figures], k, drawn, sha256, page }, now))
+      .then((drawn) => figureReadOff(job(drawn), now))
+      // (a figure that is a picture: drawn by the PDF's reader as finely as the worker said, and read again, traced)
+      .then((figure) => (figure.picture ? pictureAgain(job, sha256, page, figures[k], figure.picture.dpi, now) : figure))
       .then((figure) => {
         had.set(key, figure);
         // (its compounds' numbers, for the PDF's index of them: ./compoundIndex)
@@ -87,6 +93,20 @@ export function figureStructuresHad(sha256: string, page: number, figures: reado
     });
   }
   return null;
+}
+
+/**
+ * A figure that is a picture read again, traced: its box drawn by the PDF's reader (off this thread) at `dpi`, its pixels and the
+ * system's letters (drawn here, on a canvas: a worker has none) sent with the figure to the worker.
+ */
+async function pictureAgain(job: (drawn: ArrayBuffer) => FigureJob, sha256: string, page: number, box: Box, dpi: number, now: boolean): Promise<FigureStructures> {
+  const shot = await boxPicture(sha256, page, box, dpi);
+  const pixels = await pngPixels(shot.png);
+  const k = 72 / shot.dpi;
+  const at = { scale: k, x: Math.floor(box[0] / k) * k, y: Math.floor(box[1] / k) * k };
+  const drawn = await invoke<ArrayBuffer>("pdf_figure_raw", { sha: sha256, page, box });
+  const data = pixels.data.buffer.slice(pixels.data.byteOffset, pixels.data.byteOffset + pixels.data.byteLength) as ArrayBuffer;
+  return figureReadOff({ ...job(drawn), picture: { width: pixels.width, height: pixels.height, data, at, known: systemGlyphs() } }, now);
 }
 
 /** Which of a page's figures a box is, among those worked out: none where they are not, or it is none of them. */

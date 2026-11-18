@@ -42,7 +42,7 @@ export function figureReadOff(job: FigureJob, urgent: boolean): Promise<FigureSt
   return new Promise((done, fail) => {
     const id = ++asked;
     lane.waiting.set(id, { done, fail });
-    // (the bytes the reader gave go over as they are: no copy)
-    started(lane).postMessage({ id, job }, job.drawn instanceof ArrayBuffer ? [job.drawn] : []);
+    // (the bytes the reader gave, and a picture's pixels, go over as they are: no copy)
+    started(lane).postMessage({ id, job }, [...(job.drawn instanceof ArrayBuffer ? [job.drawn] : []), ...(job.picture ? [job.picture.data] : [])]);
   });
 }
