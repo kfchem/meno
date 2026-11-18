@@ -63,6 +63,7 @@
 import { drawnRoundMetal } from "../elements";
 import { flatRingAtoms } from "../flatRings";
 import { smallestRings } from "../rings";
+import { PYRAMID_VALENCE } from "../hydrogens";
 
 /** The elements of the rule but N, which keeps its configuration only where its ring or its cage holds it. */
 const KEPT: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
@@ -204,19 +205,6 @@ export const SHARED_WITH_A_DOUBLE_BOND: ReadonlySet<string> = new Set(["N", "O"]
  * in place of a hydrogen or not, which only the chemist can say.
  */
 export const GIVES_A_METAL_A_PAIR: ReadonlySet<string> = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
-
-/** The valence electrons of the elements whose atom of three neighbours can have a lone pair: groups 15 and 16. */
-const PYRAMID_VALENCE: ReadonlyMap<string, number> = new Map([
-  ["N", 5],
-  ["P", 5],
-  ["As", 5],
-  ["Sb", 5],
-  ["Bi", 5],
-  ["O", 6],
-  ["S", 6],
-  ["Se", 6],
-  ["Te", 6],
-]);
 
 /**
  * Whether an atom of three - its `neighbours` and the `hs` hydrogens it

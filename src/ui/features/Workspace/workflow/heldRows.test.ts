@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Restraint } from "../../../../lib/entry";
-import { OWN_NUMBERING, NUMBERING, restraintsTable, type RestraintRow } from "../../../../lib/steps/restraints";
+import { OWN_NUMBERING, NUMBERING, restraintRowsIn, restraintsTable, type RestraintRow } from "../../../../lib/steps/restraints";
+import { dielsAlder } from "../../../../lib/chem/reactionMap.fixtures";
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
-import type { SetEntry } from "./entries";
+import { numberingKey, type SetEntry } from "./entries";
+import { runMenoPair } from "./meno";
 import type { Flow } from "./flow";
 import { heldBy, heldRows, NONE_MADE_WHY, NOTHING_TO_HOLD, RENUMBERED_WHY } from "./heldRows";
 import { RESTRAINTS_INPUT, ONE_EXIT, ONE_INPUT } from "./kinds";
@@ -145,6 +147,40 @@ describe("the restraints a step holds, wired in", () => {
     // (made after it, in that numbering: held)
     const after = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row({ kind: "distance", atoms: [0, 1], value: 1.5, strength: 500 }, "p1", "as reactant #1 (k2)")] }], [[11, 40, RESTRAINTS_INPUT.id]]);
     expect(heldRows(after, 40, [molecule("p1", "as reactant #1 (k2)")], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "distance" }] }] });
+  });
+
+  it("holds rows made on a reaction's reactant, in its own numbering, on a product Atom map numbered as that reactant - one numbering - and refuses one numbered as another", () => {
+    // (a Diels-Alder's product mapped onto its reactant: the product's atoms in the reactant's numbering, said by the map's label)
+    const da = dielsAlder();
+    const asEntry = (m: (typeof da)["product"], name: string): SetEntry =>
+      ({ compound: 0, number: 1, name, atoms: m.atoms, bonds: m.bonds, xyz: m.atoms.flatMap((a) => [a.x, a.y, a.z]), properties: { start: { value: "p1", unit: "none", status: "computed", label: true } } }) as unknown as SetEntry;
+    const reactant = asEntry(da.reactants[0], "reactant");
+    const mapped = runMenoPair("atom-map", { entries: [asEntry(da.product, "cyclohexene")], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, { moleculesAre: "each", referenceIs: "each", bonds: "change" });
+    if (!mapped.ok) throw new Error(mapped.said);
+    const product = mapped.kept[0];
+    expect(product.properties?.[NUMBERING]?.value).toBe(`as reactant (${numberingKey([reactant])})`);
+    // (the rows made on the reactant itself, never mapped: in its own numbering, with its key)
+    const made = restrainedSet([reactant], "molecules", { on: "start", coordination: false, fixed: "1" });
+    if (!made.ok) throw new Error(made.said);
+    expect(restraintRowsIn(made.tables![ONE_EXIT])).toMatchObject({ rows: [{ numbering: `${OWN_NUMBERING} (${numberingKey([reactant])})` }] });
+    const d = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, table: made.tables![ONE_EXIT] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(d, 40, [product], RDKIT, "RDKit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
+    // (numbered as the reactant after another map before it: in the reactant's numbering now, held too)
+    expect(heldRows(d, 40, [molecule("p1", `as a #1 (x), then as reactant (${numberingKey([reactant])})`)], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
+    // (numbered as another compound - or as the reactant first, then as another: refused, never held on what are now other atoms)
+    const product2 = asEntry(da.product, "cyclohexene");
+    expect(heldRows(d, 40, [molecule("p1", `as cyclohexene (${numberingKey([product2])})`)], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    expect(heldRows(d, 40, [molecule("p1", `as reactant (${numberingKey([reactant])}), then as cyclohexene (${numberingKey([product2])})`)], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    // (a conformer of the product, its atoms in the product's own order, numbered as the product - itself in the reactant's numbering: in
+    //  the reactant's numbering too, atom for atom, and held - the backward ends' case)
+    const m = runMenoPair("atom-map", { entries: [asEntry(da.product, "conformer")], holds: "molecules" }, { entries: [product], holds: "molecules" }, { moleculesAre: "each", referenceIs: "each", bonds: "same" });
+    if (!m.ok) throw new Error(m.said);
+    expect(m.kept[0].properties?.[NUMBERING]?.value).toMatch(new RegExp(`^as [^,]+ \\(${numberingKey([reactant])}\\)$`));
+    expect(heldRows(d, 40, m.kept, RDKIT, "RDKit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
+    // (a row of a table read from a file that says its own, bare: held on a molecule never mapped, as ever, and refused on one mapped)
+    const bare = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row({ kind: "fixed", atoms: [0] })] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(bare, 40, [molecule("p1")], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
+    expect(heldRows(bare, 40, [product], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
   });
 
   it("refuses a molecule no row is for, or one a row names an atom it has not; and counts rows for no molecule", () => {

@@ -55,6 +55,9 @@ export function dragsSelection(st: Parameters<typeof selectedOf>[0], id: number)
 }
 const noFlow = (): SelFlow => ({ sets: new Set(), steps: new Set() });
 
+/** The things a right-click selects alone (`selectAlone`): each kind the page selects. */
+export type SelectableKind = "atom" | "bond" | "molecule3d" | "arrow" | "plus" | "caption" | "text" | "ink" | "cycle" | "shape" | "picture" | "pdf" | "slide" | "set" | "step";
+
 /**
  * What is selected, and the last atom chosen - where a Shift+click's path
  * starts from. The selection is the view's, not the document's: it is not
@@ -177,6 +180,51 @@ export function createSelectionSlice(set: SetState) {
           ? { ...prev, sel: none(), selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selFlow: noFlow(), pdfSel: null, pdfBox: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>(), selInks: new Set<number>(), selCycles: new Set<number>() }
           : prev,
       ),
+
+    /**
+     * The thing right-clicked, selected alone - whatever was selected let go, as a file browser does (the maintainer,
+     * 2026-11-14: docs/EDITOR-2D.md, *Selecting*). Not a step of the document. A kind with no selection of its own leaves the
+     * selection as it is.
+     */
+    selectAlone: (kind: SelectableKind, id: number) =>
+      set((prev: EditorState) => {
+        const cleared = { sel: none(), selAnchor: null, sel3d: new Set<number>(), chosen3d: null, selFlow: noFlow(), pdfSel: null, pdfBox: null, selPictures: new Set<number>(), selTexts: new Set<number>(), selCaptions: new Set<number>(), selPdfs: new Set<number>(), selSlides: new Set<number>(), selShapes: new Set<number>(), selArrows: new Set<number>(), selPluses: new Set<number>(), selInks: new Set<number>(), selCycles: new Set<number>() };
+        const one = new Set([id]);
+        switch (kind) {
+          case "atom":
+            return prev.model.atoms.some((a) => a.id === id) ? { ...prev, ...cleared, sel: { atoms: one, bonds: new Set<number>() }, selAnchor: id } : prev;
+          case "bond": {
+            const b = prev.model.bonds.find((x) => x.id === id);
+            return b ? { ...prev, ...cleared, sel: { atoms: new Set([b.a, b.b]), bonds: one }, selAnchor: b.a } : prev;
+          }
+          case "molecule3d":
+            return { ...prev, ...cleared, sel3d: one };
+          case "arrow":
+            return { ...prev, ...cleared, selArrows: one };
+          case "plus":
+            return { ...prev, ...cleared, selPluses: one };
+          case "caption":
+            return { ...prev, ...cleared, selCaptions: one };
+          case "text":
+            return { ...prev, ...cleared, selTexts: one };
+          case "ink":
+            return { ...prev, ...cleared, selInks: one };
+          case "cycle":
+            return { ...prev, ...cleared, selCycles: one };
+          case "shape":
+            return { ...prev, ...cleared, selShapes: one };
+          case "picture":
+            return { ...prev, ...cleared, selPictures: one };
+          case "pdf":
+            return { ...prev, ...cleared, selPdfs: one };
+          case "slide":
+            return { ...prev, ...cleared, selSlides: one };
+          case "set":
+            return { ...prev, ...cleared, selFlow: { sets: one, steps: new Set<number>() } };
+          case "step":
+            return { ...prev, ...cleared, selFlow: { sets: new Set<number>(), steps: one } };
+        }
+      }),
 
     /** Arrows and "+" signs selected for themselves - added to those selected, or in their place. */
     // (only those there: an id an undo has taken away is no selection - as for shapes)
