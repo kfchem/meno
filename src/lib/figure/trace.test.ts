@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Pixels } from "./inkFit";
 import { readFigure } from "./read";
 import type { Point, Shapes } from "./drawn";
-import { closedJoints, inkOf, onPage, patchesOf, thinned, tracePicture, type Piece, type Traced, type Vertex } from "./trace";
+import { closedJoints, widening, inkOf, onPage, patchesOf, thinned, tracePicture, type Piece, type Traced, type Vertex } from "./trace";
 
 type Pt = [number, number];
 /** Whether a point of the picture is inked by a shape. */
@@ -254,6 +254,35 @@ describe("a picture traced", () => {
     // (a piece as short with a free end is a line's end, not a joint: kept)
     const kept = [lay(v(10, 10), v(14, 10, true), { x: 10, y: 10 }, { x: 14, y: 10 })];
     expect(closedJoints(kept, 60).size).toBe(0);
+  });
+
+  it("tells a wedge by how its widths rise one way, however unevenly the pixels' grid measures them; a line as wide all along, unevenly measured, is none", () => {
+    // (a wedge 60 long widening from 3 to 12, measured in ten bins from 18 to 54, every other bin a fifth off - a straight line's fit of
+    // them is poor, their ranks rise)
+    const bins = Array.from({ length: 10 }, (_, k) => 18 + 4 * k);
+    const wedge = bins.map((t, k) => ({ t, w: (3 + (9 * t) / 60) * (k % 2 ? 1.15 : 0.8) }));
+    const w = widening(wedge, 60)!;
+    expect(w).not.toBeNull();
+    expect(w.wa).toBeLessThan(0.5 * w.wb);
+    expect(w.wb).toBeGreaterThan(9);
+    // (its ends where most of its widths put them: 3.45 and 13.8, about the 3 and 12 drawn - not where its first width alone would; one
+    // bin far off - a joint's ink at its wide end, 30 - moves them not at all)
+    expect(w.wa).toBeCloseTo(3.45, 1);
+    expect(w.wb).toBeCloseTo(13.8, 1);
+    const off = widening(wedge.map((q, k) => (k === 9 ? { ...q, w: 30 } : q)), 60)!;
+    expect(off.wa).toBeCloseTo(3.45, 1);
+    expect(off.wb).toBeCloseTo(13.8, 1);
+    // (the same wedge measured the other way round, every other bin a fifth over and under: its widths agree less - Kendall's 0.51 - and
+    // it is a wedge still)
+    expect(widening(bins.map((t, k) => ({ t, w: (3 + (9 * t) / 60) * (k % 2 ? 0.8 : 1.15) })), 60)).not.toBeNull();
+    // (widths all the same: no way it widens)
+    expect(widening(bins.map((t) => ({ t, w: 8 })), 60)).toBeNull();
+    // (as many widths falling along it as rising: no way it widens)
+    const even = bins.map((t, k) => ({ t, w: 8 * [1, 1.2, 0.85, 1.15, 0.9, 1.1, 0.8, 1.2, 0.95, 1][k] }));
+    expect(widening(even, 60)).toBeNull();
+    // (a trend too faint: two of three pairs of widths not agreeing)
+    const faint = bins.map((t, k) => ({ t, w: [8, 9.5, 7.5, 9, 8.5, 10, 7.8, 9.8, 8.6, 9.4][k] }));
+    expect(widening(faint, 60)).toBeNull();
   });
 
   it("gives a line much wider than the rest as a bold one", () => {

@@ -51,8 +51,11 @@ const FORK_DEG = 15;
 /** A line widening from one end is a wedge where its wide end is this many times its figure's line, and its narrow end at most this share of its wide end. */
 const WEDGE_WIDE = 2;
 const WEDGE_NARROW = 0.5;
-/** ... and how it widens follows a straight line this closely (the square of the correlation). */
-const WEDGE_EVEN = 0.8;
+/**
+ * ... and it widens one way all along it this surely: Kendall's rank correlation of its widths with where they lie, at the least. Ranks, not a
+ * straight line's fit: at 300 dpi a wedge's widths are measured in bins a line wide, the pixels' grid making them uneven by a fifth or more.
+ */
+const WEDGE_EVEN = 0.3;
 /** A patch smaller across than this share of a bond is a bar, a dot or a small letter, not lines. */
 const SMALL = 0.3;
 /** A patch smaller than this share of a bond, all of its pieces shorter than this other share, and joined, bent or closed as a letter's strokes are, is a letter. */
@@ -993,20 +996,27 @@ function barOf(ink: Ink, patch: Int32Array, own: number, box: readonly number[])
   return { a: { x: c.x - u.x * half, y: c.y - u.y * half }, b: { x: c.x + u.x * half, y: c.y + u.y * half }, w: short };
 }
 
-/** How a piece widens along it: as wide at its first end and at its second, by the straight line through its widths - where they follow one closely. */
-function widening(s: readonly { t: number; w: number }[], l: number): { wa: number; wb: number } | null {
+/**
+ * How a piece widens along it: as wide at its first end and at its second, by the line through its widths that the most of them agree on
+ * (the median of the slopes between each two, and of what that leaves) - where they widen one way surely enough (`WEDGE_EVEN`).
+ */
+export function widening(s: readonly { t: number; w: number }[], l: number): { wa: number; wb: number } | null {
   const n = s.length;
-  const mt = s.reduce((t, q) => t + q.t, 0) / n;
-  const mw = s.reduce((t, q) => t + q.w, 0) / n;
-  let [tt, tw, ww] = [0, 0, 0];
-  for (const q of s) {
-    tt += (q.t - mt) ** 2;
-    tw += (q.t - mt) * (q.w - mw);
-    ww += (q.w - mw) ** 2;
-  }
-  if (!tt || !ww || (tw * tw) / (tt * ww) < WEDGE_EVEN) return null;
-  const slope = tw / tt;
-  return { wa: Math.max(0, mw - slope * mt), wb: Math.max(0, mw + slope * (l - mt)) };
+  let [agree, disagree] = [0, 0];
+  const slopes: number[] = [];
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const [dt, dw] = [s[j].t - s[i].t, s[j].w - s[i].w];
+      if (!dt) continue;
+      if (dt * dw > 0) agree++;
+      else if (dt * dw < 0) disagree++;
+      slopes.push(dw / dt);
+    }
+  const pairs = (n * (n - 1)) / 2;
+  if (!pairs || Math.abs(agree - disagree) / pairs < WEDGE_EVEN) return null;
+  const slope = median(slopes);
+  const at0 = median(s.map((q) => q.w - slope * q.t));
+  return { wa: Math.max(0, at0), wb: Math.max(0, at0 + slope * l) };
 }
 
 /** Shapes traced in a picture's pixels laid on a page: each point `k` times as far from naught, then moved by `dx`, `dy` - as a picture's pixels are made a PDF page's points. */
