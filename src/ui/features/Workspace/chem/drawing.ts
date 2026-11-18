@@ -20,6 +20,17 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Bond, Model } from "../store/types";
 import { byStructure, type StructureValues } from "../utils/byStructure";
 import { greatest } from "../../../../lib/chem/lists";
+import { heldName } from "../../../../lib/layout/names";
+
+/**
+ * What a drawing's atom is to a reader of elements - the layout, identity, the CIP, a metal's tests: its element, or the label it carries.
+ * A group the drawing holds under a label that is also an element's symbol (a typed Pr, propyl; Ac, Ts, Fm, At: `abbrev`) is given as
+ * that group's name, never as the element (lib/layout/names `heldName`); a Pr with nothing held - from a file's element column, a SMILES,
+ * 3D - is praseodymium. The one way an atom's `el` reaches such a reader: a new one needs nothing of the rule (foundation part 3, B2).
+ */
+export function readAs(a: { el: string; abbrev?: unknown }): string {
+  return a.abbrev ? heldName(a.el) : a.el;
+}
 
 /** How many bonds each atom has, as the drawing counts them to say which end of a wedge is narrow. */
 export function degrees(bonds: readonly Pick<Bond, "a" | "b">[]): Map<number, number> {
@@ -102,7 +113,7 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
   const atoms: DrawnAtom[] = model.atoms.map((a) => ({
     x: a.x,
     y: a.y,
-    el: a.el,
+    el: readAs(a),
     hs: hs.get(a.id) ?? 0,
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.z != null ? { z: a.z } : {}),

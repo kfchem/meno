@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { ReaderOutput } from "../../../../lib/calc/output";
 import type { Molecule3D } from "../store/types";
 import { setEntries, startedFrame, type SetEntry } from "./entries";
-import { isFailure, workedOf } from "./programs";
+import { isFailure, STOPPED_SAID, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
 import { takeFrames } from "./takeFrames";
+import { stoppedSaid } from "./failures";
 
 /** H2, as a step's entry, its bond `d` A long - found at `method` (a saddle point's frequencies, say). */
 const h2 = (d = 0.97, method = "GFN2-xTB", basis?: string): SetEntry =>
@@ -30,6 +31,8 @@ describe("Follow the reaction path", () => {
   it("gives each point its path, one end to the other, its entry the point it started from - its calculation on it", () => {
     const w = workedOf("reaction-path", h2(), irc(), ["orca"]) as Worked;
     expect(isFailure(w)).toBe(false);
+    // (a path that reached its ends: none said stopped)
+    expect(w.stopped).toBeUndefined();
     const m = molecule(w);
     expect([m.frames?.length, m.entryFrames, m.energies]).toEqual([3, [2], [-1.17, -1.1, -1.09, -1.12]]);
     expect(startedFrame(m)).toBe(2);
@@ -40,9 +43,24 @@ describe("Follow the reaction path", () => {
     expect(ends.ok && ends.kept.map((e) => e.xyz[3])).toEqual([0.74]);
   });
 
-  it("puts a path one of whose sides stopped before its end out of Failed, the path as far as it came, in its program's words", () => {
-    const w = workedOf("reaction-path", h2(), irc("The forward side stopped at ORCA's iteration cap before reaching an end"), ["orca"]) as Worked;
-    expect([w.failed?.kind, w.failed?.why, w.after?.length]).toEqual(["not-converged", "The forward side stopped at ORCA's iteration cap before reaching an end", 1]);
+  it("keeps a path one of whose sides stopped before its end, as far as it came, its ends where it stopped - for the steps after it to decide", () => {
+    const why = "The forward side stopped at ORCA's iteration cap before reaching an end";
+    const w = workedOf("reaction-path", h2(), irc(why), ["orca"]) as Worked;
+    // (no failure: the path whole, said as stopped, in its program's words)
+    expect([w.failed, w.stopped, w.after?.length]).toEqual([undefined, why, 1]);
+    const m = molecule(w);
+    expect([m.frames?.length, m.entryFrames, m.failed]).toEqual([3, [2], undefined]);
+    // (its ends taken as they are, for the steps after it - their optimisation, their bonding compared - to say what they are)
+    const first = takeFrames([m], "first");
+    const last = takeFrames([m], "last");
+    expect([first.ok && first.kept.map((e) => e.xyz[3]), last.ok && last.kept.map((e) => e.xyz[3])]).toEqual([[0.74], [1.1]]);
+    // (its program's words kept on its calculation, as they came)
+    expect(w.calc?.warnings?.map((x) => x.text)).toEqual([why]);
+    // (where its program gave none: Meno's words, on the line and on the molecule alike)
+    const silent = workedOf("reaction-path", h2(), { ...irc(), optimised: false } as ReaderOutput, ["orca"]) as Worked;
+    expect([silent.stopped, silent.calc?.warnings]).toEqual([STOPPED_SAID, [{ kind: "other", text: STOPPED_SAID }]]);
+    expect(stoppedSaid(1)).toBe("1 not converged, kept as far as it came");
+    expect(stoppedSaid(2)).toBe("2 not converged, kept as far as they came");
   });
 
   it("is a path only at the level its start was found at: else it fails, naming both", () => {

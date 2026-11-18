@@ -15,7 +15,7 @@ import { readStereo } from "../../../../lib/layout/drawn";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
 import { cageViews } from "../../../../lib/layout/recognised";
 import type { Model } from "../store/types";
-import { drawingOf } from "./drawing";
+import { drawingOf, readAs } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { piSystems, unreadWedges } from "./engineLayout";
 import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
@@ -41,7 +41,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     atoms: part.atoms.map((a, i) => {
       const t = stereo.tetra.get(i);
       return {
-        el: a.el,
+        el: readAs(a),
         ...(a.charge ? { charge: a.charge } : {}),
         ...(a.isotope ? { isotope: a.isotope } : {}),
         ...(a.radical ? { radical: a.radical } : {}),
