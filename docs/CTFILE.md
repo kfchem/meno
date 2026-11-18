@@ -319,7 +319,15 @@ counter-anions after it, each leaving a positive charge on the part's
 metal: read by rule as a salt's anion is (BF4, PF6, SbF6, AsF6, BPh4,
 ClO4; see below), or BArF, which names its aryl groups by no formula, from
 a list. A ligand written as an anion (Cp⁻, Cp*⁻) leaves its charge on the
-metal, so that the whole is as charged as the formula says. A ligand in
+metal, so that the whole is as charged as the formula says. An O with
+its count, or before a halide, a bracket or the end of the formula, is an
+oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
+and two M-Cl, UO2Cl2 is uranyl's O=U=O with two chlorides, WOCl4, VOCl3,
+VO(acac)2, MeReO3 and ReO3Me - each element written with its count, as an
+inorganic formula is, never a group read across it; an O that begins a
+group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O is bound to each metal it bridges by
+a single bond. A part of several metals with an oxo not marked μ is not
+read (Re2O7: which O bridge, the formula does not say). A ligand in
 brackets may have its descriptor: RuCl[(S,S)-TsDPEN](p-cymene),
 RuCl2[(S)-BINAP][(S,S)-DPEN]. Where one part
 has several metals - Pd2(dba)3 - the ligands are shared among them in
