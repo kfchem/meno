@@ -157,7 +157,7 @@ async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn,
   const about = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
   // (as the app makes a picture's structure: over-bonded structures left out, a lone atom none)
   const got = pictureResult(read, (px, py) => ({ sha256: sha, page: 0, x: px, y: py, bond: read.bond }), about);
-  return "none" in got ? { none: got.none, pixels } : { model: got.model, pixels };
+  return "none" in got ? { none: got.none, pixels } : { model: got.model, ...(got.left ? { left: got.left } : {}), pixels };
 }
 
 it("reads every PDF back", async () => {
@@ -218,6 +218,8 @@ it("reads every PDF back", async () => {
         if ("none" in got) entry.none = got.none;
         else {
           entry.marked = markedOf(got.model);
+          // (structures left out for an atom with more bonds than it takes: said, as Read as structure says it)
+          if (got.left) entry.left = got.left;
           // (what it says, each thing once: why it is marked)
           const said = [...new Set([...got.model.atoms, ...got.model.bonds].flatMap((x) => x.unsure?.said ?? []))];
           if (said.length) entry.said = said;

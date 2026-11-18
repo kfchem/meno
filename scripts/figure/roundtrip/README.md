@@ -35,7 +35,9 @@ must be on the path). Each read records how many atoms and bonds it
 marked unsure and what it said of them, a picture's line and bond in its
 pixels, and `compare.py` prints, for each
 style and way of printing, how many were read right, how many were said
-(nothing read, or marked unsure) and how many were wrong with no mark.
+(nothing read, marked unsure, or structures said to be left out, as *Read
+as structure* says an over-bonded one is) and how many were wrong with no
+mark.
 `RT_PRESETS=rdkit,rdkitcg,rdkitacs,rdkitacscg` with `RT_READ=rdkit` reads
 only the structures drawn by RDKit (stage 2b): real papers' figures come
 from many programs, not Meno's alone.
