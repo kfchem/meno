@@ -94,6 +94,30 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
     one("CN=P(c1ccccc1)(c1ccccc1)c1ccccc1", "C[N-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
   });
 
+  it("a phosphorus ylide drawn P=C and drawn P+-C- is one identity (Wittig's reagents), both ways", () => {
+    one("C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "[CH2-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+    one("CCOC(=O)C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "CCOC(=O)[CH-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+    // (a cyclopentadienylide's: the ring's carbanion, three single bonds)
+    one("P(c1ccccc1)(c1ccccc1)(c1ccccc1)=C1C=CC=C1", "[P+](c1ccccc1)(c1ccccc1)(c1ccccc1)[C-]1C=CC=C1");
+    // (and two ylides apart still)
+    apart("C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "CC=P(c1ccccc1)(c1ccccc1)c1ccccc1");
+  });
+
+  it("a P-chiral ylide keeps its configuration: its two hands two, each one identity drawn either way", () => {
+    one("C[P@+](CC)(c1ccccc1)[CH2-]", "C[P@](CC)(c1ccccc1)=C");
+    one("C[P@@+](CC)(c1ccccc1)[CH2-]", "C[P@@](CC)(c1ccccc1)=C");
+    apart("C[P@+](CC)(c1ccccc1)[CH2-]", "C[P@@+](CC)(c1ccccc1)[CH2-]");
+  });
+
+  it("a vinyl ylide is one identity too; only at P: a sulfonium ylide keeps its charges", () => {
+    one("C=C[CH-][P+](C)(C)C", "C=CC=P(C)(C)C");
+    apart("C[S+](C)[CH2-]", "CS(C)=C");
+    // (a carbanion with a double bond of its own is no ylide's: left as drawn)
+    apart("C=[C-][P+](C)(C)C", "C=C=P(C)(C)C");
+    // (nor one of two groups and no H)
+    apart("C[C-][P+](C)(C)C", "C[C]=P(C)(C)C");
+  });
+
   it("a P+ with an O- and an N(-)-R on it is left as drawn, whichever atom comes first: the choice would follow their order", () => {
     one("C[P+](C)([O-])[N-]C", "C[N-][P+](C)(C)[O-]", "[O-][P+](C)(C)[N-]C");
   });

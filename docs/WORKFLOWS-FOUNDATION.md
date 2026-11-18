@@ -924,7 +924,10 @@ drawn, aromatic rings as one form.* What that means, plainly:
   oxide drawn R3P=O and drawn R3P(+)-O(-) is one structure, and so is a
   sulfoxide drawn S=O and S(+)-O(-): identity writes the uncharged form,
   a configuration at the P or S kept, so a P-chiral phosphine oxide's two
-  hands stay two. Never at N: an amine N-oxide and a nitro group keep
+  hands stay two. A phosphorus ylide likewise: Ph3P=CH2 drawn so and
+  drawn Ph3P(+)-CH2(-) is one structure (a carbanion of three groups on
+  a P+; Meno's own extension, at P only: a sulfonium ylide keeps its
+  charges). Never at N: an amine N-oxide and a nitro group keep
   their charges. The end atoms of one centre share their double bonds and
   their charge: a phosphate diester anion with its charge drawn on one
   oxygen or on the other is one structure, and its P, between two alike
