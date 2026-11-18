@@ -909,7 +909,9 @@ the stereoisomers, each with one way that makes it. Places that depend on
 each other fall out by identity: tartaric acid has three, inositol nine,
 1,3,5-trimethylcyclohexane two, 2,6-dimethylspiro[3.3]heptane two (its
 enantiomers). A biaryl's axis is given only where the drawing states one,
-so atropisomers are not counted, and that is said beside a count. A cage
+so atropisomers are not counted; nor are a bridged ring's in,in and out,out
+forms apart, which share one configuration (bicyclo[4.4.1]undecane's two
+are its out,out-or-in,in and its in,out); both said beside a count. A cage
 ties its bridgeheads' senses to each other: where an open bridgehead's two
 senses are one structure (norbornane's, adamantane's, cubane's) it is no
 place to give and the count stands; where they are not (norbornan-2-ol,

@@ -28,8 +28,11 @@ type Open = { at?: number; set: (g: IdentityInput, up: boolean) => IdentityInput
 /** What is said where a cage or a bridged system is left open (`isomersOf`): what the structure has, not how it is counted. */
 export const NOT_COUNTED_CAGE = "Its stereoisomers are not counted: a cage or a bridged ring system in it has a configuration not given";
 
-/** What is said beside a count (`isomersOf`): what it leaves out. */
-export const NOT_COUNTED_AXES = "Atropisomers are not counted";
+/**
+ * What is said beside a count (`isomersOf`): what it leaves out - an axis no drawing states, and a bridged ring's in,in and out,out
+ * forms, which share one configuration (bicyclo[4.4.1]undecane's: told apart by shape, never by a sense).
+ */
+export const NOT_COUNTED_AXES = "Atropisomers, and a bridged ring's in,in and out,out forms apart, are not counted";
 
 /**
  * The atoms of `g` a cage holds: an atom joined to another by three paths that share no atom but their ends, each with
