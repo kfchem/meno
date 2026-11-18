@@ -21,8 +21,8 @@ export const STEREO_OPTIONS: readonly Option[] = [
 
 /**
  * *Stereoisomers* on one structure - its parts' MOL blocks, read as one -
- * asked of the plugin that finds stereoisomers (`chem`; `program`, the
- * toolkit it runs, named where it alone failed). Kept as drawn where
+ * counted by Meno (chem/openStereo, chem/menoIsomers) and each made by
+ * the plugin that makes stereoisomers (`chem`). Kept as drawn where
  * nothing is left open, or nothing it leaves open can go more than one way
  * in 3D (a bridgehead its rings fix; a strained cage none of whose forms
  * holds); else each stereoisomer that can be made in 3D, every open

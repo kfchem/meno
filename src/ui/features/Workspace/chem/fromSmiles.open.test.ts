@@ -17,6 +17,15 @@ vi.mock("../../../../lib/roles/worker", () => ({
   }),
 }));
 vi.mock("./cleanUp", () => ({ laidOut: async (m: unknown) => m }));
+// (what Meno reads it to leave open, scripted likewise: chem/menoIsomers)
+vi.mock("./menoIsomers", async (actual) => ({
+  ...(await actual<typeof import("./menoIsomers")>()),
+  leftByMeno: () => {
+    if (open === "fails" || open === "hangs") throw new Error("it could not be read");
+    return { left: { atoms: open.atoms, bonds: open.bonds, cumulenes: [], cumulated: [], notEnumerated: [], said: null }, centres: open.atoms, doubles: open.bonds, handed: false };
+  },
+}));
+
 
 describe("a structure read from a SMILES, and the stereo it leaves open", () => {
   it("says how many stereocentres and double bonds its SMILES leaves without a configuration - none where none is", async () => {
