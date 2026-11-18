@@ -27,7 +27,7 @@ const READ_ALREADY: Record<string, number> = {
 // The other readers of an element's symbol - a valence (`canTakeBond`, `implicitHydrogens`, `valencesAt`) or a halogen (`HALOGEN.has`) - asked
 // the same: given `readAs(...)`, or listed with what they read.
 const READ_ALREADY_VALENCE: Record<string, number> = {
-  // (a callback handed an element by a reader of a plugin's or a layout's atoms, each made through readAs: squarePlanarMetal)
+  // (a callback handed an element by a reader of a plugin's drawing - of a typed SMILES or of a molecule in 3D - which holds no label: squarePlanarMetal)
   "ui/features/Workspace/chem/arrangementsMarked.ts": 1,
   // (whether an atom's valence set by a file says more than its element's own: a held group carries none - its label no valence table's)
   "ui/features/Workspace/chem/cleanUp.ts": 1,
