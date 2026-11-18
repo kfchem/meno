@@ -1376,10 +1376,12 @@ All hover-based, as above.
   - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
     before, one switch showed them all). Hidden unless asked for. The
     right-click menu of an atom that can be a stereocentre says *Show
-    R/S*, of a double bond that can be cis or trans *Show E/Z* (where by
-    Meno's candidates, by shape: docs/WORKFLOWS-FOUNDATION.md - an
-    amine's N, a metal, an aromatic ring's bond, a C=O or a CH2= end
-    offers neither), of a structure's selection or a
+    R/S*, of a double bond that can be cis or trans *Show E/Z* - where a
+    configuration can be (Meno's candidates, by shape:
+    docs/WORKFLOWS-FOUNDATION.md) and sets something (turned over, it is
+    another structure by Meno's identity). An amine's N, a metal, an
+    aromatic ring's bond, a C=O, a CH2= end, a neopentane's C and PPh3's
+    P offer neither; a meso form's centres do - of a structure's selection or a
     molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
     already (named for what they show, the maintainer, 2026-10-13). On a
     molecule in 3D (the maintainer's right-click rule, 2026-11-14: the menu's
