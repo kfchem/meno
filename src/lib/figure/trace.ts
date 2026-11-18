@@ -61,6 +61,8 @@ const LETTER_PIECE = 0.55;
 /** A closed line is a circle where it bends at this many points or more and lies round its middle within this share of its radius. */
 const ROUND_POINTS = 9;
 const ROUND_WITHIN = 0.1;
+/** A piece between two joints shorter than this, in the bond, is a joint thinning left open: `closedJoints`. */
+const JOINT_SHORT = 0.35;
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 
@@ -447,9 +449,9 @@ function corners(pts: readonly Point[], eps: number): number[] {
 }
 
 /** A point straight pieces meet at: a node, or a bend along a line - where the centre line has it, then where the pieces' own lines cross. */
-type Vertex = { at: Point; deep: number; free: boolean; pieces: Piece[] };
+export type Vertex = { at: Point; deep: number; free: boolean; pieces: Piece[] };
 /** A straight piece of a centre line: its two ends, the pixels along it, its patch; the line it is fitted to; and, where one end is set on its own line (a fork's), that end. */
-type Piece = { a: Vertex; b: Vertex; pts: Point[]; patch: number; inner?: Point[]; fit?: { c: Point; u: Point }; endA?: Point; endB?: Point };
+export type Piece = { a: Vertex; b: Vertex; pts: Point[]; patch: number; inner?: Point[]; fit?: { c: Point; u: Point }; endA?: Point; endB?: Point };
 
 /** The straight line through points that lies nearest all of them: a point on it and its way. */
 function fitLine(pts: readonly Point[]): { c: Point; u: Point } {
@@ -819,6 +821,7 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
   const asStrokes = (ls: readonly Laid[]): Stroke[] => ls.map((l) => ({ a: l.a, b: l.b, w: line }));
   const empty = { wedges: [], curves: [], blobs: [] };
   const bond = figureBond({ strokes: asStrokes(lines.filter((l) => extent(l.piece.patch) >= 0.25 * largest)), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
+  const gone = closedJoints(laid, bond);
   const shapes: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
   for (let k = 0; k < count; k++) {
     if (dropped[k]) continue;
@@ -849,6 +852,7 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
       continue;
     }
     for (const i of own) {
+      if (gone.has(i)) continue;
       const { a, b } = laid[i];
       const s = profiles[i];
       const w = s.length ? median(s.map((q) => q.w)) : line;
@@ -862,6 +866,89 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
     }
   }
   return { shapes, line, bond };
+}
+
+/**
+ * Joints thinning left open, closed again: where lines meet, thinning may
+ * leave the joint as two or three nodes joined by short pieces - a wedge's
+ * wide end turned into one corner of it, a centred double bond's two lines
+ * each run into a node of their own. A piece between two joints, shorter
+ * than `JOINT_SHORT` of the bond, is no bond: its ends are one joint, set
+ * where the other lines into it cross (or their middle, where those lie
+ * along one line), each of those lines' ends moved there. The pieces so
+ * gone, by their places in `laid`.
+ */
+export function closedJoints(laid: { piece: Piece; a: Point; b: Point; length: number }[], bond: number): Set<number> {
+  const short = (k: number) => {
+    const { piece, length } = laid[k];
+    return !piece.a.free && !piece.b.free && piece.a !== piece.b && length < JOINT_SHORT * bond;
+  };
+  const up = new Map<Vertex, Vertex>();
+  const root = (v: Vertex): Vertex => {
+    let r = v;
+    while (up.has(r) && up.get(r) !== r) r = up.get(r)!;
+    return r;
+  };
+  const gone = new Set<number>();
+  laid.forEach((_, k) => {
+    if (!short(k)) return;
+    gone.add(k);
+    const [ra, rb] = [root(laid[k].piece.a), root(laid[k].piece.b)];
+    if (ra !== rb) up.set(ra, rb);
+  });
+  if (!gone.size) return gone;
+  // (each joint so made: the ends of the lines into it, and where the lines run)
+  const into = new Map<Vertex, { k: number; end: "a" | "b" }[]>();
+  laid.forEach((l, k) => {
+    if (gone.has(k)) return;
+    for (const end of ["a", "b"] as const) {
+      const v = l.piece[end];
+      if (!up.has(v) && ![...up.values()].includes(v)) continue;
+      const r = root(v);
+      (into.get(r) ?? into.set(r, []).get(r)!).push({ k, end });
+    }
+  });
+  for (const ends of into.values()) {
+    // (each line's end into the joint, and its way out of it; lines running one way - a fork, a double bond's two lines - one group)
+    const lines = ends.map(({ k, end }) => {
+      const l = laid[k];
+      const [p, q] = end === "a" ? [l.a, l.b] : [l.b, l.a];
+      const d = dist(p, q) || 1;
+      return { k, end, p, u: { x: (q.x - p.x) / d, y: (q.y - p.y) / d } };
+    });
+    const groups: (typeof lines)[] = [];
+    for (const l of lines) {
+      const g = groups.find((g) => between(g[0].u, l.u) < FORK_DEG);
+      if (g) g.push(l);
+      else groups.push([l]);
+    }
+    // (where the groups' middle lines cross, as near all of them as may be; their ends' middle where they lie along one line)
+    let [mxx, mxy, myy, rx, ry] = [0, 0, 0, 0, 0];
+    const mid = { x: lines.reduce((t, l) => t + l.p.x, 0) / lines.length, y: lines.reduce((t, l) => t + l.p.y, 0) / lines.length };
+    for (const g of groups) {
+      const c = { x: g.reduce((t, l) => t + l.p.x, 0) / g.length, y: g.reduce((t, l) => t + l.p.y, 0) / g.length };
+      const u = { x: g.reduce((t, l) => t + l.u.x, 0), y: g.reduce((t, l) => t + l.u.y, 0) };
+      const n = Math.hypot(u.x, u.y) || 1;
+      const [nx, ny] = [-u.y / n, u.x / n];
+      mxx += nx * nx;
+      mxy += nx * ny;
+      myy += ny * ny;
+      const d = nx * c.x + ny * c.y;
+      rx += nx * d;
+      ry += ny * d;
+    }
+    const det = mxx * myy - mxy * mxy;
+    const cross = groups.length > 1 && det > 1e-3 * (mxx + myy) ** 2 ? { x: (myy * rx - mxy * ry) / det, y: (mxx * ry - mxy * rx) / det } : null;
+    const at = cross && dist(cross, mid) <= JOINT_SHORT * bond ? cross : mid;
+    // (each end there - a fork's each on its own line, as where pieces meet: the two lines of a double bond stay side by side)
+    for (const g of groups)
+      for (const l of g) {
+        const t = (at.x - l.p.x) * l.u.x + (at.y - l.p.y) * l.u.y;
+        laid[l.k][l.end] = g.length > 1 ? { x: l.p.x + t * l.u.x, y: l.p.y + t * l.u.y } : at;
+        laid[l.k].length = dist(laid[l.k].a, laid[l.k].b);
+      }
+  }
+  return gone;
 }
 
 /**

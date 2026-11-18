@@ -13,6 +13,7 @@
  * reads beside these; RT_BOX=page a box round all that is on the page, not
  * the figures found - the figure reader measured apart from finding figures;
  * RT_PRESETS=a,b only the drawings in those styles (rdkit_draw.py's too);
+ * RT_VARIANTS=upright,serif only those ways of printing them;
  * RT_OUTLINE=letter or =word the figures' words drawn as outlines first, a
  * path for each letter or for each word, as many journals print a figure's
  * labels (outline.ts) - read against the system's letters, which
@@ -165,12 +166,14 @@ it("reads every PDF back", async () => {
   mkdirSync(resolve(READ, "figures"), { recursive: true });
   const only = process.env.ONLY?.toLowerCase().split(",");
   const presets = process.env.RT_PRESETS?.split(",");
+  const variants = process.env.RT_VARIANTS?.split(",");
   const read: Record<string, unknown>[] = [];
   for (const file of readdirSync(resolve(OUT, "pdf")).sort()) {
     const m = /^(.*)\.([a-z0-9]+)\.([a-z]+)\.pdf$/.exec(file);
     if (!m || !nameOf.has(m[1])) continue;
     if (only && !only.some((o) => file.toLowerCase().startsWith(o))) continue;
     if (presets && !presets.includes(m[2])) continue;
+    if (variants && !variants.includes(m[3])) continue;
     const bytes = readFileSync(resolve(OUT, "pdf", file));
     const sha = createHash("sha256").update(bytes).digest("hex");
     if (!existsSync(resolve(cache, `${sha}.pdf`))) copyFileSync(resolve(OUT, "pdf", file), resolve(cache, `${sha}.pdf`));

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Pixels } from "./inkFit";
 import { readFigure } from "./read";
 import type { Point, Shapes } from "./drawn";
-import { inkOf, onPage, patchesOf, thinned, tracePicture, type Traced } from "./trace";
+import { closedJoints, inkOf, onPage, patchesOf, thinned, tracePicture, type Piece, type Traced, type Vertex } from "./trace";
 
 type Pt = [number, number];
 /** Whether a point of the picture is inked by a shape. */
@@ -26,6 +26,15 @@ const wedge =
     const t = (x - tip[0]) * u[0] + (y - tip[1]) * u[1];
     const off = Math.abs((x - tip[0]) * u[1] - (y - tip[1]) * u[0]);
     return t >= 0 && t <= l && off <= ((w / 2) * t) / l;
+  };
+
+/** A line from one point to another, `w` wide, its ends cut flat - as a drawing program strokes a bond with butt caps: where two meet, a notch. */
+const flat =
+  (p: Pt, q: Pt, w: number): Shape =>
+  (x, y) => {
+    const d = [q[0] - p[0], q[1] - p[1]];
+    const t = ((x - p[0]) * d[0] + (y - p[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1]);
+    return t >= 0 && t <= 1 && Math.hypot(x - (p[0] + t * d[0]), y - (p[1] + t * d[1])) <= w / 2;
   };
 
 /** A ring's line, round a middle, `w` wide. */
@@ -196,6 +205,55 @@ describe("a picture traced", () => {
       const b = r.bonds.find((x) => x.stereo === "up")!;
       expect(near(r.atoms[b.a], h[1], 0.06 * bond)).toBe(true);
     }
+  });
+
+  it("closes a joint thinning left open: a wedge's wide end, cut along the bond into it, where the chain goes on - one atom there", { timeout: 30_000 }, () => {
+    // (as a page is drawn at 300 dpi: bonds 60 pixels, lines 2.5, cut flat; the wedge's wide end 16 across, cut along the bond that
+    // goes on from it - its far corner a point standing out, which thinning leaves as a spur and a second node)
+    const tri =
+      (a: Pt, b: Pt, c: Pt): Shape =>
+      (x, y) => {
+        const s = (p: Pt, q: Pt) => (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
+        const [d1, d2, d3] = [s(a, b), s(b, c), s(c, a)];
+        return (d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0);
+      };
+    const j: Pt = [100, 110];
+    const tip: Pt = [160, 110];
+    const d: Pt = [-0.5, -0.866];
+    const up: Pt = [j[0] + 60 * d[0], j[1] + 60 * d[1]];
+    const shapes = [tri(tip, [j[0] + 8 * d[0], j[1] + 8 * d[1]], [j[0] - 8 * d[0], j[1] - 8 * d[1]]), flat(j, up, 2.5), flat(up, [up[0] - 60, up[1]], 2.5), flat(tip, [190, 58.1], 2.5), flat(tip, [190, 161.9], 2.5)];
+    const t = traced(tracePicture(picture(220, 180, shapes)));
+    // (four lines and the wedge: no short piece left between the joint's two nodes)
+    expect([t.shapes.strokes.length, t.shapes.wedges.length]).toEqual([4, 1]);
+    const r = read(t.shapes);
+    expect(r.atoms.filter((a) => near(a, j, 15))).toHaveLength(1);
+    expect([r.atoms.length, r.bonds.length]).toEqual([6, 5]);
+    expect(r.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+  });
+
+  it("closes a joint left open into one atom where the lines into it cross, a fork's two lines each ending on its own line", () => {
+    // (a joint left as two nodes a short piece apart: into one, a double bond's two lines side by side; into the other, a line from below)
+    const v = (x: number, y: number, free = false): Vertex => ({ at: { x, y }, deep: 1, free, pieces: [] });
+    const [p, q] = [v(100, 100), v(104, 103)];
+    const lay = (a: Vertex, b: Vertex, from: Point, to: Point) => ({ piece: { a, b, pts: [], patch: 0 } as Piece, a: from, b: to, length: Math.hypot(to.x - from.x, to.y - from.y) });
+    const laid = [
+      lay(p, q, p.at, q.at),
+      lay(v(40, 97, true), p, { x: 40, y: 97 }, { x: 100, y: 97 }),
+      lay(v(40, 103, true), p, { x: 40, y: 103 }, { x: 100, y: 103 }),
+      lay(q, v(104, 160, true), { x: 104, y: 103 }, { x: 104, y: 160 }),
+    ];
+    const gone = closedJoints(laid, 60);
+    expect([...gone]).toEqual([0]);
+    // (the line from below ends where it crosses the fork's middle line, y 100; each of the fork's lines ends at that x on its own line)
+    expect(laid[3].a.x).toBeCloseTo(104, 5);
+    expect(laid[3].a.y).toBeCloseTo(100, 5);
+    expect([laid[1].b, laid[2].b].map((e) => [Math.round(e.x), Math.round(e.y)])).toEqual([
+      [104, 97],
+      [104, 103],
+    ]);
+    // (a piece as short with a free end is a line's end, not a joint: kept)
+    const kept = [lay(v(10, 10), v(14, 10, true), { x: 10, y: 10 }, { x: 14, y: 10 })];
+    expect(closedJoints(kept, 60).size).toBe(0);
   });
 
   it("gives a line much wider than the rest as a bold one", () => {
