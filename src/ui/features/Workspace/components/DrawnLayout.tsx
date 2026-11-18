@@ -16,7 +16,7 @@ import { useDrawingStyle } from "../useDrawingStyle";
 import { needsFallback, useTypefaces } from "../../../fonts/typefaces";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DrawnLayoutContext, DrawnZoomContext, drawnZoomOf } from "./drawnLayoutContext";
-import { NEW_ATOM, type StrokeNode } from "../utils/stroke";
+import { NEW_ATOM, startAlone, type StrokeNode } from "../utils/stroke";
 import { ChainGrow } from "../utils/chainGrow";
 import { CHAIN_EASE } from "../constants";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -194,8 +194,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       if (!l) kept.set(a, (l = layoutAtomOf(a)));
       return l;
     });
-    // (a stroke on empty space: its own new atom where it starts)
-    if (stroke && stroke.baseId === NEW_ATOM && stroke.start) {
+    // (a stroke on empty space: its own new atom where it starts - once it has a bond: alone, it is a bare vertex with its mark, never a
+    //  lone CH4 - StrokeStart2D)
+    if (stroke && stroke.baseId === NEW_ATOM && stroke.start && !startAlone(stroke, preview)) {
       out.push({ id: STROKE_START_ID, x: stroke.start.x, y: stroke.start.y, el: "C" });
     }
     (grownNodes ?? stroke?.nodes.map((n, i) => ({ node: n, i, x: n.x, y: n.y })) ?? []).forEach(({ node: n, i, x, y }) => {
@@ -373,6 +374,50 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     }
     return out;
   }, [drawnAtoms, model.bonds, stroke, preview, growStep]);
+  // Which bond is in front where two cross, said or taken away (chem/crossings): the gap opens or closes with the page's ease, never at once.
+  const marksNow = useMemo(() => {
+    const out = new Set<string>();
+    for (const b of model.bonds) for (const front of b.behind ?? []) out.add(`${b.id}:${front}`);
+    return out;
+  }, [model.bonds]);
+  const marksWere = useRef<Set<string> | null>(null);
+  const gapEase = useRef<{ start: number; opening: Set<string>; closing: Set<string> } | null>(null);
+  const [gapStep, setGapStep] = useState(0);
+  if (marksWere.current !== marksNow) {
+    const was = marksWere.current;
+    if (was) {
+      const opening = new Set([...marksNow].filter((k) => !was.has(k)));
+      const closing = new Set([...was].filter((k) => !marksNow.has(k)));
+      if (opening.size || closing.size) gapEase.current = { start: performance.now(), opening, closing };
+    }
+    marksWere.current = marksNow;
+  }
+  useFrame(() => {
+    const g = gapEase.current;
+    if (!g) return;
+    if (performance.now() - g.start >= GLIDE_MS) gapEase.current = null;
+    setGapStep((n) => n + 1);
+    invalidate();
+  });
+  const shownBonds: LBond[] = useMemo(() => {
+    const g = gapEase.current;
+    if (!g) return bonds;
+    const e = easeOut(Math.min(1, (performance.now() - g.start) / GLIDE_MS));
+    // (each gap on its way, by the bond behind and then the one in front: open as far as it has come, or as far as it has still to close)
+    const shares = new Map<number, Record<number, number>>();
+    const put = (key: string, share: number) => {
+      const [back, front] = key.split(":").map(Number);
+      shares.set(back, { ...(shares.get(back) ?? {}), [front]: share });
+    };
+    for (const k of g.opening) put(k, e);
+    for (const k of g.closing) put(k, 1 - e);
+    return bonds.map((l) => {
+      const share = l.id != null ? shares.get(l.id) : undefined;
+      if (!share) return l;
+      return { ...l, behind: [...new Set([...(l.behind ?? []), ...Object.keys(share).map(Number)])], behindShare: share };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gapStep: a frame of the way
+  }, [bonds, gapStep]);
   const opts = useMemo(() => {
     const keys = Object.keys(aromaticRings || {}).filter(
       (k) => aromaticRings[k],
@@ -410,7 +455,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     const set = labelSetOf(opts);
     const letters = (text: string) => writtenLetters(text, opts.fontPx, set).items;
     const editing = labelEdit.active && labelEdit.atomId != null && labelEdit.n != null ? labelEdit.atomId : null;
-    if (editing != null) {
+    // (begun on the selection's atoms: each it is written on makes room for it, as the one with the caret does)
+    const editingIds = editing != null ? [editing, ...(labelEdit.atoms ?? []).filter((x) => x !== editing)] : [];
+    for (const editing of editingIds) {
       const entry = map.get(editing);
       const text = labelEdit.value;
       if (!entry || entry.n !== labelEdit.n) {
@@ -430,7 +477,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       }
     }
     for (const [id, entry] of map) {
-      if (id === editing) continue;
+      if (editingIds.includes(id)) continue;
       // (kept or let go: back to its label as drawn, from what was written)
       if (entry.step.text != null) {
         map.set(id, { n: entry.n, step: { n: nextWriteStep(), since: now, was: entry.step, hidden: false } });
@@ -470,19 +517,20 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // again at every frame of it.
   const laidAt = useRef<number | null>(null);
   const layoutZoom =
-    laidAt.current != null && sameAtZooms(opts, bonds, laidAt.current, zoom) ? laidAt.current : zoom;
+    laidAt.current != null && sameAtZooms(opts, shownBonds, laidAt.current, zoom) ? laidAt.current : zoom;
   laidAt.current = layoutZoom;
   const laid = useRef(structureLayouts());
-  // (a press held - a selection turned by its handle, or dragged: what it only carries keeps its layout, carried, and is laid out again once it is let go)
-  const moving = useEditor((s) => s.panHold.active);
+  // (a press held - a selection turned by its handle, or dragged, or an atom dragged: what it only carries keeps its layout, carried, and is
+  //  laid out again once it is let go; what it reshapes reads its configuration as last read until then)
+  const moving = useEditor((s) => s.panHold.active || s.moveDrag.active);
   const layout = useMemo(
-    () => layoutByStructure(written, bonds, opts, layoutZoom, laid.current, [fonts, abbreviations], moving),
-    [written, bonds, opts, layoutZoom, fonts, abbreviations, moving],
+    () => layoutByStructure(written, shownBonds, opts, layoutZoom, laid.current, [fonts, abbreviations], moving),
+    [written, shownBonds, opts, layoutZoom, fonts, abbreviations, moving],
   );
   lastLaid.current = { atoms: written, layout };
   const value = useMemo(
-    () => ({ atoms: written, bonds, opts, layout, laidAt: layoutZoom }),
-    [written, bonds, opts, layout, layoutZoom],
+    () => ({ atoms: written, bonds: shownBonds, opts, layout, laidAt: layoutZoom }),
+    [written, shownBonds, opts, layout, layoutZoom],
   );
   return (
     <DrawnZoomContext.Provider value={drawnZoom}>

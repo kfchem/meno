@@ -1,4 +1,5 @@
 import {
+  ArrowPathIcon,
   CloudIcon,
   CpuChipIcon,
   CursorArrowRaysIcon,
@@ -26,6 +27,8 @@ type Icon = ComponentType<SVGProps<SVGSVGElement>>;
  */
 const ICONS: Record<StepIcon, Icon | ReactNode> = {
   rings: Square3Stack3DIcon,
+  // (steps gone round again: a Repeat's)
+  repeat: ArrowPathIcon,
   // (a ball at the bottom of an energy well, an arrow down into it)
   curve: (
     <>
@@ -221,6 +224,13 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="17.4" cy="4.6" r="1.9" fill="currentColor" stroke="none" />
       <path d="M6.6 17 l-1.6 2 M9.4 17 l-1.6 2 M12.2 17 l-1.6 2 M15 17 l-1.6 2" />
       <path d="M10 8.8 V17" strokeWidth={1} strokeDasharray="0.1 1.8" />
+    </>
+  ),
+  // (a torsion trans, above one cis: the same four atoms set against each other)
+  torsions: (
+    <>
+      <path d="M2.5 8 L7 3 L13 8 L17.5 3" />
+      <path d="M2.5 12 L7 17 L13 17 L17.5 12" />
     </>
   ),
   // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)

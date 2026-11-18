@@ -55,16 +55,22 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 }));
 
 /** A drawing made of a block, as Meno's engine lays one out: here, the block's name as its one carbon's label, two atoms apart - one called "undrawable", none. */
-vi.mock("../chem/fromSmiles", async (actual) => ({
-  ...(await actual<typeof import("../chem/fromSmiles")>()),
-  drawingOf: async (block: string): Promise<Model> => {
+vi.mock("../chem/fromSmiles", async (actual) => {
+  const drawingOf = async (block: string): Promise<Model> => {
     if (block === "undrawable") throw new Error("it could not be laid out");
     return {
-    atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
-    bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
+      atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
+      bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
     };
-  },
-}));
+  };
+  // (and the step's two ways of drawing what it made, each through that drawing)
+  return {
+    ...(await actual<typeof import("../chem/fromSmiles")>()),
+    drawingOf,
+    madeDrawn: (a: { made: readonly string[] }) => Promise.all(a.made.map((block) => drawingOf(block))),
+    smilesMadeDrawn: (_smiles: string, read: { molblock: string }) => drawingOf(read.molblock),
+  };
+});
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
@@ -74,6 +80,8 @@ import { setMembers, drawnHash, TAKEN_AT_THE_EDIT } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { drawnSaid, readDrawnAnswers } from "../workflow/programs";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { stepRole } from "../workflow/doers";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -96,7 +104,7 @@ function drawn() {
 }
 
 /** A step of `kind` on the three - Sketchkit's, or Meno's Check structures - its set's members given `records` where any; run. */
-async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", records: (DrawnRecord | undefined)[] = []) {
+async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", records: (DrawnRecord | undefined)[] = [], bare = false) {
   const doc = drawn();
   const store = createEditorStore(doc);
   connectStoreToDocument(store, doc);
@@ -111,6 +119,8 @@ async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", r
   // (Check structures and Stereoisomers Meno's, on the plugins' facts; Descriptors Sketchkit's)
   stereoAsked.length = 0;
   const step = st().addStep(kind, kind === "descriptors" ? "sketchkit" : "meno", 0, 0);
+  // (one put down otherwise than on the canvas - a template's: no options of its own)
+  if (bare) doc.edit("bare", (d) => ({ ...d, steps: d.steps!.map((x) => (x.id === step ? { ...x, options: undefined } : x)) }));
   st().connect({ set }, step);
   await st().runStep(step);
   const d = doc.getState();
@@ -257,6 +267,26 @@ describe("a plugin's step on structures drawn", () => {
     // (one the toolkit could not read at all: said in its name)
     facts = () => [FINE, FINE, { read: false }];
     expect((await ran("check-structures")).rest!.records).toEqual([{ status: { aside: "Sketchkit could not read it" } }]);
+  });
+
+  it("holding no options of its own - a template's - runs with those Settings, Calculations, keeps for its kind: Check structures, Stereoisomers", async () => {
+    try {
+      // (a radical kept, as Settings says, though the option's own default sets it aside)
+      useAppSettings.setState((s) => ({ ...s, options: { [stepRole("check-structures", "meno")]: { radicals: "keep" } } }));
+      const radical = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 3, most: 4, radicals: 1, part: 0 }] };
+      facts = () => [FINE, radical, FINE];
+      const checked = await ran("check-structures", [], true);
+      expect(checked.step.options).toBeUndefined();
+      expect(checked.step.ran).toMatchObject({ ok: true, said: "3 of 3 kept" });
+      // (Stereoisomers asked with Settings' number at most, not the option's own)
+      useAppSettings.setState((s) => ({ ...s, options: { [stepRole("stereoisomers", "meno")]: { most: 7 } } }));
+      answer = () => ({ structures: [{ kept: true }, { kept: true }, { kept: true }] });
+      await ran("stereoisomers", [], true);
+      expect(stereoAsked[0].options).toMatchObject({ most: 7 });
+    } finally {
+      useAppSettings.setState((s) => ({ ...s, options: {} }));
+      facts = (structures) => structures.map(() => FINE);
+    }
   });
 
   it("keeps what a step worked out of each structure on its record, beside what it had, saying what worked it out", async () => {

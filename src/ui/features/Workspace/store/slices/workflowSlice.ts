@@ -11,8 +11,9 @@ import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
 import { styleOf } from "../../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
-import { byOf, kindsOf, optionsFor } from "../../workflow/doers";
+import { byOf, kindsOf, optionsFor, optionsNeed, stepRole } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
+import type { Bound } from "../../../../../lib/boundOptions";
 import * as wf from "../../workflow/model";
 import { heldSets } from "../../workflow/onPage";
 import { appendParts, partsBounds } from "../../workflow/parts";
@@ -29,7 +30,7 @@ type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
 /** The role a kind of step's defaults are kept under, as who does it takes them - set in Settings, Calculations (lib/settings/appSettings `options`). */
-export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
+export { stepRole };
 
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, steps and wires,
@@ -148,8 +149,16 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       });
       return id;
     },
+    putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => {
+      const id = get().addStep(kind, by, x, y, from);
+      // (one that cannot run until a value of its options is given - a window, the chemist's own: its card opened, the field asking
+      //  for it focused, so that the ask is seen as it is put down)
+      const put = doc.getState().steps?.find((s) => s.id === id);
+      if (put && optionsNeed(put)) get().setWorkflowView({ openStep: id });
+      return id;
+    },
     moveStep: (id: number, x: number, y: number, gesture?: string) => doc.edit("move step", (d) => wf.moveStep(d, id, x, y), coalesce("step-move", id, gesture)),
-    updateStep: (id: number, patch: { options?: Record<string, string | number | boolean>; kind?: StepKind }) => {
+    updateStep: (id: number, patch: { options?: Record<string, string | number | boolean>; kind?: StepKind; bound?: Bound }) => {
       const step = doc.getState().steps?.find((s) => s.id === id);
       if (!step) return;
       const by = byOf(step);
@@ -163,6 +172,13 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       }
       // (the step's alone: the defaults are Settings', and stay as they are - one undo step for a run of changes to the same
       // option, close together: a number stepped by an arrow key held down, as typing is)
+      // (an option taken from a property, or given back its own value: one undo step each)
+      if (patch.bound) {
+        const bound = patch.bound;
+        // (a name typed into it one undo step, as typing into a field is)
+        const which = Object.keys(bound).sort().join(",");
+        doc.edit(Object.keys(bound).length >= Object.keys(step.bound ?? {}).length ? "take an option from a property" : "give an option its own value", (d) => wf.updateStep(d, id, { bound }), { coalesceKey: `step-bound:${id}:${which}` });
+      }
       if (patch.options) {
         const options = patch.options;
         const changed = Object.keys(options).filter((k) => options[k] !== step.options?.[k]).sort().join(",");

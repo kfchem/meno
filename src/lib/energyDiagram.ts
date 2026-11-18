@@ -413,11 +413,12 @@ const noLevel = (reference: string) => `No level is called "${reference}"`;
  * named `names` as they come in, shown as *Levels* `text` gives them: it is
  * neither name of any (as `diagramOf` takes it). None, where it names one,
  * is blank - the first - or where the levels themselves cannot be shown, which
- * `diagramOf` says.
+ * `diagramOf` says; nor where no level has come in yet - a set before the
+ * steps that fill it have run - as there is nothing yet it could name.
  */
 export function referenceNeed(names: readonly string[], text: string, reference: string | undefined): string | undefined {
   const r = reference?.trim();
-  if (!r) return undefined;
+  if (!r || !names.length) return undefined;
   const listed = arranged(
     [...new Set(names)].map((name) => ({ name })),
     text,

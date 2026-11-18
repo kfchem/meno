@@ -56,8 +56,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Group | Role | Filled today by |
 | --- | --- | --- |
 | Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG); each program's own plugin, for its program's outputs; cclib, as a reading of its own; PySCF - see FILE-IO.md |
-| Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
-| Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
+| Chemistry (core) | Structures from SMILES, and SMILES from structures | RDKit (its worker's `from_smiles`, `to_smiles`) |
+| Chemistry (core) | the checks: hydrogens, valence, aromatic rings (one role since 2026-10-10: one request gives them all). R/S, E/Z and an axis's Ra/Sa are Meno's own (docs/CIP.md), on the drawing and in 3D: what the plugin sends of them is never read | RDKit (`analyse`) |
 | Chemistry (core) | stereoisomers: the elements that could be stereogenic, and the stereoisomers of what Meno says is left open | RDKit (`stereo_elements`, `stereoisomers`) |
 | Workflows | new structures from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set - a whole number from 1 (REINVENT 4 takes 0 as no seed given) - so that the same asking gives the same SMILES; each handed on as sampled, with its NLL and SMILES_state - every one it samples, those it marks a duplicate or could not read among them (its own filter left off, `unique_molecules = false`: which are the same and which are kept are Meno's *Duplicates* and *Filter*), nothing made of it, nothing refused. An option outside what it may be is refused in words, never run as another (2026-11-02) (*Generate*, below) |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
@@ -96,8 +96,8 @@ embed both.
   `EntryStereo`) and compares entries by `stereoIdentity`: the key with
   the plugin and version that made it, so that keys of two versions are
   never taken for one another. An element left open, or a molecule not
-  perceived, matches nothing. CIP labels (R and S, E and Z) are the
-  checks' role, for showing, and are never part of it.
+  perceived, matches nothing. CIP labels (R and S, E and Z) are
+  Meno's own, for showing (docs/CIP.md), and are never part of it.
 - **A centre of three bonds the plugin leaves unspecified is Meno's to
   read** (`lib/chem/lonePairsIn3d`). Of every element the plugin gives as a
   centre with no configuration, those of three bonds, a lone pair the
@@ -224,8 +224,15 @@ alone.
   documents is one there. As Meno starts, each version's folder its
   plugin's `current` does not name - one an update replaced, one half put
   in place - is taken away, but none of a plugin a job of which is waiting
-  or running (`tidy`; `plugin_jobs_running` asks the same). `.staging/` and
-  `catalogue*` in `plugins/` are the catalogue's.
+  or running (`tidy`; `plugin_jobs_running` asks the same). Nor any of a
+  plugin whose `current` names no version in place - none, one that cannot
+  be read at that moment (a file a virus scanner holds), or one naming a
+  folder that is not there or holds no readable manifest: which version
+  it uses is then not known, so every one is kept, and Meno's log says so
+  ("rdkit: its current names no version in place, so none of its 2
+  versions were taken away"). Until 2026-11-13 every folder was taken for
+  unused there, the one in use too. `.staging/` and `catalogue*` in
+  `plugins/` are the catalogue's.
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's
@@ -272,7 +279,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `quotedTables` | list of `{id, headings, heads?, columns}` | A table of atoms the program prints in a form of its own, as papers quote it: `headings` the lines that head it and `heads` the lines of its columns' heads (each the start of its line, without regard to case or how many spaces), and `columns` its columns in turn, from `centre`, `atomic-number` or `element` (one of the two), `type` (a number of the program's own, read as nothing) and `x`, `y`, `z`. Read only where the plugin is added; where only a plugin not added declares it, none of such a table is read, and Meno names the plugin (FILE-IO.md, *Coordinates in a text*; 2026-11-01). |
 | `xyzSteps` | list of `{id, file?, comment?}`, one or both | The XYZ files the program writes whose frames are an optimisation's steps, which of them converged not said in the file (its output says it): `file` the file's name as the program's documentation or its own output gives it, `*` any run of characters (`xtbopt.log`, `*_trj.xyz`), matched in any case; `comment` a regular expression every frame's comment line matches, so that the file is known renamed too (xtb's `energy: ... gnorm: ...`, ORCA's `Coordinates from ORCA-job <name> E ...`) - of a file of two frames or more, and never an ensemble's (a conformer search's, a relaxed scan's points). None of such a file's frames is an entry of a set, and the molecule says why (docs/WORKFLOWS.md, *Compound sets and conformer sets*). A file no plugin names is read as before, every frame an entry. |
 | `roles` | list of `{role, programs?, options?, looks?, motions?, unsure?, hosts?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below); and, for *Structures read from pictures*, the confidence its model reports below which Meno says a part of its reading is unsure, and on what that was set (`unsure: {below, basis}`: a number between 0 and 1, and its basis in words). Each model's confidence is its own, not on one scale with another's, so each plugin says its own; none, and nothing is said unsure for its confidence (PDF.md, *A picture read*). For *Talking with a model*, the hosts it talks to (`hosts`: each a host's name exactly, 1 to 8 - no pattern, address or port): the role is not its without them, and no other role names any (CONVERSATIONS.md, *Talking through a plugin*). |
-| `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?, noLoneAtom?, solvation?, restraints?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. Only kinds that run a program (*Conformers*, *Optimise*, *Energy*, *Frequencies*, *Render* and the like): one of Meno's own - its judgements, which are the same, which kept, how many, how weighted (*Duplicates*, *Energy window*, *Filter*, *Rank*, *Choose*, *Populations*, *Ensemble*, *Barrier*, *Add*...), and its rules that run no program (`MENO_ONLY`), *Check structures* among them, which decides on the facts the plugin that does the checks gives (`structure_facts`, below), and *Stereoisomers*, on what the plugin that finds stereoisomers perceives and makes (`stereo_elements`, `stereoisomers`) - is left out, as a kind Meno does not define is (the plugin boundary, 2026-10-31). `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true` on *Generate* where it makes from seeds: the step then takes *Seeds*, structures drawn (*Generate*, below). `noLoneAtom`: `true` on *Conformers* or *Optimise* where its program is given no lone atom (CREST's): such an entry is never sent, and passes through Meno's step as it came, with no energy and no calculation, said so on it and on the step's line (WORKFLOWS.md, *Kinds of step*; 2026-11-01). Said of another kind, it is left out: an entry it does not run is the plugin's to refuse, entry by entry (`refused`). `solvation`: `{says, none: {id, is}}`, how its options ask for a solvation, in the words its program says one it ran in: `says` those words, each option's value put in where its id stands in braces (xTB's and CREST's `ALPB({solvent})`), `none` the option and value that ask for none (`{"id": "solvent", "is": "none"}`). Each option named is a choice of the step's own; one that is not, and the whole is left out. Meno holds what each job's output says it ran in to that, refusing an entry where it is not, whatever program ran it (WORKFLOWS.md, *Solvation as asked*; 2026-11-04). `restraints`: on *Minimise with restraints*, *Optimise* or *Path search*, the kinds of restraint its program holds as it runs - `"fixed"`, atoms fixed where they stand; `"distance"`, `"dihedral"`, held by a strength (restrained); `"distance-exact"`, `"dihedral-exact"`, held exactly at their value (constrained) - the rows of a *Restraints* table wired into the step's *Restraints* input (WORKFLOWS.md, *Restraints wired in*; 2026-11-11). A row of a kind it does not name is refused before anything is sent, per entry, in words: never held another way, restrained for exact or exact for restrained. A *Minimise with restraints* step whose plugin names none holds `"fixed"`, `"distance"` and `"dihedral"`, what the kind is for. Where restraints are wired in and it names `"fixed"`, Meno gives the step its option `hold`, `"fixed"`, with the plugin's own, and each entry its `restraints`, their atoms from 0. Said of another kind, it is left out; a kind of restraint Meno does not know is left out too. |
+| `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?, noLoneAtom?, solvation?, restraints?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. Only kinds that run a program (*Conformers*, *Optimise*, *Energy*, *Frequencies*, *Render* and the like): one of Meno's own - its judgements, which are the same, which kept, how many, how weighted (*Duplicates*, *Energy window*, *Filter*, *Rank*, *Choose*, *Populations*, *Ensemble*, *Barrier*, *Add*...), and its rules that run no program (`MENO_ONLY`), *Check structures* among them, which decides on the facts the plugin that does the checks gives (`structure_facts`, below), and *Stereoisomers*, on what the plugin that finds stereoisomers perceives and makes (`stereo_elements`, `stereoisomers`) - is left out, as a kind Meno does not define is (the plugin boundary, 2026-10-31). `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true` on *Generate* where it makes from seeds: the step then takes *Seeds*, structures drawn (*Generate*, below). `noLoneAtom`: `true` on *Conformers* or *Optimise* where its program is given no lone atom (CREST's): such an entry is never sent, and passes through Meno's step as it came, with no energy and no calculation, said so on it and on the step's line (WORKFLOWS.md, *Kinds of step*; 2026-11-01). Said of another kind, it is left out: an entry it does not run is the plugin's to refuse, entry by entry (`refused`). `solvation`: `{says, none: {id, is}}`, how its options ask for a solvation, in the words its program says one it ran in: `says` those words, each option's value put in where its id stands in braces (xTB's and CREST's `ALPB({solvent})`), `none` the option and value that ask for none (`{"id": "solvent", "is": "none"}`). Each option named is a choice of the step's own; one that is not, and the whole is left out. Meno holds what each job's output says it ran in to that, refusing an entry where it is not, whatever program ran it (WORKFLOWS.md, *Solvation as asked*; 2026-11-04). `restraints`: on *Conformers*, *Minimise with restraints*, *Optimise*, *Path search* or *Optimise to a saddle point*, the kinds of restraint its program holds as it runs - `"fixed"`, atoms fixed where they stand; `"distance"`, `"dihedral"`, held by a strength (restrained); `"distance-exact"`, `"dihedral-exact"`, held exactly at their value (constrained) - the rows of a *Restraints* table wired into the step's *Restraints* input (WORKFLOWS.md, *Restraints wired in*; 2026-11-11). A row of a kind it does not name is refused before anything is sent, per entry, in words: never held another way, restrained for exact or exact for restrained. A *Minimise with restraints* step whose plugin names none holds `"fixed"`, `"distance"` and `"dihedral"`, what the kind is for. Where restraints are wired in and it names `"fixed"`, Meno gives the step its option `hold`, `"fixed"`, with the plugin's own, and each entry its `restraints`, their atoms from 0. Said of another kind, it is left out; a kind of restraint Meno does not know is left out too. |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?, parallel?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2aim`). And how it runs in parallel (`parallel`): `"threads"`, or unsaid - told its job's cores as its threads - or `"processes"`, as under MPI (ORCA's `%pal`): its job's cores, never more than the computer's physical cores, are its processes, each told one thread, and the queue counts each process as a whole physical core (WORKFLOWS.md, *Several at once*). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?, unpackedBytes?, cite?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped: of itself, from where it stopped (a range asked for, taken as the rest only where the server's reply says it begins there; all of it again where the server sends all of it, another range, or says the part is past its file's end), up to four times, after 2, 5, 15 and 30 seconds - each stop written to Meno's log, with how much came - and only then said to have stopped, with how much came of how much and how often it was taken up, the task failed with that reason in the network's record (`fetch_resuming`, 2026-10-24); what came is kept, and *Add* goes on from there. What came is kept under the file's name and its SHA-256's first twelve digits (`model.pth.<digits>.part`), so that what came of a file an older manifest named is never taken up as the new one's: it is thrown away. Once kept, a file is read through for its SHA-256 again once a launch - and again where its size or the time it was last changed is not what it was then - as the plugin is first used in a launch - set up, started, or its worker given its files - never at launch itself, where Meno asks only whether each is there at its size (2026-10-27; `there`): one there that is not its size, or whose SHA-256 is not the manifest's - changed or damaged since - is said plainly ("model.pth is not the file Meno downloaded: its size or fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since.") and asked about again, even where setting the plugin up was allowed, before it is downloaded anew over it; no, and the plugin does not run, saying the same. One that could not be read through - held by another program, not allowed, a share gone - is neither: said, with why, the plugin not run, and read again the next time; never fetched over. While its files are read through, where that takes more than a moment, Settings' *Plugins* and the workspace say so ("Checking its files…"). An archive Meno unpacked is as the stamp it left says: what it unpacked to is not read through again. Meno keeps the files it downloaded as they were: weights of one's own belong in a plugin of one's own, never put in place of these. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. One may be data compressed with gzip (`unpack: "gz"`, never a program), which Meno unpacks itself into `files/<its name without .gz>/`; it must give `unpackedBytes`, said when asking to set the plugin up, and is never unpacked past it. `cite` is how its makers ask to be cited, said there too. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
 | `depends` | list of `{plugin, versions, optional?, programs?, interfaces?, kinds?}` | The other plugins it uses (2026-10-31; *Depends*, below): each by its id, with the versions of it it works with (`">=0.1.4 <0.2.0"`, always bounded above), whether only some of its work needs it (`optional: true`), the interfaces of it it uses, each `{id, versions}` (*Interfaces*, below), the kinds of file of it a step of its takes (`kinds`, by their ids - Multiwfn's: the Gaussian interface's `gaussian-fchk`), and the programs of it its jobs may run, each `{program, env}` - a program that plugin's manifest declares, by the name it gives it, and the variable a job is told where it is in. ORCA's: the xTB plugin, `>=0.1.4 <0.2.0`, optional, its `xtb` in `XTBEXE`, for the xTB methods ORCA runs through the xtb program (`XTB2`, `GFN2-XTB`, `GFN-FF` and the rest; ORCA's own `NATIVE-GFN2-XTB` needs none). A job uses a program of one only where its plugin's worker says so of that job (`prepare`, a job's `needs`: the ids). Meno finds the program as that plugin's own jobs would. On macOS and Linux it is linked into the job's work folder under its own name, and the variable names it there (`./xtb`): a path with a space in it, as Meno's data folder has, is never given, as a program may take one as two words. On Windows its path is given, and refused where it has a space; it is never quoted. The link is never listed among the job's files: neither kept as a raw output nor saved in a workspace. That plugin's version is part of each job's key. Never the plugin itself; never one twice, nor a variable twice; never a shell; never a variable that finds or loads programs (`ENV_NEVER`), the network's way out, or the threads Meno sets. All as they must be, or the plugin is none (`src-tauri/src/jobs.rs` `needs_declared`, `lib/plugins/manifest`). |
@@ -548,11 +555,17 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     (however drawn), none from a
     carbon with a C=O, C=N, C=S, C=Se or C=Te out of it or a carbocation,
     two from a lone pair (pyrrole's N, furan's O, a carbanion), and a ring
-    with any other atom (a CH2, a fulvene's C=CH2) none. So a
+    with any other atom (a CH2, a fulvene's C=CH2) none; nor a ring of lone
+    pairs alone, with no pi bond and no empty p orbital in it (As4's and
+    P4's three-rings, a triaziridine): lone pairs complete a pi system and
+    never make one alone (backlog 182, 2026-11-16). So a
     fluoranthene's five-ring, aromatic in none of its own, is held flat,
     every atom of it lying on an aromatic six-ring; and so, whatever its
     count, is a ring drawn with aromatic bonds or bound to a metal through
-    all its atoms (a metallocene's). Cyclopentadiene's
+    all its atoms (a metallocene's) - a metal as the core's elements say
+    one is, Al among them, never Ge, As, Sb, Te, At, Ts or a noble gas (foundation
+    part 3, B4, 2026-11-16; before, any heavy atom with no most bonds
+    was). Cyclopentadiene's
     CH2 and cyclooctatetraene's eight pi electrons leave theirs free to
     pucker.
   - **a molecule that cannot change shape is worth ten**, the number
@@ -603,8 +616,16 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     kcal/mol until the chemist gives one, so that a 3D structure is made
     from fresh Settings with nothing asked first - the maintainer's choice
     (2026-11-08), no measured basis claimed. A step has none until given,
-    and is not ready until it has one. As a guide, 2.73 kcal/mol at 298.15
-    K is a conformer a hundredth as populated as the lowest (RT ln 100).
+    and is not ready until it has one: put down with none, its card opens
+    with the field focused (WORKFLOWS.md, *The window is the chemist's*);
+    run without one on structures drawn, it is refused at once in its
+    card's words ("Give the window for new conformers, in kcal/mol"):
+    nothing is asked of the plugin, and no structure is set aside for it -
+    never said as not made in 3D. A step keeps the options it was put down
+    with (WORKFLOWS.md, decided: 17): one put down before Settings asked for
+    a number keeps asking for as many as the molecule needs. As a guide,
+    2.73 kcal/mol at 298.15 K is a conformer a hundredth as populated as
+    the lowest (RT ln 100).
   - A search that takes no draws is asked once, as before. So is one
     whose conformers come back with no energies: there is nothing to
     tell a new low one by. A *Conformers* step on molecules in 3D, run
@@ -642,8 +663,11 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   first held*, it starts from the entry's `start`, which Meno writes on its
   result from where the entry stood as it came, the first time (case F's
   rounds each start from the geometry before the first, WORKFLOWS-FOUNDATION.md
-  F15). Its conformer search holds an entry's restraints too, as each
-  conformer is optimised, where the molecule has no metal (a metal's own
+  F15). Its conformer search holds the restraints wired into a
+  *Conformers* step's *Restraints* input too - where its manifest says
+  so for *Conformers* (`restraints`: `distance`, `dihedral`; a plugin
+  that says none is refused them, in words, before anything is sent) - as
+  each conformer is optimised, where the molecule has no metal (a metal's own
   holds are not yet combined with them); none fixed, since a search moves
   every atom. Either refusal is in words, before anything is embedded. Its
   *Held* row says the largest miss over the conformers it kept. A
@@ -936,8 +960,12 @@ fills.
 - **Starting it.** Once set up, the worker starts the first time it is
   asked for, not when Meno starts. In practice that is as soon as a
   structure is drawn, since the chemical checks run by themselves once
-  it is at hand (`useChemMarks`, `chemAtHand`). Its first import may
-  take a while; up to 90 s is allowed.
+  it is at hand (`useChemMarks`, `chemAtHand`). Quick Add, opened, starts
+  what reads a SMILES the same way, so that the first SMILES typed waits
+  for no start (`startAhead`): only a plugin set up and not taken away,
+  never set up or offered from there, and never when a wire's
+  calculations open it. Its first import may take a while; up to 90 s is
+  allowed.
 - **Keeping it.** It is then kept while it is used. If it stops, the next
   request starts it again.
 - **Stopped when unused** (the maintainer, 2026-10-13;
@@ -1067,14 +1095,27 @@ The same for every plugin and for Meno's own parts:
     never saved), `key` added by the backend alone
     (CONVERSATIONS.md, *Talking through a plugin*);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
+    {smiles}` (answered with `molblock`, and with `configuration` beside
+    it: see below), `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
     reaction as an RXN file holds it, as a reaction SMILES), and
     `smiles_read {smiles}` (what the toolkit makes of a SMILES, as facts:
     whether it reads, whether it parses at all, and the problems its own
     check finds, each with the atoms it names - `{reads, parsed,
     problems}`) (SMILES). A SMILES that cannot be read is refused in
     those words alone, "This SMILES could not be read.": why is Meno's to
-    say, from the SMILES itself and those facts (`lib/chem/smilesWhy`);
+    say, from the SMILES itself and those facts (`lib/chem/smilesWhy`).
+    **A drawing's configuration beside it:** an answer that carries a
+    drawing block - `from_smiles`, `drawing_of`, and each stereoisomer
+    drawn by `stereoisomers` - carries `configuration` beside it: each
+    centre and double bond the toolkit holds a configuration for, by the
+    block's own atom and bond numbers (`{centres: [{atom, neighbours,
+    sense}], doubles: [{bond, ends, cis}]}`; `sense` +1 where det(n1 - c,
+    n2 - c, n3 - c) is positive in a right-handed frame, the neighbours
+    in the order given; `ends` an atom on each end, `cis` whether the two
+    are on one side). Meno lays its own drawing out from that, never from
+    the block's wedges: the block is only places for Meno's engine to lay
+    out again (LAYOUT-2D.md, *A structure from a plugin*). A plugin that
+    sends none is read as before, its block's wedges read as a file's;
     `analyse {molblock}`
     (the checks, R/S and E/Z among them); `structure_facts {structures:
     [{molblocks}]}` (what the toolkit makes of each structure drawn, its
@@ -1088,7 +1129,7 @@ The same for every plugin and for Meno's own parts:
     `kind`, the atom or bond it is `at` and its `state`: `specified`,
     `unspecified`, or `unknown`, drawn as not known - none left out; what
     is left open, which atoms of three neighbours are centres by their
-    lone pair (lib/chem/lonePairCentres), which C=N bonds are never
+    lone pair (lib/chem/perception/stereo/lonePairs), which C=N bonds are never
     enumerated and which open double bonds are cumulated are Meno's:
     lib/chem/stereoOpen);
     `stereoisomers {molblocks, open, configured?, notEnumerated, most,
@@ -1107,12 +1148,18 @@ The same for every plugin and for Meno's own parts:
     tried - Meno's number, where the role says `tries`; `draw`, which
     set of tries, where it also says `draws` - with the role's
     options, and `options.threads`, how many threads it may use: the
-    cores Settings, *Calculations*, gives a job (a plugin that does not
+    cores Settings, *Calculations*, gives a job - for a search made on
+    the page (a 3D structure made from a drawing, an atom map's), where
+    Settings sets no number, all but one of them, at least one, so that
+    the page is drawn on the one left while it searches (lib/jobs
+    `pageThreadsOf`; a search on every core starved the page of its
+    frames) - (a plugin that does not
     know it ignores it, and takes every core as it did): every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies` - each stereoisomer made itself);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
-    answered with whether it found the bond orders, `perceived`),
+    answered with whether it found the bond orders, `perceived`, and with
+    `configuration` beside its block),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
     {molblock, hydrogens?}` (its bond orders from a SMILES, its hydrogens
     added - as many on each atom as `hydrogens` says, by atom, where it is
@@ -1199,7 +1246,10 @@ The same for every plugin and for Meno's own parts:
     the folder its jobs' PATH begins with (2026-10-31);
   - a job `prepare` gives may take fewer cores than it was given
     (`"cores": 1`): ORCA's, where the computer has no MPI to run its
-    processes with. Meno
+    processes with - and, on every computer, where ORCA computes a
+    Hessian numerically at its own xTB (frequencies, and a saddle
+    point's first Hessian "computed"), which it runs serially (ORCA
+    plugin 0.5.9: WORKFLOWS.md, *ORCA in parallel*). Meno
     asks for it at that many, never more than Settings gives, and the
     queue counts it so (2026-10-31);
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
@@ -1412,8 +1462,9 @@ end to the other, each with its energy; `converged` true for the point it
 started from alone, which becomes the molecule's entry frame; a frames
 result `path.frame` saying what each frame is, "the point it started from"
 for that one. Where a side stopped before its end, `optimised` false and a
-warning in the program's words: the molecule goes out of *Failed*, the path
-as far as it came.
+warning in the program's words: the molecule is kept with the others, the
+path as far as it came, its ends where it stopped for the steps after it,
+and the step's line says how many.
 
 ### Optimise to a saddle point
 
@@ -1476,7 +1527,8 @@ of odd valence - is for the general steps after it, and for
 - `said`: the run in a line.
 
 Meno reads each SMILES itself, as one pasted is (the roles'
-`from_smiles`, laid out by Meno's engine: `chem/fromSmiles` `drawingOf`).
+`from_smiles`, laid out by Meno's engine from the configuration the
+answer carries: `chem/fromSmiles` `drawingOf`).
 Each becomes a structure drawn of its own in the step's result set, in the
 order given. Its record (WORKFLOWS.md, *A structure drawn's record*) holds
 the SMILES as given (`smiles`), the model's values, each `computed` by
@@ -1567,7 +1619,22 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   input, matched to it (WORKFLOWS.md, *Restraints wired in*) - as
   `restraints`, and `start`, the places a minimisation first held them
   at, where one has. The RDKit plugin holds them (*Minimise with
-  restraints, and a search that holds them*, below). A step that holds
+  restraints, and a search that holds them*, below). The ORCA plugin's
+  *Optimise* holds a distance or a dihedral exactly in its `%geom`
+  block's constraints, as ORCA's manual writes them - `{B a b value C}`
+  in Å, `{D a b c d value C}` in degrees, written in (-180, 180] - and
+  atoms fixed as `{C a C}`, atoms from 0; to a saddle point, atoms fixed
+  alone; one held by a strength it refuses (meno-plugins: the ORCA plugin
+  of the release that holds exact rows).
+  The Gaussian plugin holds atoms fixed alone, in an optimisation or to a
+  saddle point: `Opt=ModRedundant` with `X n F` for each, atoms from 1,
+  after each molecule specification, and `NoSymm` so that they come back
+  in the orientation they were given; a distance or a torsion it refuses,
+  as the reference's ModRedundant input freezes a coordinate where it
+  stands, at no value it is given (meno-plugins: the Gaussian plugin of
+  the same release). What
+  each held is checked where its run ended (WORKFLOWS.md, *Restraints
+  wired in*). A step that holds
   none - an *Optimise*, an *Energy* - is given them all the same and leaves
   them aside: what its program gives back is unheld. It need not refuse
   them, as case F optimises, unheld, what it minimised with restraints
@@ -1644,12 +1711,12 @@ comes in its own pull request.
   - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint;
-  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is got again (*Plugins used before*).
+  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is added again (*Plugins used before*).
 
   Beside its plugins, the list may name those no longer offered
   (`retired`), each by its id, its name (at most 60 letters) and why, in
   words, at most 160 ("Meno reads these files itself now"), so that one
-  set up before is said not to be got again, and why. None on offer may be
+  set up before is said not to be added again, and why. None on offer may be
   among them: a plugin is said either not made for here or no longer
   offered, never both.
 - **Read strictly, whole.** The backend checks the signature before
@@ -1729,11 +1796,11 @@ comes in its own pull request.
   added uses - has *Remove its files*, asking first: the version in use
   unnamed, then its folder, as the plugins in place are read (`installed.rs`,
   the backend's one rule for where they are); then they are read again,
-  and it is gone at once. It can be got again from the list.
+  and it is gone at once. It can be added again from the list.
 - **Offered where it is needed** (2026-11-05). Where a role is asked of -
   a SMILES drawn, a structure made in 3D - and no plugin here fills it,
-  the line that says so ("Needs a plugin: SMILES to a structure, and
-  back.") offers the plugins online that fill it, each to
+  the line that says so ("Needs a plugin: Structures from SMILES, and
+  SMILES from structures.") offers the plugins online that fill it, each to
   add: got, then set up as any plugin is, asking first. Where the list is
   not here yet, it offers to list them, asking first too; offline, it says
   the list needs the network. The list is fetched only with the
@@ -1765,7 +1832,7 @@ starts with none in place. As it first starts, it offers to get those again
     window, and asked again as Meno next starts, unless the chemist chooses
     *Don't ask again* there.
   - With the list fetched: whether to get them, each by its name and the
-    size of its files. Those not got again are said in it, each with why:
+    size of its files. Those not added again are said in it, each with why:
     another system's or a newer Meno's, no longer offered as the list says
     (`retired`), or not on it at all; where none is got, that is said
     once. With them is offered what the list says brings presets for one
@@ -1780,6 +1847,50 @@ starts with none in place. As it first starts, it offers to get those again
   where there is nothing to get. Offline, where the list could not be
   fetched, or where one could not be got, it says so and asks again as
   Meno next starts, for those not in place.
+
+### First start
+
+Where no plugin here reads and writes SMILES, nothing was set up here
+before (that is *Plugins used before*), the card was never answered and
+Meno is online, a card at the edge of the window asks once: *Set up
+chemistry?*, with *Set up* and *Not now* (`lib/plugins/firstSetUp`,
+`ui/network/FirstSetUpCard`). It holds up nothing and takes no key: the
+page works whether or not it is answered.
+
+- **Which question goes where.** A question Meno asks of its own accord
+  comes on the card; a question that answers the chemist's own click comes
+  over the page, as ever. A card left unanswered holds up no other
+  question.
+- **What the one yes covers, and nothing more.** The card names, before
+  the click, every host its yes lets the set-up reach: the list of plugins
+  online and the plugin's files (the list's hosts), uv and Python from
+  Astral, the packages from the Python Package Index - one list with the
+  lines it shows (`lib/plugins/setUpSources`). The plugin is found on the
+  list by its role, never by a name in the core; the card names it, its
+  licence and its size once the list has them, and says each step as it
+  goes, with *Stop*.
+- **Anything beyond it stops the card**, which shows that question in its
+  place and waits: a host the card did not name, a file beside the
+  plugin's packages, terms, or another plugin it uses first. Where the list
+  offers more than one plugin for the role here, or none, the card shows
+  each to add, or why not, as the line under the SMILES field does.
+- **A SMILES typed meanwhile waits** for the set-up, and is drawn when it
+  is ready, while Quick Add stays open.
+- **Not now** is kept: never asked again of itself. Chemistry is then set
+  up from the line under the SMILES field, or in Settings, *Plugins*.
+- **A failure** is said on the card, with *Try again* - on the card alone,
+  not again in a notice. *Dismiss* there is *Not now*. A yes whose set-up
+  did not finish (Meno closed while it ran) is taken up again as Meno next
+  starts, with no question. A plugin whose files are here already but
+  which was not added - its set-up failed after its files came - is the
+  one set up, by *Try again* and as Meno next starts, its files not got
+  again; one here at another version than the list's is not, and the card
+  shows what the list offers to add instead. A plugin the chemist took away
+  in Settings counts as their answer: the card is not offered. While the
+  card sets chemistry up, the line under the SMILES field says its step in
+  the card's words, with its share as the files download.
+  *Stop* ends it for good. A step under way (a download, uv building the
+  environment) runs to its end, as nothing can cut it short today.
 
 ## Decided
 

@@ -35,3 +35,37 @@ describe("a role's options in a card", () => {
     expect(html).not.toContain('type="radio"');
   });
 });
+
+describe("a card's options opened to ask for what it needs", () => {
+  const options: Option[] = [
+    { id: "within", label: "Within", type: "number", default: Number.NaN, min: 0, unit: "kcal/mol" },
+    { id: "other", label: "Other", type: "number", default: Number.NaN },
+    { id: "count", label: "Count", type: "number", default: 3 },
+  ];
+  /** The labels of the fields marked as asked for, in order. */
+  const asked = (html: string) => [...html.matchAll(/<label class="block"><span[^>]*>([^<]+)<\/span><span[^>]*><input[^>]*data-asked="true"/g)].map((m) => m[1]);
+  it("takes the first number that holds none - only it", () => {
+    expect(asked(renderToString(<OptionsForm options={options} values={{}} onChange={() => {}} asks />))).toEqual(["Within"]);
+    expect(asked(renderToString(<OptionsForm options={options} values={{ within: 2.5 }} onChange={() => {}} asks />))).toEqual(["Other"]);
+    expect(renderToString(<OptionsForm options={options} values={{ within: 2.5, other: 1 }} onChange={() => {}} asks />)).not.toContain("data-asked");
+  });
+  it("takes none where it is not opened to ask", () => {
+    expect(renderToString(<OptionsForm options={options} values={{}} onChange={() => {}} />)).not.toContain("data-asked");
+  });
+
+  it("offers a number or text option's value from a property by a button beside it, named on hover; taken so, the property's name in its place", () => {
+    const options: Option[] = [{ id: "strength", label: "Strength, kcal/mol/rad\u00b2", type: "text", default: "50", unit: "kcal/mol/rad\u00b2", fromProperty: true }];
+    const binds = (bound: Record<string, string>) => ({ can: () => true, bound, offered: ["k", "start"], onBind: () => {} });
+    const own = renderToString(<OptionsForm options={options} values={{ strength: "50" }} onChange={() => {}} binds={binds({})} />);
+    expect(own).toContain('aria-label="From a property"');
+    expect(own).toContain('aria-pressed="false"');
+    expect(own).toContain('value="50"');
+    const taken = renderToString(<OptionsForm options={options} values={{ strength: "50" }} onChange={() => {}} binds={binds({ strength: "k" })} />);
+    expect(taken).toContain('aria-pressed="true"');
+    expect(taken).toContain('value="k"');
+    expect(taken).toContain('title="k: each entry&#x27;s own, as it comes in"');
+    expect(taken).not.toContain('value="50"');
+    // (none offered without it: a form for Settings, or a step that takes nothing in)
+    expect(renderToString(<OptionsForm options={options} values={{ strength: "50" }} onChange={() => {}} />)).not.toContain("From a property");
+  });
+});

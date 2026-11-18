@@ -10,7 +10,7 @@ How to draw structures on the page with the pointer: bonds out of atoms, chains 
 
 ## Starting on empty space {#quick-add}
 
-Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked.
+Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked. Or just type a SMILES: it goes into the SMILES field. The first SMILES takes a moment.
 
 ## Bonds and atoms {#bonds}
 
@@ -20,8 +20,9 @@ Point at an atom, and it lights up: what comes next is done to it.
 - Double-click and drag to lead the bond where you want it. It snaps to the usual angles; pause while dragging, and it goes exactly where the pointer is.
 - Drag an atom to move it. Dropped on another atom, it becomes that atom.
 - Lead a bond onto an atom already there, and it closes the ring.
-- Click a single bond to make it a wedge, again for a hashed wedge, and again for a plain bond; the next wedge then has its narrow end at the other atom. A wavy, bold, bold dashed, dashed or dative bond clicked becomes plain, a double bond single, and a triple bond double.
+- Point at a bond and press 1, 2 or 3 to make it single, double or triple. Press 1 again on a single bond for a wedge, again for a hashed wedge, and again for a plain bond; the next wedge then has its narrow end at the other atom. Press 2 again on a double bond to move its second line. A key changes only the bond under the pointer.
 - Double-click a bond to make it double; triple-click it to make it triple.
+- Click a bond to turn it: a double or triple bond becomes single; a single bond goes round wedge, hashed wedge, and plain with its other end narrow.
 
 ## Chains and rings {#chains}
 
@@ -33,15 +34,16 @@ Double-click empty space and choose *Chain* from the icons, or choose *Chain fro
 
 ## A chair {#projections}
 
-Double-click empty space and open *Projections*, then choose *Chair*: a cyclohexane chair is put down where you double-clicked, drawn as a chair is drawn, with its near edge bold.
+Double-click empty space and open *Projections*, then choose *Chair*: a cyclohexane chair is put down where you double-clicked, drawn as a chair is drawn, seen from above and from the right, every bond plain.
+
+- Click *Chair* again, before doing anything else, for the view from the other side; again, and it comes back. Each is one step to undo.
 
 - Double-click an atom of the chair and drag out a bond: it goes to one of the atom's two places, axial or equatorial, whichever is nearer the pointer, and says which. It cannot be left between the two. Where a group makes a stereocentre, its R or S is shown.
-- Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* leaves a chair as it is drawn.
-- Right-click a ring bond of the chair for a second ring fused on it: *Fuse a chair, trans*, *Fuse a chair, cis on the upper face* or *Fuse a chair, cis on the lower face*. Which of the two cis fusions is meant matters once the ring carries a group, so both are offered.
+- Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* keeps the chair as it is drawn and tidies the groups on it.
 - A chair states the configuration of every centre in it. To leave one open, make its bond wavy.
 - A 3D structure made from a chair takes the drawing's configuration, not the conformation it is drawn in.
 
-Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose) and one of five (a furanose), seen from slightly above with the ring oxygen behind and the front edge bold. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which.
+Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose); click it again, before doing anything else, for one of five (a furanose). It is seen from slightly above with the ring oxygen behind, its front bond bold and the two bonds beside it wedge-shaped. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which. The next bond out of that group turns aside, so a CH2OH reads as CH2 and OH; make that bond triple and it straightens, as a nitrile is drawn. A group pointing into the ring - such as a CH2OH on C-5 pointing down - has room for one label: type CH2OH on its atom.
 
 *Projections* also has a Newman projection: two carbons seen end-on, drawn at one place with a circle round them. The front carbon's bonds meet at the circle's centre; the back carbon's start at its rim. A bond led out of either carbon goes to one of its three places, and the tip says *front* or *back*. Drag a bond's end round the circle to turn all three groups of its carbon together; the compound is the same. Neither carbon can be given a label.
 
@@ -49,16 +51,18 @@ Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose) and o
 
 Point at an atom and type: O, NH2, OMe, Ph. The label is written where it stands, and kept when the pointer moves on. To change a label, choose *Edit label* on the atom's right-click menu.
 
+With atoms chosen, just type: the label goes to every chosen atom, wherever the pointer is, and a small count says how many. Press Enter to keep it, Escape to let it go.
+
 ## Right-click: what an atom or a bond can be {#menus}
 
-Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list.
+Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list. A right-click chooses what it is on; the menu's first line says what it acts on - *This atom*, or *3 atoms, 2 bonds* when you right-click one of several chosen. Then an atom's charge, or a bond's kind, is set on every chosen atom or bond at once, and *Cut* and *Copy* take everything chosen.
 
 - An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Electron-pushing arrow*, *Fishhook arrow*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here*, *Unpaired electron*, *Select this structure* and *Magnification*.
-- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*, which opens a second row of *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*, and *Delete bond*. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
+- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* opens a second row: *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*. *Delete bond* is last. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
 
 ## Choosing what to work on {#selecting}
 
-- Click an atom to choose it alone. Hold ⌘ (Ctrl on Windows) and click to add or take out an atom or a bond, or hold Shift and click to take everything along the bonds from the last atom chosen to this one.
+- Click an atom to choose it alone. Hold ⌘ (Ctrl on Windows) and click to add or take out an atom or a bond, or hold Shift and click to take everything along the bonds from the last atom chosen to this one. A bond is chosen with ⌘ (Ctrl), a right-click, a box or a lasso.
 - Press and hold on an atom or a bond to choose its whole structure; drag from there to move it.
 - Press and hold on empty space, then drag, to choose what a box holds - with Option (Alt on Windows) held, what a lasso encloses.
 - ⌘A (Ctrl+A) chooses everything; a click on empty space, or Escape, nothing.
@@ -79,3 +83,4 @@ Copy what is chosen (⌘C, or Ctrl+C) and paste it into a Word document or a Pow
 
 - On a Mac: to change it, copy it in Word or PowerPoint - or drag it - back onto Meno's page. It comes back as the structure it was; change it, and copy it over again.
 - On Windows: double-click it in Word or PowerPoint, and Meno opens it. What you change there goes back into the document.
+- The labels are set in IBM Plex Sans, Meno's label font. Meno installs it for you - on Windows when Meno is installed, on a Mac when Meno first starts - and Settings, *Copied pictures*, says whether it is installed. To send a presentation to someone who does not have it, turn on PowerPoint's *Embed fonts in the file* (in *Options*, *Save*) before saving, and the labels look the same on their computer.

@@ -1,5 +1,5 @@
 import { jobStateSaid } from "../utils/texts";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STOPPED_ALONE, type Job, type JobAsk } from "../../../../lib/jobs";
 
 /** The jobs, as the test has them: each one's record, its log and its files; and what was asked. */
@@ -162,6 +162,8 @@ vi.mock("../../../../lib/calc/asks", async (actual) => {
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { useReaders } from "../../../../lib/calc/workers";
+import { PLUGINS } from "../../../../lib/calc/catalog";
+import type { Option } from "../../../../lib/options";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { useInstalled } from "../../../../lib/plugins/installed";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
@@ -177,6 +179,8 @@ import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
 import { RESTRAINTS_INPUT } from "../workflow/kinds";
+import { holdTable } from "../workflow/model";
+import { restraintRowsIn, restraintsTable } from "../../../../lib/steps/restraints";
 import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
@@ -382,6 +386,123 @@ describe("a step that runs a plugin's program", () => {
       const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
       expect(out).toHaveLength(1);
       expect(out[0].calc?.held).toEqual([0, 2]);
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    next = 1;
+    {
+      const { st, step } = await page({ fixed: "1", distances: "2-3" });
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds a distance only exactly, not by a strength: distance 2-3") });
+    }
+  });
+
+  it("holds a distance exactly where its plugin says it can - its molecule no stationary point after - and fails one whose distance ended off its value", async () => {
+    // (water tagged, given a Restraints table, its row then made one holding O-H exactly - as a table read from a file
+    //  says one - and optimised by Tightbind, whose optimisation holds a distance exactly; the test's program moves every
+    //  atom alike, so O-H ends where it began)
+    const exactly = async (value: number) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, fixed: "1" } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const table = made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!;
+      const read = restraintRowsIn(table.table!);
+      if ("why" in read) throw new Error(read.why);
+      const row = { ...read.rows[0], restraint: { kind: "distance" as const, atoms: [0, 1], value, exact: true as const } };
+      made.doc.amend((x) => holdTable(x, table.id, restraintsTable([row])));
+      const step = made.st().addStep("optimise", "tightbind", 20, 0);
+      made.st().connect({ set: tagged }, step);
+      made.st().connect({ set: table.id }, step, RESTRAINTS_INPUT.id);
+      const ran = made.st().runStep(step);
+      await settle();
+      await settle();
+      const [sent] = worker.prepare.mock.lastCall![1] as { restraints?: unknown[] }[];
+      expect(sent.restraints).toEqual([{ kind: "distance", atoms: [0, 1], value, exact: true }]);
+      end(1);
+      await made.st().lookAtJobs();
+      await ran;
+      worker.prepare.mockClear();
+      jobs.clear();
+      next = 1;
+      return { st: made.st, step };
+    };
+    const oh = Math.hypot(0.76, 0.59);
+    {
+      const { st, step } = await exactly(oh);
+      const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+      expect(out).toHaveLength(1);
+      // (the record on its last frame: the frames before it its way there)
+      const converged = out[0].converged ?? [];
+      expect(converged[converged.length - 1]).toMatchObject({ how: "optimisation with restraints held", rows: [{ kind: "distance", atoms: [0, 1], value: oh, exact: true }] });
+    }
+    {
+      const { st, step } = await exactly(1.0);
+      const failed = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!).molecules;
+      expect(failed).toHaveLength(1);
+      expect(st().steps.find((s) => s.id === step)!.ran?.said).toContain(`Distance 1-2 ended at ${oh.toFixed(5)} \u00c5, held at 1 \u00c5`);
+    }
+  });
+
+  it("gives a conformer search the restraints wired in for each molecule - refused, in words, where its plugin says it holds none", async () => {
+    const made = editor();
+    const t = made.st().addStep("tag", "meno", 3, 0);
+    made.st().updateStep(t, { options: { name: "start" } });
+    made.st().connect({ set: made.st().sets[0].id }, t);
+    await made.st().runStep(t);
+    const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+    const r = made.st().addStep("restraints", "meno", 5, 0);
+    made.st().updateStep(r, { options: { on: "start", coordination: false, distances: "2-3" } });
+    made.st().connect({ set: tagged }, r);
+    await made.st().runStep(r);
+    const c = made.st().addStep("conformers", "confsweep", 20, 0);
+    made.st().connect({ set: tagged }, c);
+    made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, c, RESTRAINTS_INPUT.id);
+    await made.st().runStep(c);
+    expect(worker.prepare).not.toHaveBeenCalled();
+    expect(made.st().steps.find((s) => s.id === c)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("The Confsweep plugin holds no distances: distance 2-3") });
+  });
+
+  it("gives an optimisation to a saddle point the restraints wired into its fourth input for each guess - refused, in words, where its plugin holds none of their kind", async () => {
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    // (water tagged, given its restraints by Restraints as a table; the tagged water the guess Quanta - which holds atoms fixed - optimises)
+    const page = async (restraints: Record<string, unknown>) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, ...restraints } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const step = made.st().addStep("saddle-point", "quanta", 20, 0);
+      made.st().connect({ set: tagged }, step, "guesses");
+      made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, step, RESTRAINTS_INPUT.id);
+      return { ...made, step };
+    };
+    {
+      const { st, step } = await page({ fixed: "1, 3" });
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SADDLE\n" }], reads: [] }] }) as never);
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const sent = worker.prepare.mock.lastCall as unknown as unknown[];
+      expect(sent[0]).toBe("saddle-point");
+      expect((sent[1] as { restraints?: { kind: string; atoms: number[] }[] }[])[0].restraints).toEqual([{ kind: "fixed", atoms: [0, 2] }]);
+      expect(sent[2]).toMatchObject({ hold: "fixed" });
+      Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, files: {} });
+      await st().lookAtJobs();
+      await ran;
     }
     worker.prepare.mockClear();
     jobs.clear();
@@ -883,14 +1004,14 @@ describe("a step that runs a plugin's program", () => {
     // (the last round's own: a program's step, then a step of two inputs - nothing comes into either)
     const o3 = st().addStep("optimise", "tightbind", 90, 0);
     st().connect({ set: exit(r3, "out") }, o3);
-    const t3 = st().addStep("torsion-restraints", "meno", 110, 0);
+    const t3 = st().addStep("compare-torsions", "meno", 110, 0);
     expect(st().connect({ set: exit(o3, "out") }, t3, "molecules")).toBe(true);
     expect(st().connect({ set: st().sets[0].id }, t3, "reference")).toBe(true);
-    // (the Merge after the rounds - each round's empty out, the last's restraints and what came into them: nothing from either)
+    // (the Merge after the rounds - each round's empty out, the last's comparison and what came into it: nothing from either)
     const merge = st().addStep("merge", "meno", 130, 0);
     expect(st().connect({ set: exit(r3, "out") }, merge, "first")).toBe(true);
     expect(st().connect({ set: exit(t3, "out") }, merge, "second")).toBe(true);
-    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's restraints, empty:
+    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's comparison, empty:
     //  Merge's own rule, the rests' entries, never ended at once)
     const rests = st().addStep("merge", "meno", 130, 20);
     expect(st().connect({ set: exit(r1, "out") }, rests, "first")).toBe(true);
@@ -1100,6 +1221,18 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("says why it failed, in the plugin's words", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, code: 1 });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
+  });
+
+  it("says a why the program broke over lines on one line, where its one structure failed", async () => {
+    worker.collect.mockImplementationOnce((async () => ({ why: "Some atoms\nare  very close\n" })) as never);
     const { st, step } = editor();
     const ran = st().runStep(step);
     await settle();
@@ -1445,7 +1578,19 @@ describe("a step that runs a plugin's program", () => {
     end(4);
     await st().lookAtJobs();
     await again;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error: Some atoms are very close)" });
+    // (every one failed, each with the same words: said once, in the count - not again after it)
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
+    const none = st().runStep(step);
+    await settle();
+    await settle();
+    end(5, "failed");
+    await st().lookAtJobs();
+    await none;
+    const said = st().steps.find((s) => s.id === step)!.ran!.said!;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false });
+    expect(said).toContain("3 of 3 failed (3: the program stopped with an error: Some atoms are very close)");
+    expect(said.split("Some atoms are very close")).toHaveLength(2);
   });
 
   it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {
@@ -2123,5 +2268,129 @@ describe("Render as a step", () => {
     await ran;
     expect(st().pictures).toHaveLength(1);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "1 of 2 failed \u00b7 It stopped without finishing" });
+  });
+});
+
+describe("a plugin's step with an option taken from a property, entry by entry (docs/WORKFLOWS.md, *Options from a property*)", () => {
+  /** Tightbind's Optimise given a whole-number option of its own for the test, `cycles`, and with no program where `atOnce` - then run in its worker at once. */
+  function withCycles(atOnce: boolean) {
+    const decl = PLUGINS.find((p) => p.id === "tightbind")!.steps.find((s) => s.kind === "optimise") as unknown as { options?: Option[]; programs?: string[] };
+    const was = { options: decl.options, programs: decl.programs };
+    decl.options = [...(was.options ?? []), { id: "cycles", label: "Cycles", type: "number", default: 100, min: 1, whole: true }];
+    if (atOnce) decl.programs = [];
+    return () => Object.assign(decl, was);
+  }
+  /** Waters in 3D, each its own by where its O stands (x), carrying `n` (no unit) where given; in one set, wired into Tightbind's Optimise, its cycles taken from n. */
+  function bound(ns: (number | null)[]) {
+    const doc = createWorkspaceDocument();
+    ns.forEach((n, i) =>
+      doc.edit("water", (d) =>
+        addMolecule3d(d, {
+          atoms: [
+            { el: "O", x: i, y: 0, z: 0 },
+            { el: "H", x: i, y: 0.76, z: 0.59 },
+            { el: "H", x: i, y: -0.76, z: 0.59 },
+          ],
+          bonds: [
+            { a1: 0, a2: 1, order: 1 },
+            { a1: 0, a2: 2, order: 1 },
+          ],
+          at: { x: 0, y: 0 },
+          ...(n != null ? { properties: [{ n: { value: n, unit: "none" as const, status: "computed" as const } }] } : {}),
+        }),
+      ),
+    );
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const set = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const step = st().addStep("optimise", "tightbind", 10, 0);
+    st().connect({ set }, step);
+    st().updateStep(step, { bound: { cycles: "n" } });
+    return { st, step };
+  }
+  /** Where an entry's O stood, as sent: which water it is. */
+  const whichWater = (e: unknown) => (e as { atoms: { x: number }[] }).atoms[0].x;
+
+  let restore = () => {};
+  beforeEach(() => {
+    jobs.clear();
+    next = 1;
+    asked.started = [];
+    worker.prepare.mockClear();
+    worker.collect.mockClear();
+    worker.run.mockClear();
+    useReaders.setState({ state: { tightbind: "added" }, problem: {} });
+  });
+  afterEach(() => restore());
+
+  it("as jobs: each job holds its own entries and its group's value, collect reads each with its own, and one with no n is refused, out of Failed", async () => {
+    restore = withCycles(false);
+    const { st, step } = bound([10, 20, 10, null]);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    // (a prepare for each value, with that value: the first and third waters at 10, the second at 20; the fourth never sent)
+    expect(worker.prepare.mock.calls.map((c) => [((c as unknown[])[2] as { cycles: number }).cycles, (c[1] as unknown[]).map(whichWater)])).toEqual([
+      [10, [0, 2]],
+      [20, [1]],
+    ]);
+    const running = st().steps.find((s) => s.id === step)!.running!;
+    // (each job, by the entries it holds among all that came in, with its group's value)
+    expect(running.jobs.map((j) => [j.entries, j.options?.cycles])).toEqual([
+      [[0], 10],
+      [[2], 10],
+      [[1], 20],
+    ]);
+    expect(running.refused).toEqual([{ entry: 3, kind: "refused", why: "It has no n to take its cycles from" }]);
+    expect(running.note).toContain("2 calls, one for each value taken from a property");
+    for (const j of [...jobs.keys()]) end(Number(j.slice(-12)));
+    await st().lookAtJobs();
+    await ran;
+    // (each job's results read with its own value: the water it holds, and its cycles)
+    expect(worker.collect.mock.calls.map((c) => [(c[1] as unknown[]).map(whichWater), ((c as unknown[])[2] as { cycles: number }).cycles]).sort((p, q) => (p[0] as number[])[0] - (q[0] as number[])[0])).toEqual([
+      [[0], 10],
+      [[1], 20],
+      [[2], 10],
+    ]);
+    const failed = st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!;
+    expect(setMolecules(st(), failed).map((m) => m.atoms[0].x)).toEqual([3]);
+  });
+
+  it("as jobs: what its plugin refuses of a group is given back as that entry, among all that came in", async () => {
+    restore = withCycles(false);
+    const { st, step } = bound([10, 20, 20, 10]);
+    // (the second group's prepare - n = 20, the second and third waters - refuses its second, and makes a job for its first)
+    worker.prepare.mockImplementationOnce(worker.prepare.getMockImplementation()!);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "tightbind", args: ["input.xyz"], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["tbopt.log"] }], refused: [{ entry: 1, why: "It cannot be held so" }] }));
+    void st().runStep(step);
+    await settle();
+    await settle();
+    const running = st().steps.find((s) => s.id === step)!.running!;
+    expect(running.refused).toEqual([{ entry: 2, kind: "refused", why: "It cannot be held so" }]);
+    expect(running.jobs.map((j) => j.entries)).toEqual([[0], [3], [1]]);
+  });
+
+  it("at once in its worker: one run for each value, with that value - each judging its own; one with no n out of Failed", async () => {
+    restore = withCycles(true);
+    const { st, step } = bound([10, 20, 10, null]);
+    await st().runStep(step);
+    expect(worker.run.mock.calls.map((c) => [((c as unknown[])[2] as { cycles: number }).cycles, (c[1] as unknown[]).map(whichWater)])).toEqual([
+      [10, [0, 2]],
+      [20, [1]],
+    ]);
+    const ran = st().steps.find((s) => s.id === step)!.ran!;
+    expect(ran.said).toContain("2 calls, one for each value taken from a property");
+    // (the worker keeps the first of a group of more than one: the first water kept, the rest not; the fourth refused, saying why)
+    const out = st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!;
+    expect(setMolecules(st(), out).map((m) => m.atoms[0].x)).toEqual([0]);
+    // (those its worker did not keep set aside with it; the one with no n among them, saying why - it alone)
+    const failed = st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!;
+    const why = (m: { failed?: ({ why: string } | null)[] }) => m.failed?.[0]?.why;
+    expect(setMolecules(st(), failed).map((m) => [m.atoms[0].x, why(m) ?? null])).toEqual([
+      [1, null],
+      [2, null],
+      [3, "It has no n to take its cycles from"],
+    ]);
   });
 });

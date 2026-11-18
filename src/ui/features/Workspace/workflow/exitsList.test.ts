@@ -43,7 +43,8 @@ describe("a kind's exits, as a list", () => {
       join: [first("Joined", "same"), rest("Not joined", "same")],
       barrier: [first("With barriers", "molecules"), failed()],
       restraints: [first("Restraints", "table"), failed()],
-      "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
+      "torsion-restraints": [first("Torsion restraints", "table"), failed()],
+      "compare-torsions": [first("Compared", "same"), failed()],
       number: [first("Number", "number")],
       add: [first("{as}", "same"), rest("Not added", "same")],
       "atom-map": [first("Mapped", "same"), rest("Not mapped", "same"), { id: "changes", name: "Bond changes", gives: "table" }],
@@ -51,12 +52,14 @@ describe("a kind's exits, as a list", () => {
       "saddle-point": [first("Optimised structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       ensemble: [first("{as}", "same"), rest("The rest", "same")],
       "onto-structures": [first("With 3D results", "same")],
+      repeat: [first("This pass", "same"), { id: "reached", name: "Out", gives: "same" }],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());
     for (const k of KINDS) {
       expect(exitsOf(k.kind), k.kind).toEqual(had[k.kind]);
-      expect(asideExit(k.kind), k.kind).toEqual(had[k.kind][1]);
+      // (the second exit, where it sets aside - a Repeat's second is Out, which sets nothing aside)
+      expect(asideExit(k.kind), k.kind).toEqual(had[k.kind][1]?.of ? had[k.kind][1] : undefined);
     }
     // (what the exit for what was set aside holds: as declared, or what came in)
     expect(restHolds("choose", "molecules")).toBe("conformers");

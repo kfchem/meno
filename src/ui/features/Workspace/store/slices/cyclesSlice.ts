@@ -23,6 +23,10 @@ export function createCyclesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       return doc.edit("add cycle", (d) => ops.addCycle(d, cycle)) ? id : null;
     },
     // (with the words by its arrows put where they go, as it is turned round: `captions`)
+    // (cycles given the same patch, one step)
+    updateCycles: (ids: readonly number[], patch: ops.CyclePatch) => {
+      if (ids.length) doc.edit("change cycle", (d) => ops.placeMarks(ids.reduce((acc, id) => ops.updateCycle(acc, id, patch), d)));
+    },
     updateCycle: (id: number, patch: ops.CyclePatch, gesture?: string, captions?: { id: number; x: number; y: number }[]) =>
       doc.edit(
         patch.ccw !== undefined ? "turn cycle round" : patch.branches ? "change cycle's arrows" : "change cycle",

@@ -5,6 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
+import { behindRemapped } from "../chem/crossings";
 import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, removePictures, withoutAtoms, type WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Member, Model, Molecule3D, SeriesCore, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
@@ -19,9 +20,9 @@ import { isHeld } from "./onPage";
 import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, comeTogether, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
-import { byOf, doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
+import { byOf, doerName, inputsFor, MENO, stepValues, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { chipRows, HELD_LEAST_W, heldFrame } from "./heldView";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
@@ -31,13 +32,13 @@ export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
 import { ontoStructures } from "./ontoStructures";
-import { measuredSet, modeOnAtomsSet } from "./structureSteps";
+import { measuredSet, modeOnAtomsSet, torsionsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { recordsWithRoles } from "./schemeRoles";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
-import type { NumberValue, Table } from "../../../../lib/table";
+import type { ConstitutionOf, NumberValue, Table } from "../../../../lib/table";
 import { addedSet, numberOf } from "./addStep";
 
 /**
@@ -45,7 +46,13 @@ import { addedSet, numberOf } from "./addStep";
  * page about its middle - left, right, down and up - in any of its frames,
  * turned by `turn`, where it is; who does a step; and the time.
  */
-export type RunWith = { extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame; byOf: (step: WorkflowStep) => string; now: number };
+export type RunWith = {
+  extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame;
+  byOf: (step: WorkflowStep) => string;
+  now: number;
+  /** How a step's results will be turned, where the caller knows (the store, by the views of what came in): their room in the set is made for them so turned. */
+  turnsOf?: (doc: WorkspaceDocument, id: number, kind: StepKind, results: RunResults) => readonly (Turn3D | undefined)[] | undefined;
+};
 
 /** What each kind of set is called, where a step says what it takes. */
 const SET_NAMES: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "conformer sets", table: "a table", number: "a number" };
@@ -79,6 +86,10 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const none = emptyIn(doc, step, by);
   if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
+  // (a Repeat runs its steps pass by pass, as a pass of them: not as one step - none is made yet, and one read from a file says so)
+  if (step.kind === "repeat") return fail("A Repeat's passes are not run in this version of Meno");
+  // (its options' values: its own, else Settings' for its kind, else each option's default - doers `stepValues`)
+  const values = stepValues(step);
   // (a chart: a table's columns, one against the other)
   if (step.kind === "chart") return chartRun(doc, step, w, key);
   // (an energy diagram: molecules' energies as levels, joined as a table says)
@@ -87,18 +98,25 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (PAIRED.includes(step.kind)) {
     const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
     const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
-    return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+    return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), values), key, w);
+  }
+  // (torsion restraints: of what comes into Molecules - against what comes into Reference, where it is wired)
+  if (step.kind === "torsion-restraints") {
+    const [p, q] = ["molecules", "reference"].map((port) => inputOf(doc, id, port));
+    if (!p) return fail("Nothing comes into Molecules");
+    const of = (x: NonNullable<typeof p>) => setEntries(x.molecules, x.holds as Holds3D);
+    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values, step.bound), key, w);
   }
   // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
   if (step.kind === "onto-structures") {
     const [into, results] = [inputOf(doc, id, "structures"), inputOf(doc, id, "results")];
     if (!into || !results) return fail(!into ? "Nothing comes into Structures" : "Nothing comes into 3D results");
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     return ranAs(doc, id, ontoStructures(inputEntries(doc.model, into), setEntries(results.molecules, results.holds as Holds3D), Number(o.temperature)), key, w);
   }
   // (a number from its options alone: nothing comes in)
   if (step.kind === "number") {
-    const n = numberOf(optionsOf(kindInfo(step.kind).options ?? [], step.options));
+    const n = numberOf(values);
     if ("why" in n) return fail(n.why);
     return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberShown(n), input: key, ...as });
   }
@@ -109,18 +127,18 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const numberSet = wiresInto(doc, id, "number")[0]?.from;
     const number = numberSet ? findSet(doc, numberSet.set)?.number : undefined;
     if (numberSet && !number) return fail("Number holds no number yet");
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     return ranAs(doc, id, addedSet(setEntries(into.molecules, into.holds as Holds3D), into.holds as Holds3D, o, number), key, w);
   }
   if (!input) return fail("Nothing comes into it");
   // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
   if (step.kind === "take-frames") {
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either), keptNames(String(o.keep ?? ""))), key, w);
   }
   // (Mode on atoms: its atoms typed, or from the table wired into Atoms)
   if (step.kind === "mode-on-atoms") {
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     const r = modeRead(o);
     if ("why" in r) return ranAs(doc, id, { ok: false, said: r.why }, key, w);
     const entries = setEntries(input.molecules, input.holds as Holds3D);
@@ -130,7 +148,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)
   if (step.kind === "measure") {
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     const entries = setEntries(input.molecules, input.holds as Holds3D);
     if (o.from === "table") return ranAs(doc, id, measuredSet(entries, input.holds as Holds3D, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
     const typed = measuredSet(entries, input.holds as Holds3D, String(o.measurements ?? ""));
@@ -139,8 +157,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   }
   const outcome =
     input.holds === "structures"
-      ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
-      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules), energyLevels(input.molecules));
+      ? runMenoDrawn(step.kind, inputEntries(doc.model, input), values, doc.style)
+      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, values, energiesBy(input.molecules), energyLevels(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
 
@@ -155,7 +173,9 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   if (!step) return doc;
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
-  return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
+  // (its room made for each molecule as it will be turned - as what it came from is, where it passed through: the caller's `turnsOf`)
+  const turns = w.turnsOf?.(doc, id, step.kind, resultsOf(outcome, step.kind));
+  return setRan(withResults(keepRun(doc, step), step, outcome, w, turns), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
 }
 
 /**
@@ -252,17 +272,19 @@ const isValueKind = (h: SetHolds): h is ValueKind => (VALUE_KINDS as readonly st
 /**
  * Why what several wires bring into one input - `port`, of a step of
  * several; its one, where none is named - is not one input's: sets of
- * different kinds, which one set's entries never are, or more than one
- * number. None where it is, or one wire or none comes in.
+ * different kinds, which one set's entries never are (molecules in 3D and
+ * conformer sets come in together where it reads them as a table:
+ * kinds `comeTogether`), or more than one number. None where it is, or
+ * one wire or none comes in.
  */
-function severalWhyNot(doc: WorkspaceDocument, step: number, port?: StepPort): string | null {
+function severalWhyNot(doc: WorkspaceDocument, step: number, kind: StepKind, port?: StepPort): string | null {
   // (an empty set adds nothing, of no kind)
   const sources = sourcesInto(doc, step, port?.id);
   if (sources.length < 2) return null;
   const gives = sources.map(({ wire, set }) => (emptyNow(doc, set) ? null : givesOf(doc, wire.from)));
   if (gives.includes("number")) return `${port ? port.name : "It"} takes one number: ${sources.length} are wired into it`;
   const k = gives.findIndex((g) => g != null);
-  const j = gives.findIndex((g) => g != null && g !== gives[k]);
+  const j = gives.findIndex((g) => g != null && !comeTogether(kind, port?.id ?? ONE_INPUT, g, gives[k]!));
   if (j < 0) return null;
   const [a, b] = [gives[k]!, gives[j]!];
   const words = (g: SetHolds) => (isValueKind(g) ? SET_NAMES[g] : g);
@@ -284,7 +306,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const first = severalInputs(ports) ? ports[0] : undefined;
   // (several wires into one input: sets of one kind, and one number alone)
   for (const port of ports) {
-    const several = severalWhyNot(doc, step.id, ports.length > 1 ? port : undefined);
+    const several = severalWhyNot(doc, step.id, step.kind, ports.length > 1 ? port : undefined);
     if (several) return several;
   }
   const input = inputOf(doc, step.id, first?.id);
@@ -297,6 +319,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
       ? sourcesInto(doc, step.id, first?.id).reduce<string | null>((why, { set }) => why ?? (set.made ? null : plainAmong(setMolecules(doc, set))), null)
       : null;
   if (mixed) return mixed;
+  // (restraints wired into a step given structures drawn: they are held on molecules in 3D, each by its ID - none drawn has one)
+  if (holds === "structures" && wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length) return "Restraints are held on molecules in 3D: make the structures 3D first, then wire them in";
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
@@ -305,6 +329,10 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const plugin = by !== MENO.id ? pluginById(by) : undefined;
   if (plugin && MENO_ONLY.includes(step.kind)) return `${kindInfo(step.kind).name} is Meno's own step: add it again`;
   if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
+  // (a step of a page saved when it gave a set at an exit its kind no longer has - Torsion restraints' Trans already: said, never run
+  //  with that set left standing as if it were still given)
+  const gone = (doc.sets ?? []).find((b) => b.made?.step === step.id && !exitsOf(step.kind).some((x) => x.id === b.made!.exit));
+  if (gone) return `It was saved giving a set it no longer gives${gone.name ? ` (${gone.name})` : ""}: delete that set${step.kind === "torsion-restraints" ? " - Compare torsions and a Filter split what is trans already" : ""}`;
   // (a step of a page saved when it held what its molecules carried, asked on its card: no longer so - what it holds is wired in, and
   //  it is never run now holding nothing unsaid)
   if (step.options?.[HOLD_WAS] === "fixed" && !wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length)
@@ -508,8 +536,8 @@ export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3
 }
 
 /** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
-export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): Table {
-  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet, constitutionOf?: ConstitutionOf): Table {
+  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`, constitutionOf);
 }
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
@@ -650,6 +678,11 @@ export type Worked = SetEntry & {
   /** The path's frames after it, where it is a point the path goes on past - the highest a path search refined - and their energies: its entry is then that point, not the path's last. */
   after?: number[][];
   afterEnergies?: number[];
+  /**
+   * A reaction path one of whose sides stopped before its end, in its program's words: kept whole, its ends where it stopped, for the
+   * steps after it - their ends' optimisation and the bonding checks - to decide what they are (as ConfoTS does). Said on the step's line.
+   */
+  stopped?: string;
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
@@ -723,6 +756,33 @@ export function laidOver(
   });
 }
 
+/** How near, in angstroms, a result's atoms are to an entry's to be where they were: a step that passed it through, not one that moved it. */
+const KEPT_AT = 1e-6;
+
+/**
+ * How each molecule a step gave is first turned, where the step passed it
+ * through - a Filter's, a Tag's, a Rank's, a Repeat's *Out* - its atoms
+ * where they were (docs/WORKFLOWS.md, *Results*): as the molecule it came
+ * from is turned, so that what the chemist saw face-on one card before is
+ * face-on in the next. Unset where no entry has its atoms where they are -
+ * a molecule a step moved, or made: seen as it is first seen.
+ */
+export function viewKept(
+  molecules: readonly Pick<Molecule3D, "atoms" | "frames">[],
+  entries: readonly SetEntry[],
+  turnOf: (e: SetEntry) => Turn3D | undefined,
+): (Turn3D | undefined)[] {
+  // (each entry taken once, in order: copies of one molecule, its atoms where the other's are, each turned as its own was - found in review)
+  const taken = new Set<number>();
+  return molecules.map((m) => {
+    const xyz = frameXyz(m, framesOf(m) - 1);
+    const k = entries.findIndex((e, i) => !taken.has(i) && e.atoms.length === m.atoms.length && e.atoms.every((a, j) => a.el === m.atoms[j].el) && e.xyz.every((v, j) => Math.abs(v - xyz[j]) <= KEPT_AT));
+    if (k < 0) return undefined;
+    taken.add(k);
+    return turnOf(entries[k]);
+  });
+}
+
 /**
  * `doc` with a step's results - its molecules in 3D, those it set aside,
  * and what kind of set they make - as the entries of its result set: made
@@ -747,7 +807,8 @@ export function placeResults(
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
   if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
-  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  // (`turns` are of its molecules and then of those it set aside, in turn: each set's room made for them turned - found in review)
+  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w, turns?.slice(made.length));
   // (a table it gave at a later exit - an Atom map's bond changes - in that exit's set: under the others as they have grown)
   const tables = Object.entries(results.tables ?? {});
   for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);
@@ -1084,8 +1145,11 @@ export function numberedApart(models: readonly Model[]): Model {
         ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: group(g.id), ...(g.parent != null ? { parent: group(g.parent) } : {}) })) } : {}),
       });
     }
+    const bondIds = new Map(m.bonds.map((b, k) => [b.id, next + k]));
+    next += m.bonds.length;
     for (const b of m.bonds) {
-      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
+      const { behind, ...rest } = b;
+      out.bonds.push({ ...rest, id: bondIds.get(b.id)!, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}), ...behindRemapped(behind, (id) => bondIds.get(id)) });
     }
   }
   return out;
@@ -1263,6 +1327,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
         ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
+        ...(e.partsAlone ? { partsAlone: true as const } : {}),
         ...(e.madeOf?.length ? { madeOf: [...e.madeOf] } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
@@ -1310,6 +1375,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
+      ...(g.some((e) => e.partsAlone) ? { partsAlone: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
       ...(madeOf ? { madeOf: [...madeOf] } : {}),
       ...keptKnown(first),

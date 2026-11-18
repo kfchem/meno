@@ -13,8 +13,8 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
-import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
+import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoMarks3d, stereoSpotsShown, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type StereoMark3D, type Stick, type ValueAt } from "../utils/molecule3d";
+import { MARK_MIN_PX, marksReadAt } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
 import { LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -139,8 +139,6 @@ const NUMBERS_TAU = 0.08;
 const NUMBERS_PLACED_MOST = 600;
 /** Every atom's number in its ball's middle, at its full size, not shown: x, y, share, shown, for each. */
 const restingPlaces = (n: number) => Float32Array.from({ length: 4 * n }, (_, k) => (k % 4 === 2 ? 1 : 0));
-/** How far apart two stereo labels keep at the least, in ems of their size. */
-const STEREO_APART = 0.6;
 const easeOutCubic = (u: number) => 1 - (1 - Math.min(Math.max(u, 0), 1)) ** 3;
 const easeInOutCubic = (u: number) => {
   const t = Math.min(Math.max(u, 0), 1);
@@ -225,6 +223,8 @@ export type Molecule3DViewProps = {
   leaving?: () => void;
   /** Rising out of its drawing: where it started, over the drawing, and when; and what is told once it has risen. */
   rising?: Rising3D;
+  /** Its search goes on (store `growing3d`): its chip says so, its conformers growing as they come. */
+  searching?: boolean;
   /** Splitting off the molecule it is a copy of, a value set on it (`Split3D`): over it at first, as it is, gliding out to its own place as its value goes over to the new one; or, `back`, undone, the other way, and gone. */
   split?: Split3D;
   /** Its atom whose drawing's atom is under the pointer: lit as if it were. */
@@ -557,34 +557,17 @@ function Molecule3DView(props: Molecule3DViewProps) {
   // a conformer set's shares, as its chip shows them; and its atoms' elements
   const shares = useMemo(
     () => {
-      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers, marksUnread: m.marksUnread });
+      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, partsAlone: m.partsAlone, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers, marksUnread: m.marksUnread });
       return shares?.length === solid.frames.length ? shares : undefined;
     },
-    [m.frames, m.shares, m.conformerSet, m.partOf, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, m.marksUnread, solid.frames.length],
+    [m.frames, m.shares, m.conformerSet, m.partOf, m.partsAlone, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, m.marksUnread, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
   const shownFrame = frameOf(solid, frame);
   const centre = useMemo(() => frameCentre({ atoms: m.atoms, frames: m.frames }, shownFrame), [m.atoms, m.frames, shownFrame]);
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
-  const stereoMarks = useMemo(() => {
-    const st = m.stereo;
-    const only = props.stereoShown;
-    if (!st || !only) return [];
-    // (with the atoms whose ways out it keeps clear of: a centre's
-    // neighbours, a double bond's two and theirs)
-    const near = (i: number) => m.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
-    const out: { key: string; atoms: number[]; around: number[]; text: string }[] = [];
-    for (const [i, text] of Object.entries(st.atoms)) {
-      if (only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
-    }
-    for (const [i, text] of Object.entries(st.bonds)) {
-      const b = m.bonds[Number(i)];
-      if (b && only.bonds.includes(Number(i)))
-        out.push({ key: `b${i}`, atoms: [b.a1, b.a2], around: [...new Set([...near(b.a1), ...near(b.a2)])], text });
-    }
-    return out;
-  }, [m.stereo, m.bonds, props.stereoShown]);
+  const stereoMarks = useMemo(() => stereoMarks3d({ stereo: m.stereo, bonds: m.bonds }, props.stereoShown), [m.stereo, m.bonds, props.stereoShown]);
   // (and each hidden kept a while as it fades out - longer than its fade,
   // which counts the frames drawn rather than the time)
   const stereoPresent = usePresence(stereoMarks, (mark) => mark.key, 2 * STEREO_FADE * 1000);
@@ -1525,11 +1508,6 @@ function Molecule3DView(props: Molecule3DViewProps) {
         parent.localToWorld(v.set(x, y, z)).project(camera);
         return { x: ((v.x + 1) / 2) * size.width, y: ((1 - v.y) / 2) * size.height };
       };
-      const placedLabels: LabelBox[] = [];
-      // (every atom's ball on the screen, once for all the labels; and every
-      // bond as drawn - none when space-filling)
-      let balls: { x: number; y: number; r: number }[] | null = null;
-      const sticks: Stick[] = [];
       // (those shown together fade in together, the molecule moving or not:
       // none starts before every one of them is there to be seen - each
       // label's element is made a frame or so after the label is asked for)
@@ -1540,6 +1518,16 @@ function Molecule3DView(props: Molecule3DViewProps) {
       if (allThere) stereoWaited.current = 0;
       else if (stereoWaited.current++ < STEREO_WAIT_FRAMES) moving = true;
       const goIn = allThere || stereoWaited.current > STEREO_WAIT_FRAMES;
+      // where each is placed: as a picture of the molecule places it (utils/molecule3d `stereoSpotsAmong`, shared with
+      // `stereoPictureSpots3d`) - the balls and bonds as at rest, no atom swelling under the pointer, in the order a picture takes
+      // them, at the drawing's own letters rather than the least size they are drawn at - so that a copy made now has each where the
+      // canvas has it; those going, placed after, clear of those shown, and no obstacle to them
+      const entries: { mark: StereoMark3D; leaving: boolean; anchor: THREE.Object3D; ink: NonNullable<ReturnType<typeof stereoAnchors.current.get>>["ink"]; o: { x: number; y: number }; own: number }[] = [];
+      let balls: { x: number; y: number; r: number }[] | null = null;
+      const sticks: Stick[] = [];
+      // (an atom's ball at rest: the look it is going over to, as large as drawn, not swollen under the pointer, risen)
+      const atRest = (i: number) => solid.radii.primary[i] + (solid.radii.secondary[i] - solid.radii.primary[i]) * fill.current;
+      const restBondR = (fromR + (bondRadiusOf(style.secondary) - fromR) * fill.current) * WORLD_PER_ANGSTROM;
       for (const { item: mark, leaving } of stereoNow.current) {
         const l = stereoAnchors.current.get(mark.key);
         if (!l?.anchor) continue;
@@ -1547,46 +1535,38 @@ function Molecule3DView(props: Molecule3DViewProps) {
         for (const i of mark.atoms) at.add(v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
         at.divideScalar(mark.atoms.length);
         const parent = l.anchor.parent;
-        const ink = l.ink;
-        if (!ink || !parent) continue;
-        // (faded in, or out - in the same time either way, eased)
-        let fade = stereoFades.current.get(mark.key);
-        if (!fade) stereoFades.current.set(mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
-        if (fadeStep(fade, leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
-        const opacity = risen.current * fade.v * seenAtZoom;
+        if (!l.ink || !parent) continue;
         parent.updateWorldMatrix(true, false);
         if (!balls) {
           balls = [];
-          for (let i = 0; i < n; i++) balls.push({ ...onScreen(parent, p[3 * i], p[3 * i + 1], p[3 * i + 2]), r: (radius(i) * g) / pxIn });
-          if (bondsShown) {
+          for (let i = 0; i < n; i++) balls.push({ ...onScreen(parent, p[3 * i], p[3 * i + 1], p[3 * i + 2]), r: (atRest(i) * g) / pxIn });
+          if (restBondR > 1e-6) {
             const shownBonds = fb ? drawn.bonds.filter((_, i) => there.current[i] > 0.5) : m.bonds;
-            for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (bondR * g) / pxIn });
+            for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (restBondR * g) / pxIn });
           }
-          // (the measurements' values, where they are written now: placed above)
-          placedLabels.push(...valuesPlaced);
         }
-        const o = onScreen(parent, at.x, at.y, at.z);
-        const way = widestWay(mark.around.map((i) => Math.atan2(balls![i].y - o.y, balls![i].x - o.x)));
-        // (out past the ball - or the bond - as far as the drawing's style
-        // sets its R and S off its atoms, of its labels' size; the letters'
-        // box a capital's height, and a little for the halo)
-        const reach = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / pxIn + (props.stereoFont.gap * font) / MARK_SCALE;
-        const half = { x: font * (stereoTextEms(mark.text, props.stereoFont.parentheses) / 2 + 0.1), y: font * 0.45 };
-        // (every atom near it but its own - a double bond's two among them)
-        const own = mark.atoms.length === 1 ? mark.atoms[0] : -1;
-        const others = balls.filter((b, i) => i !== own && b.r > 0 && Math.hypot(b.x - o.x, b.y - o.y) < reach + 4 * half.x + b.r);
-        const best = labelSpot(o, reach, half, way, others, placedLabels, sticks);
+        // (out past the ball - or the bond - as far as the drawing's style sets its R and S off its atoms)
+        const own = ((mark.atoms.length === 1 ? atRest(mark.atoms[0]) : restBondR) * g) / pxIn;
+        entries.push({ mark, leaving, anchor: l.anchor, ink: l.ink, o: onScreen(parent, at.x, at.y, at.z), own });
+      }
+      const spots = balls ? stereoSpotsShown(entries, stereoMarks, balls, sticks, valuesPlaced, natural, props.stereoFont.gap, props.stereoFont.parentheses) : new Map<string, LabelBox>();
+      for (const e of entries) {
+        const best = spots.get(e.mark.key);
+        if (!best || !e.ink) continue;
+        // (faded in, or out - in the same time either way, eased)
+        let fade = stereoFades.current.get(e.mark.key);
+        if (!fade) stereoFades.current.set(e.mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
+        if (fadeStep(fade, e.leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
+        const opacity = risen.current * fade.v * seenAtZoom;
         // (not there at once where its best way changes as the molecule turns: glided round the atom to it, as everything moves)
+        const o = e.o;
         const goal = { a: Math.atan2(best.y - o.y, best.x - o.x), r: Math.hypot(best.x - o.x, best.y - o.y) };
-        const was = stereoSpots.current.get(mark.key);
+        const was = stereoSpots.current.get(e.mark.key);
         const about = was ? spotFollowed(was, goal, step, STEREO_TAU) : goal;
-        stereoSpots.current.set(mark.key, about);
+        stereoSpots.current.set(e.mark.key, about);
         if (about.a !== goal.a || about.r !== goal.r) moving = true;
         const spot = { ...best, x: o.x + about.r * Math.cos(about.a), y: o.y + about.r * Math.sin(about.a) };
-        // (the next keeps a little way off it, not just clear: two side by
-        // side read as one, and as either atom's)
-        placedLabels.push({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
-        ink.place(spot, font, opacity);
+        e.ink.place(spot, font, opacity);
       }
     }
     // (the fades of those gone, forgotten)
@@ -1758,8 +1738,9 @@ function Molecule3DView(props: Molecule3DViewProps) {
       said: m.said,
       noShares: m.conformerSet ? sharesWithheld(m) || undefined : undefined,
       conformers: m.conformerSet,
+      ...(props.searching ? { searching: true } : {}),
     }),
-    [m, count, shares],
+    [m, count, shares, props.searching],
   );
   const chipOpened = useCallback(
     (o: boolean) => {

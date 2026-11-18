@@ -207,26 +207,43 @@ describe("layoutMetrics", () => {
   });
 
   it("takes a tert-butyl's or a CF3's fan as right and a cross as wrong, but a cross for neopentane", () => {
-    // O-C(CH3)3: the O to the left of the middle carbon, the methyls
-    // fanned 60 degrees apart about the O's line, or set as a cross
+    // CH3-O-C(CH3)3: the O to the left of the middle carbon, going on to
+    // its methyl, the methyls fanned 60 degrees apart about the O's line,
+    // or set as a cross
     const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
     const tBu = (degs: number[]) => {
-      const ps = [{ x: 0, y: 0 }, at(180), ...degs.map(at)];
+      const ps = [{ x: 0, y: 0 }, at(180), ...degs.map(at), { x: -1.5, y: Math.sqrt(3) / 2 }];
       return {
         x: ps.map((p) => p.x),
         y: ps.map((p) => p.y),
-        edges: [[0, 1], [0, 2], [0, 3], [0, 4]] as [number, number][],
-        elements: ["C", "O", "C", "C", "C"],
+        edges: [[0, 1], [0, 2], [0, 3], [0, 4], [1, 5]] as [number, number][],
+        elements: ["C", "O", "C", "C", "C", "C"],
       };
     };
+    // (the error averaged over the middle carbon and the O, the O's 120 degrees right: a cross's 30 comes to 15)
     expect(layoutMetrics(tBu([-60, 0, 60])).angleError).toBeCloseTo(0, 6);
-    expect(layoutMetrics(tBu([-90, 0, 90])).angleError).toBeCloseTo(30, 6);
-    const neopentane = { ...tBu([-90, 0, 90]), elements: ["C", "C", "C", "C", "C"] };
+    expect(layoutMetrics(tBu([-90, 0, 90])).angleError).toBeCloseTo(15, 6);
+    const neopentane = { ...tBu([-90, 0, 90]), edges: [[0, 1], [0, 2], [0, 3], [0, 4]] as [number, number][], elements: ["C", "C", "C", "C", "C", "C"] };
     expect(layoutMetrics(neopentane).angleError).toBeCloseTo(0, 6);
     // (a CF3 likewise)
-    const cf3 = (degs: number[]) => ({ ...tBu(degs), elements: ["C", "C", "F", "F", "F"] });
+    const cf3 = (degs: number[]) => ({ ...tBu(degs), elements: ["C", "C", "F", "F", "F", "C"] });
     expect(layoutMetrics(cf3([-60, 0, 60])).angleError).toBeCloseTo(0, 6);
-    expect(layoutMetrics(cf3([-90, 0, 90])).angleError).toBeCloseTo(30, 6);
+    expect(layoutMetrics(cf3([-90, 0, 90])).angleError).toBeCloseTo(15, 6);
+  });
+
+  it("takes a molecule of four ends as an upright cross, not a trident - tert-butanol - and a group on a stub that goes on as a trident - a CF3 laid out alone", () => {
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+    const g = (degs: number[], elements: string[], onward?: boolean[]) => {
+      const ps = [{ x: 0, y: 0 }, ...degs.map(at)];
+      return { x: ps.map((p) => p.x), y: ps.map((p) => p.y), edges: [[0, 1], [0, 2], [0, 3], [0, 4]] as [number, number][], elements, ...(onward ? { onward } : {}) };
+    };
+    // (tert-butanol drawn upright: four ends, its right angles right)
+    expect(layoutMetrics(g([180, -90, 0, 90], ["C", "O", "C", "C", "C"])).angleError).toBeCloseTo(0, 6);
+    // (a CF3 fanned on the carbon for its bond out, which goes on: on the 30-degree lattice, no grid error; read as four ends, an upright cross's
+    // 90-degree lattice, it would have one)
+    const cf3 = g([180, -60, 0, 60], ["C", "C", "F", "F", "F"], [false, true, false, false, false]);
+    expect(layoutMetrics(cf3).gridError).toBeCloseTo(0, 6);
+    expect(layoutMetrics(cf3).angleError).toBeCloseTo(0, 6);
   });
 
   it("reads a cage's substituents the same whichever of its alike rings its smallest set holds", () => {

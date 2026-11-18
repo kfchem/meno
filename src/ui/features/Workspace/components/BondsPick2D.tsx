@@ -1,5 +1,4 @@
-import { bondKeyOf, doubleClickPatch, singleClickPatch } from "../utils/bondKinds";
-import { degrees, narrowEnd } from "../chem/drawing";
+import { bondKeyOf } from "../utils/bondKinds";
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
@@ -14,7 +13,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { releaseClicksBond } from "../utils/press";
+import { flushesClick, releaseClicksBond, turnTakenBack, type TurnedBond } from "../utils/press";
 import { bondLengthFrom } from "../utils/magnified";
 
 export default function BondsPick2D() {
@@ -76,8 +75,6 @@ export default function BondsPick2D() {
     setHoveredFromId,
     clearBondHover,
     moveDrag,
-    updateBond,
-    setBondDoubleMode,
     beginPanHold,
     endPanHold,
     suppressDoubleClick,
@@ -106,6 +103,9 @@ export default function BondsPick2D() {
     graceTimer: number | null;
     armed: boolean; // whether this mesh accepted pointerDown
     downBondId: number | null; // bondId hit by the last pointerDown
+    turned: TurnedBond | null; // the last click's turn, applied: taken back by a second click soon after (utils/press `turnTakenBack`)
+    flushCheck: boolean; // a press landed while a click waits: applied unless that press was on the same bond (`flushesClick`)
+    holdEnded: boolean; // the waiting click's hold on the view already let go (by the next press, before it begins its own)
   }>({
     lastAt: 0,
     count: 0,
@@ -117,34 +117,70 @@ export default function BondsPick2D() {
     graceTimer: null,
     armed: false,
     downBondId: null,
+    turned: null,
+    flushCheck: false,
+    holdEnded: false,
   });
   const CLICK_MS = 350;
   const SINGLE_DELAY_MS = 200;
   const TRIPLE_GRACE_MS = 180;
 
-  function applySingleCycle(b: (typeof model.bonds)[number]) {
-    if (b.order === 3) {
-      updateBond(b.id, { order: 2 as any, doubleMode: "auto" });
-      return;
+  // A click waiting to turn its bond, turned now: when its wait is over, or as the next press lands elsewhere, or a drag begins - no click
+  // is lost (the maintainer, 2026-11-17). The turn is kept with when its click was let go, for a second click soon after to take back.
+  const fireSingle = () => {
+    const st = clickState.current;
+    if (st.timer != null) {
+      window.clearTimeout(st.timer);
+      st.timer = null;
     }
-    if (b.order === 2) {
-      updateBond(b.id, {
-        order: 1 as any,
-        stereo: (b.stereo ?? "none") as any,
-      });
-      return;
+    if (st.count === 1 && st.bondId != null) {
+      const was = store.getState().model;
+      store.getState().bondClicked(st.bondId, 1);
+      // (kept only where it turned something: a turn taken back is an undo, never of another step)
+      const now = store.getState().model;
+      st.turned = now !== was ? { id: st.bondId, releasedAt: st.lastAt, after: now } : null;
     }
-    updateBond(b.id, singleClickPatch(b, narrowEnd(b, degrees(model.bonds))));
-  }
-  function applyDoubleCycle(b: (typeof model.bonds)[number]) {
-    // (a double one: its next side; any other, a double - utils/bondKinds, as the "2" key does)
-    const patch = doubleClickPatch(b, model.atoms, model.bonds);
-    if (b.order === 2) setBondDoubleMode(b.id, patch.doubleMode!);
-    else updateBond(b.id, patch);
-  }
-  function applyTriple(b: (typeof model.bonds)[number]) {
-    updateBond(b.id, { order: 3 as any, stereo: "none" });
-  }
+    // (its hold on the view let go here - unless the next press let it go already, before beginning its own, which this must not end)
+    if (!st.holdEnded) {
+      try {
+        if (st.pointerId != null) endPanHold(st.pointerId);
+        else endPanHold(null);
+      } catch {
+        endPanHold(null);
+      }
+    }
+    st.holdEnded = false;
+    st.count = 0;
+    st.bondId = null;
+    st.pointerId = null;
+    st.downPos = null;
+    st.graceUntil = null;
+  };
+  // (a press anywhere while a click waits: applied once the press is seen not to be on that bond - the bond's own handler, run in the
+  //  same event, says so)
+  useEffect(() => {
+    const onDown = () => {
+      const st = clickState.current;
+      if (st.timer == null || st.count !== 1) return;
+      // (the waiting click's hold let go now, before this press's own handlers begin theirs)
+      try {
+        if (st.pointerId != null) endPanHold(st.pointerId);
+        else endPanHold(null);
+      } catch {
+        endPanHold(null);
+      }
+      st.holdEnded = true;
+      st.flushCheck = true;
+      window.setTimeout(() => {
+        if (!clickState.current.flushCheck) return;
+        clickState.current.flushCheck = false;
+        fireSingle();
+      }, 0);
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fireSingle reads the click state through its ref
+  }, []);
 
   const { atoms, bonds } = model;
   // (what each hit area was placed from: a bond whose bond and atoms are the
@@ -226,6 +262,15 @@ export default function BondsPick2D() {
         if (idx == null || idx < 0) return;
         const b = model.bonds[idx];
         if (!b) return;
+        {
+          // (a click waiting on another bond: turned now, before this press; on this one, it waits on - utils/press `flushesClick`)
+          const st = clickState.current;
+          const pending = st.timer != null && st.count === 1 ? st.bondId : null;
+          st.flushCheck = false;
+          if (flushesClick(pending, b.id)) fireSingle();
+          // (on its own bond: the click waits on, and this press holds the view again as it begins its own hold below)
+          else st.holdEnded = false;
+        }
         try {
           const p = (e as any).point as { x: number; y: number } | undefined;
           if (p) {
@@ -342,7 +387,8 @@ export default function BondsPick2D() {
           return Math.hypot(dx, dy) > 6; // >6px is considered a drag
         })() || pressMovedUnder(camera); // (or the view moved under it: no click)
         if (moveDrag.active || moved) {
-          // Drop click aggregation
+          // Drop click aggregation - a click waiting turned first: none is lost to a drag
+          if (st.timer != null && st.count === 1) fireSingle();
           if (st.timer != null) {
             window.clearTimeout(st.timer);
             st.timer = null;
@@ -362,6 +408,14 @@ export default function BondsPick2D() {
         const now = performance.now();
         const pid =
           (e as any).pointerId ?? (e as any).nativeEvent?.pointerId ?? null;
+        // (a second click soon after the first's turn: that turn taken back, and this the double-click's second, which makes the bond
+        //  double from what it was, as one step - utils/press `turnTakenBack`)
+        if (turnTakenBack(st.turned, b.id, now, CLICK_MS) && store.getState().takeBackTurn(st.turned!.after)) {
+          st.bondId = b.id;
+          st.count = 1;
+          st.lastAt = now;
+        }
+        st.turned = null;
         const sameTarget = st.bondId === b.id && now - st.lastAt <= CLICK_MS;
         if (!sameTarget) {
           if (st.timer != null) {
@@ -384,26 +438,11 @@ export default function BondsPick2D() {
           st.timer = null;
         }
         if (st.count === 1) {
-          const delay1 = SINGLE_DELAY_MS;
-          st.timer = window.setTimeout(() => {
-            const bond = model.bonds.find((x) => x.id === st.bondId!);
-            if (bond) applySingleCycle(bond);
-            try {
-              if (st.pointerId != null) endPanHold(st.pointerId);
-              else endPanHold(null);
-            } catch {
-              endPanHold(null);
-            }
-            st.count = 0;
-            st.timer = null;
-            st.bondId = null;
-            st.pointerId = null;
-            st.downPos = null;
-            st.graceUntil = null;
-          }, delay1) as unknown as number;
+          // A click turns the bond's kind as the key 1 does - once no second click has come, so a double-click only makes it
+          // double (the maintainer, 2026-11-17, as it was until 2026-11-14; docs/EDITOR-2D.md, *How it is worked*)
+          st.timer = window.setTimeout(fireSingle, SINGLE_DELAY_MS) as unknown as number;
         } else if (st.count === 2) {
-          const bond = model.bonds.find((x) => x.id === st.bondId!);
-          if (bond) applyDoubleCycle(bond);
+          store.getState().bondClicked(st.bondId!, 2);
           st.graceUntil = now + TRIPLE_GRACE_MS;
           if (st.graceTimer != null) {
             window.clearTimeout(st.graceTimer);
@@ -424,8 +463,7 @@ export default function BondsPick2D() {
             st.graceTimer = null;
           }, TRIPLE_GRACE_MS) as unknown as number;
         } else if (st.count >= 3) {
-          const bond = model.bonds.find((x) => x.id === st.bondId!);
-          if (bond) applyTriple(bond);
+          store.getState().bondClicked(st.bondId!, 3);
           if (st.graceTimer != null) {
             window.clearTimeout(st.graceTimer);
             st.graceTimer = null;

@@ -1,6 +1,6 @@
 /**
  * A bond dragged out of an atom of a projection - a chair, a Haworth ring, a Newman pair (docs/EDITOR-2D.md, *Projections*: groups are drawn by extension): it goes to
- * one of that atom's free positions as F9 gives them, seen as the solid is seen - the one whose seen direction is nearest the pointer's - and
+ * one of that atom's free positions as the projection solids give them (lib/chem/perception/projection), seen as the solid is seen - the one whose seen direction is nearest the pointer's - and
  * nowhere between, so that nothing a projection is extended with is left unread. Pure: the model in, where the bond ends and what the place is called out.
  */
 import type { Atom, Bond } from "../store/types";
@@ -44,6 +44,99 @@ export function chairExtension(model: { atoms: readonly Atom[]; bonds: readonly 
     if (!place) return null;
     // (the new atom where the free position says, as the ring's own atoms are: the seen vector of that bond, not a bond's length along it)
     return { end: { x: here.x + place.place.x - d.atoms[k].x, y: here.y + place.place.y - d.atoms[k].y }, name: place.free.kind };
+  }
+  return null;
+}
+
+/**
+ * Where the bond after a projection's group goes, out of `tip`, its first atom - an atom whose one bond is to an atom of a projection of the
+ * tool's, standing at one of that atom's free positions: 120 degrees from that bond, to the side nearer the pointer, `length` long. Never on
+ * along the group's own line: two bonds in one line hide the atom between them, and a CH2OH drawn straight up reads as one bond to an OH
+ * (docs/EDITOR-2D.md, *Projections*). None where `tip` is no such atom, and the stroke goes as any.
+ */
+export function groupBend(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, tip: number, pointer: { x: number; y: number }, length: number): { end: { x: number; y: number }; from: number } | null {
+  const atoms = model.atoms as Atom[];
+  const bonds = model.bonds as Bond[];
+  const own = bonds.filter((b) => b.a === tip || b.b === tip);
+  if (own.length !== 1) return null;
+  const stem = own[0].a === tip ? own[0].b : own[0].a;
+  const byId = new Map(atoms.map((a) => [a.id, a]));
+  const here = byId.get(tip);
+  const root = byId.get(stem);
+  if (!here || !root) return null;
+  for (const found of projectionsIn({ atoms, bonds })) {
+    if (!found.ring.includes(stem) || found.ring.includes(tip)) continue;
+    const d = found.drawing;
+    const k = found.index.get(stem)!;
+    // (the group stands at one of the ring atom's free positions: a bond drawn elsewhere by hand is the chemist's own)
+    const at = seenPlaces(d, k).some((p) => Math.hypot(here.x - root.x - (p.place.x - d.atoms[k].x), here.y - root.y - (p.place.y - d.atoms[k].y)) < NEAR * 100);
+    if (!at) return null;
+    const back = Math.atan2(root.y - here.y, root.x - here.x);
+    const want = Math.atan2(pointer.y - here.y, pointer.x - here.x);
+    const off = (a: number) => Math.abs(Math.atan2(Math.sin(a - want), Math.cos(a - want)));
+    const turns = [back + (2 * Math.PI) / 3, back - (2 * Math.PI) / 3];
+    const angle = off(turns[0]) <= off(turns[1]) ? turns[0] : turns[1];
+    return { end: { x: here.x + length * Math.cos(angle), y: here.y + length * Math.sin(angle) }, from: back };
+  }
+  return null;
+}
+
+/**
+ * A projection's group whose first atom is made linear by its bonds - a triple bond, or two double bonds, at an atom of two bonds: a nitrile,
+ * an alkyne, an isocyanide on a ring atom of the tool's - drawn straight on, its two bonds in one line (GR-4.1.1), as the bend out of a
+ * group's atom (`groupBend`) cannot draw it, the order being set after the stroke. What lies beyond the atom is turned about it, as drawn,
+ * until its next atom is straight on from the ring atom; nothing where `atom` is no such group, is straight already, or what lies beyond
+ * comes round to the ring. The new places, by atom id.
+ */
+export function straightenedGroup(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, atom: number): Map<number, { x: number; y: number }> | null {
+  const atoms = model.atoms as Atom[];
+  const bonds = model.bonds as Bond[];
+  const own = bonds.filter((b) => b.a === atom || b.b === atom);
+  if (own.length !== 2) return null;
+  const linear = own.some((b) => b.order === 3) || own.every((b) => b.order === 2);
+  if (!linear) return null;
+  const byId = new Map(atoms.map((a) => [a.id, a]));
+  const here = byId.get(atom);
+  if (!here) return null;
+  for (const stemBond of own) {
+    const stem = stemBond.a === atom ? stemBond.b : stemBond.a;
+    const root = byId.get(stem);
+    if (!root) continue;
+    const found = projectionsIn({ atoms, bonds }).find((f) => f.ring.includes(stem) && !f.ring.includes(atom));
+    if (!found) continue;
+    const d = found.drawing;
+    const k = found.index.get(stem)!;
+    const at = seenPlaces(d, k).some((p) => Math.hypot(here.x - root.x - (p.place.x - d.atoms[k].x), here.y - root.y - (p.place.y - d.atoms[k].y)) < NEAR * 100);
+    if (!at) return null;
+    const onBond = own.find((b) => b !== stemBond)!;
+    const far = onBond.a === atom ? onBond.b : onBond.a;
+    const next = byId.get(far);
+    if (!next) return null;
+    const want = Math.atan2(here.y - root.y, here.x - root.x);
+    const now = Math.atan2(next.y - here.y, next.x - here.x);
+    const turn = Math.atan2(Math.sin(want - now), Math.cos(want - now));
+    if (Math.abs(turn) < 1e-6) return null;
+    // (what lies beyond: every atom reached from the next one without going back through `atom`; none of the ring's)
+    const beyond = new Set([far]);
+    const todo = [far];
+    while (todo.length) {
+      const u = todo.pop()!;
+      for (const b of bonds) {
+        const v = b.a === u ? b.b : b.b === u ? b.a : null;
+        if (v == null || v === atom || beyond.has(v)) continue;
+        if (found.ring.includes(v) || v === stem) return null;
+        beyond.add(v);
+        todo.push(v);
+      }
+    }
+    const [c, s] = [Math.cos(turn), Math.sin(turn)];
+    const moved = new Map<number, { x: number; y: number }>();
+    for (const id of beyond) {
+      const p = byId.get(id)!;
+      const [dx, dy] = [p.x - here.x, p.y - here.y];
+      moved.set(id, { x: here.x + dx * c - dy * s, y: here.y + dx * s + dy * c });
+    }
+    return moved;
   }
   return null;
 }

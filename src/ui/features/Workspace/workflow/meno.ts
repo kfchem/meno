@@ -8,11 +8,12 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, PARTS_ALONE_REFUSED, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
 import { alikeIn, entries as countEntries, workedOutAs, workedOutDiffer } from "../../../../lib/nodes/base";
-import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, atomMapSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, torsionsSet, withSaid } from "./structureSteps";
+import { enumerated, type Enumerated } from "./enumerate";
+import type { EnumerateAsked } from "./enumerateOff";
+import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, atomMapSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, comparedTorsionsSet, withSaid } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
 import { rankedSet, valueKeysOf } from "./valueSteps";
@@ -95,8 +96,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints*, *Join*, *Atom map* and *Barrier*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join", "atom-map", "barrier"];
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Compare torsions*, *Join*, *Atom map* and *Barrier*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "compare-torsions", "join", "atom-map", "barrier"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
@@ -137,8 +138,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         property: String(o.property ?? ""),
         symmetry: o.symmetry === "left-out" ? "left-out" : "as-read",
       });
-    case "torsion-restraints":
-      return torsionsSet(a.entries, b.entries, a.holds, o);
+    case "compare-torsions":
+      return comparedTorsionsSet(a.entries, b.entries, a.holds, o);
     case "atom-map":
       return atomMapSet(a.entries, b.entries, a.holds, o);
     default:
@@ -157,26 +158,9 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   switch (kind) {
     case "enumerate": {
-      if (entries.length > 1) return { ok: false, said: `Enumerate takes one structure drawn, its template: ${entries.length} came in` };
-      const options = optionsOf(kindInfo(kind).options ?? [], own);
-      const r =
-        options.way === "substituents"
-          ? substituted(entries[0].drawn, positionIds(String(options.positions ?? "")), String(options.groups ?? ""), options.combine === "together" ? "together" : "one", style)
-          : enumerated(entries[0].drawn, String(options.lists ?? ""), style);
-      if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
-      // (each made from its template: what that was made from, and its values as the template's - `made_from.nll` - never as
-      //  its own; a template drawn on the page has none)
-      const template = entries[0].record;
-      const fromTemplate = (record: DrawnRecord): DrawnRecord => ({
-        ...(template?.from?.length ? { from: template.from } : {}),
-        ...record,
-        properties: { ...record.properties, ...Object.fromEntries(madeFrom(template)) },
-      });
-      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: fromTemplate(numberedRecord(m.number, m.how, why)) });
-      // (its valence as it was checked before it ran, where it was: never claimed where it was not)
-      // (run with nothing asked first - in another step's run, as one before it: neither its valence nor its configurations left open looked at, and said so)
-      const valence = said.length ? said : ["Valence not checked", "Configurations left open not looked for"];
-      return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 "), core: r.core };
+      const asked = enumerateAsked(entries, own, style);
+      if ("said" in asked) return asked;
+      return enumerateOutcome(asked.way === "substituents" ? substituted(asked.template, asked.positions, asked.text, asked.combine, asked.style) : enumerated(asked.template, asked.text, asked.style), entries, said);
     }
     case "filter": {
       const options = optionsOf(kindInfo(kind).options ?? [], own);
@@ -186,6 +170,34 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
       return { ok: false, said: "Meno does not do this itself on structures drawn" };
   }
 }
+
+/** What Enumerate is asked, from what came in and its options (`runMenoDrawn`), or why it cannot run. */
+export function enumerateAsked(entries: readonly DrawnEntry[], own?: OptionValues, style?: StyleChoice): EnumerateAsked | { ok: false; said: string } {
+  if (entries.length > 1) return { ok: false, said: `Enumerate takes one structure drawn, its template: ${entries.length} came in` };
+  const options = optionsOf(kindInfo("enumerate").options ?? [], own);
+  return options.way === "substituents"
+    ? { way: "substituents", template: entries[0].drawn, positions: positionIds(String(options.positions ?? "")), text: String(options.groups ?? ""), combine: options.combine === "together" ? "together" : "one", style }
+    : { way: "lists", template: entries[0].drawn, text: String(options.lists ?? ""), style };
+}
+
+/** Enumerate's outcome from its products (`enumerated`, `substituted`): each with its record, made from its template's. */
+export function enumerateOutcome(r: Enumerated, entries: readonly DrawnEntry[], said: readonly string[]): DrawnOutcome {
+  if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
+  // (each made from its template: what that was made from, and its values as the template's - `made_from.nll` - never as
+  //  its own; a template drawn on the page has none)
+  const template = entries[0].record;
+  const fromTemplate = (record: DrawnRecord): DrawnRecord => ({
+    ...(template?.from?.length ? { from: template.from } : {}),
+    ...record,
+    properties: { ...record.properties, ...Object.fromEntries(madeFrom(template)) },
+  });
+  const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: fromTemplate(numberedRecord(m.number, m.how, why)) });
+  // (its valence as it was checked before it ran, where it was: never claimed where it was not)
+  // (run with nothing asked first - in another step's run, as one before it: neither its valence nor its configurations left open looked at, and said so)
+  const valence = said.length ? said : ["Valence not checked", "Configurations left open not looked for"];
+  return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 "), core: r.core };
+}
+
 
 /**
  * How a step done in turns goes: each turn as long as `slice` by the clock
@@ -924,6 +936,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
   if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
   const basis = basisOf(entries, kelvin);
   if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
+  // (a structure of several parts, each searched alone: one part varied at a time, the rest at their lowest - no compound's)
+  if (entries.some((e) => e.partsAlone)) return { ok: false, said: PARTS_ALONE_REFUSED };
   // (a saddle point's energy weighed as a minimum's would be a population of nothing: refused, naming it)
   const saddle = notAllMinima(entries);
   if (saddle) return { ok: false, said: saddle };

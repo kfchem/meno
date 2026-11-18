@@ -12,9 +12,12 @@ import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
 import { pageIndex, signatureOf } from "../utils/drawnLink";
-import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { identityInputOf, labelsDrawnOut } from "../chem/identityOf";
+import { identitiesAsked, identityKnown } from "../chem/identityOff";
+import { identity } from "../../../../lib/chem/identity";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
+import { NUMBERING, OWN_NUMBERING } from "../../../../lib/steps/restraints";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
@@ -38,14 +41,20 @@ export type Page = {
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 
-/** The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as one, as Combine makes one entry of its parts. */
-export function structuresOf(model: Model): number[][] {
+/**
+ * The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as
+ * one, as Combine makes one entry of its parts. A hydrogen bond is no bond of a structure: what it alone joins - an enol and a water, a
+ * salt's ion - is two structures, two entries (chem/make3d `blocksOf` likewise, CTFILE.md *Bonds*). `asDrawn`, it joins them, as the
+ * pieces of ink they are: what moves a structure, or keeps clear of one, takes them together.
+ */
+export function structuresOf(model: Model, asDrawn = false): number[][] {
   const around = new Map<number, number[]>();
   const join = (p: number, q: number) => {
     around.set(p, [...(around.get(p) ?? []), q]);
     around.set(q, [...(around.get(q) ?? []), p]);
   };
   for (const b of model.bonds) {
+    if (b.hydrogen && !asDrawn) continue;
     join(b.a, b.b);
     // (a haptic bond's ring with its metal and star, as fragmentOf has them:
     // walked by its bonds alone, the metal and the star were a structure
@@ -220,20 +229,61 @@ export function membersOf(found: {
  * charge, bond, or configuration - its mirror image - does not. Where its
  * wedges cannot be read, or its identity not worked out in full, the
  * drawing itself is in the key too: any change to it is taken for one.
+ *
+ * Its identity is worked out off the drawing thread (chem/identityOff): not
+ * yet answered, and too large to work out here, it is pending - undefined -
+ * until the answer lands; a caller that may wait asks first
+ * (`drawnHashesAsked`).
  */
-export function drawnHash(model: Model, ids: readonly number[]): string {
+export function drawnHash(model: Model, ids: readonly number[]): string | undefined {
   // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
   const drawn = drawingKey(model, ids);
-  let key = identities.get(drawn);
-  if (key == null) {
-    // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
-    // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
-    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
-    key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
-    if (identities.size >= IDENTITIES_KEPT) identities.clear();
-    identities.set(drawn, key);
-  }
+  const had = identities.get(drawn);
+  if (had != null) return had;
+  // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
+  // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
+  // (a hydrogen bond in it - an enol's own - no bond of the structure, nor of its identity: `structureInputOf`)
+  const { input, unread } = structureInputOf(partOf(model, new Set(ids)));
+  const found = identityKnown(input);
+  if (!found) return undefined;
+  const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawn}`).toString(36);
+  if (identities.size >= IDENTITIES_KEPT) identities.clear();
+  identities.set(drawn, key);
   return key;
+}
+
+/** `drawnHash`, worked out here where it is pending: only where a caller could not ask first (`drawnHashesAsked`). */
+function drawnHashNow(model: Model, ids: readonly number[]): string {
+  const { input, unread } = structureInputOf(partOf(model, new Set(ids)));
+  const found = identity(input);
+  const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawingKey(model, ids)}`).toString(36);
+  identities.set(drawingKey(model, ids), key);
+  return key;
+}
+
+/**
+ * `go`, once the identity of each of `models` - the drawings a step gives, each with its record - is known (`drawnHash`,
+ * `placedRecord`): at once where each is, or is small enough to work out here; else once the worker has answered, so that the
+ * drawing thread never works one out. Asked and failed, `go` all the same.
+ */
+export function whenDrawnKnown(models: readonly Model[], go: () => void): void {
+  const inputs = models.map((m) => structureInputOf(m).input);
+  if (inputs.every((input) => identityKnown(input))) return go();
+  void identitiesAsked(inputs).then(go, go);
+}
+
+/** Each structure's identity (`drawnHash`) asked of the worker and answered: for a caller that may wait before it reads them. */
+export async function drawnHashesAsked(model: Model, structures: readonly (readonly number[])[]): Promise<void> {
+  await identitiesAsked(structures.map((ids) => structureInputOf(partOf(model, new Set(ids))).input));
+}
+
+/**
+ * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out): a hydrogen bond in it - an
+ * enol's own - is no bond of the structure, nor of its identity, which identity's input leaves out itself. Each ask and each reading of a
+ * structure's identity (`drawnHash`) goes through it, so that what is asked is what is read.
+ */
+export function structureInputOf(part: Model): ReturnType<typeof identityInputOf> {
+  return identityInputOf(labelsDrawnOut(part));
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
@@ -250,8 +300,11 @@ export const BEFORE_THE_EDIT = "its properties were for the structure before the
 /** What a stale record says once a step has worked new values out of the structure as it is: those it had before the edit are gone still. */
 export const TAKEN_AT_THE_EDIT = "the properties it had before the edit were taken away; those it has are of it as it is";
 
-/** A record put on a structure as it is drawn now: of that structure (`of`). */
-export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => ({ ...record, of: drawnHash(model, ids) });
+/** A record put on a structure as it is drawn now: of that structure (`of`) - as it was, while its identity is pending. */
+export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => {
+  const of = drawnHash(model, ids);
+  return of == null ? record : { ...record, of };
+};
 
 /**
  * The record of a structure edited since it was given, or of two joined
@@ -268,7 +321,10 @@ function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undef
 
 /** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`) - and its lasting id, the structure being another. */
 export function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
-  if (!record?.of || record.of === drawnHash(model, ids)) return record;
+  if (!record?.of) return record;
+  // (its identity pending: kept as it stands - not known to be another is never taken for one)
+  const now = drawnHash(model, ids);
+  if (now == null || record.of === now) return record;
   return joined(undefined, record);
 }
 
@@ -312,7 +368,9 @@ export function memberRecord(record: DrawnRecord | undefined, model: Model, ids:
  * (`structureIdAt`, at the step's exit and its place).
  */
 export function placedRecord(record: DrawnRecord, model: Model, ids: readonly number[], given: (now: string) => string): DrawnRecord {
-  const now = drawnHash(model, ids);
+  // (asked before the step puts its structures down - workflow/run `madePut`'s caller - so known here; worked out in place only
+  //  where it was not)
+  const now = drawnHash(model, ids) ?? drawnHashNow(model, ids);
   const id = record.id && (!record.of || record.of === now) ? record.id : given(now);
   return { ...record, id, of: now };
 }
@@ -355,6 +413,23 @@ export function recordHow(r: DrawnRecord | undefined): string | undefined {
 export function recordWhy(r: DrawnRecord | undefined): string | undefined {
   const s = r?.status;
   return s && typeof s === "object" && "aside" in s ? s.aside : undefined;
+}
+
+/**
+ * The key of a numbering (lib/steps `NUMBERING`): of the atoms and bonds of
+ * what entries are numbered as - Atom map's references, or an entry itself -
+ * so that two of one compound number alike, and two of different compounds
+ * never do.
+ */
+export function numberingKey(references: readonly Pick<SetEntry, "atoms" | "bonds">[]): string {
+  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
+  return hash(graph).toString(36);
+}
+
+/** The numbering an entry is in now (lib/steps `NUMBERING`): the label Atom map wrote on it - or, never mapped, its own, with the key Atom map would give it as its reference. */
+export function numberingOf(e: SetEntry): string {
+  const n = e.properties?.[NUMBERING];
+  return n?.status === "computed" && typeof n.value === "string" ? n.value : `${OWN_NUMBERING} (${numberingKey([e])})`;
 }
 
 /** FNV-1a over a string: a short key - for what came into a step, and for the structure a record is of. */
@@ -690,6 +765,8 @@ export type SetEntry = {
   wholeWithoutH?: true;
   /** It is one of only a part of its compound's conformers that came from a search (`Molecule3D.partOf`): what a step makes of it is a part too. */
   partOf?: true;
+  /** It is a conformer of a structure of several parts, each searched alone (`Molecule3D.partsAlone`): never weighed as one compound's (`PARTS_ALONE_REFUSED`). */
+  partsAlone?: true;
   /**
    * What the calculation it was read from says - the program, the method
    * its energy is of - and what its molecule keeps besides (`keptOf`): the
@@ -994,6 +1071,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
+        ...(m.partsAlone ? { partsAlone: true as const } : {}),
         ...(m.calc ? { calc: f === calcFrame(m, n) ? calcOfFrame(m.calc, f, n) : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         ...(m.converged?.length === n && m.converged[f] ? { converged: m.converged[f]! } : {}),
@@ -1464,3 +1542,6 @@ export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
   const noun = holds === "conformers" ? "conformer" : "molecule";
   return `${entries.toLocaleString("en-US")} ${entries === 1 ? noun : `${noun}s`}`;
 }
+
+/** Why a step that weighs a set's frames as one compound's conformers - Populations, Ensemble - refuses those of a structure of several parts, each searched alone (`SetEntry.partsAlone`): one part varied at a time, the rest at their lowest, its shares would be of nothing. */
+export const PARTS_ALONE_REFUSED = "A structure of several parts, each searched alone: each part's conformers are its own, and no shares of the whole are given";

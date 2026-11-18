@@ -6,6 +6,7 @@
  * Nothing here is any program's.
  */
 import { elementOf } from "./elements";
+import { ionic } from "./perception/elements";
 
 /** One problem the toolkit's own check finds in a SMILES it parses but cannot make sense of, as it names it. */
 export type SmilesProblem = {
@@ -30,11 +31,6 @@ const AROMATIC_IN_BRACKETS = new Set(["b", "c", "n", "o", "p", "s", "se", "as", 
 /** A text written as a formula - SnCl4, C6H6, H2O: element symbols, each once, a count after one of them at least. */
 const FORMULA = /^(?:[A-Z][a-z]?\d*)+$/;
 const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
-/** The charges of groups 1 and 2's ions: their halides salts, written as ions. */
-const IONIC = new Map<string, number>([
-  ...["Li", "Na", "K", "Rb", "Cs", "Fr"].map((e) => [e, 1] as const),
-  ...["Be", "Mg", "Ca", "Sr", "Ba", "Ra"].map((e) => [e, 2] as const),
-]);
 
 /** One of the 118 elements, by its symbol as written (case and all). */
 const isElement = (symbol: string): boolean => elementOf(symbol) != null;
@@ -74,7 +70,7 @@ async function formulaSaid(parts: [string, number][], read: (smiles: string) => 
   if (parts.length === 2 && parts[0][1] === 1 && parts[0][0] !== "H" && HALOGENS.has(parts[1][0])) {
     const [[centre], [x, n]] = parts;
     let smiles: string | null;
-    const charge = IONIC.get(centre);
+    const charge = ionic.get(centre);
     if (charge != null) smiles = n === charge ? `[${centre}+${charge > 1 ? charge : ""}]` + `.[${x}-]`.repeat(n) : null;
     else {
       const atom = ORGANIC.has(centre) ? centre : `[${centre}]`;
@@ -172,14 +168,26 @@ export async function whyNotRead(smiles: string, read: (smiles: string) => Promi
       }
       return `its ${ordinal(k + 1)} atom, ${(problem.symbol ?? "").toLowerCase()}, is written aromatic, in lowercase, but is in no ring`;
     }
-    if (problem.kind === "KekulizeException" && problem.atoms?.length) {
-      const ring = [...problem.atoms].sort((a, b) => a - b);
-      const listed = ring.slice(0, -1).map((a) => String(a + 1)).join(", ") + ` and ${ring[ring.length - 1] + 1}`;
-      return `its aromatic ring of ${ring.length} atoms (${listed}) cannot have alternating double bonds`;
-    }
+    if (problem.kind === "KekulizeException" && problem.atoms?.length) return typedRingRefused(problem.atoms);
   }
   return null;
 }
+
+/**
+ * Why an aromatic ring - its atoms by their places among the SMILES's (0
+ * the first) - cannot be read as written: "its aromatic ring of 5 atoms
+ * (1, 2, 3, 4 and 5) cannot have alternating double bonds". One sentence,
+ * whoever finds it: the toolkit (`KekulizeException`) or Meno's own reader
+ * (lib/chem/kekulize `aromaticRefusal`).
+ */
+export function ringCannotAlternate(atoms: readonly number[]): string {
+  const ring = [...atoms].sort((a, b) => a - b);
+  const listed = ring.length === 1 ? String(ring[0] + 1) : ring.slice(0, -1).map((a) => String(a + 1)).join(", ") + ` and ${ring[ring.length - 1] + 1}`;
+  return `its aromatic ring of ${ring.length} ${ring.length === 1 ? "atom" : "atoms"} (${listed}) cannot have alternating double bonds`;
+}
+
+/** What typed input is told where Meno's own reader refuses its aromatic ring (`ringCannotAlternate`): what is likely left out of it. */
+export const typedRingRefused = (atoms: readonly number[]) => `${ringCannotAlternate(atoms)}: is a charge or an H missing?`;
 
 /** What the plugin that fills the SMILES role says when it cannot read one: its words, before Meno's why. */
 export const NOT_READ = "This SMILES could not be read.";
@@ -192,5 +200,8 @@ export async function notReadSaid(smiles: string, read: (smiles: string) => Prom
   } catch {
     why = null;
   }
-  return why ? `This SMILES could not be read: ${why}.` : NOT_READ;
+  return why ? `This SMILES could not be read: ${endedOnce(why)}` : NOT_READ;
 }
+
+/** A sentence given one mark at its end: a full stop, unless it already ends on one - a why that asks ends on its own question mark. */
+export const endedOnce = (said: string): string => (/[.?!]$/.test(said) ? said : `${said}.`);

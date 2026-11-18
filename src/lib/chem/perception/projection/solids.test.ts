@@ -147,6 +147,21 @@ describe("the ideal boat, C2v", () => {
     // (the faces are the sides of the plane of the four atoms: the out-of-plane atoms lie on the axis's side)
     for (const f of b.free) expect(Math.sign(f.direction[2])).toBe(f.face);
     expect(b.atoms[0][2]).toBeGreaterThan(0);
+    // (a bowsprit's face is the side of the plane its bond leans to: both bowsprits point up, over the ring, as the out-of-plane atoms do)
+    for (const k of [0, 3]) expect([one(b, k, "bowsprit").face, Math.sign(one(b, k, "bowsprit").direction[2])]).toEqual([1, 1]);
+  });
+});
+
+describe("each solid's axis: the ring's own up, a Newman's line of sight toward the viewer", () => {
+  it("is +z for every solid, and the solid lies on its side: a chair's first atom above the mean plane, a boat's and an envelope's out-of-plane atom on it, a Newman's front atom nearer", () => {
+    for (const s of [chair(), flipped(chair()), boat(), halfChair(), envelope(), haworth(6), haworth(5), newman("staggered"), newman("eclipsed"), fused(chair(), 0, "chair", "trans")]) expect(s.axis).toEqual([0, 0, 1]);
+    expect(chair().atoms[0][2]).toBeGreaterThan(0);
+    expect(flipped(chair()).atoms[0][2]).toBeLessThan(0);
+    expect(boat().atoms[0][2]).toBeGreaterThan(0);
+    expect(envelope().atoms[0][2]).toBeGreaterThan(0);
+    expect(newman("staggered").atoms[0][2]).toBeGreaterThan(newman("staggered").atoms[1][2]);
+    // (and a chair's axial bond over an atom above the plane is along it: up the axis)
+    expect(dot(one(chair(), 0, "axial").direction, chair().axis)).toBe(1);
   });
 });
 
@@ -161,6 +176,21 @@ describe("the half-chair and the envelope, drawn by convention", () => {
     closeV(h.atoms[5], [-h.atoms[4][0], h.atoms[4][1], -h.atoms[4][2]]);
   });
 
+  it("is a simple ring as written out: atoms 4 and 5 on the far side of the 3-0 line from the double bond, the ring angles a ring's, not folded in on itself", () => {
+    const h = halfChair();
+    // (d = 0.25: x = sqrt(1/4 - d^2) = 0.43301; y = -sqrt(3)/2 - sqrt(1 - d^2 - (x - 1)^2) = -0.86603 - 0.78487 = -1.6509)
+    closeV(h.atoms[4], [0.43301, -1.6509, 0.25], 4);
+    closeV(h.atoms[5], [-0.43301, -1.6509, -0.25], 4);
+    for (const k of [4, 5]) expect(h.atoms[k][1]).toBeLessThan(-Math.sqrt(3) / 2);
+    // (every ring angle between 105 and 125 degrees: the other root of the same distances folds atom 4 inside the ring)
+    for (let k = 0; k < 6; k++) {
+      const [u, v] = arms(h, k);
+      const angle = deg(Math.acos(dot(u, v)));
+      expect(angle).toBeGreaterThan(105);
+      expect(angle).toBeLessThan(125);
+    }
+  });
+
   it("names its free positions at the allylic atoms pseudo-axial and pseudo-equatorial, and axial and equatorial at the others", () => {
     const h = halfChair();
     for (const k of [0, 3]) expect(freeAt(h, k).map((f) => f.kind).sort()).toEqual(["pseudo-axial", "pseudo-equatorial"]);
@@ -170,6 +200,7 @@ describe("the half-chair and the envelope, drawn by convention", () => {
       const [only] = freeAt(h, k);
       expect(freeAt(h, k)).toHaveLength(1);
       expect(only.kind).toBe("in-plane");
+      expect(only.face).toBe(1);
       close(only.direction[2], 0);
       for (const u of arms(h, k)) close(dot(only.direction, u), -0.5);
     }
@@ -189,6 +220,26 @@ describe("the half-chair and the envelope, drawn by convention", () => {
     closeV(e.atoms[4], [-e.atoms[1][0], e.atoms[1][1], e.atoms[1][2]]);
     closeV(e.atoms[3], [-e.atoms[2][0], e.atoms[2][1], e.atoms[2][2]]);
     expect(e.free).toHaveLength(10);
+  });
+
+  it("is a simple ring as written out: the flap on the far side of the four atoms' line, the angles at the four a pentagon's 108 degrees, none folded in", () => {
+    const e = envelope();
+    // (x1 = 1/2 + cos 72 = 0.80902, sin 72 = 0.95106; the flap's y = sin 72 + sqrt(1 - x1^2 - 0.3^2) = 0.95106 + 0.50546 = 1.45652)
+    closeV(e.atoms[0], [0, 1.45652, 0.3], 4);
+    closeV(e.atoms[1], [-0.80902, 0.95106, 0], 4);
+    closeV(e.atoms[2], [-0.5, 0, 0], 4);
+    expect(e.atoms[0][1]).toBeGreaterThan(Math.sin((72 * Math.PI) / 180));
+    // (the angles at atoms 2 and 3 are the regular pentagon's 108; at 1 and 4, and at the flap, within a few degrees of it)
+    for (const k of [2, 3]) {
+      const [u, v] = arms(e, k);
+      close(deg(Math.acos(dot(u, v))), 108, 6);
+    }
+    for (let k = 0; k < 5; k++) {
+      const [u, v] = arms(e, k);
+      const angle = deg(Math.acos(dot(u, v)));
+      expect(angle).toBeGreaterThan(95);
+      expect(angle).toBeLessThan(125);
+    }
   });
 });
 

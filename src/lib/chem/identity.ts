@@ -1,7 +1,7 @@
 /**
  * A structure's identity and symmetry (docs/WORKFLOWS-FOUNDATION.md, PR 2),
- * from the canonical numbering Clean-up writes its layouts by
- * (src/lib/layout/canonical.ts):
+ * from the canonical numbering of the core (perception/symmetry), which
+ * Clean-up writes its layouts by too:
  * - its identity: the structure written in its own order - the same for
  *   the same structure however its atoms are numbered, another for any
  *   other, a chiral one's mirror image included - and a short key of it;
@@ -17,10 +17,19 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`).
  */
-import { canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
-import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
-import type { Axial, Tetrahedral } from "../layout/stereo";
+import { canonicalWritten, symmetryOrbits as orbitsAsDrawn } from "./perception/symmetry";
+import { type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
+import type { Axial, Cumulated } from "../layout/stereo";
 import type { Radical } from "./molecule";
+import { aromaticForm } from "./perception/aromatic";
+import { hydrogensFolded, plainHydrogenAtoms } from "./perception/fold";
+import { blanksOf, filledIn, valuesOf } from "./perception/stereo/units";
+
+// (identity's fill of what sets nothing: the core's, perception/stereo/units)
+export { filledIn };
+
+// (the aromatic form identity and symmetry compare structures in: the core's, where the two forms are said apart)
+export { aromaticForm };
 
 /**
  * An atom as identity reads it: as the layout does, and besides, its mass
@@ -30,204 +39,69 @@ import type { Radical } from "./molecule";
  * hydrogens not drawn as atoms.
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
-export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[] };
+export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[]; arrangements?: readonly Arranged[] };
 
-/** The bond order a bond its Kekulé structures disagree on is given for identity and symmetry, beside 1, 2 and 3. */
-const AROMATIC = 4;
-
-/**
- * The structure with every bond whose order its Kekulé structures disagree
- * on given one order, whichever of them was drawn: Meno's rule for identity
- * and symmetry. A structure's double bonds pair its atoms off (a perfect
- * matching of those with one); another Kekulé structure of it differs by
- * an alternating cycle - single and double bonds in turn, round a ring.
- * So a bond is drawn now single, now double exactly where it lies on such a
- * cycle, and those bonds become `AROMATIC`: benzene's, naphthalene's,
- * phenanthrene's and azulene's ring bonds, a pyridine's, cyclooctatetraene's.
- * A bond on no such cycle keeps its order, as every Kekulé structure has it:
- * pyrrole's, furan's and thiophene's (they have one Kekulé structure), a
- * quinone's (its C=O is no part of a cycle), azulene's middle bond. Which
- * bonds lie on an alternating cycle is the structure's, not the drawing's,
- * so every Kekulé structure of one structure comes to the same form, and
- * its identity cannot split by how its rings were drawn. It follows that
- * bond-shift isomers are one structure: 1,2-disubstituted cyclooctatetraene
- * with its substituents across a double bond and across a single one - two
- * compounds, a barrier apart - has one identity, as joins and duplicates
- * want it. A bond so made one order says no cis or trans of its own: it is
- * single in some of the structure's Kekulé structures, so a drawing's side
- * on it - a cyclooctatetraene's ring bonds, drawn cis - is dropped with its
- * order. That holds for a real trans bond too: in a large annulene (a
- * [14]- or [18]annulene, with E bonds in its ring), configurational
- * isomers that differ by such a bond are one structure, as the rule
- * states.
- */
-export function aromaticForm(input: LayoutInput): LayoutInput {
-  const n = input.atoms.length;
-  // (each atom's partner by its one double bond, where it has exactly one and no triple bond)
-  const mate = new Array<number>(n).fill(-1);
-  const doubles = new Array<number>(n).fill(0);
-  const triple = new Array<boolean>(n).fill(false);
-  for (const b of input.bonds) {
-    if (b.order === 2) {
-      doubles[b.a]++;
-      doubles[b.b]++;
-      mate[b.a] = b.b;
-      mate[b.b] = b.a;
-    } else if (b.order === 3) triple[b.a] = triple[b.b] = true;
-  }
-  const paired = (i: number) => doubles[i] === 1 && !triple[i] && mate[i] >= 0 && doubles[mate[i]] === 1 && !triple[mate[i]];
-  // (the single bonds between paired atoms: what an alternating cycle's other half runs along)
-  const singles: number[][] = input.atoms.map(() => []);
-  for (const b of input.bonds) {
-    if (b.order === 1 && paired(b.a) && paired(b.b)) {
-      singles[b.a].push(b.b);
-      singles[b.b].push(b.a);
-    }
-  }
-  const key = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
-  const aromatic = new Set<string>();
-  // a single bond u-v lies on an alternating cycle where, from v's partner, single and double bonds in
-  // turn reach a single bond into u's partner (u - v = v' - ... - u' = u)
-  for (const b of input.bonds) {
-    if (b.order !== 1 || !paired(b.a) || !paired(b.b) || mate[b.a] === b.b) continue;
-    const [u, v] = [b.a, b.b];
-    const goal = mate[u];
-    const seen = new Set<number>([mate[v]]);
-    const queue = [mate[v]];
-    let found = false;
-    while (queue.length && !found) {
-      const x = queue.shift()!;
-      for (const y of singles[x]) {
-        if (y === goal) {
-          found = true;
-          break;
-        }
-        if (y === u || y === v) continue;
-        const next = mate[y];
-        if (next === u || next === v || seen.has(next)) continue;
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-    if (!found) continue;
-    aromatic.add(key(u, v));
-    aromatic.add(key(u, mate[u]));
-    aromatic.add(key(v, mate[v]));
-  }
-  if (!aromatic.size) return input;
-  return {
-    ...input,
-    bonds: input.bonds.map((b) => {
-      if (!aromatic.has(key(b.a, b.b))) return b;
-      const { stereo: _side, ...rest } = b;
-      return { ...rest, order: AROMATIC };
-    }),
-  };
-}
+// (a structure's plain hydrogens folded into the atoms they are on, configurations carried: the core's one fold)
+export { hydrogensFolded };
 
 /**
- * The structure with each plain hydrogen atom counted as one of its
- * neighbour's hydrogens, as a structure drawn without it has it: R1 = H is
- * the compound drawn without that H. A hydrogen stays an atom where it is
- * any of these:
- * - charged, with unpaired electrons, or one isotope in particular
- *   (deuterium, tritium);
- * - mapped to an atom of a reaction;
- * - bonded to another hydrogen (H2), or by anything but one single bond;
- * - bonded to more than one atom (bridging), or to none;
- * - on a metal (a hydride ligand);
- * - one of a pi system bound to a metal.
- *
- * A plain hydrogen that sets a configuration is folded in with the
- * configuration kept, carried over to the atom it is on: a stereocentre's
- * hydrogen becomes its implicit one, last among its neighbours, the sense
- * turned for each place it moves; where a double bond's or an axis's
- * configuration is set by it, by its end's other neighbour instead, the
- * sense turned. Where nothing is left to carry it - a centre with two
- * hydrogens, a double bond's end with two - there was no configuration, and
- * none is kept. Folding never depends on the order of the atoms.
+ * Whether identity's fill leaves the arrangement of metal `m` - which of
+ * its donors are across from each other - open: given none (any given for
+ * it set aside), every other place filled as identity fills it, more than
+ * one pairing that can be writes the structure differently. So the one
+ * test of "not given" for identity and for the layout's mark "Which donors
+ * are next to each other is not given": two donors alike next to the
+ * metal can be different ligands further out ([Pt(NH2Me)2(NH2Et)2]2+'s,
+ * [Co(NH2Me)4(NH2Et)2]3+'s), and only the whole structure tells. False
+ * for an atom that is no metal of four or six donors, and where no pairing
+ * can be (a tripod's).
  */
-export function hydrogensFolded(input: IdentityInput): IdentityInput {
-  const n = input.atoms.length;
-  const around: { to: number; order: number }[][] = input.atoms.map(() => []);
-  for (const b of input.bonds) {
-    around[b.a].push({ to: b.b, order: b.order });
-    around[b.b].push({ to: b.a, order: b.order });
-  }
-  const inPi = new Set(input.atoms.flatMap((a) => a.pi ?? []));
-  const onAxis = new Set((input.axes ?? []).flatMap((x) => x.atoms));
-  const plain = (i: number): boolean => {
-    const a = input.atoms[i];
-    if (a.el !== "H" || a.charge || a.isotope || a.radical || a.mapped || a.hs || a.tetra || a.pi || inPi.has(i) || onAxis.has(i)) return false;
-    if (around[i].length !== 1 || around[i][0].order !== 1) return false;
-    const on = input.atoms[around[i][0].to];
-    return on.el !== "H" && !isMetal(on.el);
-  };
-  const folded = new Array<boolean>(n).fill(false);
-  for (let i = 0; i < n; i++) folded[i] = plain(i);
-  if (!folded.some(Boolean)) return input;
-  const kept = input.atoms.map((_, i) => i).filter((i) => !folded[i]);
-  const at = new Map(kept.map((i, k) => [i, k]));
-  const extra = new Array<number>(n).fill(0);
-  for (let i = 0; i < n; i++) if (folded[i]) extra[around[i][0].to]++;
-
-  // (a stereocentre's: its folded hydrogen its implicit one, last; two or more hydrogens, no stereocentre)
-  const centre = (t: Tetrahedral): Tetrahedral | undefined => {
-    const hs = t.neighbours.filter((m) => m < 0 || folded[m]).length;
-    if (hs === 0) return { neighbours: t.neighbours.map((m) => at.get(m)!), volume: t.volume };
-    if (hs > 1) return undefined;
-    const h = t.neighbours.findIndex((m) => m < 0 || folded[m]);
-    const moves = t.neighbours.length - 1 - h;
-    const rest = t.neighbours.filter((_, k) => k !== h).map((m) => at.get(m)!);
-    return { neighbours: [...rest, -1], volume: (moves % 2 ? -t.volume : t.volume) as 1 | -1 };
-  };
-  // (a reference atom folded: its end's other neighbour instead, the sense turned - none, where that end has no other)
-  const instead = (end: number, ref: number, other: number): number | null => {
-    const left = around[end].map((e) => e.to).filter((m) => m !== ref && m !== other);
-    if (left.length !== 1 || folded[left[0]] || input.atoms[end].hs) return null;
-    return left[0];
-  };
-  const atoms = kept.map((i) => {
-    const { tetra, pi, ...a } = input.atoms[i];
-    const t = tetra && centre(tetra);
-    // (a star's pi system by its atoms' new places, as every other reference is: none of them is folded)
-    return { ...a, ...(extra[i] ? { hs: (a.hs ?? 0) + extra[i] } : {}), ...(t ? { tetra: t } : {}), ...(pi ? { pi: pi.map((m) => at.get(m)!) } : {}) };
-  });
-  const bonds = input.bonds.flatMap((b): LayoutBond[] => {
-    if (folded[b.a] || folded[b.b]) return [];
-    const { stereo, ...rest } = b;
-    const bond = { ...rest, a: at.get(b.a)!, b: at.get(b.b)! };
-    if (!stereo) return [bond];
-    let [p, q] = stereo.refs;
-    let cis = stereo.cis;
-    for (const [end, other, which] of [
-      [b.a, b.b, 0],
-      [b.b, b.a, 1],
-    ] as const) {
-      const ref = which === 0 ? p : q;
-      if (!folded[ref]) continue;
-      const by = instead(end, ref, other);
-      if (by == null) return [bond];
-      if (which === 0) p = by;
-      else q = by;
-      cis = !cis;
-    }
-    return [{ ...bond, stereo: { refs: [at.get(p)!, at.get(q)!], cis } }];
-  });
-  const axes = (input.axes ?? []).flatMap((x): Axial[] => {
-    const refs = [...x.refs];
-    let sense = x.sense;
-    for (const k of [0, 1] as const) {
-      if (!folded[refs[k]]) continue;
-      const by = instead(x.atoms[k], refs[k], x.atoms[1 - k]);
-      if (by == null) return [];
-      refs[k] = by;
-      sense = -sense as 1 | -1;
-    }
-    return [{ atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!], refs: [at.get(refs[0])!, at.get(refs[1])!], sense }];
-  });
-  return { atoms, bonds, ...(input.axes ? { axes } : {}) };
+export function arrangementOpen(input: IdentityInput, m: number): boolean {
+  // (asked again and again of one structure as a layout is measured - by its metrics and by its assembly, each building the
+  //  structure its own way: worked out once, the key the same wherever the content is - fields in one order, none absent
+  //  and none at its default told apart, the bonds in one order)
+  const key = `${m}|${openKey(input)}`;
+  const known = openKnown.get(key);
+  if (known != null) return known;
+  if (openKnown.size >= OPEN_KEPT) openKnown.clear();
+  const open = openNow(input, m);
+  openKnown.set(key, open);
+  return open;
 }
+const openKnown = new Map<string, boolean>();
+/** `input` written so that two inputs of one content write one text (`arrangementOpen`'s cache). */
+function openKey(input: IdentityInput): string {
+  const tidy = (o: object) =>
+    Object.entries(o)
+      .filter(([k, v]) => v !== undefined && !((k === "charge" || k === "hs") && v === 0))
+      .sort(([p], [q]) => (p < q ? -1 : p > q ? 1 : 0));
+  const bonds = input.bonds.map((b) => JSON.stringify(tidy(b))).sort();
+  return JSON.stringify([input.atoms.map(tidy), bonds, input.axes ?? [], input.cumulated ?? [], input.arrangements ?? []]);
+}
+const OPEN_KEPT = 1024;
+
+function openNow(input: IdentityInput, m: number): boolean {
+  const others = { ...input, arrangements: (input.arrangements ?? []).filter((x) => x.metal !== m) };
+  const folded = plainHydrogenAtoms(others);
+  // (the metal's place once the plain hydrogens are folded in: none of them is it)
+  const at = m - folded.slice(0, m).filter(Boolean).length;
+  const g = compared(others);
+  const blanks = blanksOf(g);
+  if (!blanks.some((b) => b.kind === "metal" && b.at === at)) return false;
+  const leftOpen = (h: LayoutInput) => {
+    const filled = filledIn(h);
+    return !(filled.input.arrangements ?? []).some((x) => x.metal === at) && !filled.settledMetals.includes(at);
+  };
+  if (leftOpen(g)) return true;
+  // (two metals that set something only together - [Pd2Cl4(PMe3)2]'s cis and trans dimers - are filled in canonical order:
+  //  the first alone sets nothing and is filled, the second is then left open. Each is asked alike: with another metal not
+  //  given given each of its pairings in turn, is this one then left open. Up to `METALS_ASKED` others)
+  const metals = blanks.filter((b) => b.kind === "metal" && b.at !== at);
+  if (metals.length > METALS_ASKED) return false;
+  return metals.some((b) => valuesOf(g, b).some(leftOpen));
+}
+/** How many other metals not given `arrangementOpen` sets in turn: more, and only the canonical order's fill is asked. */
+const METALS_ASKED = 4;
 
 /**
  * The structure as identity compares it: its plain hydrogens folded in
@@ -246,80 +120,15 @@ function compared(input: IdentityInput): LayoutInput {
  * symmetric structures), one structure may be written two ways, so a
  * duplicate can be missed; two different structures are still never
  * written the same, but by the rules identity follows (Kekulé structures,
- * bond-shift isomers, hydrogens folded in).
+ * bond-shift isomers, hydrogens folded in) and for the hand of an
+ * octahedral centre, not yet told, which joins its enantiomers and, with
+ * another such centre, its diastereomers (docs/WORKFLOWS-FOUNDATION.md).
  */
 export function identity(input: IdentityInput): { text: string; complete: boolean } {
-  const units = stereoUnitsOnly(compared(input));
-  const found = canonicalWritten(units.input);
-  return { text: found.text, complete: found.complete && units.complete };
-}
-
-/** A configuration a structure carries: a centre's, by its atom; a double bond's, by its bond; an axis's, by its place among the axes. */
-type StereoUnit = { centre: number } | { bond: number } | { axis: number };
-
-/**
- * The structure with only the configurations that make a stereo unit: a
- * wedge on a centre two of whose neighbours are alike, or a double bond
- * drawn bent, or an axis, whose end has its two other neighbours alike,
- * sets nothing - an isopropyl's CH, a prenyl's C=C(CH3)2 - and is taken
- * out, so that the structure is one whether drawn so or not. Alike means
- * in one orbit of the structure with that configuration left out and
- * every other one kept, under the symmetries that keep the unit's own
- * atoms where they are: 1,4-dimethylcyclohexane's ring arms at one centre
- * are alike until the other centre's configuration is counted, and its cis
- * and trans stay apart. Each is tried in turn, again after each one taken
- * out, until none is. A search for the orbits that ran out of steps still
- * joins only atoms an automorphism found takes onto each other, so groups
- * it finds alike are; where it did not find them alike, the configuration
- * is kept, as drawn, and `complete` says so.
- */
-export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; complete: boolean } {
-  const around: number[][] = input.atoms.map(() => []);
-  for (const b of input.bonds) {
-    around[b.a].push(b.b);
-    around[b.b].push(b.a);
-  }
-  // (the groups whose two alike would set nothing: a centre's neighbours; each end's others, a double bond's or an axis's)
-  const ends = (a: number, b: number) => [around[a].filter((m) => m !== b), around[b].filter((m) => m !== a)];
-  const sides = (g: LayoutInput, u: StereoUnit): number[][] => {
-    if ("centre" in u) return [g.atoms[u.centre].tetra!.neighbours.filter((m) => m >= 0)];
-    if ("bond" in u) return ends(g.bonds[u.bond].a, g.bonds[u.bond].b);
-    return ends(...g.axes![u.axis].atoms);
-  };
-  const alike = (of: readonly number[], side: readonly number[]) => new Set(side.map((m) => of[m])).size < side.length;
-  const without = (g: LayoutInput, u: StereoUnit): LayoutInput => {
-    if ("centre" in u) return { ...g, atoms: g.atoms.map((a, i) => (i === u.centre ? (({ tetra: _tetra, ...rest }) => rest)(a) : a)) };
-    if ("bond" in u) return { ...g, bonds: g.bonds.map((b, i) => (i === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) };
-    return { ...g, axes: g.axes!.filter((_, i) => i !== u.axis) };
-  };
-  let g = input;
-  let complete = true;
-  for (;;) {
-    const units: StereoUnit[] = [
-      ...g.atoms.flatMap((a, i) => (a.tetra ? [{ centre: i }] : [])),
-      ...g.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i }] : [])),
-      ...(g.axes ?? []).map((_, i) => ({ axis: i })),
-    ];
-    if (!units.length) return { input: g, complete };
-    // (atoms the ranks tell apart are apart in every orbit: only those they leave alike are searched)
-    const classes = symmetryClasses(g);
-    let next: LayoutInput | null = null;
-    for (const u of units) {
-      if (!sides(g, u).some((side) => alike(classes, side))) continue;
-      const left = without(g, u);
-      // (the unit's own atoms marked, for the search only: the orbits of what keeps it where it is, not of what takes it
-      // onto another atom alike - 1,3-dichloro-2,4-dimethylcyclobutane's two CHCl, one open, swapped by a half turn)
-      const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : g.axes![u.axis].atoms);
-      const found = orbitsAsDrawn({ ...left, atoms: left.atoms.map((a, i) => (own.has(i) ? { ...a, el: `${a.el}*` } : a)) });
-      if (sides(g, u).some((side) => alike(found.orbit, side))) {
-        next = left;
-        break;
-      }
-      if (!found.complete) complete = false;
-    }
-    if (!next) return { input: g, complete };
-    g = next;
-  }
+  const filled = filledIn(compared(input));
+  if (filled.text != null) return { text: filled.text, complete: filled.complete };
+  const found = canonicalWritten(filled.input);
+  return { text: found.text, complete: found.complete && filled.complete };
 }
 
 /**
@@ -340,7 +149,28 @@ export function identityText(input: IdentityInput): string {
  * whether the search was complete; `identity` does.
  */
 export function identityKey(input: IdentityInput): string {
-  const text = identityText(input);
+  return hashed(identityText(input));
+}
+
+/**
+ * A structure's constitution as a short key: its identity with no
+ * configuration given and none filled in (`filledIn` is for what a
+ * configuration drawn or not drawn means, and a constitution has none) -
+ * the key Meno has always written for it, so that a value saved with the
+ * key of the structure it was worked out on (lib/steps/restructure
+ * `structureKey`) still finds it. Grouping and tables by constitution ask
+ * this.
+ */
+export function constitutionKey(input: IdentityInput): string {
+  const bare = {
+    atoms: input.atoms.map(({ tetra: _tetra, ...a }) => a),
+    bonds: input.bonds.map(({ stereo: _stereo, ...b }) => b),
+  };
+  return hashed(canonicalWritten(compared(bare)).text);
+}
+
+/** A text hashed (FNV-1a, twice over, 64 bits as hex). */
+function hashed(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193;
   for (let i = 0; i < text.length; i++) {

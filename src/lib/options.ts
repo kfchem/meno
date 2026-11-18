@@ -28,6 +28,12 @@ type OptionBase = {
    * (docs/CONVERSATIONS.md, *Meno's tools*).
    */
   person?: true;
+  /**
+   * That a step's value for it may be taken, entry by entry, from a property the entry carries (docs/WORKFLOWS.md, *Options from
+   * a property*) - Meno's own options' alone, each that is its entry's own to take (a torsion's strength); a plugin's number and
+   * text options each may (lib/boundOptions `bindable`).
+   */
+  fromProperty?: true;
 };
 /** The parts of Render's card, in its order: what the molecules look like, how it is rendered, the scene round them, a film's motion. */
 export const OPTION_SECTIONS = ["look", "render", "scene", "motion"] as const;
@@ -65,7 +71,8 @@ export type NumberOption = OptionBase & {
   from?: Known;
   unset?: number;
 };
-export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
+/** `unit`: the unit a number typed in it is in, where it is one (a strength's) - Meno's units table's name or label - so that one taken from a property is converted to it. */
+export type TextOption = OptionBase & { type: "text"; default: string; from?: Known; unit?: string };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
  * Lines of text, one item to a line - Meno's own kinds' alone: a plugin's
@@ -111,6 +118,11 @@ export const MANY_CHOICES = 5;
 /** A role's options' values, by their ids. */
 export type OptionValues = Record<string, string | number | boolean>;
 
+/** Of the options shown (`shownOptions`), the first number that holds no value - one the chemist gives, a window: what a card opened to ask for what it needs focuses. None where each holds one. */
+export function firstUnset(shown: readonly Option[], values: OptionValues): string | undefined {
+  return shown.find((o) => o.type === "number" && !Number.isFinite(Number(values[o.id] ?? o.default)))?.id;
+}
+
 /** An option's value, where `v` is one it takes; else none. */
 function fitting(o: Option, v: unknown): string | number | boolean | undefined {
   switch (o.type) {
@@ -125,6 +137,20 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
     case "switch":
       return typeof v === "boolean" ? v : undefined;
   }
+}
+
+/**
+ * `options`, each one's default the value `remembered` holds for it where
+ * that still fits it - and it is not one that starts from what is written
+ * (`from`), nor a step's own atoms: so that whatever has no value of its own
+ * for an option takes the remembered one, else the option's own default.
+ */
+export function defaultsFrom(options: readonly Option[], remembered: Readonly<Record<string, unknown>> | undefined): Option[] {
+  return options.map((o) => {
+    if (!remembered || o.type === "atoms" || ((o.type === "number" || o.type === "text") && o.from)) return o;
+    const v = fitting(o, remembered[o.id]);
+    return v === undefined ? o : ({ ...o, default: v } as Option);
+  });
 }
 
 /**

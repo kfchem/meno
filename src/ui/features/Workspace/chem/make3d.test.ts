@@ -1,3 +1,6 @@
+import { readMolfile } from "../../../../lib/chem/ctfile";
+import { HEXAGON } from "../../../../lib/chem/testdata/v3000";
+import { drawnGroupsOf } from "../../../../lib/chem/stereoOpen";
 import { describe, expect, it, vi } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -6,12 +9,13 @@ import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
-import { solidOf } from "../utils/molecule3d";
+import { PARTS_ALONE_WHY, sharesOf, sharesWithheld, solidOf } from "../utils/molecule3d";
 import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, conformersOnPage, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { growingJudge } from "./growing";
+import { askWords, asksFirst, bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, growOn, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -467,15 +471,27 @@ describe("conformers made for the page", () => {
     const settings = { chemistry: { sought3d: "fixed", count3d: 25 } as ChemistrySettings, calculations: { cores: 5, coresAll: 8 } };
     await conformersOnPage(chem, stereo, block, "one", { field: "UFF" }, settings);
     expect(asked).toEqual([{ molblock: block.molblock, isomers: [{ centres: [], doubles: [] }], count: 25, options: { field: "UFF", threads: 5 } }]);
-    // (all that jobs may use, where Settings gives no number)
+    // (where Settings gives no number: all that jobs may use but one, left to the page - every core but one, where it limits none)
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: { coresAll: 3 } as typeof settings.calculations });
-    expect(asked[0].options.threads).toBe(3);
+    expect(asked[0].options.threads).toBe(2);
+    asked.length = 0;
+    await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: {} as typeof settings.calculations });
+    expect(asked[0].options.threads).toBe(7);
     // (asked in rounds: each told)
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, settings, { window: 3, first: 10, most: MOST_CONFORMERS }).catch(() => undefined);
     expect(asked.length).toBeGreaterThan(0);
     expect(asked.every((a) => a.options.threads === 5 && a.draw != null)).toBe(true);
+    // (and a search that grows on the page after its first round: the same threads, each round - one core left to the page
+    //  where Settings sets none)
+    for (const [calculations, threads] of [[settings.calculations, 5], [{ coresAll: 3 }, 2], [{}, 7]] as const) {
+      asked.length = 0;
+      const growth = await conformersGrowing(chem, stereo, block, "one", { field: "UFF" }, { calculations: calculations as typeof settings.calculations }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => false).catch(() => null);
+      await growth?.rest(() => {}).catch(() => undefined);
+      expect(asked.length, JSON.stringify(calculations)).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === threads && a.options.field === "UFF"), JSON.stringify(calculations)).toBe(true);
+    }
     vi.unstubAllGlobals();
   });
 
@@ -564,7 +580,7 @@ describe("conformers made for the page", () => {
     expect(pageRounds(block, {}, true)).toEqual({ window: WITHIN_3D, first: 50, most: MOST_CONFORMERS });
     // (ethanol's first round its own fifty - lib/chem/conformersSought - or the chemist's)
     expect(pageRounds(block, { within3d: 2.5 }, true)).toEqual({ window: 2.5, first: 50, most: MOST_CONFORMERS });
-    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000 });
+    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000, firstChosen: true });
   });
 
   it("makes a 3D structure from fresh Settings, in rounds, no window asked - Meno's window for new conformers its own", async () => {
@@ -607,11 +623,426 @@ describe("conformers made for the page", () => {
     }
   });
 
+  it("growing: answers once its first round is in, and goes on after - ending as conformersOf ends, round for round", async () => {
+    // (each draw two conformers: the first two, then each round one new one further along - a conformer of its own - then none new)
+    const roundOf = (draw: number): Conformers =>
+      draw < 3 ? { ...answer, frames: [answer.frames[0], answer.frames[0].map((v, i) => (i === 13 ? v + 0.6 * (draw + 1) : v))], energies: [-0.001, 0.0005 + draw * 0.0001] } : answer;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [roundOf(Number(args.draw))] }) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const rounds = { window: 3, first: 10, most: MOST_CONFORMERS };
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false);
+    // (at once: the first round's, as the page shows them - its search going on, said)
+    expect(growth.first).toHaveLength(1);
+    expect(growth.first[0].frames).toHaveLength(2);
+    expect(growth.first[0].how?.find((r) => r.label === "Rounds")?.text).toBe("1 round, 10 tried so far: searching on");
+    // (after: each round as it lands, then how it ended - as conformersOf, asked the same, ends)
+    const grown: Conformers[] = [];
+    await growth.rest((k, c) => {
+      expect(k).toBe(0);
+      grown.push(c);
+    });
+    const [whole] = await conformersOf(chem, stereo, block, "one", {}, 50, rounds);
+    const last = grown[grown.length - 1];
+    expect(last.how?.find((r) => r.label === "Rounds")?.text).toBe(whole.how?.find((r) => r.label === "Rounds")?.text);
+    expect(last.frames.length).toBe(whole.frames.length);
+    expect(last.energies).toEqual(whole.energies);
+    expect(grown.slice(0, -1).map((c) => c.how?.find((r) => r.label === "Rounds")?.text)).toEqual(["2 rounds, 20 tried so far: searching on", "3 rounds, 40 tried so far: searching on", "4 rounds, 80 tried so far: searching on"]);
+    expect(last.how?.find((r) => r.label === "Rounds")?.text).toBe("5 rounds, 160 tried: the last brought no new conformer within 3 kcal/mol of the lowest");
+    // (run once)
+    await growth.rest(() => grown.push(answer));
+    expect(grown[grown.length - 1]).toBe(last);
+  });
+
+  it("growing, of several parts: a water drawn as its one O is searched as a water, its hydrogens kept (found in the chemistry check)", async () => {
+    // (acetic acid with a water beside it, drawn as one structure: the O alone is H2O, no bare atom)
+    const wet = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", joined: 1 },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C", joined: 1 },
+        { id: 3, x: 1.3, y: 2.25, r: 0.9, el: "O", joined: 1 },
+        { id: 4, x: 2.6, y: 0, r: 0.9, el: "O", joined: 1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "O", joined: 1 },
+      ],
+      bonds: [
+        { id: 1, a: 1, b: 2, order: 1 },
+        { id: 2, a: 2, b: 3, order: 2 },
+        { id: 3, a: 2, b: 4, order: 1 },
+      ],
+    } as Model;
+    const acid: Conformers = {
+      atoms: ["C", "C", "O", "O", "H", "H", "H", "H"].map((el) => ({ el, charge: 0 })),
+      bonds: [[0, 1, 1], [1, 2, 2], [1, 3, 1], [0, 4, 1], [0, 5, 1], [0, 6, 1], [3, 7, 1]].map(([a1, a2, order]) => ({ a1, a2, order: order as 1 | 2 })),
+      frames: [[0, 0, 0, 1.5, 0, 0, 2.1, 1.1, 0, 2.1, -1.1, 0, -0.4, 1, 0, -0.4, -0.5, -0.9, -0.4, -0.5, 0.9, 3, -1.2, 0]],
+      energies: [-0.05],
+      field: "MMFF94",
+      cip: { atoms: {}, bonds: {} },
+      chosen: { atoms: {}, bonds: {} },
+      smiles: "CC(=O)O",
+    };
+    const water: Conformers = { ...acid, atoms: ["O", "H", "H"].map((el) => ({ el, charge: 0 })), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }], frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0]], energies: [-0.01], smiles: "O" };
+    const asked: number[] = [];
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        const n = readMolfile(String(args.molblock))!.atoms.length;
+        asked.push(n);
+        return { isomers: [n === 1 ? water : acid] };
+      },
+    } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(wet, [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 5, first: 10, most: MOST_CONFORMERS }, () => false);
+    const [first] = growth.first;
+    expect(asked).toContain(1);
+    expect(first.atoms.filter((a) => a.el === "H")).toHaveLength(6);
+    expect(first.how?.find((r) => r.label === "Part 2")).toBeUndefined();
+    await growth.rest(() => {});
+  });
+
+  it("growing, of several parts: each part searched alone - a one-atom part not at all - the whole put together of them, no shares of it", async () => {
+    // (sodium acetate as one structure: its acetate searched, two conformers, then none new; Na+ never asked about)
+    const salt = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", joined: 1 },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C", joined: 1 },
+        { id: 3, x: 1.3, y: 2.25, r: 0.9, el: "O", joined: 1 },
+        { id: 4, x: 2.6, y: 0, r: 0.9, el: "O", charge: -1, joined: 1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "Na", charge: 1, joined: 1 },
+      ],
+      bonds: [
+        { id: 1, a: 1, b: 2, order: 1 },
+        { id: 2, a: 2, b: 3, order: 2 },
+        { id: 3, a: 2, b: 4, order: 1 },
+      ],
+    } as Model;
+    const frame = (twist: number) => [0, 0, 0, 1.5, 0, 0, 2.1, 1.1, 0, 2.1, -1.1, 0, -0.4, 1, twist, -0.4, -0.5, -0.9, -0.4, -0.5, 0.9];
+    const acetateIs = (draw: number): Conformers => ({
+      atoms: ["C", "C", "O", "O", "H", "H", "H"].map((el, i) => ({ el, charge: i === 3 ? -1 : 0 })),
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 2 },
+        { a1: 1, a2: 3, order: 1 },
+        { a1: 0, a2: 4, order: 1 },
+        { a1: 0, a2: 5, order: 1 },
+        { a1: 0, a2: 6, order: 1 },
+      ],
+      frames: draw === 0 ? [frame(0)] : [frame(0), frame(0.6)],
+      energies: draw === 0 ? [-0.05] : [-0.05, -0.0495],
+      field: "MMFF94",
+      cip: { atoms: {}, bonds: {} },
+      chosen: { atoms: {}, bonds: {} },
+      smiles: "CC(=O)[O-]",
+    });
+    const asked: string[] = [];
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        asked.push(String(args.molblock));
+        return { isomers: [acetateIs(Number(args.draw))] };
+      },
+    } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(salt, [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 5, first: 10, most: MOST_CONFORMERS }, () => false);
+    const [first] = growth.first as (Conformers & { partsAlone?: true })[];
+    expect(first.partsAlone).toBe(true);
+    expect(first.atoms.map((a) => a.el)).toEqual(["C", "C", "O", "O", "Na", "H", "H", "H"]);
+    expect(first.frames).toHaveLength(1);
+    expect(first.how?.filter((r) => ["Searched", "Part 1: Rounds", "Part 2", "Parts"].includes(r.label))).toEqual([
+      { label: "Searched", text: "each of its 2 parts alone" },
+      { label: "Part 1: Rounds", text: "1 round, 10 tried so far: searching on" },
+      { label: "Part 2", text: "Na+: one atom, no search" },
+      { label: "Parts", text: "2, side by side: where they lie against each other is not modelled" },
+    ]);
+    // (never Na+ asked about: one atom; every asking the acetate alone - no Na in it)
+    expect(asked.every((m) => !/\bNa\b/.test(m))).toBe(true);
+    const grown: Conformers[] = [];
+    await growth.rest((_, c) => grown.push(c));
+    const last = grown[grown.length - 1];
+    expect(last.frames).toHaveLength(2);
+    expect(last.how?.find((r) => r.label === "Part 1: Rounds")?.text).toMatch(/: the last brought no new conformer within 5 kcal\/mol of the lowest$/);
+    expect(last.how?.some((r) => r.label === "Energies")).toBe(true);
+    // (on the page: no shares of the whole)
+    const m = moleculeOf(last, block);
+    expect(m.partsAlone).toBe(true);
+    expect(sharesOf({ ...m, conformerSet: true })).toBeUndefined();
+    expect(sharesWithheld(m)).toBe(PARTS_ALONE_WHY);
+  });
+
+  it("growing: stopped, ends where it is, what came kept and said", async () => {
+    let stop = false;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [{ ...answer, frames: [answer.frames[0].map((v, i) => (i === 13 ? v + 0.5 * (Number(args.draw) + 1) : v))], energies: [-0.001 - 0.0016 * Number(args.draw)] }] }),
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => stop);
+    const said: string[] = [];
+    await growth.rest((_, c) => {
+      said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? "");
+      if (said.length === 2) stop = true;
+    });
+    expect(said).toEqual(["2 rounds, 20 tried so far: searching on", "3 rounds, 40 tried so far: searching on", "3 rounds, 40 tried: stopped, what came kept"]);
+  });
+
+  it("growing: a round that fails ends it failed, saying why, what came kept - never taken for Stop", async () => {
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) =>
+        Number(args.draw) > 0 ? Promise.reject(new Error("the plugin could not read its answer")) : { isomers: [{ ...answer, energies: [-0.001, 0.002] }] },
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => false);
+    const said: string[] = [];
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      // (said failed; why logged, as Meno's log keeps an error)
+      expect(said).toEqual(["1 round, 10 tried: a round failed, what came kept"]);
+      expect(warned).toHaveBeenCalledWith("Meno: a 3D structure's search ended: a round failed.", expect.objectContaining({ message: "the plugin could not read its answer" }));
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it("growing: Stop asked while a round is out - its plugin stopping with it - ends it stopped, nothing logged as an error", async () => {
+    let stop = false;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        if (Number(args.draw) === 0) return { isomers: [{ ...answer, energies: [-0.001, 0.002] }] };
+        stop = true;
+        throw new Error("the plugin was stopped");
+      },
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => stop);
+    const said: string[] = [];
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      expect(said).toEqual(["1 round, 10 tried: stopped, what came kept"]);
+      expect(warned).not.toHaveBeenCalled();
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it("growing: runs its rest once, asked twice at once; lets each judge go as its search ends, or all of them where the rest is not run", async () => {
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [{ ...answer, frames: [answer.frames[Number(args.draw) % 2]], energies: [-0.001] }] }) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    let ended = 0;
+    const counted: typeof growingJudge = (c, w, s) => {
+      const j = growingJudge(c, w, s);
+      return { ...j, end: () => void ended++ };
+    };
+    const rounds = { window: 3, first: 10, most: MOST_CONFORMERS };
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false, counted);
+    const grown: Conformers[] = [];
+    await Promise.all([growth.rest((_, c) => grown.push(c)), growth.rest((_, c) => grown.push(c))]);
+    expect(grown.filter((c) => !c.how?.some((r) => r.text.endsWith("searching on")))).toHaveLength(1);
+    expect(ended).toBe(1);
+    ended = 0;
+    const dropped = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false, counted);
+    dropped.drop();
+    expect(ended).toBe(1);
+    // (one whose first round's judging failed: its judge let go, the failure said)
+    ended = 0;
+    const failing: typeof growingJudge = (c, w, s) => ({ ...counted(c, w, s), add: async () => Promise.reject(new Error("its worker could not judge it")) });
+    await expect(conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false, failing)).rejects.toThrow("its worker could not judge it");
+    expect(ended).toBe(1);
+  });
+
+  it("grows each search in turn, written as each ends - every one of them, one failing among them", async () => {
+    const grown: number[] = [];
+    const settled: number[] = [];
+    const growth = (fail: boolean) => ({ rest: async (g: (k: number, c: Conformers) => void) => (g(0, answer), fail ? Promise.reject(new Error("gone")) : undefined) });
+    const shownAs = (c: Conformers) => ({ atoms: [], energies: c.energies });
+    await expect(
+      growOn(
+        [
+          { growth: growth(true), ids: [1], shownAs },
+          { growth: growth(false), ids: [2, 3], shownAs },
+        ],
+        { grow: (id) => grown.push(id), settle: (id) => settled.push(id) },
+      ),
+    ).rejects.toThrow("gone");
+    expect(grown).toEqual([1]);
+    expect([...new Set(settled)].sort()).toEqual([1, 2, 3]);
+    // (each written as it ends, before the next one goes on)
+    const order: string[] = [];
+    await growOn(
+      [
+        { growth: { rest: async () => void order.push("rest 1") }, ids: [1], shownAs },
+        { growth: { rest: async () => void order.push("rest 2") }, ids: [2], shownAs },
+      ],
+      { grow: () => undefined, settle: (id) => order.push(`settle ${id}`) },
+    );
+    expect(order.slice(0, 3)).toEqual(["rest 1", "settle 1", "rest 2"]);
+  });
+
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {
     const [block] = blocksOf(ethanol, [12]);
     // (ethanol: its OH turns, the rule's fifty - lib/chem/conformersSought)
     expect(pageCount(block, {})).toBe(50);
     expect(pageCount(block, { sought3d: "fixed", count3d: 40 })).toBe(40);
     expect(pageCount(block, { sought3d: "fixed" })).toBe(RING_CONFORMERS);
+  });
+});
+
+describe("a hydrogen bond drawn, made in 3D", () => {
+  // ((Z)-4-hydroxypent-3-en-2-one, its O-H...O=C hydrogen bond drawn (a file's type 10), and a water whose H it binds - when `water`)
+  const L = NOMINAL_BOND_LENGTH;
+  const at = (id: number, deg: number, r: number, el = "C") => ({ id, x: r * L * Math.cos((deg * Math.PI) / 180), y: -r * L * Math.sin((deg * Math.PI) / 180), r: 0.9, el });
+  const drawn = (water: boolean): Model => ({
+    atoms: [at(1, 150, 2), at(2, 150, 1), at(3, -150, 1, "O"), at(4, 90, 1), at(5, 30, 1), at(6, -30, 1, "O"), at(7, 30, 2), at(8, -90, 1, "H"), ...(water ? [at(9, -90, 2, "O")] : [])],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 2 },
+      { id: 13, a: 2, b: 4, order: 1 },
+      { id: 14, a: 4, b: 5, order: 2 },
+      { id: 15, a: 5, b: 6, order: 1 },
+      { id: 16, a: 5, b: 7, order: 1 },
+      { id: 17, a: 6, b: 8, order: 1 },
+      { id: 18, a: 8, b: 3, order: 1, hydrogen: true },
+      ...(water ? [{ id: 19, a: 9, b: 3, order: 1 as const, hydrogen: true as const }] : []),
+    ],
+  });
+  /** A V3000 MOL block's bonds, as its lines say them: type, first atom, second. */
+  const bondsIn = (molblock: string) => {
+    const lines = molblock.split("\n");
+    const [from, to] = [lines.indexOf("M  V30 BEGIN BOND"), lines.indexOf("M  V30 END BOND")];
+    return lines.slice(from + 1, to).map((l) => l.split(/\s+/).slice(3, 6).map(Number));
+  };
+
+  it("hands the embedding no hydrogen bond: the enol's block holds its seven bonds, none of them the hydrogen bond (type 10)", () => {
+    const blocks = blocksOf(drawn(false), [1]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].bonds).toEqual([11, 12, 13, 14, 15, 16, 17]);
+    const bonds = bondsIn(blocks[0].molblock);
+    expect(bonds).toHaveLength(7);
+    expect(bonds.some(([type]) => type === 10)).toBe(false);
+  });
+
+  it("makes what a hydrogen bond alone joins two structures, side by side - the one asked of first - and counts two parts", () => {
+    const blocks = blocksOf(drawn(true), [1]);
+    expect(blocks.map((b) => b.atoms)).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [9]]);
+    expect(drawnBlocksOf(drawn(true), [9]).map((b) => b.atoms.length)).toEqual([1, 8]);
+    expect(drawnBlocksOf(drawn(true), drawn(true).atoms.map((a) => a.id))).toHaveLength(2);
+  });
+
+  it("keeps a molecule made so its drawing's: a hydrogen bond drawn or taken away since changes nothing made", () => {
+    const blocks = blocksOf(drawn(true), [1]);
+    expect(blocksStill(blocks, drawn(true))).toBe(true);
+    const without = { ...drawn(true), bonds: drawn(true).bonds.filter((b) => !b.hydrogen) };
+    expect(blocksStill(blocks, without)).toBe(true);
+    expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(drawn(true), blocks[0].atoms));
+    expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(without, blocks[0].atoms));
+  });
+
+  it("tells of a counter-ion a hydrogen bond alone holds, as of one drawn apart: Cl- left out, and still a part of what was drawn", () => {
+    // (methylammonium, one N-H drawn, and a chloride held to that H by a hydrogen bond - a salt drawn with its hydrogen bond)
+    const salt = (bond: boolean): Model => ({
+      atoms: [at(1, 180, 1), at(2, 0, 0, "N"), at(3, 0, 1, "H"), at(4, 0, 2, "Cl")].map((a) => (a.id === 2 ? { ...a, charge: 1 } : a.id === 4 ? { ...a, charge: -1 } : a)),
+      bonds: [
+        { id: 11, a: 1, b: 2, order: 1 },
+        { id: 12, a: 2, b: 3, order: 1 },
+        ...(bond ? [{ id: 13, a: 3, b: 4, order: 1 as const, hydrogen: true as const }] : []),
+      ],
+    });
+    for (const bond of [true, false]) {
+      expect(blocksOf(salt(bond), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3]]);
+      const bare = bareAtomsOf(salt(bond), bond ? [1] : [1, 4]);
+      expect(bare.map((a) => a.id)).toEqual([4]);
+      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure.");
+    }
+    expect(drawnBlocksOf(salt(true), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3], [4]]);
+  });
+});
+
+describe("a configuration's groups on the page (foundation part 7)", () => {
+  it("says on the card that asks what a group stands for, and what is drawn without a configuration, each once, nothing before them", () => {
+    const and1 = { kind: "and" as const, name: "and1" };
+    const or1 = { kind: "or" as const, name: "or1" };
+    expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Stereo drawn as a group", said: "and1 stands for both of its forms", isomers: 2 });
+    expect(askWords([{ atoms: [], bonds: [], groups: [or1], isomers: 2 }]).said).toBe("or1 is one of two forms, not known which");
+    expect(askWords([{ atoms: [4], bonds: [], groups: [and1], isomers: 4 }])).toEqual({ title: "Stereo not drawn", said: "1 stereocentre is drawn without a configuration; and1 stands for both of its forms", isomers: 4 });
+  });
+
+  it("asks first, one or all, for a group with more than one half; not for one with one and nothing open", () => {
+    const and1 = { kind: "and" as const, name: "and1" };
+    expect(asksFirst({ atoms: [], bonds: [], groups: [and1], isomers: 2 })).toBe(true);
+    expect(asksFirst({ atoms: [], bonds: [], groups: [and1], isomers: 1 })).toBe(false);
+    expect(asksFirst({ atoms: [3], bonds: [], groups: [], isomers: 2 })).toBe(true);
+    expect(asksFirst({ atoms: [], bonds: [], groups: [], isomers: 1 })).toBe(false);
+  });
+
+  // (trans-2-methylcyclohexan-1-ol, its two centres and1: a racemate)
+  const hexagon = HEXAGON.map((p, k) => ({ id: 100 + k, ...p, r: 0.9, el: "C", stereoGroup: k < 2 ? { kind: "and" as const, n: 1 } : undefined }));
+  const racemate: Model = {
+    atoms: [...hexagon.map(({ stereoGroup, ...a }) => (stereoGroup ? { ...a, stereoGroup } : a)), { id: 106, x: 0, y: 3, r: 0.9, el: "O" }, { id: 107, x: 2.598, y: 1.5, r: 0.9, el: "C" }],
+    bonds: [
+      ...[0, 1, 2, 3, 4, 5].map((k) => ({ id: 200 + k, a: 100 + k, b: 100 + ((k + 1) % 6), order: 1 as const })),
+      { id: 206, a: 100, b: 106, order: 1 as const, stereo: "up" as const },
+      { id: 207, a: 101, b: 107, order: 1 as const, stereo: "down" as const },
+    ],
+  };
+  // (one conformer of the half as drawn: the ring a little puckered, the OH above it, the methyl below)
+  const zs = [0.25, -0.25, 0.25, -0.25, 0.25, -0.25, 1.2, -1.2];
+  const frame = [...HEXAGON, { x: 0, y: 3 }, { x: 2.598, y: 1.5 }].flatMap((p, i) => [p.x, p.y, zs[i]]);
+  const volume = (f: number[], c: number, [a, b, d]: number[]) => {
+    const v = (i: number) => [f[3 * i] - f[3 * c], f[3 * i + 1] - f[3 * c + 1], f[3 * i + 2] - f[3 * c + 2]];
+    const [p, q, r] = [v(a), v(b), v(d)];
+    return Math.sign(p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0]));
+  };
+
+  it("makes the half that is the mirror image of the one before it as that one's reflection, never asked for: its energies kept, said so", async () => {
+    const [block] = blocksOf(racemate, racemate.atoms.map((a) => a.id));
+    const read = drawnGroupsOf([block.molblock])!.read;
+    const centres = [...read.values()];
+    const asIs = { centres, doubles: [] };
+    const turned = { centres: centres.map((c) => ({ ...c, sense: c.sense > 0 ? (-1 as const) : (1 as const) })), doubles: [] };
+    const stereo = {
+      request: async (op: string) =>
+        op === "stereo_elements"
+          ? { read: true, elements: centres.map((c) => ({ kind: "centre", at: c.atom, state: "specified" })) }
+          : { isomers: [{ configured: turned, smiles: "b" }, { configured: asIs, smiles: "a" }], free: false },
+    } as unknown as ChemClient;
+    const asked: { isomers: unknown[] }[] = [];
+    const chem = {
+      request: async (_op: string, args: { isomers: unknown[] }) => (
+        asked.push(args),
+        {
+          isomers: args.isomers.map(() => ({
+            atoms: racemate.atoms.map((a) => ({ el: a.el, charge: 0 })),
+            bonds: racemate.bonds.map((b) => ({ a1: b.a - 100, a2: b.b - 100, order: 1 })),
+            frames: [frame],
+            energies: [-0.25],
+            field: "MMFF94",
+            how: [{ label: "Field", text: "MMFF94" }],
+            cip: { atoms: {}, bonds: {} },
+            smiles: "C[C@@H]1CCCC[C@H]1O",
+          })),
+        }
+      ),
+    } as unknown as ChemClient;
+    const made = await conformersOf(chem, stereo, block, "all");
+    // (one search, of the half as drawn; the other made of it)
+    expect(asked).toHaveLength(1);
+    expect(asked[0].isomers).toEqual([{ centres: asIs.centres, doubles: [] }]);
+    expect(made).toHaveLength(2);
+    expect(made[1].energies).toEqual(made[0].energies);
+    expect(made[0].how?.filter((h) => h.label === "Stereo").map((h) => h.text)).toEqual(["and1 as drawn"]);
+    expect(made[1].how?.filter((h) => h.label === "Stereo").map((h) => h.text)).toEqual([
+      "and1 turned over: the mirror image of the half as drawn (same energies)",
+      "made as the mirror image of and1 as drawn: not calculated",
+    ]);
+    // (each centre the other way round in it: its mirror image, by its places)
+    for (const c of centres) {
+      const ns = c.neighbours.slice(0, 3);
+      expect(volume(made[1].frames[0], c.atom, ns)).toBe(-volume(made[0].frames[0], c.atom, ns));
+    }
+    // (its SMILES the mirror image's)
+    expect(made[1].smiles).toBe("C[C@H]1CCCC[C@@H]1O");
   });
 });

@@ -19,10 +19,12 @@
  */
 import type { Option, OptionValues } from "../options";
 import { symmetryOrbits } from "../layout/canonical";
-import { smallestRings } from "../layout/rings";
+import { factsOf } from "./perception/facts";
+import { sharesMoreThanABond } from "./perception/rings";
 import { readMolfile } from "./ctfile";
-import { aromaticIn } from "./aromaticity";
-import { implicitHydrogens, mostBonds } from "./molecule";
+import { flatRingAtoms, neighboursOf } from "./perception/flatRings";
+import { HELD_FLAT_BY_AN_ACYL } from "./perception/stereo/lonePairs";
+import { implicitHydrogens } from "./molecule";
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -61,55 +63,10 @@ export const MOST_CONFORMERS = 5000;
 
 const heavy = (a: SoughtAtom | undefined) => a != null && a.el !== "H" && a.el !== "*";
 
-/** Each atom's bonds, as [other atom, order]. */
-function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): [number, number][][] {
-  const out: [number, number][][] = atoms.map(() => []);
-  for (const b of bonds) {
-    if (b.a === b.b || !atoms[b.a] || !atoms[b.b]) continue;
-    out[b.a].push([b.b, b.order]);
-    out[b.b].push([b.a, b.order]);
-  }
-  return out;
-}
-
-/** The bonds that lie in a ring - those whose ends stay joined without them - by index. */
-function ringBonds(n: number, bonds: readonly SoughtBond[]): Set<number> {
-  // (the bonds no cycle passes through are a graph's bridges: found by depth-first search, each bond's lowest reach)
-  const adj: [number, number][][] = Array.from({ length: n }, () => []);
-  bonds.forEach((b, i) => {
-    if (b.a === b.b || b.a >= n || b.b >= n) return;
-    adj[b.a].push([b.b, i]);
-    adj[b.b].push([b.a, i]);
-  });
-  const seen = new Array<number>(n).fill(-1);
-  const low = new Array<number>(n).fill(0);
-  const bridges = new Set<number>();
-  let time = 0;
-  for (let root = 0; root < n; root++) {
-    if (seen[root] >= 0) continue;
-    // (iterative: a chain of thousands of atoms is no recursion's)
-    const stack: { v: number; via: number; k: number }[] = [{ v: root, via: -1, k: 0 }];
-    seen[root] = low[root] = time++;
-    while (stack.length) {
-      const top = stack[stack.length - 1];
-      if (top.k < adj[top.v].length) {
-        const [w, i] = adj[top.v][top.k++];
-        if (i === top.via) continue;
-        if (seen[w] < 0) {
-          seen[w] = low[w] = time++;
-          stack.push({ v: w, via: i, k: 0 });
-        } else low[top.v] = Math.min(low[top.v], seen[w]);
-      } else {
-        stack.pop();
-        const up = stack[stack.length - 1];
-        if (up) {
-          low[up.v] = Math.min(low[up.v], low[top.v]);
-          if (low[top.v] > seen[up.v]) bridges.add(top.via);
-        }
-      }
-    }
-  }
-  return new Set(bonds.flatMap((_, i) => (bridges.has(i) ? [] : [i])));
+/** The bonds that lie in a ring - those whose ends stay joined without them - by index: the core's (lib/chem/perception/rings). */
+export function bondsInRings(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): Set<number> {
+  const { inRing } = factsOf({ atoms, bonds });
+  return new Set(bonds.flatMap((_, i) => (inRing[i] ? [i] : [])));
 }
 
 /**
@@ -146,7 +103,7 @@ function ringBonds(n: number, bonds: readonly SoughtBond[]): Set<number> {
  */
 export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): number[] {
   const around = neighboursOf(atoms, bonds);
-  const inRing = ringBonds(atoms.length, bonds);
+  const inRing = bondsInRings(atoms, bonds);
   const heavyAround = (i: number) => around[i].filter(([j]) => heavy(atoms[j]));
   const end = (i: number) => heavyAround(i).length === 1;
   const linear = (i: number) => around[i].some(([, o]) => o === 3);
@@ -157,7 +114,7 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
     const kind = (j: number) => `${atoms[j].el}${atoms[j].charge ?? 0}`;
     return rest.every(([j]) => kind(j) === kind(first[0]));
   };
-  const lonePair = (i: number) => ["N", "O", "S"].includes(atoms[i].el) && (atoms[i].charge ?? 0) <= 0;
+  const lonePair = (i: number) => HELD_FLAT_BY_AN_ACYL.has(atoms[i].el) && (atoms[i].charge ?? 0) <= 0;
   const acyl = (i: number) => atoms[i].el === "C" && around[i].some(([j, o]) => o === 2 && ["O", "N", "S"].includes(atoms[j].el));
   // (a lone pair's atom carrying two alike - in one orbit of the symmetries that keep the flat bond itself in place: one of
   //  them swaps the two, so the bond's two forms are one shape. The bond's own atoms marked apart from every other atom, so
@@ -220,37 +177,8 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
   return out.sort((x, y) => x - y);
 }
 
-/**
- * The atoms that lie on a ring held flat, by index: each ring (the smallest
- * set) every atom of which is aromatic under Meno's rule (lib/chem/
- * aromaticity: Hückel's 4n + 2, of each ring and each pair of rings fused
- * at a bond) - a benzene's, a pyrrole's, a tropone's, azulene's two, and a
- * fluoranthene's five-ring, which is not aromatic itself but every atom of
- * which lies on an aromatic ring (the rule's 22 electrons at most is the
- * rule's alone). So, whatever its count, is one every bond of which is
- * drawn aromatic, and one every atom of which is bound to one metal (a
- * ferrocene's, eta) - by a bond each, or through a star at its centre
- * (`held`: each such bond's atoms) - as its metal holds it.
- */
-export function flatRingAtoms(
-  atoms: readonly SoughtAtom[],
-  bonds: readonly SoughtBond[],
-  rings: readonly (readonly number[])[],
-  held: readonly (readonly number[])[] = [],
-): Set<number> {
-  const around = neighboursOf(atoms, bonds);
-  const metal = (i: number) => heavy(atoms[i]) && mostBonds(atoms[i].el) === null;
-  const aromatic = aromaticIn(atoms, bonds, rings);
-  const out = new Set<number>();
-  for (const ring of rings) {
-    const order = (x: number, y: number) => around[x].find(([j]) => j === y)?.[1];
-    const ringBondsOf = ring.map((x, k) => order(x, ring[(k + 1) % ring.length]));
-    const bound = ring.every((x) => around[x].some(([j]) => metal(j))) && around[ring[0]].some(([m]) => metal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
-    const centred = held.some((h) => ring.every((x) => h.includes(x)));
-    if (bound || centred || ringBondsOf.every((o) => o === 4) || ring.every((x) => aromatic.has(x))) for (const x of ring) out.add(x);
-  }
-  return out;
-}
+/** The atoms that lie on a ring held flat, by index: worked out in the core (perception/flatRings `flatRingAtoms`, part 14 B). */
+export { flatRingAtoms };
 
 /**
  * Whether a molecule has a ring with more than one shape of its own: a ring
@@ -263,15 +191,11 @@ export function flatRingAtoms(
  * each sugar of a cyclodextrin lies on its macrocycle.
  */
 export function canFlip(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[], held: readonly (readonly number[])[] = []): boolean {
-  const rings = smallestRings(
-    atoms.length,
-    bonds.filter((b) => b.a !== b.b && atoms[b.a] && atoms[b.b]).map((b) => [b.a, b.b] as const),
-  );
+  const rings = factsOf({ atoms, bonds }).rings;
   const flat = flatRingAtoms(atoms, bonds, rings, held);
-  const edges = rings.map((r) => new Set(r.map((x, k) => (x < r[(k + 1) % r.length] ? `${x},${r[(k + 1) % r.length]}` : `${r[(k + 1) % r.length]},${x}`))));
   return rings.some((ring, i) => {
     if (ring.length < 5 || ring.every((x) => flat.has(x))) return false;
-    const bridged = rings.some((other, j) => j !== i && other.length <= ring.length && [...edges[i]].filter((e) => edges[j].has(e)).length > 1);
+    const bridged = rings.some((other, j) => j !== i && sharesMoreThanABond(ring, other));
     return !bridged;
   });
 }

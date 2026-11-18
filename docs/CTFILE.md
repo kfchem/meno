@@ -54,7 +54,9 @@ title, its first line; the record's data items are not kept:
   back.
 - **Collections** (V3000): enhanced stereo (MDLV30/STEABS, STERACn,
   STERELn, and the bond collections STEBABS, STEBRACn, STEBRELn),
-  highlighting, a file's own.
+  highlighting, a file's own. An AND or OR group of centres is made in
+  3D, and by *Stereoisomers*, as each of its halves; a group on a bond is
+  made as drawn, said so (WORKFLOWS.md, *Stereoisomers is Meno's*).
 - **The chiral flag**, link atoms, Rgroup definitions and their logic.
 - **Rxnfiles**, V2000 (`$MOL` blocks) and V3000 (BEGIN REACTANT / PRODUCT /
   REAGENT blocks), their molecules in the file's order: reactants,
@@ -101,15 +103,46 @@ holds whole: the file is read (before, either failed as it was read).
 
 | What | How | Why |
 |---|---|---|
-| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
+| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it (on an odd cumulene's double bond, a butatriene's, beside the run's ends): never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |
-| An aromatic bond (type 4) | Written out as a Kekulé structure: every carbon of the ring with one double bond, a pyridine-type N where the ring needs it, a pyrrole-type N-H or a furan O with none. A query atom in the ring - A, Q, *, an atom list - takes one where the ring needs it, as such an N does (until 2026-10-13 it took none, and a ring with a query atom between every two carbons came out with no double bond at all). Where the file does not say which nitrogen carries a ring's H - an imidazole's, a tetrazole's, a purine's, a porphine's - and another could have, the atom it is drawn on says so, dashed, on hover: "The file does not say which atom carries this H: it is drawn on this one." Until that atom is changed (2026-10-22, the maintainer: to be tried in use). | The editor draws single, double and triple bonds. IUPAC defines aromatic compounds by a cyclic, delocalized (4n+2) π-electron system, after Hückel (Moss, Smith and Tavernier, Pure Appl. Chem. 67, 1307, 1995, p. 1319), and states Hückel's rule of monocyclic systems, generally n = 0 to 5 (Müller, Pure Appl. Chem. 66, 1077, 1994, p. 1122; E. Hückel, Z. Phys. 70, 204, 1931). Applying it to fused rings is Meno's extension: to choose how many nitrogens carry an H, Meno applies the 4n + 2 count to each aromatic ring system as a whole, fused rings included, with no upper bound on n - porphine's 26, n = 6 - each atom counted as Meno's rule on aromatic rings counts it (`lib/chem/aromaticity.ts`), a completion of what the file leaves out, not a statement of which rings are aromatic. |
+| An aromatic bond (type 4) | Written out as a Kekulé structure: every carbon of the ring with one double bond, a pyridine-type N where the ring needs it, a pyrrole-type N-H or a furan O with none. A ring N bound to a metal is read as its ring has it (2026-11-13): it takes a double bond, lending its lone pair to the metal as a pyridine's N does, or none, the bond to the metal its own as a pyrrolide's or a porphyrin's N's is - and then it carries no H, the metal being where the H would be. Of the ways the ring's double bonds can go, the fewest atoms left without one come first, as for an N-H (below); of those, the fewest N given an H the input does not state. So a pyridine, a pyrazine or a phenanthroline bound by its N keeps every double bond, an imidazole bound by its N3 is an imidazole, and a zinc porphyrin has two N on the zinc as their own bonds and two lending (before, every such bond was counted as the N's own: a pyridine on a platinum was read as a dihydropyridine with a CH2; the same for a SMILES). Where the molecule as a whole has no Kekulé structure, each ring system - its aromatic bonds joined at their atoms - is written out on its own, so that a ring with none leaves the others theirs. A query atom in the ring - A, Q, *, an atom list - takes one where the ring needs it, as such an N does (until 2026-10-13 it took none, and a ring with a query atom between every two carbons came out with no double bond at all). Where the file does not say which nitrogen carries a ring's H - an imidazole's, a tetrazole's, a purine's, a porphine's - and another could have, the atom it is drawn on says so, dashed, on hover: "The file does not say which atom carries this H: it is drawn on this one." Until that atom is changed (2026-10-22, the maintainer: to be tried in use). A file's aromatic bonds are read so, leniently; a SMILES typed with a ring that cannot be given its double bonds as written is refused instead (EDITOR-2D.md, *Quick Add*). | The editor draws single, double and triple bonds. IUPAC defines aromatic compounds by a cyclic, delocalized (4n+2) π-electron system, after Hückel (Moss, Smith and Tavernier, Pure Appl. Chem. 67, 1307, 1995, p. 1319), and states Hückel's rule of monocyclic systems, generally n = 0 to 5 (Müller, Pure Appl. Chem. 66, 1077, 1994, p. 1122; E. Hückel, Z. Phys. 70, 204, 1931). Applying it to fused rings is Meno's extension: to choose how many nitrogens carry an H, Meno applies the 4n + 2 count to each aromatic ring system as a whole, fused rings included, with no upper bound on n - porphine's 26, n = 6 - each atom counted as Meno's rule on aromatic rings counts it (`lib/chem/aromaticity.ts`), a completion of what the file leaves out, not a statement of which rings are aromatic. |
 | A query bond (types 5 to 8) | The first kind it stands for - single, or double for "double or aromatic" - labelled small beside its middle on the side with more room: S/D, S/A, D/A, Any. | GR-11.2: a bond's annotation by its middle, smaller than an atom's label. Meno's own labels. |
 
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
 atoms at its ends, as a dative bond does not: an ammine stays NH3.
+
+Nor is a hydrogen bond a bond of the structure for anything Meno reads of
+it (`ofTheStructure`, lib/chem/perception/graph): it closes no ring, so the
+double bond of an enol it closes a ring of six round keeps its cis or trans;
+it joins no two molecules, so a water bound to an enol by one leaves the
+enol's identity as it is drawn apart; and it takes no place round an atom,
+so an amine's N it is drawn to keeps three bonds and no configuration. It is
+kept, drawn and laid out as before: Clean-up gives it to the layout as a
+bond. Until 2026-11-15 a hydrogen bond drawn so hid the double bond's cis or
+trans, and the molecules it joined had one identity.
+
+Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
+way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
+joins - an enol and a water, an acid's dimer - is two structures, made side
+by side, both of them where only one is selected, and a counter-ion it alone
+holds - a chloride to an ammonium's N-H - is told of as left out, as one
+drawn apart is; one inside a molecule - an enol's own - is left out of it, so
+the H is placed by the molecule's own bonds. *Check structures* counts such
+a pair two parts, and a set round it holds two entries, each with its own
+identity; a structure's own hydrogen bond is not in its identity. Moved out
+of a frame's way, the pair moves together, as it is drawn; and the frame
+round the two entries holds each one's labels as the page draws them,
+toward the hydrogen bond (a water's OH2 with its H2 away from it), and
+what is written of each beside its atoms (a stereo group's note, a
+bracket's label) where the structure alone would have it. To take such a
+pair as one entry - a complex, a salt - select both and *Make one
+structure* (EDITOR-2D.md, *One structure of several parts*): it is then one
+structure of two parts, one identity. Until 2026-11-15 the hydrogen bond went to the plugin as
+a bond, and the embedding made it a covalent one: the H bonded to both
+atoms. A hydrogen bond drawn or taken away after a molecule is made in 3D
+leaves it its drawing's.
 
 ### Atoms that are not elements
 
@@ -120,10 +153,10 @@ atoms at its ends, as a dative bond does not: an ammine stays NH3.
 | An alias (A line) | The atom is drawn as - and taken to be - its alias, its letters' case as written: CO is carbon monoxide, Co cobalt, HO a hydroxy. One in small letters only is read as an element's symbol where it is one (co is Co), as a label typed so is. | |
 | A contracted abbreviation (SUP not expanded, or the old G line) | One atom, labelled, where the group's first attachment is, holding the atoms and bonds it stands for (`abbrev`); its bonds out leave from it. *Expand abbreviation*, in its menu, draws them out, turned with its bond. | |
 | An expanded abbreviation | Its atoms. | |
-| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3.3; reversed when bonded on its right, GR-2.1.6. |
+| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. A label that reads as nothing at all (CH2CH2, xyz) is never turned round: drawn in the order typed on either side. No hydrogens of its own. | GR-2.3.3; reversed when bonded on its right, GR-2.1.6. |
 | The prefixes n-, s-, t-, sec-, tert-, i- (hyphenated) and o-, m-, p- | In italics: *t*-Bu, *s*-Bu, *p*-Ts; iPr and iBu upright, unhyphenated. The canvas leans the label's own letters; an SVG or EMF asks for the typeface's italic. | Table II sets them so, and prefers it (upright is acceptable); the names have them so (isopropyl, *tert*-butyl). |
 | A substituted aryl group named ring last (2,6-diMeBz, 4-MeOC6H4) | As written on either side of its bond - it is not read outward - the ring's group, or a formula's C6, at the bond when that comes in from the right. Positions are no counts: not subscript. | Meno's own: such labels name the ring last. |
-| A valence the file sets (V2000's vvv, V3000's VAL) | Hydrogens counted to it; a carbon of other than four shows its label, CH2. | |
+| A valence the file sets (V2000's vvv, V3000's VAL) | Hydrogens counted to it; a carbon of other than four shows its label, CH2. At a metal, its coordination and dative bonds count toward it, as the file's own valence counts them: cisplatin written with Pt VAL=4 - two bonds to Cl, two coordination bonds from NH3 - has no H on its Pt (until 2026-11-13 they counted as nothing there, and the Pt was given two H nobody wrote: PtH2, and [Pt(NH3)4]2+ PtH4). | |
 | A query hydrogen count | Kept, and written back; not drawn. | |
 
 ### What is said about atoms, bonds and structures
@@ -131,7 +164,14 @@ atoms at its ends, as a dative bond does not: an ammine stays NH3.
 Annotations are set smaller than labels, close to what they are about and in
 the most open space beside it (IUPAC GR-11.1, GR-11.2); what is said about a
 whole structure is set beneath it, half a bond and more clear of it, as
-large as its labels (GR-11.3).
+large as its labels (GR-11.3). What is said beside an atom is kept off every
+bond, every label and what was said before it: of the ways out from its
+atom, one where its letters cover nothing goes first, then the most open, so
+a word as long as "and1" at a ring's centre goes outside the ring, not across
+it. A group's label stands outside the ring its centre is on wherever a
+clear place outside is - inside, it would read as the ring's, beside
+another centre's R or S (the maintainer, 2026-11-17). R, S, E and Z keep
+off it in turn.
 
 | What | How | Why |
 |---|---|---|
@@ -144,7 +184,7 @@ large as its labels (GR-11.3).
 | Not a reacting centre (-1) | A small cross on the bond's middle. | Meno's own. |
 | A reacting centre otherwise (1), or no change (2) | "rc", "nc" beside the bond's middle. | Meno's own. |
 | An enhanced stereo group taking in all a structure's centres | Racemic (AND): "and enantiomer" beneath it; relative (OR): "or enantiomer"; absolute: nothing. | ST-6.3 prefers text beside the diagram; ST-6.5 rules out "rac" and "rel" as labels; ST-6.2: a diagram with no indicator shows the configuration drawn. |
-| Groups that do not (more than one in a structure, or of stereo bonds) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
+| Groups that do not (more than one in a structure, or of stereo bonds, or one beside a centre drawn with a wedge and in no group: its forms then diastereomers, no enantiomers - a centre the reader reads, whose groups are not two alike - by constitution, and where alike so, by the configurations of the centres in them too: a pseudoasymmetric centre between an R and an S arm counts; a wedge that sets none, as on an isopropyl's CH, does not) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
 
 A file with stereo bonds and the chiral flag set but no collections has
 each of its stereocentres (where a wedge starts) taken as absolute, as the
@@ -279,7 +319,15 @@ counter-anions after it, each leaving a positive charge on the part's
 metal: read by rule as a salt's anion is (BF4, PF6, SbF6, AsF6, BPh4,
 ClO4; see below), or BArF, which names its aryl groups by no formula, from
 a list. A ligand written as an anion (Cp⁻, Cp*⁻) leaves its charge on the
-metal, so that the whole is as charged as the formula says. A ligand in
+metal, so that the whole is as charged as the formula says. An O with
+its count, or before a halide, a bracket or the end of the formula, is an
+oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
+and two M-Cl, UO2Cl2 is uranyl's O=U=O with two chlorides, WOCl4, VOCl3,
+VO(acac)2, MeReO3 and ReO3Me - each element written with its count, as an
+inorganic formula is, never a group read across it; an O that begins a
+group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O is bound to each metal it bridges by
+a single bond. A part of several metals with an oxo not marked μ is not
+read (Re2O7: which O bridge, the formula does not say). A ligand in
 brackets may have its descriptor: RuCl[(S,S)-TsDPEN](p-cymene),
 RuCl2[(S)-BINAP][(S,S)-DPEN]. Where one part
 has several metals - Pd2(dba)3 - the ligands are shared among them in
@@ -404,9 +452,14 @@ as the one given (tested). A cage's, shown by its perspective with no
 wedge, is written to a MOL or SD file - and copied, and sent to RDKit,
 for its R/S and its SMILES and to be made in 3D (`chem/make3d.ts#blocksOf`) -
 with a wedge that says it, as any cage Clean-up draws is: on a bond out of
-the centre, or - where it has none to take one - on an explicit H atom
-added to the file for it, after every atom there is
-(`chem/drawing.ts#forFlatReaders`; docs/EDITOR-2D.md). The depth itself is
+the centre, or - where it has none to take one, or where a wedge on one
+would not say it read flat, two of the centre's bonds lying in one line
+as the projection left them (epibatidine's C2, its pyridyl straight on
+from a bridgehead) - on an explicit H atom added to the file for it, in
+the widest gap round the centre, after every atom there is
+(`chem/drawing.ts#forFlatReaders`, lib/layout/drawn `wedgesForFlat`;
+docs/EDITOR-2D.md). Each such wedge is checked by Meno's own reader to say
+the configuration the drawing shows. The depth itself is
 not written, so the cage opens again flat, its configuration wedged. A chair the Projections tool put down is written the
 same way (docs/EDITOR-2D.md, *Projections*): its 2D places, wedges for what
 its depth says, a z of 0 throughout, never the conformation it is drawn in;
@@ -438,15 +491,22 @@ whole, and is what RDKit is asked about; one not known is text. Ar is
 argon's symbol as well as aryl's (GR-9.2): typed alone, it is argon; drawn
 with a bond, which argon never has, it is aryl's - written as a label, a
 star atom with its alias, as is any element that forms no bonds (He, Ne)
-drawn with one. Y is yttrium's symbol and a variable's (the maintainer,
-2026-10-17): alone, or with several bonds, it is yttrium; with one bond, in
-a substituent's place, it stands for a group as X and Z do, and a file is
-written with it as a label, a star atom with its alias. The groups
+drawn with one. Y is yttrium's symbol and a variable's: with one bond and no
+charge, in a substituent's place, it stands for a group as X and Z do, and a
+file is written with it as a label, a star atom with its alias; alone, with
+several bonds, or with a charge (a variable carries none), it is yttrium. The groups
 named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,
 2026-10-10): typed, or written by Clean-up, the atom holds the group
 (`abbrev`), drawn as a label, written out whole and expanded as any
-abbreviation is; typed with more - AcH, Ac+ - it is the element. Settings ›
+abbreviation is; typed with more - AcH, Ac+ - it is the element. So is
+one read from a page's figure. The atom that holds the group is read as
+the group everywhere - the layout, identity, a metal's tests - and never as
+the element; the same symbol with nothing held - a file's element column,
+a SMILES's [Pr], 3D - is the element: PrCl3 from a file is
+praseodymium's chloride (chem/drawing `readAs`; the maintainer's choice,
+2026-11-16). A drawing saved before this, with Pr typed and nothing held,
+opens as praseodymium: type Pr again. Settings ›
 Abbreviations shows Meno's list, each drawn as what it stands for.
 
 A bond that came from a file as one of these becomes an ordinary bond once

@@ -1,0 +1,1349 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { readStereo as core, type CageFitter, type Vec3 } from "./from2d";
+import { readStereo, sameConfiguration, straightEnds, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../layout/drawn";
+import { readSmiles } from "../../smiles";
+import { cipLabels } from "../../cip";
+import { kekuleOrders } from "../../kekulize";
+import { implicitHydrogens } from "../../molecule";
+import { layout2D } from "../../../layout/engine";
+import type { LayoutInput } from "../../../layout/perceive";
+import cages from "../../../layout/testdata/cages.json";
+import { measured } from "../../../../testing/timeouts";
+import { fromSmiles } from "../../../layout/testdata/fromSmiles";
+
+/** What a centre of three bonds that keeps no configuration of its own is said to lack (`unreadWhy`). */
+const KEEPS_NONE = "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
+import { misreadCentres } from "../../../layout/readBack";
+
+const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+
+/** A carbon at the origin with neighbours drawn at these angles, lifted as given (+1 wedge, -1 hashes). */
+function centre(angles: number[], lifts: number[], hs = 0) {
+  const atoms: DrawnAtom[] = [{ x: 0, y: 0, hs }, ...angles.map((a) => ({ ...at(a), hs: 0 }))];
+  const bonds: DrawnBond[] = angles.map((_, i) => ({
+    a: 0,
+    b: i + 1,
+    order: 1,
+    ...(lifts[i] ? { wedge: { narrow: 0, stereo: lifts[i] > 0 ? ("up" as const) : ("down" as const) } } : {}),
+  }));
+  return readStereo(atoms, bonds).tetra.get(0);
+}
+
+/** A layout of `input` as the engine draws it, taken down as a drawing: its H atoms, wedges and depths. */
+function drawing(input: LayoutInput) {
+  const out = layout2D(input);
+  const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({
+    x: out.x[i],
+    y: out.y[i],
+    hs: a.hs ?? 0,
+    ...(out.depth[i] != null ? { z: out.depth[i]! } : {}),
+    ...(out.solid[i] && a.tetra ? { centre: true } : {}),
+  }));
+  const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
+  const hydrogen = new Map<number, number>();
+  for (const h of out.hydrogens) {
+    atoms.push({ ...h.at, hs: 0 });
+    atoms[h.on] = { ...atoms[h.on], hs: atoms[h.on].hs - 1 };
+    bonds.push({ a: h.on, b: atoms.length - 1, order: 1 });
+    hydrogen.set(atoms.length - 1, h.on);
+  }
+  for (const w of out.wedges) {
+    const to = w.to === -1 ? [...hydrogen].find(([, on]) => on === w.from)![0] : w.to;
+    const bond = bonds.find((b) => (b.a === w.from && b.b === to) || (b.b === w.from && b.a === to))!;
+    bond.wedge = { narrow: w.from, stereo: w.stereo };
+  }
+  return { atoms, bonds, out, hydrogen };
+}
+
+describe("readStereo", () => {
+  // what RDKit reads each of these as (neighbours F, Cl, Br, I or H, in order)
+  it("reads a centre from its wedge, as RDKit does", () => {
+    expect(centre([-30, 90, 210, 30], [0, 0, 0, 1])?.volume).toBe(-1); // R
+    expect(centre([-30, 90, 210, 30], [0, 0, 0, -1])?.volume).toBe(1);
+    expect(centre([0, 120, 240], [1, 0, 0], 1)).toEqual({ neighbours: [1, 2, 3, -1], volume: 1 }); // R
+  });
+
+  it("reads three bonds in the page within 180 degrees of each other as RDKit does", () => {
+    // (read from the angles alone, two of them and the wedge say one thing
+    // and the other two the opposite)
+    expect(centre([0, -40, -128, 116], [0, 0, 0, 1])?.volume).toBe(1); // S
+  });
+
+  it("reads nothing at a centre with no wedge, or one with two H", () => {
+    expect(centre([-30, 90, 210, 30], [0, 0, 0, 0])).toBeUndefined();
+    expect(centre([0, 120], [1, 0], 2)).toBeUndefined();
+  });
+
+  it("reads a double bond's groups on the sides they are drawn on", () => {
+    // 2-butene: C0-C1=C2-C3, trans, then cis
+    const trans = [at(210), { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1 + Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) }];
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 1 },
+    ];
+    const hs = (ps: { x: number; y: number }[]) => ps.map((p) => ({ ...p, hs: 1 }));
+    expect(readStereo(hs(trans), bonds).cisTrans.get(1)).toEqual({ refs: [0, 3], cis: false });
+    const cis = [...trans.slice(0, 3), { x: trans[3].x, y: -trans[3].y }];
+    expect(readStereo(hs(cis), bonds).cisTrans.get(1)).toEqual({ refs: [0, 3], cis: true });
+  });
+
+  it("reads nothing of a double bond cumulated with another, however it is drawn bent: an azide's N=N, an allene's C=C", () => {
+    // phenyl azide's N(-)=N(+)=N-C, its N(+) drawn off the line: the N=N
+    // to the ring's N has the other N on one end and the ring on the other
+    const azide: DrawnAtom[] = [
+      { x: -2.6, y: 0.6, el: "N", hs: 0 },
+      { x: -1.7, y: 0.2, el: "N", hs: 0 },
+      { x: -0.9, y: 0.7, el: "N", hs: 0 },
+      { x: 0, y: 0, hs: 0 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 2 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 1 },
+    ];
+    expect(readStereo(azide, bonds).cisTrans.size).toBe(0);
+    // a tetrasubstituted allene's two C=C, its middle C bent
+    const allene: DrawnAtom[] = [{ ...at(150), hs: 3 }, { x: 0, y: 0, hs: 1 }, { x: 0.9, y: 0.4, hs: 0 }, { x: 1.8, y: 0, hs: 1 }, { x: 2.6, y: 0.6, hs: 3 }];
+    const its: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1 },
+    ];
+    expect(readStereo(allene, its).cisTrans.size).toBe(0);
+  });
+
+  it("reads nothing of a double bond in a ring of seven or fewer, but one in a larger ring", () => {
+    // a ring of n atoms, its bond 0=1 double, drawn as a regular polygon
+    const ring = (n: number) => {
+      const atoms = Array.from({ length: n }, (_, i) => ({ ...at((360 * i) / n), hs: 1 }));
+      const bonds: DrawnBond[] = atoms.map((_, i) => ({ a: i, b: (i + 1) % n, order: i === 0 ? 2 : 1 }));
+      return readStereo(atoms, bonds).cisTrans;
+    };
+    expect(ring(6).size).toBe(0);
+    expect(ring(7).size).toBe(0);
+    expect(ring(8).size).toBe(1);
+  });
+
+  it("reads back every centre the engine draws, cages in perspective among them", () => {
+    for (const [name, g] of Object.entries(cages)) {
+      const input = g as LayoutInput;
+      const { atoms, bonds, out, hydrogen } = drawing(input);
+      expect(out.solid.some(Boolean), name).toBe(true);
+      const read = readStereo(atoms, bonds);
+      input.atoms.forEach((a, i) => {
+        if (!a.tetra) return;
+        const t = read.tetra.get(i);
+        expect(t, `${name} ${i}`).toBeDefined();
+        expect(sameConfiguration(a.tetra, t!, (n) => (hydrogen.has(n) ? -1 : n)), `${name} ${i}`).toBe(true);
+      });
+    }
+    // (the whole engine on each of the molecules, cages among them: about a
+    // second alone, a few times that on a machine busy with the rest of the
+    // tests)
+  }, 30_000);
+
+  it("reads every centre in a cage for sure, not by a hair", () => {
+    // each bond out of a cage turned a little either way reads the same:
+    // it is drawn along the corner it is in, not somewhere between the two
+    for (const [name, g] of Object.entries(cages)) {
+      const input = g as LayoutInput;
+      const { atoms, bonds, out } = drawing(input);
+      const read = readStereo(atoms, bonds);
+      for (const [c, t] of read.tetra) {
+        if (atoms[c].z == null) continue;
+        for (const n of t.neighbours) {
+          if (n < 0 || atoms[n].z != null) continue;
+          for (const deg of [-15, 15]) {
+            const r = (deg * Math.PI) / 180;
+            const v = { x: atoms[n].x - atoms[c].x, y: atoms[n].y - atoms[c].y };
+            const turned = atoms.map((a, i) =>
+              i === n
+                ? { ...a, x: atoms[c].x + v.x * Math.cos(r) - v.y * Math.sin(r), y: atoms[c].y + v.x * Math.sin(r) + v.y * Math.cos(r) }
+                : a,
+            );
+            const u = readStereo(turned, bonds).tetra.get(c);
+            expect(u && sameConfiguration(t, u), `${name}: centre ${c}, its bond to ${n} turned ${deg}`).toBe(true);
+          }
+        }
+      }
+      expect(out.solid.some(Boolean), name).toBe(true);
+    }
+    // (the whole engine on each of the cages: about a second alone, a few times
+    // that on a machine busy with the rest of the tests)
+  }, 30_000);
+
+  it("says a perspective centre to a flat reader on a bond no other centre's wedge is on", () => {
+    // tetrodotoxin drawn as a solid, its C4 wedged on its bond to C4a, which
+    // its shape shows: C4a's wedge for a flat reader went on the same bond
+    // and took C4's away
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const drawn = drawing({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+    // (each atom what it is, as a drawing has it)
+    const atoms = drawn.atoms.map((a, i) => ({ ...a, el: s.atoms[i]?.el ?? "H" }));
+    const { bonds } = drawn;
+    const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [[b.a, b.b].sort((p, q) => p - q).join(",")] : [])));
+    for (const w of wedgesForFlat(atoms, bonds).wedges) {
+      if (w.to >= 0) expect(wedged.has([w.from, w.to].sort((p, q) => p - q).join(",")), `${w.from}-${w.to}`).toBe(false);
+    }
+    // (the whole engine on tetrodotoxin's cage: under half a second alone,
+    // a few times that on a machine busy with the rest of the tests)
+  }, measured(1_900));
+
+  it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {
+    // an atom of a ring laid across another's face, behind it - gibberellic
+    // acid's 3-epimer's C3: its depth is a layer, not a place in space, and
+    // taken as one it tipped the bond to the ring in front up towards the
+    // viewer and turned the centre
+    const atoms: DrawnAtom[] = [
+      { x: 0, y: 0, hs: 1, z: -1 },
+      { x: -0.21, y: 0.98, hs: 0, z: 0 },
+      { x: -0.87, y: -0.5, hs: 0, z: -1 },
+      { x: 0.91, y: -0.4, el: "O", hs: 1 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1, wedge: { narrow: 0, stereo: "down" } },
+    ];
+    const flat = readStereo(atoms.map(({ z: _z, ...a }) => a), bonds).tetra.get(0);
+    expect(flat).toBeDefined();
+    expect(readStereo(atoms, bonds).tetra.get(0)).toEqual(flat);
+  });
+
+  it("reads a cage's bridgehead drawn all but flat from the cage as a whole", () => {
+    // camphor's skeleton with only its bridgehead C4 given, either way: the
+    // textbook chair draws that centre's three bonds into the cage all but
+    // in one plane on the page, which way round they go a matter of a hair
+    const bonded: [number, number, number?][] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 6], [6, 3], [1, 7, 2], [0, 8], [6, 9], [6, 10]];
+    const order = new Array(11).fill(0);
+    for (const [a, b, o] of bonded) [order[a], order[b]] = [order[a] + (o ?? 1), order[b] + (o ?? 1)];
+    for (const volume of [1, -1] as const) {
+      const input: LayoutInput = {
+        atoms: Array.from({ length: 11 }, (_, i) =>
+          i === 7 ? { el: "O", hs: 0 } : { el: "C", hs: 4 - order[i], ...(i === 3 ? { tetra: { neighbours: [2, 4, 6, -1], volume } } : {}) },
+        ),
+        bonds: bonded.map(([a, b, o]) => ({ a, b, order: o ?? 1 })),
+      };
+      const { atoms, bonds, out } = drawing(input);
+      expect(out.solid[3]).toBe(true);
+      const t = readStereo(atoms, bonds).tetra.get(3);
+      expect(t && sameConfiguration(input.atoms[3].tetra!, t), `volume ${volume}`).toBe(true);
+    }
+  });
+
+  it("turns a centre in a cage when its substituent is drawn the other way", () => {
+    // cocaine's C3, which carries the benzoate: as the bond to its O is
+    // drawn round the carbon, it is read on one side of the cage or the
+    // other - where it is drawn, the way it was
+    const input = cages.Cocaine as LayoutInput;
+    const { atoms, bonds } = drawing(input);
+    const bonded = (i: number) => input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
+    const c = input.atoms.findIndex(
+      (a, i) => a.tetra && atoms[i].z != null && bonded(i).some((n) => input.atoms[n].el === "O"),
+    );
+    const o = bonded(c).find((n) => input.atoms[n].el === "O")!;
+    const before = readStereo(atoms, bonds).tetra.get(c)!;
+    const r = Math.hypot(atoms[o].x - atoms[c].x, atoms[o].y - atoms[c].y);
+    const readings = new Set<boolean>();
+    for (let deg = 0; deg < 360; deg += 10) {
+      const p = at(deg, r);
+      const moved = atoms.map((a, i) => (i === o ? { ...a, x: atoms[c].x + p.x, y: atoms[c].y + p.y } : a));
+      const t = readStereo(moved, bonds).tetra.get(c);
+      if (t) readings.add(sameConfiguration(before, t));
+    }
+    expect(readings).toEqual(new Set([true, false]));
+  });
+});
+
+describe("sameConfiguration", () => {
+  it("counts the swaps between two orders of the neighbours", () => {
+    const t = { neighbours: [1, 2, 3, 4], volume: 1 as const };
+    expect(sameConfiguration(t, { neighbours: [2, 1, 3, 4], volume: -1 })).toBe(true);
+    expect(sameConfiguration(t, { neighbours: [2, 3, 1, 4], volume: 1 })).toBe(true);
+    expect(sameConfiguration(t, { neighbours: [2, 3, 1, 4], volume: -1 })).toBe(false);
+    expect(sameConfiguration(t, { neighbours: [1, 2, 3, 5], volume: 1 })).toBe(false);
+  });
+});
+
+describe("what a drawing says of its stereochemistry only by luck", () => {
+  const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180), hs: 0 });
+  it("is a wedged centre whose other bonds lie in a line, not one whose bonds are spread", () => {
+    const centre = { x: 0, y: 0, hs: 1 };
+    const tee = [centre, at(-90), at(0), at(180)];
+    const bonds = [
+      { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" as const } },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+    ];
+    expect(unsureStereo(tee, bonds).atoms).toEqual([0]);
+    const spread = [centre, at(-90), at(30), at(150)];
+    expect(unsureStereo(spread, bonds).atoms).toEqual([]);
+  });
+
+  it("is a centre with all four bonds in one half of the page", () => {
+    const fan = [{ x: 0, y: 0, hs: 0 }, at(-20), at(30), at(80), at(130)];
+    const bonds = [
+      { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" as const } },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+      { a: 0, b: 4, order: 1 },
+    ];
+    expect(unsureStereo(fan, bonds).atoms).toEqual([0]);
+  });
+
+  it("is a double bond with a group almost in line with it, not one exactly in line or well off it", () => {
+    const pts = (deg: number) => [
+      { x: 0, y: 0, hs: 1 },
+      { x: 1, y: 0, hs: 1 },
+      { x: -0.5, y: 0.87, hs: 3 },
+      { x: 1 + Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180), hs: 3 },
+    ];
+    const bonds = [
+      { a: 0, b: 1, order: 2 },
+      { a: 0, b: 2, order: 1 },
+      { a: 1, b: 3, order: 1 },
+    ];
+    expect(unsureStereo(pts(5), bonds).bonds).toEqual([0]);
+    expect(unsureStereo(pts(0), bonds).bonds).toEqual([]);
+    expect(unsureStereo(pts(60), bonds).bonds).toEqual([]);
+    // (the two groups joined round a ring: of seven, the bond has no cis or trans to leave to luck; of eight, it has)
+    const closed = (k: number) => {
+      const atoms = [...pts(5), ...Array.from({ length: k }, (_, i) => ({ x: -1 + i, y: 3, hs: 2 }))];
+      const chain = Array.from({ length: k + 1 }, (_, i) => ({ a: i === 0 ? 2 : 3 + i, b: i === k ? 3 : 4 + i, order: 1 }));
+      return unsureStereo(atoms, [...bonds, ...chain]).bonds;
+    };
+    expect(closed(3)).toEqual([]);
+    expect(closed(4)).toEqual([0]);
+  });
+});
+
+describe("a centre with a lone pair for its fourth group", () => {
+  // (methyl phenyl sulfoxide's S at the origin: its O up, its methyl left on
+  // a wedge, its ring carbon right; and the same with another element - of
+  // group 15 or another, with a methyl up in the O's place, three single bonds)
+  const sulfoxide = (el: string, stereo: "up" | "down"): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => {
+    const chalcogen = ["S", "Se", "Te"].includes(el);
+    return {
+      atoms: [
+        { x: 0, y: 0, el, hs: 0 },
+        { x: 0, y: 1, el: chalcogen ? "O" : "C", hs: chalcogen ? 0 : 3 },
+        { x: -0.87, y: -0.5, el: "C", hs: 3 },
+        { x: 0.87, y: -0.5, el: "C", hs: 2 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: chalcogen ? 2 : 1 },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo } },
+        { a: 0, b: 3, order: 1 },
+      ],
+    };
+  };
+
+  it("is said to read only by luck, as a centre with an H left out is, where its other bonds lie in a line - and not where they are spread", () => {
+    for (const el of ["S", "P"]) {
+      const { atoms, bonds } = sulfoxide(el, "up");
+      expect(unsureStereo(atoms, bonds).atoms).toEqual([]);
+      // (its O - or methyl - and its ring carbon in one line through it, its wedged methyl off it: either way round by luck)
+      const tee = atoms.map((a, i) => (i === 1 ? { ...a, x: -1, y: 0 } : i === 2 ? { ...a, x: 0, y: -1 } : i === 3 ? { ...a, x: 1, y: 0 } : a));
+      expect(unsureStereo(tee, bonds).atoms).toEqual([0]);
+    }
+    // (an atom of three bonds that keeps no configuration - an amine's N - is never asked)
+    const amine = sulfoxide("P", "up");
+    const n = amine.atoms.map((a, i) => (i === 0 ? { ...a, el: "N" } : i === 1 ? { ...a, x: -1, y: 0 } : i === 2 ? { ...a, x: 0, y: -1 } : i === 3 ? { ...a, x: 1, y: 0 } : a));
+    expect(unsureStereo(n, amine.bonds).atoms).toEqual([]);
+  });
+
+  it("is read from its wedge where its lone pair keeps a configuration - a sulfoxide's S, a selenoxide's Se, a telluroxide's Te, a phosphine's P, an arsine's As, a stibine's Sb, a bismuthine's Bi - the two ways round told apart", () => {
+    for (const el of ["S", "Se", "Te", "P", "As", "Sb", "Bi"]) {
+      const up = readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.get(0);
+      const down = readStereo(sulfoxide(el, "down").atoms, sulfoxide(el, "down").bonds).tetra.get(0);
+      expect(up?.neighbours, el).toHaveLength(3);
+      expect(down?.neighbours, el).toHaveLength(3);
+      expect(sameConfiguration(up!, down!), el).toBe(false);
+    }
+  });
+
+  it("is not read where its lone pair keeps no configuration - an amine's N (which inverts), a borane's B - nor at a C of three bonds", () => {
+    for (const el of ["N", "B", "C"]) expect(readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.has(0), el).toBe(false);
+  });
+
+  it("is read at an N its ring or its cage holds - an N-chloro aziridine's, an oxaziridine's, a quinuclidine's - and not at a plain N-methyl aziridine's, an N-aryl aziridine's or an amine's", () => {
+    // (each laid out with no configuration, and a wedge put on a bond out of its N)
+    const wedgedAt = (smiles: string, at: number) => {
+      const input = fromSmiles(smiles);
+      const l = layout2D(input);
+      const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({ x: l.x[i], y: l.y[i], el: a.el, hs: a.hs ?? 0 }));
+      let wedged = false;
+      const bonds: DrawnBond[] = input.bonds.map((b) => {
+        if (wedged || (b.a !== at && b.b !== at)) return { a: b.a, b: b.b, order: b.order };
+        wedged = true;
+        return { a: b.a, b: b.b, order: b.order, wedge: { narrow: at, stereo: "up" as const } };
+      });
+      return readStereo(atoms, bonds).tetra.has(at);
+    };
+    expect(wedgedAt("CC1(C)CN1Cl", 4)).toBe(true);
+    expect(wedgedAt("CC1ON1C", 3)).toBe(true);
+    expect(wedgedAt("CC1CC2CCN1CC2", 6)).toBe(true);
+    expect(wedgedAt("CC1CN1C", 3)).toBe(false);
+    expect(wedgedAt("CC1CN1c1ccccc1", 3)).toBe(false);
+    expect(wedgedAt("CN(CC)CCC", 1)).toBe(false);
+  });
+
+  it("is no axis's end where it is a pyramid of three that keeps no configuration: a wedge at an O+ beside a ring is read as neither", () => {
+    for (const [el, charge] of [["O", 1]] as const) {
+      // (its methyl left on a wedge, an ethyl's CH2 up, a ring's ipso C right, that C with two more neighbours)
+      const atoms: DrawnAtom[] = [
+        { x: 0, y: 0, el, hs: 0, charge },
+        { x: -0.87, y: -0.5, el: "C", hs: 3 },
+        { x: 0, y: 1, el: "C", hs: 3 },
+        { x: 0.87, y: -0.5, el: "C", hs: 0 },
+        { x: 1.73, y: 0, el: "C", hs: 1 },
+        { x: 0.87, y: -1.5, el: "C", hs: 1 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 2, order: 1 },
+        { a: 0, b: 3, order: 1 },
+        { a: 3, b: 4, order: 2 },
+        { a: 3, b: 5, order: 1 },
+      ];
+      const read = readStereo(atoms, bonds);
+      expect(read.tetra.has(0), el).toBe(false);
+      expect(read.axes, el).toEqual([]);
+    }
+  });
+
+  it("states no configuration drawn as a T - two plain bonds in line, the wedge between them - as a centre with its H left out does not", () => {
+    // (the sulfoxide's O and its ring carbon straight across the S from each other, the wedged methyl to one side: a T, which states none -
+    // Brecher 2006, ST-1.2.12)
+    const t = sulfoxide("S", "up");
+    t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
+    t.atoms[3] = { ...t.atoms[3], x: 0, y: -1 };
+    t.atoms[2] = { ...t.atoms[2], x: 1, y: 0 };
+    expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
+  });
+
+  it("reads a carbon with its H left out and its wedge on one of two bonds in line, at any slant within IN_LINE, as the same carbon drawn with its bonds apart", () => {
+    // (butan-2-ol's C2: C1 on the wedge, C3 across from it, the O to one side - a bridgehead drawn so from a SMILES; ST-1.2.3: the same
+    // configuration wherever the wedged bond stands)
+    const drawing = (c1: number, stereo: "up" | "down" = "up"): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [
+        { x: 0, y: 0, el: "C", hs: 1 },
+        { ...at(c1), el: "C", hs: 3 },
+        { ...at(180), el: "C", hs: 2 },
+        { ...at(90), el: "O", hs: 1 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo } },
+        { a: 0, b: 2, order: 1 },
+        { a: 0, b: 3, order: 1 },
+      ],
+    });
+    const usual = readStereo(drawing(300).atoms, drawing(300).bonds).tetra.get(0)!;
+    expect(usual).toBeDefined();
+    for (const deg of [350, 0, 10]) {
+      const got = readStereo(drawing(deg).atoms, drawing(deg).bonds).tetra.get(0);
+      expect(got, `${deg}`).toBeDefined();
+      expect(sameConfiguration(got!, usual), `${deg}`).toBe(true);
+      expect(sameConfiguration(readStereo(drawing(deg, "down").atoms, drawing(deg, "down").bonds).tetra.get(0)!, usual), `${deg} hashed`).toBe(false);
+    }
+    // (two plain bonds in line, the wedge between them: still a T, unread)
+    const t = drawing(300);
+    t.atoms[3] = { ...t.atoms[3], ...at(0) };
+    expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
+  });
+
+  it("reads a centre of three bonds with two or three wedges as the text's figures do, and nothing where they state none (ST-1.2.2, 1.2.5 to 1.2.11): known answers", () => {
+    // (CHFClBr, its H left out: F at 0 degrees, Cl and Br at the angles given, counter-clockwise; +1 a wedge narrow at the C, -1 hashes, 0 plain.
+    //  the answers worked out from the figures' equal drawings)
+    // (counter-clockwise as the page is seen, its y down, as the drawing's places have it)
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
+    const rows: [string, number, [number, number], [number, number], "R" | "S" | null][] = [
+      ["ST-1.2.5", 0, [120, 1], [240, 1], "S"],
+      ["ST-1.2.5", 0, [120, -1], [240, -1], "R"],
+      ["ST-1.2.5", 0, [60, 1], [300, 1], "S"],
+      ["ST-1.2.5, in line", 0, [90, 1], [270, 1], "S"],
+      ["ST-1.2.5", 1, [120, 1], [240, 0], "S"],
+      ["ST-1.2.5, mirror-placed", 0, [30, 1], [150, 1], null],
+      ["ST-1.2.6", 1, [120, 1], [240, 1], "S"],
+      ["ST-1.2.6", -1, [120, -1], [240, -1], "R"],
+      ["ST-1.2.7", 1, [60, -1], [120, 1], "S"],
+      // (the two alike exactly half a turn apart: the deciding gap within IN_LINE of it - a hair less and it is ST-1.2.11, which states none -
+      //  so nothing is read, as for every deciding gap in that band)
+      ["ST-1.2.7, in line", 1, [30, -1], [210, -1], null],
+      ["ST-1.2.7, clear of the line", 1, [30, -1], [230, -1], "R"],
+      // (a wedge, hashes and a plain bond, the plain bond's wider gap 15 degrees past half a turn: read; 5 degrees past it, within IN_LINE
+      //  of half a turn: nothing)
+      ["ST-1.2.2, clear of the line", 1, [90, -1], [165, 0], "S"],
+      ["ST-1.2.2, in line", 1, [90, -1], [175, 0], null],
+      // (the plain bond between the wedge and the hashes, the widest gap between those two: still nothing)
+      ["ST-1.2.10, the wedges far apart", 0, [60, 1], [260, -1], null],
+      ["ST-1.2.9", 1, [60, 1], [120, 1], null],
+      ["ST-1.2.10", 0, [90, 1], [210, -1], null],
+      ["ST-1.2.10", 0, [150, 1], [240, -1], null],
+      ["ST-1.2.11", 1, [120, 1], [240, -1], null],
+      ["ST-1.2.11", 1, [60, -1], [210, 1], null],
+      ["ST-1.2.8", 1, [30, 1], [60, -1], null],
+    ];
+    const lifted = (stereo: number) => (stereo ? { wedge: { narrow: 0, stereo: stereo > 0 ? ("up" as const) : ("down" as const) } } : {});
+    for (const [form, f, [cl, clLift], [br, brLift], states] of rows) {
+      const d: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+        atoms: [{ x: 0, y: 0, el: "C", hs: 1 }, { ...at(0), el: "F", hs: 0 }, { ...at(cl), el: "Cl", hs: 0 }, { ...at(br), el: "Br", hs: 0 }],
+        bonds: [
+          { a: 0, b: 1, order: 1, ...lifted(f) },
+          { a: 0, b: 2, order: 1, ...lifted(clLift) },
+          { a: 0, b: 3, order: 1, ...lifted(brLift) },
+        ],
+      };
+      const tetra = readStereo(d.atoms, d.bonds).tetra.get(0);
+      const name = `${form}: F ${f}, Cl ${cl} ${clLift}, Br ${br} ${brLift}`;
+      if (!states) {
+        expect(tetra, name).toBeUndefined();
+        continue;
+      }
+      expect(tetra, name).toBeDefined();
+      const got = cipLabels({
+        atoms: [{ el: "C", hs: 1, tetra: tetra! }, { el: "F", hs: 0 }, { el: "Cl", hs: 0 }, { el: "Br", hs: 0 }],
+        bonds: [1, 2, 3].map((b) => ({ a: 0, b, order: 1 })),
+      }).centres.get(0);
+      expect(got && "label" in got ? got.label : null, name).toBe(states);
+    }
+  });
+
+  it("reads a centre of four bonds open where the text calls the form ambiguous or another shape's, and as before where it gives one (ST-1.1)", () => {
+    // (CFClBrI: F, Cl, Br, I at the angles given, counter-clockwise as the page is seen, its y down; +1 a wedge narrow at the C, -1 hashes, 0 plain)
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
+    const drawing = (bonds: [number, number][]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "C", hs: 0 }, ...bonds.map(([deg], k) => ({ ...at(deg), el: ["F", "Cl", "Br", "I"][k], hs: 0 }))],
+      bonds: bonds.map(([, lift], k) => ({ a: 0, b: k + 1, order: 1, ...(lift ? { wedge: { narrow: 0, stereo: lift > 0 ? ("up" as const) : ("down" as const) } } : {}) })),
+    });
+    const open: [string, [number, number][]][] = [
+      ["ST-1.1.20, four wedges alike", [[0, 1], [90, 1], [180, 1], [270, 1]]],
+      ["ST-1.1.9, three alike, the odd one in their wide space", [[0, 1], [60, 1], [180, 0], [300, 1]]],
+      ["ST-1.1.10, plain bonds apart, not across", [[0, 0], [60, 1], [150, 0], [270, -1]]],
+      ["ST-1.1.15, plain bonds across", [[0, 0], [90, 1], [180, 0], [270, -1]]],
+      ["ST-1.1.13, plain bonds side by side, half a turn apart", [[0, 0], [180, 0], [240, 1], [300, -1]]],
+      ["ST-1.1.13, at 175 degrees: within the band", [[0, 0], [175, 0], [240, 1], [300, -1]]],
+      ["ST-1.1.14, plain bonds side by side, more than half a turn apart", [[0, 0], [200, 0], [250, 1], [310, -1]]],
+      ["ST-1.1.11, two alike side by side, two plain side by side, every gap under half a turn", [[0, 0], [90, 0], [180, 1], [270, 1]]],
+      ["ST-1.1.19, the plain bonds more than half a turn apart, the wedges between them", [[0, 0], [60, 1], [120, 1], [200, 0]]],
+      ["ST-1.1.16, three plain, the wedge not in their wide space", [[0, 0], [60, 1], [120, 0], [300, 0]]],
+      ["ST-1.1.17, two wedges and two hashes, like by like", [[0, 1], [90, 1], [180, -1], [270, -1]]],
+      // (all four bonds within half the page, whatever their kinds: ST-1.1.12's figure, and arrangements the text gives no number)
+      ["ST-1.1.12, the figure's first drawing: a wedge and hashes in line, a wedge and a plain bond below", [[0, 1], [180, -1], [240, 1], [300, 0]]],
+      ["ST-1.1.12, the figure's third drawing: a wedge and a plain bond in line, a wedge and hashes below", [[0, 1], [180, 0], [240, 1], [300, -1]]],
+      ["two like wedges in line, the other wedge and a plain bond below", [[0, 1], [180, 1], [240, -1], [300, 0]]],
+      ["one plain, two like wedges side by side and the other, within a third of a turn", [[0, 0], [40, 1], [80, 1], [120, -1]]],
+      ["three like wedges within half the page, the plain bond among them", [[0, 1], [40, 0], [80, 1], [120, 1]]],
+      ["two plain side by side, the wedge and the hashes on their side", [[0, 0], [60, 0], [100, 1], [140, -1]]],
+      ["two like wedges and two plain, like by like, the wide gap not the plain pair's", [[0, 1], [30, 0], [60, 0], [100, 1]]],
+      ["three plain and the wedge within half the page", [[0, 0], [30, 0], [60, 0], [90, 1]]],
+      ["wedge, plain, wedge, plain within half the page", [[0, 1], [30, 0], [60, 1], [90, 0]]],
+      ["the largest gap 175 degrees: within the band", [[0, 0], [100, 0], [150, 1], [185, -1]]],
+    ];
+    for (const [form, bonds] of open) {
+      const d = drawing(bonds);
+      expect(readStereo(d.atoms, d.bonds).tetra.has(0), form).toBe(false);
+      expect(unreadWhy(d.atoms, d.bonds, 0), form).toBe("its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side");
+    }
+    const read: [string, [number, number][]][] = [
+      ["ST-1.1.1, two plain side by side, a wedge and hashes on the far side", [[0, 0], [120, 0], [210, 1], [300, -1]]],
+      ["ST-1.1.13's line at 165 degrees: side by side under half a turn, read", [[0, 0], [165, 0], [240, 1], [300, -1]]],
+      ["ST-1.1.4, three plain, the wedge in their wide space", [[0, 0], [90, 0], [180, 0], [270, 1]]],
+      // (the upright cross, two like wedges across from each other: its volume has one sign whatever the wedges' heights)
+      ["the upright cross, one plain, two like wedges across from each other", [[0, 0], [90, 1], [180, -1], [270, 1]]],
+      // (each a neighbour of a drawing above that opens, its bonds on both sides)
+      ["ST-1.1.8, beside the drawing within a third of a turn", [[0, 0], [90, 1], [180, 1], [270, -1]]],
+      ["ST-1.1.5, beside the three like wedges within half the page", [[0, 1], [60, 0], [120, 1], [240, 1]]],
+      ["ST-1.1.6 with its bonds all round", [[0, 1], [60, 0], [180, 1], [240, 0]]],
+      ["the largest gap 165 degrees: clear of the band", [[0, 0], [100, 0], [150, 1], [195, -1]]],
+    ];
+    for (const [form, bonds] of read) {
+      const d = drawing(bonds);
+      expect(readStereo(d.atoms, d.bonds).tetra.has(0), form).toBe(true);
+    }
+  });
+
+  it("says why a centre of three bonds and two or three wedges states nothing, with what to redraw", () => {
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
+    const d = (f: number, cl: [number, number], br: [number, number]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => {
+      const lifted = (stereo: number) => (stereo ? { wedge: { narrow: 0, stereo: stereo > 0 ? ("up" as const) : ("down" as const) } } : {});
+      return {
+        atoms: [{ x: 0, y: 0, el: "C", hs: 1 }, { ...at(0), el: "F", hs: 0 }, { ...at(cl[0]), el: "Cl", hs: 0 }, { ...at(br[0]), el: "Br", hs: 0 }],
+        bonds: [{ a: 0, b: 1, order: 1, ...lifted(f) }, { a: 0, b: 2, order: 1, ...lifted(cl[1]) }, { a: 0, b: 3, order: 1, ...lifted(br[1]) }],
+      };
+    };
+    const why = (x: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => unreadWhy(x.atoms, x.bonds, 0);
+    expect(why(d(0, [90, 1], [210, -1]))).toBe("its plain bond lies between its wedge and its hashes: draw it across from them");
+    expect(why(d(1, [60, 1], [120, 1]))).toBe("its three wedges leave half a turn or more open: draw one of them plain");
+    expect(why(d(1, [120, 1], [240, -1]))).toBe("its wedges and hashes are spread all round it: draw one of them plain");
+    expect(why(d(1, [30, 1], [60, -1]))).toBe("its wedge and its hashes are half a turn or more apart: draw one of them plain");
+    // (a deciding gap within IN_LINE of half a turn: which side of the rule it is on cannot be told)
+    expect(why(d(1, [30, -1], [172, 1]))).toBe("two of its bonds in line or on top of each other");
+  });
+
+
+  it("reads one drawn with its wedge on one of the two bonds in line, as the same centre drawn with its bonds apart (ST-1.2.3, ST-1.2.4)", () => {
+    // (the O and the wedged methyl straight across the S, the ring carbon to one side: the lone pair takes the widest gap, opposite the wedge -
+    // ST-1.2.4's form; and wherever the wedged bond stands within that gap, the same configuration - ST-1.2.3)
+    const usual = sulfoxide("S", "up");
+    const t = sulfoxide("S", "up");
+    t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
+    t.atoms[2] = { ...t.atoms[2], x: 0, y: -1 };
+    t.atoms[3] = { ...t.atoms[3], x: 1, y: 0 };
+    const [got, want] = [readStereo(t.atoms, t.bonds).tetra.get(0), readStereo(usual.atoms, usual.bonds).tetra.get(0)];
+    expect(got).toBeDefined();
+    expect(sameConfiguration(got!, want!)).toBe(true);
+    // (and on hashes, the other one)
+    const hashed = { atoms: t.atoms, bonds: t.bonds.map((b) => (b.wedge ? { ...b, wedge: { ...b.wedge, stereo: "down" as const } } : b)) };
+    expect(sameConfiguration(readStereo(hashed.atoms, hashed.bonds).tetra.get(0)!, want!)).toBe(false);
+  });
+
+  it("says why a wedge it does not read says nothing, by what the atom is and how it is drawn", () => {
+    // (an amine's N, a B: three bonds, and no configuration of their own - lib/chem/lonePairCentres)
+    for (const el of ["N", "B"]) expect(unreadWhy(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds, 0), el).toBe(KEEPS_NONE);
+    // (a phosphorane's P: five groups)
+    const p: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "P", hs: 0 }, ...[90, 210, 330, 30, 270].map((d) => ({ ...at(d), el: "F", hs: 0 }))],
+      bonds: [1, 2, 3, 4, 5].map((b) => ({ a: 0, b, order: 1, ...(b === 1 ? { wedge: { narrow: 0, stereo: "up" as const } } : {}) })),
+    };
+    expect(readStereo(p.atoms, p.bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(p.atoms, p.bonds, 0)).toBe("it has 5 groups round it, more than the four of a tetrahedral centre");
+    // (four bonds and an H: five groups too - its H counted with them)
+    const ph: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = { atoms: p.atoms.slice(0, 5).map((a, i) => (i === 0 ? { ...a, hs: 1 } : a)), bonds: p.bonds.slice(0, 4) };
+    expect(unreadWhy(ph.atoms, ph.bonds, 0)).toBe("it has 5 groups round it, more than the four of a tetrahedral centre");
+    // (a sulfoxide drawn as a T: its two plain bonds in line, the wedge between them)
+    const t = sulfoxide("S", "up");
+    t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
+    t.atoms[3] = { ...t.atoms[3], x: 0, y: -1 };
+    t.atoms[2] = { ...t.atoms[2], x: 1, y: 0 };
+    expect(unreadWhy(t.atoms, t.bonds, 0)).toBe("two of its bonds in line or on top of each other");
+    // (a C of four bonds, its wedge and its hashes drawn opposite each other: they cancel)
+    const crossed: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "C", hs: 0 }, ...[90, 270, 0, 180].map((d) => ({ ...at(d), el: "C", hs: 3 }))],
+      bonds: [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo: "down" } },
+        { a: 0, b: 3, order: 1 },
+        { a: 0, b: 4, order: 1 },
+      ],
+    };
+    expect(readStereo(crossed.atoms, crossed.bonds).tetra.has(0)).toBe(false);
+    // (the two plain bonds across from each other, the wedge and the hashes across from each other: ST-1.1.15, no tetrahedral centre's picture)
+    expect(unreadWhy(crossed.atoms, crossed.bonds, 0)).toBe("its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side");
+    // (a wavy bond at it: either, whatever else is drawn)
+    const wavy = sulfoxide("Se", "up");
+    wavy.bonds[2] = { ...wavy.bonds[2], either: true };
+    expect(unreadWhy(wavy.atoms, wavy.bonds, 0)).toBe("a wavy bond at it says it is either");
+    // (three bonds and an H: four groups, so not one that keeps none - read as a centre where it can be, crossed here)
+    const nh: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "N", hs: 1 }, { ...at(90), el: "C", hs: 3 }, { ...at(270), el: "C", hs: 3 }, { ...at(0), el: "C", hs: 3 }],
+      bonds: [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo: "down" } },
+        { a: 0, b: 3, order: 1 },
+      ],
+    };
+    expect(unreadWhy(nh.atoms, nh.bonds, 0)).not.toBe(KEEPS_NONE);
+  });
+
+  it("reads a P with an H drawn as an atom, and no N with one - nor a P with its H carried and two bonds, which says why (the maintainer, 2026-11-06)", () => {
+    // (a secondary phosphine: its H drawn as an atom, a centre; carried, its H and its lone pair both left out)
+    const phosphine = (h: boolean): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "P", hs: h ? 0 : 1 }, { ...at(90), el: "C", hs: 3 }, { ...at(210), el: "C", hs: 3 }, ...(h ? [{ ...at(330), el: "H", hs: 0 }] : [])],
+      bonds: [{ a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } }, { a: 0, b: 2, order: 1 }, ...(h ? [{ a: 0, b: 3, order: 1 }] : [])],
+    });
+    expect(readStereo(phosphine(true).atoms, phosphine(true).bonds).tetra.has(0)).toBe(true);
+    expect(readStereo(phosphine(false).atoms, phosphine(false).bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(phosphine(false).atoms, phosphine(false).bonds, 0)).toBe("its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom");
+    // (an oxaziridine's N, its ring's C and O beside it: with a methyl a centre, with an H drawn as an atom none, and said)
+    const oxaziridine = (on: string): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "N", hs: 0 }, { ...at(60), el: "C", hs: 2 }, { ...at(120), el: "O", hs: 0 }, { ...at(270), el: on, hs: on === "C" ? 3 : 0 }],
+      bonds: [{ a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } }, { a: 0, b: 2, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }],
+    });
+    expect(readStereo(oxaziridine("C").atoms, oxaziridine("C").bonds).tetra.has(0)).toBe(true);
+    expect(readStereo(oxaziridine("H").atoms, oxaziridine("H").bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(oxaziridine("H").atoms, oxaziridine("H").bonds, 0)).toBe(KEEPS_NONE);
+  });
+
+  it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, a selenoxide, a stibine, an N-chloro aziridine, an oxaziridine, each way round", () => {
+    for (const smiles of [
+      "C[S@](=O)c1ccccc1",
+      "C[S@@](=O)c1ccccc1",
+      "CC(C)(C)[S@](=O)N",
+      "CC[P@](C)c1ccccc1",
+      "CC[P@@](C)c1ccccc1",
+      "C[S@+](CC)c1ccccc1",
+      "C[S@@](=O)C[C@H](N)C(=O)O",
+      "C[Se@](=O)c1ccccc1",
+      "CC[Sb@@](C)c1ccccc1",
+      "C1[N@@](Cl)C1(C)C",
+      "CC1[N@](C)O1",
+      "C1[N@](Cl)C1[C@H](C)O",
+    ]) {
+      const input = fromSmiles(smiles);
+      expect(misreadCentres(input, layout2D(input)), smiles).toEqual([]);
+    }
+  });
+});
+
+describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
+  // (penta-2,3-diene drawn straight through: CH3 0 - C1 = C2 = C3 - CH3 4, its middle C2; a wedge out of C1 to its methyl, or none)
+  const allene = (wedge?: "up" | "down") => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 3 },
+      { x: 0, y: 0, hs: 1 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 1 },
+      { x: 3.9, y: 0.75, hs: 3 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1, ...(wedge ? { wedge: { narrow: 1, stereo: wedge } } : {}) },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1 },
+    ];
+    return readStereo(atoms, bonds);
+  };
+  // (1,4-difluorobutatriene drawn straight through: F 0 - C1 = C2 = C3 = C4 - F 5, the far F at `y`; its bond to C4 wavy, or not)
+  const butatriene = (y: number, wavy = false) => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 0, el: "F" },
+      { x: 0, y: 0, hs: 1 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 0 },
+      { x: 3.9, y: 0, hs: 1 },
+      { x: 5.2, y, hs: 0, el: "F" },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 2 },
+      { a: 4, b: 5, order: 1, ...(wavy ? { either: true } : {}) },
+    ];
+    return readStereo(atoms, bonds);
+  };
+
+  it("takes only a carbon, or an N+, between two double bonds for an allene's middle: a sulfur's C=S=C is bent, and has no axis", () => {
+    const middle = (el: string, charge?: number) => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0, el, ...(charge ? { charge } : {}) },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1, wedge: { narrow: 1, stereo: "up" } },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1 },
+      ];
+      return readStereo(atoms, bonds);
+    };
+    expect(middle("C").axes).toHaveLength(1);
+    expect(middle("N", 1).axes).toHaveLength(1);
+    expect(middle("S").axes).toEqual([]);
+    expect(middle("S").cumulated).toEqual([]);
+    expect(middle("N").axes).toEqual([]);
+  });
+
+  it("reads an allene's axis from a wedge at one end, the other end's groups in the page, as a biaryl's: the other wedge, the other sense", () => {
+    const up = allene("up").axes;
+    const down = allene("down").axes;
+    expect(up).toHaveLength(1);
+    expect(up[0]).toMatchObject({ atoms: [1, 3], refs: [0, 4] });
+    expect(down[0].sense).toBe(-up[0].sense);
+    // (none drawn: open; and no double bond of it has a cis or trans of its own)
+    expect(allene().axes).toEqual([]);
+    expect(allene("up").cisTrans.size).toBe(0);
+  });
+
+  it("reads an allene wedged only at its far end: its axis from that wedge, the opposite wedge the opposite sense", () => {
+    const wedgedAtFar = (wedge: "up" | "down") => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0 },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1 },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1, wedge: { narrow: 3, stereo: wedge } },
+      ];
+      return readStereo(atoms, bonds).axes;
+    };
+    const [up, down] = [wedgedAtFar("up"), wedgedAtFar("down")];
+    expect(up).toHaveLength(1);
+    expect(down).toHaveLength(1);
+    expect(up[0].sense).toBe(-down[0].sense);
+  });
+
+  it("reads an odd cumulene's side from the group off its line, not one straight on from it - at either end", () => {
+    // (a butatriene, each end with a group straight on from the run - listed first - and another off it: the off-line one is the side)
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0, hs: 0, el: "Cl" },
+      { x: 0, y: 0, hs: 0 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 0 },
+      { x: 3.9, y: 0, hs: 0 },
+      { x: 5.2, y: 0, hs: 0, el: "Cl" },
+      { x: 5.2, y: 0.75, hs: 0, el: "F" },
+      { x: -0.65, y: 1.1, hs: 0, el: "F" },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 2 },
+      { a: 4, b: 5, order: 1 },
+      { a: 4, b: 6, order: 1 },
+      { a: 1, b: 7, order: 1 },
+    ];
+    const read = readStereo(atoms, bonds).cumulated;
+    expect(read).toHaveLength(1);
+    expect(read[0].refs).toEqual([7, 6]);
+  });
+
+  it("reads an allene wedged at both ends where the two agree, and none where they say opposite ways - and says why", () => {
+    // (the far end's methyl wedged too: up or down, at its end C3)
+    const both = (near: "up" | "down", far: "up" | "down") => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0 },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1, wedge: { narrow: 1, stereo: near } },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1, wedge: { narrow: 3, stereo: far } },
+      ];
+      return { atoms, bonds, read: readStereo(atoms, bonds) };
+    };
+    const sense = (near: "up" | "down", far: "up" | "down") => both(near, far).read.axes.map((x) => x.sense);
+    // (each read alone, then together: where the two agree, the one sense; where they do not, none)
+    const alone = allene("up").axes[0].sense;
+    const agreeing = (["up", "down"] as const).find((far) => sense("up", far).length === 1)!;
+    expect(sense("up", agreeing)).toEqual([alone]);
+    const other = agreeing === "up" ? "down" : "up";
+    expect(sense("up", other)).toEqual([]);
+    const { atoms, bonds } = both("up", other);
+    expect(unreadWhy(atoms, bonds, 1)).toBe("the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it");
+  });
+
+  it("reads an odd cumulene's cis or trans from its ends' groups across the line through it, and none where an end is straight on or wavy", () => {
+    expect(butatriene(0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
+    expect(butatriene(-0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);
+    expect(butatriene(0).cumulated).toEqual([]);
+    expect(butatriene(0.75, true).cumulated).toEqual([]);
+    expect(butatriene(0.75).cisTrans.size).toBe(0);
+  });
+});
+
+describe("a double bond's cis or trans, drawn: in no ring, or in a ring of eight atoms or more; none in a ring of seven or fewer", () => {
+  /** The SMILES drawn by the engine: each double bond read cis or trans, by its atoms. */
+  const read = (smiles: string) => {
+    const g = fromSmiles(smiles);
+    const { atoms, bonds } = drawing(g);
+    return [...readStereo(atoms, bonds).cisTrans].map(([i, c]) => ({ atoms: [bonds[i].a, bonds[i].b].sort((p, q) => p - q), cis: c.cis }));
+  };
+
+  it("reads (E)-but-2-ene's and (Z)-but-2-ene's, in no ring", () => {
+    expect(read("C/C=C/C")).toEqual([{ atoms: [1, 2], cis: false }]);
+    expect(read(String.raw`C/C=C\C`)).toEqual([{ atoms: [1, 2], cis: true }]);
+  });
+
+  it("reads (E)-cyclooctene's, in a ring of eight, and none in cyclohexene's or cycloheptene's", () => {
+    expect(read("C1CCC/C=C/CC1")).toEqual([{ atoms: [4, 5], cis: false }]);
+    expect(read("C1CCC=CC1")).toEqual([]);
+    expect(read("C1CCCC=CC1")).toEqual([]);
+  });
+
+  /** A ring of `n` with its double bond 0=1 and atom 2 drawn straight on from it, the rest round a circle back to 0: the ends kept straight. */
+  const ringDrawnStraight = (n: number) => {
+    const atoms: DrawnAtom[] = [
+      { el: "C", x: 0, y: 0, hs: 0 },
+      { el: "C", x: 1, y: 0, hs: 0 },
+      { el: "C", x: 2, y: 0, hs: 0 },
+      ...Array.from({ length: n - 3 }, (_, k) => {
+        const t = (Math.PI * (k + 1)) / (n - 2);
+        return { el: "C", x: 1 + Math.cos(t), y: 1.5 * Math.sin(t), hs: 0 };
+      }),
+    ];
+    const bonds: DrawnBond[] = atoms.map((_, i) => ({ a: i, b: (i + 1) % n, order: i === 0 ? 2 : 1 }));
+    return straightEnds(atoms, bonds);
+  };
+
+  it("keeps an end drawn straight on in a ring of eight, which can state cis or trans, and none in a ring of seven, which cannot", () => {
+    expect([...ringDrawnStraight(8)]).toEqual([1]);
+    expect([...ringDrawnStraight(7)]).toEqual([]);
+  });
+});
+
+describe("the ends kept straight on of an odd cumulene drawn so: its cis or trans across the run left unsaid", () => {
+  /** Hexa-2,3,4-triene, C0 C1=C2=C3=C4 C5, its run along x, each end's methyl straight on or bent off by `bend` (y). */
+  const triene = (bendA: number, bendB: number, wavy = false) => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: "C", x, y: i === 0 ? bendA : i === 5 ? bendB : 0, hs: i === 1 || i === 4 ? 1 : 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3, 4].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 4 ? 1 : 2, ...(wavy && i === 0 ? { either: true } : {}) }));
+    return straightEnds(atoms, bonds);
+  };
+
+  it("keeps each end whose group is straight on from the run", () => {
+    expect([...triene(0, 0)].sort()).toEqual([1, 4]);
+    expect([...triene(0, 0.9)]).toEqual([1]);
+    expect([...triene(0.9, 0.9)]).toEqual([]);
+  });
+
+  it("keeps none of an end of one group and no H - an N's, which has no cis or trans to state, as the run is read", () => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3, 4].map((x, i) => ({ el: i === 4 ? "N" : "C", x, y: 0, hs: i === 1 ? 1 : 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3, 4].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 4 ? 1 : 2 }));
+    expect([...straightEnds(atoms, bonds)]).toEqual([]);
+  });
+
+  it("keeps none where a wavy bond at an end says either already", () => {
+    expect([...triene(0, 0, true)]).toEqual([]);
+  });
+
+  it("keeps an end drawn straight on of a run in a ring of nine, and none of one in a ring of seven", () => {
+    /** A ring of `n`: the run 0=1=2=3 along x, 4 straight on from 3, the rest round back to 0. */
+    const ring = (n: number) => {
+      const atoms: DrawnAtom[] = [
+        ...[0, 1, 2, 3, 4].map((x) => ({ el: "C", x, y: 0, hs: x === 0 || x === 3 ? 1 : 0 })),
+        ...Array.from({ length: n - 5 }, (_, k) => {
+          const t = (Math.PI * (k + 1)) / (n - 4);
+          return { el: "C", x: 2 + 2 * Math.cos(t), y: 2 * Math.sin(t), hs: 0 };
+        }),
+      ];
+      const bonds: DrawnBond[] = atoms.map((_, i) => ({ a: i, b: (i + 1) % n, order: i < 3 ? 2 : 1 }));
+      return straightEnds(atoms, bonds);
+    };
+    expect([...ring(9)]).toEqual([3]);
+    expect([...ring(7)]).toEqual([]);
+  });
+
+  it("keeps none of an allene's run, which has an axis, not a cis or trans", () => {
+    const atoms: DrawnAtom[] = [-1, 0, 1, 2, 3].map((x) => ({ el: "C", x, y: 0, hs: 0 }));
+    const bonds: DrawnBond[] = [0, 1, 2, 3].map((i) => ({ a: i, b: i + 1, order: i === 0 || i === 3 ? 1 : 2 }));
+    expect([...straightEnds(atoms, bonds)]).toEqual([]);
+  });
+});
+
+describe("a wedge out of an allene's end, read once: the allene's axis, and no axis about the end's single bond", () => {
+  /**
+   * A run straight through from end E (0) to its far end F, `doubles` double bonds long, F's two groups in the page: at E a methyl (1)
+   * and a ring of six (its ipso 2, then 3 to 7 round it, 3 an ortho carbon), with `el` at the far end's place and `ortho` on 3; a
+   * wedge or hashes as `wedge` puts them, narrow at the atom named.
+   */
+  const drawing = (opts: { doubles?: number; el?: string; ortho?: boolean; wedge: [number, number, "up" | "down"] | null }) => {
+    const doubles = opts.doubles ?? 2;
+    const c = Math.cos(Math.PI / 6);
+    const atoms: DrawnAtom[] = [
+      { x: 0, y: 0, hs: 0 },
+      { x: -0.5, y: c, hs: 3 },
+      { x: -0.5, y: -c, hs: 0 },
+    ];
+    // (the ring round its centre, the ipso at 30 degrees from it)
+    const centre = { x: -0.5 - c, y: -c - 0.5 };
+    for (let k = 1; k < 6; k++) {
+      const a = Math.PI / 6 - (k * Math.PI) / 3;
+      atoms.push({ x: centre.x + Math.cos(a), y: centre.y + Math.sin(a), hs: k === 1 && opts.ortho ? 0 : 1 });
+    }
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      ...[2, 3, 4, 5, 6, 7].map((p, k) => ({ a: p, b: k === 5 ? 2 : p + 1, order: k % 2 ? 1 : 2 })),
+    ];
+    // (the run: its middles, then F)
+    let last = 0;
+    for (let k = 1; k <= doubles; k++) {
+      const at = atoms.length;
+      atoms.push({ x: k, y: 0, hs: 0, ...(k === doubles && opts.el ? { el: opts.el } : {}) });
+      bonds.push({ a: last, b: at, order: 2 });
+      last = at;
+    }
+    const far = last;
+    // (F's groups: two methyls, one where F is an N)
+    atoms.push({ x: doubles + 0.5, y: -c, hs: 3 });
+    bonds.push({ a: far, b: atoms.length - 1, order: 1 });
+    if (opts.el !== "N") {
+      atoms.push({ x: doubles + 0.5, y: c, hs: 2 }, { x: doubles + 1.5, y: c, hs: 3 });
+      bonds.push({ a: far, b: atoms.length - 2, order: 1 }, { a: atoms.length - 2, b: atoms.length - 1, order: 1 });
+    }
+    if (opts.ortho) {
+      atoms.push({ x: atoms[3].x + 0.5, y: atoms[3].y - c, hs: 3 });
+      bonds.push({ a: 3, b: atoms.length - 1, order: 1 });
+    }
+    if (opts.wedge) {
+      const [narrow, other, stereo] = opts.wedge;
+      const b = bonds.find((x) => (x.a === narrow && x.b === other) || (x.b === narrow && x.a === other))!;
+      b.wedge = { narrow, stereo };
+    }
+    return { atoms, bonds, far, read: readStereo(atoms, bonds) };
+  };
+  const pair = (atoms: readonly number[]) => [...atoms].sort((p, q) => p - q).join("-");
+
+  it("reads a wedge at an allene's end, on the end's other group, as the allene's axis only - not also an axis about the end's bond to an aryl", () => {
+    for (const ortho of [false, true])
+      for (const stereo of ["up", "down"] as const) {
+        const { far, read } = drawing({ ortho, wedge: [0, 1, stereo] });
+        expect(read.axes.map((x) => pair(x.atoms)), `${ortho} ${stereo}`).toEqual([pair([0, far])]);
+      }
+  });
+
+  it("reads the same allene drawn either way at its end - the wedge on one group or the hashes on the other - the same", () => {
+    for (const ortho of [false, true]) {
+      const onMethyl = drawing({ ortho, wedge: [0, 1, "up"] }).read.axes;
+      const onAryl = drawing({ ortho, wedge: [0, 2, "down"] }).read.axes;
+      expect(onMethyl, `${ortho}`).toHaveLength(1);
+      expect(onAryl).toEqual(onMethyl);
+    }
+  });
+
+  it("still reads the aryl's own axis from a wedge in its ring, the allene's end plain (ST-1.7's form)", () => {
+    const { read } = drawing({ ortho: true, wedge: [2, 3, "up"] });
+    expect(read.axes.map((x) => pair(x.atoms))).toEqual([pair([0, 2])]);
+  });
+
+  it("reads a wedge at an alkene's carbon, or at a butatriene's end, as an axis about its bond to the aryl, as before: their runs lie in the page", () => {
+    for (const doubles of [1, 3]) {
+      const { read } = drawing({ doubles, ortho: true, wedge: [0, 1, "up"] });
+      expect(read.axes.map((x) => pair(x.atoms)), `${doubles}`).toEqual([pair([0, 2])]);
+    }
+  });
+
+  it("reads no axis about a ketenimine's carbon's bond to its aryl from a wedge at that carbon: it is the run's (whose N end has one group, so no axis is read)", () => {
+    expect(drawing({ el: "N", wedge: [0, 1, "up"] }).read.axes).toEqual([]);
+  });
+
+  it("says of a wedge at a ketenimine's, a ketene's or a terminal allene's end that the run's other end does not carry two different groups - and of an allene's wedges at both ends, opposite, what it said", () => {
+    const NONE = "the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state";
+    // (a ketenimine: its N with one group)
+    const keten = drawing({ el: "N", wedge: [0, 1, "up"] });
+    expect(keten.read.axes).toEqual([]);
+    expect(unreadWhy(keten.atoms, keten.bonds, 0)).toBe(NONE);
+    // (a ketene: its O with none)
+    const ketene = drawing({ el: "N", wedge: [0, 1, "up"] });
+    ketene.atoms[ketene.far] = { ...ketene.atoms[ketene.far], el: "O" };
+    const bare = ketene.bonds.filter((b) => b.order === 2 || (b.a !== ketene.far && b.b !== ketene.far));
+    expect(readStereo(ketene.atoms, bare).axes).toEqual([]);
+    expect(unreadWhy(ketene.atoms, bare, 0)).toBe(NONE);
+    // (a terminal allene: its CH2's two H carried)
+    const terminal = drawing({ wedge: [0, 1, "up"] });
+    terminal.atoms[terminal.far] = { ...terminal.atoms[terminal.far], hs: 2 };
+    const ch2 = terminal.bonds.filter((b) => b.order === 2 || (b.a !== terminal.far && b.b !== terminal.far));
+    expect(readStereo(terminal.atoms, ch2).axes).toEqual([]);
+    expect(unreadWhy(terminal.atoms, ch2, 0)).toBe(NONE);
+    // (the allene with its far end's methyl wedged too: the way that says the opposite of the near end's wedge)
+    const opposite = (["up", "down"] as const).map((stereo) => {
+      const { atoms, bonds, far } = drawing({ wedge: [0, 1, "up"] });
+      const methyl = bonds.find((b) => b.a === far && atoms[b.b].hs === 3)!;
+      methyl.wedge = { narrow: far, stereo };
+      return { atoms, bonds, read: readStereo(atoms, bonds) };
+    }).find((x) => x.read.axes.length === 0)!;
+    expect(unreadWhy(opposite.atoms, opposite.bonds, 0)).toBe("the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it");
+  });
+
+  it("reads a neighbouring centre's wedge, wide at the allene's end, as that centre's, as before", () => {
+    // (the methyl at E made a centre: an F, a Cl and an H on it, its wedge to E narrow at it)
+    const { atoms, bonds } = drawing({ wedge: null });
+    atoms[1] = { ...atoms[1], hs: 1 };
+    atoms.push({ x: -1.5, y: atoms[1].y, hs: 0, el: "F" }, { x: 0, y: atoms[1].y + 0.87, hs: 0, el: "Cl" });
+    bonds.push({ a: 1, b: atoms.length - 2, order: 1 }, { a: 1, b: atoms.length - 1, order: 1 });
+    bonds[0] = { ...bonds[0], a: 1, b: 0, wedge: { narrow: 1, stereo: "up" } };
+    const read = readStereo(atoms, bonds);
+    expect(read.tetra.has(1)).toBe(true);
+    expect(read.axes).toEqual([]);
+  });
+});
+
+describe("an axis inside a ring, drawn", () => {
+  /** A biphenyl bridged at 2 and 2' (`smiles`, its biaryl bond between atoms `i` and `j`), drawn by the engine with its axis given: the axis read back, or none. */
+  const readBack = (smiles: string, [i, j]: [number, number]) => {
+    const g = fromSmiles(smiles);
+    const around: number[][] = g.atoms.map(() => []);
+    for (const b of g.bonds) {
+      around[b.a].push(b.b);
+      around[b.b].push(b.a);
+    }
+    expect(around[i]).toContain(j);
+    const refs = [Math.min(...around[i].filter((n) => n !== j)), Math.min(...around[j].filter((n) => n !== i))] as const;
+    const given = { atoms: [i, j] as const, refs, sense: 1 as const };
+    const drawn = drawing({ ...g, axes: [given] });
+    // (each atom its element, as a drawing's are: a metal in a ring known for one)
+    const atoms = drawn.atoms.map((a, k) => (k < g.atoms.length ? { ...a, el: g.atoms[k].el } : { ...a, el: "H" }));
+    const bonds = drawn.bonds;
+    // (a wedge at an end, as the engine draws one; one put there where it does not, so that each case has one to read)
+    if (!bonds.some((b) => b.wedge && (b.wedge.narrow === i || b.wedge.narrow === j))) {
+      const out = bonds.find((b) => b.order === 1 && (b.a === i || b.b === i) && b.a !== j && b.b !== j)!;
+      out.wedge = { narrow: i, stereo: "up" };
+    }
+    return { given, read: readStereo(atoms, bonds).axes };
+  };
+
+  it("reads one in a ring of seven atoms or more - a 2,2'-bridged biphenyl, a dibenzocycloheptanone - as drawn", () => {
+    const { given, read } = readBack("O=C1Cc2ccccc2-c2ccccc2C1", [8, 9]);
+    expect(read).toHaveLength(1);
+    // (the same axis: from either end, against the same two groups, the same sense)
+    expect(new Set(read[0].atoms)).toEqual(new Set(given.atoms));
+    expect(read[0].sense).toBe(given.sense);
+  });
+
+  it("counts a metal as any atom of the ring: BINAP's chelate ring on Pd, of seven, read; 2,2'-bipyridine's on Pd, of five, held flat, none", () => {
+    // (BINAP-PdCl2, its C1-C1' atoms 25 and 26 as the SMILES is written)
+    const binap = "Cl[Pd]1(Cl)P(c2ccccc2)(c2ccccc2)c2ccc3ccccc3c2-c2c(P1(c1ccccc1)c1ccccc1)ccc1ccccc21";
+    const { given, read } = readBack(binap, [25, 26]);
+    expect(read).toHaveLength(1);
+    expect(read[0].sense).toBe(given.sense);
+    // (2,2'-bipyridine-PdCl2, its N bound to Pd written as N+, Pd as 2-, so that its rings are aromatic as drawn)
+    expect(readBack("Cl[Pd-2]1(Cl)[n+]2ccccc2-c2cccc[n+]21", [8, 9]).read).toEqual([]);
+    // (BINAP and bipyridine complexes laid out and read: it ran close to or past Vitest's own 5 s on a busy Windows runner)
+  }, measured(600));
+
+  it("reads one on a biaryl bond in no ring: 2,2',6,6'-tetramethylbiphenyl's", () => {
+    const { given, read } = readBack("Cc1cccc(C)c1-c1c(C)cccc1C", [7, 8]);
+    expect(read).toHaveLength(1);
+    expect(read[0].sense).toBe(given.sense);
+  });
+
+  it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
+    expect(readBack("C1c2ccccc2-c2ccccc12", [6, 7]).read).toEqual([]);
+    expect(readBack("C1Cc2ccccc2-c2ccccc12", [7, 8]).read).toEqual([]);
+  });
+});
+
+describe("the core's reader on its own: the cage's fit handed in, and the drawn line", () => {
+  // a centre drawn with three bonds into a cage, all but in one plane (their unit volume 0.10 as drawn, 0.83 drawn deeper), its H left out;
+  // the cage's solid, handed in, has them pyramidal the other way
+  const drawing = (depth: number): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+    atoms: [
+      { x: 0, y: 0, z: 0, hs: 1, centre: true },
+      { x: 1, y: 0, z: depth, hs: 2 },
+      { x: -0.5, y: 0.866, z: depth, hs: 2 },
+      { x: -0.5, y: -0.866, z: depth, hs: 2 },
+    ],
+    bonds: [1, 2, 3].map((n) => ({ a: 0, b: n, order: 1 })),
+  });
+  const solid = new Map<number, Vec3>([
+    [0, [0, 0, 0]],
+    [1, [1, 0, -0.3]],
+    [2, [-0.5, 0.866, -0.3]],
+    [3, [-0.5, -0.866, -0.3]],
+  ]);
+  const fit: CageFitter = (atoms) => new Map(atoms.map((_, i) => [i, { solid, map: (v: Vec3) => v, miss: 0 }]));
+
+  it("reads a centre whose cage bonds are drawn all but flat from the cage's solid, as handed in; drawn clearly, from the drawing", () => {
+    const flat = drawing(0.04);
+    const [byDrawing, bySolid] = [core(flat.atoms, flat.bonds).tetra.get(0), core(flat.atoms, flat.bonds, fit).tetra.get(0)];
+    expect(byDrawing).toBeDefined();
+    expect(bySolid).toBeDefined();
+    expect(bySolid!.volume).toBe(-byDrawing!.volume);
+    // (drawn deep enough to say it, the drawing's own way: the solid is not asked)
+    const deep = drawing(0.4);
+    expect(core(deep.atoms, deep.bonds, fit).tetra.get(0)).toEqual(core(deep.atoms, deep.bonds).tetra.get(0));
+  });
+
+  it("reads no centre drawn as a T - two plain bonds within IN_LINE of a line, the wedge between them - and reads one bent further", () => {
+    const at = (deg: number): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [
+        { x: 0, y: 0, hs: 1, el: "C" },
+        { x: 1, y: 0, hs: 3 },
+        { x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180), hs: 3 },
+        { x: 0, y: -1, hs: 2, el: "O" },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 0, b: 2, order: 1 },
+        { a: 0, b: 3, order: 1, wedge: { narrow: 0, stereo: "up" } },
+      ],
+    });
+    const t = at(174);
+    expect(core(t.atoms, t.bonds).tetra.has(0)).toBe(false);
+    expect(core(at(160).atoms, at(160).bonds).tetra.has(0)).toBe(true);
+  });
+});
+
+describe("a hydrogen bond is no bond of the structure", () => {
+  // (Z)-4-hydroxypent-3-en-2-one drawn flat, its O-H...O=C hydrogen bond closing a hexagon: C2 1, C3 3, C4 4, O 5, H 7, O 2; a methyl
+  // out from C2 (0) and from C4 (6)
+  const hex = (deg: number) => at(deg);
+  const out = (deg: number) => ({ x: 2 * Math.cos((deg * Math.PI) / 180), y: 2 * Math.sin((deg * Math.PI) / 180) });
+  const atoms: DrawnAtom[] = [
+    { ...out(150), el: "C", hs: 3 },
+    { ...hex(150), el: "C", hs: 0 },
+    { ...hex(-150), el: "O", hs: 0 },
+    { ...hex(90), el: "C", hs: 1 },
+    { ...hex(30), el: "C", hs: 0 },
+    { ...hex(-30), el: "O", hs: 0 },
+    { ...out(30), el: "C", hs: 3 },
+    { ...hex(-90), el: "H", hs: 0 },
+  ];
+  const bonds: DrawnBond[] = [
+    { a: 0, b: 1, order: 1 },
+    { a: 1, b: 2, order: 2 },
+    { a: 1, b: 3, order: 1 },
+    { a: 3, b: 4, order: 2 },
+    { a: 4, b: 5, order: 1 },
+    { a: 4, b: 6, order: 1 },
+    { a: 5, b: 7, order: 1 },
+  ];
+  const hBond: DrawnBond = { a: 7, b: 2, order: 1, hydrogen: true };
+
+  it("reads the enol's C=C with its hydrogen bond drawn as without it: Z, the hydrogen bond closing no ring of six", () => {
+    for (const drawn of [bonds, [...bonds, hBond]]) {
+      const { cisTrans } = readStereo(atoms, drawn);
+      expect([...cisTrans]).toEqual([[3, { refs: [1, 5], cis: true }]]);
+    }
+  });
+
+  // (an imine drawn straight at its N, ST-4.4, a water's H bonded to the N; and an amine's N wedged, a water's H bonded to its lone pair)
+  const imine = {
+    atoms: [
+      { x: 0, y: 0, el: "C", hs: 0 },
+      { ...at(150), el: "C", hs: 3 },
+      { ...at(210), el: "C", hs: 2 },
+      { x: 1, y: 0, el: "N", hs: 0 },
+      { x: 2, y: 0, el: "C", hs: 3 },
+      { x: 1, y: -1, el: "H", hs: 0 },
+      { x: 1, y: -2, el: "O", hs: 1 },
+      { x: -1.73, y: -1, el: "C", hs: 3 },
+    ] as DrawnAtom[],
+    bonds: [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1 },
+      { a: 5, b: 6, order: 1 },
+      { a: 2, b: 7, order: 1 },
+    ] as DrawnBond[],
+    hBond: { a: 5, b: 3, order: 1, hydrogen: true } as DrawnBond,
+  };
+  const amine = {
+    atoms: [
+      { x: 0, y: 0, el: "N", hs: 0 },
+      { ...at(90), el: "C", hs: 3 },
+      { ...at(210), el: "C", hs: 2 },
+      { ...at(330), el: "C", hs: 2 },
+      { ...at(270, 1.1), el: "H", hs: 0 },
+      { ...at(270, 2.1), el: "O", hs: 1 },
+      { x: -1.73, y: -1, el: "C", hs: 3 },
+      { x: 1.73, y: -1, el: "C", hs: 3 },
+    ] as DrawnAtom[],
+    bonds: [
+      { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+      { a: 4, b: 5, order: 1 },
+      { a: 2, b: 6, order: 1 },
+      { a: 3, b: 7, order: 1 },
+    ] as DrawnBond[],
+    hBond: { a: 4, b: 0, order: 1, hydrogen: true } as DrawnBond,
+  };
+
+  it("reads the imine's N as drawn straight and the amine's N as keeping no configuration, the hydrogen bond drawn or not", () => {
+    for (const drawn of [imine.bonds, [...imine.bonds, imine.hBond]]) expect([...straightEnds(imine.atoms, drawn)]).toEqual([3]);
+    for (const drawn of [amine.bonds, [...amine.bonds, amine.hBond]]) {
+      expect(readStereo(amine.atoms, drawn).tetra.size).toBe(0);
+      expect(unreadWhy(amine.atoms, drawn, 0)).toBe(KEEPS_NONE);
+    }
+  });
+
+  it("gives every reading of a drawing's bonds the same answer with the hydrogen bond drawn - each such function, whatever it is named", async () => {
+    // (every function this file exports that takes a drawing's atoms and bonds, found in its source: one added later is asked too)
+    const source = readFileSync(new URL("./from2d.ts", import.meta.url), "utf8");
+    const names = [...source.matchAll(/^export function (\w+)\(\w+: readonly DrawnAtom\[\], \w+: readonly DrawnBond\[\]/gm)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThanOrEqual(5);
+    const core = (await import("./from2d")) as unknown as Record<string, (...args: unknown[]) => unknown>;
+    // (Maps and Sets as lists, so that answers compare as values)
+    const plain = (x: unknown): unknown =>
+      x instanceof Map ? [...x].map(([k, v]) => [k, plain(v)]) : x instanceof Set ? [...x] : Array.isArray(x) ? x.map(plain) : x && typeof x === "object" ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, plain(v)])) : x;
+    for (const name of names) {
+      const f = core[name];
+      // (a third argument an atom - unreadWhy's centre - asked of every atom; each drawing: the enol, the imine, the amine)
+      for (const d of [{ atoms, bonds, hBond }, imine, amine]) {
+        const asks = f.length >= 3 ? d.atoms.map((_, c) => [c]) : [[]];
+        for (const rest of asks) expect(plain(f(d.atoms, [...d.bonds, d.hBond], ...rest)), `${name}(${rest.join()})`).toEqual(plain(f(d.atoms, d.bonds, ...rest)));
+      }
+    }
+  });
+
+  it("reads a biaryl's axis whose rings a hydrogen bond bridges, O to N, as without it: the bond closes no ring of five round the axis", () => {
+    // (2-(2-hydroxy-6-methylphenyl)-3-methylpyridine: its biaryl bond atoms 7 and 8, its O 6 and N 9)
+    const g = fromSmiles("Cc1cccc(O)c1-c1ncccc1C");
+    const given = { atoms: [7, 8] as const, refs: [1, 9] as const, sense: 1 as const };
+    const drawn = drawing({ ...g, axes: [given] });
+    const plainAtoms = drawn.atoms.map((a, k) => (k < g.atoms.length ? { ...a, el: g.atoms[k].el } : { ...a, el: "H" }));
+    const axesOf = (bs: DrawnBond[]) => readStereo(plainAtoms, bs).axes.map((x) => x.sense);
+    expect(axesOf(drawn.bonds)).toHaveLength(1);
+    expect(axesOf([...drawn.bonds, { a: 6, b: 9, order: 1, hydrogen: true }])).toEqual(axesOf(drawn.bonds));
+  });
+
+  it("says a bond by its place in the caller's list, the hydrogen bond first in it", () => {
+    const { cisTrans } = readStereo(atoms, [hBond, ...bonds]);
+    expect([...cisTrans.keys()]).toEqual([4]);
+    // (a double bond with a group almost in line with it - said by luck - and a hydrogen bond drawn before it to a water apart)
+    const pts = [
+      { x: 0, y: 0, hs: 1 },
+      { x: 1, y: 0, hs: 1 },
+      { x: -0.5, y: 0.87, hs: 3 },
+      { x: 1 + Math.cos((5 * Math.PI) / 180), y: Math.sin((5 * Math.PI) / 180), hs: 3 },
+      { x: 5, y: 5, el: "O", hs: 2 },
+    ];
+    const plainBonds = [
+      { a: 0, b: 1, order: 2 },
+      { a: 0, b: 2, order: 1 },
+      { a: 1, b: 3, order: 1 },
+    ];
+    expect(unsureStereo(pts, plainBonds).bonds).toEqual([0]);
+    expect(unsureStereo(pts, [{ a: 4, b: 2, order: 1, hydrogen: true }, ...plainBonds]).bonds).toEqual([1]);
+  });
+});
+
+describe("an axis's end asked whether it is a pyramid of three, its bonds by a Kekule structure's orders", () => {
+  /**
+   * `smiles` laid out by the engine, its bonds as the SMILES gives them (aromatic ones of order 4, as a file can carry them), with one
+   * wedge narrow at atom `at` on its bond to `to`: what the reader reads.
+   */
+  const drawn = (smiles: string, at: number, to: number) => {
+    const read = readSmiles(smiles);
+    const l = layout2D(fromSmiles(smiles));
+    const atoms: DrawnAtom[] = read.atoms.map((a, i) => ({ x: l.x[i], y: l.y[i], el: a.el, hs: a.hs ?? 0 }));
+    const bonds: DrawnBond[] = read.bonds.map((b) =>
+      (b.a1 === at && b.a2 === to) || (b.a1 === to && b.a2 === at)
+        ? { a: b.a1, b: b.a2, order: b.order, wedge: { narrow: at, stereo: "up" as const } }
+        : { a: b.a1, b: b.a2, order: b.order },
+    );
+    return core(atoms, bonds);
+  };
+
+  it("reads no axis about a 1-phenylphosphole's P-aryl bond from a wedge at its P: the P, 1 + 1 + 1 by its Kekule orders, is a pyramid", () => {
+    // (P 0, its ring 1-4, the phenyl's ipso C 5; aromatic, the P's two ring bonds 1.5 each would leave it no lone pair)
+    expect(readSmiles("p1(cccc1)-c1ccccc1").bonds.filter((b) => b.order === 4).length).toBeGreaterThan(0);
+    expect(drawn("p1(cccc1)-c1ccccc1", 0, 1).axes).toEqual([]);
+  });
+
+  it("reads a 2-methyl-1-phenylphosphole's wedge at its P as about the P's pyramid, never as an axis (whether the P keeps a configuration is the lone-pair rule's)", () => {
+    const read = drawn("p1(c(C)ccc1)-c1ccccc1", 0, 1);
+    expect(read.axes).toEqual([]);
+  });
+
+  it("leaves a 1-phenylphosphinine's P and a 1-(2-methylphenyl)pyrrole's N as they were", () => {
+    // (a six-ring's P of two ring bonds and none out: no axis's end; a pyrrole's N is planar, and its bond to the aryl an axis where wedged)
+    expect(drawn("c1ccpcc1", 3, 2).axes).toEqual([]);
+    expect(drawn("n1(cccc1)-c1ccccc1C", 0, 1).axes).toHaveLength(1);
+  });
+});

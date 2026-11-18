@@ -24,7 +24,8 @@
   },
   "bundle": {
     "resources": [
-      "resources/licenses/*"
+      "resources/licenses/*",
+      "resources/fonts/*"
     ],
     "macOS": {
       "frameworks": [

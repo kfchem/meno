@@ -78,6 +78,22 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     expect(wiresInto(doc, dup).map((w) => w.from.set)).toEqual([left.set, right.set]);
   });
 
+  it("judge every wire into a later input, not its first alone: one from a step that gives nothing yet is said", () => {
+    const a = waterAt(emptyWorkspaceDocument(), 0, 20, "A");
+    const b = waterAt(a.doc, 0, 10, "B");
+    // (an Optimise with nothing wired into it, lower on the page: its exit gives nothing yet)
+    let doc = addStep(b.doc, "optimise", 0, -10);
+    const optimise = doc.steps![doc.steps!.length - 1].id;
+    doc = addStep(doc, "merge", 40, 0);
+    const merge = doc.steps![doc.steps!.length - 1];
+    doc = connect(connect(doc, { set: a.set }, merge.id, "first"), { set: b.set }, merge.id, "second");
+    expect(whyNot(doc, merge, "meno")).toBeNull();
+    const nothingYet = resultOf(doc, optimise)!.id;
+    doc = { ...doc, wires: [...doc.wires!, { id: 900, from: { set: nothingYet }, to: { step: merge.id, port: "second" } }] };
+    expect(wiresInto(doc, merge.id, "second").map((w) => w.from.set)).toEqual([b.set, nothingYet]);
+    expect(whyNot(doc, merge, "meno")).toBe("Nothing comes into Second");
+  });
+
   it("name every entry by the set it came from - one wire alone adds no such name", () => {
     const { doc: d0, high, low, step } = twoRounds();
     const one = connect(d0, { set: low }, step);
@@ -174,6 +190,27 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     // (two numbers wired so all the same: said before it runs)
     const two = { ...add, wires: [...add.wires!, { id: 998, from: { set: resultOf(add, n2)!.id }, to: { step: sum, port: "number" } }] };
     expect(whyNot(two, two.steps!.find((s) => s.id === sum)!, "meno")).toBe("Number takes one number: 2 are wired into it");
+  });
+
+  it("into an input that reads them as a table take molecules and conformer sets together - an energy diagram's minima and saddle points - where Merge's two inputs are one kind", () => {
+    const { doc: d0, low } = twoRounds();
+    const conf = waterAt(d0, 0, -20, "Conformers", { conformerSet: true });
+    // (Levels: the conformer set and the molecules each wired in, and the step asks nothing of what they are)
+    let doc = addStep(conf.doc, "energy-diagram", 40, 0);
+    const diagram = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(doc, { set: conf.set }, diagram, "levels");
+    expect(wireRefusal(doc, { set: low }, diagram, "levels")).toBeNull();
+    doc = connect(doc, { set: low }, diagram, "levels");
+    expect(wiresInto(doc, diagram, "levels")).toHaveLength(2);
+    expect(whyNot(doc, doc.steps!.find((s) => s.id === diagram)!, "meno")).toBeNull();
+    // (Merge: a conformer set into First, molecules into Second - refused as the wire is drawn, and said before it runs where wired all the same)
+    let merge = addStep(conf.doc, "merge", 40, 0);
+    const m = merge.steps![merge.steps!.length - 1].id;
+    merge = connect(merge, { set: conf.set }, m, "first");
+    expect(wireRefusal(merge, { set: low }, m, "second")).toBe("It gives molecules in 3D, and First a conformer set: Merge makes one set of two of one kind");
+    expect(wireRefusal(merge, { set: conf.set }, m, "second")).toBeNull();
+    const mixed = { ...merge, wires: [...merge.wires!, { id: 997, from: { set: low }, to: { step: m, port: "second" } }] };
+    expect(whyNot(mixed, mixed.steps!.find((s) => s.id === m)!, "meno")).toBe("First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind");
   });
 
   it("into a Path search's Start, paired In order, count all their entries, in order", () => {

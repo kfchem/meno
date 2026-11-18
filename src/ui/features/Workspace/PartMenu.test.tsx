@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import PartMenu, { type MenuTarget } from "./PartMenu";
+import { BOND_ICONS, bondIconAsLying } from "./menuIcons";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws the menu, and what it lists is read off that.
@@ -42,12 +43,28 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
   );
   const row = html.match(/<div role="group" aria-label="Frequent"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
   const icons = [...row.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-  const rest = html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "");
+  // (the selection's own row of icons, under the thing's: cut and copy, and more where the thing's items do not reach it)
+  const selRow = html.match(/<div role="group" aria-label="Selection"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
+  const selIcons = [...selRow.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
+  const rest = html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "").replace(/<div role="group" aria-label="Selection".*?<\/div>/, "");
   const listed = [...rest.matchAll(/<button[^>]*><span>([^<]+)<\/span>/g)].map((m) => m[1]);
-  return { icons, listed, html };
+  // (what it acts on: its lines saying so, in order)
+  const lines = [...html.matchAll(/<div role="note"[^>]*>([^<]+)<\/div>/g)].map((m) => m[1]);
+  return { icons, selIcons, listed, lines, html };
 }
 
 describe("a bond's menu", () => {
+  it("marks which of two crossing bonds is in front as it holds: the held item shown as chosen, the other not", () => {
+    const chosen = (front: boolean, behind: boolean) => {
+      const html = menu(target({ kind: "bond", id: 2 }), { crossing: { front, behind, onFront: none, onBehind: none } }).html;
+      const mark = (name: string) => new RegExp(`<span>${name}</span><svg[^>]*aria-label="Chosen"`).test(html);
+      return [mark("In front"), mark("Behind")];
+    };
+    expect(chosen(false, true)).toEqual([false, true]);
+    expect(chosen(true, false)).toEqual([true, false]);
+    expect(chosen(false, false)).toEqual([false, false]);
+  });
+
   it("chooses its kind in the first row, the rest of its kinds under it, Delete last, and lists what else it does", () => {
     const m = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "double", choose: none } });
     expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "More kinds of bond", "Delete bond"]);
@@ -57,10 +74,43 @@ describe("a bond's menu", () => {
     const other = open.match(/aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
     expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Wavy bond", "Bold bond", "Bold dashed bond", "Dashed bond", "Dative bond"]);
     expect(open).toMatch(/aria-label="Dashed bond" aria-pressed="true"/);
+    // (each as large as the first row's, its icon as large: the same square, nothing scaled down)
+    const size = (html: string, name: string) => html.match(new RegExp(`aria-label="${name}"[^>]*style="([^"]+)"`))?.[1];
+    expect(size(open, "Dashed bond")).toBe(size(open, "Single bond"));
+    expect(size(open, "Wavy bond")).toBe("width:36px;height:36px");
+    expect(other).not.toContain("scale-90");
     expect(m.listed).toEqual(["Clean up this structure", "3D structure", "Select this structure"]);
     // (the current kind marked)
     expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);
     expect(m.html).toMatch(/aria-label="Single bond" aria-pressed="false"/);
+  });
+});
+
+describe("a bond's kinds in its menu", () => {
+  const drawn = (icon: unknown) => renderToString(<>{icon}</>);
+  it("draw the bond's own kind as it lies: a wedge narrow at the right turned end for end, a double bond's second line above or below", () => {
+    for (const kind of ["wedge", "hashed-wedge"] as const) {
+      expect(drawn(bondIconAsLying(kind, { narrowLeft: false, side: "center" })), kind).toContain('transform="rotate(180 10 10)"');
+      expect(drawn(bondIconAsLying(kind, { narrowLeft: false, side: "center" }))).toContain(drawn(BOND_ICONS[kind]).match(/<path[^>]*>/)![0]);
+      expect(bondIconAsLying(kind, { narrowLeft: true, side: "center" }), kind).toBe(BOND_ICONS[kind]);
+    }
+    expect(drawn(bondIconAsLying("double", { narrowLeft: true, side: "upper" }))).toContain('d="M6.5 17.2 L17.2 6.5 M4.6 11.7 L11.7 4.6"');
+    expect(drawn(bondIconAsLying("double", { narrowLeft: true, side: "lower" }))).toContain('d="M2.8 13.5 L13.5 2.8 M8.3 15.4 L15.4 8.3"');
+    expect(bondIconAsLying("double", { narrowLeft: true, side: "center" })).toBe(BOND_ICONS.double);
+    expect(bondIconAsLying("single", { narrowLeft: false, side: "upper" })).toBe(BOND_ICONS.single);
+  });
+
+  it("show each kind's key only where the menu acts on the one bond, and the bond's own kind drawn as it lies", () => {
+    const keys = (html: string) => [...html.matchAll(/aria-label="(Single bond|Double bond|Triple bond)"[^>]*data-tip="([^"]+)"/g)].map((m) => m[2]);
+    const lie = { narrowLeft: false, side: "center" as const };
+    const one = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: true, choose: none } }).html;
+    expect(keys(one)).toEqual(["Single bond (1)", "Double bond (2)", "Triple bond (3)"]);
+    const several = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: false, choose: none } }).html;
+    expect(keys(several)).toEqual(["Single bond", "Double bond", "Triple bond"]);
+    const wedge = (html: string) => html.match(/aria-label="Wedge"[^>]*>(.*?)<\/button>/)?.[1] ?? "";
+    expect(wedge(one)).toContain("rotate(180 10 10)");
+    // (a kind not the bond's own, as it always is)
+    expect(menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "single", lie, one: true, choose: none } }).html.match(/aria-label="Wedge"[^>]*>(.*?)<\/button>/)?.[1]).not.toContain("rotate");
   });
 });
 
@@ -99,18 +149,20 @@ describe("the right-click menu", () => {
     ]);
   });
 
-  it("gives the selection its clipboard, clean-up and 3D as icons - Paste where it was opened on empty space - and Export among the rest", () => {
+  it("on empty space with a selection, is the page's menu - Paste, Select all - with the selection's own under it: cut, copy, clean-up, 3D, Delete, and Export among the rest", () => {
     const here = target({ selection: "here", drawing: true });
-    const { icons, listed } = menu(here, { onExport: none });
-    expect(icons).toEqual(["Cut", "Copy", "Paste", "Clean up these structures", "3D structures", "Delete selection"]);
+    const { icons, selIcons, listed, lines } = menu(here, { onExport: none, scope: { thing: "3 atoms", count: "3 atoms", more: true, ofKind: "" } });
+    expect(icons).toEqual(["Paste", "Select all"]);
+    expect(selIcons).toEqual(["Cut", "Copy", "Clean up these structures", "3D structures", "Delete selection"]);
     expect(listed).toEqual(["Copy as SMILES", "Export…", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
-    // (opened on an atom of it: no paste there)
+    expect(lines).toEqual(["3 atoms"]);
+    // (opened on an atom of it: the atom's menu, no paste there)
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
   it("offers an atom map between the structures selected on the one right-clicked - and, on a structure in maps, what they do", () => {
     const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
-    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Atom map", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
+    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Unpaired electron", "Atom map", "Select this structure", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
     const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
@@ -145,7 +197,7 @@ describe("the right-click menu", () => {
 
   it("offers the structures selected made one, and one of several parts taken apart", () => {
     const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
-    expect(menu(here, { parts: { onJoin: none } }).listed[0]).toBe("Make one structure");
+    expect(menu(here, { parts: { onJoin: none } }).listed).toContain("Make one structure");
     expect(menu(target({ kind: "atom", id: 1 }), { parts: { onSeparate: none } }).listed).toEqual(["Unpaired electron", "Separate", "Select this structure"]);
   });
 
@@ -166,6 +218,9 @@ describe("the right-click menu", () => {
     const { html } = menu(target({ kind: "pdf", id: 1 }), { pdf });
     expect(html).toMatch(/aria-label="Previous page"[^>]*disabled=""/);
     expect(html).not.toMatch(/aria-label="Next page"[^>]*disabled=""/);
+    // (named from round it, as a disabled button is not sent the pointer in every engine; the one to be pressed, from itself)
+    expect(html).toMatch(/<span data-tip="Previous page \(←\)"[^>]*><button[^>]*aria-label="Previous page"(?![^>]*data-tip)[^>]*disabled=""/);
+    expect(html).toMatch(/<button[^>]*aria-label="Next page"[^>]*data-tip="Next page \(→\)"/);
   });
 
   it("offers a PDF's pages spread, some in places of their own, put back in their rows", () => {
@@ -385,5 +440,39 @@ describe("an arrow's menu and its atom map", () => {
     expect(listed).not.toContain("Atom map");
     expect(listed).not.toContain("Hide atom map");
     expect(listed).not.toContain("Show atom map");
+  });
+});
+
+describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
+  const atomHere = (scope: { thing: string; count: string; more: boolean; ofKind: string }) => ({ ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope });
+
+  it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy in a second row", () => {
+    const t = atomHere({ thing: "This atom", count: "This atom", more: false, ofKind: "1 atom" });
+    const m = menu(t, { scope: t.scope, onColour: none });
+    expect(m.lines).toEqual(["This atom"]);
+    expect(m.icons).toEqual(["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Delete atom"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toContain("Copy as SMILES");
+  });
+
+  it("on an atom selected with others is still the atom's menu, every icon in its place, its own items named for the atoms they reach and the first line counting them", () => {
+    const t = atomHere({ thing: "This atom", count: "3 atoms", more: true, ofKind: "3 atoms" });
+    const m = menu(t, { scope: t.scope, onColour: none });
+    expect(m.lines).toEqual(["3 atoms"]);
+    expect(m.icons).toEqual(["Charge one up on 3 atoms", "Charge one down on 3 atoms", "Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toContain("Unpaired electron on 3 atoms");
+    // (and its key, + : it acts on the selection as the item does)
+    expect(m.html).toContain('data-tip="Charge one up on 3 atoms (+)"');
+  });
+
+  it("on a shape selected with more is the shape's menu under one line counting the selection: its own items reaching the shapes selected, Delete the selection", () => {
+    const shape = { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none };
+    const scope = { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape" };
+    const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope, shape, onColour: none });
+    expect(m.lines).toEqual(["2 atoms, 1 shape"]);
+    expect(m.icons).toEqual(["Colour…", "Delete selection"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toEqual(["Corners…", "Line as bonds", "1 pt line", "2 pt line", "Dashed line", "Bring to front", "Send to back", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
   });
 });

@@ -29,7 +29,7 @@ import type { TypingField } from "../../TextEditor/typingField";
 import { useEditor, useEditorStore } from "../store";
 import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { labelKey, labelReading } from "../utils/labelTyping";
+import { labelBegunOn, labelKey, labelReading } from "../utils/labelTyping";
 import { LabelWords } from "../utils/labelWords";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
@@ -37,6 +37,7 @@ import { WholeTexts2D } from "./Labels2D";
 import { keyAfterKept, pageField } from "./pageField";
 import { leaveWatch, pastLabel } from "../utils/labelLeave";
 import { WRITE_MS, writtenLetters } from "../utils/writtenLetters";
+import PageHtml from "./PageHtml";
 import { measured, usePressAmong, useWriting, writingMarks, type WritingDrawn } from "./writing";
 
 type Pt = { x: number; y: number };
@@ -77,24 +78,34 @@ export default function LabelTyping2D() {
   const left = useEditor((s) => s.labelLeft);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
   const [, setTick] = useState(0);
+  const { camera, gl } = useThree();
 
-  // a letter typed over an atom begins its label with it
+  // a letter typed begins a label with it: on the selection's atoms, wherever the pointer is - the caret on the one nearest the
+  // pointer - and, with no atom selected, on the atom under the pointer (the maintainer, 2026-11-14: docs/EDITOR-2D.md, *Labels
+  // typed in place*)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (edit.active || hoveredAtom == null) return;
+      if (edit.active) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       // (typing into a box elsewhere - a setting beside the canvas - is not typing a label)
       const t = e.target as HTMLElement | null;
       if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.dataset.textField != null)) return;
+      const s = store.getState();
+      const selected = s.model.atoms.filter((a) => s.sel.atoms.has(a.id));
+      if (!selected.length && hoveredAtom == null) return;
       const ch = labelKey(e);
       if (!ch) return;
-      // (the letter as typed: what it is read as, the label's to say)
-      store.getState().beginLabelEdit(hoveredAtom, ch);
+      // (the pointer where it is on the page: which of the selected atoms takes the caret - utils/labelTyping `labelBegunOn`)
+      const r = gl.domElement.getBoundingClientRect();
+      const q = pointer.x != null && pointer.y != null ? pageAt(((pointer.x - r.left) / r.width) * 2 - 1, -(((pointer.y - r.top) / r.height) * 2 - 1), camera) : null;
+      const on = labelBegunOn(selected, hoveredAtom, q ? { x: q.x, y: q.y } : null, s.selAnchor);
+      if (!on) return;
+      s.beginLabelEdit(on.id, ch, on.atoms ? { atoms: on.atoms } : undefined);
       e.preventDefault();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [hoveredAtom, edit.active, store]);
+  }, [hoveredAtom, edit.active, store, camera, gl]);
 
   // a label kept by Enter: an Enter straight after draws it out (docs/EDITOR-2D.md, *Labels typed in place*) - any other key, or a press,
   // first, and it is left as it is
@@ -176,6 +187,8 @@ function Typing({ session }: { session: Session }) {
   const field = useRef<TypingField | null>(null);
   const done = useRef(false);
   const typing = phase === "typing";
+  // (begun on the selection's atoms: the others it is written on, its letters shown on each as on this one)
+  const [others] = useState(() => (store.getState().labelEdit.atoms ?? []).filter((x) => x !== atomId));
 
   // where its atom is - or was, gone from under it
   const index = atoms.findIndex((a) => a.id === atomId);
@@ -285,7 +298,8 @@ function Typing({ session }: { session: Session }) {
   area.current = { at, room };
   const watching = useRef<{ frame: () => void } | null>(null);
   useEffect(() => {
-    if (!typing) return;
+    // (begun on several atoms: the pointer moving does nothing to it - Enter keeps it, Escape lets it go, a press elsewhere keeps it)
+    if (!typing || others.length) return;
     const L = NOMINAL_BOND_LENGTH;
     const past = (c: { x: number; y: number }) => pastLabel(world.current(c.x, c.y), area.current.at, area.current.room, L);
     let cur = pointer.x != null && pointer.y != null ? { x: pointer.x, y: pointer.y } : null;
@@ -310,7 +324,7 @@ function Typing({ session }: { session: Session }) {
       window.removeEventListener("pointermove", onMove, true);
       canvas.removeEventListener("pointerleave", onOut);
     };
-  }, [typing, gl]);
+  }, [typing, gl, others.length]);
   useFrame(() => watching.current?.frame());
 
   // seen as it begins - begun by a letter, growing out of the atom - until it goes: kept, in a moment; let go, drawing back into the atom
@@ -351,16 +365,33 @@ function Typing({ session }: { session: Session }) {
   const d = drawnNow.current;
   const marks: ReactNode[] = d && typing ? writingMarks(d, { fs, lineH: fs * CAPTION_LINE, px, ink: opts.labelColor ?? "#000000", caretRef, z: 0.07, text: TEXT_ORDER }) : [];
   // (about the atom: what grows out of it, and draws back into it)
+  // (the other atoms it is written on: the same letters on each, as they are typed - where they are now)
+  const echoes = others.map((id) => atoms.find((a) => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a);
   return (
-    <group ref={group} position={[at.x, at.y, 0]}>
-      <group ref={scaled}>
-        <group position={[-at.x, -at.y, 0]}>
-          <group position={[mid.x, mid.y, 0.07]}>
-            <WholeTexts2D texts={laid.items} onDrawn={onDrawn} renderOrder={TEXT_ORDER} opacity={opacity} />
+    <>
+      <group ref={group} position={[at.x, at.y, 0]}>
+        <group ref={scaled}>
+          <group position={[-at.x, -at.y, 0]}>
+            <group position={[mid.x, mid.y, 0.07]}>
+              <WholeTexts2D texts={laid.items} onDrawn={onDrawn} renderOrder={TEXT_ORDER} opacity={opacity} />
+            </group>
+            {marks}
           </group>
-          {marks}
         </group>
       </group>
-    </group>
+      {echoes.map((a) => (
+        <group key={a.id} position={[a.x + dx, a.y, 0.07]}>
+          <WholeTexts2D texts={laid.items} renderOrder={TEXT_ORDER} opacity={opacity} />
+        </group>
+      ))}
+      {/* (how many it is written on, by the caret: those out of view counted too - nothing changed unseen) */}
+      {typing && echoes.length > 0 && (
+        <PageHtml position={[mid.x, mid.y - Math.max(laid.halfH, fs * 0.5) - fs * 0.35, 0]} center zIndexRange={[20, 10]} style={{ pointerEvents: "none" }}>
+          <div className="meno-fade-in whitespace-nowrap rounded-md border border-gh-line bg-white px-1.5 py-0.5 text-[11px] text-gh-gray shadow-sm" style={{ transform: "translateY(50%)" }}>
+            {others.length + 1} atoms
+          </div>
+        </PageHtml>
+      )}
+    </>
   );
 }

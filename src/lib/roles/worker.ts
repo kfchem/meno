@@ -88,11 +88,20 @@ onWorkerStopped((id) => {
   if ("plugin" in now && now.plugin === pluginById(id)?.name) useChem.setState({ state: "idle" });
 });
 
+/**
+ * The set-up of chemistry from the first start's card under way, where one is (lib/plugins/firstSetUp, which sets
+ * this): what a role asked of meanwhile, with no plugin here to fill it, waits for - not refused as wanting a plugin.
+ */
+export const firstSetUpWait: { now: () => Promise<void> | null } = { now: () => null };
+
 /** The worker of the plugin that fills `role`, started the first time it is asked for. */
 export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
   const plugin = rolePlugin(role);
   const undecided = plugin ? [] : roleUndecided(role);
   if (undecided.length) return Promise.reject(new Error(`${undecided.map((p) => p.name).join(" and ")} each do this: ${ROLES[role].name} - choose which in Settings.`));
+  // (a SMILES typed while the card sets chemistry up: answered when it is ready, done or not - then as ever)
+  const setUp = plugin ? null : firstSetUpWait.now();
+  if (setUp) return setUp.then(() => chemWorker(role));
   if (!plugin) {
     useRoleOffer.setState({ role });
     return Promise.reject(new NoPlugin(role));
@@ -131,6 +140,23 @@ export async function chemAtHand(role: RoleId = "checks"): Promise<boolean> {
   const plugin = rolePlugin(role);
   if (!plugin) return false;
   return workerRunning(plugin.id) || (await pyEnvReady(plugin.profile));
+}
+
+/**
+ * The worker of what fills `role` started before it is asked anything, where
+ * a question of it may soon come: Quick Add opened, where a SMILES may be
+ * typed, so that the first one read waits for no start. Only where it can be
+ * had without asking anything (`chemAtHand`) and was not taken away: nothing
+ * is set up, offered or chosen from here. A start that fails is said as any
+ * start's failure is, and met again by the question itself.
+ */
+export async function startAhead(role: RoleId): Promise<void> {
+  const plugin = rolePlugin(role);
+  if (!plugin || takenAway(plugin) || !(await chemAtHand(role).catch(() => false))) return;
+  await pluginWorker(plugin).then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 async function start(plugin: PythonPlugin): Promise<ChemClient> {

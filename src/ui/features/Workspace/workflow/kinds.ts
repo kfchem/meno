@@ -8,8 +8,11 @@ import { CHECK_OPTIONS } from "./checkStructures";
 import { STEREO_OPTIONS } from "./stereoisomers";
 import { deltaOf, levelsTyped, propertiesTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
+import { cardHigh } from "./look";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
+import { boundSaid, type Bound } from "../../../../lib/boundOptions";
+import { REPEAT_IN, REPEAT_OPTIONS, REPEAT_OUT, repeatHow, repeatNeeds } from "./repeat";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 import { keptNames, takeFramesHow, type Which } from "./takeFrames";
@@ -23,7 +26,7 @@ import { measurementName, measurementsTyped } from "../../../../lib/steps/measur
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
 import { BOND_REACH, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
-import { DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
+import { angleIn, DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
@@ -51,7 +54,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto" | "torsions" | "repeat";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -139,9 +142,11 @@ export type KindInfo = {
   /** Its exits beyond the first, which is `made`, in order: entries it sets aside (*rest*), or could not do (*failed*) - at most one such - and anything else it gives. */
   others?: readonly StepExit[];
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
-  how?: (values: Record<string, string | number | boolean>) => string;
+  how?: (values: Record<string, string | number | boolean>, bound?: Bound) => string;
   /** What it still needs of its options before it can run, where it cannot as they are: said on its card where *Ready* would be (`needsOf`), as its run would refuse. */
-  needs?: (values: Record<string, string | number | boolean>) => string | undefined;
+  needs?: (values: Record<string, string | number | boolean>, bound?: Bound) => string | undefined;
+  /** Not among the kinds a step is chosen from - Quick Add's, a card's *Calculation*, a conversation's - but made otherwise: a Repeat, round steps. */
+  apart?: true;
   /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
   whole?: true;
 };
@@ -201,7 +206,20 @@ const MOLECULES_IN: StepPort = { id: ONE_INPUT, name: "Molecules", takes: ["mole
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", family: "structures", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", family: "structures", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
+  // (each compound's conformers, every one its program gives - holding the restraints wired in for each molecule in 3D, where its plugin's search holds them)
+  {
+    kind: "conformers",
+    name: "Conformers",
+    icon: "rings",
+    family: "structures",
+    takes: ["structures", "molecules", "conformers"],
+    gives: "conformers",
+    runs: "program",
+    made: "Conformers",
+    whole: true,
+    inputs: [{ id: ONE_INPUT, name: "Structures", takes: ["structures", "molecules", "conformers"] }, RESTRAINTS_INPUT],
+    others: [{ ...FAILED, gives: "molecules" }],
+  },
   { kind: "optimise", name: "Optimise", icon: "curve", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, inputs: [MOLECULES_IN, RESTRAINTS_INPUT], others: [FAILED] },
   // (each entry minimised in a force field with the restraints wired in for it held, as its plugin holds them: docs/PLUGINS.md)
   { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, inputs: [MOLECULES_IN, RESTRAINTS_INPUT], others: [FAILED] },
@@ -231,7 +249,8 @@ export const KINDS: readonly KindInfo[] = [
   },
   {
     // (a guess optimised to a saddle point by its program - with the reactant and product sides, where both are wired, each paired with
-    //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
+    //  it as its own options say, and the restraints wired in for it held, as its plugin holds them: one optimisation, nothing else;
+    //  Meno judges none of them a saddle point - docs/WORKFLOWS.md. Four inputs: its card one port's step taller - look `cardHigh`)
     kind: "saddle-point",
     name: "Optimise to a saddle point",
     icon: "saddle", family: "paths",
@@ -243,6 +262,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "guesses", name: "Guesses", takes: ["molecules"] },
       { id: "reactant", name: "Reactant side", takes: ["molecules"], optional: true, together: "product" },
       { id: "product", name: "Product side", takes: ["molecules"], optional: true, together: "reactant" },
+      RESTRAINTS_INPUT,
     ],
     others: [FAILED],
     whole: true,
@@ -946,19 +966,89 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => restraintsNeeds(v),
   },
   {
-    // (each torsion trans across its reference's double bonds that is not trans in the entry held at 180, stronger each time - those already trans out of the second exit)
+    // (a table of torsion restraints, a row for each: torsions typed, each held at the angle typed; or each across the Reference's double
+    //  bonds unlike here (Compare torsions' rule) at 180° or at the reference's own angle - each by its strength or exactly, each row for its
+    //  molecule by an ID a step wrote; those it cannot make rows for out of Failed - docs/STRUCTURE-STEPS.md)
     kind: "torsion-restraints",
     name: "Torsion restraints",
     icon: "heldAnti", family: "structures",
     takes: ["molecules", "conformers"],
+    gives: "table",
+    runs: "entries",
+    made: "Torsion restraints",
+    inputs: [
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"], optional: true },
+    ],
+    others: [FAILED],
+    options: [
+      { id: "on", label: "Each row for the molecule by its", type: "text", default: "" },
+      {
+        id: "torsions",
+        label: "Torsions",
+        type: "choice",
+        choices: [
+          { value: "typed", label: "Typed" },
+          { value: "reference", label: "From the reference" },
+        ],
+        default: "typed",
+      },
+      { id: "atoms", label: "Four atoms to a line, from 1 (1-2-3-4)", type: "lines", default: "", rows: 2, when: { id: "torsions", in: ["typed"] } },
+      { id: "target", label: "Held at, \u00b0", type: "text", default: "", when: { id: "torsions", in: ["typed"] } },
+      {
+        id: "at",
+        label: "Held at",
+        type: "choice",
+        choices: [
+          { value: "trans", label: "180\u00b0 where trans" },
+          { value: "own", label: "The reference's own angle" },
+        ],
+        default: "trans",
+        when: { id: "torsions", in: ["reference"] },
+      },
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "one", label: "The one reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "one",
+        when: { id: "torsions", in: ["reference"] },
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      {
+        id: "hold",
+        label: "Each held",
+        type: "choice",
+        choices: [
+          { value: "strength", label: "By a strength" },
+          { value: "exact", label: "Exactly" },
+        ],
+        default: "strength",
+      },
+      { id: "strength", label: "Strength, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP), unit: "kcal/mol/rad\u00b2", fromProperty: true, when: { id: "hold", in: ["strength"] } },
+    ],
+    how: (v, bound) => torsionsHow(v, bound),
+    needs: (v, bound) => torsionsNeeds(v, bound),
+  },
+  {
+    // (each entry against its reference, in one numbering: how many torsions across the reference's double bonds are unlike here - trans
+    //  there and cis here, and, of a double bond with no trans torsion there, trans here - and which, written on it for a Filter to split
+    //  on; one it cannot set against a reference out of Failed - docs/STRUCTURE-STEPS.md)
+    kind: "compare-torsions",
+    name: "Compare torsions",
+    icon: "torsions", family: "structures",
+    takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
-    made: "Restrained",
+    made: "Compared",
     inputs: [
       { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
       { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
     ],
-    others: [{ id: "rest", name: "Trans already", gives: "same", of: "rest" }],
+    others: [FAILED],
     options: [
       {
         id: "reference",
@@ -971,10 +1061,9 @@ export const KINDS: readonly KindInfo[] = [
         default: "one",
       },
       { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
-      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP) },
     ],
-    how: (v) => torsionsHow(v),
-    needs: (v) => torsionsNeeds(v),
+    how: (v) => compareTorsionsHow(v),
+    needs: (v) => compareTorsionsNeeds(v),
   },
   {
     // (a number with its unit and what worked it out - the standard-state term from its temperature, by its formula, or one typed - for a step that takes one: Add's)
@@ -1159,6 +1248,27 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) => ensembleHow(v),
     needs: (v) => ensembleNeeds(v),
   },
+  {
+    // (a frame round steps, run pass by pass: what comes into In goes into This pass, inside, for its first steps; what its steps give
+    //  is wired to Again, to go round once more, or to Done; Out holds what reached Done over all its passes - workflow/repeat)
+    kind: "repeat",
+    name: "Repeat",
+    icon: "repeat", family: "structures",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "This pass",
+    apart: true,
+    inputs: [
+      { id: REPEAT_IN, name: "In", takes: ["molecules", "conformers"] },
+      { id: "again", name: "Again", takes: ["molecules", "conformers"], optional: true },
+      { id: "done", name: "Done", takes: ["molecules", "conformers"], optional: true },
+    ],
+    others: [{ id: REPEAT_OUT, name: "Out", gives: "same" }],
+    options: REPEAT_OPTIONS,
+    how: (v) => repeatHow(v),
+    needs: (v) => repeatNeeds(v),
+  },
 ];
 
 /** A number typed on a card, above 0, or why it is not one; null where nothing is typed. */
@@ -1218,22 +1328,75 @@ export function restraintsHow(v: OptionValues): string {
   return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}; for each ${typed.on}`;
 }
 
-/** What a Torsion restraints step still needs of its options. */
-export function torsionsNeeds(v: OptionValues): string | undefined {
-  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
-  const step = aboveZero(String(v.step ?? TORSION_STEP), "The strength added");
-  if (step == null) return "Set the strength added";
-  return typeof step === "object" ? step.why : undefined;
+/** The torsions typed on a Torsion restraints card, one to a line, each four different atoms from 1 (as 0), or why a line does not read. */
+export function torsionsTyped(text: string): { torsions: number[][] } | { why: string } {
+  const torsions: number[][] = [];
+  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const atoms = line.split(/\s*[-,\s]\s*/).map((a) => (/^[0-9]+$/.test(a) ? Number(a) - 1 : NaN));
+    if (atoms.length !== 4 || atoms.some((a) => !(a >= 0)) || new Set(atoms).size !== 4) return { why: `"${line}" is not four different atoms from 1` };
+    torsions.push(atoms);
+  }
+  return { torsions };
 }
 
-/** A Torsion restraints step's line: what it adds each time, and what it matches on where it does. */
-export function torsionsHow(v: OptionValues): string {
-  const needs = torsionsNeeds(v);
+/** A Torsion restraints step's options as read from its card: what it makes - typed torsions and their angle, or those from the reference - how each is held, and the property each row names its molecule by; or why they do not read. */
+export function torsionsRead(v: OptionValues, bound?: Bound): { on: string; hold: TorsionHoldRead } & ({ typed: number[][]; target: number } | { from: "trans" | "own"; property?: string }) | { why: string } {
+  const on = String(v.on ?? "").trim();
+  if (!on) return { why: "Name the property each row is for (an ID a Tag wrote)" };
+  let hold: TorsionHoldRead = { exact: true };
+  // (its strength taken from a property, entry by entry: read at its run, each entry's own - lib/boundOptions)
+  if (v.hold !== "exact" && bound?.strength) hold = { strengthFrom: bound.strength };
+  else if (v.hold !== "exact") {
+    const k = aboveZero(String(v.strength ?? TORSION_STEP), "The strength");
+    if (k == null) return { why: "Set the strength" };
+    if (typeof k === "object") return k;
+    hold = { strength: k };
+  }
+  if (v.torsions === "reference") {
+    if (v.reference === "property" && !String(v.property ?? "").trim()) return { why: "Name the property to pair them on" };
+    return { on, hold, from: v.at === "own" ? "own" : "trans", ...(v.reference === "property" ? { property: String(v.property).trim() } : {}) };
+  }
+  const typed = torsionsTyped(String(v.atoms ?? ""));
+  if ("why" in typed) return typed;
+  if (!typed.torsions.length) return { why: "Type the torsions, four atoms to a line" };
+  const t = String(v.target ?? "").trim();
+  const target = Number(t);
+  if (!t) return { why: "Set the angle to hold them at" };
+  if (!Number.isFinite(target) || !/^[0-9.eE+-]+$/.test(t)) return { why: "The angle must be a number, in degrees" };
+  return { on, hold, typed: typed.torsions, target };
+}
+
+/** How a Torsion restraints step holds each torsion, as its card reads: by a strength, exactly, or by the strength each entry's property gives. */
+export type TorsionHoldRead = { strength: number } | { exact: true } | { strengthFrom: string };
+
+/** What a Torsion restraints step still needs of its options. */
+export function torsionsNeeds(v: OptionValues, bound?: Bound): string | undefined {
+  const r = torsionsRead(v, bound);
+  return "why" in r ? r.why : undefined;
+}
+
+/** A Torsion restraints step's line: what it holds, at what, how, and what each row is for. */
+export function torsionsHow(v: OptionValues, bound?: Bound): string {
+  const r = torsionsRead(v, bound);
+  if ("why" in r) return r.why;
+  const how = "exact" in r.hold ? "exactly" : `${"strengthFrom" in r.hold ? boundSaid(r.hold.strengthFrom) : r.hold.strength} kcal/mol/rad\u00b2`;
+  const what =
+    "typed" in r
+      ? `${r.typed.length} ${r.typed.length === 1 ? "torsion" : "torsions"} at ${angleIn(r.target)}\u00b0`
+      : `unlike the reference: ${r.from === "trans" ? "trans there and cis here, at 180\u00b0" : "at its own angle"}${r.property ? `, matched on ${r.property}` : ""}`;
+  return `${what}, ${how}; for each ${r.on}`;
+}
+
+/** What a Compare torsions step still needs of its options. */
+export function compareTorsionsNeeds(v: OptionValues): string | undefined {
+  return v.reference === "property" && !String(v.property ?? "").trim() ? "Name the property to pair them on" : undefined;
+}
+
+/** A Compare torsions step's line: what it counts, and by what rule (Klyne and Prelog's). */
+export function compareTorsionsHow(v: OptionValues): string {
+  const needs = compareTorsionsNeeds(v);
   if (needs) return needs;
-  // (the one reference is the default: left unsaid)
-  const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
-  // (the + says it adds each time - the option's own label says it whole)
-  return `held at 180\u00b0, +${String(v.step ?? TORSION_STEP).trim()} kcal/mol/rad\u00b2${matched}`;
+  return `trans in the reference, cis here \u00b7 trans: more than 90\u00b0 either way (Klyne\u2013Prelog)${v.reference === "property" ? `, matched on ${String(v.property).trim()}` : ""}`;
 }
 
 /** What an Atom map step still needs of its options. */
@@ -1374,9 +1537,9 @@ export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind =
 export const STEP_FAMILIES = ["structures", "energies", "paths", "charts"] as const;
 export type StepFamily = (typeof STEP_FAMILIES)[number];
 /** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
-export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
+export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean>; bound?: Bound }): string | undefined => {
   const info = kindInfo(s.kind);
-  return info.needs?.(optionsOf(info.options ?? [], s.options));
+  return info.needs?.(optionsOf(info.options ?? [], s.options), s.bound);
 };
 
 /** Whether a step of `kind` takes a set that holds `holds`. */
@@ -1415,9 +1578,10 @@ export function howOf(
   options: readonly Option[],
   own: Record<string, string | number | boolean> | undefined,
   said?: KindInfo["how"],
+  bound?: Bound,
 ): string {
   const values = optionsOf(options, own);
-  if (said) return said(values);
+  if (said) return said(values, bound);
   const shown = shownOptions(options, values);
   // (each choice's value as said, and how many choices say it)
   const chosen = (o: Option) => (o.type === "choice" && values[o.id] !== "none" ? (o.choices.find((c) => c.value === values[o.id])?.label ?? String(values[o.id])) : null);
@@ -1435,6 +1599,9 @@ export function howOf(
   return [...shown.filter((o) => !many(o)), ...shown.filter(many)]
     .flatMap((o) => {
       const v = values[o.id];
+      // (one taken from a property: by the property's name, "= k", with its unit)
+      const from = bound?.[o.id];
+      if (from && (o.type === "number" || o.type === "text")) return [`${boundSaid(from)}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "choice") {
         const c = chosen(o);
@@ -1506,11 +1673,22 @@ export const readsAsTable = (kind: StepKind, port: string): boolean => {
   return !!p.asTable || p.takes.includes("table");
 };
 
+/**
+ * Whether sets of the kinds `a` and `b`, wired into one input of `kind`, may come in together: one kind, as one set's entries are - or
+ * molecules in 3D and conformer sets into an input that reads them as a table, each molecule as it is (`readsAsTable`), as it takes one
+ * set mixing them: an energy diagram's minima, conformer sets, and its saddle points, molecules.
+ */
+export const comeTogether = (kind: StepKind, port: string, a: SetHolds, b: SetHolds): boolean =>
+  a === b || (readsAsTable(kind, port) && (a === "molecules" || a === "conformers") && (b === "molecules" || b === "conformers"));
+
 /** The exit of `kind` named `exit`, or its first where `exit` is not one of its own. */
 export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
   return exits.find((e) => e.id === exit) ?? exits[0];
 }
+
+/** How tall a card of `kind` is closed (look `cardHigh`): as many port rows as it has inputs down its left or exits down its right, the more of the two. */
+export const cardHighOf = (kind: StepKind): number => cardHigh(Math.max(inputsOf(kind).length, exitsOf(kind).length));
 
 /** Where `exit` is among its kind's exits, from 0 - its port's place down the card's right side (look `stepGives`): the first's, where the kind has no such exit, as `exitOf` takes it. */
 export const exitPlace = (kind: StepKind, exit: string): number => Math.max(0, exitsOf(kind).findIndex((e) => e.id === exit));
