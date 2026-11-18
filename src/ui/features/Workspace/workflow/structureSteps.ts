@@ -868,3 +868,29 @@ export function modeOnAtomsSet(
   if (replaced) line.push(`the mode's values ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
   return { ok: true, holds, kept: backEach(entries, made), aside: [], said: [line.join(" · "), ...notes].join(". ") };
 }
+
+/** How far apart the two sides' entries per compound may be, as a share of their sum, for both to pass (`fewerSideSet`): a quarter, as ConfoTS's own rule has it. */
+export const FEWER_SIDE_SHARE = 0.25;
+
+/**
+ * *Pass the side with fewer* (docs/WORKFLOWS.md): of two sets, *First* and *Second*, which pass on - *First*'s out of its first exit,
+ * *Second*'s out of its second, each as it came or not at all. `pass` "auto" compares their entries per compound (each a species'
+ * conformers): within `FEWER_SIDE_SHARE` of their sum, both pass; else only the side with fewer - the rule ConfoTS's own code takes to
+ * choose which way its reaction paths run (confots_step1.py, its `path_flag` left "auto"), from the side with fewer conformers kept.
+ * "both", "first" and "second" pass those whatever the counts. Its line says both sides' entries per compound and what passed.
+ */
+export function fewerSideSet(first: readonly SetEntry[], second: readonly SetEntry[], holds: Holds3D, pass: "auto" | "both" | "first" | "second"): Outcome3D {
+  const perCompound = (es: readonly SetEntry[]) => es.length / new Set(es.map((e) => e.compound)).size;
+  const [a, b] = [perCompound(first), perCompound(second)];
+  const which: "both" | "first" | "second" = pass !== "auto" ? pass : Math.abs(a - b) / (a + b) < FEWER_SIDE_SHARE ? "both" : a < b ? "first" : "second";
+  const counts = `First ${a.toFixed(1)}, Second ${b.toFixed(1)} per compound`;
+  const passed = which === "both" ? "both passed" : which === "first" ? "First only passed" : "Second only passed";
+  const why = pass === "auto" ? (which === "both" ? " (within a quarter of their sum)" : " (the side with fewer)") : " (as set)";
+  return {
+    ok: true,
+    holds,
+    kept: which === "second" ? [] : [...first],
+    aside: which === "first" ? [] : [...second],
+    said: `${counts} · ${passed}${why}`,
+  };
+}

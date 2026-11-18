@@ -85,13 +85,13 @@ export const NOTES: { stage: string; text: string }[] = [
   { stage: STAGES.species, text: "The first Conformers make one 3D structure of each species from 200 tries (ConfoTS is given its 3D structures). The search runs in rounds until one brings no new conformer within 10 kcal/mol, ConfoTS's window for what it keeps, at most 5000 tries (ConfoTS's up to 10000 steps are of another kind: the two counts are not the same). Energies here are the search's force field's, another than ConfoTS's." },
   {
     stage: STAGES.conformers,
-    text: "The windows, 10 and 5 kcal/mol, and the limit of 64 are ConfoTS's; they are yours to change. Optimisations have no step limit of their own. An energy exactly at a window's edge is kept here; ConfoTS drops it.",
+    text: "The windows, 10 and 5 kcal/mol, and the limit of 64 are ConfoTS's; they are yours to change. Optimisations have no step limit of their own. An energy exactly at a window's edge is kept here; ConfoTS drops it. Pass the side with fewer chooses which way the paths run, as ConfoTS does when left to choose: from the side with fewer conformers per species, or both ways where the two are within a quarter of their sum. A flexible reactant against compact products runs from the products only. It counts after the limit of 64, where ConfoTS counts before its limit; set it to Both, or to one side, to run otherwise.",
   },
   {
     stage: `${STAGES.pairs} to the products`,
     text: "Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The first round's strength, 50, is Meno's own measured one; 100 and 150, three rounds (ConfoTS allows ten) and 2000 minimisation steps (the plugin's default) have no basis of their own: they are yours to change. Ends still wrong after the last round are dropped. Every conformer is paired with every product, and nothing holds a new centre: an end that is another product - the other ring fusion - is that product's end, kept there. Ends, and the ends of each path, are checked by R/S and E/Z, not by their atoms' numbers as ConfoTS checks them: Meno's Atom map does not yet choose which hydrogen of a CH2 is which as ConfoTS's map does, so which hydrogen of a CH2 is which is not tested, here or anywhere in the template, until it does. An end that is the mirror image of the drawn product is dropped, as in ConfoTS.",
   },
-  { stage: `${STAGES.pairs} to the reactant`, text: "The same rounds, from the products' conformers. Both directions are wired: take the paths of the one you want, or both." },
+  { stage: `${STAGES.pairs} to the reactant`, text: "The same rounds, from the products' conformers. Each direction runs where Pass the side with fewer lets its side through; the other says that nothing came in." },
   {
     stage: STAGES.diagram,
     text: "Each direction keeps up to 16 saddle points of a path (ConfoTS's 16 is for the path); the two together are capped at the lowest 16 of each path. A saddle point found from both directions may appear twice: its two entries are bonded differently, as the product and as the reactant, and Duplicates does not take them as one. The share of the reaction through each path is not in Meno yet. The barriers and the diagram show which path is lower.",
@@ -381,8 +381,10 @@ function body(): RecipeStep[] {
     // (the species by their IDs, apart: the reactant, and the products each given the ID of the path to it)
     step({ key: "reactant-species", stage: STAGES.conformers, kind: "filter", options: { conditions: "species = species-1", match: "all" }, in: { in: "species" }, note: "The reactant, with its species ID" }),
     step({ key: "product-species", stage: STAGES.conformers, kind: "tag", options: { name: "path" }, in: { in: "reactant-species.rest" }, note: "The products, each with its species ID and the ID of the path to it" }),
-    ...direction("forward", { geometry: "sides", geometryTag: "start", bonding: "product-species", bondingTag: "path", tagged: true, target: "product-species", reference: "species", pathsBy: "path" }),
-    ...direction("backward", { geometry: "sides.rest", geometryTag: "pc", bonding: "reactant-species", bondingTag: "reactant", product: "product-species", reference: "species", pathsBy: "path" }),
+    // (which way the paths run, as ConfoTS chooses: from the side with fewer conformers per species, or both where they are alike)
+    step({ key: "which-way", stage: STAGES.conformers, kind: "fewer-side", options: { pass: "auto" }, in: { first: "sides", second: "sides.rest" }, note: "Which way the paths run: the reactant's conformers, or the products', or both" }),
+    ...direction("forward", { geometry: "which-way", geometryTag: "start", bonding: "product-species", bondingTag: "path", tagged: true, target: "product-species", reference: "species", pathsBy: "path" }),
+    ...direction("backward", { geometry: "which-way.rest", geometryTag: "pc", bonding: "reactant-species", bondingTag: "reactant", product: "product-species", reference: "species", pathsBy: "path" }),
     // The diagram at the xTB level
     step({ key: "saddles", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "forward/ranked", second: "backward/ranked" }, note: "Validated saddle points of both directions" }),
     // (ConfoTS's 16 is for the path: the two directions together are capped at the lowest 16 of each path)
