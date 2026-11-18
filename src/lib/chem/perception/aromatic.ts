@@ -46,7 +46,7 @@
  */
 
 import type { ChemBond, ChemGraph } from "./graph";
-import { smallestRings } from "./rings";
+import { SMALL_RING, smallestRings } from "./rings";
 
 /** Two atoms as one key, the lower first. */
 const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
@@ -266,11 +266,8 @@ export function aromaticForm<G extends ChemGraph>(input: G): AromaticForm<G> {
   };
 }
 
-/** Rings of at most this many atoms are the small ones `keepsSide` asks about: a cyclooctatetraene's is not one. */
-const SMALL_RING_MOST = 7;
-
 /**
- * Whether a double bond keeps its side in the aromatic form: neither of its atoms in a ring of `SMALL_RING_MOST` atoms or fewer, and a
+ * Whether a double bond keeps its side in the aromatic form: neither of its atoms in a ring of `SMALL_RING` atoms or fewer, and a
  * larger ring of the smallest set through it that shares two bonds or more with such a ring - runs across it, as a phane's, not fused
  * to it at one bond.
  */
@@ -278,10 +275,10 @@ function keepsSide(n: number, bonds: readonly ChemBond[]): (b: ChemBond) => bool
   const rings = smallestRings(n, bonds.map((b) => [b.a, b.b] as const));
   const key = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
   const edges = rings.map((r) => new Set(r.map((x, k) => key(x, r[(k + 1) % r.length]))));
-  const small = rings.flatMap((r, i) => (r.length <= SMALL_RING_MOST ? [i] : []));
+  const small = rings.flatMap((r, i) => (r.length <= SMALL_RING ? [i] : []));
   const inSmall = new Set(small.flatMap((i) => rings[i]));
   // (a large ring that runs across a small one: two bonds or more of the small ring's its own)
-  const across = rings.map((r, i) => r.length > SMALL_RING_MOST && small.some((j) => [...edges[j]].filter((e) => edges[i].has(e)).length >= 2));
+  const across = rings.map((r, i) => r.length > SMALL_RING && small.some((j) => [...edges[j]].filter((e) => edges[i].has(e)).length >= 2));
   return (b) => !inSmall.has(b.a) && !inSmall.has(b.b) && rings.some((_, i) => across[i] && edges[i].has(key(b.a, b.b)));
 }
 
