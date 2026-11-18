@@ -905,7 +905,8 @@ No reader, step or mark takes them yet: each will, in its own change.
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);
-- the canonical text of the structure's aromatic form;
+- the canonical text of the structure's aromatic form, its end
+  chalcogens on P, As, Sb, S, Se and Te written as one form;
 - with each stereocentre's and each double bond's configuration as drawn,
   and each axis of chirality;
 - and, for a square-planar or an octahedral metal, which of its donors are
@@ -944,6 +945,27 @@ drawn, aromatic rings as one form.* What that means, plainly:
   (Pd(PPh3)4). The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
+- **an oxygen (or S, Se, Te) at the end of a bond to P, As, Sb, S, Se or
+  Te is the same drawn double or drawn charged** (IUPAC 2013 P-93.2.3 to
+  P-93.2.5; `src/lib/chem/perception/chalcogenEnds.ts`). A phosphine
+  oxide drawn R3P=O and drawn R3P(+)-O(-) is one structure, and so is a
+  sulfoxide drawn S=O and S(+)-O(-): identity writes the uncharged form,
+  a configuration at the P or S kept, so a P-chiral phosphine oxide's two
+  hands stay two. Never at N: an amine N-oxide and a nitro group keep
+  their charges. The end atoms of one centre share their double bonds and
+  their charge: a phosphate diester anion with its charge drawn on one
+  oxygen or on the other is one structure, and its P, between two alike
+  oxygens, is no stereocentre; a sulfinate anion's S neither. An O-H
+  shares its hydrogen with the other end oxygens of its centre, so a
+  phosphinic acid's P is no stereocentre either, as its anion's is not -
+  but never with another element: a thio acid drawn P(=S)(O-H) and drawn
+  P(=O)(S-H) are two tautomers, as drawn. Ends of two elements, or an end
+  labelled by its mass number, stay apart: a phosphorothioate anion with
+  its charge on O or on S is one structure, its P a stereocentre. A
+  phosphinate ester, a phosphonate with two unlike esters, a sulfoxide
+  and a sulfinate ester keep theirs. Se and Te are the text's; As and Sb
+  are Meno's own extension of it (P-93.2.2: "treated in the same
+  manner");
 - **a metal's isomers by which donors are across are two structures:**
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
