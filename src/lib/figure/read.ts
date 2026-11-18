@@ -210,12 +210,37 @@ export function sizedOutlines(shapes: Shapes, letters: readonly FigureLetter[] =
 
 /**
  * How long a figure's bonds are drawn, as `figureBond` has it of what the figure is drawn with besides its chains of bars - their number, kept or given
- * up, does not move it - or, the figure having nothing else, of the bars kept.
+ * up, does not move it - or, the figure having nothing else, of the bars kept. Where it has chains of bars kept, a line or a wedge with an end
+ * meeting nothing - within `FREE_END` of the bars' bond of no other line's end nor any bar - is left out of it: an outline drawing's own bonds
+ * cut short at their labels (a C=O to its O, a bond to an OMe) and its short wedges, no drawing of lines of their own. And where the bars
+ * of their length are `BARS_OVER_LINES` times as many as the lines left of theirs, the bars' length: a figure drawn in outlines, its few
+ * joined lines its own or a chart's or a 3D picture's beside it. Fewer, the lines' (a structure drawn in lines beside rings drawn in
+ * outlines at another size).
  */
 export function bondOf(shapes: Shapes, letters: readonly FigureLetter[]): number {
   const plain: Shapes = { ...shapes, strokes: shapes.strokes.filter((t) => t.chain == null), wedges: shapes.wedges.filter((t) => t.chain == null) };
-  return figureBond(plain, letters) || figureBond(shapes, letters);
+  const kept = shapes.strokes.filter((t) => t.chain != null);
+  if (!kept.length) return figureBond(plain, letters) || figureBond(shapes, letters);
+  const tol = FREE_END * (bondLength(kept.map(len)) || figureBond(shapes, letters));
+  const ends = [...shapes.strokes.map((t): [Point, Point] => [t.a, t.b]), ...shapes.wedges.map((w): [Point, Point] => [w.tip, w.base])];
+  // (an end meets another line's end, the two at an angle - a double bond's second line, alongside, is no joint)
+  const meets = (p: Point, [a, b]: [Point, Point]) =>
+    ends.some(([c, d]) => (c !== a || d !== b) && (dist(c, p) <= tol || dist(d, p) <= tol) && Math.abs(cross(unit(a, b), unit(c, d))) >= JOINT_SINE);
+  const joined: Shapes = { ...plain, strokes: plain.strokes.filter((t) => meets(t.a, [t.a, t.b]) && meets(t.b, [t.a, t.b])), wedges: plain.wedges.filter((w) => meets(w.tip, [w.tip, w.base]) && meets(w.base, [w.tip, w.base])) };
+  const byLines = figureBond(joined, letters);
+  const byBars = bondLength(kept.map(len));
+  if (!byLines) return byBars || figureBond(shapes, letters);
+  const near = (lengths: readonly number[], b: number) => lengths.filter((l) => Math.abs(l - b) <= b / 8).length;
+  const lines = [...joined.strokes.map(len), ...joined.wedges.map((w) => dist(w.tip, w.base))];
+  if (byBars && near(kept.map(len), byBars) >= BARS_OVER_LINES * near(lines, byLines)) return byBars;
+  return byLines;
 }
+
+/** How near an end is to another line's, in the bars' bond, to meet it, and at what angle at the least (its sine: 15 degrees): `bondOf`. */
+const FREE_END = 0.15;
+const JOINT_SINE = 0.26;
+/** How many more bars of their length than joined lines of theirs make the bars' length the figure's bond: `bondOf`. */
+const BARS_OVER_LINES = 4;
 
 /** The shortest a chain's bar is, in the drawing's bonds, to be a bond: under it, a speck or a letter's stem. */
 const CHAIN_LEAST = 0.45;

@@ -221,6 +221,15 @@ describe("a PDF page's figures", () => {
     expect(figuresOf([...structureAt(100, 300), beside, path([183, 150, 183.5, 450])])[0][2]).toBe(180);
   });
 
+  it("take a word across a line too thick or too short to be a rule, but none across a rule over the width they share, though not over all the figure's", () => {
+    const number = text([125, 338, 131, 346]);
+    // (3 points thick, a rule being 1.5 at most; 100 long, a rule being 150 at the least: no rule - the number taken)
+    expect(figuresOf([...structureAt(100, 300), number, path([60, 332, 540, 335])])[0][3]).toBe(346);
+    expect(figuresOf([...structureAt(100, 300), number, path([60, 333, 160, 333.5])])[0][3]).toBe(346);
+    // (the figure 91 to 180 across, the number 125 to 131; a rule 110 to 300: over the width they share, not the figure's left end - between them)
+    expect(figuresOf([...structureAt(100, 300), number, path([110, 333, 300, 333.5])])[0][3]).toBe(328);
+  });
+
   it("take no column's line of words beside a scheme across two columns, however close", () => {
     const arrow = [path([150, 308, 212, 309]), path([210, 305, 218, 312])];
     const lines = [text([50, 291, 290, 299]), text([305, 291, 545, 299])];
