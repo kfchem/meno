@@ -1358,13 +1358,28 @@ it where it lies out of view.
     frame round part of the figure - nor a short line or dash between two
     words of a line of text, a caption's "3aa, R = H, 73%": the line goes
     on past both, a word that reads as no label on each side within a
-    space and a comma (a row of labels, HO-P-O-P, is a chain);
+    space and a comma (a row of labels, HO-P-O-P, is a chain); nor the = after a
+    variable's name - R, R', R1, Ar - in an R' = OH under a structure: two
+    level lines, each under six tenths of a letter long, a space from each
+    word; it says what R' is, never a double bond to it;
+  - nor a short level line set at the side of a word that reads as no
+    label, all but touching it (three tenths of a letter at most), at the
+    word's height and no longer than six tenths of a letter: a hyphen, in a
+    trans-TS1, a t-BuOOH, a cis-II whose numeral is drawn as lines;
+  - nor an upright line by a letter of a line of text, standing on that
+    letter's baseline, as tall as its capitals (0.55 to 0.85 of its size)
+    and within six tenths of a letter of it: an I drawn as a line, the I of
+    an I2 written under a label over it;
   - a short dash between two labels - two words, not one word's ends - as between S and O in a sulfonyl, is
     a bond between them, two side by side a double one, three a triple
     one (N≡N+) - never a hash, however evenly they are set (but a short
     line side by side with another that runs to no label is a hash's: its
     widest line by an H set close, the hash two lines and the dots at its
-    narrow end); and so is a
+    narrow end), where both words read as labels and the dash is not at
+    their foot (a comma between two words side by side, a "Cs2CO3,
+    acetone", lies a quarter of a letter or more under their middle, as
+    a bond between labels never does; a colon by a word that reads as no
+    label, a yield's "8: 40%", is the text's too); and so is a
     short line from a joint of bonds to a label stacked tall - an NH with
     its H over its N - cut back short of its H;
   - a short line, a sixth of a bond long or more, running straight out
@@ -1484,6 +1499,20 @@ it where it lies out of view.
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
+- **What stands alone and is no structure** (`withoutStrays`): a point with
+  no label and no bond, and a line alone - single, double or triple, both
+  its ends bare, no other bond at either - more than a fifth off the
+  figure's bond: a chart's energy level, a dagger's strokes, a numeral or
+  a letter drawn as lines (II, III). A double line about a bond long
+  stays, marked unsure ("A double line alone: read as ethylene."): a
+  scheme draws an ethylene so, beside a "+", and losing it would lose a
+  reactant. A single or a triple line about a bond long is left out too,
+  and the figure says so ("A line standing alone was not read as ethane.",
+  "A triple line standing alone was not read as ethyne."): a bare line
+  that long in a figure is a dash, a minus, a rule or a letter, a bare
+  triple line a sign of equivalence or a separator, and an ethane or an
+  ethyne is all but never drawn so. A line bonded to anything is read as
+  before. (Ruled in review, 2026-11-18.)
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - a row of dashes along one line - three short lines or more, each a
