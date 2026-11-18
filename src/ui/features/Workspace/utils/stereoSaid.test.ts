@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Molecule3D } from "../store/types";
 import { chipDetails } from "./chipSaid";
 import { SAID_NAMED_MOST, stereoSaidRows } from "./stereoSaid";
+import { stereoAfter } from "./edit3d";
 
 /** A chain of carbons in 3D, with what its stereo says. */
 const chain = (n: number, stereo: Molecule3D["stereo"]): Pick<Molecule3D, "atoms" | "bonds" | "stereo"> => ({
@@ -10,7 +11,7 @@ const chain = (n: number, stereo: Molecule3D["stereo"]): Pick<Molecule3D, "atoms
   stereo,
 });
 
-describe("what a molecule in 3D says of the units it shows no R or S on (backlog 190)", () => {
+describe("what a molecule in 3D says of the units it shows no R or S on", () => {
   const said = { atoms: { 0: "flat", 3: "flat", 2: "exchanges" }, bonds: { 4: "flat" } };
   it("says each why once, its units named by their atoms, where R and S are shown on it", () => {
     const m = chain(8, { atoms: { 1: "R" }, bonds: {}, shown: { atoms: [1], bonds: [] }, said });
@@ -26,6 +27,20 @@ describe("what a molecule in 3D says of the units it shows no R or S on (backlog
   it("says nothing where no R or S is shown on it, nor where none has a why", () => {
     expect(stereoSaidRows(chain(8, { atoms: { 1: "R" }, bonds: {}, said }))).toEqual([]);
     expect(stereoSaidRows(chain(8, { atoms: { 1: "R" }, bonds: {}, shown: { atoms: [1], bonds: [] } }))).toEqual([]);
+  });
+
+  it("names as many as it names at most, and counts one more", () => {
+    const of = (n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [i, "flat"]));
+    const row = (n: number) => stereoSaidRows(chain(12, { atoms: {}, bonds: {}, shown: { atoms: [], bonds: [4] }, said: { atoms: of(n), bonds: {} } }))[0].label;
+    // (the chain's third atom its N)
+    expect(row(SAID_NAMED_MOST)).toBe(Array.from({ length: SAID_NAMED_MOST }, (_, i) => `${i === 2 ? "N" : "C"}${i + 1}`).join(", "));
+    expect(row(SAID_NAMED_MOST + 1)).toBe(`${SAID_NAMED_MOST + 1} centres`);
+  });
+
+  it("is not kept where the molecule is edited in 3D: its places say otherwise", () => {
+    const m = { ...chain(4, { atoms: { 1: "R" }, bonds: {}, said: { atoms: { 2: "flat" }, bonds: {} } }) };
+    const xyz = m.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    expect(stereoAfter(m, xyz, xyz)?.said).toBeUndefined();
   });
 
   it("counts the units of one why past the most it names", () => {

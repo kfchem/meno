@@ -27,6 +27,28 @@ describe("R and S, E and Z of a molecule in 3D, read from its places", () => {
     expect(cipIn3d(chfclbr(["H", "H", "Cl", "Cl"])).said).toBeUndefined();
   });
 
+  it("gives a double bond twisted near a right angle none, and says so; turned either way from it, its E or Z", () => {
+    // (1-chloro-2-fluoroethene along x: Cl on C1 in the plane z = 0, F on C2 turned about the bond by the angle given)
+    const twisted = (deg: number) => {
+      const t = (deg * Math.PI) / 180;
+      return {
+        atoms: [{ el: "Cl" }, { el: "C" }, { el: "C" }, { el: "F" }, { el: "H" }, { el: "H" }],
+        bonds: [
+          { a1: 0, a2: 1, order: 1 },
+          { a1: 1, a2: 2, order: 2 },
+          { a1: 2, a2: 3, order: 1 },
+          { a1: 1, a2: 4, order: 1 },
+          { a1: 2, a2: 5, order: 1 },
+        ],
+        xyz: [-0.7, 1.2, 0, 0, 0, 0, 1.33, 0, 0, 2.03, 1.2 * Math.cos(t), 1.2 * Math.sin(t), -0.5, -0.9, 0, 1.83, -0.9 * Math.cos(t), -0.9 * Math.sin(t)],
+      };
+    };
+    const r = cipIn3d(twisted(90));
+    expect([r.bonds, r.said]).toEqual([{}, { atoms: {}, bonds: { "1": "flat" } }]);
+    expect(cipIn3d(twisted(30)).bonds).toEqual({ "1": "Z" });
+    expect(cipIn3d(twisted(150)).bonds).toEqual({ "1": "E" });
+  });
+
   it("gives a centre whose groups lie nearly in a plane none, and says so - never a guessed sense; nothing of one nearly flat that is no unit", () => {
     // (CHFClBr pressed flat: its four groups round it in the plane z = 0)
     const flat = (order: string[]) => ({ ...chfclbr(order), xyz: [0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -1.1, 0, 0, 0, -1.1, 0.001] });

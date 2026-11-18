@@ -1,5 +1,5 @@
 /**
- * What a molecule in 3D says of the units it shows no R or S, E or Z on, though they are units (backlog 190; docs/WORKSPACE.md, *Told
+ * What a molecule in 3D says of the units it shows no R or S, E or Z on, though they are units (docs/WORKSPACE.md, *Told
  * apart*): where R and S are shown on it, each such unit's why (lib/chem/cip/in3d, `Molecule3D.stereo.said`) in the 2D marks' words
  * (chem/cipMarks `cipSaid`) - its groups nearly in a plane, an N that exchanges its H, the structure too large - as rows of its card,
  * under *Stereo*: the units of one why on one row, named by their atoms ("C4, C7"), counted past `SAID_NAMED_MOST`. Nothing for an atom or

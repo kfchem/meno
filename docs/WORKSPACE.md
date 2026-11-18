@@ -796,7 +796,9 @@ Taken on 2026-10-13:
   words for a structure too large to work out; the units of one reason on one row,
   named by their atoms (C4, C7), counted past six. Nothing is said of an
   atom or a bond that is no unit - two of its groups alike (under the
-  maintainer's rule above; lib/chem/cip/in3d, `utils/stereoSaid`).
+  maintainer's rule above; lib/chem/cip/in3d, `utils/stereoSaid`). The
+  words are of the places its labels are read from, its first frame's,
+  as its R and S are.
 - **Measurements' values keep apart.** Each value stands on its point
   while that is clear of the values before it; where another is in its
   way it moves off - square to a distance's line, out from an angle's
