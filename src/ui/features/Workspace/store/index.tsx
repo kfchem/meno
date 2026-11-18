@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { Conversation } from "../conversation/types";
 import type { DocumentStore } from "../../../../lib/doc";
+import { watchConfiguration } from "../configuration/watch";
 import { createWorkspaceDocument, opensReadingFilled, type WorkspaceDocument } from "../document";
 import { extentIn } from "../style3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -331,6 +332,7 @@ export function createEditorStore(
     pdfLens: null,
     pdfStructures: null,
     pdfStructureFlight: null,
+    configurationNotes: [],
     hoveredText: null,
     selTexts: new Set<number>(),
     selPdfs: new Set<number>(),
@@ -530,6 +532,8 @@ export function EditorProvider({
   // reloaded after it failed - finds the store as it was.
   const store = useMemo(() => storeOf(doc), [doc]);
   useEffect(() => connectStoreToDocument(store, doc), [store, doc]);
+  // (each change's effect on the configurations the drawing states, said where it turned one: configuration/watch)
+  useEffect(() => watchConfiguration(store, doc), [store, doc]);
   return (
     <EditorStoreContext.Provider value={store}>
       {children}

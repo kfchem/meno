@@ -1430,6 +1430,46 @@ All hover-based, as above.
     (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
     alike. Atom numbers on a molecule in 3D still fade below their own least
     size with the zoom, atom by atom, in the 3D view's shaders.
+- **When an edit turns a configuration** (foundation part 15, phase 2;
+  the maintainer's direction of 2026-11-04: the configuration is read
+  from the drawing, and a change of it is said). After each edit is done,
+  the structures it touched are read again with the one reader (with depth
+  and the cage fit) and compared with what they stated before, unit by
+  unit (part 14 C's one comparison). Where the edit turned, opened or
+  closed a configuration, a short note by that atom or bond eases in,
+  stays a moment and eases out:
+  - "C3: R, now S" where a centre turned (an atom dragged across its
+    centre's other bond; a wedge made a hash), "C4=C5: E, now Z" for a
+    double bond, its descriptors before and after (Meno's own CIP, worked
+    out off the drawing's thread); "C3: turned" where the CIP gives none;
+  - "C3: now open" where the drawing no longer states it - a wedge made
+    plain, a wavy bond, a double bond drawn "either";
+  - "C3: no longer read: " and why, where its marks are there but say
+    nothing the reader can read (two of its bonds dragged into line), and
+    "C3: now read: R" where they say it again;
+  - "every centre turned: the mirror image" where every unit of a
+    structure turned at once - one note, not one for each.
+  The atom's name is its element and its place in the drawing, counted
+  from 1. Nothing is said where nothing changed, where a unit is simply
+  new (a wedge just drawn), gone with its atom or with one of its groups,
+  or no longer a unit because two of its groups are now alike; nor while
+  a gesture is still going (a drag says it once, as it ends), nor for undo
+  or redo, which give a drawing back with its configuration. Another
+  centre's R or S may follow a turned one without its own configuration
+  changing (its groups' ranks moved): its mark changes, and no note calls
+  it changed. The note asks nothing and stops nothing: the drawing wins,
+  and undo gives back what the edit changed. A note that would come after
+  the drawing has changed again is dropped. Meno's own moves - Clean-up,
+  Turn over (which exchanges solid and hashed wedges as it turns a drawing,
+  Brecher 2008, GR-3), Rotate, Expand, Contract, a stack gathered again - keep
+  every configuration; where one did not, that is Meno's fault: the same
+  note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
+  Meno's log records which move. The structures are read in a moment the
+  page is idle after the change, only those it touched
+  (`Workspace/configuration`: `configurationChanges`, `watchConfiguration`;
+  `components/ConfigurationNotes2D`). In this phase what was stated before
+  is the drawing as it was after the last change; nothing new is saved, and
+  identity, Clean-up, R and S, 3D and the files still read the marks.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

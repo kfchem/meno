@@ -7,6 +7,9 @@ import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+
+/** A note of a change of configuration on the page (configuration/watch): its words, the place it stands by, when it came. */
+export type ConfigurationNote = { id: number; text: string; at: { x: number; y: number }; since: number };
 import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -1237,6 +1240,11 @@ export type EditorState = {
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
+  /**
+   * What edits did to the configurations the drawing states, said at their units as they come (configuration/watch): each note's words,
+   * where it stands on the page, and when it came.
+   */
+  configurationNotes: ConfigurationNote[];
   /** A structure being carried out of a PDF as Meno's own drawing of it. */
   pdfStructureFlight: StructureFlight | null;
   setPdfStructureFlight: (flight: StructureFlight | null) => void;

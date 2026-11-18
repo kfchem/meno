@@ -257,6 +257,7 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import FigureNotes2D from "./components/FigureNotes2D";
+import ConfigurationNotes2D from "./components/ConfigurationNotes2D";
 import { figureNoteSource, figureNotesOf, readMarksShown } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
@@ -2981,6 +2982,7 @@ function WorkspaceContent({
           <StackChips2D />
           <MagnifiedMarks2D />
           <FigureNotes2D />
+          <ConfigurationNotes2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />
