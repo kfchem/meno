@@ -614,7 +614,8 @@ third back (`putChair`; the icon's tip says so: "Click again for the view from t
   a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
   *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
   would not be.
-- **Clean-up leaves a chair as drawn** and says so (`CleanUpRefused`); *Draw flat* is `cleanUp` asked to lay it out. **3D** from a chair takes its
+- **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
+  below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
   nothing - and the drawn conformation is neither a start nor a limit of the conformer search; a notice says so when it is made. Known answers
   (tests): every pair of groups on a chair, in either view and either flip, read back from the MOL a flat reader is given as the same identity; trans-

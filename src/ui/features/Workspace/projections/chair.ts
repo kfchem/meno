@@ -224,5 +224,5 @@ export function chairsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlyS
   return depthRings(part).filter((ring) => chairOf(part, ring) != null);
 }
 
-/** Whether a structure holds a projection - for now, a chair of the tool's: Clean-up leaves it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
+/** Whether a structure holds a projection - for now, a chair of the tool's: Clean-up keeps it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
 export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => chairsIn(model, ids).length > 0;

@@ -11,8 +11,9 @@ The benchmark in `scripts/layout` measures the engine against these rules
 (`src/lib/layout/metrics.ts`) and shows every drawing beside the structure
 its Wikipedia article uses.
 
-A projection the Projections tool put down (docs/EDITOR-2D.md, *Projections*) is the one drawing Clean-up does not lay out: it is left as drawn, and
-said so; its right-click *Draw flat* asks the layout for it, wedges for its depth.
+A projection the Projections tool put down (docs/EDITOR-2D.md, *Projections*) is kept as drawn by Clean-up, what is flat on it laid out
+onto it, as any ring in perspective is (docs/EDITOR-2D.md, *Clean-up keeps a projection*); its right-click *Draw flat* asks the layout for
+all of it, ring and all, wedges for its depth.
 
 Clean-up gives one drawing, the best it finds, and the same drawing
 whatever order the atoms come in (the maintainer, 2026-10-14). Every

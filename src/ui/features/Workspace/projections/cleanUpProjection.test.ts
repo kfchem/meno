@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanUp, CleanUpRefused } from "../chem/cleanUp";
+import { cleanUp } from "../chem/cleanUp";
 import { identityOfDrawn } from "../chem/identityOf";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -24,13 +24,14 @@ function page() {
 }
 
 describe("Clean-up and a projection", () => {
-  it("leaves a chair as it is drawn, and says so", async () => {
+  it("keeps a chair where it is drawn, its depth with it, the compound the same", async () => {
     const { doc, store } = page();
     const was = doc.getState().model;
-    const error = await cleanUp(store, null).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(CleanUpRefused);
-    expect((error as Error).message).toMatch(/projection, drawn as it is/);
-    expect(doc.getState().model).toBe(was);
+    const ring = (m: typeof was) => m.atoms.filter((a) => a.id < 20).map((a) => [a.id, a.x, a.y, a.z]);
+    await cleanUp(store, null);
+    const now = doc.getState().model;
+    expect(ring(now)).toEqual(ring(was));
+    expect(identityOfDrawn(now).text).toBe(identityOfDrawn(was).text);
   });
 
   it("is laid out flat by Draw flat: no depth left, the compound the same", async () => {
