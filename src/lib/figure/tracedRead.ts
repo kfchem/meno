@@ -6,7 +6,7 @@
  * them over the picture; ink read as nothing beside the structure said. Pure:
  * the app reads pictures so in a worker, and the round trip in Node.
  */
-import type { Box, FigureLetter } from "./drawn";
+import type { Box, FigureDrawn, FigureLetter } from "./drawn";
 import type { GlyphShape } from "./glyphs";
 import type { Pixels } from "./inkFit";
 import { readFigure, type FigureRead } from "./read";
@@ -43,4 +43,21 @@ export function readTracedPicture(
   // (ink beside the structure read as nothing: the atom nearest it said)
   for (const [i, said] of unreadInk(read, shapes, known)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];
   return read;
+}
+
+/**
+ * How finely a box of a page holding pictures is drawn to be traced, in dots an inch: as finely as the picture covering most of it is
+ * stored - never finer, which would only enlarge its pixels, and hide that it is drawn too small to read - and at most `most`; where the
+ * PDF does not say, `otherwise`. A picture's resolution, however it is turned: the square root of its pixels over its area, in inches.
+ */
+export function pictureDpi(drawn: Pick<FigureDrawn, "pictures" | "pixels">, box: Box, otherwise: number, most: number): number {
+  let [best, dpi] = [0, otherwise];
+  drawn.pictures.forEach((p, i) => {
+    const px = drawn.pixels?.[i];
+    const cover = Math.max(0, Math.min(p[2], box[2]) - Math.max(p[0], box[0])) * Math.max(0, Math.min(p[3], box[3]) - Math.max(p[1], box[1]));
+    const inches = ((p[2] - p[0]) / 72) * ((p[3] - p[1]) / 72);
+    if (!px || cover <= best || inches <= 0) return;
+    [best, dpi] = [cover, Math.sqrt((px[0] * px[1]) / inches)];
+  });
+  return Math.min(dpi, most);
 }

@@ -21,6 +21,7 @@ import { boxPicture } from "../../../../lib/pdf/reader";
 import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker, roleChosen, rolePlugin } from "../../../../lib/roles/worker";
 import { pictureReadOff } from "./pictureOff";
+import { pictureDpi } from "../../../../lib/figure/tracedRead";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
@@ -139,7 +140,7 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
   // nothing, the plugin chosen to read pictures offered by name, never run unasked)
   if ("none" in read && drawn.pictures.length) {
     working?.("Reading the picture…");
-    const shot = await boxPicture(sha256, page, box, PICTURE_DPI);
+    const shot = await boxPicture(sha256, page, box, pictureDpi(drawn, box, PICTURE_DPI, PICTURE_DPI_MOST));
     const pixels = await pngPixels(shot.png);
     // (a pixel is 72/dpi of a point, from the box's top left as the reader drew it: whole pixels)
     const k = 72 / shot.dpi;
@@ -149,8 +150,12 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
   return read;
 }
 
-/** How finely a figure that is a picture is drawn to be traced: as Meno's own picture reader was measured (docs/PDF.md, *A picture traced*). */
+/**
+ * How finely a figure that is a picture is drawn to be traced: as finely as its picture is stored, up to the most - else, where the PDF
+ * does not say, as Meno's own picture reader was measured at (docs/PDF.md, *A picture traced*).
+ */
 const PICTURE_DPI = 300;
+const PICTURE_DPI_MOST = 600;
 
 /**
  * A picture read by Meno's own reader, in a worker (pictureOff.ts): its structure, each atom tied to its place - `spot` - or why none.
