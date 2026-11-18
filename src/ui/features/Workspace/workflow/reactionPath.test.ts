@@ -5,6 +5,7 @@ import { setEntries, startedFrame, type SetEntry } from "./entries";
 import { isFailure, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
 import { takeFrames } from "./takeFrames";
+import { stoppedSaid } from "./failures";
 
 /** H2, as a step's entry, its bond `d` A long - found at `method` (a saddle point's frequencies, say). */
 const h2 = (d = 0.97, method = "GFN2-xTB", basis?: string): SetEntry =>
@@ -40,9 +41,19 @@ describe("Follow the reaction path", () => {
     expect(ends.ok && ends.kept.map((e) => e.xyz[3])).toEqual([0.74]);
   });
 
-  it("puts a path one of whose sides stopped before its end out of Failed, the path as far as it came, in its program's words", () => {
-    const w = workedOf("reaction-path", h2(), irc("The forward side stopped at ORCA's iteration cap before reaching an end"), ["orca"]) as Worked;
-    expect([w.failed?.kind, w.failed?.why, w.after?.length]).toEqual(["not-converged", "The forward side stopped at ORCA's iteration cap before reaching an end", 1]);
+  it("keeps a path one of whose sides stopped before its end, as far as it came, its ends taken as reached - for the steps after it to decide", () => {
+    const why = "The forward side stopped at ORCA's iteration cap before reaching an end";
+    const w = workedOf("reaction-path", h2(), irc(why), ["orca"]) as Worked;
+    // (no failure: the path whole, said as stopped, in its program's words)
+    expect([w.failed, w.stopped, w.after?.length]).toEqual([undefined, why, 1]);
+    const m = molecule(w);
+    expect([m.frames?.length, m.entryFrames, m.failed]).toEqual([3, [2], undefined]);
+    // (its ends taken as they are, for the steps after it - their optimisation, their bonding compared - to say what they are)
+    const first = takeFrames([m], "first");
+    const last = takeFrames([m], "last");
+    expect([first.ok && first.kept.map((e) => e.xyz[3]), last.ok && last.kept.map((e) => e.xyz[3])]).toEqual([[0.74], [1.1]]);
+    expect(stoppedSaid(1)).toBe("1 not converged, its ends taken as reached");
+    expect(stoppedSaid(2)).toBe("2 not converged, their ends taken as reached");
   });
 
   it("is a path only at the level its start was found at: else it fails, naming both", () => {

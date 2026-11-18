@@ -678,6 +678,11 @@ export type Worked = SetEntry & {
   /** The path's frames after it, where it is a point the path goes on past - the highest a path search refined - and their energies: its entry is then that point, not the path's last. */
   after?: number[][];
   afterEnergies?: number[];
+  /**
+   * A reaction path one of whose sides stopped before its end, in its program's words: kept whole, its ends taken as reached, for the
+   * steps after it - their ends' optimisation and the bonding checks - to decide what they are (as ConfoTS does). Said on the step's line.
+   */
+  stopped?: string;
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };

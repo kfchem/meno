@@ -63,6 +63,14 @@ export function failuresLine(failures: readonly Failure[], of: number, whyToo: b
 }
 
 /**
+ * Reaction paths one of whose sides stopped before its end, kept and said on the step's line (as ConfoTS does): "1 not
+ * converged, its ends taken as reached" - what the ends are, the steps after it decide.
+ */
+export function stoppedSaid(n: number): string {
+  return `${n} not converged, ${n === 1 ? "its" : "their"} ends taken as reached`;
+}
+
+/**
  * Failures counted by kind, in plain words, most first: "2 of 81 failed (1:
  * not converged; 1: the program stopped with an error)". `of` is how many
  * there were in all. Where every failure of a kind gave the same why, it is
