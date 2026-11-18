@@ -353,6 +353,38 @@ export function renumberedTexts(map: ArrowAtomMap, drawnOrder: ReadonlyMap<numbe
  * hydrogens, in its turn; an atom in no molecule numbered after those that are, as it was. The one place the order is chosen.
  */
 export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): number[] {
+  return numbersOf(map, iupacNumbering(map, drawnOrder).order);
+}
+
+/**
+ * What *Renumber atoms* keeps on a map (`iupacNumbering`, worked out once): Before's numbers, the texts its atoms show for them, and its
+ * heavy atoms whose numbers are Meno's own.
+ */
+export function renumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): Pick<ArrowAtomMap, "numbers" | "texts" | "own"> {
+  const { order, texts, own } = iupacNumbering(map, drawnOrder);
+  const heavyOwn = own.filter((i) => map.reactant.atoms[i].el !== "H").sort((p, q) => p - q);
+  return { numbers: numbersOf(map, order), texts: map.reactant.atoms.map((_, i) => texts.get(i) ?? null), own: heavyOwn };
+}
+
+/**
+ * What a renumbered map says of its numbering, under *Renumber atoms*: "IUPAC numbering" where a rule decided every number;
+ * "IUPAC numbering, except 7, 8 and 12 (Meno's own order)" where it did not - the atoms by the numbers they show - or "except 14
+ * atoms" where more than six. None where the map was not renumbered so (Before's numbers are then the drawing's order, or a version's
+ * before this, which said nothing of IUPAC's).
+ */
+export function numberingSaid(map: ArrowAtomMap): string | null {
+  const n = map.reactant.atoms.length;
+  if (!map.complete || map.numbers?.length !== n || !map.own) return null;
+  const own = map.own.filter((i) => Number.isInteger(i) && i >= 0 && i < n);
+  if (!own.length) return "IUPAC numbering";
+  if (own.length > 6) return `IUPAC numbering, except ${own.length} atoms (Meno's own order)`;
+  const shown = own.map((i) => map.numbers![i]).sort((p, q) => p - q);
+  const listed = shown.length === 1 ? `${shown[0]}` : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+  return `IUPAC numbering, except ${listed} (Meno's own order)`;
+}
+
+/** Before's numbers from its heavy atoms in `order`: each heavy atom its place there, then each H after them, by the number of the atom it is on. */
+function numbersOf(map: ArrowAtomMap, order: readonly number[]): number[] {
   const atoms = map.reactant.atoms;
   const n = atoms.length;
   const around: number[][] = atoms.map(() => []);
@@ -361,7 +393,7 @@ export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, nu
     around[b.a2].push(b.a1);
   }
   const by = (key: (i: number) => number) => (p: number, q: number) => (key(p) === key(q) ? p - q : key(p) - key(q));
-  const heavy = iupacNumbering(map, drawnOrder).order.filter((i) => atoms[i].el !== "H");
+  const heavy = order.filter((i) => atoms[i].el !== "H");
   const number = new Array<number>(n).fill(0);
   heavy.forEach((i, k) => (number[i] = k + 1));
   // (each H after the heavy atoms, by the number of the atom it is on; one on none, or on another H, last)

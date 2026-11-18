@@ -10,7 +10,7 @@ import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readSDfile } from "../../../../lib/chem/ctfile";
 import { atomGlyphsOf, glyphCode, glyphsWidth } from "../utils/atomNumbers";
-import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, renumberedTexts, unpairedSaid } from "./atomMap";
+import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, numberingSaid, renumbered, renumbering, renumberedTexts, unpairedSaid } from "./atomMap";
 import { conformerPairs, conformersSaid, MOST_PAIRS, numbers3d, pairedCounts, pairedSdf, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -481,6 +481,31 @@ describe("an atom map renumbered", () => {
     expect(shown).toEqual(["4a", "8a"]);
     // (not renumbered: no texts, whatever the map holds)
     expect(mapMarks({ ...kept, numbers: undefined, texts }, page().doc.model).texts.size).toBe(0);
+  });
+
+  it("says under Renumber atoms whether a rule of IUPAC's decided every number, or names those Meno's own order decided", () => {
+    const { kept } = page();
+    const done = { ...kept, ...renumbering(kept, drawnOrder()) };
+    // (butadiene and ethylene: every number by a rule; the one pass gives what the two functions give)
+    expect(done.own).toEqual([]);
+    expect(done.numbers).toEqual(renumbered(kept, drawnOrder()));
+    expect(done.texts).toEqual(renumberedTexts(kept, drawnOrder()));
+    expect(numberingSaid(done)).toBe("IUPAC numbering");
+    // (some by Meno's own order: named by the numbers they show, in order; more than six, counted)
+    const heavy = kept.reactant.atoms.map((a, i) => (a.el === "H" ? -1 : i)).filter((i) => i >= 0);
+    const two = [heavy[3], heavy[0]];
+    const shown = two.map((i) => done.numbers![i]).sort((p, q) => p - q);
+    expect(numberingSaid({ ...done, own: two })).toBe(`IUPAC numbering, except ${shown[0]} and ${shown[1]} (Meno's own order)`);
+    expect(numberingSaid({ ...done, own: [heavy[2]] })).toBe(`IUPAC numbering, except ${done.numbers![heavy[2]]} (Meno's own order)`);
+    const three = [heavy[0], heavy[1], heavy[2]];
+    const s3 = three.map((i) => done.numbers![i]).sort((p, q) => p - q);
+    expect(numberingSaid({ ...done, own: three })).toBe(`IUPAC numbering, except ${s3[0]}, ${s3[1]} and ${s3[2]} (Meno's own order)`);
+    const many = kept.reactant.atoms.map((_, i) => i).slice(0, 7);
+    expect(numberingSaid({ ...done, own: many })).toBe("IUPAC numbering, except 7 atoms (Meno's own order)");
+    // (nothing said where it was not renumbered so - the drawing's order, a version's before this - nor of a partial map)
+    expect(numberingSaid(kept)).toBeNull();
+    expect(numberingSaid({ ...done, own: undefined })).toBeNull();
+    expect(numberingSaid({ ...done, complete: false })).toBeNull();
   });
 
   it("shows the same texts on the molecules in 3D, by number, Before's and After's alike - and takes them off with the map", () => {

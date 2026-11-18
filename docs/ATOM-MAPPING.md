@@ -459,9 +459,14 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   molecules in 3D and in the export alike. One undo step. Without it, the
   heavy atoms are numbered as the map holds them and the hydrogens after
   them. Only a complete map is renumbered: a partial one's menu says it
-  needs every atom mapped. (`renumbered` in chem/atomMap is the one place
-  the order is chosen; the maintainer, 2026-11-06: IUPAC's numbering
-  instead of the drawing's order. Undo gives the old numbers back.)
+  needs every atom mapped. Once renumbered, a line under the item says
+  how: *IUPAC numbering* where a rule decided every number; *IUPAC
+  numbering, except 7, 8 and 12 (Meno's own order)* where some were not -
+  the atoms by the numbers they show - or *except 14 atoms* past six. A
+  map renumbered before this version says nothing. (`renumbering` in
+  chem/atomMap is the one place the order is chosen; the maintainer,
+  2026-11-06: IUPAC's numbering instead of the drawing's order. Undo gives
+  the old numbers back.)
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
   reactants' numbering, each atom written at its number's place, as a

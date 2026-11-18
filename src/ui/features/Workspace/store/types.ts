@@ -218,6 +218,8 @@ export type ArrowAtomMap = {
    * (*Renumber atoms*, chem/atomMap `iupacNumbering`) - by its atom; null for one that shows its number. Kept with `numbers`.
    */
   texts?: ({ base: string; sup?: string } | null)[];
+  /** Before's heavy atoms, by index, whose numbers are Meno's own order where no rule of IUPAC's decided them (`iupacNumbering`'s own). Kept with `numbers`. */
+  own?: number[];
   /**
    * The conformers paired (*Pair conformers*, chem/structureMaps): Before's
    * frames and After's, each with each - frame 0 a molecule's own - to be

@@ -15,7 +15,7 @@ import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import { depthStored, recognisedDepthOf } from "../../chem/depthHeld";
-import { renumbered, renumberedTexts } from "../../chem/atomMap";
+import { renumbering } from "../../chem/atomMap";
 import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
@@ -355,7 +355,7 @@ export const createModelSlice = (
       const drawn = new Map(d.model.atoms.map((a, i) => [a.id, i]));
       return ops.setStructureMaps(
         d,
-        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.complete ? { ...m, map: { ...m.map, numbers: renumbered(m.map, drawn), texts: renumberedTexts(m.map, drawn), shown: true } } : m)),
+        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.complete ? { ...m, map: { ...m.map, ...renumbering(m.map, drawn), shown: true } } : m)),
       );
     });
   },
@@ -369,7 +369,7 @@ export const createModelSlice = (
     if (!map?.complete) return;
     doc.edit("renumber atoms", (d) => {
       const drawn = new Map(d.model.atoms.map((a, i) => [a.id, i]));
-      return ops.setAtomMap(d, arrowId, { ...map, numbers: renumbered(map, drawn), texts: renumberedTexts(map, drawn), shown: true });
+      return ops.setAtomMap(d, arrowId, { ...map, ...renumbering(map, drawn), shown: true });
     });
   },
 
