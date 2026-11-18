@@ -861,6 +861,23 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **A hashed line read** (2026-11-19; IUPAC 2006 ST-0.3). Hashes drawn as
+  a line (the bold dashed bond), and a hashed wedge drawn the wrong way
+  round, are read as "below" at a stereocentre only where the text grades
+  them acceptable: from the centre to an end group - an atom with at most
+  one other group not a hydrogen (an H, a halogen, OH, NH2, a methyl, an
+  ethyl, an ethoxy, a CHO) - the centre with no wedge of its own and no
+  other such line (`perception/stereo/from2d` `hashedLinesRead`). A
+  centre with a wedge narrow at it is read from the wedge, the line not
+  looked at. Otherwise the line states nothing, and a centre with no
+  wedge of its own is open, saying why: "a hashed line between two
+  stereocentres states neither", "a hashed line to a group of this size
+  does not say which end it belongs to" (an isopropyl, a phenyl, a COOH),
+  or "two hashed lines at one atom". Exactly one such line is narrower
+  than the text, which allows two: the safe side. A solid wedge the wrong
+  way round, a bold line and a dashed line state nothing, as ever. Meno
+  never draws these forms; it reads them where a chemist or a figure
+  does. A figure's even hashes - no end narrower - are such a line.
 - **A wedge's narrow end is kept by atom** (`Bond.narrow`). A wedge or
   hashes, and a ring's bond in perspective, are narrow at the atom they
   were drawn, read or laid out narrow at, and stay so while bonds are

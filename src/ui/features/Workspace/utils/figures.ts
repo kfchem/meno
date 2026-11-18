@@ -325,6 +325,8 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
     // (a wedge narrow where the figure has it, at its first atom)
     ...(b.stereo === "up" || b.stereo === "down" ? { narrow: b.a + 1 } : {}),
     ...(b.bold ? { display: "bold" as const } : {}),
+    // (hashes drawn even: a hashed line, read by the reader's one rule for it)
+    ...(b.hashed ? { display: "hashed" as const } : {}),
   }));
   // (made regular, its arrangement kept - its rings and chains where and as they go, at the style's bond and angles: lib/layout/
   // regularise - where that shows the stereochemistry it is drawn with, and moves nothing far; else as drawn)

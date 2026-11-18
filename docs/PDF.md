@@ -1321,7 +1321,9 @@ it where it lies out of view.
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
-    behind, narrow where its lines are shortest (its lines, not the joints
+    behind, narrow where its lines are shortest (lines all of one length
+    are a hashed line, no end narrow: read by the reader's one rule for a
+    hashed line - *A hashed line read*, EDITOR-2D.md - since 2026-11-19) (its lines, not the joints
     of the bonds at its ends, drawn as dots or thinner pieces; the first
     of its own lines may be a dot: a small filled shape, or a line next to
     nothing long whose round ends make it one, as Meno's own style draws

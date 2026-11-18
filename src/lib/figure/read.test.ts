@@ -530,16 +530,19 @@ describe("a figure read as a structure", () => {
     expect(r.bonds.find((b) => (b.a === c2 && b.b === c1) || (b.a === c1 && b.b === c2))?.stereo).toBe("down");
   });
 
-  it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
+  it("gives even hashes as a hashed line, no narrow end guessed: the reader's one rule for a hashed line reads it, or says why not", () => {
     const c: P = [40, 40];
     const branch = [stroke(step(c, 150), c, step(c, 30)), stroke(c, step(c, 90))];
     const s = read(figure([...branch, ...hashes(step(c, -90), c, true)]));
-    const h = s.bonds.find((b) => b.stereo === "down")!;
-    expect(s.bonds.filter((b) => b.a === h.a || b.b === h.a)).toHaveLength(4);
+    const h = s.bonds.find((b) => b.hashed)!;
+    expect(h).toBeDefined();
+    expect(h.stereo).toBeUndefined();
     expect(h.unsure).toBeUndefined();
-    // (an ethane's: either carbon could be)
+    // (an ethane's: either carbon could be the centre - a line still, nothing said of the bond itself)
     const e = read(figure([stroke(step(c, 150), c, step(c, 30)), ...hashes(c, step(c, -90), true), stroke(step(c, -90), step(step(c, -90), -30)), stroke(step(c, -90), step(step(c, -90), -150))]));
-    expect(e.bonds.find((b) => b.stereo === "down")!.unsure).toHaveLength(1);
+    const line = e.bonds.find((b) => b.hashed)!;
+    expect(line.stereo).toBeUndefined();
+    expect(line.unsure).toBeUndefined();
   });
 
   it("reads labels as typed: HO as OH, NH2, a charge set high", () => {
