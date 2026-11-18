@@ -463,7 +463,12 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
 - **The bond** is measured as the reader measures a PDF's, on the lines
   of the patches at least six tenths as large as the largest: a
   structure's, not its letters'. An H or a D is three strokes, and a small
-  molecule's labels hold more strokes than its bonds (2026-11-18).
+  molecule's labels hold more strokes than its bonds (2026-11-18). The
+  largest is the largest patch that is not a line - one piece spanning
+  three quarters of it, the others at most a third of that piece, as a
+  reaction arrow and its head are: a scheme's arrow may be far longer
+  than any of its structures, and measured beside it the structures
+  were taken for letters (2026-11-19).
 - **What else it is**: a round line closed on itself, with four lines or
   more of patches larger than a letter round it, each running across the
   way out of its middle within 30 degrees and lying within a bond of it,

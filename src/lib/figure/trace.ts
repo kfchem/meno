@@ -82,6 +82,12 @@ const BOND_PATCH = 0.6;
 const LEAST_BOND = 25;
 /** A picture this much of whose ink is shaded (`shadedOf`) is a photograph or a rendering, not a drawing. */
 const SHADED = 0.1;
+/**
+ * A patch one piece of which spans at least this share of its extent, every other piece of it at most `LINE_REST` of that piece, is a line
+ * - a reaction arrow, its head - not a structure: the largest patch the bond is measured beside is the largest that is not one.
+ */
+const LINE_SPAN = 0.75;
+const LINE_REST = 0.35;
 /** A piece between two joints shorter than this, in the bond, is a joint thinning left open: `closedJoints`. */
 const JOINT_SHORT = 0.35;
 
@@ -868,7 +874,15 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
   const largest = Math.max(0, ...lines.map((l) => extent(l.piece.patch)));
   const asStrokes = (ls: readonly Laid[]): Stroke[] => ls.map((l) => ({ a: l.a, b: l.b, w: line }));
   const empty = { wedges: [], curves: [], blobs: [] };
-  const bond = figureBond({ strokes: asStrokes(lines.filter((l) => extent(l.piece.patch) >= BOND_PATCH * largest)), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
+  // (a scheme's reaction arrow may be far longer than any of its structures: the largest patch that is not a line - one piece spanning
+  //  it, the others short - is what a structure's patch is near as large as; where every patch is one, the largest of them)
+  const isLine = (k: number) => {
+    const own = (byPatch.get(k) ?? []).map((i) => laid[i].length).sort((p, q) => q - p);
+    return own.length > 0 && own[0] >= LINE_SPAN * extent(k) && own.slice(1).every((v) => v <= LINE_REST * own[0]);
+  };
+  const sized = Math.max(0, ...lines.filter((l) => !isLine(l.piece.patch)).map((l) => extent(l.piece.patch))) || largest;
+  const structural = (k: number) => extent(k) >= BOND_PATCH * sized;
+  const bond = figureBond({ strokes: asStrokes(lines.filter((l) => structural(l.piece.patch))), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
   if (bond < LEAST_BOND) return { none: "The picture is drawn too small to read." };
   const gone = closedJoints(laid, bond);
   // (a circle's ring: lines of other patches whose middles lie within half a bond of its line)

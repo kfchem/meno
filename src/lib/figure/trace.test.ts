@@ -589,3 +589,16 @@ describe("the edges of the numbers of the joint rule and the wedge rule", () => 
     expect(widening(series(16), 60)).toBeNull();
   });
 });
+
+describe("a scheme's picture", () => {
+  it("measures its bond on its structures, not on a reaction arrow far longer than any of them", { timeout: 30_000 }, () => {
+    // (three rings a bond of 30 long, apart, and an arrow of eight bonds across the picture under them, its head two short lines)
+    const rings = [60, 160, 260].flatMap((x) => hexagon([x, 70], 30).map((p, k, all) => line(p, all[(k + 1) % 6], 2.5)));
+    const arrow = [line([20, 170], [300, 170], 2.5), line([300, 170], [288, 162], 2.5), line([300, 170], [288, 178], 2.5)];
+    const t = traced(tracePicture(picture(330, 200, [...rings, ...arrow])));
+    expect(t.bond).toBeGreaterThan(25);
+    expect(t.bond).toBeLessThan(35);
+    // (each ring's six bonds lines, none taken for a letter)
+    expect(t.shapes.blobs).toHaveLength(0);
+  });
+});
