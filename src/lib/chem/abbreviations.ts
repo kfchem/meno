@@ -264,7 +264,7 @@ function composedOf(label: string): Abbreviation | undefined {
   if (salt === "unread") return undefined;
   if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
-  if (complex && bondsUnwrittenOO(label, complex)) return undefined;
+  if (complex && (bondsUnwrittenOO(label, complex) || oxoPastHighest(label, complex))) return undefined;
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
   if (made && bondsUnwrittenOO(label, made)) return undefined;
@@ -355,6 +355,39 @@ function bondsUnwrittenOO(label: string, s: GroupStructure): boolean {
   if (/OO|\((?:[μη]2?-)?O2\)/.test(label)) return false;
   REFUSED.set(label, UNWRITTEN_OO);
   return true;
+}
+
+/** The highest oxidation state of the metals an oxo formula is read of, where a count of oxo past it is no reading of what is written. */
+const HIGHEST_STATE: ReadonlyMap<string, number> = new Map([
+  ["Cr", 6],
+  ["Mo", 6],
+  ["W", 6],
+  ["Mn", 7],
+  ["Re", 7],
+  ["Ru", 8],
+  ["Os", 8],
+]);
+
+/**
+ * Whether a complex's formula read gives one of `HIGHEST_STATE`'s metals more oxo - O on it by a double bond and on nothing else - than
+ * its highest oxidation state has room for, two each: CrO5 read as five oxo would be Cr past +6. Not read as written, and said: CrO5 is a
+ * compound, CrO(O2)2 with two peroxo ligands, which a formula's O count does not say.
+ */
+function oxoPastHighest(label: string, s: GroupStructure): boolean {
+  for (const [i, a] of s.atoms.entries()) {
+    const most = HIGHEST_STATE.get(a.el);
+    if (most == null) continue;
+    const oxo = s.bonds.filter((b) => {
+      if (b.order !== 2 || (b.a1 !== i && b.a2 !== i)) return false;
+      const o = b.a1 === i ? b.a2 : b.a1;
+      return s.atoms[o].el === "O" && s.bonds.filter((c) => c.a1 === o || c.a2 === o).length === 1;
+    }).length;
+    if (2 * oxo > most) {
+      REFUSED.set(label, `${oxo} oxo would take ${a.el} past +${most}, its highest oxidation state`);
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Why `label`, typed, is not read - where a reader refused it rather than finding nothing - or undefined. */

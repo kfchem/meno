@@ -78,7 +78,7 @@ describe("a label typed in place", () => {
     s().setLabelEditValue("MoO2NO3");
     s().commitLabelEdit();
     const note = useNotices.getState().notices.find((n) => n.id === "label-refused");
-    expect(note?.text).toBe("MoO2NO3 is not read: it would bond two O the label does not bond. It is kept as words.");
+    expect(note?.text).toBe("MoO2NO3 is not read as written: it would bond two O the label does not bond. It is kept as words.");
     useNotices.getState().dismiss("label-refused");
   });
 

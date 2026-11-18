@@ -91,3 +91,19 @@ describe("a formula read as two O bonded that it does not write together", () =>
     expect(labelRefused("CH2CH2")).toBeUndefined();
   });
 });
+
+describe("an oxo formula past its metal's highest oxidation state", () => {
+  it("is not read as written, and says why: CrO5 and MoO5, five oxo each, past +6", () => {
+    for (const [label, el] of [["CrO5", "Cr"], ["MoO5", "Mo"]] as const) {
+      expect([abbreviationOf(label) ?? null, abbreviationStructure(label)], label).toEqual([null, null]);
+      expect(labelRefused(label), label).toBe(`5 oxo would take ${el} past +6, its highest oxidation state`);
+    }
+  });
+
+  it("reads one at its highest state or below as before: CrO3, MoO3, WO3, OsO4, MoO2Cl2, ReO3Me, CrO2Cl2", () => {
+    for (const label of ["CrO3", "MoO3", "WO3", "OsO4", "MoO2Cl2", "ReO3Me", "CrO2Cl2"]) {
+      expect(abbreviationStructure(label), label).not.toBeNull();
+      expect(labelRefused(label), label).toBeUndefined();
+    }
+  });
+});

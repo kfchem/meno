@@ -176,7 +176,7 @@ export function createUiSlice(
         // (a formula a reader refused - MoO2NO3, which would bond two O it does not write together - kept as words, and why said)
         const refused = changed && read.kind === "text" && !named ? labelRefused(value) : undefined;
         if (refused) {
-          useNotices.getState().show({ id: "label-refused", title: "Not read", text: `${value} is not read: ${refused}. It is kept as words.` });
+          useNotices.getState().show({ id: "label-refused", title: "Not read", text: `${value} is not read as written: ${refused}. It is kept as words.` });
         } else if (changed && read.kind === "text" && !named && readsAsNothing(value)) {
           const lost = ids.map((i) => before.get(i)).find((was) => was != null);
           if (lost) {
