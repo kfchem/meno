@@ -640,7 +640,8 @@ on a page); the Newman projection follows.
   tert-butyl, not CF3 or CMe2OH); fewer groups axial; the axial groups' kinds, the smaller axial; their sizes by their non-hydrogen
   atoms; the group whose first atom ranks lowest in the canonical order equatorial. So cis-4-tert-butylcyclohexanol, its tosylate, its
   TBS ether and its benzoate have the tert-butyl equatorial; cis-4-methylcyclohexyl chloride its methyl equatorial; 1-tert-butyl-
-  2,5-difluorocyclohexane the tert-butyl equatorial though the two F go axial. It lies as near to the flat drawing as it can, a tie to form 1. A pyranose's ring - its ring O beside a carbon carrying an O
+  2,5-difluorocyclohexane the tert-butyl equatorial though the two F go axial. A group typed as a label (tBu, iPr, Ph, OMe) is read as
+  the atoms it holds, so it goes where the same group drawn out goes. It lies as near to the flat drawing as it can, a tie to form 1. A pyranose's ring - its ring O beside a carbon carrying an O
   outside the ring on a single bond - lies with that O behind and that carbon at the right-hand end, in either chair (McNaught 1996, 2-Carb-7,
   Chart III): so a pyranose in its 1C4 chair is drawn with its up end at the right, not as form 1, as the chart draws it. Where both carbons
   beside the ring O carry one (a 2,6-dialkoxyoxane), the ring lies as any other. A ring centre the drawing leaves open keeps it open: its group

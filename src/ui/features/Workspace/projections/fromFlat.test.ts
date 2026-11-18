@@ -225,6 +225,27 @@ describe("the conventions, whichever way the flat drawing lies", () => {
     }
   }, measured(1000));
 
+  it("reads a group typed as a label as the atoms it holds: cis-1-tert-butyl-4-isopropylcyclohexane with its tBu a label puts it equatorial, as drawn out", () => {
+    // (the tert-butyl's carbon and its three methyls made one label, "tBu", where they stood)
+    const flat = drawnFromSmiles("CC(C)(C)[C@@H]1CC[C@H](C(C)C)CC1");
+    const quaternary = flat.atoms.find((a) => a.el === "C" && flat.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 4)!;
+    const methyls = new Set(flat.bonds.flatMap((b) => (b.a === quaternary.id ? [b.b] : b.b === quaternary.id ? [b.a] : [])).filter((n) => flat.bonds.filter((b) => b.a === n || b.b === n).length === 1));
+    expect(methyls.size).toBe(3);
+    const labelled: Model = {
+      atoms: flat.atoms.filter((a) => !methyls.has(a.id)).map((a) => (a.id === quaternary.id ? { ...a, el: "tBu" } : a)),
+      bonds: flat.bonds.filter((b) => !methyls.has(b.a) && !methyls.has(b.b)),
+    };
+    const ringAtom = labelled.bonds.find((b) => b.a === quaternary.id || b.b === quaternary.id)!;
+    const r = ringAtom.a === quaternary.id ? ringAtom.b : ringAtom.a;
+    for (const m of [flat, labelled]) {
+      const chair = asChair(m, r);
+      const at = new Map(chair.atoms.map((a) => [a.id, a]));
+      // (the tert-butyl's first atom not straight up or down from its ring atom: equatorial; the isopropyl axial)
+      expect(Math.abs(at.get(quaternary.id)!.x - at.get(r)!.x), m === flat ? "drawn out" : "label").toBeGreaterThan(1e-6);
+      expect(axialOf(chair), m === flat ? "drawn out" : "label").toMatchObject({ axial: 1, equatorial: 1 });
+    }
+  }, measured(1000));
+
   it("puts, of a chair either way with as many groups axial and alike in size, the group whose first atom ranks lowest equatorial - the same, however the drawing lies", () => {
     // (cis-2-methylcyclohexanol: one group axial in either chair, the methyl and the OH each of one non-hydrogen atom)
     const flat = drawnFromSmiles("C[C@H]1CCCC[C@H]1O");

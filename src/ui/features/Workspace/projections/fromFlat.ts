@@ -28,7 +28,7 @@ import { smallestRings } from "../../../../lib/layout/rings";
 import { identityText } from "../../../../lib/chem/identity";
 import { canonicalRanks } from "../../../../lib/layout/canonical";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
-import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
+import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairDrawing, FIRST_FORM, ringAlone, seenPlaces, type ChairDrawing } from "./chair";
 
@@ -213,7 +213,24 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
     }
     return out;
   };
-  const size = (r: number, g: number) => hanging(r, g).length;
+  // (a group typed as a label - tBu, iPr, Ph, OMe - read as the atoms it holds: its size and kind are its structure's, its first atom keeping
+  //  its id; what moves is the drawing's)
+  const read = labelsDrawnOut(part);
+  const readAt = new Map(read.atoms.map((a) => [a.id, a]));
+  const readNear = (x: number) => read.bonds.flatMap((b) => (b.a === x ? [b.b] : b.b === x ? [b.a] : []));
+  const readHanging = (from: number, first: number): number[] => {
+    const out = [first];
+    const seen = new Set([from, first]);
+    for (let h = 0; h < out.length; h++) {
+      for (const n of readNear(out[h])) {
+        if (seen.has(n) || inRing.has(n)) continue;
+        seen.add(n);
+        out.push(n);
+      }
+    }
+    return out;
+  };
+  const size = (r: number, g: number) => readHanging(r, g).length;
   const middle = { x: ring.reduce((s, r) => s + at.get(r)!.x, 0) / 6, y: ring.reduce((s, r) => s + at.get(r)!.y, 0) / 6 };
   const ringBonds = ring.map((r, i) => Math.hypot(at.get(r)!.x - at.get(ring[(i + 1) % 6])!.x, at.get(r)!.y - at.get(ring[(i + 1) % 6])!.y));
   const length = ringBonds.reduce((s, l) => s + l, 0) / 6 || NOMINAL_BOND_LENGTH;
@@ -224,18 +241,18 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
   const c1 = carrying.length === 1 ? carrying[0] : undefined;
   // (a group's non-hydrogen atoms, what hangs from it counted: of chairs with as many groups axial, the one whose axial groups are the
   //  smaller; still tied, the group whose first atom ranks lowest in the canonical order equatorial)
-  const heavy = (r: number, g: number) => hanging(r, g).filter((h) => at.get(h)!.el !== "H").length;
+  const heavy = (r: number, g: number) => readHanging(r, g).filter((h) => readAt.get(h)!.el !== "H").length;
   // (each group's kind, by the atom bound to the ring: the core's aromatic rule asked of the structure's rings)
-  const index = new Map(part.atoms.map((a, i) => [a.id, i]));
+  const index = new Map(read.atoms.map((a, i) => [a.id, i]));
   const aromatic = (() => {
-    const edges = part.bonds.map((b) => [index.get(b.a)!, index.get(b.b)!] as const);
-    const rings = smallestRings(part.atoms.length, edges);
+    const edges = read.bonds.map((b) => [index.get(b.a)!, index.get(b.b)!] as const);
+    const rings = smallestRings(read.atoms.length, edges);
     const inner = aromaticIn(
-      part.atoms.map((a) => ({ el: a.el, charge: a.charge })),
-      part.bonds.map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order })),
+      read.atoms.map((a) => ({ el: a.el, charge: a.charge })),
+      read.bonds.map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order })),
       rings,
     );
-    return new Set([...inner].map((i) => part.atoms[i].id));
+    return new Set([...inner].map((i) => read.atoms[i].id));
   })();
   const allGroups = [...groups.values()].flat();
   const lowest = allGroups.length ? allGroups.reduce((m, g) => (ranks.get(g)! < ranks.get(m)! ? g : m)) : undefined;
@@ -299,8 +316,8 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
               if (at.get(onAx)!.el !== "H") {
                 axial++;
                 axialSizes.push(heavy(r, onAx));
-                axialKinds.push(groupKind(part, onAx, r, aromatic));
-                if (tertiaryAlkyl(part, onAx, r, aromatic)) tertiary++;
+                axialKinds.push(groupKind(read, onAx, r, aromatic));
+                if (tertiaryAlkyl(read, onAx, r, aromatic)) tertiary++;
               }
             }
           }
