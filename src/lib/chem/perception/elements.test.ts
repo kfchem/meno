@@ -57,14 +57,15 @@ describe("what kind of element: each set by hand, against the periodic table", (
     expect([...ionic.keys()].filter((el) => !symbols.includes(el))).toEqual([]);
   });
 
-  it("draws ligands round the transition metals, the actinoids among them, but Pr, Ac and Fm, groups' labels, and Rf to Cn", () => {
+  it("draws ligands round the transition metals, the actinoids among them and Pr, Ac and Fm as elements, but Rf to Cn", () => {
     expect(sorted(labelNotElement)).toEqual(["Ac", "At", "Fm", "Pr", "Ts"]);
     // (every label or other name of the abbreviations' table that is an element's symbol, and no other: a label added there is a label here)
     const isSymbol = new Set(symbols);
     expect(sorted(new Set(ABBREVIATIONS.flatMap((a) => [a.label, ...(a.also ?? [])]).filter((l) => isSymbol.has(l))))).toEqual(sorted(labelNotElement));
-    expect(drawnRoundMetal.size).toBe(56);
-    for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Nd", "Lu", "Hg", "Th", "U", "Lr"]) expect(drawnRoundMetal.has(el), el).toBe(true);
-    for (const el of ["Pr", "Ac", "Fm", "Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
+    expect(drawnRoundMetal.size).toBe(59);
+    // (a group typed as Pr, Ac or Fm is given to the readers as its name, never as one of these: B2)
+    for (const el of ["Sc", "Fe", "Zn", "Pd", "La", "Ce", "Pr", "Nd", "Lu", "Hg", "Ac", "Th", "U", "Fm", "Lr"]) expect(drawnRoundMetal.has(el), el).toBe(true);
+    for (const el of ["Rf", "Cn", "Al", "Li"]) expect(drawnRoundMetal.has(el), el).toBe(false);
     expect([...drawnRoundMetal].filter((el) => !transitionMetal.has(el))).toEqual([]);
   });
 
@@ -112,8 +113,8 @@ describe("each caller takes the set that was its list: nothing moved", () => {
   const every = [...symbols, ...notSymbols];
   const differ = (was: (el: string) => unknown, is: (el: string) => unknown) => every.filter((el) => was(el) !== is(el));
 
-  it("draws round the same metals, and a complex's formula reads the same ones - but the actinoids, B1's fix", () => {
-    expect(differ((el) => old.drawnRound.has(el), (el) => drawnRoundMetal.has(el))).toEqual(["Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Md", "No", "Lr"]);
+  it("draws round the same metals, and a complex's formula reads the same ones - but the actinoids, B1's fix, and Pr, Ac and Fm, B2's", () => {
+    expect(differ((el) => old.drawnRound.has(el), (el) => drawnRoundMetal.has(el))).toEqual(["Pr", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr"]);
   });
   it("holds the same metals by their d count", () => {
     expect(differ(old.dOrF, (el) => transitionMetal.has(el))).toEqual([]);

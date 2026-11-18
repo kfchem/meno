@@ -5,7 +5,7 @@ import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder } from "./molecule";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
 import { ELEMENTS } from "./elements";
-import { drawnRoundMetal } from "./perception/elements";
+import { drawnRoundMetal, labelNotElement } from "./perception/elements";
 import { movedBond } from "./structureBonds";
 
 /**
@@ -421,9 +421,15 @@ export function structureFormula(s: GroupStructure): string {
 
 const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
-/** Whether a metal's symbol (the core's `drawnRoundMetal`: Pr, propyl here, aside) is written anywhere in `text`: what any complex's formula has. */
+/**
+ * The metals a label's text names: the core's `drawnRoundMetal`, but for a label's own groups named as elements (`labelNotElement`) - Ac
+ * in HoAc is acetyl, Pr in Pr2N propyl - as a label typed is read (the maintainer, 2026-10-10).
+ */
+const TEXT_METAL: ReadonlySet<string> = new Set([...drawnRoundMetal].filter((m) => !labelNotElement.has(m)));
+
+/** Whether a metal's symbol (`TEXT_METAL`) is written anywhere in `text`: what any complex's formula has. */
 function hasMetal(text: string): boolean {
-  for (const m of drawnRoundMetal) if (text.includes(m)) return true;
+  for (const m of TEXT_METAL) if (text.includes(m)) return true;
   return false;
 }
 
@@ -619,7 +625,7 @@ function plainToken(t: string, names: Names): Item | null {
     const bridge = plainToken(mu[1], names);
     return bridge && (bridge.kind === "ligand" || bridge.kind === "x") ? { ...bridge, bridging: true } : null;
   }
-  if (drawnRoundMetal.has(t)) return { kind: "metal", el: t, n: 1 };
+  if (TEXT_METAL.has(t)) return { kind: "metal", el: t, n: 1 };
   const own = Object.prototype.hasOwnProperty.call(names.local, t) ? names.local[t] : undefined;
   // (a formula's own ligand as its SMILES has it: whose configuration it is, the reagent says)
   if (own) return { kind: "ligand", ligand: { ...own, enantiomers: own.enantiomers ?? { as: [], mirror: [], plain: true } }, descriptor: null, n: 1 };
