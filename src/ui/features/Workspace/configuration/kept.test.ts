@@ -7,6 +7,9 @@ import { readDrawn, recordText } from "../utils/copyPaste";
 import { keptBondRead, keptCentreRead } from "./kept";
 import { notesOf, watchConfiguration } from "./watch";
 import { configurationChanges } from "./changes";
+import { chair } from "../../../../lib/chem/perception/projection/solids";
+import { drawn } from "../../../../lib/chem/perception/projection/views";
+import { drawnFromSmiles } from "../utils/smilesDrawn";
 
 // Foundation part 15, phase 2, its second half: the configuration kept on the drawing's own atoms and bonds, in the step that made it, saved
 // and copied with it, and what an edit changed said against what is kept.
@@ -150,6 +153,41 @@ describe("known answers of the chemistry check (part 15, phase 2)", () => {
     expect(changes).toEqual([{ unit: { kind: "centre", at: 2 }, how: "inverted" }]);
     const notes = await notesOf(before, after, changes, undefined);
     expect(notes.map((n) => n.text)).toEqual([expect.stringMatching(/^C2: [RS], now [RS]$/)]);
+  });
+
+  it("says a chair atom's group dragged to the atom's other free position: its centre turned", async () => {
+    // (a chair as the solids draw it, carrying its depth; a methyl on C1 and on C2, each at its atom's equatorial place)
+    const d = drawn(chair(), 1)!;
+    const ring = d.atoms.map((p, k) => ({ id: k + 1, el: "C", r: 0.9, x: p.x * L, y: p.y * L, z: p.z * L, stereoCentre: true }));
+    const placeOf = (k: number, kind: string) => {
+      const f = d.free.find((x) => x.free.at === k && x.free.kind === kind)!;
+      return { x: ring[k].x + f.x * L, y: ring[k].y + f.y * L };
+    };
+    const methyl = (id: number, k: number) => ({ id, el: "C", r: 0.9, ...placeOf(k, "equatorial") });
+    const model: Model = {
+      atoms: [...ring, methyl(7, 0), methyl(8, 1)],
+      bonds: [...ring.map((_, k) => ({ id: 20 + k, a: k + 1, b: ((k + 1) % 6) + 1, order: 1 as const })), { id: 30, a: 1, b: 7, order: 1 as const }, { id: 31, a: 2, b: 8, order: 1 as const }],
+    };
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model, nextId: 100 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const stop = watchConfiguration(store, doc);
+    await vi.runAllTimersAsync();
+    // (C1's methyl dragged to C1's axial place: the other face - C1 turned, C2 as it was)
+    store.getState().moveAtoms([{ id: 7, ...placeOf(0, "axial") }], "drag-chair");
+    await vi.runAllTimersAsync();
+    const notes = store.getState().configurationNotes.map((n) => n.text);
+    expect(notes).toEqual([expect.stringMatching(/^C1: [RS], now [RS]$/)]);
+    stop();
+  });
+
+  it("says nothing for a structure put down from a SMILES", async () => {
+    const { store, notes, stop } = page();
+    store.getState().pasteModel(drawnFromSmiles("C[C@H](O)CC"));
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual([]);
+    stop();
   });
 
   it("says nothing for a drawing pasted or opened, and keeps its configuration bit for bit through a save and an open", async () => {
