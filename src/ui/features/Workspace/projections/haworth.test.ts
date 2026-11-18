@@ -6,6 +6,15 @@ import { chairExtension } from "./extend";
 import { haworthDrawing, haworthOf, haworthsIn } from "./haworth";
 import { chairDrawing } from "./chair";
 import { isProjection } from "./rings";
+import { identityOfDrawn } from "../chem/identityOf";
+import { identityText } from "../../../../lib/chem/identity";
+import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
+import { cleanUp } from "../chem/cleanUp";
+import { blocksOf } from "../chem/make3d";
+import { createWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
+import { editorModelOf } from "../utils/io";
 
 type Group = { at: number; face: 1 | -1; el: string; then?: string };
 
@@ -29,6 +38,17 @@ function ring(size: 5 | 6, groups: Group[]): Model {
 }
 
 const all = (m: Model) => new Set(m.atoms.map((a) => a.id));
+
+/** D-glucopyranose as the Haworth tool draws it: ring O, C-1 to C-5; the CH2OH up at C-5, the OH at C-1 up (beta) or down (alpha), C-2 down, C-3 up, C-4 down. */
+const glucopyranose = (beta: boolean) =>
+  ring(6, [
+    { at: 5, face: 1, el: "C", then: "O" },
+    { at: 1, face: beta ? 1 : -1, el: "O" },
+    { at: 2, face: -1, el: "O" },
+    { at: 3, face: 1, el: "O" },
+    { at: 4, face: -1, el: "O" },
+  ]);
+const betaGlucose = () => glucopyranose(true);
 describe("the Haworth tool's drawing", () => {
   it("is a pyranose of six - the ring O at the back right, C-1 at the right, the front edge lower and bold - or a furanose of five, O at the back", () => {
     const six = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
@@ -100,14 +120,55 @@ describe("the Haworth tool's drawing", () => {
   });
 });
 
-// (Known answers that need the depth read of F8: today a ring all of whose atoms carry a depth is taken as a cage's solid by `cageFits`
-// (lib/layout/drawn), and a planar Haworth ring read so gives its centres no configuration - measured: the same ring with one atom's depth
-// left out reads each centre. They are written down here, to be switched on when F8 is on main, with D-glucopyranose built from ring O, C1 to C5: the CH2OH up at C5, each OH - beta up at C1, alpha down - C2 down, C3 up, C4 down; its SMILES beta
-// C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O, alpha C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O.)
-describe("what the Haworth tool draws, read as Meno reads a drawing (known answers, after F8)", () => {
-  it.todo("makes beta-D-glucopyranose: one identity with its SMILES, the alpha anomer another");
-  it.todo("is laid out flat by Draw flat with the same identity, and is the same compound as the 4C1 chair built with the chair tool");
-  it.todo("is asked about for 3D as a flat MOL whose wedges read as the configuration the ring drew");
+// (Known answers: D-glucopyranose drawn by the tool, read as Meno reads a ring drawn in perspective - by its depth - against its SMILES,
+// against the 4C1 chair the chair tool draws, laid flat by Draw flat, and written for 3D.)
+describe("what the Haworth tool draws, read as Meno reads a drawing (known answers)", () => {
+  it("makes beta-D-glucopyranose: one identity with its SMILES, the alpha anomer another", () => {
+    const BETA = "C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O";
+    const ALPHA = "C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O";
+    const [beta, alpha] = [identityOfDrawn(glucopyranose(true)), identityOfDrawn(glucopyranose(false))];
+    expect([beta.complete, alpha.complete]).toEqual([true, true]);
+    expect(beta.text).toBe(identityText(fromSmiles(BETA)));
+    expect(alpha.text).toBe(identityText(fromSmiles(ALPHA)));
+    expect(beta.text).not.toBe(alpha.text);
+  });
+  it("is laid out flat by Draw flat with the same identity, and is the same compound as the 4C1 chair built with the chair tool", async () => {
+    const drawn = betaGlucose();
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().pasteModel(drawn);
+    const was = identityOfDrawn(doc.getState().model).text;
+    await cleanUp(store, null, true);
+    const flat = doc.getState().model;
+    expect(flat.atoms.every((a) => a.z == null)).toBe(true);
+    expect(identityOfDrawn(flat).text).toBe(was);
+    // (the 4C1 chair, form 1: C-1 the right-hand end, pointing down; C-4 the left-hand end; the ring O at the back right - every group
+    //  equatorial, as beta-D-glucopyranose's are)
+    const d = chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });
+    const [o, c1, c2, c3, c4, c5] = [4, 3, 2, 1, 0, 5];
+    const atoms: Atom[] = d.atoms.map((a, k) => (k === o ? { ...a, el: "O" } : a));
+    const bonds: Bond[] = [...d.bonds];
+    [c1, c2, c3, c4, c5].forEach((k, i) => {
+      const free = d.solid.free.find((f) => f.at === k && f.kind === "equatorial")!;
+      const place = seenPlaces(d, k).find((p) => p.free === free)!;
+      atoms.push({ id: 50 + 2 * i, el: k === c5 ? "C" : "O", r: 0.9, x: place.place.x, y: place.place.y });
+      bonds.push({ id: 200 + 2 * i, a: d.ring[k], b: 50 + 2 * i, order: 1 });
+      if (k === c5) {
+        atoms.push({ id: 51 + 2 * i, el: "O", r: 0.9, x: place.place.x - 0.5, y: place.place.y + 0.5 });
+        bonds.push({ id: 201 + 2 * i, a: 50 + 2 * i, b: 51 + 2 * i, order: 1 });
+      }
+    });
+    expect(identityOfDrawn({ atoms, bonds }).text).toBe(was);
+  }, measured(400));
+
+  it("is asked about for 3D as a flat MOL whose wedges read as the configuration the ring drew", () => {
+    const drawn = betaGlucose();
+    const block = blocksOf(drawn, [drawn.atoms[0].id])[0].molblock;
+    const back = editorModelOf(moleculesToEditorModel(readMoleculesFromText(block, "mol")).model);
+    expect(identityOfDrawn(back).text).toBe(identityOfDrawn(drawn).text);
+    expect(identityOfDrawn(back).text).toBe(identityText(fromSmiles("C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O")));
+  });
 });
 
 

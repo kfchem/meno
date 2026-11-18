@@ -645,11 +645,10 @@ on a page); the Newman projection follows.
   at each ring atom, straight up and down the page, a group's bond drawn 0.745 of a bond out of the ring's picture and 0.40 into it (a front
   atom's up group, a back atom's down group), so that every place stands clear of the ring and of every other place: Meno's own lengths, no
   text gives one. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
-  right-click *Draw flat*, Clean-up leaving it as drawn and the 3D notice are the chair's. It is not flipped or fused. **What reads a Haworth ring is F8's:**
-  today a ring all of whose atoms carry a depth is taken as a cage's solid (`cageFits`, lib/layout/drawn) and a planar ring read so states no
-  configuration at its centres (measured: the same ring with one atom's depth left out reads each) - so until the depth read of F8 is in, a Haworth
-  ring's groups are drawn right and read as nothing, and *Draw flat* and 3D would lose them. Its known answers (beta- and alpha-D-glucopyranose
-  against their SMILES, and against the 4C1 chair built with the chair tool) are written in `haworth.test.ts` as todos for F8.
+  right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's. It is not flipped or fused. A Haworth ring is read by
+  its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
+  each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
+  the chair tool, every group equatorial; the MOL written for 3D reads back as the same.
 - **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no ring fused on a chair by the tool yet (Fuse comes in its
   own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
   offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
