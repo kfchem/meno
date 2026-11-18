@@ -313,6 +313,29 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
     expect(Math.round(readFigure(figure(...rings, ...chain(3))).bond)).toBe(13);
   });
 
+  it("takes the bond of the lines joined at both ends: a ring of six lines of 10 and eight spokes of 6.5, each with an end free, beside an outline ring of 11", () => {
+    const c: P = [100, 100];
+    const corner = (i: number): P => [c[0] + 10 * Math.cos((Math.PI / 3) * i), c[1] + 10 * Math.sin((Math.PI / 3) * i)];
+    const hex = [...Array.from({ length: 6 }, (_, i) => corner(i)), corner(0)];
+    // (spokes out of the corners, 6.5 long, two out of a corner for two of them)
+    const spoke = (i: number, turn: number): FigurePath => {
+      const a = Math.PI / 3 * i + turn;
+      return stroked([corner(i), [corner(i)[0] + 6.5 * Math.cos(a), corner(i)[1] + 6.5 * Math.sin(a)]]);
+    };
+    const spokes = [0, 1, 2, 3, 4, 5].map((i) => spoke(i, 0)).concat([spoke(0, 0.9), spoke(3, 0.9)]);
+    const read = readFigure(figure(stroked(hex), ...spokes, ring([300, 300], "mitre", 11, 0.8)));
+    expect(Math.round(read.bond)).toBe(10);
+  });
+
+  it("takes a joint at 20 degrees for one: two sides of 10 meeting so are joined, the third side 3.5, beside an outline ring of 14", () => {
+    const a = (20 * Math.PI) / 180;
+    const apex: P = [100, 100];
+    const p: P = [apex[0] + 10, apex[1]];
+    const q: P = [apex[0] + 10 * Math.cos(a), apex[1] + 10 * Math.sin(a)];
+    const read = readFigure(figure(stroked([p, apex, q, p]), ring([300, 300], "mitre", 14, 0.8)));
+    expect(Math.round(read.bond)).toBe(10);
+  });
+
   it("is read the same way in a scheme: a chart line drawn as one outline beside a structure stays no bonds", () => {
     const chart = thick([[40, 300], [75, 300], [90, 350], [120, 350], [135, 270], [170, 270], [185, 330]], 0.8, "mitre");
     expect(readScheme(figure(...structure(10), chart)).figure.bonds).toHaveLength(11);

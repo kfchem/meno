@@ -959,9 +959,44 @@ export function readScheme(
   const inside = (p: Point, b: readonly number[]) => p.x > b[0] && p.x < b[2] && p.y > b[1] && p.y < b[3];
   const dataCells = (figure.table ?? []).filter((b) => !figure.atoms.some((a) => inside(a, b)) && !arrows.some((a) => [a.tail, a.point, ...a.corners].some((p) => inside(p, b))));
   const inTable = (w: SchemeWords) => w.arrow == null && dataCells.some((b) => inside({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 }, b));
-  const words = all.filter((w) => !molecules.includes(w) && !inTable(w));
-  const { table: _table, ...read } = figure;
-  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [] } }, arrows, pluses: signed, words, bond: atBond };
+  // (marks drawn over a picture - a 3D model's distances and their numbers, drawn over its rendering: a piece wholly within a picture's
+  // box and joined to nothing outside it, a word wholly within one - are the picture's, no structure: left out, and counted to be said)
+  const over = marksOver(figure, drawn.pictures);
+  const within = (w: SchemeWords) => drawn.pictures.some((b) => w.box[0] >= b[0] && w.box[1] >= b[1] && w.box[2] <= b[2] && w.box[3] <= b[3]);
+  const words = all.filter((w) => !molecules.includes(w) && !inTable(w) && !within(w));
+  const marks = over.marks + all.filter(within).length;
+  const { table: _table, ...read } = over.read;
+  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [], ...(marks ? { marks } : {}) } }, arrows, pluses: signed, words, bond: atBond };
+}
+
+/**
+ * A figure read without what is drawn over its pictures: each piece - atoms joined by bonds, or an atom alone - whose atoms all lie within
+ * one picture's box. A structure reaching out of the picture is kept whole.
+ */
+export function marksOver(read: FigureRead, pictures: readonly Box[]): { read: FigureRead; marks: number } {
+  if (!pictures.length || !read.atoms.length) return { read, marks: 0 };
+  const up = read.atoms.map((_, i) => i);
+  const root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i])));
+  for (const b of read.bonds) up[root(b.a)] = root(b.b);
+  const pieces = new Map<number, number[]>();
+  read.atoms.forEach((_, i) => pieces.set(root(i), [...(pieces.get(root(i)) ?? []), i]));
+  const inBox = (p: Point, b: Box) => p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3];
+  const out = new Set<number>();
+  let marks = 0;
+  for (const ids of pieces.values()) {
+    if (!pictures.some((b) => ids.every((i) => inBox(read.atoms[i], b)))) continue;
+    ids.forEach((i) => out.add(i));
+    marks++;
+  }
+  if (!marks) return { read, marks: 0 };
+  const to = new Map<number, number>();
+  const atoms = read.atoms.filter((_, i) => {
+    if (out.has(i)) return false;
+    to.set(i, to.size);
+    return true;
+  });
+  const bonds = read.bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...b, a: to.get(b.a)!, b: to.get(b.b)! }));
+  return { read: { ...read, atoms, bonds }, marks };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */

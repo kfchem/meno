@@ -1479,6 +1479,15 @@ it where it lies out of view.
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
+- **What is drawn over a picture** (`marksOver`, lib/figure/scheme;
+  2026-11-18): a piece - atoms joined by bonds, or an atom alone - whose
+  atoms all lie within one of the figure's pictures, and a word wholly
+  within one, is the picture's: a 3D model's rendering with its distances
+  and their numbers drawn over it, no structure. It is left out, and the
+  figure says so ("Marks drawn over a picture: not read."). A structure that
+  reaches out of the picture is kept whole. Only a picture counts - a
+  rendering placed as an image - never a frame or a coloured panel drawn
+  behind a drawing.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - **a repeat unit in brackets, counted** (2026-11-05), where it is not
