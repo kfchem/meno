@@ -39,7 +39,7 @@ Double-click empty space and open *Projections*, then choose *Chair*: a cyclohex
 - Click *Chair* again, before doing anything else, for the view from the other side; again, and it comes back. Each is one step to undo.
 
 - Double-click an atom of the chair and drag out a bond: it goes to one of the atom's two places, axial or equatorial, whichever is nearer the pointer, and says which. It cannot be left between the two. Where a group makes a stereocentre, its R or S is shown.
-- Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* leaves a chair as it is drawn.
+- Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* keeps the chair as it is drawn and tidies the groups on it.
 - A chair states the configuration of every centre in it. To leave one open, make its bond wavy.
 - A 3D structure made from a chair takes the drawing's configuration, not the conformation it is drawn in.
 

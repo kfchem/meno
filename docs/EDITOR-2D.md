@@ -623,8 +623,7 @@ third back (`putChair`; the icon's tip says so: "Click again for the view from t
 - **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
-- **Limits.** No five-ring or bridged ring from the tools; no ring fused on a chair by the tool yet (it waits for the depth reader, which reads a
-  fused pair's groups right); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered; a fused system is not
+- **Limits.** No five-ring or bridged ring from the tools; no ring fused on a chair by the tool yet (Fuse comes in its own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered; a fused system is not
   flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
