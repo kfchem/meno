@@ -22,8 +22,19 @@ describe("R and S, E and Z of a molecule in 3D, read from its places", () => {
     expect(new Set([one, other])).toEqual(new Set(["R", "S"]));
   });
 
-  it("gives an atom of four groups two of them alike none: a CH2Cl2's C", () => {
+  it("gives an atom of four groups two of them alike none: a CH2Cl2's C - and says nothing of it, no unit", () => {
     expect(cipIn3d(chfclbr(["H", "H", "Cl", "Cl"])).atoms).toEqual({});
+    expect(cipIn3d(chfclbr(["H", "H", "Cl", "Cl"])).said).toBeUndefined();
+  });
+
+  it("gives a centre whose groups lie nearly in a plane none, and says so - never a guessed sense; nothing of one nearly flat that is no unit", () => {
+    // (CHFClBr pressed flat: its four groups round it in the plane z = 0)
+    const flat = (order: string[]) => ({ ...chfclbr(order), xyz: [0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -1.1, 0, 0, 0, -1.1, 0.001] });
+    const r = cipIn3d(flat(["H", "F", "Cl", "Br"]));
+    expect([r.atoms, r.said]).toEqual([{}, { atoms: { "0": "flat" }, bonds: {} }]);
+    expect(cipIn3d(flat(["H", "H", "Cl", "Cl"])).said).toBeUndefined();
+    // (a CHFClBr as it is: R or S, nothing said)
+    expect(cipIn3d(chfclbr(["H", "F", "Cl", "Br"])).said).toBeUndefined();
   });
 
   it("reads a double bond's E or Z from its dihedral - not one in a ring of seven atoms or fewer", () => {
@@ -69,6 +80,8 @@ describe("R and S, E and Z of a molecule in 3D, read from its places", () => {
     const at = (p: number[], s: number) => p.map((v) => v * s);
     const xyz = [0, 0, 0, ...tetrahedron.flatMap((p) => at(p, 0.85)), ...at(tetrahedron[1], 1.7), ...at(tetrahedron[2], 1.7), ...at(tetrahedron[2], 2.55)];
     expect(cipIn3d({ atoms, bonds, xyz }).atoms).toEqual({});
+    // (said why: it is a unit, four groups all different - its H comes and goes)
+    expect(cipIn3d({ atoms, bonds, xyz }).said).toEqual({ atoms: { "0": "exchanges" }, bonds: {} });
     // (the same but neutral, a quaternary C in its place: a centre)
     expect(Object.keys(cipIn3d({ atoms: atoms.map((a, i) => (i === 0 ? { el: "C" } : a)), bonds, xyz }).atoms)).toEqual(["0"]);
   });

@@ -632,7 +632,14 @@ export type Molecule3D = {
    * (`shown`), as asked for on it or on them - where none has been, those
    * its drawing left open (`stereoShownOf`).
    */
-  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
+  stereo?: {
+    atoms: Record<number, string>;
+    bonds: Record<number, string>;
+    chosen?: { atoms: number[]; bonds: number[] };
+    shown?: { atoms: number[]; bonds: number[] };
+    /** Of each unit with no descriptor though it is one, why (lib/chem/cip/in3d `In3dWhy`): its groups nearly in a plane, an N that exchanges its H, the structure too large. */
+    said?: { atoms: Record<number, string>; bonds: Record<number, string> };
+  };
   /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
   atomNumbers?: AtomNumbersShown;
   /**
