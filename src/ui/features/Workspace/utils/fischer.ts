@@ -14,6 +14,7 @@ import { symmetryClasses } from "../../../../lib/chem/perception/symmetry";
 import { identityInputOf } from "../chem/identityOf";
 import { fragmentOf } from "../chem/cleanUp";
 import { isMetal } from "../../../../lib/layout/perceive";
+import { readAs } from "../chem/drawing";
 
 /** How far, across, a centre of one Fischer projection may lie from the line through its topmost and lowest, in a bond's length. */
 const ONE_LINE = 0.25;
@@ -57,7 +58,7 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
   for (const a of part.atoms) {
     const bs = bondsAt.get(a.id) ?? [];
     // (a metal drawn as a plus is no Fischer projection's centre: it is read as it is drawn, square planar where it surely is)
-    if (bs.length !== 4 || isMetal(a.el) || !bs.every(plain)) continue;
+    if (bs.length !== 4 || isMetal(readAs(a)) || !bs.every(plain)) continue;
     // (each bond's way from the centre: level, one each side; upright, one each side)
     const ways = bs.map((b) => {
       const o = atomOf.get(b.a === a.id ? b.b : b.a)!;

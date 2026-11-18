@@ -1,7 +1,7 @@
 /**
  * The edges of the rules of a Fischer projection's crosses (found in review): how far a column may lean from upright (the reader's 10
  * degrees, however many crosses it has, and either way), the reader's 10 degrees for a cross (not 20), a bond that is bold, hashed, dative or double, a cross of three
- * on the axes and a fourth off them (each of the four), five bonds, a ring atom whose ring neighbours are unlike (the PR's ring test passes by its
+ * on the axes and a fourth off them (each of the four), five bonds, a ring atom whose ring neighbours are unlike (the earlier ring test passes by its
  * neighbours being alike, so it does not hold the ring check), a pseudo-asymmetric middle with one arm holding no cross, and a CH2 in the column.
  */
 import { describe, expect, it } from "vitest";
@@ -177,5 +177,49 @@ describe("a metal drawn as a plus is no Fischer projection's centre", () => {
   });
   it("a carbon of the same four groups is one", () => {
     expect(fischerCentres(plus("C"), 1)).toHaveLength(1);
+  });
+});
+
+/**
+ * Two crosses a chain of two atoms apart - the upper cross A at the origin (Cl up, F left, Br right), a vertical bond down to P, a bond across to
+ * Q, a vertical bond down from Q to the lower cross B (O left, N right, I below) - the line from A to B leaning `deg` degrees to the right (left if
+ * negative): B at x = 2 tan(deg), two bonds below A.
+ */
+function apart(deg: number): Model {
+  const x = 2 * Math.tan((deg * Math.PI) / 180);
+  return {
+    atoms: [A(1, "C", 0, 0), A(2, "Cl", 0, 1), A(3, "F", -1, 0), A(4, "Br", 1, 0), A(5, "C", 0, -1), A(6, "C", x, -1), A(7, "C", x, -2), A(8, "O", x - 1, -2), A(9, "N", x + 1, -2), A(10, "I", x, -3)],
+    bonds: [B(11, 1, 2), B(12, 1, 3), B(13, 1, 4), B(14, 1, 5), B(15, 5, 6), B(16, 6, 7), B(17, 7, 8), B(18, 7, 9), B(19, 7, 10)],
+  } as Model;
+}
+
+describe("a column of two crosses, however they are joined", () => {
+  it("a lean of 8 degrees either way is taken (two crosses), of 15 either way is not", () => {
+    for (const s of [1, -1]) {
+      expect(fischerCentres(apart(8 * s), 1), `${8 * s}`).toHaveLength(2);
+      expect(fischerCentres(apart(15 * s), 1), `${15 * s}`).toEqual([]);
+    }
+    expect(fischerCentres(apart(0), 1)).toHaveLength(2);
+  });
+
+  it("two crosses side by side - tartaric acid's chain turned a quarter - are not one above another: none", () => {
+    // (the same two crosses, the whole drawing turned 90 degrees: each cross still on the axes, the line between them level)
+    const m = apart(0);
+    const turned = { ...m, atoms: m.atoms.map((a) => ({ ...a, x: -a.y, y: a.x })) };
+    expect(fischerCentres(turned, 1)).toEqual([]);
+  });
+});
+
+/** Five crosses bulging sideways: centre k shifted `bulge` x [0, 1, 2, 1, 0] - each bond leans atan(bulge) (9.6 degrees at 0.17, inside the reader's 10), the line from the top to the foot upright. */
+const banana = (bulge: number): Model => {
+  const m = fischer("CHO", [["H", "OH"], ["OH", "H"], ["H", "OH"], ["OH", "H"], ["H", "OH"]], "CH2OH");
+  const shift = (y: number) => bulge * [0, 1, 2, 1, 0][Math.min(4, Math.max(0, Math.round(-y)))];
+  return { ...m, atoms: m.atoms.map((a) => ({ ...a, x: a.x + shift(a.y) })) };
+};
+
+describe("each centre within a quarter of a bond of the line from the topmost to the lowest", () => {
+  it("a column bulging 0.2 of a bond is taken (five crosses); bulging 0.34, not (each bond still within the reader's 10 degrees)", () => {
+    expect(fischerCentres(banana(0.1), 1)).toHaveLength(5);
+    expect(fischerCentres(banana(0.17), 1)).toEqual([]);
   });
 });
