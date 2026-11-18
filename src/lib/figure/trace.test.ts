@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Pixels } from "./inkFit";
 import { readFigure } from "./read";
-import type { Point, Shapes } from "./drawn";
-import { closedJoints, widening, inkOf, onPage, patchesOf, thinned, tracePicture, type Piece, type Traced, type Vertex } from "./trace";
+import type { Blob, Point, Shapes } from "./drawn";
+import { closedJoints, widening, inkOf, onPage, patchesOf, shadedOf, thinned, tracePicture, unreadInk, type Piece, type Traced, type Vertex } from "./trace";
+import type { FigureRead } from "./read";
 
 type Pt = [number, number];
 /** Whether a point of the picture is inked by a shape. */
@@ -361,5 +362,230 @@ describe("a picture traced", () => {
     expect(xs[1]).toBeCloseTo(100 + 82 * 0.5, 0);
     expect(s.a.y).toBeCloseTo(215, 0);
     expect(s.w).toBeCloseTo(2, 0);
+  });
+});
+
+/** An H, `h` tall and three fifths as wide, its foot at `foot` (its left stem's): three lines `w` wide. */
+const letterH = (foot: Pt, h: number, w: number): Shape[] => {
+  const [x, y] = foot;
+  const r = x + 0.6 * h;
+  return [line([x, y], [x, y - h], w), line([r, y], [r, y - h], w), line([x, y - h / 2], [r, y - h / 2], w)];
+};
+
+/** An N, `h` tall and three fifths as wide, its foot at `foot` (its left stem's): three lines `w` wide, joined at its corners. */
+const letterN = (foot: Pt, h: number, w: number): Shape[] => {
+  const [x, y] = foot;
+  const r = x + 0.6 * h;
+  return [line([x, y], [x, y - h], w), line([x, y - h], [r, y], w), line([r, y], [r, y - h], w)];
+};
+
+/** A C, `h` tall: most of a ring's line, open to the right, its foot on `foot`'s line, its left at `foot`'s x. */
+const letterC =
+  (foot: Pt, h: number, w: number): Shape =>
+  (x, y) => {
+    const c = [foot[0] + h * 0.42, foot[1] - h / 2];
+    const a = Math.atan2(y - c[1], x - c[0]);
+    return Math.abs(Math.hypot((x - c[0]) / 0.84, y - c[1]) - h / 2 + w / 2) <= w / 2 && Math.abs(a) > Math.PI / 4;
+  };
+
+describe("a picture's letters", () => {
+  it("takes a round closed line at a bond's end for a letter however large, and one with a ring's bonds round it for the ring's circle", { timeout: 30_000 }, () => {
+    const c: Pt = [100, 180];
+    const h = hexagon(c, 60);
+    // (a bond out of the top corner, an O at its end four fifths of a bond tall: as large as a ring's circle is wide)
+    const top = h[0];
+    const end: Pt = [top[0], top[1] - 60];
+    const o = ring([end[0], end[1] - 26], 24, 2.5);
+    const shapes: Shape[] = [...h.map((p, k) => line(p, h[(k + 1) % 6], 2.5)), ring(c, 34, 2.5), line(top, [end[0], end[1] + 8], 2.5), o];
+    const t = traced(tracePicture(picture(220, 260, shapes)));
+    expect(t.shapes.curves).toHaveLength(1);
+    expect(Math.hypot(t.shapes.curves[0].pts[0].x - c[0], t.shapes.curves[0].pts[0].y - c[1])).toBeGreaterThan(25);
+    expect(t.shapes.blobs).toHaveLength(1);
+    expect(t.shapes.blobs[0].box[1]).toBeLessThan(end[1]);
+  });
+
+  it("measures the bond on the structure, not on its letters' many short strokes; a letter four fifths of a bond tall is a letter", { timeout: 30_000 }, () => {
+    // (a chain of two bonds of 60, an H at each of its ends and two more beside it: twelve strokes of letters for two of bonds)
+    const [a, b, c]: Pt[] = [
+      [70, 120],
+      [122, 90],
+      [174, 120],
+    ];
+    const shapes: Shape[] = [line(a, b, 2.5), line(b, c, 2.5), ...letterH([30, 150], 48, 3), ...letterH([186, 150], 48, 3), ...letterH([30, 60], 48, 3), ...letterH([186, 60], 48, 3)];
+    const t = traced(tracePicture(picture(240, 180, shapes)));
+    expect(t.bond).toBeGreaterThan(50);
+    expect(t.bond).toBeLessThan(70);
+    expect(t.shapes.blobs).toHaveLength(4);
+    expect(t.shapes.strokes).toHaveLength(2);
+    // (an N as tall: its stems and its slant each four fifths of a bond or more, one piece each - a letter's strokes still)
+    const n = traced(tracePicture(picture(240, 180, [line(a, b, 2.5), line(b, c, 2.5), ...letterN([30, 150], 48, 3), ...letterN([186, 150], 48, 3)])));
+    expect(n.shapes.blobs).toHaveLength(2);
+    expect(n.shapes.strokes).toHaveLength(2);
+  });
+
+  it("takes a round closed line for a letter where the lines round it point at it, or are a letter's own: a ring's bonds run across the way out of its circle", { timeout: 30_000 }, () => {
+    const c: Pt = [150, 150];
+    const o = ring(c, 24, 2.5);
+    // (a ring elsewhere, for the bond)
+    const h = hexagon([60, 60], 60).map((p, k, all) => line(p, all[(k + 1) % 6], 2.5));
+    // (four bonds each pointing at the O, each a patch of its own)
+    const spokes = [0, 1, 2, 3].map((k) => {
+      const t = (k * Math.PI) / 2 + Math.PI / 4;
+      return line([c[0] + 32 * Math.cos(t), c[1] + 32 * Math.sin(t)], [c[0] + 100 * Math.cos(t), c[1] + 100 * Math.sin(t)], 2.5);
+    });
+    const pointing = traced(tracePicture(picture(300, 300, [...h, o, ...spokes])));
+    expect(pointing.shapes.curves).toHaveLength(0);
+    expect(pointing.shapes.blobs).toHaveLength(1);
+    // (an H either side of it, their stems running across the way out of it: a letter's lines, not a ring's)
+    const hs = [...letterH([c[0] - 60, c[1] + 20], 40, 3), ...letterH([c[0] + 34, c[1] + 20], 40, 3)];
+    const lettered = traced(tracePicture(picture(300, 300, [...h, o, ...hs])));
+    expect(lettered.shapes.curves).toHaveLength(0);
+    expect(lettered.shapes.blobs).toHaveLength(3);
+  });
+
+  it("takes an upright line alone, as tall as a letter beside it on its line, for a letter - the l of a Cl; one with no letter beside it stays a line", { timeout: 30_000 }, () => {
+    const c: Pt = [90, 110];
+    const h = hexagon(c, 60);
+    const ringLines = h.map((p, k) => line(p, h[(k + 1) % 6], 2.5));
+    // (a C and an l beside it, as tall, on its line, to the ring's right)
+    const cl: Shape[] = [letterC([170, 130], 36, 3.5), line([205, 130], [205, 94], 3.5)];
+    const withC = traced(tracePicture(picture(240, 220, [...ringLines, ...cl])));
+    expect(withC.shapes.blobs).toHaveLength(2);
+    expect(withC.shapes.strokes).toHaveLength(6);
+    // (the l alone: a line)
+    const alone = traced(tracePicture(picture(240, 220, [...ringLines, cl[1]])));
+    expect(alone.shapes.blobs).toHaveLength(0);
+    expect(alone.shapes.strokes).toHaveLength(7);
+  });
+});
+
+describe("a picture not read", () => {
+  it("is drawn too small to read where its bond is under 25 of its pixels", () => {
+    const at = (bond: number) => {
+      const c: Pt = [bond * 1.6, bond * 1.6];
+      const h = hexagon(c, bond);
+      return tracePicture(picture(Math.round(bond * 3.2), Math.round(bond * 3.2), h.map((p, k) => line(p, h[(k + 1) % 6], 2))));
+    };
+    expect(at(22)).toEqual({ none: "The picture is drawn too small to read." });
+    expect("none" in at(28)).toBe(false);
+  });
+
+  it("is shaded, as a photograph or a rendering is, where a tenth of its ink lies in grey fields; a drawing's grey is at its lines' edges", () => {
+    const c: Pt = [100, 100];
+    const h = hexagon(c, 60);
+    const lines = h.map((p, k) => line(p, h[(k + 1) % 6], 2.5));
+    const drawn = picture(200, 200, lines);
+    expect(shadedOf(inkOf(drawn)!)).toBeLessThan(0.01);
+    // (a ball shaded from grey at its rim to darker at its middle, beside the ring)
+    const shaded = picture(200, 200, lines);
+    const data = shaded.data as Uint8ClampedArray;
+    for (let y = 0; y < 200; y++)
+      for (let x = 0; x < 200; x++) {
+        const d = Math.hypot(x - 150, y - 150);
+        if (d > 40) continue;
+        const v = Math.round(110 + 80 * (d / 40));
+        for (let k = 0; k < 3; k++) data[4 * (y * 200 + x) + k] = Math.min(data[4 * (y * 200 + x) + k], v);
+      }
+    expect(shadedOf(inkOf(shaded)!)).toBeGreaterThan(0.1);
+    // (a small grey dot beside it - a twentieth of its ink in a grey field - is a drawing still)
+    const dotted = picture(200, 200, [...lines, (x, y) => Math.hypot(x - 170, y - 170) <= 5]);
+    const dd = dotted.data as Uint8ClampedArray;
+    for (let y = 0; y < 200; y++) for (let x = 0; x < 200; x++) if (Math.hypot(x - 170, y - 170) <= 5) for (let k = 0; k < 3; k++) dd[4 * (y * 200 + x) + k] = 128;
+    expect(shadedOf(inkOf(dotted)!)).toBeGreaterThan(0.01);
+    expect("none" in tracePicture(dotted)).toBe(false);
+    expect(tracePicture(shaded)).toEqual({ none: "The picture is shaded, as a photograph or a rendering is: it is not a drawing to read." });
+  });
+});
+
+describe("ink read as nothing beside a structure read", () => {
+  // (a chain of three atoms a bond of 60 apart)
+  const read = (letters: FigureRead["left"]["letters"] = []): FigureRead => ({
+    atoms: [
+      { x: 0, y: 0 },
+      { x: 52, y: 30 },
+      { x: 104, y: 0 },
+    ],
+    bonds: [],
+    bond: 60,
+    left: { letters },
+  });
+  const blob = (x: number, y: number): Blob => {
+    const pts = [
+      { x, y },
+      { x: x + 10, y },
+      { x: x + 10, y: y + 20 },
+      { x, y: y + 20 },
+    ];
+    return { pts, parts: [pts], box: [x, y, x + 10, y + 20], curved: true };
+  };
+  const shapes = (blobs: Blob[]): Shapes => ({ strokes: [], wedges: [], curves: [], blobs });
+
+  it("leaves the atom nearest a patch no letter matches unsure, within 0.6 of a bond of it; farther, nothing; a patch read as a letter, nothing", () => {
+    // (its middle 33 below the atom at 104, 0: 0.55 of the bond; 39 below: 0.65)
+    expect([...unreadInk(read(), shapes([blob(99, 23)]), []).keys()]).toEqual([2]);
+    expect(unreadInk(read(), shapes([blob(99, 29)]), []).size).toBe(0);
+    const matched = blob(99, 23);
+    expect(unreadInk(read(), shapes([matched]), [], [{ from: [matched] }]).size).toBe(0);
+  });
+
+  it("leaves the atom nearest a letter read in no label unsure, within 1.2 bonds of it: a label whose bond was not read", () => {
+    const letter = (x: number, y: number) => ({ c: "O", box: [x - 5, y - 10, x + 5, y + 10] as [number, number, number, number], at: null, size: 10 });
+    const near = unreadInk(read([letter(170, 0)]), shapes([]), []);
+    expect([...near.keys()]).toEqual([2]);
+    expect(near.get(2)).toBe('"O" beside it in the picture was read in no label.');
+    expect(unreadInk(read([letter(180, 0)]), shapes([]), []).size).toBe(0);
+  });
+});
+
+// (REVIEW's pin, #1277: the edges of the numbers of the joint rule and the wedge rule)
+const vx = (x: number, y: number, free = false): Vertex => ({ at: { x, y }, deep: 1, free, pieces: [] });
+const layx = (a: Vertex, b: Vertex, from: Point, to: Point) => ({ piece: { a, b, pts: [], patch: 0 } as Piece, a: from, b: to, length: Math.hypot(to.x - from.x, to.y - from.y) });
+
+describe("the edges of the numbers of the joint rule and the wedge rule", () => {
+  it("a piece between two joints is no bond under 0.35 of the bond, and is one over it: 20 and 22.5 of a bond of 60", () => {
+    const piece = (d: number) => [layx(vx(100, 100), vx(100 + d, 100), { x: 100, y: 100 }, { x: 100 + d, y: 100 })];
+    expect([...closedJoints(piece(20), 60)]).toEqual([0]);
+    expect(closedJoints(piece(22.5), 60).size).toBe(0);
+  });
+
+  // (a joint left as two nodes 5 apart; two lines come into the one from the left, the second turned from the first by `deg` degrees; each ends at the
+  //  joint: a fork - within 15 degrees - keeps each on its own line, the two ends apart; else both ends are one joint)
+  const endsOf = (deg: number) => {
+    const t = (deg * Math.PI) / 180;
+    const [p, q] = [vx(100, 97), vx(105, 100)];
+    const laid = [
+      layx(p, q, p.at, q.at),
+      layx(vx(40, 97, true), p, { x: 40, y: 97 }, { x: 100, y: 97 }),
+      layx(vx(100 - 60 * Math.cos(t), 103 + 60 * Math.sin(t), true), p, { x: 100 - 60 * Math.cos(t), y: 103 + 60 * Math.sin(t) }, { x: 100, y: 103 }),
+    ];
+    closedJoints(laid, 60);
+    return [laid[1].b, laid[2].b];
+  };
+
+  it("two lines 14 degrees apart are a fork: each ends on its own line, the two ends apart", () => {
+    const [a, b] = endsOf(14);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(1);
+  });
+
+  it("two lines 16 degrees apart are no fork: both end at the one joint", () => {
+    const [a, b] = endsOf(16);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(1e-6);
+  });
+
+  it("a width rises one way surely enough where Kendall's rank correlation is 0.3 or more: 0.333 is a wedge, 0.289 none (ten widths, 15 and 16 of 45 pairs against)", () => {
+    // (ten places along a line 60 long, the widths a permutation of 0 to 9 with `inversions` pairs against the rise: tau = (45 - 2 x inversions) / 45)
+    const series = (inversions: number) => {
+      const left = Array.from({ length: 10 }, (_, k) => k);
+      const out: number[] = [];
+      let rest = inversions;
+      for (let k = 0; k < 10; k++) {
+        const take = Math.min(rest, 9 - k);
+        out.push(left.splice(left.length - 1 - take, 1)[0]);
+        rest -= take;
+      }
+      return out.map((w, k) => ({ t: 6 * k + 3, w: 3 + w }));
+    };
+    expect(widening(series(15), 60)).not.toBeNull();
+    expect(widening(series(16), 60)).toBeNull();
   });
 });
