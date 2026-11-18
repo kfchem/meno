@@ -1239,6 +1239,20 @@ describe("a stereocentre whose configuration the figure does not show", () => {
     expect(marked(drawn(false))).toBe(1);
   });
 
+  it("a ring atom whose bonds lie as a plus on the axes is no Fischer projection's cross: the plain words", () => {
+    // (a five-membered ring through the centre's up and right bonds, a methyl on the ring at the up side; an ethyl down, Br left)
+    const c: P = [100, 100];
+    const [up, right, down, left] = [step(c, 90), step(c, 0), step(c, -90), step(c, 180)];
+    const p = step(up, 18);
+    const q = step(right, 72);
+    const f = figure(
+      [stroke(c, up), stroke(up, p), stroke(p, q), stroke(q, right), stroke(right, c), stroke(p, step(p, 90)), stroke(c, down), stroke(down, step(down, -30)), stroke(c, along(c, left, 0.7))],
+      [...word("Br", [left[0] - 9, left[1]])],
+    );
+    const centre = read(f).atoms.find((a) => a.unsure?.includes(FISCHER_CROSS));
+    expect(centre).toBeUndefined();
+  });
+
   it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {
     expect(marked(drawn(true))).toBe(0);
     // (CH(OH)(CH3)2: its two methyls alike, no stereocentre)

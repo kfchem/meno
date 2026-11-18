@@ -880,7 +880,11 @@ Both go together, because both touch every layer.
   right-click on any of its atoms or bonds) offers *Read as Fischer
   projection* (`utils/fischer.ts`). At each cross that is a stereocentre
   (four bonds, in no ring, each within the reader's 10 degrees of level
-  or upright, its four groups unlike), the two level bonds become solid
+  or upright, its four groups unlike - or only its two upright groups
+  alike, each holding such a cross, as the middle carbon of ribitol and of
+  xylitol: told apart only by the configurations about it, which the CIP
+  then reads r or s, or none where it is no centre, as in D-arabinitol),
+  the two level bonds become solid
   wedges narrow at it and the two upright bonds stay plain: the horizontal
   groups toward the viewer, as the Fischer projection of the acyclic form
   has them (A. D. McNaught, Nomenclature of carbohydrates (IUPAC
@@ -892,12 +896,12 @@ Both go together, because both touch every layer.
   - Not offered where no cross lies on the axes (a chain turned a quarter
     has its crosses side by side, not one above another), where a cross's
     bond is already a wedge, hashed, bold or dative, at a ring atom, or
-    where a cross's groups are not all unlike (it is no stereocentre; such
+    where a cross's groups are alike otherwise (it is no stereocentre; such
     a cross among others is left plain).
   - A single cross has no chain to tell up from down by: it is read as it
     lies, on the chemist's word. Turned a quarter before the command, it
     gives the enantiomer.
-  - A cross of plain bonds read from a PDF's figure says so at its centre
+  - A cross of plain bonds, in no ring, read from a PDF's figure says so at its centre
     - "Drawn as a cross of plain bonds: no configuration is read. Read as
     Fischer projection, if it is one." - and nothing is read until the
     chemist asks (`lib/figure/structure.ts`).

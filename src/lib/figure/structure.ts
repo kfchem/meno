@@ -256,6 +256,23 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const crossed = (i: number) => {
     const plainHere = bonds.filter((b) => (b.a === i || b.b === i) && b.order === 1 && !b.stereo && !b.bold);
     if (around[i].length !== 4 || plainHere.length !== 4) return false;
+    // (in no ring: a ring atom is never read as a Fischer projection's cross - another way round from each neighbour back to it)
+    const ringed = around[i].some((n) => {
+      const seen = new Set([i, n]);
+      const todo = [n];
+      while (todo.length) {
+        const m = todo.pop()!;
+        for (const o of around[m]) {
+          if (o === i && m !== n) return true;
+          if (o !== i && !seen.has(o)) {
+            seen.add(o);
+            todo.push(o);
+          }
+        }
+      }
+      return false;
+    });
+    if (ringed) return false;
     const ways = around[i].map((n) => Math.atan2(atoms[n].y - atoms[i].y, atoms[n].x - atoms[i].x));
     const near = (t: number, to: number) => Math.abs(Math.atan2(Math.sin(t - to), Math.cos(t - to))) <= IN_LINE;
     return [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((to) => ways.filter((t) => near(t, to)).length === 1);

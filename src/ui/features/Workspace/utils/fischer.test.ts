@@ -190,6 +190,40 @@ describe("a structure drawn as a Fischer projection, read so on the chemist's wo
   });
 });
 
+describe("a centre told only by the configurations about it (CHEM, 11-18: alditols and aldaric acids)", () => {
+  const right: [string, string] = ["H", "OH"];
+  const left: [string, string] = ["OH", "H"];
+  const wedgedText = (m: Model, skip?: number) => {
+    const patches = new Map(fischerWedges(fischerCentres(m, m.atoms[0].id).filter((c) => c.atom !== skip)));
+    return identityText(identityInputOf({ ...m, bonds: m.bonds.map((b) => (patches.has(b.id) ? { ...b, ...patches.get(b.id) } : b)) }).input);
+  };
+
+  it("ribitol and xylitol differ only at C-3: it is taken, read s and r, and their identities differ", () => {
+    const ribitol = fischer("CH2OH", [right, right, right], "CH2OH");
+    const xylitol = fischer("CH2OH", [right, left, right], "CH2OH");
+    expect(readAfter(ribitol)[1]).toBe("s");
+    expect(readAfter(xylitol)[1]).toBe("r");
+    expect(wedgedText(ribitol)).not.toBe(wedgedText(xylitol));
+  });
+
+  it("ribaric and xylaric acid differ only at C-3: read r and s, their identities different", () => {
+    const ribaric = fischer("COOH", [right, right, right], "COOH");
+    const xylaric = fischer("COOH", [right, left, right], "COOH");
+    expect(readAfter(ribaric)[1]).toBe("r");
+    expect(readAfter(xylaric)[1]).toBe("s");
+    expect(wedgedText(ribaric)).not.toBe(wedgedText(xylaric));
+  });
+
+  it("D-arabinitol's C-3 is taken, but no centre: no label, and its identity the same as with it plain", () => {
+    const arabinitol = fischer("CH2OH", [left, right, right], "CH2OH");
+    const centres = fischerCentres(arabinitol, arabinitol.atoms[0].id);
+    expect(centres).toHaveLength(3);
+    expect(readAfter(arabinitol)[1]).toBeNull();
+    const c3 = arabinitol.atoms.find((a) => Math.abs(a.y + 1) < 1e-9 && Math.abs(a.x) < 1e-9)!.id;
+    expect(wedgedText(arabinitol)).toBe(wedgedText(arabinitol, c3));
+  });
+});
+
 describe("where it is not offered", () => {
   it("a cross turned a quarter off the page's axes: none", () => {
     expect(fischerCentres(fischer("CHO", [["H", "OH"]], "CH2OH", Math.PI / 6), 1)).toEqual([]);

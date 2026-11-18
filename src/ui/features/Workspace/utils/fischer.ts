@@ -23,7 +23,8 @@ const plain = (b: Bond) => b.order === 1 && (!b.stereo || b.stereo === "none") &
 /**
  * The centres of the structure holding `at` drawn as a Fischer projection: each an atom of four plain bonds, in no ring, that lie as a
  * plus on the page's axes (each within the reader's `IN_LINE` of level or upright, one each way), its four groups unlike (by the
- * structure's own classes, as a stereocentre's are; a cross that is none is left as it is) - and all of them in one upright line.
+ * structure's own classes, as a stereocentre's are), or only its two upright ones alike, each holding such a cross (a centre told by
+ * the configurations about it); a cross that is neither is left as it is - and all of them in one upright line.
  * None, where there are none, or where such centres do not lie one above another. Each with its two level bonds, by id.
  */
 export function fischerCentres(model: Model, at: number): { atom: number; level: [number, number] }[] {
@@ -51,7 +52,7 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
     }
     return false;
   };
-  const crosses: { atom: number; x: number; y: number; level: [number, number]; around: number[] }[] = [];
+  const crosses: { atom: number; x: number; y: number; level: [number, number]; upright: [number, number]; sides: [number, number] }[] = [];
   for (const a of part.atoms) {
     const bs = bondsAt.get(a.id) ?? [];
     if (bs.length !== 4 || !bs.every(plain) || bs.some(inRing)) continue;
@@ -66,7 +67,7 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
     const down = ways.filter((w) => near(w.t, Math.PI / 2));
     const up = ways.filter((w) => near(w.t, -Math.PI / 2));
     if (right.length !== 1 || left.length !== 1 || down.length !== 1 || up.length !== 1) continue;
-    crosses.push({ atom: a.id, x: a.x, y: a.y, level: [right[0].b.id, left[0].b.id], around: ways.map((w) => w.other) });
+    crosses.push({ atom: a.id, x: a.x, y: a.y, level: [right[0].b.id, left[0].b.id], upright: [up[0].other, down[0].other], sides: [right[0].other, left[0].other] });
   }
   if (!crosses.length) return [];
   // (its four groups unlike, as a stereocentre's are: by the structure's classes, each group the class of the atom it begins at; a
@@ -74,7 +75,42 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
   const { input } = identityInputOf(part);
   const classes = symmetryClasses(input);
   const index = new Map(part.atoms.map((a, i) => [a.id, i]));
-  const centres = crosses.filter((c) => new Set(c.around.map((id) => classes[index.get(id)!])).size === 4);
+  const classOf = (id: number) => classes[index.get(id)!];
+  const taken = new Set(crosses.filter((c) => new Set([...c.upright, ...c.sides].map(classOf)).size === 4).map((c) => c.atom));
+  // (and a cross whose only alike pair is its two upright groups, each holding a cross taken - the middle of ribitol, of xylitol: alike
+  // by constitution, told apart by the configurations about it - taken too, for the CIP to judge: it reads such a centre r or s, or
+  // none where it is no centre, as in D-arabinitol; CHEM, 11-18)
+  const holds = (from: number, start: number) => {
+    // (the atoms reached from `start` not through `from`: whether a cross taken is among them)
+    const seen = new Set([from, start]);
+    const todo = [start];
+    while (todo.length) {
+      const n = todo.pop()!;
+      if (taken.has(n)) return true;
+      for (const b of bondsAt.get(n) ?? []) {
+        const m = b.a === n ? b.b : b.a;
+        if (!seen.has(m)) {
+          seen.add(m);
+          todo.push(m);
+        }
+      }
+    }
+    return false;
+  };
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const c of crosses) {
+      if (taken.has(c.atom)) continue;
+      const [u, d] = c.upright.map(classOf);
+      const [r, l] = c.sides.map(classOf);
+      const onlyUpright = u === d && new Set([u, r, l]).size === 3;
+      if (onlyUpright && c.upright.every((n) => holds(c.atom, n))) {
+        taken.add(c.atom);
+        grew = true;
+      }
+    }
+  }
+  const centres = crosses.filter((c) => taken.has(c.atom));
   if (!centres.length) return [];
   // (one above another: all within a quarter of a bond across of the first)
   const bond = part.bonds.reduce((t, b) => t + Math.hypot(atomOf.get(b.a)!.x - atomOf.get(b.b)!.x, atomOf.get(b.a)!.y - atomOf.get(b.b)!.y), 0) / part.bonds.length;
