@@ -8,6 +8,7 @@
  * go, and it goes with its bond.
  */
 import { isMetal } from "../../../../lib/layout/perceive";
+import { readAs } from "./drawing";
 import { allylCurve } from "../../../../lib/chem/allylArc";
 import type { Atom, Bond, Model } from "../store/types";
 import { ringsOf } from "../utils/rings";
@@ -189,7 +190,7 @@ const ringsKept = new WeakMap<readonly Bond[], { atoms: readonly Atom[]; rings: 
  */
 export function etaRingAt(model: Graph, metal: number, p: { x: number; y: number }): { ring: number[]; centre: { x: number; y: number } } | null {
   const m = model.atoms.find((a) => a.id === metal);
-  if (!m || !isMetal(m.el)) return null;
+  if (!m || !isMetal(readAs(m))) return null;
   let kept = ringsKept.get(model.bonds);
   if (!kept || kept.atoms !== model.atoms) {
     kept = { atoms: model.atoms, rings: ringsOf({ atoms: [...model.atoms], bonds: [...model.bonds] }).map((r) => r.ids) };
@@ -230,7 +231,7 @@ export function etaBondAt(
   onAtom: number,
 ): { ring: number[]; centre: { x: number; y: number } } | null {
   const m = model.atoms.find((a) => a.id === metal);
-  if (!m || !isMetal(m.el)) return null;
+  if (!m || !isMetal(readAs(m))) return null;
   if (model.atoms.some((a) => Math.hypot(a.x - p.x, a.y - p.y) <= onAtom)) return null;
   const at = new Map(model.atoms.map((a) => [a.id, a]));
   let best: { ring: number[]; d: number } | null = null;
@@ -238,7 +239,7 @@ export function etaBondAt(
     if (b.order < 2 || b.endpoints?.length || b.a === metal || b.b === metal) continue;
     const u = at.get(b.a);
     const v = at.get(b.b);
-    if (!u || !v || isMetal(u.el) || isMetal(v.el) || u.el === "*" || v.el === "*") continue;
+    if (!u || !v || isMetal(readAs(u)) || isMetal(readAs(v)) || u.el === "*" || v.el === "*") continue;
     const dx = v.x - u.x;
     const dy = v.y - u.y;
     const len2 = dx * dx + dy * dy;

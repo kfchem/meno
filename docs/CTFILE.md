@@ -184,7 +184,7 @@ off it in turn.
 | Not a reacting centre (-1) | A small cross on the bond's middle. | Meno's own. |
 | A reacting centre otherwise (1), or no change (2) | "rc", "nc" beside the bond's middle. | Meno's own. |
 | An enhanced stereo group taking in all a structure's centres | Racemic (AND): "and enantiomer" beneath it; relative (OR): "or enantiomer"; absolute: nothing. | ST-6.3 prefers text beside the diagram; ST-6.5 rules out "rac" and "rel" as labels; ST-6.2: a diagram with no indicator shows the configuration drawn. |
-| Groups that do not (more than one in a structure, or of stereo bonds, or one beside a centre drawn with a wedge and in no group: its forms then diastereomers, no enantiomers) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
+| Groups that do not (more than one in a structure, or of stereo bonds, or one beside a centre drawn with a wedge and in no group: its forms then diastereomers, no enantiomers - a centre the reader reads, whose groups are not two alike - by constitution, and where alike so, by the configurations of the centres in them too: a pseudoasymmetric centre between an R and an S arm counts; a wedge that sets none, as on an isopropyl's CH, does not) | Each centre or stereo bond labelled small: abs, and1, or2. | ST-0.8 finds no consensus on how mixtures of diastereoisomers are depicted; these are Meno's, after the format's own names. |
 
 A file with stereo bonds and the chiral flag set but no collections has
 each of its stereocentres (where a wedge starts) taken as absolute, as the
@@ -319,7 +319,15 @@ counter-anions after it, each leaving a positive charge on the part's
 metal: read by rule as a salt's anion is (BF4, PF6, SbF6, AsF6, BPh4,
 ClO4; see below), or BArF, which names its aryl groups by no formula, from
 a list. A ligand written as an anion (Cp⁻, Cp*⁻) leaves its charge on the
-metal, so that the whole is as charged as the formula says. A ligand in
+metal, so that the whole is as charged as the formula says. An O with
+its count, or before a halide, a bracket or the end of the formula, is an
+oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
+and two M-Cl, UO2Cl2 is uranyl's O=U=O with two chlorides, WOCl4, VOCl3,
+VO(acac)2, MeReO3 and ReO3Me - each element written with its count, as an
+inorganic formula is, never a group read across it; an O that begins a
+group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O is bound to each metal it bridges by
+a single bond. A part of several metals with an oxo not marked μ is not
+read (Re2O7: which O bridge, the formula does not say). A ligand in
 brackets may have its descriptor: RuCl[(S,S)-TsDPEN](p-cymene),
 RuCl2[(S)-BINAP][(S,S)-DPEN]. Where one part
 has several metals - Pd2(dba)3 - the ligands are shared among them in
@@ -488,7 +496,14 @@ named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,
 2026-10-10): typed, or written by Clean-up, the atom holds the group
 (`abbrev`), drawn as a label, written out whole and expanded as any
-abbreviation is; typed with more - AcH, Ac+ - it is the element. Settings ›
+abbreviation is; typed with more - AcH, Ac+ - it is the element. So is
+one read from a page's figure. The atom that holds the group is read as
+the group everywhere - the layout, identity, a metal's tests - and never as
+the element; the same symbol with nothing held - a file's element column,
+a SMILES's [Pr], 3D - is the element: PrCl3 from a file is
+praseodymium's chloride (chem/drawing `readAs`; the maintainer's choice,
+2026-11-16). A drawing saved before this, with Pr typed and nothing held,
+opens as praseodymium: type Pr again. Settings ›
 Abbreviations shows Meno's list, each drawn as what it stands for.
 
 A bond that came from a file as one of these becomes an ordinary bond once

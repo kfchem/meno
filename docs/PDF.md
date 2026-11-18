@@ -397,6 +397,63 @@ PDFs there - one step, which an undo takes back. It is held as any other
   workspace keeps its place, size, turn and source.
 - **Read as a structure in stage 5**, from its right-click menu.
 
+### A picture traced (`lib/figure/trace`; built, not yet used by the app)
+
+A picture of a drawing is traced to the shapes a PDF's paths make, so that
+Meno's own figure reader reads it as it reads a PDF's figure. The app does
+not offer it yet: reading a picture this way is wired in later, after its
+measurements.
+
+- **Its ink**: the paper is the picture's commonest colour; a pixel is ink
+  as far as its farthest channel lies from the paper's, above one
+  threshold between the two classes of the histogram (N. Otsu, IEEE
+  Trans. Syst. Man Cybern. 9 (1979) 62-66). Coloured and light-on-dark
+  drawings are traced so too.
+- **Its patches**, each the ink that touches, in two passes over the
+  pixels (A. Rosenfeld, J. L. Pfaltz, J. ACM 13 (1966) 471-494). A patch
+  lying within the letters the PDF writes over the picture is theirs:
+  those letters are read as written.
+- **How deep each pixel of ink lies** from the paper, exactly (P. F.
+  Felzenszwalb, D. P. Huttenlocher, Theory Comput. 8 (2012) 415-428).
+- **Its centre lines**, by thinning (T. Y. Zhang, C. Y. Suen, Commun. ACM
+  27 (1984) 236-239), a pixel taken away only with three to six of its
+  neighbours inked, as H. E. Lü and P. S. P. Wang amend it (Commun. ACM
+  29 (1986) 239-242): a slanting line two pixels thick, as a bond is at
+  300 dpi, is kept, where the method as first written takes it away.
+- **Straight pieces** along each centre line (U. Ramer, Comput. Graph.
+  Image Process. 1 (1972) 244-256; D. H. Douglas, T. K. Peucker, Can.
+  Cartogr. 10 (1973) 112-122), each fitted away from its ends, and set
+  where it meets others where their lines cross.
+- **Joints closed again** (2026-11-18): where lines meet, thinning may
+  leave the joint as two or three nodes a short piece apart - a wedge's
+  wide end cut along the bond that goes on from it, a centred double
+  bond's two lines each run into a node of its own. A piece between two
+  joints shorter than 0.35 of the bond is no bond: its ends are one joint,
+  where the lines into it cross, a double bond's two lines each kept on
+  its own line.
+- **How wide each piece is**, from how much ink lies across it, along it,
+  to a fraction of a pixel. A piece is a **wedge** where its widths rise
+  one way along it surely enough - Kendall's rank correlation of width
+  with place 0.3 at the least (M. G. Kendall, Biometrika 30 (1938)
+  81-93) - its wide end twice the drawing's line at the least and its
+  narrow end half its wide end at most, its ends' widths those of the
+  line most of its widths agree on, the median of the slopes between
+  each two (H. Theil, Proc. K. Ned. Akad. Wet. 53 (1950) 386-392; P. K.
+  Sen, J. Am. Stat. Assoc. 63 (1968) 1379-1389). Ranks, not a straight
+  line's fit (2026-11-18): at 300 dpi the widths are measured a line
+  apart and the pixels' grid makes them uneven by a fifth, so the fit
+  failed most wedges.
+- **What else it is**: a round line closed on itself, a curve (an aromatic
+  ring's circle); a short bar or a dot on its own, a stroke (a hash's
+  line, a charge's); anything else small, its outlines, for the letters'
+  matcher. Every tolerance is in the drawing's own line width or bond.
+- **Measured** on Meno's own round trip: each drawing printed as a PDF,
+  its figure drawn as a picture at a resolution and traced, then read
+  and compared with what it was drawn from (`scripts/figure/roundtrip`,
+  `RT_DPI`). The drawings of one way of printing were kept apart, never
+  looked at while the rules above were set, and measured once at the
+  end.
+
 ## A text
 
 - **A sheet on the page** with its first lines, in Meno's monospaced
@@ -1320,9 +1377,11 @@ it where it lies out of view.
     of theirs (2026-11-18: an outline drawing's own lines are its wedges and
     its bonds cut short at labels, a C=O to its O, each with an end free, and
     taken alone a drawing in its own box read short; the joined lines beside
-    a drawing in outlines may be a chart's, at twice its bond - `bondOf`)): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), every bar
+    a drawing in outlines may be a chart's, at twice its bond - `bondOf`)): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), or
+    1.1 where one of its bars is a whole bond (0.85 to 1.15 bonds) - a chain whose end bars are cut short where its labels are set, as a dioxolane's
+    O-CH2-CH2-O is, 1.2 to 1.3 across - every bar
     from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
-    speck, a letter's stems (under 1.3 bonds across), a frame, an arrow
+    speck, a letter's stems (under 1.3 bonds across, and none of them a whole bond, or under 1.1), a frame, an arrow
     of one polygon, a big letter's stems (they meet at no corner) are none, and
     the polygon is read as it was before;
   - short strokes side by side across a line, evenly spaced - a
