@@ -893,8 +893,13 @@ Both go together, because both touch every layer.
   its ordinary rules (IUPAC 2006 ST-1.1.3, ST-1.8). One step, undone as
   one ("Read as a Fischer projection"). Nothing is stored to say it was a
   Fischer projection: the wedges say it.
+  - The centres must stand one above another: the line from the topmost
+    to the lowest within the reader's 10 degrees of upright, however many
+    there are, each within a quarter of a bond of that line.
   - Not offered where no cross lies on the axes (a chain turned a quarter
-    has its crosses side by side, not one above another), where a cross's
+    has its crosses side by side, not one above another), at a metal (a
+    metal drawn as a plus is read as drawn, square planar where it surely
+    is), where a cross's
     bond is already a wedge, hashed, bold or dative, at a ring atom, or
     where a cross's groups are alike otherwise (it is no stereocentre; such
     a cross among others is left plain).

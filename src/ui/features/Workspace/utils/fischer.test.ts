@@ -190,7 +190,7 @@ describe("a structure drawn as a Fischer projection, read so on the chemist's wo
   });
 });
 
-describe("a centre told only by the configurations about it (CHEM, 11-18: alditols and aldaric acids)", () => {
+describe("a centre told only by the configurations about it (alditols and aldaric acids, found in review)", () => {
   const right: [string, string] = ["H", "OH"];
   const left: [string, string] = ["OH", "H"];
   const wedgedText = (m: Model, skip?: number) => {

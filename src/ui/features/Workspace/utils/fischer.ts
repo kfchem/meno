@@ -13,8 +13,9 @@ import { IN_LINE } from "../../../../lib/chem/perception/stereo/from2d";
 import { symmetryClasses } from "../../../../lib/chem/perception/symmetry";
 import { identityInputOf } from "../chem/identityOf";
 import { fragmentOf } from "../chem/cleanUp";
+import { isMetal } from "../../../../lib/layout/perceive";
 
-/** How far apart, across, the centres of one Fischer projection may lie, in a bond's length: one above another. */
+/** How far, across, a centre of one Fischer projection may lie from the line through its topmost and lowest, in a bond's length. */
 const ONE_LINE = 0.25;
 
 /** Whether a bond is plain: single, no wedge or look of its own. */
@@ -55,7 +56,8 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
   const crosses: { atom: number; x: number; y: number; level: [number, number]; upright: [number, number]; sides: [number, number] }[] = [];
   for (const a of part.atoms) {
     const bs = bondsAt.get(a.id) ?? [];
-    if (bs.length !== 4 || !bs.every(plain) || bs.some(inRing)) continue;
+    // (a metal drawn as a plus is no Fischer projection's centre: it is read as it is drawn, square planar where it surely is)
+    if (bs.length !== 4 || isMetal(a.el) || !bs.every(plain)) continue;
     // (each bond's way from the centre: level, one each side; upright, one each side)
     const ways = bs.map((b) => {
       const o = atomOf.get(b.a === a.id ? b.b : b.a)!;
@@ -67,6 +69,8 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
     const down = ways.filter((w) => near(w.t, Math.PI / 2));
     const up = ways.filter((w) => near(w.t, -Math.PI / 2));
     if (right.length !== 1 || left.length !== 1 || down.length !== 1 || up.length !== 1) continue;
+    // (in no ring - asked only of a cross on the axes: a search over the structure for each of its bonds)
+    if (bs.some(inRing)) continue;
     crosses.push({ atom: a.id, x: a.x, y: a.y, level: [right[0].b.id, left[0].b.id], upright: [up[0].other, down[0].other], sides: [right[0].other, left[0].other] });
   }
   if (!crosses.length) return [];
@@ -79,7 +83,7 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
   const taken = new Set(crosses.filter((c) => new Set([...c.upright, ...c.sides].map(classOf)).size === 4).map((c) => c.atom));
   // (and a cross whose only alike pair is its two upright groups, each holding a cross taken - the middle of ribitol, of xylitol: alike
   // by constitution, told apart by the configurations about it - taken too, for the CIP to judge: it reads such a centre r or s, or
-  // none where it is no centre, as in D-arabinitol; CHEM, 11-18)
+  // none where it is no centre, as in D-arabinitol; found in review)
   const holds = (from: number, start: number) => {
     // (the atoms reached from `start` not through `from`: whether a cross taken is among them)
     const seen = new Set([from, start]);
@@ -112,9 +116,17 @@ export function fischerCentres(model: Model, at: number): { atom: number; level:
   }
   const centres = crosses.filter((c) => taken.has(c.atom));
   if (!centres.length) return [];
-  // (one above another: all within a quarter of a bond across of the first)
-  const bond = part.bonds.reduce((t, b) => t + Math.hypot(atomOf.get(b.a)!.x - atomOf.get(b.b)!.x, atomOf.get(b.a)!.y - atomOf.get(b.b)!.y), 0) / part.bonds.length;
-  if (centres.some((c) => Math.abs(c.x - centres[0].x) > ONE_LINE * bond)) return [];
+  // (one above another: the line from the topmost to the lowest within the reader's IN_LINE of upright, however many there are, and each
+  // within a quarter of a bond across of that line)
+  if (centres.length > 1) {
+    const bond = part.bonds.reduce((t, b) => t + Math.hypot(atomOf.get(b.a)!.x - atomOf.get(b.b)!.x, atomOf.get(b.a)!.y - atomOf.get(b.b)!.y), 0) / part.bonds.length;
+    const byHeight = [...centres].sort((p, q) => q.y - p.y);
+    const [top, foot] = [byHeight[0], byHeight[byHeight.length - 1]];
+    const [dx, dy] = [foot.x - top.x, foot.y - top.y];
+    const span = Math.hypot(dx, dy);
+    if (!span || Math.abs(Math.atan2(dx, -dy)) > IN_LINE) return [];
+    if (centres.some((c) => Math.abs((c.x - top.x) * dy - (c.y - top.y) * dx) / span > ONE_LINE * bond)) return [];
+  }
   return centres.map((c) => ({ atom: c.atom, level: c.level }));
 }
 

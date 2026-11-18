@@ -1253,6 +1253,31 @@ describe("a stereocentre whose configuration the figure does not show", () => {
     expect(centre).toBeUndefined();
   });
 
+  describe("the figure's note of a Fischer cross: where it is not said", () => {
+    // (a centre at (100, 100) of an OH, a Br, a methyl and an ethyl: right, left, up and down - `deg` the whole cross turned, `ways` the four bonds' directions in degrees)
+    const noteOf = (ways: [number, number, number, number], far?: "right") => {
+      const c: P = [100, 100];
+      const [r, l, u, d] = ways.map((w) => step(c, w));
+      const f = figure(
+        [far ? wedge(along(c, r, 0.7), c) : stroke(c, along(c, r, 0.7)), stroke(c, along(c, l, 0.7)), stroke(c, u), stroke(c, d), stroke(d, step(d, ways[3] - 30))],
+        [...word("OH", [r[0] + 3.4, r[1]]), ...word("Br", [l[0] - 9, l[1]])],
+      );
+      return read(f).atoms.find((a) => a.unsure?.includes(NOT_DRAWN) || a.unsure?.includes(FISCHER_CROSS))?.unsure ?? [];
+    };
+    it("a cross turned 8 degrees says it; turned 15, it is the plain words", () => {
+      expect(noteOf([8, 188, 98, -82])).toContain(FISCHER_CROSS);
+      expect(noteOf([15, 195, 105, -75])).toContain(NOT_DRAWN);
+      expect(noteOf([15, 195, 105, -75])).not.toContain(FISCHER_CROSS);
+    });
+    it("two bonds level and two upward (60 and 120 degrees) are no cross: the plain words", () => {
+      expect(noteOf([0, 180, 60, 120])).toContain(NOT_DRAWN);
+      expect(noteOf([0, 180, 60, 120])).not.toContain(FISCHER_CROSS);
+    });
+    it("a cross with a wedge narrow at the far end of one bond is no plain cross: the plain words", () => {
+      expect(noteOf([0, 180, 90, -90], "right")).not.toContain(FISCHER_CROSS);
+    });
+  });
+
   it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {
     expect(marked(drawn(true))).toBe(0);
     // (CH(OH)(CH3)2: its two methyls alike, no stereocentre)
