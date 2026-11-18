@@ -1320,9 +1320,11 @@ it where it lies out of view.
     of theirs (2026-11-18: an outline drawing's own lines are its wedges and
     its bonds cut short at labels, a C=O to its O, each with an end free, and
     taken alone a drawing in its own box read short; the joined lines beside
-    a drawing in outlines may be a chart's, at twice its bond - `bondOf`)): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), every bar
+    a drawing in outlines may be a chart's, at twice its bond - `bondOf`)): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), or
+    1.1 where one of its bars is a whole bond (0.85 to 1.15 bonds) - a chain whose end bars are cut short where its labels are set, as a dioxolane's
+    O-CH2-CH2-O is, 1.2 to 1.3 across - every bar
     from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
-    speck, a letter's stems (under 1.3 bonds across), a frame, an arrow
+    speck, a letter's stems (under 1.3 bonds across, and none of them a whole bond, or under 1.1), a frame, an arrow
     of one polygon, a big letter's stems (they meet at no corner) are none, and
     the polygon is read as it was before;
   - short strokes side by side across a line, evenly spaced - a
@@ -1343,7 +1345,8 @@ it where it lies out of view.
     is carried on to the bond end it points at, under half a bond on -
     such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's, a
+  - a bond broken where another passes in front of it - a line, or a wedge
+    (a perspective drawing's near edge is often one) - a bridge's, a
     cage's back edge, a double bond's two lines - is joined again, however
     short one of its pieces, and its pieces are never a hash's lines; its
     gap may be near half a bond (nine twentieths), as a figure with many
@@ -1405,7 +1408,9 @@ it where it lies out of view.
   letters.
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
-  from two sides; and an end by both ends of a bond shorter than ends lie
+  from two sides - unless they lie together, a tenth of a bond apart, as
+  a bold bar's end and a wedge's do at a ring's corner set just over a
+  Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
   word (one so short both its ends lie in the word's box, its other end
