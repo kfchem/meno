@@ -30,7 +30,10 @@
  *
  * The rules it follows (Brecher 2006, by rule number):
  * - ST-0.3: a wedge is narrow at its stereocentre, and is read there only
- *   (`lift`); a bond's bold or hashed look with no wedge states no centre.
+ *   (`lift`); a bond's bold look with no wedge states no centre, nor a
+ *   hashed one, but where the text grades it acceptable: a hashed line,
+ *   or a hashed wedge drawn the wrong way round, from a stereocentre to an
+ *   end group, read as the hashed wedge it states (`hashedLinesRead`).
  * - ST-0.1, ST-1.2.12: two plain bonds in line with one wedge are a T, not a
  *   tetrahedral centre: "in line" within `IN_LINE`; such a centre is unread
  *   and `unreadWhy` says why.
@@ -1000,8 +1003,7 @@ function structureOf(bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]
 export const HASHED_BETWEEN = "a hashed line between two stereocentres states neither";
 export const HASHED_TO_LARGE = "a hashed line to a group of this size does not say which end it belongs to";
 export const HASHED_TWO = "two hashed lines at one atom";
-
-const readHashed = new WeakMap<readonly DrawnBond[], { atoms: readonly DrawnAtom[]; got: { bonds: readonly DrawnBond[]; why: Map<number, string> } }>();
+export const HASHED_RING = "a hashed line along a ring bond states neither end";
 
 /**
  * Hashes drawn as a line, and a hashed wedge drawn the wrong way round, read as IUPAC grades them (Brecher 2006, ST-0.3): acceptable, and
@@ -1010,18 +1012,12 @@ const readHashed = new WeakMap<readonly DrawnBond[], { atoms: readonly DrawnAtom
  * line. Each such bond comes back as the hashed wedge it states, narrow at the centre. A centre with a wedge narrow at it is read from the
  * wedge, the line not looked at. In every other case the line states nothing, and a centre with no wedge of its own is open, saying why
  * (`why`, by the centre): between two stereocentres; to a group of two other groups or more, which end it belongs to not said; or two such
- * lines at it. A solid wedge the wrong way round stays unread, as ever. (A stereocentre here: an atom of four groups, its hydrogens
- * counted; whether its groups differ is for identity to tell.)
+ * lines at it; or along a ring bond - a ring's far edge in perspective, no configuration of either end, nor a hashed wedge so. The end
+ * of a cumulated double bond (an allene's) is no end group: a wedge out of it states the allene's axis. A solid wedge the wrong way
+ * round stays unread, as ever. (A stereocentre here: an atom of four groups, its hydrogens counted; whether its groups differ is for
+ * identity to tell.)
  */
 function hashedLinesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]; why: Map<number, string> } {
-  const had = readHashed.get(bonds);
-  if (had && had.atoms === atoms) return had.got;
-  const got = hashedLinesReadOf(atoms, bonds);
-  readHashed.set(bonds, { atoms, got });
-  return got;
-}
-
-function hashedLinesReadOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]; why: Map<number, string> } {
   const why = new Map<number, string>();
   if (!bonds.some((b) => b.hashed || b.wedge?.stereo === "down")) return { bonds, why };
   const around: number[][] = atoms.map(() => []);
@@ -1031,10 +1027,29 @@ function hashedLinesReadOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     around[b.b].push(b.a);
   }
   const isH = (i: number) => atoms[i].el === "H";
+  // (an end of a cumulated double bond - a double bond to an atom with a double bond of its own: an allene's - is no end group)
+  const doubled = (i: number) => bonds.filter((b) => b.order === 2 && (b.a === i || b.b === i)).map((b) => (b.a === i ? b.b : b.a));
+  const cumulatedEnd = (i: number) => doubled(i).some((m) => doubled(m).length >= 2);
+  // (a bond in a ring: another way round from one end to the other)
+  const ringBond = (b: DrawnBond) => {
+    const seen = new Set([b.a]);
+    const todo = [b.a];
+    while (todo.length) {
+      const n = todo.pop()!;
+      for (const m of around[n]) {
+        if ((n === b.a && m === b.b) || seen.has(m)) continue;
+        if (m === b.b) return true;
+        seen.add(m);
+        todo.push(m);
+      }
+    }
+    return false;
+  };
   // (four groups, its hydrogens counted: as the reader takes a stereocentre)
   const centre = (i: number) => around[i].length + atoms[i].hs === 4 && atoms[i].hs <= 1;
   // (its other groups not hydrogens, the bond to `from` aside)
   const others = (i: number, from: number) => around[i].filter((n) => n !== from && !isH(n)).length;
+  const endGroup = (i: number, from: number) => others(i, from) <= 1 && !cumulatedEnd(i);
   const wedged = (i: number) => bonds.some((b) => b.wedge && b.wedge.narrow === i && (b.a === i || b.b === i));
   const linesAt = (i: number) => bonds.filter((b) => b.hashed && (b.a === i || b.b === i));
   // (for the words alone - the centre is open either way: whether the far end looks a stereocentre, its four groups unlike by what each
@@ -1051,22 +1066,27 @@ function hashedLinesReadOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     if (b.wedge?.stereo === "down" && !b.hashed) {
       const narrow = b.wedge.narrow;
       const wide = narrow === b.a ? b.b : b.a;
-      if (!centre(narrow) && others(narrow, wide) <= 1 && centre(wide) && !wedged(wide) && !linesAt(wide).length) out[k] = { ...b, wedge: { narrow: wide, stereo: "down" } };
+      if (!centre(narrow) && endGroup(narrow, wide) && centre(wide) && !wedged(wide) && !linesAt(wide).length && !ringBond(b)) out[k] = { ...b, wedge: { narrow: wide, stereo: "down" } };
       return;
     }
     if (!b.hashed) return;
     const ends = [b.a, b.b].filter((c) => centre(c) && !wedged(c));
+    const inRing = ends.length > 0 && ringBond(b);
     for (const c of ends) {
       const far = c === b.a ? b.b : b.a;
+      if (inRing) {
+        why.set(c, HASHED_RING);
+        continue;
+      }
       if (linesAt(c).length > 1) {
         why.set(c, HASHED_TWO);
         continue;
       }
-      if (others(far, c) <= 1 && !(centre(far) && !wedged(far) && others(c, far) <= 1)) {
+      if (endGroup(far, c) && !(centre(far) && !wedged(far) && endGroup(c, far))) {
         out[k] = { ...b, hashed: undefined, wedge: { narrow: c, stereo: "down" } };
         continue;
       }
-      if (others(far, c) > 1) why.set(c, stereocentreLike(far) ? HASHED_BETWEEN : HASHED_TO_LARGE);
+      if (!endGroup(far, c)) why.set(c, stereocentreLike(far) ? HASHED_BETWEEN : HASHED_TO_LARGE);
     }
   });
   return { bonds: out, why };

@@ -545,6 +545,20 @@ describe("a figure read as a structure", () => {
     expect(line.unsure).toBeUndefined();
   });
 
+  it("a stereocentre with a hashed line at it (even hashes to an ethyl) is not told 'configuration not drawn': the reader's rule says what it reads; with a plain bond there, it is told", () => {
+    const NOT_DRAWN = "A stereocentre whose configuration is not drawn: none is read.";
+    const c: P = [40, 40];
+    const [up, right, left, down] = [step(c, 90), step(c, 30), step(c, 150), step(c, -90)];
+    const drawn = (hashed: boolean) =>
+      figure(
+        [stroke(c, up), stroke(c, right), stroke(c, left), ...(hashed ? hashes(c, down, true) : [stroke(c, down)]), stroke(down, step(down, -30))],
+        [...word("OH", [right[0] + 3.4, right[1]]), ...word("Br", [left[0] - 9, left[1]])],
+      );
+    const noted = (f: FigureDrawn) => read(f).atoms.filter((a) => a.unsure?.includes(NOT_DRAWN)).length;
+    expect(noted(drawn(false))).toBe(1);
+    expect(noted(drawn(true))).toBe(0);
+  });
+
   it("reads labels as typed: HO as OH, NH2, a charge set high", () => {
     const c: P = [60, 60];
     const left = step(c, 180);

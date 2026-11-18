@@ -873,7 +873,11 @@ Both go together, because both touch every layer.
   wedge of its own is open, saying why: "a hashed line between two
   stereocentres states neither", "a hashed line to a group of this size
   does not say which end it belongs to" (an isopropyl, a phenyl, a COOH),
-  or "two hashed lines at one atom". Exactly one such line is narrower
+  or "two hashed lines at one atom". A hashed line along a ring bond - a
+  ring's far edge in perspective - states nothing ("a hashed line along a
+  ring bond states neither end"), nor a reversed hashed wedge along one;
+  and an allene's end is no end group: a wedge out of it states the
+  allene's axis. Exactly one such line is narrower
   than the text, which allows two: the safe side. A solid wedge the wrong
   way round, a bold line and a dashed line state nothing, as ever. Meno
   never draws these forms; it reads them where a chemist or a figure
