@@ -598,9 +598,10 @@ solid of lib/chem/perception/projection drawn as the textbook draws it (`drawn`:
 the axial ones vertical), as ordinary atoms and bonds that carry the depth of its true view (`Atom.z`, nearer larger) and the flag that their
 configuration is the drawing's (`stereoCentre`). Every bond is plain: a ring in perspective is drawn with plain bonds (IUPAC 2006 ST-3.3). After
 that it is a drawing like any other - nothing remembers that a tool made it - and what Meno does with a structure works on it through its depth
-(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; a second click on
-the icon, while the chair it put down is as it was with nothing done since, turns it to form 0, the view from the other side, as one step, and a
-third back (`putChair`; the icon's tip says so: "Click again for the view from the other side"). Built so far: the **chair**
+(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; the icon chosen
+again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
+was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
+"Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
 (`Workspace/projections/`: `chair`, `extend`, `flip`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
 on a page), and the **Newman projection** (`newman`).
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
@@ -634,8 +635,9 @@ on a page), and the **Newman projection** (`newman`).
 - **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
-- **The Haworth ring** (Quick Add, *Projections*: one icon - a ring of six, a pyranose's; a second click, while the ring it put down is as it was
-  with nothing done since, makes it a ring of five, a furanose's, in its place as one step, and a third back - `putHaworth`, the icon's tip saying
+- **The Haworth ring** (Quick Add, *Projections*: one icon - a ring of six, a pyranose's; the icon chosen again from Quick Add opened on the ring it put
+  down, while that ring is as it was with nothing done since, makes it a ring of five, a furanose's, in its place as one step, and again back
+  (opened anywhere else, another ring is put down there) - `putHaworth`, the icon's tip saying
   so, as the chair's does). Drawn as the figure under IUPAC 2006 ST-1.9 draws one - Meno's choice, as the chair's drawing is; IUPAC's
   carbohydrate text's own figures are drawn otherwise - a true view of the regular ring from above, the eye's height the angle whose sine is
   2/3, so that the nearer edge is drawn lower: its bottommost bond bold and the two ring bonds that run to it wedge-shaped, broad at its ends,

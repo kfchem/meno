@@ -69,6 +69,10 @@ describe("Flip chair", () => {
     const m = methylated([[0, 1]]);
     expect(flipOf({ atoms: m.atoms.map((a) => (a.id === 50 ? { ...a, x: a.x + 0.7 } : a)), bonds: m.bonds }, everything(m))).toBeNull();
     expect(flipOf({ atoms: m.atoms.map((a) => ({ ...a, z: undefined })), bonds: m.bonds }, everything(m))).toBeNull();
+    // (two chairs asked about at once: which to flip is not said)
+    const other = chairDrawing({ at: { x: 30, y: 0 }, firstId: 100, firstBondId: 500 });
+    const two = { atoms: [...m.atoms, ...other.atoms], bonds: [...m.bonds, ...other.bonds] };
+    expect(flipOf(two, everything(two))).toBeNull();
   });
 
   it("marks the structure a projection: a chair of the tool's, and no other drawing", () => {

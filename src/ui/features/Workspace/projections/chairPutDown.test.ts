@@ -54,7 +54,8 @@ describe("the chair's icon clicked again", () => {
     const first = doc.getState().model;
     expect(formOf(first)).toBe(1);
     const depth = doc.history().undoDepth;
-    st().putChair({ x: 30, y: 20 });
+    // (Quick Add opened on the chair - a little off its middle)
+    st().putChair({ x: 3.6, y: 2.4 });
     const second = doc.getState().model;
     expect(second.atoms).toHaveLength(6);
     expect(formOf(second)).toBe(0);
@@ -65,15 +66,27 @@ describe("the chair's icon clicked again", () => {
     expect(mid(second).x).toBeCloseTo(mid(first).x, 9);
     expect(mid(second).y).toBeCloseTo(mid(first).y, 9);
     expect(chairOf(second, depthRings(second)[0])).toMatchObject({ form: expect.any(Number) });
-    st().putChair({ x: 0, y: 0 });
+    st().putChair({ x: 3, y: 2 });
     expect(formOf(doc.getState().model)).toBe(1);
     expect(doc.getState().model.atoms).toHaveLength(6);
     // (undone, the click before it: clicked again from there, it turns again)
     doc.undo();
     expect(formOf(doc.getState().model)).toBe(0);
-    st().putChair({ x: 0, y: 0 });
+    st().putChair({ x: 3, y: 2 });
     expect(formOf(doc.getState().model)).toBe(1);
     expect(doc.getState().model.atoms).toHaveLength(6);
+  });
+
+  it("puts down another where Quick Add is opened away from the chair just put down, the first as it was", () => {
+    const { doc, st } = page();
+    st().putChair({ x: 3, y: 2 });
+    const first = doc.getState().model;
+    st().putChair({ x: 30, y: 20 });
+    const both = doc.getState().model;
+    expect(both.atoms).toHaveLength(12);
+    // (the first chair untouched: each of its atoms where it was)
+    for (const a of first.atoms) expect(both.atoms.find((b) => b.id === a.id)).toMatchObject({ x: a.x, y: a.y, z: a.z });
+    expect(doc.history().undoLabel).not.toBe("the chair's other view");
   });
 
   it("puts down another where anything was done since: a group drawn on it, or another edit", () => {

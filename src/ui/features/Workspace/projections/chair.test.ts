@@ -280,3 +280,19 @@ describe("a chair at a bond length other than the nominal one - a page's own, or
     for (const length of bondsOf(flipped)) expect(length).toBeCloseTo(short, 9);
   });
 });
+
+describe("a free position aimed at", () => {
+  it("is taken however the pointer stands about it, either side of it, on every ring atom - a leftward place across the half turn as well", () => {
+    const d = chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 });
+    for (let k = 0; k < 6; k++) {
+      const at = d.atoms[k];
+      for (const place of seenPlaces(d, k)) {
+        const angle = Math.atan2(place.place.y - at.y, place.place.x - at.x);
+        for (const off of [-0.45, 0.45]) {
+          const pointer = { x: at.x + 5 * Math.cos(angle + off), y: at.y + 5 * Math.sin(angle + off) };
+          expect(snapTo(d, k, pointer)?.free, `atom ${k} ${place.free.kind} ${off}`).toBe(place.free);
+        }
+      }
+    }
+  });
+});
