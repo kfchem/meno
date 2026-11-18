@@ -108,24 +108,23 @@ export function endsShared<A extends ChemAtom, B extends ChemBond, G extends Gra
   // (each centre's ends: double bonds and charges shared by all of them, hydrogens within one element)
   for (let x = 0; x < atoms.length; x++) {
     if (!CENTRES.has(el(x)) || shared(x)) continue;
-    const ends = around[x].filter(({ to: y, bond }) => {
+    const kept = around[x].filter(({ to: y, bond }) => {
       if (!CHALCOGENS.has(el(y)) || around[y].length !== 1 || !lone(y)) return false;
       const o = bonds[bond].order;
       const q = charge(y);
       if (o === 1) return (q === 0 && hs(y) <= 1) || (q === -1 && !hs(y));
       return o === 2 && q === 0 && !hs(y);
     });
-    // (an O-H only where another end of its element is on the centre: what it is alike with)
-    const kept = ends.filter(({ to: y }) => !hs(y) || ends.some((e) => e.to !== y && atoms[e.to].el === atoms[y].el));
     if (kept.length < 2) continue;
     const said = (y: number, bond: number) => `${atoms[y].el}|${bonds[bond].order}|${charge(y)}|${hs(y)}`;
     if (new Set(kept.map(({ to, bond }) => said(to, bond))).size === 1) continue;
     const order = kept.reduce((s, { bond }) => s + bonds[bond].order, 0);
-    const q = kept.reduce((s, { to }) => s + charge(to), 0);
     const h = new Map<string, number>();
     for (const { to } of kept) if (hs(to)) h.set(atoms[to].el, (h.get(atoms[to].el) ?? 0) + hs(to));
     const hText = [...h].sort(([p], [r]) => (p < r ? -1 : p > r ? 1 : 0)).map(([e, n]) => `,h${e}${n}`).join("");
-    atoms[x] = { ...atoms[x], el: `${atoms[x].el}~${kept.length},${order},${q}${hText}` };
+    // (how many ends, their double bonds, and their hydrogens by element: their charge follows, each end's bonds, charge and
+    //  hydrogens making up its valence)
+    atoms[x] = { ...atoms[x], el: `${atoms[x].el}~${kept.length},${order}${hText}` };
     for (const { to, bond } of kept) {
       bonds[bond] = { ...bonds[bond], order: SHARED_END };
       atoms[to] = { ...atoms[to], charge: 0, hs: 0 };
@@ -142,7 +141,7 @@ export function endsShared<A extends ChemAtom, B extends ChemBond, G extends Gra
  */
 export function endsAsDrawn<B extends ChemBond>(atoms: readonly ChemAtom[], bonds: readonly B[]): B[] {
   const doubles = atoms.map((a) => {
-    const m = /~(\d+),(\d+),/.exec(a.el);
+    const m = /~(\d+),(\d+)/.exec(a.el);
     return m ? Number(m[2]) - Number(m[1]) : 0;
   });
   return bonds.map((b) => {

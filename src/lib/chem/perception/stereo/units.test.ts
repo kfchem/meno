@@ -90,6 +90,14 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
     apart("C[N+](=O)[O-]", "CN(=O)=O");
   });
 
+  it("an iminophosphorane drawn P=N-R and drawn P+-N(-)-R is one identity", () => {
+    one("CN=P(c1ccccc1)(c1ccccc1)c1ccccc1", "C[N-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+  });
+
+  it("a P+ with an O- and an N(-)-R on it is left as drawn, whichever atom comes first: the choice would follow their order", () => {
+    one("C[P+](C)([O-])[N-]C", "C[N-][P+](C)(C)[O-]", "[O-][P+](C)(C)[N-]C");
+  });
+
   it("the same whatever order the atoms come in", () => {
     one("CCOP(=O)([O-])OC", "COP([O-])(=O)OCC", "[O-]P(OCC)(OC)=O");
     one("CS(=O)(=O)[O-]", "[O-]S(C)(=O)=O", "O=S(=O)([O-])C");
