@@ -12,13 +12,14 @@ function structureAt(x: number, y: number): PageObject[] {
 }
 
 describe("a PDF page's figures", () => {
-  it("are read from the reader's answer: what each thing is and where it lies, 20 bytes each", () => {
-    const buf = new ArrayBuffer(60);
+  it("are read from the reader's answer: what each thing is and where it lies, 20 bytes each - a form never, its things listed instead", () => {
+    const buf = new ArrayBuffer(80);
     const v = new DataView(buf);
     [
       [2, 1, 2, 3, 4],
       [3, 5, 6, 7, 8],
       [9, 0, 0, 1, 1],
+      [5, 0, 0, 500, 700],
     ].forEach((row, i) => {
       v.setUint32(i * 20, row[0], true);
       row.slice(1).forEach((n, k) => v.setFloat32(i * 20 + 4 + k * 4, n, true));
@@ -194,6 +195,30 @@ describe("a PDF page's figures", () => {
     // (a compound's label at its end, beside its neighbour 12 points on: the compound's, not the neighbour's - the two apart)
     const label = text([173, 303, 203, 311]);
     expect(figuresOf([...structureAt(100, 300).slice(0, 6), label, ...structureAt(215, 300).slice(0, 6)])).toHaveLength(2);
+  });
+
+  it("take a line or two of words under a figure, never a column of them, each line set close under the one before", () => {
+    // (each line's words each a thing of its own, as a journal sets them; a line 12 points under the one before, the first 4 under the labels)
+    const column = Array.from({ length: 10 }, (_, k) => [text([100, 332 + 12 * k, 130, 342 + 12 * k]), text([135, 332 + 12 * k, 170, 342 + 12 * k])]).flat();
+    const figures = figuresOf([...structureAt(100, 300), ...column]);
+    expect(figures).toHaveLength(1);
+    expect(figures[0][3]).toBe(354);
+  });
+
+  it("take no word across a rule between it and the figure - a journal's rule under a scheme - but one past a rule that is not between them", () => {
+    const number = text([125, 338, 131, 346]);
+    expect(figuresOf([...structureAt(100, 300), number])[0][3]).toBe(346);
+    expect(figuresOf([...structureAt(100, 300), number, path([60, 333, 540, 333.5])])[0][3]).toBe(328);
+    // (over the figure, a rule between them: the word the other side of it)
+    const over = text([125, 286, 131, 294]);
+    expect(figuresOf([...structureAt(100, 300), over])[0][1]).toBe(286);
+    expect(figuresOf([...structureAt(100, 300), over, path([60, 296.5, 540, 297])])[0][1]).toBe(300);
+    // (a rule beside, not under the number: no rule between)
+    expect(figuresOf([...structureAt(100, 300), number, path([200, 333, 360, 333.5])])[0][3]).toBe(346);
+    // (upright, between the figure and a word beside it)
+    const beside = text([186, 306, 196, 314]);
+    expect(figuresOf([...structureAt(100, 300), beside])[0][2]).toBe(196);
+    expect(figuresOf([...structureAt(100, 300), beside, path([183, 150, 183.5, 450])])[0][2]).toBe(180);
   });
 
   it("take no column's line of words beside a scheme across two columns, however close", () => {
