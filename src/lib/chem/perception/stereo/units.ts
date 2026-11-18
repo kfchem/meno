@@ -5,6 +5,7 @@
  * lib/chem/identity (part 13's move), which imports it back; what a later step changes is pinned in this file's test as it stands.
  */
 import { AROMATIC } from "../aromatic";
+import { elementOf, endsAsDrawn } from "../chalcogenEnds";
 import { drawnRoundMetal } from "../elements";
 import { canonicalSearched, canonicalWritten, symmetryClasses, type SymmetryInput } from "../symmetry";
 import { lonePairCentres } from "./lonePairs";
@@ -65,12 +66,13 @@ export function blanksOf(g: SymmetryInput): Blank[] {
     }
   }
   for (const a of around) a.sort((x, y) => x - y);
-  // (its element as written: identity's own marks - a mass number, an unpaired electron - taken off: `compared`)
-  const element = (i: number) => g.atoms[i].el.replace(/[\^.].*$/, "");
+  // (its element as written: identity's own marks - a mass number, an unpaired electron, a centre's shared ends - taken off: `compared`)
+  const element = (i: number) => elementOf(g.atoms[i].el);
   const hs = (i: number) => g.atoms[i].hs ?? 0;
+  // (a centre whose end chalcogens share their bonds read by the lone-pair rule as drawn: ../chalcogenEnds `endsAsDrawn`)
   const pyramid = lonePairCentres(
     g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0, hs: a.hs ?? 0 })),
-    g.bonds,
+    endsAsDrawn(g.atoms, g.bonds),
   );
   const out: Blank[] = [];
   for (let i = 0; i < n; i++) {
