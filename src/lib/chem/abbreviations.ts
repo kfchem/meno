@@ -18,7 +18,7 @@
  */
 import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
-import { anionStructure, condensedStructure } from "./condensed";
+import { anionStructure, condensedStructure, metalSaltStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
@@ -259,6 +259,9 @@ function composedOf(label: string): Abbreviation | undefined {
   }
   const group = composedGroupOf(label);
   if (group) return group;
+  // (a metal's salt of an oxoanion - AgNO3, Cu(NO3)2, CuSO4 - read as its ions, before a complex's formula would read its O across: ./condensed)
+  const salt = metalSaltStructure(label, groupStructure);
+  if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
@@ -325,7 +328,7 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
     }
     return { atoms, bonds, attach: [], ...(axes.length ? { axes } : {}), name: names.join(" · ") };
   }
-  return ionStructure(label) ?? condensedStructure(label, groupLabels(), groupStructure);
+  return ionStructure(label) ?? metalSaltStructure(label, groupStructure) ?? condensedStructure(label, groupLabels(), groupStructure);
 }
 
 /**
