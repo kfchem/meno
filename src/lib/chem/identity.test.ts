@@ -729,3 +729,41 @@ describe("an allene's or a cumulene's end with two alike groups sets nothing", (
     expect(identityText(fromSmiles("F/C=C=C=C/F"))).not.toBe(identityText(fromSmiles("F/C=C=C=C\\F")));
   });
 });
+
+// (a cage's bounds on both sides, found in review)
+/** Every assignment of @ and @@ to the `@?` marks of a SMILES, as identity texts, in the order of the assignments (the first mark the lowest bit). */
+const cageWritings = (template: string): string[] => {
+  const n = (template.match(/@\?/g) ?? []).length;
+  return Array.from({ length: 1 << n }, (_, m) => {
+    let k = 0;
+    return identityText(fromSmiles(template.replace(/@\?/g, () => ((m >> k++) & 1 ? "@@" : "@"))));
+  });
+};
+const distinctTexts = (texts: string[]) => new Set(texts).size;
+
+describe("what a cage's bridgeheads leave to the rest of its structure", () => {
+  it("a bridgehead of bridges of three, three and one atoms is settled: bicyclo[3.3.1]nonan-9-ol, however its three centres are written, and as none are, is one structure", () => {
+    const all = [...cageWritings("O[C@?H]1[C@?H]2CCC[C@?H]1CCC2"), identityText(fromSmiles("OC1C2CCCC1CCC2"))];
+    expect(distinctTexts(all)).toBe(1);
+  });
+
+  it("two bridges alike only where they run the same way: 2,6-dioxabicyclo[2.2.2]octane is one structure; 2,5-dioxa, its O next to one bridgehead in one bridge and next to the other in the second, keeps its bridgeheads' senses", () => {
+    expect(distinctTexts(cageWritings("[C@?H]12OC[C@?H](CO1)CC2"))).toBe(1);
+    expect(distinctTexts(cageWritings("[C@?H]12OC[C@?H](OC1)CC2"))).toBeGreaterThan(1);
+  });
+
+  it("a ring's two arms and a methyl are no bridges: 1,4-dimethylcyclohexane's cis and trans are two", () => {
+    expect(distinctTexts(cageWritings("C[C@?H]1CC[C@?H](C)CC1"))).toBe(2);
+  });
+
+  it("a cage's trans-diol is a pair and its cis-diol one: bicyclo[2.2.2]octane-2,3-diol, its bridgeheads written either way, three structures - RR and SS apart, RS and SR one", () => {
+    const t = cageWritings("O[C@?H]1[C@?H](O)[C@?H]2CC[C@?H]1CC2");
+    // (the marks in order: the two carbinols, then the two bridgeheads; bit 0 the first carbinol, bit 1 the second)
+    const by = (a: number, b: number) => t.filter((_, m) => (m & 1) === a && ((m >> 1) & 1) === b);
+    for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) expect(distinctTexts(by(a, b))).toBe(1);
+    expect(distinctTexts(t)).toBe(3);
+    expect(by(1, 0)[0]).toBe(by(0, 1)[0]);
+    expect(by(0, 0)[0]).not.toBe(by(1, 1)[0]);
+    expect(by(0, 0)[0]).not.toBe(by(1, 0)[0]);
+  });
+});
