@@ -1,9 +1,9 @@
 /**
- * An allene's end is no end group, and a hashed bond along a ring bond states nothing (found in review; CHEM, the ring's far edge in
+ * An allene's end is no end group, and a hashed bond along a ring bond states nothing (found in review: the ring's far edge in
  * perspective): its centres are open, said so, where they have no wedge of their own.
  */
 import { describe, expect, it } from "vitest";
-import { HASHED_RING, readStereo, unreadWhy, type DrawnAtom, type DrawnBond } from "./from2d";
+import { HASHED_RING, HASHED_TO_LARGE, readStereo, unreadWhy, type DrawnAtom, type DrawnBond } from "./from2d";
 
 describe("an allene's end, and a ring's bond", () => {
   it("an allene's hashed wedge to a carbinol carbon is read as before: the allene's axis, no centre at the carbinol", () => {
@@ -56,5 +56,48 @@ describe("an allene's end, and a ring's bond", () => {
     const [a1, b1] = mk(true), [a2, b2] = mk(false);
     expect(readStereo(a1, b1).tetra.get(0)).toBeDefined();
     expect(readStereo(a1, b1).tetra.get(0)).toEqual(readStereo(a2, b2).tetra.get(0));
+  });
+});
+
+/** A centre (atom 0) with an ethyl up-left, a methyl up-right and a hashed line down to `far` (atom 4, whose own atoms follow). */
+function centre(far: DrawnAtom, more: { atom: DrawnAtom; order: 1 | 2 }[]) {
+  const atoms: DrawnAtom[] = [{ x: 0, y: 0, el: "C", hs: 1 }, { x: -0.87, y: 0.5, el: "C", hs: 2 }, { x: -1.73, y: 0, el: "C", hs: 3 }, { x: 0.87, y: 0.5, el: "C", hs: 3 }, far];
+  const bonds: DrawnBond[] = [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }, { a: 0, b: 4, order: 1, hashed: true }];
+  more.forEach((m) => {
+    atoms.push(m.atom);
+    bonds.push({ a: 4, b: atoms.length - 1, order: m.order });
+  });
+  return { atoms, bonds };
+}
+const wedged = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => ({ atoms: d.atoms, bonds: d.bonds.map((b) => (b.hashed ? { a: b.a, b: b.b, order: b.order, wedge: { narrow: 0, stereo: "down" as const } } : b)) });
+
+describe("the edges of an allene's end and a ring's bond (found in review)", () => {
+  it("a hashed line to a carbonyl carbon (CHO: a C with =O and an H) is read, as the hashed wedge: a double bond is no allene", () => {
+    const d = centre({ x: 0, y: -1, el: "C", hs: 1 }, [{ atom: { x: 0.5, y: -1.8, el: "O", hs: 0 }, order: 2 }]);
+    expect(readStereo(d.atoms, d.bonds).tetra.get(0)).toBeDefined();
+    expect(readStereo(d.atoms, d.bonds).tetra.get(0)).toEqual(readStereo(wedged(d).atoms, wedged(d).bonds).tetra.get(0));
+  });
+
+  it("a hashed line from a centre to an allene's end states nothing, and the centre is open, saying 'a group of this size'", () => {
+    // (the far end an allene's: =C=CH-CH3 out of it)
+    const d = centre({ x: 0, y: -1, el: "C", hs: 1 }, [{ atom: { x: 0.9, y: -1.4, el: "C", hs: 0 }, order: 2 }]);
+    d.atoms.push({ x: 1.8, y: -1.0, el: "C", hs: 2 });
+    d.bonds.push({ a: 5, b: 6, order: 2 });
+    expect(readStereo(d.atoms, d.bonds).tetra.get(0)).toBeUndefined();
+    expect(unreadWhy(d.atoms, d.bonds, 0)).toBe(HASHED_TO_LARGE);
+  });
+
+  it("a ring atom with a hashed line along a ring bond and another to its OH: open, the words those of the ring bond", () => {
+    // (cyclopentane C1 with an OH on a hashed line, and the bond C1-C2 hashed: both lines at C1)
+    const ring = Array.from({ length: 5 }, (_, k) => ({ x: Math.cos((2 * Math.PI * k) / 5), y: Math.sin((2 * Math.PI * k) / 5) }));
+    const atoms: DrawnAtom[] = [{ ...ring[0], el: "C", hs: 1 }, ...ring.slice(1).map((p): DrawnAtom => ({ ...p, el: "C", hs: 2 })), { x: ring[0].x * 2, y: ring[0].y * 2, el: "O", hs: 1 }];
+    const ringBonds: DrawnBond[] = ring.map((_, k): DrawnBond => ({ a: k, b: (k + 1) % 5, order: 1, ...(k === 0 ? { hashed: true } : {}) }));
+    const toOH: DrawnBond = { a: 0, b: 5, order: 1, hashed: true };
+    // (its words the ring bond's, whichever of the two lines is looked at first)
+    expect(unreadWhy(atoms, [toOH, ...ringBonds], 0)).toBe(HASHED_RING);
+    expect(unreadWhy(atoms, [...ringBonds, toOH], 0)).toBe(HASHED_RING);
+    // (and either way the centre is open: none read)
+    expect(readStereo(atoms, [...ringBonds, toOH]).tetra.get(0)).toBeUndefined();
+    expect(readStereo(atoms, [toOH, ...ringBonds]).tetra.get(0)).toBeUndefined();
   });
 });

@@ -1061,6 +1061,10 @@ function hashedLinesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[
     return new Set(marks).size === 4;
   };
   const out = [...bonds];
+  // (a centre's words, whatever order its bonds are listed in: a hashed line along a ring bond's first - the centre is open either way)
+  const say = (c: number, words: string) => {
+    if (why.get(c) !== HASHED_RING) why.set(c, words);
+  };
   bonds.forEach((b, k) => {
     // (a hashed wedge the wrong way round: narrow at an end group that is no centre, wide at a centre with no wedge nor line of its own)
     if (b.wedge?.stereo === "down" && !b.hashed) {
@@ -1079,14 +1083,14 @@ function hashedLinesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[
         continue;
       }
       if (linesAt(c).length > 1) {
-        why.set(c, HASHED_TWO);
+        say(c, HASHED_TWO);
         continue;
       }
       if (endGroup(far, c) && !(centre(far) && !wedged(far) && endGroup(c, far))) {
         out[k] = { ...b, hashed: undefined, wedge: { narrow: c, stereo: "down" } };
         continue;
       }
-      if (!endGroup(far, c)) why.set(c, stereocentreLike(far) ? HASHED_BETWEEN : HASHED_TO_LARGE);
+      if (!endGroup(far, c)) say(c, stereocentreLike(far) ? HASHED_BETWEEN : HASHED_TO_LARGE);
     }
   });
   return { bonds: out, why };
