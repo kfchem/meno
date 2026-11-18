@@ -629,3 +629,20 @@ describe("a step named once it is done", () => {
     expect(doc.named("none", doc.getState())).toBe(false);
   });
 });
+
+describe("what a document's last change was", () => {
+  it("is an edit, a travel, the document put in anew, or its states rewritten in place", () => {
+    const doc = createDocument({ n: 0 });
+    expect(doc.lastChange()).toBe("reset");
+    doc.edit("add", (s) => ({ n: s.n + 1 }));
+    expect(doc.lastChange()).toBe("edit");
+    doc.undo();
+    expect(doc.lastChange()).toBe("travel");
+    doc.redo();
+    expect(doc.lastChange()).toBe("travel");
+    doc.amend((s) => ({ n: s.n + 10 }));
+    expect(doc.lastChange()).toBe("amend");
+    doc.reset({ n: 5 });
+    expect(doc.lastChange()).toBe("reset");
+  });
+});

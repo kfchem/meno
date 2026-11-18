@@ -148,6 +148,39 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     expect(changes).toEqual([{ unit: { kind: "centre", at: 1 }, how: "mirror" }]);
   });
 
+  it("says nothing where the document is put in anew - a file opened - though its atoms have the ids of the drawing before", async () => {
+    const { doc, notes, stop } = page(butanol());
+    // (another drawing, the same ids, its OH on a hash: what an opened file brings, nothing done to it)
+    const other = { ...butanol(), bonds: butanol().bonds.map((b) => (b.id === 12 ? { ...b, stereo: "down" as const } : b)) };
+    doc.reset({ ...doc.getState(), model: other, nextId: 100 });
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual([]);
+    // (nor where the history is rewritten in place)
+    doc.amend((d) => ({ ...d, model: butanol() }));
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual([]);
+    stop();
+  });
+
+  it("says each of two steps made in one moment as its own: a chemist's turn named on its step, never on the next one's", async () => {
+    const { store, doc, notes, stop } = page(butanol());
+    // (the turn, then an atom put down apart, before the page is idle: the turn is the first step's)
+    store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-6");
+    store.getState().addAtom(20 * L, 0, "N");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["C1: R, now S"]);
+    // (the atom's step keeps its own name; the turn's step, no longer the one undo takes back, is not renamed)
+    expect(doc.history().undoLabel).toBe("add atom");
+    stop();
+  });
+
+  it("says a centre drawn wavy now open, though its bonds would leave its marks unread: the drawing says it is not known", () => {
+    const t = butanol();
+    t.atoms = t.atoms.map((x) => (x.id === 3 ? { ...x, x: L, y: 0 } : x.id === 2 ? { ...x, x: -L, y: 0 } : x));
+    t.bonds = t.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "wavy" as const } : b));
+    expect(configurationChanges(butanol(), t)).toEqual([{ unit: { kind: "centre", at: 1 }, how: "opened" }]);
+  });
+
   it("says nothing after Clean-up, which keeps every configuration", async () => {
     const { store, notes, stop } = page(butanol());
     vi.useRealTimers();

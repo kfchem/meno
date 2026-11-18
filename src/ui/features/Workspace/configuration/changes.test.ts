@@ -27,6 +27,9 @@ describe("what an edit did to a drawing's configurations (part 15, phase 2)", ()
     expect([...touchedAtoms(was, now)].sort()).toEqual([3, 4]);
     expect(touchedAtoms(was, was).size).toBe(0);
     const apart: Model = { atoms: [...was.atoms, { id: 9, x: 20, y: 0, r: 0.9, el: "O" }], bonds: was.bonds };
+    // (a haptic bond's ring atoms, where it changed: touched too)
+    const bound: Model = { ...was, bonds: [...was.bonds, { id: 20, a: 1, b: 4, order: 1, endpoints: [2, 3] }] };
+    expect([...touchedAtoms(was, bound)].sort()).toEqual([1, 2, 3, 4]);
     // (an atom put down apart: its own structure only)
     expect(partsTouched(was, apart)!.now.atoms.map((a) => a.id)).toEqual([9]);
   });
