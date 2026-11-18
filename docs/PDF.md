@@ -397,12 +397,29 @@ PDFs there - one step, which an undo takes back. It is held as any other
   workspace keeps its place, size, turn and source.
 - **Read as a structure in stage 5**, from its right-click menu.
 
-### A picture traced (`lib/figure/trace`; built, not yet used by the app)
+### A picture traced (`lib/figure/trace`, `lib/figure/tracedRead`)
 
 A picture of a drawing is traced to the shapes a PDF's paths make, so that
-Meno's own figure reader reads it as it reads a PDF's figure. The app does
-not offer it yet: reading a picture this way is wired in later, after its
-measurements.
+Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
+
+- **Where it is used**: *Read as structure* on a figure of a PDF that is a
+  picture, and on any picture on the page that is not a film, reads it so
+  first (*A picture read*), in a worker of its own, the drawing never
+  kept waiting. Where it reads nothing, the line says why - drawn too
+  small to read, shaded as a photograph is, no structure found - and the
+  plugin chosen to read pictures, if any, is offered by name, never run
+  unasked. The lens reads a PDF's figures that are pictures so too, in its
+  worker, as it reads ahead (*In the column, as built*): the pointer on a
+  compound's number in such a PDF finds its structure.
+- **How finely**: a figure of a PDF is drawn as finely as the picture
+  covering most of it is stored - the PDF says how many pixels each
+  picture holds - at most 600 dpi, and never finer, which would only
+  enlarge its pixels and hide that it is drawn too small to read; where
+  the PDF does not say, at 300 dpi. A picture on the page is read as it is
+  stored.
+- **What is kept**: as a figure's, a structure with an atom with more bonds
+  than it takes is left out and said; a lone atom left is no structure
+  (the ring of a charge read as an O, once its structure is left out).
 
 - **Its ink**: the paper is the picture's commonest colour; a pixel is ink
   as far as its farthest channel lies from the paper's, above one
@@ -1259,6 +1276,9 @@ Two kinds of figure, read two ways:
    the picture, no more.
 7. **A figure in a PDF that is a picture is read by the chosen plugin**
    from the same *Read as structure*, without being asked again.
+   (Since 2026-11-18 Meno reads a picture itself first, traced, and offers
+   the chosen plugin by name only where it reads nothing: *A picture
+   traced*.)
 
 ### Coordinates in a PDF (built 2026-10-15)
 
@@ -2007,11 +2027,15 @@ mention a number, and the card.
 
 ### A picture read (part B, built 2026-10-11)
 
-*Read as structure* reads, by the plugin chosen for the role *Structures
-read from pictures* (Settings, *Chemistry*): a figure in a box of a PDF
-that is a picture - Meno finds no lines in it - and any picture on the
-page that is not a film. The first time, the plugin is set up as any is:
-Meno asks first, saying what it downloads, how large, and from where.
+*Read as structure* reads a figure in a box of a PDF that is a picture -
+Meno finds no lines in it - and any picture on the page that is not a
+film, by Meno's own reader first, traced (*A picture traced*, since
+2026-11-18). Where Meno reads nothing, its line says why and, where the
+chemist chose a plugin for the role *Structures read from pictures*
+(Settings, *Chemistry*) or added one, offers it by name: "Read with ...".
+Only then does the plugin read it. The first time, the plugin is set up
+as any is: Meno asks first, saying what it downloads, how large, and from
+where.
 
 **The plugins** - folders of their own, neither knowing of the other;
 each one's code installed from its makers' repository at a fixed commit,
