@@ -3,7 +3,6 @@
  * bicycle's junctions, which join only cis - each pair's volumes about its three neighbours toward the other opposite (`Tie`). Counted by
  * the stereoisomers (lib/chem/isomers) and asked by the CIP, which says a pair drawn the impossible way round (lib/chem/cip).
  */
-import type { IdentityInput } from "../../identity";
 import { parity } from "./geometry";
 
 /**
@@ -16,7 +15,7 @@ import { parity } from "./geometry";
 export type Tie = { a: number; b: number; ta: readonly number[]; tb: readonly number[] };
 
 /** Every tie of `g` (`Tie`): a cage's bridgeheads, pair by pair, and a small fused bicycle's two junctions. */
-export function tiesOf(g: IdentityInput): Tie[] {
+export function tiesOf(g: { readonly atoms: readonly unknown[]; readonly bonds: readonly { readonly a: number; readonly b: number }[] }): Tie[] {
   const around: number[][] = g.atoms.map(() => []);
   for (const b of g.bonds) {
     around[b.a].push(b.b);
