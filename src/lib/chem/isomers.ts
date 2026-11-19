@@ -9,8 +9,6 @@
  */
 import { hydrogensFolded } from "./perception/fold";
 import { candidates } from "./perception/stereo/candidates";
-import { elementOf } from "./perception/chalcogenEnds";
-import { symmetryClasses } from "./perception/symmetry";
 import { identity, type IdentityInput } from "./identity";
 
 /**
@@ -136,16 +134,7 @@ export function isomersOf(input: IdentityInput, most = ASSIGNMENTS_TRIED): { iso
   //  are one structure - norbornane's, two of its bridges alike - is no place to give; any other, none counted, said - until
   //  Meno ties them, its own item)
   const caged = cageAtoms(g);
-  // (a cage's N of three bonds whose two senses identity writes as one, though no two of its groups are alike - Troeger's
-  //  base's: identity does not yet keep such an N's sense, so none counted, said, as of any cage left open - found in the
-  //  chemistry check. One two of whose groups are alike - quinuclidin-3-ol's - sets nothing, rightly)
-  const classes = symmetryClasses(unconfigured(g));
-  const keptNot = (at: number) => {
-    if (elementOf(g.atoms[at].el) !== "N" || (g.atoms[at].hs ?? 0) > 0) return false;
-    const around = g.bonds.flatMap((b) => (b.a === at ? [b.b] : b.b === at ? [b.a] : []));
-    return around.length === 3 && new Set(around.map((n) => classes[n])).size === 3;
-  };
-  const open = openPlaces(g).filter((o) => o.at == null || !caged.has(o.at) || keptNot(o.at) || identity(o.set(g, true)).text !== identity(o.set(g, false)).text);
+  const open = openPlaces(g).filter((o) => o.at == null || !caged.has(o.at) || identity(o.set(g, true)).text !== identity(o.set(g, false)).text);
   if (open.some((o) => o.at != null && caged.has(o.at))) return { notCounted: NOT_COUNTED_CAGE };
   // (a small fused bicycle's junction left open: its trans form, which identity writes, cannot be made - none counted, said)
   const small = smallFusedJunctions(g);
@@ -203,7 +192,3 @@ function openPlaces(g: IdentityInput): Open[] {
   return out;
 }
 
-/** `g` with no configuration given: its constitution, as symmetry classes read it. */
-function unconfigured(g: IdentityInput): IdentityInput {
-  return { atoms: g.atoms.map(({ tetra: _t, ...a }) => a), bonds: g.bonds.map(({ stereo: _s, ...b }) => b) };
-}
