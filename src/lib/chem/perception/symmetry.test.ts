@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalWritten, symmetryClasses, symmetryOrbits, type SymmetryInput } from "./symmetry";
+import { canonicalRanks, canonicalWritten, symmetryClasses, symmetryOrbits, type SymmetryInput } from "./symmetry";
 import { symmetryOrbits as aromaticOrbits } from "../identity";
 import { fromSmiles } from "../../layout/testdata/fromSmiles";
 import { shuffled, tiedCages } from "../../layout/testdata/shuffled";
@@ -103,6 +103,18 @@ describe("symmetry: the canonical text", () => {
     expect(canonicalWritten(given([p, q], !b.stereo!.cis)).text).not.toBe(own);
   });
 
+  it("ranks and writes a double bond one way with its atoms listed the other way round, its refs as they were: beta-carotene", () => {
+    // (each ref is found by the end it is bonded to, not by its place in the refs; read by place, two of beta-carotene's bonds
+    //  turned so rank its atoms otherwise)
+    const g = fromSmiles("CC1=C(C(CCC1)(C)C)/C=C/C(=C/C=C/C(=C/C=C/C=C(/C=C/C=C(/C=C/C2=C(CCCC2(C)C)C)\\C)\\C)/C)/C");
+    g.bonds.forEach((b, k) => {
+      if (!b.stereo) return;
+      const turned: SymmetryInput = { ...g, bonds: g.bonds.map((x, j) => (j === k ? { ...x, a: x.b, b: x.a } : x)) };
+      expect(canonicalRanks(turned), `bond ${k}`).toEqual(canonicalRanks(g));
+      expect(canonicalWritten(turned).text, `bond ${k}`).toBe(canonicalWritten(g).text);
+    });
+  });
+
   it("writes a double bond with an end of two alike groups one way, given cis or trans: 2-methylbut-2-ene has no configuration to write", () => {
     const g = fromSmiles("CC=C(C)C");
     const k = g.bonds.findIndex((b) => b.order === 2);
@@ -135,5 +147,25 @@ describe("symmetry: a search that runs out of steps", () => {
     expect(found.complete).toBe(false);
     const cls = symmetryClasses(g);
     for (let a = 0; a < g.atoms.length; a++) for (let b = 0; b < g.atoms.length; b++) if (found.orbit[a] === found.orbit[b]) expect(cls[a]).toBe(cls[b]);
+  });
+});
+
+describe("a double bond's cis or trans, as the canonical text writes it", () => {
+  // (3-methylpent-2-ene: C1 0 - C2 1 = C3 2, C3's methyl 3 and ethyl 4-5. The text says "c" where the ends' lower-ranked other
+  //  neighbours - C1, and the ethyl's CH2 before the methyl (two H before three) - are cis, "t" where trans, whichever
+  //  neighbour each end was given against: an end of one other neighbour (C2's) is set against it, one of two by which of the
+  //  two its reference is)
+  const g = fromSmiles("CC=C(C)CC");
+  const given = (ref: number, cis: boolean): SymmetryInput => ({ ...g, bonds: g.bonds.map((b, k) => (k === 1 ? { ...b, stereo: { refs: [0, ref] as [number, number], cis } } : b)) });
+  const letter = (h: SymmetryInput) => canonicalWritten(h).text.match(/:2:([ct])/)?.[1];
+
+  it("writes C1 and the ethyl cis as c, and trans as t", () => {
+    expect(letter(given(4, true))).toBe("c");
+    expect(letter(given(4, false))).toBe("t");
+  });
+
+  it("writes the same configuration given against the methyl the same way: the ethyl cis to C1 is the methyl trans to it", () => {
+    expect(letter(given(3, false))).toBe("c");
+    expect(letter(given(3, true))).toBe("t");
   });
 });

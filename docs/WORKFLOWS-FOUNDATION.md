@@ -886,6 +886,33 @@ which is the same in every product.
 
 #### Duplicates, and what judges them
 
+**Which atoms and bonds can carry a configuration are Meno's own**
+(`src/lib/chem/perception/stereo/candidates.ts`), by their shape alone -
+whether their groups are alike is identity's question, below:
+- an atom of B, C, Si, Ge, Sn, Pb, N, P, As, Sb, Bi, S, Se or Te with four
+  groups round it, at most one of them a hydrogen, whatever the orders of
+  its bonds (IUPAC 2013 P-93.2); or with three and a lone pair that keeps
+  its configuration (Meno's lone-pair rule: a sulfoxide's S, a
+  phosphine's P, never an amine's N) - an H among the three for a P, As,
+  Sb or Bi as without one (a secondary phosphine's P, the maintainer's
+  ruling of 2026-11-06), never for an N, S, Se or Te. Identity fills such
+  a P as any centre: with two alike groups on it, a wedge sets nothing;
+- a double bond with a group besides the other end on each end, in no
+  ring of seven atoms or fewer (P-93.5.1.4.1: there it is cis; for fused
+  and bridged rings Meno takes the smallest ring through the bond), and
+  not a C=N whose E/Z is none of its own (*Which C=N*, docs/WORKFLOWS.md);
+- a run of cumulated double bonds between two carbons, each with a group:
+  even, an axis (an allene's), odd, a cis or trans. Both ends carbon is
+  Meno's cautious rule, not a text's;
+- an axis of hindered rotation only where the drawing states one.
+Not candidates: a metal of the d or f block, or Al, Ga, In or Tl (their
+four groups are not surely tetrahedral); an N+ with an H among its four,
+which loses its configuration through the free amine (Meno's rule, no
+text's - a P+ or As+ with an H is a candidate); planar and helical
+chirality; a metal's own geometry. Each candidate says why it is one, and
+a place asked of that is none says why not, in the words the page shows.
+No reader, step or mark takes them yet: each will, in its own change.
+
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);
@@ -924,9 +951,25 @@ drawn, aromatic rings as one form.* What that means, plainly:
   each group hanging from the place alone, with no place or configuration
   in it) sets nothing whatever else is given: it carries no configuration
   in the identity, one drawn on it taken off, and is asked no more, with
-  no search of the whole structure. So its identity never turns on which
+  no search of the whole structure - so too a bridgehead of a small cage
+  two of whose bridges to the other bridgehead are alike
+  (bicyclo[2.2.2]octane's, quinuclidine's), the cage standing only one way:
+  every bridge of three atoms or fewer, a bound on the safe side, since
+  with four in,out isomers begin (bicyclo[4.4.1]undecane's); and, asked again until
+  nothing more settles, a place whose groups are alike but for places of
+  their own that settled first (tri-tert-butylmethanol). Two arms of a
+  ring are no cage (cis- and trans-1,4-dimethylcyclohexane), nor are
+  bridges to different atoms (tropine and pseudotropine). So its identity never turns on which
   way it was filled in, as it could where a search runs out of steps
-  (Pd(PPh3)4). The filled form is
+  (Pd(PPh3)4). A double bond's cis or trans that sets nothing with the
+  rest as given - its end's two groups alike while another place is open:
+  a cyclohexylidene's C=C with its ring's C4 plain - is none, in the
+  drawing as read and in every canonical text (`settingCisTrans`,
+  `src/lib/chem/perception/symmetry.ts`), and identity leaves such a
+  double bond with none rather than filling one in: so
+  (4-methylcyclohexylidene)acetic acid drawn with its double bond bent,
+  with its C4 wedged, or with neither is one structure (either
+  enantiomer), and drawn with both, one of its two enantiomers. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
 - **an oxygen (or S, Se, Te) at the end of a bond to P, As, Sb, S, Se or
@@ -935,7 +978,10 @@ drawn, aromatic rings as one form.* What that means, plainly:
   oxide drawn R3P=O and drawn R3P(+)-O(-) is one structure, and so is a
   sulfoxide drawn S=O and S(+)-O(-): identity writes the uncharged form,
   a configuration at the P or S kept, so a P-chiral phosphine oxide's two
-  hands stay two. Never at N: an amine N-oxide and a nitro group keep
+  hands stay two. A phosphorus ylide likewise: Ph3P=CH2 drawn so and
+  drawn Ph3P(+)-CH2(-) is one structure (a carbanion of three groups on
+  a P+; Meno's own extension, at P only: a sulfonium ylide keeps its
+  charges). Never at N: an amine N-oxide and a nitro group keep
   their charges. The end atoms of one centre share their double bonds and
   their charge: a phosphate diester anion with its charge drawn on one
   oxygen or on the other is one structure, and its P, between two alike
@@ -950,6 +996,24 @@ drawn, aromatic rings as one form.* What that means, plainly:
   and a sulfinate ester keep theirs. Se and Te are the text's; As and Sb
   are Meno's own extension of it (P-93.2.2: "treated in the same
   manner");
+- **a racemate, "one or the other" and the drawn absolute are three
+  structures** (CTfile enhanced stereo: AND, OR and ABS groups, which
+  Meno reads from a V3000 molfile and draws as *and1*, *or1*, *abs*;
+  `grouped` in `src/lib/chem/identity.ts`). A structure with centres in
+  AND or OR groups is written as the stereoisomers it stands for: each
+  group's centres as drawn or all turned over together, an AND group's
+  two in the mixture, an OR group's one or the other. So a racemate drawn
+  as one hand or as the other is one structure, a meso form drawn with
+  its two centres in one AND group is the meso form, and each centre of
+  a diol in an AND group of its own is the mixture of all its
+  stereoisomers, whichever was drawn. A centre drawn absolute, or in no
+  group, is as drawn. This is what *Same as* in Enumerate and
+  Substituents, a record's key and a search for the same compound read;
+  a stereoisomer made in 3D, or a structure's mirror image, has one
+  configuration and reads no group. A group on a bond (an axis, a
+  double bond) is not read yet: the bond is as drawn. Past 256
+  stereoisomers to write (eight groups), the structure is written as
+  drawn and said not complete;
 - **a metal's isomers by which donors are across are two structures:**
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
@@ -1206,6 +1270,10 @@ space: the group goes where the hydrogen was.
   or two of its groups are now alike (F[C@H](R1)Cl with R1 = H or Cl) - stops
   nothing: there is no configuration left to change. Its bond is drawn
   plain, since a wedge there would state nothing.
+- **A double bond the group makes no stereo unit** - the group now alike
+  with the other on its end, (E)-1-fluoropropene's C2 given a methyl -
+  has no cis or trans in the product, so none is lost: the product is
+  made (1-fluoro-2-methylpropene).
 - **Tested against RDKit** by a differential in the fixture: stereo-rich
   templates, every atom with an undrawn hydrogen in turn, each with several
   groups, the compound for each made by RDKit by putting the group in that

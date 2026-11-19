@@ -163,6 +163,9 @@ export type Bond = BondChem & {
 import type { FlowParts } from "../workflow/parts";
 import type { GuideMarks } from "../presenting/guides";
 
+/** A note of a change of configuration on the page (configuration/watch): its words, the place it stands by, when it came. */
+export type ConfigurationNote = { id: number; text: string; at: { x: number; y: number }; since: number };
+
 export type Sel = { atoms: Set<number>; bonds: Set<number> };
 /** A workflow's parts selected, as the drawing's are (docs/WORKFLOWS.md, *Copying*): sets and steps, by id - the wires among them with them. */
 export type SelFlow = { sets: Set<number>; steps: Set<number> };
@@ -1244,6 +1247,11 @@ export type EditorState = {
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
+  /**
+   * What edits did to the configurations the drawing states, said at their units as they come (configuration/watch): each note's words,
+   * where it stands on the page, and when it came.
+   */
+  configurationNotes: ConfigurationNote[];
   /** A structure being carried out of a PDF as Meno's own drawing of it. */
   pdfStructureFlight: StructureFlight | null;
   setPdfStructureFlight: (flight: StructureFlight | null) => void;

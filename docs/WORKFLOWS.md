@@ -3477,6 +3477,11 @@ those left open, *Generate*'s, and a SMILES pasted.
   - an OR group's halves are made as an AND group's, both being what a
     chemist needs to see; only the words differ ("or1 as drawn: one of the
     two, not known which").
+  - which structures are the same reads the groups as the stereoisomers
+    they stand for: a racemate, an OR group and the drawn absolute are
+    three structures, a racemate of either hand one
+    (docs/WORKFLOWS-FOUNDATION.md, *Which structures are the same is
+    judged by Meno's identity*).
   *Stereoisomers* makes each half as a drawing, each with its whole
   configuration and no group left on it, the half as drawn first, and
   says on each which they are, in order; *Set aside* is for stereo left
@@ -3508,7 +3513,7 @@ other nitrogens moves to the imine nitrogen, and the double bond moves
 with it, so the two "isomers" interconvert. Its E/Z is no configuration
 of its own, and Meno never chooses one for it.
 
-- **Which C=N** (Meno's, lib/chem/stereoOpen `movingCN`, on its own
+- **Which C=N** (Meno's, lib/chem/perception/stereo/movingCN `movingCN`, on its own
   graph of the structure), as the InChI Technical
   Manual takes them (S. E. Stein, S. R. Heller, D. V. Tchekhovskoi,
   I. V. Pletnev, *InChI version 1, software version 1.04 (2011),

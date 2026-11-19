@@ -341,3 +341,15 @@ describe("what waits on an identity", () => {
     expect(constitutionKnown(input)).toBe(constitutionKey(input));
   });
 });
+
+describe("what an identity costs, to work it out here or ask the worker", () => {
+  it("weighs a structure by its atoms, and one with AND or OR groups by its writings as well (found in review)", async () => {
+    const { inPlaceWeight, IN_PLACE_MOST } = await import("./identityOff");
+    const atoms = Array.from({ length: 4 }, () => ({ el: "C" }));
+    expect(inPlaceWeight({ atoms, bonds: [] })).toBe(4);
+    expect(inPlaceWeight({ atoms, bonds: [], groups: [{ kind: "and", atoms: [0] }, { kind: "or", atoms: [1] }] })).toBe(16);
+    // (eight groups on sixteen atoms: never worked out here)
+    const big = Array.from({ length: 16 }, () => ({ el: "C" }));
+    expect(inPlaceWeight({ atoms: big, bonds: [], groups: Array.from({ length: 8 }, (_, k) => ({ kind: "and" as const, atoms: [k] })) })).toBeGreaterThan(IN_PLACE_MOST);
+  });
+});

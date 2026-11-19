@@ -19,7 +19,14 @@
  *   place in space, and a ring fused flat onto a cage is flat.
  * - A double bond's groups are on the side they are drawn on - but in a
  *   ring of seven atoms or fewer, which has them as its ring does (cis),
- *   however it is drawn: a benzene ring's bonds say nothing.
+ *   however it is drawn: a benzene ring's bonds say nothing. Nor does one
+ *   with an end whose two other groups are alike, however it is drawn:
+ *   turned over, it is the same molecule (2-methylbut-2-ene's, a prenyl's,
+ *   a cyclohexylidene's), so none is read there - and an odd cumulene's
+ *   likewise - by the symmetry's one test (perception/symmetry
+ *   `settingCisTrans`), the rest of what the drawing shows kept. Nor one
+ *   with an end that is no trigonal-planar centre (an ylide's S or P, a
+ *   sulfoximine's S, a metal), by the same test.
  * - An axis of chirality - a single bond in no ring, each end with two
  *   other neighbours (a biaryl's) - shows how it turns by a wedge out of an
  *   end, narrow there: that neighbour out of the page (or behind it, on
@@ -54,6 +61,7 @@ import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
 import { parity } from "./geometry";
 import { runsOf } from "./runs";
 import { factsOf, OPEN_RING } from "../facts";
+import { settingCisTrans, type SymmetryInput } from "../symmetry";
 import { ofTheStructure } from "../graph";
 
 /** A pair of atoms as one key, the lower first. */
@@ -66,6 +74,13 @@ export type DrawnAtom = {
   el?: string;
   /** Its charge, where it has one: for whether it has a lone pair (lib/chem/lonePairCentres). */
   charge?: number;
+  /**
+   * Its mass number, where it is one isotope in particular, and its unpaired electrons, where it has them: what else tells two
+   * groups apart - a CD3 from a CH3 - for whether a double bond's end has two alike (`readStereo`). Where not given, the
+   * element alone.
+   */
+  isotope?: number;
+  radical?: string;
   /** Its depth where the structure is drawn in perspective: nearer the viewer is larger. */
   z?: number;
   /** Hydrogens it carries but are not drawn as atoms. */
@@ -562,7 +577,61 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
     }
   });
 
-  return { tetra, cisTrans, axes, cumulated: odd };
+  // (none where it sets nothing - an end of two alike groups: perception/symmetry `settingCisTrans`, asked of the molecule as
+  //  read, its atoms as identity writes them, every other configuration kept. Asked when first wanted: a reader that wants
+  //  only the centres - the layout's checks of each centre it draws, many times over - asks nothing of the symmetry)
+  let setting: { cisTrans: Map<number, CisTrans>; cumulated: Cumulated[] } | null = null;
+  const settled = () => {
+    if (setting) return setting;
+    const { graph: read, bondAt: unique } = drawnGraph(atoms, bonds, { tetra, cisTrans, axes, cumulated: odd });
+    const kept = settingCisTrans(read);
+    const set = new Set(unique.filter((_, j) => kept.bonds[j].stereo));
+    setting = kept === read ? { cisTrans, cumulated: odd } : { cisTrans: new Map([...cisTrans].filter(([k]) => set.has(k))), cumulated: odd.filter((x) => kept.cumulated.includes(x)) };
+    return setting;
+  };
+  return {
+    tetra,
+    axes,
+    get cisTrans() {
+      return settled().cisTrans;
+    },
+    get cumulated() {
+      return settled().cumulated;
+    },
+  };
+}
+
+/**
+ * A drawing with what is read of it, as the core's graph (`SymmetryInput`): each atom as identity writes it - its element,
+ * mass number and unpaired electrons - with its charge and H count, each bond once (the first of a pair drawn twice; none
+ * from an atom to itself), and the configurations `read` gives; `bondAt`, each of the graph's bonds' place among `bonds`.
+ * What `settingCisTrans` is asked of, by `readStereo` and by a caller that asks it of a cis or trans of its own.
+ */
+export function drawnGraph(
+  atoms: readonly DrawnAtom[],
+  bonds: readonly DrawnBond[],
+  read: { tetra: ReadonlyMap<number, Tetrahedral>; cisTrans: ReadonlyMap<number, CisTrans>; axes: readonly Axial[]; cumulated: readonly Cumulated[] },
+): { graph: SymmetryInput & { cumulated: readonly Cumulated[] }; bondAt: number[] } {
+  const seen = new Set<string>();
+  const bondAt = bonds.flatMap((b, k) => {
+    if (b.a === b.b || seen.has(key(b.a, b.b))) return [];
+    seen.add(key(b.a, b.b));
+    return [k];
+  });
+  return {
+    graph: {
+      atoms: atoms.map((a, i) => ({
+        el: `${a.el ?? "C"}${a.isotope ? `^${a.isotope}` : ""}${a.radical ? `.${a.radical}` : ""}`,
+        hs: a.hs,
+        ...(a.charge ? { charge: a.charge } : {}),
+        ...(read.tetra.has(i) ? { tetra: read.tetra.get(i)! } : {}),
+      })),
+      bonds: bondAt.map((k) => ({ a: bonds[k].a, b: bonds[k].b, order: bonds[k].order, ...(read.cisTrans.has(k) ? { stereo: read.cisTrans.get(k)! } : {}) })),
+      axes: read.axes,
+      cumulated: read.cumulated,
+    },
+    bondAt,
+  };
 }
 
 /** How far a bond in the page is turned, either way, to ask whether what the drawing says of a centre or a double bond stays the same. */
@@ -643,7 +712,9 @@ function unreadWhyOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c
  * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
  * A centre with a lone pair for its fourth group - a sulfoxide's S, a
  * phosphine's P (lib/chem/lonePairCentres) - is asked so too: its
- * configuration read as readStereo reads it, from its three groups.
+ * configuration read as readStereo reads it, from its three groups. A
+ * double bond with no cis or trans to show - an end of two alike groups -
+ * is none, however it is drawn.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const kept = structureOf(bonds);
@@ -714,7 +785,17 @@ function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
     const cumulated = runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a);
     if (groups && !cumulated && (inLine(a, b) || inLine(b, a))) doubles.push(i);
   });
-  return { atoms: centres, bonds: doubles };
+  // (none at a double bond that has no cis or trans to show - an end of two alike groups: perception/symmetry
+  //  `settingCisTrans`, asked as readStereo asks it, with the bond given one, every other configuration as read)
+  if (!doubles.length) return { atoms: centres, bonds: doubles };
+  const read = readStereo(atoms, bonds);
+  const unit = doubles.filter((i) => {
+    const { a, b } = bonds[i];
+    const refs: [number, number] = [neighbours[a].find((n) => n !== b)!, neighbours[b].find((n) => n !== a)!];
+    const { graph, bondAt } = drawnGraph(atoms, bonds, { ...read, cisTrans: new Map(read.cisTrans).set(i, { refs, cis: true }) });
+    return !!settingCisTrans(graph).bonds[bondAt.indexOf(i)].stereo;
+  });
+  return { atoms: centres, bonds: unit };
 }
 
 /**
