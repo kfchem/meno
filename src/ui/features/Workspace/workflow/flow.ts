@@ -136,8 +136,34 @@ function repeatWireRefusal(doc: Flow, set: WorkflowSet, to: WorkflowStep, port: 
     return inside === to.id ? "It is inside this Repeat: wire it to Again to go round once more" : inside != null ? "It is inside another Repeat: what leaves it goes by Done and Out" : null;
   }
   const holder = repeatHolding(doc, to.id);
-  if (holder != null && inside !== holder) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
+  // (a step inside takes its entries from This pass or a step inside; a later input of it - a Reference, Restraints - may take a set from
+  //  outside, read the same in every pass; never one of another Repeat's)
+  const first = inputsFor(to.kind, byOf(to))[0]?.id ?? ONE_INPUT;
+  if (holder != null && inside !== holder && (port === first || inside != null)) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
+  // (a reference inside a Repeat is the same in every pass: one from inside it would change between passes, and the rows of earlier
+  //  passes were made against another: docs/WORKFLOWS.md, *Repeat*)
+  if (holder != null && inside === holder && to.kind === "torsion-restraints" && port === "reference") return "A reference inside a Repeat is the same in every pass: wire it from outside the Repeat";
   if (inside != null && inside !== holder) return "It is inside a Repeat: what leaves it goes by Done, then Out";
+  return null;
+}
+
+/**
+ * Why a Repeat cannot run as its wires stand: one of them crosses its frame otherwise than by its ports - a card dragged in or out
+ * of the frame with its wires on it, which a wire made now would not be (`repeatWireRefusal`); none where none does.
+ */
+export function repeatCrossing(doc: Flow, repeat: number): string | null {
+  const r = stepOf(doc, repeat);
+  if (!r || r.kind !== "repeat") return null;
+  const held = new Set(r.holds ?? []);
+  for (const w of doc.wires ?? []) {
+    const set = findSet(doc, w.from.set);
+    const to = stepOf(doc, w.to.step);
+    if (!set || !to) continue;
+    const maker = set.made?.step;
+    if (!held.has(w.to.step) && !(maker != null && held.has(maker)) && w.to.step !== repeat) continue;
+    const why = repeatWireRefusal(doc, set, to, w.to.port);
+    if (why) return `A wire crosses its frame's edge, a card moved in or out with its wires on: ${why}`;
+  }
   return null;
 }
 
@@ -411,7 +437,9 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
   // (a Restraints input with nothing wired into it: no input of its - a step that never had one keeps its key)
-  const ports = inputsFor(step.kind, by).filter((p) => p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0);
+  // (a Repeat's Again and Done its own passes fill, never what it was run on: its key is what comes into In - a run of it never
+  //  reads as changed by what it made)
+  const ports = inputsFor(step.kind, by).filter((p) => (p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0) && !(step.kind === "repeat" && (LANDING as readonly string[]).includes(p.id)));
   // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
   if (ports.length > 1) {
     const keys = ports.map((p) => portKey(doc, step.id, p.id, true));
@@ -530,5 +558,13 @@ export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [..
 /** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
 export function allToRun(doc: Flow): number[] {
   const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
-  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
+  return heldByRepeats(doc, stale.flatMap((id) => [id, ...stepsAfter(doc, id)]));
+}
+
+/**
+ * Steps to run, each a Repeat holds taken as that Repeat, once: the Repeat runs the steps it holds, pass by pass, and none of them is
+ * run again on its own after it (found in review).
+ */
+export function heldByRepeats(doc: Flow, ids: readonly number[]): number[] {
+  return [...new Set(ids.map((id) => repeatHolding(doc, id) ?? id))];
 }

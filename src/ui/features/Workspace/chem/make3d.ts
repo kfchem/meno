@@ -307,6 +307,8 @@ export function moleculeOf(c: Conformers & { partsAlone?: true }, block: Block, 
     stereo: {
       atoms: numbered(renumbered(c.cip?.atoms, atomAt)),
       bonds: numbered(renumbered(c.cip?.bonds, bondAt)),
+      // (each unit with none, why: said where R and S are asked for - lib/chem/cip/in3d)
+      ...(c.cip?.said ? { said: { atoms: numbered(renumbered(c.cip.said.atoms, atomAt)), bonds: numbered(renumbered(c.cip.said.bonds, bondAt)) } } : {}),
       ...(several && (Object.keys(chosen.atoms).length || Object.keys(chosen.bonds).length)
         ? { chosen: { atoms: Object.keys(chosen.atoms).map(Number), bonds: Object.keys(chosen.bonds).map(Number) } }
         : {}),
