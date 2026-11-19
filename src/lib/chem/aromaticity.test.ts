@@ -80,6 +80,18 @@ describe("aromatic rings, by each ring and each pair of rings fused at a bond", 
     // (each atom left out is a bridge's: bonded to no more than one benzene carbon)
     expect(not.every((i) => s.bonds.filter((b) => (b.a1 === i || b.a2 === i) && !bridge.has(b.a1 === i ? b.a2 : b.a1)).length === 1)).toBe(true);
   });
+
+  it("take two rings that share two bonds as no pair either: a six-ring between two seven-rings, all sp2, one seven-ring along two of its bonds", () => {
+    // (the six-ring 6-7-8-9-12-13 shares one bond with the seven-ring through 0, 1, 10 and 11, and two - 12-13 and 13-6 - with the one
+    //  through 2, 3, 4 and 5. That six-ring and seven-ring would count ten, 4n + 2, but together they are no ring: no count of one.
+    //  Only the six-ring is aromatic)
+    const smiles = "C1=CC2=CC=CC3=CC=C(C=C1)C2=C3";
+    const s = readSmiles(smiles);
+    const rings = smallestRings(s.atoms.length, s.bonds.map((b) => [b.a1, b.a2] as const));
+    const shared = (p: readonly number[], q: readonly number[]) => s.bonds.filter((b) => [b.a1, b.a2].every((a) => p.includes(a) && q.includes(a))).length;
+    expect(rings.flatMap((p, i) => rings.slice(i + 1).map((q) => shared(p, q))).sort()).toEqual([1, 1, 2]);
+    expect(read(smiles)).toEqual({ aromatic: [6, 7, 8, 9, 12, 13], not: [0, 1, 2, 3, 4, 5, 10, 11] });
+  });
 });
 
 describe("a ring with no pi bond and no empty p orbital, its atoms' lone pairs alone (backlog 182)", () => {

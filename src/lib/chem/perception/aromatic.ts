@@ -98,9 +98,10 @@ export function piElectrons(s: PiState): number | null {
  * atoms stay pyramidal - As4's and P4's three-rings, a triaziridine,
  * cyclotriphosphane (backlog 182). Lone pairs complete a pi
  * system; they never make one alone. Two rings that share more than one
- * bond are no fused pair: a [2.2]paracyclophane-1,9-diene's twelve-ring
- * runs across each benzene ring along three of its bonds, and the two
- * together are no ring, so their atoms' sum is no count of one.
+ * bond - two or more - are no fused pair: together they are no ring, so
+ * their atoms' sum is no count of one. A [2.2]paracyclophane-1,9-diene's
+ * twelve-ring runs across each benzene ring along three of its bonds; a
+ * seven-ring set about a six-ring's corner shares two.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {
   const out = new Set<number>();
