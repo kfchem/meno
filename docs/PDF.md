@@ -1439,7 +1439,8 @@ it where it lies out of view.
     is carried on to the bond end it points at, under half a bond on -
     such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's, a
+  - a bond broken where another passes in front of it - a line, or a wedge
+    (a perspective drawing's near edge is often one) - a bridge's, a
     cage's back edge, a double bond's two lines - is joined again, however
     short one of its pieces, and its pieces are never a hash's lines; its
     gap may be near half a bond (nine twentieths), as a figure with many
@@ -1501,7 +1502,9 @@ it where it lies out of view.
   letters.
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
-  from two sides; and an end by both ends of a bond shorter than ends lie
+  from two sides - unless they lie together, a tenth of a bond apart, as
+  a bold bar's end and a wedge's do at a ring's corner set just over a
+  Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
   word (one so short both its ends lie in the word's box, its other end
