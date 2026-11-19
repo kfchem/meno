@@ -287,9 +287,10 @@ const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
  * its H taken away. Given the drawing's `style`, a bond from a label to one
  * at a terminal atom is drawn long enough for the two (roomForLabels).
  * Throws, changing nothing, if the new drawing would not say the
- * stereochemistry the old one said.
+ * stereochemistry the old one said. `flat`: a ring in perspective laid
+ * out flat as well, none kept (a chair's *Draw flat*).
  */
-export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: Layout2D, style?: DrawingStyle): Relayout {
+export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: Layout2D, style?: DrawingStyle, flat = false): Relayout {
   const { input, ids } = job;
   // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
   const n = ids.length;
@@ -376,11 +377,12 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)
   // - and a ring in perspective drawn with no depth, recognised as one (lib/chem/perception/projection/depth), kept so too, by the depth worked out for it:
   // the recognition changes nothing in the document, so no depth is stored for it, and its centres stay as the reading finds them
-  const recognised = job.recognised ?? new Map<number, number>();
+  const recognised = flat ? new Map<number, number>() : (job.recognised ?? new Map<number, number>());
   const kept = projectionsKept(
     input,
     was.map((a, i) => {
-      if (i >= n) return undefined;
+      // (laid out flat: no ring kept in perspective - none is given a depth to keep it by)
+      if (i >= n || flat) return undefined;
       const z = a.z ?? recognised.get(i);
       return { x: a.x, y: a.y, ...(z != null ? { z } : {}), ...(a.stereoCentre ? { stereoCentre: true } : {}) };
     }),

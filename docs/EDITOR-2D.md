@@ -491,12 +491,12 @@ where a SMILES typed waits for it, "This is drawn when it is ready."; and
 "Starting <plugin>. The first one takes a moment." as it starts; a SMILES
 no plugin here reads says what does, as before. The icons: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text and an arrow (*Arrows* below); then two groups, each with a
+SMILES, text and an arrow (*Arrows* below); then three groups, each with a
 small mark at its corner, each opening a row of its own below the first,
 with no heading (the maintainer, 2026-10-29, layout A): *Scheme* - a "+",
 an electron-pushing arrow (from the first atom or bond pressed,
 *Electron-pushing arrows* below), a catalytic cycle and a slide of what
-is seen (docs/PRESENTING.md) - and *Marks on the page* - a rectangle, an
+is seen (docs/PRESENTING.md) - *Projections* - the chair (below) - and *Marks on the page* - a rectangle, an
 ellipse and a line, each drawn from where the double-click was by a drag
 from its icon, or traced with the button up until a click
 (docs/PRESENTING.md, *Shapes*), and *Pen*, its card opened, to write by
@@ -593,7 +593,41 @@ bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 canvas*), a double-click on empty space shuts it instead - the work comes
 back to the canvas (the maintainer, 2026-10-10) - and the next opens
 Quick Add.
-*SMILES*, *Scheme*, *Marks on the page* and *Calculations* open and shut their panels a click
+**Projections** (the maintainer, 2026-11-13: one Quick Add group, *Projections*, an icon each; Clean-up keeps a projection as drawn, *Draw flat* is in its menu; 3D takes the configuration only). A tool puts down a
+solid of lib/chem/perception/projection drawn as the textbook draws it (`drawn`: a chair's bonds on four directions, each the style's bond length,
+the axial ones vertical), as ordinary atoms and bonds that carry the depth of its true view (`Atom.z`, nearer larger) and the flag that their
+configuration is the drawing's (`stereoCentre`). Every bond is plain: a ring in perspective is drawn with plain bonds (IUPAC 2006 ST-3.3). After
+that it is a drawing like any other - nothing remembers that a tool made it - and what Meno does with a structure works on it through its depth
+(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; the icon chosen
+again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
+was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
+"Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
+(`Workspace/projections/`: `chair`, `extend`, `flip`); the Haworth ring and the Newman projection follow.
+- **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
+  seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
+  not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
+  (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+- **R and S** are shown at once on the ring's atoms (`stereoShown`): none while there is no centre, each as a group makes one.
+- **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
+  goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard
+  (`sameStereo`) is asserted before anything moves - a failure is a fault of Meno's, said, nothing moved. Offered where the structure holds one chair
+  and every group stands at one of its atom's free positions (a group drawn by hand is not guessed at), and where the chair stands alone (`ringAlone`:
+  a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
+  *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
+  would not be.
+- **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
+  below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
+  configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
+  nothing - and the drawn conformation is neither a start nor a limit of the conformer search; a notice says so when it is made. Known answers
+  (tests): every pair of groups on a chair, in either view and either flip, read back from the MOL a flat reader is given as the same identity; trans-
+  1,2-dimethylcyclohexane diequatorial and flipped diaxial are one compound, cis another.
+- **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
+  "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
+  hand keeps its depth: what is read may change, and only the labels say so.
+- **Limits.** No five-ring or bridged ring from the tools; no ring fused on a chair by the tool yet (Fuse comes in its own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered; a fused system is not
+  flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
+
+*SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,
 utils/press; double-clicked, a panel opened and shut again at once).
 After a thin rule, one more button - *Calculations* - opens below the

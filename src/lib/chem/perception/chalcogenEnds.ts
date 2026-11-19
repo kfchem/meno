@@ -5,7 +5,9 @@
  *   P, As, Sb; 6 for S, Se, Te), is written X=O (X=S, X=N-R): the uncharged form - a phosphine oxide drawn R3P=O and drawn
  *   R3P(+)-O(-), a sulfoxide drawn S=O and S(+)-O(-), are one structure (IUPAC 2013 P-93.2.3: the kind of bond to that oxygen does
  *   not matter). Never at N or any other atom of the second period: an amine N-oxide has no N=O form, a nitro group keeps its
- *   charges. A configuration at X is kept: the bond changes, not its neighbours;
+ *   charges. A configuration at X is kept: the bond changes, not its neighbours. So too a phosphorus ylide: a P+ with a C- of
+ *   three groups, its H's counted, is written P=C - Ph3P=CH2 drawn so and drawn Ph3P(+)-CH2(-) are one
+ *   structure (Meno's own extension: no text names it; the chemistry check's known answers);
  * - the end chalcogens on such a centre - each with no other atom, its bond single or double, at most its one negative charge -
  *   share their double bonds and charges between them: each is written with the same bond, uncharged, and the centre carries
  *   how many there were. So a phosphate diester anion drawn with its charge on one oxygen or on the other is one structure, and
@@ -66,8 +68,8 @@ function opened<A extends ChemAtom, B extends ChemBond>(g: Graph<A, B>) {
 }
 
 /**
- * The uncharged form: X+ - Y(-) written X=Y, X one of the six centres with room for one more bond, Y an end chalcogen or an N
- * with one other atom (see the file's header). Before the aromatic form is worked out, which then reads one form.
+ * The uncharged form: X+ - Y(-) written X=Y, X one of the six centres with room for one more bond, Y an end chalcogen, an N
+ * with one other atom, or, X a P, a carbanion of three groups (an ylide; see the file's header). Before the aromatic form is worked out, which then reads one form.
  */
 export function unchargedEnds<A extends ChemAtom, B extends ChemBond, G extends Graph<A, B>>(g: G): G {
   const { atoms, bonds, around, el, shared, charge, hs, lone } = opened<A, B>(g);
@@ -83,10 +85,17 @@ export function unchargedEnds<A extends ChemAtom, B extends ChemBond, G extends 
       const orders = around[x].map((e) => bonds[e.bond].order);
       if (orders.some((o) => o < 1 || o > 3)) break;
       if (orders.reduce((s, o) => s + o, 0) + hs(x) + 1 > most) break;
-      const ys = around[x].filter(({ to: y, bond }) => {
-        if (bonds[bond].order !== 1 || charge(y) !== -1 || hs(y) || !lone(y)) return false;
+      const all = around[x].filter(({ to: y, bond }) => {
+        if (bonds[bond].order !== 1 || charge(y) !== -1 || !lone(y)) return false;
+        // (a phosphorus ylide's carbanion, three groups round it, its H's counted, and its lone pair: Ph3P(+)-CH2(-) is Ph3P=CH2)
+        if (el(y) === "C") return el(x) === "P" && around[y].length + hs(y) === 3;
+        if (hs(y)) return false;
         return (CHALCOGENS.has(el(y)) && around[y].length === 1) || (el(y) === "N" && around[y].length === 2);
       });
+      // (a carbanion taken only where no chalcogen or N end is: a phosphonate's carbanion drawn P=O or P(+)-O(-) is the O's to
+      //  take, as before - found in review)
+      const ends = all.filter(({ to }) => el(to) !== "C");
+      const ys = ends.length ? ends : all;
       if (!ys.length) break;
       const end = (e: { to: number }) => CHALCOGENS.has(el(e.to)) && around[e.to].length === 1;
       if (ys.length > 1 && !ys.every(end)) break;
