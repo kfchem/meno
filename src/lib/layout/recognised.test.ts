@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { identity, type IdentityInput } from "../chem/identity";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { layout2D } from "./engine";
-import { recognisedSaid, withRecognisedDepth } from "./recognised";
+import { recognisedSaid, withRecognisedDepth } from "../chem/perception/projection/depth";
+import { cageViews } from "./recognised";
+
+// (the core's reading of rings drawn in perspective, with the engine's views of bridged systems and cages, as the app asks it)
+const depthOf = (atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]) => withRecognisedDepth(atoms, bonds, cageViews);
+const saidOf = (atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]) => recognisedSaid(atoms, bonds, cageViews);
 import { NOT_MARKED } from "../chem/perception/projection/recognise";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { chair, haworth, rad } from "./testdata/projections";
@@ -75,7 +80,7 @@ describe("a chair drawn bond by bond, read as the compound it shows", () => {
   it("leaves a chair with a wedge as it always was: read by the wedge, no depth worked out", () => {
     const d = stripped(chair({ 0: "equatorial", 1: "equatorial" }));
     const wedged = { atoms: d.atoms, bonds: d.bonds.map((b) => (b.a === 0 && b.b === 6 ? { ...b, wedge: { narrow: 0, stereo: "up" as const } } : b)) };
-    expect(withRecognisedDepth(wedged.atoms, wedged.bonds)).toBe(wedged.atoms);
+    expect(depthOf(wedged.atoms, wedged.bonds)).toBe(wedged.atoms);
   });
 });
 
@@ -101,10 +106,10 @@ describe("a Haworth ring drawn bond by bond, with no depth stored", () => {
   it("is flat where the groups are not drawn vertical: the flattened ring alone is no Haworth ring", () => {
     const d = stripped(haworth([true, false, true, false, true], 30));
     const slanted = { atoms: d.atoms.map((a, i) => (i >= 6 ? { ...a, x: a.x + 0.9 } : a)), bonds: d.bonds };
-    expect(withRecognisedDepth(slanted.atoms, slanted.bonds)).toBe(slanted.atoms);
+    expect(depthOf(slanted.atoms, slanted.bonds)).toBe(slanted.atoms);
     // (and no group at all: nothing to read)
     const bare = { atoms: d.atoms.slice(0, 6), bonds: d.bonds.slice(0, 6) };
-    expect(withRecognisedDepth(bare.atoms, bare.bonds)).toBe(bare.atoms);
+    expect(depthOf(bare.atoms, bare.bonds)).toBe(bare.atoms);
   });
 
   it("is read by a near edge marked bold, with the groups not vertical, before the convention", () => {
@@ -112,12 +117,12 @@ describe("a Haworth ring drawn bond by bond, with no depth stored", () => {
     const slanted = d.atoms.map((a, i) => (i >= 6 ? { ...a, x: a.x + 0.9 } : a));
     // (the front edge C2-C3, the lower one on the page: marked bold, it reads as the convention would)
     const marked = d.bonds.map((b) => (b.a === 2 && b.b === 3 ? { ...b, bold: true } : b));
-    const got = withRecognisedDepth(slanted, marked);
+    const got = depthOf(slanted, marked);
     expect(got).not.toBe(slanted);
     expect(got[2].z).toBeGreaterThan(0);
     expect(got[3].z).toBeGreaterThan(0);
     // (the back edge marked, the ring is read from below)
-    const back = withRecognisedDepth(slanted, d.bonds.map((b) => (b.a === 5 && b.b === 0 ? { ...b, bold: true } : b)));
+    const back = depthOf(slanted, d.bonds.map((b) => (b.a === 5 && b.b === 0 ? { ...b, bold: true } : b)));
     expect(back[5].z).toBeGreaterThan(0);
   });
 
@@ -129,13 +134,13 @@ describe("a Haworth ring drawn bond by bond, with no depth stored", () => {
       return { atoms: d.atoms.map((a, i) => ({ ...a, x: i < 6 ? shifted[i].x : shifted[at(i)].x, y: shifted[i].y })), bonds: d.bonds };
     };
     const d = stripped(haworth([true, false, true, false, true], 30));
-    expect(withRecognisedDepth(d.atoms, d.bonds)).not.toBe(d.atoms);
+    expect(depthOf(d.atoms, d.bonds)).not.toBe(d.atoms);
     // (one end of the front edge C2-C3 dropped: the edge slants past LEVEL_EDGE)
     const slanted = moved(d, (a, i) => ({ x: a.x, y: i === 2 ? a.y - 0.5 : a.y }));
-    expect(withRecognisedDepth(slanted.atoms, slanted.bonds)).toBe(slanted.atoms);
+    expect(depthOf(slanted.atoms, slanted.bonds)).toBe(slanted.atoms);
     // (the ring O, at the back, pulled down below the front edge)
     const sagged = moved(d, (a, i) => ({ x: a.x, y: i === 0 ? d.atoms[2].y - 0.3 : a.y }));
-    expect(withRecognisedDepth(sagged.atoms, sagged.bonds)).toBe(sagged.atoms);
+    expect(depthOf(sagged.atoms, sagged.bonds)).toBe(sagged.atoms);
   });
 
   it("leaves a hexagon and a pentagon standing on a corner, and a regular hexagon on an edge with its groups straight up and down, as they are; reads the last with its near edge bold", () => {
@@ -147,13 +152,13 @@ describe("a Haworth ring drawn bond by bond, with no depth stored", () => {
     };
     for (const [n, from] of [[6, Math.PI / 6], [5, 0]] as const) {
       const d = drawing(n, from);
-      expect(withRecognisedDepth(d.atoms, d.bonds), `${n}`).toBe(d.atoms);
+      expect(depthOf(d.atoms, d.bonds), `${n}`).toBe(d.atoms);
     }
     // (on an edge, every group straight up or down: still a flat drawing that happens to lie so - as tall as a regular ring - and read only with its near edge bold)
     const onEdge = drawing(6, 0);
-    expect(withRecognisedDepth(onEdge.atoms, onEdge.bonds)).toBe(onEdge.atoms);
+    expect(depthOf(onEdge.atoms, onEdge.bonds)).toBe(onEdge.atoms);
     const marked = onEdge.bonds.map((b, k) => (k === 4 ? { ...b, bold: true } : b));
-    expect(withRecognisedDepth(onEdge.atoms, marked)).not.toBe(onEdge.atoms);
+    expect(depthOf(onEdge.atoms, marked)).not.toBe(onEdge.atoms);
   });
 
   it("reads another of the twelve representations of beta-D-glucopyranose - the ring turned, and turned over - as the same compound, drawn with depth and drawn by hand alike (2-Carb-5.4)", () => {
@@ -395,7 +400,7 @@ describe("a bridged system drawn bond by bond, a bold bond its near edge (norbor
       // (else unread: no configuration from the depth, as the drawing with no depth and no mark has)
       else expect(got, smi).toBe(identityOfDrawing(bare));
       // (with no mark: never a configuration the depth gave)
-      const unmarked = withRecognisedDepth(bare.atoms, bare.bonds);
+      const unmarked = depthOf(bare.atoms, bare.bonds);
       expect(unmarked.every((a) => a.z == null), smi).toBe(true);
     }
     expect(all).toBeGreaterThan(20);
@@ -419,7 +424,7 @@ describe("a bridged system drawn bond by bond, a bold bond its near edge (norbor
       const read = marked(stripped(d), nearest(d));
       // (C3 read the way the engine drew it)
       const want = readStereo(d.atoms.map((a, i) => (i === 1 ? a : { ...a, centre: undefined })), d.bonds).tetra.get(1);
-      const t = readStereo(withRecognisedDepth(read.atoms, read.bonds), read.bonds).tetra.get(1);
+      const t = readStereo(depthOf(read.atoms, read.bonds), read.bonds).tetra.get(1);
       expect(t && want && sameConfiguration(t, want), smi).toBe(true);
     }
   });
@@ -427,7 +432,7 @@ describe("a bridged system drawn bond by bond, a bold bond its near edge (norbor
   it("reads no configuration with no mark: the hydroxyl carbon gets none, and the words ask for the near bonds bold", () => {
     const d = stripped(engineDrawn(exo));
     expect(readStereo(d.atoms, d.bonds).tetra.size).toBe(0);
-    expect(recognisedSaid(d.atoms, d.bonds).get(1)).toBe(NOT_MARKED);
+    expect(saidOf(d.atoms, d.bonds).get(1)).toBe(NOT_MARKED);
   });
 });
 
@@ -450,12 +455,12 @@ describe("no drawing the engine makes in the plane is taken for a chair", () => 
       const out = layout2D(input);
       const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({ x: out.x[i], y: out.y[i], hs: a.hs ?? 0, el: a.el, ...(out.depth[i] != null ? { z: out.depth[i]! } : {}) }));
       const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
-      const read = withRecognisedDepth(atoms, bonds);
+      const read = depthOf(atoms, bonds);
       rings += 1;
       // (nothing given a depth that had none, and nothing said of a ring drawn flat: no words, read or unread)
       expect(read.every((a, i) => a.z === atoms[i].z), smi).toBe(true);
       const flatAtoms = atoms.filter((a) => a.z == null).length === atoms.length;
-      if (flatAtoms) expect(recognisedSaid(atoms, bonds).size, smi).toBe(0);
+      if (flatAtoms) expect(saidOf(atoms, bonds).size, smi).toBe(0);
     }
     expect(rings).toBeGreaterThan(20);
   }, measured(20_000));

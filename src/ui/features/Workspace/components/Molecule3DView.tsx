@@ -1,3 +1,4 @@
+import { stereoSaidRows } from "../utils/stereoSaid";
 import clsx from "clsx";
 import { longPressMs } from "../longPress";
 import PageHtml from "./PageHtml";
@@ -1737,6 +1738,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
       made: m.made,
       said: m.said,
       noShares: m.conformerSet ? sharesWithheld(m) || undefined : undefined,
+      // (where R and S are shown on it: the units it shows none on, and why - utils/stereoSaid)
+      ...(stereoSaidRows(m).length ? { stereoSaid: stereoSaidRows(m) } : {}),
       conformers: m.conformerSet,
       ...(props.searching ? { searching: true } : {}),
     }),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, NAME_GAP_PX, OUTWARD_LINE, tabNameBox, tabNamesKept, tabStart, tabWidthPx, type FarTabs, type FrameTab } from "./frameParts";
+import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, LOOP_LINE, NAME_GAP_PX, OUTWARD_LINE, tabNameBox, tabNamesKept, tabStart, tabWidthPx, type FarTabs, type FrameTab } from "./frameParts";
 import { NAME_PX } from "./cardBands";
 import { PAGE_PX } from "../utils/pageScale";
 import { NAME_DOWN, PX, TAB_INSET } from "../workflow/look";
@@ -302,5 +302,15 @@ describe("a set's tab, zoomed out", () => {
     expect([...tabNamesKept([mine, frame({ key: "chat", box: over, tabOnly: true })], 0.4, "named")]).toContain("m");
     // (the same frame as a set, taking the pointer: it is in the way)
     expect([...tabNamesKept([mine, set({ key: "other", box: over })], 0.4, "named")]).not.toContain("m");
+  });
+});
+
+describe("a Repeat's frame line", () => {
+  it("is dashed and quiet, Meno's colour chosen - neither a set's hairline nor a conversation's", () => {
+    const rest = frameLine({ tone: "rest", loop: true });
+    expect(rest.dashed).toEqual(LOOP_LINE.dashed);
+    expect(rest.color).toBe(FRAME_COLORS.quiet);
+    expect(frameLine({ tone: "chosen", loop: true }).color).toBe(FRAME_COLORS.chosen);
+    expect(rest.dashed).not.toEqual(OUTWARD_LINE.dashed);
   });
 });

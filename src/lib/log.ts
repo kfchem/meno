@@ -35,6 +35,8 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
   [/^Meno: the tab "[\s\S]*" stopped working\.$/, () => 'Meno: the tab "…" stopped working.'],
   // (hooks/useStructureEvents, clipboardActions, useOfficeLink, chem/fromSmiles)
   [/^(initial payload|append) import failed$/, (m) => m[0]],
+  // (configuration/watch: one of Meno's own moves changed a configuration the drawing states - the move's name, nothing of the drawing)
+  [/^Meno: (Clean-up|Turn over|Rotate|Expand|Contract|Stack) changed a configuration$/, (m) => m[0]],
   // (App: a workspace file that does not read, said on the page - its name left out)
   [/^a workspace file could not be read$/, (m) => m[0]],
   [/^the structure is copied without its pictures$/, (m) => m[0]],

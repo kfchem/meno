@@ -23,8 +23,17 @@ there - the figure reader measured apart from finding figures.
 reads each figure as a picture of it instead: its box drawn at that
 resolution by the PDF reader, traced (`lib/figure/trace`, docs/PDF.md
 *A picture traced*), and read from the traced shapes with the PDF's own
-letters as written; a page turned is not traced. Each read records how
-many atoms and bonds it marked unsure, and `compare.py` prints, for each
+letters as written; a page turned is not traced. With
+`RT_LETTERS=traced` no letters are given: the picture's own are traced
+and matched against the system's letters (`known.json`, as for
+`RT_OUTLINE`), as a picture's are where no text lies over it.
+`RT_JPEG=50` saves each picture as JPEG at that quality and opens it again
+before it is traced, and `RT_SCAN=1` makes a scan of it - turned a
+little, blurred, black and white, speckled, the same for each figure
+every time (`spoil.ts`; JPEG through libjpeg's `cjpeg` and `djpeg`, which
+must be on the path). Each read records how many atoms and bonds it
+marked unsure and what it said of them, a picture's line and bond in its
+pixels, and `compare.py` prints, for each
 style and way of printing, how many were read right, how many were said
 (nothing read, or marked unsure) and how many were wrong with no mark.
 `RT_PRESETS=rdkit,rdkitcg,rdkitacs,rdkitacscg` with `RT_READ=rdkit` reads
