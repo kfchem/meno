@@ -118,7 +118,7 @@ const figure = (paths: FigurePath[], letters: FigureLetter[] = []): FigureDrawn 
 /** Labels read as the tests have them: elements, with their H and charge, and two groups. */
 const reads: LabelReader = (label) => {
   const m = /^([A-Z][a-z]?)(H\d*)?([+-]?)$/.exec(label);
-  if (m && ["C", "H", "N", "O", "S", "Cl", "I"].includes(m[1])) return { el: m[1], charge: m[3] === "+" ? 1 : m[3] === "-" ? -1 : 0 };
+  if (m && ["C", "H", "N", "O", "P", "S", "Cl", "I"].includes(m[1])) return { el: m[1], charge: m[3] === "+" ? 1 : m[3] === "-" ? -1 : 0 };
   return ["OTBS", "CO2Me", "NHBoc"].includes(label) ? { el: label } : null;
 };
 const read = (f: FigureDrawn) => structureOf(readFigure(f, (l) => readDrawnLabel(l, reads).read), reads);
@@ -2024,5 +2024,29 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     const f = figure([stroke(p0, step(p0, -30), step(step(p0, -30), 30))], word("6", [step(p0, -30)[0], step(p0, -30)[1] + 1.5 * L]));
     expect(read(f).atoms.some((a) => a.unsure)).toBe(false);
     expect(readFigure(f).left.letters.map((l) => l.c)).toEqual(["6"]);
+  });
+});
+
+describe("a P of four bonds or an S of three, drawn with no H (the chemistry check's ruling)", () => {
+  // (a label at (100, 100), its bonds stopping short of it, each to a carbon chain of one more bond)
+  const labelled = (label: string, n: number) => {
+    const c: P = [100, 100];
+    const ways = [90, -30, 210, -90].slice(0, n);
+    const paths = ways.flatMap((w) => {
+      const end = step(c, w);
+      return [stroke(along(c, end, 0.35), end), stroke(end, step(end, w + 30))];
+    });
+    return read(figure(paths, word(label, c)));
+  };
+  const note = (label: string, n: number) => labelled(label, n).atoms.find((a) => a.el === label)?.unsure ?? [];
+
+  it("is said short of an H or of a charge not read: a phosphonium's or a sulfonium's + is what a reader loses; never given an H", () => {
+    expect(note("P", 4)).toContain("Drawn as P, but its bonds leave it one hydrogen, or a charge not read.");
+    expect(note("S", 3)).toContain("Drawn as S, but its bonds leave it one hydrogen, or a charge not read.");
+  });
+
+  it("a P of three, an S of two: whole, nothing said", () => {
+    expect(note("P", 3).filter((u) => u.startsWith("Drawn as"))).toEqual([]);
+    expect(note("S", 2).filter((u) => u.startsWith("Drawn as"))).toEqual([]);
   });
 });

@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 import { abbreviationStructure, reversedLabel } from "../chem/abbreviations";
 import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
-import { chargeText, mostBonds, type Radical } from "../chem/molecule";
+import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { hydrogenCounts } from "../chem/perception/hydrogens";
 import { isMetal } from "../layout/perceive";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
@@ -203,7 +203,11 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
       const drawn = drawnHydrogens(as);
       if (label.read && drawn != null && els[i] !== "H") {
         const left = counted[i];
-        if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
+        // (where a P's or an S's higher valence decides it - a P of four bonds, an S of three - it may as well be a phosphonium's or a
+        //  sulfonium's charge set apart and not read: said both ways, never added; the chemistry check's ruling)
+        const higher = left > implicitHydrogens(els[i], valence[i], charges[i], radicals[i]);
+        const words = left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`;
+        if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${words}${higher ? ", or a charge not read" : ""}.`);
       }
     }
     // (a Y with one bond and no charge is a variable, as X and Z are - Meno's rule, as the writer has it (docs/CTFILE.md): a label cannot tell it from
