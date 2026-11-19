@@ -45,6 +45,7 @@ import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 import { principalTurn } from "../../utils/align3d";
 import { noteTurns } from "../turnJournal";
+import { fischerCentres, fischerWedges } from "../../utils/fischer";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -500,6 +501,12 @@ export const createModelSlice = (
   // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's
   //  round, about itself, where the kind is the right-clicked bond's own: utils/bondKinds `bondKindStepPatch`; nothing, where
   //  it would change nothing)
+  readFischer: (at: number) => {
+    const patches = fischerWedges(fischerCentres(get().model, at));
+    if (!patches.length) return false;
+    doc.edit("read as a Fischer projection", (d) => patches.reduce((acc, [id, patch]) => ops.updateBond(acc, id, patch), d));
+    return true;
+  },
   setBondsKind: (ids: readonly number[], kind: BondKindName, stepOn = false) => {
     const { model } = get();
     const patches = ids.flatMap((id) => {

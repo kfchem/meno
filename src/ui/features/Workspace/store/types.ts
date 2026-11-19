@@ -632,7 +632,14 @@ export type Molecule3D = {
    * (`shown`), as asked for on it or on them - where none has been, those
    * its drawing left open (`stereoShownOf`).
    */
-  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
+  stereo?: {
+    atoms: Record<number, string>;
+    bonds: Record<number, string>;
+    chosen?: { atoms: number[]; bonds: number[] };
+    shown?: { atoms: number[]; bonds: number[] };
+    /** Of each unit with no descriptor though it is one, why (lib/chem/cip/in3d `In3dWhy`): its groups nearly in a plane, an N that exchanges its H, the structure too large. */
+    said?: { atoms: Record<number, string>; bonds: Record<number, string> };
+  };
   /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
   atomNumbers?: AtomNumbersShown;
   /**
@@ -1866,6 +1873,8 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
+  /** A Repeat made round steps (*Repeat these steps*: workflow/model `repeatAround`), the wires that crossed their edge routed through it - one undo step; its id, why it could not be made (`workflow/model` `repeatMade`), or none where there is nothing to make it round. */
+  repeatSteps: (ids: readonly number[]) => number | { why: string } | null;
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
@@ -1927,6 +1936,8 @@ export type EditorState = {
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */
   jobsSeen: Record<string, JobSeen>;
+  /** Each Repeat running, by step: the pass under way, of how many where it says (until none goes again, none), and whether Stop was pressed - its tab says it. Not the document's. */
+  repeatPasses: Record<number, { pass: number; of?: number; stopping?: true }>;
   /** Meno's steps working in turns (Duplicates, `runMenoInTurns`), by step: since when, and how many of their entries they have been through. Not the document's: gone once each is done. */
   menoWorking: Record<number, { since: number; done: number; total: number }>;
   /** A wire picked up off its step and let go on another's port: into that one instead, as one step. */
@@ -2098,6 +2109,11 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /**
+   * The structure holding atom `at` read as a Fischer projection (utils/fischer): at each of its crosses of plain bonds on the page's
+   * axes that is a stereocentre, its two level bonds made solid wedges narrow at it - one step. False where it has none.
+   */
+  readFischer: (at: number) => boolean;
   /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
   orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**
