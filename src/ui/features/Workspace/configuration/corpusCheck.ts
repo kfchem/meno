@@ -23,12 +23,12 @@ import type { CorpusEntry } from "./corpus";
 // saved and opened, copied and pasted. None of those moves is said to have changed a configuration, and what is kept reads as the
 // drawing does after each. Mirrored by the chemist, it reads as every unit turned: the SMILES's mirror image.
 
-const expected = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
+export const expected = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
 /** The drawing's identity as Meno reads one: each label that stands for atoms drawn out first (`labelsDrawnOut`), as Clean-up writes
  *  groups by name. */
-const read = (m: Pick<Model, "atoms" | "bonds">) => identityOfDrawn(labelsDrawnOut(m as Model)).text;
+export const read = (m: Pick<Model, "atoms" | "bonds">) => identityOfDrawn(labelsDrawnOut(m as Model)).text;
 /** The SMILES's mirror image: every @ and @@ exchanged (a double bond's / and \ say the same of the mirror image). */
-const mirrorSmiles = (smiles: string) => smiles.replace(/@@|@/g, (m) => (m === "@@" ? "@" : "@@"));
+export const mirrorSmiles = (smiles: string) => smiles.replace(/@@|@/g, (m) => (m === "@@" ? "@" : "@@"));
 
 /** A chair put down by the tool with its groups at the places named (`CorpusEntry.chair`), each a bond long, as the tool leads one. */
 function chairWith(groups: NonNullable<CorpusEntry["chair"]>): Model {
@@ -43,15 +43,22 @@ function chairWith(groups: NonNullable<CorpusEntry["chair"]>): Model {
   return { atoms, bonds };
 }
 
-/** The entry as Meno draws it: by the chair tool, by expanding a label, or from its SMILES - then grouped or made wavy where it says. */
-function drawnOf(entry: CorpusEntry, mirrored = false): Model {
+/** The entry as Meno draws it: by the chair tool, by expanding a label, or from its SMILES - then grouped, made wavy or its axis wedged where
+ *  it says. */
+export function drawnOf(entry: CorpusEntry, mirrored = false): Model {
   if (entry.chair) return chairWith(entry.chair);
   if (entry.label) {
     const el = mirrored ? entry.label.mirror : entry.label.label;
     return expandAbbreviation({ ...emptyWorkspaceDocument(), model: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el }], bonds: [] }, nextId: 100 }, 1).model;
   }
   const smiles = entry.from ?? entry.smiles;
-  const m = drawnFromSmiles(mirrored ? mirrorSmiles(smiles) : smiles);
+  const drawnM = drawnFromSmiles(mirrored ? mirrorSmiles(smiles) : smiles);
+  // (an axis stated by a wedge from its end onto a neighbour, narrow at the end: hashed for the mirror image - drawnFromSmiles numbers
+  //  atoms from 1)
+  const axis = entry.axisWedge;
+  const m: Model = axis
+    ? { ...drawnM, bonds: drawnM.bonds.map((b) => ((b.a === axis[0] + 1 && b.b === axis[1] + 1) || (b.a === axis[1] + 1 && b.b === axis[0] + 1) ? { ...b, stereo: mirrored ? "down" : "up", narrow: axis[0] + 1 } : b)) }
+    : drawnM;
   const narrow = new Set(m.bonds.flatMap((b) => ((b.stereo === "up" || b.stereo === "down") && b.narrow != null ? [b.narrow] : [])));
   return {
     atoms: entry.group ? m.atoms.map((a) => (narrow.has(a.id) ? { ...a, stereoGroup: { kind: entry.group!, n: 1 } } : a)) : m.atoms,
@@ -72,7 +79,7 @@ function labels(m: Model): string[] {
   return [...marks.centres.values(), ...marks.doubleBonds.values()].map(String).sort();
 }
 
-function page(model: Model) {
+export function page(model: Model) {
   const doc = createWorkspaceDocument();
   doc.reset({ ...doc.getState(), model, nextId: 1000 });
   const store = createEditorStore(doc);
@@ -84,7 +91,7 @@ function page(model: Model) {
 }
 
 /** What is kept, read, against what the drawing says now: the same where the configuration is kept. */
-const keptAgrees = (m: Model) => {
+export const keptAgrees = (m: Model) => {
   const now = readingOf(m);
   return JSON.stringify(keptReading(m, now.said).said) === JSON.stringify(now.said);
 };
