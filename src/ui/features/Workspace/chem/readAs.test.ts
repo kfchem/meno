@@ -24,9 +24,15 @@ const READ_ALREADY: Record<string, number> = {
   "ui/features/Workspace/chem/openStereo.ts": 1,
 };
 
-// The other readers of an element's symbol - a valence (`canTakeBond`, `implicitHydrogens`) or a halogen (`HALOGEN.has`) - asked the same:
-// given `readAs(...)`, or listed with what they read.
+// The other readers of an element's symbol - a valence (`canTakeBond`, `implicitHydrogens`, `valencesAt`) or a halogen (`HALOGEN.has`) - asked
+// the same: given `readAs(...)`, or listed with what they read.
 const READ_ALREADY_VALENCE: Record<string, number> = {
+  // (a callback handed an element by a reader of a plugin's drawing - of a typed SMILES or of a molecule in 3D - which holds no label: squarePlanarMetal)
+  "ui/features/Workspace/chem/arrangementsMarked.ts": 1,
+  // (whether an atom's valence set by a file says more than its element's own: a held group carries none - its label no valence table's)
+  "ui/features/Workspace/chem/cleanUp.ts": 1,
+  // (a callback handed the drawing read's element, `drawingOf`, made through readAs)
+  "ui/features/Workspace/chem/identityOf.ts": 1,
   // (an atom holding a group is passed first: `!isElementSymbol(a.el) || a.abbrev ? 0 : ...`)
   "ui/features/Workspace/chem/drawing.ts": 1,
   // (a selection to make an abbreviation of, refused first where an atom holds a group: "expand it first")
@@ -69,7 +75,7 @@ describe("a drawing's atom is read through readAs", () => {
   it("every valence or halogen read in the app's code outside lib is given readAs, but those listed with what they read", () => {
     const found: Record<string, number> = {};
     for (const f of [...files(join(SRC, "ui")), ...files(join(SRC, "utils"))]) {
-      const n = (readFileSync(f, "utf8").match(/\b(?:canTakeBond|implicitHydrogens|HALOGEN\.has)\((?!readAs\()/g) ?? []).length;
+      const n = (readFileSync(f, "utf8").match(/\b(?:canTakeBond|implicitHydrogens|valencesAt|HALOGEN\.has)\((?!readAs\()/g) ?? []).length;
       if (n) found[relative(SRC, f).split(sep).join("/")] = n;
     }
     expect(found).toEqual(READ_ALREADY_VALENCE);

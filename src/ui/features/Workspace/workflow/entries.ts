@@ -900,6 +900,14 @@ export function keptRenumbered(k: Kept, order: readonly number[], now: readonly 
             bonds: Object.fromEntries(Object.entries(st.bonds).flatMap(([b, l]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], l]] : []))),
             ...(st.chosen ? { chosen: { atoms: atoms(st.chosen.atoms), bonds: bonds(st.chosen.bonds) } } : {}),
             ...(st.shown ? { shown: { atoms: atoms(st.shown.atoms), bonds: bonds(st.shown.bonds) } } : {}),
+            ...(st.said
+              ? {
+                  said: {
+                    atoms: Object.fromEntries(Object.entries(st.said.atoms).map(([a, w]) => [now[Number(a)], w])),
+                    bonds: Object.fromEntries(Object.entries(st.said.bonds).flatMap(([b, w]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], w]] : []))),
+                  },
+                }
+              : {}),
           },
         }
       : {}),

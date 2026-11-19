@@ -115,3 +115,15 @@ describe("a structure of several phosphate or sulfate groups still has a complet
     expect(complete(s + "O")).toBe(true);
   }, 60_000);
 });
+
+describe("the hydrogens of shared ends", () => {
+  it("a phosphonic acid's ends (=O, OH, OH) are written three O alike with no hydrogen, the centre carrying the two", () => {
+    const s = endsShared(graph("CP(=O)(O)O"));
+    const p = s.atoms.findIndex((a) => a.el.startsWith("P"));
+    expect(s.atoms[p].el).toContain(",hO2");
+    const ends = s.atoms.map((a, i) => ({ a, i })).filter(({ a }) => a.el.startsWith("O"));
+    expect(ends).toHaveLength(3);
+    for (const { a } of ends) expect([a.hs ?? 0, a.charge ?? 0]).toEqual([0, 0]);
+    expect(s.bonds.filter((b) => b.a === p || b.b === p).filter((b) => b.order === SHARED_END)).toHaveLength(3);
+  });
+});
