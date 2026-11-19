@@ -559,7 +559,9 @@ is single, and each ring is read as its own. A bond written aromatic
 outside any ring (":") takes a form of single and double bonds as
 one in a ring does, each atom by the room its valence, its H and its
 charge leave (lib/chem/perception/kekule): CC(:O):O is acetic acid, one
-C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane.
+C=O and one OH, never ethane-1,1-diol; C[N+](:O):[O-] is nitromethane;
+OP(:O)(:O)O is phosphoric acid. A sulfone written CS(:O)(:O)C and CO2
+written O:C:O, each needing two double bonds at one atom, are refused.
 An atom whose H is written in its brackets has its valence fixed by
 what is written: CC(:N):[NH2+] is the acetamidinium, its [NH2+] taking
 the C=N. Where more than one end may take the one double bond a centre
@@ -568,6 +570,16 @@ acetamide, never the imidic acid; CC(:S):N is thioacetamide; NC(:O):N is
 urea. Between two of one element - an amidine's two N - Meno draws one
 form, the same however it is written, with no claim of which is the
 more stable.
+
+**The hydrogens an atom carries that are not drawn** are counted by the
+lowest valence its element takes at or above its bonds to non-metals, as
+connection tables and SMILES count them: P 3 or 5; S and Se 2, 4 or 6;
+a charge shifting each as it moves the electrons (lib/chem/perception/
+hydrogens `implicitHydrogens`). So a P(=O) with two groups carries one H
+(diphenylphosphine oxide, dimethyl phosphite HP(=O)(OMe)2), and a CH3S(=O)
+one; triphenylphosphine oxide, DMSO, a sulfone, PPh3 and a
+methyltriphenylphosphonium carry none. A bond to a metal does not lift
+the valence: a phosphine on a metal (Pd(PPh3)4's P) is P(III), with no H.
 Where no such form closes them, the SMILES is refused, never read by
 adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
 2, 3 and 4) have no form with single and double bonds: is a charge
