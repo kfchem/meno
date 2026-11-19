@@ -266,7 +266,7 @@ describe("a cage's bridgehead keeps its CIP label, whatever identity's turning s
     expect(wrong).toEqual([]);
   }, 120_000);
 
-  it("a bicyclo[2.2.2]octan-2-ol: its two bridgeheads labelled where drawn out,out; drawn in,out (which no embedding makes), said impossible", () => {
+  it("a bicyclo[2.2.2]octan-2-ol: its two bridgeheads labelled where drawn out,out; drawn in,out (which the cage cannot take), said impossible", () => {
     expect(row("O[C@H]1C[C@@H]2CC[C@H]1CC2")).toBe("c1:S c3:R c6:S |  |  | ");
     expect(row("O[C@H]1C[C@H]2CC[C@H]1CC2")).toBe("c1:S c3:no:impossible c6:no:impossible |  |  | ");
   });
