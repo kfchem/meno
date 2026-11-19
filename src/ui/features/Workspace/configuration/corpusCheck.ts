@@ -13,7 +13,7 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readingOf } from "./changes";
 import molecules from "../../../../../scripts/layout/molecules.json";
 import heldout from "../../../../../scripts/layout/heldout.json";
-import { keptReading } from "./kept";
+import { keptReading, marksOnly } from "./kept";
 import { watchConfiguration } from "./watch";
 import { chairDrawing, seenPlaces } from "../projections/chair";
 import type { CorpusEntry } from "./corpus";
@@ -105,6 +105,8 @@ export function corpusTest(entry: CorpusEntry): void {
         expect(read(st().model), after).toBe(c);
         expect(notes(), `${after}: said as no change`).toEqual([]);
         expect(keptAgrees(st().model), `${after}: what is kept reads as the drawing`).toBe(true);
+        // (the user switched to what is kept - identity and R/S - against the same user given the marks alone: one answer)
+        expect(read(st().model), `${after}: from what is kept, as from the marks`).toBe(read(marksOnly(st().model)));
       };
       await check("put on the page");
 

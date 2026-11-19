@@ -20,7 +20,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
 import { changeWords, changesAgainstKept, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
-import { keptFrom, withKept } from "./kept";
+import { keptFrom, marksOnly, withKept } from "./kept";
 
 /**
  * Meno's own moves, by the name of the step each makes (docs/EDITOR-2D.md): each keeps every configuration as it was, and says so where it
@@ -108,7 +108,9 @@ export async function notesOf(
   ask: typeof cipMarksAsked = cipMarksAsked,
 ): Promise<Omit<ConfigurationNote, "id" | "since">[]> {
   const named = changes.some((c) => c.how === "inverted" || c.how === "read");
-  const [was, now] = named ? await Promise.all([ask(before, unitsAsked(before, changes)), ask(after, unitsAsked(after, changes))]) : [null, null];
+  // (each drawing's descriptors as its marks say them, what it keeps set aside: a note says what the marks turned to, against what was
+  //  kept, and the CIP, given a drawing that keeps, takes what is kept - chem/identityOf)
+  const [was, now] = named ? await Promise.all([ask(marksOnly(before), unitsAsked(before, changes)), ask(marksOnly(after), unitsAsked(after, changes))]) : [null, null];
   return changes.flatMap((c) => {
     const at = placeOf(after, c);
     if (!at) return [];

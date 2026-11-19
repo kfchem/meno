@@ -1581,9 +1581,16 @@ All hover-based, as above.
   where keeping went wrong - a copy pasted on new ids, a file read - the
   note shows it. It is saved in the workspace's file and in a copy, read
   back only where it is whole and of the drawing's own atoms, and goes
-  with a drawing pasted, on its new ids. Identity, Clean-up, R and S, 3D
-  and the files still read the marks: none of them takes what is kept
-  yet.
+  with a drawing pasted, on its new ids. **Identity, and R and S with it,
+  take what is kept** (part 15, phase 3; chem/identityOf
+  `identityInputOf`, configuration/kept `keptAsDrawn`): a drawing that
+  keeps its configuration is read from it, and one that keeps none - from
+  before this, or new - from its marks. The note's own descriptors are
+  read from the marks, what is kept set aside (`marksOnly`), for it says
+  what the marks turned to against what was kept. The configuration
+  corpus (configuration/corpus) checks that the two agree after every one
+  of Meno's own moves. Clean-up, 3D, the files and the clipboard still read
+  the marks.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
