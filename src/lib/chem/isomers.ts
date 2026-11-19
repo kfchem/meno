@@ -89,8 +89,7 @@ const SMALL_FUSED_MOST = 4;
 /**
  * Two centres whose senses their ring system ties (`tiesOf`): `ta`, three of `a`'s neighbours toward `b` - along each of a cage's
  * three bridges, or a fused bicycle's `b` itself and each ring's next atom - and `tb`, `b`'s matching three. Their volumes about each,
- * the three in that order, are opposite: a cage's out,out form, a small fused bicycle's cis (MEASURED, 3D embeddings of norbornane,
- * camphor, bicyclo[2.2.2]octane, quinuclidine, bicyclo[3.1.0]hexane; the chemistry check's ruling). The other way is the in,out form,
+ * the three in that order, are opposite: a cage's out,out form, a small fused bicycle's cis (the chemistry check's ruling). The other way is the in,out form,
  * or a trans fusion, which a bridge of three atoms or fewer, or rings of six atoms in all, cannot take.
  */
 type Tie = { a: number; b: number; ta: readonly number[]; tb: readonly number[] };

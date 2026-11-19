@@ -93,7 +93,7 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
       ["bicyclo[2.2.2]octane-2,6-dione", "O=C1CC2CC(=O)C1CC2", 1],
       ["bicyclo[3.3.1]nonane-2,6-dione", "O=C1CCC2CC1CCC2=O", 2],
       ["tropan-3-ol: tropine and pseudotropine", "CN1C2CCC1CC(O)C2", 2],
-      ["sparteine: (-)/(+)-sparteine and the alpha- and beta-isosparteines (MEASURED, an enumeration of only the forms that embed in 3D)", "C1CCN2CC3CC(C2C1)CN4C3CCCC4", 6],
+      ["sparteine: (-)/(+)-sparteine and the alpha- and beta-isosparteines (the chemistry check's table)", "C1CCN2CC3CC(C2C1)CN4C3CCCC4", 6],
       ["bicyclo[4.4.1]undecane, untied: its bridge of four", "C12CCCCC(CCCC1)C2", 2],
     ];
     for (const [name, smiles, n] of counted) expect(count(smiles), name).toBe(n);
@@ -116,7 +116,7 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
       ["C1CCC2CCCC2C1", 3],
       ["C1CCC2CCCCC2C1", 2],
       // ([1.1.0], [2.1.0], [2.2.0], [3.1.0]: cis alone, one; 1-methylbicyclo[2.1.0]pentane, its cis form chiral, and bicyclo[3.1.0]hexan-3-ol, two -
-      //  each as an enumeration of only the forms that embed in 3D gives it, MEASURED)
+      //  the chemistry check's ruling)
       ["C1C2CC12", 1],
       ["C1CC2CC12", 1],
       ["C1CC2CCC12", 1],
