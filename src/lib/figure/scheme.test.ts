@@ -114,6 +114,28 @@ describe("a reaction scheme's arrows", () => {
     expect(s.arrows).toHaveLength(0);
   });
 
+  it("reads a head of every shape that narrows to its point as one: concave, half, outlined, its point rounded, its sides convex", () => {
+    // (each 6 long and 5 wide, its point at (140, 95) - a quarter of its length back from the point, under 0.6 as wide as at its widest)
+    const side = (x: number, half: (t: number) => number, k = 12): P[] => Array.from({ length: k + 1 }, (_, i): P => [134 + (6 * i) / k, 95 + x * half((6 * i) / k)]);
+    const heads: [string, FigurePath][] = [
+      // (its back notched, its sides straight: 0.25)
+      ["concave", filled([[140, 95], [134, 92.5], [135.5, 95], [134, 97.5]])],
+      // (one barb, a harpoon's: 0.25 of its own widest)
+      ["half", head([140, 95], [1, 0], 1)],
+      // (its outline stroked, not filled)
+      ["outlined", stroke([[140, 95], [134, 92.5], [134, 97.5], [140, 95]])],
+      // (its point a fillet 1 across - a fifth of its width: about 0.35)
+      ["rounded", filled([[139.6, 94.8], [139.9, 94.92], [140, 95], [139.9, 95.08], [139.6, 95.2], [134, 97.5], [134, 92.5]])],
+      // (its sides parabolas, the point their vertex: 0.5)
+      ["convex", filled([...side(-1, (t) => 2.5 * Math.sqrt(1 - t / 6)), ...side(1, (t) => 2.5 * Math.sqrt(1 - t / 6)).reverse()])],
+    ];
+    for (const [what, h] of heads) {
+      const s = read(scheme([stroke([[60, 95], [134, 95]]), h]));
+      expect(s.arrows.length, what).toBe(1);
+      expect(near(s.arrows[0].point, [140, 95]), what).toBe(true);
+    }
+  });
+
   it("reads heads at both ends as two heads, and an arrow drawn as one outline", () => {
     const two = read(scheme([stroke([[66, 95], [134, 95]]), head([140, 95], [1, 0]), head([60, 95], [-1, 0])]));
     expect(two.arrows[0].form).toEqual({ heads: 2 });
