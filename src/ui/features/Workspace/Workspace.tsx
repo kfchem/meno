@@ -456,8 +456,9 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
-  // (what the chemistry's line offers to do, where it offers something: a plugin chosen to read pictures, by name, where Meno read none)
-  const [chemOffer, setChemOffer] = useState<{ what: string; run: () => void } | null>(null);
+  // (what the chemistry's line offers to do, where it offers something: a plugin chosen to read pictures, by name, where Meno read none -
+  //  with the words it was offered beside, shown only while the line says them: another error put there lets it go)
+  const [chemOffer, setChemOffer] = useState<{ what: string; run: () => void; beside: string | null } | null>(null);
   // (the role a chemistry asked of that no plugin here fills: what the line of its error offers plugins for)
   const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
@@ -1800,7 +1801,7 @@ function WorkspaceContent({
           <span className="break-words">{a.text}</span>
           {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
           {/* (a picture Meno read nothing from: the plugin chosen to read pictures, by name, run when asked) */}
-          {a.key === "chem" && chemOffer && (
+          {a.key === "chem" && chemOffer && chemOffer.beside === chemError && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -2382,13 +2383,15 @@ function WorkspaceContent({
           onReadStructure={(() => {
             const st = store.getState();
             // (what it says lets go of what was offered before; an offer comes after it)
+            let said: string | null = null;
             const ui = {
               working: setWorking3d,
               say: (why: string | null) => {
+                said = why;
                 setChemError(why);
                 setChemOffer(null);
               },
-              offer: (what: string, run: () => void) => setChemOffer({ what, run }),
+              offer: (what: string, run: () => void) => setChemOffer({ what, run, beside: said }),
             };
             // (the figure in a box drawn on a PDF: the structure beside the PDF)
             const pdf = menu.kind === "pdf" ? st.pdfs.find((x) => x.id === menu.id) : undefined;
