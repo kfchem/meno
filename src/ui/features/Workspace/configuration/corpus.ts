@@ -22,6 +22,8 @@ export type CorpusEntry = {
   group?: "and" | "or";
   /** Its wedges made wavy: each centre open. */
   wavy?: true;
+  /** Its wedges kept only on bonds to a drawn H: the centre stated by the wedge to its H alone. */
+  onlyH?: true;
   /** Drawn by expanding this label, not from a SMILES; `mirror` is the label of its mirror image. Read against its own first drawing. */
   label?: { label: string; mirror: string };
 };
@@ -120,6 +122,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   // axes, drawn from the label's own structure
   { name: "(R)-BINAP", smiles: "", kind: "axis", label: { label: "(R)-BINAP", mirror: "(S)-BINAP" }, self: "a SMILES says no axis" },
   { name: "(S)-BINAP", smiles: "", kind: "axis", label: { label: "(S)-BINAP", mirror: "(R)-BINAP" }, self: "a SMILES says no axis" },
+  // a centre drawn with its H, the wedge on the H's bond alone
+  { name: "(S)-butan-2-ol drawn with its H, the wedge on the H", from: "[H][C@@](C)(O)CC", smiles: "[H][C@@](C)(O)CC", kind: "centre", onlyH: true, labels: ["S"] },
   // a wavy bond: open
   { name: "butan-2-ol drawn with its OH on a wavy bond: open", from: "CC[C@@H](C)O", smiles: "CCC(C)O", kind: "open", wavy: true },
   // an isotope centre; open
