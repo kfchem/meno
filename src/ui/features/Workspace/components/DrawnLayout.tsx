@@ -520,8 +520,9 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     laidAt.current != null && sameAtZooms(opts, shownBonds, laidAt.current, zoom) ? laidAt.current : zoom;
   laidAt.current = layoutZoom;
   const laid = useRef(structureLayouts());
-  // (a press held - a selection turned by its handle, or dragged: what it only carries keeps its layout, carried, and is laid out again once it is let go)
-  const moving = useEditor((s) => s.panHold.active);
+  // (a press held - a selection turned by its handle, or dragged, or an atom dragged: what it only carries keeps its layout, carried, and is
+  //  laid out again once it is let go; what it reshapes reads its configuration as last read until then)
+  const moving = useEditor((s) => s.panHold.active || s.moveDrag.active);
   const layout = useMemo(
     () => layoutByStructure(written, shownBonds, opts, layoutZoom, laid.current, [fonts, abbreviations], moving),
     [written, shownBonds, opts, layoutZoom, fonts, abbreviations, moving],

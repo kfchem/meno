@@ -538,7 +538,7 @@ describe("ink read as nothing beside a structure read", () => {
   });
 });
 
-// (REVIEW's pin, #1277: the edges of the numbers of the joint rule and the wedge rule)
+// (found in review, #1277: the edges of the numbers of the joint rule and the wedge rule)
 const vx = (x: number, y: number, free = false): Vertex => ({ at: { x, y }, deep: 1, free, pieces: [] });
 const layx = (a: Vertex, b: Vertex, from: Point, to: Point) => ({ piece: { a, b, pts: [], patch: 0 } as Piece, a: from, b: to, length: Math.hypot(to.x - from.x, to.y - from.y) });
 
@@ -660,5 +660,73 @@ describe("a letter-sized patch of one or two lines, standing apart", () => {
     const t = traced(tracePicture(picture(200, 140, [...ringLines, line(shorten(pi, qi), shorten(qi, pi), 3)]), [], KNOWN));
     expect(t.shapes.blobs).toHaveLength(0);
     expect(t.shapes.strokes).toHaveLength(7);
+  });
+});
+
+// (found in review: the edges of the numbers of the letters, the shading and the circle's lines, each held on both sides)
+describe("the edges of the new numbers", () => {
+  it("a ball a seventh or so of the ink in grey is shaded, and refused so; a twentieth is not", () => {
+    const c: Pt = [100, 100];
+    const h = hexagon(c, 60);
+    const lines = h.map((p, k) => line(p, h[(k + 1) % 6], 2.5));
+    const ball = (r: number) => {
+      const pic = picture(200, 200, [...lines, (x, y) => Math.hypot(x - 170, y - 170) <= r]);
+      const d = pic.data as Uint8ClampedArray;
+      for (let y = 0; y < 200; y++) for (let x = 0; x < 200; x++) if (Math.hypot(x - 170, y - 170) <= r) for (let k = 0; k < 3; k++) d[4 * (y * 200 + x) + k] = 128;
+      return pic;
+    };
+    const share = shadedOf(inkOf(ball(10))!);
+    expect(share).toBeGreaterThan(0.1);
+    expect(share).toBeLessThan(0.3);
+    expect(tracePicture(ball(10))).toEqual({ none: "The picture is shaded, as a photograph or a rendering is: it is not a drawing to read." });
+    expect("none" in tracePicture(ball(4))).toBe(false);
+  });
+
+  it("a patch a bond across or more is no letter, however short its pieces: a zigzag of five short strokes 1.2 bonds across stays lines; 0.9 across is a letter", () => {
+    const bond = 60;
+    const ring6 = hexagon([90, 110], bond).map((p, k, all) => line(p, all[(k + 1) % 6], 2.5));
+    const zig = (across: number): Shape[] => {
+      // (six points up and down, each stroke 0.4 of a bond or less, a zigzag as a made letter's strokes are)
+      const dx = across / 5;
+      const pts: Pt[] = Array.from({ length: 6 }, (_, k) => [190 + k * dx, 120 + (k % 2 ? -0.3 * bond : 0.3 * bond)]);
+      return pts.slice(1).map((p, k) => line(pts[k], p, 3));
+    };
+    const wide = traced(tracePicture(picture(340, 220, [...ring6, ...zig(1.2 * bond)])));
+    expect(wide.shapes.blobs).toHaveLength(0);
+    const narrow = traced(tracePicture(picture(340, 220, [...ring6, ...zig(0.9 * bond)])));
+    expect(narrow.shapes.blobs).toHaveLength(1);
+  });
+
+  it("a letter's pieces are up to 0.85 of a bond: a T whose stem is 0.9 of the measured bond is lines, one of 0.7 is a letter (both under a bond across)", () => {
+    const ring6 = hexagon([90, 110], 60).map((p, k, all) => line(p, all[(k + 1) % 6], 2.5));
+    const bond = traced(tracePicture(picture(300, 220, ring6))).bond;
+    const T = (h: number): Shape[] => [line([200, 170], [200, 170 - h], 3), line([200 - 0.25 * h, 170 - h], [200 + 0.25 * h, 170 - h], 3)];
+    const tall = traced(tracePicture(picture(300, 220, [...ring6, ...T(0.9 * bond)])));
+    expect(tall.shapes.blobs).toHaveLength(0);
+    const short = traced(tracePicture(picture(300, 220, [...ring6, ...T(0.7 * bond)])));
+    expect(short.shapes.blobs).toHaveLength(1);
+  });
+
+  it("four lines round a circle are a ring's circle, three are not: a square with a circle in it, a triangle with a circle in it", { timeout: 30_000 }, () => {
+    const bond = 90;
+    // (a ring elsewhere, for the bond)
+    const far = hexagon([100, 100], bond).map((p, k, all) => line(p, all[(k + 1) % 6], 3));
+    const sq: Pt[] = [
+      [300, 240],
+      [390, 240],
+      [390, 330],
+      [300, 330],
+    ];
+    const square = [...sq.map((p, k) => line(p, sq[(k + 1) % 4], 3)), ring([345, 285], 26, 3)];
+    const four = traced(tracePicture(picture(460, 380, [...far, ...square])));
+    expect(four.shapes.curves).toHaveLength(1);
+    const tri: Pt[] = [
+      [290, 330],
+      [380, 330],
+      [335, 252],
+    ];
+    const tr = [...tri.map((p, k) => line(p, tri[(k + 1) % 3], 3)), ring([335, 308], 16, 3)];
+    const three = traced(tracePicture(picture(460, 380, [...far, ...tr])));
+    expect(three.shapes.curves).toHaveLength(0);
   });
 });

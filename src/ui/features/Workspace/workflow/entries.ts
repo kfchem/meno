@@ -12,7 +12,7 @@ import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
 import { pageIndex, signatureOf } from "../utils/drawnLink";
-import { identityInputOf, labelsDrawnOut } from "../chem/identityOf";
+import { identityInputOf, labelsDrawnOut, withGroups } from "../chem/identityOf";
 import { identitiesAsked, identityKnown } from "../chem/identityOff";
 import { identity } from "../../../../lib/chem/identity";
 import { partOf } from "../chem/cleanUp";
@@ -278,12 +278,14 @@ export async function drawnHashesAsked(model: Model, structures: readonly (reado
 }
 
 /**
- * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out): a hydrogen bond in it - an
- * enol's own - is no bond of the structure, nor of its identity, which identity's input leaves out itself. Each ask and each reading of a
- * structure's identity (`drawnHash`) goes through it, so that what is asked is what is read.
+ * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out, its AND and OR groups with
+ * it: `withGroups`): a hydrogen bond in it - an enol's own - is no bond of the structure, nor of its identity, which identity's input
+ * leaves out itself. Each ask and each reading of a structure's identity (`drawnHash`) goes through it, so that what is asked is what is read.
  */
 export function structureInputOf(part: Model): ReturnType<typeof identityInputOf> {
-  return identityInputOf(labelsDrawnOut(part));
+  const drawn = labelsDrawnOut(part);
+  const found = identityInputOf(drawn);
+  return { ...found, input: withGroups(found.input, drawn) };
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
@@ -898,6 +900,14 @@ export function keptRenumbered(k: Kept, order: readonly number[], now: readonly 
             bonds: Object.fromEntries(Object.entries(st.bonds).flatMap(([b, l]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], l]] : []))),
             ...(st.chosen ? { chosen: { atoms: atoms(st.chosen.atoms), bonds: bonds(st.chosen.bonds) } } : {}),
             ...(st.shown ? { shown: { atoms: atoms(st.shown.atoms), bonds: bonds(st.shown.bonds) } } : {}),
+            ...(st.said
+              ? {
+                  said: {
+                    atoms: Object.fromEntries(Object.entries(st.said.atoms).map(([a, w]) => [now[Number(a)], w])),
+                    bonds: Object.fromEntries(Object.entries(st.said.bonds).flatMap(([b, w]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], w]] : []))),
+                  },
+                }
+              : {}),
           },
         }
       : {}),
