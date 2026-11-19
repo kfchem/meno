@@ -21,6 +21,7 @@ import { valencesAt } from "./hydrogens";
 import { kekuleOrders, AROMATIC_BOND } from "./kekule";
 import { LOCANT_PARENTS, type EntryLocant } from "./locantParents";
 import { vonBaeyer } from "./vonBaeyer";
+import { CLASS, groupsOf, type Group } from "./locantGroups";
 
 /** A locant as written: its base ("1", "4a", "2'") and a superscript where it has one (pyrene's 3a with a superscript 1). */
 export type Locant = { base: string; sup?: string };
@@ -108,6 +109,10 @@ type Ctx = {
   systemOf: number[];
   systems: readonly { atoms: number[]; rings: number[] }[];
   rings: readonly (readonly number[])[];
+  /** Level 2: the principal characteristic groups (locantGroups), each held by a parent where it sits (`heldIn`). */
+  principal?: readonly Group[];
+  /** Level 2: every characteristic group found, principal or not. */
+  groups?: readonly Group[];
 };
 
 function contextOf(input: LocantsInput): Ctx {
@@ -125,6 +130,15 @@ function contextOf(input: LocantsInput): Ctx {
   f.ringSystems.forEach((s, k) => s.atoms.forEach((i) => (systemOf[i] = k)));
   const inRing = input.atoms.map((_, i) => systemOf[i] >= 0);
   return { input, heavy, around, bondIndex: (a, b) => f.bondBetween(a, b), orders, inRing, systemOf, systems: f.ringSystems, rings: f.rings };
+}
+
+/** An atom's hydrogens: as given, else its element's valence less its bonds (Kekule orders). */
+function hydrogensAt(c: Ctx, i: number): number {
+  const a = c.input.atoms[i];
+  if (a.hs != null) return a.hs;
+  const used = c.input.bonds.reduce((t, b, k) => (b.a === i || b.b === i ? t + c.orders[k] : t), 0);
+  const v = valencesAt(a.el, a.charge ?? 0)[0] ?? 0;
+  return Math.max(0, v - used);
 }
 
 const orderOf = (c: Ctx, a: number, b: number) => {
@@ -635,6 +649,16 @@ function hangers(c: Ctx, parent: ReadonlySet<number>): { on: number; first: numb
  * prefix: not built), isotopes, configuration. Returns those left and, where they still differ by more than a symmetry, the atoms whose
  * number would differ (`own`).
  */
+/**
+ * The atom of a unit (`unit`) that holds the group `g` (level 2): an acid's, an amide's, a nitrile's or an aldehyde's carbon where the
+ * unit is a chain ending on it, else the atom it hangs on; an amine's carbon bonded to its N; or none where the unit does not hold it.
+ */
+function heldIn(c: Ctx, g: Group, unit: ReadonlySet<number>): number | null {
+  if (g.carbon != null && unit.has(g.carbon)) return g.carbon;
+  if (g.rank === CLASS.amine) return c.around[g.at].find((a) => unit.has(a)) ?? null;
+  return unit.has(g.at) ? g.at : null;
+}
+
 function a5(
   c: Ctx,
   cands: Candidate[],
@@ -660,6 +684,11 @@ function a5(
       };
       left = keepLeast(left, sets, (p, q) => (p && q ? compareSets(p, q) : p ? -1 : q ? 1 : 0));
     }
+  }
+  // (level 2, P-14.4 (c): the principal groups' locants as a set, lowest - after indicated hydrogen, before saturation)
+  if (from <= 1 && c.principal?.length) {
+    const held = c.principal.flatMap((g) => heldIn(c, g, set) ?? []);
+    if (held.length) left = keepLeast(left, (cd) => { const k = keyIn(cd); return held.map((a) => k.get(a)!); }, compareSets);
   }
   if (from <= 3) {
     left = unit.mancude
@@ -879,6 +908,91 @@ function parentOf(c: Ctx, atoms: readonly number[]): ParentPick {
   chains = leastByList(chains, (p) => unsaturation(c, p));
   if (chains.length === 1) return { unit: { kind: "chain", atoms: chains[0] }, own: null };
   return tiedParents(c, chains.map((p) => ({ kind: "chain", atoms: p }) as Unit));
+}
+
+/**
+ * The parent at level 2 (B3): of the ring systems, assemblies and carbon chains, those holding the most principal groups (P-44.1.1),
+ * before every other criterion; among them, A3 as at level 1 - a ring before a chain, then the ring's own seniority, or the longest
+ * chain. A chain may end on an acid's, an amide's, a nitrile's or an aldehyde's carbon (B2.2), but never runs through a carboxy or cyano
+ * carbon that is not a principal group (B2.4). Two rings joined through the principal group itself are not multiplied (B3.4): one is
+ * the parent, either, as the molecule's symmetry has it. Where no unit holds any - an amine on silicon - level 1's parent.
+ */
+function parentOf2(c: Ctx, atoms: readonly number[]): ParentPick {
+  const el = (a: number) => c.input.atoms[a].el;
+  const principal = c.principal ?? [];
+  // (a chain ending on a group's carbon holds it there; one whose carbon it does not hold, only where all of them hang on the chain -
+  //  the two ways never mixed, B2.3)
+  const heldBy = (unit: readonly number[], hanging = false) => {
+    const set = new Set(unit);
+    return principal.filter((g) => (g.carbon != null && !hanging && c.inRing[g.at] === false && !set.has(g.carbon) ? false : heldIn(c, g, set) != null));
+  };
+  const holds = (unit: readonly number[]) => heldBy(unit).length;
+  // (the carboxy and cyano carbons that are not principal: never in a chain)
+  const notChain = new Set((c.groups ?? []).filter((g) => g.carbon != null && !principal.includes(g) && (g.rank === CLASS.carboxylicAcid || g.rank === CLASS.nitrile)).map((g) => g.carbon!));
+  const ringSystems = [...new Set(atoms.filter((a) => c.inRing[a]).map((a) => c.systemOf[a]))];
+  const assemblies = assembliesOf(c, ringSystems);
+  const inAssembly = new Set(assemblies.flat());
+  const ringUnits = [...assemblies.map((row) => row.flatMap((k) => c.systems[k].atoms)), ...ringSystems.filter((k) => !inAssembly.has(k)).map((k) => c.systems[k].atoms)];
+  const ends = chainPaths(c, atoms, (a) => el(a) === "C" && !c.inRing[a] && !notChain.has(a));
+  // (B2.3: three or more principal groups linked to one unbranched chain all hang on it, none of their carbons in it - citric acid is
+  //  a propane, P-65.1.2.2.1; counted so only where there are three or more, else as the chain ending on them)
+  const carbons = new Set(principal.flatMap((g) => (g.carbon != null ? [g.carbon] : [])));
+  const hung = carbons.size ? chainPaths(c, atoms, (a) => el(a) === "C" && !c.inRing[a] && !notChain.has(a) && !carbons.has(a)) : [];
+  const chains = [...ends, ...hung];
+  const ringCounts = ringUnits.map(holds);
+  const chainCounts = [...ends.map(holds), ...hung.map((p) => { const n = heldBy(p, true).length; return n >= 3 ? n : 0; })];
+  const most = Math.max(0, ...ringCounts, ...chainCounts);
+  if (!most) return parentOf(c, atoms);
+  // (the groups the parent chosen holds are its principal groups, numbered as such; any other of their class is a substituent)
+  const chosen = (unit: readonly number[]) => {
+    const hanging = hung.includes(unit as number[]);
+    c.principal = heldBy(unit, hanging);
+  };
+  const rings = ringUnits.filter((_, i) => ringCounts[i] === most);
+  if (rings.length) {
+    const pick = parentOf(c, rings.flat());
+    // (joined through the principal group itself - an amine's N, a ketone's carbon - one ring is the parent, never both)
+    if (pick.multiplied && principal.some((g) => !pick.multiplied!.some((u) => u.atoms.includes(g.at)))) return { unit: pick.multiplied[0], own: null };
+    return pick;
+  }
+  let best = chains.filter((_, i) => chainCounts[i] === most);
+  const longest = Math.max(...best.map((p) => p.length));
+  best = best.filter((p) => p.length === longest);
+  best = leastByList(best, (p) => unsaturation(c, p));
+  if (best.length === 1) {
+    chosen(best[0]);
+    return { unit: { kind: "chain", atoms: best[0] }, own: null };
+  }
+  const tied = tiedParents(c, best.map((p) => ({ kind: "chain", atoms: p }) as Unit));
+  chosen(best.find((p) => p.every((a, k) => tied.unit.atoms[k] === a)) ?? tied.unit.atoms);
+  return tied;
+}
+
+/** Every chain of `allowed` atoms among `atoms` - each simple path between two of them, in order - once each way round. */
+function chainPaths(c: Ctx, atoms: readonly number[], allowed: (a: number) => boolean): number[][] {
+  const ok = atoms.filter(allowed);
+  const set = new Set(ok);
+  const out: number[][] = [];
+  for (const start of ok) {
+    // (the acyclic atoms form trees: from each, the one path to every other, by a walk)
+    const back = new Map<number, number>([[start, -1]]);
+    const todo = [start];
+    while (todo.length) {
+      const u = todo.shift()!;
+      for (const v of c.around[u]) {
+        if (!set.has(v) || back.has(v)) continue;
+        back.set(v, u);
+        todo.push(v);
+      }
+    }
+    for (const end of back.keys()) {
+      if (end < start) continue;
+      const path: number[] = [];
+      for (let x = end; x !== -1; x = back.get(x)!) path.push(x);
+      out.push(path.reverse());
+    }
+  }
+  return out;
 }
 
 /** Step 0's parent where its element sits only outside rings (A3 step 0): one atom, or an unbranched chain of that element. */
@@ -1130,13 +1244,28 @@ function hangingOrder(c: Ctx, cand: Candidate, unit: ReadonlySet<number>, taken:
  * the heavy atoms, by the atom each is on). `level` 1: the skeleton's own numbering; level 2 is not built in this part.
  */
 export function locants(input: LocantsInput, level: 1 | 2 = 1): Locants {
-  void level;
   const c = contextOf(input);
   const heavyAtoms = input.atoms.map((_, i) => i).filter((i) => c.heavy[i]);
   const own: { atom: number; why: OwnWhy }[] = [];
   const locant: (Locant | null)[] = input.atoms.map(() => null);
   if (!heavyAtoms.length) return { order: [], locant, shown: [], own };
-  const pick = parentOf(c, heavyAtoms);
+  // (level 2: the principal characteristic group leads (B). Its class not built - or a not-built group below it whose carbon ends a
+  //  chain of carbons: level 1's numbering, every atom said as Meno's own)
+  let notBuilt = false;
+  if (level === 2) {
+    const groups = groupsOf(c.input.atoms.map((a, i) => ({ el: a.el, charge: a.charge, hs: hydrogensAt(c, i) })), c.input.bonds.map((b, k) => ({ a: b.a, b: b.b, order: c.orders[k] })), c.inRing);
+    if (groups.length) {
+      const first = Math.min(...groups.map((g) => g.rank));
+      const top = groups.filter((g) => g.rank === first);
+      const endsChain = (g: Group) => c.input.atoms[g.at].el === "C" && !c.inRing[g.at] && c.around[g.at].filter((b) => c.input.atoms[b].el === "C").length <= 1;
+      if (top.some((g) => !g.built) || groups.some((g) => !g.built && g.rank > first && endsChain(g))) notBuilt = true;
+      else {
+        c.groups = groups;
+        c.principal = top;
+      }
+    }
+  }
+  const pick = c.principal ? parentOf2(c, heavyAtoms) : parentOf(c, heavyAtoms);
   const units = pick.multiplied ?? [pick.unit];
   const parentSet = new Set(units.flatMap((u) => u.atoms));
   // (multiplied parents: each numbered alike, the link's point of attachment as low as it allows, the second primed, the third twice)
@@ -1152,6 +1281,7 @@ export function locants(input: LocantsInput, level: 1 | 2 = 1): Locants {
     own: each.find((e) => e.own)?.own ?? null,
   };
   if (pick.own) for (const a of heavyAtoms) own.push({ atom: a, why: pick.own });
+  if (notBuilt) for (const a of heavyAtoms) own.push({ atom: a, why: "not built" });
   if (numbered.own) for (const a of numbered.own.atoms) own.push({ atom: a, why: numbered.own.why });
   numbered.cand.atoms.forEach((a, k) => (locant[a] = numbered.cand.locants[k]));
   // (A6.1: plain-number locants at their numbers, the rest after them in the order of their keys)
