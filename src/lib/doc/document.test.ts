@@ -610,3 +610,42 @@ describe("amending a document", () => {
   });
 });
 
+
+describe("a step named once it is done", () => {
+  it("names the step undo would take back, while it is still the one that came to that state - never another", () => {
+    const doc = createDocument({ n: 0 });
+    doc.edit("add", (s) => ({ n: s.n + 1 }));
+    const came = doc.getState();
+    expect(doc.named("add: C3: R, now S", came)).toBe(true);
+    expect(doc.history().undoLabel).toBe("add: C3: R, now S");
+    // (another step since: that one not named)
+    doc.edit("add", (s) => ({ n: s.n + 1 }));
+    expect(doc.named("old", came)).toBe(false);
+    expect(doc.history().undoLabel).toBe("add");
+    // (undone: the step before is now the one undo would take back, and may be named; back at the start there is none)
+    doc.undo();
+    expect(doc.named("again", doc.getState())).toBe(true);
+    doc.undo();
+    expect(doc.named("none", doc.getState())).toBe(false);
+  });
+});
+
+describe("what a document's last change was", () => {
+  it("is an edit, a travel, the document put in anew, or its states rewritten in place", () => {
+    const doc = createDocument({ n: 0 });
+    expect(doc.lastChange()).toBe("reset");
+    doc.edit("add", (s) => ({ n: s.n + 1 }));
+    expect(doc.lastChange()).toBe("edit");
+    doc.undo();
+    expect(doc.lastChange()).toBe("travel");
+    doc.redo();
+    expect(doc.lastChange()).toBe("travel");
+    doc.amend((s) => ({ n: s.n + 10 }));
+    expect(doc.lastChange()).toBe("amend");
+    doc.edit("add", (s) => ({ n: s.n + 1 }));
+    doc.takeBackTo(1, { n: 0 });
+    expect(doc.lastChange()).toBe("travel");
+    doc.reset({ n: 5 });
+    expect(doc.lastChange()).toBe("reset");
+  });
+});
