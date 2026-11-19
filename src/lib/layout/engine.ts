@@ -138,6 +138,9 @@ function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
     };
     // (laid out as three lines: four donors or more on their spokes already, each on its own; the others turned onto the spokes left -
     // however far a step after the lines were set moved them, an NH2's H given room, say)
+    // (laid out as three lines at all: four donors on their spokes as the lines set them, not merely near - a macrocycle's square, its N
+    // 15 degrees off the spokes, is no three lines)
+    if (round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_ON).length < 4) return;
     const onIt = round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_SNAP);
     const usedSpokes = new Set(onIt.map((v) => spokeOf(angle(v))));
     if (onIt.length < 4 || usedSpokes.size !== onIt.length) return;
@@ -1822,6 +1825,8 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
 const SPOKES_EVEN = rad(10);
 /** How far off its spoke a donor of such a metal may lie and still count as on it, its slip turned back (`onSpokes`). */
 const SPOKES_SNAP = rad(15);
+/** How near its spoke a donor stands where the three lines set it: four such show the metal laid out so (`onSpokes`). */
+const SPOKES_ON = rad(2);
 
 /**
  * A six-bond atom of `piece` - a metal, or SF6's S - whose neighbours

@@ -347,7 +347,7 @@ export function placeRingSystem(
     const p = new Map<number, Point>([[metal.at, { x: 0, y: 0 }]]);
     const n = order.length;
     // (a six-bond metal's spokes from straight down, round; a free spoke's place left)
-    const start = mol.neighbours[metal.at].length === 6 ? -Math.PI / 2 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
+    const start = metal.spokes ? -Math.PI / 2 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
     order.forEach((d, k) => d >= 0 && p.set(d, dir(start + k * metal.step)));
     return placeRest(p, new Set());
   }
@@ -371,9 +371,11 @@ export function placeRingSystem(
  * arrangement of separate chains round the metal (the first kept as it is:
  * the rest are the same turned or mirrored). Null where no metal has two
  * rings through it, or a ring through it is a macrocycle, or two rings
- * close between the same two donors.
+ * close between the same two donors. `spokes`: a six-bond metal's donors
+ * set on three lines through it, from straight down; else round it as
+ * before, centred below.
  */
-export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][] } | null {
+export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][]; spokes: boolean } | null {
   const through = (a: number) => rings.filter((r) => r.includes(a));
   const metals = [...new Set(rings.flat())]
     .filter((a) => isMetal(mol.el[a]) && (through(a).length >= 2 || (mol.neighbours[a].length === 6 && through(a).length >= 1)))
@@ -419,7 +421,9 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
   const n = donors.length;
   // (a metal of six bonds: its six spokes three lines through it, 60 degrees apart, as the text draws an octahedron - Brecher 2006,
   // ST-2.11 - its chelates' donors on spokes side by side and the spokes between them left to its other ligands)
-  const six = mol.neighbours[at].length === 6;
+  // (not where its donors close a ring round it - a macrocycle's, cyclam's or a porphyrin's four N: those cannot stand on spokes side by
+  // side, and keep the square they are drawn in)
+  const six = mol.neighbours[at].length === 6 && !closed;
   const step = six ? Math.PI / 3 : closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
   // the first chain as it is; the others in every order, each either way round
   const orders: number[][] = [];
@@ -446,10 +450,10 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
       });
     };
     spread(chains.slice(1), chains[0], 6 - n);
-    return { at, step, orders };
+    return { at, step, orders, spokes: true };
   }
   go(chains.slice(1), chains[0]);
-  return { at, step, orders };
+  return { at, step, orders, spokes: six };
 }
 
 /** How many layouts of a ring system are tried at most where rings alike could each go next (`placeRingSystem`). */

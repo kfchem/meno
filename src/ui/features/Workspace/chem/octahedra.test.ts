@@ -24,7 +24,10 @@ function octahedron(spokes: [string, number, ("up" | "down")?][], metal = "Co", 
   return { atoms, bonds } as Model;
 }
 
-/** Round the metal (id 1): each donor's element, its bond's kind (+ solid, # hashed) and its way in whole degrees from 0 to 359. */
+/**
+ * Round the metal (id 1): each donor's element, its bond's kind (+ solid, # hashed; ! after it where the wedge is not narrow at the metal)
+ * and its way in whole degrees from 0 to 359.
+ */
 function spokes(m: Model): string[] {
   const c = m.atoms.find((a) => a.id === 1)!;
   return m.bonds
@@ -32,7 +35,8 @@ function spokes(m: Model): string[] {
     .map((b) => {
       const o = m.atoms.find((a) => a.id === (b.a === 1 ? b.b : b.a))!;
       const deg = Math.round((((Math.atan2(o.y - c.y, o.x - c.x) * 180) / Math.PI) % 360 + 360) % 360) % 360;
-      return `${o.el}${b.stereo === "up" ? "+" : b.stereo === "down" ? "#" : ""}@${deg}`;
+      const wedge = b.stereo === "up" ? "+" : b.stereo === "down" ? "#" : "";
+      return `${o.el}${wedge}${wedge && b.narrow !== 1 ? "!" : ""}@${deg}`;
     })
     .sort();
 }
@@ -130,6 +134,38 @@ describe("a six-bond metal laid out from its SMILES", () => {
       const laid = await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true);
       const metal = laid.atoms.find((a) => a.el === "Co" || a.el === "Ru")!.el;
       expect(ways(laid, metal), smiles).toEqual([30, 90, 150, 210, 270, 330]);
+    }
+  });
+
+  it("is three lines with one chelate or three, its other ligands on the spokes left: Ru(en)Cl4, [Co(en)(NH3)4]3+, [Co(en)3]3+", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    for (const [smiles, metal] of [
+      ["Cl[Ru-2]12(Cl)(Cl)Cl.[NH2]1CC[NH2]2", "Ru"],
+      ["N[Co+3]12(N)(N)N.[NH2]1CC[NH2]2", "Co"],
+      ["N1CCN[Co+3]123(NCCN2)NCCN3", "Co"],
+    ] as const) {
+      const laid = await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true);
+      expect(ways(laid, metal), smiles).toEqual([30, 90, 150, 210, 270, 330]);
+    }
+  });
+
+  it("keeps a macrocycle's four donors square round the metal, its two other ligands beside: cyclam's and a porphyrin's", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    for (const [smiles, metal] of [
+      ["Cl[Co+3]1234Cl.[NH]15CC[NH]2CCC[NH]3CC[NH]4CCC5", "Co"],
+      ["Cl[Co+3]1234N.[NH]15CC[NH]2CCC[NH]3CC[NH]4CCC5", "Co"],
+      ["N[Fe+2]6789N.C1=CC2=CC3=CC=C([N-]36)C=C4C=CC(=N47)C=C5C=CC(=CC1=N28)[N-]59", "Fe"],
+    ] as const) {
+      // (laid out, not refused: a macrocycle's donors cannot stand on spokes side by side)
+      const laid = await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true);
+      const c = laid.atoms.find((a) => a.el === metal)!;
+      const ring = laid.bonds
+        .filter((b) => b.a === c.id || b.b === c.id)
+        .map((b) => laid.atoms.find((a) => a.id === (b.a === c.id ? b.b : b.a))!)
+        .filter((o) => laid.bonds.some((b) => (b.a === o.id || b.b === o.id) && b.a !== c.id && b.b !== c.id && laid.atoms.find((a) => a.id === (b.a === o.id ? b.b : b.a))!.el === "C"));
+      expect(ring, smiles).toHaveLength(4);
+      const at = ring.map((o) => (((Math.atan2(o.y - c.y, o.x - c.x) * 180) / Math.PI) % 360 + 360) % 360).sort((p, q) => p - q);
+      at.forEach((t, i) => expect(((at[(i + 1) % 4] - t + 360) % 360), smiles).toBeCloseTo(90, 0));
     }
   });
 
