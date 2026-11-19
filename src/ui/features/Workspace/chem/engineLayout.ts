@@ -451,8 +451,9 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
       // (a look of depth - a Haworth ring's near edge, bold and wedge-shaped - on a bond whose two ends were drawn with depth, laid out
       //  flat (*Draw flat*): plain, since it stated only the depth that is gone, and wedge-shaped on a flat ring would read as a
       //  configuration. A look the chemist gave a flat bond stays)
+      // (only where the structure is laid out flat - Draw flat: a projection Clean-up keeps keeps its depth and its looks)
       const deep = (id: number) => byId.get(id)?.z != null;
-      return (b.display === "bold" || b.display === "wedge") && deep(b.a) && deep(b.b) ? { display: undefined } : null;
+      return flat && (b.display === "bold" || b.display === "wedge") && deep(b.a) && deep(b.b) ? { display: undefined } : null;
     }
     const key = pairKey(b.a, b.b);
     const far = farEnd.get(key);
