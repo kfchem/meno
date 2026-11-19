@@ -14,6 +14,8 @@ import { readingOf } from "./changes";
 import { CORPUS } from "./corpus";
 import { keptReading } from "./kept";
 import { watchConfiguration } from "./watch";
+import { chairDrawing, seenPlaces } from "../projections/chair";
+import type { CorpusEntry } from "./corpus";
 
 // The configuration corpus (docs/EDITOR-2D.md, *The configuration kept*): every structure drawn by Meno reads back as the SMILES it
 // was drawn from - read(draw(c)) = c - and the same after each of Meno's own moves: turned, turned over, cleaned up, laid out again,
@@ -24,6 +26,19 @@ const expected = (smiles: string) => identity(smilesInput(smiles) as unknown as 
 const read = (m: Pick<Model, "atoms" | "bonds">) => identityOfDrawn(m as Model).text;
 /** The SMILES's mirror image: every @ and @@ exchanged (a double bond's / and \ say the same of the mirror image). */
 const mirrorSmiles = (smiles: string) => smiles.replace(/@@|@/g, (m) => (m === "@@" ? "@" : "@@"));
+
+/** A chair put down by the tool with its groups at the places named (`CorpusEntry.chair`), each a bond long, as the tool leads one. */
+function chairWith(groups: NonNullable<CorpusEntry["chair"]>): Model {
+  const d = chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });
+  const atoms = [...d.atoms];
+  const bonds = [...d.bonds];
+  groups.forEach(([k, kind, el], i) => {
+    const place = seenPlaces(d, k).find((p) => p.free.kind === kind)!;
+    atoms.push({ id: 50 + i, el, r: 0.9, x: place.place.x, y: place.place.y });
+    bonds.push({ id: 200 + i, a: d.ring[k], b: 50 + i, order: 1 });
+  });
+  return { atoms, bonds };
+}
 
 /** The descriptors the drawing comes to, every unit asked, as a sorted list. */
 function labels(m: Model): string[] {
@@ -55,7 +70,7 @@ afterEach(() => vi.useRealTimers());
 describe("the configuration corpus: read(draw(c)) = c", () => {
   for (const entry of CORPUS) {
     (entry.known ? it.fails : it)(`${entry.name} (${entry.kind})${entry.known ? ` - not yet: ${entry.known}` : ""}`, async () => {
-      const drawn = drawnFromSmiles(entry.smiles);
+      const drawn = entry.chair ? chairWith(entry.chair) : drawnFromSmiles(entry.smiles);
       const c = entry.self ? read(drawn) : expected(entry.smiles);
       expect(read(drawn), "drawn").toBe(c);
       if (entry.labels) expect(labels(drawn), "by its name").toEqual([...entry.labels].sort());

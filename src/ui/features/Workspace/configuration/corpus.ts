@@ -13,6 +13,9 @@ export type CorpusEntry = {
   self?: string;
   /** Known not to hold yet: what is missing. The corpus asserts that it fails, so that it is noticed when it holds. */
   known?: string;
+  /** Drawn with the chair tool, not from its SMILES: each group's ring atom (0 to 5, the tool's order), its place and its element. Its
+   *  SMILES is then its flat twin, which is to state the same configuration. */
+  chair?: readonly (readonly [number, "axial" | "equatorial", string])[];
 };
 
 export type CorpusKind =
@@ -24,7 +27,8 @@ export type CorpusKind =
   | "cumulene"
   | "cage"
   | "isotope"
-  | "open";
+  | "open"
+  | "chair";
 
 export const CORPUS: readonly CorpusEntry[] = [
   // centres: C with its H left out, and with four drawn groups; a ring atom's two groups; ring fusions; a quaternary centre in a chain
@@ -89,6 +93,13 @@ export const CORPUS: readonly CorpusEntry[] = [
   { name: "camphor, the other hand", smiles: "CC1(C)[C@H]2CC[C@]1(C)C(=O)C2", kind: "cage" },
   { name: "exo-norborneol, one hand", smiles: "O[C@@H]1C[C@@H]2CC[C@H]1C2", kind: "cage" },
   { name: "cocaine", smiles: "COC(=O)[C@H]1[C@@H](OC(=O)c2ccccc2)C[C@@H]2CC[C@H]1N2C", kind: "cage" },
+  // chairs drawn with the tool, each against its flat twin
+  { name: "trans-1,4-dimethylcyclohexane as a chair, both groups equatorial", smiles: "C[C@H]1CC[C@H](C)CC1", kind: "chair", chair: [[0, "equatorial", "C"], [3, "equatorial", "C"]] },
+  { name: "trans-1,4-dimethylcyclohexane as a chair, both groups axial", smiles: "C[C@H]1CC[C@H](C)CC1", kind: "chair", chair: [[0, "axial", "C"], [3, "axial", "C"]] },
+  { name: "cis-1,4-dimethylcyclohexane as a chair, one group axial", smiles: "C[C@H]1CC[C@@H](C)CC1", kind: "chair", chair: [[0, "equatorial", "C"], [3, "axial", "C"]] },
+  { name: "cis-1,3-dimethylcyclohexane as a chair, both groups equatorial", smiles: "C[C@H]1CCC[C@@H](C)C1", kind: "chair", chair: [[0, "equatorial", "C"], [2, "equatorial", "C"]] },
+  { name: "trans-1,3-dimethylcyclohexane as a chair, one group axial, one hand", smiles: "C[C@@H]1CCC[C@@H](C)C1", kind: "chair", chair: [[0, "equatorial", "C"], [2, "axial", "C"]] },
+  { name: "cyclohexanol as a chair, its OH axial (no centre)", smiles: "OC1CCCCC1", kind: "chair", chair: [[0, "axial", "O"]] },
   // an isotope centre; open
   { name: "(2-2H1)butane, one hand: CHD", smiles: "C[C@H]([2H])CC", kind: "isotope", self: "the SMILES read directly leaves its isotopes out" },
   { name: "(1-13C)-2-methylbutane, one hand: a centre by its isotope", smiles: "[13CH3][C@H](C)CC", kind: "isotope", self: "the SMILES read directly leaves its isotopes out" },
