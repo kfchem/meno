@@ -238,6 +238,7 @@ export default function PartMenu({
   scope,
   records,
   stereo,
+  projection,
   fischer,
   figure,
   numbers,
@@ -577,6 +578,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
+  /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
+  projection?: { flat: () => void; flip?: () => void };
   /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
   fischer?: { run: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
@@ -1088,6 +1091,12 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...(projection
+            ? [
+                ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
+                { name: "Draw flat", keys: "", run: projection.flat },
+              ]
+            : []),
           ...partsItems,
           ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },

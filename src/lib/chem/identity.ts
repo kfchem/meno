@@ -17,7 +17,8 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`); and the end chalcogens on P, As, Sb, S, Se and Te
  * as one form, whichever is drawn double or charged
- * (perception/chalcogenEnds).
+ * (perception/chalcogenEnds); and, where centres are drawn in AND or OR
+ * groups, the stereoisomers the drawing stands for (`grouped`).
  */
 import { canonicalWritten, symmetryOrbits as orbitsAsDrawn } from "./perception/symmetry";
 import { type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
@@ -42,7 +43,22 @@ export { aromaticForm };
  * hydrogens not drawn as atoms.
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
-export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[]; arrangements?: readonly Arranged[] };
+export type IdentityInput = {
+  atoms: readonly IdentityAtom[];
+  bonds: readonly LayoutBond[];
+  axes?: readonly Axial[];
+  cumulated?: readonly Cumulated[];
+  arrangements?: readonly Arranged[];
+  /** Its centres drawn in AND or OR groups (`IdentityGroup`); a centre in none is drawn absolute. */
+  groups?: readonly IdentityGroup[];
+};
+
+/**
+ * Centres whose configurations are drawn as one group (V3000's enhanced stereo, docs/WORKFLOWS-FOUNDATION.md): "and", a mixture of
+ * the configurations drawn and those all turned over together (a racemate, where they are all its centres); "or", one or the other,
+ * not known which. Each by its place among the input's atoms; two groups of a kind are two groups, told apart.
+ */
+export type IdentityGroup = { kind: "and" | "or"; atoms: readonly number[] };
 
 // (a structure's plain hydrogens folded into the atoms they are on, configurations carried: the core's one fold)
 export { hydrogensFolded };
@@ -115,7 +131,9 @@ const METALS_ASKED = 4;
  * hydrogens (`endsShared`) - perception/chalcogenEnds.
  */
 function compared(input: IdentityInput): LayoutInput {
-  const folded = hydrogensFolded(input);
+  // (its groups are identity's to write: `grouped`)
+  const { groups: _groups, ...drawn } = input;
+  const folded = hydrogensFolded(drawn);
   const atoms = folded.atoms.map(({ isotope, radical, mapped: _mapped, ...a }) => ({ ...a, el: `${a.el}${isotope ? `^${isotope}` : ""}${radical ? `.${radical}` : ""}` }));
   return endsShared(aromaticForm(unchargedEnds({ ...folded, atoms })));
 }
@@ -131,7 +149,13 @@ function compared(input: IdentityInput): LayoutInput {
  * another such centre, its diastereomers (docs/WORKFLOWS-FOUNDATION.md).
  */
 export function identity(input: IdentityInput): { text: string; complete: boolean } {
-  const filled = filledIn(compared(input));
+  const g = compared(input);
+  return input.groups?.length ? grouped(g, input) : written(g);
+}
+
+/** A structure as identity compares it (`compared`), its configurations filled in (`filledIn`) and written in its own order. */
+function written(g: LayoutInput): { text: string; complete: boolean } {
+  const filled = filledIn(g);
   if (filled.text != null) return { text: filled.text, complete: filled.complete };
   const found = canonicalWritten(filled.input);
   return { text: found.text, complete: found.complete && filled.complete };
@@ -174,6 +198,67 @@ function turnedAt(input: IdentityInput, place: GivenPlace): IdentityInput | null
   }
   const c = input.cumulated?.[at];
   return c ? { ...input, cumulated: input.cumulated!.map((y, i) => (i === at ? { ...y, cis: !c.cis } : y)) } : null;
+}
+
+/**
+ * The identity of a structure with centres drawn in AND or OR groups (`IdentityGroup`; foundation part 13, its first asker), as
+ * the stereoisomers it stands for. Each group's centres as drawn or all turned over together: an AND group's two in the
+ * mixture, an OR group's one or the other, not known which. So it is written as the ways it may be - each OR group as drawn
+ * or turned over - each with the identities (`written`) of the stereoisomers in it, every AND group as drawn and turned over:
+ * the same text for every drawing of the same stereoisomers, whichever hand is drawn, whichever centre a group holds and
+ * however the groups are numbered. A racemate, one or the other and the drawn absolute are three structures; a group whose
+ * turning over writes the structure as drawn (a meso form's two centres, a centre that sets nothing) says nothing, and the
+ * structure is written as it would be without it. A centre with no configuration drawn is in no group. Past `GROUP_WRITINGS`
+ * stereoisomers to write, the structure as drawn, said not complete.
+ */
+function grouped(g: LayoutInput, input: IdentityInput): { text: string; complete: boolean } {
+  // (each atom's place once its plain hydrogens are folded in: none of them is in a group, as none carries a configuration)
+  const folded = plainHydrogenAtoms(input);
+  const place: number[] = [];
+  let k = 0;
+  for (let i = 0; i < input.atoms.length; i++) place.push(folded[i] ? -1 : k++);
+  const seen = new Set<number>();
+  const groups = (input.groups ?? [])
+    .map((x) => ({
+      kind: x.kind,
+      atoms: [...new Set(x.atoms)].flatMap((i) => {
+        const at = place[i] ?? -1;
+        if (at < 0 || !g.atoms[at]?.tetra || seen.has(at)) return [];
+        seen.add(at);
+        return [at];
+      }),
+    }))
+    .filter((x) => x.atoms.length);
+  const ors = groups.filter((x) => x.kind === "or");
+  const ands = groups.filter((x) => x.kind === "and");
+  if (2 ** groups.length > GROUP_WRITINGS) return { ...written(g), complete: false };
+  let complete = true;
+  const ways = new Set<string>();
+  for (let or = 0; or < 2 ** ors.length; or++) {
+    const texts = new Set<string>();
+    for (let and = 0; and < 2 ** ands.length; and++) {
+      const over = [...ors.flatMap((x, b) => (or & (1 << b) ? x.atoms : [])), ...ands.flatMap((x, b) => (and & (1 << b) ? x.atoms : []))];
+      const w = written(turned(g, over));
+      complete &&= w.complete;
+      texts.add(w.text);
+    }
+    ways.add(JSON.stringify([...texts].sort()));
+  }
+  // (one way, one stereoisomer: the structure as it would be written with no group)
+  if (ways.size === 1) {
+    const only: string[] = JSON.parse([...ways][0]);
+    if (only.length === 1) return { text: only[0], complete };
+  }
+  return { text: `stereoisomers ${JSON.stringify([...ways].sort().map((w) => JSON.parse(w)))}`, complete };
+}
+
+/** How many stereoisomers `grouped` writes at most - two to the power of the groups: past it, the structure as drawn only. */
+export const GROUP_WRITINGS = 256;
+
+/** `g` with the centres at `atoms` turned over. */
+function turned(g: LayoutInput, atoms: readonly number[]): LayoutInput {
+  const over = new Set(atoms);
+  return { ...g, atoms: g.atoms.map((a, i) => (over.has(i) && a.tetra ? { ...a, tetra: { ...a.tetra, volume: a.tetra.volume > 0 ? -1 : 1 } } : a)) };
 }
 
 /**

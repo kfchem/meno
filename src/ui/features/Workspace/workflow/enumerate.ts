@@ -17,7 +17,7 @@ import { identity } from "../../../../lib/chem/identity";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
-import { identityInputOf } from "../chem/identityOf";
+import { identityInputOf, withGroups } from "../chem/identityOf";
 import { degrees, narrowEnd, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
 import { resolve, type Reading } from "../chem/resolve";
@@ -251,7 +251,7 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
     else {
       // (a centre no longer one, two of its groups now alike: drawn plain)
       const drawnNow = plainWhereAlike(held, differences);
-      const found = identity(identityInputOf(drawnNow).input);
+      const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
       if (!found.complete) missed++;
       const first = seen.get(found.text);
       if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
