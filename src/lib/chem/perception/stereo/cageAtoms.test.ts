@@ -18,7 +18,7 @@ describe("cageAtoms: atoms joined to another by three short paths sharing no ato
 
   it("no fused junction (decalin, bicyclo[3.3.0]octane, the small fused bicycles), no bridgehead whose bridges are long enough to stand in or out (bicyclo[4.4.1]undecane), no plain ring", () => {
     expect(caged("C1CCC2CCCCC2C1")).toEqual([]);
-    expect(caged("C1CCCC2CCCCC(C1)C2")).toEqual([]);
+    expect(caged("C12CCCCC(CCCC1)C2")).toEqual([]);
     expect(caged("C1CCCCC1")).toEqual([]);
     // (a fused system's junctions are bonded, and a bond is no bridge: bicyclo[3.3.0]octane's, [3.1.0]'s, [1.1.0]'s - found in review)
     expect(caged("C1CC2CCCC2C1")).toEqual([]);

@@ -1468,16 +1468,17 @@ All hover-based, as above.
   - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
     before, one switch showed them all). Hidden unless asked for. The
     right-click menu of an atom that can be a stereocentre says *Show
-    R/S*, of a double bond that can be cis or trans *Show E/Z* - where a
+    R/S*, of a double bond that can be cis or trans *Show E/Z*, of a
+    structure's selection or a molecule in 3D *Show R/S and E/Z* - *Hide*
+    where all of it is shown already (named for what they show, the
+    maintainer, 2026-10-13). An atom or a bond is offered where a
     configuration can be (Meno's candidates, by shape:
     docs/WORKFLOWS-FOUNDATION.md) and sets something (turned over, it is
     another structure by Meno's identity). An amine's N, a metal, an
     aromatic ring's bond, a C=O, a CH2= end, a neopentane's C and PPh3's
     P offer neither; a meso form's centres do. A cage's bridgehead
     (norbornane's, camphor's, quinuclidine's N) is offered where the CIP
-    gives it a label as drawn, and not where it gives none - of a structure's selection or a
-    molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
-    already (named for what they show, the maintainer, 2026-10-13). On a
+    gives it a label as drawn, and not where it gives none. On a
     molecule in 3D (the maintainer's right-click rule, 2026-11-14: the menu's
     thing, reaching the selection when the thing is in it): the molecule
     right-clicked, all of it, wherever on it - right-clicked on an atom or
