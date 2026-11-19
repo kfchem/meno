@@ -346,9 +346,9 @@ export function placeRingSystem(
     const order = metal.orders[variant % metal.orders.length];
     const p = new Map<number, Point>([[metal.at, { x: 0, y: 0 }]]);
     const n = order.length;
-    // (a six-bond metal's spokes from straight down, round; a free spoke's place left)
-    // (a six-bond metal's spokes from straight down; a four-bond one with a free spoke, as the X: from 45 degrees off straight down)
-    const start = mol.neighbours[metal.at].length === 6 ? -Math.PI / 2 : mol.neighbours[metal.at].length === 4 && order.length === 4 && order.includes(-1) ? -Math.PI / 2 - Math.PI / 4 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
+    // (a six-bond metal's spokes from straight down, round, a free spoke's place left; a four-bond one with a free spoke, as the X: from
+    //  45 degrees off straight down)
+    const start = metal.spokes === 6 ? -Math.PI / 2 : metal.spokes === 4 && order.length === 4 && order.includes(-1) ? -Math.PI / 2 - Math.PI / 4 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
     order.forEach((d, k) => d >= 0 && p.set(d, dir(start + k * metal.step)));
     return placeRest(p, new Set());
   }
@@ -372,9 +372,12 @@ export function placeRingSystem(
  * arrangement of separate chains round the metal (the first kept as it is:
  * the rest are the same turned or mirrored). Null where no metal has two
  * rings through it, or a ring through it is a macrocycle, or two rings
- * close between the same two donors.
+ * close between the same two donors. `spokes`: 6 where a six-bond metal's
+ * donors are set on three lines through it, from straight down; 4 where a
+ * four-bond metal's are set a right angle apart; 0 where they go round it
+ * as before, centred below.
  */
-export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][] } | null {
+export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][]; spokes: number } | null {
   const through = (a: number) => rings.filter((r) => r.includes(a));
   const metals = [...new Set(rings.flat())]
     // (a six-bond metal with a chelate; a four-bond one with a chelate of a small ring - six atoms or fewer, as an en's, a bpy's, an
@@ -422,10 +425,12 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
   const n = donors.length;
   // (a metal of six bonds: its six spokes three lines through it, 60 degrees apart, as the text draws an octahedron - Brecher 2006,
   // ST-2.11 - its chelates' donors on spokes side by side and the spokes between them left to its other ligands)
-  const six = mol.neighbours[at].length === 6;
+  // (not where its donors close a ring round it - a macrocycle's, cyclam's or a porphyrin's four N: those cannot stand on spokes side by
+  // side, and keep the square they are drawn in)
+  const six = mol.neighbours[at].length === 6 && !closed;
   // (a metal of four bonds with one chelate - Pt(en)Cl2: its four spokes a right angle apart, the chelate's two ends side by side and
-  // its other two ligands on the spokes left, as a square-planar metal is drawn - backlog 124)
-  const four = mol.neighbours[at].length === 4 && n < 4 && through(at).every((r) => r.length <= 6);
+  // its other two ligands on the spokes left, as a square-planar metal is drawn)
+  const four = mol.neighbours[at].length === 4 && n < 4 && !closed && through(at).every((r) => r.length <= 6);
   const spokes = six ? 6 : four ? 4 : 0;
   const step = six ? Math.PI / 3 : closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
   // the first chain as it is; the others in every order, each either way round
@@ -445,7 +450,7 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     // check keeping which donors are opposite as drawn; -1 a free spoke)
     // (a chain of three - a tridentate - also meridional: its two outer donors on one line, a free spoke between its middle donor and
     // one end, so that the middle stands 60 degrees from one end and 120 from the other; laid flat round the metal, a terpyridine or a
-    // pincer has no other way - CHEM, the brief's point 2)
+    // pincer has no other way)
     const waysOf = (c: number[]): number[][] => {
       const turned = c.length > 1 ? [c, [...c].reverse()] : [c];
       if (c.length !== 3 || !six) return turned;
@@ -475,12 +480,12 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
       const keeps = (o: number[]) =>
         o.every((p, i) => p < 0 || o.every((q, j) => q < 0 || j <= i || (j - i === 3) === across.has(p < q ? `${p},${q}` : `${q},${p}`)));
       const kept = orders.filter(keeps);
-      if (kept.length) return { at, step, orders: kept };
+      if (kept.length) return { at, step, orders: kept, spokes };
     }
-    return { at, step, orders };
+    return { at, step, orders, spokes };
   }
   go(chains.slice(1), chains[0]);
-  return { at, step, orders };
+  return { at, step, orders, spokes: six ? 6 : 0 };
 }
 
 /** How many layouts of a ring system are tried at most where rings alike could each go next (`placeRingSystem`). */

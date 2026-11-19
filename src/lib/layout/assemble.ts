@@ -540,7 +540,7 @@ function assign(
     const own = placed.filter((v) => mol.systemOf[v] === mol.systemOf[a]);
     // (a six-bond metal whose chelates' donors stand on its spokes - three lines through it, 60 degrees apart (ringSystem metalHub) -
     // has its other ligands on the spokes left free: the heaviest first, nearest the middle of those left;
-    // (and a four-bond one with a chelate - Pt(en)Cl2 - its other two on the right angles left: backlog 124)
+    // (and a four-bond one with a chelate - Pt(en)Cl2 - its other two on the right angles left)
     const nSpokes = mol.neighbours[a].length;
     if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && (nSpokes === 6 || nSpokes === 4) && own.length >= 2) {
       const grid = (2 * Math.PI) / nSpokes;

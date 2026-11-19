@@ -1070,7 +1070,11 @@ round, as elements either).
   next to each other. A chelate's two ends stand on neighbouring spokes,
   its ring drawn between them, never on one line; [Co(en)3]3+ has its
   three chelates on the three neighbouring pairs, and trans-[Co(en)2Cl2]+
-  its two Cl on one line. The wedge forms of the text are never made by
+  its two Cl on one line. A metal in a macrocycle - its donors closing a
+  ring round it, cyclam's four N or a porphyrin's - keeps them square,
+  as a metal of four bonds in a ring does, with its other two ligands
+  beside: four donors cannot stand on neighbouring spokes and close round
+  it. The wedge forms of the text are never made by
   Meno - they state the hand, which Meno holds no record of - but one
   drawn so is read and kept (EDITOR-2D.md, *Clean-up*).
   Where a chelate's two donors are labelled and carry H - ethane-1,2-

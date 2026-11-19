@@ -138,6 +138,8 @@ function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
     };
     // (laid out as three lines: four donors or more on their spokes already, each on its own; the others turned onto the spokes left -
     // however far a step after the lines were set moved them, an NH2's H given room, say)
+    // (laid out as three lines at all: four donors on or by their spokes - a macrocycle's square, its N 15 degrees off them, is none)
+    if (round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_ON).length < 4) return;
     const onIt = round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_SNAP);
     const usedSpokes = new Set(onIt.map((v) => spokeOf(angle(v))));
     if (onIt.length < 4 || usedSpokes.size !== onIt.length) return;
@@ -213,6 +215,9 @@ function chelatesOpened(input: LayoutInput, out: Layout2D): Layout2D {
   };
   near.forEach((round, m) => {
     if (round.length !== 6 || out.depth[m] != null || !isMetal(input.atoms[m].el)) return;
+    // (laid out as three lines: its six spokes 60 degrees apart - a macrocycle's metal, its donors square, is left as it is)
+    const ways = round.map((v) => Math.atan2(out.y[v] - out.y[m], out.x[v] - out.x[m])).sort((p, q) => p - q);
+    if (!ways.every((t, i) => Math.abs((i + 1 < 6 ? ways[i + 1] : ways[0] + 2 * Math.PI) - t - Math.PI / 3) <= SPOKES_EVEN)) return;
     for (const d1 of round) {
       for (const d2 of round) {
         if (d2 <= d1 || !labelled(d1) || !labelled(d2)) continue;
@@ -1895,6 +1900,11 @@ export const CHELATE_OPENED = 1.8;
 
 /** How far off its spoke a donor of such a metal may lie and still count as on it, its slip turned back (`onSpokes`). */
 const SPOKES_SNAP = rad(15);
+/**
+ * How near its spoke a donor stands where the three lines set it, or a step after moved it a little: four such show the metal laid out
+ * so (`onSpokes`). A square's donors stand 15 degrees off every spoke, whichever way it is turned: never taken for three lines.
+ */
+const SPOKES_ON = rad(10);
 
 /**
  * A six-bond atom of `piece` - a metal, or SF6's S - whose neighbours

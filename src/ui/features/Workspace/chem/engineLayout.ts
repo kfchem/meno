@@ -32,6 +32,7 @@ import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, readAs } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
+import { factsOf } from "../../../../lib/chem/perception/facts";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
@@ -377,10 +378,11 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const opposite = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
   const laid = octahedraKept(job, opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite));
   // (a six-bond metal with a tridentate - three of its donors in one ligand - laid out other than as three lines through it: the
-  // layout cannot yet put a fused tridentate's metal on its spokes (backlog 125), and a picture off the lines can show two donors
+  // layout cannot yet put a fused tridentate's metal on its spokes, and a picture off the lines can show two donors
   // side by side that are across - refused, saying so, rather than drawn so)
   for (const [i, a] of input.atoms.entries()) {
-    if (i >= n || !sixWithTridentate(input, i)) continue;
+    // (a macrocycle's metal is no such case: its donors close round it, and it keeps the square they are drawn in - ringSystem metalHub)
+    if (i >= n || !sixWithTridentate(input, i) || donorsCloseRound(input, i)) continue;
     const round = input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
     const ways = round.map((o) => Math.atan2(laid.y[o] - laid.y[i], laid.x[o] - laid.x[i]));
     const onLines = ways.every((t) => {
@@ -1043,6 +1045,32 @@ export function nextFree(model: Model): number {
  * joined to each other not through it - a tridentate's (dien, tacn, terpy): the one kind of ligand whose meridional or facial form a
  * turn of it round the metal cannot change (`oppositesKept`), so the layout is told which (`tridentatesDrawn`).
  */
+/**
+ * Whether a metal's donors close a ring round it - a macrocycle's, cyclam's four N or a porphyrin's, a triazacyclononane's three - as
+ * ringSystem `metalHub` reads it: the two donors each smallest ring through the metal binds it by, linked, run round in a cycle.
+ */
+export function donorsCloseRound(input: LayoutInput, m: number): boolean {
+  const pairs = new Set<string>();
+  const donors = new Set<number>();
+  for (const r of factsOf(input).rings) {
+    const i = r.indexOf(m);
+    if (i < 0) continue;
+    const [p, q] = [r[(i + r.length - 1) % r.length], r[(i + 1) % r.length]];
+    pairs.add(p < q ? `${p},${q}` : `${q},${p}`);
+    donors.add(p).add(q);
+  }
+  // (a cycle among the links: a link between two donors already joined)
+  const root = new Map([...donors].map((d) => [d, d]));
+  const find = (d: number): number => (root.get(d) === d ? d : find(root.get(d)!));
+  for (const k of pairs) {
+    const [p, q] = k.split(",").map(Number);
+    const [a, b] = [find(p), find(q)];
+    if (a === b) return true;
+    root.set(a, b);
+  }
+  return false;
+}
+
 export function sixWithTridentate(input: LayoutInput, m: number): boolean {
   if (!isMetal(input.atoms[m].el)) return false;
   const round = input.bonds.flatMap((b) => (b.a === m ? [b.b] : b.b === m ? [b.a] : []));
