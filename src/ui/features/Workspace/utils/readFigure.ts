@@ -19,6 +19,7 @@ import { toBase64 } from "../../../../lib/clipboard";
 import { PICTURE_DPI, PICTURE_DPI_MOST, pictureDpi } from "../../../../lib/figure/tracedRead";
 import type { FigureSpot, PictureItem } from "../store/types";
 import { picturePng, pngPixels } from "./pictures";
+import { pngBuffer } from "./pngPixels";
 import { systemGlyphs } from "./glyphShapes";
 import { pictureReadOff } from "./pictureOff";
 import { figureFrom, modelOf, pictureResult, type FigureResult, type Unread } from "./figures";
@@ -38,24 +39,23 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
   if ("none" in read && drawn.pictures.length) {
     working?.("Reading the picture…");
     const shot = await boxPicture(sha256, page, box, pictureDpi(drawn, box, PICTURE_DPI, PICTURE_DPI_MOST));
-    const pixels = await pngPixels(shot.png);
     // (a pixel is 72/dpi of a point, from the box's top left as the reader drew it: whole pixels)
     const k = 72 / shot.dpi;
     const at = { scale: k, x: Math.floor(box[0] / k) * k, y: Math.floor(box[1] / k) * k };
-    return withPluginOffered(await ownPicture(pixels, at, drawn.letters, (x, y, bond) => ({ sha256, page, x, y, bond })));
+    return withPluginOffered(await ownPicture(shot.png, at, drawn.letters, (x, y, bond) => ({ sha256, page, x, y, bond })));
   }
   return read;
 }
 
 
 /**
- * A picture read by Meno's own reader, in a worker (pictureOff.ts): its structure, each atom tied to its place - `spot` - or why none.
+ * A picture read by Meno's own reader from its PNG, in a worker (pictureOff.ts) - decoded and traced there, never on the thread the drawing
+ * runs on: its structure, each atom tied to its place - `spot` - or why none.
  * A structure with an atom with more bonds than it takes is left out and said, as a figure's is; what is left must hold a bond: a
  * lone atom is no structure read (the ring of a charge, read as an O, once its structure is left out).
  */
-async function ownPicture(pixels: ImageData, at: { scale: number; x: number; y: number }, letters: FigureDrawn["letters"], spot: (x: number, y: number, bond: number) => FigureSpot): Promise<FigureResult | Unread> {
-  const data = pixels.data.buffer.slice(pixels.data.byteOffset, pixels.data.byteOffset + pixels.data.byteLength) as ArrayBuffer;
-  const read = await pictureReadOff({ width: pixels.width, height: pixels.height, data, at, known: systemGlyphs(), letters: [...letters] });
+async function ownPicture(png: Uint8Array, at: { scale: number; x: number; y: number }, letters: FigureDrawn["letters"], spot: (x: number, y: number, bond: number) => FigureSpot): Promise<FigureResult | Unread> {
+  const read = await pictureReadOff({ png: pngBuffer(png), at, known: systemGlyphs(), letters: [...letters] });
   if ("none" in read) return read;
   return pictureResult(read, (x, y) => spot(x, y, read.bond));
 }
@@ -114,7 +114,7 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
   if (!isTauri()) return { none: "Pictures are read in the app." };
   const png = await picturePng(picture);
   if (!png) return { none: "A film is not read as a structure." };
-  if (by !== "plugin") return withPluginOffered(await ownPicture(await pngPixels(png), { scale: 1, x: 0, y: 0 }, [], (x, y, bond) => ({ sha256: picture.sha256, x, y, bond })));
+  if (by !== "plugin") return withPluginOffered(await ownPicture(png, { scale: 1, x: 0, y: 0 }, [], (x, y, bond) => ({ sha256: picture.sha256, x, y, bond })));
   const read = await readByPlugin(png);
   if ("none" in read) return read;
   return { model: modelOf(read, (x, y) => ({ sha256: picture.sha256, x, y, bond: read.bond })) };

@@ -1,10 +1,11 @@
 /**
  * A picture read off the thread the drawing runs on (pictureWorker.ts):
- * never on it - tracing one takes up to a second. Where there are no
- * workers - tests - it is read here.
+ * never on it - decoding and tracing one takes up to seconds. Where there
+ * are no workers - tests - it is read here.
  */
 import type { FigureRead } from "../../../../lib/figure/read";
-import { pictureRead, type PictureJob } from "./tracedPicture";
+import { pictureRead, type PicturePngJob } from "./tracedPicture";
+import { pngPixels } from "./pictures";
 
 type Answer = { id: number; ok: true; read: FigureRead | { none: string } } | { id: number; ok: false; error: string };
 
@@ -33,12 +34,16 @@ function started(): Worker {
   return w;
 }
 
-/** A picture read in a worker: its figure, or why none. Its pixels go over as they are, no copy. */
-export function pictureReadOff(job: PictureJob): Promise<FigureRead | { none: string }> {
-  if (typeof Worker === "undefined") return Promise.resolve().then(() => pictureRead(job));
+/** A picture read in a worker, from its PNG - decoded there: its figure, or why none. Its bytes go over as they are, no copy. */
+export function pictureReadOff(job: PicturePngJob): Promise<FigureRead | { none: string }> {
+  if (typeof Worker === "undefined")
+    return pngPixels(new Uint8Array(job.png)).then((p) => {
+      const { png: _png, ...rest } = job;
+      return pictureRead({ ...rest, width: p.width, height: p.height, data: p.data.buffer as ArrayBuffer });
+    });
   return new Promise((done, fail) => {
     const id = ++asked;
     waiting.set(id, { done, fail });
-    started().postMessage({ id, job }, [job.data]);
+    started().postMessage({ id, job }, [job.png]);
   });
 }

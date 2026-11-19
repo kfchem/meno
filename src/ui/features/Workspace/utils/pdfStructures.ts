@@ -14,9 +14,9 @@ import { textHad } from "../../../../lib/pdf/text";
 import type { CompoundLabel, PageStructure } from "./pageStructures";
 import { labelsRead, type PageLabels } from "./compoundIndex";
 import { figureReadOff } from "./structuresOff";
-import type { FigureJob, FigureStructures } from "./structuresRead";
+import type { FigurePngJob, FigureStructures } from "./structuresRead";
 import { boxPicture } from "../../../../lib/pdf/reader";
-import { pngPixels } from "./pictures";
+import { pngBuffer } from "./pngPixels";
 import { systemGlyphs } from "./glyphShapes";
 
 export type { FigureStructures } from "./structuresRead";
@@ -64,7 +64,7 @@ export function figureStructuresHad(sha256: string, page: number, figures: reado
     if (begun) return;
     begun = true;
     hurried.delete(key);
-    const job = (drawn: ArrayBuffer): FigureJob => ({ objects, text: textHad(sha256, page), figures: [...figures], k, drawn, sha256, page });
+    const job = (drawn: ArrayBuffer): FigurePngJob => ({ objects, text: textHad(sha256, page), figures: [...figures], k, drawn, sha256, page });
     invoke<ArrayBuffer>("pdf_figure_raw", { sha: sha256, page, box: figures[k] })
       .then((drawn) => figureReadOff(job(drawn), now))
       // (a figure that is a picture: drawn by the PDF's reader as finely as the worker said, and read again, traced)
@@ -96,17 +96,17 @@ export function figureStructuresHad(sha256: string, page: number, figures: reado
 }
 
 /**
- * A figure that is a picture read again, traced: its box drawn by the PDF's reader (off this thread) at `dpi`, its pixels and the
- * system's letters (drawn here, on a canvas: a worker has none) sent with the figure to the worker.
+ * A figure that is a picture read again, traced: its box drawn by the PDF's reader (off this thread) at `dpi`, its PNG and the system's
+ * letters (drawn here, with the window's own letters) sent with the figure to the worker, which decodes it - never this thread: a picture
+ * at 600 dpi is tens of millions of pixels. Read ahead, not `now`: sent only once the page is calm, never during a scroll or a zoom.
  */
-async function pictureAgain(job: (drawn: ArrayBuffer) => FigureJob, sha256: string, page: number, box: Box, dpi: number, now: boolean): Promise<FigureStructures> {
+async function pictureAgain(job: (drawn: ArrayBuffer) => FigurePngJob, sha256: string, page: number, box: Box, dpi: number, now: boolean): Promise<FigureStructures> {
   const shot = await boxPicture(sha256, page, box, dpi);
-  const pixels = await pngPixels(shot.png);
+  if (!now) await new Promise<void>((calm) => whenCalm(calm));
   const k = 72 / shot.dpi;
   const at = { scale: k, x: Math.floor(box[0] / k) * k, y: Math.floor(box[1] / k) * k };
   const drawn = await invoke<ArrayBuffer>("pdf_figure_raw", { sha: sha256, page, box });
-  const data = pixels.data.buffer.slice(pixels.data.byteOffset, pixels.data.byteOffset + pixels.data.byteLength) as ArrayBuffer;
-  return figureReadOff({ ...job(drawn), picture: { width: pixels.width, height: pixels.height, data, at, known: systemGlyphs() } }, now);
+  return figureReadOff({ ...job(drawn), picture: { png: pngBuffer(shot.png), at, known: systemGlyphs() } }, now);
 }
 
 /** Which of a page's figures a box is, among those worked out: none where they are not, or it is none of them. */

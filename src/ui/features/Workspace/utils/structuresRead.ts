@@ -32,6 +32,8 @@ export type FigureJob = {
   /** A figure that is a picture: its box drawn (RGBA, row by row), where its pixels lie on the page, and the system's letters. */
   picture?: { width: number; height: number; data: ArrayBuffer; at: PictureAt; known: GlyphShape[] };
 };
+/** A figure's reading as asked of a worker: a picture's box as the reader drew it, its PNG - decoded there (./pngPixels), never on the thread the drawing runs on. */
+export type FigurePngJob = Omit<FigureJob, "picture"> & { picture?: Omit<NonNullable<FigureJob["picture"]>, "width" | "height" | "data"> & { png: ArrayBuffer } };
 
 /** The words a box of a page holds, as its letters say. */
 export function wordsInBox(t: Pick<PageText, "codes" | "boxes"> | null, box: Box): string {
