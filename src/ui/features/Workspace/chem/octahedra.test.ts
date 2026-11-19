@@ -190,4 +190,50 @@ describe("a six-bond metal with a tridentate", () => {
     }
     await expect((async () => laidOut(drawnFromSmiles("Cl[Ru]123(Cl)Cl.c4ccc(n1c4)-c5cccc(n25)-c6ccccn63"), MENO, undefined, undefined, true))()).rejects.toThrow(/tridentate could not be laid out as three lines/);
   });
+
+  it("is kept by Clean-up meridional where drawn meridional and facial where drawn facial, never the one made the other - and refused where two of its joined donors are drawn across: Co(dien)Cl3", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    // (dien's two ends - each N with one C - across each other: meridional; not: facial. Read by the angles round the Co)
+    const mer = (m: Model) => {
+      const c = m.atoms.find((a) => a.el === "Co")!;
+      const ends = m.bonds
+        .filter((b) => b.a === c.id || b.b === c.id)
+        .map((b) => m.atoms.find((a) => a.id === (b.a === c.id ? b.b : b.a))!)
+        .filter((o) => o.el === "N" && m.bonds.filter((b) => (b.a === o.id || b.b === o.id) && b.a !== c.id && b.b !== c.id).length === 1);
+      expect(ends).toHaveLength(2);
+      const [p, q] = ends.map((o) => Math.atan2(o.y - c.y, o.x - c.x));
+      return Math.abs(Math.atan2(Math.sin(p - q), Math.cos(p - q))) > (150 * Math.PI) / 180;
+    };
+    const laid = await laidOut(drawnFromSmiles("Cl[Co]123(Cl)Cl.N1CCN2CCN3"), MENO, undefined, undefined, true);
+    const co = laid.atoms.find((a) => a.el === "Co")!;
+    const round = laid.bonds.filter((b) => b.a === co.id || b.b === co.id).map((b) => laid.atoms.find((a) => a.id === (b.a === co.id ? b.b : b.a))!);
+    const end = round.find((o) => o.el === "N" && laid.bonds.filter((b) => (b.a === o.id || b.b === o.id) && b.a !== co.id && b.b !== co.id).length === 1)!;
+    // (the other isomer, drawn: one end of dien and a Cl changed places round the Co - each Cl tried, for a drawing of each kind twice)
+    const drawings: Model[] = [laid];
+    for (const cl of round.filter((o) => o.el === "Cl")) {
+      drawings.push({ ...laid, atoms: laid.atoms.map((a) => (a.id === end.id ? { ...a, x: cl.x, y: cl.y } : a.id === cl.id ? { ...a, x: end.x, y: end.y } : a)) });
+    }
+    // (dien's middle N - the one with two C - drawn across one of its ends: two donors joined in one chelate, which cannot be across)
+    const strained = (m: Model) => {
+      const c = m.atoms.find((a) => a.el === "Co")!;
+      const way = (o: { x: number; y: number }) => Math.atan2(o.y - c.y, o.x - c.x);
+      const ns = m.bonds.filter((b) => b.a === c.id || b.b === c.id).map((b) => m.atoms.find((a) => a.id === (b.a === c.id ? b.b : b.a))!).filter((o) => o.el === "N");
+      const others = (o: { id: number }) => m.bonds.filter((b) => (b.a === o.id || b.b === o.id) && b.a !== c.id && b.b !== c.id).length;
+      const middle = ns.find((o) => others(o) === 2)!;
+      return ns.some((o) => o !== middle && Math.abs(Math.atan2(Math.sin(way(o) - way(middle)), Math.cos(way(o) - way(middle)))) > (150 * Math.PI) / 180);
+    };
+    const kinds = drawings.map(mer);
+    const can = drawings.map((d) => !strained(d));
+    expect(kinds.filter((_, k) => can[k]), "both kinds drawn").toContain(true);
+    expect(kinds.filter((_, k) => can[k]), "both kinds drawn").toContain(false);
+    for (const [k, drawn] of drawings.entries()) {
+      forgetLaidOut();
+      if (!can[k]) {
+        await expect(laidOut(drawn, MENO), `drawing ${k}, a chelate's two donors across`).rejects.toThrow(/opposite each other as drawn/);
+        continue;
+      }
+      const out = await laidOut(drawn, MENO);
+      expect(mer(out), `drawing ${k}, ${kinds[k] ? "meridional" : "facial"}`).toBe(kinds[k]);
+    }
+  });
 });

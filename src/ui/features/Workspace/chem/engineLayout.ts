@@ -22,7 +22,7 @@ import { againstLowest, compared, saidOf, type Difference, type Said, type SaidC
 import { pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { etaBondedAtomByAtom, isMetal, type Arranged, type CisTrans } from "../../../../lib/layout/perceive";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { arrangementNotGiven } from "./arrangementsMarked";
 import { allylCurve } from "../../../../lib/chem/allylArc";
@@ -280,7 +280,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   // a star at a haptic bond's end: the pi system it stands for (an H of a stereocentre is none of one)
   const pi = new Map<number, number[]>();
   for (const [star, atoms] of piSystems(part, drawing)) if (atoms.every((i) => at.has(i))) pi.set(star, atoms.map((i) => at.get(i)!));
-  const input: LayoutInput = {
+  const built: LayoutInput = {
     atoms: kept.map((i) => {
       const t = configuration(i);
       return {
@@ -321,6 +321,10 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
         }
       : {}),
   };
+  // (a six-bond metal's tridentate meridional or facial as drawn: which donors are across, for the layout to put them so - a picture
+  //  made by turning its units round the metal could not make the one of the other)
+  const across = tridentatesDrawn(built, kept.map((i) => part.atoms[i]));
+  const input: LayoutInput = across.length ? { ...built, arrangements: across } : built;
   const ids = kept.map((i) => part.atoms[i].id);
   // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
   const seen = withRecognisedDepth(drawing.atoms, drawing.bonds, cageViews);
@@ -376,26 +380,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // layout cannot yet put a fused tridentate's metal on its spokes (backlog 125), and a picture off the lines can show two donors
   // side by side that are across - refused, saying so, rather than drawn so)
   for (const [i, a] of input.atoms.entries()) {
-    if (i >= n || !isMetal(a.el)) continue;
+    if (i >= n || !sixWithTridentate(input, i)) continue;
     const round = input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
-    if (round.length !== 6 || round.some((o) => input.atoms[o].el === "*" || isMetal(input.atoms[o].el))) continue;
-    const near = new Map<number, number[]>();
-    for (const b of input.bonds) {
-      near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
-      near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
-    }
-    const tridentate = round.some((d) => {
-      const seen = new Set([d]);
-      for (const todo = [d]; todo.length; ) {
-        for (const v of near.get(todo.pop()!) ?? []) {
-          if (v === i || seen.has(v)) continue;
-          seen.add(v);
-          todo.push(v);
-        }
-      }
-      return round.filter((e) => seen.has(e)).length >= 3;
-    });
-    if (!tridentate) continue;
     const ways = round.map((o) => Math.atan2(laid.y[o] - laid.y[i], laid.x[o] - laid.x[i]));
     const onLines = ways.every((t) => {
       const u = (t - ways[0]) / (Math.PI / 3);
@@ -1052,6 +1038,47 @@ export function nextFree(model: Model): number {
  * trans-[Pt2Cl4(NH3)2]) - nor by mirroring a chelate drawn so, nor where a
  * change would need a donor of a larger chelate to move.
  */
+/**
+ * Whether atom `m` of a layout's input is a metal of six bonds, none to a star or another metal, three or more of whose donors are
+ * joined to each other not through it - a tridentate's (dien, tacn, terpy): the one kind of ligand whose meridional or facial form a
+ * turn of it round the metal cannot change (`oppositesKept`), so the layout is told which (`tridentatesDrawn`).
+ */
+export function sixWithTridentate(input: LayoutInput, m: number): boolean {
+  if (!isMetal(input.atoms[m].el)) return false;
+  const round = input.bonds.flatMap((b) => (b.a === m ? [b.b] : b.b === m ? [b.a] : []));
+  if (round.length !== 6 || round.some((o) => input.atoms[o].el === "*" || isMetal(input.atoms[o].el))) return false;
+  const near = new Map<number, number[]>();
+  for (const b of input.bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  return round.some((d) => {
+    const seen = new Set([d]);
+    for (const todo = [d]; todo.length; ) {
+      for (const v of near.get(todo.pop()!) ?? []) {
+        if (v === m || seen.has(v)) continue;
+        seen.add(v);
+        todo.push(v);
+      }
+    }
+    return round.filter((e) => seen.has(e)).length >= 3;
+  });
+}
+
+/**
+ * Which donors of each six-bond metal with a tridentate (`sixWithTridentate`) are drawn across from each other, by the angles round it
+ * (`pairingDrawn`, the reading identity and `oppositesKept` use): none where the drawing does not say. `at`: each input atom's place.
+ */
+export function tridentatesDrawn(input: LayoutInput, at: readonly { x: number; y: number }[]): Arranged[] {
+  return input.atoms.flatMap((_, m) => {
+    if (!sixWithTridentate(input, m)) return [];
+    const round = input.bonds.flatMap((b) => (b.a === m ? [b.b] : b.b === m ? [b.a] : []));
+    const partner = pairingDrawn(round.map((d) => Math.atan2(at[d].y - at[m].y, at[d].x - at[m].x)));
+    if (!partner) return [];
+    return [{ metal: m, pairs: partner.flatMap((j, i) => (i < j ? [[round[i], round[j]] as const] : [])) }];
+  });
+}
+
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
 

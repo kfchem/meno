@@ -1083,9 +1083,18 @@ round, as elements either).
   chelate ring of other atoms - a glycinate's carbonyl, a bipyridine's
   aromatic rings - is left as it is. A metal of four bonds with one
   chelate is laid out square: the chelate's two ends side by side, its
-  other two ligands on the right angles left. A tridentate that cannot
-  be set on three lines (a terpyridine's metal, its rings fused) is
-  refused by Clean-up, saying so, until the layout can.
+  other two ligands on the right angles left. A tridentate - dien, tacn -
+  is set meridional (its two outer donors on one line, its middle one on
+  a spoke of another) or facial (no two of its donors on one line). Put
+  down from a SMILES that says neither, the layout's choice stands.
+  Cleaned up, it is the one drawn: Clean-up gives the layout the pairs the
+  drawing has across (`tridentatesDrawn`, `LayoutInput.arrangements`), and
+  the metal's arrangements tried are only those that put those pairs on
+  one line (`metalHub`), since no turn of the ligand round the metal makes
+  the one of the other. Two of its joined donors drawn across each other
+  are refused, as any chelate's are. A tridentate that cannot be set on
+  three lines (a terpyridine's metal, its rings fused) is refused by
+  Clean-up, saying so, until the layout can.
 - **A donor bonded to a metal** (a phosphine's P) spreads what it carries
   away from the metal, as a tripod's legs, 75 degrees apart.
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the

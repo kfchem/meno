@@ -466,6 +466,17 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
       const uses = first.filter((d) => d < 0).length;
       if (uses <= spokes - n) spread(chains.slice(1), first, spokes - n - uses);
     }
+    // (where the input says which donors are across - a drawing Clean-up lays out again, its tridentate meridional or facial as drawn:
+    // `LayoutInput.arrangements` - only the orders that put each pair given on one line and no other two of the chains' donors on one;
+    // none such, all of them, and Clean-up's own check refuses what does not keep the drawing)
+    const given = six ? mol.input.arrangements?.find((x) => x.metal === at) : undefined;
+    if (given) {
+      const across = new Set(given.pairs.map(([p, q]) => (p < q ? `${p},${q}` : `${q},${p}`)));
+      const keeps = (o: number[]) =>
+        o.every((p, i) => p < 0 || o.every((q, j) => q < 0 || j <= i || (j - i === 3) === across.has(p < q ? `${p},${q}` : `${q},${p}`)));
+      const kept = orders.filter(keeps);
+      if (kept.length) return { at, step, orders: kept };
+    }
     return { at, step, orders };
   }
   go(chains.slice(1), chains[0]);
