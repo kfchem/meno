@@ -342,6 +342,8 @@ describe("acids, esters, acid halides", () => {
     expect(at(smiles, 3)).toEqual(["1"]);
     expect(at(smiles, 4, 9).sort()).toEqual(["2", "6"]);
     expect(locantOf(smiles, 1, 10)).toEqual([null, null]);
+    // (the alphabet not built: the ring's atoms whose numbers differ either way said as Meno's own - never a silent choice)
+    expect(ownOf(smiles)).toEqual([4, 6, 8, 9]);
   });
 
   it("2,2'-sulfanediyldiacetic acid: the link not of the principal class, so multiplied - C=O 1 and 1'", () => {
