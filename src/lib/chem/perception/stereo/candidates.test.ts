@@ -146,3 +146,12 @@ describe("words and places at the rules' edges", () => {
     expect(notCandidate(graph("[NH+](C)(CC)CCC"), { kind: "centre", at: 0 })).toBe(NOT_CANDIDATE.ammonium);
   });
 });
+
+describe("a sulfinyl H, R-S(=O)-H, keeps no configuration (the chemistry check's ruling)", () => {
+  it("CS=O, its S(IV) carrying an H (the one count), is no centre and no place left open: its H moves to O, the sulfenic acid", () => {
+    const g = smilesInput("CS=O") as unknown as SymmetryInput;
+    expect(g.atoms[1].hs).toBe(1);
+    expect(candidates(g).filter((c) => c.kind === "centre")).toEqual([]);
+    expect(notCandidate(g, { kind: "centre", at: 1 })).toBe(NOT_CANDIDATE.three);
+  });
+});
