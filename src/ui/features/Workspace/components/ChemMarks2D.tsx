@@ -24,8 +24,7 @@ import {
 import { useEditor } from "../store";
 import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
-import { readingOf, type Reading } from "../configuration/changes";
-import { atomSaid, bondSaid } from "../configuration/said";
+import { hasLooks, pointedSaid } from "../configuration/pointedSaid";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
@@ -60,19 +59,6 @@ const STEREO_ORDER = 35;
  * and written as here (chem/marks `stereoPictureItems`, `stereoTextItem`,
  * 2026-10-21), never the rings.
  */
-/** What the look the pointer rests on states (configuration/said), the drawing read once for each model it is asked of. */
-const readings = new WeakMap<Model, Reading>();
-function lookSaid(model: Model, atom: number | undefined, bond: number | undefined, marks: ChemMarks | null): string | null {
-  if (!model.bonds.some((b) => b.stereo || b.display) && !model.atoms.some((a) => a.z != null)) return null;
-  let reading = readings.get(model);
-  if (!reading) readings.set(model, (reading = readingOf(model)));
-  const label = (key: string) => {
-    const id = Number(key.slice(key.indexOf("-") + 1));
-    return key.startsWith("centre-") ? marks?.centres.get(id) : marks?.doubleBonds.get(id);
-  };
-  return atom != null ? atomSaid(model, reading, atom, label) : bond != null ? bondSaid(model, reading, bond, label) : null;
-}
-
 export default function ChemMarks2D({
   marks,
   unsure,
@@ -99,7 +85,10 @@ export default function ChemMarks2D({
   // (the view's zoom, where there is anything to mark: with nothing, a zoom
   // draws nothing here again - and marks fading out keep the size they had)
   const zoomWanted = useRef(1);
-  const zoom = useDrawnZoom((z) => (wanted ? (zoomWanted.current = z) : zoomWanted.current));
+  // (and while the pointer rests on an atom or a bond of a drawing with a look: what it states is said, at the view's zoom)
+  const looks = useMemo(() => hasLooks(model), [model]);
+  const tipWanted = looks && (hoveredAtom != null || hoveredBond != null);
+  const zoom = useDrawnZoom((z) => (wanted || tipWanted ? (zoomWanted.current = z) : zoomWanted.current));
   // each atom where it is drawn this frame: a dragged atom where it is
   const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
   // the structure where it is drawn this frame
@@ -315,17 +304,9 @@ export default function ChemMarks2D({
   //  turns in the mirror image: said under it as a box's words are, with no box)
   const saidPointed = (() => {
     if (pointed || !marksRead) return null;
-    const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom) : undefined;
-    const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond) : undefined;
-    const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
-    const shown = atom ? atom.stereoShown : bond?.stereoShown;
-    // (its own words where its R, S, E or Z is shown with some - why it has none; else what its look states: configuration/said)
-    const text = (key && shown && marks?.said?.get(key)) || (key ? lookSaid(model, atom?.id, bond?.id, marks) : null);
-    if (!key || !text) return null;
-    const p = atom ? at.get(atom.id) : bond ? at.get(bond.a) : undefined;
-    const q = bond ? at.get(bond.b) : p;
-    if (!p || !q) return null;
-    return { key, text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, size: 0.6 * labelFont };
+    // (each atom where it is drawn this frame - looked up here, not from `at`, which is empty while nothing is marked)
+    const said = pointedSaid(model, marks, hoveredAtom, hoveredBond, (id) => at.get(id) ?? atoms.find((a) => a.id === id));
+    return said && { ...said, size: 0.6 * labelFont };
   })();
   if (!valenceShown.length && !stereoShown.length && !saidPointed) return null;
 
