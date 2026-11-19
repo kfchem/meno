@@ -5,7 +5,8 @@ import { wordsSet } from "../../../../../lib/chem/captions";
 import { labelSetOf } from "../../../../../lib/chem/layout2d";
 import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
-import { restyledDrawn } from "../../utils/copyPaste";
+import { centredAt, restyledDrawn } from "../../utils/copyPaste";
+import { chairDrawing, FIRST_FORM } from "../../projections/chair";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -14,6 +15,7 @@ import { newBondFrom } from "../../utils/geometry";
 import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
+import { depthStored, recognisedDepthOf } from "../../chem/depthHeld";
 import { renumbered } from "../../chem/atomMap";
 import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
@@ -43,6 +45,7 @@ import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 import { principalTurn } from "../../utils/align3d";
 import { noteTurns } from "../turnJournal";
+import { fischerCentres, fischerWedges } from "../../utils/fischer";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -123,6 +126,17 @@ const SELECTION_KEYS = ["sel", "selAnchor", "sel3d", "chosen3d", "selFlow", "pdf
 type PressNote = { depth: number; state: WorkspaceDocument; selection: Pick<EditorState, (typeof SELECTION_KEYS)[number]> };
 /** The press noted last, by its document: none once taken back. */
 const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
+
+/**
+ * A chair the Quick Add icon put down, by the model it left: its ring atoms' ids in the solid's order, its ring's middle, its form and its
+ * bond's length. A click on the icon while the model is still one of these - the chair the last step put down or turned, nothing since -
+ * turns that chair to its other form instead of putting down another (`putChair`).
+ */
+type ChairPut = { ids: number[]; at: { x: number; y: number }; form: 0 | 1; length: number };
+const chairPuts = new WeakMap<Model, ChairPut>();
+
+/** How near the chair just put down Quick Add is opened for its icon to turn that chair, in bonds from its ring's middle: on it, not beside it. */
+const CHAIR_TURN_REACH = 2;
 
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
@@ -214,8 +228,18 @@ export const createModelSlice = (
     whileMoving(() => doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`)));
   },
 
+  placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => {
+    doc.edit(name, (d) => ops.placeAtoms(d, moves));
+  },
+
   dropMoveAtoms: (gesture: string) => {
     doc.drop(`move-atoms:${gesture}`);
+  },
+
+  holdRecognisedDepth: (atoms: ReadonlySet<number>, gesture: string) => {
+    // (a ring in perspective with no depth, about to be turned: its worked-out depth stored first, in the same step - chem/depthHeld)
+    const held = recognisedDepthOf(get().model, atoms);
+    if (held.size) doc.edit("move atoms", (d) => depthStored(d, held), gestureStep(`move-atoms:${gesture}`));
   },
 
   settleMove: (gesture: string, atoms: Iterable<number>) => {
@@ -236,11 +260,14 @@ export const createModelSlice = (
     const words = among.captions;
     // (all of it - and the pictures, texts' sheets, PDFs, slides, shapes and molecules in 3D selected with it - about the middle of all it moves, which so stays where it was)
     const mid = turnOverMiddle(get(), { arrows: among.arrows, pluses: among.pluses, captions: words })!;
-    const over = turnedOver(model, sel.atoms, axis, mid);
+    // (a ring in perspective with no depth: its worked-out depth stored first, so that it is turned over as one drawn with depth is - the
+    //  same compound seen from its other side, not its mirror image: chem/depthHeld)
+    const held = recognisedDepthOf(model, sel.atoms);
+    const over = turnedOver(held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model, sel.atoms, axis, mid);
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)
-    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(d, over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
@@ -430,6 +457,17 @@ export const createModelSlice = (
     );
   },
 
+  // (an unpaired electron given to every atom of `ids`, or taken from each, as one step - an atom's menu reaching the atoms
+  //  selected with it: docs/EDITOR-2D.md, *Selecting*)
+  setRadicals: (ids: Iterable<number>, on: boolean) => {
+    const atoms = doc.getState().model.atoms;
+    const changing = [...new Set(ids)].map((id) => atoms.find((a) => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a && !!a.radical !== on);
+    if (!changing.length) return;
+    doc.edit(on ? "unpaired electron" : "no unpaired electron", (d) =>
+      changing.reduce((acc, atom) => ops.setAtomChemistry(acc, atom.id, { ...atom, radical: on ? "doublet" : undefined }), d),
+    );
+  },
+
   deleteAtom: (id: number) => {
     if (doc.edit("delete atom", (d) => ops.deleteParts(d, [id], []))) {
       forgetDeleted(set);
@@ -463,6 +501,12 @@ export const createModelSlice = (
   // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's
   //  round, about itself, where the kind is the right-clicked bond's own: utils/bondKinds `bondKindStepPatch`; nothing, where
   //  it would change nothing)
+  readFischer: (at: number) => {
+    const patches = fischerWedges(fischerCentres(get().model, at));
+    if (!patches.length) return false;
+    doc.edit("read as a Fischer projection", (d) => patches.reduce((acc, [id, patch]) => ops.updateBond(acc, id, patch), d));
+    return true;
+  },
   setBondsKind: (ids: readonly number[], kind: BondKindName, stepOn = false) => {
     const { model } = get();
     const patches = ids.flatMap((id) => {
@@ -488,13 +532,17 @@ export const createModelSlice = (
     return true;
   },
 
-  // (clicks on a bond, so many in a row: the first selects it alone - a click never changes the compound (the maintainer,
-  //  2026-11-14) - the second makes it double, a double's second line on its next side as the 2 key does, the third a triple)
+  // (clicks on a bond, so many in a row: one turns it as the 1 key does (the maintainer, 2026-11-17), two make it double, a double's
+  //  second line on its next side as the 2 key does, three a triple)
   bondClicked: (id: number, clicks: number) => {
     const { model } = get();
     const bond = model.bonds.find((b) => b.id === id);
     if (!bond) return;
-    if (clicks <= 1) return get().clickSelectBond(id);
+    // (one click: the key 1's round - a double or triple made single, a single round its wedge, hashed wedge, the other end narrow)
+    if (clicks <= 1) {
+      get().bondKey(id, 1);
+      return;
+    }
     if (clicks === 2) {
       const patch = doubleClickPatch(bond, model.atoms, model.bonds);
       if (bond.order === 2) get().setBondDoubleMode(id, patch.doubleMode!);
@@ -502,6 +550,13 @@ export const createModelSlice = (
       return;
     }
     get().updateBond(id, { order: 3, stereo: "none" });
+  },
+
+  // (a click's turn of a bond taken back - where the drawing is still the one it made - so that the second click of a slow
+  //  double-click makes the bond double from what it was, as one step: utils/press `turnTakenBack`)
+  takeBackTurn: (after: unknown) => {
+    if (get().model !== after) return false;
+    return doc.undo();
   },
 
   setBondOrder: (id: number, order: Bond["order"]) => {
@@ -681,6 +736,31 @@ export const createModelSlice = (
       extend: { active: false, atomId: null, pointer: null, mode: "snap" },
       fitNonce: prev.fitNonce + 1,
     }));
+  },
+
+  putChair: (at: { x: number; y: number }) => {
+    // (the chair just put down, unchanged, and Quick Add opened on it - within two bonds of its ring's middle: turned to its other form, the
+    //  view from the other side, as one step; again, back. Opened anywhere else, another chair is put down there)
+    const was = chairPuts.get(get().model);
+    if (was && Math.hypot(at.x - was.at.x, at.y - was.at.y) <= CHAIR_TURN_REACH * was.length) {
+      const form: 0 | 1 = was.form === 1 ? 0 : 1;
+      const d = chairDrawing({ at: was.at, form, firstId: 1, firstBondId: 1, length: was.length });
+      const moves = was.ids.map((id, k) => ({ id, x: d.atoms[k].x, y: d.atoms[k].y, z: d.atoms[k].z }));
+      doc.edit("the chair's other view", (dd) => ops.placeAtoms(dd, moves));
+      chairPuts.set(get().model, { ...was, form });
+      return;
+    }
+    const drawing = chairDrawing({ at, firstId: 1, firstBondId: 1 });
+    const before = new Set(get().model.atoms.map((a) => a.id));
+    get().pasteModel(centredAt(drawing, at));
+    const added = get().model.atoms.filter((a) => !before.has(a.id));
+    if (added.length !== 6) return;
+    // (each new atom matched to the drawing's atom of the same place, by the shift the paste gave them all)
+    const middle = { x: added.reduce((sum, a) => sum + a.x, 0) / 6, y: added.reduce((sum, a) => sum + a.y, 0) / 6 };
+    const shift = { x: middle.x - at.x, y: middle.y - at.y };
+    const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
+    if (new Set(ids).size !== 6) return;
+    chairPuts.set(get().model, { ids, at: middle, form: FIRST_FORM, length: drawing.scale });
   },
 
   pasteModel: (given: Drawn) => {

@@ -115,3 +115,22 @@ export function labelTextOf(a: { el: string; charge?: number; isotope?: number; 
   if (a.el === "C" && !q && !a.isotope) return "";
   return `${a.isotope ?? ""}${a.el}${charge}`;
 }
+
+/**
+ * Where a letter typed begins a label (docs/EDITOR-2D.md, *Labels typed in place*): on the selection's atoms, wherever the
+ * pointer is - the caret on the one nearest the pointer `at` (on the page; none known, the one chosen first, `anchor`, or the
+ * first) - and, with no atom selected, on the atom under the pointer; nowhere with neither. `atoms`, every atom it is written
+ * on, where there are several.
+ */
+export function labelBegunOn(
+  selected: readonly { id: number; x: number; y: number }[],
+  hovered: number | null,
+  at: { x: number; y: number } | null,
+  anchor: number | null,
+): { id: number; atoms?: number[] } | null {
+  if (!selected.length) return hovered != null ? { id: hovered } : null;
+  const near = at
+    ? selected.reduce((m, a) => (Math.hypot(a.x - at.x, a.y - at.y) < Math.hypot(m.x - at.x, m.y - at.y) ? a : m))
+    : (selected.find((a) => a.id === anchor) ?? selected[0]);
+  return selected.length > 1 ? { id: near.id, atoms: selected.map((a) => a.id) } : { id: near.id };
+}

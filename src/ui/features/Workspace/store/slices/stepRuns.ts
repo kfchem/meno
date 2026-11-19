@@ -17,24 +17,26 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, molblockOfSmiles, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { madeDrawn, molblockOfSmiles, smilesMadeDrawn, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
+import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf, stereoRows } from "../../chem/make3d";
+import { sentOf } from "../../../../../lib/chem/perception/stereo/configuration";
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
-import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
+import { EXAMINE_MS, type IsomerConfiguration } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
+import { boundGroups } from "../../../../../lib/boundOptions";
 import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
 import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
-import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { entryOfSet, compoundLetter, numberingOf, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, whenDrawnKnown, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -42,22 +44,26 @@ import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from 
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, type Flow } from "../../workflow/flow";
+import { allToRun, allWiresInto, chainTo, findSet, heldByRepeats, inputKey, inputOf, landing, repeatCrossing, repeatHolding, stepOf, stepsAfter, stepsBefore, type Flow } from "../../workflow/flow";
+import { REPEAT_IN, REPEAT_OUT, repeatRead, THIS_PASS } from "../../workflow/repeat";
+import { lastPass, passEntries, ranOut, startsFrom } from "../../workflow/repeatRun";
+import { setMolecules } from "../../workflow/entries";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
-import { failuresLine, folded, type Failure, type FailureKind } from "../../workflow/failures";
+import { failuresLine, folded, stoppedSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type CarriedRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
+import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { runMenoInTurns } from "../../workflow/meno";
+import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { DrawnRecord, EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { DrawnModel, DrawnRecord, EditorState, JobSeen, Model, Molecule3D, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, CANVAS_LOOK, finishEntry, looksOffered } from "../../render/renderOptions";
 import { handOff, stepRefused, withPresets } from "../../render/presets";
 import { progressOf, SCENE } from "../../render/renders";
@@ -221,9 +227,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
   };
 
-  /** The steps before a step: each that gives what comes into one of its inputs, once - a step of two inputs may have two. */
+  /** The steps before a step: each that gives what comes into one of its inputs, once - a step of two inputs may have two; a Repeat's, those before its In (what lands on Again and Done is read by it as a pass ends: workflow/flow `landing`). */
   const before = (d: WorkspaceDocument, id: number) => {
-    const ids = new Set(allWiresInto(d, id).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
+    const ids = new Set(allWiresInto(d, id).filter((w) => !landing(d, w)).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
     return [...ids].flatMap((k) => stepOf(d, k) ?? []);
   };
 
@@ -235,6 +241,104 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (a run that could not start: nothing it did, so nothing dropped for it)
       return step ? setRan(keepRun(d, step, false), id, { at, ok: false, said, input, kind: step.kind, ...(step.options ? { options: step.options } : {}) }) : d;
     });
+
+  /**
+   * A Repeat, pass by pass (docs/WORKFLOWS.md, *Repeat*; workflow/repeat, workflow/repeatRun): each pass, what comes into it - In's
+   * entries, then what landed on Again - put in *This pass*, each with its pass, its count of times round and its variable's value;
+   * then the steps it holds run, each after those inside it takes from; then what landed on Done added to *Out*, and what landed on
+   * Again started from as *Each pass starts* says, for the next. It ends with its last pass - as many as it makes, or none gone round
+   * again - or with Stop, the steps running finishing first and no next pass started; what was still going round when the passes ran
+   * out leaves by *Out*, marked so, and its line says how many.
+   */
+  async function runRepeat(id: number, at: number): Promise<void> {
+    const d0 = doc.getState();
+    const step = stepOf(d0, id)!;
+    const key = inputKey(d0, step, "meno");
+    const r = repeatRead(stepValues(step));
+    if ("why" in r) return void fail(id, r.why, at, key);
+    // (a wire across its frame's edge - a card dragged in or out with its wires on: said, never run past)
+    const crossed = repeatCrossing(d0, id);
+    if (crossed) return void fail(id, crossed, at, key);
+    const wired = (port: string) => allWiresInto(doc.getState(), id).filter((x) => x.to.port === port);
+    if (!wired("again").length && !wired("done").length) return void fail(id, "Nothing is wired to Again or Done: wire what the steps inside give to them", at, key);
+    if (r.repeat === "until" && !wired("again").length) return void fail(id, "Nothing is wired to Again: wire what is to go round once more, or repeat a number of times", at, key);
+    const input = inputOf(d0, id, REPEAT_IN);
+    if (!input || !input.molecules.length) return void fail(id, "Nothing comes into In", at, key);
+    const holds = input.holds as Holds3D;
+    // (its steps, each after those inside it that it takes from: by how many of them come before it)
+    const inside = step.holds ?? [];
+    const depth = (s: number) => stepsBefore(d0, s).filter((b) => inside.includes(b)).length;
+    const inner = [...inside].sort((a, b) => depth(a) - depth(b) || a - b);
+    const plain = (m: Molecule3D): Omit<Molecule3D, "id" | "at"> => {
+      const { id: _i, at: _a, ...rest } = m;
+      return rest;
+    };
+    /** What lands on one of its inputs inside, now: each set wired to it, its molecules. */
+    const landed = (port: string) => wired(port).flatMap((x) => {
+      const set = findSet(doc.getState(), x.from.set);
+      return set ? setMolecules(doc.getState(), set).map(plain) : [];
+    });
+    const cameIn = input.molecules.map(plain);
+    let current = cameIn;
+    let again: Omit<Molecule3D, "id" | "at">[] = [];
+    const out: Omit<Molecule3D, "id" | "at">[] = [];
+    let pass = 0;
+    let ranOutCount = 0;
+    let broken: string | null = null;
+    menoStops.delete(id);
+    for (pass = 1; ; pass++) {
+      const { go, spent } = passEntries(current, r, pass);
+      out.push(...spent.map(ranOut));
+      ranOutCount += spent.length;
+      // (every entry spent at the top of a pass: those already in Out - none of them still going round, found in review)
+      if (!go.length) {
+        again = [];
+        break;
+      }
+      // (the pass under way, said on its tab - Stop pressed meanwhile kept)
+      set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { pass, ...(r.repeat !== "until" ? { of: r.passes } : {}), ...(prev.repeatPasses[id]?.stopping ? { stopping: true as const } : {}) } } }));
+      doc.amend((x) => (stepOf(x, id) ? fillExit(x, stepOf(x, id)!, THIS_PASS, go, holds, undefined, w) : x), { unsaved: true });
+      for (const s of inner) {
+        if (menoStops.has(id) || !stepOf(doc.getState(), s)) break;
+        await runOnce(s);
+        // (a step inside that failed ends the passes, and the Repeat says which and why - never read as a pass run well: found in review)
+        const ran = stepOf(doc.getState(), s)?.ran;
+        if (ran && !ran.ok && !menoStops.has(id)) {
+          broken = `${kindInfo(stepOf(doc.getState(), s)!.kind).name} failed in pass ${pass}: ${ran.said}`;
+          break;
+        }
+      }
+      if (menoStops.has(id) || broken) break;
+      out.push(...landed("done"));
+      again = landed("again");
+      if (lastPass(r, pass, again.length)) break;
+      current = startsFrom(again, r.starts, cameIn);
+    }
+    const stopped = menoStops.has(id);
+    menoStops.delete(id);
+    set((prev) => {
+      const { [id]: _done, ...rest } = prev.repeatPasses;
+      return { ...prev, repeatPasses: rest };
+    });
+    if (broken) return void fail(id, broken, at, key);
+    // (still going round as its passes ran out - or as it was stopped: left by Out, marked so)
+    const left = r.repeat === "until" && !again.length ? [] : again;
+    out.push(...left.map(ranOut));
+    ranOutCount += left.length;
+    const passes = `${pass} ${pass === 1 ? "pass" : "passes"}`;
+    const said = [stopped ? `Stopped after ${passes}` : passes, `${out.length - ranOutCount} done`, ...(ranOutCount ? [`${ranOutCount} still going round, out by Out`] : [])].join(" \u00b7 ");
+    // (what leaves by Out seen as what came into In, where it passed through unmoved: its room made for it so turned, then turned - as
+    //  any step's results are, workflow/run `viewKept`)
+    const turns3d = get().turns3d;
+    const outTurns = viewKept(out, setEntries(input.molecules, holds), (e) => (e.from != null ? turns3d[e.from] : undefined));
+    const before = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
+    doc.edit("results", (x) => {
+      const s = stepOf(x, id);
+      if (!s) return x;
+      return setRan(fillExit(keepRun(x, s), s, REPEAT_OUT, out, holds, undefined, w, outTurns), id, { at, ok: !stopped, said, input: key, took: Date.now() - at, kind: s.kind, ...(stopped ? { stopped: true } : {}), ...(s.options ? { options: s.options } : {}) });
+    });
+    viewsKept(d0, id, before);
+  }
 
   /** One step run: Meno's at once; a plugin's in its worker, or as jobs. */
   async function runOne(id: number): Promise<void> {
@@ -255,17 +359,27 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const input = inputOf(d, id);
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }
+    if (by === "meno" && step.kind === "repeat") return runRepeat(id, at);
     if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
     if (by === "meno" && step.kind === "atom-map") return menoAtomMap(id, at);
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno" && step.kind === "check-structures") return checkDrawn(id, at);
     if (by === "meno" && step.kind === "stereoisomers") return stereoDrawn(id, at);
-    if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
+    if (by === "meno") {
+      const d0 = doc.getState();
+      const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
+      doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at, turnsOf: turnsFor }));
+      return void viewsKept(d0, id, before);
+    }
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
     // (a plugin stopped - one it uses not added, or not of a version it works with - runs nothing, saying why)
     const stopped = stoppedOf(plugin, addedNow());
     if (stopped) return void fail(id, `${plugin.name} is stopped. ${stopped}.`, at, key);
+    // (options taken from a property, entry by entry: by a step run as jobs, or in its plugin's worker, a call for each group of
+    // values - one that takes its options once for all of what comes in says so, never runs on the step's own values instead)
+    const bindsHere = !(takesNothing(step.kind) || step.kind === "render" || (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") || (kindInfo(step.kind).gives === "structures" && inputOf(d, id)?.holds === "structures"));
+    if (step.bound && Object.keys(step.bound).length && !bindsHere) return void fail(id, `${kindInfo(step.kind).name} here takes its options as given on its card, not from a property: give each its own value`, at, key);
     if (takesNothing(step.kind)) return runGenerate(id, plugin, at);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
     if (step.kind === "render") return renderEach(id, plugin, at);
@@ -382,6 +496,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * its valence was checked and by what - never claiming a check not made.
    */
   async function enumerateChecked(id: number, at: number): Promise<void> {
+    // (said to be running at once - its valence checked, its products made in their worker - so that Stop is seen to be
+    //  offered from the first moment: a clock until its products are counted, `leftOpen`'s count after)
+    set((prev) => ({ ...prev, menoWorking: { ...prev.menoWorking, [id]: { since: at, total: 0, done: 0 } } }));
+    try {
+      await enumerateMade(id, at);
+    } finally {
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    }
+  }
+
+  async function enumerateMade(id: number, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, "meno");
@@ -408,11 +537,23 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const now = doc.getState();
     if (!stepOf(now, id)) return;
     // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
-    const made = runMenoDrawn("enumerate", entries, own, now.style, [checked]);
+    // (its products made off the drawing thread - laid out and told apart, a long list takes seconds: workflow/enumerateOff)
+    // (a Stop ends this run's work in the worker - `enumerateStopped` - rather than waiting for products it would throw away; another step's run goes on)
+    menoKills.set(id, () => enumerateStopped(id));
+    let made: Awaited<ReturnType<typeof runMenoDrawnOff>> | null = null;
+    try {
+      made = await runMenoDrawnOff("enumerate", entries, own, now.style, [checked], id);
+    } catch (e) {
+      if (!(e instanceof Error) || e.message !== ENUMERATE_STOPPED) throw e;
+    } finally {
+      menoKills.delete(id);
+    }
+    // (stopped while they were made: nothing put in, and said so as below; the step taken away: nothing at all)
+    const stopped = menoStops.has(id) || !made;
     menoStops.delete(id);
-    const open = made.ok ? await leftOpen(id, at, made.kept) : "";
-    // (stopped while its products were asked about: nothing put in, and the step says so, as Meno's say it)
-    if (open == null) {
+    const open = stopped || !made ? null : made.ok ? await leftOpen(id, at, made.kept) : "";
+    // (stopped while its products were made or asked about: nothing put in, and the step says so, as Meno's say it)
+    if (open == null || !made) {
       menoStops.delete(id);
       const still = stepOf(doc.getState(), id);
       if (!still) return;
@@ -518,7 +659,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what came in changed meanwhile - an edit, an undo, its set deleted: its results are of what came in when it started, put in all the same, and the step says it has changed)
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
-    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
+    const before = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
+    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at, turnsOf: turnsFor }));
+    viewsKept(d, id, before);
   }
 
   /**
@@ -609,11 +752,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     //  for a run again to start from)
     if (!worked.length && !aside.length && !asideDrawn.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
     const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said, ...(asideDrawn.length ? { asideDrawn } : {}) };
-    const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
-    doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
-    atTheirEnds(before);
-    turnNew(before, turns);
-    listsShown(before);
+    const results = resultsOf(outcome, ran.kind ?? step.kind);
+    const turns = turnsFor(d, id, ran.kind ?? step.kind, results);
+    // (the structures it draws, their identities known first - off the drawing thread, workflow/entries `whenDrawnKnown` - so
+    //  that putting them down works none out)
+    whenDrawnKnown(recorded(results), () => {
+      doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
+      atTheirEnds(before);
+      turnNew(before, turns);
+      listsShown(before);
+    });
+  }
+
+  /** The drawings a step's results give that carry a record (workflow/entries `placedRecord`): what is to be known before they are put down. */
+  function recorded(results: ReturnType<typeof resultsOf>): DrawnModel[] {
+    return [...(results.drawn?.made ?? []), ...(results.drawn?.rest ?? [])].filter((m) => m.record);
   }
 
   /** Molecules new on the page with a list to be opened at once - NCI's surfaces - shown with it open, its row chosen. */
@@ -636,12 +789,37 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
   }
 
-  /** How a step's results are first turned, where they are what came in worked out: each laid over what it was worked out from, turned as that is (workflow/run `laidOver`). */
+  /**
+   * How a step's results are first turned: where they are what came in worked out, each laid over what it was worked out from, turned as
+   * that is (workflow/run `laidOver`); where the step passed them through, its atoms where they were, turned as the molecule each came from
+   * is (`viewKept`) - one a step moved or made seen as it is first seen.
+   */
   function turnsFor(d: WorkspaceDocument, id: number, kind: StepKind, results: RunResults): (Turn3D | undefined)[] | undefined {
     const input = inputOf(d, id);
-    if (!LAID_OVER.includes(kind) || !input || input.holds === "structures" || results.holds === "conformers") return undefined;
+    if (!input || input.holds === "structures" || results.holds === "conformers") return undefined;
     const turns = get().turns3d;
-    return laidOver(results.molecules, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    const entries = setEntries(input.molecules, input.holds);
+    const turnOf = (e: SetEntry) => (e.from != null ? turns[e.from] : undefined);
+    // (those it gave, then those it set aside: the turns of both, in the order they are put down)
+    const all = [...results.molecules, ...results.rest];
+    return LAID_OVER.includes(kind) ? laidOver(all, entries, turnOf) : viewKept(all, entries, turnOf);
+  }
+
+  /**
+   * Each molecule a run of step `id` put down - none of `before` - that the step passed through, its atoms where they were in what came
+   * in (as `d` had it), turned as the molecule it came from is (workflow/run `viewKept`): face-on one card before, face-on in the next.
+   */
+  function viewsKept(d: WorkspaceDocument, id: number, before: ReadonlySet<number>) {
+    const input = inputOf(d, id);
+    if (!input || input.holds === "structures") return;
+    const made = (doc.getState().molecules3d ?? []).filter((m) => !before.has(m.id));
+    if (!made.length) return;
+    const turns = get().turns3d;
+    const kept = viewKept(made, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    made.forEach((m, i) => {
+      const turn = kept[i];
+      if (turn && !turns[m.id]) get().setTurn3d(m.id, turn);
+    });
   }
 
   /** Molecules new on the page, in the order they were put down, turned as `turns` says. */
@@ -824,7 +1002,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
-            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options: { ...options, threads: threadsOf(useAppSettings.getState().calculations) } }, CONFORMERS_MS)).isomers[0];
+            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers.map(sentOf), ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options: { ...options, threads: threadsOf(useAppSettings.getState().calculations) } }, CONFORMERS_MS)).isomers[0];
           let got = rounds ? undefined : await ask(tries);
           if (rounds) {
             const round = async (n: number, draw: number) => {
@@ -835,7 +1013,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             const { made: all, run } = await inRounds(round, { ...rounds, draws: true }, (first) => roundsJudge(first, rounds.window));
             got = { ...all, how: [...(all.how ?? []), { label: "Rounds", text: roundsSaid(run, rounds) }] };
           }
-          made = got && partsSideBySide(keptMade(withChosen(withOwnCip(got), which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
+          // (what is said of its stereo: the half of its groups made, and what is said of the structure - chem/groupHalves)
+          made = got && partsSideBySide(keptMade(withChosen(withOwnCip({ ...got, how: [...(got.how ?? []), ...stereoRows(which, 0)] }), which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
@@ -977,7 +1156,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
         try {
-          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: withoutStereoOpen(await drawingOf(block, style)) }))));
+          // (each laid out from the configuration it was made with, where the plugin sends it)
+          made.push((await madeDrawn(a, style)).map((drawn) => ({ place: 0, drawn: withoutStereoOpen(drawn) })));
         } catch {
           made.push([]);
           answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
@@ -1101,7 +1281,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
       for (const g of read.made) {
-        let block: string;
+        let block: { molblock: string; configuration?: IsomerConfiguration };
         try {
           block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
@@ -1112,7 +1292,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
         let unset: number | null = null;
         try {
-          const { left } = await openStereo(stereo, [block]);
+          const { left } = await openStereo(stereo, [block.molblock]);
           unset = left.atoms.length + left.bonds.length;
         } catch {
           unexamined++;
@@ -1129,7 +1309,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(seed?.from?.length ? { from: seed.from } : {}),
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
-        kept.push({ place: kept.length, drawn: withoutStereoOpen(await drawingOf(block, style)), record });
+        // (laid out from what the plugin read of the SMILES, and the text's own axes, as a SMILES typed is)
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await smilesMadeDrawn(g.smiles, block, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -1170,23 +1351,33 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const refused = skeletonsRefused(step.kind, entries);
     if (refused) return void fail(id, refused, at, key);
     const options: OptionValues = stepValues(step, plugin.id);
-    let kept;
+    // (options its entries take from a property: a call for each group of values, each judging its own - one that cannot take
+    //  them out of Failed, saying why: lib/boundOptions)
+    const grouped = boundGroups(optionsFor(step.kind, plugin.id), options, step.bound, (i) => entryOfSet(entries[i], String(i)).properties, entries.map((_, i) => i));
+    // (every one refused: why the first was, and how many more - as a step run as jobs says it)
+    const refusedAll = grouped.refused;
+    if (!grouped.groups.length) return void fail(id, refusedAll.length > 1 ? `${refusedAll[0].why}; and ${refusedAll.length - 1} more cannot be worked out` : (refusedAll[0]?.why ?? "Nothing came in"), at, key);
+    const keep = new Set<number>();
     try {
       const client = await pluginClient(plugin);
-      const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
-      kept = readKept(await client.run(step.kind, given, options, input.holds), entries.length);
+      for (const g of grouped.groups) {
+        const given = g.entries.map((i) => entries[i]).map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
+        const kept = readKept(await client.run(step.kind, given, g.values, input.holds), g.entries.length);
+        if (typeof kept === "string") return void fail(id, kept, at, key);
+        for (const k of kept) keep.add(g.entries[k]);
+      }
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
-    if (typeof kept === "string") return void fail(id, kept, at, key);
-    const keep = new Set(kept);
+    const cannot = new Map(grouped.refused.map((r) => [r.entry, r.why]));
     const took = Date.now() - at;
+    const calls = grouped.groups.length > 1 ? ` \u00b7 ${grouped.groups.length} calls, one for each value taken from a property` : "";
     bringIn(
       id,
       entries.filter((_, i) => keep.has(i)),
       gives,
-      { at, ok: true, said: `${keep.size} of ${entries.length} kept`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
-      entries.filter((_, i) => !keep.has(i)),
+      { at, ok: true, said: `${keep.size} of ${entries.length} kept${calls}`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
+      entries.flatMap((e, i) => (keep.has(i) ? [] : cannot.has(i) ? [{ ...e, failed: { kind: "refused" as const, why: cannot.get(i)! } }] : [e])),
     );
   }
 
@@ -1216,6 +1407,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         return why && !(taking?.refused ?? []).some((u) => u.entry === entry) ? [{ entry, why }] : [];
       }),
     ];
+    // (options its entries take from a property: one that cannot take them refused before anything is sent, saying why - its
+    //  property missing, of another unit: lib/boundOptions)
+    const bindOptions = optionsFor(step.kind, plugin.id);
+    const propertiesOf = (i: number) => entryOfSet(entries[i], String(i)).properties;
+    unpaired.push(...boundGroups(bindOptions, options, step.bound, propertiesOf, entries.flatMap((_, i) => (unpaired.some((u) => u.entry === i) ? [] : [i]))).refused);
     // (skeletons, their hydrogens not there, refused before anything is sent - each to the Failed exit, the rest run:
     //  lib/chem/skeleton. All of them skeletons, the step itself refused)
     const skeletons = skeletonEntries(step.kind, entries).filter((i) => !unpaired.some((u) => u.entry === i));
@@ -1254,7 +1450,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     };
     const sending = sendIdx.map((i) => entries[i]);
     const given = await Promise.all(sending.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
-    let prepared;
+    let prepared: (Prepared & { options?: OptionValues })[] | string;
     // (what its worker says it runs: the program's version where none installed separately says its own)
     let said = "";
     let refused: Refusal[] = [];
@@ -1263,19 +1459,37 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const client = await pluginClient(plugin);
       // (a conformer search that takes how many to try: told, for each molecule, the step's own number or as many as it needs - lib/chem/conformersSought)
       const tries = step.kind === "conformers" && plugin.roleTries.includes("conformers");
-      const triesOf = (e: SetEntry) => soughtNumber(options, () => conformersSought(e.atoms, e.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order }))));
+      const triesOf = (e: SetEntry, values: OptionValues) => soughtNumber(values, () => conformersSought(e.atoms, e.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order }))));
       // (and a molecule with metals its holds: lib/chem/metalHolds)
       const holdsOf = (e: SetEntry) => {
         const holds = entryHolds(e);
         return holds ? { holds } : {};
       };
-      const sent = sending.map((e, i) => ({ ...pluginEntry(e, rowsWired(wired, sendIdx[i])), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e), ...holdsOf(e) } : {}) }));
-      const raw = await client.prepare(step.kind, sent, holdAsked(options, plugin, step.kind, wired), cores, Object.fromEntries(paths));
-      prepared = readPrepared(raw, sending.length);
-      refused = readRefused(raw, sending.length);
+      // (a prepare for each group of values its entries take from a property - one, where none is taken: lib/boundOptions - each
+      //  job keeping its group's options where there are several, for its results to be read with)
+      const groups = boundGroups(bindOptions, options, step.bound, propertiesOf, sendIdx).groups;
+      const place = new Map(sendIdx.map((e, k) => [e, k]));
+      const made: (Prepared & { options?: OptionValues })[] = [];
+      let first: unknown = null;
+      let failedWhy: string | null = null;
+      for (const g of groups) {
+        const ks = g.entries.map((e) => place.get(e)!);
+        const sent = ks.map((k) => ({ ...pluginEntry(sending[k], rowsWired(wired, sendIdx[k])), ...(given[k].length ? { files: given[k] } : {}), ...(tries ? { count: triesOf(sending[k], g.values), ...holdsOf(sending[k]) } : {}) }));
+        const raw = await client.prepare(step.kind, sent, holdAsked(g.values, plugin, step.kind, wired), cores, Object.fromEntries(paths));
+        first ??= raw;
+        const p = readPrepared(raw, sent.length);
+        if (typeof p === "string") {
+          failedWhy = p;
+          break;
+        }
+        made.push(...p.map((j) => ({ ...j, entries: j.entries.map((x) => ks[x]), ...(groups.length > 1 ? { options: g.values } : {}) })));
+        refused.push(...readRefused(raw, sent.length).map((r) => ({ ...r, entry: ks[r.entry] })));
+      }
+      prepared = failedWhy ?? made;
       // (asked for as many as each molecule needs, where the search takes draws: of molecules in 3D, run as jobs, one round - said)
       const once = oneRoundAsJobs(tries, plugin.roleDraws.includes("conformers"), options);
-      note = [readNote(raw), once, ...(wired?.said ?? [])].filter(Boolean).join(" \u00b7 ") || undefined;
+      const calls = groups.length > 1 ? `${groups.length} calls, one for each value taken from a property` : "";
+      note = [readNote(first), once, calls, ...(wired?.said ?? [])].filter(Boolean).join(" \u00b7 ") || undefined;
       said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -1351,6 +1565,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           reads: p.reads,
           key: jobKeyed,
           ...(again ? { reused: true as const, gave: again.gave } : {}),
+          ...(p.options ? { options: p.options } : {}),
         });
       }
     } catch (e) {
@@ -1702,6 +1917,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (the restraints wired in that each entry's run held - its atoms held where they stood said on what it made, and checked)
       const wiredNow = plugin ? restraintsWired(d, id, kind, plugin, entries) : null;
       const rowsOf = (e: SetEntry) => rowsWired(wiredNow && !("why" in wiredNow) ? wiredNow : null, entries.indexOf(e));
+      // (inside a Repeat, the rows each entry was held with carried on with it, in their numbering: its next pass holds them again)
+      const inRepeat = repeatHolding(doc.getState(), id) != null;
+      const restrainedOf = (e: SetEntry): boolean | CarriedRows => {
+        const rows = rowsOf(e);
+        return inRepeat && rows?.length ? { rows, numbering: numberingOf(e) } : !!rows;
+      };
       const heldOf = (e: SetEntry) => fixedAtoms(rowsOf(e) ?? []);
       // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
       //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
@@ -1768,7 +1989,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         let said;
         try {
           // (a folder with no record, adopted: read as one that ran to its end - the chemist took what it holds)
-          said = readCollected(await client.collect(kind, mine.map((e) => pluginEntry(e, rowsOf(e))), holdAsked(run.options, plugin, kind, wiredNow && !("why" in wiredNow) ? wiredNow : null), files, log, unrecorded[k] ? "done" : record.state), mine.length);
+          said = readCollected(await client.collect(kind, mine.map((e) => pluginEntry(e, rowsOf(e))), holdAsked(j.options ?? run.options, plugin, kind, wiredNow && !("why" in wiredNow) ? wiredNow : null), files, log, unrecorded[k] ? "done" : record.state), mine.length);
         } catch (e) {
           // (its plugin refused what it was given, or what came back)
           fails(mine, "refused", message(e));
@@ -1806,7 +2027,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               continue;
             }
             const made =
-              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? []));
+              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), restrainedOf(mine[i]), exactRows(rowsOf(mine[i]) ?? []));
             if (isFailure(made)) {
               fails([mine[i]], made.kind, made.why);
               continue;
@@ -1830,7 +2051,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", out);
               continue;
             }
-            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
+            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), restrainedOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
           }
           continue;
         }
@@ -1849,7 +2070,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
           // (a search Meno tells how many to try: which of what it made stand, Meno's checks - lib/chem/metalHolds)
           const checks = plugin.roleTries.includes("conformers") ? entryChecks(mine[i]) : undefined;
-          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
+          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), restrainedOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
         }
       }
       passOn(Infinity);
@@ -1871,7 +2092,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         kind === "conformers"
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
-      const warned = worked.filter((w) => w.calc?.warnings?.length).length;
+      // (reaction paths one of whose sides stopped before its end: kept, their ends where they stopped - said, their warnings with it)
+      const stopped = worked.filter((w) => w.stopped).length;
+      const warned = worked.filter((w) => w.calc?.warnings?.length && !w.stopped).length;
       // (those it started from a failed run's geometry - Runs again: said, as its start was no result)
       const restarted = entries.filter((e) => e?.failed).length;
       // (a path search's pairs that carried how a pair was made already - an earlier path's: replaced by this one's, said, never silently)
@@ -1885,7 +2108,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const said = `${
         !ok && failures.length && total === 1
           ? folded(failures[0].why)
-          : [...(ok ? [found] : []), ...(passedLine ? [passedLine] : []), ...failuresLine(failures, total, !ok), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
+          : [...(ok ? [found] : []), ...(passedLine ? [passedLine] : []), ...failuresLine(failures, total, !ok), ...(stopped ? [stoppedSaid(stopped)] : []), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
       }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.note && ok ? ` \u00b7 ${run.note}` : ""}${run.paired && ok ? ` \u00b7 ${run.paired}` : ""}${carried > 0 ? ` \u00b7 the ${PAIRED} ${carried === 1 ? "a pair" : `${carried} pairs`} carried replaced` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
@@ -2005,11 +2228,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   return {
     jobsSeen: {} as Record<string, JobSeen>,
     menoWorking: {} as Record<number, { since: number; done: number; total: number }>,
+    repeatPasses: {} as Record<number, { pass: number; of?: number; stopping?: true }>,
     runStep: (id: number) => runSteps([id]),
-    runFrom: (id: number) => runSteps([id, ...stepsAfter(doc.getState(), id)]),
+    runFrom: (id: number) => runSteps(heldByRepeats(doc.getState(), [id, ...stepsAfter(doc.getState(), id)])),
     runAll: () => runSteps(allToRun(doc.getState())),
     stopStep: (id: number) => {
       if (get().menoWorking[id]) menoStops.add(id);
+      // (a Repeat: no next pass, its steps running finishing first - its tab says so at once)
+      const pass = get().repeatPasses[id];
+      if (pass) {
+        menoStops.add(id);
+        set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { ...pass, stopping: true } } }));
+      }
       menoKills.get(id)?.();
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
@@ -2022,17 +2252,24 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     },
     stopAll: () => {
       for (const id of Object.keys(get().menoWorking)) menoStops.add(Number(id));
+      for (const [id, pass] of Object.entries(get().repeatPasses)) {
+        menoStops.add(Number(id));
+        set((prev) => ({ ...prev, repeatPasses: { ...prev.repeatPasses, [id]: { ...pass, stopping: true } } }));
+      }
       menoKills.forEach((kill) => kill());
       for (const s of doc.getState().steps ?? []) for (const j of s.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },
     keepRunOf: (id: number, index: number, keep: boolean) => doc.edit(keep ? "keep run" : "keep run no longer", (x) => keptRun(x, id, index, keep)),
     showRun: (id: number, index: number) => {
-      const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
-      let turns: (Turn3D | undefined)[] | undefined;
-      doc.edit("show run", (x) => showRun(x, id, index, w, (results, kind) => (turns = turnsFor(x, id, kind, results))));
-      atTheirEnds(was);
-      turnNew(was, turns);
+      const shown = stepOf(doc.getState(), id)?.runs?.[index]?.results;
+      whenDrawnKnown(shown ? recorded(shown) : [], () => {
+        const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
+        let turns: (Turn3D | undefined)[] | undefined;
+        doc.edit("show run", (x) => showRun(x, id, index, w, (results, kind) => (turns = turnsFor(x, id, kind, results))));
+        atTheirEnds(was);
+        turnNew(was, turns);
+      });
     },
     showStepLog: async (id: number) => {
       const step = stepOf(doc.getState(), id);

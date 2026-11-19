@@ -1,3 +1,4 @@
+import { stereoSaidRows } from "../utils/stereoSaid";
 import clsx from "clsx";
 import { longPressMs } from "../longPress";
 import PageHtml from "./PageHtml";
@@ -557,10 +558,10 @@ function Molecule3DView(props: Molecule3DViewProps) {
   // a conformer set's shares, as its chip shows them; and its atoms' elements
   const shares = useMemo(
     () => {
-      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers, marksUnread: m.marksUnread });
+      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, partsAlone: m.partsAlone, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers, marksUnread: m.marksUnread });
       return shares?.length === solid.frames.length ? shares : undefined;
     },
-    [m.frames, m.shares, m.conformerSet, m.partOf, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, m.marksUnread, solid.frames.length],
+    [m.frames, m.shares, m.conformerSet, m.partOf, m.partsAlone, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, m.marksUnread, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
@@ -1737,6 +1738,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
       made: m.made,
       said: m.said,
       noShares: m.conformerSet ? sharesWithheld(m) || undefined : undefined,
+      // (where R and S are shown on it: the units it shows none on, and why - utils/stereoSaid)
+      ...(stereoSaidRows(m).length ? { stereoSaid: stereoSaidRows(m) } : {}),
       conformers: m.conformerSet,
       ...(props.searching ? { searching: true } : {}),
     }),

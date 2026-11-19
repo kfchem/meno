@@ -17,11 +17,11 @@ import { identity } from "../../../../lib/chem/identity";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
-import { identityInputOf } from "../chem/identityOf";
+import { identityInputOf, withGroups } from "../chem/identityOf";
 import { degrees, narrowEnd, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
 import { resolve, type Reading } from "../chem/resolve";
-import { changedAt } from "./stereoKept";
+import { changedOf, changesFrom, plainWhereAlike, unitName } from "./stereoKept";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
 export const MOST_COMBINATIONS = 10_000;
@@ -153,7 +153,8 @@ export function listsReadAs(text: string): LineRead[] {
 export type Lists = { lists: Map<number, (OptionRead | OptionProblem)[]>; problems: string[] };
 
 /**
- * A template's R atoms, by number, each number's atoms by id in the
+ * A template's R atoms, by number - an R drawn numbered, or an R or a star
+ * typed with its number ([*:1]) - each number's atoms by id in the
  * template's order - and what about the template stops the step: an R with
  * no number or more than one, an R atom bonded by anything but one single
  * bond, a wedge whose narrow end is at an R atom, and wedges that cannot be
@@ -164,12 +165,15 @@ export function templateRs(template: Model): { rs: Map<number, number[]>; proble
   const problems: string[] = [];
   const degree = degrees(template.bonds);
   for (const a of template.atoms) {
-    if (a.el === "R") {
+    // (an R or a star typed with a number - [*:1], a SMILES's atom class, which a toolkit gives as the atom's map number and
+    //  the page draws beside it - is that R: R1)
+    const typed = (a.el === "R" || a.el === "*") && a.map ? [a.map] : null;
+    if (a.el === "R" && !typed) {
       problems.push("An R has no number: number each, as R1, R2");
       continue;
     }
-    if (a.el !== "R#") continue;
-    const ns = a.rgroups ?? [];
+    if (a.el !== "R#" && !typed) continue;
+    const ns = typed ?? a.rgroups ?? [];
     if (ns.length !== 1) {
       problems.push(ns.length ? `R${ns.join(",")} has more than one number: draw one R for each` : "An R has no number: number each, as R1, R2");
       continue;
@@ -237,18 +241,17 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
   let missed = 0;
   const choice = options.map(() => 0);
   const refused: string[] = [];
-  const atomName = (id: number) => {
-    const i = template.atoms.findIndex((a) => a.id === id);
-    return `${template.atoms[i].el}${i + 1}`;
-  };
   for (let number = 1; number <= count; number++) {
     // (each wedge narrow where it was, and the product's configurations read back and held to the template's: stereoKept)
-    const drawnNow = wedgesHeld(joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style), template);
+    const held = wedgesHeld(joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style), template);
     const how = numbers.map((n, k) => `R${n} = ${label(options[k][choice[k]])}`).join(", ");
-    const changed = changedAt(template, drawnNow, new Map());
-    if (changed.length) refused.push(`${how}: would change the configuration at ${changed.map(atomName).join(", ")}`);
+    const differences = changesFrom(template, held, new Map());
+    const changed = changedOf(differences);
+    if (changed.length) refused.push(`${how}: would change the configuration at ${changed.map((u) => unitName(template, u)).join(", ")}`);
     else {
-      const found = identity(identityInputOf(drawnNow).input);
+      // (a centre no longer one, two of its groups now alike: drawn plain)
+      const drawnNow = plainWhereAlike(held, differences);
+      const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
       if (!found.complete) missed++;
       const first = seen.get(found.text);
       if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
@@ -304,6 +307,9 @@ export function joined(template: Model, choices: readonly (readonly [number, rea
   let doc = { ...emptyWorkspaceDocument(style), model: template, nextId: Math.max(0, ...template.atoms.map((a) => a.id), ...template.bonds.map((b) => b.id)) + 1 };
   for (const [, atoms, option] of choices) {
     for (const id of atoms) {
+      // (an R typed with its number carries it as its map number: what is put in its place carries none - an H mapped is no
+      //  hydrogen of its neighbour's, and toluene made so would be another structure; a map on the template's own atoms stays)
+      doc = { ...doc, model: { ...doc.model, atoms: doc.model.atoms.map((a) => (a.id === id && a.map != null ? (({ map: _map, ...rest }) => rest)(a) : a)) } };
       doc =
         option.as === "element"
           ? setAtomChemistry(doc, id, { el: option.el, ...(option.charge ? { charge: option.charge } : {}), ...(option.isotope ? { isotope: option.isotope } : {}) })

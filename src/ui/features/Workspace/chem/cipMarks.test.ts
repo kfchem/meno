@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
-import { cipMarksFrom, cipMarksOf, cipSaid, oneForEachRun, turnsSaid, type CipJob } from "./cipMarks";
+import { cipJobsOf, cipMarksFrom, cipMarksOf, cipSaid, oneForEachRun, turnsSaid, type CipJob } from "./cipMarks";
 import { drawnFromSmiles } from "./testdata/identityCases";
 
 /** Butan-2-ol drawn: C1-C2(-O5)-C3-C4, its O on a wedge out of C2, up or down; C2 asked for its R or S. */
@@ -174,5 +174,27 @@ describe("one mark for each run of cumulated double bonds", () => {
     expect(oneForEachRun(input, [0, 1, 2, 3].map(unit)).map((u) => u.at)).toEqual([1, 3]);
     expect(oneForEachRun(input, [0, 2, 3].map(unit)).map((u) => u.at)).toEqual([0, 3]);
     expect(oneForEachRun(input, [2, 0].map(unit))).toHaveLength(1);
+  });
+
+  it("keeps one unit for a run whichever way each of its bonds is listed: a butatriene's bonds C0=C1, C2=C1, C2=C3, all asked", () => {
+    const input = {
+      atoms: ["C", "C", "C", "C"].map((el) => ({ el, hs: 0 })),
+      bonds: [
+        { a: 0, b: 1, order: 2 },
+        { a: 2, b: 1, order: 2 },
+        { a: 2, b: 3, order: 2 },
+      ],
+    } as Parameters<typeof oneForEachRun>[0];
+    const unit = (at: number) => ({ at, id: 100 + at });
+    expect(oneForEachRun(input, [0, 1, 2].map(unit)).map((u) => u.at)).toEqual([1]);
+    expect(oneForEachRun(input, [2, 1, 0].map(unit)).map((u) => u.at)).toEqual([1]);
+  });
+
+  it("asks a drawn butatriene's cis or trans once, its middle bond drawn from its far end: one unit in the job, one mark", () => {
+    const m = asked("C/C=C=C=C/C");
+    const turned = { ...m, bonds: m.bonds.map((b) => (b.a === 3 && b.b === 4 ? { ...b, a: 4, b: 3 } : b)) };
+    const middle = turned.bonds.find((b) => b.a === 4 && b.b === 3)!;
+    expect(cipJobsOf(turned).flatMap((j) => j.bonds.filter((u) => u.id === middle.id))).toHaveLength(1);
+    expect([...cipMarksOf(turned).doubleBonds]).toEqual([[middle.id, "E"]]);
   });
 });

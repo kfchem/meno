@@ -5,6 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
+import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { isId, type SolvationDecl } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
@@ -440,7 +441,7 @@ function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | nul
  * geometry, as far as it came, is the entry of the step's Failed exit -
  * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = [], restrained = false, exact: readonly Restraint[] = []): Worked | Failure {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = [], restrained: boolean | CarriedRows = false, exact: readonly Restraint[] = []): Worked | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
@@ -538,12 +539,19 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
  * (docs/WORKFLOWS-FOUNDATION.md, F15). The rows are not carried on: the next
  * step holds what is wired into it. Nothing where it held none.
  */
-function firstHeld(entry: SetEntry, restrained: boolean): Pick<SetEntry, "properties"> | Record<string, never> {
+function firstHeld(entry: SetEntry, restrained: boolean | CarriedRows): Pick<SetEntry, "properties"> | Record<string, never> {
   const held = entry.properties?.restraints;
   const was = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
-  if (was?.start || !restrained) return {};
-  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
+  // (inside a Repeat, the rows it held carried on with it, in the numbering they were made in, for its next pass to hold them again -
+  //  rows up the entry's own lineage, the later pass winning: docs/WORKFLOWS.md, *Repeat*; workflow/heldRows)
+  const carry = typeof restrained === "object" ? restrained : null;
+  if (!restrained || (was?.start && !carry)) return {};
+  const start = was?.start ? [...was.start] : [...entry.xyz];
+  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: carry ? carry.rows.map((r) => ({ ...r, atoms: [...r.atoms] })) : [], start, ...(carry ? { numbering: carry.numbering } : {}) }, unit: "none", status: "computed" } } };
 }
+
+/** The rows a minimisation inside a Repeat held for an entry, and the numbering they were made in: carried on with it (`firstHeld`). */
+export type CarriedRows = { rows: readonly Restraint[]; numbering: string };
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
 const SAME_PLACE = 1e-3;
@@ -607,11 +615,16 @@ function singlePointWorked(entry: SetEntry, last: number[], energies: readonly n
  * with its energy, its entry the point it started from (the run's one
  * converged geometry), between them. A side that stopped before its end -
  * its program's iteration cap reached - leaves the path as far as it came,
- * out of *Failed*, its program's words on it: its end no minimum. The path
+ * its ends where it stopped (`stopped`, its program's words): the steps
+ * after it - the ends optimised, their bonding compared - decide what they
+ * are, as ConfoTS does, and the step's line says so. The path
  * is one only at the level its start was found at - a saddle point at one
  * level is no stationary point at another - so the path's own level, as
  * its output says it, must be its start's: else it fails, naming both.
  */
+/** What a reaction path one of whose sides stopped says of it, where its program said nothing. */
+export const STOPPED_SAID = "A side stopped before its end";
+
 function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
   const k = out.converged?.length === frames.length ? out.converged.indexOf(true) : -1;
   if (k < 0 || out.converged!.lastIndexOf(true) !== k) return { kind: "no-geometry", why: "It read back no one point the path started from" };
@@ -619,7 +632,9 @@ function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[]
   if (!calc.method) return { kind: "failed", why: "It did not say the path's level: whether it is its start's cannot be told" };
   if (levelKey(calc) !== levelKey(entry.calc))
     return { kind: "failed", why: `The path is at ${levelSaid(calc)}, its start was found at ${levelSaid(entry.calc)}: run it at the start's level` };
-  const stopped = out.optimised === false ? (out.warnings?.map((w) => w.text).join("; ") ?? "") || "A side stopped before its end" : null;
+  const stopped = out.optimised === false ? (out.warnings?.map((w) => w.text).join("; ") ?? "") || STOPPED_SAID : null;
+  // (kept on the molecule too, after the step's line is gone: its program's words, or where it gave none, Meno's)
+  const said = stopped && !calc.warnings?.length ? { ...calc, warnings: [{ kind: "other" as const, text: STOPPED_SAID }] } : calc;
   return {
     ...anew(entry),
     ...keptAnew(entry, frames[k], calc.charge),
@@ -629,8 +644,8 @@ function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[]
     pathEnergies: energies.slice(0, k),
     after: frames.slice(k + 1),
     afterEnergies: energies.slice(k + 1),
-    calc,
-    ...(stopped ? { failed: { kind: "not-converged" as const, why: stopped } } : {}),
+    calc: said,
+    ...(stopped ? { stopped } : {}),
   };
 }
 
@@ -953,7 +968,7 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
  */
 export type DrawnAnswer =
   | { as: "drawn"; properties?: Record<string, DrawnValue> }
-  | { made: string[]; smiles?: string[]; properties?: Record<string, DrawnValue> }
+  | { made: string[]; smiles?: string[]; configurations?: (IsomerConfiguration | undefined)[]; properties?: Record<string, DrawnValue> }
   | { aside: string; kind: string };
 /** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
 export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };

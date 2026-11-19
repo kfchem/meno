@@ -10,21 +10,23 @@ import { useMenuAt, type MenuAnchor } from "./useMenuAt";
 import { listWidth } from "./quickAddLabel";
 import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
-import { startAhead } from "../../../lib/roles/worker";
+import { startAhead, useChem } from "../../../lib/roles/worker";
+import { useFirstSetUp } from "../../../lib/plugins/firstSetUp";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { togglesOn } from "./utils/press";
-import { quickAddLeaves } from "./quickAddLeave";
+import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
-import { afterAdded, readSmiles } from "./quickAddSmiles";
+import { afterAdded, chemistryLine, readSmiles } from "./quickAddSmiles";
+import { useDownloads } from "../../../lib/pyEnv";
 import { calcMadeWith, toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair";
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
@@ -46,7 +48,7 @@ const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
  * *Marks on the page* - the shapes and the pen, which draw on the page and
  * say nothing chemical.
  */
-const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name: string; icon: ReactNode }[] = [
+const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks" | "projections"; name: string; icon: ReactNode; tip?: string }[] = [
   {
     id: "bond",
     name: "Bond",
@@ -107,6 +109,12 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name:
     ),
   },
   {
+    id: "projections",
+    name: "Projections",
+    // (a chair, as it is drawn: the ring's six atoms seen from above and in front)
+    icon: <path d="M16.6 9 L13.3 8.7 L6.7 6.5 L3.4 11 L6.7 11.3 L13.3 13.5 Z" />,
+  },
+  {
     id: "conversation",
     name: "Conversation",
     // (a word balloon: what is said, in a frame of its own)
@@ -158,6 +166,18 @@ const SCHEME: typeof ROW = [
   },
 ];
 
+/** What *Projections* opens below the row (docs/EDITOR-2D.md, *Projections*): the tools that put down a solid seen as a drawing is made of it. */
+const PROJECTIONS: typeof ROW = [
+  {
+    id: "chair",
+    name: "Chair",
+    // (what it does a second time, said as the pointer rests on it: the view from the other side)
+    tip: "Chair. Chosen again on the chair just put down: the view from the other side",
+    // (a chair as it is first put down, seen from the right: its up end at the left, every bond plain)
+    icon: <path d="M3.4 9 L6.7 8.7 L13.3 6.5 L16.6 11 L13.3 11.3 L6.7 13.5 Z" />,
+  },
+];
+
 /** The pen, among the marks on the page after the shapes: its card opened, to write by hand. */
 const PEN = {
   id: "pen" as const,
@@ -167,7 +187,7 @@ const PEN = {
 };
 
 /** Each that opens a row below the row (or a field): its id. */
-const OPENS = ["smiles", "scheme", "marks"] as const;
+const OPENS = ["smiles", "scheme", "marks", "projections"] as const;
 const opens = (id: string): id is (typeof OPENS)[number] => (OPENS as readonly string[]).includes(id);
 
 /**
@@ -265,6 +285,25 @@ export default function QuickAdd({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose, leaving]);
+  // (a key typed with no icon chosen: the SMILES field opens with it - typing is what a first-time chemist tries - an input
+  //  method's composing there: ./quickAddLeave `typedIntoQuickAdd`)
+  const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
+  useEffect(() => {
+    if (leaving || wired) return;
+    const onType = (e: KeyboardEvent) => {
+      const what = typedIntoQuickAdd(e, open !== "none");
+      if (!what) return;
+      e.stopPropagation();
+      if ("seed" in what) {
+        e.preventDefault();
+        setSeed((s) => ({ text: what.seed, n: (s?.n ?? 0) + 1 }));
+      }
+      // (the field takes the focus as it opens: SmilesField's own effect - it is inert until then)
+      setOpen("smiles");
+    };
+    window.addEventListener("keydown", onType, true);
+    return () => window.removeEventListener("keydown", onType, true);
+  }, [leaving, wired, open]);
   // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
   const offered = wired ? [] : procedures;
   // (measured only once its rows are made: a font's measure as Quick Add opens would only add to its first frame)
@@ -295,7 +334,7 @@ export default function QuickAdd({
             <button
               key={c.id}
               aria-label={c.name}
-              title={c.name}
+              data-tip={c.name}
               aria-expanded={opens(c.id) ? open === c.id : undefined}
               onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : c.id === "arrow" && onArrow ? (e) => e.button === 0 && onArrow(e) : undefined}
               onClick={
@@ -312,7 +351,7 @@ export default function QuickAdd({
                 {c.icon}
               </svg>
               {/* (a group's corner mark: it opens a row of its own) */}
-              {(c.id === "scheme" || c.id === "marks") && (
+              {(c.id === "scheme" || c.id === "marks" || c.id === "projections") && (
                 <svg viewBox="0 0 6 4" width={6} height={4} aria-hidden className="absolute right-1 bottom-1 text-gh-gray">
                   <path d="M0 0 H6 L3 4 Z" fill="currentColor" />
                 </svg>
@@ -323,7 +362,7 @@ export default function QuickAdd({
           <button
             aria-label="Calculations"
             aria-expanded={calcOpen}
-            title="Calculations"
+            data-tip="Calculations"
             onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
             className={`meno-press rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
@@ -338,7 +377,7 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
           <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
+            <SmilesField width={width - 8} open={open === "smiles"} seed={seed} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
@@ -349,6 +388,18 @@ export default function QuickAdd({
             <div role="group" aria-label="Scheme" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
               {SCHEME.map((c) => (
                 <RowIcon key={c.id} name={c.name} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* (the projections, likewise: each tool puts its solid down where Quick Add was opened) */}
+      {!wired && (
+        <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "projections" ? "1fr" : "0fr", opacity: open === "projections" ? 1 : 0 }}>
+          <div className="overflow-hidden" inert={open !== "projections"}>
+            <div role="group" aria-label="Projections" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
+              {PROJECTIONS.map((c) => (
+                <RowIcon key={c.id} name={c.name} tip={c.tip} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
               ))}
             </div>
           </div>
@@ -397,6 +448,7 @@ export default function QuickAdd({
 function SmilesField({
   width,
   open,
+  seed,
   onSmiles,
   onNamed,
   onCoordinates,
@@ -404,6 +456,8 @@ function SmilesField({
 }: {
   width: number;
   open: boolean;
+  /** A key typed in Quick Add with no icon chosen: the field begun with it (each its own `n`). */
+  seed?: { text: string; n: number } | null;
   onSmiles: (smiles: string) => Promise<void>;
   onNamed?: (label: string) => void;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
@@ -414,6 +468,12 @@ function SmilesField({
   // (a SMILES no plugin here reads: the plugins online that do, each to add - RoleOffer)
   const [needs, setNeeds] = useState<RoleId | null>(null);
   const [busy, setBusy] = useState(false);
+  // (where chemistry stands while it is got ready or started: one line under the field - a SMILES typed meanwhile waits, and is drawn)
+  const chem = useChem();
+  // (the first start's card, where it sets chemistry up: said here too, as the card says it)
+  const card = useFirstSetUp();
+  // (its files' share as they download: the worker's set-up's, or the card's plugin's while the card sets it up)
+  const share = useDownloads((d) => (chem.state === "setting-up" ? d[chem.id] : card.phase === "going" && card.plugin ? d[card.plugin.id] : undefined));
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
   const readings = useMemo(() => (named ? resolve(text, "molecule").readings : []), [text, named]);
@@ -426,6 +486,14 @@ function SmilesField({
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
+  // (begun with the key typed in Quick Add: what is there now, as typed, the caret after it)
+  useEffect(() => {
+    if (!seed) return;
+    setText(seed.text);
+    setChoice(0);
+    setError(null);
+    setNeeds(null);
+  }, [seed]);
   /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
   const read = (smiles: string) => {
     reading.current = true;
@@ -489,6 +557,12 @@ function SmilesField({
         className="w-full h-8 rounded-md border border-gh-line px-2 font-mono text-xs outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
       />
       {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
+      {/* (where chemistry stands, while it is got ready or started - many seconds on a first start: said here, where it is typed) */}
+      {!error && !needs && chemistryLine(chem, share, busy, card) && (
+        <div role="status" className="meno-fade-in px-0.5 pt-1 text-[11px] leading-snug text-gh-gray">
+          {chemistryLine(chem, share, busy, card)}
+        </div>
+      )}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
       {needs && (
         <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
@@ -543,11 +617,11 @@ export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Readin
 }
 
 /** An icon of a row Quick Add opens below its own: as the row's icons are, named as the pointer rests on it. */
-function RowIcon({ name, icon, onClick, onPointerDown }: { name: string; icon: ReactNode; onClick?: () => void; onPointerDown?: (e: React.PointerEvent) => void }) {
+function RowIcon({ name, tip, icon, onClick, onPointerDown }: { name: string; tip?: string; icon: ReactNode; onClick?: () => void; onPointerDown?: (e: React.PointerEvent) => void }) {
   return (
     <button
       aria-label={name}
-      title={name}
+      data-tip={tip ?? name}
       onClick={onClick}
       onPointerDown={onPointerDown}
       className="meno-press rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"

@@ -103,6 +103,51 @@ function moleculeOf(parts: Part[]): (GroupStructure & { name: string }) | null {
   return { ...s, name: structureFormula(s) };
 }
 
+/** The metals a salt of an oxoanion is read for besides the alkali metals, which a condensed formula reads (`saltOf`): groups 2, 12 and 13, tin, lead, bismuth and the transition metals. */
+const SALT_METALS: ReadonlySet<string> = new Set([
+  ...["Be", "Mg", "Ca", "Sr", "Ba", "Zn", "Cd", "Hg", "Al", "Ga", "In", "Tl", "Sn", "Pb", "Bi"],
+  ...["Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Y", "Zr", "Nb", "Mo", "Ru", "Rh", "Pd", "Ag", "La", "Ce", "Nd", "Sm", "Eu", "Gd", "Yb", "Lu", "Hf", "W", "Os", "Ir", "Pt", "Au", "U"],
+]);
+
+/**
+ * A metal's salt of one oxoanion, as its formula writes it - the metal and its count, then the anion, in brackets with its count or bare:
+ * AgNO3, Cu(NO3)2, Mg(ClO4)2, CuSO4, Ag2CO3, Fe2(SO4)3 - read as its ions: the anion of the least charge its formula makes (`anionOf`:
+ * NO3 and ClO4 one, SO4 and CO3 two, PO4 three), and the metal's as many as balance them, one to four. Null for any other label: a
+ * halide, a group by one bond (OTf, OAc) - a complex's - and the alkali metals' salts, which a condensed formula reads. "unread" for
+ * a label no reader is to read: one Hg+ alone (HgNO3).
+ */
+export function metalSaltStructure(label: string, groupOf: (label: string) => GroupStructure | null): (GroupStructure & { name: string }) | "unread" | null {
+  const m = /^([A-Z][a-z]?)(\d*)(?:\(([A-Za-z0-9]+)\)(\d+)|([A-Za-z0-9]+))$/.exec(label);
+  if (!m || !SALT_METALS.has(m[1])) return null;
+  const text = m[3] ?? m[5];
+  const metals = m[2] ? Number(m[2]) : 1;
+  const anions = m[4] ? Number(m[4]) : 1;
+  // (an oxoanion's elements alone, read as elements: no group a complex binds by one bond)
+  const parts = partsOf(text, () => undefined, groupOf);
+  if (!parts || parts.some((p) => p.kind !== "element") || !parts.some((p) => p.kind === "element" && p.el === "O")) return null;
+  for (let charge = 1; charge <= 3; charge++) {
+    const ion = anionOf(parts, charge);
+    if (!ion) continue;
+    const q = (anions * charge) / metals;
+    if (!Number.isInteger(q) || q < 1 || q > 4) return null;
+    // (one Hg+ alone is no ion: mercury(I) is the Hg2 2+ pair, and HgNO3, its empirical formula, does not say the pair - left unread, by
+    // this reader and the readers after it)
+    if (m[1] === "Hg" && metals === 1 && q === 1) return "unread";
+    const atoms: SmilesAtom[] = Array.from({ length: metals }, () => ({ el: m[1], hs: 0, charge: q }));
+    const bonds: StructureBond[] = [];
+    // (mercury(I) is the Hg2 2+ ion, its two Hg bonded, each +1: Hg2(NO3)2, Hg2SO4)
+    if (m[1] === "Hg" && metals === 2 && q === 1) bonds.push({ a1: 0, a2: 1, order: 1 });
+    for (let k = 0; k < anions; k++) {
+      const at = atoms.length;
+      atoms.push(...ion.atoms.map((a) => ({ ...a })));
+      bonds.push(...ion.bonds.map((b) => movedBond(b, (i) => i + at)));
+    }
+    const s: GroupStructure = { atoms, bonds, attach: [] };
+    return { ...s, name: structureFormula(s) };
+  }
+  return null;
+}
+
 /** Parts as a salt: its alkali metals, and the anion the rest makes. */
 function saltOf(parts: Part[]): (GroupStructure & { name: string }) | null {
   const isMetal = (p: Part): p is Extract<Part, { kind: "element" }> => p.kind === "element" && (alwaysIonic.has(p.el) || p.el === "Li");

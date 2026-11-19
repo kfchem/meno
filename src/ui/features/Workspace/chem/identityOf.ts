@@ -1,19 +1,22 @@
 /**
  * A structure drawn, as identity reads it (lib/chem/identity): every atom
  * drawn - its element, charge, mass number, unpaired electrons, mapping to
- * a reaction's atom, and its hydrogens not drawn - every bond, and the
+ * a reaction's atom, and its hydrogens not drawn - every bond of the structure (a hydrogen bond is none), and the
  * configurations the drawing shows, read as Clean-up reads them
  * (lib/layout/drawn `readStereo`). No hydrogen is folded in here: identity
  * does that, by its own rule (`hydrogensFolded`).
  */
-import { identity, identityText, type IdentityInput } from "../../../../lib/chem/identity";
+import { identity, identityText, type IdentityGroup, type IdentityInput } from "../../../../lib/chem/identity";
 import { earlierPicture, pairingDrawn, pairsDrawnAcross, pairsOf } from "../../../../lib/chem/arrangement";
 import { isMetal, squarePlanarMetal, type Arranged } from "../../../../lib/layout/perceive";
 import { valencesAt } from "../../../../lib/chem/molecule";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { readStereo } from "../../../../lib/layout/drawn";
+import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
+import { cageViews } from "../../../../lib/layout/recognised";
 import type { Model } from "../store/types";
-import { drawingOf } from "./drawing";
+import { drawingOf, readAs } from "./drawing";
+import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { piSystems, unreadWedges } from "./engineLayout";
 import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -24,9 +27,13 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
  * by id, whose wedges say nothing that can be read (drawn crossed, or at an
  * atom of three bonds that keeps no configuration of its own,
  * lib/chem/lonePairCentres), so whose configuration the input does not
- * hold.
+ * hold - and, for each of the drawing's bonds by its place, its place among
+ * the input's bonds: -1 for a hydrogen bond, which the input leaves out -
+ * and, by the atom's place, what the reading of a ring drawn in
+ * perspective with no depth says of it (lib/chem/perception/projection/depth
+ * `recognisedSaid`): read from the ring, read as a Haworth ring, or why not.
  */
-export function identityInputOf(part: Model): { input: IdentityInput; unread: number[] } {
+export function identityInputOf(part: Model): { input: IdentityInput; unread: number[]; bondAt: number[]; perspective: ReadonlyMap<number, string> } {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const pi = piSystems(part, drawing);
@@ -34,7 +41,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     atoms: part.atoms.map((a, i) => {
       const t = stereo.tetra.get(i);
       return {
-        el: a.el,
+        el: readAs(a),
         ...(a.charge ? { charge: a.charge } : {}),
         ...(a.isotope ? { isotope: a.isotope } : {}),
         ...(a.radical ? { radical: a.radical } : {}),
@@ -44,13 +51,18 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
         ...(pi.has(i) ? { pi: pi.get(i)! } : {}),
       };
     }),
-    bonds: drawing.bonds.map((b, k) => {
+    // (the structure's bonds: a hydrogen bond is none, so two molecules it joins are two parts - each bond's cis or trans taken by its
+    //  place in the drawing, before those are left out)
+    bonds: drawing.bonds.flatMap((b, k) => {
+      if (!ofTheStructure(b)) return [];
       const ct = stereo.cisTrans.get(k);
-      return { a: b.a, b: b.b, order: b.order, ...(ct ? { stereo: { refs: ct.refs, cis: ct.cis } } : {}) };
+      return [{ a: b.a, b: b.b, order: b.order, ...(ct ? { stereo: { refs: ct.refs, cis: ct.cis } } : {}) }];
     }),
     ...(stereo.axes.length ? { axes: stereo.axes.map((x) => ({ atoms: x.atoms, refs: x.refs, sense: x.sense })) } : {}),
     ...(stereo.cumulated.length ? { cumulated: stereo.cumulated.map((x) => ({ atoms: x.atoms, refs: x.refs, cis: x.cis })) } : {}),
   };
+  let kept = 0;
+  const bondAt = drawing.bonds.map((b) => (ofTheStructure(b) ? kept++ : -1));
   // (a metal drawn in the earlier picture - two lines and two side by side: read where every way of reading it is one structure)
   const oneOf = (metal: number, ways: readonly Arranged["pairs"][]): Arranged["pairs"] | null => {
     const others = arrangementsDrawn(drawing, part).filter((x) => x.metal !== metal);
@@ -58,13 +70,32 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     return texts.size === 1 ? ways[0] : null;
   };
   const arrangements = arrangementsDrawn(drawing, part, oneOf);
-  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id) };
+  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds, cageViews) };
 }
 
-/** A structure drawn's identity (lib/chem `identity`), and the atoms whose wedges it could not read (`identityInputOf`). */
+/** A structure drawn's identity (lib/chem `identity`), its AND and OR groups with it (`withGroups`), and the atoms whose wedges it could not read (`identityInputOf`). */
 export function identityOfDrawn(part: Model): { text: string; complete: boolean; unread: number[] } {
   const { input, unread } = identityInputOf(part);
-  return { ...identity(input), unread };
+  return { ...identity(withGroups(input, part)), unread };
+}
+
+/**
+ * `input`, identity's input of `part` (`identityInputOf`, its atoms in `part`'s order), with the AND and OR groups `part`'s
+ * centres are drawn in (lib/chem/identity `IdentityGroup`): for what says whether two structures drawn are the same structure
+ * (*Same as* in Enumerate and Substituents, a record's key, a search for the same compound). Not for what gives a structure one
+ * configuration - a stereoisomer made, its mirror image - whose configuration is the whole of it. `input` itself where none is.
+ */
+export function withGroups(input: IdentityInput, part: Model): IdentityInput {
+  const groups = new Map<string, IdentityGroup & { atoms: number[] }>();
+  part.atoms.forEach((a, i) => {
+    const g = a.stereoGroup;
+    if (!g || g.kind === "abs") return;
+    const name = `${g.kind}${g.n ?? 1}`;
+    const into = groups.get(name) ?? { kind: g.kind, atoms: [] };
+    into.atoms.push(i);
+    groups.set(name, into);
+  });
+  return groups.size ? { ...input, groups: [...groups.values()] } : input;
 }
 
 /**
@@ -130,7 +161,9 @@ export function arrangementsDrawn(
   oneOf?: (metal: number, ways: readonly Arranged["pairs"][]) => Arranged["pairs"] | null,
 ): Arranged[] {
   const around: number[][] = drawing.atoms.map(() => []);
+  // (a hydrogen bond drawn to the metal is no donor: it takes no place round an atom)
   for (const b of drawing.bonds) {
+    if (!ofTheStructure(b)) continue;
     around[b.a].push(b.b);
     around[b.b].push(b.a);
   }

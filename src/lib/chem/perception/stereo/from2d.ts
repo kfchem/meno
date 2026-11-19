@@ -19,7 +19,14 @@
  *   place in space, and a ring fused flat onto a cage is flat.
  * - A double bond's groups are on the side they are drawn on - but in a
  *   ring of seven atoms or fewer, which has them as its ring does (cis),
- *   however it is drawn: a benzene ring's bonds say nothing.
+ *   however it is drawn: a benzene ring's bonds say nothing. Nor does one
+ *   with an end whose two other groups are alike, however it is drawn:
+ *   turned over, it is the same molecule (2-methylbut-2-ene's, a prenyl's,
+ *   a cyclohexylidene's), so none is read there - and an odd cumulene's
+ *   likewise - by the symmetry's one test (perception/symmetry
+ *   `settingCisTrans`), the rest of what the drawing shows kept. Nor one
+ *   with an end that is no trigonal-planar centre (an ylide's S or P, a
+ *   sulfoximine's S, a metal), by the same test.
  * - An axis of chirality - a single bond in no ring, each end with two
  *   other neighbours (a biaryl's) - shows how it turns by a wedge out of an
  *   end, narrow there: that neighbour out of the page (or behind it, on
@@ -30,7 +37,10 @@
  *
  * The rules it follows (Brecher 2006, by rule number):
  * - ST-0.3: a wedge is narrow at its stereocentre, and is read there only
- *   (`lift`); a bond's bold or hashed look with no wedge states no centre.
+ *   (`lift`); a bond's bold look with no wedge states no centre, nor a
+ *   hashed one, but where the text grades it acceptable: a hashed line,
+ *   or a hashed wedge drawn the wrong way round, from a stereocentre to an
+ *   end group, read as the hashed wedge it states (`hashedLinesRead`).
  * - ST-0.1, ST-1.2.12: two plain bonds in line with one wedge are a T, not a
  *   tetrahedral centre: "in line" within `IN_LINE`; such a centre is unread
  *   and `unreadWhy` says why.
@@ -44,10 +54,15 @@
  * The core's (lib/chem/perception): it imports nothing of the layout's. The
  * layout's `lib/layout/drawn` reads through it with its cage fit handed in.
  */
-import { lonePairCentres, pyramidal } from "../../lonePairCentres";
+import { lonePairCentres, pyramidal } from "./lonePairs";
+import { AROMATIC_BOND, valenceOrders } from "../kekule";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
-import { factsOf } from "../facts";
+import { parity } from "./geometry";
+import { runsOf } from "./runs";
+import { factsOf, OPEN_RING } from "../facts";
+import { settingCisTrans, type SymmetryInput } from "../symmetry";
+import { ofTheStructure } from "../graph";
 
 /** A pair of atoms as one key, the lower first. */
 const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -59,6 +74,13 @@ export type DrawnAtom = {
   el?: string;
   /** Its charge, where it has one: for whether it has a lone pair (lib/chem/lonePairCentres). */
   charge?: number;
+  /**
+   * Its mass number, where it is one isotope in particular, and its unpaired electrons, where it has them: what else tells two
+   * groups apart - a CD3 from a CH3 - for whether a double bond's end has two alike (`readStereo`). Where not given, the
+   * element alone.
+   */
+  isotope?: number;
+  radical?: string;
   /** Its depth where the structure is drawn in perspective: nearer the viewer is larger. */
   z?: number;
   /** Hydrogens it carries but are not drawn as atoms. */
@@ -78,6 +100,12 @@ export type DrawnBond = {
   wedge?: { narrow: number; stereo: "up" | "down" };
   /** A wavy bond: either configuration, so none is read at its ends. */
   either?: boolean;
+  /** Hashes drawn as a line, not a wedge: read as "below" only as IUPAC grades it acceptable (`hashedLinesRead`); else it states nothing. */
+  hashed?: boolean;
+  /** A ring bond drawn bold, or as a near edge: the edge of a ring in perspective that is the nearer. */
+  bold?: boolean;
+  /** A hydrogen bond: no bond of the structure (perception/graph `ofTheStructure`), so read as if it were not there. */
+  hydrogen?: boolean;
 };
 
 export type DrawnStereo = {
@@ -117,6 +145,12 @@ const WEDGE_LIFT = 0.8;
  * centre's three span 0.77).
  */
 const HAIR = 0.2;
+/**
+ * How far a group of a perspective centre is drawn from half way between two free positions, as seen, to be unread there: the drawing says neither (by convention, as UNSURE_TURN; no text gives a number). Two free positions seen less than twice this apart leave a group between them unread, however it is drawn.
+ */
+const BETWEEN = (12 * Math.PI) / 180;
+/** A bond is seen end-on where its length on the page is less than this share of its depth: a Newman projection's central bond. */
+const END_ON = 0.1;
 
 /**
  * How near two bonds' directions are taken to be one line, either way - in
@@ -142,6 +176,8 @@ const IN_LINE_WHY = "two of its bonds in line or on top of each other";
  * ambiguous or the picture of another shape (read as open, never guessed), `lifts` each bond's
  * +1 (a wedge narrow at the centre), -1 (hashes) or 0. "Half a turn" with `IN_LINE`'s tolerance either way (ST-0.1): a deciding gap in that band
  * says nothing either. Open:
+ * - all four bonds within half the page - the largest gap between neighbours half a turn or more - whatever their kinds: a tetrahedron's four
+ *   bonds add up to nought, so their pictures never all point into one half (ST-1.1.12's figure, every drawing of it);
  * - four wedges of one kind (ST-1.1.20);
  * - three of one kind and one other, the other in the space of half a turn or more between two of the three (ST-1.1.9);
  * - two plain, a wedge and hashes: the plain bonds not next to each other (ST-1.1.10, 1.1.15), or next to each other and half a turn or more
@@ -150,8 +186,8 @@ const IN_LINE_WHY = "two of its bonds in line or on top of each other";
  *   apart (ST-1.1.19);
  * - three plain and a wedge, two plain bonds next to each other half a turn or more apart and the wedge not in that space (ST-1.1.16);
  * - two wedges and two hashes, like next to like (ST-1.1.17, 1.1.18).
- * Read as before: the forms the text gives a configuration, ST-1.1.4's (three plain, two half a turn or more apart, the wedge in that space) and
- * ST-1.1.12's among them.
+ * Read as before: the forms the text gives a configuration with bonds on both sides of the centre, ST-1.1.4's cross (three plain, two half a
+ * turn or more apart, the wedge in that space) and the upright cross with two like wedges across from each other among them.
  */
 function fourBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
@@ -164,6 +200,8 @@ function fourBondsSayNothing(at: { x: number; y: number }, around: readonly { x:
   const kinds = [0, 1, -1].map((k) => [0, 1, 2, 3].filter((i) => lifts[i] === k));
   const [plain, up, down] = kinds;
   const WHY = "its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side";
+  // (all four within half the page)
+  if (atLeastHalf(Math.max(...gaps.map((g) => g.size)))) return WHY;
   if (up.length === 4 || down.length === 4) return WHY;
   // (three of one wedge kind and one other: the other in the wide space between two of the three)
   for (const three of [up, down]) {
@@ -247,10 +285,16 @@ function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x
  * by atom index. Not a double bond with nothing on an end, in a ring of
  * seven atoms or fewer, cumulated, or with a wavy bond at an end - none of
  * those has a cis or trans to leave unsaid - nor an end with two groups,
- * whose other group states it. Clean-up keeps these ends straight
- * (`LayoutAtom.linear`), so that what it lays out leaves the bond unsaid too.
+ * whose other group states it. And the ends of an odd cumulene's run so
+ * drawn (a butatriene's), by the same tests. Clean-up keeps these ends
+ * straight (`LayoutAtom.linear`), so that what it lays out leaves the bond
+ * unsaid too.
  */
 export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
+  return straightEndsOf(atoms, structureOf(bonds).bonds);
+}
+
+function straightEndsOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -260,15 +304,16 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     bondOf.set(key(b.a, b.b), b);
   });
   const inRingUnder = ringsOfDrawing(atoms, bonds);
+  // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
+  const runs = runsOf({ atoms, bonds });
   const out = new Set<number>();
-  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
   const straightOn = (end: number, other: number, n: number) =>
     apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
   for (const bond of bonds) {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) continue;
     const { a, b } = bond;
     const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
-    if (!groups(a, b).length || !groups(b, a).length || inRingUnder(a, b, OPEN_RING) || cumulated(a, b) || cumulated(b, a)) continue;
+    if (!groups(a, b).length || !groups(b, a).length || inRingUnder(a, b, OPEN_RING) || runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a)) continue;
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
     for (const [end, other] of [
       [a, b],
@@ -278,15 +323,39 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
       if (g.length === 1 && straightOn(end, other, g[0])) out.add(end);
     }
   }
+  // (and the ends of an odd cumulene's run - a butatriene's: its cis or trans across the run, read from its ends' groups as a double
+  //  bond's are - by the same tests, an end's group straight on from the run)
+  const { middle, from: runFrom } = runs;
+  atoms.forEach((_, i) => {
+    if (middle(i)) return;
+    for (const m of neighbours[i]) {
+      if (bondOf.get(key(i, m))!.order !== 2 || !middle(m)) continue;
+      const run = runFrom(i, m);
+      const j = run[run.length - 1];
+      if (j <= i || run.length % 2 === 1) continue;
+      const ends = [
+        [i, m],
+        [j, run[run.length - 2]],
+      ];
+      const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
+      // (each end with two groups, an H among them at most, as the run is read)
+      if (ends.some(([e, t]) => !groups(e, t).length || groups(e, t).length + atoms[e].hs !== 2) || inRingUnder(i, m, OPEN_RING)) continue;
+      if (ends.some(([e]) => neighbours[e].some((n) => bondOf.get(key(e, n))!.either))) continue;
+      for (const [e, t] of ends) {
+        const g = groups(e, t);
+        if (g.length === 1 && straightOn(e, t, g[0])) out.add(e);
+      }
+    }
+  });
   return out;
 }
 
 /**
- * The stereochemistry a drawing shows (this file's header). A drawing with depth is read by its bonds with depth; `fit`, where given, says
- * for each atom of a cage the solid it is drawn from, fitted to the drawing (the layout's `cageFits`): asked once, and again with the
- * centres the first reading fixed held.
+ * The centres a drawing shows, and what each was read against: the atoms, their bonds, and for each atom of a bridged system or a cage the
+ * solid fitted to it (`fit`, the layout's: asked once, and again with the centres the first reading fixed held). `readStereo` and
+ * `groupDepths` both read from this, so a group's depth is the very choice that read its centre.
  */
-export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): DrawnStereo {
+function readCentres(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter) {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -295,7 +364,6 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     neighbours[b.b].push(b.a);
     bondOf.set(key(b.a, b.b), b);
   });
-  const inRingUnder = ringsOfDrawing(atoms, bonds);
   // how a bond out of a centre stands: +1 on a wedge, -1 on hashes, 0 in
   // the page (a wedge narrow at the other end says nothing about this one)
   const lift = (c: number, n: number) => {
@@ -344,6 +412,7 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
   // two corners drawn on one side, read by a hair)
   const first = fit(atoms, bonds);
   let tetra = centres(first);
+  let fits = first;
   const fixed = new Map(
     [...tetra].filter(([c]) => {
       const fit = first.get(c);
@@ -353,11 +422,31 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
   if (fixed.size) {
     const second = fit(atoms, bonds, fixed);
     const nearer = new Map([...first].map(([a, f]) => [a, (second.get(a)?.miss ?? Infinity) < f.miss ? second.get(a)! : f]));
-    if ([...nearer].some(([a, f]) => f !== first.get(a))) tetra = centres(nearer);
+    if ([...nearer].some(([a, f]) => f !== first.get(a))) {
+      fits = nearer;
+      tetra = centres(nearer);
+    }
   }
+  return { neighbours, bondOf, lift, keepsPyramid, tetra, fits };
+}
+
+/**
+ * The stereochemistry a drawing shows (this file's header). A drawing with depth is read by its bonds with depth; `fit`, where given, says
+ * for each atom of a bridged system or a cage the solid it is drawn from, fitted to the drawing (the layout's `cageFits`).
+ */
+export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): DrawnStereo {
+  const kept = structureOf(bonds);
+  const read = readStereoOf(atoms, hashedLinesRead(atoms, kept.bonds).bonds, fit);
+  return { ...read, cisTrans: new Map([...read.cisTrans].map(([i, c]) => [kept.at(i), c])) };
+}
+
+function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter): DrawnStereo {
+  const { neighbours, bondOf, lift, keepsPyramid, tetra } = readCentres(atoms, bonds, fit);
+  const inRingUnder = ringsOfDrawing(atoms, bonds);
 
   const cisTrans = new Map<number, CisTrans>();
-  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
+  // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
+  const runs = runsOf({ atoms, bonds });
   bonds.forEach((bond, i) => {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
     const { a, b } = bond;
@@ -370,7 +459,7 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     // (an end with a second double bond, or a triple one - an azide's
     // middle N, an allene's middle C - is straight through, and the bond
     // has no cis or trans of its own, however the drawing bends it)
-    if (cumulated(a, b) || cumulated(b, a)) return;
+    if (runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a)) return;
     // a wavy bond at either end: either configuration
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) return;
     const along = { x: atoms[b].x - atoms[a].x, y: atoms[b].y - atoms[a].y };
@@ -385,20 +474,19 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     cisTrans.set(i, { refs: [ra, rb], cis: sa === sb });
   });
 
-  // a run of cumulated double bonds: a carbon, or an N+, between two double bonds (a sulfur's C=S=C is bent, no axis - the rule
-  // the restraints' linear-by-bonds has)
-  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
-  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
-  /** The atoms along the run from end `i` through its double bond to `m`, to the run's other end. */
-  const runFrom = (i: number, m: number) => {
-    const run = [i, m];
-    while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
-    return run;
-  };
+  // a run of cumulated double bonds
+  const { middle, from: runFrom } = runs;
   // (an end of a run of an even number of double bonds - an allene's, a ketenimine's: a wedge out of it is the run's)
   const endsAnAllene = (i: number) =>
     !middle(i) && neighbours[i].some((m) => bondOf.get(key(i, m))!.order === 2 && middle(m) && runFrom(i, m).length % 2 === 1);
 
+  // (each bond's order with the aromatic ones written out as a Kekule structure, worked out once and only where one is asked of)
+  let kekule: Map<DrawnBond, number> | null = null;
+  const kekuleOrder = (b: DrawnBond): number => {
+    if (b.order !== AROMATIC_BOND) return b.order;
+    kekule ??= new Map(valenceOrders(atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, charge: a.charge ?? 0 })), bonds).map((o, k) => [bonds[k], o]));
+    return kekule.get(b) ?? 1;
+  };
   const axes: Axial[] = [];
   bonds.forEach((bond) => {
     if (bond.order !== 1 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
@@ -418,7 +506,9 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
       // turned the S over: laid out, the axis was kept and the centre not.
       // A wedge at a pyramid of three is about the pyramid, whether or not
       // that keeps a configuration - no axis's end)
-      const orders = neighbours[i].reduce((sum, n) => sum + (bondOf.get(key(i, n))!.order === 4 ? 1.5 : bondOf.get(key(i, n))!.order), 0);
+      // (by a Kekule structure's orders - perception/kekule `valenceOrders` - not an aromatic bond as 1.5: a 1-arylphosphole's P,
+      //  1 + 1 + 1 so, keeps its lone pair and is a pyramid, where 1.5 + 1.5 + 1 left it none and offered its P-aryl bond as an axis)
+      const orders = neighbours[i].reduce((sum, n) => sum + kekuleOrder(bondOf.get(key(i, n))!), 0);
       if (keepsPyramid(i) || pyramidal(atoms[i].el ?? "C", atoms[i].charge ?? 0, 3, orders, atoms[i].hs)) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
       // (an axis in a ring only where the ring is of seven atoms or more - a 2,2'-bridged biphenyl's, a BINOL phosphoric
@@ -487,7 +577,61 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     }
   });
 
-  return { tetra, cisTrans, axes, cumulated: odd };
+  // (none where it sets nothing - an end of two alike groups: perception/symmetry `settingCisTrans`, asked of the molecule as
+  //  read, its atoms as identity writes them, every other configuration kept. Asked when first wanted: a reader that wants
+  //  only the centres - the layout's checks of each centre it draws, many times over - asks nothing of the symmetry)
+  let setting: { cisTrans: Map<number, CisTrans>; cumulated: Cumulated[] } | null = null;
+  const settled = () => {
+    if (setting) return setting;
+    const { graph: read, bondAt: unique } = drawnGraph(atoms, bonds, { tetra, cisTrans, axes, cumulated: odd });
+    const kept = settingCisTrans(read);
+    const set = new Set(unique.filter((_, j) => kept.bonds[j].stereo));
+    setting = kept === read ? { cisTrans, cumulated: odd } : { cisTrans: new Map([...cisTrans].filter(([k]) => set.has(k))), cumulated: odd.filter((x) => kept.cumulated.includes(x)) };
+    return setting;
+  };
+  return {
+    tetra,
+    axes,
+    get cisTrans() {
+      return settled().cisTrans;
+    },
+    get cumulated() {
+      return settled().cumulated;
+    },
+  };
+}
+
+/**
+ * A drawing with what is read of it, as the core's graph (`SymmetryInput`): each atom as identity writes it - its element,
+ * mass number and unpaired electrons - with its charge and H count, each bond once (the first of a pair drawn twice; none
+ * from an atom to itself), and the configurations `read` gives; `bondAt`, each of the graph's bonds' place among `bonds`.
+ * What `settingCisTrans` is asked of, by `readStereo` and by a caller that asks it of a cis or trans of its own.
+ */
+export function drawnGraph(
+  atoms: readonly DrawnAtom[],
+  bonds: readonly DrawnBond[],
+  read: { tetra: ReadonlyMap<number, Tetrahedral>; cisTrans: ReadonlyMap<number, CisTrans>; axes: readonly Axial[]; cumulated: readonly Cumulated[] },
+): { graph: SymmetryInput & { cumulated: readonly Cumulated[] }; bondAt: number[] } {
+  const seen = new Set<string>();
+  const bondAt = bonds.flatMap((b, k) => {
+    if (b.a === b.b || seen.has(key(b.a, b.b))) return [];
+    seen.add(key(b.a, b.b));
+    return [k];
+  });
+  return {
+    graph: {
+      atoms: atoms.map((a, i) => ({
+        el: `${a.el ?? "C"}${a.isotope ? `^${a.isotope}` : ""}${a.radical ? `.${a.radical}` : ""}`,
+        hs: a.hs,
+        ...(a.charge ? { charge: a.charge } : {}),
+        ...(read.tetra.has(i) ? { tetra: read.tetra.get(i)! } : {}),
+      })),
+      bonds: bondAt.map((k) => ({ a: bonds[k].a, b: bonds[k].b, order: bonds[k].order, ...(read.cisTrans.has(k) ? { stereo: read.cisTrans.get(k)! } : {}) })),
+      axes: read.axes,
+      cumulated: read.cumulated,
+    },
+    bondAt,
+  };
 }
 
 /** How far a bond in the page is turned, either way, to ask whether what the drawing says of a centre or a double bond stays the same. */
@@ -511,10 +655,17 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * or else wedges and hashes that cancel, saying neither way round.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
+  const read = hashedLinesRead(atoms, structureOf(bonds).bonds);
+  return read.why.get(c) ?? unreadWhyOf(atoms, read.bonds, c);
+}
+
+function unreadWhyOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
   const mine = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c));
   const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
   const atom = atoms[c];
   if (mine.some((b) => b.either)) return "a wavy bond at it says it is either";
+  // (a centre drawn in perspective with no wedge: a group drawn half way between the two ways it could point)
+  if (atom.centre && atom.z != null && !mine.some((b) => b.wedge)) return "its bond is drawn between its two free positions";
   // (an allene's end: its wedge says how the allene turns - or, wedged at both ends, the two say opposite ways)
   const doubles = (x: number) => bonds.filter((b) => b.order === 2 && (b.a === x || b.b === x));
   const run = doubles(c).map((b) => (b.a === c ? b.b : b.a)).find((m) => doubles(m).length === 2);
@@ -561,9 +712,20 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
  * A centre with a lone pair for its fourth group - a sulfoxide's S, a
  * phosphine's P (lib/chem/lonePairCentres) - is asked so too: its
- * configuration read as readStereo reads it, from its three groups.
+ * configuration read as readStereo reads it, from its three groups. A
+ * double bond with no cis or trans to show - an end of two alike groups -
+ * is none, however it is drawn.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
+  const kept = structureOf(bonds);
+  const read = hashedLinesRead(atoms, kept.bonds);
+  const unsure = unsureStereoOf(atoms, read.bonds);
+  // (and a centre a hashed line leaves open, saying why: `hashedLinesRead`)
+  const open = [...read.why.keys()].filter((c) => !unsure.atoms.includes(c));
+  return { atoms: [...unsure.atoms, ...open], bonds: unsure.bonds.map(kept.at) };
+}
+
+function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -573,6 +735,7 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     bondOf.set(key(b.a, b.b), b);
   });
   const inRingUnder = ringsOfDrawing(atoms, bonds);
+  const runs = runsOf({ atoms, bonds });
   const lift = (c: number, n: number) => {
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
@@ -619,10 +782,20 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
         });
     const groups = neighbours[a].some((n) => n !== b) && neighbours[b].some((n) => n !== a);
     // (nor one cumulated with another, which has none: readStereo)
-    const cumulated = [a, b].some((end) => neighbours[end].some((n) => n !== (end === a ? b : a) && bondOf.get(key(end, n))!.order >= 2));
+    const cumulated = runs.cumulatedAt(a, b) || runs.cumulatedAt(b, a);
     if (groups && !cumulated && (inLine(a, b) || inLine(b, a))) doubles.push(i);
   });
-  return { atoms: centres, bonds: doubles };
+  // (none at a double bond that has no cis or trans to show - an end of two alike groups: perception/symmetry
+  //  `settingCisTrans`, asked as readStereo asks it, with the bond given one, every other configuration as read)
+  if (!doubles.length) return { atoms: centres, bonds: doubles };
+  const read = readStereo(atoms, bonds);
+  const unit = doubles.filter((i) => {
+    const { a, b } = bonds[i];
+    const refs: [number, number] = [neighbours[a].find((n) => n !== b)!, neighbours[b].find((n) => n !== a)!];
+    const { graph, bondAt } = drawnGraph(atoms, bonds, { ...read, cisTrans: new Map(read.cisTrans).set(i, { refs, cis: true }) });
+    return !!settingCisTrans(graph).bonds[bondAt.indexOf(i)].stereo;
+  });
+  return { atoms: centres, bonds: unit };
 }
 
 /**
@@ -691,6 +864,8 @@ function volumeInSpace(
   around: readonly number[],
   lift: (c: number, n: number) => number,
   fit?: CageFit,
+  /** Filled, where the centre is read, with the way each of its groups out of the ring (no depth, no wedge) was read to go: for `groupDepths`. */
+  chosen?: Map<number, V3>,
 ): number {
   const at: V3 = [atoms[c].x, atoms[c].y, atoms[c].z!];
   const dirs = new Map<number, V3>();
@@ -712,11 +887,34 @@ function volumeInSpace(
     const left = around.length === 4 && out >= 0 ? out : 3;
     const three = around.filter((_, k) => k !== left).slice(0, 3);
     const sign = left % 2 === 1 ? 1 : -1;
+    // (a fourth group the three leave where they leave it: away from all three, as they were read)
+    const fourth = (ways: V3[]) => {
+      const group = unknown.length === 1 ? unknown[0] : null;
+      if (chosen && group != null) chosen.set(group, unit3(ways.reduce((s, u) => sub3(s, unit3(u)), [0, 0, 0] as V3)));
+    };
     const d = det3(...(three.map((n) => unit3(dirs.get(n)!)) as [V3, V3, V3]));
-    if (Math.abs(d) >= HAIR || !fit) return Math.abs(d) < 1e-6 ? 0 : Math.sign(d) * sign;
+    if (Math.abs(d) >= HAIR || !fit) {
+      if (Math.abs(d) < 1e-6) return 0;
+      fourth(caged.map((n) => dirs.get(n)!));
+      return Math.sign(d) * sign;
+    }
     const s = fit.solid.get(c)!;
     const f = det3(...(three.map((n) => unit3(fit.map(sub3(fit.solid.get(n)!, s)))) as [V3, V3, V3]));
-    return Math.abs(f) < 1e-6 ? 0 : Math.sign(f) * sign;
+    if (Math.abs(f) < 1e-6) return 0;
+    fourth(caged.map((n) => fit.map(sub3(fit.solid.get(n)!, s))));
+    return Math.sign(f) * sign;
+  }
+  // a Newman projection's atom (docs/EDITOR-2D.md, *Drawn in perspective*): its one known bond end-on - the atom behind it, or before it, in the same place on the page - and its groups drawn about it at angles of their own: each leaves it away from that atom, at the angle it is drawn at, as a staggered or an eclipsed projection says
+  if (dirs.size === 1 && unknown.length >= 2) {
+    const d0 = [...dirs.values()][0];
+    if (Math.hypot(d0[0], d0[1]) >= END_ON * Math.abs(d0[2])) return 0;
+    const away = d0[2] > 0 ? -1 : 1;
+    const t = Math.acos(-1 / 3);
+    const angles = unknown.map((n) => Math.atan2(atoms[n].y - at[1], atoms[n].x - at[0]));
+    // (two groups drawn on one line, or all but, say nothing of which is which)
+    for (let i = 0; i < angles.length; i++) for (let j = i + 1; j < angles.length; j++) if (apart(angles[i], angles[j]) < 2 * BETWEEN) return 0;
+    unknown.forEach((n, i) => dirs.set(n, [Math.sin(t) * Math.cos(angles[i]), Math.sin(t) * Math.sin(angles[i]), away * -Math.cos(t)]));
+    unknown.length = 0;
   }
   if (dirs.size < 2) return 0;
   if (unknown.length) {
@@ -752,6 +950,18 @@ function volumeInSpace(
     };
     if (unknown.length === 1) {
       const [n] = unknown;
+      // (drawn half way between its two nearest free ways, as seen, or between two seen close together: neither is said)
+      if (free.length >= 2 && !fit) {
+        const seen = free.filter((d) => Math.hypot(d[0], d[1]) > 1e-9).map((d) => Math.atan2(d[1], d[0]));
+        const group = Math.atan2(atoms[n].y - at[1], atoms[n].x - at[0]);
+        const near = [...seen].sort((p, q) => apart(group, p) - apart(group, q)).slice(0, 2);
+        if (near.length === 2) {
+          const mid = Math.atan2(Math.sin(near[0]) + Math.sin(near[1]), Math.cos(near[0]) + Math.cos(near[1]));
+          const between = apart(near[0], near[1]) < Math.PI && apart(group, near[0]) + apart(group, near[1]) <= apart(near[0], near[1]) + 1e-9;
+          if (apart(near[0], near[1]) < 2 * BETWEEN && between) return 0;
+          if (apart(group, mid) < BETWEEN && apart(near[0], near[1]) > 1e-9) return 0;
+        }
+      }
       dirs.set(n, free.reduce((best, d) => (fitTo(n, d) > fitTo(n, best) ? d : best)));
     } else if (unknown.length === 2 && free.length === 2) {
       const [m, n] = unknown;
@@ -765,7 +975,78 @@ function volumeInSpace(
   }
   const [p, q, r] = around.slice(0, 3).map((n) => unit3(dirs.get(n)!));
   const d = det3(p, q, r);
-  return Math.abs(d) < 1e-6 ? 0 : Math.sign(d);
+  if (Math.abs(d) < 1e-6) return 0;
+  if (chosen) for (const n of around) if (!lift(c, n) && !(fit ? fit.solid.has(n) : atoms[n].z != null)) chosen.set(n, unit3(dirs.get(n)!));
+  return Math.sign(d);
+}
+
+/**
+ * The depth of each group drawn out of a ring in perspective, worked out for where its bond passes behind another (lib/chem/layout2d
+ * `brokenBehind`; Brecher 2006, ST-3.1): the way its centre is read to send it (`volumeInSpace`, the very choice that reads the centre - the
+ * ring's bonds as drawn, or a bridged system's or a cage's solid fitted to it) says how far before or behind its ring atom it lies: that way's
+ * depth, as a part of a bond one long, times the bond's length as drawn. The atoms further out along the same group lie at its first atom's
+ * depth: a group is drawn flat, before or behind its ring as its first atom is. None where the ring atom is not read there - a group drawn half
+ * way between two places, a wavy bond at it - nor for an atom reached from two atoms with depth, nor where nothing in the drawing has depth.
+ * Nothing is kept: the drawing asks again as it is drawn, so a group dragged round has its depth, and its gap, follow it. By atom index.
+ */
+export function groupDepths(drawnAtoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): Map<number, number> {
+  return groupDepthsOf(drawnAtoms, structureOf(bonds).bonds, fit);
+}
+
+function groupDepthsOf(drawnAtoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter): Map<number, number> {
+  const out = new Map<number, number>();
+  const deep = (i: number) => drawnAtoms[i].z != null;
+  // (no atom with depth that has a group without and two bonds with depth, or one seen end-on as a Newman projection's: nothing to work out,
+  //  and nothing read - an engine's cage gives its groups' first atoms depth already)
+  const near = drawnAtoms.map((): number[] => []);
+  for (const b of bonds) {
+    if (b.a === b.b) continue;
+    near[b.a].push(b.b);
+    near[b.b].push(b.a);
+  }
+  const endOn = (c: number, n: number) => Math.hypot(drawnAtoms[n].x - drawnAtoms[c].x, drawnAtoms[n].y - drawnAtoms[c].y) < END_ON * Math.abs(drawnAtoms[n].z! - drawnAtoms[c].z!);
+  const anchors = (c: number) => deep(c) && near[c].some((n) => !deep(n)) && (near[c].filter(deep).length >= 2 || near[c].some((n) => deep(n) && endOn(c, n)));
+  if (!drawnAtoms.some((_, c) => anchors(c))) return out;
+  const atoms = drawnAtoms;
+  const { neighbours, bondOf, lift, fits } = readCentres(atoms, bonds, fit);
+  const first = new Map<number, number>();
+  const twice = new Set<number>();
+  atoms.forEach((atom, c) => {
+    if (!deep(c)) return;
+    const around = neighbours[c];
+    if (around.length > 4 || around.length + atom.hs > 4 || around.some((n) => bondOf.get(key(c, n))!.either)) return;
+    const groups = around.filter((n) => !deep(n) && !lift(c, n));
+    if (!groups.length) return;
+    const chosen = new Map<number, V3>();
+    if (!volumeInSpace(atoms, c, around, lift, fits.get(c), chosen)) return;
+    for (const n of groups) {
+      const way = chosen.get(n);
+      if (!way) continue;
+      if (first.has(n)) twice.add(n);
+      first.set(n, atoms[c].z! + way[2] * Math.hypot(atoms[n].x - atom.x, atoms[n].y - atom.y));
+    }
+  });
+  // (an atom bonded to two atoms with depth is between them, not out of either)
+  for (const [n] of first) if (twice.has(n) || neighbours[n].filter(deep).length > 1) first.delete(n);
+  // each group's further atoms at its first atom's depth; one reached from two groups, neither's
+  const from = new Map<number, number>();
+  for (const [g] of first) {
+    const seen = new Set([g]);
+    const queue = [g];
+    while (queue.length) {
+      const i = queue.shift()!;
+      for (const n of neighbours[i]) {
+        if (deep(n) || seen.has(n) || first.has(n)) continue;
+        seen.add(n);
+        queue.push(n);
+        if (from.has(n) && from.get(n) !== g) twice.add(n);
+        from.set(n, g);
+      }
+    }
+  }
+  for (const [g, z] of first) out.set(g, z);
+  for (const [n, g] of from) if (!twice.has(n)) out.set(n, first.get(g)!);
+  return out;
 }
 
 /**
@@ -782,22 +1063,119 @@ export function sameConfiguration(
   const a = p.neighbours.map(as);
   const b = q.neighbours.map(as);
   if (a.length !== b.length || a.some((n) => !b.includes(n))) return false;
-  const perm = a.map((n) => b.indexOf(n));
-  let swaps = 0;
-  const seen = perm.map(() => false);
-  for (let i = 0; i < perm.length; i++) {
-    let len = 0;
-    for (let j = i; !seen[j]; j = perm[j]) {
-      seen[j] = true;
-      len++;
-    }
-    if (len) swaps += len - 1;
-  }
-  return (swaps % 2 === 0) === (p.volume === q.volume);
+  // (the parity of the permutation taking one order to the other: geometry's)
+  return (parity(a.map((n) => b.indexOf(n))) === 1) === (p.volume === q.volume);
 }
 
-/** The smallest ring a double bond in which has a cis or trans to state: eight atoms - one in a ring of seven or fewer is held cis. */
-export const OPEN_RING = 8;
+/**
+ * The drawing's bonds of the structure (perception/graph `ofTheStructure`: a hydrogen bond is none), which every reading here takes in place
+ * of the caller's, and `at`, which gives a kept bond's index in the caller's list back - so what is said of bonds is said in its numbering.
+ */
+function structureOf(bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]; at: (i: number) => number } {
+  if (bonds.every(ofTheStructure)) return { bonds, at: (i) => i };
+  const at: number[] = [];
+  bonds.forEach((b, i) => {
+    if (ofTheStructure(b)) at.push(i);
+  });
+  return { bonds: at.map((i) => bonds[i]), at: (i) => at[i] };
+}
+
+/** What a centre a hashed line leaves open says (the look owner's words). */
+export const HASHED_BETWEEN = "a hashed line between two stereocentres states neither";
+export const HASHED_TO_LARGE = "a hashed line to a group of this size does not say which end it belongs to";
+export const HASHED_TWO = "two hashed lines at one atom";
+export const HASHED_RING = "a hashed line along a ring bond states neither end";
+
+/**
+ * Hashes drawn as a line, and a hashed wedge drawn the wrong way round, read as IUPAC grades them (Brecher 2006, ST-0.3): acceptable, and
+ * read as "below" at the centre, only where the line runs from a stereocentre to an end group - an atom with at most one other group not
+ * a hydrogen (an H, a halogen, OH, NH2, a methyl, an ethyl, an ethoxy, a CHO) - the centre with no wedge of its own and no other such
+ * line. Each such bond comes back as the hashed wedge it states, narrow at the centre. A centre with a wedge narrow at it is read from the
+ * wedge, the line not looked at. In every other case the line states nothing, and a centre with no wedge of its own is open, saying why
+ * (`why`, by the centre): between two stereocentres; to a group of two other groups or more, which end it belongs to not said; or two such
+ * lines at it; or along a ring bond - a ring's far edge in perspective, no configuration of either end, nor a hashed wedge so. The end
+ * of a cumulated double bond (an allene's) is no end group: a wedge out of it states the allene's axis. A solid wedge the wrong way
+ * round stays unread, as ever. (A stereocentre here: an atom of four groups, its hydrogens counted; whether its groups differ is for
+ * identity to tell.)
+ */
+function hashedLinesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]; why: Map<number, string> } {
+  const why = new Map<number, string>();
+  if (!bonds.some((b) => b.hashed || b.wedge?.stereo === "down")) return { bonds, why };
+  const around: number[][] = atoms.map(() => []);
+  for (const b of bonds) {
+    if (b.a === b.b) continue;
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  const isH = (i: number) => atoms[i].el === "H";
+  // (an end of a cumulated double bond - a double bond to an atom with a double bond of its own: an allene's - is no end group)
+  const doubled = (i: number) => bonds.filter((b) => b.order === 2 && (b.a === i || b.b === i)).map((b) => (b.a === i ? b.b : b.a));
+  const cumulatedEnd = (i: number) => doubled(i).some((m) => doubled(m).length >= 2);
+  // (a bond in a ring: another way round from one end to the other)
+  const ringBond = (b: DrawnBond) => {
+    const seen = new Set([b.a]);
+    const todo = [b.a];
+    while (todo.length) {
+      const n = todo.pop()!;
+      for (const m of around[n]) {
+        if ((n === b.a && m === b.b) || seen.has(m)) continue;
+        if (m === b.b) return true;
+        seen.add(m);
+        todo.push(m);
+      }
+    }
+    return false;
+  };
+  // (four groups, its hydrogens counted: as the reader takes a stereocentre)
+  const centre = (i: number) => around[i].length + atoms[i].hs === 4 && atoms[i].hs <= 1;
+  // (its other groups not hydrogens, the bond to `from` aside)
+  const others = (i: number, from: number) => around[i].filter((n) => n !== from && !isH(n)).length;
+  const endGroup = (i: number, from: number) => others(i, from) <= 1 && !cumulatedEnd(i);
+  const wedged = (i: number) => bonds.some((b) => b.wedge && b.wedge.narrow === i && (b.a === i || b.b === i));
+  const linesAt = (i: number) => bonds.filter((b) => b.hashed && (b.a === i || b.b === i));
+  // (for the words alone - the centre is open either way: whether the far end looks a stereocentre, its four groups unlike by what each
+  // first atom is - an isopropyl's CH, its two methyls alike, does not)
+  const stereocentreLike = (i: number) => {
+    if (!centre(i)) return false;
+    const marks = around[i].map((n) => `${atoms[n].el ?? "C"}:${atoms[n].hs}:${around[n].length}`);
+    if (atoms[i].hs) marks.push("H");
+    return new Set(marks).size === 4;
+  };
+  const out = [...bonds];
+  // (a centre's words, whatever order its bonds are listed in: a hashed line along a ring bond's first - the centre is open either way)
+  const say = (c: number, words: string) => {
+    if (why.get(c) !== HASHED_RING) why.set(c, words);
+  };
+  bonds.forEach((b, k) => {
+    // (a hashed wedge the wrong way round: narrow at an end group that is no centre, wide at a centre with no wedge nor line of its own)
+    if (b.wedge?.stereo === "down" && !b.hashed) {
+      const narrow = b.wedge.narrow;
+      const wide = narrow === b.a ? b.b : b.a;
+      if (!centre(narrow) && endGroup(narrow, wide) && centre(wide) && !wedged(wide) && !linesAt(wide).length && !ringBond(b)) out[k] = { ...b, wedge: { narrow: wide, stereo: "down" } };
+      return;
+    }
+    if (!b.hashed) return;
+    const ends = [b.a, b.b].filter((c) => centre(c) && !wedged(c));
+    const inRing = ends.length > 0 && ringBond(b);
+    for (const c of ends) {
+      const far = c === b.a ? b.b : b.a;
+      if (inRing) {
+        why.set(c, HASHED_RING);
+        continue;
+      }
+      if (linesAt(c).length > 1) {
+        say(c, HASHED_TWO);
+        continue;
+      }
+      if (endGroup(far, c) && !(centre(far) && !wedged(far) && endGroup(c, far))) {
+        out[k] = { ...b, hashed: undefined, wedge: { narrow: c, stereo: "down" } };
+        continue;
+      }
+      if (!endGroup(far, c)) say(c, stereocentreLike(far) ? HASHED_BETWEEN : HASHED_TO_LARGE);
+    }
+  });
+  return { bonds: out, why };
+}
 
 /** The smallest ring a drawn axis may be in: seven atoms. */
 const AXIS_RING = 7;
@@ -810,3 +1188,4 @@ function ringsOfDrawing(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
   const facts = factsOf({ atoms: atoms.map((x) => ({ el: x.el ?? "C" })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) });
   return (a, b, n) => facts.inRingSmallerThan(facts.bondBetween(a, b), n);
 }
+

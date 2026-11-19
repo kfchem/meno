@@ -44,13 +44,19 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 }));
 
 /** A drawing of a block, as Meno's engine lays one out: here a carbon labelled with the block, and an oxygen. */
-vi.mock("../chem/fromSmiles", async (actual) => ({
-  ...(await actual<typeof import("../chem/fromSmiles")>()),
-  drawingOf: async (block: string): Promise<Model> => ({
+vi.mock("../chem/fromSmiles", async (actual) => {
+  const drawingOf = async (block: string): Promise<Model> => ({
     atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block.split("\n")[0] } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
     bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
-  }),
-}));
+  });
+  // (and the step's two ways of drawing what it made, each through that drawing)
+  return {
+    ...(await actual<typeof import("../chem/fromSmiles")>()),
+    drawingOf,
+    madeDrawn: (a: { made: readonly string[] }) => Promise.all(a.made.map((block) => drawingOf(block))),
+    smilesMadeDrawn: (_smiles: string, read: { molblock: string }) => drawingOf(read.molblock),
+  };
+});
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
@@ -80,6 +86,16 @@ function page() {
 }
 
 describe("Generate: a step that takes nothing in", () => {
+  it("refuses to run with an option taken from a property: nothing comes in to take it from - and never runs on the step's own value instead", async () => {
+    const { st } = page();
+    const step = st().addStep("generate", "molgen", 0, 0);
+    st().updateStep(step, { options: { count: 3, seed: 7 } });
+    st().updateStep(step, { bound: { count: "n" } });
+    await st().runStep(step);
+    expect(run).not.toHaveBeenCalled();
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("takes its options as given on its card, not from a property") });
+  });
+
   beforeEach(() => {
     run.mockReset();
     asked.length = 0;

@@ -13,6 +13,7 @@ import { styleOf } from "../../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { byOf, kindsOf, optionsFor, optionsNeed, stepRole } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
+import type { Bound } from "../../../../../lib/boundOptions";
 import * as wf from "../../workflow/model";
 import { heldSets } from "../../workflow/onPage";
 import { appendParts, partsBounds } from "../../workflow/parts";
@@ -156,8 +157,17 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       if (put && optionsNeed(put)) get().setWorkflowView({ openStep: id });
       return id;
     },
+    repeatSteps: (ids: readonly number[]) => {
+      const before = doc.getState();
+      const id = before.nextWorkflowId ?? 1;
+      // (one that cannot be made round them says why, and nothing changes: workflow/model `repeatMade`)
+      const made = wf.repeatMade(before, ids);
+      if (made && "why" in made) return { why: made.why };
+      doc.edit("repeat steps", (d) => wf.repeatAround(d, ids));
+      return doc.getState().steps?.some((s) => s.id === id && s.kind === "repeat") ? id : null;
+    },
     moveStep: (id: number, x: number, y: number, gesture?: string) => doc.edit("move step", (d) => wf.moveStep(d, id, x, y), coalesce("step-move", id, gesture)),
-    updateStep: (id: number, patch: { options?: Record<string, string | number | boolean>; kind?: StepKind }) => {
+    updateStep: (id: number, patch: { options?: Record<string, string | number | boolean>; kind?: StepKind; bound?: Bound }) => {
       const step = doc.getState().steps?.find((s) => s.id === id);
       if (!step) return;
       const by = byOf(step);
@@ -171,6 +181,13 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       }
       // (the step's alone: the defaults are Settings', and stay as they are - one undo step for a run of changes to the same
       // option, close together: a number stepped by an arrow key held down, as typing is)
+      // (an option taken from a property, or given back its own value: one undo step each)
+      if (patch.bound) {
+        const bound = patch.bound;
+        // (a name typed into it one undo step, as typing into a field is)
+        const which = Object.keys(bound).sort().join(",");
+        doc.edit(Object.keys(bound).length >= Object.keys(step.bound ?? {}).length ? "take an option from a property" : "give an option its own value", (d) => wf.updateStep(d, id, { bound }), { coalesceKey: `step-bound:${id}:${which}` });
+      }
       if (patch.options) {
         const options = patch.options;
         const changed = Object.keys(options).filter((k) => options[k] !== step.options?.[k]).sort().join(",");
