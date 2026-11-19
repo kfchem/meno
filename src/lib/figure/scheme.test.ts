@@ -89,6 +89,31 @@ describe("a reaction scheme's arrows", () => {
     expect(s.figure.bonds).toHaveLength(6);
   });
 
+  it("reads no arrow where a bond runs into a filled disk - an atom marked, as a scope table marks where its compounds differ", () => {
+    // (the left chain's last atom, at (37.4, 92.8), bonded on to one marked by a pale disk 10 across: the bond ending at its middle, or
+    //  at its edge - a head as long and as wide as the disk, but round, not narrowing to a point)
+    const disk = ([x, y]: P, r: number): FigurePath => filled(Array.from({ length: 32 }, (_, k): P => [x + r * Math.cos((k * Math.PI) / 16), y + r * Math.sin((k * Math.PI) / 16)]), "#e3ecf5ff");
+    const atom: P = [37.4 + L * 0.866, 100];
+    const toEdge: P = [atom[0] - 5 * 0.866, atom[1] - 5 * 0.5];
+    for (const end of [atom, toEdge]) {
+      const s = read(scheme([stroke([[37.4, 92.8], end]), disk(atom, 5)]));
+      expect(s.arrows).toHaveLength(0);
+      // (the bond the structure's: the chains' six and it)
+      expect(s.figure.bonds).toHaveLength(7);
+    }
+  });
+
+  it("reads no arrow where a bond ends by a letter drawn as its outline, round as a C is", () => {
+    // (a C 5.6 across, its stroke 0.6, open on the right, by the left chain's last atom's bond's end - as long as a small head, and as
+    //  wide for its length, but round)
+    const at: P = [37.4 + L * 0.866 + 2.6, 100];
+    const arc = (r: number, from: number, to: number): P[] =>
+      Array.from({ length: 13 }, (_, k): P => [at[0] + r * Math.cos(from + ((to - from) * k) / 12), at[1] + r * Math.sin(from + ((to - from) * k) / 12)]);
+    const c = filled([...arc(2.8, Math.PI / 4, (7 * Math.PI) / 4), ...arc(2.2, (7 * Math.PI) / 4, Math.PI / 4)]);
+    const s = read(scheme([stroke([[37.4, 92.8], [at[0] - 2.9, at[1] - 0.6]]), c]));
+    expect(s.arrows).toHaveLength(0);
+  });
+
   it("reads heads at both ends as two heads, and an arrow drawn as one outline", () => {
     const two = read(scheme([stroke([[66, 95], [134, 95]]), head([140, 95], [1, 0]), head([60, 95], [-1, 0])]));
     expect(two.arrows[0].form).toEqual({ heads: 2 });

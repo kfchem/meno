@@ -1746,7 +1746,12 @@ being arrows.
   chevron of two strokes or an outline; or a single barb, a half head's.
   A head may be small beside the bonds, as RDKit's reaction drawing
   draws one - a twelfth of a bond - but is two of its line's widths long
-  at least.
+  at least. It narrows to its point: a quarter of its length back from
+  its point it is under 0.6 as wide as at its widest (a triangle is a
+  quarter). A filled disk a bond runs into - an atom marked, as a scope
+  table marks where its compounds differ - is as wide there as 0.87 of
+  it, and no head; nor is a letter drawn as its outline, round as a C or
+  an O is, by a bond's end (2026-11-20).
   An arrow drawn as one filled outline, its line and its head in one
   shape, is read by how wide it is along its length, measured from its
   line's middle fitted along it.

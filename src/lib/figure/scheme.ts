@@ -145,6 +145,23 @@ function colourOf(ink: string | undefined): string | undefined {
  * outline; or a single barb, a half head's. Its point lies on the line
  * ahead of the end, or at it, and its back by the end.
  */
+/**
+ * How wide an outline is across its line at `t` along it, each of its corners at `ts[k]` along the line and `cs[k]` off it: between where
+ * its sides cross there - none, where none does.
+ */
+function acrossAt(ts: readonly number[], cs: readonly number[], t: number): number {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let k = 0; k < ts.length; k++) {
+    const j = (k + 1) % ts.length;
+    if ((ts[k] - t) * (ts[j] - t) > 0) continue;
+    const c = ts[k] === ts[j] ? [cs[k], cs[j]] : [cs[k] + ((t - ts[k]) / (ts[j] - ts[k])) * (cs[j] - cs[k])];
+    lo = Math.min(lo, ...c);
+    hi = Math.max(hi, ...c);
+  }
+  return hi > lo ? hi - lo : 0;
+}
+
 /** How nearly along the line a wedge-shaped head points, from its wide end to its narrow one: within 35 degrees (a half head's leans off it by half its width). */
 const HEAD_ALONG = Math.cos((35 * Math.PI) / 180);
 
@@ -172,6 +189,10 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     // (as wide as a head is for its length: a wedge is narrower)
     const wide = side === 0 ? (left + right) / length : Math.max(left, right) / length;
     if (wide < (side === 0 ? 0.33 : 0.15)) continue;
+    // (narrowing to its point: a quarter of its length back from it, under 0.6 as wide as at its widest - a triangle a quarter, a disk
+    //  drawn at a bond's end, as a figure marks an atom, 0.87)
+    const widest = Math.max(...ts.map((t) => acrossAt(ts, cs, t)));
+    if (acrossAt(ts, cs, ts[i] - 0.25 * length) >= 0.6 * widest) continue;
     const off = Math.abs(cs[i]) + Math.abs(ts[i]) * 0.1;
     if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off, ...(h.open ? {} : { outline: h.pts }) };
   }
