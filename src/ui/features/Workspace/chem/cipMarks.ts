@@ -23,7 +23,7 @@ import { runsOf } from "../../../../lib/chem/perception/stereo/runs";
 
 /**
  * One structure to work out: its input, and the indices in it of the units asked for, with the ids they are on the drawing - a centre in a
- * ring drawn in perspective with no depth with what the reading of that ring says (`perspective`: lib/layout/recognised `recognisedSaid`).
+ * ring drawn in perspective with no depth with what the reading of that ring says (`perspective`: lib/chem/perception/projection/depth `recognisedSaid`).
  */
 export type CipJob = { input: IdentityInput; centres: { at: number; id: number; perspective?: string }[]; bonds: { at: number; id: number }[] };
 
@@ -36,7 +36,7 @@ export type CipMarks = {
 };
 
 /** Why a unit has none: the CIP's reasons, a protonated amine's N that keeps no configuration (`exchanges`), or a unit with none drawn (`undrawn`). */
-export type CipNone = CipWhy | "exchanges" | "undrawn";
+export type CipNone = CipWhy | "exchanges" | "undrawn" | "flat";
 /** A unit's answer: its descriptor, or why it has none (`axis` where the unit is an allene's axis, not a double bond's E or Z). */
 export type CipAnswer = CipResult | { why: CipNone; axis?: true };
 
@@ -210,9 +210,12 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string 
     case "large":
       return `No ${what}: the structure is too large to work it out.`;
     case "exchanges":
-      return "No R or S: this N gives up its H and takes one back, turning over as it does.";
+      return "No R or S: this N does not keep a configuration.";
     case "undrawn":
       return unit === "centre" ? "No R or S: no configuration is drawn here." : `No ${what}: none is drawn here.`;
+    // (a molecule in 3D whose places give the unit no sense: lib/chem/cip/in3d)
+    case "flat":
+      return unit === "centre" ? "No R or S: its groups lie nearly in a plane here." : `No ${what}: it is twisted nearly a right angle here.`;
   }
 }
 

@@ -1003,7 +1003,16 @@ function readStereo(given: unknown, atoms: number, bonds: number): Carried3D["st
   const chosen = pair(s.chosen);
   // (those shown, as asked for on it)
   const shown = pair((s as { shown?: unknown }).shown);
-  return { atoms: a, bonds: b, ...(chosen ? { chosen } : {}), ...(shown ? { shown } : {}) };
+  // (each unit's why where it has none: those of its own atoms and bonds, each a known why - the others left out)
+  const WHY = new Set(["flat", "exchanges", "large", "unsure", "open"]);
+  const whys = (r: unknown, n: number): Record<number, string> =>
+    r && typeof r === "object" && !Array.isArray(r)
+      ? Object.fromEntries(Object.entries(r).flatMap(([k, v]) => (Number.isInteger(Number(k)) && Number(k) >= 0 && Number(k) < n && typeof v === "string" && WHY.has(v) ? [[Number(k), v]] : [])))
+      : {};
+  const why = (s as { said?: { atoms?: unknown; bonds?: unknown } }).said;
+  const said = why && typeof why === "object" ? { atoms: whys(why.atoms, atoms), bonds: whys(why.bonds, bonds) } : null;
+  const anySaid = said && Object.keys(said.atoms).length + Object.keys(said.bonds).length > 0;
+  return { atoms: a, bonds: b, ...(chosen ? { chosen } : {}), ...(shown ? { shown } : {}), ...(anySaid ? { said } : {}) };
 }
 
 /**
