@@ -130,13 +130,15 @@ describe("a figure read as a structure for the page", () => {
     const by = drawn();
     const picture: [number, number, number, number] = [200, 150, 300, 260];
     const mark = [stroke([220, 200], step([220, 200], 30)), stroke(step([220, 200], 30), step(step([220, 200], 30), -30))];
-    const over = figureFrom({ ...by, paths: [...by.paths, ...mark], letters: [...by.letters, ...letters("2", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
+    const over = figureFrom({ ...by, paths: [...by.paths, ...mark], letters: [...by.letters, ...letters("2.1", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
     expect(over.model.atoms).toHaveLength(5);
     expect(over.left).toBe(MARKS_OVER);
     expect(over.scheme?.captions ?? []).toEqual([]);
-    // (a number alone over the picture, no line: left out, and said)
-    const number = figureFrom({ ...by, letters: [...by.letters, ...letters("2", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
+    // (a measurement alone over the picture, no line: left out, and said - but a compound's number there stays a word, for the lens)
+    const number = figureFrom({ ...by, letters: [...by.letters, ...letters("2.1", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
     expect(number.left).toBe(MARKS_OVER);
+    const compound = figureFrom({ ...by, letters: [...by.letters, ...letters("2", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
+    expect(compound.left).toBeUndefined();
     // (the same lines with no picture under them: a structure of their own, read)
     const bare = figureFrom({ ...by, paths: [...by.paths, ...mark], pictures: [] }, SHA, 0) as FigureResult;
     expect(bare.model.atoms).toHaveLength(8);

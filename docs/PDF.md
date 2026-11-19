@@ -1579,14 +1579,24 @@ it where it lies out of view.
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
 - **What is drawn over a picture** (`marksOver`, lib/figure/scheme;
-  2026-11-18): a piece - atoms joined by bonds, or an atom alone - whose
-  atoms all lie within one of the figure's pictures, and a word wholly
-  within one, is the picture's: a 3D model's rendering with its distances
-  and their numbers drawn over it, no structure. It is left out, and the
-  figure says so ("Marks drawn over a picture: not read."). A structure that
-  reaches out of the picture is kept whole. Only a picture counts - a
-  rendering placed as an image - never a frame or a coloured panel drawn
-  behind a drawing.
+  2026-11-18, narrowed 2026-11-20 by the chemistry check's ruling): a 3D
+  model's rendering placed as an image, with its distances and their
+  numbers drawn over it. Of a piece - atoms joined by bonds, or an atom
+  alone - whose atoms all lie within one of the figure's pictures, a mark
+  is left out, and the figure says so ("Marks drawn over a picture: not
+  read."): a line drawn dashed or dotted, whatever is at its ends (a
+  distance, a contact, between two element labels); a bare line of one or
+  two bonds, no label and no ring (a distance's line, an angle's two); an
+  atom alone. A labelled piece of one or two bonds there (Pd1 and O2
+  joined by a plain line) is read but said ("Drawn over a picture: it may
+  be a label of the picture."); a ring, or three bonds or more, is a
+  structure, read as before. Of the words wholly within a picture, a
+  measurement - a number with a decimal point or a unit: Å, °, pm, nm,
+  kcal, kJ - is left out; a compound's number (3, 12a, 4') stays, for the
+  lens. A structure that reaches out of the picture is kept whole. Where
+  nothing of the figure lies outside its pictures, the picture is a
+  background - a graphical abstract's, a panel placed as an image - and
+  nothing is taken.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - **a repeat unit in brackets, counted** (2026-11-05), where it is not

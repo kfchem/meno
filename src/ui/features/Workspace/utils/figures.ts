@@ -253,6 +253,8 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
+    // (all of it marks over its picture: said so, not that it holds no lines)
+    if (read.figure.left.marks) return { none: `This figure is a picture with marks drawn over it, no structure. ${MARKS_OVER}` };
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
   }
   // (one middle and one scale for all of it)
