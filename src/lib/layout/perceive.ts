@@ -58,6 +58,8 @@ export type RingSystem = {
 };
 
 export type Molecule = {
+  /** The input it was perceived from: what its ranks are the core's of (lib/layout/ranks). */
+  input: LayoutInput;
   n: number;
   el: string[];
   hs: number[];
@@ -345,6 +347,7 @@ export function perceive(input: LayoutInput): Molecule {
   }
 
   return {
+    input,
     n,
     el: input.atoms.map((a) => a.el),
     hs: input.atoms.map((a) => a.hs ?? 0),
