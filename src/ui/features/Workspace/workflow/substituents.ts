@@ -19,8 +19,8 @@ import type { StyleChoice } from "../../../../lib/chem/style";
 import { isMetal } from "../../../../lib/layout/perceive";
 import type { LineRead } from "../../../../lib/options";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
-import { identityInputOf } from "../chem/identityOf";
-import { undrawnHydrogens, wedgesHeld } from "../chem/drawing";
+import { identityInputOf, withGroups } from "../chem/identityOf";
+import { readAs, undrawnHydrogens, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
 import { changedOf, changesFrom, plainWhereAlike, rewedged, unitName } from "./stereoKept";
@@ -104,7 +104,7 @@ export function positionsOf(template: Model, ids: readonly number[]): { position
     else if (a.el === "H") {
       const bonds = around(p.id);
       const on = bonds.length === 1 ? atom.get(bonds[0].a === p.id ? bonds[0].b : bonds[0].a) : undefined;
-      if (a.charge || a.isotope || a.radical || a.map || bonds.length !== 1 || bonds[0].order !== 1 || !on || on.el === "H" || isMetal(on.el)) problems.push(`${at} is not a plain hydrogen: only a plain H is replaced`);
+      if (a.charge || a.isotope || a.radical || a.map || bonds.length !== 1 || bonds[0].order !== 1 || !on || on.el === "H" || isMetal(readAs(on))) problems.push(`${at} is not a plain hydrogen: only a plain H is replaced`);
     } else if (!(hs.get(p.id) ?? 0)) {
       const drawn = around(p.id).some((b) => atom.get(b.a === p.id ? b.b : b.a)?.el === "H");
       problems.push(drawn ? `${at}: its hydrogens are drawn - choose the H` : `${at} has no hydrogen`);
@@ -236,7 +236,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     const { drawn: drawnNow, changed } = product(choice);
     // (a product that would say another configuration than its template's: never made - the step stops, naming it)
     if (changed.length) return void refused.push(`${how}: would change the configuration at ${changed.map((u) => unitName(template, u)).join(", ")}`);
-    const found = identity(identityInputOf(drawnNow).input);
+    const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
     if (!found.complete) missed++;
     const first = seen.get(found.text);
     if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });

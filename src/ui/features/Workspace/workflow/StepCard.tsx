@@ -272,7 +272,8 @@ export default function StepCard(p: StepCardProps) {
           >
           {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
           <TextBars on={p.compact} className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
-            {p.kinds.length > 1 && (
+            {/* (another kind its doer fills to switch to - none for a kind not among them, a Repeat's: no empty choice) */}
+            {p.kinds.length > 1 && p.kinds.some((k) => k.kind === p.step.kind) && (
               <div className="mb-3">
                 <OptionsForm
                   options={[{ id: "kind", label: "Calculation", type: "choice", choices: p.kinds.map((k) => ({ value: k.kind, label: k.name })), default: p.step.kind }]}

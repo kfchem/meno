@@ -34,9 +34,12 @@ import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
+import type { KeptBond, KeptCentre } from "../configuration/kept";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), where it is, and more. */
 export type Atom = EditorAtom & {
+  /** The configuration it states as a centre, kept (configuration/kept): read after every change, said where an edit changed it. */
+  config?: KeptCentre;
   /**
    * How near the viewer the atom is, where its structure is drawn in
    * perspective - a cage, as Clean-up draws one: a bond passing behind
@@ -119,6 +122,8 @@ export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
 export type Bond = BondChem & {
+  /** The configuration it states as a double bond or an axis, kept (configuration/kept). */
+  config?: KeptBond;
   id: number;
   a: number;
   b: number;
@@ -162,6 +167,9 @@ export type Bond = BondChem & {
 
 import type { FlowParts } from "../workflow/parts";
 import type { GuideMarks } from "../presenting/guides";
+
+/** A note of a change of configuration on the page (configuration/watch): its words, the place it stands by, when it came. */
+export type ConfigurationNote = { id: number; text: string; at: { x: number; y: number }; since: number };
 
 export type Sel = { atoms: Set<number>; bonds: Set<number> };
 /** A workflow's parts selected, as the drawing's are (docs/WORKFLOWS.md, *Copying*): sets and steps, by id - the wires among them with them. */
@@ -639,7 +647,14 @@ export type Molecule3D = {
    * (`shown`), as asked for on it or on them - where none has been, those
    * its drawing left open (`stereoShownOf`).
    */
-  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
+  stereo?: {
+    atoms: Record<number, string>;
+    bonds: Record<number, string>;
+    chosen?: { atoms: number[]; bonds: number[] };
+    shown?: { atoms: number[]; bonds: number[] };
+    /** Of each unit with no descriptor though it is one, why (lib/chem/cip/in3d `In3dWhy`): its groups nearly in a plane, an N that exchanges its H, the structure too large. */
+    said?: { atoms: Record<number, string>; bonds: Record<number, string> };
+  };
   /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
   atomNumbers?: AtomNumbersShown;
   /**
@@ -1249,6 +1264,11 @@ export type EditorState = {
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
+  /**
+   * What edits did to the configurations the drawing states, said at their units as they come (configuration/watch): each note's words,
+   * where it stands on the page, and when it came.
+   */
+  configurationNotes: ConfigurationNote[];
   /** A structure being carried out of a PDF as Meno's own drawing of it. */
   pdfStructureFlight: StructureFlight | null;
   setPdfStructureFlight: (flight: StructureFlight | null) => void;
@@ -1878,6 +1898,8 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
+  /** A Repeat made round steps (*Repeat these steps*: workflow/model `repeatAround`), the wires that crossed their edge routed through it - one undo step; its id, why it could not be made (`workflow/model` `repeatMade`), or none where there is nothing to make it round. */
+  repeatSteps: (ids: readonly number[]) => number | { why: string } | null;
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
@@ -1939,6 +1961,8 @@ export type EditorState = {
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */
   jobsSeen: Record<string, JobSeen>;
+  /** Each Repeat running, by step: the pass under way, of how many where it says (until none goes again, none), and whether Stop was pressed - its tab says it. Not the document's. */
+  repeatPasses: Record<number, { pass: number; of?: number; stopping?: true }>;
   /** Meno's steps working in turns (Duplicates, `runMenoInTurns`), by step: since when, and how many of their entries they have been through. Not the document's: gone once each is done. */
   menoWorking: Record<number, { since: number; done: number; total: number }>;
   /** A wire picked up off its step and let go on another's port: into that one instead, as one step. */
@@ -2050,7 +2074,7 @@ export type EditorState = {
      * or one of the stroke's own when it closes onto it - so the drawing can
      * lay it out there.
      */
-    preview?: { x: number; y: number; atomId?: number; pathIndex?: number } | null;
+    preview?: { x: number; y: number; atomId?: number; pathIndex?: number; position?: string } | null;
   };
   panHold: { active: boolean; pointerId: number | null };
   suppressDblClickUntil: number;
@@ -2110,6 +2134,11 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /**
+   * The structure holding atom `at` read as a Fischer projection (utils/fischer): at each of its crosses of plain bonds on the page's
+   * axes that is a stereocentre, its two level bonds made solid wedges narrow at it - one step. False where it has none.
+   */
+  readFischer: (at: number) => boolean;
   /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
   orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**
@@ -2162,6 +2191,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
+  placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
   /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
   settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
@@ -2174,6 +2205,11 @@ export type EditorState = {
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
   pasteModel: (next: Drawn) => void;
+  /**
+   * A chair put down from Quick Add, its ring's middle at `at`, seen from the right (form 1); or, where the chair this put down is still as it
+   * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).
+   */
+  putChair: (at: { x: number; y: number }) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;
@@ -2295,7 +2331,7 @@ export type EditorState = {
   setExtendPreview: (
     x: number,
     y: number,
-    join?: { atomId?: number; pathIndex?: number },
+    join?: { atomId?: number; pathIndex?: number; position?: string },
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */

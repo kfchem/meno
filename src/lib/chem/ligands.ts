@@ -5,7 +5,7 @@ import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder } from "./molecule";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
 import { ELEMENTS } from "./elements";
-import { drawnRoundMetal } from "./perception/elements";
+import { drawnRoundMetal, labelNotElement } from "./perception/elements";
 import { movedBond } from "./structureBonds";
 
 /**
@@ -421,9 +421,15 @@ export function structureFormula(s: GroupStructure): string {
 
 const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
-/** Whether a metal's symbol (the core's `drawnRoundMetal`: Pr, propyl here, aside) is written anywhere in `text`: what any complex's formula has. */
+/**
+ * The metals a label's text names: the core's `drawnRoundMetal`, but for a label's own groups named as elements (`labelNotElement`) - Ac
+ * in HoAc is acetyl, Pr in Pr2N propyl - as a label typed is read (the maintainer, 2026-10-10).
+ */
+const TEXT_METAL: ReadonlySet<string> = new Set([...drawnRoundMetal].filter((m) => !labelNotElement.has(m)));
+
+/** Whether a metal's symbol (`TEXT_METAL`) is written anywhere in `text`: what any complex's formula has. */
 function hasMetal(text: string): boolean {
-  for (const m of drawnRoundMetal) if (text.includes(m)) return true;
+  for (const m of TEXT_METAL) if (text.includes(m)) return true;
   return false;
 }
 
@@ -564,9 +570,14 @@ function itemsOf(text: string, names: Names): Item[] | null {
       } else item = token(inner, names);
       i = j + 1;
     } else {
-      // the longest token from here, up to the next bracket
+      // the longest token from here, up to the next bracket - but an O counted, or before a halide, a bracket or the end, is an oxo
+      // (MoO2Cl2, WOCl4, VO(acac)2), as an inorganic formula writes each element with its count: never a group read across it, O2Cl
       const stop = text.slice(i).search(/[[(]/);
       const rest = stop < 0 ? text.slice(i) : text.slice(i, i + stop);
+      if (OXO.test(text.slice(i))) {
+        item = token("O", names);
+        if (item) i += 1;
+      }
       for (let len = Math.min(rest.length, LONGEST_PART); len > 0 && !item; len--) {
         const t = token(rest.slice(0, len), names);
         if (t) {
@@ -586,6 +597,12 @@ function itemsOf(text: string, names: Names): Item[] | null {
   }
   return out;
 }
+
+/**
+ * An oxo where a formula's text has an O with its count - MoO2Cl2, UO2Cl2, MeReO3, ReO3Me - but for the O2C of a carboxylate, an O2N or
+ * an O2S, which begin a group; or an O before a halide, a bracket or the end - WOCl4, VO(acac)2: never the O of a group, OAc, OMe.
+ */
+const OXO = /^O(?:\d+(?!C(?!l)|N|S)|(?=(?:F|Cl|Br|I)(?![a-z])|[[(]|$))/;
 
 /** A bridging ligand's mark: μ-Cl, μ-dvtms. */
 const MU = /^(?:μ|mu)2?-(.+)$/;
@@ -608,13 +625,15 @@ function plainToken(t: string, names: Names): Item | null {
     const bridge = plainToken(mu[1], names);
     return bridge && (bridge.kind === "ligand" || bridge.kind === "x") ? { ...bridge, bridging: true } : null;
   }
-  if (drawnRoundMetal.has(t)) return { kind: "metal", el: t, n: 1 };
+  if (TEXT_METAL.has(t)) return { kind: "metal", el: t, n: 1 };
   const own = Object.prototype.hasOwnProperty.call(names.local, t) ? names.local[t] : undefined;
   // (a formula's own ligand as its SMILES has it: whose configuration it is, the reagent says)
   if (own) return { kind: "ligand", ligand: { ...own, enantiomers: own.enantiomers ?? { as: [], mirror: [], plain: true } }, descriptor: null, n: 1 };
   const ligand = namedLigand(t, true);
   if (ligand) return { kind: "ligand", ...ligand, n: 1 };
   if (["F", "Cl", "Br", "I", "H"].includes(t) || names.groupOf(t)) return { kind: "x", label: t, n: 1 };
+  // (an O alone: an oxo, by a double bond to its metal - or, marked μ, a single bond to each it bridges)
+  if (t === "O") return { kind: "x", label: "O", n: 1 };
   return null;
 }
 
@@ -700,6 +719,9 @@ export function complexStructure(
       parts.push(`${it.n > 1 ? `${it.n} ` : ""}${NAME.get(it.el) ?? it.el}`);
     }
     if (!metals.length) return -1;
+    // (an oxo not marked μ in a part of several metals: which metal holds it and which O bridge, the formula does not say - Re2O7 is
+    //  O3Re-O-ReO3 - and shared in turn they would give a metal more double bonds than it has: not read)
+    if (metals.length > 1 && unit.some((it) => it.kind === "x" && it.label === "O" && !it.bridging)) return -1;
     let turn = 0;
     for (const it of unit) {
       if (it.kind === "ligand" || it.kind === "x") {
@@ -717,20 +739,33 @@ export function complexStructure(
             const charge = s.atoms.reduce((q, a) => q + (a.charge ?? 0), 0);
             if (charge && !it.ligand.inner) atoms[metal].charge = (atoms[metal].charge ?? 0) - charge;
           } else {
-            const s: GroupStructure = ["F", "Cl", "Br", "I", "H"].includes(it.label)
+            const s: GroupStructure = ["F", "Cl", "Br", "I", "H", "O"].includes(it.label)
               ? { atoms: [{ el: it.label, hs: 0 }], bonds: [], attach: [0] }
               : groupOf(it.label)!;
             const at = add(s);
-            bind(metal, s.attach[0] + at, true);
-            if (!firstX.has(metals[0])) firstX.set(metals[0], s.attach[0] + at);
-            // bridging: to each of the others too, as a donor
-            if (it.bridging) for (const other of metals) if (other !== metal) bind(other, s.attach[0] + at, false);
+            const oxo = it.label === "O";
+            // (an oxo: M=O - uranyl's O=U=O - or a μ-oxo, M-O-M: bound singly to each)
+            bind(metal, s.attach[0] + at, true, oxo && !it.bridging);
+            if (!oxo && !firstX.has(metals[0])) firstX.set(metals[0], s.attach[0] + at);
+            // bridging: to each of the others too, as a donor - a μ-oxo by a bond of its own
+            if (it.bridging) for (const other of metals) if (other !== metal) bind(other, s.attach[0] + at, oxo);
           }
         }
-        const word = it.kind === "ligand" ? `${it.descriptor ? `${it.descriptor}-` : ""}${it.ligand.name}` : it.label;
+        const word = it.kind === "ligand" ? `${it.descriptor ? `${it.descriptor}-` : ""}${it.ligand.name}` : it.label === "O" ? "oxo" : it.label;
         parts.push(`${it.n > 1 ? `${it.n} ` : ""}${it.bridging ? "μ-" : ""}${word}`);
       }
     }
+    // (mercury(I): two Hg and two groups each bound by one bond, one on each - Hg2Cl2, Hg2(OAc)2 - is X-Hg-Hg-X, the Hg2 2+ pair bonded,
+    //  as a salt of it is read: ./condensed `metalSaltStructure`)
+    const xs = unit.filter((it) => it.kind === "x");
+    if (
+      metals.length === 2 &&
+      metals.every((m) => atoms[m].el === "Hg") &&
+      unit.every((it) => it.kind === "metal" || it.kind === "x") &&
+      xs.reduce((n, it) => n + it.n, 0) === 2 &&
+      xs.every((it) => it.kind === "x" && it.label !== "O" && !it.bridging)
+    )
+      bonds.push({ a1: metals[0], a2: metals[1], order: 1 });
     if (!named) parts.length = named0;
     return metals[0];
   };
@@ -779,7 +814,7 @@ export function complexStructure(
     }
     // a part made twice: 2 × (its words), and what bridges them
     if (u.n > 1) {
-      const x = u.items.find((it): it is Extract<Item, { kind: "x" }> => it.kind === "x");
+      const x = u.items.find((it): it is Extract<Item, { kind: "x" }> => it.kind === "x" && it.label !== "O");
       const how = cluster ? ", an octahedron bridged by H" : bridged && x ? ` bridged by ${x.label}` : "";
       parts.splice(at, parts.length - at, `${u.n} × (${parts.slice(at).join(", ")})${how}`);
     }

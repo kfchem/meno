@@ -483,3 +483,10 @@ describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
     expect(m.listed).toEqual(["Corners…", "Line as bonds", "1 pt line", "2 pt line", "Dashed line", "Bring to front", "Send to back", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
   });
 });
+
+describe("a structure drawn as a Fischer projection", () => {
+  it("is offered Read as Fischer projection where it is so drawn, and not where it is not", () => {
+    expect(menu(target({ kind: "atom", id: 1 }), { fischer: { run: none } }).listed).toContain("Read as Fischer projection");
+    expect(menu(target({ kind: "atom", id: 1 })).listed).not.toContain("Read as Fischer projection");
+  });
+});

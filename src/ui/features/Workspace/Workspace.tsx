@@ -11,7 +11,7 @@ import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
 import { Vector3 } from "three";
 import type { MenuAnchor } from "./useMenuAt";
-import { useEditor, useEditorStore, EditorProvider } from "./store";
+import { documentOf, useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
@@ -43,6 +43,7 @@ import {
   LabelTyping2D,
   HoverOverlay2D,
   ChemMarks2D,
+  PositionTip,
   SnapArc2D,
   Selection2D,
 } from "./components";
@@ -95,7 +96,7 @@ import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } fr
 import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
-import { unsureOf, type Unsure } from "./chem/drawing";
+import { readAs, unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import CornersCard from "./CornersCard";
@@ -150,6 +151,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
+import { fischerCentres } from "./utils/fischer";
 import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -232,6 +234,8 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
+import { isProjection } from "./projections/chair";
+import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";
 import type { SelectableKind } from "./store/slices/selectionSlice";
 import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menuScope";
@@ -257,6 +261,8 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import FigureNotes2D from "./components/FigureNotes2D";
+import { watchConfiguration } from "./configuration/watch";
+import ConfigurationNotes2D from "./components/ConfigurationNotes2D";
 import { figureNoteSource, figureNotesOf, readMarksShown } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
@@ -428,6 +434,12 @@ function WorkspaceContent({
     store.getState().joinReadings();
     return useReadings.subscribe(() => store.getState().joinReadings());
   }, [store, sources]);
+  // (each change's effect on the configurations the drawing states, said where it turned one: configuration/watch - started here, by
+  //  the canvas, never by the store, whose code the workers take in: the watcher asks the CIP's own worker)
+  useEffect(() => {
+    const doc = documentOf(store);
+    return doc ? watchConfiguration(store, doc) : undefined;
+  }, [store]);
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
   // (for pictures made of the drawing: R, S, E and Z as the canvas shows them)
@@ -448,11 +460,11 @@ function WorkspaceContent({
   const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
-    (aroundAtom: number | Iterable<number> | null) => {
+    (aroundAtom: number | Iterable<number> | null, flat = false) => {
       if (cleaningNow.current) return;
       cleaningNow.current = true;
       setChemError(null);
-      cleanUp(store, aroundAtom)
+      cleanUp(store, aroundAtom, flat)
         .catch((e: unknown) =>
           setChemError(
             // (what it left as drawn, named - the rest laid out: its own words; anything else, a failure)
@@ -680,6 +692,8 @@ function WorkspaceContent({
       }
       setChemError(null);
       if (bare.length) useNotices.getState().show({ id: "bare-3d", title: "3D structure", text: bareWords(bare, true) });
+      // (a projection drawn as a conformation: its configuration is taken, the conformation is not - the maintainer's ruling)
+      if (blocks.some((b) => isProjection(model, new Set(b.atoms)))) useNotices.getState().show({ id: "projection-3d", title: "3D structure", text: "Made from the drawing's configuration. The conformation is not taken from the drawing." });
       try {
         const chem = await chemWorker("stereoisomers");
         const open = await Promise.all(
@@ -2126,6 +2140,9 @@ function WorkspaceContent({
                 const id = st.addConversation({ x0: at.x - w / 2, y0: at.y - h / 2, x1: at.x + w / 2, y1: at.y + h / 2 });
                 if (id != null) st.readConversation(id);
               }
+              // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth; clicked again while it is as it was
+              // put down, the view from the other side)
+              else if (what === "chair") st.putChair(at);
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -2293,6 +2310,19 @@ function WorkspaceContent({
           onStepOptions={() => {
             if (menu.kind === "step" && menu.id != null) store.getState().setWorkflowView({ openStep: menu.id });
           }}
+          onRepeatSteps={(() => {
+            if (menu.kind !== "step" || menu.id == null) return undefined;
+            const st = store.getState();
+            const pointed = st.steps.find((s) => s.id === menu.id);
+            // (not a Repeat's own card, nor a step a Repeat holds already)
+            if (!pointed || pointed.kind === "repeat" || st.steps.some((s) => s.kind === "repeat" && s.holds?.includes(pointed.id))) return undefined;
+            const chosen = st.selFlow.steps.has(pointed.id) ? [...st.selFlow.steps] : [pointed.id];
+            return () => {
+              const made = store.getState().repeatSteps(chosen);
+              // (one that cannot be made round them: why, said where the page's notices are)
+              if (made && typeof made === "object") useNotices.getState().show({ id: "repeat-steps", title: "Repeat these steps", text: made.why });
+            };
+          })()}
           onSaveProcedure={(menu.kind === "step" || menu.kind === "set") && menu.id != null ? () => {
             const st = store.getState();
             const start = menu.kind === "step" ? { step: menu.id! } : { set: menu.id! };
@@ -2632,6 +2662,26 @@ function WorkspaceContent({
             const at = structureAt(menu.kind, menu.id);
             if (at != null) store.getState().selectStructure(at);
           }}
+          projection={(() => {
+            // (a chair the Projections tool put down: laid out flat, wedges for its depth - and flipped, where it can be)
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            if (at == null) return undefined;
+            const st = store.getState();
+            const ids = fragmentOf(st.model, at);
+            if (!isProjection(st.model, ids)) return undefined;
+            const flip = flipOf(st.model, ids);
+            return {
+              flat: () => runCleanUp(at, true),
+              ...(flip
+                ? {
+                    flip: () => {
+                      if ("refused" in flip) setChemError(flip.refused);
+                      else store.getState().placeSolid(flip.moves, "flip chair");
+                    },
+                  }
+                : {}),
+            };
+          })()}
           figure={(() => {
             // (its structure read from a figure: where it came from - and, not yet said to be checked, saying so, one step)
             const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
@@ -2644,6 +2694,12 @@ function WorkspaceContent({
             return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
           stereo={stereoAtMenu ? { name: stereoAtMenu.name, run: () => showStereo(stereoAtMenu) } : undefined}
+          fischer={(() => {
+            // (the structure right-clicked drawn as a Fischer projection: read so, on the chemist's word - one step)
+            if (menu.kind !== "atom" && menu.kind !== "bond") return undefined;
+            const at = structureAt(menu.kind, menu.id);
+            return at != null && fischerCentres(store.getState().model, at).length ? { run: () => void store.getState().readFischer(at) } : undefined;
+          })()}
           numbers={(() => {
             const st = store.getState();
             const got = numbersItemsFor(st, menu);
@@ -2672,7 +2728,7 @@ function WorkspaceContent({
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             if (!a) return undefined;
             const sum = model.bonds.reduce((n, b) => (b.a === a.id || b.b === a.id ? n + valenceOrder(b, a.el) : n), 0);
-            return canTakeBond(a.el, sum, a.charge ?? 0, a.radical)
+            return canTakeBond(readAs(a), sum, a.charge ?? 0, a.radical)
               ? () => store.getState().startExtend(a.id, "chain", true)
               : undefined;
           })()}
@@ -2961,6 +3017,8 @@ function WorkspaceContent({
           <ClickBondPreview2D />
           {/* The 120-degree arc while a bond snaps to it */}
           <SnapArc2D />
+          {/* A projection's free position, named while a group is led to it */}
+          <PositionTip />
           {/* Move preview */}
           <MovePreview2D />
           <HoverOverlay2D />
@@ -2983,6 +3041,7 @@ function WorkspaceContent({
           <StackChips2D />
           <MagnifiedMarks2D />
           <FigureNotes2D />
+          <ConfigurationNotes2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />

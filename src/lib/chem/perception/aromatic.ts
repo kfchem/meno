@@ -46,6 +46,7 @@
  */
 
 import type { ChemBond, ChemGraph } from "./graph";
+import { SMALL_RING, smallestRings } from "./rings";
 
 /** Two atoms as one key, the lower first. */
 const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
@@ -88,14 +89,19 @@ export function piElectrons(s: PiState): number | null {
 
 /**
  * The atoms that lie on an aromatic ring (above), by index: of `rings` (the
- * smallest set) each, and each two that share a bond, whose atoms'
+ * smallest set) each, and each two fused at a bond - sharing that one bond
+ * and no more - whose atoms'
  * electrons (`electrons`, null where not known) add up to 4n + 2, at most
  * `MOST_PI` - but never a ring or pair each of whose atoms gives a lone
  * pair, two: with no pi bond in it and no empty p orbital (a C+, a B of
  * three bonds), there is no pi system for lone pairs to complete, and its
  * atoms stay pyramidal - As4's and P4's three-rings, a triaziridine,
  * cyclotriphosphane (backlog 182). Lone pairs complete a pi
- * system; they never make one alone.
+ * system; they never make one alone. Two rings that share more than one
+ * bond - two or more - are no fused pair: together they are no ring, so
+ * their atoms' sum is no count of one. A [2.2]paracyclophane-1,9-diene's
+ * twelve-ring runs across each benzene ring along three of its bonds; a
+ * seven-ring set about a six-ring's corner shares two.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {
   const out = new Set<number>();
@@ -115,7 +121,8 @@ export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: 
   rings.forEach((r, i) => {
     if (huckel(r)) r.forEach((a) => out.add(a));
     for (let j = i + 1; j < rings.length; j++) {
-      if (![...edges[i]].some((e) => edges[j].has(e))) continue;
+      // (fused at one bond: two rings sharing more are no ring together)
+      if ([...edges[i]].filter((e) => edges[j].has(e)).length !== 1) continue;
       const both = new Set([...r, ...rings[j]]);
       if (huckel(both)) both.forEach((a) => out.add(a));
     }
@@ -183,7 +190,19 @@ export type AromaticForm<G extends ChemGraph> = Omit<G, "bonds"> & { bonds: read
  * order. That holds for a real trans bond too: in a large annulene (a
  * [14]- or [18]annulene, with E bonds in its ring), configurational
  * isomers that differ by such a bond are one structure, as the rule
- * states.
+ * states. One double bond keeps its side all the same (`keepsSide`): one
+ * between rings that a large ring runs across - neither of its atoms in a
+ * ring of seven atoms or fewer, and a ring of eight or more of the smallest
+ * set through it sharing two bonds or more with a ring of seven or fewer,
+ * as a phane's: a [2.2]paracyclophane-1,9-diene's bridge, a cyclic
+ * phenylenevinylene's vinylene. Its other Kekule structures make the rings
+ * it crosses quinoid, and its Z and E are two compounds. An annulene's and
+ * a cyclooctatetraene's ring bonds say none, as above - one fused to a
+ * benzene ring at one bond too (a benzannulene, dibenzo[a,e]cyclooctatetraene)
+ * - and so do porphine's meso C=C, their atoms in five-rings. The other Kekule
+ * drawing of such a bond - drawn single, the rings beside it quinoid -
+ * has no side to keep, so it is another identity than the usual drawing;
+ * nobody draws it.
  */
 export function aromaticForm<G extends ChemGraph>(input: G): AromaticForm<G> {
   const n = input.atoms.length;
@@ -239,14 +258,34 @@ export function aromaticForm<G extends ChemGraph>(input: G): AromaticForm<G> {
     aromatic.add(key(v, mate[v]));
   }
   if (!aromatic.size) return input;
+  // (a side drawn on a double bond of the form: whether it is kept is asked only where there is one)
+  const sided = input.bonds.some((b) => b.order === 2 && b.stereo && aromatic.has(key(b.a, b.b)));
+  const keeps = sided ? keepsSide(n, input.bonds) : () => false;
   return {
     ...input,
     bonds: input.bonds.map((b) => {
       if (!aromatic.has(key(b.a, b.b))) return b;
+      if (b.order === 2 && b.stereo && keeps(b)) return { ...b, order: AROMATIC };
       const { stereo: _side, ...rest } = b;
       return { ...rest, order: AROMATIC };
     }),
   };
+}
+
+/**
+ * Whether a double bond keeps its side in the aromatic form: neither of its atoms in a ring of `SMALL_RING` atoms or fewer, and a
+ * larger ring of the smallest set through it that shares two bonds or more with such a ring - runs across it, as a phane's, not fused
+ * to it at one bond.
+ */
+function keepsSide(n: number, bonds: readonly ChemBond[]): (b: ChemBond) => boolean {
+  const rings = smallestRings(n, bonds.map((b) => [b.a, b.b] as const));
+  const key = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
+  const edges = rings.map((r) => new Set(r.map((x, k) => key(x, r[(k + 1) % r.length]))));
+  const small = rings.flatMap((r, i) => (r.length <= SMALL_RING ? [i] : []));
+  const inSmall = new Set(small.flatMap((i) => rings[i]));
+  // (a large ring that runs across a small one: two bonds or more of the small ring's its own)
+  const across = rings.map((r, i) => r.length > SMALL_RING && small.some((j) => [...edges[j]].filter((e) => edges[i].has(e)).length >= 2));
+  return (b) => !inSmall.has(b.a) && !inSmall.has(b.b) && rings.some((_, i) => across[i] && edges[i].has(key(b.a, b.b)));
 }
 
 /**
