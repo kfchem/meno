@@ -131,3 +131,26 @@ describe("a set's collection hash", () => {
     expect(collectionHash(bent, { ...set, members: [{ molecule: 2 }, { molecule: 1 }] })).not.toBe(collectionHash(bent, set));
   });
 });
+
+describe("a structure leaves a set only dragged wholly out (backlog 232)", () => {
+  /** Structure 1 (atoms 1 and 2, at x and x + 1.3) in set 1, its frame x from -2 to 2. */
+  const start = () => {
+    const doc = page({ x: 0, y: 0, id: 1 });
+    return settled(addSet(doc, { x0: -2, y0: -2, x1: 2, y1: 2 }), doc);
+  };
+  const shifted = (doc: WorkspaceDocument, dx: number) => ({ ...doc, model: { ...doc.model, atoms: doc.model.atoms.map((a) => ({ ...a, x: a.x + dx })) } });
+
+  it("its middle out but an atom still in: still a member", () => {
+    const doc = start();
+    expect(membersOfSet(doc)).toEqual([{ structure: [1, 2] }]);
+    // (atoms at 1.5 and 2.8: the middle 2.15 is out, atom 1 in)
+    const half = settled(shifted(doc, 1.5), doc);
+    expect(membersOfSet(half)).toEqual([{ structure: [1, 2] }]);
+  });
+
+  it("every atom out: it leaves", () => {
+    const doc = start();
+    const out = settled(shifted(doc, 2.5), doc);
+    expect(membersOfSet(out)).toEqual([]);
+  });
+});
