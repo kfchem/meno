@@ -16,6 +16,14 @@ export type CorpusEntry = {
   /** Drawn with the chair tool, not from its SMILES: each group's ring atom (0 to 5, the tool's order), its place and its element. Its
    *  SMILES is then its flat twin, which is to state the same configuration. */
   chair?: readonly (readonly [number, "axial" | "equatorial", string])[];
+  /** Drawn from this SMILES, then changed as said (`group`, `wavy`): `smiles` is then what it is to read as. */
+  from?: string;
+  /** Its centres - each wedge's narrow end - put in one AND group (a racemate) or one OR group (one of the two, not known which). */
+  group?: "and" | "or";
+  /** Its wedges made wavy: each centre open. */
+  wavy?: true;
+  /** Drawn by expanding this label, not from a SMILES; `mirror` is the label of its mirror image. Read against its own first drawing. */
+  label?: { label: string; mirror: string };
 };
 
 export type CorpusKind =
@@ -28,7 +36,9 @@ export type CorpusKind =
   | "cage"
   | "isotope"
   | "open"
-  | "chair";
+  | "chair"
+  | "group"
+  | "axis";
 
 export const CORPUS: readonly CorpusEntry[] = [
   // centres: C with its H left out, and with four drawn groups; a ring atom's two groups; ring fusions; a quaternary centre in a chain
@@ -100,6 +110,15 @@ export const CORPUS: readonly CorpusEntry[] = [
   { name: "cis-1,3-dimethylcyclohexane as a chair, both groups equatorial", smiles: "C[C@H]1CCC[C@@H](C)C1", kind: "chair", chair: [[0, "equatorial", "C"], [2, "equatorial", "C"]] },
   { name: "trans-1,3-dimethylcyclohexane as a chair, one group axial, one hand", smiles: "C[C@@H]1CCC[C@@H](C)C1", kind: "chair", chair: [[0, "equatorial", "C"], [2, "axial", "C"]] },
   { name: "cyclohexanol as a chair, its OH axial (no centre)", smiles: "OC1CCCCC1", kind: "chair", chair: [[0, "axial", "O"]] },
+  // AND and OR groups
+  { name: "rac-(2R,3R)-tartaric acid: its two centres in one AND group", smiles: "O[C@H]([C@@H](O)C(=O)O)C(=O)O", kind: "group", group: "and", self: "a SMILES says no group" },
+  { name: "(2R,3R)- or (2S,3S)-tartaric acid: its two centres in one OR group", smiles: "O[C@H]([C@@H](O)C(=O)O)C(=O)O", kind: "group", group: "or", self: "a SMILES says no group" },
+  { name: "rac-trans-1,2-dimethylcyclohexane: AND", smiles: "C[C@@H]1CCCC[C@H]1C", kind: "group", group: "and", self: "a SMILES says no group" },
+  // axes, drawn from the label's own structure
+  { name: "(R)-BINAP", smiles: "", kind: "axis", label: { label: "(R)-BINAP", mirror: "(S)-BINAP" }, self: "a SMILES says no axis" },
+  { name: "(S)-BINAP", smiles: "", kind: "axis", label: { label: "(S)-BINAP", mirror: "(R)-BINAP" }, self: "a SMILES says no axis" },
+  // a wavy bond: open
+  { name: "butan-2-ol drawn with its OH on a wavy bond: open", from: "CC[C@@H](C)O", smiles: "CCC(C)O", kind: "open", wavy: true },
   // an isotope centre; open
   { name: "(2-2H1)butane, one hand: CHD", smiles: "C[C@H]([2H])CC", kind: "isotope", self: "the SMILES read directly leaves its isotopes out" },
   { name: "(1-13C)-2-methylbutane, one hand: a centre by its isotope", smiles: "[13CH3][C@H](C)CC", kind: "isotope", self: "the SMILES read directly leaves its isotopes out" },

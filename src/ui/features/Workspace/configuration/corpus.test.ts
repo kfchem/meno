@@ -3,8 +3,8 @@ import { identity } from "../../../../lib/chem/identity";
 import { smilesInput } from "../../../../lib/layout/smilesInput";
 import { cipAnswersOf, cipJobsOf, cipMarksFrom } from "../chem/cipMarks";
 import { cleanUp } from "../chem/cleanUp";
-import { identityOfDrawn } from "../chem/identityOf";
-import { createWorkspaceDocument } from "../document";
+import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { readRecord, recordText } from "../utils/copyPaste";
@@ -23,7 +23,9 @@ import type { CorpusEntry } from "./corpus";
 // drawing does after each. Mirrored by the chemist, it reads as every unit turned: the SMILES's mirror image.
 
 const expected = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
-const read = (m: Pick<Model, "atoms" | "bonds">) => identityOfDrawn(m as Model).text;
+/** The drawing's identity as Meno reads one: each label that stands for atoms drawn out first (`labelsDrawnOut`), as Clean-up writes
+ *  groups by name. */
+const read = (m: Pick<Model, "atoms" | "bonds">) => identityOfDrawn(labelsDrawnOut(m as Model)).text;
 /** The SMILES's mirror image: every @ and @@ exchanged (a double bond's / and \ say the same of the mirror image). */
 const mirrorSmiles = (smiles: string) => smiles.replace(/@@|@/g, (m) => (m === "@@" ? "@" : "@@"));
 
@@ -38,6 +40,22 @@ function chairWith(groups: NonNullable<CorpusEntry["chair"]>): Model {
     bonds.push({ id: 200 + i, a: d.ring[k], b: 50 + i, order: 1 });
   });
   return { atoms, bonds };
+}
+
+/** The entry as Meno draws it: by the chair tool, by expanding a label, or from its SMILES - then grouped or made wavy where it says. */
+function drawnOf(entry: CorpusEntry, mirrored = false): Model {
+  if (entry.chair) return chairWith(entry.chair);
+  if (entry.label) {
+    const el = mirrored ? entry.label.mirror : entry.label.label;
+    return expandAbbreviation({ ...emptyWorkspaceDocument(), model: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el }], bonds: [] }, nextId: 100 }, 1).model;
+  }
+  const smiles = entry.from ?? entry.smiles;
+  const m = drawnFromSmiles(mirrored ? mirrorSmiles(smiles) : smiles);
+  const narrow = new Set(m.bonds.flatMap((b) => ((b.stereo === "up" || b.stereo === "down") && b.narrow != null ? [b.narrow] : [])));
+  return {
+    atoms: entry.group ? m.atoms.map((a) => (narrow.has(a.id) ? { ...a, stereoGroup: { kind: entry.group!, n: 1 } } : a)) : m.atoms,
+    bonds: entry.wavy ? m.bonds.map((b) => (b.stereo === "up" || b.stereo === "down" ? { ...b, stereo: "wavy" as const } : b)) : m.bonds,
+  };
 }
 
 /** The descriptors the drawing comes to, every unit asked, as a sorted list. */
@@ -70,7 +88,7 @@ afterEach(() => vi.useRealTimers());
 describe("the configuration corpus: read(draw(c)) = c", () => {
   for (const entry of CORPUS) {
     (entry.known ? it.fails : it)(`${entry.name} (${entry.kind})${entry.known ? ` - not yet: ${entry.known}` : ""}`, async () => {
-      const drawn = entry.chair ? chairWith(entry.chair) : drawnFromSmiles(entry.smiles);
+      const drawn = drawnOf(entry);
       const c = entry.self ? read(drawn) : expected(entry.smiles);
       expect(read(drawn), "drawn").toBe(c);
       if (entry.labels) expect(labels(drawn), "by its name").toEqual([...entry.labels].sort());
@@ -120,8 +138,10 @@ describe("the configuration corpus: read(draw(c)) = c", () => {
 
       // (mirrored by the chemist - the picture mirrored, its wedges as they are: every unit turned, the SMILES's mirror image)
       const mirrored: Model = { ...drawn, atoms: drawn.atoms.map((a) => ({ ...a, x: -a.x })) };
-      if (!entry.self) expect(read(mirrored), "mirrored by the chemist").toBe(expected(mirrorSmiles(entry.smiles)));
-      else expect(read(mirrored), "mirrored by the chemist").toBe(read(drawnFromSmiles(mirrorSmiles(entry.smiles))));
+      // (a group's mirror image is itself: a racemate, or one of the two not known which)
+      if (entry.group) expect(read(mirrored), "mirrored by the chemist: the same group").toBe(c);
+      else if (!entry.self) expect(read(mirrored), "mirrored by the chemist").toBe(expected(mirrorSmiles(entry.smiles)));
+      else expect(read(mirrored), "mirrored by the chemist").toBe(read(drawnOf(entry, true)));
     });
   }
 });
