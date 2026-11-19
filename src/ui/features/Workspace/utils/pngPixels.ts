@@ -8,7 +8,7 @@
 import { withoutColour } from "../../../../lib/binary/png";
 
 /** What is said where this system's web view cannot decode a picture off the page. */
-export const NO_CANVAS = "This system cannot read pictures: reading them needs macOS 13.3 or later.";
+export const NO_CANVAS = "This system cannot read pictures. Updating the system lets Meno read them.";
 
 /**
  * A PNG's pixels as its samples are - no gamma or colour profile applied,
@@ -18,7 +18,8 @@ export const NO_CANVAS = "This system cannot read pictures: reading them needs m
  * was given them.
  */
 export async function pngPixels(png: Uint8Array): Promise<ImageData> {
-  // (a web view with no canvas off the page - WebKit before macOS 13.3 - cannot decode it here: said in plain words, not its own error)
+  // (a web view with no canvas off the page cannot decode it here: said in plain words, not its own error - WebKit's 2D canvas off
+  //  the page came with Safari 16.4, as WebKit's bug 253431 says)
   if (typeof OffscreenCanvas === "undefined") throw new Error(NO_CANVAS);
   const plain = withoutColour(png);
   const bitmap = await createImageBitmap(new Blob([plain as Uint8Array<ArrayBuffer>], { type: "image/png" }), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
