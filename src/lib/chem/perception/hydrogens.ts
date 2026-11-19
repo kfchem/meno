@@ -42,6 +42,7 @@
  *
  * A formula's outer electrons (`FORMULA_OUTER`) are by group, 1 to 7, for the elements of a formula's table.
  */
+import { metal } from "./elements";
 import { valenceOrders } from "./kekule";
 
 /**
@@ -91,18 +92,34 @@ const VALENCE: Record<string, { valence: number; group: number }> = {
  * (NH4+, H3O+) and a negative one takes one away (O-, NH2-); carbon loses
  * one either way (CH3+, CH3-); boron, to its left, gains one with a
  * negative charge (BH4-). An unpaired electron takes a bond's place, and a
- * carbene's pair two.
+ * carbene's pair two. A P, an S or an Se takes its higher valences where its
+ * bonds to non-metals pass the lower (`LADDER`); `toMetals` is the share of
+ * `bondOrderSum` that is bonds to metals.
  */
 export function implicitHydrogens(
   el: string,
   bondOrderSum: number,
   charge = 0,
   radical?: Radical,
+  toMetals = 0,
 ): number {
   const v = VALENCE[el];
   if (!v) return 0;
-  return Math.max(0, valenceAs(v, v.valence, charge, radical) - bondOrderSum);
+  // (the lowest valence it takes at or above its bonds - a P(V) of four bonds carries one, an H-phosphonate's; an S(IV) of three,
+  //  a sulfinyl H - the rule connection tables and SMILES count by, the chemistry check's ruling. The step is chosen by its bonds
+  //  to non-metals alone (`toMetals`, of `bondOrderSum`): a phosphine on a metal stays P(III), no H; past the highest, none)
+  for (const valence of LADDER[el] ?? [v.valence]) {
+    const at = valenceAs(v, valence, charge, radical);
+    if (at >= bondOrderSum - toMetals) return Math.max(0, at - bondOrderSum);
+  }
+  return 0;
 }
+
+/**
+ * The valences a P, an S or an Se takes, lowest first, for `implicitHydrogens`: P 3 and 5, S and Se 2, 4 and 6 (as a charge or an
+ * unpaired electron leaves each). Any other element its own alone.
+ */
+const LADDER: Record<string, readonly number[]> = { P: [3, 5], S: [2, 4, 6], Se: [2, 4, 6] };
 
 /**
  * The valences an atom of `el` takes at its charge, as `implicitHydrogens`
@@ -172,12 +189,21 @@ export type CountedBond = { a: number; b: number } & ValenceBond;
  */
 export function hydrogenCounts(atoms: readonly CountedAtom[], bonds: readonly CountedBond[]): number[] {
   const sum = atoms.map(() => 0);
+  // (and of it, each atom's bonds to metals: a P, S or Se's valence step is chosen by its other bonds - `implicitHydrogens`)
+  const toMetals = atoms.map(() => 0);
   const orders = valenceOrders(atoms, bonds);
   bonds.forEach((b, k) => {
     const kind = b.dative || b.coordination || b.hydrogen;
-    for (const end of [b.a, b.b]) sum[end] += kind ? valenceOrder(b, atoms[end]?.el) : orders[k] <= 3 ? orders[k] : 0;
+    for (const [end, other] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      const o = kind ? valenceOrder(b, atoms[end]?.el) : orders[k] <= 3 ? orders[k] : 0;
+      sum[end] += o;
+      if (metal.has(atoms[other]?.el ?? "")) toMetals[end] += o;
+    }
   });
-  return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0, a.radical));
+  return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0, a.radical, Math.round(toMetals[i])));
 }
 
 /** One atom's hydrogens by the one count (`hydrogenCounts`). */

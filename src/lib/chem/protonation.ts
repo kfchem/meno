@@ -111,15 +111,9 @@ export function startingForms(by: OrdersBy, sites: readonly Site[], aromatic = f
   return sites.map((s) => (s.kind !== "metal bond" && definedBy(by) && !aromatic ? s.now : null));
 }
 
-/** An atom's hydrogens, its bonds' orders summed (`sum`): its valence's room, a phosphorus or sulfur taking its higher valences (5; 4 and 6) where its bonds go past the lower. */
+/** An atom's hydrogens, its bonds' orders summed (`sum`), by the core's count: its valence's room, a phosphorus or sulfur taking its higher valences (5; 4 and 6) where its bonds go past the lower. */
 export function hydrogensOf(a: ProtonAtom, sum: number): number {
-  const charge = a.charge ?? 0;
-  if (!charge && !a.radical && (a.el === "P" || a.el === "S")) {
-    const valences = a.el === "P" ? [3, 5] : [2, 4, 6];
-    const v = valences.find((x) => x >= sum);
-    return v == null ? 0 : v - sum;
-  }
-  return implicitHydrogens(a.el, sum, charge, a.radical);
+  return implicitHydrogens(a.el, sum, a.charge ?? 0, a.radical);
 }
 
 /**

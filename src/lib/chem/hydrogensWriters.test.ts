@@ -9,9 +9,9 @@
 import { describe, expect, it } from "vitest";
 import { analogues, CORE_SMILES } from "../layout/testdata/analogues";
 import { readSmiles } from "./smiles";
-import { halfOrderSums, lacksHydrogens, type SkeletonAtom } from "./skeleton";
+import { halfOrderHydrogens, lacksHydrogens, type SkeletonAtom } from "./skeleton";
 import { writeMolfile3d } from "./molWriter";
-import { hydrogenCounts, implicitHydrogens } from "./perception/hydrogens";
+import { hydrogenCounts } from "./perception/hydrogens";
 
 const HETEROAROMATICS = [
   "c1ccccc1", "c1ccncc1", "c1cc[nH]c1", "c1ccoc1", "c1ccsc1", "c1c[nH]cn1", "c1ccc2[nH]ccc2c1", "c1ccc2ccccc2c1",
@@ -34,10 +34,10 @@ describe("a skeleton's count against the core's", () => {
   const wholeDiffers: string[] = [];
   for (const smiles of CORPUS) {
     const { atoms, bonds, aromaticN } = asIn3d(smiles);
-    const half = halfOrderSums(atoms.length, bonds);
+    const half = halfOrderHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
     const core = hydrogenCounts(atoms, bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })));
-    atoms.forEach((a, i) => {
-      const h = implicitHydrogens(a.el, Math.round(half[i]), a.charge);
+    atoms.forEach((_, i) => {
+      const h = half[i];
       if (h !== core[i]) differing.push({ smiles, atom: i, half: h, core: core[i], aromaticN: aromaticN.has(i) });
     });
     const placed: SkeletonAtom[] = atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 }));
@@ -85,6 +85,16 @@ describe("the valence a 3D molfile writes, by the core's count", () => {
       atoms.forEach((a, i) => {
         if (a.el === "N") expect([smiles, i, vvv[i] + hs[i]]).toEqual([smiles, i, 3]);
       });
+    }
+  });
+});
+
+describe("a skeleton's aromatic S and P take no higher valence's H (the chemistry check's ruling)", () => {
+  it("thiophene's, thiazole's and thiadiazole's S, and phosphinine's P: none", () => {
+    for (const [smiles, el] of [["c1ccsc1", "S"], ["c1cscn1", "S"], ["c1nncs1", "S"], ["c1ccpcc1", "P"]] as const) {
+      const { atoms, bonds } = asIn3d(smiles);
+      const half = halfOrderHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
+      expect(half[atoms.findIndex((a) => a.el === el)], smiles).toBe(0);
     }
   });
 });

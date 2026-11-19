@@ -16,6 +16,7 @@ import { readMolfile } from "./ctfile";
 import { elementOf, vdwRadius } from "./elements";
 import { transitionMetal } from "./perception/elements";
 import { implicitHydrogens, valencesAt, type Radical } from "./molecule";
+import { metal } from "./perception/elements";
 
 /** An atom as the holds read it: its element, charge and unpaired electrons - and the hydrogens a file gives it that are not drawn as atoms (`hydrogens`: a metal's VAL past its bonds, a hydride). */
 export type HoldsAtom = { el: string; charge: number; radical?: Radical; hydrogens?: number };
@@ -254,7 +255,9 @@ function donorCharge(atoms: readonly HoldsAtom[], bonds: readonly HoldsBond[], x
   const allowed = valencesAt(a.el, a.charge, a.radical);
   if (!allowed.length) return null;
   const drawn = bonds.reduce((s, b) => s + (b.a === x || b.b === x ? (b.endpoints ? 0 : b.order) : 0), 0);
-  for (const valence of [drawn, drawn + implicitHydrogens(a.el, drawn, a.charge, a.radical)]) {
+  // (its bonds to metals apart in choosing a P's or an S's valence: a phosphine on a metal carries no H - the core's count)
+  const toMetals = bonds.reduce((s, b) => s + ((b.a === x || b.b === x) && !b.endpoints && metal.has(atoms[b.a === x ? b.b : b.a].el) ? b.order : 0), 0);
+  for (const valence of [drawn, drawn + implicitHydrogens(a.el, drawn, a.charge, a.radical, toMetals)]) {
     const other = valence - order;
     if (allowed.includes(other)) return 0;
     if (allowed.includes(other + 1)) return 1;

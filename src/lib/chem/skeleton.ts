@@ -11,7 +11,7 @@
  * Meno's one rule for whether some atoms are a skeleton. Pure: over atoms
  * and bonds.
  */
-import { implicitHydrogens, type Radical } from "./perception/hydrogens";
+import { implicitHydrogens, valencesAt, type Radical } from "./perception/hydrogens";
 import { orderFromLength, ordersFromGeometry } from "./ordersFromGeometry";
 
 export type SkeletonAtom = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical };
@@ -97,6 +97,22 @@ export function halfOrderSums(n: number, bonds: readonly SkeletonBond[]): Float6
   return sum;
 }
 
+/**
+ * Each atom's hydrogens over its half-order sum (`halfOrderSums`): its valence's room, but an atom with an aromatic bond at its own
+ * valence alone - a thiophene's S, a phosphinine's P, their two aromatic bonds summing to three, take no S(IV) or P(V) step and no H
+ * (the chemistry check's ruling: kept so until part 12's fix of the skeleton's sum, which counts them by Kekule orders).
+ */
+export function halfOrderHydrogens(atoms: readonly SkeletonAtom[], bonds: readonly SkeletonBond[]): number[] {
+  const sum = halfOrderSums(atoms.length, bonds);
+  const aromatic = new Set(bonds.flatMap((b) => (b.order === 4 ? [b.a1, b.a2] : [])));
+  return atoms.map((a, i) => {
+    const charge = a.charge ?? 0;
+    if (!aromatic.has(i)) return implicitHydrogens(a.el, Math.round(sum[i]), charge, a.radical);
+    const own = valencesAt(a.el, charge, a.radical)[0];
+    return own == null ? 0 : Math.max(0, own - Math.round(sum[i]));
+  });
+}
+
 /** Whether atoms with their bonds' orders summed (`sum`) take hydrogens their valence leaves room for. */
 const roomFor = (atoms: readonly SkeletonAtom[], among: readonly number[], sum: ArrayLike<number>, charges?: readonly number[]) =>
   among.some((i) => implicitHydrogens(atoms[i].el, Math.round(sum[i]), charges ? charges[i] : (atoms[i].charge ?? 0), atoms[i].radical) > 0);
@@ -124,7 +140,10 @@ export function lacksHydrogens(
   among: readonly number[] = atoms.map((_, i) => i),
 ): boolean {
   if (!among.length || among.some((i) => atoms[i].el === "H")) return false;
-  if (!ordersUnknown) return roomFor(atoms, among, halfOrderSums(atoms.length, bonds));
+  if (!ordersUnknown) {
+    const hs = halfOrderHydrogens(atoms, bonds);
+    return among.some((i) => hs[i] > 0);
+  }
   const near: number[][] = atoms.map(() => []);
   for (const b of bonds) {
     near[b.a1]?.push(b.a2);
