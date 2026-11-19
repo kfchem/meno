@@ -1,12 +1,13 @@
 /**
- * A ring in perspective drawn with no depth and recognised as one (lib/layout/recognised) is read by the convention - the lower atoms of a
+ * A ring in perspective drawn with no depth and recognised as one (lib/chem/perception/projection/depth) is read by the convention - the lower atoms of a
  * mostly-horizontal ring the nearer - which follows the page. A move of Meno's that turns the drawing on the page, or turns it over, would
  * so read another compound: turned half round, or turned over left for right, its mirror image. So before such a move the depth the reading
  * worked out is stored on its atoms, and the move carries it as it carries any depth drawn: the compound is kept (docs/EDITOR-2D.md,
  * *Drawn in perspective*). Clean-up, which leaves the drawing where it is, stores none.
  */
 import type { Model } from "../store/types";
-import { withRecognisedDepth } from "../../../../lib/layout/recognised";
+import { withRecognisedDepth } from "../../../../lib/chem/perception/projection/depth";
+import { cageViews } from "../../../../lib/layout/recognised";
 import { fragmentsHolding, partOf } from "./cleanUp";
 import { drawingOf } from "./drawing";
 import type { WorkspaceDocument } from "../document";
@@ -18,7 +19,7 @@ export function recognisedDepthOf(model: Model, atoms: Iterable<number>): Map<nu
     const part = partOf(model, ids);
     if (!part.atoms.length) continue;
     const d = drawingOf(part);
-    const seen = withRecognisedDepth(d.atoms, d.bonds);
+    const seen = withRecognisedDepth(d.atoms, d.bonds, cageViews);
     part.atoms.forEach((a, i) => {
       const z = seen[i]?.z;
       if (a.z == null && z != null && d.atoms[i].z == null) out.set(a.id, z);
