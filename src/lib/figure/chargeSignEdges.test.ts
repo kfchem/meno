@@ -29,7 +29,7 @@ const chargeOf = (f: FigureDrawn, el: string) => read(f).atoms.find((a) => a.el 
 
 const c: P = [60, 60];
 const right = stroke(along(c, step(c, 0), 0.35), step(c, 0));
-const EN = "–";
+const EN = "\u2013";
 
 describe("a charge's sign set alone by a label, at its edges", () => {
   it("takes its count: 2 and a dash over the O are -2", () => {
@@ -49,7 +49,7 @@ describe("a charge's sign set alone by a label, at its edges", () => {
 
   it("takes a circled plus beside, set high, as a plus", () => {
     const four = [45, 135, 225, 315].map((d) => stroke(along(c, step(c, d), 0.35), step(c, d)));
-    expect(chargeOf(figure(four, [...word("N", c), ...word("⊕", [c[0] + 11, c[1] - 5])]), "N")).toBe(1);
+    expect(chargeOf(figure(four, [...word("N", c), ...word("\u2295", [c[0] + 11, c[1] - 5])]), "N")).toBe(1);
   });
 
   it("is a sign beside the label only within its place: not set two letters high, nor with its letters across the label's", () => {
