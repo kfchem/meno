@@ -923,6 +923,27 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **A hashed line read** (2026-11-19; IUPAC 2006 ST-0.3). Hashes drawn as
+  a line (the bold dashed bond), and a hashed wedge drawn the wrong way
+  round, are read as "below" at a stereocentre only where the text grades
+  them acceptable: from the centre to an end group - an atom with at most
+  one other group not a hydrogen (an H, a halogen, OH, NH2, a methyl, an
+  ethyl, an ethoxy, a CHO) - the centre with no wedge of its own and no
+  other such line (`perception/stereo/from2d` `hashedLinesRead`). A
+  centre with a wedge narrow at it is read from the wedge, the line not
+  looked at. Otherwise the line states nothing, and a centre with no
+  wedge of its own is open, saying why: "a hashed line between two
+  stereocentres states neither", "a hashed line to a group of this size
+  does not say which end it belongs to" (an isopropyl, a phenyl, a COOH),
+  or "two hashed lines at one atom". A hashed line along a ring bond - a
+  ring's far edge in perspective - states nothing ("a hashed line along a
+  ring bond states neither end"), nor a reversed hashed wedge along one;
+  and an allene's end is no end group: a wedge out of it states the
+  allene's axis. Exactly one such line is narrower
+  than the text, which allows two: the safe side. A solid wedge the wrong
+  way round, a bold line and a dashed line state nothing, as ever. Meno
+  never draws these forms; it reads them where a chemist or a figure
+  does. A figure's even hashes - no end narrower - are such a line.
 - **A wedge's narrow end is kept by atom** (`Bond.narrow`). A wedge or
   hashes, and a ring's bond in perspective, are narrow at the atom they
   were drawn, read or laid out narrow at, and stay so while bonds are
@@ -935,6 +956,43 @@ Both go together, because both touch every layer.
   on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
   plain again with the other end narrow next time round; the wedge's icon
   in its menu, pressed again, turns its narrow end to the other atom.
+- **A Fischer projection** (2026-11-18). A structure drawn as one - each
+  stereocentre a cross of four plain bonds on the page's axes, the chain
+  upright, its centres one above another - states no configuration of
+  itself, and Meno guesses none: plain bonds lie in the page. Its menu (a
+  right-click on any of its atoms or bonds) offers *Read as Fischer
+  projection* (`utils/fischer.ts`). At each cross that is a stereocentre
+  (four bonds, in no ring, each within the reader's 10 degrees of level
+  or upright, its four groups unlike - or only its two upright groups
+  alike, each holding such a cross, as the middle carbon of ribitol and of
+  xylitol: told apart only by the configurations about it, which the CIP
+  then reads r or s, or none where it is no centre, as in D-arabinitol),
+  the two level bonds become solid
+  wedges narrow at it and the two upright bonds stay plain: the horizontal
+  groups toward the viewer, as the Fischer projection of the acyclic form
+  has them (A. D. McNaught, Nomenclature of carbohydrates (IUPAC
+  Recommendations 1996), Pure Appl. Chem. 68 (1996) 1919-2008, 2-Carb-3),
+  and a cross with two like wedges opposite is a form the reader reads by
+  its ordinary rules (IUPAC 2006 ST-1.1.3, ST-1.8). One step, undone as
+  one ("Read as a Fischer projection"). Nothing is stored to say it was a
+  Fischer projection: the wedges say it.
+  - The centres must stand one above another: the line from the topmost
+    to the lowest within the reader's 10 degrees of upright, however many
+    there are, each within a quarter of a bond of that line.
+  - Not offered where no cross lies on the axes (a chain turned a quarter
+    has its crosses side by side, not one above another), at a metal (a
+    metal drawn as a plus is read as drawn, square planar where it surely
+    is), where a cross's
+    bond is already a wedge, hashed, bold or dative, at a ring atom, or
+    where a cross's groups are alike otherwise (it is no stereocentre; such
+    a cross among others is left plain).
+  - A single cross has no chain to tell up from down by: it is read as it
+    lies, on the chemist's word. Turned a quarter before the command, it
+    gives the enantiomer.
+  - A cross of plain bonds, in no ring, read from a PDF's figure says so at its centre
+    - "Drawn as a cross of plain bonds: no configuration is read. Read as
+    Fischer projection, if it is one." - and nothing is read until the
+    chemist asks (`lib/figure/structure.ts`).
 - **A bond in front of another.** Where two bonds of one structure drawn
   by hand cross, the chemist says which is in front: a right-click on
   either bond, near the crossing, offers *In front* and *Behind*, said of

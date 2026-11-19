@@ -93,7 +93,7 @@ export type PropertyValue =
   | { vector: number[] }
   | { table: { columns: Column[]; rows: (number | string | null)[][] } }
   | { modes: number[][] }
-  | { restraints: Restraint[]; start?: number[] };
+  | { restraints: Restraint[]; start?: number[]; numbering?: string };
 
 /**
  * Where a property was worked out: the geometry (its key, `geometryKey`),
