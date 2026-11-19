@@ -6,6 +6,7 @@
  * What is deliberately *not* here: hover, drag previews, the camera, the label
  * edit buffer, fit requests. Those belong to the view (see store/).
  */
+import { keptBondMoved, keptCentreMoved } from "./configuration/kept";
 import { numbersWith, type AtomNumberKind } from "./utils/atomNumbers";
 import { createDocument, type DocumentStore } from "../../../lib/doc";
 import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
@@ -1100,8 +1101,14 @@ export function appendModel(
   };
   // (a stack of drawings it brings numbered after the document's own; one record copied out of its stack, that record alone)
   // (and a structure of several parts it brings given a number of its own, joining nothing here - utils/joinedParts)
+  // (the configuration each keeps, on the new ids: one whose atoms did not all come with it dropped - configuration/kept)
+  const centreOf = (a: Atom) => {
+    const k = a.config && keptCentreMoved(a.config, idMap);
+    const { config: _c, ...rest } = a;
+    return k ? { ...rest, config: k } : rest;
+  };
   const atoms = joinedAdded(addedStacks(next.atoms, freshRecordsId(doc.model.atoms)), doc.model.atoms).map((a) => ({
-    ...a,
+    ...centreOf(a),
     id: idMap.get(a.id)!,
     ...(a.sgroups
       ? {
@@ -1122,8 +1129,9 @@ export function appendModel(
     for (const e of [b.a, b.b]) if (next.atoms.some((a) => a.id === e && a.el === "*")) starless.add(idMap.get(e)!);
   }
   const bonds = next.bonds.flatMap((b) => {
-    const { endpoints, attach, ...rest } = b;
+    const { endpoints, attach, config, ...rest } = b;
     const whole = !!endpoints?.length && endpoints.every((e) => idMap.has(e));
+    const kept = config && keptBondMoved(config, idMap);
     const a = idMap.get(b.a) ?? b.a;
     const z = idMap.get(b.b) ?? b.b;
     if (starless.has(a) || starless.has(z)) return [];
@@ -1137,6 +1145,7 @@ export function appendModel(
         b: z,
         ...(b.narrow != null ? { narrow: idMap.get(b.narrow) ?? b.narrow } : {}),
         ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
+        ...(kept ? { config: kept } : {}),
       },
     ];
   }).map((b) => {

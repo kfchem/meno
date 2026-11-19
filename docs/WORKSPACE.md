@@ -363,6 +363,12 @@ Taken while stage 1 was built, on 2026-10-03:
     workspace file*). Its `workspace.json` is the JSON `.meno` was at
     first (`meno-workspace`, version 1); the outputs, texts, PDFs and
     pictures it keeps are files beside it (`lib/doc/menoFile.ts`).
+  - The drawing's atoms and bonds carry the configuration they state,
+    kept (`config`: docs/EDITOR-2D.md, *The configuration kept*), from
+    the version after 0.1.26. A file from before has none: what it
+    states is kept with the first change made to it, and nothing is said
+    for that. One that does not read whole, or names an atom the drawing
+    has not, is left out and read again.
   - Save and Save As write `.meno`, and nothing else (since 2026-10-06,
     #151; before, with 3D molecules on the canvas, Save offered a
     workspace or an SD file). Other kinds are written by *Export…*, on
