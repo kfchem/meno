@@ -19,6 +19,7 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
 import { againstLowest, compared, saidOf, type Difference, type Said, type SaidCentre } from "../../../../lib/chem/perception/stereo/compare";
+import { keepsAny, keptAsDrawn, keptReading } from "../configuration/kept";
 import { pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
@@ -134,7 +135,11 @@ const plainH = (a: Model["atoms"][number]) => a.el === "H" && !Object.keys(chemi
 export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
-  const { tetra, cisTrans, axes, cumulated } = stereo;
+  // (the configuration laid out: what the drawing keeps, where it keeps any - part 15, phase 3: its looks drawn again from it - else what
+  //  its marks say: configuration/kept)
+  const { tetra, cisTrans, axes, cumulated } = keepsAny(part)
+    ? keptAsDrawn(part, drawing, keptReading(part, saidOf(drawing.atoms, drawing.bonds, part.atoms.map((a) => a.id), () => false, stereo)).said)
+    : stereo;
   // (a double bond drawn straight at an end, its configuration not given: that end kept straight - IUPAC 2006 ST-4.4 - so that
   //  what is laid out leaves it unsaid too, rather than saying one or the other)
   const straight = straightEnds(drawing.atoms, drawing.bonds);

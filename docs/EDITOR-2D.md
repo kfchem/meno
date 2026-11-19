@@ -1589,8 +1589,10 @@ All hover-based, as above.
   read from the marks, what is kept set aside (`marksOnly`), for it says
   what the marks turned to against what was kept. The configuration
   corpus (configuration/corpus) checks that the two agree after every one
-  of Meno's own moves. Clean-up, 3D, the files and the clipboard still read
-  the marks.
+  of Meno's own moves. **Clean-up takes what is kept too** (chem/engineLayout
+  `layoutJob`): the configuration it lays out, and draws the looks again
+  from, is the one kept, where the drawing keeps one. 3D, the files and
+  the clipboard still read the marks.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
