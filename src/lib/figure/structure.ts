@@ -55,7 +55,7 @@ export type StructureAtom = {
   of?: number;
   multiple?: { group: number; n: number; paradigm?: true };
 };
-export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; unsure?: string[] };
+export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; /** Hashes drawn even, a line: no narrow end. */ hashed?: true; unsure?: string[] };
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
 function drawnHydrogens(label: string): number | null {
@@ -218,16 +218,14 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
       ...(multiple[i] ? { multiple: multiple[i] } : {}),
     };
   });
-  // a hashed bond whose narrow end is not drawn: at the end that can be a
-  // stereocentre - an atom of four bonds, its hydrogens counted, none of them
-  // double - where only one can; said, where both can or neither
+  // a hashed bond whose narrow end is not drawn - its hashes even: a hashed line, read by the reader's one rule for it (perception/stereo/
+  // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
   const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) === 4;
   const bonds = read.bonds.map((b, i): StructureBond => {
     const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
     if (b.either) {
-      const [ca, cb] = [centre(b.a), centre(b.b)];
-      if (cb && !ca) [out.a, out.b] = [b.b, b.a];
-      else if (ca === cb) (out.unsure ??= []).push("Its hashes are even: which end is the stereocentre is not drawn.");
+      delete out.stereo;
+      out.hashed = true;
     }
     // a wedge or hash of which only the nearer end is known: narrow at the
     // end that can be a stereocentre - a wedge up from it, or a hash down
@@ -242,6 +240,8 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   // perspective has none - is unsure: none is read, none guessed
   const shown = new Set(bonds.filter((b) => b.stereo === "up" || b.stereo === "down").map((b) => b.a));
   const wavy = new Set(bonds.filter((b) => b.stereo === "wavy").flatMap((b) => [b.a, b.b]));
+  // (an atom with a hashed line at it: the reader reads it by its rule, or says why not)
+  const lined = new Set(bonds.filter((b) => b.hashed).flatMap((b) => [b.a, b.b]));
   const around: number[][] = atoms.map(() => []);
   bonds.forEach((b) => {
     around[b.a].push(b.b);
@@ -279,7 +279,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   };
   atoms.forEach((a, i) => {
     // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
-    if (isMetal(els[i]) || shown.has(i) || wavy.has(i)) return;
+    if (isMetal(els[i]) || shown.has(i) || wavy.has(i) || lined.has(i)) return;
     // (four groups, each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
     if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
