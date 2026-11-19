@@ -33,9 +33,9 @@ function started(): Worker {
   return w;
 }
 
-/** The R and S, E and Z asked for on `model` (`stereoShown`), and what each with none says. */
-export function cipMarksAsked(model: Model): Promise<CipMarks> {
-  const jobs = cipJobsOf(model);
+/** The R and S, E and Z asked for on `model` (`stereoShown`, or the atoms and bonds `units` by id), and what each with none says. */
+export function cipMarksAsked(model: Model, units?: { atoms: readonly number[]; bonds: readonly number[] }): Promise<CipMarks> {
+  const jobs = cipJobsOf(model, units);
   if (!jobs.length) return Promise.resolve(cipMarksFrom([], []));
   if (typeof Worker === "undefined") return Promise.resolve().then(() => cipMarksFrom(jobs, jobs.map(cipAnswersOf)));
   return new Promise<CipAnswer[][]>((done, fail) => {

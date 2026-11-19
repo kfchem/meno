@@ -45,6 +45,13 @@ describe("a structure drawn, as identity reads it", () => {
     ]);
   });
 
+  it("reads no cis or trans at a double bond's end of two alike methyls, and reads one where a mass number tells them apart", () => {
+    const stated = (smiles: string) => identityInputOf(drawnFromSmiles(smiles)).input.bonds.filter((b) => b.stereo).length;
+    expect(stated("C/C(C)=C/C")).toBe(0);
+    expect(stated("[13CH3]/C(C)=C/C")).toBe(1);
+    expect(identityOfDrawn(drawnFromSmiles("[13CH3]/C(C)=C/C")).text).not.toBe(identityOfDrawn(drawnFromSmiles("[13CH3]/C(C)=C\\C")).text);
+  });
+
   it("says which atoms' wedges it could not read: wedge and hashes drawn opposite each other", () => {
     // (a carbon with four groups, a wedge and a hash in line: no configuration can be read)
     const crossed = {
