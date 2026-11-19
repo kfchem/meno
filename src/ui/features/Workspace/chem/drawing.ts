@@ -136,6 +136,8 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
         ...(b.stereo === "wavy" || (b.order === 2 && b.stereo === "either") ? { either: true } : {}),
         // (a ring bond drawn bold, or as a ring in perspective's near edge: the edge that is the nearer)
         ...(b.order === 1 && (b.display === "bold" || b.display === "wedge") ? { bold: true } : {}),
+        // (hashes drawn as a line, no wedge: read as "below" only where IUPAC grades it acceptable - perception/stereo/from2d `hashedLinesRead`)
+        ...(b.order === 1 && !wedged && b.display === "hashed" ? { hashed: true } : {}),
         // (a hydrogen bond: kept, in its place, and read as no bond of the structure)
         ...(b.hydrogen ? { hydrogen: true } : {}),
       },

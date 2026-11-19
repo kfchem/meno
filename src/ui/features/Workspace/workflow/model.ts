@@ -12,11 +12,12 @@ import type { OptionValues } from "../../../../lib/options";
 import type { Bound } from "../../../../lib/boundOptions";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, type Frame } from "./entries";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
-import { canWire, resultOf, wiresInto } from "./flow";
+import { canWire, resultOf, wireRefusal, wiresInto } from "./flow";
 import { cardHighOf, exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 import { frameAt, placeBelow, placeCard, placeNext } from "./place";
+import { unseenSets } from "./onPage";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -193,7 +194,9 @@ export function removeSet(doc: WorkspaceDocument, id: number): WorkspaceDocument
 /** `doc` with a step of `kind`, done by `by` - Meno, or a plugin - whose card's top left is at (x, y); it is numbered `nextWorkflowId`. */
 export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: number, options?: OptionValues, by?: string): WorkspaceDocument {
   const id = idOf(doc);
-  const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}) };
+  // (a Repeat put down alone: an empty frame of room for a few steps, its card at its top left - steps dragged in join it)
+  const frame = kind === "repeat" ? { frame: { w: REPEAT_EMPTY.w, h: REPEAT_EMPTY.h } } : {};
+  const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}), ...frame };
   return withExits({ ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] }, id);
 }
 
@@ -256,6 +259,16 @@ function withStep(doc: WorkspaceDocument, id: number, change: (s: WorkflowStep) 
 }
 
 export function moveStep(doc: WorkspaceDocument, id: number, x: number, y: number): WorkspaceDocument {
+  const was = doc.steps?.find((s) => s.id === id);
+  // (a Repeat moved with the steps it holds, by as much: its frame round them as it was)
+  if (was?.kind === "repeat" && was.holds?.length && (was.x !== x || was.y !== y)) {
+    const [dx, dy] = [x - was.x, y - was.y];
+    const held = new Set(was.holds);
+    let d: WorkspaceDocument = { ...doc, steps: doc.steps!.map((s) => (s.id === id ? { ...s, x, y } : held.has(s.id) ? { ...s, x: s.x + dx, y: s.y + dy } : s)) };
+    // (and the sets those steps give, with what they hold: inside its frame as they were - found in review)
+    for (const b of doc.sets ?? []) if (b.made && held.has(b.made.step)) d = moveSet(d, b.id, dx, dy);
+    return d;
+  }
   return withStep(doc, id, (s) => (s.x === x && s.y === y ? s : { ...s, x, y }));
 }
 
@@ -353,6 +366,69 @@ export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocumen
   return wires.length === (doc.wires ?? []).length ? doc : { ...doc, wires };
 }
 
+/** A Repeat's frame put down alone: room for three cards across and two down, beside its own. */
+const REPEAT_EMPTY = { w: 4 * CARD_W + 5 * GAP, h: 3 * CARD_H + 4 * GAP };
+
+/**
+ * `doc` with a Repeat made round steps `ids` (*Repeat these steps*): its card above them, its frame round them all, and each wire
+ * that crossed their edge routed through it in the same edit - a wire into one's first input from outside goes to *In*, and *This pass*
+ * to that step; one from a set of theirs to a step outside lands on *Done*, and *Out* goes to that step. A later input - a Reference -
+ * keeps its wire from outside, read the same every pass. Where what comes in is more than one set, or none of the steps is left, nothing.
+ */
+export function repeatAround(doc: WorkspaceDocument, ids: readonly number[]): WorkspaceDocument {
+  const made = repeatMade(doc, ids);
+  return made && "doc" in made ? made.doc : doc;
+}
+
+/**
+ * `repeatAround`'s Repeat, or why it is not made, in words: what comes into the steps is more than one set, or a set *In* does not take
+ * (structures drawn: a Repeat runs on molecules in 3D) - never made with the wire that crossed its edge lost. None where there is
+ * nothing to make it round: no step, or one a Repeat holds already.
+ */
+export function repeatMade(doc: WorkspaceDocument, ids: readonly number[]): { doc: WorkspaceDocument } | { why: string } | null {
+  const inner = (doc.steps ?? []).filter((s) => ids.includes(s.id) && s.kind !== "repeat");
+  if (!inner.length || (doc.steps ?? []).some((s) => s.kind === "repeat" && s.holds?.some((h) => ids.includes(h)))) return null;
+  const held = new Set(inner.map((s) => s.id));
+  const made = new Map((doc.sets ?? []).flatMap((b) => (b.made ? [[b.id, b.made.step] as const] : [])));
+  const insideSet = (set: number) => held.has(made.get(set) ?? -1);
+  const wires = doc.wires ?? [];
+  const firstOf = (step: number) => {
+    const s = doc.steps!.find((x) => x.id === step)!;
+    return inputsFor(s.kind, byOf(s))[0]?.id ?? ONE_INPUT;
+  };
+  const comingIn = wires.filter((w) => held.has(w.to.step) && !insideSet(w.from.set) && w.to.port === firstOf(w.to.step));
+  if (new Set(comingIn.map((w) => w.from.set)).size > 1) return { why: "More than one set comes into these steps: a Repeat takes one, by its In" };
+  const goingOut = wires.filter((w) => !held.has(w.to.step) && insideSet(w.from.set));
+  // (its card above theirs, at the frame's top left - never out to their left, where what comes in to them stands - and its frame
+  //  round all of them, no wider than they are and a gap: the page's y runs up, a card's top its y, its foot below it)
+  //  (the sets their exits give round with them: what they make is inside it, found in the GUI check)
+  //  (those drawn on the page: one held off it - an exit of theirs nothing is wired from - takes no room, found in the GUI check)
+  const unseen = unseenSets(doc);
+  const theirs = (doc.sets ?? []).filter((b) => insideSet(b.id) && !unseen.has(b.id));
+  const x0 = Math.min(...inner.map((s) => s.x)) - GAP;
+  const top = Math.max(...inner.map((s) => s.y), ...theirs.map((b) => b.y1)) + 2 * GAP + cardHighOf("repeat");
+  const x1 = Math.max(x0 + CARD_W + 2 * GAP, ...inner.map((s) => s.x + CARD_W + GAP), ...theirs.map((b) => b.x1 + GAP));
+  const foot = Math.min(...inner.map((s) => s.y - cardHighOf(s.kind)), ...theirs.map((b) => b.y0)) - 2 * GAP;
+  const id = idOf(doc);
+  let d = addStep(doc, "repeat", x0, top, undefined, "meno");
+  d = { ...d, steps: d.steps!.map((s) => (s.id === id ? { ...s, frame: { w: x1 - x0, h: Math.max(top - foot, cardHighOf("repeat") + 2 * GAP) }, holds: inner.map((x) => x.id) } : s)) };
+  // (what comes in must go into its In: a set In does not take is said, never dropped)
+  if (comingIn.length && !canWire(d, { set: comingIn[0].from.set }, id, "in")) {
+    return { why: `What comes into these steps cannot go into a Repeat: ${wireRefusal(d, { set: comingIn[0].from.set }, id, "in") ?? "In does not take it"}` };
+  }
+  const exit = (e: string) => d.sets!.find((b) => b.made?.step === id && b.made.exit === e)!.id;
+  // (its Out outside its frame, to the right of it, level with its card - never across its edge, found in the GUI check)
+  const out = d.sets!.find((b) => b.id === exit("reached"))!;
+  d = resizeSet(d, out.id, placeBelow(d, x1 + GAP, top, out.x1 - out.x0, out.y1 - out.y0, { set: out.id }));
+  // (what crossed its edge taken away, then routed through it)
+  for (const w of [...comingIn, ...goingOut]) d = removeWire(d, w.id);
+  if (comingIn.length) d = connect(d, { set: comingIn[0].from.set }, id, "in");
+  for (const w of comingIn) d = connect(d, { set: exit("out") }, w.to.step, w.to.port);
+  for (const set of new Set(goingOut.map((w) => w.from.set))) d = connect(d, { set }, id, "done");
+  for (const w of goingOut) d = connect(d, { set: exit("reached") }, w.to.step, w.to.port);
+  return { doc: d };
+}
+
 /**
  * Each Repeat's steps as its frame now holds them (workflow/repeat): a step whose card's middle lies inside the frame - from the
  * Repeat's card's top left, `frame` wide and high - in reading order, no Repeat among them (one inside another is not made). Dragged
@@ -362,17 +438,24 @@ export function repeatsSettled(doc: WorkspaceDocument): WorkspaceDocument {
   const steps = doc.steps ?? [];
   if (!steps.some((s) => s.kind === "repeat" && s.frame)) return doc;
   let changed = false;
+  // (each step held by one Repeat alone: of the frames round its card's middle, the smallest - the same size, the first made)
+  const frames = steps.filter((r) => r.kind === "repeat" && r.frame);
+  const holder = new Map<number, number>();
+  for (const s of steps) {
+    if (s.kind === "repeat") continue;
+    // (its card's middle: the page's y runs up, so half its height below its top)
+    const mx = s.x + CARD_W / 2;
+    const my = s.y - cardHighOf(s.kind) / 2;
+    const round = frames.filter((r) => mx > r.x && mx < r.x + r.frame!.w && my < r.y && my > r.y - r.frame!.h);
+    round.sort((p, q) => p.frame!.w * p.frame!.h - q.frame!.w * q.frame!.h || p.id - q.id);
+    if (round.length) holder.set(s.id, round[0].id);
+  }
   const next = steps.map((r) => {
     if (r.kind !== "repeat" || !r.frame) return r;
-    const { w, h } = r.frame;
     const inside = steps
-      .filter((s) => s.kind !== "repeat")
-      .filter((s) => {
-        const mx = s.x + CARD_W / 2;
-        const my = s.y + cardHighOf(s.kind) / 2;
-        return mx > r.x && mx < r.x + w && my > r.y && my < r.y + h;
-      })
-      .sort((a, b) => a.y - b.y || a.x - b.x)
+      .filter((s) => holder.get(s.id) === r.id)
+      // (in reading order: the highest first - the page's y runs up - then left to right)
+      .sort((a, b) => b.y - a.y || a.x - b.x)
       .map((s) => s.id);
     if (JSON.stringify(inside) === JSON.stringify(r.holds ?? [])) return r;
     changed = true;

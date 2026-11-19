@@ -359,7 +359,18 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 - each stereocentre's, double bond's and axis's configuration as drawn;
 - aromatic rings as one form: a structure's Kekulé structures, and
   bond-shift isomers, are one structure. A bond made one order there keeps
-  no cis or trans of its own;
+  no cis or trans of its own - but a double bond between rings does
+  (`aromaticForm`): one neither of whose atoms is in a ring of seven atoms
+  or fewer, on a larger ring that runs across such a ring - sharing two
+  of its bonds or more, as a phane's: a [2.2]paracyclophane-1,9-diene's
+  bridge, a cyclic phenylenevinylene's vinylene. Its Z and E are two
+  compounds. An annulene's and a cyclooctatetraene's ring bonds keep
+  none, and so do those of one fused to a benzene ring at one bond (a
+  benzannulene, dibenzo[a,e]cyclooctatetraene) and porphine's meso C=C
+  (its atoms in five-rings). Known limit:
+  the other Kekulé drawing of such a bond - drawn single, the rings beside
+  it quinoid - has no configuration on it, so it is another identity than
+  the usual drawing; nobody draws it;
 - a plain hydrogen atom as one of its neighbour's hydrogens, with its
   configuration carried to the atom it is on (`hydrogensFolded`). A
   hydrogen stays an atom where it is charged, has an unpaired electron, is
@@ -878,7 +889,8 @@ which is the same in every product.
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);
-- the canonical text of the structure's aromatic form;
+- the canonical text of the structure's aromatic form, its end
+  chalcogens on P, As, Sb, S, Se and Te written as one form;
 - with each stereocentre's and each double bond's configuration as drawn,
   and each axis of chirality;
 - and, for a square-planar or an octahedral metal, which of its donors are
@@ -925,6 +937,27 @@ drawn, aromatic rings as one form.* What that means, plainly:
   enantiomer), and drawn with both, one of its two enantiomers. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
+- **an oxygen (or S, Se, Te) at the end of a bond to P, As, Sb, S, Se or
+  Te is the same drawn double or drawn charged** (IUPAC 2013 P-93.2.3 to
+  P-93.2.5; `src/lib/chem/perception/chalcogenEnds.ts`). A phosphine
+  oxide drawn R3P=O and drawn R3P(+)-O(-) is one structure, and so is a
+  sulfoxide drawn S=O and S(+)-O(-): identity writes the uncharged form,
+  a configuration at the P or S kept, so a P-chiral phosphine oxide's two
+  hands stay two. Never at N: an amine N-oxide and a nitro group keep
+  their charges. The end atoms of one centre share their double bonds and
+  their charge: a phosphate diester anion with its charge drawn on one
+  oxygen or on the other is one structure, and its P, between two alike
+  oxygens, is no stereocentre; a sulfinate anion's S neither. An O-H
+  shares its hydrogen with the other end oxygens of its centre, so a
+  phosphinic acid's P is no stereocentre either, as its anion's is not -
+  but never with another element: a thio acid drawn P(=S)(O-H) and drawn
+  P(=O)(S-H) are two tautomers, as drawn. Ends of two elements, or an end
+  labelled by its mass number, stay apart: a phosphorothioate anion with
+  its charge on O or on S is one structure, its P a stereocentre. A
+  phosphinate ester, a phosphonate with two unlike esters, a sulfoxide
+  and a sulfinate ester keep theirs. Se and Te are the text's; As and Sb
+  are Meno's own extension of it (P-93.2.2: "treated in the same
+  manner");
 - **a metal's isomers by which donors are across are two structures:**
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
