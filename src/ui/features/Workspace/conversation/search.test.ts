@@ -106,4 +106,20 @@ describe("a conversation's search asks a SMILES's mass numbers of what it search
     expect(search(labelled.d, labelled.s, "CO", "same")).toEqual({ found: [] });
     expect(search(deuterated.d, deuterated.s, "[2H]C([2H])([2H])O", "same")).toEqual({ found: [seenId("structure", 1)] });
   });
+
+  // (one mass number of the same element asked, not any other (found in review): methanol's carbon a carbon-14, its methyl tritiated)
+  const c14 = pageOf(drawnFromSmiles("[14CH3]O"));
+  const tritiated = pageOf(drawnFromSmiles("[3H]C([3H])([3H])O"));
+
+  it("a carbon-13 asked for is not held by a carbon-14", () => {
+    expect(search(c14.d, c14.s, "[13CH3]O", "holds")).toEqual({ found: [] });
+    expect(search(c14.d, c14.s, "[14CH3]O", "holds")).toEqual({ found: [seenId("structure", 1)] });
+    expect(search(c14.d, c14.s, "[13CH3]O", "same")).toEqual({ found: [] });
+  });
+
+  it("a deuterium asked for is not held by a tritium, nor a tritium by a deuterium", () => {
+    expect(search(tritiated.d, tritiated.s, "[2H]C", "holds")).toEqual({ found: [] });
+    expect(search(deuterated.d, deuterated.s, "[3H]C", "holds")).toEqual({ found: [] });
+    expect(search(tritiated.d, tritiated.s, "[3H]C", "holds")).toEqual({ found: [seenId("structure", 1)] });
+  });
 });
