@@ -47,7 +47,49 @@ export function readTracedPicture(
   // (a carbon between two single bonds in line: a skeleton draws carbons in line only on a triple bond or cumulated double bonds - one
   //  bond traced broken in two reads so)
   for (const i of inLineCarbons(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), IN_LINE_SAID];
+  // (bonds stopping short of one point where nothing was read: a label lost - its ink faint, or never traced - said, never taken for carbons)
+  for (const i of lostLabelEnds(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), LOST_LABEL_SAID];
   return read;
+}
+
+/**
+ * How far short of where their lines cross two bonds' free ends may stop to be a label's (`lostLabelEnds`), in a bond: a label's half
+ * width and its gap. No atom read may lie within half of it of that point.
+ */
+export const LOST_LABEL_REACH = 0.75;
+export const LOST_LABEL_SAID = "A label here was not read: its bonds stop short of it.";
+
+/**
+ * The atoms of a read at which a label was lost: free ends - an unlabelled carbon of one bond - of two bonds or more which, carried on
+ * past those ends, cross no more than `LOST_LABEL_REACH` of a bond beyond each, where no atom was read. Bonds stop so short of a label,
+ * and of nothing else: two methyls' ends point apart, a chain's end points at no other.
+ */
+export function lostLabelEnds(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number[] {
+  const { atoms, bonds, bond } = read;
+  const at = atoms.map((): FigureRead["bonds"] => []);
+  for (const b of bonds) for (const e of [b.a, b.b]) at[e].push(b);
+  const ends = atoms.flatMap((a, i) => {
+    if (a.label || (a.el && a.el !== "C") || at[i].length !== 1) return [];
+    const o = atoms[at[i][0].a === i ? at[i][0].b : at[i][0].a];
+    const l = Math.hypot(a.x - o.x, a.y - o.y);
+    return l ? [{ i, p: { x: a.x, y: a.y }, u: { x: (a.x - o.x) / l, y: (a.y - o.y) / l } }] : [];
+  });
+  const lost = new Set<number>();
+  for (let s = 0; s < ends.length; s++)
+    for (let t = s + 1; t < ends.length; t++) {
+      const [e, f] = [ends[s], ends[t]];
+      // (where the two lines carried on cross: how far along each, from its end)
+      const cross = e.u.x * f.u.y - e.u.y * f.u.x;
+      const [dx, dy] = [f.p.x - e.p.x, f.p.y - e.p.y];
+      if (Math.abs(cross) < 1e-6) continue;
+      const se = (dx * f.u.y - dy * f.u.x) / cross;
+      const sf = (dx * e.u.y - dy * e.u.x) / cross;
+      if (se <= 0 || sf <= 0 || se > LOST_LABEL_REACH * bond || sf > LOST_LABEL_REACH * bond) continue;
+      const meet = { x: e.p.x + e.u.x * se, y: e.p.y + e.u.y * se };
+      if (atoms.some((a) => Math.hypot(a.x - meet.x, a.y - meet.y) < (LOST_LABEL_REACH / 2) * bond)) continue;
+      lost.add(e.i).add(f.i);
+    }
+  return [...lost];
 }
 
 /** How near straight two single bonds at a carbon may be before it is said (`inLineCarbons`): within ten degrees of a line. */

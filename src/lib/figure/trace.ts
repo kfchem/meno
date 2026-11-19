@@ -95,6 +95,13 @@ const LINE_REST = 0.35;
  * end - a methyl's, a CH2OH's - is one, and would be read as an l or an I.
  */
 const APART = 0.3;
+/**
+ * A letter-sized patch of three lines or more, joined - an N, a W - whose pieces are longer than `LETTER_PIECE`'s (a letter printed
+ * large beside short bonds: its slant longer than a bond's share), is a letter where two lines of a structure or more stop short of it,
+ * pointing at it, each end within this share of a bond of its box: bonds to a label. Never lines: read as bonds, its strokes join those
+ * ends as carbons, and the label's element is lost with nothing to say so.
+ */
+const LABEL_STOPS = 0.5;
 /** A piece between two joints shorter than this, in the bond, is a joint thinning left open: `closedJoints`. */
 const JOINT_SHORT = 0.35;
 
@@ -920,6 +927,22 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: r
   };
   const apart = (k: number, own: readonly number[]) =>
     lines.every((l) => l.piece.patch === k || extent(l.piece.patch) < LETTER * bond || own.every((i) => [laid[i].a, laid[i].b].every((p) => near(p, l) > APART * bond)));
+  // (whether two lines of a structure or more stop short of patch `k`, as bonds to a label do: each a free end within `LABEL_STOPS` of
+  //  its box, the line pointing into the box)
+  const stoppedAt = (k: number, box: readonly number[]) => {
+    const reach = LABEL_STOPS * bond;
+    const inBox = (p: Point, pad: number) => p.x >= box[0] - pad && p.x <= box[2] + pad && p.y >= box[1] - pad && p.y <= box[3] + pad;
+    const stops = lines.filter((l) => {
+      if (l.piece.patch === k || extent(l.piece.patch) < LETTER * bond || !l.length) return false;
+      return ([[l.piece.a, l.a, l.b], [l.piece.b, l.b, l.a]] as const).some(([v, end, from]) => {
+        if (!v.free || !inBox(end, reach) || inBox(end, 0)) return false;
+        // (the line carried on past its end by `reach` comes into the box)
+        const t = reach / l.length;
+        return inBox({ x: end.x + (end.x - from.x) * t, y: end.y + (end.y - from.y) * t }, 0);
+      });
+    });
+    return stops.length >= 2;
+  };
   for (let k = 0; k < count; k++) {
     if (dropped[k]) continue;
     const own = byPatch.get(k) ?? [];
@@ -941,8 +964,10 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: r
     const longest = Math.max(0, ...own.map((i) => laid[i].length));
     const joined = own.some((i) => [laid[i].piece.a, laid[i].piece.b].some((v) => !v.free && v.pieces.length > 2));
     const closed = own.some((i) => laid[i].piece.a === laid[i].piece.b) || chains.some((c) => !c.gone && c.patch === k && !c.from);
-    // (a letter: small, its strokes short and joined, bent or closed - its outlines, for the letters' matcher)
-    if (across < SMALL * bond || (across < LETTER * bond && longest < LETTER_PIECE * bond && (joined || closed || own.length >= 3))) {
+    // (a letter: small, its strokes short and joined, bent or closed - its outlines, for the letters' matcher; or of three lines or more,
+    //  as large as a letter, where a structure's bonds stop short of it - `LABEL_STOPS`)
+    const letter = across < LETTER * bond && (joined || closed || own.length >= 3) && (longest < LETTER_PIECE * bond || (own.length >= 3 && stoppedAt(k, box)));
+    if (across < SMALL * bond || letter) {
       const parts = outlinesOf(patch, k, width, box);
       const all = parts.flat();
       if (all.length) shapes.blobs.push({ pts: all, parts, box: boxOf(all), curved: true } satisfies Blob);

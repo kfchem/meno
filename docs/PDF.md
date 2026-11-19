@@ -489,7 +489,14 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   surely, else lines (2026-11-19): a compound's number, a yield's digits
   are words, not bonds. One straight line alone never is: a bond from a
   label to its free end, a methyl's, is one, and read so it was an l or
-  an I - an iodine on the round trip. Every tolerance is in the drawing's own line width or bond.
+  an I - an iodine on the round trip. A patch up to a bond across of
+  three lines or more, joined, whose pieces are longer than that - an N
+  printed large beside short bonds, its slant a bond long - is a letter
+  where two lines of the structure or more stop short of it, each end
+  within half a bond of its box and pointing into it, as bonds to a
+  label do (2026-11-19): read as lines, its strokes joined those ends
+  as carbons, and the label's element was lost with nothing said. Every
+  tolerance is in the drawing's own line width or bond.
 - **Not read** (2026-11-18): a picture whose bond is under 25 of its
   pixels is drawn too small to read, and is said to be: the round trip
   read such pictures wrong, with no mark, more often than it said them
@@ -523,6 +530,13 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   or cumulated double bonds, and a bond traced broken reads so - an extra
   CH2 in a chain or a ring. Ethyne's, a nitrile's, an allene's and a
   cumulene's straight carbons are not said.
+- **A label lost** (2026-11-19): read from a picture, two carbons with
+  no label and one bond each, whose bonds carried on past them cross
+  within three quarters of a bond of each, where no atom was read
+  within half of that, are unsure and say a label there was not read:
+  bonds stop so short of a label, and of nothing else - two methyls'
+  ends point apart. A heteroatom's letter faint in a picture, or not
+  traced, would otherwise leave its ring open with nothing said.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes

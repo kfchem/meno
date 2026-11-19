@@ -4,6 +4,7 @@ import { readFigure } from "./read";
 import type { Blob, Point, Shapes } from "./drawn";
 import { closedJoints, widening, inkOf, onPage, patchesOf, shadedOf, thinned, tracePicture, unreadInk, type Piece, type Traced, type Vertex } from "./trace";
 import type { FigureRead } from "./read";
+import { LOST_LABEL_SAID, readTracedPicture } from "./tracedRead";
 import { glyphShape, type GlyphShape } from "./glyphs";
 
 type Pt = [number, number];
@@ -728,5 +729,51 @@ describe("the edges of the new numbers", () => {
     const tr = [...tri.map((p, k) => line(p, tri[(k + 1) % 3], 3)), ring([335, 308], 16, 3)];
     const three = traced(tracePicture(picture(460, 380, [...far, ...tr])));
     expect(three.shapes.curves).toHaveLength(0);
+  });
+});
+
+describe("a label lost from a ring - a heteroatom's letter faint, or not drawn - never read as carbons with nothing said", () => {
+  const bond = 40;
+  const c: Pt = [100, 100];
+  const corners = hexagon(c, bond);
+  /** The ring's bonds, those into corner `at` stopping `short` of a bond before it, as bonds to a label do. */
+  const ringTo = (at: number, short: number): Shape[] =>
+    corners.map((p, k) => {
+      const q = corners[(k + 1) % 6];
+      const cut = (from: Pt, to: Pt): Pt => [to[0] + (from[0] - to[0]) * short, to[1] + (from[1] - to[1]) * short];
+      return line(k === at ? cut(q, p) : p, (k + 1) % 6 === at ? cut(p, q) : q, 3);
+    });
+  /** An N set over point `at`, 0.85 of a bond tall and 0.6 wide: its slant a bond long, longer than a letter's piece is allowed (a letter printed large beside short bonds). */
+  const bigN = (at: Pt): Shape[] => {
+    const [h, w] = [0.85 * bond, 0.6 * bond];
+    const [l, r, t, b] = [at[0] - w / 2, at[0] + w / 2, at[1] - h / 2, at[1] + h / 2];
+    return [line([l, b], [l, t], 3), line([l, t], [r, b], 3), line([r, b], [r, t], 3)];
+  };
+
+  it("is a letter where a ring's two bonds stop short of it, however long its slant: its lines are never bonds", { timeout: 30_000 }, () => {
+    const t = traced(tracePicture(picture(200, 200, [...ringTo(3, 0.55), ...bigN(corners[3])])));
+    expect(t.shapes.blobs).toHaveLength(1);
+    const box = t.shapes.blobs[0].box;
+    expect(box[0] <= corners[3][0] && corners[3][0] <= box[2] && box[1] <= corners[3][1] && corners[3][1] <= box[3]).toBe(true);
+    // (the ring's four whole bonds and the two that stop short: six lines, none of the N's)
+    expect(t.shapes.strokes).toHaveLength(6);
+  });
+
+  it("is lines where no bonds stop short of it: an N-shaped mark apart from the ring, its slant as long, stays as it was", { timeout: 30_000 }, () => {
+    const t = traced(tracePicture(picture(260, 200, [...ringTo(-1, 0), ...bigN([215, 100])])));
+    expect(t.shapes.blobs).toHaveLength(0);
+    expect(t.shapes.strokes).toHaveLength(9);
+  });
+
+  it("is said where its letter is not drawn at all: the two bonds that stop short of the corner, each end marked", { timeout: 30_000 }, () => {
+    const read = readTracedPicture(picture(200, 200, ringTo(3, 0.4)), { scale: 1, x: 0, y: 0 }, [], () => true);
+    if ("none" in read) throw new Error(read.none);
+    const said = read.atoms.filter((a) => a.unsure?.includes(LOST_LABEL_SAID));
+    expect(said).toHaveLength(2);
+    for (const a of said) expect(Math.hypot(a.x - corners[3][0], a.y - corners[3][1])).toBeLessThan(0.6 * bond);
+    // (and the whole ring: nothing said)
+    const whole = readTracedPicture(picture(200, 200, ringTo(-1, 0)), { scale: 1, x: 0, y: 0 }, [], () => true);
+    if ("none" in whole) throw new Error(whole.none);
+    expect(whole.atoms.filter((a) => a.unsure?.includes(LOST_LABEL_SAID))).toHaveLength(0);
   });
 });
