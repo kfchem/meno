@@ -13,7 +13,7 @@ import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filt
 import { alikeIn, entries as countEntries, workedOutAs, workedOutDiffer } from "../../../../lib/nodes/base";
 import { enumerated, type Enumerated } from "./enumerate";
 import type { EnumerateAsked } from "./enumerateOff";
-import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, atomMapSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, comparedTorsionsSet, withSaid } from "./structureSteps";
+import { combinedSet, comparedSet, displacedSet, measuredSet, fewerSideSet, mergedSet, atomMapSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, comparedTorsionsSet, withSaid } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
 import { rankedSet, valueKeysOf } from "./valueSteps";
@@ -97,7 +97,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
 }
 
 /** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Compare torsions*, *Join*, *Atom map* and *Barrier*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "compare-torsions", "join", "atom-map", "barrier"];
+export const PAIRED: readonly StepKind[] = ["merge", "fewer-side", "rebond", "compare-bonding", "compare-torsions", "join", "atom-map", "barrier"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
@@ -112,6 +112,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
   switch (kind) {
     case "merge":
       return mergedSet(a.entries, b.entries, a.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
+    case "fewer-side":
+      return fewerSideSet(a.entries, b.entries, a.holds, o.pass === "both" || o.pass === "first" || o.pass === "second" ? o.pass : "auto");
     case "rebond":
       return rebondedSet(a.entries, b.entries, a.holds, o.pairs === "property" ? "property" : "each", String(o.property ?? ""));
     case "compare-bonding":
