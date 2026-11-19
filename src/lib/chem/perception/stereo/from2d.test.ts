@@ -324,6 +324,30 @@ describe("what a drawing says of its stereochemistry only by luck", () => {
     expect(closed(3)).toEqual([]);
     expect(closed(4)).toEqual([0]);
   });
+
+  it("is no double bond with an end of two alike groups, however near in line one is drawn: it has no cis or trans to leave to luck", () => {
+    // (the far end C1 with a second group at -120 degrees: a methyl - 2-methylbut-2-ene, none - or an ethyl, its cis or trans by luck)
+    const gem = (ethyl: boolean) => {
+      const atoms: DrawnAtom[] = [
+        { x: 0, y: 0, hs: 1 },
+        { x: 1, y: 0, hs: 0 },
+        { x: -0.5, y: 0.87, hs: 3 },
+        { x: 1 + Math.cos((5 * Math.PI) / 180), y: Math.sin((5 * Math.PI) / 180), hs: 3 },
+        { x: 1.5, y: -0.87, hs: ethyl ? 2 : 3 },
+        ...(ethyl ? [{ x: 2.5, y: -0.87, hs: 3 }] : []),
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 0, b: 1, order: 2 },
+        { a: 0, b: 2, order: 1 },
+        { a: 1, b: 3, order: 1 },
+        { a: 1, b: 4, order: 1 },
+        ...(ethyl ? [{ a: 4, b: 5, order: 1 }] : []),
+      ];
+      return unsureStereo(atoms, bonds).bonds;
+    };
+    expect(gem(false)).toEqual([]);
+    expect(gem(true)).toEqual([0]);
+  });
 });
 
 describe("a centre with a lone pair for its fourth group", () => {
@@ -1174,6 +1198,92 @@ describe("the core's reader on its own: the cage's fit handed in, and the drawn 
     const t = at(174);
     expect(core(t.atoms, t.bonds).tetra.has(0)).toBe(false);
     expect(core(at(160).atoms, at(160).bonds).tetra.has(0)).toBe(true);
+  });
+});
+
+describe("a double bond with an end of two alike groups, drawn: none read, however it is drawn", () => {
+  // (2-methylbut-2-ene: C1 0 - C2 1 = C3 2, C3's methyls 3 and 4; C1 drawn up or down, the whole flat or with a depth, as a
+  //  structure from 3D is; `isotope` on the methyl 4 where given)
+  const methylbutene = (up: boolean, depth = false, isotope?: number) => {
+    const z = (v: number) => (depth ? { z: v } : {});
+    const atoms: DrawnAtom[] = [
+      { el: "C", x: -0.65, y: up ? 1.1 : -1.1, hs: 3, ...z(0.4) },
+      { el: "C", x: 0, y: 0, hs: 1, ...z(0) },
+      { el: "C", x: 1.3, y: 0, hs: 0, ...z(0) },
+      { el: "C", x: 1.95, y: 1.1, hs: 3, ...z(-0.3) },
+      { el: "C", x: 1.95, y: -1.1, hs: 3, ...z(0.3), ...(isotope ? { isotope } : {}) },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 1 },
+      { a: 2, b: 4, order: 1 },
+    ];
+    return readStereo(atoms, bonds);
+  };
+  /** The SMILES drawn by the engine, each atom its element: the double bonds read cis or trans, by their atoms. */
+  const read = (smiles: string) => {
+    const g = fromSmiles(smiles);
+    const out = layout2D(g);
+    const atoms: DrawnAtom[] = g.atoms.map((a, i) => ({ el: a.el, x: out.x[i], y: out.y[i], hs: a.hs ?? 0, ...(a.charge ? { charge: a.charge } : {}) }));
+    const bonds: DrawnBond[] = g.bonds.map(({ a, b, order }) => ({ a, b, order }));
+    return [...readStereo(atoms, bonds).cisTrans].map(([i]) => [bonds[i].a, bonds[i].b].sort((p, q) => p - q).join("="));
+  };
+
+  it("2-methylbut-2-ene drawn with its C1 up or down, flat or with a depth: none", () => {
+    for (const up of [true, false]) for (const depth of [false, true]) expect(methylbutene(up, depth).cisTrans.size).toBe(0);
+  });
+
+  it("2,7-dimethylocta-2,6-diene, isobutene, a prenyl alcohol, cyclohexylideneacetic acid, drawn: none", () => {
+    for (const smiles of ["CC(C)=CCCC=C(C)C", "C=C(C)C", "CC(C)=CCO", "OC(=O)C=C1CCCCC1"]) expect(read(smiles), smiles).toEqual([]);
+  });
+
+  it("(E)- and (Z)-3-methylpent-2-ene, (E)-cyclooctene, and (2E)-6-methylhepta-2,5-diene's first C=C, drawn: read", () => {
+    expect(read("C/C=C(/C)CC")).toEqual(["1=2"]);
+    expect(read("C/C=C(\\C)CC")).toEqual(["1=2"]);
+    expect(read("C1CCC/C=C/CC1")).toEqual(["4=5"]);
+    expect(read("C/C=C/CC=C(C)C")).toEqual(["1=2"]);
+  });
+
+  it("a double bond with an end that is no trigonal-planar centre - a sulfoxonium ylide's S, a sulfoximine's, a sulfonium ylide's - drawn: none; a sulfine's C=S and a disilene's Si=Si: read", () => {
+    for (const smiles of ["C/C=S(/CC)(=O)C", "C/N=S(/CC)(=O)C", "C/C=S(/CC)C"]) expect(read(smiles), smiles).toEqual([]);
+    expect(read("CC/C=S/O")).toEqual(["2=3"]);
+    expect(read("C/[Si](CC)=[Si](/C)CC")).toEqual(["1=4"]);
+  });
+
+  it("an end of a (13C)methyl and a methyl, drawn: read, either way - the isotope tells the two apart", () => {
+    const [up, down] = [methylbutene(true, false, 13), methylbutene(false, false, 13)];
+    expect(up.cisTrans.size).toBe(1);
+    expect(down.cisTrans.size).toBe(1);
+    expect(up.cisTrans.get(1)!.cis).not.toBe(down.cisTrans.get(1)!.cis);
+  });
+
+  it("an odd cumulene's likewise: 2-methylpenta-2,3,4-triene drawn bent at its far end, none; with the near end's methyls a methyl and an ethyl, read", () => {
+    // (C0 - C1(C2) = C3 = C4 = C5 - C6, the run straight along y = 0; C1's two methyls either side of it, C6 above)
+    const triene = (ethyl: boolean) => {
+      const atoms: DrawnAtom[] = [
+        { el: "C", x: -0.65, y: 1.1, hs: 3 },
+        { el: "C", x: 0, y: 0, hs: 0 },
+        { el: "C", x: -0.65, y: -1.1, hs: ethyl ? 2 : 3 },
+        { el: "C", x: 1.3, y: 0, hs: 0 },
+        { el: "C", x: 2.6, y: 0, hs: 0 },
+        { el: "C", x: 3.9, y: 0, hs: 1 },
+        { el: "C", x: 4.55, y: 1.1, hs: 3 },
+        ...(ethyl ? [{ el: "C", x: -1.95, y: -1.1, hs: 3 }] : []),
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 0, b: 1, order: 1 },
+        { a: 1, b: 2, order: 1 },
+        { a: 1, b: 3, order: 2 },
+        { a: 3, b: 4, order: 2 },
+        { a: 4, b: 5, order: 2 },
+        { a: 5, b: 6, order: 1 },
+        ...(ethyl ? [{ a: 2, b: 7, order: 1 }] : []),
+      ];
+      return readStereo(atoms, bonds).cumulated;
+    };
+    expect(triene(false)).toEqual([]);
+    expect(triene(true)).toHaveLength(1);
   });
 });
 

@@ -702,6 +702,48 @@ describe("a figure read as a structure", () => {
     expect(s.atoms).toHaveLength(6);
   });
 
+  it("joins a bond broken where a wedge passes in front of it, as a perspective drawing's near edge does", () => {
+    const a: P = [40, 40];
+    const b: P = [40 + 2 * L, 40];
+    const gap = 2.6;
+    const m: P = [40 + L, 40];
+    // (the wedge in front, crossing the gap, from its narrow end above to its wide end below; it and the bonds round it a structure)
+    const tip: P = [m[0] - 0.3 * L, 40 - 0.6 * L];
+    const base: P = [m[0] + 0.3 * L, 40 + 0.6 * L];
+    const s = read(
+      figure([
+        stroke(step(a, 150), a),
+        stroke(a, [m[0] - gap, 40]),
+        stroke([m[0] + gap, 40], b),
+        stroke(b, step(b, 30)),
+        stroke(step(tip, 120), tip),
+        wedge(tip, base),
+      ]),
+    );
+    // (one bond from a to b, not two pieces each ending at nothing: four plain bonds and the wedge, seven atoms)
+    expect(s.bonds.filter((x) => !x.stereo)).toHaveLength(4);
+    expect(s.atoms).toHaveLength(7);
+  });
+
+  it("reads a ring's corner set just over a Me as a carbon - a bold bar's end and a wedge's meeting there - the Me its own line's", () => {
+    // (a perspective drawing's near edge: a bold bar and a wedge meet at a corner; under it a Me, the end of a line drawn down from
+    // another ring carbon, behind the bar; both the bar's end and the wedge's point into the Me's room)
+    const k: P = [100, 100];
+    const r: P = [k[0] + L * 0.96, k[1] - L * 0.29];
+    const t: P = [k[0] - L * 0.5, k[1] - L * 0.87];
+    const v: P = [103, 98.5 - L];
+    const [ux, uy] = unit(k, r);
+    const bar = filled([k[0] - uy, k[1] + ux], [r[0] - uy, r[1] + ux], [r[0] + uy, r[1] - ux], [k[0] + uy, k[1] - ux]);
+    const paths = [bar, wedge(t, k), stroke(v, [103, 98.5]), stroke(step(t, 150), t), stroke(r, step(r, -30)), stroke(step(v, 30), v)];
+    const f = readFigure(figure(paths, word("Me", [99.4, 104.2])), () => true);
+    const me = f.atoms.findIndex((a) => a.label === "Me");
+    const bondsOf = (i: number) => f.bonds.filter((b) => b.a === i || b.b === i);
+    expect(bondsOf(me).map((b) => f.atoms[b.a === me ? b.b : b.a]).map((a) => [Math.round(a.x), Math.round(a.y)])).toEqual([v.map(Math.round)]);
+    const corner = f.atoms.findIndex((a) => !a.label && Math.hypot(a.x - k[0], a.y - k[1]) < 1);
+    expect(corner).toBeGreaterThanOrEqual(0);
+    expect(bondsOf(corner)).toHaveLength(2);
+  });
+
   it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
     // (as a turned page's letters may be read: lower case, or smaller than the word)
     const w: P = [80, 60];

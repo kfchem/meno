@@ -35,7 +35,8 @@ import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
-import { recognisedSaid, withRecognisedDepth } from "../../../../lib/layout/recognised";
+import { recognisedSaid, withRecognisedDepth } from "../../../../lib/chem/perception/projection/depth";
+import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 
 export type LayoutJob = {
@@ -51,7 +52,7 @@ export type LayoutJob = {
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
   /**
-   * A ring in perspective the drawing gives no depth, its depth worked out (lib/layout/recognised): each such atom's depth, by its input
+   * A ring in perspective the drawing gives no depth, its depth worked out (lib/chem/perception/projection/depth): each such atom's depth, by its input
    * index - so that Clean-up keeps it as drawn, as it keeps one drawn with depth, and stores no depth for it.
    */
   recognised?: Map<number, number>;
@@ -248,10 +249,10 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   };
   const ids = kept.map((i) => part.atoms[i].id);
   // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
-  const seen = withRecognisedDepth(drawing.atoms, drawing.bonds);
+  const seen = withRecognisedDepth(drawing.atoms, drawing.bonds, cageViews);
   // (and one taken for a ring in perspective but not read - its near and far not marked: kept where it is drawn too, since the words ask
   //  the chemist to mark it, by no depth of its own)
-  const said = recognisedSaid(drawing.atoms, drawing.bonds);
+  const said = recognisedSaid(drawing.atoms, drawing.bonds, cageViews);
   const unreadRing = (i: number) => said.has(i) && said.get(i) !== READ_IN_PERSPECTIVE && said.get(i) !== READ_AS_HAWORTH;
   const recognisedAt = new Map(
     kept.flatMap((i, k) => (drawing.atoms[i].z != null ? [] : seen[i].z != null ? [[k, seen[i].z!] as const] : unreadRing(i) ? [[k, 0] as const] : [])),
@@ -373,7 +374,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   }));
   // a ring system the drawing shows in perspective, that the engine lays flat - a chair, a Haworth ring - kept where it is, depth and
   // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)
-  // - and a ring in perspective drawn with no depth, recognised as one (lib/layout/recognised), kept so too, by the depth worked out for it:
+  // - and a ring in perspective drawn with no depth, recognised as one (lib/chem/perception/projection/depth), kept so too, by the depth worked out for it:
   // the recognition changes nothing in the document, so no depth is stored for it, and its centres stay as the reading finds them
   const recognised = job.recognised ?? new Map<number, number>();
   const kept = projectionsKept(
