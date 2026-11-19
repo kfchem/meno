@@ -2,7 +2,7 @@
  * R and S, E and Z of a molecule in 3D, by Meno's own reading of the CIP
  * rules (docs/CIP.md), its configurations read from where its atoms are:
  * every atom of four bonds and every double bond its places give a
- * configuration (lib/chem/stereoOpen `configuredFrom`), and every atom of
+ * configuration (lib/chem/perception/stereo/from3d `configuredFrom`), and every atom of
  * three bonds whose lone pair keeps one by Meno's rule (lib/chem
  * `lonePairsIn3d`) - never the toolkit's list of which atoms are centres.
  * The CIP's own ranking decides which of them have a descriptor at all: a
