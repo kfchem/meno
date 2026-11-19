@@ -18,16 +18,17 @@
  */
 import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
-import { anionStructure, condensedStructure } from "./condensed";
+import { anionStructure, condensedStructure, metalSaltStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
-import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "./kekulize";
 import { typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
 import { ELEMENTS as TABLE } from "./elements";
 import { notMetal } from "./perception/elements";
 import { VALENCE } from "./formula";
+import { CARRIERS } from "./perception/hydrogens";
 import { movedBond } from "./structureBonds";
 
 export type Abbreviation = {
@@ -258,6 +259,10 @@ function composedOf(label: string): Abbreviation | undefined {
   }
   const group = composedGroupOf(label);
   if (group) return group;
+  // (a metal's salt of an oxoanion - AgNO3, Cu(NO3)2, CuSO4 - read as its ions, before a complex's formula would read its O across: ./condensed)
+  const salt = metalSaltStructure(label, groupStructure);
+  if (salt === "unread") return undefined;
+  if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
@@ -324,7 +329,11 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
     }
     return { atoms, bonds, attach: [], ...(axes.length ? { axes } : {}), name: names.join(" · ") };
   }
-  return ionStructure(label) ?? condensedStructure(label, groupLabels(), groupStructure);
+  const ion = ionStructure(label);
+  if (ion) return ion;
+  const salt = metalSaltStructure(label, groupStructure);
+  if (salt === "unread") return null;
+  return salt ?? condensedStructure(label, groupLabels(), groupStructure);
 }
 
 /**
@@ -381,21 +390,6 @@ function moleculeOf(label: string): GroupStructure | null {
   const s = abbreviationStructure(label);
   return s && { ...s, attach: [] };
 }
-
-/**
- * Atoms that take as many of one group as fill their valence but the bond
- * out (PPh2, PCy2, NBn2): each one's valence, and the word its group's name
- * ends in.
- */
-const CARRIERS: Record<string, { valence: number; word: string }> = {
-  B: { valence: 3, word: "boranyl" },
-  N: { valence: 3, word: "amino" },
-  P: { valence: 3, word: "phosphanyl" },
-  As: { valence: 3, word: "arsanyl" },
-  Si: { valence: 4, word: "silyl" },
-  Ge: { valence: 4, word: "germyl" },
-  Sn: { valence: 4, word: "stannyl" },
-};
 
 /**
  * Atoms that carry halogens as a group, by the valence each is read at -
@@ -693,6 +687,8 @@ export function structureProblem(smiles: string): string | null {
   }
   const refused = aromaticRefusal(read.atoms, read.bonds);
   if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused)}`;
+  const outside = outsideRingRefusal(read.atoms, read.bonds);
+  if (outside) return `The SMILES cannot be read: ${outside}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));
   if (stars.length !== 1) return 'Mark where it is attached with one "*".';
   if (read.atoms.length < 2) return "Give it at least one atom besides the *.";

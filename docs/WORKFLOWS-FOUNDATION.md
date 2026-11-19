@@ -199,7 +199,9 @@ its own only where nothing is lost or guessed:
     its id, its identity and its properties as columns;
   - numbers between units of one dimension that Meno's units table knows
     (Eh, kcal/mol, kJ/mol, eV, cm⁻¹; K and °C; nm and eV on a spectrum's
-    axis), converted where they are read;
+    axis; a restraint's strength, kcal/mol/rad² and kJ/mol/rad² for a
+    torsion's, kcal/mol/Å² and kJ/mol/Å² for a distance's), converted
+    where they are read;
 - **never implicit**: molecules to 3D (decision 18); frames to one geometry
   (*Take frames* says which); a table to molecules; a table to a number;
   across dimensions; a model to anything.
@@ -357,7 +359,18 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 - each stereocentre's, double bond's and axis's configuration as drawn;
 - aromatic rings as one form: a structure's Kekulé structures, and
   bond-shift isomers, are one structure. A bond made one order there keeps
-  no cis or trans of its own;
+  no cis or trans of its own - but a double bond between rings does
+  (`aromaticForm`): one neither of whose atoms is in a ring of seven atoms
+  or fewer, on a larger ring that runs across such a ring - sharing two
+  of its bonds or more, as a phane's: a [2.2]paracyclophane-1,9-diene's
+  bridge, a cyclic phenylenevinylene's vinylene. Its Z and E are two
+  compounds. An annulene's and a cyclooctatetraene's ring bonds keep
+  none, and so do those of one fused to a benzene ring at one bond (a
+  benzannulene, dibenzo[a,e]cyclooctatetraene) and porphine's meso C=C
+  (its atoms in five-rings). Known limit:
+  the other Kekulé drawing of such a bond - drawn single, the rings beside
+  it quinoid - has no configuration on it, so it is another identity than
+  the usual drawing; nobody draws it;
 - a plain hydrogen atom as one of its neighbour's hydrogens, with its
   configuration carried to the atom it is on (`hydrogensFolded`). A
   hydrogen stays an atom where it is charged, has an unpaired electron, is
@@ -729,7 +742,10 @@ Agreed 2026-10-21. Specified here before it is built (*In order: the PRs*,
 *Enumerate*).
 
 **Enumerate is Meno's own.** It edits Meno's own graph by a rule written
-here, and runs no program. *Generate* stays a kind that plugins fill
+here, and runs no program. Its products are made off the thread the page
+draws on (`workflow/enumerateOff`, a worker of its own): each laid out and
+told from the others by its identity, a long list takes seconds, and the
+step shows its running state meanwhile; stopped then, nothing is put in. *Generate* stays a kind that plugins fill
 (*Kinds filled by plugins*). The two are told apart by what decides the
 structures:
 
@@ -870,10 +886,38 @@ which is the same in every product.
 
 #### Duplicates, and what judges them
 
+**Which atoms and bonds can carry a configuration are Meno's own**
+(`src/lib/chem/perception/stereo/candidates.ts`), by their shape alone -
+whether their groups are alike is identity's question, below:
+- an atom of B, C, Si, Ge, Sn, Pb, N, P, As, Sb, Bi, S, Se or Te with four
+  groups round it, at most one of them a hydrogen, whatever the orders of
+  its bonds (IUPAC 2013 P-93.2); or with three and a lone pair that keeps
+  its configuration (Meno's lone-pair rule: a sulfoxide's S, a
+  phosphine's P, never an amine's N) - an H among the three for a P, As,
+  Sb or Bi as without one (a secondary phosphine's P, the maintainer's
+  ruling of 2026-11-06), never for an N, S, Se or Te. Identity fills such
+  a P as any centre: with two alike groups on it, a wedge sets nothing;
+- a double bond with a group besides the other end on each end, in no
+  ring of seven atoms or fewer (P-93.5.1.4.1: there it is cis; for fused
+  and bridged rings Meno takes the smallest ring through the bond), and
+  not a C=N whose E/Z is none of its own (*Which C=N*, docs/WORKFLOWS.md);
+- a run of cumulated double bonds between two carbons, each with a group:
+  even, an axis (an allene's), odd, a cis or trans. Both ends carbon is
+  Meno's cautious rule, not a text's;
+- an axis of hindered rotation only where the drawing states one.
+Not candidates: a metal of the d or f block, or Al, Ga, In or Tl (their
+four groups are not surely tetrahedral); an N+ with an H among its four,
+which loses its configuration through the free amine (Meno's rule, no
+text's - a P+ or As+ with an H is a candidate); planar and helical
+chirality; a metal's own geometry. Each candidate says why it is one, and
+a place asked of that is none says why not, in the words the page shows.
+No reader, step or mark takes them yet: each will, in its own change.
+
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);
-- the canonical text of the structure's aromatic form;
+- the canonical text of the structure's aromatic form, its end
+  chalcogens on P, As, Sb, S, Se and Te written as one form;
 - with each stereocentre's and each double bond's configuration as drawn,
   and each axis of chirality;
 - and, for a square-planar or an octahedral metal, which of its donors are
@@ -907,11 +951,69 @@ drawn, aromatic rings as one form.* What that means, plainly:
   each group hanging from the place alone, with no place or configuration
   in it) sets nothing whatever else is given: it carries no configuration
   in the identity, one drawn on it taken off, and is asked no more, with
-  no search of the whole structure. So its identity never turns on which
+  no search of the whole structure - so too a bridgehead of a small cage
+  two of whose bridges to the other bridgehead are alike
+  (bicyclo[2.2.2]octane's, quinuclidine's), the cage standing only one way:
+  every bridge of three atoms or fewer, a bound on the safe side, since
+  with four in,out isomers begin (bicyclo[4.4.1]undecane's); and, asked again until
+  nothing more settles, a place whose groups are alike but for places of
+  their own that settled first (tri-tert-butylmethanol). Two arms of a
+  ring are no cage (cis- and trans-1,4-dimethylcyclohexane), nor are
+  bridges to different atoms (tropine and pseudotropine). So its identity never turns on which
   way it was filled in, as it could where a search runs out of steps
-  (Pd(PPh3)4). The filled form is
+  (Pd(PPh3)4). A double bond's cis or trans that sets nothing with the
+  rest as given - its end's two groups alike while another place is open:
+  a cyclohexylidene's C=C with its ring's C4 plain - is none, in the
+  drawing as read and in every canonical text (`settingCisTrans`,
+  `src/lib/chem/perception/symmetry.ts`), and identity leaves such a
+  double bond with none rather than filling one in: so
+  (4-methylcyclohexylidene)acetic acid drawn with its double bond bent,
+  with its C4 wedged, or with neither is one structure (either
+  enantiomer), and drawn with both, one of its two enantiomers. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
+- **an oxygen (or S, Se, Te) at the end of a bond to P, As, Sb, S, Se or
+  Te is the same drawn double or drawn charged** (IUPAC 2013 P-93.2.3 to
+  P-93.2.5; `src/lib/chem/perception/chalcogenEnds.ts`). A phosphine
+  oxide drawn R3P=O and drawn R3P(+)-O(-) is one structure, and so is a
+  sulfoxide drawn S=O and S(+)-O(-): identity writes the uncharged form,
+  a configuration at the P or S kept, so a P-chiral phosphine oxide's two
+  hands stay two. A phosphorus ylide likewise: Ph3P=CH2 drawn so and
+  drawn Ph3P(+)-CH2(-) is one structure (a carbanion of three groups on
+  a P+; Meno's own extension, at P only: a sulfonium ylide keeps its
+  charges). Never at N: an amine N-oxide and a nitro group keep
+  their charges. The end atoms of one centre share their double bonds and
+  their charge: a phosphate diester anion with its charge drawn on one
+  oxygen or on the other is one structure, and its P, between two alike
+  oxygens, is no stereocentre; a sulfinate anion's S neither. An O-H
+  shares its hydrogen with the other end oxygens of its centre, so a
+  phosphinic acid's P is no stereocentre either, as its anion's is not -
+  but never with another element: a thio acid drawn P(=S)(O-H) and drawn
+  P(=O)(S-H) are two tautomers, as drawn. Ends of two elements, or an end
+  labelled by its mass number, stay apart: a phosphorothioate anion with
+  its charge on O or on S is one structure, its P a stereocentre. A
+  phosphinate ester, a phosphonate with two unlike esters, a sulfoxide
+  and a sulfinate ester keep theirs. Se and Te are the text's; As and Sb
+  are Meno's own extension of it (P-93.2.2: "treated in the same
+  manner");
+- **a racemate, "one or the other" and the drawn absolute are three
+  structures** (CTfile enhanced stereo: AND, OR and ABS groups, which
+  Meno reads from a V3000 molfile and draws as *and1*, *or1*, *abs*;
+  `grouped` in `src/lib/chem/identity.ts`). A structure with centres in
+  AND or OR groups is written as the stereoisomers it stands for: each
+  group's centres as drawn or all turned over together, an AND group's
+  two in the mixture, an OR group's one or the other. So a racemate drawn
+  as one hand or as the other is one structure, a meso form drawn with
+  its two centres in one AND group is the meso form, and each centre of
+  a diol in an AND group of its own is the mixture of all its
+  stereoisomers, whichever was drawn. A centre drawn absolute, or in no
+  group, is as drawn. This is what *Same as* in Enumerate and
+  Substituents, a record's key and a search for the same compound read;
+  a stereoisomer made in 3D, or a structure's mirror image, has one
+  configuration and reads no group. A group on a bond (an axis, a
+  double bond) is not read yet: the bond is as drawn. Past 256
+  stereoisomers to write (eight groups), the structure is written as
+  drawn and said not complete;
 - **a metal's isomers by which donors are across are two structures:**
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
@@ -939,7 +1041,12 @@ drawn, aromatic rings as one form.* What that means, plainly:
   arrangement, one given taken off, with no search of the whole
   structure, as such a centre carries no sense. A chelate's two
   ends, joined by a ring of seven atoms or fewer with the metal, are
-  never taken as across. A complex whose arrangement can be more than
+  never taken as across; and two donors a third holds flat - the third in
+  a ring of five or six off the metal, it and its two ring neighbours
+  trigonal, each led to its donor by trigonal atoms in a chelate ring of
+  five or six - always are: a porphyrin's opposite N, terpyridine's outer
+  two, dipicolinate's two O, so such a complex has one arrangement. A path
+  of CH2 holds nothing flat: cyclam, dien and salen stay open. A complex whose arrangement can be more than
   one and is not given (cisplatin from a SMILES) is a third structure,
   matching neither isomer until it is given. Two metals held by bridges,
   whose cis and trans dimers differ only together ([Pt2Cl4(NH3)2]), are
@@ -989,7 +1096,7 @@ drawn, aromatic rings as one form.* What that means, plainly:
   `identityKey`, checks each one against the change, and adds a test
   where the change matters to it;
 - **the canonical search has a budget** (`settleBudget` in
-  `src/lib/layout/canonical.ts`). A very large, very symmetric structure
+  `src/lib/chem/perception/symmetry.ts`). A very large, very symmetric structure
   that exhausts it can be written two ways, so a duplicate can be missed.
   It never judges two different structures the same, except by the rules
   above (Kekulé structures, bond-shift isomers, hydrogens folded in): the
@@ -1147,10 +1254,26 @@ space: the group goes where the hydrogen was.
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads
   a drawing, and each configuration of the template, at its atoms, mapped,
-  is held to it. A product that would change one, lose one, or say one the
-  template does not, is never made: the step stops, naming it (*Position 1
-  (C4) = Me: would change the configuration at C4*). This holds one at a
-  time and together, and for groups with configurations of their own.
+  is held to it: each stereocentre, each double bond's side (an odd run of
+  cumulated double bonds' too) and each axis (a biaryl's, an allene's). A
+  product that would change one, lose one, or say one the template does
+  not, is never made: the step stops, naming it (*Position 1 (C4) = Me:
+  would change the configuration at C4*; a double bond as *C4=C5*, an axis
+  as *the axis C4-C5*). This holds one at a time and together, and for
+  groups with configurations of their own. It is the one comparison of two
+  drawings' configurations (lib/chem/perception/stereo/compare), which
+  Clean-up's own check uses too: an H drawn as an atom on a centre and the
+  centre's H not drawn are the same neighbour (an H with a mass number, a
+  charge or a map number is a group of its own); an H replaced in place by
+  a group keeps the arrangement.
+- **A centre that is no longer one** - its R group or its new group is an H,
+  or two of its groups are now alike (F[C@H](R1)Cl with R1 = H or Cl) - stops
+  nothing: there is no configuration left to change. Its bond is drawn
+  plain, since a wedge there would state nothing.
+- **A double bond the group makes no stereo unit** - the group now alike
+  with the other on its end, (E)-1-fluoropropene's C2 given a methyl -
+  has no cis or trans in the product, so none is lost: the product is
+  made (1-fluoro-2-methylpropene).
 - **Tested against RDKit** by a differential in the fixture: stereo-rich
   templates, every atom with an undrawn hydrogen in turn, each with several
   groups, the compound for each made by RDKit by putting the group in that
@@ -1299,7 +1422,7 @@ abstract*:
 | Spectrum type | **Changed**: a curve is a property; a measured one is a table | one less type, nothing lost |
 | *Pair*, with its side chosen by itself | **Changed**: *Re-bond* (one role); the direction is wired | choosing the side by conformer counts was a node deciding by itself |
 | *Take from path* (guess with two sides) | **Changed**: *Take frames*, one rule a node; three of them for the three structures | one role a node |
-| *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
+| *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Energy diagram*; the ratio between competing paths is a step of its own that Meno does not have yet (not *Populations*, which takes minima) | four roles were bundled |
 | *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
 | *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (Meno), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
 | An ACCeL plugin | **Changed**: none in this plan; *Atom map*, *Compare bonding*, *Duplicates* with symmetry and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
@@ -1505,14 +1628,18 @@ side together, on the *Atom map* card); set **P** holds the products drawn.
     correction to G, plus 42. Each part is worked out at the same geometry,
     so *Add* takes them; the result is G at the DFT level.
 43. **Duplicates** (Meno, with symmetry), then **Populations** (Meno) in each group
-    [`calc_distribution`].
+    of minima [`calc_distribution`]. For the saddle points of a path, ConfoTS's
+    `distribution` is the share within the path: the step of 46, which Meno does not have yet.
 44. **Rank** (Meno), the lowest in each group, or **Ensemble energy** (Meno)
     over each.
 45. **Relative** (Meno): each saddle point against the reactant, giving ΔG‡
     per path.
-46. **Populations** (Meno) over the saddle points of both paths, as one
-    group: the share of each path, which is the ratio of *b* to *c* at
-    298.15 K.
+46. *(Not in Meno yet: a step of its own over the saddle points of both
+    paths, giving the share of the reaction through each, by transition state
+    theory, and each path's share, whose ratio is that of *b* to *c* at 298.15 K
+    where the reactant's conformers exchange faster than they react and the step
+    is not reversed. *Populations* is not this: a saddle point is no minimum, and
+    Meno refuses it.)*
 47. **Energy diagram** (Meno): a chart [310].
 
 **F7. IRC at the DFT level** (steps 4 and 5)
@@ -1563,7 +1690,9 @@ can be saved and put down again (question C).
    - *Mode on atoms*;
    - *Compare bonding* with *Join*.
 5. **Levels of theory**: properties with their geometry; *Add*.
-6. **Barriers and diagrams**: *Relative*, *Populations*, *Energy diagram*.
+6. **Barriers and diagrams**: *Relative*, *Energy diagram*; the ratio between
+   paths needs a step Meno does not have yet (not *Populations*: a saddle
+   point is no minimum).
 7. **Failure and runs again**: the *failed* exit, drawn chains, *Merge*.
 8. **Where jobs run**: runners; job keys; cluster jobs submitted and taken
    up again.

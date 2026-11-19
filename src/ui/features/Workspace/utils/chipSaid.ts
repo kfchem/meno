@@ -86,6 +86,8 @@ export type ChipFacts = SetChip & {
   said?: readonly { label: string; text: string }[];
   /** Why it shows no shares, where it would. */
   noShares?: string;
+  /** Of the units it shows no R or S, E or Z on though they are units, why - where R and S are shown on it (`stereoSaidRows`). */
+  stereoSaid?: readonly { label: string; text: string }[];
   /** Its frames are a conformer set's: a set however many there are. */
   conformers?: boolean;
 };
@@ -136,6 +138,7 @@ export function chipDetails(c: ChipFacts, told: number): CardGroups {
   if (madeRows.length) details.push({ group: MADE_GROUP, rows: madeRows.map((r) => ({ label: r.label, text: r.text })), folded: true });
   if (c.said?.length) details.push({ group: "In the text", rows: c.said.map((r) => ({ label: r.label, text: r.text })) });
   if (c.noShares) details.push({ group: "Shares", rows: [{ label: "None", text: c.noShares }] });
+  if (c.stereoSaid?.length) details.push({ group: "Stereo", rows: c.stereoSaid.map((r) => ({ label: r.label, text: r.text })) });
   const failure = c.failed?.[told] ?? undefined;
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (c.warnings?.length) details.push({ group: "Warnings", rows: c.warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });

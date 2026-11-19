@@ -25,7 +25,7 @@
  * is Meno's own.)
  */
 import { elementOf } from "./elements";
-import { inValenceSumsFromGeometry } from "./perception/elements";
+import { inValenceSums } from "./perception/elements";
 
 export type GeoAtom = { el: string; x: number; y: number; z: number };
 export type GeoBond = { a1: number; a2: number };
@@ -153,8 +153,9 @@ function rangeOf(el: string, around: GeoAtom[], at: GeoAtom, terminals: number, 
       return deg === 1 ? { min: 0, max: 1 } : { min: 0, max: 0 };
     }
     case "P":
-    case "As": {
-      // (a phosphate's or phosphine oxide's one P=O)
+    case "As":
+    case "Sb": {
+      // (a phosphate's or phosphine oxide's one P=O; an arsine oxide's As=O, a stibine oxide's Sb=O)
       if (deg === 4 && terminals) return { min: 1, max: 1, terminalOnly: true };
       if (hydrogens) return { min: Math.max(0, 3 - deg), max: Math.max(0, 3 - deg), exact: true };
       return deg <= 2 ? { min: 0, max: 1 } : { min: 0, max: 0 };
@@ -204,7 +205,7 @@ export const work = { steps: 0 };
  * conjugated part where the estimate is not decided.
  */
 export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly GeoBond[]): GeometryOrders {
-  const counted = (i: number) => inValenceSumsFromGeometry.has(atoms[i].el);
+  const counted = (i: number) => inValenceSums.has(atoms[i].el);
   const hydrogens = atoms.some((a) => a.el === "H");
   const near: number[][] = atoms.map(() => []);
   bonds.forEach((b) => {

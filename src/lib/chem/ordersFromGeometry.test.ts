@@ -80,6 +80,81 @@ describe("bond orders estimated from where atoms stand", () => {
     expect(doubles(f, r.orders.slice(0, 6))).toEqual([1, 1, 1, 1, 1, 1]);
   });
 
+  it("gives SbPh3 three aromatic rings and no charge, as AsPh3: an Sb's bonds count in its neighbours' valences (foundation part 3, B3)", () => {
+    // (three phenyls round the metalloid, pyramidal - C-E-C 96 degrees - each ring in a plane through its E-C bond, C-C 1.39 A;
+    //  laid out here by hand, no program's places)
+    const triaryl = (el: string, length: number, withH: boolean): { atoms: GeoAtom[]; bonds: { a1: number; a2: number }[] } => {
+      const atoms: GeoAtom[] = [{ el, x: 0, y: 0, z: 0 }];
+      const bonds: { a1: number; a2: number }[] = [];
+      const tilt = Math.asin(Math.sqrt((1 - Math.cos((96 * Math.PI) / 180)) / 1.5));
+      for (let k = 0; k < 3; k++) {
+        const phi = (2 * Math.PI * k) / 3;
+        const dir = [Math.sin(tilt) * Math.cos(phi), Math.sin(tilt) * Math.sin(phi), -Math.cos(tilt)];
+        const across = [-Math.sin(phi), Math.cos(phi), 0];
+        const centre = dir.map((d) => (length + 1.39) * d);
+        const from = atoms.length;
+        for (let i = 0; i < 6; i++) {
+          const t = (i * Math.PI) / 3;
+          const [x, y, z] = centre.map((c, j) => c + 1.39 * (-Math.cos(t) * dir[j] + Math.sin(t) * across[j]));
+          atoms.push({ el: "C", x, y, z });
+          bonds.push({ a1: from + i, a2: from + ((i + 1) % 6) });
+        }
+        bonds.push({ a1: 0, a2: from });
+        // (each ring carbon but the one bonded to E with its H, 1.08 A out from the ring's centre)
+        if (withH)
+          for (let i = 1; i < 6; i++) {
+            const t = (i * Math.PI) / 3;
+            const [x, y, z] = centre.map((c, j) => c + 2.47 * (-Math.cos(t) * dir[j] + Math.sin(t) * across[j]));
+            bonds.push({ a1: from + i, a2: atoms.length });
+            atoms.push({ el: "H", x, y, z });
+          }
+      }
+      return { atoms, bonds };
+    };
+    for (const withH of [false, true])
+      for (const [el, length] of [["As", 1.96], ["Sb", 2.15]] as const) {
+        const m = triaryl(el, length, withH);
+        const r = ordersFromGeometry(m.atoms, m.bonds);
+        const what = `${el}${withH ? " with its hydrogens" : ""}`;
+        expect(r.decided, what).toBe(true);
+        expect(r.charges.every((c) => c === 0), what).toBe(true);
+        // (each ring carbon on one double bond: three aromatic rings; the bonds to the metalloid single)
+        const doubled = m.atoms.map((a, i) => (a.el === "C" ? m.bonds.filter((b, k) => (b.a1 === i || b.a2 === i) && r.orders[k] === 2).length : 0));
+        expect(doubled.filter((_, i) => m.atoms[i].el === "C"), what).toEqual(Array(18).fill(1));
+        expect(doubled[0], what).toBe(0);
+      }
+  });
+
+  it("gives a stibine oxide its one Sb=O, as an arsine oxide its As=O", () => {
+    // (Me3E=O laid out by hand: E at the origin, its O straight up at a double bond's length, its methyls below at a single bond's)
+    for (const [el, eo, ec] of [["As", 1.66, 1.95], ["Sb", 1.85, 2.13]] as const) {
+      const tilt = (109.5 * Math.PI) / 180;
+      const atoms: GeoAtom[] = [
+        { el, x: 0, y: 0, z: 0 },
+        { el: "O", x: 0, y: 0, z: eo },
+        ...[0, 1, 2].map((k) => ({ el: "C", x: ec * Math.sin(tilt) * Math.cos((2 * Math.PI * k) / 3), y: ec * Math.sin(tilt) * Math.sin((2 * Math.PI * k) / 3), z: ec * Math.cos(tilt) })),
+      ];
+      const r = ordersFromGeometry(atoms, [{ a1: 0, a2: 1 }, { a1: 0, a2: 2 }, { a1: 0, a2: 3 }, { a1: 0, a2: 4 }]);
+      expect(r.decided, el).toBe(true);
+      expect(r.orders, el).toEqual([2, 1, 1, 1]);
+      expect(r.charges.every((c) => c === 0), el).toBe(true);
+    }
+  });
+
+  it("leaves a metal's bond out of what its neighbour counts: acetone bound to Zn through its O keeps its C=O", () => {
+    // (laid out by hand; were Zn's bond counted, the O would have two neighbours and no double bond to give)
+    const atoms: GeoAtom[] = [
+      { el: "C", x: 0, y: 0, z: 0 },
+      { el: "O", x: 0, y: 1.22, z: 0 },
+      { el: "C", x: -1.28, y: -0.74, z: 0 },
+      { el: "C", x: 1.28, y: -0.74, z: 0 },
+      { el: "Zn", x: 0, y: 3.22, z: 0 },
+    ];
+    const r = ordersFromGeometry(atoms, [{ a1: 0, a2: 1 }, { a1: 0, a2: 2 }, { a1: 0, a2: 3 }, { a1: 1, a2: 4 }]);
+    expect(r.decided).toBe(true);
+    expect(r.orders).toEqual([2, 1, 1, 1]);
+  });
+
   it("is not decided where a carbon's shape asks a double bond it cannot have", () => {
     // (a carbon flat among three chlorines: a radical, as drawn, or a cation)
     const atoms: GeoAtom[] = [

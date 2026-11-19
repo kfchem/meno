@@ -200,5 +200,8 @@ export async function notReadSaid(smiles: string, read: (smiles: string) => Prom
   } catch {
     why = null;
   }
-  return why ? `This SMILES could not be read: ${why}.` : NOT_READ;
+  return why ? `This SMILES could not be read: ${endedOnce(why)}` : NOT_READ;
 }
+
+/** A sentence given one mark at its end: a full stop, unless it already ends on one - a why that asks ends on its own question mark. */
+export const endedOnce = (said: string): string => (/[.?!]$/.test(said) ? said : `${said}.`);

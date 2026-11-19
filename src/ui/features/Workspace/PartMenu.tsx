@@ -6,6 +6,7 @@ import { useLeaving } from "../../theme/leaving";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, bondIconAsLying, MENU_ICONS } from "./menuIcons";
+import type { MenuScope } from "./utils/menuScope";
 import { withRules } from "./menuRules";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
@@ -201,10 +202,44 @@ function mapShownItems(
   ];
 }
 
+/** A menu's line saying what it acts on: "This atom", "3 atoms, 2 bonds" (utils/menuScope). */
+function ScopeLine({ text }: { text: string }) {
+  return (
+    <div role="note" className="px-3 pt-0.5 pb-1 text-[11px] leading-4 text-gh-gray whitespace-nowrap">
+      {text}
+    </div>
+  );
+}
+
+/** A row of a menu's icons: the selection's, cut and copy, under the thing's own. */
+function IconRow({ label, items, run, below }: { label: string; items: Item[]; run: (item: Item) => () => void; below: boolean }) {
+  return (
+    <div role="group" aria-label={label} className={`flex items-center gap-0.5 px-1 ${below ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
+      {items.map((item) => (
+        <button
+          key={item.name}
+          role="menuitem"
+          aria-label={item.name}
+          title={item.keys ? `${item.name} (${item.keys})` : item.name}
+          disabled={item.disabled}
+          onClick={run(item)}
+          className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent text-gh-black hover:bg-gh-base focus:bg-gh-base`}
+          style={{ width: ROW, height: ROW }}
+        >
+          {item.icon}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function PartMenu({
   target,
+  scope,
   records,
   stereo,
+  projection,
+  fischer,
   figure,
   numbers,
   onDelete,
@@ -234,6 +269,7 @@ export default function PartMenu({
   onReadStructure,
   text,
   onSaveProcedure,
+  onRepeatSteps,
   keepInFile,
   shownOnPage,
   onOpenAsTable,
@@ -269,6 +305,12 @@ export default function PartMenu({
   anchor?: MenuAnchor;
   /** The part deleted, or the selection when the menu is its. */
   onDelete: () => void;
+  /**
+   * What the menu acts on, said in its first line (utils/menuScope): the thing right-clicked and the selection it is in
+   * (docs/EDITOR-2D.md, *Selecting*). Unset, a menu of a thing that is not selected (a measurement, a wire).
+   */
+  scope?: MenuScope;
+
   /** The part's structure cleaned up, or the selection's structures. */
   onCleanUp: () => void;
   /** The part's structure made in 3D, or the selection's structures. */
@@ -389,6 +431,8 @@ export default function PartMenu({
   text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void; onTable?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
+  /** *Repeat these steps*: a Repeat made round the step pointed at - or round every step chosen, where it is among them (workflow/model `repeatAround`). */
+  onRepeatSteps?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
   keepInFile?: { kept: boolean; set: (keep: boolean) => void };
   /** A step's result set whose exit is wired on (workflow/held) - the set right-clicked, or the one a wire right-clicked comes from: shown on the page, opened, or held off it; and shown or held as asked. */
@@ -534,6 +578,10 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
+  /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
+  projection?: { flat: () => void; flip?: () => void };
+  /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
+  fischer?: { run: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
   figure?: { from: string; run?: () => void };
   /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
@@ -600,8 +648,9 @@ export default function PartMenu({
   const deleteKey = MAC ? "⌫" : "Del";
   const cleanUpKey = MAC ? "⇧⌘K" : "Ctrl+Shift+K";
   const shortcut = (key: string) => (MAC ? `⌘${key}` : `Ctrl+${key}`);
-  // (with a selection elsewhere, the keys are the selection's)
-  const keys = target.selection === "none";
+  // (a key acts on the selection: shown beside an item only where the item acts on it too - as every menu's items do, the
+  //  thing's own reaching the selected of its kind: docs/EDITOR-2D.md, *Selecting*)
+  const keys = target.selection !== "elsewhere";
   const drawing = target.drawing !== false;
   const del = (name: string, withKey = true): Item => ({ name, keys: withKey ? deleteKey : "", run: onDelete, icon: MENU_ICONS.delete, del: true });
   // (an electron-pushing arrow from the atom or bond right-clicked: a pair's, or one electron's)
@@ -635,6 +684,7 @@ export default function PartMenu({
   ];
   const stereoItem: Item[] = [
     ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
+    ...(fischer ? [{ name: "Read as Fischer projection", keys: "", run: fischer.run, ...(stereo ? {} : { divider: true }) }] : []),
     ...(numbers
       ? [
           ...numbers.items.map((it, k) => ({ name: it.name, keys: "", run: it.run, ...(k === 0 && !stereo ? { divider: true } : {}) })),
@@ -735,7 +785,7 @@ export default function PartMenu({
   const items: Item[] =
     target.kind === "measure3d"
       ? [del("Delete measurement"), ...(measure3d ? [{ name: SET_NAME[measure3d.atoms], keys: "", run: measure3d.onSet }] : [])]
-      : target.kind === "molecule3d" && target.selection !== "here" && molecule3d
+      : target.kind === "molecule3d" && molecule3d
       ? [
           { name: "Cut", keys: keys ? shortcut("X") : "", run: molecule3d.onCut, icon: MENU_ICONS.cut },
           { name: "Copy", keys: keys ? shortcut("C") : "", run: molecule3d.onCopy, icon: MENU_ICONS.copy },
@@ -958,6 +1008,7 @@ export default function PartMenu({
           ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
+          ...(onRepeatSteps ? [{ name: "Repeat these steps", keys: "", run: onRepeatSteps }] : []),
           ...(step?.keepRaw
             ? [{ name: "Don't keep raw outputs", keys: "", run: () => step.keepRaw!.set(!step.keepRaw!.kept), checked: !step.keepRaw.kept, divider: true }]
             : []),
@@ -969,46 +1020,6 @@ export default function PartMenu({
           // (what it says, as text - its results, why it failed - and its energies as a table: copied from here, as no words on the page are selected)
           ...(target.copy ? [{ name: "Copy", keys: "", run: () => void copyText(target.copy!.all) }] : []),
           ...(target.copy?.energies ? [{ name: "Copy energies", keys: "", run: () => void copyText(target.copy!.energies!) }] : []),
-        ]
-      : target.selection === "here"
-      ? [
-          { name: "Cut", keys: shortcut("X"), run: clipboard.onCut, icon: MENU_ICONS.cut },
-          { name: "Copy", keys: shortcut("C"), run: clipboard.onCopy, icon: MENU_ICONS.copy },
-          // (on empty space, a paste goes there)
-          ...(target.kind == null ? [{ name: "Paste", keys: shortcut("V"), run: clipboard.onPaste, icon: MENU_ICONS.paste }] : []),
-          // (on a molecule in 3D in it: that molecule's own; what only a drawing has: none, for molecules in 3D alone)
-          ...moleculeRow,
-          ...(drawing
-            ? [
-                { name: "Clean up these structures", keys: cleanUpKey, run: onCleanUp, icon: MENU_ICONS.cleanUp },
-                { name: "3D structures", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
-                ...colour,
-              ]
-            : []),
-          ...partsItems,
-          ...pageMapItems,
-          del("Delete selection"),
-          // (an atom selected alone, right-clicked: its label, as on the atom's own menu)
-          ...(target.kind === "atom" && onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
-          ...moleculeList,
-          ...(drawing ? [{ name: "Copy as SMILES", keys: "", run: clipboard.onCopySmiles, divider: moleculeList.length > 0 }] : []),
-          ...(onExport ? [{ name: "Export…", keys: "", run: onExport, divider: !drawing && moleculeList.length > 0 }] : []),
-          // (its molecules in 3D rendered, by a plugin added that renders)
-          ...(onRender ? [{ name: "Render…", keys: "", run: onRender }] : []),
-          ...magnifyItems,
-          ...stereoItem,
-          ...(drawing
-            ? [
-                { name: "Turn over left to right", keys: "", run: () => onTurnOver("vertical"), divider: true },
-                { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
-              ]
-            : []),
-          ...stackItem,
-          ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
-          ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
-          ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs, divider: true }] : []),
-          ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
-          ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
       : target.kind === "push" && push
         ? [
@@ -1080,6 +1091,12 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...(projection
+            ? [
+                ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
+                { name: "Draw flat", keys: "", run: projection.flat },
+              ]
+            : []),
           ...partsItems,
           ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
@@ -1087,10 +1104,64 @@ export default function PartMenu({
           ...stackItem,
           ...magnifyItems,
         ];
-  const row = items.filter((i) => i.icon && !i.compact);
-  const compact = items.filter((i) => i.icon && i.compact);
+  // (a thing's own items reach every selected thing of its kind - an atom's charge, a bond's kind, a shape's line, words' bold -
+  //  and what is about the one thing stays its own; clean up, 3D, colour and Delete reach the whole selection: each said for what
+  //  it reaches where the selection holds more - "Charge one up on 3 atoms", "Delete selection" - docs/EDITOR-2D.md, *Selecting*)
+  const own: Item[] = items.map((i): Item => {
+    if (!scope?.more || target.kind == null) return i;
+    if (i.del) return { ...i, name: "Delete selection" };
+    if (i.name === "Clean up this structure") return { ...i, name: "Clean up these structures" };
+    if (i.name === "3D structure") return { ...i, name: "3D structures" };
+    if (target.kind === "atom" && (i.name === "Charge one up" || i.name === "Charge one down" || i.name === "Unpaired electron" || i.name === "No unpaired electron")) return { ...i, name: `${i.name} on ${scope.ofKind}` };
+    return i;
+  });
+  // (the selection's own: cut and copy, a second row of icons - on empty space, its clean up, 3D, colour and Delete beside them -
+  //  and its listed items under a line; none twice)
+  const here = target.selection === "here";
+  const ownNames = new Set(own.map((i) => i.name));
+  const selIcons: Item[] = (here
+    ? [
+        { name: "Cut", keys: keys ? shortcut("X") : "", run: clipboard.onCut, icon: MENU_ICONS.cut },
+        { name: "Copy", keys: keys ? shortcut("C") : "", run: clipboard.onCopy, icon: MENU_ICONS.copy },
+        // (on empty space: the selection's own clean up, 3D and colour)
+        ...(target.kind == null && drawing
+          ? [
+              { name: "Clean up these structures", keys: cleanUpKey, run: onCleanUp, icon: MENU_ICONS.cleanUp },
+              { name: "3D structures", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
+            ]
+          : []),
+        ...(target.kind == null ? colour : []),
+        ...(target.kind == null ? [{ ...del("Delete selection"), keys: deleteKey }] : []),
+      ]
+    : []
+  ).filter((i) => !ownNames.has(i.name));
+  const selList: Item[] = here
+    ? [
+        ...partsItems,
+        ...pageMapItems,
+        ...(drawing ? [{ name: "Copy as SMILES", keys: "", run: clipboard.onCopySmiles }] : []),
+        ...(onExport ? [{ name: "Export…", keys: "", run: onExport }] : []),
+        ...(onRender ? [{ name: "Render…", keys: "", run: onRender }] : []),
+        ...(drawing
+          ? [
+              { name: "Turn over left to right", keys: "", run: () => onTurnOver("vertical"), divider: true },
+              { name: "Turn over top to bottom", keys: "", run: () => onTurnOver("horizontal") },
+            ]
+          : []),
+        ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
+        ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
+        ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs, divider: true }] : []),
+        ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
+        ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
+      ].filter((i) => !ownNames.has(i.name))
+    : [];
+  const row = own.filter((i) => i.icon && !i.compact);
+  const compact = own.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
-  const list = withRules(items.filter((i) => !i.icon));
+  const list = withRules(own.filter((i) => !i.icon));
+  const selRules = withRules(selList);
+  // (the first line: what the menu acts on - the thing alone, or the selection counted)
+  const firstLine = scope ? scope.count : null;
   const stepNote = target.kind === "step" ? step?.note : undefined;
   // (words' size, line spacing and typeface, under the icons)
   const font = target.kind === "caption" ? words?.font : undefined;
@@ -1168,16 +1239,22 @@ export default function PartMenu({
         e.stopPropagation();
       }}
     >
+      {/* what it acts on, said first */}
+      {firstLine && <ScopeLine text={firstLine} />}
       {/* the frequent, as icons - named as the pointer rests on one - and Delete at the right end */}
       {row.length > 0 && (
         <div role="group" aria-label="Frequent" className={`flex items-center gap-0.5 px-1 ${list.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
-          {row.map((item) => (
+          {row.map((item) => {
+            const tip = item.keys ? `${item.name} (${item.keys})` : item.name;
+            const button = (
             <button
               key={item.name}
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              title={item.keys ? `${item.name} (${item.keys})` : item.name}
+              data-tip={item.disabled ? undefined : tip}
+              // (its keys said to a screen reader too, as the system's tooltip said them)
+              aria-description={item.keys ? `${item.name} (${item.keys})` : undefined}
               disabled={item.disabled}
               // (one begun by its press is not begun again by its click - but by a key, it is)
               onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
@@ -1192,12 +1269,21 @@ export default function PartMenu({
                     }
                   : undefined
               }
-              className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`${item.del && !item.disabled ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:pointer-events-none disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
             >
               {item.icon}
             </button>
-          ))}
+            );
+            // (one not to be pressed is named from round it: a disabled button is not sent the pointer in every engine)
+            return item.disabled ? (
+              <span key={item.name} data-tip={tip} className={`${item.del ? "ml-auto " : ""}shrink-0 flex`}>
+                {button}
+              </span>
+            ) : (
+              button
+            );
+          })}
         </div>
       )}
       {font && (
@@ -1230,7 +1316,7 @@ export default function PartMenu({
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              title={item.name}
+              data-tip={item.name}
               onClick={run(item)}
               className={`meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
@@ -1241,6 +1327,8 @@ export default function PartMenu({
         </motion.div>
       )}
       </AnimatePresence>
+      {/* the selection's cut and copy, a row of their own under the thing's - where its items reach it */}
+      {selIcons.length > 0 && <IconRow label="Selection" items={selIcons} run={run} below={list.length + selRules.length > 0} />}
       {list.map((item) => [
         item.divider && <div key={`${item.name}-divider`} role="separator" className="my-1 border-t border-gh-line" />,
         <button
@@ -1272,6 +1360,20 @@ export default function PartMenu({
           </div>
         ),
         item.after && <Fragment key={`${item.name}-after`}>{item.after}</Fragment>,
+      ])}
+      {/* the selection's listed items, after a rule */}
+      {selRules.map((item, k) => [
+        (item.divider || (k === 0 && list.length > 0)) && <div key={`${item.name}-sel-divider`} role="separator" className="my-1 border-t border-gh-line" />,
+        <button
+          key={`sel-${item.name}`}
+          role="menuitem"
+          onClick={run(item)}
+          disabled={item.disabled}
+          className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none disabled:text-gh-gray disabled:hover:bg-transparent"
+        >
+          <span>{item.name}</span>
+          <kbd className="font-sans text-xs text-gh-gray">{item.keys}</kbd>
+        </button>,
       ])}
     </motion.div>
   );

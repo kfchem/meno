@@ -34,18 +34,24 @@ export const metal: ReadonlySet<string> = new Set([...transitionMetal, ...mainGr
 export const notMetal: ReadonlySet<string> = new Set("H He B C N O F Ne Si P S Cl Ar Ge As Se Br Kr Sb Te I Xe At Rn Ts Og".split(" "));
 
 /**
- * What a drawing's label is that is also an element's symbol: "Pr" on a drawing is propyl's label. A fact about labels, not about praseodymium,
- * which is a lanthanoid and a `transitionMetal` all the same.
+ * What a label typed or written is that is also an element's symbol (the maintainer's rule, 2026-10-10: a group named as an element is the
+ * group): "Pr" propyl's, "Ac" acetyl's, "Ts" tosyl's, "Fm" 9-fluorenylmethyl's, "At" 7-azabenzotriazol-1-yl's. A fact about labels, not
+ * about the elements: what a typed label is read as, and what a label's text holds (Ac in HoAc, acetyl's - lib/chem/ligands). A drawing's
+ * atom so typed holds its group, and is given to every reader of elements as the group's name, never as the element (foundation part 3,
+ * B2, the maintainer's choice of 2026-11-16); an atom with the symbol and nothing held - from a file's element column, a SMILES, 3D - is
+ * the element. Every label and other name of the abbreviations' table (lib/chem/abbreviations) that is an element's symbol, and no other:
+ * held so by a test, the core taking no table but the elements'.
  */
-export const labelNotElement: ReadonlySet<string> = new Set(["Pr"]);
+export const labelNotElement: ReadonlySet<string> = new Set(["Pr", "Ac", "Ts", "Fm", "At"]);
 
 /**
  * The metals ligands are drawn round (lib/layout/perceive `isMetal`, docs/LAYOUT-2D.md section 7), and a complex's formula is read for
- * (lib/chem/ligands): the `transitionMetal`s, but for two gaps. Pr, its label being propyl's (`labelNotElement`). And the seventh row, Ac to Cn:
- * not listed - so a thorium's or a uranium's complex is not drawn round its metal (foundation part 3, B1).
+ * (lib/chem/ligands): the `transitionMetal`s, the actinoids among them (Th to Lr: uranocene is a sandwich as ferrocene is, and an H on U is a
+ * hydride kept, as on Pd - foundation part 3, B1), praseodymium, actinium and fermium with them: a drawing's propyl, acetyl or
+ * 9-fluorenylmethyl typed as Pr, Ac or Fm is given to these readers as the group's name, never as the element (`labelNotElement`; B2). But
+ * Rf to Cn, the seventh row's d block, whose complexes are not made: not listed, as before.
  */
-export const drawnRoundMetal: ReadonlySet<string> = ((seventhRow) =>
-  new Set([...transitionMetal].filter((el) => !labelNotElement.has(el) && !seventhRow.has(el))))(byNumber([89, 112]));
+export const drawnRoundMetal: ReadonlySet<string> = ((notMade) => new Set([...transitionMetal].filter((el) => !notMade.has(el))))(byNumber([104, 112]));
 
 /**
  * Nine metals of groups 1, 2, 12 and 13 bridged to a transition metal by two atoms as a second transition metal is - the Tebbe reagent's
@@ -67,13 +73,10 @@ export const ionic: ReadonlyMap<string, number> = new Map([
 export const alwaysIonic: ReadonlySet<string> = new Set([...ionic].filter(([el, charge]) => charge === 1 && el !== "Li" && el !== "Fr").map(([el]) => el));
 
 /**
- * The elements whose bonds count in their neighbours' valences, as a structure's protonation reads them (lib/chem/protonation): hydrogen, the
- * nonmetals and the metalloids - not a metal's bonds, nor a noble gas's, At's or Ts's. One more than `inValenceSumsFromGeometry`: Sb.
+ * The elements whose bonds count in their neighbours' valences, as a structure's protonation reads them (lib/chem/protonation) and as bond
+ * orders are worked out from a geometry (lib/chem/ordersFromGeometry): hydrogen, the nonmetals and the metalloids - not a metal's bonds, which
+ * are dative, kept single and out of the reckoning, nor a noble gas's, At's or Ts's. Sb among them as As is: a metalloid bonded covalently to
+ * C, H and halogens (SbPh3, SbCl3), so that an aryl carbon on it is not one bond short (foundation part 3, B3; before, the geometry's set
+ * left Sb out).
  */
 export const inValenceSums: ReadonlySet<string> = new Set("H B C N O F Si P S Cl Ge As Se Br Sb Te I".split(" "));
-
-/**
- * The elements whose bonds count in their neighbours' valences, as bond orders are worked out from a geometry (lib/chem/ordersFromGeometry):
- * `inValenceSums` without Sb - a metal's bonds being dative, kept single and out of the reckoning. Sb is to join it (foundation part 3, B3).
- */
-export const inValenceSumsFromGeometry: ReadonlySet<string> = new Set([...inValenceSums].filter((el) => el !== "Sb"));

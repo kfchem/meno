@@ -19,11 +19,12 @@ import type { StyleChoice } from "../../../../lib/chem/style";
 import { isMetal } from "../../../../lib/layout/perceive";
 import type { LineRead } from "../../../../lib/options";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
-import { identityInputOf } from "../chem/identityOf";
-import { undrawnHydrogens, wedgesHeld } from "../chem/drawing";
+import { identityInputOf, withGroups } from "../chem/identityOf";
+import { readAs, undrawnHydrogens, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
-import { changedAt, rewedged } from "./stereoKept";
+import { changedOf, changesFrom, plainWhereAlike, rewedged, unitName } from "./stereoKept";
+import type { ConfigurationUnit } from "../../../../lib/chem/perception/stereo/compare";
 import { joined, MOST_COMBINATIONS, readOption, type Enumerated, type Made, type OptionProblem, type OptionRead } from "./enumerate";
 
 /** How the positions are combined: one position given a group in each product, or every position in each. */
@@ -103,7 +104,7 @@ export function positionsOf(template: Model, ids: readonly number[]): { position
     else if (a.el === "H") {
       const bonds = around(p.id);
       const on = bonds.length === 1 ? atom.get(bonds[0].a === p.id ? bonds[0].b : bonds[0].a) : undefined;
-      if (a.charge || a.isotope || a.radical || a.map || bonds.length !== 1 || bonds[0].order !== 1 || !on || on.el === "H" || isMetal(on.el)) problems.push(`${at} is not a plain hydrogen: only a plain H is replaced`);
+      if (a.charge || a.isotope || a.radical || a.map || bonds.length !== 1 || bonds[0].order !== 1 || !on || on.el === "H" || isMetal(readAs(on))) problems.push(`${at} is not a plain hydrogen: only a plain H is replaced`);
     } else if (!(hs.get(p.id) ?? 0)) {
       const drawn = around(p.id).some((b) => atom.get(b.a === p.id ? b.b : b.a)?.el === "H");
       problems.push(drawn ? `${at}: its hydrogens are drawn - choose the H` : `${at} has no hydrogen`);
@@ -187,24 +188,25 @@ export function substituted(template: Model, ids: readonly number[], text: strin
   if (count > MOST_COMBINATIONS) return { ok: false, problems: [`${size} make ${thousands(count)} combinations; Enumerate makes at most ${thousands(MOST_COMBINATIONS)}`] };
 
   const name = (k: number) => `Position ${k + 1} (${positions[k].name})`;
-  const atomName = (id: number) => {
-    const i = template.atoms.findIndex((a) => a.id === id);
-    return `${template.atoms[i].el}${i + 1}`;
-  };
   // (each product's configurations read back and held to the template's - docs/WORKFLOWS-FOUNDATION.md, *Configurations kept*)
-  const product = (choice: readonly (OptionRead | null)[]): { drawn: Model; changed: number[] } => {
+  const product = (choice: readonly (OptionRead | null)[]): { drawn: Model; changed: ConfigurationUnit[] } => {
     // (H, and a position not given one, left as drawn)
     const given = choice.flatMap((o, k) => (o && !isPlainH(o) ? [k] : []));
     const { model, rs: at } = withRs(template, positions, given);
     let drawn = wedgesHeld(joined(model, given.map((k) => [k + 1, [at.get(k)!], choice[k]!] as const), style), template);
     // (a heavy atom's undrawn H taken: the group in its place among the centre's neighbours)
     const took = new Map(given.filter((k) => !positions[k].drawnH).map((k) => [positions[k].id, at.get(k)!]));
-    for (const c of changedAt(template, drawn, took)) {
-      if (!took.has(c)) continue;
-      const again = rewedged(template, drawn, c, took);
-      if (again) drawn = again;
+    let differences = changesFrom(template, drawn, took);
+    let again = false;
+    for (const u of changedOf(differences)) {
+      if (u.kind !== "centre" || !took.has(u.at)) continue;
+      const wedged = rewedged(template, drawn, u.at, took);
+      if (wedged) [drawn, again] = [wedged, true];
     }
-    return { drawn, changed: changedAt(template, drawn, took) };
+    // (read again only where a centre was wedged anew)
+    if (again) differences = changesFrom(template, drawn, took);
+    // (a centre no longer one, two of its groups now alike: drawn plain)
+    return { drawn: plainWhereAlike(drawn, differences), changed: changedOf(differences) };
   };
   const combinations: { choice: (OptionRead | null)[]; how: string }[] = [];
   if (combine === "one") {
@@ -233,8 +235,8 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     const number = i + 1;
     const { drawn: drawnNow, changed } = product(choice);
     // (a product that would say another configuration than its template's: never made - the step stops, naming it)
-    if (changed.length) return void refused.push(`${how}: would change the configuration at ${changed.map(atomName).join(", ")}`);
-    const found = identity(identityInputOf(drawnNow).input);
+    if (changed.length) return void refused.push(`${how}: would change the configuration at ${changed.map((u) => unitName(template, u)).join(", ")}`);
+    const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
     if (!found.complete) missed++;
     const first = seen.get(found.text);
     if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });

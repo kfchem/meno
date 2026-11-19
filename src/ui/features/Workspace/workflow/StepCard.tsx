@@ -1,7 +1,7 @@
 import TextBars from "./TextBars";
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
-import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { ComponentProps, CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE, LEAVE } from "../../../theme/motion";
 import OptionsForm from "../../../options/OptionsForm";
@@ -162,6 +162,8 @@ export type StepCardProps = {
   /** What running it again drops of its earlier runs, and of those it runs first (workflow/earlierRuns `droppedBy`) - none, where it drops none. */
   drops?: string;
   onOptions: (values: OptionValues) => void;
+  /** Its options that may take their value from a property, those that do, the names coming in, and a change (ui/options/OptionsForm `binds`). */
+  binds?: ComponentProps<typeof OptionsForm>["binds"];
   /** Its atoms option being chosen on the drawing, by id; and choosing begun or ended (OptionsForm `onChoose`). */
   choosing?: string | null;
   onChoose?: (id: string | null) => void;
@@ -270,7 +272,8 @@ export default function StepCard(p: StepCardProps) {
           >
           {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
           <TextBars on={p.compact} className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
-            {p.kinds.length > 1 && (
+            {/* (another kind its doer fills to switch to - none for a kind not among them, a Repeat's: no empty choice) */}
+            {p.kinds.length > 1 && p.kinds.some((k) => k.kind === p.step.kind) && (
               <div className="mb-3">
                 <OptionsForm
                   options={[{ id: "kind", label: "Calculation", type: "choice", choices: p.kinds.map((k) => ({ value: k.kind, label: k.name })), default: p.step.kind }]}
@@ -280,7 +283,7 @@ export default function StepCard(p: StepCardProps) {
               </div>
             )}
             {p.optionList.length ? (
-              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} asks={p.asks} />
+              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} asks={p.asks} binds={p.binds} />
             ) : (
               <div className="text-xs text-gh-gray">No options</div>
             )}

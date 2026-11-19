@@ -6,11 +6,12 @@
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { recordsWithRoles } from "./schemeRoles";
+import { LANDING, THIS_PASS } from "./repeat";
 import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAmong, readingOrder, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
-import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type ConstitutionOf, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { comeTogether, exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, presetsStamp, setName, stepValues, takesBy, takesNothingBy } from "./doers";
 
 export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
@@ -90,18 +91,80 @@ export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new
 }
 
 
+/**
+ * Whether a wire lands inside a Repeat's frame - into its *Again* or *Done* (workflow/repeat `LANDING`): what its steps give, read by it
+ * as a pass ends, never a way back in the flow. The steps before a Repeat are those before its *In* alone, and such a wire makes no loop.
+ */
+export const landing = (doc: Flow, w: Wire): boolean => (LANDING as readonly string[]).includes(w.to.port) && stepOf(doc, w.to.step)?.kind === "repeat";
+
+/** The wires into a step that lead back in the flow: all of them, but those landing inside a Repeat (`landing`). */
+const wiresBack = (doc: Flow, step: number): Wire[] => allWiresInto(doc, step).filter((w) => !landing(doc, w));
+
 /** The steps before a step, nearest first, as its wires lead back. */
 export function stepsBefore(doc: Flow, step: number): number[] {
   const out: number[] = [];
-  const todo = allWiresInto(doc, step).map((w) => w.from);
+  const todo = wiresBack(doc, step).map((w) => w.from);
   for (let guard = 0; todo.length && guard < 1000; guard++) {
     const at = todo.shift()!;
     const made = findSet(doc, at.set)?.made?.step;
     if (made == null || out.includes(made) || made === step) continue;
     out.push(made);
-    todo.push(...allWiresInto(doc, made).map((w) => w.from));
+    todo.push(...wiresBack(doc, made).map((w) => w.from));
   }
   return out;
+}
+
+/** The Repeat whose frame holds step `step`, by id; none where none does. */
+export const repeatHolding = (doc: Flow, step: number): number | undefined => (doc.steps ?? []).find((s) => s.kind === "repeat" && s.holds?.includes(step))?.id;
+
+/** The Repeat a set lies inside, as its wires go: one a step inside gives, or a Repeat's *This pass*; none for one outside - a chemist's, a Repeat's *Out*. */
+function repeatOfSet(doc: Flow, set: WorkflowSet): number | undefined {
+  const maker = set.made ? stepOf(doc, set.made.step) : undefined;
+  if (!maker) return undefined;
+  if (maker.kind === "repeat") return set.made!.exit === THIS_PASS ? maker.id : repeatHolding(doc, maker.id);
+  return repeatHolding(doc, maker.id);
+}
+
+/**
+ * Why a wire may not cross a Repeat's frame as it would (workflow/repeat): what comes in goes by *In*, its steps take from *This pass*
+ * and from one another, and what leaves goes by *Again* or *Done*, then *Out* - none where it may. A Repeat is held by none.
+ */
+function repeatWireRefusal(doc: Flow, set: WorkflowSet, to: WorkflowStep, port: string): string | null {
+  const inside = repeatOfSet(doc, set);
+  if (to.kind === "repeat") {
+    if ((LANDING as readonly string[]).includes(port)) return inside === to.id ? null : "Only what the steps inside it give goes to Again or Done";
+    return inside === to.id ? "It is inside this Repeat: wire it to Again to go round once more" : inside != null ? "It is inside another Repeat: what leaves it goes by Done and Out" : null;
+  }
+  const holder = repeatHolding(doc, to.id);
+  // (a step inside takes its entries from This pass or a step inside; a later input of it - a Reference, Restraints - may take a set from
+  //  outside, read the same in every pass; never one of another Repeat's)
+  const first = inputsFor(to.kind, byOf(to))[0]?.id ?? ONE_INPUT;
+  if (holder != null && inside !== holder && (port === first || inside != null)) return "This step is inside a Repeat: wire it into the Repeat's In, and This pass to this step";
+  // (a reference inside a Repeat is the same in every pass: one from inside it would change between passes, and the rows of earlier
+  //  passes were made against another: docs/WORKFLOWS.md, *Repeat*)
+  if (holder != null && inside === holder && to.kind === "torsion-restraints" && port === "reference") return "A reference inside a Repeat is the same in every pass: wire it from outside the Repeat";
+  if (inside != null && inside !== holder) return "It is inside a Repeat: what leaves it goes by Done, then Out";
+  return null;
+}
+
+/**
+ * Why a Repeat cannot run as its wires stand: one of them crosses its frame otherwise than by its ports - a card dragged in or out
+ * of the frame with its wires on it, which a wire made now would not be (`repeatWireRefusal`); none where none does.
+ */
+export function repeatCrossing(doc: Flow, repeat: number): string | null {
+  const r = stepOf(doc, repeat);
+  if (!r || r.kind !== "repeat") return null;
+  const held = new Set(r.holds ?? []);
+  for (const w of doc.wires ?? []) {
+    const set = findSet(doc, w.from.set);
+    const to = stepOf(doc, w.to.step);
+    if (!set || !to) continue;
+    const maker = set.made?.step;
+    if (!held.has(w.to.step) && !(maker != null && held.has(maker)) && w.to.step !== repeat) continue;
+    const why = repeatWireRefusal(doc, set, to, w.to.port);
+    if (why) return `A wire crosses its frame's edge, a card moved in or out with its wires on: ${why}`;
+  }
+  return null;
 }
 
 /** Whether a wire may go from `from` into the step `to` (`wireRefusal`: none). */
@@ -123,10 +186,14 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   if (!step || !set) return "It is not there";
   // (a step that takes nothing in has nothing to wire to)
   if (takesNothingBy(step.kind, byOf(step))) return "It takes nothing in";
-  if (set.made?.step === to) return "It is what this step gives";
-  // (nothing it gives may come back round to it)
+  if (set.made?.step === to && !(step.kind === "repeat" && (LANDING as readonly string[]).includes(port))) return "It is what this step gives";
+  // (a Repeat's frame crossed only by its own ports: workflow/repeat)
+  const crossing = repeatWireRefusal(doc, set, step, port);
+  if (crossing) return crossing;
+  // (nothing it gives may come back round to it - but what lands inside a Repeat, which it reads as a pass ends)
   const madeBy = set.made?.step;
-  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
+  const lands = step.kind === "repeat" && (LANDING as readonly string[]).includes(port);
+  if (!lands && madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
   const holds = givesOf(doc, from);
   // (pictures - a Render step's - and charts no step takes)
   if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
@@ -147,11 +214,20 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
     const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
     return `It takes ${wants}, not ${SET_WORDS[holds]}`;
   }
-  // (several wires into one input: what they give one kind, as one set's entries are - and a number, one alone; an empty set adds nothing, of no kind)
+  // (Merge: its other input's kind, where it is known - two sets of one kind made one)
+  if (step.kind === "merge" && (port === "first" || port === "second")) {
+    const other = inputs.find((p) => p.id === (port === "first" ? "second" : "first"))!;
+    const there = wiresInto(doc, to, other.id)
+      .map((w) => givesOf(doc, w.from))
+      .find((g): g is ValueKind => g != null && g !== holds && g in SET_WORDS);
+    if (there) return `It gives ${SET_WORDS[holds]}, and ${other.name} ${SET_WORDS[there]}: Merge makes one set of two of one kind`;
+  }
+  // (several wires into one input: what they give one kind, as one set's entries are - molecules and conformer sets together where it
+  //  reads them as a table - and a number, one alone; an empty set adds nothing, of no kind)
   const others = wiresInto(doc, to, port).filter((w) => w.from.set !== from.set && !emptyNow(doc, findSet(doc, w.from.set)!));
   if (!others.length || emptyNow(doc, set)) return null;
   if (holds === "number") return "It takes one number: one is wired into it already";
-  const there = others.map((w) => givesOf(doc, w.from)).find((g): g is ValueKind => g != null && g !== holds && g in SET_WORDS);
+  const there = others.map((w) => givesOf(doc, w.from)).find((g): g is ValueKind => g != null && !comeTogether(step.kind, port, g, holds) && g in SET_WORDS);
   return there ? `It gives ${SET_WORDS[holds]}, and what is wired into it already ${SET_WORDS[there]}: an input takes one kind` : null;
 }
 
@@ -282,7 +358,7 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
  * imaginary frequencies. None where what comes in is a table, structures
  * drawn, or nothing.
  */
-export function moleculesSeen(doc: Flow, step: number, port?: string): { table: Table; entries: SetEntry[] } | null {
+export function moleculesSeen(doc: Flow, step: number, port?: string, constitutionOf?: ConstitutionOf): { table: Table; entries: SetEntry[] } | null {
   if (tableWired(doc, step, port)) return null;
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
@@ -308,6 +384,7 @@ export function moleculesSeen(doc: Flow, step: number, port?: string): { table: 
       const how = e.from != null ? by.get(e.from) : undefined;
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
     }),
+    constitutionOf,
   );
   // (said after the row's id)
   return { table: { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) }, entries };
@@ -342,7 +419,7 @@ function keyTexts(m: Molecule3D): readonly string[] {
       // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
       m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
       `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
-      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}`,
+      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}${m.partsAlone ? "|alone" : ""}`,
       JSON.stringify(m.properties ?? null),
     ];
     keyed.set(m, texts);
@@ -354,12 +431,15 @@ function keyTexts(m: Molecule3D): readonly string[] {
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const values = stepValues(step, by);
   // (and, a Render's, the plugins its look and studio are of, by version)
-  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values);
+  // (and the options taken from a property, each by the property's name: what each entry takes is in its properties, keyed below)
+  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values) + (step.bound && Object.keys(step.bound).length ? `|bound${JSON.stringify(Object.entries(step.bound).sort())}` : "");
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
   // (a Restraints input with nothing wired into it: no input of its - a step that never had one keeps its key)
-  const ports = inputsFor(step.kind, by).filter((p) => p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0);
+  // (a Repeat's Again and Done its own passes fill, never what it was run on: its key is what comes into In - a run of it never
+  //  reads as changed by what it made)
+  const ports = inputsFor(step.kind, by).filter((p) => (p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0) && !(step.kind === "repeat" && (LANDING as readonly string[]).includes(p.id)));
   // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
   if (ports.length > 1) {
     const keys = ports.map((p) => portKey(doc, step.id, p.id, true));
@@ -478,5 +558,13 @@ export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [..
 /** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
 export function allToRun(doc: Flow): number[] {
   const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
-  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
+  return heldByRepeats(doc, stale.flatMap((id) => [id, ...stepsAfter(doc, id)]));
+}
+
+/**
+ * Steps to run, each a Repeat holds taken as that Repeat, once: the Repeat runs the steps it holds, pass by pass, and none of them is
+ * run again on its own after it (found in review).
+ */
+export function heldByRepeats(doc: Flow, ids: readonly number[]): number[] {
+  return [...new Set(ids.map((id) => repeatHolding(doc, id) ?? id))];
 }

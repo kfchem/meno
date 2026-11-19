@@ -7,6 +7,7 @@
  * Which one a stack shows is the view's (`stacksShown`); that its molecules
  * are a stack, and whether it is laid out, the document's.
  */
+import { readAs } from "../chem/drawing";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { AtomStack, Molecule3D } from "../store/types";
 import { greatest, least, middleOfPoints } from "../../../../lib/chem/lists";
@@ -348,7 +349,7 @@ export function alignedRecords<A extends AlignAtom, B extends AlignBond, M exten
   const drawing = (ids: readonly number[]): MatchDrawing => {
     const index = new Map(ids.map((id, k) => [id, k]));
     return {
-      atoms: ids.map((id) => ({ el: at.get(id)!.el, ...(at.get(id)!.charge ? { charge: at.get(id)!.charge } : {}), ...place(id) })),
+      atoms: ids.map((id) => ({ el: readAs(at.get(id)!), ...(at.get(id)!.charge ? { charge: at.get(id)!.charge } : {}), ...place(id) })),
       bonds: model.bonds.flatMap((b) => (index.has(b.a) && index.has(b.b) ? [{ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }] : [])),
     };
   };

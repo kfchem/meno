@@ -10,7 +10,7 @@
  */
 import type { OptionValues } from "../options";
 import type { SmilesRead } from "../chem/smilesWhy";
-import type { Configuration, IsomersMade, StereoElement } from "../chem/stereoOpen";
+import type { IsomerConfiguration, IsomersMade, StereoElement } from "../chem/stereoOpen";
 import type { MetalHolds } from "../chem/metalHolds";
 import { counter, type Watch } from "../calc/client";
 
@@ -27,7 +27,8 @@ export type ChemRequests = {
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
-  from_smiles: { args: { smiles: string }; result: { molblock: string } };
+  /** A SMILES read: its drawing, and - from a plugin that sends it - the configuration it read, by the block's own atom and bond numbers (Meno lays its drawing out from that, not from the block's wedges). */
+  from_smiles: { args: { smiles: string }; result: { molblock: string; configuration?: IsomerConfiguration } };
   /** What the toolkit makes of a SMILES, as facts - whether it reads, whether it parses at all, the problems its own check finds (lib/chem/smilesWhy): Meno says why in words. */
   smiles_read: { args: { smiles: string }; result: SmilesRead };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
@@ -54,7 +55,7 @@ export type ChemRequests = {
     args: {
       molblocks: string[];
       open: { atoms: number[]; bonds: number[] };
-      configured?: Configuration;
+      configured?: IsomerConfiguration;
       notEnumerated: number[];
       most: number;
       whole?: boolean;
@@ -89,7 +90,7 @@ export type ChemRequests = {
      * only to a plugin whose role says it takes draws (lib/plugins/manifest
      * `draws`).
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
+    args: { molblock: string; isomers?: IsomerConfiguration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**
@@ -98,7 +99,7 @@ export type ChemRequests = {
    * they are not known (`perceive`) - and whether they were (`perceived`):
    * never without hydrogens, which they are found by.
    */
-  drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; perceived?: boolean } };
+  drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; configuration?: IsomerConfiguration; perceived?: boolean } };
   /**
    * A molecule in 3D whose file gives no bond orders given them from a
    * SMILES of the same molecule: its
@@ -183,7 +184,7 @@ export type Conformers = {
   /** How they were made, in one line - embedding, force field, and what was held that is no term of it: shown with them, kept with them. */
   method?: string;
   /** The CIP labels, by atom and bond index: Meno's own, read from the places (Workspace/chem/openStereo `withOwnCip`) - what the plugin sends here is never read. */
-  cip: { atoms: Record<string, string>; bonds: Record<string, string> };
+  cip: { atoms: Record<string, string>; bonds: Record<string, string>; said?: { atoms: Record<string, string>; bonds: Record<string, string> } };
   chosen: { atoms: Record<string, string>; bonds: Record<string, string> };
   smiles: string;
 };

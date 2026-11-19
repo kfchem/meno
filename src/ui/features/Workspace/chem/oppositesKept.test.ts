@@ -455,6 +455,13 @@ describe("a metal's donors kept opposite as drawn, or the drawing refused", () =
     expect(lines(out, m.names).map((p) => p.replace(/[NO][ab]/g, "N"))).toEqual(["Cl-N", "Cl-N", "N-N"]);
   });
 
+  it("never puts across two donors drawn side by side: a cis-[CoCl2(NH3)4]+ drawn as an earlier layout drew it - its NH3 an X, its Cl side by side - is laid out as three lines, each Cl across an NH3", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const m = complex("Co", 1, ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"], [0, 1, 2, 3, 4, 5], ["NH3", "NH3", "NH3", "NH3", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
+    const out = await laidOut(m.model, MENO);
+    expect(lines(out, m.names)).toEqual(["Cl-NH3", "Cl-NH3", "NH3-NH3"]);
+  });
+
   it("keeps each of M(gly)2Cl2's five arrangements drawn with six spokes, as three lines with the pairs drawn across", { timeout: 180000 }, async () => {
     forgetLaidOut();
     for (const [isomer, names] of [

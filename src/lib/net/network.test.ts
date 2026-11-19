@@ -44,5 +44,7 @@ describe("a purpose, as Settings, Network names it", () => {
   it("names a model's plugin by the hosts it was allowed for", () => {
     expect(purposeName("model:talker@api.example.com,files.example.com")).toBe("Conversations through talker, to api.example.com, files.example.com");
     expect(purposeName("model:talker")).toBe("model:talker");
+    // (the list of plugins online, said as the other purposes are: never its key)
+    expect(purposeName("plugin-catalogue")).toBe("Looking up plugins online");
   });
 });

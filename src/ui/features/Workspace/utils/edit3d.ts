@@ -10,6 +10,7 @@ import * as THREE from "three";
 import type { Molecule3D } from "../store/types";
 import { kindOf, measureValue, type MeasureKind } from "./measure3d";
 import { bondsAt, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { EXACT, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
 
 type Bonded = { atoms: readonly unknown[]; bonds: readonly { a1: number; a2: number }[] };
 
@@ -201,18 +202,17 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
   const st = m.stereo;
   if (!st) return st;
   const near = neighbours(m);
+  const place = (xyz: readonly number[], k: number) => [xyz[3 * k], xyz[3 * k + 1], xyz[3 * k + 2]];
   const volume = (xyz: readonly number[], i: number) => {
     const n = near[i];
     if (n.length < 3) return 0;
-    const o = vec(xyz, i);
-    const [p, q, r] = n.slice(0, 3).map((k) => vec(xyz, k).sub(o));
-    return p.dot(q.cross(r));
+    return volumeSign(place(xyz, n[0]), place(xyz, n[1]), place(xyz, n[2]), place(xyz, i), EXACT);
   };
   const SWAP: Record<string, string> = { R: "S", S: "R", r: "s", s: "r", E: "Z", Z: "E" };
   const atoms: Record<number, string> = {};
   for (const [k, text] of Object.entries(st.atoms)) {
     const i = Number(k);
-    const flipped = SWAP[text] && Math.sign(volume(before, i)) * Math.sign(volume(after, i)) < 0;
+    const flipped = SWAP[text] && volume(before, i) * volume(after, i) < 0;
     atoms[i] = flipped ? SWAP[text] : text;
   }
   const bonds: Record<number, string> = {};
@@ -228,7 +228,9 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
     }
     bonds[Number(k)] = swapped ? SWAP[text] : text;
   }
-  return { ...st, atoms, bonds };
+  // (why a unit had none - nearly flat, say - is not known of the places it has now: not kept)
+  const { said: _said, ...rest } = st;
+  return { ...rest, atoms, bonds };
 }
 
 /**

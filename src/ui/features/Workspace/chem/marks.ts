@@ -14,6 +14,7 @@ import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { isMetal } from "../../../../lib/layout/perceive";
+import { readAs } from "./drawing";
 import type { Model } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelBox, labelSetOf, runsWidth, type LayoutOptions, type TextItem, type TextRun } from "../../../../lib/chem/layout2d";
@@ -139,14 +140,14 @@ const HALOGEN = new Set(ELEMENTS.filter((e) => [9, 17, 35, 53, 85, 117].includes
  * marked still.
  */
 function bridgesMetals(model: Model, atom: Model["atoms"][number], p: ValenceProblem): boolean {
-  if (!HALOGEN.has(atom.el)) return false;
+  if (!HALOGEN.has(readAs(atom))) return false;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   let toMetals = 0;
   for (const b of model.bonds) {
     const other = b.a === atom.id ? b.b : b.b === atom.id ? b.a : null;
     if (other == null) continue;
     const o = byId.get(other);
-    if (o && isMetal(o.el)) toMetals += b.order;
+    if (o && isMetal(readAs(o))) toMetals += b.order;
   }
   return toMetals > 0 && p.valence - toMetals <= (p.most ?? 1);
 }
@@ -513,6 +514,8 @@ export function stereoPlaces(o: {
   off: number;
   bond: number;
   fixed?: ReadonlyMap<string, Vec>;
+  /** What else is written beside the drawing, as boxes where it is: an atom's group, its map number, a charge beside a vertex (`notesBoxes`). */
+  notes?: readonly Rect[];
 }): StereoPlace[] {
   const { model, boxes, half, apart, off, bond: L } = o;
   const index = markIndex(model);
@@ -534,6 +537,7 @@ export function stereoPlaces(o: {
       maxY: a.y + box.top,
     });
   }
+  for (const r of o.notes ?? []) rects.push(r);
   const out: StereoPlace[] = [];
   // (what each is kept off, looked for near it, not all over the page)
   const obstacles = new MarkObstacles(segments, rects, L);
@@ -578,6 +582,22 @@ export function stereoPlaces(o: {
       obstacles,
     });
     put(`bond-${id}`, cip, r);
+  }
+  return out;
+}
+
+/**
+ * Where the drawing's notes are, as boxes: each text the layout sets beside the drawing rather than on an atom - an atom's
+ * enhanced stereo group ("and1"), its map number, a charge beside a vertex, what is said of a bond - for R, S, E and Z to keep
+ * off (`stereoPlaces` `notes`); what is said of a whole structure stands beneath it, in no text here. `size` is the size a text is
+ * measured at.
+ */
+export function notesBoxes(texts: readonly TextItem[], size: (t: TextItem) => number, set: ReturnType<typeof labelSetOf>): Rect[] {
+  const out: Rect[] = [];
+  for (const t of texts) {
+    if (t.atom != null || !t.beside) continue;
+    const box = labelBox(t, size(t), set);
+    out.push({ minX: t.x - box.left, maxX: t.x + box.right, minY: t.y - box.bottom, maxY: t.y + box.top });
   }
   return out;
 }
@@ -679,6 +699,7 @@ export function stereoPictureItems(o: {
     off: gap * labelFont,
     bond: NOMINAL_BOND_LENGTH,
     fixed,
+    notes: notesBoxes(o.texts, (t) => t.fontPx, set),
   });
   return places.map((p) => stereoTextItem(p, size, opts));
 }

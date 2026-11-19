@@ -13,7 +13,7 @@ import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { cardHighOf, exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
-import { unseenSets } from "./onPage";
+import { isHeld, unseenSets } from "./onPage";
 import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, inputLead, nearWire, portDown, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
@@ -210,6 +210,49 @@ export function placeAgain(doc: WorkspaceDocument, step: { id: number; x: number
   const there = frameAt(was.x0, was.y1, width, height);
   const made = doc.sets?.find((b) => b.id === was.id)?.made;
   return clearOf(doc, there, self) ? there : placeFor(doc, step, made?.exit ?? ONE_EXIT, width, height, self);
+}
+
+/** A step's exit's frame not run yet: made for the step, holding nothing yet ("Not run yet", workflow/entries `countSaid`). */
+const notRunYet = (b: WorkflowSet): boolean => !!b.made && !b.made.holds && !b.notKept;
+
+/** `doc` with set `id`'s frame now `f`: a frame alone, what it holds left where it is - for a frame not run yet, which holds nothing. */
+const framed = (doc: WorkspaceDocument, id: number, f: Frame): WorkspaceDocument => ({ ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? { ...b, x0: f.x0, x1: f.x1, y0: f.y0, y1: f.y1 } : b)) });
+
+/**
+ * `doc` with room made, where it can be, for a step's result set made before as it runs again, grown to `width` by `height`
+ * (`placeAgain`): where what stands in the way of it where it was, its top left kept, is frames not run yet alone - other steps' exits,
+ * empty - each is pushed down just clear of it, as far as it must (`placeBelow`), its wires with it, in the same edit as the run. A
+ * card or a set the chemist placed, or one that holds results, is never moved: where one is in the way, or the frames pushed would
+ * not clear its place, `doc` as it was, and the set goes lower (`placeFor`), as docs/WORKFLOWS.md says.
+ */
+export function roomMadeFor(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, was: Frame & { id: number }, width: number, height: number): WorkspaceDocument {
+  const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === step.id && b.id !== was.id).map((b) => b.id));
+  const self: Self = { set: was.id, sets: siblings, step: step.id };
+  const there = frameAt(was.x0, was.y1, width, height);
+  // (asked of the grown set and its step's later exits together: its own place clear is not theirs - a small growth too, found in
+  //  review)
+  // (the grown set and, under it, where its step's later exits' frames go as they are kept under it (run `keepExitsUnder`): what is
+  //  pushed goes below them all, never onto one of them - found in review)
+  const kind = (doc.steps ?? []).find((x) => x.id === step.id)?.kind;
+  // (each kept under it whether or not it is drawn - an empty exit for what its step sets aside too - but one held off the page)
+  const block: Frame[] = [there];
+  for (const e of kind ? exitsOf(kind).slice(1) : []) {
+    const b = (doc.sets ?? []).find((x) => x.made?.step === step.id && x.made.exit === e.id);
+    if (!b || b.id === was.id || isHeld(doc, b)) continue;
+    const top = block[block.length - 1].y0 - BETWEEN;
+    block.push(frameAt(b.x0, top, b.x1 - b.x0, b.y1 - b.y0));
+  }
+  const foot = Math.min(...block.map((f) => f.y0));
+  const near = (b: Frame) => block.some((f) => b.x0 < f.x1 + BETWEEN && f.x0 < b.x1 + BETWEEN && b.y0 < f.y1 + BETWEEN && f.y0 < b.y1 + BETWEEN);
+  const inWay = (doc.sets ?? []).filter((b) => b.id !== was.id && !siblings.has(b.id) && notRunYet(b) && near(b));
+  if (!inWay.length) return doc;
+  // (the grown set where it was, then each frame in its way pushed down just clear of it and its step's later exits - the highest first)
+  let d = framed(doc, was.id, there);
+  for (const b of [...inWay].sort((p, q) => q.y1 - p.y1)) {
+    const f = placeBelow(d, b.x0, Math.min(b.y1, foot - BETWEEN), b.x1 - b.x0, b.y1 - b.y0, { set: b.id });
+    d = framed(d, b.id, f);
+  }
+  return clearOf(d, there, self) ? framed(d, was.id, doc.sets!.find((b) => b.id === was.id) ?? was) : doc;
 }
 
 /**

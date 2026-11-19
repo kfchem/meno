@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
@@ -19,6 +19,7 @@ import { schemeSaid } from "../workflow/schemeRoles";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
+import { repeatBox } from "../workflow/repeat";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
 import { unseenSets } from "../workflow/onPage";
 import { exitChip, exitNames } from "../workflow/exitNames";
@@ -32,7 +33,8 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, inputOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
+import { bindable } from "../../../../lib/boundOptions";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { cardHighOf, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
@@ -41,7 +43,7 @@ import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished, quietFor } from "../../../../lib/jobs";
 import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, portDown, PORT_PAGE_PX, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
-import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, optionsNeed, setName, stepOptions } from "../workflow/doers";
+import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, optionsNeed, setName, stepOptions, takesNothingBy } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -449,6 +451,27 @@ function WireLine({ target, color, zoom, onHover, leaving = false }: { target: P
 /** How many of an earlier run's molecules did not read from its file, of both its exits. */
 const notRead = (r: StepRunKept) => (r.results?.unread ?? 0) + (r.results?.restUnread ?? 0);
 
+/** A step's options that may take their value from a property, entry by entry (lib/boundOptions), as its open card offers them: none for a step that takes nothing in, or Render's. */
+function bindsOf(s: WorkflowStep, flow: Parameters<typeof inputOf>[0], onBound: (bound: Record<string, string>) => void): ComponentProps<typeof StepCard>["binds"] {
+  const by = byOf(s);
+  const plugin = by !== "meno";
+  if (plugin && (takesNothingBy(s.kind, by) || s.kind === "render")) return undefined;
+  // (the names the entries coming in carry, each once, in the order first met)
+  const names = new Set<string>();
+  for (const m of inputOf(flow, s.id)?.molecules ?? []) for (const p of m.properties ?? []) for (const k of Object.keys(p ?? {})) names.add(k);
+  return {
+    can: (o) => bindable(o, !plugin),
+    bound: s.bound ?? {},
+    offered: [...names],
+    onBind: (id, name) => {
+      const next: Record<string, string> = { ...(s.bound ?? {}) };
+      if (name == null) delete next[id];
+      else next[id] = name;
+      onBound(next);
+    },
+  };
+}
+
 /** A step's runs as its card lists them: the one shown, then those it keeps, each with how it was set - its kind, where it was another. */
 function runRows(s: WorkflowStep): RunRow[] {
   const by = byOf(s);
@@ -636,6 +659,8 @@ export default function Workflow2D() {
   const bandNow = useRef<Band>("read");
   const named = useEasedTo(band === "marked" ? 0 : 1);
   const hoveredStep = useEditor((s) => s.hoveredStep);
+  // (each Repeat's pass under way, where one runs: its tab says it - store `runRepeat`)
+  const repeatPasses = useEditor((s) => s.repeatPasses);
   // (a chemist's set being named anew, by two presses on its tab)
   const [renaming, setRenaming] = useState<number | null>(null);
   // (a shut card's state pointed at: its words in full, in the page's tip)
@@ -1176,7 +1201,7 @@ export default function Workflow2D() {
       const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
       const own = diagram ? diagramValues(takes, s.options) : s.options;
       // (Add's: its formula, the number wired into its Number with it, where one is)
-      const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
+      const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined, s.bound);
       const run = runs.get(s.id);
       const state = run?.waiting ? "waiting" : (states.get(s.id) ?? "ready");
       const missing = notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined);
@@ -1233,6 +1258,7 @@ export default function Workflow2D() {
             runs={runRows(s)}
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
+            binds={openStep === s.id ? bindsOf(s, flow, (bound) => store.getState().updateStep(s.id, { bound })) : undefined}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
             asks={!!optionsNeed(s)}
             onChoose={(option) => store.getState().chooseAtomsFor(s.id, option)}
@@ -1317,6 +1343,35 @@ export default function Workflow2D() {
       iconWhenSmall: true,
     };
   });
+  // a Repeat's frame round the steps it runs pass by pass (workflow/repeat), by WebGL as a set's is: dashed and quiet, its tab "Repeat"
+  // and the pass under way; its card at its top left is the step's own
+  const repeatTabs: FrameTab[] = steps.flatMap((s) => {
+    if (s.kind !== "repeat" || !s.frame) return [];
+    const at = repeatPasses[s.id];
+    const status = at ? (at.stopping ? "Stopping after the jobs running" : `pass ${at.pass}${at.of ? ` of ${at.of}` : ""}`) : undefined;
+    return [
+      {
+        key: `repeat:${s.id}`,
+        box: repeatBox({ x: s.x, y: s.y, frame: s.frame }),
+        tone: selFlow.steps.has(s.id) ? ("chosen" as const) : hoveredStep === s.id ? ("hover" as const) : ("rest" as const),
+        loop: true as const,
+        tab: { icon: "repeat", name: "Repeat", ...(status ? { status } : {}) },
+        iconWhenSmall: true as const,
+      },
+    ];
+  });
+  const onRepeatTabs: FrameTabsOn = {
+    tabDown: (key, e) => {
+      const s = stepById.get(Number(key.slice("repeat:".length)));
+      if (s) dragStep(asPress(e), s);
+    },
+    hover: (key, on) => {
+      const id = Number(key.slice("repeat:".length));
+      if (on) hover({ hoveredStep: id });
+      else unhover("hoveredStep", id);
+    },
+    menu: (key, e) => store.getState().setWorkflowView({ workflowMenu: { kind: "step", id: Number(key.slice("repeat:".length)), clientX: e.screen.x, clientY: e.screen.y } }),
+  };
   // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
   //  aside, given nothing - and growing out of it as it is shown again - about that port, as its HTML did: its frame drawn that far
   //  from the port, as present as it is)
@@ -1575,6 +1630,7 @@ export default function Workflow2D() {
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
       <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map(cardBoxOf)} />
+      {repeatTabs.length > 0 && <FrameTabs items={repeatTabs} on={onRepeatTabs} clear={faceList.map(cardBoxOf)} />}
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

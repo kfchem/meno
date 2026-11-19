@@ -24,10 +24,25 @@ export type Copy = { concept: string; file: string; name: string; part: number |
 export const CONCEPTS: Record<string, RegExp> = {
   rings: /^(?:export )?(?:async )?(?:function|const) (inSmallRing|ringThrough|ringsThrough|smallRings|ringBonds|ringParts|smallestRings|ringsAlike|withSmallRings|smallestSets|ringSetsToTry|sixCycles|ringsOf)\b/,
   metals: /^(?:export )?(?:function|const) (METALS|isMetal|NOT_METALS|IONIC|COUNTED|BRIDGED_TO)\b/,
-  valence: /^(?:export )?(?:function|const) (VALENCE|VALENCES|HIGHER|OUTER|HIGHEST|PYRAMID_VALENCE|VALENCE_ELECTRONS|D_ORBITAL_VALENCE|NORMAL_VALENCES|BONDS_LEFT|CARRIERS)\b/,
+  valence: /^(?:export )?(?:function|const) (VALENCE|VALENCES|HIGHER|OUTER|HIGHEST|PYRAMID_VALENCE|VALENCE_ELECTRONS|D_ORBITAL_VALENCE|NORMAL_VALENCES|BONDS_LEFT|CARRIERS|octetValence|SECOND_PERIOD)\b/,
   parity: /^(?:export )?(?:function|const) (parity|permutationParity)\b/,
   volume: /^(?:export )?(?:function|const) (drawnVolume|volumeSign|handedness|signedVolume)\b/,
   "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
+  // a run of cumulated double bonds, and the atom an axis's or a cumulene's end runs on through (perception/stereo/runs.ts, part 4)
+  runs: /^(?:export )?(?:function|const) (cumulatedRuns|runsThrough|runsOfDrawing|linearMiddle)\b/,
+  "depth read": /^(?:export )?(?:function|const) (withRecognisedDepth|recogniseChair|recogniseHaworth)\b/,
+  // Meno's rule for an aromatic ring (perception/aromatic.ts): no copy of it outside the core
+  "aromatic rule": /^(?:export )?(?:function|const) (aromaticAtoms|piElectrons|MOST_PI|RING_LONE_PAIR)\b/,
+  // a structure's symmetry and canonical order: the one refinement and search (perception/symmetry.ts, part 6)
+  symmetry: /^(?:export )?(?:function|const) (symmetryClasses|symmetryOrbits|canonicalRanks|canonicalText|canonicalWritten|canonicalSearched|settleBudget|withStereo|isomorphisms|coreMatches|matchedAtoms)\b/,
+  // which atoms of three keep a configuration by their lone pair, and which have one (perception/stereo/lonePairs.ts)
+  "lone pair": /^(?:export )?(?:function|const) (lonePairCentres|lonePairOfThree|lonePairs|pyramidal|protonatedAmineHeld)\b/,
+  // an atom's hydrogens that are no atoms of their own, counted over its bonds (perception/hydrogens.ts `hydrogenCounts`)
+  "hydrogen count": /^(?:export )?(?:function|const) (implicitOf|hydrogensOf|undrawnHydrogens|hydrogenCounts)\b/,
+  // a plain hydrogen, the one test, and the one fold of them into the atoms they are on (perception/fold.ts)
+  "plain hydrogen": /^(?:export )?(?:function|const) (isPlainH|plainH|plainHydrogen|plainHydrogenAtoms|hydrogensFolded|foldedOf)\b/,
+  // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
+  "aromatic tests": /^(?:export )?(?:function|const) (aromaticRing|aromaticBonds|isFlat)\b/,
 };
 
 /**
@@ -48,32 +63,19 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/ringSets.ts", name: "ringSetsToTry", part: 2, why: "the layout's own choice of ring sets to try" },
   // metals: every list in one file under its name (perception/elements.ts); what stands apart is a name for a set of it, or a test of its own
   { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
-  { concept: "metals", file: "lib/chem/conformersSought.ts", name: "metalByBonds", part: 3, why: "a test of its own (no most bonds), not a list: it becomes the core's metal in part 3's fixes (B4)" },
   // valence tables: one count, one table (hydrogens and valence)
-  { concept: "valence", file: "lib/chem/molecule.ts", name: "VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/molecule.ts", name: "HIGHEST", part: 12 },
-  { concept: "valence", file: "lib/chem/formula.ts", name: "VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/formula.ts", name: "HIGHER", part: 12 },
-  { concept: "valence", file: "lib/chem/formula.ts", name: "OUTER", part: 12 },
-  { concept: "valence", file: "lib/chem/chain.ts", name: "VALENCES", part: 12 },
-  { concept: "valence", file: "lib/chem/lonePairCentres.ts", name: "PYRAMID_VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "VALENCE_ELECTRONS", part: 12 },
-  { concept: "valence", file: "lib/chem/cip/prepare.ts", name: "D_ORBITAL_VALENCE", part: 12 },
-  { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
-  { concept: "valence", file: "lib/chem/abbreviations.ts", name: "CARRIERS", part: 12 },
-  // permutation parity and signed volume from places
-  { concept: "parity", file: "lib/layout/canonical.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
-  { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },
-  { concept: "volume", file: "lib/layout/cage.ts", name: "handedness", part: 4 },
-  { concept: "volume", file: "lib/steps/compareBonding.ts", name: "handedness", part: 4 },
+  // the lone pair: the CIP's own count stands apart by design
+  { concept: "lone pair", file: "lib/chem/cip/prepare.ts", name: "lonePairs", part: "14 B", why: "the conventions' count, for describing a configuration given (a carbanion's lone pair counted with its charge, its fourth place a phantom): not which atoms keep one - the core's rule would refuse a carbanion's label (cip.test.ts)" },
+  // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
+  { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },
+  { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: 12, why: "a P and an S at their higher valences where the bonds pass the lower: part 12b" },
+  { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
+  // a plain hydrogen: each a variant for its own question, named, or onto the core's test in its file's queue
+  { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "isPlainH", part: 12, why: "a match ignores a map number (a named variant); takes a bridging H and one on a metal as plain, which the core's test does not: part 12c with those two fixes" },
+  { concept: "plain hydrogen", file: "ui/features/Workspace/workflow/substituents.ts", name: "isPlainH", part: 12, why: "an option typed as H, not a drawn atom: an H, not D or T, with no charge - a question of its own: part 12c" },
+  { concept: "plain hydrogen", file: "ui/features/Workspace/chem/engineLayout.ts", name: "plainH", part: 12, why: "an H with no chemistry, one on a metal too, which the core's test keeps an atom: onto the core's with that fix, its own change" },
   // the types for a centre, a double bond, an axis, a whole configuration
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredCentre", part: 14 },
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredDouble", part: 14 },
-  { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "Configuration", part: 14 },
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "StereoElement", part: 14 },
   { concept: "stereo types", file: "lib/chem/smiles.ts", name: "Configuration", part: 14 },
   { concept: "stereo types", file: "lib/entry.ts", name: "StereoElement", part: 14 },
@@ -84,6 +86,20 @@ export const STILL_APART: Copy[] = [
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Axial", part: 14, why: "re-exported from the core, as Tetrahedral" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Cumulated", part: 14, why: "re-exported from the core, as Tetrahedral (part 14 A)" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
+  // symmetry: the layout's ranks and the Kekule ranker onto the core's refinement and search (parts 6a, 6b); the orbits of the aromatic form
+  // identity's until part 13; and the matchers of two graphs, which are not the symmetry of one
+  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "canonicalRanks", part: "by design", why: "the layout's name for the core's canonical ranks of the input its Molecule was perceived from: written over the core's search (part 6b), not a second one" },
+  { concept: "symmetry", file: "lib/chem/identity.ts", name: "symmetryOrbits", part: 13, why: "the orbits of the aromatic form, over the core's orbits as drawn: identity's own until part 13" },
+  { concept: "symmetry", file: "lib/chem/accelMapper.ts", name: "isomorphisms", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
+  { concept: "symmetry", file: "lib/layout/scaffold.ts", name: "coreMatches", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
+  { concept: "symmetry", file: "lib/layout/morph.ts", name: "matchedAtoms", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
+  { concept: "runs", file: "lib/chem/stereoOpen.ts", name: "cumulatedRuns", part: "by design", why: "groups the double bonds a structure leaves open by the runs they are in: written over the core's runs (part 4), not a second finder of them" },
+  // tests of a ring as aromatic that are not Meno's rule nor its two forms (perception/aromatic.ts): each answers a question of its own
+  { concept: "aromatic tests", file: "lib/chem/aromaticSides.ts", name: "aromaticRing", part: "stays", why: "display, by design: a ring drawn with its double bonds in turn, for the side its second lines are drawn on" },
+  { concept: "aromatic tests", file: "lib/chem/contract.ts", name: "aromaticBonds", part: "stays", why: "by design, of a drawing: a six-ring drawn alternating, matched as a group's ring when Clean-up writes groups by their labels" },
+  { concept: "aromatic tests", file: "lib/chem/reactionMap.ts", name: "aromaticBonds", part: "stays", why: "a use of the core's aromaticForm, not a rule: its bonds of order 4 as a set of atom pairs" },
+  { concept: "aromatic tests", file: "lib/chem/ordersFromGeometry.ts", name: "isFlat", part: "stays", why: "from geometry, by design: a ring flat in space, where orders are read from 3D coordinates" },
+  { concept: "aromatic tests", file: "lib/chem/protonation.ts", name: "isFlat", part: "stays", why: "by its bonds, by design: a five- or six-ring each of whose atoms has a multiple bond or is N, O or S - flat, for where an H goes; no count of electrons" },
 ];
 
 /** The top-level declarations in a file's text that a concept's pattern names: name and line. */
@@ -148,11 +164,17 @@ describe("one definition per concept: the ratchet", () => {
 });
 
 describe("the ratchet's own reading, so that it bites", () => {
-  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre", () => {
+  it("finds a new copy of a concept: a ring search, a metal list, a parity, a type for a centre, the aromatic rule, a hydrogen count, a plain hydrogen, a lone pair's rule, a symmetry search", () => {
     expect(declarationsIn("export function ringThrough(g, a) {}\nconst x = 1;\n", CONCEPTS.rings)).toEqual([{ name: "ringThrough", line: 1 }]);
     expect(declarationsIn("const METALS = new Set([]);\n", CONCEPTS.metals)).toEqual([{ name: "METALS", line: 1 }]);
     expect(declarationsIn("function parity(p: number[]) {}\n", CONCEPTS.parity)).toEqual([{ name: "parity", line: 1 }]);
     expect(declarationsIn("export type Tetrahedral = { volume: 1 | -1 };\n", CONCEPTS["stereo types"])).toEqual([{ name: "Tetrahedral", line: 1 }]);
+    expect(declarationsIn("export function aromaticAtoms(rings, electrons) {}\nconst MOST_PIXELS = 1;\n", CONCEPTS["aromatic rule"])).toEqual([{ name: "aromaticAtoms", line: 1 }]);
+    expect(declarationsIn("export function symmetryOrbits(g) {}\nconst settleBudgets = 1;\n", CONCEPTS.symmetry)).toEqual([{ name: "symmetryOrbits", line: 1 }]);
+    expect(declarationsIn("function lonePairs(p, a) {}\nexport function lonePairsIn3d() {}\n", CONCEPTS["lone pair"])).toEqual([{ name: "lonePairs", line: 1 }]);
+    expect(declarationsIn("function implicitOf(atoms, bonds) {}\nconst hydrogensOfThem = 1;\n", CONCEPTS["hydrogen count"])).toEqual([{ name: "implicitOf", line: 1 }]);
+    expect(declarationsIn("const isPlainH = (a) => a.el === 'H';\nconst plainHydrogens = 1;\n", CONCEPTS["plain hydrogen"])).toEqual([{ name: "isPlainH", line: 1 }]);
+    expect(declarationsIn("function aromaticRing(ring) {}\nconst isFlatter = 1;\n", CONCEPTS["aromatic tests"])).toEqual([{ name: "aromaticRing", line: 1 }]);
   });
 
   it("leaves a use, a local and an import alone: only a declaration counts", () => {

@@ -331,6 +331,7 @@ export function createEditorStore(
     pdfLens: null,
     pdfStructures: null,
     pdfStructureFlight: null,
+    configurationNotes: [],
     hoveredText: null,
     selTexts: new Set<number>(),
     selPdfs: new Set<number>(),
@@ -475,9 +476,14 @@ export function storeOf(doc: DocumentStore<WorkspaceDocument>): EditorStore {
   if (!store) {
     store = createEditorStore(doc);
     storesOf.set(doc, store);
+    docsOf.set(store, doc);
   }
   return store;
 }
+
+const docsOf = new WeakMap<EditorStore, DocumentStore<WorkspaceDocument>>();
+/** The document a store was made for (`storeOf`): none for a store made otherwise. */
+export const documentOf = (store: EditorStore): DocumentStore<WorkspaceDocument> | undefined => docsOf.get(store);
 
 /** The store a document is drawn from, where one has been made: none for a document never drawn. */
 export const madeStoreOf = (doc: DocumentStore<WorkspaceDocument>): EditorStore | undefined => storesOf.get(doc);
@@ -496,6 +502,11 @@ export function takeOpening(store: EditorStore): boolean {
   openedStores.add(store);
   return true;
 }
+
+/** What a canvas was opened with, being taken into its store: settled once it is in, or has failed (hooks/useStructureEvents). */
+const openings = new WeakMap<EditorStore, Promise<unknown>>();
+export const holdOpening = (store: EditorStore, taking: Promise<unknown>): void => void openings.set(store, taking);
+export const openingOf = (store: EditorStore): Promise<unknown> | undefined => openings.get(store);
 
 const EditorStoreContext = createContext<EditorStore | null>(null);
 
