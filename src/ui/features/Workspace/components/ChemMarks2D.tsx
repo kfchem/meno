@@ -24,6 +24,8 @@ import {
 import { useEditor } from "../store";
 import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
+import { readingOf, type Reading } from "../configuration/changes";
+import { atomSaid, bondSaid } from "../configuration/said";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
@@ -58,6 +60,19 @@ const STEREO_ORDER = 35;
  * and written as here (chem/marks `stereoPictureItems`, `stereoTextItem`,
  * 2026-10-21), never the rings.
  */
+/** What the look the pointer rests on states (configuration/said), the drawing read once for each model it is asked of. */
+const readings = new WeakMap<Model, Reading>();
+function lookSaid(model: Model, atom: number | undefined, bond: number | undefined, marks: ChemMarks | null): string | null {
+  if (!model.bonds.some((b) => b.stereo || b.display) && !model.atoms.some((a) => a.z != null)) return null;
+  let reading = readings.get(model);
+  if (!reading) readings.set(model, (reading = readingOf(model)));
+  const label = (key: string) => {
+    const id = Number(key.slice(key.indexOf("-") + 1));
+    return key.startsWith("centre-") ? marks?.centres.get(id) : marks?.doubleBonds.get(id);
+  };
+  return atom != null ? atomSaid(model, reading, atom, label) : bond != null ? bondSaid(model, reading, bond, label) : null;
+}
+
 export default function ChemMarks2D({
   marks,
   unsure,
@@ -299,12 +314,14 @@ export default function ChemMarks2D({
   // (a stereocentre or double bond asked for, pointed at, with words of its own - why it has no R or S, E or Z, or that its Z or E
   //  turns in the mirror image: said under it as a box's words are, with no box)
   const saidPointed = (() => {
-    if (pointed || !marks?.said?.size || !marksRead) return null;
-    const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom && a.stereoShown) : undefined;
-    const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond && b.stereoShown) : undefined;
+    if (pointed || !marksRead) return null;
+    const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom) : undefined;
+    const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond) : undefined;
     const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
-    const text = key && marks.said.get(key);
-    if (!text) return null;
+    const shown = atom ? atom.stereoShown : bond?.stereoShown;
+    // (its own words where its R, S, E or Z is shown with some - why it has none; else what its look states: configuration/said)
+    const text = (key && shown && marks?.said?.get(key)) || (key ? lookSaid(model, atom?.id, bond?.id, marks) : null);
+    if (!key || !text) return null;
     const p = atom ? at.get(atom.id) : bond ? at.get(bond.a) : undefined;
     const q = bond ? at.get(bond.b) : p;
     if (!p || !q) return null;

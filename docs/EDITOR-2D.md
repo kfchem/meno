@@ -1584,6 +1584,25 @@ All hover-based, as above.
   with a drawing pasted, on its new ids. Identity, Clean-up, R and S, 3D
   and the files still read the marks: none of them takes what is kept
   yet.
+- **What a look states** (foundation part 15, phase 4;
+  `configuration/said.ts`, shown by `ChemMarks2D` in the tip it gives an
+  R or S of its own words). The pointer resting on a bond or an atom of a
+  structure says, in one line under it, what that look states - what it
+  is, never how it is worked out:
+  - a wedge: the centre it is narrow at, with its R or S where the drawing
+    shows one ("C3: R, by this wedge"; "C3: set, by this wedge" where R
+    or S is not shown), or why it is not read ("C3: not read: ..."); where
+    the atom at its wide end is a centre too, that it says nothing of it;
+  - a wavy bond: its centre open; an "either" double bond: open;
+  - a bold, dashed or hashed line on a flat drawing: no configuration; a
+    bold line of a ring drawn with depth: the near edge;
+  - a double bond whose cis or trans is stated: its E or Z where shown;
+  - a centre: its R or S, "set", "open", or "not read" and why; an atom of
+    a ring drawn with depth: that the drawing shows its configuration.
+  A plain bond and an atom with no configuration say nothing. The words
+  follow the drawing as it is edited. Where a centre has no mark at all,
+  nothing is said: whether it could carry one is the identity's search,
+  too long to make as the pointer moves.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
