@@ -1888,8 +1888,17 @@ All hover-based, as above.
   - Put down near an arrow - within its length and two and a half ems of
     it - they go over it or under it, on the side they were put, centred on
     its middle and half an em clear of it, beyond any words already there;
-    and go where the arrow goes, moved or drawn out, until they are dragged
-    off it. Put down elsewhere, they stay where they are put.
+    and go where the arrow goes as it is drawn out, or with a selection
+    that takes it, until they are dragged off it. Put down elsewhere, they
+    stay where they are put.
+  - An arrow and its words move apart, each on its own (the maintainer,
+    2026-11-09): the arrow dragged by itself goes alone, its words staying
+    where they stand. They are let go of it as it moves, so that it is not
+    drawn out to them, and are over it again where it is put within their
+    reach - along it, within its length, and across it, within two and a
+    half ems - else they are words of their own. Words dragged go alone, as
+    before. Both go when both are selected and either is dragged
+    (`Arrows2D`, `components/drawnArrows` `wordsKeptBy`).
   - An arrow is as long as its words need (the maintainer, 2026-10-11):
     where the words over it or under it would run past it, it is drawn out
     about its middle - nothing else moves - to reach three quarters of an
