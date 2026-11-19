@@ -24,7 +24,8 @@ import { drawnBox } from "../../../../utils/importers";
 import { cornersOf } from "../utils/selection";
 import { cardRect } from "../pageGl/conversationCard";
 import { drawnIn, inside, structuresOf, setMembers, type Frame } from "./entries";
-import { SET_PAD, SET_TOP } from "./look";
+import { CARD_H, CARD_W, SET_PAD, SET_TOP } from "./look";
+import { exitsOf } from "./kinds";
 import { resizeSet } from "./model";
 import { unseenSets } from "./onPage";
 import { keepExitsUnder, LEAST_W, roomOf, type RunWith } from "./run";
@@ -37,6 +38,26 @@ const EPS = 1e-6;
 /** Whether a set's frame is its members' room: one holding structures, molecules in 3D or pictures it knows of, and nothing a frame says otherwise - no table, number or chart, none held in the set itself (a large set), none not read. */
 export function holdsToFit(set: WorkflowSet): boolean {
   return !!set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread;
+}
+
+/**
+ * Whether a set's frame is left over from what it no longer holds: a set that fits its members (`holdsToFit`) with none left - its last
+ * member dragged out or deleted, or its step run on nothing (model `holdNothing`) - and nothing else a frame says.
+ */
+export function emptied(set: WorkflowSet): boolean {
+  return !set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread;
+}
+
+/**
+ * An emptied set's frame (`emptied`): as large as a frame made for it before it held anything - a step's exit's "Not run yet" frame, a card
+ * wide and a card high, or half as high for an exit of one of its others (model `withExits`); a chemist's set, a card wide and half a card
+ * high - kept where its top-left corner is, never the tall frame of what it last held (backlog 232, found in a GUI run).
+ */
+export function emptyFrame(doc: WorkspaceDocument, set: WorkflowSet): Frame {
+  const step = set.made && doc.steps?.find((s) => s.id === set.made!.step);
+  const exit = step && exitsOf(step.kind).find((e) => e.id === set.made!.exit);
+  const high = exit && !exit.of ? CARD_H : CARD_H / 2;
+  return { x0: set.x0, x1: set.x0 + CARD_W, y0: set.y1 - high, y1: set.y1 };
 }
 
 /** The bonds of a model by the atoms they join, worked out once for each list of bonds. */
@@ -232,6 +253,13 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
   // (the frames fitted all at once, each from the page as it was: a step's other exits' sets are kept under its first only then, moving with what they hold)
   const steps = new Set<number>();
   for (const set of doc.sets) {
+    // (one this edit emptied - it held members before it: back to the frame it had before it held anything, where it is)
+    if (emptied(set)) {
+      const prior = before?.sets?.find((b) => b.id === set.id);
+      const frame = emptyFrame(doc, set);
+      if (prior?.members?.length && !sameFrame(set, frame)) out = resizeSet(out, set.id, frame);
+      continue;
+    }
     if (!holdsToFit(set)) continue;
     // (a set the edit added is as it was made; and one whose member is being dragged keeps its frame)
     const prior = before?.sets?.find((b) => b.id === set.id);

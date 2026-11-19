@@ -8,7 +8,7 @@ import type { Model, Molecule3D } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
 import type { Frame } from "./entries";
 import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
-import { CHIP, PX, SET_PAD, SET_TOP } from "./look";
+import { CARD_H, CARD_W, CHIP, PX, SET_PAD, SET_TOP } from "./look";
 import { addSet, markMade } from "./model";
 import { LEAST_W, roomOf, type RunWith } from "./run";
 
@@ -474,5 +474,22 @@ describe("a structure's box beside another a hydrogen bond joins it to: its labe
     // (the water's box no wider than its label as drawn: OH2 from its O rightward)
     const alone = drawnBox({ atoms: [model.atoms[2]], bonds: [] });
     expect(water.x1 - water.x0).toBeLessThan(alone.maxX - alone.minX + 0.5);
+  });
+});
+
+describe("a set emptied keeps no tall frame (backlog 232)", () => {
+  it("its last member gone, its frame goes back to a card wide and half a card high, its top-left where it was", () => {
+    const doc = fitted();
+    const was = frameOf(doc.getState());
+    doc.edit("delete", (d) => ({ ...d, molecules3d: [] }));
+    const now = frameOf(doc.getState());
+    close(now, { x0: was.x0, x1: was.x0 + CARD_W, y0: was.y1 - CARD_H / 2, y1: was.y1 });
+  });
+
+  it("a set left empty from the first is as it was made: never shrunk unasked", () => {
+    const doc = createWorkspaceDocument(undefined, undefined, undefined, () => reach);
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }));
+    doc.edit("place", (d) => addMolecule3d(d, mol(20, 20)));
+    close(frameOf(doc.getState()), { x0: -3, y0: -3, x1: 3, y1: 3 });
   });
 });
