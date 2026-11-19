@@ -531,6 +531,11 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
 
   The rule is by the bonds that turn; which those are is Meno's
   definition, above: a bond whose turn gives conformers of their own.
+  Bonds marked aromatic are read in the core's Kekule form first, in a
+  ring or outside one (`perception/kekule` `valenceOrders`): a carboxyl
+  written with two aromatic C-O bonds is a C=O and a C-OH, and its OH
+  turns as acetic acid's does; acetate's and a nitro group's ends turn
+  nothing.
 
   Two things are added to the rule, both measured:
   - **a ring that can flip is worth at least two hundred.** A ring's two

@@ -22,6 +22,21 @@ const flips = (smiles: string) => {
   return canFlip(m.atoms, m.bonds);
 };
 
+describe("bonds marked aromatic outside a ring, counted in the core's Kekule form", () => {
+  it("turn as the molecule's own Kekule structure does: acetic acid's OH, acetate's none, nitromethane's none - and a ring's as before", () => {
+    // (acetic acid written with two aromatic C-O: one C=O and one C-OH, the OH's bond turning, as CC(=O)O's does)
+    expect(turns("CC(:O):O")).toBe(turns("CC(=O)O"));
+    expect(sought("CC(:O):O")).toBe(sought("CC(=O)O"));
+    // (acetate with its charge: C=O and C-O-, no H to turn; nitromethane with its charges: nothing turns but the methyl, a top)
+    expect(turns("CC(:O):[O-]")).toBe(turns("CC(=O)[O-]"));
+    expect(turns("C[N+](:O):[O-]")).toBe(turns("C[N+](=O)[O-]"));
+    // (a ring's aromatic bonds: unchanged - toluene, phenol, benzoic acid with its ring written aromatic)
+    for (const [aromatic, kekule] of [["Cc1ccccc1", "CC1=CC=CC=C1"], ["Oc1ccccc1", "OC1=CC=CC=C1"], ["OC(=O)c1ccccc1", "OC(=O)C1=CC=CC=C1"]]) {
+      expect(turns(aromatic), aromatic).toBe(turns(kekule));
+    }
+  });
+});
+
 describe("how many conformers are tried of a molecule", () => {
   it("tries few of a molecule that has only the one shape", () => {
     // (benzene; caffeine; adamantane and norbornane, held by their bridges; neopentane, whose one turn gives the same shape)

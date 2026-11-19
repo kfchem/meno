@@ -25,6 +25,13 @@ import { readMolfile } from "./ctfile";
 import { flatRingAtoms, neighboursOf } from "./perception/flatRings";
 import { HELD_FLAT_BY_AN_ACYL } from "./perception/stereo/lonePairs";
 import { implicitHydrogens } from "./molecule";
+import { AROMATIC_BOND, valenceOrders } from "./perception/kekule";
+
+/** The bonds with those marked aromatic given their Kekule orders, as the core counts them; the rest as given. */
+function kekuleRead(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): SoughtBond[] {
+  const orders = valenceOrders(atoms, bonds);
+  return bonds.map((b, i) => (b.order === orders[i] ? b : { ...b, order: orders[i] }));
+}
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -101,7 +108,10 @@ export function bondsInRings(atoms: readonly SoughtAtom[], bonds: readonly Sough
  * The rule (above) is by the bonds that turn; which those are is Meno's
  * definition, here: a bond whose turn gives conformers of their own.
  */
-export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): number[] {
+export function turningBonds(atoms: readonly SoughtAtom[], given: readonly SoughtBond[]): number[] {
+  // (bonds marked aromatic read in the core's Kekule form - the same matching in a ring or outside one: a carboxyl written with two
+  //  aromatic C-O bonds is a C=O and a C-OH, whose OH turns, as the molecule's own structure has it - perception/kekule `valenceOrders`)
+  const bonds = given.some((b) => b.order === AROMATIC_BOND) ? kekuleRead(atoms, given) : given;
   const around = neighboursOf(atoms, bonds);
   const inRing = bondsInRings(atoms, bonds);
   const heavyAround = (i: number) => around[i].filter(([j]) => heavy(atoms[j]));
