@@ -407,6 +407,30 @@ describe("cleanUp", () => {
     expect(partFormula({ atoms: [{ ...atom(1, 0, 0, "N"), charge: 1 }], bonds: [] })).toBe("H4N+");
   });
 
+  it("says a structure's formula as the compound's: a dative, coordination or hydrogen bond counted as a drawing counts it (the chemistry check's ruling)", () => {
+    const bond = (id: number, a: number, b: number, more: object = {}) => ({ id, a, b, order: 1 as const, ...more });
+    // (H3N->BH3: BH6N; NH3 on a PtCl2: Cl2H3NPt; (NH3)2PtCl2: Cl2H6N2Pt)
+    expect(partFormula({ atoms: [atom(1, 0, 0, "N"), atom(2, 1, 0, "B")], bonds: [bond(10, 1, 2, { dative: true })] })).toBe("BH6N");
+    const pt = (ammines: number) => ({
+      atoms: [atom(1, 0, 0, "Pt"), atom(2, 1, 0, "Cl"), atom(3, -1, 0, "Cl"), ...Array.from({ length: ammines }, (_, k) => atom(4 + k, 0, k ? -1 : 1, "N"))],
+      bonds: [bond(10, 1, 2), bond(11, 1, 3), ...Array.from({ length: ammines }, (_, k) => bond(12 + k, 4 + k, 1, { dative: true }))],
+    });
+    expect(partFormula(pt(1))).toBe("Cl2H3NPt");
+    expect(partFormula(pt(2))).toBe("Cl2H6N2Pt");
+    // (a methyl radical: CH3; diphenylphosphine oxide: C12H11OP; acetic acid, the control: C2H4O2)
+    expect(partFormula({ atoms: [{ ...atom(1, 0, 0), radical: "doublet" as const }], bonds: [] })).toBe("CH3");
+    const ring = (from: number) => Array.from({ length: 6 }, (_, k) => atom(from + k, k, 1));
+    const ringBonds = (from: number, id: number) => Array.from({ length: 6 }, (_, k) => ({ id: id + k, a: from + k, b: from + ((k + 1) % 6), order: (k % 2 ? 1 : 2) as 1 | 2 }));
+    const ph2po = {
+      atoms: [atom(1, 0, 0, "P"), atom(2, 0, 1, "O"), ...ring(10), ...ring(20)],
+      bonds: [{ id: 1, a: 1, b: 2, order: 2 as const }, bond(2, 1, 10), bond(3, 1, 20), ...ringBonds(10, 30), ...ringBonds(20, 40)],
+    };
+    expect(partFormula(ph2po)).toBe("C12H11OP");
+    expect(partFormula({ atoms: [atom(1, 0, 0), atom(2, 1, 0), atom(3, 2, 0, "O"), atom(4, 1, 1, "O")], bonds: [bond(10, 1, 2), bond(11, 2, 3), { id: 12, a: 2, b: 4, order: 2 }] })).toBe("C2H4O2");
+    // (two waters held by a hydrogen bond: no H taken at either end - H4O2)
+    expect(partFormula({ atoms: [atom(1, 0, 0, "O"), atom(2, 2, 0, "O")], bonds: [bond(10, 1, 2, { hydrogen: true })] })).toBe("H4O2");
+  });
+
   it("lays out only the structure an atom is in, when asked about one", async () => {
     const { store } = canvas(model);
     await cleanUp(store, 5);
