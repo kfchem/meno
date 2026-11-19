@@ -1,7 +1,7 @@
 import { addAfterEffect, useFrame, useThree } from "@react-three/fiber";
 import { longPressMs } from "../longPress";
 import { setCursor } from "../../../theme/cursors";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
@@ -22,7 +22,8 @@ import { moleculeHandlers, type MoleculeHandlers } from "../utils/moleculeHandle
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
 import { useProtonationMark } from "../chem/protonate";
-import { eyeOf, pageAt } from "../utils/page";
+import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";
+import { coastFrame, coastFrom, type Coast } from "../utils/coast";
 import { guideMove } from "../utils/guiding";
 import { selectionScheme } from "../utils/selectionScheme";
 import { setMembers } from "../workflow/entries";
@@ -44,10 +45,6 @@ import { editorLayoutOptions } from "../layoutOptions";
 import { MARK_SCALE } from "../chem/marks";
 import { fontStack, labelSetOf } from "../../../../lib/chem/layout2d";
 
-/** A turn left to itself stops below this speed, in radians a second. */
-const STILL = 0.02;
-/** A release this long after the last move leaves the molecule still, in ms. */
-const HELD_MS = 80;
 /** How far back the moves go that say how fast a molecule was turning when let go, in ms. */
 const RECENT_MS = 64;
 /**
@@ -196,6 +193,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const chosen = useEditor((s) => s.chosen3d);
   const hoveredMeasure = useEditor((s) => s.hoveredMeasure3d);
   const store = useEditorStore();
+  // (how each is turned now, as each frame is drawn: a turn set this frame - a molecule let go turning on - drawn in it)
+  const turnOf = useCallback((id: number) => store.getState().turns3d[id], [store]);
   const { camera, gl, invalidate } = useThree();
   const dom = gl.domElement as HTMLCanvasElement;
   // where the measurements' values are put: what the canvas's events are
@@ -205,8 +204,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // (in the layer the page's HTML goes in, where there is one: PageHtml)
   const layer = useContext(PageHtmlLayer);
   valuesHost.current = layer ?? connected ?? dom.parentElement?.parentElement ?? null;
-  // molecules turning on by themselves: about which axis, how fast (rad/s)
-  const spins = useRef(new Map<number, { axis: THREE.Vector3; speed: number }>());
+  // molecules turning on by themselves (utils/coast)
+  const spins = useRef(new Map<number, Coast>());
   const gesture = useRef<Gesture | null>(null);
   // a measurement's value being dragged across, to set it: which, where the
   // drag began and the value then, and the undo step it makes - the
@@ -614,9 +613,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         // over the last moves, slowing as it goes
         const took = g.recent.reduce((a, r) => a + r.dt, 0);
         const speed = g.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
-        if (e.timeStamp - g.t < HELD_MS && speed > STILL) {
-          for (const id of g.group) spins.current.set(id, { axis: g.axis, speed });
-        }
+        const coast = coastFrom(g.axis, speed, g.t, e.timeStamp);
+        if (coast) for (const id of g.group) spins.current.set(id, { ...coast });
       }
       swallowClick();
       st.setHovered3d(hit(e));
@@ -728,26 +726,29 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     };
   }, [store, invalidate]);
 
-  // a molecule let go while turning turns on, slowing to a stop; one turning once round, round (utils/turnOnce)
-  useFrame((_, dt) => {
+  // a molecule let go while turning turns on, slowing to a stop; one turning once round, round (utils/turnOnce) - before
+  // the molecules are placed, so that each is drawn as it is turned this frame, not as it was the frame before
+  useFrame(() => {
     if (turningOnce(store)) {
       stepTurnsOnce(store, performance.now(), new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion));
       movedUnderPointer(camera);
       invalidate();
     }
     if (!spins.current.size) return;
+    const now = performance.now();
     for (const [id, s] of spins.current) {
+      const { angle, next } = coastFrame(s, now, style.turnDamping);
       const was = store.getState().turns3d[id];
       const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();
-      q.premultiply(new THREE.Quaternion().setFromAxisAngle(s.axis, s.speed * dt)).normalize();
+      q.premultiply(new THREE.Quaternion().setFromAxisAngle(s.axis, angle)).normalize();
       store.getState().setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
-      s.speed *= Math.pow(1 - style.turnDamping, dt * 60);
-      if (s.speed < STILL) spins.current.delete(id);
+      if (next) spins.current.set(id, next);
+      else spins.current.delete(id);
     }
     // (turning on under a pointer resting on it: the atom under it changes)
     movedUnderPointer(camera);
     invalidate();
-  });
+  }, FRAME_ORDER.turning);
 
   // a list opened under a molecule with no room for it below: the view
   // glides - zooming out, where it must - until the molecule and the list,
@@ -816,6 +817,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             look={lookOf(m)}
             frame={frames[m.id] ?? 0}
             turn={turns[m.id]}
+            turnOf={turnOf}
             lit={litOf(m.id)}
             selected={sel3d.has(m.id)}
             chosen={chosen?.id === m.id ? chosen.atoms : NONE}

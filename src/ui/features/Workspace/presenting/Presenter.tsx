@@ -39,6 +39,7 @@ import { style3dOf } from "../style3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { lookOf, onMolecule, poseOf, solidOf } from "../utils/molecule3d";
 import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";
+import { coastFrame, coastFrom, type Coast } from "../utils/coast";
 import { isPinch, wheelReader } from "../../../../lib/input/wheel";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { MOV_PX } from "../constants";
@@ -52,9 +53,7 @@ const VEIL_TAU = 0.08;
 /** How long a slide's number shows as it comes, in ms; and the pointer, still, before it hides. */
 const COUNT_MS = 1600;
 const POINTER_MS = 2000;
-/** A turned molecule's coasting: as on the page (Molecules3D) - let go within HELD_MS of its last move, it turns on, slowing, until slower than STILL. */
-const HELD_MS = 80;
-const STILL = 0.02;
+/** How far back the moves go that say how fast a molecule was turning when let go, in ms: as on the page (Molecules3D). Let go, it coasts as there (utils/coast). */
 const RECENT_MS = 64;
 /** How long the molecules take to turn back as they were, as a talk ends, in ms. */
 const TURN_BACK_MS = 420;
@@ -81,7 +80,7 @@ type Run = {
   veil: number;
   /** A press on the talk's surface: on a molecule in 3D (turning it), or not (a click going on, a drag moving the view). */
   press: { pointerId: number; sx: number; sy: number; x: number; y: number; t: number; moved: boolean; on: number | null; axis: THREE.Vector3; recent: { t: number; angle: number; dt: number }[] } | null;
-  spins: Map<number, { axis: THREE.Vector3; speed: number }>;
+  spins: Map<number, Coast>;
   /** A slide's number typed, to go to with Enter. */
   typed: string;
   screen: "black" | "white" | null;
@@ -268,7 +267,8 @@ export default function Presenter() {
           if (g.on != null) {
             const took = g.recent.reduce((a, x) => a + x.dt, 0);
             const speed = g.recent.reduce((a, x) => a + x.angle, 0) / (Math.max(took, 16) / 1000);
-            if (e.timeStamp - g.t < HELD_MS && speed > STILL) r.spins.set(g.on, { axis: g.axis, speed });
+            const coast = coastFrom(g.axis, speed, g.t, e.timeStamp);
+            if (coast) r.spins.set(g.on, coast);
             invalidate();
           }
           return;
@@ -570,13 +570,15 @@ export default function Presenter() {
     // molecules let go while turning, turning on and slowing
     if (r.spins.size) {
       const damping = style3dOf(store.getState()).turnDamping;
+      const now = performance.now();
       for (const [id, sp] of r.spins) {
+        const { angle, next } = coastFrame(sp, now, damping);
         const was = st.turns3d[id];
         const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();
-        q.premultiply(new THREE.Quaternion().setFromAxisAngle(sp.axis, sp.speed * dt)).normalize();
+        q.premultiply(new THREE.Quaternion().setFromAxisAngle(sp.axis, angle)).normalize();
         st.setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
-        sp.speed *= Math.pow(1 - damping, dt * 60);
-        if (sp.speed < STILL) r.spins.delete(id);
+        if (next) r.spins.set(id, next);
+        else r.spins.delete(id);
       }
       moving = true;
     }

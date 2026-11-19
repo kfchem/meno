@@ -11,11 +11,11 @@ import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
 import { FOV, FRAMING_TAU, framedAt } from "./framing";
 import { idleClockWhileSeen } from "./idleClock";
 import { markTurning } from "./sampleTurn";
+import { coastFrame, coastFrom, type Coast } from "../Workspace/utils/coast";
+import { FRAME_ORDER } from "../Workspace/utils/page";
 
 // --- Preview -------------------------------------------------------------------
 
-/** A turn left to itself stops below this speed, in radians a second. */
-const STILL = 0.02;
 /** The screen's upright, as a turn's axis. */
 const UPRIGHT = new THREE.Vector3(0, 1, 0);
 /** How fast a card's sample turns by itself, about the screen's upright, in radians a second: a turn in about half a minute, calm. */
@@ -100,7 +100,7 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
   // (how it is turned: read by the view as each frame is drawn - a turn, by hand or its own, draws the frame alone)
   const turn = useRef(new THREE.Quaternion(...SAMPLE_TURN));
   const { gl, invalidate, camera, scene, raycaster } = useThree();
-  const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
+  const spin = useRef<Coast | null>(null);
   const styleRef = useRef(style);
   styleRef.current = style;
   const tapRef = useRef(onTap);
@@ -173,7 +173,7 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       }
       const took = drag.recent.reduce((a, r) => a + r.dt, 0);
       const speed = drag.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
-      if (e.timeStamp - drag.t < 80 && speed > STILL) spin.current = { axis: drag.axis, speed };
+      spin.current = coastFrom(drag.axis, speed, drag.t, e.timeStamp);
       drag = null;
       setCursor(dom, anywhere || onMolecule(e) ? "turn" : null);
       invalidate();
@@ -227,15 +227,16 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     };
   }, [idle, gl, invalidate, turnBy]);
 
-  // let go while turning, it turns on, slowing as the style says
-  useFrame((_, dt) => {
+  // let go while turning, it turns on, slowing as the style says (utils/coast) - before the view reads its turn, so that it is drawn
+  // as it is turned this frame
+  useFrame(() => {
     const s = spin.current;
     if (!s) return;
-    turnBy(s.axis, s.speed * dt);
-    s.speed *= Math.pow(1 - styleRef.current.turnDamping, dt * 60);
-    if (s.speed < STILL) spin.current = null;
+    const { angle, next } = coastFrame(s, performance.now(), styleRef.current.turnDamping);
+    turnBy(s.axis, angle);
+    spin.current = next;
     invalidate();
-  });
+  }, FRAME_ORDER.turning);
 
   return (
     <Molecule3DView
