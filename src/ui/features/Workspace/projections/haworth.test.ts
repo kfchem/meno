@@ -5,7 +5,7 @@ import { seenPlaces, snapTo } from "./chair";
 import { chairExtension } from "./extend";
 import { haworthDrawing, haworthOf, haworthsIn } from "./haworth";
 import { chairDrawing } from "./chair";
-import { isProjection } from "./rings";
+import { isProjection, projectionsIn } from "./rings";
 import { identityOfDrawn } from "../chem/identityOf";
 import { identityText } from "../../../../lib/chem/identity";
 import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
@@ -165,6 +165,45 @@ describe("what the Haworth tool draws, read as Meno reads a drawing (known answe
     });
     expect(identityOfDrawn({ atoms, bonds }).text).toBe(was);
   }, measured(400));
+
+  it("keeps its near edge through Clean-up, the ring's depth with it; only Draw flat draws it plain, and a look given to a flat bond stays", async () => {
+    const looks = (m: Model) => m.bonds.filter((b) => b.display === "bold" || b.display === "wedge").length;
+    const page = (m: Model) => {
+      const doc = createWorkspaceDocument();
+      const store = createEditorStore(doc);
+      connectStoreToDocument(store, doc);
+      store.getState().pasteModel(m);
+      return { doc, store };
+    };
+    const kept = page(betaGlucose());
+    await cleanUp(kept.store, null);
+    const after = kept.doc.getState().model;
+    expect(looks(after)).toBe(3);
+    expect(after.atoms.filter((a) => a.z != null)).toHaveLength(6);
+    // (a bold bond the chemist gave a flat drawing beside it: Draw flat leaves it bold)
+    const sugar = betaGlucose();
+    const flatPart: Model = {
+      atoms: [...sugar.atoms, { id: 900, el: "C", r: 0.9, x: 20, y: 0 }, { id: 901, el: "C", r: 0.9, x: 21.4, y: 0 }],
+      bonds: [...sugar.bonds, { id: 950, a: 900, b: 901, order: 1, display: "bold" }],
+    };
+    const flat = page(flatPart);
+    await cleanUp(flat.store, null, true);
+    const laid = flat.doc.getState().model;
+    expect(looks(laid)).toBe(1);
+    // (and it is the lone bond's, the two atoms bonded to nothing else - pasted on new ids)
+    const bold = laid.bonds.find((b) => b.display === "bold")!;
+    const degree = (id: number) => laid.bonds.filter((b) => b.a === id || b.b === id).length;
+    expect([degree(bold.a), degree(bold.b)]).toEqual([1, 1]);
+  }, measured(400));
+
+  it("is found once for each drawing: every frame of a stroke asks again of the same drawing", () => {
+    const m = betaGlucose();
+    const first = projectionsIn(m);
+    expect(first).toHaveLength(1);
+    expect(projectionsIn({ atoms: m.atoms, bonds: m.bonds })).toBe(first);
+    // (a drawing changed - its atoms another array - is looked at again)
+    expect(projectionsIn({ atoms: [...m.atoms], bonds: m.bonds })).not.toBe(first);
+  });
 
   it("is asked about for 3D as a flat MOL whose wedges read as the configuration the ring drew", () => {
     const drawn = betaGlucose();
