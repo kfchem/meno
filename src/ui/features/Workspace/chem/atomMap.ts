@@ -6,6 +6,7 @@ import { arrowEnds, reactionMeant, reactionRoles } from "../../../../lib/chem/re
 import type { Arrow, ArrowAtomMap, Model, Plus, EditorState } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { symmetryOrbits } from "../../../../lib/chem/identity";
+import { cipIn3d } from "../../../../lib/chem/cip/in3d";
 import { locants, type Locant } from "../../../../lib/chem/perception/locants";
 
 /**
@@ -117,7 +118,7 @@ export function keptMap(model: Model, result: ReactionMap, reactants: readonly S
     })
     .slice(0, MAPS_KEPT);
   const plain = (m: Molecule): Omit<ArrowAtomMap["reactant"], "drawnFrom"> => ({
-    atoms: m.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) })),
+    atoms: m.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) })),
     bonds: m.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),
   });
   return {
@@ -280,6 +281,46 @@ export function beforeNumbers(map: ArrowAtomMap): number[] {
 }
 
 /**
+ * How many heavy atoms a molecule may have for *Renumber atoms* to number it: past it, its numbers are Meno's own ("over the budget"),
+ * so that the page never waits on a polymer's numbering.
+ */
+export const NUMBERING_ATOMS_BUDGET = 150;
+
+/**
+ * Each atom's orbit under the molecule's symmetry, as `locants` reads them - of its heavy atoms, worked out on the molecule with its
+ * hydrogens as counts: the same orbits, without the search through every hydrogen's place (seconds for a long chain). Each hydrogen its own.
+ */
+function heavyOrbits(input: { atoms: readonly { el: string; charge?: number }[]; bonds: readonly { a: number; b: number; order: number }[] }): number[] {
+  const heavy = input.atoms.map((_, i) => i).filter((i) => input.atoms[i].el !== "H");
+  const at = new Map(heavy.map((i, k) => [i, k]));
+  const hs = heavy.map(() => 0);
+  const bonds: { a: number; b: number; order: number }[] = [];
+  for (const b of input.bonds) {
+    const p = at.get(b.a);
+    const q = at.get(b.b);
+    if (p != null && q != null) bonds.push({ a: p, b: q, order: b.order });
+    else if (p != null && input.atoms[b.b].el === "H") hs[p]++;
+    else if (q != null && input.atoms[b.a].el === "H") hs[q]++;
+  }
+  const orbit = symmetryOrbits({ atoms: heavy.map((i, k) => ({ el: input.atoms[i].el, ...(input.atoms[i].charge ? { charge: input.atoms[i].charge } : {}), hs: hs[k] })), bonds }).orbit;
+  let next = Math.max(-1, ...orbit) + 1;
+  return input.atoms.map((_, i) => (at.has(i) ? orbit[at.get(i)!] : next++));
+}
+
+/** Each centre's R, S, r or s and each double bond's E or Z, read from where the atoms are in 3D (cip/in3d): P-14.4 (j). */
+function descriptorsOf(
+  atoms: readonly { el: string; charge?: number; isotope?: number }[],
+  bonds: readonly { a1: number; a2: number; order: number }[],
+  places: readonly { x: number; y: number; z: number }[],
+): { atoms: Map<number, string>; bonds: Map<number, string> } {
+  const read = cipIn3d({ atoms, bonds, xyz: places.flatMap((p) => [p.x, p.y, p.z]) });
+  return {
+    atoms: new Map(Object.entries(read.atoms).map(([k, d]) => [Number(k), d])),
+    bonds: new Map(Object.entries(read.bonds).map(([k, d]) => [Number(k), d])),
+  };
+}
+
+/**
  * Before's heavy atoms in IUPAC's order (foundation part 16a; lib/chem/perception/locants): each molecule's parent numbered as its name
  * numbers it and its groups after it, the molecules one after another in the drawing's order (by the first place any of its atoms has
  * there). Each atom's text where it is not its number - a parent's 4a, 1', 3a with a superscript - and the atoms whose number is Meno's own.
@@ -318,12 +359,24 @@ export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number
   const own: number[] = [];
   const shownTexts = new Set<string>();
   for (const piece of pieces) {
+    // (a molecule too large to number while the page waits: its atoms in the drawing's order, all Meno's own)
+    if (piece.filter((i) => atoms[i].el !== "H").length > NUMBERING_ATOMS_BUDGET) {
+      const heavyFirst = [...piece].sort((p, q) => Number(atoms[p].el === "H") - Number(atoms[q].el === "H") || place(p) - place(q) || p - q);
+      for (const i of heavyFirst) {
+        if (atoms[i].el === "H") continue;
+        order.push(i);
+        own.push(i);
+      }
+      continue;
+    }
     const at = new Map(piece.map((i, k) => [i, k]));
+    const pieceBonds = map.reactant.bonds.filter((b) => at.has(b.a1) && at.has(b.a2)).map((b) => ({ a1: at.get(b.a1)!, a2: at.get(b.a2)!, order: b.order }));
     const input = {
-      atoms: piece.map((i) => ({ el: atoms[i].el, ...(atoms[i].charge ? { charge: atoms[i].charge } : {}) })),
-      bonds: map.reactant.bonds.filter((b) => at.has(b.a1) && at.has(b.a2)).map((b) => ({ a: at.get(b.a1)!, b: at.get(b.a2)!, order: b.order })),
+      // (isotopes - of a hydrogen too, read on the atom it is on - and the configuration P-14.4 (i) and (j) number by)
+      atoms: piece.map((i) => ({ el: atoms[i].el, ...(atoms[i].charge ? { charge: atoms[i].charge } : {}), ...(atoms[i].isotope ? { isotope: atoms[i].isotope } : {}) })),
+      bonds: pieceBonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
     };
-    const r = locants({ ...input, orbits: symmetryOrbits(input).orbit });
+    const r = locants({ ...input, orbits: heavyOrbits(input), descriptors: descriptorsOf(input.atoms, pieceBonds, piece.map((i) => atoms[i])) });
     r.order.forEach((k) => order.push(piece[k]));
     r.order.forEach((k) => {
       const l = r.locant[k];

@@ -1609,12 +1609,18 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
   const numbers = new Map<number, number>();
   const centres = new Map<number, number>();
   const texts = new Map<number, { base: string; sup?: string }>();
-  for (const { map } of maps) {
+  // (each map's texts by number, for its own molecules in 3D: two maps on a page both number from 1)
+  const textsByNumber = maps.map(() => new Map<number, { base: string; sup?: string }>());
+  for (const [k, { map }] of maps.entries()) {
     if (!map.shown || !mapShows(mapStanding({ atomMap: map }, doc.model))) continue;
     const marks = mapMarks(map, doc.model);
     for (const [id, n] of marks.numbers) numbers.set(id, n);
     for (const [id, c] of marks.centres) centres.set(id, c);
-    for (const [id, t] of marks.texts) texts.set(id, t);
+    for (const [id, t] of marks.texts) {
+      texts.set(id, t);
+      const n = marks.numbers.get(id);
+      if (n) textsByNumber[k].set(n, t);
+    }
   }
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
@@ -1632,12 +1638,8 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
     return c ? { ...rest, reactingCentre: c } : rest;
   });
   // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on -
-  //  where the drawing shows a number as its IUPAC locant, 4a, the same: by number, as a conformer's frames number alike atoms anew)
-  const textOf = new Map<number, { base: string; sup?: string }>();
-  for (const [id, t] of texts) {
-    const n = numbers.get(id);
-    if (n) textOf.set(n, t);
-  }
+  //  where the drawing shows a number as its IUPAC locant, 4a, the same: by number, as a conformer's frames number alike atoms anew - the
+  //  numbers of the map that numbered that molecule)
   const molecules = doc.molecules3d ?? [];
   const now = numbers3d(maps, molecules, doc.model);
   const touched = new Set([...numbers3d(before, molecules, doc.model).touched, ...now.touched]);
@@ -1653,7 +1655,7 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
     const { atomNumbers: shownBefore, mapFrames: _f, mapTexts: _t, ...rest } = m;
     const atomNumbers = n ? { kind: "map" as const } : shownBefore?.kind === "map" ? undefined : shownBefore;
     const has = new Set(n ? [...n.first, ...n.rest.flatMap((f) => f ?? [])] : []);
-    const mapTexts = [...textOf].filter(([k]) => has.has(k)).sort((a, b) => a[0] - b[0]);
+    const mapTexts = n ? [...textsByNumber[n.from]].filter(([k]) => has.has(k)).sort((a, b) => a[0] - b[0]) : [];
     // (each frame after the first numbered as its own: chem/structureMaps `framesNumbered`)
     return {
       ...rest,

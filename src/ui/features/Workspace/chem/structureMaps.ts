@@ -94,10 +94,10 @@ export function numbers3d(
   maps: readonly StructureMap[],
   molecules3d: readonly Molecule3D[],
   model: Model,
-): { numbers: Map<number, { first: number[]; rest: (number[] | null)[] }>; touched: Set<number> } {
-  const numbers = new Map<number, { first: number[]; rest: (number[] | null)[] }>();
+): { numbers: Map<number, { first: number[]; rest: (number[] | null)[]; from: number }>; touched: Set<number> } {
+  const numbers = new Map<number, { first: number[]; rest: (number[] | null)[]; from: number }>();
   const touched = new Set<number>();
-  for (const { map } of maps) {
+  for (const [k, { map }] of maps.entries()) {
     const sides = [
       { side: map.reactant, key: "before" as const },
       { side: map.product, key: "after" as const },
@@ -111,7 +111,7 @@ export function numbers3d(
         const m = molecules3d.find((x) => x.id === id)!;
         if (!n || linkOf(m, model) !== "live") continue;
         const [first, ...rest] = framesNumbered(m, side, start, n[key]);
-        numbers.set(id, { first: first ?? new Array<number>(m.atoms.length).fill(0), rest });
+        numbers.set(id, { first: first ?? new Array<number>(m.atoms.length).fill(0), rest, from: k });
       }
     }
   }

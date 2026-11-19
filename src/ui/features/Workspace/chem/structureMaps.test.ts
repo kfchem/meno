@@ -10,7 +10,8 @@ import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readSDfile } from "../../../../lib/chem/ctfile";
 import { atomGlyphsOf, glyphCode, glyphsWidth } from "../utils/atomNumbers";
-import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, numberingSaid, renumbered, renumbering, renumberedTexts, unpairedSaid } from "./atomMap";
+import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, numberingSaid, NUMBERING_ATOMS_BUDGET, renumbered, renumbering, renumberedTexts, unpairedSaid } from "./atomMap";
+import { cipIn3d } from "../../../../lib/chem/cip/in3d";
 import { conformerPairs, conformersSaid, MOST_PAIRS, numbers3d, pairedCounts, pairedSdf, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -25,9 +26,10 @@ const R_NAMES = ["C1", "C2", "C3", "C4", "H2", "H3", "H1a", "H1b", "H4a", "H4b",
 
 let partial: ReturnType<typeof keptMap>;
 
-function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
-  const at = (id: number, x: number, y: number): Atom => ({ id, el: "C", x: x * L, y: y * L, r: 0 }) as Atom;
-  const bond = (id: number, a: number, b: number, order: 1 | 2): Bond => ({ id, a, b, order }) as Bond;
+/** `o`: every id moved on by it, for a second pair on one page. */
+function page(o = 0): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
+  const at = (id: number, x: number, y: number): Atom => ({ id: id + o, el: "C", x: x * L, y: y * L, r: 0 }) as Atom;
+  const bond = (id: number, a: number, b: number, order: 1 | 2): Bond => ({ id: id + o, a: a + o, b: b + o, order }) as Bond;
   const atoms: Atom[] = [
     at(1, -9, 0), at(2, -8.5, 0.87), at(3, -7.5, 0.87), at(4, -7, 0), at(5, -5, 0), at(6, -4, 0),
     at(11, 4, 0), at(12, 4.5, 0.87), at(13, 5.5, 0.87), at(14, 6, 0), at(16, 5.5, -0.87), at(15, 4.5, -0.87),
@@ -38,8 +40,8 @@ function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
   ];
   const model = { atoms, bonds } as Model;
   const da = dielsAlder();
-  const rFrom = R_NAMES.map((k) => R_ID[k] ?? null);
-  const pFrom = da.productOrder.map((k) => P_ID[k] ?? null);
+  const rFrom = R_NAMES.map((k) => (R_ID[k] != null ? R_ID[k] + o : null));
+  const pFrom = da.productOrder.map((k) => (P_ID[k] != null ? P_ID[k] + o : null));
   const in3d = (id: number, m: typeof da.product, drawnFrom: (number | null)[]): Molecule3D => ({
     id,
     atoms: m.atoms.map((a) => ({ ...a })),
@@ -55,7 +57,7 @@ function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
   const c1 = da.productOrder.indexOf("C1");
   const cut = { ...result, maps: result.maps.map((m) => m.map((r, j) => (j === c1 ? -1 : r))), complete: result.maps.map(() => false) };
   partial = keptMap(model, cut, [{ molecule: da.reactants[0], drawnFrom: rFrom }], [{ molecule: da.product, drawnFrom: pFrom }]);
-  const doc = { ...emptyWorkspaceDocument(), model, nextId: 100, molecules3d: [in3d(1, da.reactants[0], rFrom), in3d(2, da.product, pFrom)], nextMolecule3dId: 3 };
+  const doc = { ...emptyWorkspaceDocument(), model, nextId: 100, molecules3d: [in3d(1 + o, da.reactants[0], rFrom), in3d(2 + o, da.product, pFrom)], nextMolecule3dId: 3 + o };
   return { doc, kept };
 }
 
@@ -527,6 +529,83 @@ describe("an atom map renumbered", () => {
     // (hidden: no texts left on them)
     const hidden = ops.setStructureMaps(shown, [{ id: 1, map: { ...map, shown: false } }]);
     expect(hidden.molecules3d!.every((m) => m.mapTexts == null)).toBe(true);
+  });
+
+  it("keeps each map's texts on its own molecules in 3D: two maps on one page both number from 1", () => {
+    const a = page();
+    const b = page(100);
+    const numbers = renumbered(a.kept, drawnOrder());
+    const c1 = R_NAMES.indexOf("C1");
+    const mapA = { ...a.kept, numbers, texts: a.kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "4a" } : null)) };
+    const doc = {
+      ...a.doc,
+      model: { atoms: [...a.doc.model.atoms, ...b.doc.model.atoms], bonds: [...a.doc.model.bonds, ...b.doc.model.bonds] } as Model,
+      molecules3d: [...a.doc.molecules3d!, ...b.doc.molecules3d!],
+      nextId: 300,
+      nextMolecule3dId: 300,
+    };
+    const { doc: shown } = ops.addStructureMaps(doc, [mapA, b.kept]);
+    const byId = new Map(shown.molecules3d!.map((m) => [m.id, m]));
+    expect(byId.get(1)!.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    expect(byId.get(2)!.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    // (the second map's molecules carry the same number, its atoms their own: no 4a on them)
+    expect(byId.get(101)!.atoms.some((x) => x.map === numbers[c1])).toBe(true);
+    expect(byId.get(101)!.mapTexts).toBeUndefined();
+    expect(byId.get(102)!.mapTexts).toBeUndefined();
+  });
+
+  it("numbers by isotopes - of a hydrogen too - and by configuration where they decide a tie (P-14.4 (i), (j))", () => {
+    const { kept } = page();
+    type Reactant = typeof kept.reactant;
+    const withReactant = (atoms: Reactant["atoms"], bonds: [number, number][]) => ({
+      ...kept,
+      reactant: { atoms, bonds: bonds.map(([a1, a2]) => ({ a1, a2, order: 1 })), drawnFrom: atoms.map(() => null) },
+    });
+    const c = (x: number, y: number, z = 0, el = "C") => ({ el, x, y, z });
+    // (propane, its last carbon 13C: that carbon is 1)
+    const labelled = withReactant([c(0, 0), c(1.25, 0.8), { ...c(2.5, 0), isotope: 13 }], [[0, 1], [1, 2]]);
+    const r = renumbering(labelled, new Map());
+    expect(r.numbers!.slice(0, 3)).toEqual([3, 2, 1]);
+    expect(r.own).toEqual([]);
+    // (propane with its hydrogens, one on the last carbon 2H: that carbon is 1)
+    const h = (x: number, y: number, z: number) => c(x, y, z, "H");
+    const deuterated = withReactant(
+      [c(0, 0), c(1.25, 0.8), c(2.5, 0), h(-0.5, 0.5, 0.8), h(-0.5, 0.5, -0.8), h(0, -1, 0), h(1.25, 1.4, 0.9), h(1.25, 1.4, -0.9), h(3, 0.5, 0.8), { ...h(3, 0.5, -0.8), isotope: 2 }, h(2.5, -1, 0)],
+      [[0, 1], [1, 2], [0, 3], [0, 4], [0, 5], [1, 6], [1, 7], [2, 8], [2, 9], [2, 10]],
+    );
+    expect(renumbering(deuterated, new Map()).numbers!.slice(0, 3)).toEqual([3, 2, 1]);
+    // (meso-2,4-dichloropentane, drawn both ways round: its R centre is 2 - by atom order alone, one drawing would give it 4)
+    const rAt: number[] = [];
+    for (const side of [1, -1]) {
+      const meso = withReactant(
+        [c(0, 0), c(1.25, 0.75), c(2.5, 0), c(3.75, 0.75), c(5, 0), c(1.25, 1.5, side, "Cl"), c(3.75, 1.5, side, "Cl"), h(1.25, 1.5, -side), h(3.75, 1.5, -side)],
+        [[0, 1], [1, 2], [2, 3], [3, 4], [1, 5], [3, 6], [1, 7], [3, 8]],
+      );
+      const cip = cipIn3d({ atoms: meso.reactant.atoms, bonds: meso.reactant.bonds, xyz: meso.reactant.atoms.flatMap((x) => [x.x, x.y, x.z]) });
+      const rCentre = [1, 3].find((i) => cip.atoms[i] === "R")!;
+      expect(cip.atoms[4 - rCentre]).toBe("S");
+      const done = renumbering(meso, new Map());
+      expect(done.numbers![rCentre]).toBe(2);
+      expect(done.own).toEqual([]);
+      rAt.push(rCentre);
+    }
+    expect(new Set(rAt).size).toBe(2);
+  });
+
+  it("leaves a molecule too large to number while the page waits as Meno's own, at once", () => {
+    const { kept } = page();
+    const n = NUMBERING_ATOMS_BUDGET + 1;
+    const big = {
+      ...kept,
+      reactant: {
+        atoms: Array.from({ length: n }, (_, i) => ({ el: i % 3 ? "C" : "O", x: i, y: i % 2, z: 0 })),
+        bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
+        drawnFrom: Array.from({ length: n }, () => null),
+      },
+    };
+    const done = renumbering(big, new Map());
+    expect(done.own).toHaveLength(n);
+    expect(numberingSaid({ ...big, ...done })).toBe(`IUPAC numbering, except ${n} atoms (Meno's own order)`);
   });
 
   it("is kept in the workspace's file, and numbers that are not each of 1 to n once are left out", () => {

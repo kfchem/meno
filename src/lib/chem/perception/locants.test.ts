@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fromSmiles } from "../../layout/testdata/fromSmiles";
 import { aromaticForm, symmetryOrbits } from "../identity";
-import { locants, type Locants, type LocantsInput } from "./locants";
+import { locants, TIED_PARENTS_BUDGET, type Locants, type LocantsInput } from "./locants";
+import { LOCANT_PARENTS } from "./locantParents";
 
 // Foundation part 16, level 1: known answers - the 2013 recommendations' own names, and Meno's plain cases (M),
 // each name's numbering read off it. Atoms are named by their place in the SMILES.
@@ -504,5 +505,42 @@ describe("more known answers, each numbered by hand from its name", () => {
 
   it("disiloxane: Meno's own, said", () => {
     expect(ownOf("[SiH3]O[SiH3]").length).toBeGreaterThan(0);
+  });
+});
+
+describe("tied parents past the budget", () => {
+  /** Poly(ethylene glycol) of `n` units, HO(CH2CH2O)nH's heavy atoms: n tied two-carbon parents. */
+  const peg = (n: number): LocantsInput => {
+    const atoms: { el: string }[] = [{ el: "O" }];
+    const bonds: { a: number; b: number; order: number }[] = [];
+    for (let k = 0; k < n; k++) {
+      const c1 = atoms.length;
+      atoms.push({ el: "C" }, { el: "C" }, { el: "O" });
+      bonds.push({ a: c1 - 1, b: c1, order: 1 }, { a: c1, b: c1 + 1, order: 1 }, { a: c1 + 1, b: c1 + 2, order: 1 });
+    }
+    return { atoms, bonds };
+  };
+
+  it("are Meno's own, over the budget, without being worked out; under it, as the rules leave them", () => {
+    const input = peg(6);
+    const orbits = symmetryOrbits(input as never).orbit;
+    expect(new Set(locants({ ...input, orbits }).own.map((o) => o.why))).toEqual(new Set(["needs the name"]));
+    const over = locants({ ...input, orbits, tiedParentsBudget: 100 });
+    expect(over.own.map((o) => o.why)).toEqual(input.atoms.map(() => "over the budget"));
+    // (every atom still numbered, once)
+    expect([...over.order].sort((p, q) => p - q)).toEqual(input.atoms.map((_, i) => i));
+    // (the default lets an ordinary molecule's few tied parents through: six units are within it)
+    expect(6 * 19 * 19).toBeLessThan(TIED_PARENTS_BUDGET);
+  });
+});
+
+describe("the table of parents numbered by hand", () => {
+  it("says how each is known: 21 read from IUPAC's tables, five calculated from their rules, one inferred", () => {
+    const counts = new Map<string, string[]>();
+    for (const p of LOCANT_PARENTS) counts.set(p.known, [...(counts.get(p.known) ?? []), p.name]);
+    expect(LOCANT_PARENTS).toHaveLength(27);
+    expect(counts.get("read")).toHaveLength(21);
+    expect(counts.get("calculated")).toEqual(["1,10-phenanthroline", "tetracene", "triphenylene", "acenaphthylene", "9H-pyrido[3,4-b]indole"]);
+    expect(counts.get("inferred")).toEqual(["dibenzo[b,d]thiophene"]);
   });
 });

@@ -40,6 +40,8 @@ export type LocantsInput = {
   orbits?: readonly number[];
   /** Each atom's CIP descriptor where it has one (R, S, r, s), and each double bond's by its index (E, Z): P-14.4 (j). */
   descriptors?: { atoms?: ReadonlyMap<number, string>; bonds?: ReadonlyMap<number, string> };
+  /** The work tied parents may take (`TIED_PARENTS_BUDGET`, the default): a test sets it lower to reach the guard without the wait. */
+  tiedParentsBudget?: number;
 };
 
 export type Locants = {
@@ -108,6 +110,8 @@ type Ctx = {
   systemOf: number[];
   systems: readonly { atoms: number[]; rings: number[] }[];
   rings: readonly (readonly number[])[];
+  /** Each heavy atom's hydrogens of a given mass number (2H, 3H), the heaviest: 0 where it has none. */
+  labelledH: number[];
 };
 
 function contextOf(input: LocantsInput): Ctx {
@@ -124,7 +128,8 @@ function contextOf(input: LocantsInput): Ctx {
   const systemOf = input.atoms.map(() => -1);
   f.ringSystems.forEach((s, k) => s.atoms.forEach((i) => (systemOf[i] = k)));
   const inRing = input.atoms.map((_, i) => systemOf[i] >= 0);
-  return { input, heavy, around, bondIndex: (a, b) => f.bondBetween(a, b), orders, inRing, systemOf, systems: f.ringSystems, rings: f.rings };
+  const labelledH = input.atoms.map((_, i) => (heavy[i] ? Math.max(0, ...f.around[i].filter((j) => !heavy[j]).map((j) => input.atoms[j].isotope ?? 0)) : 0));
+  return { input, heavy, around, bondIndex: (a, b) => f.bondBetween(a, b), orders, inRing, systemOf, systems: f.ringSystems, rings: f.rings, labelledH };
 }
 
 const orderOf = (c: Ctx, a: number, b: number) => {
@@ -613,12 +618,47 @@ function groupText(c: Ctx, from: number, parent: ReadonlySet<number>): string {
     const x = c.input.atoms[a];
     return `${x.el}${x.charge ?? 0}${x.isotope ?? ""}${a === from ? "*" : ""}`;
   };
+  const rounds = atoms.length;
   let label = new Map(atoms.map((a) => [a, atomText(a)]));
-  for (let round = 0; round < atoms.length; round++) {
+  let round = 0;
+  for (; round < rounds; round++) {
     const next = new Map(atoms.map((a) => [a, `${label.get(a)}(${c.around[a].filter((b) => inG.has(b)).map((b) => `${orderOf(c, a, b)}${label.get(b)}`).sort().join(",")})`]));
     // (compressed to the rank of each text, so that the texts stay short)
-    const ranks = [...new Set(next.values())].sort();
-    label = new Map(atoms.map((a) => [a, `${atomText(a)}#${ranks.indexOf(next.get(a)!)}`]));
+    const ranks = new Map([...new Set(next.values())].sort().map((t, i) => [t, i]));
+    const classes = new Set(label.values()).size;
+    label = new Map(atoms.map((a) => [a, `${atomText(a)}#${ranks.get(next.get(a)!)}`]));
+    // (no class parted this round: none will again. Each text from here on starts with its atom's label and "(", so the texts sort as the
+    //  labels do - each round after this only renumbers the classes by their labels' order, worked out on one label of each class)
+    if (ranks.size === classes) {
+      round++;
+      break;
+    }
+  }
+  if (round < rounds) {
+    // (one label of each class, with its atom's text)
+    const textOf = new Map<string, string>();
+    for (const a of atoms) textOf.set(label.get(a)!, atomText(a));
+    const first = [...textOf.keys()];
+    const texts = first.map((t) => textOf.get(t)!);
+    const step = (labels: readonly string[]): string[] => {
+      const ranks = new Map([...labels].sort().map((t, i) => [t, i]));
+      return labels.map((t, i) => `${texts[i]}#${ranks.get(t)}`);
+    };
+    let now = first;
+    const seen = new Map<string, number>();
+    for (; round < rounds; round++) {
+      const key = now.join(";");
+      const was = seen.get(key);
+      if (was != null) {
+        // (the labels came round again: whole turns of the cycle skipped)
+        for (let k = (rounds - round) % (round - was); k > 0; k--) now = step(now);
+        break;
+      }
+      seen.set(key, round);
+      now = step(now);
+    }
+    const final = new Map(first.map((t, i) => [t, now[i]]));
+    label = new Map(atoms.map((a) => [a, final.get(label.get(a)!)!]));
   }
   return [...label.values()].sort().join(";");
 }
@@ -678,17 +718,30 @@ function a5(
     const t0 = texts(left[0]);
     if (left.some((cd) => texts(cd) !== t0)) return { left, own: { atoms: differing(c, left), why: "needs the name" } };
   }
-  // (i) isotopes: the atoms with a mass number, as a set; then the heavier nuclide
-  const labelled = unit.atoms.filter((a) => c.input.atoms[a].isotope);
+  // (i) isotopes: the atoms with a mass number, or with a hydrogen of one (2H, 3H), as a set; then the heavier nuclide
+  const labelled = unit.atoms.filter((a) => c.input.atoms[a].isotope || c.labelledH[a]);
   if (labelled.length) {
     left = keepLeast(left, (cd) => { const k = keyIn(cd); return labelled.map((a) => k.get(a)!); }, compareSets);
     left = keepLeast(left, (cd) => [...cd.atoms].filter((a) => c.input.atoms[a].isotope).map((a) => -(c.input.atoms[a].isotope ?? 0)), (p, q) => compareKeys(p, q));
   }
-  // (j) configuration: R before S, Z before E, r before s, at the first point of difference
-  const desc = c.input.descriptors?.atoms;
-  if (desc && left.length > 1) {
+  // (j) configuration: R before S, Z before E, r before s, at the first point of difference - a double bond's at its lower-numbered end
+  const desc = c.input.descriptors;
+  if (desc && (desc.atoms?.size || desc.bonds?.size) && left.length > 1) {
     const order = (d: string | undefined) => (d === "R" || d === "r" || d === "Z" ? 0 : d ? 1 : 2);
-    left = keepLeast(left, (cd) => cd.atoms.map((a) => order(desc.get(a))), (p, q) => compareKeys(p, q));
+    left = keepLeast(
+      left,
+      (cd) => {
+        const at = new Map(cd.atoms.map((a, k) => [a, k]));
+        const key: number[] = cd.atoms.map((a) => order(desc.atoms?.get(a)));
+        desc.bonds?.forEach((d, i) => {
+          const b = c.input.bonds[i];
+          const k = b && at.has(b.a) && at.has(b.b) ? Math.min(at.get(b.a)!, at.get(b.b)!) : -1;
+          if (k >= 0) key[k] = Math.min(key[k], order(d));
+        });
+        return key;
+      },
+      (p, q) => compareKeys(p, q),
+    );
   }
   if (left.length > 1 && !sameUnderSymmetry(c, left)) return { left, own: { atoms: differing(c, left), why: "needs the name" } };
   return { left, own: null };
@@ -912,6 +965,14 @@ function leastByList(xs: number[][], score: (x: number[]) => number[]): number[]
  * Parents still tied (A3 step 5): P-45.2.1, the one with more substituents; P-45.2.2, the lower locants for them; still tied and the
  * parents one orbit apart, either (the same numbering, the molecule turned); otherwise Meno's own.
  */
+/**
+ * How much numbering tied parents may take: each tied parent is numbered with its groups read, at a cost that grows about with the
+ * molecule's heavy atoms squared, so the parents times that square. Over it, the first parent is taken and the molecule's numbering is
+ * Meno's own (`over the budget`): a long polymer of tied repeat units (poly(ethylene glycol) of fifteen units and more) is left alone at
+ * once rather than worked out for seconds while the page waits.
+ */
+export const TIED_PARENTS_BUDGET = 30_000;
+
 function tiedParents(c: Ctx, units: Unit[], heteroatoms = false): ParentPick {
   // (identical ring parents in one orbit of the molecule - or step 0's acyclic heteroatom parents, `heteroatoms` - multiplied: P-45.1.1,
   //  P-51.3.1, P-15.3; each numbered alike. Never a carbon chain: P-15.3.1.1 (b))
@@ -920,6 +981,11 @@ function tiedParents(c: Ctx, units: Unit[], heteroatoms = false): ParentPick {
   if (rings && orbits && units.every((u) => u.atoms.length === units[0].atoms.length) && sameOrbitSets(orbits, units.map((u) => u.atoms))) {
     const first = [...units].sort((p, q) => Math.min(...p.atoms) - Math.min(...q.atoms));
     return { unit: first[0], own: null, multiplied: first };
+  }
+  const heavyCount = c.heavy.filter(Boolean).length;
+  if (units.length * heavyCount * heavyCount > (c.input.tiedParentsBudget ?? TIED_PARENTS_BUDGET)) {
+    const first = [...units].sort((p, q) => Math.min(...p.atoms) - Math.min(...q.atoms));
+    return { unit: first[0], own: "over the budget" };
   }
   // (some of them alike but not all: the text would multiply a set of them (P-15.3.3.2.1) - Meno's own)
   const someAlike = rings && !!orbits && units.some((u, i) => units.some((v, j) => j > i && u.atoms.length === v.atoms.length && sameOrbitSets(orbits, [u.atoms, v.atoms])));
@@ -1113,8 +1179,13 @@ function hangingOrder(c: Ctx, cand: Candidate, unit: ReadonlySet<number>, taken:
   const out: number[] = [];
   for (const a of cand.atoms) {
     const firsts = c.around[a].filter((b) => !unit.has(b) && !taken.has(b));
-    const sized = firsts.map((b) => ({ b, ring: c.inRing[b] ? 0 : 1, size: allFrom(c, b, new Set([...taken, ...unit])).size, text: groupText(c, b, new Set([...taken, ...unit])) }));
-    sized.sort((p, q) => p.ring - q.ring || q.size - p.size || (p.text < q.text ? -1 : p.text > q.text ? 1 : p.b - q.b));
+    const away = new Set([...taken, ...unit]);
+    // (a group's text only where two on this atom tie on the rest: worked out once each, and never for an atom with one group - a long
+    //  chain's walk stays linear)
+    const texts = new Map<number, string>();
+    const text = (b: number) => texts.get(b) ?? texts.set(b, groupText(c, b, away)).get(b)!;
+    const sized = firsts.length < 2 ? firsts.map((b) => ({ b, ring: 0, size: 0 })) : firsts.map((b) => ({ b, ring: c.inRing[b] ? 0 : 1, size: allFrom(c, b, away).size }));
+    sized.sort((p, q) => p.ring - q.ring || q.size - p.size || (text(p.b) < text(q.b) ? -1 : text(p.b) > text(q.b) ? 1 : p.b - q.b));
     for (const { b } of sized) {
       if (taken.has(b)) continue;
       out.push(...substituentOrder(c, b, taken, own));
