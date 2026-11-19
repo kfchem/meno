@@ -30,9 +30,12 @@ describe("what a look states, with no mark on the page", () => {
     expect(onWedge.text).toBe("C1: set, by this wedge");
     expect(onWedge.x).toBeCloseTo((m.atoms[0].x + m.atoms[3].x) / 2, 9);
     expect(onWedge.y).toBeCloseTo((m.atoms[0].y + m.atoms[3].y) / 2, 9);
+    // (the words stand clear of the whole bond: its extent from end to end, the C-O bond upright)
+    expect(onWedge.h).toBeCloseTo(Math.abs(m.atoms[3].y - m.atoms[0].y), 9);
+    expect(onWedge.w).toBeCloseTo(Math.abs(m.atoms[3].x - m.atoms[0].x), 9);
     const onCentre = pointedSaid(m, null, 1, null, placeOf)!;
     expect(onCentre.text).toBe("C1: set");
-    expect([onCentre.x, onCentre.y]).toEqual([m.atoms[0].x, m.atoms[0].y]);
+    expect([onCentre.x, onCentre.y, onCentre.w, onCentre.h]).toEqual([m.atoms[0].x, m.atoms[0].y, 0, 0]);
     // (a plain bond, nothing pointed at, a drawing with no look: nothing)
     expect(pointedSaid(m, null, null, 10, placeOf)).toBeNull();
     expect(pointedSaid(m, null, null, null, placeOf)).toBeNull();

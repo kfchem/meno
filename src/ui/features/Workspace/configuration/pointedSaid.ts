@@ -26,7 +26,8 @@ function lookSaid(model: Model, atom: number | undefined, bond: number | undefin
 
 /**
  * What is said under the atom or bond the pointer rests on, and where: its own words where its R, S, E or Z is shown with some - why
- * it has none - else what its look states (configuration/said); at the atom, or the bond's middle, where each is drawn (`placeOf`).
+ * it has none - else what its look states (configuration/said); at the atom, or the bond's middle, where each is drawn (`placeOf`), with
+ * the extent it is to stand clear of (`w`, `h`: a bond's, from end to end).
  * Null where nothing is said. Whether the drawing shows any R, S or other mark at all does not enter into it.
  */
 export function pointedSaid(
@@ -35,7 +36,7 @@ export function pointedSaid(
   hoveredAtom: number | null | undefined,
   hoveredBond: number | null | undefined,
   placeOf: (id: number) => { x: number; y: number } | undefined,
-): { key: string; text: string; x: number; y: number } | null {
+): { key: string; text: string; x: number; y: number; w: number; h: number } | null {
   const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom) : undefined;
   const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond) : undefined;
   const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
@@ -46,5 +47,6 @@ export function pointedSaid(
   const p = placeOf(atom ? atom.id : bond!.a);
   const q = bond ? placeOf(bond.b) : p;
   if (!p || !q) return null;
-  return { key, text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  // (the box it stands clear of: the bond's whole extent, so that the words are under all of it, not over its far end; an atom's, none)
+  return { key, text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, w: Math.abs(q.x - p.x), h: Math.abs(q.y - p.y) };
 }

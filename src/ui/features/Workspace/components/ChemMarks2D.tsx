@@ -333,7 +333,7 @@ export default function ChemMarks2D({
       {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
       {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
       {pointed && <PageTip tipKey={pointed.key} x={pointed.x} y={pointed.y} w={pointed.w} h={pointed.h} zoom={z} text={pointed.message} zIndexRange={Z_RANGE} />}
-      {saidPointed && <PageTip tipKey={`said-${saidPointed.key}`} x={saidPointed.x} y={saidPointed.y} w={saidPointed.size} h={saidPointed.size} zoom={z} text={saidPointed.text} zIndexRange={Z_RANGE} />}
+      {saidPointed && <PageTip tipKey={`said-${saidPointed.key}`} x={saidPointed.x} y={saidPointed.y} w={saidPointed.w + saidPointed.size} h={saidPointed.h + saidPointed.size} zoom={z} text={saidPointed.text} zIndexRange={Z_RANGE} />}
       {stereoTexts.length > 0 && (
         <Texts2D
           texts={stereoTexts}
