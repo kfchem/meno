@@ -926,7 +926,15 @@ drawn, aromatic rings as one form.* What that means, plainly:
   in the identity, one drawn on it taken off, and is asked no more, with
   no search of the whole structure. So its identity never turns on which
   way it was filled in, as it could where a search runs out of steps
-  (Pd(PPh3)4). The filled form is
+  (Pd(PPh3)4). A double bond's cis or trans that sets nothing with the
+  rest as given - its end's two groups alike while another place is open:
+  a cyclohexylidene's C=C with its ring's C4 plain - is none, in the
+  drawing as read and in every canonical text (`settingCisTrans`,
+  `src/lib/chem/perception/symmetry.ts`), and identity leaves such a
+  double bond with none rather than filling one in: so
+  (4-methylcyclohexylidene)acetic acid drawn with its double bond bent,
+  with its C4 wedged, or with neither is one structure (either
+  enantiomer), and drawn with both, one of its two enantiomers. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
 - **an oxygen (or S, Se, Te) at the end of a bond to P, As, Sb, S, Se or
@@ -1206,6 +1214,10 @@ space: the group goes where the hydrogen was.
   or two of its groups are now alike (F[C@H](R1)Cl with R1 = H or Cl) - stops
   nothing: there is no configuration left to change. Its bond is drawn
   plain, since a wedge there would state nothing.
+- **A double bond the group makes no stereo unit** - the group now alike
+  with the other on its end, (E)-1-fluoropropene's C2 given a methyl -
+  has no cis or trans in the product, so none is lost: the product is
+  made (1-fluoro-2-methylpropene).
 - **Tested against RDKit** by a differential in the fixture: stereo-rich
   templates, every atom with an undrawn hydrogen in turn, each with several
   groups, the compound for each made by RDKit by putting the group in that

@@ -116,6 +116,8 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
     el: readAs(a),
     hs: hs.get(a.id) ?? 0,
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.stereoCentre ? { centre: true } : {}),
   }));

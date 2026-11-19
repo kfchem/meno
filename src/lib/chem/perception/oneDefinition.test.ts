@@ -89,9 +89,7 @@ export const STILL_APART: Copy[] = [
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
   // symmetry: the layout's ranks and the Kekule ranker onto the core's refinement and search (parts 6a, 6b); the orbits of the aromatic form
   // identity's until part 13; and the matchers of two graphs, which are not the symmetry of one
-  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "canonicalRanks", part: "6b", why: "the layout's own ranks of its Molecule: onto the core's refinement and search in part 6b (part 6a first)" },
-  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "withStereo", part: "6b", why: "the layout's ranks' stereo refinement: onto the core's in part 6b" },
-  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "settleBudget", part: "6b", why: "the layout's ranks' search budget: goes with its search in part 6b" },
+  { concept: "symmetry", file: "lib/layout/ranks.ts", name: "canonicalRanks", part: "by design", why: "the layout's name for the core's canonical ranks of the input its Molecule was perceived from: written over the core's search (part 6b), not a second one" },
   { concept: "symmetry", file: "lib/chem/identity.ts", name: "symmetryOrbits", part: 13, why: "the orbits of the aromatic form, over the core's orbits as drawn: identity's own until part 13" },
   { concept: "symmetry", file: "lib/chem/accelMapper.ts", name: "isomorphisms", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
   { concept: "symmetry", file: "lib/layout/scaffold.ts", name: "coreMatches", part: "by design", why: "a matcher of two graphs, not the symmetry of one" },
