@@ -173,10 +173,10 @@ export function createUiSlice(
         }
         // (letters that read as nothing - CH2CH2 - are kept as typed, as words: typed over an atom that was an element or a group, the
         // structure has lost it, and that is said, never left silent)
-        // (a formula a reader refused - MoO2NO3, which would bond two O it does not write together - kept as words, and why said)
-        const refused = changed && read.kind === "text" && !named ? labelRefused(value) : undefined;
-        if (refused) {
-          useNotices.getState().show({ id: "label-refused", title: "Not read", text: `${value} is not read as written: ${refused}. It is kept as words.` });
+        // (a formula a reader refused - MoO2NO3, H2CrO4, CrO5 - kept as words, and said: not read as written, and how to have its
+        // structure. What it would have been read as, and the rule, are the docs' (CTFILE), not the notice's)
+        if (changed && read.kind === "text" && labelRefused(value)) {
+          useNotices.getState().show({ id: "label-refused", title: "Not read", text: `${value} is not read as written. Draw it to give it its structure; the label is kept as words.` });
         } else if (changed && read.kind === "text" && !named && readsAsNothing(value)) {
           const lost = ids.map((i) => before.get(i)).find((was) => was != null);
           if (lost) {

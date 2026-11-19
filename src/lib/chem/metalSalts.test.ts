@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { abbreviationOf, abbreviationStructure, labelRefused } from "./abbreviations";
+import { abbreviationOf, abbreviationStructure, bondsUnwrittenOO, labelRefused } from "./abbreviations";
 import { structureFormula, type GroupStructure } from "./ligands";
 
 // A metal's salt of an oxoanion, typed as a label, read as its ions: the metal's cation and the anion of the charge its formula makes.
@@ -94,8 +94,25 @@ describe("a formula read as two O bonded that it does not write together", () =>
   it("is not read, and says why: MoO2NO3 and VO2NO3 - no compounds - would be three O-O-N=O", () => {
     for (const label of ["MoO2NO3", "VO2NO3"]) {
       expect([abbreviationOf(label) ?? null, abbreviationStructure(label)], label).toEqual([null, null]);
-      expect(labelRefused(label), label).toBe("it would bond two O the label does not bond");
+      expect(labelRefused(label), label).toEqual({ why: "two O bonded" });
     }
+  });
+
+  it("is asked of the reading and the label alike: an O-O the label writes - OO, or O2 in brackets as a peroxo ligand - is no refusal", () => {
+    // (two O bonded, each with one more bond: O-O-N, as MoO2NO3 would be read)
+    const peroxo = {
+      atoms: ["N", "O", "O", "C"].map((el) => ({ el })),
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+        { a1: 2, a2: 3, order: 1 },
+      ],
+      attach: [],
+    } as unknown as GroupStructure;
+    expect(bondsUnwrittenOO("MoO2NO3", peroxo)).toBe(true);
+    for (const label of ["CH3OOH", "tBuOOMe", "CrO(O2)2", "Cp2Ti(η2-O2)", "Mo(μ-O2)"]) expect(bondsUnwrittenOO(label, peroxo), label).toBe(false);
+    // (no O bonded to an O, nothing to refuse, whatever the label)
+    expect(bondsUnwrittenOO("MoO2NO3", { ...peroxo, bonds: peroxo.bonds.slice(0, 1) })).toBe(false);
   });
 
   it("leaves every formula read without an O-O as it was, and refuses nothing it finds no structure for", () => {
@@ -111,13 +128,40 @@ describe("an oxo formula past its metal's highest oxidation state", () => {
   it("is not read as written, and says why: CrO5 and MoO5, five oxo each, past +6", () => {
     for (const [label, el] of [["CrO5", "Cr"], ["MoO5", "Mo"]] as const) {
       expect([abbreviationOf(label) ?? null, abbreviationStructure(label)], label).toEqual([null, null]);
-      expect(labelRefused(label), label).toBe(`its 5 oxo would take ${el} to +10, past +6, its highest oxidation state`);
+      expect(labelRefused(label), label).toEqual({ why: "past the highest state", metal: el, oxo: 5, others: 0, state: 10, highest: 6 });
     }
   });
 
   it("counts the other groups by a single bond too: MoO3Cl2 (+8), WO2Cl3 (+7), TiO3 (+6) and VO3 (+6) not read as written", () => {
-    expect(labelRefused("MoO3Cl2")).toBe("its 3 oxo and 2 other groups would take Mo to +8, past +6, its highest oxidation state");
+    expect(labelRefused("MoO3Cl2")).toEqual({ why: "past the highest state", metal: "Mo", oxo: 3, others: 2, state: 8, highest: 6 });
     for (const label of ["WO2Cl3", "TiO3", "VO3"]) expect([abbreviationOf(label) ?? null, labelRefused(label) != null], label).toEqual([null, true]);
+  });
+
+  it("holds each metal's highest state: one oxo past it refused, at it read - Ti, Zr, Hf +4; Nb, Ta +5; Tc, Mn, Re +7; Ru, Os +8", () => {
+    const past: [string, string, number, number][] = [
+      ["TiO3", "Ti", 6, 4],
+      ["ZrO3", "Zr", 6, 4],
+      ["HfO3", "Hf", 6, 4],
+      ["NbO3", "Nb", 6, 5],
+      ["TaO3", "Ta", 6, 5],
+      ["TcO4", "Tc", 8, 7],
+      ["MnO4", "Mn", 8, 7],
+      ["ReO4", "Re", 8, 7],
+      ["RuO5", "Ru", 10, 8],
+      ["OsO5", "Os", 10, 8],
+    ];
+    for (const [label, metal, state, highest] of past) expect(labelRefused(label), label).toMatchObject({ why: "past the highest state", metal, state, highest });
+    for (const label of ["OsO4", "RuO4", "ReO3Cl", "TcO3Cl", "MnO3Cl", "TaO2Cl", "NbO2Cl"]) {
+      expect(abbreviationStructure(label), label).not.toBeNull();
+      expect(labelRefused(label), label).toBeUndefined();
+    }
+  });
+
+  it("refuses the metal oxoacids written as HnMOm - their H read as groups on the metal, past its highest state - though each is a compound", () => {
+    for (const [label, metal] of [["H2CrO4", "Cr"], ["HReO4", "Re"], ["HMnO4", "Mn"], ["H3VO4", "V"], ["H2MoO4", "Mo"], ["H2WO4", "W"]] as const) {
+      expect(abbreviationOf(label) ?? null, label).toBeNull();
+      expect(labelRefused(label), label).toMatchObject({ why: "past the highest state", metal });
+    }
   });
 
   it("reads one at its highest state or below as before: CrO3, MoO3, WO3, OsO4, MoO2Cl2, ReO3Me, CrO2Cl2, VOCl3, NbOCl3, TiOCl2, MnO3Cl", () => {

@@ -429,15 +429,20 @@ Read by rule, besides, as whole molecules:
   Hg (`complexStructure`, `src/lib/chem/ligands.ts`). A formula that
   one of these readers would read as two O bonded, where the label does
   not write them together (OO, or O2 as a peroxo ligand in brackets), is
-  not read, and that is said as the label is typed: MoO2NO3 is no
-  compound, and read across it would be three O-O-N=O. A peroxide or a
-  peracid from the tables (H2O2, mCPBA, TBHP) is never such a reading. An
-  oxo formula that would take its metal past its highest oxidation state,
-  two for each oxo and one for each other group by a single bond (Ti, Zr,
-  Hf +4; V, Nb, Ta +5; Cr, Mo, W +6; Mn, Tc, Re +7; Ru, Os +8: MoO3Cl2
-  would be Mo +8), is not read as written either, and said so: CrO5 is a
+  not read: MoO2NO3 is no compound, and read across it would be three
+  O-O-N=O. A peroxide or a peracid from the tables (H2O2, mCPBA, TBHP) is
+  never such a reading. An oxo formula that would take its metal past its
+  highest oxidation state, two for each oxo and one for each other group
+  by a single bond (Ti, Zr, Hf +4; V, Nb, Ta +5; Cr, Mo, W +6; Mn, Tc, Re
+  +7; Ru, Os +8: MoO3Cl2 would be Mo +8), is not read either. CrO5 is a
   compound, CrO(O2)2 with two peroxo ligands, which the formula's O count
-  does not say. A halide (CuCl2), a
+  does not say. So is a metal oxoacid written HnMOm: H2CrO4, chromic acid,
+  is CrO2(OH)2, but its formula's H would be read as groups on the metal
+  and its O all as oxo, Cr +10. Typed as a label, each such formula is
+  kept as words, and a notice says that it is not read as written and
+  that drawing it gives it its structure; what it would have been read
+  as is no structure the chemist wrote, so the notice does not say it.
+  A halide (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
 - an ion written alone, a counter-ion set beside a complex or a salt: an

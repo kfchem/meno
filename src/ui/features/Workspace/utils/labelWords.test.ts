@@ -77,9 +77,30 @@ describe("a label typed in place", () => {
     s().beginLabelEdit(id);
     s().setLabelEditValue("MoO2NO3");
     s().commitLabelEdit();
-    const note = useNotices.getState().notices.find((n) => n.id === "label-refused");
-    expect(note?.text).toBe("MoO2NO3 is not read as written: it would bond two O the label does not bond. It is kept as words.");
+    const note = () => useNotices.getState().notices.find((n) => n.id === "label-refused");
+    expect(note()?.text).toBe("MoO2NO3 is not read as written. Draw it to give it its structure; the label is kept as words.");
     useNotices.getState().dismiss("label-refused");
+    // (the same label typed again on it, nothing changed: nothing said again)
+    s().beginLabelEdit(id);
+    s().setLabelEditValue("MoO2NO3");
+    s().commitLabelEdit();
+    expect(note()).toBeUndefined();
+  });
+
+  it("a metal oxoacid written as HnMOm - H2CrO4, a compound - and CrO5 are said as not read as written, never as what they were read as", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const s = () => store.getState();
+    for (const label of ["H2CrO4", "CrO5"]) {
+      const id = s().addAtom(0, 0, "C");
+      s().beginLabelEdit(id);
+      s().setLabelEditValue(label);
+      s().commitLabelEdit();
+      const text = useNotices.getState().notices.find((n) => n.id === "label-refused")?.text;
+      expect(text, label).toBe(`${label} is not read as written. Draw it to give it its structure; the label is kept as words.`);
+      useNotices.getState().dismiss("label-refused");
+    }
   });
 
   it("read as something else than was typed, is had back as typed from the atom's menu - one step", () => {

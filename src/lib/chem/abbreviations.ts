@@ -264,10 +264,10 @@ function composedOf(label: string): Abbreviation | undefined {
   if (salt === "unread") return undefined;
   if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
-  if (complex && (bondsUnwrittenOO(label, complex) || oxoPastHighest(label, complex))) return undefined;
+  if (complex && (refusedForOO(label, complex) || oxoPastHighest(label, complex))) return undefined;
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
-  if (made && bondsUnwrittenOO(label, made)) return undefined;
+  if (made && refusedForOO(label, made)) return undefined;
   if (made) return { label, name: made.name, smiles: "", kind: "reagent" };
   // (last of all, after every group and every formula read whole: an atom with its H and the groups it carries,
   // its other bonds the drawing's - SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
@@ -336,24 +336,35 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
   const salt = metalSaltStructure(label, groupStructure);
   if (salt === "unread") return null;
   const read = salt ?? condensedStructure(label, groupLabels(), groupStructure);
-  return read && bondsUnwrittenOO(label, read) ? null : read;
+  return read && refusedForOO(label, read) ? null : read;
 }
 
-/** Why a label is not read, where one of its formula's readers refused it (`bondsUnwrittenOO`), by label. */
-const REFUSED = new Map<string, string>();
+/**
+ * Why a label's formula is not read as written, where one of its readers refused it: it would bond two O the label does not write
+ * together, or take its metal past its highest oxidation state (by so many oxo and other groups). The chemist is told only that it is
+ * not read as written (`labelRefused`, the label's notice): what the formula would have been read as is no structure they wrote.
+ */
+export type LabelRefusal = { why: "two O bonded" } | { why: "past the highest state"; metal: string; oxo: number; others: number; state: number; highest: number };
 
-/** The words of a label's formula read as two O bonded that it does not write so. */
-const UNWRITTEN_OO = "it would bond two O the label does not bond";
+/** Each label refused, by label. */
+const REFUSED = new Map<string, LabelRefusal>();
 
 /**
  * Whether a structure read from a label's formula bonds two O that the label does not write together - "OO" (OOH, OOtBu) or O2 as a
- * peroxo ligand in brackets ((O2), (η2-O2)): not read, and said (`labelRefused`). MoO2NO3 is no compound; read across it is three O-O-N=O.
- * A peroxide, a superoxide or a peracid from the tables (H2O2, mCPBA, TBHP) is no formula's reading, so never asked.
+ * peroxo ligand in brackets ((O2), (η2-O2)). MoO2NO3 is no compound; read across it is three O-O-N=O. A peroxide, a superoxide or a
+ * peracid from the tables (H2O2, mCPBA, TBHP) is no formula's reading, so never asked. Asked of a complex's, a made formula's and a
+ * condensed formula's reading; of today's readers only the complex's ever bonds two O, so the others are asked for a reader yet to come,
+ * as is a label that does write its O-O, which no reader yet reads with one.
  */
-function bondsUnwrittenOO(label: string, s: GroupStructure): boolean {
+export function bondsUnwrittenOO(label: string, s: GroupStructure): boolean {
   if (!s.bonds.some((b) => s.atoms[b.a1]?.el === "O" && s.atoms[b.a2]?.el === "O")) return false;
-  if (/OO|\((?:[μη]2?-)?O2\)/.test(label)) return false;
-  REFUSED.set(label, UNWRITTEN_OO);
+  return !/OO|\((?:[μη]2?-)?O2\)/.test(label);
+}
+
+/** Whether a reading bonds two O its label does not write together: so, it is recorded as refused. */
+function refusedForOO(label: string, s: GroupStructure): boolean {
+  if (!bondsUnwrittenOO(label, s)) return false;
+  REFUSED.set(label, { why: "two O bonded" });
   return true;
 }
 
@@ -378,8 +389,8 @@ const HIGHEST_STATE: ReadonlyMap<string, number> = new Map([
 /**
  * Whether a complex's formula read takes one of `HIGHEST_STATE`'s metals past its highest oxidation state - two for each oxo (O on it by
  * a double bond and on nothing else), one for each other group bound to it by a single bond of its own, not lent: CrO5 read as five oxo
- * would be Cr +10, MoO3Cl2 Mo +8. Not read as written, and said: CrO5 is a compound, CrO(O2)2 with two peroxo ligands, which a formula's
- * O count does not say.
+ * would be Cr +10, MoO3Cl2 Mo +8, H2CrO4 (chromic acid, CrO2(OH)2) Cr +10. Not read as written: CrO5 is a compound, CrO(O2)2 with
+ * two peroxo ligands, which a formula's O count does not say.
  */
 function oxoPastHighest(label: string, s: GroupStructure): boolean {
   for (const [i, a] of s.atoms.entries()) {
@@ -394,15 +405,15 @@ function oxoPastHighest(label: string, s: GroupStructure): boolean {
     const single = s.bonds.filter((b) => b.order === 1 && !b.coordination && (b.a1 === i || b.a2 === i)).length;
     const state = 2 * oxo + single;
     if (oxo && state > most) {
-      REFUSED.set(label, `its ${oxo} oxo${single ? ` and ${single} other group${single === 1 ? "" : "s"}` : ""} would take ${a.el} to +${state}, past +${most}, its highest oxidation state`);
+      REFUSED.set(label, { why: "past the highest state", metal: a.el, oxo, others: single, state, highest: most });
       return true;
     }
   }
   return false;
 }
 
-/** Why `label`, typed, is not read - where a reader refused it rather than finding nothing - or undefined. */
-export function labelRefused(label: string): string | undefined {
+/** Why `label`, typed, is not read as written - where a reader refused it rather than finding nothing - or undefined. */
+export function labelRefused(label: string): LabelRefusal | undefined {
   abbreviationOf(label);
   return REFUSED.get(label.trim());
 }
