@@ -33,3 +33,31 @@ describe("a flat structure with all its hydrogens, as a file gives it, is no dra
     expect(refusedAsFlat(withHydrogens({ el: "C" }, 3))).toBe(true);
   });
 });
+
+describe("a flat pyrrole whose N-H is left out is short of it, its ring typed aromatic or Kekule (the chemistry check's ruling)", () => {
+  /** Pyrrole flat, each C-H drawn, its ring's bonds of `ring` (4 aromatic; else Kekule), its N-H drawn or not. */
+  const pyrrole = (ring: "aromatic" | "kekule", nh: boolean): Molecule => {
+    const atoms: Molecule["atoms"] = [];
+    const bonds: Molecule["bonds"] = [];
+    const at = (el: string, x: number, y: number) => atoms.push({ el, x, y, z: 0 } as Molecule["atoms"][number]) - 1;
+    const ringAtoms = ["N", "C", "C", "C", "C"].map((el, k) => at(el, Math.cos((2 * Math.PI * k) / 5), Math.sin((2 * Math.PI * k) / 5)));
+    const kekule = [1, 2, 1, 2, 1];
+    ringAtoms.forEach((a, k) => bonds.push({ a1: a, a2: ringAtoms[(k + 1) % 5], order: ring === "aromatic" ? 4 : kekule[k] }));
+    ringAtoms.forEach((a, k) => {
+      if (k === 0 && !nh) return;
+      bonds.push({ a1: a, a2: at("H", 2 * Math.cos((2 * Math.PI * k) / 5), 2 * Math.sin((2 * Math.PI * k) / 5)), order: 1 });
+    });
+    return { atoms, bonds };
+  };
+
+  it("typed aromatic, its N-H left out: taken as a drawing short of its H", () => {
+    expect(refusedAsFlat(pyrrole("aromatic", false))).toBe(true);
+  });
+  it("its N-H drawn: whole, aromatic or Kekule", () => {
+    expect(refusedAsFlat(pyrrole("aromatic", true))).toBe(false);
+    expect(refusedAsFlat(pyrrole("kekule", true))).toBe(false);
+  });
+  it("typed Kekule, its N-H left out: short of it, as before", () => {
+    expect(refusedAsFlat(pyrrole("kekule", false))).toBe(true);
+  });
+});
