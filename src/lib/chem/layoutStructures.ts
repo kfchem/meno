@@ -22,7 +22,10 @@ import { layoutMolecule, type Atom, type Bond, type Circle, type Layout, type La
  * by a selection's handle, dragged - each of its atoms where the same turn
  * and shift take it, nothing else of it changed, is not laid out again: its
  * last layout is carried with it, each label kept upright beside its atom
- * (`carriedLayout`). Once the gesture ends, it is laid out again, once.
+ * (`carriedLayout`). A structure laid out while it lasts - an atom of it
+ * dragged - takes what it reads of configuration as last read (layout2d
+ * `layoutMolecule`'s `held`). Once the gesture ends, each is laid out again,
+ * once.
  */
 export function layoutByStructure(
   atoms: Atom[],
@@ -63,7 +66,7 @@ export function layoutByStructure(
     let it = was.get(key);
     // (carried while a gesture lasts, from the structure as it was last laid out)
     const motion = it && moving && it.atoms.length === part.atoms.length && sameBonds(it, part, bonds) ? rigidMotion(it.base?.atoms ?? it.atoms, part.atoms.map((i) => atoms[i])) : null;
-    if (it && !moving && it.base) it = undefined;
+    if (it && !moving && (it.base || it.held)) it = undefined;
     if (it && motion && !sameAs(it, part, atoms, bonds)) {
       const base = it.base ?? { atoms: it.atoms, layout: it.layout };
       const now = part.atoms.map((i) => atoms[i]);
@@ -76,8 +79,9 @@ export function layoutByStructure(
         part.bonds.map((k) => ({ ...bonds[k], a1: local[bonds[k].a1], a2: local[bonds[k].a2] })),
         magnifiedOptions(opts, k),
         zoom,
+        moving,
       );
-      it = { atoms: part.atoms.map((i) => atoms[i]), bonds: part.bonds.map((k) => bonds[k]), at: part.atoms, layout, texts: placed(layout.texts, part.atoms) };
+      it = { atoms: part.atoms.map((i) => atoms[i]), bonds: part.bonds.map((k) => bonds[k]), at: part.atoms, layout, texts: placed(layout.texts, part.atoms), ...(moving ? { held: true as const } : {}) };
     } else if (!sameNumbers(it.at, part.atoms)) {
       // (the same structure, its atoms at other places in the drawing: its labels say which by place)
       it = { ...it, at: part.atoms, texts: placed(it.layout.texts, part.atoms) };
@@ -167,6 +171,8 @@ type Laid = {
   texts: TextItem[];
   /** Carried while a gesture lasts: the structure as it was last laid out, and that layout (`carriedLayout`). */
   base?: { atoms: Atom[]; layout: Layout };
+  /** Laid out while a gesture lasted, what it reads of configuration held as last read (layout2d `layoutMolecule`'s `held`): laid out again once it ends. */
+  held?: true;
 };
 
 /** Atoms and bonds, by their places in the drawing, laid out together. */

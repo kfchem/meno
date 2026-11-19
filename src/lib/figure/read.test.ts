@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
+import { FISCHER_CROSS } from "./structure";
 import { bondLength, DASHED_ROW, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
@@ -530,16 +531,33 @@ describe("a figure read as a structure", () => {
     expect(r.bonds.find((b) => (b.a === c2 && b.b === c1) || (b.a === c1 && b.b === c2))?.stereo).toBe("down");
   });
 
-  it("puts even hashes' narrow end where a stereocentre can be, and says so where both ends could be", () => {
+  it("gives even hashes as a hashed line, no narrow end guessed: the reader's one rule for a hashed line reads it, or says why not", () => {
     const c: P = [40, 40];
     const branch = [stroke(step(c, 150), c, step(c, 30)), stroke(c, step(c, 90))];
     const s = read(figure([...branch, ...hashes(step(c, -90), c, true)]));
-    const h = s.bonds.find((b) => b.stereo === "down")!;
-    expect(s.bonds.filter((b) => b.a === h.a || b.b === h.a)).toHaveLength(4);
+    const h = s.bonds.find((b) => b.hashed)!;
+    expect(h).toBeDefined();
+    expect(h.stereo).toBeUndefined();
     expect(h.unsure).toBeUndefined();
-    // (an ethane's: either carbon could be)
+    // (an ethane's: either carbon could be the centre - a line still, nothing said of the bond itself)
     const e = read(figure([stroke(step(c, 150), c, step(c, 30)), ...hashes(c, step(c, -90), true), stroke(step(c, -90), step(step(c, -90), -30)), stroke(step(c, -90), step(step(c, -90), -150))]));
-    expect(e.bonds.find((b) => b.stereo === "down")!.unsure).toHaveLength(1);
+    const line = e.bonds.find((b) => b.hashed)!;
+    expect(line.stereo).toBeUndefined();
+    expect(line.unsure).toBeUndefined();
+  });
+
+  it("a stereocentre with a hashed line at it (even hashes to an ethyl) is not told 'configuration not drawn': the reader's rule says what it reads; with a plain bond there, it is told", () => {
+    const NOT_DRAWN = "A stereocentre whose configuration is not drawn: none is read.";
+    const c: P = [40, 40];
+    const [up, right, left, down] = [step(c, 90), step(c, 30), step(c, 150), step(c, -90)];
+    const drawn = (hashed: boolean) =>
+      figure(
+        [stroke(c, up), stroke(c, right), stroke(c, left), ...(hashed ? hashes(c, down, true) : [stroke(c, down)]), stroke(down, step(down, -30))],
+        [...word("OH", [right[0] + 3.4, right[1]]), ...word("Br", [left[0] - 9, left[1]])],
+      );
+    const noted = (f: FigureDrawn) => read(f).atoms.filter((a) => a.unsure?.includes(NOT_DRAWN)).length;
+    expect(noted(drawn(false))).toBe(1);
+    expect(noted(drawn(true))).toBe(0);
   });
 
   it("reads labels as typed: HO as OH, NH2, a charge set high", () => {
@@ -834,6 +852,48 @@ describe("a figure read as a structure", () => {
       const s = read(figure([...lines, curve, wedge(ring[1], end)]));
       expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
     });
+  });
+
+  it("joins a bond broken where a wedge passes in front of it, as a perspective drawing's near edge does", () => {
+    const a: P = [40, 40];
+    const b: P = [40 + 2 * L, 40];
+    const gap = 2.6;
+    const m: P = [40 + L, 40];
+    // (the wedge in front, crossing the gap, from its narrow end above to its wide end below; it and the bonds round it a structure)
+    const tip: P = [m[0] - 0.3 * L, 40 - 0.6 * L];
+    const base: P = [m[0] + 0.3 * L, 40 + 0.6 * L];
+    const s = read(
+      figure([
+        stroke(step(a, 150), a),
+        stroke(a, [m[0] - gap, 40]),
+        stroke([m[0] + gap, 40], b),
+        stroke(b, step(b, 30)),
+        stroke(step(tip, 120), tip),
+        wedge(tip, base),
+      ]),
+    );
+    // (one bond from a to b, not two pieces each ending at nothing: four plain bonds and the wedge, seven atoms)
+    expect(s.bonds.filter((x) => !x.stereo)).toHaveLength(4);
+    expect(s.atoms).toHaveLength(7);
+  });
+
+  it("reads a ring's corner set just over a Me as a carbon - a bold bar's end and a wedge's meeting there - the Me its own line's", () => {
+    // (a perspective drawing's near edge: a bold bar and a wedge meet at a corner; under it a Me, the end of a line drawn down from
+    // another ring carbon, behind the bar; both the bar's end and the wedge's point into the Me's room)
+    const k: P = [100, 100];
+    const r: P = [k[0] + L * 0.96, k[1] - L * 0.29];
+    const t: P = [k[0] - L * 0.5, k[1] - L * 0.87];
+    const v: P = [103, 98.5 - L];
+    const [ux, uy] = unit(k, r);
+    const bar = filled([k[0] - uy, k[1] + ux], [r[0] - uy, r[1] + ux], [r[0] + uy, r[1] - ux], [k[0] + uy, k[1] - ux]);
+    const paths = [bar, wedge(t, k), stroke(v, [103, 98.5]), stroke(step(t, 150), t), stroke(r, step(r, -30)), stroke(step(v, 30), v)];
+    const f = readFigure(figure(paths, word("Me", [99.4, 104.2])), () => true);
+    const me = f.atoms.findIndex((a) => a.label === "Me");
+    const bondsOf = (i: number) => f.bonds.filter((b) => b.a === i || b.b === i);
+    expect(bondsOf(me).map((b) => f.atoms[b.a === me ? b.b : b.a]).map((a) => [Math.round(a.x), Math.round(a.y)])).toEqual([v.map(Math.round)]);
+    const corner = f.atoms.findIndex((a) => !a.label && Math.hypot(a.x - k[0], a.y - k[1]) < 1);
+    expect(corner).toBeGreaterThanOrEqual(0);
+    expect(bondsOf(corner)).toHaveLength(2);
   });
 
   it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
@@ -1373,6 +1433,60 @@ describe("a stereocentre whose configuration the figure does not show", () => {
 
   it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
     expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("drawn as a cross of plain bonds on the page's axes - a Fischer projection's - says so, and that it is read as one only when asked", () => {
+    // (a centre at (100, 100): a methyl up, an ethyl down, OH right and Br left, each bond a plain line on an axis)
+    const c: P = [100, 100];
+    const [up, down, right, left] = [step(c, 90), step(c, -90), step(c, 0), step(c, 180)];
+    const f = figure(
+      [stroke(c, up), stroke(c, down), stroke(down, step(down, -30)), stroke(c, along(c, right, 0.7)), stroke(c, along(c, left, 0.7))],
+      [...word("OH", [right[0] + 3.4, right[1]]), ...word("Br", [left[0] - 9, left[1]])],
+    );
+    const centre = read(f).atoms.find((a) => a.unsure?.includes(FISCHER_CROSS));
+    expect(centre).toBeDefined();
+    expect(centre!.unsure).not.toContain(NOT_DRAWN);
+    // (the same kind of centre, its bonds off the axes: no cross, the plain words)
+    expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("a ring atom whose bonds lie as a plus on the axes is no Fischer projection's cross: the plain words", () => {
+    // (a five-membered ring through the centre's up and right bonds, a methyl on the ring at the up side; an ethyl down, Br left)
+    const c: P = [100, 100];
+    const [up, right, down, left] = [step(c, 90), step(c, 0), step(c, -90), step(c, 180)];
+    const p = step(up, 18);
+    const q = step(right, 72);
+    const f = figure(
+      [stroke(c, up), stroke(up, p), stroke(p, q), stroke(q, right), stroke(right, c), stroke(p, step(p, 90)), stroke(c, down), stroke(down, step(down, -30)), stroke(c, along(c, left, 0.7))],
+      [...word("Br", [left[0] - 9, left[1]])],
+    );
+    const centre = read(f).atoms.find((a) => a.unsure?.includes(FISCHER_CROSS));
+    expect(centre).toBeUndefined();
+  });
+
+  describe("the figure's note of a Fischer cross: where it is not said", () => {
+    // (a centre at (100, 100) of an OH, a Br, a methyl and an ethyl: right, left, up and down - `deg` the whole cross turned, `ways` the four bonds' directions in degrees)
+    const noteOf = (ways: [number, number, number, number], far?: "right") => {
+      const c: P = [100, 100];
+      const [r, l, u, d] = ways.map((w) => step(c, w));
+      const f = figure(
+        [far ? wedge(along(c, r, 0.7), c) : stroke(c, along(c, r, 0.7)), stroke(c, along(c, l, 0.7)), stroke(c, u), stroke(c, d), stroke(d, step(d, ways[3] - 30))],
+        [...word("OH", [r[0] + 3.4, r[1]]), ...word("Br", [l[0] - 9, l[1]])],
+      );
+      return read(f).atoms.find((a) => a.unsure?.includes(NOT_DRAWN) || a.unsure?.includes(FISCHER_CROSS))?.unsure ?? [];
+    };
+    it("a cross turned 8 degrees says it; turned 15, it is the plain words", () => {
+      expect(noteOf([8, 188, 98, -82])).toContain(FISCHER_CROSS);
+      expect(noteOf([15, 195, 105, -75])).toContain(NOT_DRAWN);
+      expect(noteOf([15, 195, 105, -75])).not.toContain(FISCHER_CROSS);
+    });
+    it("two bonds level and two upward (60 and 120 degrees) are no cross: the plain words", () => {
+      expect(noteOf([0, 180, 60, 120])).toContain(NOT_DRAWN);
+      expect(noteOf([0, 180, 60, 120])).not.toContain(FISCHER_CROSS);
+    });
+    it("a cross with a wedge narrow at the far end of one bond is no plain cross: the plain words", () => {
+      expect(noteOf([0, 180, 90, -90], "right")).not.toContain(FISCHER_CROSS);
+    });
   });
 
   it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {

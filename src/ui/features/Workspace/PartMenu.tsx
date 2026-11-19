@@ -238,6 +238,8 @@ export default function PartMenu({
   scope,
   records,
   stereo,
+  projection,
+  fischer,
   figure,
   numbers,
   onDelete,
@@ -267,6 +269,7 @@ export default function PartMenu({
   onReadStructure,
   text,
   onSaveProcedure,
+  onRepeatSteps,
   keepInFile,
   shownOnPage,
   onOpenAsTable,
@@ -428,6 +431,8 @@ export default function PartMenu({
   text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void; onTable?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
+  /** *Repeat these steps*: a Repeat made round the step pointed at - or round every step chosen, where it is among them (workflow/model `repeatAround`). */
+  onRepeatSteps?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
   keepInFile?: { kept: boolean; set: (keep: boolean) => void };
   /** A step's result set whose exit is wired on (workflow/held) - the set right-clicked, or the one a wire right-clicked comes from: shown on the page, opened, or held off it; and shown or held as asked. */
@@ -573,6 +578,10 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
+  /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
+  projection?: { flat: () => void; flip?: () => void };
+  /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
+  fischer?: { run: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
   figure?: { from: string; run?: () => void };
   /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
@@ -675,6 +684,7 @@ export default function PartMenu({
   ];
   const stereoItem: Item[] = [
     ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
+    ...(fischer ? [{ name: "Read as Fischer projection", keys: "", run: fischer.run, ...(stereo ? {} : { divider: true }) }] : []),
     ...(numbers
       ? [
           ...numbers.items.map((it, k) => ({ name: it.name, keys: "", run: it.run, ...(k === 0 && !stereo ? { divider: true } : {}) })),
@@ -998,6 +1008,7 @@ export default function PartMenu({
           ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
+          ...(onRepeatSteps ? [{ name: "Repeat these steps", keys: "", run: onRepeatSteps }] : []),
           ...(step?.keepRaw
             ? [{ name: "Don't keep raw outputs", keys: "", run: () => step.keepRaw!.set(!step.keepRaw!.kept), checked: !step.keepRaw.kept, divider: true }]
             : []),
@@ -1080,6 +1091,12 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...(projection
+            ? [
+                ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
+                { name: "Draw flat", keys: "", run: projection.flat },
+              ]
+            : []),
           ...partsItems,
           ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
