@@ -896,6 +896,24 @@ describe("a figure read as a structure", () => {
     expect(bondsOf(corner)).toHaveLength(2);
   });
 
+  // (the edge of the tenth of a bond at which two ends meet, held on both sides; found in review)
+  it("a bar's end and a wedge's 0.075 or 0.09 bond apart meet: the corner is a carbon; 0.11 or 0.125 apart they do not: the Me takes both", () => {
+    const read = (d: number) => {
+      // (the Me test's drawing, the wedge cut short `d` bonds, its base that far from the bar's end)
+      const k: P = [100, 100];
+      const r: P = [k[0] + L * 0.96, k[1] - L * 0.29];
+      const t: P = [k[0] - L * 0.5, k[1] - L * 0.87];
+      const v: P = [103, 98.5 - L];
+      const [ux, uy] = unit(k, r);
+      const bar = filled([k[0] - uy, k[1] + ux], [r[0] - uy, r[1] + ux], [r[0] + uy, r[1] - ux], [k[0] + uy, k[1] - ux]);
+      const f = readFigure(figure([bar, wedge(t, along(t, k, 1 - d)), stroke(v, [103, 98.5]), stroke(step(t, 150), t), stroke(r, step(r, -30)), stroke(step(v, 30), v)], word("Me", [99.4, 104.2])), () => true);
+      const me = f.atoms.findIndex((a) => a.label === "Me");
+      return { me: f.bonds.filter((b) => b.a === me || b.b === me).length, corner: f.atoms.some((a) => !a.label && Math.hypot(a.x - k[0], a.y - k[1]) < 1) };
+    };
+    for (const d of [0.075, 0.09]) expect(read(d), `${d}`).toEqual({ me: 1, corner: true });
+    for (const d of [0.11, 0.125]) expect(read(d), `${d}`).toEqual({ me: 3, corner: false });
+  });
+
   it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
     // (as a turned page's letters may be read: lower case, or smaller than the word)
     const w: P = [80, 60];
