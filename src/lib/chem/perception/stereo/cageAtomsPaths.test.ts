@@ -17,6 +17,12 @@ describe("cageAtoms, where a looser reading would flag more", () => {
     ["camphor: its two bridgeheads, not the C7 with its two methyls", "CC1(C)C2CCC1(C)C(=O)C2", [3, 6]],
     ["pinane", "CC1(C)C2CCC1C2", [3, 6]],
     ["triptycene: the two bridgeheads, none of its rings'", "c1ccc2c(c1)C1c3ccccc3C2c2ccccc12", [6, 13]],
+    ["bicyclo[4.4.1]undecane: bridges of four atoms stand in or out, none", "C12CCCCC(CCCC1)C2", []],
+    ["bicyclo[3.3.0]octane: its junctions are bonded, a bond is no bridge", "C1CC2CCCC2C1", []],
+    ["bicyclo[3.2.0]heptane", "C1CC2CCC2C1", []],
+    ["3-azabicyclo[3.1.0]hexane", "C1NCC2CC12", []],
+    ["hexahydrofuro[2,3-b]furan", "C1COC2OCCC12", []],
+    ["bicyclo[1.1.1]pentane: three bridges of one atom", "C1C2CC1C2", [1, 3]],
   ])("%s: %s", (_what, smiles, want) => {
     expect(flagged(smiles)).toEqual(want);
   });
