@@ -359,7 +359,18 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 - each stereocentre's, double bond's and axis's configuration as drawn;
 - aromatic rings as one form: a structure's Kekulé structures, and
   bond-shift isomers, are one structure. A bond made one order there keeps
-  no cis or trans of its own;
+  no cis or trans of its own - but a double bond between rings does
+  (`aromaticForm`): one neither of whose atoms is in a ring of seven atoms
+  or fewer, on a larger ring that runs across such a ring - sharing two
+  of its bonds or more, as a phane's: a [2.2]paracyclophane-1,9-diene's
+  bridge, a cyclic phenylenevinylene's vinylene. Its Z and E are two
+  compounds. An annulene's and a cyclooctatetraene's ring bonds keep
+  none, and so do those of one fused to a benzene ring at one bond (a
+  benzannulene, dibenzo[a,e]cyclooctatetraene) and porphine's meso C=C
+  (its atoms in five-rings). Known limit:
+  the other Kekulé drawing of such a bond - drawn single, the rings beside
+  it quinoid - has no configuration on it, so it is another identity than
+  the usual drawing; nobody draws it;
 - a plain hydrogen atom as one of its neighbour's hydrogens, with its
   configuration carried to the atom it is on (`hydrogensFolded`). A
   hydrogen stays an atom where it is charged, has an unpaired electron, is

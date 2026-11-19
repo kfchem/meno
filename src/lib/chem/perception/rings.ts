@@ -35,6 +35,9 @@ import type { ChemGraph } from "./graph";
 
 export type Edge = readonly [number, number];
 
+/** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number; stereo/units, and the aromatic form's side kept). */
+export const SMALL_RING = 7;
+
 /** A ring kept, with the atom and bond (global indices) it was first found from. */
 type Found = { ring: number[]; v: number; e: number };
 

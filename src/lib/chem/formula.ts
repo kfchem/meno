@@ -98,12 +98,26 @@ export const longestGroup =
  *   which is theirs (ClO4, IO4, ClO2, CF3SO2, CO3, HCO3, PO4) - as many
  *   bonds in all as a valence of the centre's own.
  *
- * A second-row centre has no more than four bonds: no CF5, and no NO3 so.
+ * A second-row centre has no more than four bonds: no CF5. Nitrate is the
+ * one oxoanion that keeps it so by a charge of its own: NO3, of one charge,
+ * is its N with one N=O and two N-O-, the N +1.
  */
 export function anionOf(parts: readonly Part[], charge: number): GroupStructure | null {
   const is = (el: string) => (p: Part) => p.kind === "element" && p.el === el;
   const elements = parts.flatMap((p) => (p.kind === "element" ? [p.el] : []));
   const once = [...new Set(elements)].filter((el) => el !== "O" && el !== "H" && elements.filter((e) => e === el).length === 1);
+  // (nitrate: N+ with one N=O and two O-, its four bonds a second-row atom's most)
+  if (charge === 1 && parts.length === 4 && parts.filter(is("N")).length === 1 && parts.filter(is("O")).length === 3) {
+    return {
+      atoms: [{ el: "N", hs: 0, charge: 1 }, { el: "O", hs: 0 }, { el: "O", hs: 0, charge: -1 }, { el: "O", hs: 0, charge: -1 }],
+      bonds: [
+        { a1: 0, a2: 1, order: 2 },
+        { a1: 0, a2: 2, order: 1 },
+        { a1: 0, a2: 3, order: 1 },
+      ],
+      attach: [],
+    };
+  }
   for (const centre of once) {
     const rest = parts.filter((p) => !is(centre)(p));
     const others = rest.filter((p) => !is("O")(p) && !is("H")(p));

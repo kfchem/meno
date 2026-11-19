@@ -26,8 +26,21 @@ const D_ORBITAL: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se"
 /** A molecule in 3D as this reads it: its atoms, its bonds by their atoms' numbers from 0, and its places (x, y, z for each atom, in its order). */
 export type In3d = { atoms: readonly { el: string; charge?: number; isotope?: number }[]; bonds: readonly { a1: number; a2: number; order: number }[]; xyz: readonly number[] };
 
-/** Each centre's R, S, r or s and each double bond's E or Z, by atom and bond number: those that have one. */
-export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record<string, string> } {
+/**
+ * Why a unit of a molecule in 3D has no descriptor: its groups nearly in a plane, so that its places give it no sense (`flat`, under
+ * stereo/geometry `FLAT_VOLUME_3D`); an N that exchanges its H (`exchanges`); or the CIP's own why - the structure too large to work
+ * out, a group it depends on not told apart. Never for an atom or a bond that is no unit: two of its groups alike.
+ */
+export type In3dWhy = "flat" | "exchanges" | "large" | "unsure" | "open";
+
+/** What a molecule in 3D says of its configurations (`cipIn3d`): each unit's descriptor, by atom and bond number - and, of a unit with none, why. */
+export type In3dLabels = { atoms: Record<string, string>; bonds: Record<string, string>; said?: { atoms: Record<string, In3dWhy>; bonds: Record<string, In3dWhy> } };
+
+/**
+ * Each centre's R, S, r or s and each double bond's E or Z, by atom and bond number: those that have one; and of each unit that has none
+ * though it is one, why (`said`): its groups nearly in a plane, an N that exchanges its H, or the CIP's why.
+ */
+export function cipIn3d(m: In3d): In3dLabels {
   const n = m.atoms.length;
   const around: number[][] = m.atoms.map(() => []);
   m.bonds.forEach((b) => {
@@ -45,7 +58,8 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
     bonds,
   );
   // the candidates: four single bonds to no metal (a protonated amine's N where its amine's is held), three and a lone pair, a double bond
-  const four = m.atoms.flatMap((_, i) => (around[i].length === 4 && single(i) && !metal(i) && !around[i].some(metal) && held(i) !== false ? [i] : []));
+  const fourAll = m.atoms.flatMap((_, i) => (around[i].length === 4 && single(i) && !metal(i) && !around[i].some(metal) ? [i] : []));
+  const four = fourAll.filter((i) => held(i) !== false);
   const three = m.atoms.flatMap((_, i) => (around[i].length === 3 ? [i] : []));
   // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, `runsIn3d`. The other tests already keep one
   //  from getting a label, so this guard has no case where it shows - it says what a unit here is)
@@ -73,7 +87,33 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
   const runs: Record<string, string> = {};
   for (const [k, v] of r.axes) if ("label" in v && AXIS_SHOWN[v.label]) runs[String(shownOn.axes[k])] = AXIS_SHOWN[v.label]!;
   for (const [k, v] of r.cumulated) if ("label" in v) runs[String(shownOn.cumulated[k])] = v.label;
-  return { atoms: labels(r.centres), bonds: { ...labels(r.bonds), ...runs } };
+  // (a unit with no descriptor, said why: the CIP's own why - but none for one whose groups are alike, which is no unit)
+  const said = { atoms: {} as Record<string, In3dWhy>, bonds: {} as Record<string, In3dWhy> };
+  const why = (v: unknown): In3dWhy | null => (v && typeof v === "object" && "why" in v && v.why !== "alike" ? (v.why as In3dWhy) : null);
+  for (const [k, v] of r.centres) if (why(v)) said.atoms[String(k)] = why(v)!;
+  for (const [k, v] of r.bonds) if (why(v)) said.bonds[String(k)] = why(v)!;
+  // (and a candidate its places gave no sense - nearly flat - or an N that exchanges its H: a unit where, given either sense, the CIP names
+  //  it - asked so apart, its sense one taken for the asking, never shown)
+  const flat = fourAll.filter((i) => !tetra.has(i));
+  const flatDoubles = doubles.filter((i) => !stereo.has(i));
+  if (flat.length || flatDoubles.length) {
+    const asked: IdentityInput = {
+      ...input,
+      atoms: input.atoms.map((a, i) => (flat.includes(i) ? { ...a, tetra: { neighbours: [...around[i]], volume: 1 as const } } : a)),
+      bonds: input.bonds.map((b, i) => {
+        if (!flatDoubles.includes(i)) return b;
+        const na = around[b.a].find((x) => x !== b.b);
+        const nb = around[b.b].find((x) => x !== b.a);
+        return na != null && nb != null ? { ...b, stereo: { refs: [na, nb] as [number, number], cis: true } } : b;
+      }),
+    };
+    const t = cipLabels(asked, { centres: flat, bonds: flatDoubles });
+    const named = (v: unknown) => !!v && typeof v === "object" && "label" in v;
+    for (const i of flat) if (named(t.centres.get(i))) said.atoms[String(i)] = held(i) === false ? "exchanges" : "flat";
+    for (const i of flatDoubles) if (named(t.bonds.get(i))) said.bonds[String(i)] = "flat";
+  }
+  const anySaid = Object.keys(said.atoms).length + Object.keys(said.bonds).length > 0;
+  return { atoms: labels(r.centres), bonds: { ...labels(r.bonds), ...runs }, ...(anySaid ? { said } : {}) };
 }
 
 /**
