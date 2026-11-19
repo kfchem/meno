@@ -6,9 +6,12 @@
  * identities. So a neopentane's C, PPh3's P, a sulfone's S and an acetone oxime's C=N, candidates by shape whose two senses are
  * one structure, are none; a meso form's centres and a pseudoasymmetric centre are. Read as identity reads the structure
  * (chem/identityOf `identityInputOf`), its plain hydrogens counted on their atoms. Each place is asked only when it is asked
- * of, once.
+ * of, once; a centre two of whose groups are alike and hold no place sets nothing with no identity asked, and the rest are asked
+ * of identity off the drawing thread (chem/identityOff): one not yet answered is offered by its shape, so the menu opens at once.
  */
-import { identity, type IdentityInput } from "../../../../lib/chem/identity";
+import type { IdentityInput } from "../../../../lib/chem/identity";
+import { symmetryClasses } from "../../../../lib/chem/perception/symmetry";
+import { identityKnown } from "./identityOff";
 import { candidates } from "../../../../lib/chem/perception/stereo/candidates";
 import { hydrogensFolded, plainHydrogenAtoms } from "../../../../lib/chem/perception/fold";
 import type { Model } from "../store/types";
@@ -68,9 +71,36 @@ export function candidatesDrawn(part: Model): { atom: (id: number) => boolean; b
     }
   }
   const known = new Map<Place, boolean>();
+  // (the constitution's classes - refined, never searched: cheap on a large complex - worked out once if asked)
+  let classesOf: readonly number[] | null = null;
+  const classes = () => (classesOf ??= symmetryClasses({ atoms: input.atoms.map(({ tetra: _t, ...a }) => a), bonds: input.bonds.map(({ stereo: _s, ...b }) => b) }));
+  // (the atoms that are or touch a place a configuration could be or is given at: a group holding one is no plain group)
+  const placed = new Set<number>();
+  for (const pl of [...atoms.values(), ...bonds.values()]) {
+    if (pl.kind === "centre") placed.add(pl.at);
+    else if (pl.kind === "bond") [input.bonds[pl.at].a, input.bonds[pl.at].b].forEach((i) => placed.add(i));
+    else (pl.kind === "run" ? pl.ends : pl.atoms).forEach((i) => placed.add(i));
+  }
+  input.atoms.forEach((a, i) => a.tetra && placed.add(i));
+  input.bonds.forEach((b) => b.stereo && [b.a, b.b].forEach((i) => placed.add(i)));
+  const plain = (from: number, not: number): boolean => {
+    // (the group hanging from `not` through `from`: none of its atoms placed, at most GROUP_MOST of them - else it is not asked so)
+    const seen = new Set([not, from]);
+    const queue = [from];
+    while (queue.length) {
+      const at = queue.pop()!;
+      if (placed.has(at) || seen.size > GROUP_MOST) return false;
+      for (const n of around[at]) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        queue.push(n);
+      }
+    }
+    return true;
+  };
   const unit = (place: Place | undefined): boolean => {
     if (!place) return false;
-    if (!known.has(place)) known.set(place, setsSomething(input, around, order, place));
+    if (!known.has(place)) known.set(place, setsSomething(input, around, order, place, classes, plain));
     return known.get(place)!;
   };
   return { atom: (id) => unit(atoms.get(id)), bond: (id) => unit(bonds.get(id)) };
@@ -81,9 +111,20 @@ export function candidatesDrawn(part: Model): { atom: (id: number) => boolean; b
  * structure writes two identities. Where identity's search was not complete two texts may be one structure, so the place is
  * then taken to set something: never the other way.
  */
-function setsSomething(input: IdentityInput, around: readonly number[][], order: (p: number, q: number) => number, place: Place): boolean {
+function setsSomething(input: IdentityInput, around: readonly number[][], order: (p: number, q: number) => number, place: Place, classes: () => readonly number[], plain: (from: number, not: number) => boolean): boolean {
+  // (a centre two of whose groups are alike by the constitution and hold no place a configuration could be at - PPh3's P, a
+  //  neopentane's C - sets nothing: no identity asked. A pseudoasymmetric centre's two groups hold their centres: asked)
+  if (place.kind === "centre") {
+    const c = classes();
+    const n = around[place.at];
+    for (let i = 0; i < n.length; i++) for (let j = i + 1; j < n.length; j++) if (c[n[i]] === c[n[j]] && plain(n[i], place.at) && plain(n[j], place.at)) return false;
+  }
   const ways = waysOf(input, around, order, place);
-  return ways.length === 2 && identity(ways[0]).text !== identity(ways[1]).text;
+  if (ways.length !== 2) return false;
+  // (each way's identity off the drawing thread - chem/identityOff, kept per structure: one not yet answered is offered by its
+  //  shape, the menu never kept waiting; the next time it opens, as identity says)
+  const [a, b] = ways.map((w) => identityKnown(w));
+  return !a || !b || a.text !== b.text;
 }
 
 /** `input` with the configuration at `place` each way: the drawn one and it turned over, or, none drawn, each sense of one. */
@@ -122,3 +163,6 @@ function waysOf(input: IdentityInput, around: readonly number[][], order: (p: nu
   const x = k >= 0 ? runs[k] : { atoms: ends, refs: [p!, q!] as const, cis: true };
   return [true, false].map((same) => ({ ...input, cumulated: [...runs.filter((_, j) => j !== k), { ...x, cis: same === x.cis }] }));
 }
+
+/** The most atoms a group may have for a centre to be read as two alike groups with no identity asked (`setsSomething`). */
+const GROUP_MOST = 64;
