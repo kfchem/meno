@@ -918,7 +918,7 @@ export function stereoAgainst(stated: StereoShown, now: StereoShown): "changed" 
 export function stereoOf(m: Model): Said {
   const d = drawingOf(m);
   // (an H on a metal of the d or f block is no plain H, as identity keeps it an atom: backlog 177)
-  const onMetal = new Set(d.bonds.flatMap((b) => (isMetal(d.atoms[b.a].el ?? "") ? [b.b] : isMetal(d.atoms[b.b].el ?? "") ? [b.a] : [])));
+  const onMetal = new Set(d.bonds.flatMap((b) => (isMetal(readAs(m.atoms[b.a])) ? [b.b] : isMetal(readAs(m.atoms[b.b])) ? [b.a] : [])));
   return saidOf(d.atoms, d.bonds, m.atoms.map((a) => a.id), (i) => plainH(m.atoms[i]) && !onMetal.has(i), readStereo(d.atoms, d.bonds));
 }
 
