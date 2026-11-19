@@ -175,7 +175,12 @@ describe("complexes' formulas", () => {
     // (a μ-O bound singly to each metal it bridges; several metals with oxo not so marked, not read)
     const fe2 = of("Fe2Cl6(μ-O)");
     const o = fe2.atoms.findIndex((a) => a.el === "O");
-    expect(fe2.bonds.filter((b) => b.a1 === o || b.a2 === o).map((b) => b.order)).toEqual([1, 1]);
+    expect(fe2.bonds.filter((b) => b.a1 === o || b.a2 === o).map((b) => [b.order, !!b.coordination])).toEqual([[1, false], [1, false]]);
+    // (a part with an oxo made twice: bridged by its halide, never by the oxo, which stays M=O on each metal)
+    const mo2 = of("[MoO2Cl2]2");
+    expect(abbreviationOf("[MoO2Cl2]2")?.name).toMatch(/ bridged by Cl$/);
+    expect(mo2.bonds.filter((b) => b.coordination).map((b) => mo2.atoms[b.a1].el)).toEqual(["Cl", "Cl"]);
+    expect(mo2.bonds.filter((b) => b.order === 2).map((b) => [mo2.atoms[b.a1].el, mo2.atoms[b.a2].el].sort().join(""))).toEqual(Array(4).fill("MoO"));
     expect(abbreviationStructure("Re2O7")).toBeNull();
   });
 

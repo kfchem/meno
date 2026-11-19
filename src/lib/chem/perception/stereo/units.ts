@@ -5,8 +5,10 @@
  * lib/chem/identity (part 13's move), which imports it back; what a later step changes is pinned in this file's test as it stands.
  */
 import { AROMATIC } from "../aromatic";
+import { elementOf, endsAsDrawn } from "../chalcogenEnds";
 import { drawnRoundMetal } from "../elements";
-import { canonicalSearched, canonicalWritten, symmetryClasses, type SymmetryInput } from "../symmetry";
+import { SMALL_RING } from "../rings";
+import { canonicalSearched, canonicalWritten, settingCisTrans, symmetryClasses, type SymmetryInput } from "../symmetry";
 import { lonePairCentres } from "./lonePairs";
 
 /**
@@ -23,8 +25,6 @@ const isMetal = (el: string): boolean => drawnRoundMetal.has(el);
 /** The elements a centre of four groups may be (as the chemistry check ruled them: never a metal). */
 const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb", "Bi", "S", "Se", "Te"]);
 
-/** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
-const SMALL_RING = 7;
 
 /**
  * A place that could carry a configuration and carries none: a centre (its
@@ -66,12 +66,13 @@ export function blanksOf(g: SymmetryInput): Blank[] {
     }
   }
   for (const a of around) a.sort((x, y) => x - y);
-  // (its element as written: identity's own marks - a mass number, an unpaired electron - taken off: `compared`)
-  const element = (i: number) => g.atoms[i].el.replace(/[\^.].*$/, "");
+  // (its element as written: identity's own marks - a mass number, an unpaired electron, a centre's shared ends - taken off: `compared`)
+  const element = (i: number) => elementOf(g.atoms[i].el);
   const hs = (i: number) => g.atoms[i].hs ?? 0;
+  // (a centre whose end chalcogens share their bonds read by the lone-pair rule as drawn: ../chalcogenEnds `endsAsDrawn`)
   const pyramid = lonePairCentres(
     g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0, hs: a.hs ?? 0 })),
-    g.bonds,
+    endsAsDrawn(g.atoms, g.bonds),
   );
   const out: Blank[] = [];
   for (let i = 0; i < n; i++) {
@@ -265,12 +266,15 @@ function unconfigured(g: SymmetryInput): SymmetryInput {
  * (a rule of the chemistry check): nothing drawn is ever taken out, but
  * at a centre or double bond two of whose groups are alike - two ends, or
  * two whole groups (`groupsAlike`) - which sets nothing however the rest is
- * given: there no configuration is written, drawn or not. A
+ * given: there no configuration is written, drawn or not; and a double
+ * bond's or an odd cumulene's cis or trans that sets nothing with the rest
+ * as given (perception/symmetry `settingCisTrans`) is taken off. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
- * nothing, so writing it changes no compound - an isopropyl's CH, a
- * prenyl's C=C(CH3)2, the third centre of the cis,trans
- * 1,2,3-trimethylcyclopropane written with its trans pair. A place whose
+ * nothing, so writing it changes no compound - an isopropyl's CH, the
+ * third centre of the cis,trans 1,2,3-trimethylcyclopropane written with
+ * its trans pair; a double bond or an odd cumulene so is left with none,
+ * and asked no more (below). A place whose
  * two senses write two texts is open, and stays so: the cis pair's third
  * centre, which decides between two compounds.
  *
@@ -283,11 +287,18 @@ function unconfigured(g: SymmetryInput): SymmetryInput {
  * came in. That this order gives one form for every structure is not
  * proved: it is held by the chemistry check's known answers and, over every writing of
  * fourteen structures, by the tests: never one identity for two meanings,
- * and a writing that states one compound has that compound's text. Some
+ * and a writing that states one compound has that compound's text. Where
  * writings that leave the same thing unsaid in different ways get two
- * identities (that acid, drawn with its double bond bent and with nothing
- * at all): alike told apart, never two unlike joined, and only where no
- * single compound is stated.
+ * identities, they are alike told apart, never two unlike joined, and only
+ * where no single compound is stated. A double bond or an odd cumulene
+ * that sets nothing is left with none, never filled: a cis or trans given
+ * there is none to every canonical reading (perception/symmetry
+ * `settingCisTrans`) while the rest stays open, so filled, it would turn
+ * into a configuration again once another place was filled - that acid
+ * with its double bond filled and then its centre would have one
+ * enantiomer's text, though it states neither. So that acid drawn with its
+ * double bond bent, with its centre wedged, or with nothing at all is one
+ * structure.
  *
  * A metal of four or six donors whose arrangement is not given - which of
  * its donors are across from each other - is such a place too, its values
@@ -309,7 +320,9 @@ function unconfigured(g: SymmetryInput): SymmetryInput {
  * and wrote two, that place is left as it is, and `complete` says so.
  */
 export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete: boolean; text?: string; searches: number; settledMetals: number[] } {
-  let g = input;
+  // (a cis or trans given where it sets nothing, the rest as given - a cyclohexylidene's with its ring's C4 left open - taken
+  //  off: perception/symmetry `settingCisTrans`, as every canonical reading takes it)
+  let g = settingCisTrans(input);
   let complete = true;
   // (how many canonical searches the fill made - its cost, the same for the same structure whatever its atoms' order)
   let searches = 0;
@@ -328,11 +341,27 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
   const every = blanksOf(unconfigured(g));
   const constitution = symmetryClasses(unconfigured(input));
   const own = new Set(every.flatMap((b) => b.own));
-  const alike = groupsAlike(g, own, constitution);
-  const settled = every.filter((b) => (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
-  const plainAt = new Set(settled.flatMap((b) => (b.kind === "centre" ? [b.at] : [])));
-  const plainBond = new Set(settled.flatMap((b) => (b.kind === "bond" ? [b.at] : [])));
-  g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  const plainAt = new Set<number>();
+  const plainBond = new Set<number>();
+  const settledHere = (b: Blank) => (b.kind === "centre" && plainAt.has(b.at)) || (b.kind === "bond" && plainBond.has(b.at));
+  // (asked again until nothing more settles: a place settled is no place for the groups that hold it - each sense of it one
+  //  structure, so two groups alike but for it are alike - and three tert-butyls on one carbon settle it, their own centres
+  //  settled first: tri-tert-butylmethanol. And a cage's bridgehead two of whose bridges are alike: `bridgesAlike`)
+  for (;;) {
+    const places = new Set(every.filter((b) => !settledHere(b)).flatMap((b) => b.own));
+    const alike = groupsAlike(g, places, constitution);
+    const bridges = bridgesAlike(g, places, constitution);
+    const more = every.filter(
+      (b) => !settledHere(b) && (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side) || bridges(b.own[k] ?? b.own[0], side)),
+    );
+    if (!more.length) break;
+    for (const b of more) {
+      if (b.kind === "centre") plainAt.add(b.at);
+      else if (b.kind === "bond") plainBond.add(b.at);
+    }
+    g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  }
+  const settled = every.filter(settledHere);
   // (a metal all of whose donors, or all but one, are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+, RhCl(PPh3)3,
   //  PtCl3Br 2-: the odd one across any of the others, every pairing one structure, so it carries none, as such a centre
   //  carries no sense: one given taken off, none filled in, and no search - RhCl(PPh3)3's ran out of steps, found in review.
@@ -343,8 +372,14 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
   if (plainMetal.size) g = { ...g, arrangements: (g.arrangements ?? []).filter((x) => !plainMetal.has(x.metal)) };
   // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
   const settledMetals = [...plainMetal];
+  // (a double bond or an odd cumulene found to set nothing below: left with none, never given one - a cis or trans given there
+  //  would be taken off by every canonical reading while its place stays open, and become a configuration again once
+  //  another place was filled: (4-methylcyclohexylidene)acetic acid's C=C filled and then its C4, one enantiomer's text for
+  //  a writing that states neither)
+  const leftNone = new Set<string>();
+  const noneKey = (b: Blank) => (b.kind === "bond" ? `b${b.at}` : b.kind === "cumulated" ? `c${b.ends.join(",")}` : null);
   // (the places left: those not settled so)
-  const open = (b: Blank) => !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at)) && !(b.kind === "metal" && plainMetal.has(b.at));
+  const open = (b: Blank) => !settledHere(b) && !(b.kind === "metal" && plainMetal.has(b.at)) && !leftNone.has(noneKey(b) ?? "");
   // (an axis or a cumulene of alike end atoms: filled, as before)
   for (const b of blanksOf(g)) if ((b.kind === "axis" || b.kind === "cumulated") && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
@@ -376,7 +411,9 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
       // (a symmetry of the structure that keeps the place and turns it over - two of a centre's groups swapped, or the two
       //  on one end of a double bond: its two senses are one structure, so it sets nothing, with no writing)
       if (b.kind !== "biaryl" && b.kind !== "metal" && turnedOver(b, searched().automorphisms)) {
-        next = given(g, b, true);
+        const none = noneKey(b);
+        if (none) leftNone.add(none);
+        next = none ? g : given(g, b, true);
         text = undefined;
         break;
       }
@@ -398,8 +435,10 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
       }
       // (one text is one structure, whether the search finished or not: it writes the whole of it)
       if (!d) {
-        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : values[0];
-        text = b.kind === "biaryl" ? undefined : u.complete ? u.text : undefined;
+        const none = noneKey(b);
+        if (none) leftNone.add(none);
+        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : none ? g : values[0];
+        text = b.kind === "biaryl" || none ? undefined : u.complete ? u.text : undefined;
         break;
       }
       if (!u.complete || !d.complete) complete = false;
@@ -437,6 +476,101 @@ function turnedOver(b: Exclude<Blank, { kind: "biaryl" | "metal" }>, automorphis
     return swapped(b.sides[0]) !== swapped(b.sides[1]);
   });
 }
+
+/**
+ * Whether `at` is a bridgehead of a cage two of whose bridges are alike: every group of `side` a bridge to one other atom -
+ * cut from `at` and that atom, each its own part - as quinuclidine's three to its N; and two of them alike as wholes, with no
+ * place in them (`places`) and no configuration, written the same with the atoms on each bridgehead marked. Exchanging the
+ * two turns both bridgeheads over and moves nothing else, and a cage's bridgeheads stand only one way to each other, so the
+ * sense at `at` says nothing. Two arms of a ring are no cage (1,4-dimethylcyclohexane's cis and trans), nor are bridges to
+ * different atoms (tropine's C3): a centre still (found in the chemistry check).
+ */
+function bridgesAlike(g: SymmetryInput, places: ReadonlySet<number>, classes: readonly number[]): (at: number, side: readonly number[]) => boolean {
+  const around: number[][] = g.atoms.map(() => []);
+  const order = new Map<string, number>();
+  const key = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+    order.set(key(b.a, b.b), b.order);
+  }
+  const configured = new Set<number>();
+  g.atoms.forEach((a, i) => a.tetra && configured.add(i));
+  for (const b of g.bonds) if (b.stereo) [b.a, b.b].forEach((i) => configured.add(i));
+  for (const x of [...(g.axes ?? []), ...(g.cumulated ?? [])]) x.atoms.forEach((i) => configured.add(i));
+  /** The part reached from `from`, never through `at` or `far`; null past GROUP_MOST atoms. */
+  const part = (from: number, at: number, far: number): number[] | null => {
+    const seen = new Set([at, far, from]);
+    const out = [from];
+    for (let k = 0; k < out.length; k++)
+      for (const y of around[out[k]]) {
+        if (seen.has(y)) continue;
+        if (out.length >= GROUP_MOST) return null;
+        seen.add(y);
+        out.push(y);
+      }
+    return out;
+  };
+  /** How many atoms a bridge has along it: from its atom on `at`'s side (`from`) to the nearest of its atoms on `far`. */
+  const bridgeLength = (group: readonly number[], from: number, far: number): number => {
+    const inGroup = new Set(group);
+    let at = [from];
+    const seen = new Set([from]);
+    for (let d = 1; at.length; d++) {
+      if (at.some((a) => around[a].includes(far))) return d;
+      const next: number[] = [];
+      for (const u of at)
+        for (const v of around[u]) {
+          if (!inGroup.has(v) || seen.has(v)) continue;
+          seen.add(v);
+          next.push(v);
+        }
+      at = next;
+    }
+    return Infinity;
+  };
+  const text = (group: readonly number[], at: number, far: number): string | null => {
+    if (group.some((a) => places.has(a) || configured.has(a))) return null;
+    const index = new Map(group.map((a, i) => [a, i]));
+    const mark = (a: number) => [at, far].map((e, k) => (around[a].includes(e) ? `^${k ? "far" : "on"}${order.get(key(a, e))}` : "")).join("");
+    const atoms = group.map((a) => ({ ...g.atoms[a], el: `${g.atoms[a].el}${mark(a)}` }));
+    const bonds = g.bonds.filter((b) => index.has(b.a) && index.has(b.b)).map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }));
+    return canonicalWritten({ atoms, bonds }).text;
+  };
+  return (at, side) => {
+    if (side.length < 3) return false;
+    // (the other bridgehead: an atom of the first bridge every group of `at` reaches it by, each by its own part)
+    const first = part(side[0], at, -1);
+    if (!first) return false;
+    for (const far of first) {
+      const parts = side.map((n) => (n === far ? null : part(n, at, far)));
+      if (parts.some((q) => !q)) continue;
+      const own = parts as number[][];
+      // (each its own part, apart from the others, and each meeting the far bridgehead)
+      if (own.some((_, k) => own.some((r, l) => l !== k && r.includes(side[k])))) continue;
+      if (!own.every((q) => q.some((a) => around[a].includes(far)))) continue;
+      // (every bridge of BRIDGE_MOST atoms or fewer between the two bridgeheads, along it: a longer one lets the bridgeheads
+      //  stand in or out - in,out-bicyclo[4.4.1]undecane - and their senses to each other say which)
+      if (own.some((q, k) => bridgeLength(q, side[k], far) > BRIDGE_MOST)) continue;
+      for (let p = 0; p < side.length; p++)
+        for (let q = p + 1; q < side.length; q++) {
+          if (classes[side[p]] !== classes[side[q]]) continue;
+          const t = text(own[p], at, far);
+          if (t != null && t === text(own[q], at, far)) return true;
+        }
+      return false;
+    }
+    return false;
+  };
+}
+
+/**
+ * The most atoms a cage's bridge may have, along it, for its bridgeheads to stand only one way to each other (`bridgesAlike`):
+ * with four, in,out isomers begin (bicyclo[4.4.1]undecane's, found in the chemistry check). That none is known with every
+ * bridge of three or fewer is the chemistry check's memory, not a source read: a bound on the safe side - a cage past it is
+ * left to the search, never two compounds joined.
+ */
+const BRIDGE_MOST = 3;
 
 /** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */
 const GROUP_MOST = 64;

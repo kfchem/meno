@@ -10,7 +10,11 @@ import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
 import { candidates } from "../chem/perception/stereo/candidates";
+import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
+
+/** What a stereocentre drawn as a cross of plain bonds on the page's axes says: a Fischer projection's, read so only when the chemist asks. */
+export const FISCHER_CROSS = "Drawn as a cross of plain bonds: no configuration is read. Read as Fischer projection, if it is one.";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
 export type LabelReader = (label: string) => { el: string; charge?: number; isotope?: number } | null;
@@ -52,7 +56,7 @@ export type StructureAtom = {
   of?: number;
   multiple?: { group: number; n: number; paradigm?: true };
 };
-export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; unsure?: string[] };
+export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; /** Hashes drawn even, a line: no narrow end. */ hashed?: true; unsure?: string[] };
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
 function drawnHydrogens(label: string): number | null {
@@ -219,15 +223,14 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   //  of four groups, a P=O's or an S=O's too, or of three and a lone pair it keeps, never a metal's nor an N+ with an H - read
   //  with each H drawn as an atom counted on its atom)
   const centres = centresOf(read, orders, els, charges, (i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]));
-  // a hashed bond whose narrow end is not drawn: at the end that can be a
-  // stereocentre where only one can; said, where both can or neither
-  const centre = (i: number) => centres.has(i);
+  // a hashed bond whose narrow end is not drawn - its hashes even: a hashed line, read by the reader's one rule for it (perception/stereo/
+  // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
+  const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) === 4;
   const bonds = read.bonds.map((b, i): StructureBond => {
     const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
     if (b.either) {
-      const [ca, cb] = [centre(b.a), centre(b.b)];
-      if (cb && !ca) [out.a, out.b] = [b.b, b.a];
-      else if (ca === cb) (out.unsure ??= []).push("Its hashes are even: which end is the stereocentre is not drawn.");
+      delete out.stereo;
+      out.hashed = true;
     }
     // a wedge or hash of which only the nearer end is known: narrow at the
     // end that can be a stereocentre - a wedge up from it, or a hash down
@@ -242,6 +245,8 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   // perspective has none - is unsure: none is read, none guessed
   const shown = new Set(bonds.filter((b) => b.stereo === "up" || b.stereo === "down").map((b) => b.a));
   const wavy = new Set(bonds.filter((b) => b.stereo === "wavy").flatMap((b) => [b.a, b.b]));
+  // (an atom with a hashed line at it: the reader reads it by its rule, or says why not)
+  const lined = new Set(bonds.filter((b) => b.hashed).flatMap((b) => [b.a, b.b]));
   const around: number[][] = atoms.map(() => []);
   bonds.forEach((b) => {
     around[b.a].push(b.b);
@@ -251,13 +256,39 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const lone = (n: number) => els[n] === "H" && around[n].length === 1;
   const hs = atoms.map((_, i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) + around[i].filter(lone).length);
   const kinds = atomKinds(atoms, bonds, hs, lone);
+  // (four plain bonds lying as a plus on the page's axes, each within the reader's IN_LINE of level or upright: a Fischer projection's
+  // cross, which states no configuration until the chemist says it is one)
+  const crossed = (i: number) => {
+    const plainHere = bonds.filter((b) => (b.a === i || b.b === i) && b.order === 1 && !b.stereo && !b.bold);
+    if (around[i].length !== 4 || plainHere.length !== 4) return false;
+    // (in no ring: a ring atom is never read as a Fischer projection's cross - another way round from each neighbour back to it)
+    const ringed = around[i].some((n) => {
+      const seen = new Set([i, n]);
+      const todo = [n];
+      while (todo.length) {
+        const m = todo.pop()!;
+        for (const o of around[m]) {
+          if (o === i && m !== n) return true;
+          if (o !== i && !seen.has(o)) {
+            seen.add(o);
+            todo.push(o);
+          }
+        }
+      }
+      return false;
+    });
+    if (ringed) return false;
+    const ways = around[i].map((n) => Math.atan2(atoms[n].y - atoms[i].y, atoms[n].x - atoms[i].x));
+    const near = (t: number, to: number) => Math.abs(Math.atan2(Math.sin(t - to), Math.cos(t - to))) <= IN_LINE;
+    return [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((to) => ways.filter((t) => near(t, to)).length === 1);
+  };
   atoms.forEach((a, i) => {
     // (where a configuration can be, by the candidates, and none is drawn)
-    if (!centres.has(i) || shown.has(i) || wavy.has(i)) return;
+    if (!centres.has(i) || shown.has(i) || wavy.has(i) || lined.has(i)) return;
     // (its groups each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
     if (hs[i] > 1 || new Set(groups).size !== groups.length) return;
-    (a.unsure ??= []).push("A stereocentre whose configuration is not drawn: none is read.");
+    (a.unsure ??= []).push(crossed(i) ? FISCHER_CROSS : "A stereocentre whose configuration is not drawn: none is read.");
   });
   // a bond's open end - an atom of one bond, with no label - drawn short, as a bond to a label is: a letter there not read (an
   // I, set alone), or a wavy line across it, the point a group is attached at - never a methyl, sure

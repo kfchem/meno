@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import type { WorkspaceDocument } from "../document";
 import { canWire, landing, repeatHolding, stepsAfter, stepsBefore, wireRefusal, type Flow } from "./flow";
-import { repeatsSettled } from "./model";
+import { moveStep, repeatsSettled } from "./model";
 import { readWorkflow } from "./saved";
 import { kindsOf } from "./doers";
+import { MENO_ONLY } from "../../../../lib/plugins/steps";
 import { cardHighOf } from "./kinds";
 import { CARD_W } from "./look";
 import { REPEAT_OUT, repeatHow, repeatNeeds, repeatRead, THIS_PASS, valueAt } from "./repeat";
@@ -56,6 +57,10 @@ describe("a Repeat's options", () => {
     const o = repeatRead({ repeat: "over", variable: "T", values: "300\n310" });
     if ("why" in o || !o.variable) throw new Error("not read");
     expect([0, 1, 2].map((c) => valueAt(o.variable!, c))).toEqual([300, 310, undefined]);
+    // (a sum floating point does not hold exactly - 0.1 and 0.2 - said as written: 0.3, never 0.30000000000000004)
+    const f = repeatRead({ variable: "x", from: "0.1", step: "0.2" });
+    if ("why" in f || !f.variable) throw new Error("not read");
+    expect([1, 2].map((c) => valueAt(f.variable!, c))).toEqual([0.3, 0.5]);
   });
 
   it("say what they still need, as the card says it", () => {
@@ -67,11 +72,14 @@ describe("a Repeat's options", () => {
     expect(repeatNeeds({ repeat: "over", variable: "T" })).toBe("Give the values, one to a line");
     expect(repeatNeeds({ repeat: "over", variable: "T", values: "300\nwarm" })).toBe('"warm" is no number');
     expect(repeatNeeds({ repeat: "over", values: "300" })).toBe("Name the variable the values are given as");
+    expect([repeatNeeds({ times: 0 }), repeatNeeds({ repeat: "until", most: 0 })]).toEqual(["Give how many passes", "Give at most how many passes"]);
   });
 
   it("is none of the kinds a step is chosen from: a Repeat is made round steps", () => {
     expect(kindsOf("meno")).not.toContain("repeat");
     expect(kindsOf("meno")).toContain("tag");
+    // (and Meno's own: no plugin may claim it)
+    expect(MENO_ONLY).toContain("repeat");
   });
 });
 
@@ -110,7 +118,8 @@ describe("a Repeat's frame in the flow", () => {
 
 describe("the steps a Repeat holds", () => {
   const doc = (steps: WorkflowStep[]) => ({ steps }) as unknown as WorkspaceDocument;
-  const inFrame = (x: number, y: number) => ({ x: x - CARD_W / 2, y: y - cardHighOf("tag") / 2 });
+  /** A card's top left with its middle at `x` across and `y` below its frame's top (the page's y runs up: a card's top is its y, its foot below). */
+  const inFrame = (x: number, y: number) => ({ x: x - CARD_W / 2, y: -y + cardHighOf("tag") / 2 });
 
   it("are those whose cards' middles lie inside its frame, in reading order: one dragged in joins, one dragged out leaves", () => {
     const r = step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
@@ -124,6 +133,35 @@ describe("the steps a Repeat holds", () => {
     expect(out.steps!.find((s) => s.id === R)!.holds).toEqual([B, C]);
     // (nothing moved: the same document)
     expect(repeatsSettled(out)).toBe(out);
+  });
+
+  it("move with it, by as much: its frame round them as it was", () => {
+    const moved = moveStep(doc([step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 }, holds: [A] }), step(A, "tag", 100, 100), step(C, "tag", 2000, 0)]), R, 50, -20);
+    expect(moved.steps!.map((s) => [s.id, s.x, s.y])).toEqual([
+      [R, 50, -20],
+      [A, 150, 80],
+      [C, 2000, 0],
+    ]);
+  });
+
+  it("are held by their card's middle, not its top: a card whose top lies outside the frame and its middle inside is held", () => {
+    const r = step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
+    // (its top above the frame's top, its middle below it: a quarter of its height above - found in review)
+    const a = step(A, "tag", 300, cardHighOf("tag") / 4);
+    expect(repeatsSettled(doc([r, a])).steps!.find((s) => s.id === R)!.holds).toEqual([A]);
+  });
+
+  it("are held by one Repeat alone where frames overlap: the smallest round the card's middle, the first made where two are alike (found in review)", () => {
+    const big = step(R, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
+    const small = step(9, "repeat", 200, 0, { frame: { w: 600, h: 400 } });
+    const a = step(A, "tag", inFrame(400, 200).x, inFrame(400, 200).y);
+    const b = step(B, "tag", inFrame(100, 200).x, inFrame(100, 200).y);
+    const settled = repeatsSettled(doc([big, small, a, b]));
+    expect(settled.steps!.find((s) => s.id === 9)!.holds).toEqual([A]);
+    expect(settled.steps!.find((s) => s.id === R)!.holds).toEqual([B]);
+    const twin = step(9, "repeat", 0, 0, { frame: { w: 1000, h: 400 } });
+    const both = repeatsSettled(doc([big, twin, a]));
+    expect([both.steps!.find((s) => s.id === R)!.holds, both.steps!.find((s) => s.id === 9)!.holds]).toEqual([[A], undefined]);
   });
 
   it("are kept with its frame in the workspace's file; a step of another kind keeps neither", () => {

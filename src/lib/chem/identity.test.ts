@@ -4,7 +4,7 @@ import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled";
 import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
 import type { Axial } from "../layout/stereo";
-import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
+import { aromaticForm, automorphismGroup, filledIn, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
 import { measured } from "../../testing/timeouts";
 
 /** How many distinct values a list has. */
@@ -14,6 +14,36 @@ const distinct = (xs: readonly number[]) => new Set(xs).size;
 function keepsBonds(g: LayoutInput, p: readonly number[]): boolean {
   const bonds = new Set(g.bonds.map((b) => `${Math.min(b.a, b.b)}-${Math.max(b.a, b.b)}:${b.order}`));
   return g.bonds.every((b) => bonds.has(`${Math.min(p[b.a], p[b.b])}-${Math.max(p[b.a], p[b.b])}:${b.order}`));
+}
+
+/** Every Kekule structure of `g`: every way to pair off the atoms that carry a double bond by bonds between them, each drawn. */
+function kekules(g: LayoutInput): LayoutInput[] {
+  const carriers = new Set(g.bonds.filter((b) => b.order === 2).flatMap((b) => [b.a, b.b]));
+  const candidates = g.bonds.map((b, i) => ({ b, i })).filter(({ b }) => b.order <= 2 && carriers.has(b.a) && carriers.has(b.b));
+  const out: LayoutInput[] = [];
+  const chosen = new Set<number>();
+  const used = new Set<number>();
+  const atoms = [...carriers].sort((p, q) => p - q);
+  const walk = (k: number) => {
+    while (k < atoms.length && used.has(atoms[k])) k++;
+    if (k === atoms.length) {
+      out.push({ ...g, bonds: g.bonds.map((b, i) => (candidates.some((c) => c.i === i) ? { ...b, order: chosen.has(i) ? 2 : 1 } : b)) });
+      return;
+    }
+    const a = atoms[k];
+    for (const { b, i } of candidates) {
+      const other = b.a === a ? b.b : b.b === a ? b.a : -1;
+      if (other < 0 || used.has(other)) continue;
+      used.add(a).add(other);
+      chosen.add(i);
+      walk(k + 1);
+      chosen.delete(i);
+      used.delete(a);
+      used.delete(other);
+    }
+  };
+  walk(0);
+  return out;
 }
 
 describe("a structure's identity", () => {
@@ -62,35 +92,6 @@ describe("the aromatic form, Kekulé-free", () => {
   });
 
   it("comes to the same form from every Kekulé structure there is, each enumerated", () => {
-    // (every way to pair off the atoms that carry a double bond by bonds between them, each drawn and formed)
-    const kekules = (g: LayoutInput): LayoutInput[] => {
-      const carriers = new Set(g.bonds.filter((b) => b.order === 2).flatMap((b) => [b.a, b.b]));
-      const candidates = g.bonds.map((b, i) => ({ b, i })).filter(({ b }) => b.order <= 2 && carriers.has(b.a) && carriers.has(b.b));
-      const out: LayoutInput[] = [];
-      const chosen = new Set<number>();
-      const used = new Set<number>();
-      const atoms = [...carriers].sort((p, q) => p - q);
-      const walk = (k: number) => {
-        while (k < atoms.length && used.has(atoms[k])) k++;
-        if (k === atoms.length) {
-          out.push({ ...g, bonds: g.bonds.map((b, i) => (candidates.some((c) => c.i === i) ? { ...b, order: chosen.has(i) ? 2 : 1 } : b)) });
-          return;
-        }
-        const a = atoms[k];
-        for (const { b, i } of candidates) {
-          const other = b.a === a ? b.b : b.b === a ? b.a : -1;
-          if (other < 0 || used.has(other)) continue;
-          used.add(a).add(other);
-          chosen.add(i);
-          walk(k + 1);
-          chosen.delete(i);
-          used.delete(a);
-          used.delete(other);
-        }
-      };
-      walk(0);
-      return out;
-    };
     const orders = (g: LayoutInput) => aromaticForm(g).bonds.map((b) => b.order).join("");
     for (const [name, smiles, count] of [
       ["benzene", "c1ccccc1", 2],
@@ -401,16 +402,17 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     expect(one("C/C=C1/CCCCC1", "C/C=C1\\CCCCC1", "CC=C1CCCCC1")).toBe(true);
   });
 
-  it("tells apart, on the safe side, writings that leave one thing unsaid in two ways: (4-methylcyclohexylidene)ethane", () => {
+  it("is one structure however a writing leaves its one thing unsaid, and two enantiomers where both are written: (4-methylcyclohexylidene)ethane", () => {
     // (its centre alone sets nothing, and its double bond alone; once either is written the other decides between
     // the two enantiomers. Drawn with its double bond, with its centre, or with neither: each means "either
-    // enantiomer", and nothing is filled in the first two. The third is filled in the canonical order - as one of
-    // them. Alike told apart, never unlike joined, and only where no single compound is stated: found in the chemistry check)
-    const [bond, centre, neither] = ["C/C=C1/CCC(C)CC1", "C[C@H]1CCC(=CC)CC1", "CC=C1CCC(C)CC1"].map((x) => identityText(fromSmiles(x)));
-    expect(bond).not.toBe(centre);
-    expect([bond, centre]).toContain(neither);
-    expect(one("C/C=C1/CCC(C)CC1", "C/C=C1\\CCC(C)CC1")).toBe(true);
-    expect(one("C[C@H]1CCC(=CC)CC1", "C[C@@H]1CCC(=CC)CC1")).toBe(true);
+    // enantiomer" - its double bond's cis or trans, set against its ring's arms while the centre is open, is none
+    // (perception/symmetry `settingCisTrans`), and is never filled in, so no fill of the centre makes the two together
+    // one of the enantiomers. Found in the chemistry check)
+    expect(one("C/C=C1/CCC(C)CC1", "C/C=C1\\CCC(C)CC1", "C[C@H]1CCC(=CC)CC1", "C[C@@H]1CCC(=CC)CC1", "CC=C1CCC(C)CC1")).toBe(true);
+    // (both written: the two enantiomers apart, each the same written with both turned)
+    expect(one("C/C=C1/CC[C@H](C)CC1", "C/C=C1/CC[C@@H](C)CC1")).toBe(false);
+    expect(one("C/C=C1/CC[C@H](C)CC1", "C/C=C1\\CC[C@@H](C)CC1")).toBe(true);
+    expect(one("C/C=C1/CC[C@H](C)CC1", "CC=C1CCC(C)CC1")).toBe(false);
   });
 
   it("keeps every stereo unit: a centre's two alike arms set apart by another configuration, a pseudoasymmetric centre, E and Z", () => {
@@ -465,6 +467,39 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
   it("is looked for again after each one taken out: 2,4-dimethylpentan-3-ol's C3 has alike groups only once both isopropyls' CH are", () => {
     const plain = identityText(fromSmiles("CC(C)C(O)C(C)C"));
     for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
+  });
+
+  it("settles a bridgehead two of whose bridges are alike and end at the same atom; one between bridges to different atoms stays a centre", () => {
+    // (bicyclo[2.2.2]octan-2-ol, its two bridgeheads written - each with two CH2CH2 alike to the other: however they are
+    //  written, or not at all, one structure; its C2 a centre, two)
+    const bicyclooctanol = ["O[C@H]1C[C@@H]2CC[C@H]1CC2", "O[C@H]1C[C@H]2CC[C@@H]1CC2", "O[C@H]1C[C@@H]2CC[C@@H]1CC2", "O[C@H]1C[C@H]2CC[C@H]1CC2", "O[C@H]1CC2CCC1CC2"];
+    expect(new Set(bicyclooctanol.map((s) => identityText(fromSmiles(s)))).size).toBe(1);
+    expect(identityText(fromSmiles("O[C@H]1CC2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CC2CCC1CC2")));
+    // (quinuclidin-3-ol likewise at its C4, the N between the same bridges; its C3 a centre, two)
+    expect(new Set(["O[C@H]1CN2CC[C@@H]1CC2", "O[C@H]1CN2CC[C@H]1CC2", "O[C@H]1CN2CCC1CC2"].map((s) => identityText(fromSmiles(s)))).size).toBe(1);
+    expect(identityText(fromSmiles("O[C@H]1CN2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CN2CCC1CC2")));
+    // (a cage with a bridge of four atoms or more lets its bridgeheads stand in or out: in,out- and out,out-bicyclo[4.4.1]undecane
+    //  and bicyclo[4.4.4]tetradecane, two structures each - the bridgeheads' senses to each other written, not settled)
+    for (const [inOut, outOut] of [
+      ["C1CC[C@H]2CCCC[C@@H](C1)C2", "C1CC[C@H]2CCCC[C@H](C1)C2"],
+      ["C1CCC[C@H]2CCCC[C@@H](C1)CCCC2", "C1CCC[C@H]2CCCC[C@H](C1)CCCC2"],
+    ])
+      expect([inOut, identityText(fromSmiles(inOut)) === identityText(fromSmiles(outOut))]).toEqual([inOut, false]);
+    // (tropine and pseudotropine: C3 between C2 to C1 and C4 to C5, bridges to different atoms - two structures)
+    expect(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@@H](O)C2"))).not.toBe(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@H](O)C2")));
+  });
+
+  it("settles a place whose groups are alike but for places of their own that settle first: tri-tert-butylmethanol, with no search", () => {
+    // (each tert-butyl's centre settled by its methyls; then the carbinol's three tert-butyls are alike as wholes - the
+    //  fill complete, and no configuration of it written; the writing's own search of so symmetric a structure may still run
+    //  out of steps: lib/layout/canonical)
+    const g = fromSmiles("CC(C)(C)C(O)(C(C)(C)C)C(C)(C)C");
+    const filled = filledIn(g);
+    expect([filled.complete, filled.searches, filled.input.atoms.filter((a) => a.tetra).length]).toEqual([true, 0, 0]);
+    for (const seed of SHUFFLE_SEEDS.slice(0, 3)) expect(identityText(shuffled(g, seed))).toBe(identityText(g));
+    // (and two such groups unlike - a tert-butyl and a 1,1-dimethylpropyl - leave it to the search, a centre still)
+    const h = fromSmiles("CC(C)(C)[C@@H](O)C(C)(C)CC");
+    expect(identityText(h)).not.toBe(identityText(fromSmiles("CC(C)(C)[C@H](O)C(C)(C)CC")));
   });
 
   it("is the same whatever order a large symmetric structure's atoms come in, where its search runs out of steps: Pd(PPh3)4, PdCl2(PPh3)2", { timeout: measured(10_000) }, () => {
@@ -694,5 +729,94 @@ describe("an allene's or a cumulene's end with two alike groups sets nothing", (
     expect(fromSmiles("F/C=C=C=C/F").cumulated).toHaveLength(1);
     expect(identityText(fromSmiles("F/C=C=C=C/F"))).not.toBe(identityText(fromSmiles("FC=C=C=CF")));
     expect(identityText(fromSmiles("F/C=C=C=C/F"))).not.toBe(identityText(fromSmiles("F/C=C=C=C\\F")));
+  });
+});
+
+// (a cage's bounds on both sides, found in review)
+/** Every assignment of @ and @@ to the `@?` marks of a SMILES, as identity texts, in the order of the assignments (the first mark the lowest bit). */
+const cageWritings = (template: string): string[] => {
+  const n = (template.match(/@\?/g) ?? []).length;
+  return Array.from({ length: 1 << n }, (_, m) => {
+    let k = 0;
+    return identityText(fromSmiles(template.replace(/@\?/g, () => ((m >> k++) & 1 ? "@@" : "@"))));
+  });
+};
+const distinctTexts = (texts: string[]) => new Set(texts).size;
+
+describe("what a cage's bridgeheads leave to the rest of its structure", () => {
+  it("a bridgehead of bridges of three, three and one atoms is settled: bicyclo[3.3.1]nonan-9-ol, however its three centres are written, and as none are, is one structure", () => {
+    const all = [...cageWritings("O[C@?H]1[C@?H]2CCC[C@?H]1CCC2"), identityText(fromSmiles("OC1C2CCCC1CCC2"))];
+    expect(distinctTexts(all)).toBe(1);
+  });
+
+  it("two bridges alike only where they run the same way: 2,6-dioxabicyclo[2.2.2]octane is one structure; 2,5-dioxa, its O next to one bridgehead in one bridge and next to the other in the second, keeps its bridgeheads' senses", () => {
+    expect(distinctTexts(cageWritings("[C@?H]12OC[C@?H](CO1)CC2"))).toBe(1);
+    expect(distinctTexts(cageWritings("[C@?H]12OC[C@?H](OC1)CC2"))).toBeGreaterThan(1);
+  });
+
+  it("a ring's two arms and a methyl are no bridges: 1,4-dimethylcyclohexane's cis and trans are two", () => {
+    expect(distinctTexts(cageWritings("C[C@?H]1CC[C@?H](C)CC1"))).toBe(2);
+  });
+
+  it("a cage's trans-diol is a pair and its cis-diol one: bicyclo[2.2.2]octane-2,3-diol, its bridgeheads written either way, three structures - RR and SS apart, RS and SR one", () => {
+    const t = cageWritings("O[C@?H]1[C@?H](O)[C@?H]2CC[C@?H]1CC2");
+    // (the marks in order: the two carbinols, then the two bridgeheads; bit 0 the first carbinol, bit 1 the second)
+    const by = (a: number, b: number) => t.filter((_, m) => (m & 1) === a && ((m >> 1) & 1) === b);
+    for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) expect(distinctTexts(by(a, b))).toBe(1);
+    expect(distinctTexts(t)).toBe(3);
+    expect(by(1, 0)[0]).toBe(by(0, 1)[0]);
+    expect(by(0, 0)[0]).not.toBe(by(1, 1)[0]);
+    expect(by(0, 0)[0]).not.toBe(by(1, 0)[0]);
+  });
+});
+
+describe("a double bond between rings in an aromatic form", () => {
+  // (the CIP suite's VS155: a [2.2]paracyclophane-1,9-diene, its two bridges Z)
+  const ZZ = String.raw`OC(=O)C1=CC2=CC=C1/C=C\C1=CC(Br)=C(/C=C\2)C=C1`;
+  const EZ = String.raw`OC(=O)C1=CC2=CC=C1/C=C/C1=CC(Br)=C(/C=C\2)C=C1`;
+  const OPEN = String.raw`OC(=O)C1=CC2=CC=C1C=CC1=CC(Br)=C(/C=C\2)C=C1`;
+
+  it("keeps its side where neither atom is in a small ring and a large ring through it runs across a small one: a [2.2]paracyclophane-1,9-diene's (Z,Z), (E,Z) and unstated are three", () => {
+    expect(new Set([ZZ, EZ, OPEN].map((s) => identityKey(fromSmiles(s)))).size).toBe(3);
+    // (still order 4, all eighteen bonds: its Kekule drawings stay one)
+    const form = aromaticForm(fromSmiles(ZZ));
+    expect(form.bonds.filter((b) => b.order === 4)).toHaveLength(18);
+    expect(form.bonds.filter((b) => b.order === 4 && b.stereo)).toHaveLength(2);
+  });
+
+  it("keeps a cyclic tetra(p-phenylenevinylene)'s: all-E and the isomer with one Z are two", () => {
+    const ring = (first: string) => `C1=CC2=CC=C1${first}C1=CC=C(C=C1)/C=C/C1=CC=C(C=C1)/C=C/C1=CC=C(C=C1)/C=C/2`;
+    expect(identityKey(fromSmiles(ring("/C=C/")))).not.toBe(identityKey(fromSmiles(ring("/C=C\\"))));
+  });
+
+  it("keeps none where the large ring is fused to a small one at one bond: dibenzo[a,e]cyclooctatetraene, a benzo[18]annulene, as an annulene", () => {
+    // (dibenzo-COT's eight-ring shares one bond with each benzene ring: its C=C say no side, as a cyclooctatetraene's)
+    const cot = aromaticForm(fromSmiles(String.raw`C1=CC=C2C(=C1)/C=C\C1=CC=CC=C1/C=C\2`));
+    expect(cot.bonds.filter((b) => b.order === 4 && b.stereo)).toHaveLength(0);
+    // (a benzo[18]annulene: its Kekule drawings one, and an E/Z pair of its ring one, as on an annulene)
+    const plain = "C1=CC=C2C(=C1)C=CC=CC=CC=CC=CC=CC=CC=C2";
+    expect(new Set(kekules(fromSmiles(plain)).map(identityKey)).size).toBe(1);
+    const allE = String.raw`C1=CC=C2C(=C1)/C=C/C=C/C=C/C=C/C=C/C=C/C=C/C=C/2`;
+    const oneZ = String.raw`C1=CC=C2C(=C1)/C=C\C=C/C=C/C=C/C=C/C=C/C=C/C=C/2`;
+    expect(identityKey(fromSmiles(allE))).toBe(identityKey(fromSmiles(oneZ)));
+  });
+
+  it("is as it was elsewhere: porphine's Kekule drawings one, [18]annulene's E/Z isomers one, stilbene's two, a metacyclophane-diene's bridges their own", () => {
+    // (porphine: its meso C=C's atoms in five-rings, so each of its Kekule structures is one form)
+    const porphine = kekules(fromSmiles("N1C2=CC=C1C=C1C=CC(=N1)C=C1C=CC(N1)=CC3=NC(C=C3)=C2"));
+    expect(porphine.length).toBeGreaterThan(1);
+    expect(new Set([...porphine, fromSmiles("c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)[nH]5)n4)[nH]3")].map(identityKey)).size).toBe(1);
+    // (a side drawn on a meso C=C, one of its atoms in a five-ring, is dropped with its order, as before)
+    expect(identityKey(fromSmiles(String.raw`N1C2=CC=C1/C=C1\C=CC(=N1)C=C1C=CC(N1)=CC3=NC(C=C3)=C2`))).toBe(identityKey(porphine[0]));
+    expect(identityKey(fromSmiles(String.raw`N1C2=CC=C1C=C1C=CC(=N1)C=C1C=C/C(N1)=C/C3=NC(C=C3)=C2`))).toBe(identityKey(porphine[0]));
+    // ([18]annulene: a ring system with no small ring, its ring bonds no side, as the rule states)
+    const a = String.raw`C1=C/C=C/C=C\C=C/C=C/C=C\C=C/C=C/C=C\1`;
+    const b = String.raw`C1=C/C=C/C=C/C=C/C=C/C=C/C=C/C=C/C=C/1`;
+    expect(identityKey(fromSmiles(a))).toBe(identityKey(fromSmiles(b)));
+    expect(new Set(kekules(fromSmiles(a)).map(identityKey)).size).toBe(1);
+    expect(identityKey(fromSmiles(String.raw`C(/C1=CC=CC=C1)=C\C1=CC=CC=C1`))).not.toBe(identityKey(fromSmiles(String.raw`C(/C1=CC=CC=C1)=C/C1=CC=CC=C1`)));
+    // ([2.2]metacyclophane-1,9-diene: no alternating cycle runs through a meta path, so its bridges were never order 4)
+    const meta = aromaticForm(fromSmiles(String.raw`C1=CC2=CC(=C1)/C=C\C1=CC=CC(=C1)/C=C\2`));
+    expect(meta.bonds.filter((x) => x.stereo && x.order === 2)).toHaveLength(2);
   });
 });

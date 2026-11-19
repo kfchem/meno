@@ -325,8 +325,10 @@ oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
 and two M-Cl, UO2Cl2 is uranyl's O=U=O with two chlorides, WOCl4, VOCl3,
 VO(acac)2, MeReO3 and ReO3Me - each element written with its count, as an
 inorganic formula is, never a group read across it; an O that begins a
-group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O is bound to each metal it bridges by
-a single bond. A part of several metals with an oxo not marked μ is not
+group (OAc, OTf, OiPr, a carboxylate's O2C) is the group's, and a μ-O
+is bound to each metal it bridges by a single bond. A part with an oxo
+made twice ([MoO2Cl2]2) is bridged by its halide, its oxo M=O on each
+metal. A part of several metals with an oxo not marked μ is not
 read (Re2O7: which O bridge, the formula does not say). A ligand in
 brackets may have its descriptor: RuCl[(S,S)-TsDPEN](p-cymene),
 RuCl2[(S)-BINAP][(S,S)-DPEN]. Where one part
@@ -408,8 +410,23 @@ Read by rule, besides, as whole molecules:
   which carries it, and one for each hydrogen, which is theirs (ClO4⁻,
   IO4⁻, CO3²⁻, HCO3⁻) - as many bonds as a valence of the centre's own:
   below the second row P(V), S(IV) and S(VI), Cl(I) to Cl(VII) too, and in
-  it no more than four bonds (no NO3⁻ so). A group in parentheses is one
-  part, as counted: NaBH(OAc)3, and Pb(OAc)4 as a molecule;
+  it no more than four bonds - nitrate keeping to four by a charge of its
+  own, N⁺ with one N=O and two O⁻ (NaNO3, KNO3). A group in parentheses
+  is one part, as counted: NaBH(OAc)3, and Pb(OAc)4 as a molecule;
+- a metal's salt of one oxoanion - a metal of groups 2, 12 or 13, tin,
+  lead, bismuth or a transition metal, its count, then the anion, in
+  brackets with its count or bare: AgNO3, Cu(NO3)2, Mg(ClO4)2, CuSO4,
+  Fe2(SO4)3, Ag2CO3, Ca3(PO4)2 - is read as its ions, before a
+  complex's formula would read its oxygens across: the anion of the least
+  charge its formula makes (NO3⁻, ClO4⁻, SO4²⁻, CO3²⁻, PO4³⁻), and the
+  metal's charge as many as balance them, one to four
+  (`metalSaltStructure`, `src/lib/chem/condensed.ts`). Mercury(I) is the
+  Hg2²⁺ ion, its two Hg bonded, each +1 (Hg2(NO3)2, Hg2SO4); Hg(NO3)2 is
+  Hg²⁺. HgNO3, mercury(I)'s empirical formula, is left unread: one Hg⁺
+  alone is no ion, and the formula does not say the pair. A halide
+  (CuCl2), a
+  group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
+  complex's, as before;
 - an ion written alone, a counter-ion set beside a complex or a salt: an
   anion with its charge last, read as one is in a salt (PF6-, BF4-,
   SbF6-, AlCl4-, ClO4-); a group bound by an O or an S with the charge
@@ -460,7 +477,10 @@ the widest gap round the centre, after every atom there is
 (`chem/drawing.ts#forFlatReaders`, lib/layout/drawn `wedgesForFlat`;
 docs/EDITOR-2D.md). Each such wedge is checked by Meno's own reader to say
 the configuration the drawing shows. The depth itself is
-not written, so the cage opens again flat, its configuration wedged.
+not written, so the cage opens again flat, its configuration wedged. A chair the Projections tool put down is written the
+same way (docs/EDITOR-2D.md, *Projections*): its 2D places, wedges for what
+its depth says, a z of 0 throughout, never the conformation it is drawn in;
+the .meno keeps it as drawn.
 
 **Hydrogens drawn as said.** Where a structure says an atom has more H
 than its valence leaves - Bu3SnH's tin, a metal's hydride, LiAlH4's
