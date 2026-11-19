@@ -6,6 +6,7 @@
  */
 import { AROMATIC } from "../aromatic";
 import { drawnRoundMetal } from "../elements";
+import { SMALL_RING } from "../rings";
 import { canonicalSearched, canonicalWritten, symmetryClasses, type SymmetryInput } from "../symmetry";
 import { lonePairCentres } from "./lonePairs";
 
@@ -23,8 +24,6 @@ const isMetal = (el: string): boolean => drawnRoundMetal.has(el);
 /** The elements a centre of four groups may be (as the chemistry check ruled them: never a metal). */
 const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb", "Bi", "S", "Se", "Te"]);
 
-/** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
-const SMALL_RING = 7;
 
 /**
  * A place that could carry a configuration and carries none: a centre (its

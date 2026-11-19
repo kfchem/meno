@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { smilesInput } from "../../../layout/smilesInput";
 import { filledIn as filledInIdentity, identity } from "../../identity";
 import { CHELATE_RING as fromChelateRing } from "../../chelateRing";
-import { CHELATE_RING, filledIn } from "./units";
+import { blanksOf, CHELATE_RING, filledIn } from "./units";
 
 const id = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
 
@@ -18,6 +18,11 @@ describe("identity's fill, moved into the core", () => {
 
   it("fills what sets nothing as before: propan-2-ol written with its CH either way, and not, is one", () => {
     expect(new Set([id("C[C@H](O)C"), id("C[C@@H](O)C"), id("CC(O)C")]).size).toBe(1);
+  });
+
+  it("takes a ring's double bond as able to carry cis or trans from eight atoms: cyclooctene's (trans-cyclooctene is made), not cycloheptene's", () => {
+    const bonds = (smiles: string) => blanksOf(smilesInput(smiles) as unknown as Parameters<typeof blanksOf>[0]).filter((b) => b.kind === "bond").length;
+    expect([bonds("C1=CCCCCC1"), bonds("C1=CCCCCCC1")]).toEqual([0, 1]);
   });
 });
 
