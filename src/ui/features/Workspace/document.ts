@@ -860,7 +860,9 @@ export function contractToAbbreviation(
 ): WorkspaceDocument {
   const inside = doc.model.atoms.filter((a) => ids.has(a.id));
   const crossing = doc.model.bonds.filter((b) => ids.has(b.a) !== ids.has(b.b));
-  if (!inside.length || crossing.length !== 1) return doc;
+  // (nor a group holding one of its own: its atom's group would be lost, and a Pr held as propyl come back praseodymium - expanded
+  //  first, as the selection's check asks: chem/abbreviationFromSelection)
+  if (!inside.length || crossing.length !== 1 || inside.some((a) => a.abbrev)) return doc;
   const out = crossing[0];
   const attachId = ids.has(out.a) ? out.a : out.b;
   const att = inside.find((a) => a.id === attachId)!;

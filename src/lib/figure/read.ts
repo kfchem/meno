@@ -210,12 +210,37 @@ export function sizedOutlines(shapes: Shapes, letters: readonly FigureLetter[] =
 
 /**
  * How long a figure's bonds are drawn, as `figureBond` has it of what the figure is drawn with besides its chains of bars - their number, kept or given
- * up, does not move it - or, the figure having nothing else, of the bars kept.
+ * up, does not move it - or, the figure having nothing else, of the bars kept. Where it has chains of bars kept, a line or a wedge with an end
+ * meeting nothing - within `FREE_END` of the bars' bond of no other line's end nor any bar - is left out of it: an outline drawing's own bonds
+ * cut short at their labels (a C=O to its O, a bond to an OMe) and its short wedges, no drawing of lines of their own. And where the bars
+ * of their length are `BARS_OVER_LINES` times as many as the lines left of theirs, the bars' length: a figure drawn in outlines, its few
+ * joined lines its own or a chart's or a 3D picture's beside it. Fewer, the lines' (a structure drawn in lines beside rings drawn in
+ * outlines at another size).
  */
 export function bondOf(shapes: Shapes, letters: readonly FigureLetter[]): number {
   const plain: Shapes = { ...shapes, strokes: shapes.strokes.filter((t) => t.chain == null), wedges: shapes.wedges.filter((t) => t.chain == null) };
-  return figureBond(plain, letters) || figureBond(shapes, letters);
+  const kept = shapes.strokes.filter((t) => t.chain != null);
+  if (!kept.length) return figureBond(plain, letters) || figureBond(shapes, letters);
+  const tol = FREE_END * (bondLength(kept.map(len)) || figureBond(shapes, letters));
+  const ends = [...shapes.strokes.map((t): [Point, Point] => [t.a, t.b]), ...shapes.wedges.map((w): [Point, Point] => [w.tip, w.base])];
+  // (an end meets another line's end, the two at an angle - a double bond's second line, alongside, is no joint)
+  const meets = (p: Point, [a, b]: [Point, Point]) =>
+    ends.some(([c, d]) => (c !== a || d !== b) && (dist(c, p) <= tol || dist(d, p) <= tol) && Math.abs(cross(unit(a, b), unit(c, d))) >= JOINT_SINE);
+  const joined: Shapes = { ...plain, strokes: plain.strokes.filter((t) => meets(t.a, [t.a, t.b]) && meets(t.b, [t.a, t.b])), wedges: plain.wedges.filter((w) => meets(w.tip, [w.tip, w.base]) && meets(w.base, [w.tip, w.base])) };
+  const byLines = figureBond(joined, letters);
+  const byBars = bondLength(kept.map(len));
+  if (!byLines) return byBars || figureBond(shapes, letters);
+  const near = (lengths: readonly number[], b: number) => lengths.filter((l) => Math.abs(l - b) <= b / 8).length;
+  const lines = [...joined.strokes.map(len), ...joined.wedges.map((w) => dist(w.tip, w.base))];
+  if (byBars && near(kept.map(len), byBars) >= BARS_OVER_LINES * near(lines, byLines)) return byBars;
+  return byLines;
 }
+
+/** How near an end is to another line's, in the bars' bond, to meet it, and at what angle at the least (its sine: 15 degrees): `bondOf`. */
+const FREE_END = 0.15;
+const JOINT_SINE = 0.26;
+/** How many more bars of their length than joined lines of theirs make the bars' length the figure's bond: `bondOf`. */
+const BARS_OVER_LINES = 4;
 
 /** The shortest a chain's bar is, in the drawing's bonds, to be a bond: under it, a speck or a letter's stem. */
 const CHAIN_LEAST = 0.45;
@@ -223,11 +248,21 @@ const CHAIN_LEAST = 0.45;
 const CHAIN_ACROSS = 1.3;
 /** The longest a chain's bar is, in the drawing's bonds, to be a bond: over it, a chart's line, a frame, a rule - the bonds of one drawing are of about one length. */
 const CHAIN_MOST = 1.9;
+/**
+ * How far across a chain is, in the drawing's bonds, at the least, where one of its bars is a whole bond (`CHAIN_WHOLE`) - a chain whose end bars are
+ * cut short where its labels are set: a dioxolane's O-CH2-CH2-O, its middle bar a bond and its end bars about half a bond each, is 1.2 to 1.3 across,
+ * and an O's two bonds as much. Two bars a whole bond long are 1.1 across only where they open wider than 67 degrees, as two bonds do; a letter's V is
+ * narrower, and its stems are not of the drawing's bond.
+ */
+const CHAIN_ACROSS_CUT = 1.1;
+/** A bar a whole bond long, in the drawing's bonds: from `CHAIN_WHOLE[0]` to `CHAIN_WHOLE[1]`. */
+const CHAIN_WHOLE = [0.85, 1.15] as const;
 
 /**
  * A figure's shapes with each chain of bars `shapesOf` made of a filled outline (`Stroke.bar`, `chain`) either kept or not, by `bond`, the drawing's own
  * length of bond: kept - its bars bonds, the shapes the polygon was read as before left out - where the chain is `CHAIN_ACROSS` bonds across at the least
- * and every bar between `CHAIN_LEAST` and `CHAIN_MOST` bonds long; else given up - its bars left out, the polygon read as it was. No bond known, none kept.
+ * (`CHAIN_ACROSS_CUT` where one bar is a whole bond) and every bar between `CHAIN_LEAST` and `CHAIN_MOST` bonds long; else given up -
+ * its bars left out, the polygon read as it was. No bond known, none kept.
  */
 export function outlineChains(shapes: Shapes, bond: number): Shapes {
   const bars = new Map<number, Stroke[]>();
@@ -240,7 +275,10 @@ export function outlineChains(shapes: Shapes, bond: number): Shapes {
       const ys = ss.flatMap((t) => [t.a.y, t.b.y]);
       // (a chain is 1.3 bonds across at the least - two bonds at a right angle are 1.4 - and a letter's stems, a speck, are not: the drawing's own bond, not points)
       const across = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-      if (across >= CHAIN_ACROSS * bond && ss.every((t) => len(t) >= CHAIN_LEAST * bond && len(t) <= CHAIN_MOST * bond)) kept.add(id);
+      // (or 1.1 across, where one of its bars is a whole bond: a chain whose end bars are cut short by its labels)
+      const cut = ss.some((t) => len(t) >= CHAIN_WHOLE[0] * bond && len(t) <= CHAIN_WHOLE[1] * bond);
+      const least = cut ? CHAIN_ACROSS_CUT : CHAIN_ACROSS;
+      if (across >= least * bond && ss.every((t) => len(t) >= CHAIN_LEAST * bond && len(t) <= CHAIN_MOST * bond)) kept.add(id);
     }
   }
   // (a chain given up is its shapes again: its bars out; a chain kept, its bars in and the shapes it was read as out)

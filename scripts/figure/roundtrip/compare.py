@@ -117,7 +117,9 @@ def main():
         v, got = verdict(m["truth"], r.get("mol"))
         if r.get("none"):
             v = f"nothing read: {r['none']}"
-        rows.append({"name": r["name"], "category": m["category"], "stage": "read", "preset": r["preset"], "variant": r["variant"], "verdict": v, "got": got, "truth": m["truth"]})
+        # (said: nothing read, or what was read marked unsure somewhere - the reader saying it may be wrong)
+        said = bool(r.get("none")) or r.get("marked", 0) > 0
+        rows.append({"name": r["name"], "category": m["category"], "stage": "read", "preset": r["preset"], "variant": r["variant"], "verdict": v, "got": got, "truth": m["truth"], "said": said})
     (at / "report.json").write_text(json.dumps(rows, indent=1))
     # the match rate: drawn, then read by preset and by variant
     lines = ["# Round trip", ""]
@@ -141,6 +143,21 @@ def main():
                 good, n = table.get((p, v), [0, 0])
                 cells.append(f"{good}/{n} ({100 * good / n:.1f}%)" if n else "-")
             lines.append(f"| {p} | " + " | ".join(cells) + " |")
+    # the three counts of each cell: read as the truth, said (nothing read, or marked unsure) and not, wrong with no mark - the one
+    # that misleads a chemist
+    three = defaultdict(lambda: [0, 0, 0])
+    for r in rows:
+        if r["stage"] != "read" or "said" not in r:
+            continue
+        k = 0 if r["verdict"] == "ok" else 1 if r["said"] else 2
+        for key in ((r["preset"], r["variant"]), (r["preset"], "all"), ("all", r["variant"]), ("all", "all")):
+            three[key][k] += 1
+    if three:
+        presets = sorted({k[0] for k in three if k[0] != "all"}) + ["all"]
+        variants = sorted({k[1] for k in three if k[1] != "all"}) + ["all"]
+        lines += ["", "Read right / said not read or unsure / wrong with no mark:", "", "| preset | " + " | ".join(variants) + " |", "|---" * (len(variants) + 1) + "|"]
+        for p in presets:
+            lines.append(f"| {p} | " + " | ".join("{} / {} / {}".format(*three[(p, v)]) if sum(three.get((p, v), [0])) else "-" for v in variants) + " |")
     kinds = defaultdict(list)
     for r in rows:
         if r["verdict"] != "ok":

@@ -7,6 +7,7 @@ import { smilesInput } from "../../../layout/smilesInput";
 import type { SymmetryInput } from "../symmetry";
 import { CANDIDATE_WHY, candidates, NOT_CANDIDATE, notCandidate } from "./candidates";
 import { MOVING_CN } from "./movingCN";
+import { blanksOf } from "./units";
 
 const graph = (smiles: string) => smilesInput(smiles) as unknown as SymmetryInput;
 /** The candidates of a SMILES, each as its kind and its atom (a centre), its bond's two atoms (a double bond) or its run's ends. */
@@ -98,5 +99,50 @@ describe("an axis of hindered rotation", () => {
   it("an allene's axis drawn is the run's, listed once", () => {
     const g = graph("CC=C=CC");
     expect(candidates({ ...g, axes: [{ atoms: [1, 3], refs: [0, 4], sense: 1 }] }).map((c) => c.kind)).toEqual(["axis"]);
+  });
+});
+
+// (the rules' edges: found in review)
+describe("edges of the candidates", () => {
+  it("an element of no configuration of four groups - an iodine with four - is none, said", () => {
+    expect(found("C[I](C)(C)C")).toEqual([]);
+    expect(notCandidate(graph("C[I](C)(C)C"), { kind: "centre", at: 1 })).toBe(NOT_CANDIDATE.element);
+  });
+
+  it("a primary phosphine's P - one group and two hydrogens - is none: only one H is allowed among three", () => {
+    expect(found("C[PH2]")).toEqual([]);
+    expect(found("C[PH]C")).toEqual(["centre 1"]);
+  });
+
+  it("a triple bond is no candidate; a cycloheptene's double bond (a ring of seven) is none, a cyclooctene's is one", () => {
+    expect(found("CC#CC")).toEqual([]);
+    expect(found("C1CCC=CCC1")).toEqual([]);
+    expect(found("C1CCCC=CCC1")).toEqual(["bond 4-5"]);
+  });
+
+  it("a lead, a bismuth and a tellurium centre are candidates (the list is the text's)", () => {
+    expect(found("C[Pb](C)(CC)Cl")).toEqual(["centre 1"]);
+    expect(found("C[Bi](C)CC")).toEqual(["centre 1"]);
+    expect(found("C[Te](=O)C")).toEqual(["centre 1"]);
+  });
+});
+
+describe("words and places at the rules' edges", () => {
+  it("a triple bond asked of: 'no double bond' (the run's words are for a bond of a run)", () => {
+    const g = graph("CC#CC");
+    const k = g.bonds.findIndex((b) => b.order === 3);
+    expect(notCandidate(g, { kind: "bond", at: k })).toBe(NOT_CANDIDATE.notDouble);
+  });
+
+  it("a secondary phosphine's centre: its neighbours are the two groups, then the H (-1), as a four-group centre's", () => {
+    const [b] = blanksOf(graph("C[PH]CC"));
+    expect(b).toMatchObject({ kind: "centre", at: 1, neighbours: [0, 2, -1] });
+    const [q] = blanksOf(graph("C[SiH](CC)CCC"));
+    expect(q).toMatchObject({ kind: "centre", neighbours: [0, 2, 4, -1] });
+  });
+
+  it("a quaternary ammonium of four unlike groups is a centre; an N+ with an H among its four is not", () => {
+    expect(notCandidate(graph("[N+](C)(CC)(CCC)c1ccccc1"), { kind: "centre", at: 0 })).toBeNull();
+    expect(notCandidate(graph("[NH+](C)(CC)CCC"), { kind: "centre", at: 0 })).toBe(NOT_CANDIDATE.ammonium);
   });
 });

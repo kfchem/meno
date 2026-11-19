@@ -1,5 +1,5 @@
 {
-  "//": "Structures the round trip is checked on beside the layout benchmark's (scripts/layout/molecules.json, heldout.json): charges, isotopes, stereochemistry, radicals and metals, each a SMILES whose meaning is not in doubt.",
+  "//": "Structures the round trip is checked on beside the layout benchmark's (scripts/layout/molecules.json, heldout.json): charges, isotopes, stereochemistry, radicals and metals, each a SMILES whose meaning is not in doubt. A donor to a metal is written as a dative bond (->): an ammine is NH3 and a phosphine's P has no H, which a plain bond to the metal would give them otherwise.",
   "molecules": [
     { "name": "Glycine zwitterion", "category": "charges", "smiles": "[NH3+]CC(=O)[O-]" },
     { "name": "Betaine", "category": "charges", "smiles": "C[N+](C)(C)CC(=O)[O-]" },
@@ -21,8 +21,8 @@
     { "name": "trans-1,2-Dimethylcyclohexane", "category": "stereo", "smiles": "C[C@@H]1CCCC[C@H]1C" },
     { "name": "(R)-Ibuprofen", "category": "stereo", "smiles": "CC(C)Cc1ccc(cc1)[C@@H](C)C(=O)O" },
     { "name": "TEMPO", "category": "radicals", "smiles": "CC1(C)CCCC(C)(C)N1[O]" },
-    { "name": "Cisplatin", "category": "metals", "smiles": "N[Pt](N)(Cl)Cl" },
+    { "name": "Cisplatin", "category": "metals", "smiles": "[NH3]->[Pt](<-[NH3])(Cl)Cl" },
     { "name": "Potassium ferricyanide", "category": "metals", "smiles": "[K+].[K+].[K+].N#C[Fe-3](C#N)(C#N)(C#N)(C#N)C#N" },
-    { "name": "Chloro(triphenylphosphine)gold", "category": "metals", "smiles": "Cl[Au]P(c1ccccc1)(c1ccccc1)c1ccccc1" }
+    { "name": "Chloro(triphenylphosphine)gold", "category": "metals", "smiles": "Cl[Au]<-P(c1ccccc1)(c1ccccc1)c1ccccc1" }
   ]
 }
