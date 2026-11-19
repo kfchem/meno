@@ -51,8 +51,9 @@ export function offeredSteps(flow: Flow, wire?: WireEnd): QuickGroup[] {
     .map((d) => ({
       by: d.id,
       name: d.name,
-      steps: kindsOf(d.id)
-        .filter((kind) => offered(kind, d.id))
+      // (Meno's Repeat too, put down alone - not from a wire: a frame round steps, not a step a set goes into)
+      steps: [...kindsOf(d.id), ...(d.id === "meno" && !wire ? (["repeat"] as const) : [])]
+        .filter((kind) => kind === "repeat" || offered(kind, d.id))
         .map((kind) => ({ kind, name: kindInfo(kind).name, icon: kindInfo(kind).icon })),
     }))
     .filter((g) => g.steps.length);

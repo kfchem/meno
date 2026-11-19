@@ -39,7 +39,12 @@ describe("an anion read from its formula", () => {
   });
 
   it("is none where no valence of the centre's own is met, nor a second-row centre's more than four bonds", () => {
-    for (const text of ["NO3", "CF5", "SO3", "BF3", "OPh", "F4"]) expect(anion(text), text).toBeNull();
+    for (const text of ["CF5", "SO3", "BF3", "OPh", "F4"]) expect(anion(text), text).toBeNull();
+    // (but nitrate, whose N keeps to four bonds by a charge of its own: N+ with one N=O and two O-)
+    const nitrate = anion("NO3")!;
+    expect(nitrate.atoms.map((a) => `${a.el}${a.charge ?? 0}`)).toEqual(["N1", "O0", "O-1", "O-1"]);
+    expect(nitrate.bonds.map((b) => b.order)).toEqual([2, 1, 1]);
+    expect(anion("NO3", 2)).toBeNull();
     // an ate anion is of one charge
     expect(anion("BF4", 2)).toBeNull();
   });
