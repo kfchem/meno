@@ -179,3 +179,43 @@ describe("a P, S or Se's valence step chosen by its bonds to non-metals (the che
     expect(implicitHydrogens("P", 4, 0, undefined, 0)).toBe(1);
   });
 });
+
+describe("Ge, As, Sb and Te carry the hydrogens their bonding number leaves; Sn, Pb, Al, Ga, In, Tl and Bi none unless written (part 12, E1)", () => {
+  it("the bare symbol: AsH3, SbH3, GeH4, H2Te", () => {
+    expect(implicitHydrogens("As", 0)).toBe(3);
+    expect(implicitHydrogens("Sb", 0)).toBe(3);
+    expect(implicitHydrogens("Ge", 0)).toBe(4);
+    expect(implicitHydrogens("Te", 0)).toBe(2);
+    expect(implicitHydrogens("Ge", 3)).toBe(1);
+  });
+
+  it("none where the bonds take the valence: trimethylarsine, SbPh3, dimethyl telluride, TeCl4, an arsenate, AsF6- and SbF6-", () => {
+    expect(implicitHydrogens("As", 3)).toBe(0);
+    expect(implicitHydrogens("Sb", 3)).toBe(0);
+    expect(implicitHydrogens("Te", 2)).toBe(0);
+    expect(implicitHydrogens("Te", 4, 0, undefined, 0)).toBe(0);
+    expect(implicitHydrogens("As", 5, 0, undefined, 0)).toBe(0);
+    expect(mostBonds("As", -1)).toBe(6);
+    expect(mostBonds("Sb", -1)).toBe(6);
+    expect(mostBonds("Te", 0)).toBe(6);
+  });
+
+  it("their ions: AsPh4+ none, a tellurolate RTe- none, a telluronium R3Te+ none, an arsenide R2As- none", () => {
+    expect(implicitHydrogens("As", 4, 1)).toBe(0);
+    expect(implicitHydrogens("Te", 1, -1)).toBe(0);
+    expect(implicitHydrogens("Te", 3, 1)).toBe(0);
+    expect(implicitHydrogens("As", 2, -1)).toBe(0);
+  });
+
+  it("Sn, Pb, Al, Ga, In, Tl, Bi, Po and At none, whatever their bonds or charge: Bu3Sn, SnCl2, PbCl2, AlCl3, Bi3+, Al3+, Tl+", () => {
+    for (const el of ["Sn", "Pb", "Al", "Ga", "In", "Tl", "Bi", "Po", "At"]) for (const bonds of [0, 2, 3]) expect(implicitHydrogens(el, bonds), el).toBe(0);
+    expect(implicitHydrogens("Bi", 0, 3)).toBe(0);
+    expect(implicitHydrogens("Tl", 0, 1)).toBe(0);
+    expect(mostBonds("Sn")).toBeNull();
+  });
+
+  it("a hydrogen written on one is kept and counted: Bu3SnH, an Al-H", () => {
+    expect(hydrogenCounts([{ el: "Sn", hs: 1 }, { el: "C" }, { el: "C" }, { el: "C" }], [1, 2, 3].map((b) => ({ a: 0, b, order: 1 })))[0]).toBe(1);
+    expect(hydrogenCounts([{ el: "Al", hs: 1 }, { el: "C" }, { el: "C" }], [1, 2].map((b) => ({ a: 0, b, order: 1 })))[0]).toBe(1);
+  });
+});

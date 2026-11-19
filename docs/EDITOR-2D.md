@@ -580,6 +580,16 @@ hydrogens `implicitHydrogens`). So a P(=O) with two groups carries one H
 one; triphenylphosphine oxide, DMSO, a sulfone, PPh3 and a
 methyltriphenylphosphonium carry none. A bond to a metal does not lift
 the valence: a phosphine on a metal (Pd(PPh3)4's P) is P(III), with no H.
+The elements that carry hydrogens they are not drawn with: B, C, Si, Ge,
+N, P, As, Sb, O, S, Se, Te and the halogens to I, by their standard
+bonding numbers (IUPAC 2013, P-14.1.2) - "As" alone is AsH3, "Te" H2Te,
+"Ge" GeH4, As and Sb taking 3 or 5 as P does, Te 2, 4 or 6 as S does.
+Sn, Pb, Al, Ga, In, Tl, Bi, Po and At carry none unless one is written:
+they are drawn with fewer bonds and no hydrogen (SnCl2, PbCl2, AlCl3,
+Bi3+), and a hydrogen written on one (Bu3SnH, an Al-H) is kept and
+counted. An As, Sb, Ge or Te drawn bonded only to metals (a bridging
+arsenide or telluride) carries the hydrogens its bonds leave, as a
+phosphide or a selenide does; say "none" there by its charge.
 Where no such form closes them, the SMILES is refused, never read by
 adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
 2, 3 and 4) have no form with single and double bonds: is a charge
