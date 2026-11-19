@@ -443,16 +443,51 @@ measurements.
   line's fit (2026-11-18): at 300 dpi the widths are measured a line
   apart and the pixels' grid makes them uneven by a fifth, so the fit
   failed most wedges.
-- **What else it is**: a round line closed on itself, a curve (an aromatic
-  ring's circle); a short bar or a dot on its own, a stroke (a hash's
-  line, a charge's); anything else small, its outlines, for the letters'
-  matcher. Every tolerance is in the drawing's own line width or bond.
+- **The bond** is measured as the reader measures a PDF's, on the lines
+  of the patches at least six tenths as large as the largest: a
+  structure's, not its letters'. An H or a D is three strokes, and a small
+  molecule's labels hold more strokes than its bonds (2026-11-18).
+- **What else it is**: a round line closed on itself, with four lines or
+  more of patches larger than a letter round it, each running across the
+  way out of its middle within 30 degrees and lying within a bond of it,
+  a curve (an aromatic ring's circle, its ring's bonds round it); one with
+  fewer is a letter - an O, an o, a 0 - however large, the lines by a
+  letter pointing at it (2026-11-18). A short bar or a dot on its own, a
+  stroke (a hash's line, a charge's). Anything else up to a bond across,
+  its pieces each up to 0.85 of a bond and joined, bent or closed, a
+  letter: its outlines, for the letters' matcher (2026-11-18: a drawing's
+  letters stand up to four fifths of its bond where its bonds are drawn
+  short). One upright line alone, free at both ends and as tall as a
+  letter, is a letter where a letter as tall stands beside it on its line
+  - the l of Cl, the 1 of 13 - and a line where none does. Every tolerance
+  is in the drawing's own line width or bond.
+- **Not read** (2026-11-18): a picture whose bond is under 25 of its
+  pixels is drawn too small to read, and is said to be: the round trip
+  read such pictures wrong, with no mark, more often than it said them
+  (as at 100 dpi and under, and for small structures at 150). A picture a
+  tenth of whose ink lies in grey fields - pixels between a fifth and four
+  fifths inked with all eight round them so too - is shaded, as a
+  photograph or a rendering of a model is, and is no drawing to read; a
+  drawing's grey lies at the edges of its lines.
+- **Ink read as nothing** (2026-11-18): read from a picture, the atom
+  nearest a letter-sized patch the matcher reads as no letter, within 0.6
+  of a bond, or nearest letters read in no label, within 1.2 bonds, is
+  unsure, and says so. A label the matcher cannot read, or whose bond was
+  lost, would otherwise be left out with what it holds, and what is left
+  can be a whole structure that is not the picture's.
+- **Its letters traced** (2026-11-18): a picture holds no text, so its
+  letters are traced too and read by the matcher, as a PDF's letters
+  drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes
+  letters over the picture, those are read as written.
 - **Measured** on Meno's own round trip: each drawing printed as a PDF,
   its figure drawn as a picture at a resolution and traced, then read
   and compared with what it was drawn from (`scripts/figure/roundtrip`,
-  `RT_DPI`). The drawings of one way of printing were kept apart, never
-  looked at while the rules above were set, and measured once at the
-  end.
+  `RT_DPI`), its letters traced too (`RT_LETTERS=traced`), and spoilt as
+  pictures in papers are - saved as JPEG at qualities down to 25, or made
+  a scan of, turned a little, blurred, black and white and speckled
+  (`RT_JPEG`, `RT_SCAN`) - at 600 to 72 dpi. The drawings of one way of
+  printing were kept apart, never looked at while the rules above were
+  set, and measured once at the end of each stage.
 
 ## A text
 
