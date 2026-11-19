@@ -33,8 +33,6 @@ const READ_ALREADY_VALENCE: Record<string, number> = {
   "ui/features/Workspace/chem/cleanUp.ts": 1,
   // (a callback handed the drawing read's element, `drawingOf`, made through readAs)
   "ui/features/Workspace/chem/identityOf.ts": 1,
-  // (an atom holding a group is passed first: `!isElementSymbol(a.el) || a.abbrev ? 0 : ...`)
-  "ui/features/Workspace/chem/drawing.ts": 1,
   // (a selection to make an abbreviation of, refused first where an atom holds a group: "expand it first")
   "ui/features/Workspace/chem/abbreviationFromSelection.ts": 1,
   // (a carbon, by its symbol)
