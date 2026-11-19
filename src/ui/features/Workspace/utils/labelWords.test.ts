@@ -4,6 +4,7 @@ import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
 import { LabelWords } from "./labelWords";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
+import { useNotices } from "../../../notices";
 import { buildTextLabels } from "../../../../lib/chem/layout2d";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
@@ -65,6 +66,41 @@ describe("a label typed in place", () => {
     s().beginLabelEdit(id);
     s().cancelLabelEdit();
     expect(s().labelLeft).toBeNull();
+  });
+
+  it("a formula a reader refuses - MoO2NO3, two O it does not bond - is kept as words, and why is said", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const s = () => store.getState();
+    const id = s().addAtom(0, 0, "C");
+    s().beginLabelEdit(id);
+    s().setLabelEditValue("MoO2NO3");
+    s().commitLabelEdit();
+    const note = () => useNotices.getState().notices.find((n) => n.id === "label-refused");
+    expect(note()?.text).toBe("MoO2NO3 is not read as written. Draw it to give it its structure; the label is kept as words.");
+    useNotices.getState().dismiss("label-refused");
+    // (the same label typed again on it, nothing changed: nothing said again)
+    s().beginLabelEdit(id);
+    s().setLabelEditValue("MoO2NO3");
+    s().commitLabelEdit();
+    expect(note()).toBeUndefined();
+  });
+
+  it("a metal oxoacid written as HnMOm - H2CrO4, a compound - and CrO5 are said as not read as written, never as what they were read as", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const s = () => store.getState();
+    for (const label of ["H2CrO4", "CrO5"]) {
+      const id = s().addAtom(0, 0, "C");
+      s().beginLabelEdit(id);
+      s().setLabelEditValue(label);
+      s().commitLabelEdit();
+      const text = useNotices.getState().notices.find((n) => n.id === "label-refused")?.text;
+      expect(text, label).toBe(`${label} is not read as written. Draw it to give it its structure; the label is kept as words.`);
+      useNotices.getState().dismiss("label-refused");
+    }
   });
 
   it("read as something else than was typed, is had back as typed from the atom's menu - one step", () => {
