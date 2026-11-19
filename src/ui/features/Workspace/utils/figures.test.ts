@@ -668,6 +668,20 @@ describe("a figure whose labels are outlines", () => {
     expect(elementsOf(figureFrom(f, SHA, 0, KNOWN))).toContain("C(O)NiPr2");
   });
 
+  it("reads a group's label that is an element's symbol as the group, held as a typed one is: Pr on a ring is propyl (B2)", () => {
+    const at: P = step([100, 100], 0);
+    const f: FigureDrawn = {
+      paths: [...ring([100, 100], 120), cut([100, 100], at, 0, 2), ...outlinedRun([["Pr", 10, 0, 0]], [at[0] + 1, at[1] + 3.6])],
+      letters: [],
+      pictures: [],
+    };
+    const r = figureFrom(f, SHA, 0, KNOWN);
+    if ("none" in r) throw new Error("not read");
+    const pr = r.model.atoms.find((a) => a.el === "Pr")!;
+    expect(pr).toBeDefined();
+    expect(pr.abbrev?.atoms.filter((a) => a.el === "C")).toHaveLength(3);
+  });
+
   it("reads counter-ions by a complex as ions: a - set high after a subscript, PF6-; ions counted in parentheses, (Cl-)2", () => {
     const f: FigureDrawn = {
       paths: [

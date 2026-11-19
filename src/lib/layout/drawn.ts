@@ -23,7 +23,8 @@ import { movingCN } from "../chem/stereoOpen";
 import { factsOf, OPEN_RING } from "../chem/perception/facts";
 import { runsOf } from "../chem/perception/stereo/runs";
 import { sharesThreeAtoms } from "../chem/perception/rings";
-import { withRecognisedDepth } from "./recognised";
+import { withRecognisedDepth } from "../chem/perception/projection/depth";
+import { cageViews } from "./recognised";
 import { placeStereo, type Stereo, type Wedge } from "./stereo";
 import type { Point } from "./geometry";
 import { IN_LINE, sameConfiguration, unsureStereo } from "../chem/perception/stereo/from2d";
@@ -33,11 +34,11 @@ export type { DrawnAtom, DrawnBond, DrawnStereo };
 
 /**
  * The stereochemistry a drawing shows (lib/chem/perception/stereo/from2d `readStereo`): a ring drawn in perspective with no depth given
- * has its depth worked out first (lib/chem/perception/projection/recognise, as `withRecognisedDepth` asks it), and a bridged system or a
+ * has its depth worked out first (lib/chem/perception/projection/depth `withRecognisedDepth`, the engine giving its views of cages: ./recognised), and a bridged system or a
  * cage in perspective is read against its solid.
  */
 export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): DrawnStereo {
-  return readFrom2d(withRecognisedDepth(atoms, bonds), bonds, cageFits);
+  return readFrom2d(withRecognisedDepth(atoms, bonds, cageViews), bonds, cageFits);
 }
 
 /** The depth of each group drawn out of a ring in perspective, for where its bond passes behind another (from2d `groupDepths`), a bridged system or a cage read against its solid. */
@@ -109,7 +110,7 @@ function bridged(rings: readonly (readonly number[])[], of: readonly number[]): 
  */
 export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Stereo {
   const { tetra } = readStereo(atoms, bonds);
-  const seen = withRecognisedDepth(atoms, bonds);
+  const seen = withRecognisedDepth(atoms, bonds, cageViews);
   const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [b.wedge.narrow] : [])));
   const shown = new Map([...tetra].filter(([c]) => seen[c].z != null && !wedged.has(c)));
   if (!shown.size) return { wedges: [], hydrogens: [] };

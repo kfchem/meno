@@ -13,12 +13,24 @@ import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
 import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
-import { recognisedSaid } from "../../../../lib/layout/recognised";
+import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
+import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Bond, Model } from "../store/types";
 import { byStructure, type StructureValues } from "../utils/byStructure";
 import { greatest } from "../../../../lib/chem/lists";
+import { heldName } from "../../../../lib/layout/names";
+
+/**
+ * What a drawing's atom is to a reader of elements - the layout, identity, the CIP, a metal's tests: its element, or the label it carries.
+ * A group the drawing holds under a label that is also an element's symbol (a typed Pr, propyl; Ac, Ts, Fm, At: `abbrev`) is given as
+ * that group's name, never as the element (lib/layout/names `heldName`); a Pr with nothing held - from a file's element column, a SMILES,
+ * 3D - is praseodymium. The one way an atom's `el` reaches such a reader: a new one needs nothing of the rule (foundation part 3, B2).
+ */
+export function readAs(a: { el: string; abbrev?: unknown }): string {
+  return a.abbrev ? heldName(a.el) : a.el;
+}
 
 /** How many bonds each atom has, as the drawing counts them to say which end of a wedge is narrow. */
 export function degrees(bonds: readonly Pick<Bond, "a" | "b">[]): Map<number, number> {
@@ -101,9 +113,11 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
   const atoms: DrawnAtom[] = model.atoms.map((a) => ({
     x: a.x,
     y: a.y,
-    el: a.el,
+    el: readAs(a),
     hs: hs.get(a.id) ?? 0,
     ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.stereoCentre ? { centre: true } : {}),
   }));
@@ -123,6 +137,8 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
         ...(b.stereo === "wavy" || (b.order === 2 && b.stereo === "either") ? { either: true } : {}),
         // (a ring bond drawn bold, or as a ring in perspective's near edge: the edge that is the nearer)
         ...(b.order === 1 && (b.display === "bold" || b.display === "wedge") ? { bold: true } : {}),
+        // (hashes drawn as a line, no wedge: read as "below" only where IUPAC grades it acceptable - perception/stereo/from2d `hashedLinesRead`)
+        ...(b.order === 1 && !wedged && b.display === "hashed" ? { hashed: true } : {}),
         // (a hydrogen bond: kept, in its place, and read as no bond of the structure)
         ...(b.hydrogen ? { hydrogen: true } : {}),
       },
@@ -154,7 +170,7 @@ function holdsRing(model: Model): boolean {
  * centre a perspective drawing shows, a wedge that says it - on a bond out
  * of it, or on an H added for the purpose (after every atom there is, so
  * the atoms there are keep their places in a MOL file). A ring drawn in
- * perspective with no depth, recognised as one (lib/layout/recognised), is
+ * perspective with no depth, recognised as one (lib/chem/perception/projection/depth), is
  * such a drawing too: a drawing with no depth and no ring is passed on as
  * it is, unread. `recognised` false leaves those out, for a reader that
  * asks nothing of stereochemistry (the valence marks): reading every ring
@@ -202,7 +218,7 @@ export function unsureOf(model: Model, kept?: StructureValues<Unsure>): { atoms:
 
 /**
  * The stereocentres and double bonds a drawing shows only by luck, by id; see `unsureOf` - and, for an atom of a ring drawn in perspective
- * that is not read (lib/layout/recognised), what its mark says: why, and what to draw.
+ * that is not read (lib/chem/perception/projection/depth), what its mark says: why, and what to draw.
  */
 export type Unsure = { atoms: number[]; bonds: number[]; said?: [number, string][] };
 
@@ -216,7 +232,7 @@ function unsureIn(model: Model): Unsure {
   const kept = model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b));
   // (a ring taken for one drawn in perspective but not read: the unread mark on each of its atoms that carries a group and could be a
   //  centre, its words on it - "No R or S:" and why, as the R or S asked of it says - as a crossed wedge's is; nothing is silent)
-  const unread = new Map([...recognisedSaid(atoms, bonds)].filter(([, words]) => words !== READ_IN_PERSPECTIVE && words !== READ_AS_HAWORTH));
+  const unread = new Map([...recognisedSaid(atoms, bonds, cageViews)].filter(([, words]) => words !== READ_IN_PERSPECTIVE && words !== READ_AS_HAWORTH));
   const around = (i: number) => bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
   const marked = [...unread.keys()].filter((i) => atoms[i].hs <= 1 && around(i).some((n) => !unread.has(n)) && !found.atoms.includes(i));
   return {
