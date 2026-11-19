@@ -1,7 +1,7 @@
 /**
  * What a 3D structure does not keep of a configuration asked for or drawn, read back from its frames (chem/pageMirror `notKept`,
  * chem/make3d `notKeptRows`): said where it is, never passed by - Troeger's base drawn with both N wedged, whose given sense the
- * plugin's toolkit drops (MEASURED on RDKit 2026.03.6, foundation part 13: the plugin keeps it in its own change, with item 225).
+ * plugin may not keep: the read-back names it (foundation part 13, item 225).
  */
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";

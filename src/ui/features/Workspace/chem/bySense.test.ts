@@ -51,7 +51,7 @@ describe("conformers kept by the sense of an axis asked for", () => {
 
 describe("conformers kept by the sense of a ring N asked for (225, the chemistry check's ruling)", () => {
   // (two N, atoms 0 and 4, each with three neighbours (1, 2, 3 and 5, 6, 7) set as a pyramid pointing either way: `up` the sign of the
-  //  volume its three span about it - as a Troeger's base's two bridgehead N, which the toolkit embeds each way about half the time)
+  //  volume its three span about it - as a Troeger's base's two bridgehead N, whose sense the embedding does not hold)
   const pyramid = (centre: number, up: 1 | -1) => [0, 0, 0, 1, 0, -0.3 * up, -0.5, 0.87, -0.3 * up, -0.5, -0.87, -0.3 * up].map((v, k) => v + (k % 3 === 0 ? centre : 0));
   const frame = (a: 1 | -1, b: 1 | -1) => [...pyramid(0, a), ...pyramid(10, b)];
   const asked = (a: 1 | -1, b: 1 | -1) => ({

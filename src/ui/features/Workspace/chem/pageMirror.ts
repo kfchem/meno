@@ -162,7 +162,7 @@ const runHeld = (f: readonly number[], x: ConfiguredRun) => sideOfLine(placeOf(f
 /**
  * Of conformers made of a stereoisomer that gives an axis, an odd run, or a centre of three bonds and a lone pair its configuration -
  * an axis's and a run's Meno's own, never the plugin's to give; a cage's bridgehead N's or a ring's N the toolkit's embedding does not
- * hold (MEASURED: Troeger's base's two N each way about half the time) - those whose frames have it, each frame kept or not with its
+ * hold, Troeger's base's - those whose frames have it, each frame kept or not with its
  * energies, and how many were set aside and where, said; null where none has it: that stereoisomer cannot be made in 3D (Troeger's
  * base given in,out never comes back so). `c` itself where it gives none. A centre of three is only ever one the candidates hold, so an
  * amine's N, which inverts, is never one (the chemistry check's ruling). `part`, where given, names the atoms said (`N5`).
