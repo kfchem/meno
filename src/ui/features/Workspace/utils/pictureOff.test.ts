@@ -30,3 +30,13 @@ describe("a picture read off the drawing's thread", () => {
     expect(Object.keys(sent.message.job).sort()).toEqual(["at", "known", "letters", "png"]);
   });
 });
+
+describe("a picture decoded where the web view has no canvas off the page", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is said in plain words, not the web view's own error", async () => {
+    vi.stubGlobal("OffscreenCanvas", undefined);
+    const { pngPixels, NO_CANVAS } = await import("./pngPixels");
+    await expect(pngPixels(new Uint8Array([137, 80, 78, 71]))).rejects.toThrow(NO_CANVAS);
+  });
+});
