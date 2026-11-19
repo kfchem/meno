@@ -142,6 +142,10 @@ describe("what the Haworth tool draws, read as Meno reads a drawing (known answe
     await cleanUp(store, null, true);
     const flat = doc.getState().model;
     expect(flat.atoms.every((a) => a.z == null)).toBe(true);
+    // (the near edge's look - its bold bond and the two wedge-shaped bonds beside it - goes with the depth it drew: laid flat, a ring bond
+    //  wedge-shaped would read as a configuration)
+    expect(drawn.bonds.filter((b) => b.display === "bold" || b.display === "wedge")).toHaveLength(3);
+    expect(flat.bonds.filter((b) => b.display === "bold" || b.display === "wedge")).toEqual([]);
     expect(identityOfDrawn(flat).text).toBe(was);
     // (the 4C1 chair, form 1: C-1 the right-hand end, pointing down; C-4 the left-hand end; the ring O at the back right - every group
     //  equatorial, as beta-D-glucopyranose's are)

@@ -647,7 +647,7 @@ on a page); the Newman projection follows.
   at each ring atom, straight up and down the page, a group's bond drawn 0.745 of a bond out of the ring's picture and 0.40 into it (a front
   atom's up group, a back atom's down group), so that every place stands clear of the ring and of every other place: Meno's own lengths, no
   text gives one. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
-  right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's. It is not flipped or fused. A Haworth ring is read by
+  right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
   the chair tool, every group equatorial; the MOL written for 3D reads back as the same.

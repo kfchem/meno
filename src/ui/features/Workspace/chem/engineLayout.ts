@@ -446,7 +446,14 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const display = (b: Bond): Pick<Bond, "display" | "narrow"> | null => {
     const u = indexOf.get(b.a);
     const v = indexOf.get(b.b);
-    if (u == null || v == null || laid.depth[u] == null || laid.depth[v] == null || b.endpoints?.length) return null;
+    if (u == null || v == null || b.endpoints?.length) return null;
+    if (laid.depth[u] == null || laid.depth[v] == null) {
+      // (a look of depth - a Haworth ring's near edge, bold and wedge-shaped - on a bond whose two ends were drawn with depth, laid out
+      //  flat (*Draw flat*): plain, since it stated only the depth that is gone, and wedge-shaped on a flat ring would read as a
+      //  configuration. A look the chemist gave a flat bond stays)
+      const deep = (id: number) => byId.get(id)?.z != null;
+      return (b.display === "bold" || b.display === "wedge") && deep(b.a) && deep(b.b) ? { display: undefined } : null;
+    }
     const key = pairKey(b.a, b.b);
     const far = farEnd.get(key);
     if (far != null) {
