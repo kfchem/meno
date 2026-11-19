@@ -262,8 +262,10 @@ pointer does; put back by an undo, they glide back.
   in 3D or a picture whose middle is inside it - in the order it lies
   (top to bottom, left to right);
 - dragged into a set the chemist made, a structure or a molecule joins it,
-  at its place in that order among the members; dragged out of any set,
-  it leaves; moved within the frame, it keeps its place;
+  at its place in that order among the members; dragged wholly out of any
+  set - a structure with none of its atoms left inside, a molecule or a
+  picture with its middle outside - it leaves; moved within the frame, or
+  half out of it, it keeps its place, and the frame grows round it;
 - what joins or leaves is marked a moment as it does;
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
@@ -271,16 +273,17 @@ pointer does; put back by an undo, they glide back.
 - a step's result set holds what its step made, in its order, and takes
   nothing in: dragged into it, a structure stays outside the set;
 - **the frame is its members' room** (the maintainer, 2026-11-11), never
-  sized by hand: each member's box as it is drawn - a structure's labels
-  and a molecule's frames chip below it included - and half a bond about
+  sized by hand: each member's box as it is drawn - a structure's labels,
+  its record's number below it (Enumerate's #n) and a molecule's frames
+  chip below it included - and half a bond about
   them, with room for the name above and never narrower than a name needs
   (`workflow/fitFrames`). It grows and shrinks as they change - a structure
   drawn on, a bigger look, a member deleted - its edges eased, in the same
   step as the edit; a workspace saved with frames of other sizes is fitted
   as it opens. Its tab drags it, with all it holds;
 - **nothing lies half over a frame.** While a member is dragged its frame
-  stays where it is, so that it can be dragged out. Let go, a thing with
-  its middle in the frame is its member, and the frame grows round it
+  stays where it is, so that it can be dragged out. Let go, a member with
+  any of it still in the frame is its member, and the frame grows round it
   whole; a thing no set holds, with its middle outside, is eased out to
   just outside, on the nearest side, half a bond from the frame. A frame
   that grows into a thing no set holds eases it out the same way, once:
@@ -289,7 +292,11 @@ pointer does; put back by an undo, they glide back.
   of the gesture's step: one undo takes back the drag, the frame and what
   was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
-  it held; a set left empty stays, empty, until it is deleted;
+  it held; a set left empty stays, empty, until it is deleted - its frame
+  back to the size it had before it held anything (a step's "Not run yet"
+  frame, a card wide; a chemist's set, a card wide and half a card high),
+  its top-left corner where it was, never the tall frame of what it last
+  held;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
   and structures drawn are not written to the workspace's file - only how
   many it held and their collection's hash - and opened again, the set
