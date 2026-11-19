@@ -40,10 +40,14 @@ export type CipNone = CipWhy | "exchanges" | "undrawn" | "flat";
 /** A unit's answer: its descriptor, or why it has none (`axis` where the unit is an allene's axis, not a double bond's E or Z). */
 export type CipAnswer = CipResult | { why: CipNone; axis?: true };
 
-/** The structures of `model` that hold a unit asked for, each read for the CIP. */
-export function cipJobsOf(model: Model): CipJob[] {
-  const atomsAsked = model.atoms.filter((a) => a.stereoShown).map((a) => a.id);
-  const bondsAsked = model.bonds.filter((b) => b.stereoShown);
+/**
+ * The structures of `model` that hold a unit asked for, each read for the CIP: those whose R or S, E or Z is shown (`stereoShown`) - or,
+ * `asked`, the atoms and bonds given by id (a change of configuration said: configuration/changes).
+ */
+export function cipJobsOf(model: Model, asked?: { atoms: readonly number[]; bonds: readonly number[] }): CipJob[] {
+  const bondIds = asked ? new Set(asked.bonds) : null;
+  const atomsAsked = asked ? [...asked.atoms] : model.atoms.filter((a) => a.stereoShown).map((a) => a.id);
+  const bondsAsked = model.bonds.filter((b) => (bondIds ? bondIds.has(b.id) : b.stereoShown));
   const ends = bondsAsked.map((b) => b.a);
   if (!atomsAsked.length && !ends.length) return [];
   const askedAtoms = new Set(atomsAsked);
