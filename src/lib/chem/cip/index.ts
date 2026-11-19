@@ -19,6 +19,7 @@ import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Bu
 import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
 import { runsThrough } from "../perception/stereo/runs";
+import { cageAtoms } from "../perception/stereo/units";
 
 /**
  * Why a unit has no descriptor:
@@ -369,9 +370,13 @@ export function cipLabels(
     });
   };
   // (a label only on a unit: a configuration that sets nothing - turned over, the same identity - is alike, whatever the ranking
-  //  says. Asked only of a place the ranking labels)
+  //  says. Asked only of a place the ranking labels. A cage's atom is left to the ranking alone: turned alone it makes no
+  //  structure, so identity writes it the same, yet its configuration is real and cited - camphor's 1R,4R - the chemistry
+  //  check's ruling: `cageAtoms`)
   const unit = unitsOf(input);
-  const onUnit = (r: CipResult, place: GivenPlace): CipResult => ("label" in r && !unit(place) ? no("alike") : r);
+  let caged: Set<number> | undefined;
+  const inCage = (place: GivenPlace) => place.kind === "centre" && (caged ??= cageAtoms(input)).has(place.at);
+  const onUnit = (r: CipResult, place: GivenPlace): CipResult => ("label" in r && !inCage(place) && !unit(place) ? no("alike") : r);
   const centres = new Map<number, CipResult>();
   const bonds = new Map<number, CipResult>();
   const atomsAsked = ask?.centres ? [...ask.centres] : input.atoms.map((_, i) => i);
