@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
+import { FISCHER_CROSS } from "./structure";
 import { bondLength, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
@@ -1221,6 +1222,60 @@ describe("a stereocentre whose configuration the figure does not show", () => {
 
   it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
     expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("drawn as a cross of plain bonds on the page's axes - a Fischer projection's - says so, and that it is read as one only when asked", () => {
+    // (a centre at (100, 100): a methyl up, an ethyl down, OH right and Br left, each bond a plain line on an axis)
+    const c: P = [100, 100];
+    const [up, down, right, left] = [step(c, 90), step(c, -90), step(c, 0), step(c, 180)];
+    const f = figure(
+      [stroke(c, up), stroke(c, down), stroke(down, step(down, -30)), stroke(c, along(c, right, 0.7)), stroke(c, along(c, left, 0.7))],
+      [...word("OH", [right[0] + 3.4, right[1]]), ...word("Br", [left[0] - 9, left[1]])],
+    );
+    const centre = read(f).atoms.find((a) => a.unsure?.includes(FISCHER_CROSS));
+    expect(centre).toBeDefined();
+    expect(centre!.unsure).not.toContain(NOT_DRAWN);
+    // (the same kind of centre, its bonds off the axes: no cross, the plain words)
+    expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("a ring atom whose bonds lie as a plus on the axes is no Fischer projection's cross: the plain words", () => {
+    // (a five-membered ring through the centre's up and right bonds, a methyl on the ring at the up side; an ethyl down, Br left)
+    const c: P = [100, 100];
+    const [up, right, down, left] = [step(c, 90), step(c, 0), step(c, -90), step(c, 180)];
+    const p = step(up, 18);
+    const q = step(right, 72);
+    const f = figure(
+      [stroke(c, up), stroke(up, p), stroke(p, q), stroke(q, right), stroke(right, c), stroke(p, step(p, 90)), stroke(c, down), stroke(down, step(down, -30)), stroke(c, along(c, left, 0.7))],
+      [...word("Br", [left[0] - 9, left[1]])],
+    );
+    const centre = read(f).atoms.find((a) => a.unsure?.includes(FISCHER_CROSS));
+    expect(centre).toBeUndefined();
+  });
+
+  describe("the figure's note of a Fischer cross: where it is not said", () => {
+    // (a centre at (100, 100) of an OH, a Br, a methyl and an ethyl: right, left, up and down - `deg` the whole cross turned, `ways` the four bonds' directions in degrees)
+    const noteOf = (ways: [number, number, number, number], far?: "right") => {
+      const c: P = [100, 100];
+      const [r, l, u, d] = ways.map((w) => step(c, w));
+      const f = figure(
+        [far ? wedge(along(c, r, 0.7), c) : stroke(c, along(c, r, 0.7)), stroke(c, along(c, l, 0.7)), stroke(c, u), stroke(c, d), stroke(d, step(d, ways[3] - 30))],
+        [...word("OH", [r[0] + 3.4, r[1]]), ...word("Br", [l[0] - 9, l[1]])],
+      );
+      return read(f).atoms.find((a) => a.unsure?.includes(NOT_DRAWN) || a.unsure?.includes(FISCHER_CROSS))?.unsure ?? [];
+    };
+    it("a cross turned 8 degrees says it; turned 15, it is the plain words", () => {
+      expect(noteOf([8, 188, 98, -82])).toContain(FISCHER_CROSS);
+      expect(noteOf([15, 195, 105, -75])).toContain(NOT_DRAWN);
+      expect(noteOf([15, 195, 105, -75])).not.toContain(FISCHER_CROSS);
+    });
+    it("two bonds level and two upward (60 and 120 degrees) are no cross: the plain words", () => {
+      expect(noteOf([0, 180, 60, 120])).toContain(NOT_DRAWN);
+      expect(noteOf([0, 180, 60, 120])).not.toContain(FISCHER_CROSS);
+    });
+    it("a cross with a wedge narrow at the far end of one bond is no plain cross: the plain words", () => {
+      expect(noteOf([0, 180, 90, -90], "right")).not.toContain(FISCHER_CROSS);
+    });
   });
 
   it("is not marked where a wedge narrow at it shows it, nor where two of its groups are alike", () => {

@@ -2102,6 +2102,11 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /**
+   * The structure holding atom `at` read as a Fischer projection (utils/fischer): at each of its crosses of plain bonds on the page's
+   * axes that is a stereocentre, its two level bonds made solid wedges narrow at it - one step. False where it has none.
+   */
+  readFischer: (at: number) => boolean;
   /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
   orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**

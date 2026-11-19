@@ -238,6 +238,7 @@ export default function PartMenu({
   scope,
   records,
   stereo,
+  fischer,
   figure,
   numbers,
   onDelete,
@@ -576,6 +577,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
+  /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
+  fischer?: { run: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
   figure?: { from: string; run?: () => void };
   /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
@@ -678,6 +681,7 @@ export default function PartMenu({
   ];
   const stereoItem: Item[] = [
     ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
+    ...(fischer ? [{ name: "Read as Fischer projection", keys: "", run: fischer.run, ...(stereo ? {} : { divider: true }) }] : []),
     ...(numbers
       ? [
           ...numbers.items.map((it, k) => ({ name: it.name, keys: "", run: it.run, ...(k === 0 && !stereo ? { divider: true } : {}) })),

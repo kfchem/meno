@@ -9,7 +9,11 @@ import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
+import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
+
+/** What a stereocentre drawn as a cross of plain bonds on the page's axes says: a Fischer projection's, read so only when the chemist asks. */
+export const FISCHER_CROSS = "Drawn as a cross of plain bonds: no configuration is read. Read as Fischer projection, if it is one.";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
 export type LabelReader = (label: string) => { el: string; charge?: number; isotope?: number } | null;
@@ -247,13 +251,39 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const lone = (n: number) => els[n] === "H" && around[n].length === 1;
   const hs = atoms.map((_, i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) + around[i].filter(lone).length);
   const kinds = atomKinds(atoms, bonds, hs, lone);
+  // (four plain bonds lying as a plus on the page's axes, each within the reader's IN_LINE of level or upright: a Fischer projection's
+  // cross, which states no configuration until the chemist says it is one)
+  const crossed = (i: number) => {
+    const plainHere = bonds.filter((b) => (b.a === i || b.b === i) && b.order === 1 && !b.stereo && !b.bold);
+    if (around[i].length !== 4 || plainHere.length !== 4) return false;
+    // (in no ring: a ring atom is never read as a Fischer projection's cross - another way round from each neighbour back to it)
+    const ringed = around[i].some((n) => {
+      const seen = new Set([i, n]);
+      const todo = [n];
+      while (todo.length) {
+        const m = todo.pop()!;
+        for (const o of around[m]) {
+          if (o === i && m !== n) return true;
+          if (o !== i && !seen.has(o)) {
+            seen.add(o);
+            todo.push(o);
+          }
+        }
+      }
+      return false;
+    });
+    if (ringed) return false;
+    const ways = around[i].map((n) => Math.atan2(atoms[n].y - atoms[i].y, atoms[n].x - atoms[i].x));
+    const near = (t: number, to: number) => Math.abs(Math.atan2(Math.sin(t - to), Math.cos(t - to))) <= IN_LINE;
+    return [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((to) => ways.filter((t) => near(t, to)).length === 1);
+  };
   atoms.forEach((a, i) => {
     // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
     if (isMetal(els[i]) || shown.has(i) || wavy.has(i)) return;
     // (four groups, each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
     if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
-    (a.unsure ??= []).push("A stereocentre whose configuration is not drawn: none is read.");
+    (a.unsure ??= []).push(crossed(i) ? FISCHER_CROSS : "A stereocentre whose configuration is not drawn: none is read.");
   });
   // a bond's open end - an atom of one bond, with no label - drawn short, as a bond to a label is: a letter there not read (an
   // I, set alone), or a wavy line across it, the point a group is attached at - never a methyl, sure

@@ -873,6 +873,43 @@ Both go together, because both touch every layer.
   on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
   plain again with the other end narrow next time round; the wedge's icon
   in its menu, pressed again, turns its narrow end to the other atom.
+- **A Fischer projection** (2026-11-18). A structure drawn as one - each
+  stereocentre a cross of four plain bonds on the page's axes, the chain
+  upright, its centres one above another - states no configuration of
+  itself, and Meno guesses none: plain bonds lie in the page. Its menu (a
+  right-click on any of its atoms or bonds) offers *Read as Fischer
+  projection* (`utils/fischer.ts`). At each cross that is a stereocentre
+  (four bonds, in no ring, each within the reader's 10 degrees of level
+  or upright, its four groups unlike - or only its two upright groups
+  alike, each holding such a cross, as the middle carbon of ribitol and of
+  xylitol: told apart only by the configurations about it, which the CIP
+  then reads r or s, or none where it is no centre, as in D-arabinitol),
+  the two level bonds become solid
+  wedges narrow at it and the two upright bonds stay plain: the horizontal
+  groups toward the viewer, as the Fischer projection of the acyclic form
+  has them (A. D. McNaught, Nomenclature of carbohydrates (IUPAC
+  Recommendations 1996), Pure Appl. Chem. 68 (1996) 1919-2008, 2-Carb-3),
+  and a cross with two like wedges opposite is a form the reader reads by
+  its ordinary rules (IUPAC 2006 ST-1.1.3, ST-1.8). One step, undone as
+  one ("Read as a Fischer projection"). Nothing is stored to say it was a
+  Fischer projection: the wedges say it.
+  - The centres must stand one above another: the line from the topmost
+    to the lowest within the reader's 10 degrees of upright, however many
+    there are, each within a quarter of a bond of that line.
+  - Not offered where no cross lies on the axes (a chain turned a quarter
+    has its crosses side by side, not one above another), at a metal (a
+    metal drawn as a plus is read as drawn, square planar where it surely
+    is), where a cross's
+    bond is already a wedge, hashed, bold or dative, at a ring atom, or
+    where a cross's groups are alike otherwise (it is no stereocentre; such
+    a cross among others is left plain).
+  - A single cross has no chain to tell up from down by: it is read as it
+    lies, on the chemist's word. Turned a quarter before the command, it
+    gives the enantiomer.
+  - A cross of plain bonds, in no ring, read from a PDF's figure says so at its centre
+    - "Drawn as a cross of plain bonds: no configuration is read. Read as
+    Fischer projection, if it is one." - and nothing is read until the
+    chemist asks (`lib/figure/structure.ts`).
 - **A bond in front of another.** Where two bonds of one structure drawn
   by hand cross, the chemist says which is in front: a right-click on
   either bond, near the crossing, offers *In front* and *Behind*, said of
