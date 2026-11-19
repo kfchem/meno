@@ -5,10 +5,10 @@
  * another. The plugin enumerates and embeds as it is asked; what is open,
  * and what is never chosen, are Meno's.
  */
-import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
+import { hydrogenCounts } from "./perception/hydrogens";
 import { FLAT_VOLUME_3D, sideOfLine, signedVolume } from "./perception/stereo/geometry";
 import { runsOf } from "./perception/stereo/runs";
 import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
@@ -27,18 +27,6 @@ export type StereoAtom = { el: string; charge?: number; hs?: number };
 export type StereoBond = { a: number; b: number; order: number };
 
 
-/** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule), aromatic bonds as a Kekulé structure has them (lib/chem/kekulize `valenceOrders`). */
-export function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
-  const sum = atoms.map(() => 0);
-  const orders = valenceOrders(atoms, bonds);
-  bonds.forEach((b, k) => {
-    const o = orders[k] <= 3 ? orders[k] : 0;
-    sum[b.a] += o;
-    sum[b.b] += o;
-  });
-  return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0));
-}
-
 /**
  * The centres the toolkit perceives that are no centres under Meno's rule
  * on lone pairs (lib/chem/lonePairCentres): an atom of three neighbours and
@@ -46,7 +34,7 @@ export function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoB
  * keeps no configuration.
  */
 function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): (at: number) => boolean {
-  const hs = implicitOf(atoms, bonds);
+  const hs = hydrogenCounts(atoms, bonds);
   const around = atoms.map(() => 0);
   const orders = atoms.map(() => 0);
   for (const b of bonds) {
@@ -316,7 +304,7 @@ export function drawnGroupsOf(molblocks: readonly string[]): DrawnGroups | null 
   const onBonds: GroupOnBond[] = [];
   const atoms: DrawnAtom[] = [];
   const bonds: DrawnBond[] = [];
-  const hs = implicitOf(graph.atoms, graph.bonds);
+  const hs = hydrogenCounts(graph.atoms, graph.bonds);
   for (const block of molblocks) {
     const ct = readMolfile(block);
     if (!ct) return null;

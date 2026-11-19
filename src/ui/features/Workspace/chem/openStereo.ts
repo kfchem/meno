@@ -4,7 +4,6 @@ import {
   configuredFrom,
   distinctIsomers,
   drawnGroupsOf,
-  implicitOf,
   leftOver,
   MOST_ISOMERS,
   NO_CONFIGURATION,
@@ -20,6 +19,7 @@ import {
 import { sentOf } from "../../../../lib/chem/perception/stereo/configuration";
 import { identityKey, type IdentityInput } from "../../../../lib/chem/identity";
 import { isMetal } from "../../../../lib/layout/perceive";
+import { hydrogenCounts } from "../../../../lib/chem/perception/hydrogens";
 import { halvesOf, onBondSaid, type Half } from "./groupHalves";
 import { withConfiguration } from "./pageMirror";
 
@@ -134,7 +134,7 @@ export async function stereoisomersOf(chem: ChemClient, molblocks: readonly stri
  */
 export function halvesMade<T extends { configured: IsomerConfiguration }>(open: OpenStereo, molblocks: readonly string[], isomers: readonly T[]) {
   const graph = stereoGraphOf(molblocks);
-  const hs = graph ? implicitOf(graph.atoms, graph.bonds) : [];
+  const hs = graph ? hydrogenCounts(graph.atoms, graph.bonds) : [];
   const input: IdentityInput | null = graph
     ? { atoms: graph.atoms.map((a, i) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), hs: hs[i] })), bonds: graph.bonds.map((b) => ({ a: b.a, b: b.b, order: b.order })) }
     : null;
