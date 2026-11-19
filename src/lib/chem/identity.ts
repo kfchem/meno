@@ -13,9 +13,11 @@
  * What identity compares (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*,
  * *Duplicates, and what judges them*): the constitution, with each atom's
  * element, charge, mass number and unpaired electrons, and each
- * configuration as drawn; aromatic rings as one form (`aromaticForm`); and a
+ * configuration as drawn; aromatic rings as one form (`aromaticForm`); a
  * plain hydrogen atom as one of its neighbour's hydrogens
- * (`hydrogensFolded`).
+ * (`hydrogensFolded`); and the end chalcogens on P, As, Sb, S, Se and Te
+ * as one form, whichever is drawn double or charged
+ * (perception/chalcogenEnds).
  */
 import { canonicalWritten, symmetryOrbits as orbitsAsDrawn } from "./perception/symmetry";
 import { type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
@@ -23,6 +25,7 @@ import type { Axial, Cumulated } from "../layout/stereo";
 import type { Radical } from "./molecule";
 import { aromaticForm } from "./perception/aromatic";
 import { hydrogensFolded, plainHydrogenAtoms } from "./perception/fold";
+import { endsShared, unchargedEnds } from "./perception/chalcogenEnds";
 import { blanksOf, filledIn, valuesOf } from "./perception/stereo/units";
 
 // (identity's fill of what sets nothing: the core's, perception/stereo/units)
@@ -106,12 +109,15 @@ const METALS_ASKED = 4;
 /**
  * The structure as identity compares it: its plain hydrogens folded in
  * (`hydrogensFolded`), each atom's mass number and unpaired electrons made
- * part of what it is, and its aromatic form (`aromaticForm`).
+ * part of what it is, its end chalcogens on P, As, Sb, S, Se and Te in
+ * their uncharged form (`unchargedEnds`), its aromatic form
+ * (`aromaticForm`), and those ends sharing their double bonds, charges and
+ * hydrogens (`endsShared`) - perception/chalcogenEnds.
  */
 function compared(input: IdentityInput): LayoutInput {
   const folded = hydrogensFolded(input);
   const atoms = folded.atoms.map(({ isotope, radical, mapped: _mapped, ...a }) => ({ ...a, el: `${a.el}${isotope ? `^${isotope}` : ""}${radical ? `.${radical}` : ""}` }));
-  return aromaticForm({ ...folded, atoms });
+  return endsShared(aromaticForm(unchargedEnds({ ...folded, atoms })));
 }
 
 /**

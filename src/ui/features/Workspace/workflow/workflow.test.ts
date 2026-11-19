@@ -967,7 +967,7 @@ describe("Quick Add's calculations", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "fewer-side", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "compare-torsions", "number", "add", "atom-map", "displace", "ensemble"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "fewer-side", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "compare-torsions", "number", "add", "atom-map", "displace", "ensemble", "repeat"]]]);
     // a compound set's wire: what takes it - a chart of it seen as a table too - and the conversion
     expect(offered(doc, { set: 1 })).toEqual([["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "fewer-side", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "compare-torsions", "add", "atom-map", "displace", "ensemble"]]]);
     // a conformer set's
@@ -977,7 +977,7 @@ describe("Quick Add's calculations", () => {
     expect(offered(doc)).toEqual([
       ["Sketchkit", ["conformers", "minimise", "descriptors"]],
       ["Tightbind", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "fewer-side", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "compare-torsions", "number", "add", "atom-map", "displace", "ensemble"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "fewer-side", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "compare-torsions", "number", "add", "atom-map", "displace", "ensemble", "repeat"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
       ["Sketchkit", ["conformers", "minimise"]],

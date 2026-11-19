@@ -3,6 +3,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { HELD_NAME, heldName, isName, nameBox } from "../../../../lib/layout/names";
 import { isMetal } from "../../../../lib/layout/perceive";
+import { stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument } from "../document";
 import { drawnOf } from "../fileActions";
@@ -11,7 +12,7 @@ import type { Model } from "../store/types";
 import { readDrawn, recordText } from "../utils/copyPaste";
 import { callTool } from "../conversation/tools";
 import { cleanUp, partFormula } from "./cleanUp";
-import { drawingOf, forFlatReaders, readAs } from "./drawing";
+import { drawingOf, forFlatReaders, readAs, undrawnHydrogens } from "./drawing";
 import { etaRingAt } from "./eta";
 import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "./identityOf";
 
@@ -125,6 +126,17 @@ describe("a group typed as an element's symbol is the group; the element from a 
     else expect(back.atoms.filter((a) => a.el === "C")).toHaveLength(9);
   });
 
+  it("in the MOL blocks a structure's halves are told from, a typed Pr is propyl and no metal; praseodymium bound is a metal", () => {
+    // (openStereo's halvesMade tells a structure's halves as mirror images only where no atom of its blocks is a metal)
+    const typed = writeMolfile(forFlatReaders(drawnOf(benzeneWith("Pr").state())));
+    expect(stereoGraphOf([typed])!.atoms.some((a) => isMetal(a.el))).toBe(false);
+    const at = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
+    const ring = Array.from({ length: 6 }, (_, k) => at(k + 1, L * Math.cos((Math.PI / 3) * k), L * Math.sin((Math.PI / 3) * k)));
+    const bonds = ring.map((_, k) => ({ id: 10 + k, a: k + 1, b: ((k + 1) % 6) + 1, order: (k % 2 ? 1 : 2) as 1 | 2 }));
+    const element = { atoms: [...ring, at(20, 2 * L, 0, "Pr")], bonds: [...bonds, { id: 30, a: 1, b: 20, order: 1 as const }] };
+    expect(stereoGraphOf([writeMolfile(forFlatReaders(element))])!.atoms.some((a) => isMetal(a.el))).toBe(true);
+  });
+
   it("copied and pasted, a typed Pr stays propyl", () => {
     const { state } = benzeneWith("Pr");
     const copied = readDrawn(JSON.parse(recordText(drawnOf(state()))));
@@ -175,6 +187,14 @@ describe("a group typed as an element's symbol is the group; the element from a 
     expect(read(benzeneWith("Pr").doc)).toEqual([expect.objectContaining({ el: "Pr", group: true })]);
     const file = editor(moleculesToEditorModel(readMoleculesFromText(prCl3, "mol")).model);
     expect(read(file.doc)).toEqual([expect.not.objectContaining({ group: true })]);
+  });
+
+  it("a held group carries no H the drawing does not show, though a file set its atom a valence", () => {
+    const typed = benzeneWith("Pr").state().model;
+    const pr = typed.atoms.find((a) => a.el === "Pr")!;
+    // (a valence on the atom, as a file may set one: the label's group is drawn out with its own H, none carried on the label)
+    const withValence: Model = { ...typed, atoms: typed.atoms.map((a) => (a.id === pr.id ? { ...a, valence: 3 } : a)) };
+    expect(undrawnHydrogens(withValence).get(pr.id)).toBe(0);
   });
 
   it("a Pr saved with nothing held - before this version, or from a file - opens as praseodymium", () => {

@@ -5,7 +5,9 @@
  * lib/chem/identity (part 13's move), which imports it back; what a later step changes is pinned in this file's test as it stands.
  */
 import { AROMATIC } from "../aromatic";
+import { elementOf, endsAsDrawn } from "../chalcogenEnds";
 import { drawnRoundMetal } from "../elements";
+import { SMALL_RING } from "../rings";
 import { canonicalSearched, canonicalWritten, symmetryClasses, type SymmetryInput } from "../symmetry";
 import { lonePairCentres } from "./lonePairs";
 
@@ -23,8 +25,6 @@ const isMetal = (el: string): boolean => drawnRoundMetal.has(el);
 /** The elements a centre of four groups may be (as the chemistry check ruled them: never a metal). */
 const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb", "Bi", "S", "Se", "Te"]);
 
-/** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
-const SMALL_RING = 7;
 
 /**
  * A place that could carry a configuration and carries none: a centre (its
@@ -65,12 +65,13 @@ export function blanksOf(g: SymmetryInput): Blank[] {
     }
   }
   for (const a of around) a.sort((x, y) => x - y);
-  // (its element as written: identity's own marks - a mass number, an unpaired electron - taken off: `compared`)
-  const element = (i: number) => g.atoms[i].el.replace(/[\^.].*$/, "");
+  // (its element as written: identity's own marks - a mass number, an unpaired electron, a centre's shared ends - taken off: `compared`)
+  const element = (i: number) => elementOf(g.atoms[i].el);
   const hs = (i: number) => g.atoms[i].hs ?? 0;
+  // (a centre whose end chalcogens share their bonds read by the lone-pair rule as drawn: ../chalcogenEnds `endsAsDrawn`)
   const pyramid = lonePairCentres(
     g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0, hs: a.hs ?? 0 })),
-    g.bonds,
+    endsAsDrawn(g.atoms, g.bonds),
   );
   const out: Blank[] = [];
   for (let i = 0; i < n; i++) {
