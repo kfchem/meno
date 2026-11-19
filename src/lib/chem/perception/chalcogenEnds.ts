@@ -85,13 +85,17 @@ export function unchargedEnds<A extends ChemAtom, B extends ChemBond, G extends 
       const orders = around[x].map((e) => bonds[e.bond].order);
       if (orders.some((o) => o < 1 || o > 3)) break;
       if (orders.reduce((s, o) => s + o, 0) + hs(x) + 1 > most) break;
-      const ys = around[x].filter(({ to: y, bond }) => {
+      const all = around[x].filter(({ to: y, bond }) => {
         if (bonds[bond].order !== 1 || charge(y) !== -1 || !lone(y)) return false;
         // (a phosphorus ylide's carbanion, three groups round it, its H's counted, and its lone pair: Ph3P(+)-CH2(-) is Ph3P=CH2)
         if (el(y) === "C") return el(x) === "P" && around[y].length + hs(y) === 3;
         if (hs(y)) return false;
         return (CHALCOGENS.has(el(y)) && around[y].length === 1) || (el(y) === "N" && around[y].length === 2);
       });
+      // (a carbanion taken only where no chalcogen or N end is: a phosphonate's carbanion drawn P=O or P(+)-O(-) is the O's to
+      //  take, as before - found in review)
+      const ends = all.filter(({ to }) => el(to) !== "C");
+      const ys = ends.length ? ends : all;
       if (!ys.length) break;
       const end = (e: { to: number }) => CHALCOGENS.has(el(e.to)) && around[e.to].length === 1;
       if (ys.length > 1 && !ys.every(end)) break;

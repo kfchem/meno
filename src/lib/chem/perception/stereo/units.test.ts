@@ -10,6 +10,9 @@ import { CHELATE_RING as fromChelateRing } from "../../chelateRing";
 import { blanksOf, CHELATE_RING, filledIn } from "./units";
 
 const id = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
+/** All written one identity, or each its own (the review's pins at the file's end). */
+const one = (...smiles: string[]) => expect(new Set(smiles.map(id)).size).toBe(1);
+const apart = (...smiles: string[]) => expect(new Set(smiles.map(id)).size).toBe(smiles.length);
 
 describe("identity's fill, moved into the core", () => {
   it("is the one identity imports and the one the chelate ring's number comes from", () => {
@@ -130,5 +133,36 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
   it("the same whatever order the atoms come in", () => {
     one("CCOP(=O)([O-])OC", "COP([O-])(=O)OCC", "[O-]P(OCC)(OC)=O");
     one("CS(=O)(=O)[O-]", "[O-]S(C)(=O)=O", "O=S(=O)([O-])C");
+  });
+});
+
+// (found in review)
+describe("a P+ with an end chalcogen or an N(-)-R and a carbanion on it: the end is taken, as before the ylide rule (found in review)", () => {
+  it("a phosphine oxide's carbanion drawn P=O and drawn P+-O-, with its C- either side", () => {
+    one("O=P(C)(C)[CH2-]", "[O-][P+](C)(C)[CH2-]", "[CH2-][P+](C)(C)[O-]");
+  });
+
+  it("a phosphonate's carbanion (a Horner-Wadsworth-Emmons reagent's), drawn P=O and drawn P+-O-", () => {
+    one("CCOC(=O)[CH-]P(=O)(OCC)OCC", "CCOC(=O)[CH-][P+]([O-])(OCC)OCC");
+  });
+
+  it("the same with S- and with N(-)-R", () => {
+    one("S=P(C)(C)[CH2-]", "[S-][P+](C)(C)[CH2-]");
+    one("CN=P(C)(C)[CH2-]", "C[N-][P+](C)(C)[CH2-]");
+  });
+
+  it("two O- and a carbanion, and one O- and two carbanions, on one P+", () => {
+    one("[O-][P+]([O-])([CH2-])c1ccccc1", "O=P([O-])([CH2-])c1ccccc1");
+    one("[O-][P+]([CH2-])([CH2-])C", "O=P([CH2-])([CH2-])C");
+  });
+});
+
+// (found in review)
+describe("a phosphorus ylide only: an arsonium and a stibonium ylide keep their charges (found in review)", () => {
+  it("As+-C- and As=C are two structures; so are Sb's, Se's and Te's", () => {
+    apart("C[As+](C)(C)[CH2-]", "C[As](C)(C)=C");
+    apart("C[Sb+](C)(C)[CH2-]", "C[Sb](C)(C)=C");
+    apart("C[Se+](C)[CH2-]", "C[Se](C)=C");
+    apart("C[Te+](C)[CH2-]", "C[Te](C)=C");
   });
 });
