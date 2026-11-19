@@ -29,7 +29,7 @@
  */
 
 import { piElectrons } from "./aromatic";
-import { notMetal } from "./elements";
+import { metal, notMetal } from "./elements";
 import { implicitHydrogens } from "./hydrogens";
 import { ringParts } from "./rings";
 
@@ -157,10 +157,14 @@ export function outsideRingRefusal(atoms: readonly KekuleAtom[], bonds: readonly
   //  to an atom cannot close: never filled with an H, which would make another compound)
   const roomLeft = (a: number) => {
     let sum = atoms[a]?.hs ?? 0;
+    let toMetals = 0;
     bonds.forEach((b, k) => {
-      if (b.a1 === a || b.a2 === a) sum += b.order === AROMATIC_BOND ? orders[k] : b.order >= 1 && b.order <= 3 ? b.order : 0;
+      if (b.a1 !== a && b.a2 !== a) return;
+      const o = b.order === AROMATIC_BOND ? orders[k] : b.order >= 1 && b.order <= 3 ? b.order : 0;
+      sum += o;
+      if (metal.has(canonical(atoms[b.a1 === a ? b.a2 : b.a1]?.el ?? ""))) toMetals += o;
     });
-    return implicitHydrogens(canonical(atoms[a]?.el ?? ""), sum, atoms[a]?.charge ?? 0) > 0;
+    return implicitHydrogens(canonical(atoms[a]?.el ?? ""), sum, atoms[a]?.charge ?? 0, undefined, toMetals) > 0;
   };
   for (const ks of groups.values()) {
     const at = [...new Set(ks.flatMap((k) => [bonds[k].a1, bonds[k].a2]))].sort((p, q) => p - q);
@@ -249,8 +253,14 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     if (hasMultiple[i]) return "never";
     const hs = atoms[i]?.hs;
     let sum = hs ?? 0;
-    for (const b of bonds) if (b.a1 === i || b.a2 === i) sum += b.order === AROMATIC_BOND ? 1 : b.order >= 1 && b.order <= 3 ? b.order : 0;
-    if (implicitHydrogens(canonical(atoms[i]?.el ?? ""), sum, atoms[i]?.charge ?? 0) <= 0) return "never";
+    let toMetals = 0;
+    for (const b of bonds) {
+      if (b.a1 !== i && b.a2 !== i) continue;
+      const o = b.order === AROMATIC_BOND ? 1 : b.order >= 1 && b.order <= 3 ? b.order : 0;
+      sum += o;
+      if (metal.has(canonical(atoms[b.a1 === i ? b.a2 : b.a1]?.el ?? ""))) toMetals += o;
+    }
+    if (implicitHydrogens(canonical(atoms[i]?.el ?? ""), sum, atoms[i]?.charge ?? 0, undefined, toMetals) <= 0) return "never";
     // (at an end, an atom whose H is stated - a bracket's [NH2+], [OH+] - has its valence fixed by what is written: the room it has
     //  left is a double bond it needs; one whose H is left to its valence may take the double or carry an H in its place)
     return (chain.get(i) ?? 0) >= 2 || hs != null ? "needs" : "may";

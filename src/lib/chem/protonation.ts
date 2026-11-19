@@ -113,7 +113,8 @@ export function startingForms(by: OrdersBy, sites: readonly Site[], aromatic = f
 
 /** An atom's hydrogens, its bonds' orders summed (`sum`), by the core's count: its valence's room, a phosphorus or sulfur taking its higher valences (5; 4 and 6) where its bonds go past the lower. */
 export function hydrogensOf(a: ProtonAtom, sum: number): number {
-  return implicitHydrogens(a.el, sum, a.charge ?? 0, a.radical);
+  // (its sum is the one its question asks - with or without its bonds to metals, each form its own: the higher valences on all of it)
+  return implicitHydrogens(a.el, sum, a.charge ?? 0, a.radical, 0);
 }
 
 /**

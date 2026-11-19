@@ -93,21 +93,25 @@ const VALENCE: Record<string, { valence: number; group: number }> = {
  * one either way (CH3+, CH3-); boron, to its left, gains one with a
  * negative charge (BH4-). An unpaired electron takes a bond's place, and a
  * carbene's pair two. A P, an S or an Se takes its higher valences where its
- * bonds to non-metals pass the lower (`LADDER`); `toMetals` is the share of
- * `bondOrderSum` that is bonds to metals.
+ * bonds to non-metals pass the lower (`LADDER`), where the caller says the
+ * share of `bondOrderSum` that is bonds to metals (`toMetals`, 0 for none);
+ * not said, its element's own valence alone.
  */
 export function implicitHydrogens(
   el: string,
   bondOrderSum: number,
   charge = 0,
   radical?: Radical,
-  toMetals = 0,
+  toMetals?: number,
 ): number {
   const v = VALENCE[el];
   if (!v) return 0;
   // (the lowest valence it takes at or above its bonds - a P(V) of four bonds carries one, an H-phosphonate's; an S(IV) of three,
   //  a sulfinyl H - the rule connection tables and SMILES count by, the chemistry check's ruling. The step is chosen by its bonds
-  //  to non-metals alone (`toMetals`, of `bondOrderSum`): a phosphine on a metal stays P(III), no H; past the highest, none)
+  //  to non-metals alone (`toMetals`, of `bondOrderSum`): a phosphine on a metal stays P(III), no H; past the highest, none. A
+  //  caller that does not say which of its bonds go to metals gets its element's own valence alone, as before: none is lifted
+  //  by a bond to a metal it did not set apart - found in review)
+  if (toMetals == null) return Math.max(0, valenceAs(v, v.valence, charge, radical) - bondOrderSum);
   for (const valence of LADDER[el] ?? [v.valence]) {
     const at = valenceAs(v, valence, charge, radical);
     if (at >= bondOrderSum - toMetals) return Math.max(0, at - bondOrderSum);

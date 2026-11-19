@@ -137,9 +137,12 @@ describe("the lowest valence at or above an atom's bonds (the chemistry check's 
     expect(counted("P(=O)(OC)OC").reduce((s, h) => s + h, 0)).toBe(7);
     expect(onFirst("O=P(c1ccccc1)c1ccccc1", "P")).toBe(1);
     expect(onFirst("CS=O", "S")).toBe(1);
-    expect(implicitHydrogens("P", 4)).toBe(1);
-    expect(implicitHydrogens("S", 3)).toBe(1);
-    expect(implicitHydrogens("S", 5)).toBe(1);
+    expect(implicitHydrogens("P", 4, 0, undefined, 0)).toBe(1);
+    expect(implicitHydrogens("S", 3, 0, undefined, 0)).toBe(1);
+    expect(implicitHydrogens("S", 5, 0, undefined, 0)).toBe(1);
+    // (a caller that does not say which bonds go to metals: its element's own valence alone, as before - found in review)
+    expect(implicitHydrogens("P", 4)).toBe(0);
+    expect(implicitHydrogens("S", 3)).toBe(0);
   });
 
   it("none where none belongs: DMSO, triphenylphosphine oxide, a methyltriphenylphosphonium, a sulfone, PPh3, a phosphate, PF6-", () => {
@@ -150,8 +153,8 @@ describe("the lowest valence at or above an atom's bonds (the chemistry check's 
     expect(onFirst("P(c1ccccc1)(c1ccccc1)c1ccccc1", "P")).toBe(0);
     expect(onFirst("OP(=O)(O)O", "P")).toBe(0);
     expect(onFirst("F[P-](F)(F)(F)(F)F", "P")).toBe(0);
-    expect(implicitHydrogens("P", 6)).toBe(0);
-    expect(implicitHydrogens("S", 7)).toBe(0);
+    expect(implicitHydrogens("P", 6, 0, undefined, 0)).toBe(0);
+    expect(implicitHydrogens("S", 7, 0, undefined, 0)).toBe(0);
   });
 
   it("the lower valence first where it is enough: PH3, H2S, a phosphine's PH2, a thiol", () => {
