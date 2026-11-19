@@ -23,12 +23,12 @@ import type { Atom, Bond, Model, Molecule3D, PictureItem, WorkflowSet } from "..
 import { drawnBox } from "../../../../utils/importers";
 import { cornersOf } from "../utils/selection";
 import { cardRect } from "../pageGl/conversationCard";
-import { drawnIn, inside, structuresOf, setMembers, type Frame } from "./entries";
+import { drawnIn, inside, recordNumber, structuresOf, setMembers, type Frame } from "./entries";
 import { CARD_H, CARD_W, SET_PAD, SET_TOP } from "./look";
 import { exitsOf } from "./kinds";
 import { resizeSet } from "./model";
 import { unseenSets } from "./onPage";
-import { keepExitsUnder, LEAST_W, roomOf, type RunWith } from "./run";
+import { keepExitsUnder, LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
 type Reach = RunWith["extentOf"];
 
@@ -143,7 +143,11 @@ export function memberBoxes(doc: WorkspaceDocument, set: WorkflowSet, extentOf: 
   const molecules = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
   const pictures = new Map((doc.pictures ?? []).map((p) => [p.id, p]));
   const boxes: Frame[] = [
-    ...held.structures.map((ids) => on.structure(ids)),
+    // (a structure numbered by its record - Enumerate's #n, drawn under it - its number's room below it, as the run gave it: run `NUMBER_ROOM`)
+    ...held.structures.map((ids, i) => {
+      const b = on.structure(ids);
+      return recordNumber(held.records[i]) != null ? { ...b, y0: b.y0 - NUMBER_ROOM } : b;
+    }),
     ...held.molecules.flatMap((id) => (molecules.has(id) ? [on.molecule(molecules.get(id)!)] : [])),
     ...held.pictures.flatMap((id) => (pictures.has(id) ? [on.picture(pictures.get(id)!)] : [])),
   ];
