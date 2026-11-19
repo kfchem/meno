@@ -23,7 +23,7 @@ import { runsOf } from "../../../../lib/chem/perception/stereo/runs";
 
 /**
  * One structure to work out: its input, and the indices in it of the units asked for, with the ids they are on the drawing - a centre in a
- * ring drawn in perspective with no depth with what the reading of that ring says (`perspective`: lib/layout/recognised `recognisedSaid`).
+ * ring drawn in perspective with no depth with what the reading of that ring says (`perspective`: lib/chem/perception/projection/depth `recognisedSaid`).
  */
 export type CipJob = { input: IdentityInput; centres: { at: number; id: number; perspective?: string }[]; bonds: { at: number; id: number }[] };
 
