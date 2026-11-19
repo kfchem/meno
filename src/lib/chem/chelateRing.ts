@@ -5,4 +5,4 @@
  * and by the SMILES reader, which refuses a mark that puts two such donors across; kept here so that the reader stays clear of
  * identity's own imports.
  */
-export const CHELATE_RING = 7;
+export { CHELATE_RING } from "./perception/stereo/units";

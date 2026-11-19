@@ -29,6 +29,8 @@ export type FrameTab = {
   tone: "rest" | "hover" | "chosen";
   /** What lies inside it may be sent away from this computer: its own line, not a set's. */
   outward?: true;
+  /** A Repeat's frame round the steps it runs pass by pass (workflow/repeat): dashed, quiet - neither a set's hairline nor a conversation's. */
+  loop?: true;
   /** How far its tone has come, eased (0 at rest, 1 pointed at, 2 chosen): an outward line's weight follows it. */
   level?: number;
   tab: { icon: string; name?: string; status?: string; warn?: string };
@@ -50,7 +52,11 @@ export const FRAME_PX = { radius: 12, line: 1, words: 11, icon: 14, gap: 6, edge
 export const OUTWARD_LINE = { color: COLORS.base, rest: 1, hover: 1.5, chosen: 2, dashed: { onPx: 6, offPx: 4 } } as const;
 
 /** A frame's line as its tone has it: a set's hairline, darker pointed at, Meno's colour chosen; an outward one's dashes. */
-export function frameLine(it: Pick<FrameTab, "tone" | "outward" | "level">): { widthPx: number; color: string; dashed?: { onPx: number; offPx: number } } {
+/** A Repeat's frame's line (`FrameTab.loop`): dashed, quiet at rest, Meno's colour chosen - longer dashes than an outward frame's, in page px. */
+export const LOOP_LINE = { rest: 1, hover: 1.25, chosen: 1.5, dashed: { onPx: 10, offPx: 5 } } as const;
+
+export function frameLine(it: Pick<FrameTab, "tone" | "outward" | "level" | "loop">): { widthPx: number; color: string; dashed?: { onPx: number; offPx: number } } {
+  if (it.loop) return { widthPx: LOOP_LINE[it.tone], color: it.tone === "chosen" ? FRAME_COLORS.chosen : FRAME_COLORS.quiet, dashed: LOOP_LINE.dashed };
   if (it.outward) {
     const level = it.level ?? { rest: 0, hover: 1, chosen: 2 }[it.tone];
     const widthPx = level <= 1 ? OUTWARD_LINE.rest + (OUTWARD_LINE.hover - OUTWARD_LINE.rest) * level : OUTWARD_LINE.hover + (OUTWARD_LINE.chosen - OUTWARD_LINE.hover) * (level - 1);

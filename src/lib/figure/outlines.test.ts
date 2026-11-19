@@ -176,6 +176,64 @@ describe("a chain whose end bars are cut short by labels", () => {
     expect(shapesOf(figure(outline)).strokes.filter((s) => s.bar)).toHaveLength(3);
     expect(readFigure(figure(...structure, outline)).bonds).toHaveLength(11 + 3);
   });
+
+  it("is its three bars where the ring stands so that the chain is 1.2 bonds across: a dioxolane's O-CH2-CH2-O turned in its five-ring, each end bar cut 0.45 of a bond short", () => {
+    const stroked = (pts: P[]): FigurePath => ({ fill: null, stroke: black, width: 0.6, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+    const c = zig(5, [50, 50], 10);
+    const hex = Array.from({ length: 6 }, (_, i): P => [250 + 10 * Math.cos((Math.PI / 3) * i), 170 + 10 * Math.sin((Math.PI / 3) * i)]);
+    const structure = [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
+    // (a regular five-ring of ten-point bonds turned 27 degrees: O, CH2, CH2, O its corners; the chain 11.97 points across, under 1.3 bonds)
+    const outline = thick([[303.57, 305.9], [298.67, 308.4], [291.6, 301.33], [294.1, 296.43]], 0.6, "mitre");
+    expect(shapesOf(figure(outline)).strokes.filter((s) => s.bar)).toHaveLength(3);
+    expect(readFigure(figure(...structure, outline)).bonds).toHaveLength(11 + 3);
+  });
+
+  it("is its two bars where one is cut short at its label: a bond of 0.9 and one of half a bond, at 120 degrees, 1.23 bonds across", () => {
+    const stroked = (pts: P[]): FigurePath => ({ fill: null, stroke: black, width: 0.6, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+    const c = zig(5, [50, 50], 10);
+    const hex = Array.from({ length: 6 }, (_, i): P => [250 + 10 * Math.cos((Math.PI / 3) * i), 170 + 10 * Math.sin((Math.PI / 3) * i)]);
+    const structure = [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
+    const outline = thick([[300, 300], [303.865, 296.83], [312.29, 300]], 0.6, "mitre");
+    expect(shapesOf(figure(outline)).strokes.filter((s) => s.bar)).toHaveLength(2);
+    expect(readFigure(figure(...structure, outline)).bonds).toHaveLength(11 + 2);
+  });
+
+  it("gives up a large Z beside a structure of ten-point bonds: three bars, one of them a bond long, but 0.9 of a bond across", () => {
+    const stroked = (pts: P[]): FigurePath => ({ fill: null, stroke: black, width: 0.6, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+    const c = zig(5, [50, 50], 10);
+    const hex = Array.from({ length: 6 }, (_, i): P => [250 + 10 * Math.cos((Math.PI / 3) * i), 170 + 10 * Math.sin((Math.PI / 3) * i)]);
+    const structure = [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
+    const z = thick([[300, 300], [309, 300], [300, 306], [309, 306]], 0.8, "mitre");
+    expect(shapesOf(figure(z)).strokes.filter((s) => s.bar)).toHaveLength(3);
+    expect(readFigure(figure(...structure, z)).bonds).toHaveLength(11);
+  });
+});
+
+/**
+ * The edges of the rule for a chain cut short at its labels (found in review): a chain with a whole-bond bar (0.85 to 1.15 of the bond) is
+ * kept from 1.1 bonds across; a chain with none from 1.3. Each test stands at one of those edges.
+ */
+describe("the edges of a chain cut short at its labels", () => {
+  const stroked = (pts: P[]): FigurePath => ({ fill: null, stroke: black, width: 0.6, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+  const c = zig(5, [50, 50], 10);
+  const hex = Array.from({ length: 6 }, (_, i): P => [250 + 10 * Math.cos((Math.PI / 3) * i), 170 + 10 * Math.sin((Math.PI / 3) * i)]);
+  const structure = [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
+  const read = (pts: P[]) => {
+    const outline = thick(pts, 0.6, "mitre");
+    return { bars: shapesOf(figure(outline)).strokes.filter((s) => s.bar).length, bonds: readFigure(figure(...structure, outline)).bonds.length - 11 };
+  };
+
+  it("gives up a chain 1.04 bonds across whose one bar is 0.9 of a bond", () => {
+    expect(read([[300, 300], [309, 300], [310.4, 304.5]])).toEqual({ bars: 2, bonds: 0 });
+  });
+
+  it("gives up a chain 1.125 bonds across none of whose bars is a whole bond (one of 0.8)", () => {
+    expect(read([[300, 300], [308, 300], [311.25, 303.25]])).toEqual({ bars: 2, bonds: 0 });
+  });
+
+  it("keeps a chain 1.25 bonds across whose one bar is 1.1 bonds", () => {
+    expect(read([[300, 300], [311, 300], [312.5, 305]])).toEqual({ bars: 2, bonds: 2 });
+  });
 });
 
 describe("which chains of bars are bonds: told by the drawing's own bond, not by points", () => {

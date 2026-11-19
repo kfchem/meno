@@ -249,11 +249,21 @@ const CHAIN_LEAST = 0.45;
 const CHAIN_ACROSS = 1.3;
 /** The longest a chain's bar is, in the drawing's bonds, to be a bond: over it, a chart's line, a frame, a rule - the bonds of one drawing are of about one length. */
 const CHAIN_MOST = 1.9;
+/**
+ * How far across a chain is, in the drawing's bonds, at the least, where one of its bars is a whole bond (`CHAIN_WHOLE`) - a chain whose end bars are
+ * cut short where its labels are set: a dioxolane's O-CH2-CH2-O, its middle bar a bond and its end bars about half a bond each, is 1.2 to 1.3 across,
+ * and an O's two bonds as much. Two bars a whole bond long are 1.1 across only where they open wider than 67 degrees, as two bonds do; a letter's V is
+ * narrower, and its stems are not of the drawing's bond.
+ */
+const CHAIN_ACROSS_CUT = 1.1;
+/** A bar a whole bond long, in the drawing's bonds: from `CHAIN_WHOLE[0]` to `CHAIN_WHOLE[1]`. */
+const CHAIN_WHOLE = [0.85, 1.15] as const;
 
 /**
  * A figure's shapes with each chain of bars `shapesOf` made of a filled outline (`Stroke.bar`, `chain`) either kept or not, by `bond`, the drawing's own
  * length of bond: kept - its bars bonds, the shapes the polygon was read as before left out - where the chain is `CHAIN_ACROSS` bonds across at the least
- * and every bar between `CHAIN_LEAST` and `CHAIN_MOST` bonds long; else given up - its bars left out, the polygon read as it was. No bond known, none kept.
+ * (`CHAIN_ACROSS_CUT` where one bar is a whole bond) and every bar between `CHAIN_LEAST` and `CHAIN_MOST` bonds long; else given up -
+ * its bars left out, the polygon read as it was. No bond known, none kept.
  */
 export function outlineChains(shapes: Shapes, bond: number): Shapes {
   const bars = new Map<number, Stroke[]>();
@@ -266,7 +276,10 @@ export function outlineChains(shapes: Shapes, bond: number): Shapes {
       const ys = ss.flatMap((t) => [t.a.y, t.b.y]);
       // (a chain is 1.3 bonds across at the least - two bonds at a right angle are 1.4 - and a letter's stems, a speck, are not: the drawing's own bond, not points)
       const across = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-      if (across >= CHAIN_ACROSS * bond && ss.every((t) => len(t) >= CHAIN_LEAST * bond && len(t) <= CHAIN_MOST * bond)) kept.add(id);
+      // (or 1.1 across, where one of its bars is a whole bond: a chain whose end bars are cut short by its labels)
+      const cut = ss.some((t) => len(t) >= CHAIN_WHOLE[0] * bond && len(t) <= CHAIN_WHOLE[1] * bond);
+      const least = cut ? CHAIN_ACROSS_CUT : CHAIN_ACROSS;
+      if (across >= least * bond && ss.every((t) => len(t) >= CHAIN_LEAST * bond && len(t) <= CHAIN_MOST * bond)) kept.add(id);
     }
   }
   // (a chain given up is its shapes again: its bars out; a chain kept, its bars in and the shapes it was read as out)
@@ -812,6 +825,9 @@ function boxGap(a: Box, b: Box): number {
   return Math.hypot(Math.max(0, a[0] - b[2], b[0] - a[2]), Math.max(0, a[1] - b[3], b[1] - a[3]));
 }
 
+/** How near two bonds' ends lie, in bonds, at the most, to meet each other even where both point into one label. */
+const TOGETHER = 0.1;
+
 /** How many bonds an element in a label takes, its hydrogens and charge aside: an NH2's N one, an OH's O one. */
 const BONDS_LEFT: Record<string, number> = { N: 3, O: 2, S: 2, P: 3, B: 3, Si: 4, Se: 2 };
 
@@ -1180,7 +1196,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const lines = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
-  const joined = joinedAcross([...lines, ...loose], bond);
+  // (the line in front may be a wedge, or a bond drawn bold and read as one: a perspective drawing's near edge)
+  const joined = joinedAcross([...lines, ...loose], bond, shapes.wedges.map((w) => ({ a: w.tip, b: w.base })));
   // (a line lying along another - the same middle line, within a sixteenth of a bond, as long as the other or shorter, within its stretch -
   // is that line: a bold bar has a hairline drawn along it. It is never a second line of a multiple bond)
   const along = (s: Stroke, t: Stroke) => {
@@ -1245,10 +1262,13 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       return [e, words.flatMap((w, k) => (reaches(e.p, out, w.box, bond) ? [k] : []))];
     }),
   );
+  // (but two ends at one point - a tenth of a bond apart: a bold bar's and a wedge's at a ring's corner set just over a label - meet
+  // there, a carbon: bonds drawn short of a metal from two sides end the label's width apart)
+  const together = (e: End, f: End) => dist(e.p, f.p) < TOGETHER * bond;
   // (and an end by both ends of a bond shorter than that - a hash to an H set close - meets the nearer)
   const otherEnd = (e: End) => (e.side === 0 ? drawnBonds[e.bond].b : drawnBonds[e.bond].a);
   for (const e of ends)
-    meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && dist(f.p, e.p) <= dist(f.p, otherEnd(e)) && !into.get(e)!.some((k) => into.get(f)!.includes(k))).length);
+    meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && dist(f.p, e.p) <= dist(f.p, otherEnd(e)) && (together(e, f) || !into.get(e)!.some((k) => into.get(f)!.includes(k)))).length);
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
   const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w, reads)));
@@ -1558,13 +1578,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
 /**
  * Lines broken where another passes in front - a bridge drawn behind a
  * ring's bond, the gap left round it - joined again: two lines on one line,
- * a little apart, with a third crossing the gap.
+ * a little apart, with a third crossing the gap: a line, or one of `front` -
+ * a wedge, a bold bond - drawn in front.
  */
-function joinedAcross(lines: readonly Stroke[], bond: number): Stroke[] {
+function joinedAcross(lines: readonly Stroke[], bond: number, front: readonly { a: Point; b: Point }[] = []): Stroke[] {
   const out = [...lines];
   for (let i = 0; i < out.length; i++) {
     for (let j = i + 1; j < out.length; j++) {
-      const whole = brokenAcross(out[i], out[j], out, bond);
+      const whole = brokenAcross(out[i], out[j], out, bond, front);
       if (!whole) continue;
       out[i] = { ...whole, w: Math.max(out[i].w, out[j].w) };
       out.splice(j, 1);
@@ -1574,8 +1595,8 @@ function joinedAcross(lines: readonly Stroke[], bond: number): Stroke[] {
   return out;
 }
 
-/** Two lines on one line, a little apart, a third of `all` crossing the gap: one line broken where another passes in front - its ends, or none. */
-function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number): { a: Point; b: Point } | null {
+/** Two lines on one line, a little apart, a third of `all` or of `front` crossing the gap: one line broken where another passes in front - its ends, or none. */
+function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number, front: readonly { a: Point; b: Point }[] = []): { a: Point; b: Point } | null {
   const u = unit(s.a, s.b);
   if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((4 * Math.PI) / 180)) return null;
   if (Math.abs(cross(u, { x: t.a.x - s.a.x, y: t.a.y - s.a.y })) > 0.03 * bond) return null;
@@ -1593,7 +1614,7 @@ function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number
   // (it must lie between them, not past one: the far ends further apart than the near ones)
   if (dist(far0, far1) < dist(near0, near1) + len(s) + len(t) - 0.01 * bond) return null;
   const m = mid(near0, near1);
-  return all.some((o) => o !== s && o !== t && segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
+  return [...all.filter((o) => o !== s && o !== t), ...front].some((o) => segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
 }
 
 /** Whether a line passes across the gap between two points, near its middle. */

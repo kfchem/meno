@@ -13,10 +13,17 @@
  * reads beside these; RT_BOX=page a box round all that is on the page, not
  * the figures found - the figure reader measured apart from finding figures;
  * RT_PRESETS=a,b only the drawings in those styles (rdkit_draw.py's too);
+ * RT_VARIANTS=upright,serif only those ways of printing them;
  * RT_OUTLINE=letter or =word the figures' words drawn as outlines first, a
  * path for each letter or for each word, as many journals print a figure's
  * labels (outline.ts) - read against the system's letters, which
- * glyphs.swift measures into known.json first.
+ * glyphs.swift measures into known.json first. RT_DPI=300 (or any) reads
+ * each figure as a picture instead: its box drawn at that resolution by the
+ * reader (`render`), traced (lib/figure/trace) and read from the shapes
+ * traced, the PDF's own letters given as they are written - or, with
+ * RT_LETTERS=traced, none given: the picture's letters traced too and read
+ * against the system's letters (known.json, as for RT_OUTLINE); RT_JPEG and
+ * RT_SCAN spoil the picture first (spoil.ts); a page turned is not traced.
  *
  * A reaction's drawing (rdkit_draw.py's) is read the same way, and its
  * molecules told apart by where they stand to its longest arrow - before
@@ -32,9 +39,14 @@ import { it } from "vitest";
 import { figuresOf, pageObjectsOf, type Box } from "../../../src/lib/pdf/figures";
 import type { FigureDrawn } from "../../../src/lib/figure/drawn";
 import { structureFileText } from "../../../src/ui/features/Workspace/fileActions";
-import { figureFrom, lettersAsShapes } from "../../../src/ui/features/Workspace/utils/figures";
+import { figureFrom, figureLabels, lettersAsShapes, modelOf, withoutOverBonded } from "../../../src/ui/features/Workspace/utils/figures";
+import { readFigure } from "../../../src/lib/figure/read";
+import type { GlyphShape } from "../../../src/lib/figure/glyphs";
+import { readDrawnLabel } from "../../../src/lib/figure/structure";
+import { onPage, tracePicture, unreadInk } from "../../../src/lib/figure/trace";
 import type { Model } from "../../../src/ui/features/Workspace/store/types";
 import { fileName } from "./names";
+import { asScan, viaJpeg, type Raw } from "./spoil";
 import { knownLetters, outlined } from "./outline";
 
 const OUT = resolve(process.cwd(), ".roundtrip");
@@ -42,6 +54,15 @@ const READ = process.env.RT_READ ? resolve(OUT, process.env.RT_READ) : OUT;
 const EXE = process.env.MENO ?? resolve(process.cwd(), "src-tauri/target/release/bundle/macos/Meno.app/Contents/MacOS/Meno");
 /** How the figures' words are drawn before they are read: as letters, as the PDF has them, or as outlines, a path for each letter or each word. */
 const OUTLINE = process.env.RT_OUTLINE === "letter" || process.env.RT_OUTLINE === "word" ? process.env.RT_OUTLINE : null;
+/** RT_DPI: each figure read as a picture of it at this resolution, traced - none, read as drawn. */
+const DPI = Number(process.env.RT_DPI) || null;
+/** RT_LETTERS=traced: a picture's letters traced and matched too, none given from the PDF - else the PDF's own letters given. */
+const TRACED_LETTERS = process.env.RT_LETTERS === "traced";
+/** RT_JPEG=quality: each picture saved as JPEG at that quality and opened again before it is traced; RT_SCAN=1: made a scan of (spoil.ts). */
+const JPEG = Number(process.env.RT_JPEG) || null;
+const SCAN = !!process.env.RT_SCAN;
+/** How many of a structure's atoms and bonds are marked unsure: what it says it may have read wrong. */
+const markedOf = (m: Model) => m.atoms.filter((a) => a.unsure).length + m.bonds.filter((b) => b.unsure).length;
 /** How far round the figures found the box goes, in points: as a hand draws one. */
 const PAD_PT = 6;
 
@@ -112,13 +133,46 @@ export function sidesOf(model: Model, arrows: readonly { x: number; y: number; a
   return sides;
 }
 
+/**
+ * A figure's box read as a picture of it (RT_DPI): drawn by the reader at that resolution, white under it, traced, the shapes laid
+ * back on the page and read with the PDF's own letters, as written - a structure, or why none. A page turned is not traced.
+ */
+async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn, variant: string, known: readonly GlyphShape[] = []): Promise<({ model: Model; scheme?: undefined } | { none: string }) & { pixels?: { line: number; bond: number; shaded: number } }> {
+  if (variant === "turned") return { none: "a page turned is not traced" };
+  const s = DPI! / 72;
+  const [x, y] = [Math.max(0, Math.floor(box[0] * s)), Math.max(0, Math.floor(box[1] * s))];
+  const [w, h] = [Math.ceil((box[2] - box[0]) * s), Math.ceil((box[3] - box[1]) * s)];
+  const { head, body } = await reader.ask({ op: "render", sha, page: 0, scale: s, x, y, w, h, packed: false });
+  if (head.ok === false) throw new Error(String(head.error));
+  let raw: Raw = { width: Number(head.w), height: Number(head.h), data: body };
+  if (SCAN) raw = asScan(raw, parseInt(sha.slice(0, 8), 16));
+  if (JPEG) raw = viaJpeg(raw, JPEG);
+  // (where the PDF's letters lie, in the picture's pixels: their ink left out, the letters read as written)
+  const given = TRACED_LETTERS ? [] : drawn.letters;
+  const drop = given.map((l) => [l.box[0] * s - x, l.box[1] * s - y, l.box[2] * s - x, l.box[3] * s - y] as [number, number, number, number]);
+  const t = tracePicture(raw, drop);
+  if ("none" in t) return t;
+  // (how the picture draws it, in its pixels: its line and its bond)
+  const pixels = { line: +t.line.toFixed(2), bond: +t.bond.toFixed(1), shaded: +t.shaded.toFixed(3) };
+  const shapes = onPage(t.shapes, 1 / s, x / s, y / s);
+  const read = readFigure({ paths: [], letters: given, pictures: [] }, (l) => readDrawnLabel(l, figureLabels).read, TRACED_LETTERS ? known : [], shapes);
+  if (!read.atoms.length || !read.bonds.length) return { none: "No structure was read in the picture.", pixels };
+  // (ink beside the structure read as nothing: the atom nearest it said)
+  for (const [i, said] of unreadInk(read, shapes, known)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];
+  const xs = read.atoms.map((a) => a.x);
+  const ys = read.atoms.map((a) => a.y);
+  const about = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  const { kept } = withoutOverBonded(modelOf(read, (px, py) => ({ sha256: sha, page: 0, x: px, y: py, bond: read.bond }), about));
+  return kept.atoms.length ? { model: kept, pixels } : { none: "As read, an atom has more bonds than it takes.", pixels };
+}
+
 it("reads every PDF back", async () => {
   const { molecules, reactions = [] } = JSON.parse(readFileSync(resolve(OUT, "corpus.json"), "utf8")) as { molecules: { name: string }[]; reactions?: { name: string }[] };
   const nameOf = new Map([...molecules, ...reactions].map((m) => [fileName(m.name), m.name]));
   const isReaction = new Set(reactions.map((r) => r.name));
   // (letters drawn as shapes are read against the system's letters, as the app reads them: glyphs.swift measures them - needed for
   // RT_OUTLINE; without them a figure's outlines are left unread, the app's own being drawn on a canvas)
-  const known = OUTLINE || existsSync(resolve(OUT, "known.json")) ? knownLetters(resolve(OUT, "known.json")) : undefined;
+  const known = OUTLINE || TRACED_LETTERS || existsSync(resolve(OUT, "known.json")) ? knownLetters(resolve(OUT, "known.json")) : undefined;
   const cache = resolve(OUT, "cache");
   mkdirSync(cache, { recursive: true });
   // (the reader keeps every PDF it is asked about open: started afresh every so often)
@@ -128,12 +182,14 @@ it("reads every PDF back", async () => {
   mkdirSync(resolve(READ, "figures"), { recursive: true });
   const only = process.env.ONLY?.toLowerCase().split(",");
   const presets = process.env.RT_PRESETS?.split(",");
+  const variants = process.env.RT_VARIANTS?.split(",");
   const read: Record<string, unknown>[] = [];
   for (const file of readdirSync(resolve(OUT, "pdf")).sort()) {
     const m = /^(.*)\.([a-z0-9]+)\.([a-z]+)\.pdf$/.exec(file);
     if (!m || !nameOf.has(m[1])) continue;
     if (only && !only.some((o) => file.toLowerCase().startsWith(o))) continue;
     if (presets && !presets.includes(m[2])) continue;
+    if (variants && !variants.includes(m[3])) continue;
     const bytes = readFileSync(resolve(OUT, "pdf", file));
     const sha = createHash("sha256").update(bytes).digest("hex");
     if (!existsSync(resolve(cache, `${sha}.pdf`))) copyFileSync(resolve(OUT, "pdf", file), resolve(cache, `${sha}.pdf`));
@@ -163,9 +219,14 @@ it("reads every PDF back", async () => {
         writeFileSync(resolve(READ, "figures", file.replace(/\.pdf$/, ".json")), JSON.stringify({ box, ...head }));
         // (RT_OUTLINE: its words drawn as outlines first, as a journal may print them - outline.ts - and read against the system's letters)
         const drawn = OUTLINE ? outlined(head as unknown as FigureDrawn, OUTLINE) : (head as unknown as FigureDrawn);
-        const got = figureFrom(drawn, sha, 0, known && lettersAsShapes(drawn) ? known : undefined);
+        const got = DPI ? await traced(reader, sha, box, drawn, m[3], known) : figureFrom(drawn, sha, 0, known && lettersAsShapes(drawn) ? known : undefined);
+        if ("pixels" in got && got.pixels) entry.pixels = got.pixels;
         if ("none" in got) entry.none = got.none;
         else {
+          entry.marked = markedOf(got.model);
+          // (what it says, each thing once: why it is marked)
+          const said = [...new Set([...got.model.atoms, ...got.model.bonds].flatMap((x) => x.unsure?.said ?? []))];
+          if (said.length) entry.said = said;
           entry.mol = structureFileText(got.model, "read.mol");
           if (isReaction.has(String(entry.name))) {
             const arrows = got.scheme?.arrows ?? [];
