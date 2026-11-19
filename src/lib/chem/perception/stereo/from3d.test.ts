@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { configuredFrom, FLAT_ALLENE, runsFrom3d, type Place } from "./from3d";
-import { FLAT_VOLUME_3D } from "./geometry";
+import { cisAt, configuredFrom, FLAT_ALLENE, runsFrom3d, senseAt, type Place } from "./from3d";
+import { FLAT_VOLUME_3D, HANDED } from "./geometry";
 import { cipIn3d } from "../../cip/in3d";
 
 /** A tetrahedron's four corners round a centre at the origin, a bond long: the first straight down, the other three round it above. */
@@ -85,5 +85,22 @@ describe("a configuration read from places", () => {
     expect(FLAT_ALLENE).toBe(0.5);
     expect(runsFrom3d(around, bonds, placed(20)).axes).toEqual([]);
     expect(runsFrom3d(around, bonds, placed(40)).axes).toHaveLength(1);
+  });
+
+  it("reads a centre's sense from its first three neighbours, and none under the tolerance its reader names", () => {
+    const [, br, cl, f] = corners(1);
+    expect(senseAt([0, 0, 0], [br, cl, f])).toBe(senseAt([0, 0, 0], [br, f, cl]) * -1);
+    expect(Math.abs(senseAt([0, 0, 0], [br, cl, f]))).toBe(1);
+    // (three neighbours nearly in a plane with the centre: a sense exactly, none at HANDED's size)
+    const flat: Place[] = [[1, 0, 0], [0, 1, 0], [-1, -1, 0.01]];
+    expect(senseAt([0, 0, 0], flat)).not.toBe(0);
+    expect(senseAt([0, 0, 0], flat, HANDED)).toBe(0);
+  });
+
+  it("reads a double bond's side: cis, trans, or none where an end group lies on its line", () => {
+    const [a, b]: Place[] = [[0, 0, 0], [1.34, 0, 0]];
+    expect(cisAt(a, b, [-0.7, 1.2, 0], [2.04, 1.2, 0])).toBe(true);
+    expect(cisAt(a, b, [-0.7, 1.2, 0], [2.04, -1.2, 0])).toBe(false);
+    expect(cisAt(a, b, [-0.7, 1.2, 0], [2.84, 0, 0])).toBe(null);
   });
 });
