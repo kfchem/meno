@@ -7,7 +7,8 @@ import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 import { abbreviationStructure, reversedLabel } from "../chem/abbreviations";
 import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
-import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
+import { chargeText, mostBonds, type Radical } from "../chem/molecule";
+import { hydrogenCounts } from "../chem/perception/hydrogens";
 import { isMetal } from "../layout/perceive";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
@@ -186,6 +187,12 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
     radicals[i] = undefined;
     return `${read.atoms[i].dots === 1 ? "A dot" : "Two dots"} by it, but its bonds leave it no unpaired electron: no radical is read.`;
   });
+  // (each atom's H by the core's one count - lib/chem/perception/hydrogens `hydrogenCounts`, over the orders read, a P's or an S's
+  //  valence chosen by its bonds to non-metals; a label's own H are what it is checked against, never given to it)
+  const counted = hydrogenCounts(
+    read.atoms.map((_, i) => ({ el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(radicals[i] ? { radical: radicals[i] } : {}) })),
+    read.bonds.map((b, k) => ({ a: b.a, b: b.b, order: orders[k] })),
+  );
   const atoms = read.atoms.map((a, i): StructureAtom => {
     const unsure = [...(a.unsure ?? [])];
     const label = labels[i];
@@ -195,7 +202,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
       else if (as !== a.label) unsure.splice(0, unsure.length, `Its letters are drawn as shapes: read as "${as}".`);
       const drawn = drawnHydrogens(as);
       if (label.read && drawn != null && els[i] !== "H") {
-        const left = implicitHydrogens(els[i], valence[i], charges[i], radicals[i]);
+        const left = counted[i];
         if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
     }
@@ -220,7 +227,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   });
   // a hashed bond whose narrow end is not drawn - its hashes even: a hashed line, read by the reader's one rule for it (perception/stereo/
   // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
-  const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) === 4;
+  const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + counted[i] === 4;
   const bonds = read.bonds.map((b, i): StructureBond => {
     const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
     if (b.either) {
@@ -249,7 +256,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   });
   // (an H drawn as an atom of its own, at the end of a bond, counted with its atom's hydrogens - an O's drawn apart from it, as its OH)
   const lone = (n: number) => els[n] === "H" && around[n].length === 1;
-  const hs = atoms.map((_, i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) + around[i].filter(lone).length);
+  const hs = atoms.map((_, i) => counted[i] + around[i].filter(lone).length);
   const kinds = atomKinds(atoms, bonds, hs, lone);
   // (four plain bonds lying as a plus on the page's axes, each within the reader's IN_LINE of level or upright: a Fischer projection's
   // cross, which states no configuration until the chemist says it is one)
