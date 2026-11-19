@@ -8,11 +8,14 @@
  * (chem/identityOf `identityInputOf`), its plain hydrogens counted on their atoms. Each place is asked only when it is asked
  * of, once; a centre two of whose groups are alike and hold no place sets nothing with no identity asked, and the rest are asked
  * of identity off the drawing thread (chem/identityOff): one not yet answered is offered by its shape, so the menu opens at once.
+ * A cage's atom (lib/chem/perception/stereo/units `cageAtoms`) is offered where the CIP labels it as drawn, whatever identity's
+ * turning says: camphor's bridgeheads, not quinuclidin-3-ol's C4 nor a bridgehead with no configuration drawn.
  */
 import type { IdentityInput } from "../../../../lib/chem/identity";
 import { symmetryClasses } from "../../../../lib/chem/perception/symmetry";
 import { identityKnown } from "./identityOff";
 import { candidates } from "../../../../lib/chem/perception/stereo/candidates";
+import { cageAtoms } from "../../../../lib/chem/perception/stereo/units";
 import { hydrogensFolded, plainHydrogenAtoms } from "../../../../lib/chem/perception/fold";
 import type { Model } from "../store/types";
 import { identityInputOf } from "./identityOf";
@@ -98,9 +101,19 @@ export function candidatesDrawn(part: Model): { atom: (id: number) => boolean; b
     }
     return true;
   };
+  // (a cage's atom - its configuration tied to the cage's other bridgehead's, so turned alone it makes no structure - is offered
+  //  where the CIP labels it as drawn: R, S, r or s; the CIP alone decides there, not identity's turning, the chemistry check's
+  //  ruling. Worked out off the drawing thread with the identities; not yet answered, offered by its shape)
+  let cagedOf: Set<number> | null = null;
+  const inCage = (at: number) => (cagedOf ??= cageAtoms(input)).has(at);
+  const labelledInCage = (at: number): boolean => {
+    if (!input.atoms[at].tetra) return false;
+    const said = identityKnown(input, "cage labels");
+    return !said || said.text.split(",").includes(String(at));
+  };
   const unit = (place: Place | undefined): boolean => {
     if (!place) return false;
-    if (!known.has(place)) known.set(place, setsSomething(input, around, order, place, classes, plain));
+    if (!known.has(place)) known.set(place, place.kind === "centre" && inCage(place.at) ? labelledInCage(place.at) : setsSomething(input, around, order, place, classes, plain));
     return known.get(place)!;
   };
   return { atom: (id) => unit(atoms.get(id)), bond: (id) => unit(bonds.get(id)) };

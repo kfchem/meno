@@ -33,12 +33,16 @@ describe("where a configuration can be and sets something, drawn", () => {
     expect(offered("OC(=O)[C@H](O)[C@@H](O)[C@H](O)C(=O)O").atoms).toEqual(["C3", "C5", "C7"]);
   });
 
-  it("charged and lone-pair centres of unlike groups: an ammonium, a sulfonium, an N-oxide, a phosphonium, Troeger's base's N", () => {
+  it("charged and lone-pair centres of unlike groups: an ammonium, a sulfonium, an N-oxide, a phosphonium", () => {
     expect(offered("C[N+](CC)(CCC)Cc1ccccc1").atoms).toEqual(["N1"]);
     expect(offered("C[S+](CC)c1ccccc1").atoms).toEqual(["S1"]);
     expect(offered("C[N+]([O-])(CC)c1ccccc1").atoms).toEqual(["N1"]);
     expect(offered("C[P+](CC)(c1ccccc1)Cc1ccccc1").atoms).toEqual(["P1"]);
-    expect(offered("Cc1ccc2c(c1)CN3c4ccc(C)cc4CN2C3").atoms).toEqual(["N8", "N17"]);
+  });
+
+  it("a cage's atom with no configuration drawn is not offered: the CIP gives it no label (Troeger's base's N, a cage's)", () => {
+    expect(offered("Cc1ccc2c(c1)CN3c4ccc(C)cc4CN2C3").atoms).toEqual([]);
+    expect(offered("C1CC2CCC1C2").atoms).toEqual([]);
   });
 
   it("a sulfone's S, a phosphate's P of two alike esters, PPh3's P: candidates by shape, none here", () => {
