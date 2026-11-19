@@ -535,7 +535,9 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   ring or outside one (`perception/kekule` `valenceOrders`): a carboxyl
   written with two aromatic C-O bonds is a C=O and a C-OH, and its OH
   turns as acetic acid's does; acetate's and a nitro group's ends turn
-  nothing.
+  nothing. Where they have no such form (a nitro group written without
+  its charges), no number is worked out: the molecule is set aside in
+  the core's own words, never counted with H nobody wrote.
 
   Two things are added to the rule, both measured:
   - **a ring that can flip is worth at least two hundred.** A ring's two
