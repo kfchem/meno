@@ -478,12 +478,22 @@ describe("a structure's box beside another a hydrogen bond joins it to: its labe
 });
 
 describe("a set emptied keeps no tall frame (backlog 232)", () => {
-  it("its last member gone, its frame goes back to a card wide and half a card high, its top-left where it was", () => {
+  it("a step's result set, its last member gone: back to a card wide and half a card high (an exit of no step on the page), its top-left where it was", () => {
     const doc = fitted();
+    doc.edit("made", (d) => markMade(d, 1, { step: 7, exit: "out", holds: "molecules" }));
     const was = frameOf(doc.getState());
     doc.edit("delete", (d) => ({ ...d, molecules3d: [] }));
     const now = frameOf(doc.getState());
     close(now, { x0: was.x0, x1: was.x0 + CARD_W, y0: was.y1 - CARD_H / 2, y1: was.y1 });
+  });
+
+  it("a chemist's set, its last member gone, keeps its frame: what is drawn into it again where it was joins it", () => {
+    const doc = fitted();
+    const was = frameOf(doc.getState());
+    doc.edit("delete", (d) => ({ ...d, molecules3d: [] }));
+    close(frameOf(doc.getState()), was);
+    doc.edit("place", (d) => addMolecule3d(d, mol(0, 0)));
+    expect(doc.getState().sets![0].members).toHaveLength(1);
   });
 
   it("a set left empty from the first is as it was made: never shrunk unasked", () => {

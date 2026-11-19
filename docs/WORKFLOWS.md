@@ -292,11 +292,11 @@ pointer does; put back by an undo, they glide back.
   of the gesture's step: one undo takes back the drag, the frame and what
   was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
-  it held; a set left empty stays, empty, until it is deleted - its frame
-  back to the size it had before it held anything (a step's "Not run yet"
-  frame, a card wide; a chemist's set, a card wide and half a card high),
-  its top-left corner where it was, never the tall frame of what it last
-  held;
+  it held; a set left empty stays, empty, until it is deleted. A step's
+  result set left empty - its step run on nothing, or its last member
+  taken - goes back to its "Not run yet" frame, its top-left corner where
+  it was, never the tall frame of what it last held; a chemist's set keeps
+  its frame, so that what is drawn into it again where it was joins it;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
   and structures drawn are not written to the workspace's file - only how
   many it held and their collection's hash - and opened again, the set

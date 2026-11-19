@@ -41,17 +41,18 @@ export function holdsToFit(set: WorkflowSet): boolean {
 }
 
 /**
- * Whether a set's frame is left over from what it no longer holds: a set that fits its members (`holdsToFit`) with none left - its last
- * member dragged out or deleted, or its step run on nothing (model `holdNothing`) - and nothing else a frame says.
+ * Whether a step's result set's frame is left over from what it no longer holds: one with no member left - its step run on nothing (model
+ * `holdNothing`), or its last member dragged out or deleted - and nothing else a frame says. A chemist's set keeps its frame emptied: what
+ * is drawn into it again, where it was, is its member (members `membersSettled`).
  */
 export function emptied(set: WorkflowSet): boolean {
-  return !set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread;
+  return !!set.made && !set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread;
 }
 
 /**
- * An emptied set's frame (`emptied`): as large as a frame made for it before it held anything - a step's exit's "Not run yet" frame, a card
- * wide and a card high, or half as high for an exit of one of its others (model `withExits`); a chemist's set, a card wide and half a card
- * high - kept where its top-left corner is, never the tall frame of what it last held (backlog 232, found in a GUI run).
+ * An emptied step's set's frame (`emptied`): as large as the frame made for it before it held anything - its exit's "Not run yet" frame,
+ * a card wide and a card high, or half as high for an exit of one of its others (model `withExits`) - kept where its top-left corner is,
+ * never the tall frame of what it last held (backlog 232, found in a GUI run).
  */
 export function emptyFrame(doc: WorkspaceDocument, set: WorkflowSet): Frame {
   const step = set.made && doc.steps?.find((s) => s.id === set.made!.step);
