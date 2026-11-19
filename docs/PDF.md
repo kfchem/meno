@@ -1560,7 +1560,18 @@ it where it lies out of view.
   level 7 after it are one run, CH37). A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
-  of its ring off; never a bond, nor a scheme's "+". A lone H at no
+  of its ring off; never a bond, nor a scheme's "+". A charge's sign set
+  alone by a label that reads as an atom or a group, a word of its own, is
+  that atom's too (2026-11-20). A minus - a "-", a minus sign or an en
+  dash, with its count where it has one (2-) - right over the label's
+  letters or under them, less than a letter's height off, as a mechanism
+  sets a borate's minus over the B of its Bpin; or beside the label, level
+  with it or set high, within four fifths of the label's height, with nothing
+  written on its other side within as much - a dash between two words is a
+  bond written between them. A plus only beside the label and set high, as
+  Py+ is: one over a word, under it or level beside it is a scheme's "+".
+  A charge drawn so lets the atom take the bonds it takes charged: a
+  borate's B its four. A lone H at no
   bond's end, a short line or two across the way to it from an atom by
   it, is that atom's H behind, its hash the rest hidden by the joint at
   the atom and by the H. A small round dot
