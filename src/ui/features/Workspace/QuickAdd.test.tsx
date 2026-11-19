@@ -21,17 +21,19 @@ function rows() {
   const first = html.match(/<div role="toolbar" aria-label="Add"[^>]*><div class="flex items-center gap-0.5">(.*?)<div class="mx-1/)?.[1] ?? "";
   const group = (name: string) => html.match(new RegExp(`<div role="group" aria-label="${name}"[^>]*>(.*?)</div>`))?.[1] ?? "";
   const names = (s: string) => [...s.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
-  return { first: names(first), scheme: names(group("Scheme")), marks: names(group("Marks on the page")) };
+  return { first: names(first), scheme: names(group("Scheme")), marks: names(group("Marks on the page")), projections: names(group("Projections")) };
 }
 
 describe("Quick Add", () => {
   it("has in its first row what makes a structure and a scheme's words and arrow, then two groups - each opening a row of its own (layout A, 2026-10-29)", () => {
-    const { first, scheme, marks } = rows();
-    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page", "Conversation"]);
+    const { first, scheme, marks, projections } = rows();
+    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page", "Projections", "Conversation"]);
     // (Scheme: the "+", the electron-pushing arrow, the catalytic cycle and the slide; one arrow on the page, the Arrow, in the first row)
     expect(scheme).toEqual(["Plus", "Electron-pushing arrow", "Catalytic cycle", "Slide"]);
     // (Marks on the page: the shapes - a rectangle, its corners rounded from its menu, an ellipse and a line - and the pen)
     expect(marks).toEqual(["Rectangle", "Ellipse", "Line", "Pen"]);
+    // (Projections: the solids put down as a drawing is made of them - the chair first)
+    expect(projections).toEqual(["Chair"]);
   });
 
   it("its rules and its SMILES field span the row whole: each icon, the gaps between them, the divider", () => {
@@ -45,6 +47,7 @@ describe("Quick Add", () => {
     expect(html).toMatch(new RegExp(`<form class="[^"]*border-t[^"]*" style="width:${row}px"`));
     expect(html).toMatch(new RegExp(`aria-label="Scheme" class="[^"]*border-t[^"]*" style="width:${row}px"`));
     expect(html).toMatch(new RegExp(`aria-label="Marks on the page" class="[^"]*border-t[^"]*" style="width:${row}px"`));
+    expect(html).toMatch(new RegExp(`aria-label="Projections" class="[^"]*border-t[^"]*" style="width:${row}px"`));
   });
 });
 
@@ -56,6 +59,7 @@ describe("Quick Add's groups", () => {
     expect(toggledPanel("none", "scheme")).toBe("scheme");
     expect(toggledPanel("scheme", "marks")).toBe("marks");
     expect(toggledPanel("marks", "marks")).toBe("none");
+    expect(toggledPanel("marks", "projections")).toBe("projections");
     expect(toggledPanel("smiles", "scheme")).toBe("scheme");
   });
 

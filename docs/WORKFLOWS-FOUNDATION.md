@@ -951,7 +951,15 @@ drawn, aromatic rings as one form.* What that means, plainly:
   each group hanging from the place alone, with no place or configuration
   in it) sets nothing whatever else is given: it carries no configuration
   in the identity, one drawn on it taken off, and is asked no more, with
-  no search of the whole structure. So its identity never turns on which
+  no search of the whole structure - so too a bridgehead of a small cage
+  two of whose bridges to the other bridgehead are alike
+  (bicyclo[2.2.2]octane's, quinuclidine's), the cage standing only one way:
+  every bridge of three atoms or fewer, a bound on the safe side, since
+  with four in,out isomers begin (bicyclo[4.4.1]undecane's); and, asked again until
+  nothing more settles, a place whose groups are alike but for places of
+  their own that settled first (tri-tert-butylmethanol). Two arms of a
+  ring are no cage (cis- and trans-1,4-dimethylcyclohexane), nor are
+  bridges to different atoms (tropine and pseudotropine). So its identity never turns on which
   way it was filled in, as it could where a search runs out of steps
   (Pd(PPh3)4). A double bond's cis or trans that sets nothing with the
   rest as given - its end's two groups alike while another place is open:
@@ -970,7 +978,10 @@ drawn, aromatic rings as one form.* What that means, plainly:
   oxide drawn R3P=O and drawn R3P(+)-O(-) is one structure, and so is a
   sulfoxide drawn S=O and S(+)-O(-): identity writes the uncharged form,
   a configuration at the P or S kept, so a P-chiral phosphine oxide's two
-  hands stay two. Never at N: an amine N-oxide and a nitro group keep
+  hands stay two. A phosphorus ylide likewise: Ph3P=CH2 drawn so and
+  drawn Ph3P(+)-CH2(-) is one structure (a carbanion of three groups on
+  a P+; Meno's own extension, at P only: a sulfonium ylide keeps its
+  charges). Never at N: an amine N-oxide and a nitro group keep
   their charges. The end atoms of one centre share their double bonds and
   their charge: a phosphate diester anion with its charge drawn on one
   oxygen or on the other is one structure, and its P, between two alike
@@ -985,6 +996,24 @@ drawn, aromatic rings as one form.* What that means, plainly:
   and a sulfinate ester keep theirs. Se and Te are the text's; As and Sb
   are Meno's own extension of it (P-93.2.2: "treated in the same
   manner");
+- **a racemate, "one or the other" and the drawn absolute are three
+  structures** (CTfile enhanced stereo: AND, OR and ABS groups, which
+  Meno reads from a V3000 molfile and draws as *and1*, *or1*, *abs*;
+  `grouped` in `src/lib/chem/identity.ts`). A structure with centres in
+  AND or OR groups is written as the stereoisomers it stands for: each
+  group's centres as drawn or all turned over together, an AND group's
+  two in the mixture, an OR group's one or the other. So a racemate drawn
+  as one hand or as the other is one structure, a meso form drawn with
+  its two centres in one AND group is the meso form, and each centre of
+  a diol in an AND group of its own is the mixture of all its
+  stereoisomers, whichever was drawn. A centre drawn absolute, or in no
+  group, is as drawn. This is what *Same as* in Enumerate and
+  Substituents, a record's key and a search for the same compound read;
+  a stereoisomer made in 3D, or a structure's mirror image, has one
+  configuration and reads no group. A group on a bond (an axis, a
+  double bond) is not read yet: the bond is as drawn. Past 256
+  stereoisomers to write (eight groups), the structure is written as
+  drawn and said not complete;
 - **a metal's isomers by which donors are across are two structures:**
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
