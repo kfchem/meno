@@ -1,34 +1,24 @@
 /**
- * A molecule in 3D turned during a frame - as one let go while turning is (utils/coast, FRAME_ORDER `turning`) - is drawn turned in
- * that frame (Molecules3D's `turnOf`, read by each Molecule3DView as it is placed), not in the next, once React has drawn the page
- * again: a frame shown with the turn of the frame before is a frame the turn stands still.
+ * A molecule in 3D let go while turning (utils/coast) coasts in the frame the shared frame turns it (useCoasting, at FRAME_ORDER
+ * `turning`), and the page's own view of it (Molecule3DView, reading Molecules3D's `turnOf` as it is placed) draws it so turned in
+ * that same frame - not in the next, once React has drawn the page again: a frame shown with the turn of the frame before is a
+ * frame the turn stands still. Drawn into a scene without WebGL; what is drawn read off the scene itself.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { act } from "react";
-import { _roots, createRoot, extend, useFrame, type RootState } from "@react-three/fiber";
+import { _roots, createRoot, extend, type RootState } from "@react-three/fiber";
 import { EditorProvider, storeOf, connectStoreToDocument } from "../store";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
 import type { Molecule3D, Turn3D } from "../store/types";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
-import { FRAME_ORDER } from "../utils/page";
+import type { Coast } from "../utils/coast";
 import Molecules3D from "./Molecules3D";
+import { useCoasting } from "./useCoasting";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 vi.mock("./WarmShaders3D", () => ({ default: () => null }));
-// (each molecule's view: as it is placed each frame, the turn its `turnOf` reads then, and the `turn` React last gave it)
-const placed = vi.hoisted(() => ({ frames: [] as { read: unknown; given: unknown }[] }));
-vi.mock("./Molecule3DView", async (actual) => {
-  const real = await actual<typeof import("./Molecule3DView")>();
-  const { useFrame: frame } = await import("@react-three/fiber");
-  const { FRAME_ORDER: order } = await import("../utils/page");
-  function Molecule3DView(p: { m: { id: number }; turn?: unknown; turnOf?: (id: number) => unknown }) {
-    frame(() => void placed.frames.push({ read: p.turnOf?.(p.m.id), given: p.turn }), order.molecules);
-    return null;
-  }
-  return { ...real, default: Molecule3DView };
-});
-
+vi.mock("../utils/occlusions", async (actual) => ({ ...(await actual<object>()), askOcclusion: () => new Promise(() => undefined) }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 extend(THREE as never);
 
@@ -59,25 +49,41 @@ const ethane: Omit<Molecule3D, "id"> = {
 const mounted: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const unmount of mounted.splice(0)) await unmount();
-  placed.frames.length = 0;
+
   vi.unstubAllGlobals();
 });
 
-describe("a molecule turned during a frame", () => {
-  it("is drawn turned in that frame - its view reads the turn as it is placed, after the turn and before React draws the page again", async () => {
-    vi.stubGlobal("window", { addEventListener: () => undefined, removeEventListener: () => undefined, setTimeout, clearTimeout });
+/** Whether something in the scene is turned as `turn` is: the molecule's view, placed. */
+const drawnTurned = (scene: THREE.Object3D, turn: Turn3D | undefined) => {
+  if (!turn) return false;
+  const want = new THREE.Quaternion(...turn);
+  let found = false;
+  scene.traverse((o) => void (o.quaternion.angleTo(want) < 1e-6 && (found = true)));
+  return found;
+};
+
+describe("a molecule let go while turning", () => {
+  it("is drawn, frame by frame, as the frame that turns it leaves it - not as the frame before left it", async () => {
+    vi.stubGlobal("window", { addEventListener: () => undefined, removeEventListener: () => undefined, setTimeout, clearTimeout, devicePixelRatio: 1 });
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
     const doc = createWorkspaceDocument();
     const store = storeOf(doc);
     connectStoreToDocument(store, doc);
     doc.edit("add", (d) => addMolecule3d(d, ethane));
     const id = store.getState().molecules3d[0].id;
-    const turned: Turn3D = [0, Math.sin(0.1), 0, Math.cos(0.1)];
-    // (a turn set in the frame, where a coast is worked out: utils/coast)
-    let turnNow = false;
-    function Turning() {
-      useFrame(() => {
-        if (turnNow) store.getState().setTurn3d(id, turned);
-      }, FRAME_ORDER.turning);
+    // (its coast, as the page keeps one: by the molecule's id, turned in the store)
+    const coasts = new Map<number, Coast>();
+    function Coasting() {
+      useCoasting(
+        () => coasts,
+        (key, axis, angle) => {
+          const was = store.getState().turns3d[key];
+          const q = (was ? new THREE.Quaternion(...was) : new THREE.Quaternion()).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle));
+          store.getState().setTurn3d(key, [q.x, q.y, q.z, q.w] as Turn3D);
+        },
+        () => STYLE_3D.turnDamping,
+      );
       return null;
     }
     const canvas = { style: {}, width: 800, height: 600, addEventListener: () => undefined, removeEventListener: () => undefined } as unknown as HTMLCanvasElement;
@@ -87,18 +93,25 @@ describe("a molecule turned during a frame", () => {
       root.render(
         <EditorProvider tabId="t" document={doc}>
           <Molecules3D style={STYLE_3D} />
-          <Turning />
+          <Coasting />
         </EditorProvider>,
       );
     });
     mounted.push(() => act(async () => void root.unmount()));
     const state = (_roots as unknown as Map<HTMLCanvasElement, { store: { getState(): RootState } }>).get(canvas)!.store.getState();
-    turnNow = true;
-    // (one frame, React not let draw the page within it)
-    state.advance(performance.now());
-    const frame = placed.frames[placed.frames.length - 1];
-    expect(frame.read).toEqual(turned);
-    // (what React gave the view is the turn of the frame before: drawn from it, the frame would have stood still)
-    expect(frame.given).toBeUndefined();
+    const start = performance.now();
+    coasts.set(id, { axis: new THREE.Vector3(0, 1, 0), speed: 6, at: start });
+    const seen: Turn3D[] = [];
+    for (let k = 1; k <= 4; k++) {
+      // (one frame; React let draw the page only between frames, as it is)
+      state.advance(start + k * (1000 / 60));
+      const now = store.getState().turns3d[id];
+      expect(now, `frame ${k}`).toBeDefined();
+      expect(drawnTurned(state.scene, now), `frame ${k}`).toBe(true);
+      seen.push(now!);
+      await act(async () => undefined);
+    }
+    // (turned on each frame, never the same turn twice: the coast kept from one frame to the next)
+    for (let k = 1; k < seen.length; k++) expect(new THREE.Quaternion(...seen[k]).angleTo(new THREE.Quaternion(...seen[k - 1]))).toBeGreaterThan(1e-4);
   });
 });

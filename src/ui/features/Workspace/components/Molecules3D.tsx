@@ -23,7 +23,8 @@ import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
 import { useProtonationMark } from "../chem/protonate";
 import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";
-import { coastFrame, coastFrom, type Coast } from "../utils/coast";
+import { coastFrom, type Coast } from "../utils/coast";
+import { useCoasting } from "./useCoasting";
 import { guideMove } from "../utils/guiding";
 import { selectionScheme } from "../utils/selectionScheme";
 import { setMembers } from "../workflow/entries";
@@ -613,7 +614,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         // over the last moves, slowing as it goes
         const took = g.recent.reduce((a, r) => a + r.dt, 0);
         const speed = g.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
-        const coast = coastFrom(g.axis, speed, g.t, e.timeStamp);
+        const coast = coastFrom(g.axis, speed, g.t, e.timeStamp, performance.now());
         if (coast) for (const id of g.group) spins.current.set(id, { ...coast });
       }
       swallowClick();
@@ -726,29 +727,29 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     };
   }, [store, invalidate]);
 
-  // a molecule let go while turning turns on, slowing to a stop; one turning once round, round (utils/turnOnce) - before
-  // the molecules are placed, so that each is drawn as it is turned this frame, not as it was the frame before
+  // one turning once round, round (utils/turnOnce) - before the molecules are placed, so that each is drawn as it is
+  // turned this frame, not as it was the frame before
   useFrame(() => {
-    if (turningOnce(store)) {
-      stepTurnsOnce(store, performance.now(), new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion));
-      movedUnderPointer(camera);
-      invalidate();
-    }
-    if (!spins.current.size) return;
-    const now = performance.now();
-    for (const [id, s] of spins.current) {
-      const { angle, next } = coastFrame(s, now, style.turnDamping);
-      const was = store.getState().turns3d[id];
-      const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();
-      q.premultiply(new THREE.Quaternion().setFromAxisAngle(s.axis, angle)).normalize();
-      store.getState().setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
-      if (next) spins.current.set(id, next);
-      else spins.current.delete(id);
-    }
-    // (turning on under a pointer resting on it: the atom under it changes)
+    if (!turningOnce(store)) return;
+    stepTurnsOnce(store, performance.now(), new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion));
     movedUnderPointer(camera);
     invalidate();
   }, FRAME_ORDER.turning);
+  // a molecule let go while turning turns on, slowing to a stop (utils/coast) - drawn in the frame that turns it
+  const styleNow = useRef(style);
+  styleNow.current = style;
+  useCoasting(
+    () => spins.current,
+    (id, axis, angle) => {
+      const was = store.getState().turns3d[id];
+      const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();
+      q.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
+      store.getState().setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
+    },
+    () => styleNow.current.turnDamping,
+    // (turning on under a pointer resting on it: the atom under it changes)
+    () => movedUnderPointer(camera),
+  );
 
   // a list opened under a molecule with no room for it below: the view
   // glides - zooming out, where it must - until the molecule and the list,

@@ -11,8 +11,8 @@ import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
 import { FOV, FRAMING_TAU, framedAt } from "./framing";
 import { idleClockWhileSeen } from "./idleClock";
 import { markTurning } from "./sampleTurn";
-import { coastFrame, coastFrom, type Coast } from "../Workspace/utils/coast";
-import { FRAME_ORDER } from "../Workspace/utils/page";
+import { coastFrom, type Coast } from "../Workspace/utils/coast";
+import { useCoasting } from "../Workspace/components/useCoasting";
 
 // --- Preview -------------------------------------------------------------------
 
@@ -100,7 +100,8 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
   // (how it is turned: read by the view as each frame is drawn - a turn, by hand or its own, draws the frame alone)
   const turn = useRef(new THREE.Quaternion(...SAMPLE_TURN));
   const { gl, invalidate, camera, scene, raycaster } = useThree();
-  const spin = useRef<Coast | null>(null);
+  // (let go while turning, its coast: the one sample's, under its one key)
+  const spin = useRef(new Map<0, Coast>());
   const styleRef = useRef(style);
   styleRef.current = style;
   const tapRef = useRef(onTap);
@@ -138,7 +139,7 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       held.current = true;
       own.current = 0;
       dom.setPointerCapture(e.pointerId);
-      spin.current = null;
+      spin.current.clear();
       drag = { x: e.clientX, y: e.clientY, t: e.timeStamp, recent: [], axis: new THREE.Vector3(0, 1, 0), from: { x: e.clientX, y: e.clientY }, moved: false };
     };
     const onMove = (e: PointerEvent) => {
@@ -173,7 +174,8 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       }
       const took = drag.recent.reduce((a, r) => a + r.dt, 0);
       const speed = drag.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
-      spin.current = coastFrom(drag.axis, speed, drag.t, e.timeStamp);
+      const coast = coastFrom(drag.axis, speed, drag.t, e.timeStamp, performance.now());
+      if (coast) spin.current.set(0, coast);
       drag = null;
       setCursor(dom, anywhere || onMolecule(e) ? "turn" : null);
       invalidate();
@@ -200,7 +202,7 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     const dom = gl.domElement;
     let onScreen = true;
     const clock = idleClockWhileSeen((d) => {
-      if (held.current || spin.current) {
+      if (held.current || spin.current.size) {
         own.current = 0;
         return;
       }
@@ -227,16 +229,12 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     };
   }, [idle, gl, invalidate, turnBy]);
 
-  // let go while turning, it turns on, slowing as the style says (utils/coast) - before the view reads its turn, so that it is drawn
-  // as it is turned this frame
-  useFrame(() => {
-    const s = spin.current;
-    if (!s) return;
-    const { angle, next } = coastFrame(s, performance.now(), styleRef.current.turnDamping);
-    turnBy(s.axis, angle);
-    spin.current = next;
-    invalidate();
-  }, FRAME_ORDER.turning);
+  // let go while turning, it turns on, slowing as the style says - drawn in the frame that turns it (Workspace/components/useCoasting)
+  useCoasting(
+    () => spin.current,
+    (_, axis, angle) => turnBy(axis, angle),
+    () => styleRef.current.turnDamping,
+  );
 
   return (
     <Molecule3DView

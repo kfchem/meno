@@ -39,7 +39,8 @@ import { style3dOf } from "../style3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { lookOf, onMolecule, poseOf, solidOf } from "../utils/molecule3d";
 import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";
-import { coastFrame, coastFrom, type Coast } from "../utils/coast";
+import { coastFrom, type Coast } from "../utils/coast";
+import { useCoasting } from "../components/useCoasting";
 import { isPinch, wheelReader } from "../../../../lib/input/wheel";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { MOV_PX } from "../constants";
@@ -267,7 +268,7 @@ export default function Presenter() {
           if (g.on != null) {
             const took = g.recent.reduce((a, x) => a + x.dt, 0);
             const speed = g.recent.reduce((a, x) => a + x.angle, 0) / (Math.max(took, 16) / 1000);
-            const coast = coastFrom(g.axis, speed, g.t, e.timeStamp);
+            const coast = coastFrom(g.axis, speed, g.t, e.timeStamp, performance.now());
             if (coast) r.spins.set(g.on, coast);
             invalidate();
           }
@@ -567,21 +568,6 @@ export default function Presenter() {
       }
     }
     cam.updateProjectionMatrix();
-    // molecules let go while turning, turning on and slowing
-    if (r.spins.size) {
-      const damping = style3dOf(store.getState()).turnDamping;
-      const now = performance.now();
-      for (const [id, sp] of r.spins) {
-        const { angle, next } = coastFrame(sp, now, damping);
-        const was = st.turns3d[id];
-        const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();
-        q.premultiply(new THREE.Quaternion().setFromAxisAngle(sp.axis, angle)).normalize();
-        st.setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
-        if (next) r.spins.set(id, next);
-        else r.spins.delete(id);
-      }
-      moving = true;
-    }
     // the veil over the screen about the slide's frame: there at a slide that does not show the page about it - and on the
     // way from one to the next, the frame black about all along (the maintainer, 2026-10-19: it went white as the view
     // went, and black again as it came), unless both show the page about them; gone while the view is moved freely
@@ -610,6 +596,17 @@ export default function Presenter() {
     }
     if (moving) invalidate();
   }, FRAME_ORDER.camera);
+  // molecules let go while turning, turning on and slowing: drawn in the frame that turns them (../components/useCoasting)
+  useCoasting(
+    () => run.current?.spins,
+    (id, axis, angle) => {
+      const was = store.getState().turns3d[id];
+      const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();
+      q.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
+      store.getState().setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
+    },
+    () => style3dOf(store.getState()).turnDamping,
+  );
 
   return null;
 }

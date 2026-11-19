@@ -624,13 +624,15 @@ What is left before the editor counts as finished, and in what order, is in
     it and all that is selected. Let go while turning, it coasts
     (`utils/coast`): on from the pointer's last move, a moment held still
     before the release counted as a frame at most, each frame turning it as
-    far as it went since the one before. The coast is worked out each frame
-    before the molecules are placed (`FRAME_ORDER.turning`), and each view
-    reads its turn from the store as it is placed (`turnOf`), so a coasting
-    molecule is drawn in the frame that turns it, as a dragged one is. A
-    turn that waited for React to draw the page again showed each frame
-    the frame before's, and stood still for one frame as the drag became a
-    coast. A long press selects it, the outline
+    far as it went since the one before, its time kept in the frames'
+    clock. The coast is worked out each frame before the molecules are
+    placed (`components/useCoasting`, at `FRAME_ORDER.turning`: the page's,
+    a talk's and Settings' preview's alike), as a molecule turning once
+    round is (`utils/turnOnce`), and each view reads its turn from the
+    store as it is placed (`turnOf`). So a coasting molecule is drawn in
+    the frame that turns it, as a dragged one is. A turn that waited for
+    React to draw the page again showed each frame the frame before's, and
+    stood still for one frame as the drag became a coast. A long press selects it, the outline
     spreading from the atom pressed on; a click chooses an atom or a
     bond. The selection's handle (`Selection2D`) turns molecules alone as
     one body in 3D, and with a drawing in its plane.

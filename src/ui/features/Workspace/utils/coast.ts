@@ -24,11 +24,14 @@ const FRAME_MS = 1000 / 60;
 export type Coast = { axis: THREE.Vector3; speed: number; at: number };
 
 /**
- * The coast of a molecule let go at `now` (ms) after its pointer's last move at `moved`, turning at
- * `speed` (rad/s) - or null where it stays still: let go too long after its last move, or too slowly.
+ * The coast of a molecule let go at `now` after its pointer's last move at `moved` (ms, both the
+ * pointer events' own times), turning at `speed` (rad/s) - or null where it stays still: let go too long
+ * after its last move, or too slowly. `clock` is the frames' time at the release (`performance.now()`):
+ * the coast's time is kept in the frames' clock, never mixing an event's time with a frame's.
  */
-export function coastFrom(axis: THREE.Vector3, speed: number, moved: number, now: number): Coast | null {
-  return now - moved < COAST_HELD_MS && speed > COAST_STILL ? { axis, speed, at: Math.max(moved, now - FRAME_MS) } : null;
+export function coastFrom(axis: THREE.Vector3, speed: number, moved: number, now: number, clock: number): Coast | null {
+  if (now - moved >= COAST_HELD_MS || speed <= COAST_STILL) return null;
+  return { axis, speed, at: clock - (now - Math.max(moved, now - FRAME_MS)) };
 }
 
 /**
@@ -37,7 +40,22 @@ export function coastFrom(axis: THREE.Vector3, speed: number, moved: number, now
  * is slower than COAST_STILL: it has stopped.
  */
 export function coastFrame(c: Coast, now: number, damping: number): { angle: number; next: Coast | null } {
+  // (a frame's time before the coast's own - a clock stepped back - turns it not at all, never backwards)
   const dt = Math.max(0, now - c.at) / 1000;
   const speed = c.speed * Math.pow(1 - damping, dt * 60);
-  return { angle: c.speed * dt, next: speed < COAST_STILL ? null : { ...c, speed, at: now } };
+  return { angle: c.speed * dt, next: speed < COAST_STILL ? null : { ...c, speed, at: Math.max(now, c.at) } };
+}
+
+/**
+ * One frame at `now` of every coast in `coasts`, by key: each turned (`turn`) as far as it went, kept for
+ * the next frame - or let go, once it has stopped. Whether any is left to turn on.
+ */
+export function coastsFrame<K>(coasts: Map<K, Coast>, now: number, damping: number, turn: (key: K, axis: THREE.Vector3, angle: number) => void): boolean {
+  for (const [key, c] of coasts) {
+    const { angle, next } = coastFrame(c, now, damping);
+    turn(key, c.axis, angle);
+    if (next) coasts.set(key, next);
+    else coasts.delete(key);
+  }
+  return coasts.size > 0;
 }
