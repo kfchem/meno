@@ -423,7 +423,10 @@ Read by rule, besides, as whole molecules:
   (`metalSaltStructure`, `src/lib/chem/condensed.ts`). Mercury(I) is the
   Hg2²⁺ ion, its two Hg bonded, each +1 (Hg2(NO3)2, Hg2SO4); Hg(NO3)2 is
   Hg²⁺. HgNO3, mercury(I)'s empirical formula, is left unread: one Hg⁺
-  alone is no ion, and the formula does not say the pair. A formula that
+  alone is no ion, and the formula does not say the pair. Mercury(I)'s
+  halides and its acetate, read as a complex's formula, are X-Hg-Hg-X:
+  Hg2Cl2 (calomel) and Hg2(OAc)2 have the Hg-Hg bond, one group on each
+  Hg (`complexStructure`, `src/lib/chem/ligands.ts`). A formula that
   one of these readers would read as two O bonded, where the label does
   not write them together (OO, or O2 as a peroxo ligand in brackets), is
   not read, and that is said as the label is typed: MoO2NO3 is no
@@ -432,10 +435,9 @@ Read by rule, besides, as whole molecules:
   oxo formula that would take its metal past its highest oxidation state,
   two for each oxo and one for each other group by a single bond (Ti, Zr,
   Hf +4; V, Nb, Ta +5; Cr, Mo, W +6; Mn, Tc, Re +7; Ru, Os +8: MoO3Cl2
-  would be Mo +8), is not read as
-  written either, and said so: CrO5 is a compound, CrO(O2)2 with two
-  peroxo ligands, which the formula's O count does not say. A
-  halide (CuCl2), a
+  would be Mo +8), is not read as written either, and said so: CrO5 is a
+  compound, CrO(O2)2 with two peroxo ligands, which the formula's O count
+  does not say. A halide (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
 - an ion written alone, a counter-ion set beside a complex or a salt: an
