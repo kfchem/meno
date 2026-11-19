@@ -160,22 +160,38 @@ const axisHeld = (f: readonly number[], x: ConfiguredAxis) => torsionSense(place
 const runHeld = (f: readonly number[], x: ConfiguredRun) => sideOfLine(placeOf(f, x.atoms[0]), placeOf(f, x.atoms[1]), placeOf(f, x.refs[0]), placeOf(f, x.refs[1])) > 0 === x.cis;
 
 /**
- * Of conformers made of a stereoisomer that gives an axis or an odd run its configuration (Meno's own, never the plugin's to give:
- * its toolkit embeds either way), those whose frames have it - each frame kept or not with its energies - and how many were set aside,
- * said; null where none has it: that stereoisomer cannot be made in 3D. `c` itself where it gives none.
+ * Of conformers made of a stereoisomer that gives an axis, an odd run, or a centre of three bonds and a lone pair its configuration -
+ * an axis's and a run's Meno's own, never the plugin's to give; a cage's bridgehead N's or a ring's N the toolkit's embedding does not
+ * hold (MEASURED: Troeger's base's two N each way about half the time) - those whose frames have it, each frame kept or not with its
+ * energies, and how many were set aside and where, said; null where none has it: that stereoisomer cannot be made in 3D (Troeger's
+ * base given in,out never comes back so). `c` itself where it gives none. A centre of three is only ever one the candidates hold, so an
+ * amine's N, which inverts, is never one (the chemistry check's ruling). `part`, where given, names the atoms said (`N5`).
  */
-export function bySense<T extends Pick<Conformers, "frames" | "energies" | "modelEnergies" | "how">>(c: T, isomer: IsomerConfiguration): T | null {
-  if (!isomer.axes?.length && !isomer.cumulated?.length) return c;
-  const keep = c.frames.map((f) => (isomer.axes ?? []).every((x) => axisHeld(f, x)) && (isomer.cumulated ?? []).every((x) => runHeld(f, x)));
+export function bySense<T extends Pick<Conformers, "frames" | "energies" | "modelEnergies" | "how">>(c: T, isomer: IsomerConfiguration, part?: Model): T | null {
+  const pyramids = isomer.centres.filter((x) => x.neighbours.length === 3);
+  if (!isomer.axes?.length && !isomer.cumulated?.length && !pyramids.length) return c;
+  const pyramidHeld = (f: readonly number[], x: (typeof pyramids)[number]) =>
+    volumeSign(placeOf(f, x.neighbours[0]), placeOf(f, x.neighbours[1]), placeOf(f, x.neighbours[2]), placeOf(f, x.atom), EXACT) === x.sense;
+  const turned = c.frames.map((f) => (isomer.axes ?? []).every((x) => axisHeld(f, x)) && (isomer.cumulated ?? []).every((x) => runHeld(f, x)));
+  const pyramided = c.frames.map((f) => pyramids.every((x) => pyramidHeld(f, x)));
+  const keep = c.frames.map((_, k) => turned[k] && pyramided[k]);
   const kept = keep.filter(Boolean).length;
   if (!kept) return null;
   const pick = <V,>(xs: readonly V[] | undefined) => xs && xs.filter((_, k) => keep[k]);
-  const aside = c.frames.length - kept;
+  const offTurned = turned.filter((t) => !t).length;
+  const offPyramid = c.frames.filter((_, k) => turned[k] && !pyramided[k]).length;
+  const inputAtoms = part ? identityInputOf(part).input.atoms : undefined;
+  const name = (i: number) => `${inputAtoms?.[i]?.el ?? "atom "}${i + 1}`;
+  const at = pyramids.filter((x) => c.frames.some((f) => !pyramidHeld(f, x))).map((x) => name(x.atom));
   return {
     ...c,
     frames: pick(c.frames)!,
     ...(c.energies ? { energies: pick(c.energies) } : {}),
     ...(c.modelEnergies ? { modelEnergies: pick(c.modelEnergies) } : {}),
-    how: [...(c.how ?? []), ...(aside ? [{ label: "Stereo", text: `${aside} of ${c.frames.length} embedded with the other configuration at its axis or run: set aside` }] : [])],
+    how: [
+      ...(c.how ?? []),
+      ...(offTurned ? [{ label: "Stereo", text: `${offTurned} of ${c.frames.length} embedded with the other configuration at its axis or run: set aside` }] : []),
+      ...(offPyramid ? [{ label: "Stereo", text: `${offPyramid} of ${c.frames.length} came out as the mirror form at ${at.join(", ")}: set aside` }] : []),
+    ],
   };
 }

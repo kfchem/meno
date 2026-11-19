@@ -48,3 +48,42 @@ describe("conformers kept by the sense of an axis asked for", () => {
     expect(bySense(made, cis(false))!.energies).toEqual([-2]);
   });
 });
+
+describe("conformers kept by the sense of a ring N asked for (225, the chemistry check's ruling)", () => {
+  // (two N, atoms 0 and 4, each with three neighbours (1, 2, 3 and 5, 6, 7) set as a pyramid pointing either way: `up` the sign of the
+  //  volume its three span about it - as a Troeger's base's two bridgehead N, which the toolkit embeds each way about half the time)
+  const pyramid = (centre: number, up: 1 | -1) => [0, 0, 0, 1, 0, -0.3 * up, -0.5, 0.87, -0.3 * up, -0.5, -0.87, -0.3 * up].map((v, k) => v + (k % 3 === 0 ? centre : 0));
+  const frame = (a: 1 | -1, b: 1 | -1) => [...pyramid(0, a), ...pyramid(10, b)];
+  const asked = (a: 1 | -1, b: 1 | -1) => ({
+    centres: [
+      { atom: 0, neighbours: [1, 2, 3], sense: a },
+      { atom: 4, neighbours: [5, 6, 7], sense: b },
+    ],
+    doubles: [],
+  });
+  const n2: Model = {
+    atoms: ["N", "C", "C", "C", "N", "C", "C", "C"].map((el, i) => ({ id: i + 1, el, x: i, y: 0, r: 0.9 })),
+    bonds: [[1, 2], [1, 3], [1, 4], [5, 6], [5, 7], [5, 8]].map(([a, b], k) => ({ id: 20 + k, a, b, order: 1 as const })),
+  };
+  // (the sign `pyramid(_, 1)` makes, read as the check reads it)
+  const plus = bySense({ frames: [frame(1, 1)], how: [] }, asked(1, 1)) ? (1 as const) : (-1 as const);
+  const minus = (plus === 1 ? -1 : 1) as 1 | -1;
+
+  it("keeps every frame as asked at both N, says how many came out as the mirror form and where", () => {
+    const c = { frames: [frame(1, -1), frame(-1, 1), frame(1, -1)], energies: [-1, -2, -3], how: [] };
+    const kept = bySense(c, asked(plus, minus), n2)!;
+    expect(kept.frames).toEqual([frame(1, -1), frame(1, -1)]);
+    expect(kept.energies).toEqual([-1, -3]);
+    expect(kept.how).toEqual([{ label: "Stereo", text: "1 of 3 came out as the mirror form at N1, N5: set aside" }]);
+  });
+
+  it("given a form no frame has (Troeger's base in,out): none kept - it cannot be made in 3D", () => {
+    expect(bySense({ frames: [frame(1, -1), frame(-1, 1)], how: [] }, asked(plus, plus), n2)).toBeNull();
+  });
+
+  it("nothing set aside where every frame is as asked (quinuclidin-3-ol's N, its cage holding it); an amine's N, never a centre, no filter", () => {
+    const c = { frames: [frame(1, 1), frame(1, 1)], how: [] };
+    expect(bySense(c, asked(plus, plus), n2)!.how).toEqual([]);
+    expect(bySense(c, { centres: [], doubles: [] }, n2)).toBe(c);
+  });
+});

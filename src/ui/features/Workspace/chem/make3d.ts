@@ -769,9 +769,9 @@ export async function conformersOf(
   }
   // (of one that gives an axis or a run its configuration, the conformers that have it - chem/pageMirror `bySense`: none, and it cannot
   //  be made in 3D, said on the others)
-  const sensed = each.map((c, i) => c && bySense(c, made.isomers[i]));
+  const sensed = each.map((c, i) => c && bySense(c, made.isomers[i], block.part));
   const none = sensed.filter((c, i) => each[i] && !c).length;
-  const noneRow = none ? [{ label: STEREO_ROW, text: `${none} stereoisomer${none === 1 ? "" : "s"} cannot be made in 3D: none came back with the configuration asked at its axis or run` }] : [];
+  const noneRow = none ? [{ label: STEREO_ROW, text: `${none} stereoisomer${none === 1 ? "" : "s"} cannot be made in 3D: none came back with the configuration asked at its axis, run or ring N` }] : [];
   const got = sensed.flatMap((c, i) => (c ? [{ ...c, how: [...(c.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i), ...notKeptRows(c, block.part, made.isomers[i]), ...noneRow, ...(c.how ?? []).filter((h) => h.label === STEREO_ROW && /set aside$/.test(h.text))] }] : []));
   // (which of each one's stand, by the drawing's checks - a reflection's lengths and angles are its twin's; and a structure of
   //  more than one part, its parts side by side - chem/partsApart)
@@ -899,7 +899,7 @@ export async function conformersGrowing(
   // (what is said of each one's stereo, its rows of how it was made - chem/groupHalves)
   const withRows = (c: Conformers, i: number): Conformers => {
     // (of one that gives an axis or a run its configuration, those that have it - none, and the read-back says so: chem/pageMirror)
-    const s = bySense(c, made.isomers[i]) ?? c;
+    const s = bySense(c, made.isomers[i], block.part) ?? c;
     return { ...s, how: [...(s.how ?? []).filter((h) => h.label !== STEREO_ROW), ...stereoRows(made, i), ...notKeptRows(s, block.part, made.isomers[i]), ...(s.how ?? []).filter((h) => h.label === STEREO_ROW && /set aside$/.test(h.text))] };
   };
   // (a group's half that is the mirror image of one before it: that one as the page shows it, reflected - its R and S read anew - never
