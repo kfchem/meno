@@ -1532,9 +1532,15 @@ All hover-based, as above.
   **The configuration kept.** What a structure states is kept on its own
   atoms and bonds, by id (`Atom.config`, `Bond.config`;
   configuration/kept): each centre's neighbours and sense, each double
-  bond's two refs and whether they are on one side, each axis's sense;
-  "open" where the drawing says it is not known; unread, with why, where
-  its marks say nothing readable. It is kept after each change, in the
+  bond's two refs and whether they are on one side, each axis's two refs -
+  at each end the other neighbour its sense is taken against - and that
+  sense; "open" where the drawing says it is not known; unread, with why,
+  where its marks say nothing readable. Every atom a unit names is kept by
+  id, so a renumbering - a paste - takes its meaning along: an axis's sense
+  kept alone, against whichever neighbour had the lower id, would name the
+  other hand once the ids changed. A unit whose two ends are not bonded to
+  each other - an allene's axis, an odd cumulene's cis or trans - is kept
+  on the first bond of its run, its ends named. It is kept after each change, in the
   change's own step, so that undo takes it back with the drawing - and a
   drawing just opened keeps it with the first change made to it, no step
   of its own. The note says what an edit changed against what is kept:

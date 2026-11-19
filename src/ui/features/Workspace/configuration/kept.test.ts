@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
-import { createWorkspaceDocument } from "../document";
+import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { readDrawn, recordText } from "../utils/copyPaste";
-import { keptBondRead, keptCentreRead } from "./kept";
+import { keptBondMoved, keptBondRead, keptCentreMoved, keptCentreRead, keptFrom, keptReading, withKept } from "./kept";
 import { notesOf, watchConfiguration } from "./watch";
-import { configurationChanges } from "./changes";
+import { configurationChanges, readingOf } from "./changes";
 import { chair } from "../../../../lib/chem/perception/projection/solids";
 import { drawn } from "../../../../lib/chem/perception/projection/views";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
@@ -207,5 +207,79 @@ describe("known answers of the chemistry check (part 15, phase 2)", () => {
     await vi.runAllTimersAsync();
     expect(notes()).toEqual([]);
     stop();
+  });
+});
+
+describe("an axis kept with the neighbours its sense is taken against", () => {
+  /** `m` with its atoms renumbered (`to`, by id), its bonds' ends and its kept configuration with them - as a paste renumbers a copy. */
+  function renumbered(m: Model, to: (id: number) => number): Model {
+    const map = new Map(m.atoms.map((a) => [a.id, to(a.id)]));
+    return {
+      atoms: m.atoms.map(({ config, ...a }) => {
+        const k = config && keptCentreMoved(config, map);
+        return { ...a, id: to(a.id), ...(k ? { config: k } : {}) };
+      }),
+      bonds: m.bonds.map(({ config, ...b }) => {
+        const k = config && keptBondMoved(config, map);
+        return { ...b, a: to(b.a), b: to(b.b), ...(b.narrow != null ? { narrow: to(b.narrow) } : {}), ...(k ? { config: k } : {}) };
+      }),
+    };
+  }
+  /** At one end of `m`'s axis, its two other neighbours' ids swapped: which of them has the lower id is the other way round. */
+  function swappedAtOneEnd(m: Model): (id: number) => number {
+    const [key] = [...readingOf(m).said.axes.keys()];
+    const [p, q] = key.split(",").map(Number);
+    const near = (x: number) => m.bonds.flatMap((b) => (b.a === x ? [b.b] : b.b === x ? [b.a] : []));
+    // (an end's other neighbours: not the other end, nor what runs on to it - an allene's middle carbon)
+    const [r, t] = near(p).filter((n) => n !== q && !near(n).includes(q));
+    return (id) => (id === r ? t : id === t ? r : id);
+  }
+  const allene = () => drawnFromSmiles("OC(Cl)=[C@]=C(C)F");
+  const binap = () => expandAbbreviation({ ...emptyWorkspaceDocument(), model: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "(R)-BINAP" }], bonds: [] }, nextId: 100 }, 1).model;
+
+  it("keeps an allene's and a biaryl's hand through a renumbering against the order of an end's neighbours: no note, the same hand", () => {
+    for (const [name, m] of [["an allene", allene()], ["(R)-BINAP", binap()]] as const) {
+      const ids = new Set(m.atoms.map((a) => a.id));
+      const kept = withKept(m, ids, keptFrom(m, readingOf(m)));
+      const axis = kept.bonds.find((b) => b.config && typeof b.config === "object" && "axis" in b.config)!;
+      expect(axis.config, name).toMatchObject({ axis: { refs: [expect.any(Number), expect.any(Number)] } });
+      const pasted = renumbered(kept, swappedAtOneEnd(m));
+      // (the drawing read afresh: the sense against the new lowest neighbour at that end is the other number - the hand is the same)
+      const before = [...readingOf(kept).said.axes.values()][0];
+      const now = readingOf(pasted).said.axes;
+      expect([...now.values()][0], name).toBe(-before);
+      // (what is kept, read as the drawing now is: the same - so nothing is said of it)
+      expect(keptReading(pasted, readingOf(pasted).said).said.axes, name).toEqual(now);
+      expect(configurationChanges(pasted, pasted), name).toEqual([]);
+      // (and every id turned round as well, so that the axis's other end is now its lower-id one: each kept ref still its own end's)
+      const swap = swappedAtOneEnd(m);
+      const turned = renumbered(kept, (id) => 10_000 - swap(id));
+      expect(keptReading(turned, readingOf(turned).said).said.axes, name).toEqual(readingOf(turned).said.axes);
+    }
+  });
+
+  it("keeps a unit whose ends are not bonded - an allene's axis, an odd cumulene's cis or trans - on its run's first bond, its ends named", () => {
+    for (const [name, m, kind] of [["an allene", allene(), "axis"], ["a hexatriene's cumulene", drawnFromSmiles("C/C=C=C=C/C"), "set"]] as const) {
+      const kept = withKept(m, new Set(m.atoms.map((a) => a.id)), keptFrom(m, readingOf(m)));
+      const on = kept.bonds.filter((b) => b.config && typeof b.config === "object" && kind in b.config);
+      expect(on, name).toHaveLength(1);
+      const unit = (on[0].config as Record<string, { ends?: [number, number] }>)[kind];
+      expect(unit.ends, name).toHaveLength(2);
+      // (read back as the drawing reads it: nothing said)
+      expect(configurationChanges(kept, kept), name).toEqual([]);
+      const back = keptReading(kept, readingOf(kept).said).said;
+      expect(kind === "axis" ? back.axes : back.doubles, name).toEqual(kind === "axis" ? readingOf(kept).said.axes : readingOf(kept).said.doubles);
+    }
+  });
+
+  it("reads an axis back from a file or a copy only whole, its refs among the drawing's atoms, and renumbers its refs with them", () => {
+    const ids = new Set([1, 2, 3]);
+    expect(keptBondRead({ axis: { refs: [1, 3], sense: -1 } }, ids)).toEqual({ axis: { refs: [1, 3], sense: -1 } });
+    for (const v of [{ axis: 1 }, { axis: { refs: [1, 9], sense: 1 } }, { axis: { refs: [1], sense: 1 } }, { axis: { refs: [1, 3], sense: 0 } }]) expect(keptBondRead(v, ids)).toBeUndefined();
+    expect(keptBondMoved({ axis: { refs: [1, 3], sense: 1 } }, new Map([[1, 7], [3, 8]]))).toEqual({ axis: { refs: [7, 8], sense: 1 } });
+    expect(keptBondMoved({ axis: { refs: [1, 3], sense: 1 } }, new Map([[1, 7]]))).toBeUndefined();
+    expect(keptBondRead({ axis: { refs: [1, 3], sense: 1, ends: [1, 2] } }, ids)).toEqual({ axis: { refs: [1, 3], sense: 1, ends: [1, 2] } });
+    expect(keptBondRead({ axis: { refs: [1, 3], sense: 1, ends: [1, 9] } }, ids)).toBeUndefined();
+    expect(keptBondMoved({ set: { refs: [1, 3], cis: true, ends: [1, 2] } }, new Map([[1, 7], [2, 6], [3, 8]]))).toEqual({ set: { refs: [7, 8], cis: true, ends: [7, 6] } });
   });
 });
