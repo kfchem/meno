@@ -179,16 +179,7 @@ impl Drawn {
     /// A thing on the page, under the transforms of the forms it lies in; a form's own things, each in turn.
     fn take(&mut self, obj: &PdfPageObject, outer: Affine, at: &impl Fn(f32, f32) -> (f32, f32), within: &[f32; 4]) {
         let meets = |q: &[f32; 4]| q[0] <= within[2] && q[2] >= within[0] && q[1] <= within[3] && q[3] >= within[1];
-        let Ok(bounds) = obj.bounds() else { return };
-        let r = bounds.to_rect();
-        let corners = [(r.left().value, r.bottom().value), (r.right().value, r.top().value), (r.left().value, r.top().value), (r.right().value, r.bottom().value)];
-        let drawn: Vec<(f32, f32)> = corners.iter().map(|&(x, y)| { let p = apply(&outer, x, y); at(p.0, p.1) }).collect();
-        let q = [
-            drawn.iter().map(|p| p.0).fold(f32::MAX, f32::min),
-            drawn.iter().map(|p| p.1).fold(f32::MAX, f32::min),
-            drawn.iter().map(|p| p.0).fold(f32::MIN, f32::max),
-            drawn.iter().map(|p| p.1).fold(f32::MIN, f32::max),
-        ];
+        let Some(q) = drawn_bounds(obj, &outer, at) else { return };
         if !meets(&q) {
             return;
         }
@@ -233,6 +224,41 @@ impl Drawn {
         } else if obj.as_image_object().is_some() {
             self.pictures.push(q);
         }
+    }
+}
+
+/// Where a thing lies on the page as drawn, under the transforms of the forms it lies in: the box round its own box's corners.
+fn drawn_bounds(obj: &PdfPageObject, outer: &Affine, at: &impl Fn(f32, f32) -> (f32, f32)) -> Option<[f32; 4]> {
+    let r = obj.bounds().ok()?.to_rect();
+    let corners = [(r.left().value, r.bottom().value), (r.right().value, r.top().value), (r.left().value, r.top().value), (r.right().value, r.bottom().value)];
+    let drawn: Vec<(f32, f32)> = corners.iter().map(|&(x, y)| { let p = apply(outer, x, y); at(p.0, p.1) }).collect();
+    Some([
+        drawn.iter().map(|p| p.0).fold(f32::MAX, f32::min),
+        drawn.iter().map(|p| p.1).fold(f32::MAX, f32::min),
+        drawn.iter().map(|p| p.0).fold(f32::MIN, f32::max),
+        drawn.iter().map(|p| p.1).fold(f32::MIN, f32::max),
+    ])
+}
+
+/// A thing of a page listed (`objects`) - what it is, and its box - or, a form, each of its own things in turn, under its transforms.
+fn things_of(obj: &PdfPageObject, outer: Affine, at: &impl Fn(f32, f32) -> (f32, f32), said: &impl Fn(&PdfPageTextObject) -> String, listed: &mut impl FnMut(u32, [f32; 4])) {
+    if let Some(form) = obj.as_x_object_form_object() {
+        let m = then(&form.matrix().map(|m| affine_of(&m)).unwrap_or(IDENTITY), &outer);
+        for o in form.iter() {
+            things_of(&o, m, at, said, listed);
+        }
+        return;
+    }
+    let kind: u32 = match obj.object_type() {
+        PdfPageObjectType::Text if obj.as_text_object().map(|t| said(t).trim() == "+").unwrap_or(false) => 6,
+        PdfPageObjectType::Text => 1,
+        PdfPageObjectType::Path => 2,
+        PdfPageObjectType::Image => 3,
+        PdfPageObjectType::Shading => 4,
+        _ => return,
+    };
+    if let Some(q) = drawn_bounds(obj, &outer, at) {
+        listed(kind, q);
     }
 }
 
@@ -385,9 +411,13 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
             Ok((json!({"n": bytes.len() / 24, "ms": ms(t)}), bytes))
         }
         // what the page is made of, each thing where it lies - 20 bytes each:
-        // what it is (1 text, 2 a path, 3 a picture, 4 a shading, 5 a form
-        // holding more, 6 text that is a "+" alone, as a scheme sets one
-        // between its compounds), and its box, as a letter's is (`text`)
+        // what it is (1 text, 2 a path, 3 a picture, 4 a shading, 6 text
+        // that is a "+" alone, as a scheme sets one between its compounds),
+        // and its box, as a letter's is (`text`). A form is opened: each of
+        // its things is listed, where the form's transforms put it - a
+        // journal sets a whole scheme, or a page's figures together, as one
+        // form, and taken whole it was one figure of the page (5, a form,
+        // is listed no more)
         "objects" => {
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
@@ -398,21 +428,14 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                 Some(p) => p.for_object(t),
                 None => t.text(),
             };
-            for obj in page.objects().iter() {
-                let kind: u32 = match obj.object_type() {
-                    PdfPageObjectType::Text if obj.as_text_object().map(|t| said(t).trim() == "+").unwrap_or(false) => 6,
-                    PdfPageObjectType::Text => 1,
-                    PdfPageObjectType::Path => 2,
-                    PdfPageObjectType::Image => 3,
-                    PdfPageObjectType::Shading => 4,
-                    PdfPageObjectType::XObjectForm => 5,
-                    _ => continue,
-                };
-                let Ok(q) = obj.bounds() else { continue };
+            let mut listed = |kind: u32, q: [f32; 4]| {
                 bytes.extend_from_slice(&kind.to_le_bytes());
-                for v in drawn_box(&at, &q.to_rect()) {
+                for v in q {
                     bytes.extend_from_slice(&v.to_le_bytes());
                 }
+            };
+            for obj in page.objects().iter() {
+                things_of(&obj, IDENTITY, &at, &said, &mut listed);
             }
             Ok((json!({"n": bytes.len() / 20, "ms": ms(t)}), bytes))
         }
@@ -1282,6 +1305,129 @@ mod tests {
         let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0, "box": [290, 530, 330, 550]})).unwrap();
         assert_eq!(head["paths"].as_array().unwrap().len(), 1);
         assert_eq!(head["letters"].as_array().unwrap().len(), 0);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    // (a journal sets a whole scheme as one form: taken whole, it was one figure of the page, however many compounds it held)
+    #[test]
+    fn a_forms_things_are_listed_each_where_it_lies_not_the_form() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-forms-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "c".repeat(64);
+        // (the figure page: its form holding a line and an O; and a form within a form, a line in it, the outer one moved
+        // 200 up and doubled, the inner 10 along)
+        let inner = "1 w 0 0 m 20 0 l S";
+        let outer = "/Fm2 Do";
+        let page = "q 0.5 0 0 0.5 100 400 cm /Fm1 Do Q q 2 0 0 2 0 200 cm /Fm3 Do Q";
+        let form = "0.6 w 0 0 m 100 0 l S BT /F1 10 Tf 0 20 Td (O) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (5, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 200 200] /Matrix [1 0 0 1 10 0] /Resources << /Font << /F1 3 0 R >> >> /Length {} >>\nstream\n{form}\nendstream", form.len())),
+            (6, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [1 0 0 1 10 0] /Length {} >>\nstream\n{inner}\nendstream", inner.len())),
+            (7, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /XObject << /Fm2 6 0 R >> >> /Length {} >>\nstream\n{outer}\nendstream", outer.len())),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> /XObject << /Fm1 5 0 R /Fm3 7 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let object = |i: usize| {
+            let f = |k: usize| f32::from_le_bytes(bytes[i * 20 + 4 + k * 4..i * 20 + 8 + k * 4].try_into().unwrap());
+            (u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap()), [f(0), f(1), f(2), f(3)])
+        };
+        // (no form listed: the line, the O, and the inner form's line)
+        assert_eq!((0..n).map(|i| object(i).0).collect::<Vec<_>>(), vec![2, 1, 2]);
+        // the line, moved 10 by its form's matrix, halved and placed at (100, 400): 105..155 across, 442 from the top
+        let (_, b) = object(0);
+        assert!((b[0] - 105.0).abs() < 1.0 && (b[2] - 155.0).abs() < 1.0 && (b[1] + b[3]) / 2.0 > 441.0 && (b[1] + b[3]) / 2.0 < 443.0, "{b:?}");
+        // the O over it, half its size
+        let (_, o) = object(1);
+        assert!(o[0] > 104.0 && o[2] < 111.0 && o[3] < 442.0 && o[1] > 425.0, "{o:?}");
+        // the inner form's line: 10 along, then doubled and 200 up - 20..60 across, 642 from the top
+        let (_, i) = object(2);
+        assert!((i[0] - 19.0).abs() < 1.5 && (i[2] - 61.0).abs() < 1.5 && (i[1] + i[3]) / 2.0 > 641.0 && (i[1] + i[3]) / 2.0 < 643.0, "{i:?}");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    // (a "+" set inside a form - a journal sets a scheme's compounds and its pluses as one form - is told as a plus, where the form's transforms put it)
+    #[test]
+    fn a_plus_in_a_form_is_told_as_a_plus_where_the_form_puts_it() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-plusform-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "d".repeat(64);
+        let page = "q 0.5 0 0 0.5 100 400 cm /Fm1 Do Q";
+        let form = "0.6 w 0 0 m 100 0 l S BT /F1 10 Tf 0 20 Td (O) Tj ET BT /F1 10 Tf 60 20 Td (+) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (5, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 200 200] /Matrix [1 0 0 1 10 0] /Resources << /Font << /F1 3 0 R >> >> /Length {} >>\nstream\n{form}\nendstream", form.len())),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> /XObject << /Fm1 5 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let object = |i: usize| {
+            let f = |k: usize| f32::from_le_bytes(bytes[i * 20 + 4 + k * 4..i * 20 + 8 + k * 4].try_into().unwrap());
+            (u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap()), [f(0), f(1), f(2), f(3)])
+        };
+        assert_eq!((0..n).map(|i| object(i).0).collect::<Vec<_>>(), vec![2, 1, 6]);
+        // the plus: 60 along, plus the form's 10, halved, placed at x 100: from about 135 across
+        let (_, p) = object(2);
+        assert!(p[0] > 133.0 && p[2] < 143.0, "{p:?}");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    // (a form within a form, each moved by the cm before its own Do - PDFium folds a form's /Matrix into its things, so a cm is the form object's own
+    // matrix, and the order the two are composed in shows only so: the inner moved 5 along, the outer doubled and moved 200 up, the inner form's line,
+    // 10 along by its /Matrix, is (10 + 5) * 2 = 30 to 70 across; composed the other way round, 25 to 65)
+    #[test]
+    fn a_form_in_a_form_each_moved_by_its_own_cm_composes_inner_first() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-cmform-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "e".repeat(64);
+        let inner = "1 w 0 0 m 20 0 l S";
+        let outer = "q 1 0 0 1 5 0 cm /Fm2 Do Q";
+        let page = "q 2 0 0 2 0 200 cm /Fm3 Do Q";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (6, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [1 0 0 1 10 0] /Length {} >>\nstream\n{inner}\nendstream", inner.len())),
+            (7, format!("<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /XObject << /Fm2 6 0 R >> >> /Length {} >>\nstream\n{outer}\nendstream", outer.len())),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Fm3 7 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        assert_eq!(head["n"].as_u64().unwrap(), 1);
+        let f = |k: usize| f32::from_le_bytes(bytes[4 + k * 4..8 + k * 4].try_into().unwrap());
+        let (x0, x1) = (f(0), f(2));
+        // 30 to 70 across, the line's width a point either side of the 2 w of its doubling
+        assert!((x0 - 29.0).abs() < 1.5 && (x1 - 71.0).abs() < 1.5, "{x0} {x1}");
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }

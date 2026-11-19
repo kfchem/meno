@@ -209,6 +209,33 @@ describe("a chain whose end bars are cut short by labels", () => {
   });
 });
 
+/**
+ * The edges of the rule for a chain cut short at its labels (found in review): a chain with a whole-bond bar (0.85 to 1.15 of the bond) is
+ * kept from 1.1 bonds across; a chain with none from 1.3. Each test stands at one of those edges.
+ */
+describe("the edges of a chain cut short at its labels", () => {
+  const stroked = (pts: P[]): FigurePath => ({ fill: null, stroke: black, width: 0.6, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+  const c = zig(5, [50, 50], 10);
+  const hex = Array.from({ length: 6 }, (_, i): P => [250 + 10 * Math.cos((Math.PI / 3) * i), 170 + 10 * Math.sin((Math.PI / 3) * i)]);
+  const structure = [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
+  const read = (pts: P[]) => {
+    const outline = thick(pts, 0.6, "mitre");
+    return { bars: shapesOf(figure(outline)).strokes.filter((s) => s.bar).length, bonds: readFigure(figure(...structure, outline)).bonds.length - 11 };
+  };
+
+  it("gives up a chain 1.04 bonds across whose one bar is 0.9 of a bond", () => {
+    expect(read([[300, 300], [309, 300], [310.4, 304.5]])).toEqual({ bars: 2, bonds: 0 });
+  });
+
+  it("gives up a chain 1.125 bonds across none of whose bars is a whole bond (one of 0.8)", () => {
+    expect(read([[300, 300], [308, 300], [311.25, 303.25]])).toEqual({ bars: 2, bonds: 0 });
+  });
+
+  it("keeps a chain 1.25 bonds across whose one bar is 1.1 bonds", () => {
+    expect(read([[300, 300], [311, 300], [312.5, 305]])).toEqual({ bars: 2, bonds: 2 });
+  });
+});
+
 describe("which chains of bars are bonds: told by the drawing's own bond, not by points", () => {
   const stroked = (pts: P[], w = 0.6): FigurePath => ({ fill: null, stroke: black, width: w, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
   /** A structure drawn with lines, bonds of `bond` points: what gives the figure its bond length. */
@@ -298,6 +325,50 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
     const read = readFigure(figure(...structure(10), ...rings));
     expect(read.bonds).toHaveLength(11 + 24);
     expect(Math.round(read.bond)).toBe(10);
+  });
+
+  it("takes an outline drawing's bond from its bars, not from its own short lines with an end free: its wedges and its bonds cut short at labels", () => {
+    // (a ring of 10 drawn as an outline; three wedges of 6.5 out of its corners and a C=O's two lines of 7, each with an end free - as at
+    // a label - drawn as lines: the bars six, the lines five; the C=O's two lines alongside each other are no joint)
+    const c: P = [200, 200];
+    const corner = (i: number): P => [c[0] + 10 * Math.cos((Math.PI / 3) * i), c[1] + 10 * Math.sin((Math.PI / 3) * i)];
+    const out = (i: number, l: number): P => [c[0] + (10 + l) * Math.cos((Math.PI / 3) * i), c[1] + (10 + l) * Math.sin((Math.PI / 3) * i)];
+    const wedge = (i: number): FigurePath => {
+      const [tip, end] = [corner(i), out(i, 6.5)];
+      const n: P = [-(end[1] - tip[1]) / 6.5, (end[0] - tip[0]) / 6.5];
+      return { fill: black, stroke: null, width: 0, d: [["M", ...tip], ["L", end[0] + n[0] * 1.2, end[1] + n[1] * 1.2], ["L", end[0] - n[0] * 1.2, end[1] - n[1] * 1.2], ["Z"]] as PathStep[] };
+    };
+    const ketone = [stroked([corner(4), out(4, 7)]), stroked([[corner(4)[0] + 1.5, corner(4)[1]], [out(4, 7)[0] + 1.5, out(4, 7)[1]]])];
+    const read = readFigure(figure(ring(c, "mitre", 10, 0.8), wedge(1), wedge(2), wedge(3), ...ketone));
+    expect(Math.round(read.bond)).toBe(10);
+    // (every bond read at least 0.6 of it: none of its lines read short of the figure's bond, nothing left in pieces)
+    const short = read.bonds.filter((b) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y) < 0.6 * read.bond);
+    expect(short).toEqual([]);
+  });
+
+  it("takes an outline drawing's bond from its bars where they are four times its joined lines: a chart drawn in lines of 20 beside it", () => {
+    // (fifteen bars of 10; a zigzag of five lines of 20, three of them joined at both ends)
+    const chart = stroked(zig(5, [300, 300], 20));
+    const drawn = figure(ring([200, 200], "mitre", 10, 0.8), ring([250, 200], "mitre", 10, 0.8), thick(zig(3, [100, 100], 10), 0.8, "mitre"), chart);
+    expect(Math.round(readFigure(drawn).bond)).toBe(10);
+  });
+
+  it("takes lines as a drawing's only where their ends meet - within 0.15 of the bars' bond, at an angle: a chain whose joints are a little open, not one whose are wide apart", () => {
+    // (two rings of 13 drawn as outlines, twelve bars; a chain of six lines of 10, each line drawn short of its joints by `s` at either end)
+    const chain = (open: number): FigurePath[] => {
+      const pts = zig(6, [100, 300], 10);
+      const s = open / Math.sqrt(3);
+      return pts.slice(1).map((q, i) => {
+        const p = pts[i];
+        const u = unit(sub(q, p));
+        return stroked([[p[0] + u[0] * s, p[1] + u[1] * s], [q[0] - u[0] * s, q[1] - u[1] * s]]);
+      });
+    };
+    const rings = [ring([300, 200], "mitre", 13, 0.9), ring([360, 200], "mitre", 13, 0.9)];
+    // (open by 1 point, 0.08 of the bars' bond: its joints meet, four lines joined, the bars not four times as many - the lines' length, 8.8)
+    expect(Math.round(readFigure(figure(...rings, ...chain(1))).bond)).toBe(9);
+    // (open by 3, 0.23 of it: no end meets, no line is the drawing's - the bars' bond)
+    expect(Math.round(readFigure(figure(...rings, ...chain(3))).bond)).toBe(13);
   });
 
   it("is read the same way in a scheme: a chart line drawn as one outline beside a structure stays no bonds", () => {

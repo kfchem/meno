@@ -10,6 +10,13 @@
  */
 import type { Option, OptionValues } from "../../../../lib/options";
 import { UNITS, unitNamed, type Unit } from "../../../../lib/units";
+import type { Frame } from "./entries";
+
+/**
+ * A Repeat's frame on the page: from its card's top left, `frame.w` across and `frame.h` down - the page's y runs up, so its top is the
+ * card's top and its foot lies `frame.h` below it.
+ */
+export const repeatBox = (s: { x: number; y: number; frame: { w: number; h: number } }): Frame => ({ x0: s.x, x1: s.x + s.frame.w, y1: s.y, y0: s.y - s.frame.h });
 
 /** The inputs inside a Repeat's frame, which what its steps give lands on: never a way back in its flow (workflow/flow `landing`). */
 export const LANDING = ["again", "done"] as const;
