@@ -363,6 +363,12 @@ Taken while stage 1 was built, on 2026-10-03:
     workspace file*). Its `workspace.json` is the JSON `.meno` was at
     first (`meno-workspace`, version 1); the outputs, texts, PDFs and
     pictures it keeps are files beside it (`lib/doc/menoFile.ts`).
+  - The drawing's atoms and bonds carry the configuration they state,
+    kept (`config`: docs/EDITOR-2D.md, *The configuration kept*), from
+    the version after 0.1.26. A file from before has none: what it
+    states is kept with the first change made to it, and nothing is said
+    for that. One that does not read whole, or names an atom the drawing
+    has not, is left out and read again.
   - Save and Save As write `.meno`, and nothing else (since 2026-10-06,
     #151; before, with 3D molecules on the canvas, Save offered a
     workspace or an SD file). Other kinds are written by *Export…*, on
@@ -787,6 +793,18 @@ Taken on 2026-10-13:
   zoomed so far out that the canvas leaves them out does not leave them
   out of the picture (the maintainer, 2026-10-21: in every picture, as
   the canvas shows them).
+  Where R and S are shown on a molecule, a unit it shows none on though
+  it is one is said in its card, under *Stereo*, in the drawing's words:
+  "No R or S: its groups lie nearly in a plane here." where its places
+  give it no sense (its volume under the flat bound, never a sign
+  guessed), "No R or S: this N does not keep a configuration." for an N
+  that exchanges its H (as the drawing's tip says it), and the drawing's
+  words for a structure too large to work out; the units of one reason on one row,
+  named by their atoms (C4, C7), counted past six. Nothing is said of an
+  atom or a bond that is no unit - two of its groups alike (under the
+  maintainer's rule above; lib/chem/cip/in3d, `utils/stereoSaid`). The
+  words are of the places its labels are read from, its first frame's,
+  as its R and S are.
 - **Measurements' values keep apart.** Each value stands on its point
   while that is clear of the values before it; where another is in its
   way it moves off - square to a distance's line, out from an angle's
@@ -2320,7 +2338,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   aromatic, which is how such rings almost always are. The orders chosen
   are those, of all the shapes allow, that fit the lengths best with the
   most aromatic rings: a search over each conjugated part. A sulfonyl
-  has two S=O and a phosphate one P=O, to its shortest oxygens; a nitro
+  has two S=O and a phosphate one P=O, to its shortest oxygens, as an
+  arsine oxide its As=O and a stibine oxide its Sb=O; a nitro
   group's charges are N+ and O-. Bonds to metals stay single; a
   metalloid's (B, Si, Ge, As, Sb, Te) count in its neighbours' valences
   as a nonmetal's do, so SbPh3's rings are aromatic and nothing on them

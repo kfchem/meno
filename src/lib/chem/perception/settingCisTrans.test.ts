@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalWritten, settingCisTrans, symmetryOrbits, type SymmetryInput } from "./symmetry";
+import { canonicalRanks, canonicalWritten, settingCisTrans, symmetryOrbits, type SymmetryInput } from "./symmetry";
 import { identityText, type IdentityInput } from "../identity";
 import { fromSmiles } from "../../layout/testdata/fromSmiles";
 
@@ -256,5 +256,32 @@ describe("a cis or trans needs two trigonal-planar ends", () => {
   it("an end's lone pairs counted with its charge: an iminium's N+ (three neighbours, no lone pair) kept, the two forms two identities", () => {
     expect(given(settingCisTrans(fromSmiles("C/C=[N+](/C)CC")))).toBe(1);
     expect(one("C/C=[N+](/C)CC", "C/C=[N+](\\C)CC")).toBe(false);
+  });
+});
+
+// (found in review: a metal end of two other groups, a labelled end atom, and the ranks the layout takes)
+describe("what the symmetry's cis or trans test is asked, at the edges", () => {
+  it("a double bond to a metal of two other groups, given either way: none (a metal end is no trigonal-planar centre)", () => {
+    for (const smiles of ["C/C=[Ti](/Cl)Br", "C/C=[Ti](\\Cl)Br"]) expect(given(settingCisTrans(fromSmiles(smiles))), smiles).toBe(0);
+    expect(one("C/C=[Ti](/Cl)Br", "C/C=[Ti](\\Cl)Br")).toBe(true);
+  });
+
+  it("a sulfonium ylide whose S is a 34S: none, as with the plain S (a mass number does not make its end a trigonal one)", () => {
+    // (C0 / C1 = S2 (/ C3 C4) C5)
+    const labelled = (smiles: string): IdentityInput => {
+      const g = fromSmiles(smiles);
+      return { ...g, atoms: g.atoms.map((a, i) => (i === 2 ? { ...a, isotope: 34 } : a)) } as IdentityInput;
+    };
+    expect(one(labelled("C/C=S(/CC)C"), labelled("C/C=S(\\CC)C"), labelled("CC=S(CC)C"))).toBe(true);
+  });
+
+  it("the ranks of 2,7-dimethylocta-2,6-diene with each C=C given either way are those of it given none", () => {
+    const g = fromSmiles("CC(C)=CCCC=C(C)C");
+    for (const [p, q] of [
+      [true, true],
+      [true, false],
+      [false, true],
+      [false, false],
+    ]) expect(canonicalRanks(set(g, p, q))).toEqual(canonicalRanks(g));
   });
 });

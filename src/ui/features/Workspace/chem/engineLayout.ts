@@ -30,12 +30,13 @@ import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
-import { degrees, drawingOf } from "./drawing";
+import { degrees, drawingOf, readAs } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
-import { recognisedSaid, withRecognisedDepth } from "../../../../lib/layout/recognised";
+import { recognisedSaid, withRecognisedDepth } from "../../../../lib/chem/perception/projection/depth";
+import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 
 export type LayoutJob = {
@@ -51,7 +52,7 @@ export type LayoutJob = {
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
   /**
-   * A ring in perspective the drawing gives no depth, its depth worked out (lib/layout/recognised): each such atom's depth, by its input
+   * A ring in perspective the drawing gives no depth, its depth worked out (lib/chem/perception/projection/depth): each such atom's depth, by its input
    * index - so that Clean-up keeps it as drawn, as it keeps one drawn with depth, and stores no depth for it.
    */
   recognised?: Map<number, number>;
@@ -155,7 +156,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   const fourForm = new Map<number, "x" | "cross">();
   part.atoms.forEach((a, i) => {
     const mine = bondsOf.get(i) ?? [];
-    if (!isMetal(a.el) || mine.length !== 4) return;
+    if (!isMetal(readAs(a)) || mine.length !== 4) return;
     // (not a chelate's metal - two of its donors joined other than through it: its own rules lay it out)
     const donors = mine.map((k) => (drawing.bonds[k].a === i ? drawing.bonds[k].b : drawing.bonds[k].a));
     const reached = new Set([donors[0]]);
@@ -221,7 +222,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
     atoms: kept.map((i) => {
       const t = configuration(i);
       return {
-        el: part.atoms[i].el,
+        el: readAs(part.atoms[i]),
         ...(part.atoms[i].charge ? { charge: part.atoms[i].charge } : {}),
         hs: drawing.atoms[i].hs + (folded.get(at.get(i)!)?.length ?? 0),
         ...(t ? { tetra: t } : {}),
@@ -260,10 +261,10 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   };
   const ids = kept.map((i) => part.atoms[i].id);
   // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
-  const seen = withRecognisedDepth(drawing.atoms, drawing.bonds);
+  const seen = withRecognisedDepth(drawing.atoms, drawing.bonds, cageViews);
   // (and one taken for a ring in perspective but not read - its near and far not marked: kept where it is drawn too, since the words ask
   //  the chemist to mark it, by no depth of its own)
-  const said = recognisedSaid(drawing.atoms, drawing.bonds);
+  const said = recognisedSaid(drawing.atoms, drawing.bonds, cageViews);
   const unreadRing = (i: number) => said.has(i) && said.get(i) !== READ_IN_PERSPECTIVE && said.get(i) !== READ_AS_HAWORTH;
   const recognisedAt = new Map(
     kept.flatMap((i, k) => (drawing.atoms[i].z != null ? [] : seen[i].z != null ? [[k, seen[i].z!] as const] : unreadRing(i) ? [[k, 0] as const] : [])),
@@ -298,9 +299,10 @@ const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
  * its H taken away. Given the drawing's `style`, a bond from a label to one
  * at a terminal atom is drawn long enough for the two (roomForLabels).
  * Throws, changing nothing, if the new drawing would not say the
- * stereochemistry the old one said.
+ * stereochemistry the old one said. `flat`: a ring in perspective laid
+ * out flat as well, none kept (a chair's *Draw flat*).
  */
-export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: Layout2D, style?: DrawingStyle): Relayout {
+export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: Layout2D, style?: DrawingStyle, flat = false): Relayout {
   const { input, ids } = job;
   // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
   const n = ids.length;
@@ -385,13 +387,14 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   }));
   // a ring system the drawing shows in perspective, that the engine lays flat - a chair, a Haworth ring - kept where it is, depth and
   // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)
-  // - and a ring in perspective drawn with no depth, recognised as one (lib/layout/recognised), kept so too, by the depth worked out for it:
+  // - and a ring in perspective drawn with no depth, recognised as one (lib/chem/perception/projection/depth), kept so too, by the depth worked out for it:
   // the recognition changes nothing in the document, so no depth is stored for it, and its centres stay as the reading finds them
-  const recognised = job.recognised ?? new Map<number, number>();
+  const recognised = flat ? new Map<number, number>() : (job.recognised ?? new Map<number, number>());
   const kept = projectionsKept(
     input,
     was.map((a, i) => {
-      if (i >= n) return undefined;
+      // (laid out flat: no ring kept in perspective - none is given a depth to keep it by)
+      if (i >= n || flat) return undefined;
       const z = a.z ?? recognised.get(i);
       return { x: a.x, y: a.y, ...(z != null ? { z } : {}), ...(a.stereoCentre ? { stereoCentre: true } : {}) };
     }),
@@ -639,7 +642,7 @@ function poseAllyls(
       ? labelTrims([{ id: 0, x: 0, y: 0, el: metalEl }, { id: 1, x: u.x, y: u.y, el: "*" }], { a1: 0, a2: 1, order: 1, endpoints: [1] }, opts, zoom).a
       : null;
   const margin = opts ? (opts.labelMarginPx ?? opts.fontPx * 0.16) : 0;
-  const el = new Map(part.atoms.map((a) => [a.id, a.el]));
+  const el = new Map(part.atoms.map((a) => [a.id, readAs(a)]));
   const at = new Map(atoms.map((a, i) => [a.id, i]));
   for (const sys of systems) {
     const chain = allylChain({ endpoints: [...sys.atoms] }, part.bonds);

@@ -19,6 +19,7 @@ import { schemeSaid } from "../workflow/schemeRoles";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
+import { repeatBox } from "../workflow/repeat";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
 import { unseenSets } from "../workflow/onPage";
 import { exitChip, exitNames } from "../workflow/exitNames";
@@ -658,6 +659,8 @@ export default function Workflow2D() {
   const bandNow = useRef<Band>("read");
   const named = useEasedTo(band === "marked" ? 0 : 1);
   const hoveredStep = useEditor((s) => s.hoveredStep);
+  // (each Repeat's pass under way, where one runs: its tab says it - store `runRepeat`)
+  const repeatPasses = useEditor((s) => s.repeatPasses);
   // (a chemist's set being named anew, by two presses on its tab)
   const [renaming, setRenaming] = useState<number | null>(null);
   // (a shut card's state pointed at: its words in full, in the page's tip)
@@ -1340,6 +1343,35 @@ export default function Workflow2D() {
       iconWhenSmall: true,
     };
   });
+  // a Repeat's frame round the steps it runs pass by pass (workflow/repeat), by WebGL as a set's is: dashed and quiet, its tab "Repeat"
+  // and the pass under way; its card at its top left is the step's own
+  const repeatTabs: FrameTab[] = steps.flatMap((s) => {
+    if (s.kind !== "repeat" || !s.frame) return [];
+    const at = repeatPasses[s.id];
+    const status = at ? (at.stopping ? "Stopping after the jobs running" : `pass ${at.pass}${at.of ? ` of ${at.of}` : ""}`) : undefined;
+    return [
+      {
+        key: `repeat:${s.id}`,
+        box: repeatBox({ x: s.x, y: s.y, frame: s.frame }),
+        tone: selFlow.steps.has(s.id) ? ("chosen" as const) : hoveredStep === s.id ? ("hover" as const) : ("rest" as const),
+        loop: true as const,
+        tab: { icon: "repeat", name: "Repeat", ...(status ? { status } : {}) },
+        iconWhenSmall: true as const,
+      },
+    ];
+  });
+  const onRepeatTabs: FrameTabsOn = {
+    tabDown: (key, e) => {
+      const s = stepById.get(Number(key.slice("repeat:".length)));
+      if (s) dragStep(asPress(e), s);
+    },
+    hover: (key, on) => {
+      const id = Number(key.slice("repeat:".length));
+      if (on) hover({ hoveredStep: id });
+      else unhover("hoveredStep", id);
+    },
+    menu: (key, e) => store.getState().setWorkflowView({ workflowMenu: { kind: "step", id: Number(key.slice("repeat:".length)), clientX: e.screen.x, clientY: e.screen.y } }),
+  };
   // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
   //  aside, given nothing - and growing out of it as it is shown again - about that port, as its HTML did: its frame drawn that far
   //  from the port, as present as it is)
@@ -1598,6 +1630,7 @@ export default function Workflow2D() {
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
       <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map(cardBoxOf)} />
+      {repeatTabs.length > 0 && <FrameTabs items={repeatTabs} on={onRepeatTabs} clear={faceList.map(cardBoxOf)} />}
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

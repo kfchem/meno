@@ -5,7 +5,7 @@
  * again, moved or put in a set, is answered at once.
  *
  * Read on the drawing thread (`identityKnown`), a structure not yet answered is worked out in place only where it is small
- * (`IN_PLACE_MOST` atoms); else it is asked of the worker and said pending (undefined), and whoever shows it is told when
+ * (`IN_PLACE_MOST` atoms, a grouped structure weighed by its writings: `inPlaceWeight`); else it is asked of the worker and said pending (undefined), and whoever shows it is told when
  * the answer lands (`useIdentitiesAnswered`). A caller that may wait asks first (`identitiesAsked`) and then reads.
  */
 import { create } from "zustand";
@@ -22,6 +22,12 @@ export type Asked = "identity" | "constitution";
  * that none of that size takes long.
  */
 export const IN_PLACE_MOST = 16;
+
+/**
+ * What a structure's identity costs to work out, against `IN_PLACE_MOST`: its atoms - and, with AND or OR groups, as many times over
+ * as the stereoisomers it stands for that identity writes (lib/chem/identity `grouped`: two to the power of its groups) - found in review.
+ */
+export const inPlaceWeight = (input: IdentityInput): number => input.atoms.length * 2 ** Math.min(input.groups?.length ?? 0, 8);
 
 /**
  * How long the worker may say nothing, while anything waits on it, before it is taken for stopped: every structure waiting is
@@ -152,7 +158,7 @@ export function identityKnown(input: IdentityInput, kind: Asked = "identity"): F
   const had = known.get(key);
   if (had) return had;
   // (with no workers - tests - there is no drawing thread to keep free: worked out here, as before)
-  if (input.atoms.length <= IN_PLACE_MOST || typeof Worker === "undefined") return keep(key, hereNow(input, kind));
+  if (inPlaceWeight(input) <= IN_PLACE_MOST || typeof Worker === "undefined") return keep(key, hereNow(input, kind));
   void identityAsked(input, kind).catch(() => {});
   return undefined;
 }

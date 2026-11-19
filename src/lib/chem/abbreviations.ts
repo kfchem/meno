@@ -18,7 +18,7 @@
  */
 import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
-import { anionStructure, condensedStructure } from "./condensed";
+import { anionStructure, condensedStructure, metalSaltStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
@@ -259,9 +259,15 @@ function composedOf(label: string): Abbreviation | undefined {
   }
   const group = composedGroupOf(label);
   if (group) return group;
+  // (a metal's salt of an oxoanion - AgNO3, Cu(NO3)2, CuSO4 - read as its ions, before a complex's formula would read its O across: ./condensed)
+  const salt = metalSaltStructure(label, groupStructure);
+  if (salt === "unread") return undefined;
+  if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
+  if (complex && (refusedForOO(label, complex) || oxoPastHighest(label, complex))) return undefined;
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
+  if (made && refusedForOO(label, made)) return undefined;
   if (made) return { label, name: made.name, smiles: "", kind: "reagent" };
   // (last of all, after every group and every formula read whole: an atom with its H and the groups it carries,
   // its other bonds the drawing's - SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
@@ -325,7 +331,91 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
     }
     return { atoms, bonds, attach: [], ...(axes.length ? { axes } : {}), name: names.join(" · ") };
   }
-  return ionStructure(label) ?? condensedStructure(label, groupLabels(), groupStructure);
+  const ion = ionStructure(label);
+  if (ion) return ion;
+  const salt = metalSaltStructure(label, groupStructure);
+  if (salt === "unread") return null;
+  const read = salt ?? condensedStructure(label, groupLabels(), groupStructure);
+  return read && refusedForOO(label, read) ? null : read;
+}
+
+/**
+ * Why a label's formula is not read as written, where one of its readers refused it: it would bond two O the label does not write
+ * together, or take its metal past its highest oxidation state (by so many oxo and other groups). The chemist is told only that it is
+ * not read as written (`labelRefused`, the label's notice): what the formula would have been read as is no structure they wrote.
+ */
+export type LabelRefusal = { why: "two O bonded" } | { why: "past the highest state"; metal: string; oxo: number; others: number; state: number; highest: number };
+
+/** Each label refused, by label. */
+const REFUSED = new Map<string, LabelRefusal>();
+
+/**
+ * Whether a structure read from a label's formula bonds two O that the label does not write together - "OO" (OOH, OOtBu) or O2 as a
+ * peroxo ligand in brackets ((O2), (η2-O2)). MoO2NO3 is no compound; read across it is three O-O-N=O. A peroxide, a superoxide or a
+ * peracid from the tables (H2O2, mCPBA, TBHP) is no formula's reading, so never asked. Asked of a complex's, a made formula's and a
+ * condensed formula's reading; of today's readers only the complex's ever bonds two O, so the others are asked for a reader yet to come,
+ * as is a label that does write its O-O, which no reader yet reads with one.
+ */
+export function bondsUnwrittenOO(label: string, s: GroupStructure): boolean {
+  if (!s.bonds.some((b) => s.atoms[b.a1]?.el === "O" && s.atoms[b.a2]?.el === "O")) return false;
+  return !/OO|\((?:[μη]2?-)?O2\)/.test(label);
+}
+
+/** Whether a reading bonds two O its label does not write together: so, it is recorded as refused. */
+function refusedForOO(label: string, s: GroupStructure): boolean {
+  if (!bondsUnwrittenOO(label, s)) return false;
+  REFUSED.set(label, { why: "two O bonded" });
+  return true;
+}
+
+/** The highest oxidation state of the metals an oxo formula is read of, where a count of oxo past it is no reading of what is written. */
+const HIGHEST_STATE: ReadonlyMap<string, number> = new Map([
+  ["Ti", 4],
+  ["Zr", 4],
+  ["Hf", 4],
+  ["V", 5],
+  ["Nb", 5],
+  ["Ta", 5],
+  ["Tc", 7],
+  ["Cr", 6],
+  ["Mo", 6],
+  ["W", 6],
+  ["Mn", 7],
+  ["Re", 7],
+  ["Ru", 8],
+  ["Os", 8],
+]);
+
+/**
+ * Whether a complex's formula read takes one of `HIGHEST_STATE`'s metals past its highest oxidation state - two for each oxo (O on it by
+ * a double bond and on nothing else), one for each other group bound to it by a single bond of its own, not lent: CrO5 read as five oxo
+ * would be Cr +10, MoO3Cl2 Mo +8, H2CrO4 (chromic acid, CrO2(OH)2) Cr +10. Not read as written: CrO5 is a compound, CrO(O2)2 with
+ * two peroxo ligands, which a formula's O count does not say.
+ */
+function oxoPastHighest(label: string, s: GroupStructure): boolean {
+  for (const [i, a] of s.atoms.entries()) {
+    const most = HIGHEST_STATE.get(a.el);
+    if (most == null) continue;
+    const oxo = s.bonds.filter((b) => {
+      if (b.order !== 2 || (b.a1 !== i && b.a2 !== i)) return false;
+      const o = b.a1 === i ? b.a2 : b.a1;
+      return s.atoms[o].el === "O" && s.bonds.filter((c) => c.a1 === o || c.a2 === o).length === 1;
+    }).length;
+    // (each other group by a single bond of its own: a halide, an alkyl, an alkoxide - never a donor's lent bond)
+    const single = s.bonds.filter((b) => b.order === 1 && !b.coordination && (b.a1 === i || b.a2 === i)).length;
+    const state = 2 * oxo + single;
+    if (oxo && state > most) {
+      REFUSED.set(label, { why: "past the highest state", metal: a.el, oxo, others: single, state, highest: most });
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Why `label`, typed, is not read as written - where a reader refused it rather than finding nothing - or undefined. */
+export function labelRefused(label: string): LabelRefusal | undefined {
+  abbreviationOf(label);
+  return REFUSED.get(label.trim());
 }
 
 /**

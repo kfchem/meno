@@ -179,11 +179,22 @@ export interface DocumentStore<T> {
   markSaved(state?: T): void;
   history(): HistoryInfo;
   /**
+   * The step that came to `state` named `label` anew - what it is said to have done, known only once it is done (a change of
+   * configuration it made: Workspace/configuration). Only the step undo would take back, and only while it is still the one that came to
+   * `state`: false, and nothing named, otherwise.
+   */
+  named(label: string, state: T): boolean;
+  /**
    * Whether the present state was gone back or forward to - an undo, a
    * redo, a gesture dropped - rather than made by an edit: what was on the
    * page may have moved without the pointer moving.
    */
   travelled(): boolean;
+  /**
+   * What the last change was: an edit (a step made, or one gone on with); a travel (undo, redo, a step dropped or taken back); the
+   * document put in anew (`reset`: a file opened); or its states rewritten in place (`amend`). A reader of what edits do takes only edits.
+   */
+  lastChange(): "edit" | "travel" | "reset" | "amend";
 }
 
 type Entry<T> = {
@@ -246,6 +257,7 @@ export function createDocument<T>(
   let future: Entry<T>[] = [];
   let savedState: T = initial;
   let travelled = false;
+  let last: "edit" | "travel" | "reset" | "amend" = "reset";
   // (a change set under way: every edit made in it is its, the first a step of its own - `actAs`. An edit a
   //  listener makes as it is told of one is made within it too: none does today)
   let acting: { label: string; meta: EditMeta; made: boolean } | null = null;
@@ -310,6 +322,7 @@ export function createDocument<T>(
       const by = meta.by != null ? { by: meta.by } : {};
 
       travelled = false;
+      last = "edit";
       if (joins) {
         // The step on top stays what it is - its label, key and time - and takes the new end point.
         present = { ...present, state: next, cost: undefined };
@@ -362,6 +375,7 @@ export function createDocument<T>(
       future.unshift(present);
       present = previous;
       travelled = true;
+      last = "travel";
       notify();
       return true;
     },
@@ -371,6 +385,7 @@ export function createDocument<T>(
       if (present.coalesceKey !== coalesceKey || !past.length) return false;
       present = past.pop()!;
       travelled = true;
+      last = "travel";
       notify();
       return true;
     },
@@ -383,6 +398,7 @@ export function createDocument<T>(
       if (past.length === depth && Object.is(at.state, state)) return true;
       past = past.slice(0, depth);
       present = { ...at, state };
+      last = "travel";
       notify();
       return true;
     },
@@ -398,6 +414,7 @@ export function createDocument<T>(
       past.push(present);
       present = next;
       travelled = true;
+      last = "travel";
       notify();
       return true;
     },
@@ -409,6 +426,7 @@ export function createDocument<T>(
       present = { state, label, at: now() };
       savedState = state;
       travelled = false;
+      last = "reset";
       notify();
     },
 
@@ -435,6 +453,7 @@ export function createDocument<T>(
       if (!meta.unsaved) savedState = next(savedState);
       if (!Object.is(present.state, was)) {
         travelled = false;
+        last = "amend";
         notify();
       }
     },
@@ -445,6 +464,13 @@ export function createDocument<T>(
     },
 
     travelled: () => travelled,
+    lastChange: () => last,
+
+    named(label, state) {
+      if (!past.length || !Object.is(present.state, state)) return false;
+      present = { ...present, label };
+      return true;
+    },
 
     history() {
       return {

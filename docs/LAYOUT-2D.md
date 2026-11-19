@@ -11,6 +11,10 @@ The benchmark in `scripts/layout` measures the engine against these rules
 (`src/lib/layout/metrics.ts`) and shows every drawing beside the structure
 its Wikipedia article uses.
 
+A projection the Projections tool put down (docs/EDITOR-2D.md, *Projections*) is kept as drawn by Clean-up, what is flat on it laid out
+onto it, as any ring in perspective is (docs/EDITOR-2D.md, *Clean-up keeps a projection*); its right-click *Draw flat* asks the layout for
+all of it, ring and all, wedges for its depth.
+
 Clean-up gives one drawing, the best it finds, and the same drawing
 whatever order the atoms come in (the maintainer, 2026-10-14). Every
 choice on the way is made by the structure, or by trying each way at that
@@ -951,14 +955,17 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 
 The metals ligands are drawn round are the transition metals - the d
 block with the lanthanoids and actinoids, IUPAC's inner transition
-elements - but Pr, Ac and Fm, whose labels on a drawing are propyl's,
-acetyl's and 9-fluorenylmethyl's (a group named as an element is the
-group: the maintainer, 2026-10-10), and Rf to Cn, whose complexes are not
-made (lib/chem/perception/elements
-`drawnRoundMetal`). So uranocene and thorocene are sandwiches as
-ferrocene is, and an H on U is a hydride, kept as an atom as on Pd
-(foundation part 3, B1, 2026-11-16; before, the actinoids were not drawn
-round).
+elements - but Rf to Cn, whose complexes are not made
+(lib/chem/perception/elements `drawnRoundMetal`). So uranocene and
+thorocene are sandwiches as ferrocene is, and an H on U is a hydride, kept
+as an atom as on Pd (foundation part 3, B1, 2026-11-16; before, the
+actinoids were not drawn round). Praseodymium, actinium and fermium are
+among them as elements - from a file's element column, a SMILES, 3D - and
+a propyl, acetyl or 9-fluorenylmethyl typed as Pr, Ac or Fm is not: the
+drawing holds the group, and the layout is given the group's name, as it
+is given iPr's (chem/drawing `readAs`; foundation part 3, B2, the
+maintainer's choice of 2026-11-16; before, the three were never drawn
+round, as elements either).
 
 - **A ring bound face-on to a metal through all its atoms** - η⁵-Cp, Cp*,
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from

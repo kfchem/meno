@@ -69,7 +69,6 @@ export const STILL_APART: Copy[] = [
   { concept: "lone pair", file: "lib/chem/cip/prepare.ts", name: "lonePairs", part: "14 B", why: "the conventions' count, for describing a configuration given (a carbanion's lone pair counted with its charge, its fourth place a phantom): not which atoms keep one - the core's rule would refuse a carbanion's label (cip.test.ts)" },
   // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
   { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },
-  { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "hydrogensOf", part: 12, why: "implicitOf's count and the hydrogen atoms bonded: goes with implicitOf" },
   { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: 12, why: "a P and an S at their higher valences where the bonds pass the lower: part 12b" },
   { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
   // a plain hydrogen: each a variant for its own question, named, or onto the core's test in its file's queue
@@ -86,8 +85,6 @@ export const STILL_APART: Copy[] = [
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Tetrahedral", part: 14, why: "re-exported from the core: no consumer's import line changes in the PR that made the core" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Axial", part: 14, why: "re-exported from the core, as Tetrahedral" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Cumulated", part: 14, why: "re-exported from the core, as Tetrahedral (part 14 A)" },
-  // depth recognised from a ring drawn in perspective: the reading is the core's; what asks it, by the layout's rings, is still the layout's
-  { concept: "depth read", file: "lib/layout/recognised.ts", name: "withRecognisedDepth", part: 11, why: "code in motion: it finds rings by the layout's perceive, which the core may not import; it moves into perception/projection, now that the core has its rings, as a small change of its own" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
   // symmetry: the layout's ranks and the Kekule ranker onto the core's refinement and search (parts 6a, 6b); the orbits of the aromatic form
   // identity's until part 13; and the matchers of two graphs, which are not the symmetry of one

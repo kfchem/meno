@@ -5,7 +5,8 @@ import { wordsSet } from "../../../../../lib/chem/captions";
 import { labelSetOf } from "../../../../../lib/chem/layout2d";
 import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
-import { restyledDrawn } from "../../utils/copyPaste";
+import { centredAt, restyledDrawn } from "../../utils/copyPaste";
+import { chairDrawing, FIRST_FORM } from "../../projections/chair";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -44,6 +45,7 @@ import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 import { principalTurn } from "../../utils/align3d";
 import { noteTurns } from "../turnJournal";
+import { fischerCentres, fischerWedges } from "../../utils/fischer";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -124,6 +126,17 @@ const SELECTION_KEYS = ["sel", "selAnchor", "sel3d", "chosen3d", "selFlow", "pdf
 type PressNote = { depth: number; state: WorkspaceDocument; selection: Pick<EditorState, (typeof SELECTION_KEYS)[number]> };
 /** The press noted last, by its document: none once taken back. */
 const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
+
+/**
+ * A chair the Quick Add icon put down, by the model it left: its ring atoms' ids in the solid's order, its ring's middle, its form and its
+ * bond's length. A click on the icon while the model is still one of these - the chair the last step put down or turned, nothing since -
+ * turns that chair to its other form instead of putting down another (`putChair`).
+ */
+type ChairPut = { ids: number[]; at: { x: number; y: number }; form: 0 | 1; length: number };
+const chairPuts = new WeakMap<Model, ChairPut>();
+
+/** How near the chair just put down Quick Add is opened for its icon to turn that chair, in bonds from its ring's middle: on it, not beside it. */
+const CHAIR_TURN_REACH = 2;
 
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
@@ -213,6 +226,10 @@ export const createModelSlice = (
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
     // (a frame of a drag or a turn: a mark between bonds it leaves apart kept until it ends - `settleMove`)
     whileMoving(() => doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`)));
+  },
+
+  placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => {
+    doc.edit(name, (d) => ops.placeAtoms(d, moves));
   },
 
   dropMoveAtoms: (gesture: string) => {
@@ -484,6 +501,12 @@ export const createModelSlice = (
   // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's
   //  round, about itself, where the kind is the right-clicked bond's own: utils/bondKinds `bondKindStepPatch`; nothing, where
   //  it would change nothing)
+  readFischer: (at: number) => {
+    const patches = fischerWedges(fischerCentres(get().model, at));
+    if (!patches.length) return false;
+    doc.edit("read as a Fischer projection", (d) => patches.reduce((acc, [id, patch]) => ops.updateBond(acc, id, patch), d));
+    return true;
+  },
   setBondsKind: (ids: readonly number[], kind: BondKindName, stepOn = false) => {
     const { model } = get();
     const patches = ids.flatMap((id) => {
@@ -713,6 +736,31 @@ export const createModelSlice = (
       extend: { active: false, atomId: null, pointer: null, mode: "snap" },
       fitNonce: prev.fitNonce + 1,
     }));
+  },
+
+  putChair: (at: { x: number; y: number }) => {
+    // (the chair just put down, unchanged, and Quick Add opened on it - within two bonds of its ring's middle: turned to its other form, the
+    //  view from the other side, as one step; again, back. Opened anywhere else, another chair is put down there)
+    const was = chairPuts.get(get().model);
+    if (was && Math.hypot(at.x - was.at.x, at.y - was.at.y) <= CHAIR_TURN_REACH * was.length) {
+      const form: 0 | 1 = was.form === 1 ? 0 : 1;
+      const d = chairDrawing({ at: was.at, form, firstId: 1, firstBondId: 1, length: was.length });
+      const moves = was.ids.map((id, k) => ({ id, x: d.atoms[k].x, y: d.atoms[k].y, z: d.atoms[k].z }));
+      doc.edit("the chair's other view", (dd) => ops.placeAtoms(dd, moves));
+      chairPuts.set(get().model, { ...was, form });
+      return;
+    }
+    const drawing = chairDrawing({ at, firstId: 1, firstBondId: 1 });
+    const before = new Set(get().model.atoms.map((a) => a.id));
+    get().pasteModel(centredAt(drawing, at));
+    const added = get().model.atoms.filter((a) => !before.has(a.id));
+    if (added.length !== 6) return;
+    // (each new atom matched to the drawing's atom of the same place, by the shift the paste gave them all)
+    const middle = { x: added.reduce((sum, a) => sum + a.x, 0) / 6, y: added.reduce((sum, a) => sum + a.y, 0) / 6 };
+    const shift = { x: middle.x - at.x, y: middle.y - at.y };
+    const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
+    if (new Set(ids).size !== 6) return;
+    chairPuts.set(get().model, { ids, at: middle, form: FIRST_FORM, length: drawing.scale });
   },
 
   pasteModel: (given: Drawn) => {
