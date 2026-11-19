@@ -198,11 +198,15 @@ async function laidOutWithLabels(part: Model, expanded: ReadonlySet<number>): Pr
  * written so, and applied as one undo step. What *Expand abbreviation* has
  * just drawn out is left drawn out. Refuses, rather than changing anything,
  * if the structure changed meanwhile, or if the new layout would not say
- * the stereochemistry the old one said.
+ * the stereochemistry the old one said. A projection - a ring drawn in
+ * perspective, a chair the Projections tool put down - is kept where it is
+ * and what is flat on it laid out onto it (`relayoutFrom`); `flat` lays it
+ * out flat as any structure (a chair's right-click *Draw flat*).
  */
 export async function cleanUp(
   store: EditorStore,
   around: number | Iterable<number> | null = null,
+  flat = false,
 ): Promise<void> {
   // (each structure shown magnified laid out at its true size, and shown as large again: store relayout, utils/trueSize)
   const held = store.getState().model;
@@ -234,7 +238,7 @@ export async function cleanUp(
   // another - left as it is drawn, named, and the rest laid out all the same, as one step
   const tried = cleaned.map((c) => {
     try {
-      return { c, change: relayoutFrom(written, c.part, c.job, c.laid, style) };
+      return { c, change: relayoutFrom(written, c.part, c.job, c.laid, style, flat) };
     } catch (e) {
       return { c, why: e instanceof Error ? e.message : String(e) };
     }

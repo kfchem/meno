@@ -491,12 +491,12 @@ where a SMILES typed waits for it, "This is drawn when it is ready."; and
 "Starting <plugin>. The first one takes a moment." as it starts; a SMILES
 no plugin here reads says what does, as before. The icons: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text and an arrow (*Arrows* below); then two groups, each with a
+SMILES, text and an arrow (*Arrows* below); then three groups, each with a
 small mark at its corner, each opening a row of its own below the first,
 with no heading (the maintainer, 2026-10-29, layout A): *Scheme* - a "+",
 an electron-pushing arrow (from the first atom or bond pressed,
 *Electron-pushing arrows* below), a catalytic cycle and a slide of what
-is seen (docs/PRESENTING.md) - and *Marks on the page* - a rectangle, an
+is seen (docs/PRESENTING.md) - *Projections* - the chair (below) - and *Marks on the page* - a rectangle, an
 ellipse and a line, each drawn from where the double-click was by a drag
 from its icon, or traced with the button up until a click
 (docs/PRESENTING.md, *Shapes*), and *Pen*, its card opened, to write by
@@ -593,7 +593,41 @@ bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 canvas*), a double-click on empty space shuts it instead - the work comes
 back to the canvas (the maintainer, 2026-10-10) - and the next opens
 Quick Add.
-*SMILES*, *Scheme*, *Marks on the page* and *Calculations* open and shut their panels a click
+**Projections** (the maintainer, 2026-11-13: one Quick Add group, *Projections*, an icon each; Clean-up keeps a projection as drawn, *Draw flat* is in its menu; 3D takes the configuration only). A tool puts down a
+solid of lib/chem/perception/projection drawn as the textbook draws it (`drawn`: a chair's bonds on four directions, each the style's bond length,
+the axial ones vertical), as ordinary atoms and bonds that carry the depth of its true view (`Atom.z`, nearer larger) and the flag that their
+configuration is the drawing's (`stereoCentre`). Every bond is plain: a ring in perspective is drawn with plain bonds (IUPAC 2006 ST-3.3). After
+that it is a drawing like any other - nothing remembers that a tool made it - and what Meno does with a structure works on it through its depth
+(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; the icon chosen
+again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
+was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
+"Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
+(`Workspace/projections/`: `chair`, `extend`, `flip`); the Haworth ring and the Newman projection follow.
+- **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
+  seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
+  not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
+  (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+- **R and S** are shown at once on the ring's atoms (`stereoShown`): none while there is no centre, each as a group makes one.
+- **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
+  goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard
+  (`sameStereo`) is asserted before anything moves - a failure is a fault of Meno's, said, nothing moved. Offered where the structure holds one chair
+  and every group stands at one of its atom's free positions (a group drawn by hand is not guessed at), and where the chair stands alone (`ringAlone`:
+  a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
+  *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
+  would not be.
+- **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
+  below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
+  configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
+  nothing - and the drawn conformation is neither a start nor a limit of the conformer search; a notice says so when it is made. Known answers
+  (tests): every pair of groups on a chair, in either view and either flip, read back from the MOL a flat reader is given as the same identity; trans-
+  1,2-dimethylcyclohexane diequatorial and flipped diaxial are one compound, cis another.
+- **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
+  "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
+  hand keeps its depth: what is read may change, and only the labels say so.
+- **Limits.** No five-ring or bridged ring from the tools; no ring fused on a chair by the tool yet (Fuse comes in its own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered; a fused system is not
+  flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
+
+*SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,
 utils/press; double-clicked, a panel opened and shut again at once).
 After a thin rule, one more button - *Calculations* - opens below the
@@ -861,6 +895,27 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **A hashed line read** (2026-11-19; IUPAC 2006 ST-0.3). Hashes drawn as
+  a line (the bold dashed bond), and a hashed wedge drawn the wrong way
+  round, are read as "below" at a stereocentre only where the text grades
+  them acceptable: from the centre to an end group - an atom with at most
+  one other group not a hydrogen (an H, a halogen, OH, NH2, a methyl, an
+  ethyl, an ethoxy, a CHO) - the centre with no wedge of its own and no
+  other such line (`perception/stereo/from2d` `hashedLinesRead`). A
+  centre with a wedge narrow at it is read from the wedge, the line not
+  looked at. Otherwise the line states nothing, and a centre with no
+  wedge of its own is open, saying why: "a hashed line between two
+  stereocentres states neither", "a hashed line to a group of this size
+  does not say which end it belongs to" (an isopropyl, a phenyl, a COOH),
+  or "two hashed lines at one atom". A hashed line along a ring bond - a
+  ring's far edge in perspective - states nothing ("a hashed line along a
+  ring bond states neither end"), nor a reversed hashed wedge along one;
+  and an allene's end is no end group: a wedge out of it states the
+  allene's axis. Exactly one such line is narrower
+  than the text, which allows two: the safe side. A solid wedge the wrong
+  way round, a bold line and a dashed line state nothing, as ever. Meno
+  never draws these forms; it reads them where a chemist or a figure
+  does. A figure's even hashes - no end narrower - are such a line.
 - **A wedge's narrow end is kept by atom** (`Bond.narrow`). A wedge or
   hashes, and a ring's bond in perspective, are narrow at the atom they
   were drawn, read or laid out narrow at, and stay so while bonds are
@@ -873,6 +928,43 @@ Both go together, because both touch every layer.
   on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
   plain again with the other end narrow next time round; the wedge's icon
   in its menu, pressed again, turns its narrow end to the other atom.
+- **A Fischer projection** (2026-11-18). A structure drawn as one - each
+  stereocentre a cross of four plain bonds on the page's axes, the chain
+  upright, its centres one above another - states no configuration of
+  itself, and Meno guesses none: plain bonds lie in the page. Its menu (a
+  right-click on any of its atoms or bonds) offers *Read as Fischer
+  projection* (`utils/fischer.ts`). At each cross that is a stereocentre
+  (four bonds, in no ring, each within the reader's 10 degrees of level
+  or upright, its four groups unlike - or only its two upright groups
+  alike, each holding such a cross, as the middle carbon of ribitol and of
+  xylitol: told apart only by the configurations about it, which the CIP
+  then reads r or s, or none where it is no centre, as in D-arabinitol),
+  the two level bonds become solid
+  wedges narrow at it and the two upright bonds stay plain: the horizontal
+  groups toward the viewer, as the Fischer projection of the acyclic form
+  has them (A. D. McNaught, Nomenclature of carbohydrates (IUPAC
+  Recommendations 1996), Pure Appl. Chem. 68 (1996) 1919-2008, 2-Carb-3),
+  and a cross with two like wedges opposite is a form the reader reads by
+  its ordinary rules (IUPAC 2006 ST-1.1.3, ST-1.8). One step, undone as
+  one ("Read as a Fischer projection"). Nothing is stored to say it was a
+  Fischer projection: the wedges say it.
+  - The centres must stand one above another: the line from the topmost
+    to the lowest within the reader's 10 degrees of upright, however many
+    there are, each within a quarter of a bond of that line.
+  - Not offered where no cross lies on the axes (a chain turned a quarter
+    has its crosses side by side, not one above another), at a metal (a
+    metal drawn as a plus is read as drawn, square planar where it surely
+    is), where a cross's
+    bond is already a wedge, hashed, bold or dative, at a ring atom, or
+    where a cross's groups are alike otherwise (it is no stereocentre; such
+    a cross among others is left plain).
+  - A single cross has no chain to tell up from down by: it is read as it
+    lies, on the chemist's word. Turned a quarter before the command, it
+    gives the enantiomer.
+  - A cross of plain bonds, in no ring, read from a PDF's figure says so at its centre
+    - "Drawn as a cross of plain bonds: no configuration is read. Read as
+    Fischer projection, if it is one." - and nothing is read until the
+    chemist asks (`lib/figure/structure.ts`).
 - **A bond in front of another.** Where two bonds of one structure drawn
   by hand cross, the chemist says which is in front: a right-click on
   either bond, near the crossing, offers *In front* and *Behind*, said of
@@ -1430,6 +1522,68 @@ All hover-based, as above.
     (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
     alike. Atom numbers on a molecule in 3D still fade below their own least
     size with the zoom, atom by atom, in the 3D view's shaders.
+- **When an edit turns a configuration** (foundation part 15, phase 2;
+  the maintainer's direction of 2026-11-04: the configuration is read
+  from the drawing, and a change of it is said). After each edit is done,
+  the structures it touched are read again with the one reader (with depth
+  and the cage fit) and compared with what they stated before, unit by
+  unit (part 14 C's one comparison). Where the edit turned, opened or
+  closed a configuration, a short note by that atom or bond - in the
+  widest gap between the bonds there, a bond out, clear of every label of
+  an atom bound to it (`placeOf`) - eases in, stays a moment and eases out:
+  - "C3: R, now S" where a centre turned (an atom dragged across its
+    centre's other bond; a wedge made a hash), "C4=C5: E, now Z" for a
+    double bond, its descriptors before and after (Meno's own CIP, worked
+    out off the drawing's thread); "C3: turned" where the CIP gives none;
+  - "C3: now open" where the drawing no longer states it - a wedge made
+    plain, a wavy bond, a double bond drawn "either";
+  - "C3: no longer read: " and why, where its marks are there but say
+    nothing the reader can read (two of its bonds dragged into line), and
+    "C3: now read: R" where they say it again;
+  - "every centre turned: the mirror image" where every unit of a
+    structure turned at once - one note, not one for each.
+  The atom's name is its element and its place in the drawing, counted
+  from 1. Nothing is said where nothing changed, where a unit is simply
+  new (a wedge just drawn), gone with its atom or with one of its groups,
+  or no longer a unit because two of its groups are now alike; nor while
+  a gesture is still going (a drag says it once, as it ends), nor for undo
+  or redo, which give a drawing back with its configuration, nor for a
+  file opened, a drawing put in anew. Another
+  centre's R or S may follow a turned one without its own configuration
+  changing (its groups' ranks moved): its mark changes, and no note calls
+  it changed. The note asks nothing and stops nothing: the drawing wins,
+  and undo gives back what the edit changed. A note that would come after
+  the drawing has changed again is dropped. Meno's own moves - Clean-up,
+  Turn over (which exchanges solid and hashed wedges as it turns a drawing,
+  Brecher 2008, GR-3), Rotate, Expand, Contract, a stack gathered again - keep
+  every configuration; where one did not, that is Meno's fault: the same
+  note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
+  Meno's log records which move. The structures are read in a moment the
+  page is idle after the change (where the page has no such moments, after
+  the next frame), only those it touched, each step said as its own
+  (`Workspace/configuration`: `configurationChanges`, `watchConfiguration`;
+  `components/ConfigurationNotes2D`).
+  **The configuration kept.** What a structure states is kept on its own
+  atoms and bonds, by id (`Atom.config`, `Bond.config`;
+  configuration/kept): each centre's neighbours and sense, each double
+  bond's two refs and whether they are on one side, each axis's two refs -
+  at each end the other neighbour its sense is taken against - and that
+  sense; "open" where the drawing says it is not known; unread, with why,
+  where its marks say nothing readable. Every atom a unit names is kept by
+  id, so a renumbering - a paste - takes its meaning along: an axis's sense
+  kept alone, against whichever neighbour had the lower id, would name the
+  other hand once the ids changed. A unit whose two ends are not bonded to
+  each other - an allene's axis, an odd cumulene's cis or trans - is kept
+  on the first bond of its run, its ends named. It is kept after each change, in the
+  change's own step, so that undo takes it back with the drawing - and a
+  drawing just opened keeps it with the first change made to it, no step
+  of its own. The note says what an edit changed against what is kept:
+  where keeping went wrong - a copy pasted on new ids, a file read - the
+  note shows it. It is saved in the workspace's file and in a copy, read
+  back only where it is whole and of the drawing's own atoms, and goes
+  with a drawing pasted, on its new ids. Identity, Clean-up, R and S, 3D
+  and the files still read the marks: none of them takes what is kept
+  yet.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -2203,7 +2357,27 @@ lipids each have their own way of being drawn, which it should know.
      its wedge and laid out like any other, on one wedge. A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
-     the ring is drawn. Nor does a double bond cumulated with another - an
+     the ring is drawn. Nor does a double bond with an end whose two other
+     groups are alike, however it is drawn: turned over, it is the same
+     molecule (2-methylbut-2-ene's, a prenyl's, a cyclohexylidene's, whose
+     ring's two arms are alike), so no cis or trans is read there, and none
+     is kept or laid out as one. "Alike" counts the rest of what the
+     drawing shows: (4-methylcyclohexylidene)acetic acid's ring arms are
+     alike while its C4 has no wedge, and its C=C is then read as none;
+     with C4 wedged they are not, and the two together state one
+     enantiomer. A mass number tells two groups apart (a (13C)methyl from
+     a methyl). One test, the symmetry's (`perception/symmetry.ts`
+     `settingCisTrans`), for the reader and every canonical reading
+     alike. Nor does a double bond with an end that is no trigonal-planar
+     centre - one whose neighbours, hydrogens and lone pairs are more than
+     three, by VSEPR - however it is drawn: a sulfonium ylide's S (three
+     neighbours and a lone pair), a sulfoxonium ylide's or a sulfoximine's
+     S (four neighbours), a phosphorus ylide's P, a metal carbene's metal.
+     Such a "double bond" is ylidic or dative, with no planar pi bond to
+     hold a cis or trans. A sulfine's C=S=O keeps its E and Z (its S has
+     two neighbours and a lone pair), as do a silene's and a disilene's.
+     The lone pairs are counted as the CIP counts them; the same test, in
+     `settingCisTrans`. Nor does a double bond cumulated with another - an
      azide's N=N, an allene's C=C - whose shared atom is straight through:
      it has no cis or trans, however a drawing bends it (phenyl azide from
      a SMILES was refused, 2026-10-13). A chain of three cumulated double

@@ -54,7 +54,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto" | "torsions" | "repeat";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "fewer" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto" | "torsions" | "repeat";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -791,6 +791,39 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.keep === "one" ? (String(v.property ?? "").trim() ? `First's, then Second's: one of each ${String(v.property).trim()}` : "Name the property to keep one of each") : "First's, then Second's: all \u00b7 several wires into one input do the same"),
     needs: (v) => (v.keep === "one" && !String(v.property ?? "").trim() ? "Name the property to keep one of each" : undefined),
+  },
+  {
+    // (of two sets, which pass on - First's out of the first exit, Second's out of the second, each as it came or not at all: by default, both
+    //  where their entries per compound are within a quarter of their sum, else only the side with fewer - ConfoTS's own rule for which way
+    //  its reaction paths run: workflow/structureSteps `fewerSideSet`)
+    kind: "fewer-side",
+    name: "Pass the side with fewer",
+    icon: "fewer", family: "structures",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "First's",
+    inputs: [
+      { id: "first", name: "First", takes: ["molecules", "conformers"] },
+      { id: "second", name: "Second", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Second's", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "pass",
+        label: "Pass",
+        type: "choice",
+        choices: [
+          { value: "auto", label: "The side with fewer, or both where alike" },
+          { value: "both", label: "Both" },
+          { value: "first", label: "First only" },
+          { value: "second", label: "Second only" },
+        ],
+        default: "auto",
+      },
+    ],
+    how: (v) =>
+      v.pass === "both" ? "Both pass" : v.pass === "first" ? "First only passes" : v.pass === "second" ? "Second only passes" : "Entries per compound: within a quarter of their sum, both pass; else the side with fewer",
   },
   {
     // (each geometry given a bonding entry's bonds and charges - each with each, or paired on a property - those that cannot be out of the second exit, saying why)

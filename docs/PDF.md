@@ -443,16 +443,51 @@ measurements.
   line's fit (2026-11-18): at 300 dpi the widths are measured a line
   apart and the pixels' grid makes them uneven by a fifth, so the fit
   failed most wedges.
-- **What else it is**: a round line closed on itself, a curve (an aromatic
-  ring's circle); a short bar or a dot on its own, a stroke (a hash's
-  line, a charge's); anything else small, its outlines, for the letters'
-  matcher. Every tolerance is in the drawing's own line width or bond.
+- **The bond** is measured as the reader measures a PDF's, on the lines
+  of the patches at least six tenths as large as the largest: a
+  structure's, not its letters'. An H or a D is three strokes, and a small
+  molecule's labels hold more strokes than its bonds (2026-11-18).
+- **What else it is**: a round line closed on itself, with four lines or
+  more of patches larger than a letter round it, each running across the
+  way out of its middle within 30 degrees and lying within a bond of it,
+  a curve (an aromatic ring's circle, its ring's bonds round it); one with
+  fewer is a letter - an O, an o, a 0 - however large, the lines by a
+  letter pointing at it (2026-11-18). A short bar or a dot on its own, a
+  stroke (a hash's line, a charge's). Anything else up to a bond across,
+  its pieces each up to 0.85 of a bond and joined, bent or closed, a
+  letter: its outlines, for the letters' matcher (2026-11-18: a drawing's
+  letters stand up to four fifths of its bond where its bonds are drawn
+  short). One upright line alone, free at both ends and as tall as a
+  letter, is a letter where a letter as tall stands beside it on its line
+  - the l of Cl, the 1 of 13 - and a line where none does. Every tolerance
+  is in the drawing's own line width or bond.
+- **Not read** (2026-11-18): a picture whose bond is under 25 of its
+  pixels is drawn too small to read, and is said to be: the round trip
+  read such pictures wrong, with no mark, more often than it said them
+  (as at 100 dpi and under, and for small structures at 150). A picture a
+  tenth of whose ink lies in grey fields - pixels between a fifth and four
+  fifths inked with all eight round them so too - is shaded, as a
+  photograph or a rendering of a model is, and is no drawing to read; a
+  drawing's grey lies at the edges of its lines.
+- **Ink read as nothing** (2026-11-18): read from a picture, the atom
+  nearest a letter-sized patch the matcher reads as no letter, within 0.6
+  of a bond, or nearest letters read in no label, within 1.2 bonds, is
+  unsure, and says so. A label the matcher cannot read, or whose bond was
+  lost, would otherwise be left out with what it holds, and what is left
+  can be a whole structure that is not the picture's.
+- **Its letters traced** (2026-11-18): a picture holds no text, so its
+  letters are traced too and read by the matcher, as a PDF's letters
+  drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes
+  letters over the picture, those are read as written.
 - **Measured** on Meno's own round trip: each drawing printed as a PDF,
   its figure drawn as a picture at a resolution and traced, then read
   and compared with what it was drawn from (`scripts/figure/roundtrip`,
-  `RT_DPI`). The drawings of one way of printing were kept apart, never
-  looked at while the rules above were set, and measured once at the
-  end.
+  `RT_DPI`), its letters traced too (`RT_LETTERS=traced`), and spoilt as
+  pictures in papers are - saved as JPEG at qualities down to 25, or made
+  a scan of, turned a little, blurred, black and white and speckled
+  (`RT_JPEG`, `RT_SCAN`) - at 600 to 72 dpi. The drawings of one way of
+  printing were kept apart, never looked at while the rules above were
+  set, and measured once at the end of each stage.
 
 ## A text
 
@@ -1014,13 +1049,13 @@ Not yet, and where it comes:
 ### Step 4b: figures cut out of a PDF (2026-10-09)
 
 Built:
-- **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
+- **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures and shadings - each with its box, in points from the page's top left as it is drawn. A form, which holds more, is opened (2026-11-18): each of its things is listed where the form's transforms put it, a form within it too. A journal sets a whole scheme, or a page's figures together, as one form; taken whole, it was one figure as large as the scheme or the page, however many compounds and panels it held. From them:
   - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is. One line with an atom's label at an end of it, along it - CH3NH3+ - is one too, however thin: the label read as a structure's labels are (NH3+, OMe, CH3 - never a number nor a word), the line a bond and a half long at most (a bond drawn as long as its label's letters are tall and half again). A word's underline, its word over it, is none, nor a rule with a word or a number at its end ("Date ____", "____ 12", a leader).
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame, nor a filled shape across nearly all of the page's width - a panel's ground, behind an abstract's words and its figure.
   - Nor is page furniture (2026-11-13): a banner or a button - one shape round words, the words a quarter of its area or more ("Read Online") - or anything no taller than 40 points in the page's header or footer band (the top or bottom twentieth of a page as high as a page of text, 400 points), a journal's logo; and a picture in a frame - its pictures half of what the figure spans, the little else drawn level and upright lines - a cover's thumbnail, is no drawing: its frame's lines are no structure (`framedPicture`).
   - Nor is a page scanned after all: a figure over most of the page, most of it picture, with the page's words within it - its picture in strips further apart than a scan is told by, the words read over them widening it (2026-10-14). A figure drawn with lines as large, on a page cut close round it - a scheme exported as a PDF of its own - is still one.
   - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it. A "+" drawn with lines - one filled cross, or a stroke each way - square, at least 2.5 points across and at most 14, by no word (a charge drawn with lines is as small, but by its label), joins them as a written one does; and a "+" written is never a line beside a structure (*Structures picked from a PDF*).
-  - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
+  - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one. Labels are taken a line at a time, two lines at most: each word is judged against the figure as it stood before that line was taken (2026-11-18; taken word by word, each against the box the words before it had widened, a column's lines under a scheme were taken one after another, down to the page's foot). No word is taken across a rule that lies between it and the figure, over all the width they share: the rule a journal sets under a scheme, with the column beyond it.
   - A page's figures are worked out once, when its words are first wanted: as it comes into the column, or onto the screen at a size its words can be read.
 - **A box, in the column.** A press in a figure, or where no word is near, begins a box.
   - Let go where it was pressed, in a figure, it is that figure's box, labels and all - on a link too; with ⌘ (Ctrl) held, the link is followed instead.
@@ -1370,7 +1405,14 @@ it where it lies out of view.
     drawing's bonds are most of what it is drawn with - `barBond`,
     `outlineChains`, lib/figure/read; the scheme reader tells them before it
     reads anything of them, and the figure's own bond, for all else, is that of
-    what is drawn besides its chains, whether they are kept or not): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), or
+    what is drawn besides its chains, whether they are kept or not - but where
+    chains are kept, only of its lines joined at both ends, each end within
+    0.15 of the bars' bond of another line's at an angle of 15 degrees or more,
+    and the bars' bond where their bars are four times as many as those lines
+    of theirs (2026-11-18: an outline drawing's own lines are its wedges and
+    its bonds cut short at labels, a C=O to its O, each with an end free, and
+    taken alone a drawing in its own box read short; the joined lines beside
+    a drawing in outlines may be a chart's, at twice its bond - `bondOf`)): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), or
     1.1 where one of its bars is a whole bond (0.85 to 1.15 bonds) - a chain whose end bars are cut short where its labels are set, as a dioxolane's
     O-CH2-CH2-O is, 1.2 to 1.3 across - every bar
     from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
@@ -1380,7 +1422,9 @@ it where it lies out of view.
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
-    behind, narrow where its lines are shortest (its lines, not the joints
+    behind, narrow where its lines are shortest - lines all of one length
+    a hashed line, no end narrow, read by the reader's one rule for a
+    hashed line (*A hashed line read*, EDITOR-2D.md; since 2026-11-19) (its lines, not the joints
     of the bonds at its ends, drawn as dots or thinner pieces; the first
     of its own lines may be a dot: a small filled shape, or a line next to
     nothing long whose round ends make it one, as Meno's own style draws
@@ -1395,7 +1439,8 @@ it where it lies out of view.
     is carried on to the bond end it points at, under half a bond on -
     such a hash may be two lines;
   - a curve that goes to and fro along a line is a wavy bond;
-  - a bond broken where another passes in front of it - a bridge's, a
+  - a bond broken where another passes in front of it - a line, or a wedge
+    (a perspective drawing's near edge is often one) - a bridge's, a
     cage's back edge, a double bond's two lines - is joined again, however
     short one of its pieces, and its pieces are never a hash's lines; its
     gap may be near half a bond (nine twentieths), as a figure with many
@@ -1457,7 +1502,9 @@ it where it lies out of view.
   letters.
 - **Atoms**: where bonds' ends meet, a carbon (but two ends pointing into
   one word do not meet each other there: bonds drawn short of a metal
-  from two sides; and an end by both ends of a bond shorter than ends lie
+  from two sides - unless they lie together, a tenth of a bond apart, as
+  a bold bar's end and a wedge's do at a ring's corner set just over a
+  Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
   word (one so short both its ends lie in the word's box, its other end

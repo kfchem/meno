@@ -11,6 +11,10 @@ The benchmark in `scripts/layout` measures the engine against these rules
 (`src/lib/layout/metrics.ts`) and shows every drawing beside the structure
 its Wikipedia article uses.
 
+A projection the Projections tool put down (docs/EDITOR-2D.md, *Projections*) is kept as drawn by Clean-up, what is flat on it laid out
+onto it, as any ring in perspective is (docs/EDITOR-2D.md, *Clean-up keeps a projection*); its right-click *Draw flat* asks the layout for
+all of it, ring and all, wedges for its depth.
+
 Clean-up gives one drawing, the best it finds, and the same drawing
 whatever order the atoms come in (the maintainer, 2026-10-14). Every
 choice on the way is made by the structure, or by trying each way at that
@@ -21,9 +25,10 @@ tried. `npm run layout-order` lists the molecules still drawn otherwise in
 another order. Where the rules below leave a tie, it is settled so:
 
 - **By structure.** Each atom is classed by what it is and what it is
-  bonded to, refined through its neighbours, each stereocentre and each
-  double bond (`ranks.ts`): atoms of one class are alike in everything
-  the layout looks at. A branch's slots go by the weight of what hangs,
+  bonded to, refined through its neighbours, each stereocentre, each
+  double bond and each axis - the core's ranks of the structure
+  (`src/lib/chem/perception/symmetry.ts`, which `ranks.ts` asks): atoms of
+  one class are alike in everything the layout looks at. A branch's slots go by the weight of what hangs,
   then a single bond before a double one, then by class; the ring a
   system is started from, and each ring after it, by the rings' ranks,
   then the one with the most bonds out of the system, then by its atoms'

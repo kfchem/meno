@@ -1,3 +1,4 @@
+import { stereoSaidRows } from "../utils/stereoSaid";
 import clsx from "clsx";
 import { longPressMs } from "../longPress";
 import PageHtml from "./PageHtml";
@@ -198,6 +199,11 @@ export type Molecule3DViewProps = {
    * without anything drawn again but the frame (StyleEditor/Preview3D's samples).
    */
   turning?: { readonly current: THREE.Quaternion };
+  /**
+   * How it is turned now, read as each frame is drawn, in place of `turn`: on the page, its turn as the store holds it, so that a turn set
+   * during the frame - a molecule let go turning on (utils/coast) - is drawn in that frame, not the next, when the page is drawn again.
+   */
+  turnOf?: (id: number) => Turn3D | undefined;
   /** How lit its outline is: 0 not at all, 1 hovered or turning, 2 moving. */
   lit: number;
   selected: boolean;
@@ -396,6 +402,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const ribbonMade = useRef(-1);
   const { invalidate, camera, size, gl } = useThree();
   const quaternion = useMemo(() => (turn ? new THREE.Quaternion(...turn) : new THREE.Quaternion()), [turn]);
+  // (the turn read as the frame is drawn, `turnOf`'s: made again only when it has changed)
+  const turnRead = useRef<{ of: Turn3D | undefined; q: THREE.Quaternion } | null>(null);
   // how it is turned as drawn: following a drag at once, going over to a turn set afresh
   const shownTurn = useRef<THREE.Quaternion | null>(null);
   // how large it is shown (docs/WORKSPACE.md, *Magnified display*): going over to a magnification set, not jumping
@@ -928,7 +936,13 @@ function Molecule3DView(props: Molecule3DViewProps) {
     if (seen) dolly.current.matrix.copy(seen);
     else dolly.current.matrix.identity();
     dolly.current.matrixWorldNeedsUpdate = true;
-    const turnTo = props.turning?.current ?? quaternion;
+    let turnTo = props.turning?.current ?? quaternion;
+    if (!props.turning && props.turnOf) {
+      const now = props.turnOf(m.id);
+      let read = turnRead.current;
+      if (!read || read.of !== now) read = turnRead.current = { of: now, q: now ? new THREE.Quaternion(...now) : new THREE.Quaternion() };
+      turnTo = read.q;
+    }
     if (!shownTurn.current || shownTurn.current.angleTo(turnTo) < TURN_FOLLOWED) {
       shownTurn.current = turnTo.clone();
     } else {
@@ -1737,6 +1751,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
       made: m.made,
       said: m.said,
       noShares: m.conformerSet ? sharesWithheld(m) || undefined : undefined,
+      // (where R and S are shown on it: the units it shows none on, and why - utils/stereoSaid)
+      ...(stereoSaidRows(m).length ? { stereoSaid: stereoSaidRows(m) } : {}),
       conformers: m.conformerSet,
       ...(props.searching ? { searching: true } : {}),
     }),

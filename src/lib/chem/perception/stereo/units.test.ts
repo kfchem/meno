@@ -7,9 +7,12 @@ import { describe, expect, it } from "vitest";
 import { smilesInput } from "../../../layout/smilesInput";
 import { filledIn as filledInIdentity, identity } from "../../identity";
 import { CHELATE_RING as fromChelateRing } from "../../chelateRing";
-import { CHELATE_RING, filledIn } from "./units";
+import { blanksOf, CHELATE_RING, filledIn } from "./units";
 
 const id = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
+/** All written one identity, or each its own (the review's pins at the file's end). */
+const one = (...smiles: string[]) => expect(new Set(smiles.map(id)).size).toBe(1);
+const apart = (...smiles: string[]) => expect(new Set(smiles.map(id)).size).toBe(smiles.length);
 
 describe("identity's fill, moved into the core", () => {
   it("is the one identity imports and the one the chelate ring's number comes from", () => {
@@ -19,6 +22,11 @@ describe("identity's fill, moved into the core", () => {
 
   it("fills what sets nothing as before: propan-2-ol written with its CH either way, and not, is one", () => {
     expect(new Set([id("C[C@H](O)C"), id("C[C@@H](O)C"), id("CC(O)C")]).size).toBe(1);
+  });
+
+  it("takes a ring's double bond as able to carry cis or trans from eight atoms: cyclooctene's (trans-cyclooctene is made), not cycloheptene's", () => {
+    const bonds = (smiles: string) => blanksOf(smilesInput(smiles) as unknown as Parameters<typeof blanksOf>[0]).filter((b) => b.kind === "bond").length;
+    expect([bonds("C1=CCCCCC1"), bonds("C1=CCCCCCC1")]).toEqual([0, 1]);
   });
 });
 
@@ -94,6 +102,30 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
     one("CN=P(c1ccccc1)(c1ccccc1)c1ccccc1", "C[N-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
   });
 
+  it("a phosphorus ylide drawn P=C and drawn P+-C- is one identity (Wittig's reagents), both ways", () => {
+    one("C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "[CH2-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+    one("CCOC(=O)C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "CCOC(=O)[CH-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+    // (a cyclopentadienylide's: the ring's carbanion, three single bonds)
+    one("P(c1ccccc1)(c1ccccc1)(c1ccccc1)=C1C=CC=C1", "[P+](c1ccccc1)(c1ccccc1)(c1ccccc1)[C-]1C=CC=C1");
+    // (and two ylides apart still)
+    apart("C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "CC=P(c1ccccc1)(c1ccccc1)c1ccccc1");
+  });
+
+  it("a P-chiral ylide keeps its configuration: its two hands two, each one identity drawn either way", () => {
+    one("C[P@+](CC)(c1ccccc1)[CH2-]", "C[P@](CC)(c1ccccc1)=C");
+    one("C[P@@+](CC)(c1ccccc1)[CH2-]", "C[P@@](CC)(c1ccccc1)=C");
+    apart("C[P@+](CC)(c1ccccc1)[CH2-]", "C[P@@+](CC)(c1ccccc1)[CH2-]");
+  });
+
+  it("a vinyl ylide is one identity too; only at P: a sulfonium ylide keeps its charges", () => {
+    one("C=C[CH-][P+](C)(C)C", "C=CC=P(C)(C)C");
+    apart("C[S+](C)[CH2-]", "CS(C)=C");
+    // (a carbanion with a double bond of its own is no ylide's: left as drawn)
+    apart("C=[C-][P+](C)(C)C", "C=C=P(C)(C)C");
+    // (nor one of two groups and no H)
+    apart("C[C-][P+](C)(C)C", "C[C]=P(C)(C)C");
+  });
+
   it("a P+ with an O- and an N(-)-R on it is left as drawn, whichever atom comes first: the choice would follow their order", () => {
     one("C[P+](C)([O-])[N-]C", "C[N-][P+](C)(C)[O-]", "[O-][P+](C)(C)[N-]C");
   });
@@ -101,6 +133,37 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
   it("the same whatever order the atoms come in", () => {
     one("CCOP(=O)([O-])OC", "COP([O-])(=O)OCC", "[O-]P(OCC)(OC)=O");
     one("CS(=O)(=O)[O-]", "[O-]S(C)(=O)=O", "O=S(=O)([O-])C");
+  });
+});
+
+// (found in review)
+describe("a P+ with an end chalcogen or an N(-)-R and a carbanion on it: the end is taken, as before the ylide rule (found in review)", () => {
+  it("a phosphine oxide's carbanion drawn P=O and drawn P+-O-, with its C- either side", () => {
+    one("O=P(C)(C)[CH2-]", "[O-][P+](C)(C)[CH2-]", "[CH2-][P+](C)(C)[O-]");
+  });
+
+  it("a phosphonate's carbanion (a Horner-Wadsworth-Emmons reagent's), drawn P=O and drawn P+-O-", () => {
+    one("CCOC(=O)[CH-]P(=O)(OCC)OCC", "CCOC(=O)[CH-][P+]([O-])(OCC)OCC");
+  });
+
+  it("the same with S- and with N(-)-R", () => {
+    one("S=P(C)(C)[CH2-]", "[S-][P+](C)(C)[CH2-]");
+    one("CN=P(C)(C)[CH2-]", "C[N-][P+](C)(C)[CH2-]");
+  });
+
+  it("two O- and a carbanion, and one O- and two carbanions, on one P+", () => {
+    one("[O-][P+]([O-])([CH2-])c1ccccc1", "O=P([O-])([CH2-])c1ccccc1");
+    one("[O-][P+]([CH2-])([CH2-])C", "O=P([CH2-])([CH2-])C");
+  });
+});
+
+// (found in review)
+describe("a phosphorus ylide only: an arsonium and a stibonium ylide keep their charges (found in review)", () => {
+  it("As+-C- and As=C are two structures; so are Sb's, Se's and Te's", () => {
+    apart("C[As+](C)(C)[CH2-]", "C[As](C)(C)=C");
+    apart("C[Sb+](C)(C)[CH2-]", "C[Sb](C)(C)=C");
+    apart("C[Se+](C)[CH2-]", "C[Se](C)=C");
+    apart("C[Te+](C)[CH2-]", "C[Te](C)=C");
   });
 });
 

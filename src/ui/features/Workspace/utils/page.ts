@@ -10,11 +10,13 @@ export const EYE_HEIGHT = 1000;
 /**
  * The order things are done in each frame, before what is left at React
  * Three Fiber's 0 - the labels laid over the canvas (drei's Html) among it:
- * the camera moved first, then the molecules in 3D turned and placed, so
- * that a label is put where its atom is drawn this frame, not the one
- * before. (Below 0, so that the canvas still renders itself.)
+ * the camera moved first, then the molecules let go while turning turned on
+ * (utils/coast), then the molecules in 3D turned and placed, so that a
+ * molecule is drawn as it is turned this frame and a label is put where its
+ * atom is drawn this frame, not the one before. (Below 0, so that the canvas
+ * still renders itself.)
  */
-export const FRAME_ORDER = { camera: -2, molecules: -1 } as const;
+export const FRAME_ORDER = { camera: -2, turning: -1.5, molecules: -1 } as const;
 
 /**
  * How far a camera that sees in perspective stands from the page, where a

@@ -755,6 +755,17 @@ export function complexStructure(
         parts.push(`${it.n > 1 ? `${it.n} ` : ""}${it.bridging ? "μ-" : ""}${word}`);
       }
     }
+    // (mercury(I): two Hg and two groups each bound by one bond, one on each - Hg2Cl2, Hg2(OAc)2 - is X-Hg-Hg-X, the Hg2 2+ pair bonded,
+    //  as a salt of it is read: ./condensed `metalSaltStructure`)
+    const xs = unit.filter((it) => it.kind === "x");
+    if (
+      metals.length === 2 &&
+      metals.every((m) => atoms[m].el === "Hg") &&
+      unit.every((it) => it.kind === "metal" || it.kind === "x") &&
+      xs.reduce((n, it) => n + it.n, 0) === 2 &&
+      xs.every((it) => it.kind === "x" && it.label !== "O" && !it.bridging)
+    )
+      bonds.push({ a1: metals[0], a2: metals[1], order: 1 });
     if (!named) parts.length = named0;
     return metals[0];
   };
