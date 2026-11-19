@@ -1568,7 +1568,8 @@ it where it lies out of view.
   sets a borate's minus over the B of its Bpin; or beside the label, level
   with it or set high, within four fifths of the label's height, with nothing
   written on its other side within as much - a dash between two words is a
-  bond written between them. A plus only beside the label and set high, as
+  bond written between them - and no bracket's side drawn between them: a
+  sign at a bracket's corner ([BF4]-) is the whole ion's, and left as words. A plus only beside the label and set high, as
   Py+ is: one over a word, under it or level beside it is a scheme's "+".
   A charge drawn so lets the atom take the bonds it takes charged: a
   borate's B its four. A lone H at no

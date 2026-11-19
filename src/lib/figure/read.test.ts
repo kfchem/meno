@@ -1309,6 +1309,12 @@ describe("a charge's sign set alone by a label", () => {
   it("is none where a word is set just beyond it - a bond written between two words - or the label reads as nothing", () => {
     // (Me, a space, the dash, a space, the O: each a word of its own)
     expect(chargeOf(figure([one], [...word("Me", [c[0] - 31, c[1]]), ...word("\u2013", [c[0] - 11, c[1]]), ...word("O", c)]), "O")).toBe(0);
+    // (an ion in brackets set tight round its last label, its sign at the bracket's corner just beyond it: the whole ion's, no atom's)
+    const p1 = step(c, 150);
+    const p2 = step(p1, 210);
+    const chain = stroke(along(c, p1, 0.35), p1, p2, step(p2, 150));
+    const bracket = stroke([c[0] + 4, c[1] - 4.5], [c[0] + 5, c[1] - 4.5], [c[0] + 5, c[1] + 4.5], [c[0] + 4, c[1] + 4.5]);
+    expect(chargeOf(figure([chain, bracket], [...word("O", c), ...word("\u2013", [c[0] + 9.4, c[1] - 3.5])]), "O")).toBe(0);
     // (a bond's end at words that read as no atom nor group - a table's cell where a label would be - its dash under them: no atom's)
     const s = read(figure([one], [...word("Qz", c), ...word("\u2013", [c[0], c[1] + 10])]));
     expect(s.atoms.every((a) => !a.charge)).toBe(true);

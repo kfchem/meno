@@ -1537,7 +1537,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a charge's sign set alone by a label that reads - a borate's minus over the B of its Bpin, or before it, as a mechanism draws an ate
   // complex - is that atom's, as one drawn in a ring by it is. A minus: right over or under its letters, no further off than a letter's
   // height; or beside it, level with it or set high, within four fifths of the label's height, nothing written on its other side - a dash between two
-  // words is a bond's. A plus only beside it and set high (Py+): one level with a word, over it or under it is a scheme's "+")
+  // words is a bond's - and no bracket's side drawn between them: a sign at a bracket's corner is the whole ion's, left as words. A plus only
+  // beside it and set high (Py+): one level with a word, over it or under it is a scheme's "+")
   const signed = new Map<number, number>();
   const besides = (k: number): Box[] => [...words.filter((_, j) => j !== k).map((v) => v.box), ...atoms.flatMap((a) => (a.box ? [a.box] : []))];
   words.forEach((w, k) => {
@@ -1563,7 +1564,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       if (gap < -0.2 * w.size || gap >= Math.min(off, w.size, 0.8 * (a.box[3] - a.box[1]))) return;
       // (nothing on its far side, level with it, within a letter's height: no word it joins to this label as a bond would)
       const far = besides(k).some((b) => b !== a.box && b[3] > w.box[1] && b[1] < w.box[3] && (before ? w.box[0] - b[2] : b[0] - w.box[2]) > -0.2 * w.size && (before ? w.box[0] - b[2] : b[0] - w.box[2]) < w.size);
-      if (!far) [best, off] = [i, gap];
+      // (nor a line drawn upright between them - a bracket's side: a sign at its corner, [BF4]-, is the whole ion's, no atom's)
+      const [x0, x1] = before ? [w.box[2], a.box[0]] : [a.box[2], w.box[0]];
+      const bracketed = shapes.strokes.some((t) => Math.abs(t.a.x - t.b.x) < 0.3 * Math.abs(t.a.y - t.b.y) && Math.min(t.a.x, t.b.x) > x0 - 0.1 * w.size && Math.max(t.a.x, t.b.x) < x1 + 0.1 * w.size && Math.min(t.a.y, t.b.y) < c.y && Math.max(t.a.y, t.b.y) > c.y);
+      if (!far && !bracketed) [best, off] = [i, gap];
     });
     if (best < 0) return;
     const charge = (sign[1] ? Number(sign[1]) : 1) * (plus ? 1 : -1);
