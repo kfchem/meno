@@ -2057,7 +2057,7 @@ export type EditorState = {
      * or one of the stroke's own when it closes onto it - so the drawing can
      * lay it out there.
      */
-    preview?: { x: number; y: number; atomId?: number; pathIndex?: number } | null;
+    preview?: { x: number; y: number; atomId?: number; pathIndex?: number; position?: string } | null;
   };
   panHold: { active: boolean; pointerId: number | null };
   suppressDblClickUntil: number;
@@ -2174,6 +2174,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
+  placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
   /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
   settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
@@ -2186,6 +2188,11 @@ export type EditorState = {
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
   pasteModel: (next: Drawn) => void;
+  /**
+   * A chair put down from Quick Add, its ring's middle at `at`, seen from the right (form 1); or, where the chair this put down is still as it
+   * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).
+   */
+  putChair: (at: { x: number; y: number }) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;
@@ -2307,7 +2314,7 @@ export type EditorState = {
   setExtendPreview: (
     x: number,
     y: number,
-    join?: { atomId?: number; pathIndex?: number },
+    join?: { atomId?: number; pathIndex?: number; position?: string },
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */
