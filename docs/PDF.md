@@ -1596,7 +1596,11 @@ it where it lies out of view.
   lens. A structure that reaches out of the picture is kept whole. Where
   nothing of the figure lies outside its pictures, the picture is a
   background - a graphical abstract's, a panel placed as an image - and
-  nothing is taken.
+  nothing is taken. So a rendering with only its distances and angles
+  drawn over it, nothing else in the figure, has them read, as before:
+  a mark over a rendering and a structure over a background cannot be
+  told apart there, and the structure is kept (found in review). An ion
+  alone over a picture is an atom alone, a mark.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
   - **a repeat unit in brackets, counted** (2026-11-05), where it is not
