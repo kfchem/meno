@@ -154,3 +154,15 @@ describe("a structure leaves a set only dragged wholly out (backlog 232)", () =>
     expect(membersOfSet(out)).toEqual([]);
   });
 });
+
+describe("a structure dragged out over several moves leaves once wholly out (backlog 232, found in the GUI run)", () => {
+  it("its middle out first, an atom still in; then every atom out: it leaves", () => {
+    const shifted = (doc: WorkspaceDocument, dx: number) => ({ ...doc, model: { ...doc.model, atoms: doc.model.atoms.map((a) => ({ ...a, x: a.x + dx })) } });
+    const first = page({ x: 0, y: 0, id: 1 });
+    const start = settled(addSet(first, { x0: -2, y0: -2, x1: 2, y1: 2 }), first);
+    const half = settled(shifted(start, 1.5), start);
+    expect(membersOfSet(half)).toEqual([{ structure: [1, 2] }]);
+    const out = settled(shifted(half, 1), half);
+    expect(membersOfSet(out)).toEqual([]);
+  });
+});
