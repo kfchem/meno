@@ -2,7 +2,6 @@
  * Identity of a structure with AND and OR groups at its edges: the most it writes, a search's "complete" carried, groups of a kind
  * numbered either way (found in review).
  */
-// PIN (REVIEW, #1293 bb11d5b7): what identityGroups.test.ts leaves unheld - a search that ran out is carried into a grouped structure's answer, the groups of one kind are told by their places not by the order they are listed in, and each kind is turned on its own; put in src/lib/chem/ beside identityGroups.test.ts.
 import { describe, expect, it } from "vitest";
 import { smilesInput } from "../layout/smilesInput";
 import { identity, type IdentityGroup, type IdentityInput } from "./identity";

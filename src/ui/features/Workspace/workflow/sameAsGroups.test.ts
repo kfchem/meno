@@ -1,7 +1,6 @@
 /**
  * *Same as* in Enumerate and Substituents reading a template's AND and OR groups (chem/identityOf `withGroups`; found in review).
  */
-// PIN (REVIEW, #1293 bb11d5b7): the groups reach Enumerate's *Same as*: the two enantiomers a swapped pair of R groups makes at a wedged centre are one product where the centre is in an AND group, and two where it is drawn absolute; and groups numbered 1 and 2 are two. Put in src/ui/features/Workspace/workflow/ beside enumerate.test.ts.
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { enumerated } from "./enumerate";
