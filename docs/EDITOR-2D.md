@@ -614,7 +614,10 @@ was with nothing done since, turns it to form 0, the view from the other side, a
   and every group stands at one of its atom's free positions (a group drawn by hand is not guessed at), and where the chair stands alone (`ringAlone`:
   a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
   *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
-  would not be.
+  would not be. It is offered too on a chair or a Haworth ring drawn by hand that Meno reads as drawn in perspective, or takes for one whose near
+  and far are not marked (*Drawn in perspective*; `projections/projection` `isProjection`, by the recognition Clean-up keeps it by): what Clean-up
+  keeps as drawn, *Draw flat* lays out flat, and 3D made from it says it takes the configuration only, as from the tool's chair. *Flip chair*
+  stays the tool's chair's.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
   below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
