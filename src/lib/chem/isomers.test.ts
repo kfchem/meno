@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { smilesInput } from "../layout/smilesInput";
 import type { IdentityInput } from "./identity";
 import { cipInput } from "./cip/testdata/cipFrom";
-import { isomersOf, NOT_COUNTED_CAGE, NOT_COUNTED_SMALL_FUSED } from "./isomers";
+import { isomersOf, NOT_COUNTED_TIED } from "./isomers";
 
 const count = (smiles: string) => {
   const r = isomersOf(smilesInput(smiles) as unknown as IdentityInput);
@@ -75,22 +75,36 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
     expect(count("CC(C)=C=CC")).toBe(1);
   });
 
-  it("counts a cage whose bridgeheads set nothing; gives no count, said, where a cage or bridged system is left open otherwise", () => {
-    // (the chemistry check's: each bridgehead's two senses one structure - counted, right)
-    expect(count("C1CC2CCC1C2")).toBe(1);
-    expect(count("OC1CN2CCC1CC2")).toBe(2);
-    expect(count("OC1CC2CCC1CC2")).toBe(2);
-    expect(count("C1C2CC3CC1CC(C2)C3")).toBe(1);
-    expect(count("OC1C2CC3CC(C2)CC1C3")).toBe(1);
-    expect(count("C12C3C4C1C5C2C3C45")).toBe(1);
-    // (norbornan-2-ol, camphor, tropan-3-ol, twistane: bridgeheads whose senses the cage ties - no count, said)
-    for (const caged of ["OC1CC2CCC1C2", "CC1(C)C2CCC1(C)C(=O)C2", "CN1C2CCC1CC(O)C2", "C1CC2CC3CCC1C2CC3"])
-      expect(isomersOf(smilesInput(caged) as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_CAGE });
-    // (a fused system is no cage: decalin's two junctions counted)
-    expect(count("C1CCC2CCCCC2C1")).toBe(2);
+  it("counts a cage, its bridgeheads tied: one relative sense, out,out (the chemistry check's table)", () => {
+    const counted: [string, string, number][] = [
+      ["norbornane", "C1CC2CCC1C2", 1],
+      ["norbornan-2-ol", "OC1CC2CCC1C2", 4],
+      ["camphor", "CC1(C)C2CCC1(C)C(=O)C2", 2],
+      ["1,4-dimethylnorbornane", "CC12CCC(C)(CC1)C2", 1],
+      ["twistane", "C1CC2CC3CC1CC2C3", 2],
+      ["adamantane", "C1C2CC3CC1CC(C2)C3", 1],
+      ["adamantan-2-ol", "OC1C2CC3CC(C2)CC1C3", 1],
+      ["cubane", "C12C3C4C1C5C2C3C45", 1],
+      ["hexamine", "C1N2CN3CN1CN(C2)C3", 1],
+      ["quinuclidin-3-ol", "OC1CN2CCC1CC2", 2],
+      ["Troeger's base, its two N tied (a resolved pair)", "Cc1ccc2c(c1)CN3c4ccc(C)cc4CN2C3", 2],
+      ["bicyclo[2.2.2]octan-2-ol", "OC1CC2CCC1CC2", 2],
+      ["bicyclo[2.2.2]octane-2,5-dione, chiral by the tie alone", "O=C1CC2C(=O)CC1CC2", 2],
+      ["bicyclo[2.2.2]octane-2,6-dione", "O=C1CC2CC(=O)C1CC2", 1],
+      ["bicyclo[3.3.1]nonane-2,6-dione", "O=C1CCC2CC1CCC2=O", 2],
+      ["tropan-3-ol: tropine and pseudotropine", "CN1C2CCC1CC(O)C2", 2],
+      ["sparteine: (-)/(+)-sparteine and the alpha- and beta-isosparteines (MEASURED, an enumeration of only the forms that embed in 3D)", "C1CCN2CC3CC(C2C1)CN4C3CCCC4", 6],
+      ["bicyclo[4.4.1]undecane, untied: its bridge of four", "C12CCCCC(CCCC1)C2", 2],
+    ];
+    for (const [name, smiles, n] of counted) expect(count(smiles), name).toBe(n);
   });
 
-  it("counts a fused bicycle's cis and trans, a bond being no bridge; gives a small one, whose rings join only cis, no count, said (found in review; the chemistry check's ruling)", () => {
+  it("keeps a cage given its possible way, one; given in,out, no count, said (camphor's C4 turned against its C1)", () => {
+    expect(count("CC1(C)[C@@H]2CC[C@@]1(C)C(=O)C2")).toBe(1);
+    expect(isomersOf(smilesInput("CC1(C)[C@H]2CC[C@@]1(C)C(=O)C2") as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_TIED });
+  });
+
+  it("counts a fused bicycle's cis and trans, a bond being no bridge; a small one, whose rings join only cis, its cis form alone (the chemistry check's ruling)", () => {
     // ([3.2.0], [3.3.0], 1-methyl[3.3.0], hexahydrofuro[2,3-b]furan, [4.1.0], [4.2.0], [4.3.0], decalin)
     const counted: [string, number][] = [
       ["C1CC2CCC2C1", 3],
@@ -101,17 +115,22 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
       ["C1CCC2CCC2C1", 3],
       ["C1CCC2CCCC2C1", 3],
       ["C1CCC2CCCCC2C1", 2],
+      // ([1.1.0], [2.1.0], [2.2.0], [3.1.0]: cis alone, one; 1-methylbicyclo[2.1.0]pentane, its cis form chiral, and bicyclo[3.1.0]hexan-3-ol, two -
+      //  each as an enumeration of only the forms that embed in 3D gives it, MEASURED)
+      ["C1C2CC12", 1],
+      ["C1CC2CC12", 1],
+      ["C1CC2CCC12", 1],
+      ["C1CC2CC2C1", 1],
+      ["CC12CC1CC2", 2],
+      ["OC1CC2CC2C1", 2],
     ];
     for (const [smiles, n] of counted) expect(count(smiles), smiles).toBe(n);
-    // ([1.1.0], [2.1.0], [2.2.0], [3.1.0], and a [2.1.0] with a methyl at its junction)
-    for (const small of ["C1C2CC12", "C1CC2CC12", "C1CC2CCC12", "C1CC2CC2C1", "CC12CC1CC2"])
-      expect(isomersOf(smilesInput(small) as unknown as IdentityInput), small).toEqual({ notCounted: NOT_COUNTED_SMALL_FUSED });
-    // (its junctions given: what is given is kept, one)
+    // (its junctions given cis: one; given trans, which it cannot take: no count, said)
     expect(count("C1C[C@H]2C[C@H]2C1")).toBe(1);
+    expect(isomersOf(smilesInput("C1C[C@@H]2C[C@H]2C1") as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_TIED });
   });
 
-  it("gives Troeger's base no count, said: its N's senses identity does not yet keep (two, a resolved pair); a quinuclidine's N and an aziridine's as before", () => {
-    expect(isomersOf(smilesInput("Cc1ccc2c(c1)CN3c4ccc(C)cc4CN2C3") as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_CAGE });
+  it("a quinuclidine's N and an aziridine's as before", () => {
     expect(count("OC1CN2CCC1CC2")).toBe(2);
     expect(count("CC1CN1C")).toBe(2);
   });

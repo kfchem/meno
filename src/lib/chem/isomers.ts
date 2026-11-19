@@ -4,12 +4,14 @@
  * those given kept, each written by Meno's identity - the distinct identities are the stereoisomers, each with one way that makes
  * it. Dependent places fall out: a meso form's two writings, a centre that sets nothing, are one identity. A biaryl's axis is
  * none to give: only a drawing states one, so atropisomers are not counted (`NOT_COUNTED_AXES`, to say beside a count). A cage's
- * or a bridged system's bridgehead left open gives no count (`NOT_COUNTED_CAGE`): its senses are tied by the cage, which this
- * does not know. Past `ASSIGNMENTS_TRIED` ways, none is written and the answer says how many there were.
+ * bridgeheads, and a small fused bicycle's junctions, stand only one way to each other (`tiesOf`): each set tied together is one
+ * place, the rest following; given the impossible way round, no count, said (`NOT_COUNTED_TIED`). Past `ASSIGNMENTS_TRIED` ways,
+ * none is written and the answer says how many there were.
  */
 import { hydrogensFolded } from "./perception/fold";
 import { candidates } from "./perception/stereo/candidates";
 import { identity, type IdentityInput } from "./identity";
+import { parity } from "./perception/stereo/geometry";
 
 /**
  * The most ways of giving the open places their configurations `isomersOf` writes: two to the tenth, ten open places. MEASURED,
@@ -23,16 +25,11 @@ export const ASSIGNMENTS_TRIED = 1024;
 export type Stereoisomer = { text: string; input: IdentityInput };
 
 /** A place `isomersOf` gives a configuration to - a centre by its atom - and how: up or down, cis or trans, one sense of an axis or the other. */
-type Open = { at?: number; set: (g: IdentityInput, up: boolean) => IdentityInput };
+type Open = { at?: number; neighbours?: readonly number[]; set: (g: IdentityInput, up: boolean) => IdentityInput };
 
 /** What is said where a cage or a bridged system is left open (`isomersOf`): what the structure has, not how it is counted. */
 export const NOT_COUNTED_CAGE = "Its stereoisomers are not counted: a cage or a bridged ring system in it has a configuration not given";
 
-/**
- * What is said where a small fused bicycle's junction is left open (`isomersOf`): bicyclo[m.n.0] with m + n of four or fewer -
- * [1.1.0], [2.1.0], [2.2.0], [3.1.0] - whose rings no trans form joins (none is reported; strain), the chemistry check's ruling.
- */
-export const NOT_COUNTED_SMALL_FUSED = "Not counted: in a bicycle this small its rings can only be joined cis, which the count does not yet take";
 
 /**
  * What is said beside a count (`isomersOf`): what it leaves out - an axis no drawing states, and a bridged ring's in,in and out,out
@@ -86,40 +83,144 @@ function cageAtoms(g: IdentityInput): Set<number> {
   return out;
 }
 
+/** The most atoms a small fused bicycle's two rings have between its junctions (`tiesOf`): six atoms in all, with the junctions - joined only cis. */
+const SMALL_FUSED_MOST = 4;
+
 /**
- * The junction atoms of `g`'s small fused bicycles: two bonded atoms joined also by two paths that share no atom, of m and n atoms
- * between, each one or more, m + n `SMALL_FUSED_MOST` or fewer - bicyclo[1.1.0]butane's, [2.1.0]'s, [2.2.0]'s, [3.1.0]'s.
+ * Two centres whose senses their ring system ties (`tiesOf`): `ta`, three of `a`'s neighbours toward `b` - along each of a cage's
+ * three bridges, or a fused bicycle's `b` itself and each ring's next atom - and `tb`, `b`'s matching three. Their volumes about each,
+ * the three in that order, are opposite: a cage's out,out form, a small fused bicycle's cis (MEASURED, 3D embeddings of norbornane,
+ * camphor, bicyclo[2.2.2]octane, quinuclidine, bicyclo[3.1.0]hexane; the chemistry check's ruling). The other way is the in,out form,
+ * or a trans fusion, which a bridge of three atoms or fewer, or rings of six atoms in all, cannot take.
  */
-function smallFusedJunctions(g: IdentityInput): Set<number> {
+type Tie = { a: number; b: number; ta: readonly number[]; tb: readonly number[] };
+
+/** Every tie of `g` (`Tie`): a cage's bridgeheads, pair by pair, and a small fused bicycle's two junctions. */
+function tiesOf(g: IdentityInput): Tie[] {
   const around: number[][] = g.atoms.map(() => []);
   for (const b of g.bonds) {
     around[b.a].push(b.b);
     around[b.b].push(b.a);
   }
-  const out = new Set<number>();
-  for (const { a, b } of g.bonds) {
-    if (around[a].length < 3 || around[b].length < 3) continue;
-    // (every path from a to b, not by their bond, with one to SMALL_FUSED_MOST - 1 atoms between: its atoms between)
-    const paths: number[][] = [];
+  const apart = (p: readonly number[], q: readonly number[]) => !p.some((x) => q.includes(x));
+  const out: Tie[] = [];
+  for (let a = 0; a < g.atoms.length; a++) {
+    if (around[a].length < 3) continue;
+    // (every path out of `a` of up to BRIDGE_MOST + 1 bonds, by the atom it ends at: its atoms between)
+    const paths = new Map<number, number[][]>();
     const walk = (at: number, between: number[]) => {
       for (const n of around[at]) {
-        if (n === a || between.includes(n) || (at === a && n === b)) continue;
-        if (n === b) {
-          if (between.length) paths.push(between);
-          continue;
-        }
-        if (between.length < SMALL_FUSED_MOST - 1) walk(n, [...between, n]);
+        if (n === a || between.includes(n)) continue;
+        if (between.length) paths.set(n, [...(paths.get(n) ?? []), between]);
+        if (between.length < BRIDGE_MOST) walk(n, [...between, n]);
       }
     };
     walk(a, []);
-    const apart = (p: number[], q: number[]) => !p.some((x) => q.includes(x));
-    if (paths.some((p, i) => paths.some((q, j) => j > i && p.length + q.length <= SMALL_FUSED_MOST && apart(p, q)))) out.add(a).add(b);
+    for (const [b, ps] of paths) {
+      if (b < a) continue;
+      // (a cage: three bridges sharing no atom)
+      let three: number[][] | null = null;
+      for (let i = 0; i < ps.length && !three; i++)
+        for (let j = i + 1; j < ps.length && !three; j++)
+          for (let k = j + 1; k < ps.length && !three; k++) if (apart(ps[i], ps[j]) && apart(ps[i], ps[k]) && apart(ps[j], ps[k])) three = [ps[i], ps[j], ps[k]];
+      if (three) {
+        out.push({ a, b, ta: three.map((p) => p[0]), tb: three.map((p) => p[p.length - 1]) });
+        continue;
+      }
+      // (a small fused bicycle: a and b bonded, two rings through their bond of SMALL_FUSED_MOST atoms between, or fewer, in all)
+      if (!around[a].includes(b)) continue;
+      const two = ps.flatMap((p, i) => ps.slice(i + 1).flatMap((q) => (apart(p, q) && p.length + q.length <= SMALL_FUSED_MOST ? [[p, q]] : [])))[0];
+      if (two) out.push({ a, b, ta: [b, two[0][0], two[1][0]], tb: [a, two[0][two[0].length - 1], two[1][two[1].length - 1]] });
+    }
   }
   return out;
 }
 
-/** The most atoms a small fused bicycle's two rings have between its junctions (`smallFusedJunctions`): six atoms in all, with the junctions. */
-const SMALL_FUSED_MOST = 4;
+/** A centre's lone pair, as a fourth place among its neighbours (a three-bond centre's: quinuclidine's N). */
+const LONE_PAIR = -2;
+
+/** The sign of the volume `three` of a centre's neighbours span about it, from its configuration (`neighbours`, `volume`): Meno's one convention. */
+function volumeOfThree(neighbours: readonly number[], volume: 1 | -1, three: readonly number[]): 1 | -1 {
+  const four = neighbours.length === 3 ? [...neighbours, LONE_PAIR] : [...neighbours];
+  const order = [...three, four.find((n) => !three.includes(n))!].map((n) => four.indexOf(n));
+  return (volume * parity(order)) as 1 | -1;
+}
+
+/**
+ * The places `open` left once ties are given (`tiesOf`): each set of tied centres one place - its first given one way, the rest by
+ * their ties - and those given among them followed into the rest (`base`). Where a given set is the impossible way round, or a tied
+ * centre is no place to give, none counted, said.
+ */
+function tiedPlaces(g: IdentityInput, open: Open[]): { open: Open[]; base: IdentityInput } | { notCounted: string } {
+  const ties = tiesOf(g);
+  if (!ties.length) return { open, base: g };
+  const openAt = new Map(open.flatMap((o) => (o.at != null ? [[o.at, o] as const] : [])));
+  const neighboursOf = (at: number) => g.atoms[at].tetra?.neighbours ?? openAt.get(at)?.neighbours;
+  // (a tie whose ends are both centres, given or open)
+  const usable = ties.filter((t) => neighboursOf(t.a) && neighboursOf(t.b));
+  // (a cage's centre left open with no tie to follow: none counted, said - as before)
+  const caged = cageAtoms(g);
+  if ([...openAt.keys()].some((at) => caged.has(at) && !usable.some((t) => t.a === at || t.b === at))) return { notCounted: NOT_COUNTED_CAGE };
+  // (the sets tied together)
+  const by = new Map<number, Tie[]>();
+  for (const t of usable) for (const x of [t.a, t.b]) by.set(x, [...(by.get(x) ?? []), t]);
+  // (each set's volumes, from one of it set one way: undefined where they cannot be one structure)
+  const follow = (start: number, volume: 1 | -1): Map<number, 1 | -1> | undefined => {
+    const got = new Map<number, 1 | -1>([[start, volume]]);
+    const todo = [start];
+    while (todo.length) {
+      const x = todo.pop()!;
+      for (const t of by.get(x) ?? []) {
+        const [from, to, tf, tt] = t.a === x ? [t.a, t.b, t.ta, t.tb] : [t.b, t.a, t.tb, t.ta];
+        const want = -volumeOfThree(neighboursOf(from)!, got.get(from)!, tf) as 1 | -1;
+        const v = volumeOfThree(neighboursOf(to)!, want, tt);
+        if (got.has(to)) {
+          if (got.get(to) !== v) return undefined;
+        } else {
+          got.set(to, v);
+          todo.push(to);
+        }
+      }
+    }
+    return got;
+  };
+  const setVolumes = (h: IdentityInput, vs: Map<number, 1 | -1>) => ({
+    ...h,
+    atoms: h.atoms.map((a, i) => (vs.has(i) ? { ...a, tetra: { neighbours: neighboursOf(i)!, volume: vs.get(i)! } } : a)),
+  });
+  let base = g;
+  const left = open.filter((o) => o.at == null || !by.has(o.at));
+  const seen = new Set<number>();
+  for (const x of by.keys()) {
+    if (seen.has(x)) continue;
+    // (a set of tied centres: those given decide it; none given, one place)
+    const all = new Set<number>([x]);
+    const todo = [x];
+    while (todo.length)
+      for (const t of by.get(todo.pop()!) ?? [])
+        for (const y of [t.a, t.b])
+          if (!all.has(y)) {
+            all.add(y);
+            todo.push(y);
+          }
+    all.forEach((y) => seen.add(y));
+    const given = [...all].find((y) => g.atoms[y].tetra);
+    if (given != null) {
+      const vs = follow(given, g.atoms[given].tetra!.volume);
+      if (!vs || [...all].some((y) => g.atoms[y].tetra && g.atoms[y].tetra!.volume !== vs.get(y))) return { notCounted: NOT_COUNTED_TIED };
+      base = setVolumes(base, vs);
+      continue;
+    }
+    const up = follow(x, 1);
+    const down = follow(x, -1);
+    if (!up || !down) return { notCounted: NOT_COUNTED_CAGE };
+    left.push({ at: x, set: (h, isUp) => setVolumes(h, isUp ? up : down) });
+  }
+  return { open: left, base };
+}
+
+/** What is said where a cage's bridgeheads or a small fused bicycle's junctions are given in a way their rings cannot take (`isomersOf`). */
+export const NOT_COUNTED_TIED = "Not counted: its bridgeheads or ring junctions are given in a way the ring system cannot take (in,out, or a small bicycle joined trans)";
 
 /** The most atoms a cage's bridge has between its bridgeheads for their senses to be tied (`cageAtoms`): with four, in,out isomers begin. */
 const BRIDGE_MOST = 3;
@@ -130,21 +231,17 @@ const BRIDGE_MOST = 3;
  */
 export function isomersOf(input: IdentityInput, most = ASSIGNMENTS_TRIED): { isomers: Stereoisomer[]; complete: boolean } | { tooMany: number } | { notCounted: string } {
   const g = hydrogensFolded(input);
-  // (a cage's bridgeheads stand only one way to each other, which giving each its own sense does not know: one whose two senses
-  //  are one structure - norbornane's, two of its bridges alike - is no place to give; any other, none counted, said - until
-  //  Meno ties them, its own item)
-  const caged = cageAtoms(g);
-  const open = openPlaces(g).filter((o) => o.at == null || !caged.has(o.at) || identity(o.set(g, true)).text !== identity(o.set(g, false)).text);
-  if (open.some((o) => o.at != null && caged.has(o.at))) return { notCounted: NOT_COUNTED_CAGE };
-  // (a small fused bicycle's junction left open: its trans form, which identity writes, cannot be made - none counted, said)
-  const small = smallFusedJunctions(g);
-  if (small.size && open.some((o) => o.at != null && small.has(o.at))) return { notCounted: NOT_COUNTED_SMALL_FUSED };
+  // (a cage's bridgeheads, and a small fused bicycle's junctions, stand only one way to each other (`tiesOf`): each set of them tied
+  //  together is one place, given one way or the other, the rest following; one given in a way the ring system cannot take, said)
+  const tied = tiedPlaces(g, openPlaces(g));
+  if ("notCounted" in tied) return tied;
+  const { open, base } = tied;
   const ways = 2 ** open.length;
   if (ways > most) return { tooMany: ways };
   const found = new Map<string, IdentityInput>();
   let complete = true;
   for (let way = 0; way < ways; way++) {
-    const given = open.reduce((h, o, k) => o.set(h, (way & (1 << k)) === 0), g);
+    const given = open.reduce((h, o, k) => o.set(h, (way & (1 << k)) === 0), base);
     const w = identity(given);
     complete &&= w.complete;
     if (!found.has(w.text)) found.set(w.text, given);
@@ -174,7 +271,7 @@ function openPlaces(g: IdentityInput): Open[] {
       const at = c.at;
       if (g.atoms[at].tetra) continue;
       const neighbours = [...around[at], ...((g.atoms[at].hs ?? 0) ? [-1] : [])];
-      out.push({ at, set: (h, up) => ({ ...h, atoms: h.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: up ? 1 : -1 } } : a)) }) });
+      out.push({ at, neighbours, set: (h, up) => ({ ...h, atoms: h.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: up ? 1 : -1 } } : a)) }) });
     } else if (c.kind === "bond") {
       const k = c.at;
       const b = g.bonds[k];
