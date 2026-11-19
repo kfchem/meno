@@ -209,8 +209,8 @@ export type Arrow = ArrowForm & {
  */
 export type ArrowAtomMap = {
   drawnAs: string;
-  reactant: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
-  product: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  reactant: { atoms: { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  product: { atoms: { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
   maps: number[][];
   complete: boolean;
   chosen: number;

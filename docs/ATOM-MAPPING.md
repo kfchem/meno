@@ -584,9 +584,11 @@ chain never is.
   fusion atom, a fusion carbon lettered (4a), a fusion heteroatom numbered
   in its turn (P-25.3.3);
 - larger fused systems and the exceptions: a table of 27 numbered by
-  hand, cited by IUPAC's tables (anthracene, phenanthrene, purine,
-  pyrene's interior atoms 3a and 5a each with a superscript 1, and the
-  rest; lib/chem/perception/locantParents);
+  hand (anthracene, phenanthrene, purine, pyrene's interior atoms 3a and
+  5a each with a superscript 1, and the rest;
+  lib/chem/perception/locantParents): 21 read from IUPAC's tables, five
+  calculated from their rules and one inferred, each marked so in the
+  file;
 - bridged systems by von Baeyer's rules, built as a search (P-23.2);
 - spiro systems of single rings (P-24.2);
 - ring assemblies: each ring its own way, the junctions low; two rings,
@@ -595,7 +597,9 @@ chain never is.
 - a chain from either end.
 Then, in order (P-14.4 (b) to (j)): indicated hydrogen, saturation (the
 fewest compound locants first in a von Baeyer system or a chain,
-P-31.1.4), the substituents as one set, isotopes, configuration.
+P-31.1.4), the substituents as one set, isotopes (P-14.4 (i): an atom's
+mass number, or a hydrogen's - 2H, 3H - on the atom it is on), configuration
+(P-14.4 (j): R before S, Z before E, each read from the molecule in 3D).
 
 **Seen.** The parent's atoms show their locants: naphthalene 1 to 8 with
 4a and 8a, biphenyl's second ring 1' to 6'. Every other atom shows its
@@ -626,7 +630,11 @@ P-45.2.3) - added hydrogen, nonstandard valence, the orientation of fused
 systems of three or more rings not in the table, bridged fused systems,
 spiro systems with fused or bridged parts, branched ring assemblies,
 identical parents not in one orbit, chains named by replacement, and units
-holding a metal.
+holding a metal. And, so that the page never waits on a numbering, what
+is over the budget: a molecule of more than 150 heavy atoms, numbered in
+the drawing's order, and tied parents too many to compare for the
+molecule's size (a poly(ethylene glycol) of fifteen units and more), the
+first of them taken.
 
 **The principal characteristic group leads** (level 2; `perception/locantGroups.ts`,
 `perception/locants.ts`). The groups are found by their patterns and by what
