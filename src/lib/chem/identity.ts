@@ -15,7 +15,10 @@
  * element, charge, mass number and unpaired electrons, and each
  * configuration as drawn; aromatic rings as one form (`aromaticForm`); a
  * plain hydrogen atom as one of its neighbour's hydrogens
- * (`hydrogensFolded`); and the end chalcogens on P, As, Sb, S, Se and Te
+ * (`hydrogensFolded`) - an H on a main-group metal too (Li, Mg, Al, Sn:
+ * its count kept, folded into the metal's, so that identity stays
+ * stoichiometric), while one on a d- or f-block metal, a hydride ligands
+ * are drawn round, stays an atom; and the end chalcogens on P, As, Sb, S, Se and Te
  * as one form, whichever is drawn double or charged
  * (perception/chalcogenEnds); and, where centres are drawn in AND or OR
  * groups, the stereoisomers the drawing stands for (`grouped`).
