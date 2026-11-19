@@ -17,7 +17,7 @@ export type GroupBond = { a: number; b: number; order: number };
  *  group's own atoms, and for an ester the alkoxy side (`away`: never the parent). */
 export type Group = { rank: number; name: string; built: boolean; at: number; carbon?: number; atoms: number[]; away?: number };
 
-/** The classes, top first (P-41 Table 4.1; the not-built ones where the text puts them: CHEM's part 2, R3 and R10). */
+/** The classes, top first (P-41 Table 4.1; the not-built ones where the text puts them). */
 export const CLASS = {
   carboxylicAcid: 10,
   thioAcid: 11,
