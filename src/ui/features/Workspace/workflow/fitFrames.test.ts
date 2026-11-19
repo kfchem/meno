@@ -8,7 +8,7 @@ import type { Model, Molecule3D } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
 import type { Frame } from "./entries";
 import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
-import { CARD_H, CARD_W, CHIP, PX, SET_PAD, SET_TOP } from "./look";
+import { BETWEEN, CARD_H, CARD_W, CHIP, PX, SET_PAD, SET_TOP } from "./look";
 import { addSet, markMade } from "./model";
 import { LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
@@ -519,5 +519,45 @@ describe("a numbered structure's frame holds its number (backlog 232)", () => {
     const numbered = memberBoxes(base, set({ properties: { number: { value: 4 } } }) as never, reach)!;
     expect(numbered[0].y0).toBeCloseTo(plain[0].y0 - NUMBER_ROOM, 9);
     expect(numbered[0].y1).toBeCloseTo(plain[0].y1, 9);
+  });
+});
+
+describe("a frame that grows pushes the sets it would lie over (backlog 257)", () => {
+  /** Set 1 holding molecule 1 at (0, 0); set 2 below it holding molecule 2 at (0, -6); each frame fitted. */
+  const two = () => {
+    const doc = workspace();
+    doc.edit("place", (d) => addMolecule3d(d, mol(0, 0)));
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }));
+    doc.edit("place", (d) => addMolecule3d(d, mol(0, -6)));
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -9, x1: 3, y1: -3.5 }));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    return doc;
+  };
+  const overlap = (p: Frame, q: Frame) => p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
+
+  it("set 1 grown down over set 2, as the pointer is let go: set 2 pushed down just under it, with what it holds", () => {
+    const doc = two();
+    const down = doc.getState();
+    const before2 = frameOf(down, 2);
+    const mol2 = at(down, 2);
+    // (a molecule dragged into set 1 below its molecule, its frame growing down over set 2's)
+    doc.edit("place", (d) => addMolecule3d(d, mol(0, -1.5)));
+    doc.edit("fit", (d) => framesSettled(d, down, reach));
+    const s = doc.getState();
+    const f1 = frameOf(s, 1);
+    const f2 = frameOf(s, 2);
+    expect(overlap(f1, f2)).toBe(false);
+    expect(f2.y1).toBeCloseTo(f1.y0 - BETWEEN, 9);
+    const dy = f2.y1 - before2.y1;
+    expect(dy).toBeLessThan(0);
+    expect(at(s, 2).y).toBeCloseTo(mol2.y + dy, 9);
+    expect(at(s, 2).x).toBeCloseTo(mol2.x, 9);
+  });
+
+  it("no frame grown: nothing pushed", () => {
+    const doc = two();
+    const down = doc.getState();
+    doc.edit("fit", (d) => framesSettled(d, down, reach));
+    close(frameOf(doc.getState(), 2), frameOf(down, 2));
   });
 });

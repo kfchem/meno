@@ -24,9 +24,9 @@ import { drawnBox } from "../../../../utils/importers";
 import { cornersOf } from "../utils/selection";
 import { cardRect } from "../pageGl/conversationCard";
 import { drawnIn, inside, recordNumber, structuresOf, setMembers, type Frame } from "./entries";
-import { CARD_H, CARD_W, SET_PAD, SET_TOP } from "./look";
+import { BETWEEN, CARD_H, CARD_W, SET_PAD, SET_TOP } from "./look";
 import { exitsOf } from "./kinds";
-import { resizeSet } from "./model";
+import { moveSet, resizeSet } from "./model";
 import { unseenSets } from "./onPage";
 import { keepExitsUnder, LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
@@ -283,6 +283,45 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
   return out;
 }
 
+/** The most rounds a frame's growth pushes sets on (`framesCleared`): a set pushed may push the next, so far. */
+const PUSH_ROUNDS = 8;
+
+/**
+ * `doc` with no frame over another (backlog 257, the maintainer's rule that nothing overlaps a frame): each set whose frame grew past what
+ * it was as the pointer was pressed (`down`) - or was pushed itself - pushes every other set its frame now lies over down, frame and all it
+ * holds (model `moveSet`), to just under it, `BETWEEN` clear. A set pushed pushes the next in turn, `PUSH_ROUNDS` rounds at most, each set
+ * moved once; a step's later exits, kept under its first (run `keepExitsUnder`), and a set held off the page are left to their own rules.
+ * The frames ease to their places as any frame does (Workflow2D `useShownFrames`), in the gesture's step: one undo takes it all back.
+ */
+export function framesCleared(doc: WorkspaceDocument, down: WorkspaceDocument): WorkspaceDocument {
+  const was = new Map((down.sets ?? []).map((b) => [b.id, b]));
+  const grew = (b: WorkflowSet) => {
+    const w = was.get(b.id);
+    return !!w && (b.x0 < w.x0 - EPS || b.x1 > w.x1 + EPS || b.y0 < w.y0 - EPS || b.y1 > w.y1 + EPS);
+  };
+  const unseen = unseenSets(doc);
+  const over = (p: Frame, q: Frame) => p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
+  // (two sets of one step: its exits, which keep their own order under its first)
+  const sameStep = (p: WorkflowSet, q: WorkflowSet) => !!p.made && !!q.made && p.made.step === q.made.step;
+  let out = doc;
+  let pushers = (out.sets ?? []).filter((b) => grew(b) && !unseen.has(b.id)).map((b) => b.id);
+  const moved = new Set<number>(pushers);
+  for (let round = 0; round < PUSH_ROUNDS && pushers.length; round++) {
+    const next: number[] = [];
+    for (const id of pushers) {
+      const g = out.sets!.find((b) => b.id === id)!;
+      for (const b of out.sets!) {
+        if (b.id === g.id || moved.has(b.id) || unseen.has(b.id) || sameStep(g, b) || !over(g, b)) continue;
+        out = moveSet(out, b.id, 0, g.y0 - BETWEEN - b.y1);
+        moved.add(b.id);
+        next.push(b.id);
+      }
+    }
+    pushers = next;
+  }
+  return out;
+}
+
 /**
  * `doc` as the pointer is let go (`down`: the document as it was when it was
  * pressed): every frame its members' room (`framesFitted`), and what no set
@@ -292,7 +331,7 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
  */
 export function framesSettled(doc: WorkspaceDocument, down: WorkspaceDocument | undefined, extentOf: Reach | undefined): WorkspaceDocument {
   const fitted = framesFitted(doc, undefined, extentOf);
-  return down ? cardsCleared(pushedOut(fitted, down, extentOf), down, extentOf) : fitted;
+  return down ? framesCleared(cardsCleared(pushedOut(fitted, down, extentOf), down, extentOf), down) : fitted;
 }
 
 /** `p` and `q` overlap by more than a rounding in both directions. */

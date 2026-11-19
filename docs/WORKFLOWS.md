@@ -288,7 +288,10 @@ pointer does; put back by an undo, they glide back.
   just outside, on the nearest side, half a bond from the frame. A frame
   that grows into a thing no set holds eases it out the same way, once:
   where that leaves it over another frame, it stays. A step's result set
-  takes nothing in, so anything over it is eased out. All of it is part
+  takes nothing in, so anything over it is eased out. A frame that grows
+  over another set's frame pushes that set down, its frame and all it
+  holds, to just under it; a set so pushed pushes the next in turn, each
+  set once (a step's later exits keep their own order under its first); All of it is part
   of the gesture's step: one undo takes back the drag, the frame and what
   was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
