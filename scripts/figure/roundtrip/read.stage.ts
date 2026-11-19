@@ -136,7 +136,7 @@ export function sidesOf(model: Model, arrows: readonly { x: number; y: number; a
  * A figure's box read as a picture of it (RT_DPI): drawn by the reader at that resolution, white under it, traced, the shapes laid
  * back on the page and read with the PDF's own letters, as written - a structure, or why none. A page turned is not traced.
  */
-async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn, variant: string, known: readonly GlyphShape[] = []): Promise<({ model: Model; scheme?: undefined } | { none: string }) & { pixels?: { line: number; bond: number; shaded: number } }> {
+async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn, variant: string, known: readonly GlyphShape[] = []): Promise<({ model: Model; scheme?: undefined; left?: string } | { none: string }) & { pixels?: { line: number; bond: number; shaded: number } }> {
   if (variant === "turned") return { none: "a page turned is not traced" };
   const s = DPI! / 72;
   const [x, y] = [Math.max(0, Math.floor(box[0] * s)), Math.max(0, Math.floor(box[1] * s))];
