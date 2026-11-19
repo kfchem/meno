@@ -114,3 +114,21 @@ describe("whether one structure holds another", () => {
     expect(holdsSubstructure(of("OC"), of(`${"C".repeat(50)}O`), 60)).toEqual({ found: true, map: [[0, 50], [1, 49]] });
   });
 });
+
+describe("a hydrogen is one of its atom's only by one single bond to an atom not an H (backlog 176)", () => {
+  it("a bridging H, B-H-B, is an atom of its own: asked for, it is not found where two borons are bonded with none between", () => {
+    expect(holds("B1[H]B[H]1", "B[H]B")).toBe(true);
+    expect(holds("BB", "B[H]B")).toBe(false);
+  });
+
+  it("H2 asked for is found in H2, and not in methane, whose H are its carbon's", () => {
+    expect(holds("[H][H]", "[H][H]")).toBe(true);
+    expect(holds("C", "[H][H]")).toBe(false);
+  });
+
+  it("a plain H drawn asks for an H on its atom's match, as before; its map number no matter", () => {
+    expect(holds("CO", "[H]O")).toBe(true);
+    expect(holds("CO", "[H:1]O")).toBe(true);
+    expect(holds("CF", "[H]O")).toBe(false);
+  });
+});

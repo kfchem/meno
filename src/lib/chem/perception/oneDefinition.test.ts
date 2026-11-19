@@ -72,7 +72,7 @@ export const STILL_APART: Copy[] = [
   { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: 12, why: "a P and an S at their higher valences where the bonds pass the lower: part 12b" },
   { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
   // a plain hydrogen: each a variant for its own question, named, or onto the core's test in its file's queue
-  { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "isPlainH", part: 12, why: "a match ignores a map number (a named variant); takes a bridging H and one on a metal as plain, which the core's test does not: part 12c with those two fixes" },
+  { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "plainH", part: 12, why: "a match ignores a map number (a named variant); one on a metal plain, which the core's test keeps an atom: backlog 177" },
   { concept: "plain hydrogen", file: "ui/features/Workspace/workflow/substituents.ts", name: "isPlainH", part: 12, why: "an option typed as H, not a drawn atom: an H, not D or T, with no charge - a question of its own: part 12c" },
   { concept: "plain hydrogen", file: "ui/features/Workspace/chem/engineLayout.ts", name: "plainH", part: 12, why: "an H with no chemistry, one on a metal too, which the core's test keeps an atom: onto the core's with that fix, its own change" },
   // the types for a centre, a double bond, an axis, a whole configuration
