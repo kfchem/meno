@@ -39,6 +39,7 @@ import { it } from "vitest";
 import { figuresOf, pageObjectsOf, type Box } from "../../../src/lib/pdf/figures";
 import type { FigureDrawn } from "../../../src/lib/figure/drawn";
 import { structureFileText } from "../../../src/ui/features/Workspace/fileActions";
+import { unsureOf } from "../../../src/ui/features/Workspace/chem/drawing";
 import { figureFrom, figureLabels, lettersAsShapes, pictureResult } from "../../../src/ui/features/Workspace/utils/figures";
 import type { GlyphShape } from "../../../src/lib/figure/glyphs";
 import { readDrawnLabel } from "../../../src/lib/figure/structure";
@@ -60,8 +61,14 @@ const TRACED_LETTERS = process.env.RT_LETTERS === "traced";
 /** RT_JPEG=quality: each picture saved as JPEG at that quality and opened again before it is traced; RT_SCAN=1: made a scan of (spoil.ts). */
 const JPEG = Number(process.env.RT_JPEG) || null;
 const SCAN = !!process.env.RT_SCAN;
-/** How many of a structure's atoms and bonds are marked unsure: what it says it may have read wrong. */
-const markedOf = (m: Model) => m.atoms.filter((a) => a.unsure).length + m.bonds.filter((b) => b.unsure).length;
+/**
+ * How many of a structure's atoms and bonds are marked unsure - what it says it may have read wrong: as read, or as the canvas marks the
+ * drawing's stereochemistry (`unsureOf`: a centre a hashed line leaves open, one drawn by luck).
+ */
+const markedOf = (m: Model) => {
+  const shown = unsureOf(m);
+  return m.atoms.filter((a) => a.unsure || shown.atoms.has(a.id)).length + m.bonds.filter((b) => b.unsure || shown.bonds.has(b.id)).length;
+};
 /** How far round the figures found the box goes, in points: as a hand draws one. */
 const PAD_PT = 6;
 
