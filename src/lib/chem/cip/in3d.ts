@@ -14,11 +14,10 @@ import { isMetal } from "../../layout/perceive";
 import type { IdentityInput } from "../identity";
 import { protonatedAmineHeld } from "../lonePairCentres";
 import { lonePairsIn3d } from "../lonePairsIn3d";
-import { torsionSense, type Axial, type Cumulated } from "../../layout/stereo";
-import { configuredFrom, type Place } from "../stereoOpen";
+import { configuredFrom, runsFrom3d, type Place } from "../perception/stereo/from3d";
+import type { Axial, Cumulated } from "../perception/stereo/types";
 import { cipLabels } from "./index";
 import { factsOf, OPEN_RING } from "../perception/facts";
-import { runsOf } from "../perception/stereo/runs";
 
 /** The elements of the third period on whose double bonds convention (b) takes as single (prepare.ts). */
 const D_ORBITAL: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
@@ -61,7 +60,7 @@ export function cipIn3d(m: In3d): In3dLabels {
   const fourAll = m.atoms.flatMap((_, i) => (around[i].length === 4 && single(i) && !metal(i) && !around[i].some(metal) ? [i] : []));
   const four = fourAll.filter((i) => held(i) !== false);
   const three = m.atoms.flatMap((_, i) => (around[i].length === 3 ? [i] : []));
-  // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, `runsIn3d`. The other tests already keep one
+  // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, perception/stereo/from3d `runsFrom3d`. The other tests already keep one
   //  from getting a label, so this guard has no case where it shows - it says what a unit here is)
   const doublesAt = m.atoms.map((_, i) => m.bonds.filter((b) => b.order === 2 && (b.a1 === i || b.a2 === i)).length);
   const ringed = factsOf({ atoms: m.atoms, bonds });
@@ -74,7 +73,7 @@ export function cipIn3d(m: In3d): In3dLabels {
   for (const c of read.centres) tetra.set(c.atom, { neighbours: c.neighbours, volume: c.sense });
   for (const [a, t] of pyramids) tetra.set(a, t);
   const stereo = new Map(read.doubles.map((d) => [d.bond, { refs: d.ends, cis: d.cis }]));
-  const { axes, cumulated, shownOn } = runsIn3d(around, m.bonds, places);
+  const { axes, cumulated, shownOn } = runsFrom3d(around, m.bonds, places);
   const input: IdentityInput = {
     atoms: m.atoms.map((a, i) => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}), ...(tetra.has(i) ? { tetra: tetra.get(i)! } : {}) })),
     bonds: bonds.map((b, i) => ({ ...b, ...(stereo.has(i) ? { stereo: stereo.get(i)! } : {}) })),
@@ -116,16 +115,7 @@ export function cipIn3d(m: In3d): In3dLabels {
   return { atoms: labels(r.centres), bonds: { ...labels(r.bonds), ...runs }, ...(anySaid ? { said } : {}) };
 }
 
-/**
- * How near flat an allene in 3D is taken to have no hand: its two ends' groups turned about the run by less than this sine of the angle
- * from one plane - within a sixth of a half turn of none or of half a turn - as an odd run turned within the same of a quarter turn has no
- * cis or trans (`runsIn3d`). The hand changes where the two ends' planes are one, so there the sign of a torsion is noise; an open-chain
- * allene is square, and an allene bent and twisted by a small ring stays well clear of the bound, while a geometry this near flat lies far
- * up the allene's own barrier to turning into its mirror image: what is found there is a bad geometry, not either hand.
- */
-const FLAT_ALLENE = 0.5;
-
-/** Each allene's axis and each odd cumulene's cis or trans of a molecule in 3D, read from where its atoms are (`runsIn3d`), by atom number. */
+/** Each allene's axis and each odd cumulene's cis or trans of a molecule in 3D, read from where its atoms are (perception/stereo/from3d `runsFrom3d`), by atom number. */
 export function runsIn3dOf(m: In3d): { axes: Axial[]; cumulated: Cumulated[] } {
   const around: number[][] = m.atoms.map(() => []);
   m.bonds.forEach((b) => {
@@ -134,76 +124,9 @@ export function runsIn3dOf(m: In3d): { axes: Axial[]; cumulated: Cumulated[] } {
   });
   const places: Record<number, Place> = {};
   for (let i = 0; i < m.atoms.length; i++) places[i] = [m.xyz[3 * i], m.xyz[3 * i + 1], m.xyz[3 * i + 2]];
-  const { axes, cumulated } = runsIn3d(around, m.bonds, places);
+  const { axes, cumulated } = runsFrom3d(around, m.bonds, places);
   return { axes, cumulated };
 }
 
 /** An axis's descriptor as the page shows it (docs/CIP.md, *Axes*): M is Ra, P is Sa. */
 const AXIS_SHOWN: Record<string, string | undefined> = { M: "Ra", P: "Sa", m: "ra", p: "sa" };
-
-/**
- * Each run of cumulated double bonds whose ends have two other neighbours
- * each, read from the places: an allene's axis (an even number of double
- * bonds) by the sign of the torsion from a group at one end to one at the
- * other, an odd cumulene's cis or trans by whether those two stand on one
- * side of the run; none where they are in line, or square (flat or
- * twisted half way, as no such run is). Each with the first double bond of
- * its run, to be shown on. A biaryl's axis is not read: every biaryl is
- * twisted in 3D, whether or not its turn is held.
- */
-function runsIn3d(
-  around: readonly number[][],
-  bonds: readonly { a1: number; a2: number; order: number }[],
-  places: Readonly<Record<number, Place>>,
-): { axes: Axial[]; cumulated: Cumulated[]; shownOn: { axes: number[]; cumulated: number[] } } {
-  const orderOf = new Map(bonds.map((b, i) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, i]));
-  const bondOf = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`);
-  const order = (a: number, b: number) => bonds[bondOf(a, b) ?? -1]?.order ?? 0;
-  // (its runs of cumulated double bonds: perception/stereo/runs - here any atom bonded by its two double bonds alone, its places saying
-  //  whether it is in line)
-  const runs = runsOf({ atoms: around.map(() => ({})), bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }, "bondedByTwo");
-  const { middle } = runs;
-  const out = { axes: [] as Axial[], cumulated: [] as Cumulated[], shownOn: { axes: [] as number[], cumulated: [] as number[] } };
-  around.forEach((_, i) => {
-    if (middle(i)) return;
-    for (const m of around[i]) {
-      if (order(i, m) !== 2 || !middle(m)) continue;
-      const run = runs.from(i, m);
-      const j = run[run.length - 1];
-      if (j < i) continue;
-      const near = around[i].filter((n) => n !== run[1]);
-      const far = around[j].filter((n) => n !== run[run.length - 2]);
-      if (near.length !== 2 || far.length !== 2) continue;
-      const [p, q] = [Math.min(...near), Math.min(...far)];
-      if ([p, i, j, q].some((x) => !places[x])) continue;
-      const [P, I, J, Q] = [places[p], places[i], places[j], places[q]];
-      const first = bondOf(i, m)!;
-      // (each end's group off the run's line)
-      const axis = [J[0] - I[0], J[1] - I[1], J[2] - I[2]];
-      const off = (X: Place, from: Place) => {
-        const v = [X[0] - from[0], X[1] - from[1], X[2] - from[2]];
-        const t = (v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2]) / (axis[0] ** 2 + axis[1] ** 2 + axis[2] ** 2 || 1);
-        return [v[0] - t * axis[0], v[1] - t * axis[1], v[2] - t * axis[2]];
-      };
-      const [u, w] = [off(P, I), off(Q, J)];
-      const dot = u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
-      if (run.length % 2 === 1) {
-        // (an allene's ends' planes one plane - its groups' turn about the run near none or half a turn: no hand, as an odd run
-        //  twisted near a quarter turn has no cis or trans)
-        const cross = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]);
-        const sense = cross < FLAT_ALLENE * Math.hypot(...u) * Math.hypot(...w) ? 0 : torsionSense(P, I, J, Q);
-        if (sense) {
-          out.axes.push({ atoms: [i, j], refs: [p, q], sense });
-          out.shownOn.axes.push(first);
-        }
-        continue;
-      }
-      // (the two groups on the same side of the run: cis)
-      if (Math.abs(dot) < 0.5 * Math.hypot(...u) * Math.hypot(...w)) continue;
-      out.cumulated.push({ atoms: [i, j], refs: [p, q], cis: dot > 0 });
-      out.shownOn.cumulated.push(first);
-    }
-  });
-  return out;
-}
-

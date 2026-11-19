@@ -3498,7 +3498,7 @@ those left open, *Generate*'s, and a SMILES pasted.
   what the drawing leaves open is given the configuration the molecule
   made before has, read from its places by Meno - a centre's by the
   sign of the volume its neighbours span, a double bond's by the side
-  its neighbours are on (lib/chem/stereoOpen `configuredFrom`) - where
+  its neighbours are on (lib/chem/perception/stereo/from3d `configuredFrom`) - where
   it and every atom bonded to it are placed. Before, a double bond left
   open came back as the first stereoisomer, whatever the molecule made
   before had: of 236 such remakes of a 70-structure set, 185 came back

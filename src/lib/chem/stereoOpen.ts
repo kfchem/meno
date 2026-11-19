@@ -9,7 +9,6 @@ import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
-import { FLAT_VOLUME_3D, sideOfLine, signedVolume } from "./perception/stereo/geometry";
 import { runsOf } from "./perception/stereo/runs";
 import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
 import { readStereo, type DrawnAtom, type DrawnBond } from "./perception/stereo/from2d";
@@ -112,49 +111,8 @@ export function openCumulenes(bonds: readonly StereoBond[], open: readonly numbe
   return open.filter((i) => (doubles.get(bonds[i].a) ?? 0) > 1 || (doubles.get(bonds[i].b) ?? 0) > 1);
 }
 
-/** A place in 3D, in ångströms. */
-export type Place = readonly [number, number, number];
-
-/**
- * The configurations open stereocentres and double bonds have in places
- * made before (a molecule in 3D made from the same drawing: the page's
- * `like`), to be made so again: a centre's by its neighbours in the order
- * of its bonds and the sign of the volume the first three span seen from it
- * (lib/layout/stereo's `Tetrahedral` reading, an implicit H the fourth); a
- * double bond's by an atom bonded to each end, the first other than the
- * other end, and whether the two are on the same side. Only where the atom,
- * or the bond's two, and every atom bonded to them have a place; none
- * where the places are flat (a volume, or a side, of nought).
- */
-export function configuredFrom(
-  bonds: readonly StereoBond[],
-  places: Readonly<Record<number, Place>>,
-  openAtoms: readonly number[],
-  openBonds: readonly number[],
-): IsomerConfiguration {
-  const around = new Map<number, number[]>();
-  for (const b of bonds) {
-    around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
-    around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
-  }
-  const placed = (x: number) => x in places && (around.get(x) ?? []).every((n) => n in places);
-  const centres = openAtoms.flatMap((c) => {
-    const ns = around.get(c) ?? [];
-    if (ns.length < 3 || !placed(c)) return [];
-    const volume = signedVolume(places[ns[0]], places[ns[1]], places[ns[2]], places[c]);
-    return Math.abs(volume) < FLAT_VOLUME_3D ? [] : [{ atom: c, neighbours: ns, sense: (volume > 0 ? 1 : -1) as 1 | -1 }];
-  });
-  const doubles = openBonds.flatMap((i) => {
-    const { a, b } = bonds[i];
-    if (!placed(a) || !placed(b)) return [];
-    const na = (around.get(a) ?? []).find((n) => n !== b);
-    const nb = (around.get(b) ?? []).find((n) => n !== a);
-    if (na == null || nb == null) return [];
-    const side = sideOfLine(places[a], places[b], places[na], places[nb]);
-    return Math.abs(side) < FLAT_VOLUME_3D ? [] : [{ bond: i, ends: [na, nb] as [number, number], cis: side > 0 }];
-  });
-  return { centres, doubles };
-}
+// (a configuration read from places: the core's, one reading - perception/stereo/from3d)
+export { configuredFrom, type Place } from "./perception/stereo/from3d";
 
 /**
  * The most stereoisomers one structure is made in, all at once: 32 = 2^5,
