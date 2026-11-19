@@ -23,6 +23,7 @@
  */
 import type { LayoutBond } from "../layout/perceive";
 import { aromaticForm, type IdentityAtom, type IdentityInput } from "./identity";
+import { drawnRoundMetal } from "./perception/elements";
 
 /** How many placements a search tries before it stops, saying so. */
 export const STEPS_MOST = 1_000_000;
@@ -39,8 +40,8 @@ type Graph = { atoms: (IdentityAtom & { hTotal: number; hDrawn: number; at: numb
 
 /**
  * The hydrogens of `form` that are one of their atom's (`graphOf`): an H, of no mass number, charge or unpaired electron, by exactly one
- * single bond to an atom not an H - its map number no matter (a query is matched whatever it numbers). A bridging H (B-H-B), H2, a
- * lone H and an H by any other bond are atoms of their own (backlog 176, found in the hydrogen counts' measure).
+ * single bond to an atom not an H nor a metal of the d or f block - its map number no matter (a query is matched whatever it numbers).
+ * A bridging H (B-H-B), H2, a lone H, an H by any other bond (backlog 176) and an H on a transition metal (177) are atoms of their own.
  */
 function plainH(form: { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[] }): boolean[] {
   const bonds = form.atoms.map(() => [] as { to: number; order: number }[]);
@@ -48,7 +49,12 @@ function plainH(form: { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBo
     bonds[b.a].push({ to: b.b, order: b.order });
     bonds[b.b].push({ to: b.a, order: b.order });
   }
-  return form.atoms.map((a, i) => a.el === "H" && !a.isotope && !a.charge && !a.radical && bonds[i].length === 1 && bonds[i][0].order === 1 && form.atoms[bonds[i][0].to].el !== "H");
+  // (an H on a metal of the d or f block stays an atom, as identity keeps it: a search finds Pd-H - backlog 177, the chemistry check's ruling)
+  return form.atoms.map((a, i) => {
+    if (a.el !== "H" || a.isotope || a.charge || a.radical || bonds[i].length !== 1 || bonds[i][0].order !== 1) return false;
+    const on = form.atoms[bonds[i][0].to].el;
+    return on !== "H" && !drawnRoundMetal.has(on);
+  });
 }
 
 function graphOf(input: IdentityInput): Graph {
