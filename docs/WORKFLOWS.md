@@ -3509,7 +3509,7 @@ other nitrogens moves to the imine nitrogen, and the double bond moves
 with it, so the two "isomers" interconvert. Its E/Z is no configuration
 of its own, and Meno never chooses one for it.
 
-- **Which C=N** (Meno's, lib/chem/stereoOpen `movingCN`, on its own
+- **Which C=N** (Meno's, lib/chem/perception/stereo/movingCN `movingCN`, on its own
   graph of the structure), as the InChI Technical
   Manual takes them (S. E. Stein, S. R. Heller, D. V. Tchekhovskoi,
   I. V. Pletnev, *InChI version 1, software version 1.04 (2011),

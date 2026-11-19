@@ -37,10 +37,11 @@
  */
 import { distances, type Pixels } from "./inkFit";
 import { boxOf, type Blob, type Box, type Curve, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
-import { figureBond } from "./read";
+import { shapeLetters, type GlyphShape } from "./glyphs";
+import { figureBond, type FigureRead } from "./read";
 
 /** A picture traced: its shapes, how wide its lines are drawn and how long its bonds, in its pixels. */
-export type Traced = { shapes: Shapes; line: number; bond: number };
+export type Traced = { shapes: Shapes; line: number; bond: number; shaded: number };
 
 /** Why a picture gave nothing to read. */
 export type Untraced = { none: string };
@@ -64,11 +65,23 @@ const WEDGE_EVEN = 0.3;
 /** A patch smaller across than this share of a bond is a bar, a dot or a small letter, not lines. */
 const SMALL = 0.3;
 /** A patch smaller than this share of a bond, all of its pieces shorter than this other share, and joined, bent or closed as a letter's strokes are, is a letter. */
-const LETTER = 0.75;
-const LETTER_PIECE = 0.55;
+const LETTER = 1;
+const LETTER_PIECE = 0.85;
 /** A closed line is a circle where it bends at this many points or more and lies round its middle within this share of its radius. */
 const ROUND_POINTS = 9;
 const ROUND_WITHIN = 0.1;
+/**
+ * ... and has this many lines of other patches larger than a letter round it, each running across the way out from its middle (within 30 degrees of
+ * square to it) with its middle within a bond of its line - a ring's bonds round its circle: an O, an o or a 0 is as round, but
+ * stands at a bond's end, the lines by it pointing at it.
+ */
+const ROUND_RINGED = 4;
+/** The bond is measured on the patches at least this share as large as the largest: a structure's, not its letters' (an H's or a D's strokes are as many as a small molecule's bonds). */
+const BOND_PATCH = 0.6;
+/** A picture whose bond is shorter than this many of its pixels is drawn too small to read: read, it is more often wrong than said. */
+const LEAST_BOND = 25;
+/** A picture this much of whose ink is shaded (`shadedOf`) is a photograph or a rendering, not a drawing. */
+const SHADED = 0.1;
 /** A piece between two joints shorter than this, in the bond, is a joint thinning left open: `closedJoints`. */
 const JOINT_SHORT = 0.35;
 
@@ -131,6 +144,28 @@ export function inkOf(p: Pixels): Ink | null {
   const cover = new Float32Array(n);
   for (let i = 0; i < n; i++) cover[i] = Math.min(1, far[i] / full);
   return { width, height, ink, cover };
+}
+
+/**
+ * How much of a picture's ink is shaded: the share of its inked pixels (a fifth inked or more) that are grey - between a fifth and
+ * four fifths inked - with all eight pixels round them grey too. A drawing's grey is at the edges of its lines, beside paper or full
+ * ink; a photograph's or a rendering's lies in fields.
+ */
+export function shadedOf(ink: Ink): number {
+  const { width, height, cover } = ink;
+  const grey = (v: number) => v >= 0.2 && v <= 0.8;
+  let [inked, fields] = [0, 0];
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const v = cover[y * width + x];
+      if (v < 0.2) continue;
+      inked++;
+      if (!grey(v) || x === 0 || y === 0 || x === width - 1 || y === height - 1) continue;
+      let all = true;
+      for (let j = -1; j <= 1 && all; j++) for (let i = -1; i <= 1 && all; i++) all = grey(cover[(y + j) * width + x + i]);
+      if (all) fields++;
+    }
+  return inked ? fields / inked : 0;
 }
 
 /** The threshold that best parts a histogram into two classes: the one with the greatest variance between them (Otsu 1979). Above it, the second class. */
@@ -757,6 +792,8 @@ function outlinesOf(patch: Int32Array, own: number, width: number, box: [number,
 export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced | Untraced {
   const ink = inkOf(pixels);
   if (!ink) return { none: "Nothing is drawn in the picture." };
+  const shaded = shadedOf(ink);
+  if (shaded > SHADED) return { none: "The picture is shaded, as a photograph or a rendering is: it is not a drawing to read." };
   const { width, height } = ink;
   const { patch, count } = patchesOf(ink.ink, width, height);
   // (each patch's box and ink; those lying within the letters given left out)
@@ -831,15 +868,32 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
   const largest = Math.max(0, ...lines.map((l) => extent(l.piece.patch)));
   const asStrokes = (ls: readonly Laid[]): Stroke[] => ls.map((l) => ({ a: l.a, b: l.b, w: line }));
   const empty = { wedges: [], curves: [], blobs: [] };
-  const bond = figureBond({ strokes: asStrokes(lines.filter((l) => extent(l.piece.patch) >= 0.25 * largest)), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
+  const bond = figureBond({ strokes: asStrokes(lines.filter((l) => extent(l.piece.patch) >= BOND_PATCH * largest)), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
+  if (bond < LEAST_BOND) return { none: "The picture is drawn too small to read." };
   const gone = closedJoints(laid, bond);
+  // (a circle's ring: lines of other patches whose middles lie within half a bond of its line)
+  const ringed = (k: number) => {
+    const c = circles.get(k);
+    if (!c) return false;
+    const m = { x: c.pts.reduce((t, p) => t + p.x, 0) / c.pts.length, y: c.pts.reduce((t, p) => t + p.y, 0) / c.pts.length };
+    const r = c.pts.reduce((t, p) => t + dist(p, m), 0) / c.pts.length;
+    const round = (l: Laid) => {
+      const mid = { x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2 };
+      const d = dist(mid, m);
+      if (l.piece.patch === k || extent(l.piece.patch) < LETTER * bond || d < r || d > r + bond || !l.length) return false;
+      // (across the way out: the line's direction nearly square to the way from the middle to its own middle)
+      return Math.abs(((l.b.x - l.a.x) * (mid.x - m.x) + (l.b.y - l.a.y) * (mid.y - m.y)) / (l.length * d)) < Math.sin(Math.PI / 6);
+    };
+    return lines.filter(round).length >= ROUND_RINGED;
+  };
   const shapes: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
+  const stems: { k: number; box: [number, number, number, number]; stroke: Stroke }[] = [];
   for (let k = 0; k < count; k++) {
     if (dropped[k]) continue;
     const own = byPatch.get(k) ?? [];
     const box = boxes[k];
     const across = extent(k);
-    const circle = circles.get(k);
+    const circle = ringed(k) ? circles.get(k) : undefined;
     if (circle) {
       shapes.curves.push({ pts: circle.pts.filter((_, i) => i % Math.max(1, Math.round(line)) === 0), closed: true, w: line } satisfies Curve);
       continue;
@@ -862,6 +916,15 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
       if (all.length) shapes.blobs.push({ pts: all, parts, box: boxOf(all), curved: true } satisfies Blob);
       continue;
     }
+    // (one upright line alone, as tall as a letter, its ends free: an l, an I or a 1 - or a bond; told after the letters are known)
+    if (own.length === 1 && !gone.has(own[0])) {
+      const { a, b, piece } = laid[own[0]];
+      const tall = box[3] - box[1] + 1;
+      if (piece.a.free && piece.b.free && Math.abs(a.x - b.x) < 0.2 * Math.abs(a.y - b.y) && tall >= SMALL * bond && tall <= LETTER * bond) {
+        stems.push({ k, box, stroke: { a, b, w: profiles[own[0]].length ? median(profiles[own[0]].map((q) => q.w)) : line } });
+        continue;
+      }
+    }
     for (const i of own) {
       if (gone.has(i)) continue;
       const { a, b } = laid[i];
@@ -876,7 +939,19 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
       shapes.strokes.push({ a, b, w });
     }
   }
-  return { shapes, line, bond };
+  // (a stem beside a letter, as tall as it, on its line - the l of Cl, the 1 of 13 - is a letter too: its outline for the matcher; else a line)
+  const letterBoxes = shapes.blobs.map((b) => b.box);
+  for (const { k, box, stroke } of stems) {
+    const tall = box[3] - box[1] + 1;
+    const beside = letterBoxes.some((o) => {
+      const h = o[3] - o[1];
+      return h >= 0.6 * tall && h <= 1.4 * tall && Math.abs(o[3] - box[3]) <= 0.25 * tall && Math.min(Math.abs(o[0] - box[2]), Math.abs(box[0] - o[2])) <= 0.5 * tall;
+    });
+    const parts = beside ? outlinesOf(patch, k, width, box) : [];
+    if (parts.flat().length) shapes.blobs.push({ pts: parts.flat(), parts, box: boxOf(parts.flat()), curved: true } satisfies Blob);
+    else shapes.strokes.push(stroke);
+  }
+  return { shapes, line, bond, shaded };
 }
 
 /**
@@ -1037,4 +1112,43 @@ export function onPage(s: Shapes, k: number, dx: number, dy: number): Shapes {
     curves: s.curves.map((c) => ({ ...c, pts: c.pts.map(p), w: c.w * k })),
     blobs: s.blobs.map((b) => ({ ...b, pts: b.pts.map(p), parts: b.parts.map((q) => q.map(p)), box: box(b.box) })),
   };
+}
+
+/** A letter-sized patch the letters' matcher reads as no letter, this near an atom read (in the bond), leaves that atom unsure. */
+const UNREAD_NEAR = 0.6;
+/** ... and a letter read but in no label, this near: a label whose bond was not read stands a bond off the atom it was drawn on. */
+const LEFT_NEAR = 1.2;
+
+/**
+ * Ink a picture holds that was read as nothing, beside the structure read from it: a letter-sized patch of its traced shapes that no
+ * letter matches, lying within `UNREAD_NEAR` of the bond of an atom read. A label the matcher cannot read (drawn too small, its
+ * letters run together) is otherwise left out with its bond, and what is left can be a whole structure that is not the picture's:
+ * the atom nearest each such patch is said instead. By the atoms' places in `read.atoms`, each with what to say. (`letters`: those the
+ * matcher read from `shapes`, where they are known already.)
+ */
+export function unreadInk(read: FigureRead, shapes: Shapes, known: readonly GlyphShape[], letters?: readonly { from: object[] }[]): Map<number, string> {
+  const out = new Map<number, string>();
+  if (!read.bond || !read.atoms.length) return out;
+  const used = new Set<object>((letters ?? shapeLetters(shapes, read.bond, known)).flatMap((l) => l.from));
+  for (const b of shapes.blobs) {
+    if (used.has(b)) continue;
+    const m = { x: (b.box[0] + b.box[2]) / 2, y: (b.box[1] + b.box[3]) / 2 };
+    let [best, at] = [Infinity, -1];
+    read.atoms.forEach((a, i) => {
+      const d = dist(a, m);
+      if (d < best) [best, at] = [d, i];
+    });
+    if (at >= 0 && best <= UNREAD_NEAR * read.bond) out.set(at, "Ink beside it in the picture was read as no letter.");
+  }
+  // (letters read, but in no atom's label: a label whose bond was not read)
+  for (const l of read.left.letters) {
+    const m = { x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 };
+    let [best, at] = [Infinity, -1];
+    read.atoms.forEach((a, i) => {
+      const d = dist(a, m);
+      if (d < best) [best, at] = [d, i];
+    });
+    if (at >= 0 && best <= LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `"${l.c}" beside it in the picture was read in no label.`);
+  }
+  return out;
 }

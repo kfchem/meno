@@ -1863,8 +1863,11 @@ function outward(
  * of the atoms: a cage only where each of them reads as one - a set that
  * has a ring fused on a side shows the system is not all bridged.
  */
+/** The most atoms a ring system the engine takes for a cage has. */
+export const CAGE_MOST_ATOMS = 16;
+
 export function isCage(mol: Molecule, sys: RingSystem): boolean {
-  if (sys.rings.length < 2 || sys.atoms.length > 16) return false;
+  if (sys.rings.length < 2 || sys.atoms.length > CAGE_MOST_ATOMS) return false;
   // (rings through a metal - a chelate, a diene bound to it - or round a
   // star are no cage: they are drawn flat, or face-on to their metal)
   if (sys.atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]))) return false;
