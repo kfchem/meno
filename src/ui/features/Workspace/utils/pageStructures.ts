@@ -277,7 +277,7 @@ export function centreWithin(b: Box, f: Box): boolean {
 }
 
 /** What a page is made of, as `pageStructuresOf` is given it: each thing's kind and box (lib/pdf/figures `PageObject`), and the words a box of it holds, where words are known. */
-export type PageMade = { objects: readonly PageObject[]; wordsIn?: (box: Box) => string };
+export type PageMade = { objects: readonly PageObject[]; wordsIn?: (box: Box) => string; boldIn?: (box: Box) => boolean };
 
 /**
  * Every structure on a page: each figure of it (`figures`, as lib/pdf/figures
@@ -311,7 +311,7 @@ export function pageStructuresOf(
     structures.push(...checked);
     marks.push(read.marks);
     // (the compounds' numbers by them: of the words the figure's drawing holds, and the page's own words within it)
-    const ownWords = made.wordsIn ? wordsJoined(own.map((o) => ({ text: made.wordsIn!(o.box), box: o.box })), read.words) : [];
+    const ownWords = made.wordsIn ? wordsJoined(own.map((o) => ({ text: made.wordsIn!(o.box), box: o.box, ...(made.boldIn ? { bold: made.boldIn(o.box) } : {}) })), read.words) : [];
     labels.push(...compoundLabelsOf(checked, [...read.words, ...ownWords], read.marks));
   });
   return { structures, marks, labels };
@@ -441,8 +441,8 @@ function lineOfWords(f: FigureRead): string | null {
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */
 export const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
 
-/** A word on a page: what it says, and where it lies, in the page's points from its top left. */
-export type PageWord = { text: string; box: Box };
+/** A word on a page: what it says, and where it lies, in the page's points from its top left - and, where its font says, whether it is set bold. */
+export type PageWord = { text: string; box: Box; bold?: boolean };
 
 /** A compound's number set by a structure (docs/PDF.md, *A compound's number*): what it says, as `labelText` writes it; where it lies; and the structure's key. */
 export type CompoundLabel = { label: string; box: Box; key: string };
@@ -460,6 +460,25 @@ export function labelText(text: string): string | null {
   return t.replace(/^\(|\)$/g, "").replace(/\u2032/g, "'");
 }
 
+/**
+ * A compound's number set at the head of a line with its yield, where the line is one word - its number and yield in one weight:
+ * "21, 83%, 1:1 d.r." - the number before the line's first comma, as `labelText` writes it; else none. None where what follows the
+ * comma is another number of the same shape, a comma after it too: a list - of atoms' locants ("6', 8a', 11'"), a table's
+ * ("2, 4, 5") - not a number and its yield.
+ */
+export function leadingLabel(text: string): string | null {
+  return leading(text)?.label ?? null;
+}
+
+/** `leadingLabel`, and how many of the line's characters it takes from the line's start - its number's own part of the line's box. */
+function leading(text: string): { label: string; chars: number } | null {
+  const m = /^(\s*)([^,\s]+),\s+([^,\s]*)(,?)/.exec(text);
+  const label = m ? labelText(m[2]) : null;
+  // (a list goes on: its second number has a comma after it too - a yield's first digits, set apart from the rest, have none)
+  if (!label || !m || (labelText(m[3]) && m[4])) return null;
+  return { label, chars: m[1].length + m[2].length };
+}
+
 /** How far a box lies from a structure's ink - its bonds, its atoms and its labels. */
 function inkTo(st: PageStructure, b: Box): number {
   return Math.min(Infinity, ...st.bonds.map(([p, q]) => segmentToBox(p, q, b)), ...st.atoms.map((a) => toBox(a, b)), ...st.labels.map((l) => boxToBox(l, b)));
@@ -473,7 +492,9 @@ const LINE_SAME = 0.3;
  * A figure's own words on its page as words: letters set apart - a PDF may
  * set each glyph as a thing of its own - joined where they stand on one line
  * with no more than a fifth of their height between them, and none where the
- * figure's drawing holds words there already (its own read first).
+ * figure's drawing holds words there already (its own read first). Never one
+ * set bold onto one set plain: a compound's number set bold with its yield
+ * plain on its line ("21, 83%") is a word of its own.
  */
 export function wordsJoined(own: readonly PageWord[], drawn: readonly PageWord[]): PageWord[] {
   // (left to right, each glyph onto a word of its line that ends just before it)
@@ -482,11 +503,13 @@ export function wordsJoined(own: readonly PageWord[], drawn: readonly PageWord[]
   for (const w of free) {
     const h = w.box[3] - w.box[1];
     const mid = (w.box[1] + w.box[3]) / 2;
-    const word = out.find((o) => Math.abs((o.box[1] + o.box[3]) / 2 - mid) <= LINE_SAME * h && w.box[0] - o.box[2] <= GLYPHS_APART * h && w.box[0] - o.box[2] >= -GLYPHS_APART * h);
+    const word = out.find(
+      (o) => (o.bold ?? w.bold) === (w.bold ?? o.bold) && Math.abs((o.box[1] + o.box[3]) / 2 - mid) <= LINE_SAME * h && w.box[0] - o.box[2] <= GLYPHS_APART * h && w.box[0] - o.box[2] >= -GLYPHS_APART * h,
+    );
     if (word) {
       word.text += w.text;
       word.box = [word.box[0], Math.min(word.box[1], w.box[1]), Math.max(word.box[2], w.box[2]), Math.max(word.box[3], w.box[3])];
-    } else out.push({ text: w.text, box: [...w.box] as Box });
+    } else out.push({ text: w.text, box: [...w.box] as Box, ...(w.bold != null ? { bold: w.bold } : {}) });
   }
   return out;
 }
@@ -503,9 +526,13 @@ export function compoundLabelsOf(structures: readonly PageStructure[], words: re
   const heights = words.map((w) => w.box[3] - w.box[1]).sort((a, b) => a - b);
   const usual = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
   const out: CompoundLabel[] = [];
-  for (const w of words) {
-    const label = labelText(w.text);
+  for (let w of words) {
+    // (the word a number alone - set apart, or set bold beside its yield - else the number heading a line with its yield, where it
+    //  lies the line's first share of its box, as many of its characters)
+    const head = labelText(w.text) ? null : leading(w.text);
+    const label = labelText(w.text) ?? head?.label;
     if (!label || w.box[3] - w.box[1] < SUPERSCRIPT * usual) continue;
+    if (head) w = { ...w, box: [w.box[0], w.box[1], w.box[0] + ((w.box[2] - w.box[0]) * head.chars) / w.text.length, w.box[3]] };
     const mid = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
     // (the nearest box; where two are as near - the word within both, a ring's within a macrocycle's - the one whose ink is nearer)
     let best: PageStructure | null = null;

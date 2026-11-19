@@ -1951,7 +1951,16 @@ mention a number, and the card.
   words in the figure are joined where a PDF sets each glyph apart: on one
   line (their middles within 0.3 of a glyph's height), left to right, no
   more than 0.2 of a glyph's height between them; the figure's drawn words
-  first. It is the nearest structure's, and none where an arrow or a
+  first - but never a run set bold onto one set plain (2026-11-20): a
+  scope table sets a compound's number bold on one line with its yield
+  plain ("21, 83%, 1:1 d.r.", "From the alcohol 12, 64%"), and the bold
+  number is a word of its own. Where the line is one weight, the number
+  heading it before its first comma is taken (`leadingLabel`), lying the
+  line's first share of its box, as many of its characters - but not
+  where another number of that shape follows the comma with a comma of
+  its own: a list of atoms' locants ("6', 8a', 11'") or a table's
+  ("2, 4, 5"). It is the
+  nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
   height: a superscript, a footnote's mark) is none, and a structure not
