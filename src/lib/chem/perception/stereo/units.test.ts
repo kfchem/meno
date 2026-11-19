@@ -10,6 +10,9 @@ import { CHELATE_RING as fromChelateRing } from "../../chelateRing";
 import { blanksOf, CHELATE_RING, filledIn } from "./units";
 
 const id = (smiles: string) => identity(smilesInput(smiles) as unknown as Parameters<typeof identity>[0]).text;
+/** All written one identity, or each its own (the review's pins at the file's end). */
+const one = (...smiles: string[]) => expect(new Set(smiles.map(id)).size).toBe(1);
+const apart = (...smiles: string[]) => expect(new Set(smiles.map(id)).size).toBe(smiles.length);
 
 describe("identity's fill, moved into the core", () => {
   it("is the one identity imports and the one the chelate ring's number comes from", () => {
@@ -99,6 +102,30 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
     one("CN=P(c1ccccc1)(c1ccccc1)c1ccccc1", "C[N-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
   });
 
+  it("a phosphorus ylide drawn P=C and drawn P+-C- is one identity (Wittig's reagents), both ways", () => {
+    one("C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "[CH2-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+    one("CCOC(=O)C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "CCOC(=O)[CH-][P+](c1ccccc1)(c1ccccc1)c1ccccc1");
+    // (a cyclopentadienylide's: the ring's carbanion, three single bonds)
+    one("P(c1ccccc1)(c1ccccc1)(c1ccccc1)=C1C=CC=C1", "[P+](c1ccccc1)(c1ccccc1)(c1ccccc1)[C-]1C=CC=C1");
+    // (and two ylides apart still)
+    apart("C=P(c1ccccc1)(c1ccccc1)c1ccccc1", "CC=P(c1ccccc1)(c1ccccc1)c1ccccc1");
+  });
+
+  it("a P-chiral ylide keeps its configuration: its two hands two, each one identity drawn either way", () => {
+    one("C[P@+](CC)(c1ccccc1)[CH2-]", "C[P@](CC)(c1ccccc1)=C");
+    one("C[P@@+](CC)(c1ccccc1)[CH2-]", "C[P@@](CC)(c1ccccc1)=C");
+    apart("C[P@+](CC)(c1ccccc1)[CH2-]", "C[P@@+](CC)(c1ccccc1)[CH2-]");
+  });
+
+  it("a vinyl ylide is one identity too; only at P: a sulfonium ylide keeps its charges", () => {
+    one("C=C[CH-][P+](C)(C)C", "C=CC=P(C)(C)C");
+    apart("C[S+](C)[CH2-]", "CS(C)=C");
+    // (a carbanion with a double bond of its own is no ylide's: left as drawn)
+    apart("C=[C-][P+](C)(C)C", "C=C=P(C)(C)C");
+    // (nor one of two groups and no H)
+    apart("C[C-][P+](C)(C)C", "C[C]=P(C)(C)C");
+  });
+
   it("a P+ with an O- and an N(-)-R on it is left as drawn, whichever atom comes first: the choice would follow their order", () => {
     one("C[P+](C)([O-])[N-]C", "C[N-][P+](C)(C)[O-]", "[O-][P+](C)(C)[N-]C");
   });
@@ -106,5 +133,68 @@ describe("end chalcogens on P, As, Sb, S, Se, Te: one form whichever is drawn do
   it("the same whatever order the atoms come in", () => {
     one("CCOP(=O)([O-])OC", "COP([O-])(=O)OCC", "[O-]P(OCC)(OC)=O");
     one("CS(=O)(=O)[O-]", "[O-]S(C)(=O)=O", "O=S(=O)([O-])C");
+  });
+});
+
+// (found in review)
+describe("a P+ with an end chalcogen or an N(-)-R and a carbanion on it: the end is taken, as before the ylide rule (found in review)", () => {
+  it("a phosphine oxide's carbanion drawn P=O and drawn P+-O-, with its C- either side", () => {
+    one("O=P(C)(C)[CH2-]", "[O-][P+](C)(C)[CH2-]", "[CH2-][P+](C)(C)[O-]");
+  });
+
+  it("a phosphonate's carbanion (a Horner-Wadsworth-Emmons reagent's), drawn P=O and drawn P+-O-", () => {
+    one("CCOC(=O)[CH-]P(=O)(OCC)OCC", "CCOC(=O)[CH-][P+]([O-])(OCC)OCC");
+  });
+
+  it("the same with S- and with N(-)-R", () => {
+    one("S=P(C)(C)[CH2-]", "[S-][P+](C)(C)[CH2-]");
+    one("CN=P(C)(C)[CH2-]", "C[N-][P+](C)(C)[CH2-]");
+  });
+
+  it("two O- and a carbanion, and one O- and two carbanions, on one P+", () => {
+    one("[O-][P+]([O-])([CH2-])c1ccccc1", "O=P([O-])([CH2-])c1ccccc1");
+    one("[O-][P+]([CH2-])([CH2-])C", "O=P([CH2-])([CH2-])C");
+  });
+});
+
+// (found in review)
+describe("a phosphorus ylide only: an arsonium and a stibonium ylide keep their charges (found in review)", () => {
+  it("As+-C- and As=C are two structures; so are Sb's, Se's and Te's", () => {
+    apart("C[As+](C)(C)[CH2-]", "C[As](C)(C)=C");
+    apart("C[Sb+](C)(C)[CH2-]", "C[Sb](C)(C)=C");
+    apart("C[Se+](C)[CH2-]", "C[Se](C)=C");
+    apart("C[Te+](C)[CH2-]", "C[Te](C)=C");
+  });
+});
+
+describe("a secondary phosphine's P: a centre with its H among its three, as without one (the maintainer's ruling, 2026-11-06)", () => {
+  type Input = Parameters<typeof identity>[0];
+  /** Methyl(R)phosphine with its H carried, not an atom (as a drawing of two bonds has it): P's neighbours C1, then R, its H last. */
+  const carried = (r: "methyl" | "ethyl", volume?: 1 | -1): Input => ({
+    atoms: [
+      { el: "C", hs: 3 },
+      { el: "P", hs: 1, ...(volume ? { tetra: { neighbours: [0, 2, -1], volume } } : {}) },
+      { el: "C", hs: r === "methyl" ? 3 : 2 },
+      ...(r === "ethyl" ? [{ el: "C", hs: 3 }] : []),
+    ],
+    bonds: [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 1 },
+      ...(r === "ethyl" ? [{ a: 2, b: 3, order: 1 }] : []),
+    ],
+  }) as unknown as Input;
+  const text = (g: Input) => identity(g).text;
+
+  it("its H carried: its two hands two identities, neither the one with none given; two alike groups on it, it sets nothing", () => {
+    expect(new Set([text(carried("ethyl", 1)), text(carried("ethyl", -1)), text(carried("ethyl"))]).size).toBe(3);
+    expect(new Set([text(carried("methyl", 1)), text(carried("methyl", -1)), text(carried("methyl"))]).size).toBe(1);
+  });
+
+  it("its H drawn as an atom: its hands two, each one of the carried ones; two alike groups, one with none given", () => {
+    const drawn = [id("C[P@]([H])CC"), id("C[P@@]([H])CC")];
+    expect(new Set(drawn).size).toBe(2);
+    expect(new Set([...drawn, text(carried("ethyl", 1)), text(carried("ethyl", -1))]).size).toBe(2);
+    expect(id("C[P@]([H])C")).toBe(id("CPC"));
+    expect(id("C[P@@]([H])C")).toBe(id("CPC"));
   });
 });
