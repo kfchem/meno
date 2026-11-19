@@ -1866,6 +1866,8 @@ export type EditorState = {
   putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
+  /** A Repeat made round steps (*Repeat these steps*: workflow/model `repeatAround`), the wires that crossed their edge routed through it - one undo step; its id, why it could not be made (`workflow/model` `repeatMade`), or none where there is nothing to make it round. */
+  repeatSteps: (ids: readonly number[]) => number | { why: string } | null;
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind; bound?: Bound }) => void;
   chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
@@ -1927,6 +1929,8 @@ export type EditorState = {
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */
   jobsSeen: Record<string, JobSeen>;
+  /** Each Repeat running, by step: the pass under way, of how many where it says (until none goes again, none), and whether Stop was pressed - its tab says it. Not the document's. */
+  repeatPasses: Record<number, { pass: number; of?: number; stopping?: true }>;
   /** Meno's steps working in turns (Duplicates, `runMenoInTurns`), by step: since when, and how many of their entries they have been through. Not the document's: gone once each is done. */
   menoWorking: Record<number, { since: number; done: number; total: number }>;
   /** A wire picked up off its step and let go on another's port: into that one instead, as one step. */

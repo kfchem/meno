@@ -893,12 +893,18 @@ which any option can name; `lib/boundOptions`).
 
 A *Repeat* is a frame round steps that runs them pass by pass (the
 maintainer's ruling on loops: a general loop that steps a property, which
-any option can name - *Options from a property*). Its frame, the steps it
-holds and the wires it lets cross its edge are built; its passes, and the
-ways to make one (Quick Add's *Repeat*, *Repeat these steps* on a
-selection's menu), come with its runs. Until then none is made, and one
-read from a file says its passes are not run in this version.
+any option can name - *Options from a property*).
 
+- **Made** two ways: Quick Add, *Calculations*, Meno's row, *Repeat* - an
+  empty frame put down where Quick Add was opened, steps dragged into it;
+  or right-click a step - or one of the steps chosen - *Repeat these
+  steps*: its frame drawn round them, and every wire that crossed their
+  edge routed through it in the same edit (a wire coming in to *In*, and
+  *This pass* on to the step it fed; a wire going out from *Done*, and
+  *Out* on to where it went). One undo step either way. Where what
+  comes into the steps is more than one set, or one *In* does not take -
+  structures drawn: a Repeat runs on molecules in 3D - none is made, and a
+  notice says why; the wire is never lost.
 - **What it is.** A step of its own kind (`workflow/repeat`), whose card
   stands at its frame's top left. *In* is its input from outside. Inside
   its frame, *This pass* is the set its first steps take, and *Again* and
@@ -908,13 +914,18 @@ read from a file says its passes are not run in this version.
 - **The steps it holds** are those whose cards' middles lie inside its
   frame, in reading order: a step dragged in joins it, one dragged out
   leaves (`repeatsSettled`), as a set's members do. A Repeat holds no
-  Repeat.
-- **Its edge is crossed by its ports alone.** What comes in goes into
-  *In*; its steps take from *This pass* and from one another; what leaves
+  Repeat, and a step is held by one Repeat alone: where frames overlap,
+  the smallest round its card's middle.
+- **Its edge is crossed by its ports**, and by a later input's set read
+  the same every pass (below). What comes in goes into *In*; its steps
+  take their entries from *This pass* and from one another; what leaves
   goes by *Again* or *Done*, then *Out*. A wire that would cross it
   otherwise is not made, and the step's card says why ("This step is
   inside a Repeat: wire it into the Repeat's In, and This pass to this
-  step").
+  step"). A card dragged across the edge keeps its wires as they were;
+  where one of them now crosses it, the Repeat does not run, and says so
+  ("A wire crosses its frame's edge, a card moved in or out with its
+  wires on: ..."), until it is wired through its ports.
 - **No loop.** What lands on *Again* or *Done* is read by the Repeat as a
   pass ends, never a way back in the flow (`landing`): the steps before a
   Repeat are those before its *In*, and the steps after one of its steps
@@ -922,7 +933,8 @@ read from a file says its passes are not run in this version.
 - **Its options**:
   - *Repeat*: a number of times (3, a starting value with no basis of its
     own: set the passes the work needs), until none goes again (at most
-    10 passes, unless set), or over values;
+    10 passes, unless set - ConfoTS's own cap for its rounds), or over
+    values;
   - *Variable*: a name, with *From* and *Step*, or the values one to a
     line, and a unit from Meno's table;
   - *Counted*: per entry (each entry's value starts at *From* and steps
@@ -934,6 +946,44 @@ read from a file says its passes are not run in this version.
   per entry".
 - **Kept** in the workspace's file with its step: its frame (`frame`) and
   the steps it holds (`holds`), settled again by where the cards stand.
+- **Run**, as any step is, from its card or the page's Run: pass by pass
+  (store `runRepeat`). Each pass, what comes in - *In*'s entries, then what
+  landed on *Again* - goes into *This pass*, each entry carrying its pass
+  (`pass`), its count of times round and its variable's value; then the
+  steps it holds run, each after those inside it takes from; then what
+  landed on *Done* goes to *Out*, and what landed on *Again* starts the
+  next pass as *Each pass starts* says. Its tab says the pass under way
+  ("pass 2 of 3").
+- **It ends** with its last pass - as many as it makes, or, until none goes
+  again, the first with nothing on *Again*, or its cap. What is still
+  going round then leaves by *Out*, marked (`passes ran out`), and its line
+  says so: "2 passes · 0 done · 2 still going round, out by Out".
+- **Stop** on its tab or card: the steps running finish, no next pass
+  starts, and its tab says so at once ("Stopping after the jobs running").
+  Between two steps inside, Stop is looked at before the next one starts.
+  A Repeat stopped reads as not run well ("Stopped after 2 passes"), so
+  nothing after it runs on from it.
+- **A step inside that fails** ends the passes, and the Repeat fails with
+  it, saying which and in which pass ("Filter failed in pass 1: ...").
+  Mended, the Repeat runs again: neither its own steps' failure (what they
+  give lands on *Again* and *Done*) nor its own last run holds it or them
+  back (workflow/run `whyNot`).
+- **A step inside takes its entries** from *This pass* or a step inside.
+  A later input of it - a *Reference*, *Restraints* - may take a set from
+  outside the frame, read the same in every pass; a *Torsion restraints*
+  step's *Reference* is never from inside the frame, which would change
+  between passes.
+- **Restraints held over passes** (the chemistry check's rule): an entry
+  holds the rows of every pass up its own lineage - a minimisation inside a
+  Repeat carries on the rows it held, in the numbering they were made in -
+  and a torsion held in two passes is held at the later pass's row. With
+  *Counted per entry*, an entry going round twice holds its first pass's
+  rows at *From* and its second's at *From* + *Step*. Rows carried in
+  another numbering (an Atom map inside the frame) are refused, never held
+  on other atoms; each entry holds its own, never another's of the same ID.
+- **A job taken up again** in a later pass is one whose every input - its
+  geometry, its rows, its options - is the same as before: what changed
+  from pass to pass is run again, and nothing else.
 
 ## Compound sets and conformer sets
 
