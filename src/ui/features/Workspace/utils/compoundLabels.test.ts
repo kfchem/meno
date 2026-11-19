@@ -233,8 +233,9 @@ describe("the compounds' numbers on a page drawn as Meno draws one", () => {
       expect(["21, 83%", "(3a), 70%", " 7', 91%", "21,83%", "21 , 83%", "21; 83%", "1.5, 2"].map(leadingLabel)).toEqual(["21", "3a", "7'", null, null, null, null]);
       // (a list of numbers of the shape - atoms' locants, a table's - is no number with its yield)
       expect(["6', 8a', 11'", "2, 4, 5", "9a, 9b, 9c", "4, alkene", "12, 95:5 e.r.", "3c, <2%"].map(leadingLabel)).toEqual([null, null, null, "4", "12", "3c"]);
-      // (a yield's first digit set apart from the rest of it, the line cut there: the number, not a list)
-      expect(["8d, 7", "8d, 7 ", "8d, 7, 9"].map(leadingLabel)).toEqual(["8d", "8d", null]);
+      // (what follows, where it begins with a digit, a yield or a ratio - no list, locant, size or heat; a word, as it comes)
+      expect(["8d, <2%", "8d, 96:4 e.r.", "8d, 1.3:1 d.r.", "8d, Pd(OAc)2", "8d, E"].map(leadingLabel)).toEqual(["8d", "8d", "8d", "8d", "8d"]);
+      expect(["1, 3-dichlorobenzene", "1, 2-diol", "6, 8", "10, 20 nm", "21, 83", "10, 80 °C", "8d, 7"].map(leadingLabel)).toEqual(Array(7).fill(null));
     });
   });
 

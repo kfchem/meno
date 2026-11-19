@@ -462,9 +462,10 @@ export function labelText(text: string): string | null {
 
 /**
  * A compound's number set at the head of a line with its yield, where the line is one word - its number and yield in one weight:
- * "21, 83%, 1:1 d.r." - the number before the line's first comma, as `labelText` writes it; else none. None where what follows the
- * comma is another number of the same shape, a comma after it too: a list - of atoms' locants ("6', 8a', 11'"), a table's
- * ("2, 4, 5") - not a number and its yield.
+ * "21, 83%, 1:1 d.r." - the number before the line's first comma, as `labelText` writes it; else none. What follows the comma is a
+ * word ("2, Pd(OAc)2", "5a, E") or a yield or a ratio ("21, 83%", "2b, <1%", "10, 96:4 e.r."): where it begins with a digit that is
+ * neither - a list ("2, 4, 5", "6', 8a', 11'"), a locant's name ("1, 3-dichlorobenzene"), a size or a heat ("10, 20 nm", "10, 80 °C")
+ * - none (found in review).
  */
 export function leadingLabel(text: string): string | null {
   return leading(text)?.label ?? null;
@@ -472,12 +473,16 @@ export function leadingLabel(text: string): string | null {
 
 /** `leadingLabel`, and how many of the line's characters it takes from the line's start - its number's own part of the line's box. */
 function leading(text: string): { label: string; chars: number } | null {
-  const m = /^(\s*)([^,\s]+),\s+([^,\s]*)(,?)/.exec(text);
+  const m = /^(\s*)([^,\s]+),\s+(.*)$/s.exec(text);
   const label = m ? labelText(m[2]) : null;
-  // (a list goes on: its second number has a comma after it too - a yield's first digits, set apart from the rest, have none)
-  if (!label || !m || (labelText(m[3]) && m[4])) return null;
+  if (!label || !m) return null;
+  // (what follows begins with a digit: a yield or a ratio, or no number with its yield)
+  if (/^[<>~≤≥]?\s*\d/.test(m[3]) && !YIELD_OR_RATIO.test(m[3])) return null;
   return { label, chars: m[1].length + m[2].length };
 }
+
+/** What may follow a compound's number on its line, where it begins with a digit: a yield (83%, <1%) or a ratio (96:4, 1.3:1). */
+const YIELD_OR_RATIO = /^[<>~≤≥]?\s*\d+(\.\d+)?\s*(%|:\s*\d)/;
 
 /** How far a box lies from a structure's ink - its bonds, its atoms and its labels. */
 function inkTo(st: PageStructure, b: Box): number {
