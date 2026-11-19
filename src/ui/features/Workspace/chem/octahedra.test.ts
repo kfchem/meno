@@ -158,6 +158,22 @@ describe("a six-bond metal laid out from its SMILES", () => {
     }
   });
 
+  it("gives one compound one answer: Co(dien)Cl3 with its N's H written or not, charged or not - three lines, each N across a Cl", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    for (const smiles of ["Cl[Co+3]123(Cl)Cl.[NH2]1CC[NH]2CC[NH2]3", "Cl[Co]123(Cl)Cl.[NH2]1CC[NH]2CC[NH2]3", "Cl[Co]123(Cl)Cl.N1CCN2CCN3"]) {
+      const laid = await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true);
+      expect(ways(laid, "Co"), smiles).toEqual([30, 90, 150, 210, 270, 330]);
+      // (facial: each N across from a Cl)
+      const c = laid.atoms.find((a) => a.el === "Co")!;
+      const round = laid.bonds.filter((b) => b.a === c.id || b.b === c.id).map((b) => laid.atoms.find((a) => a.id === (b.a === c.id ? b.b : b.a))!);
+      const way = (o: (typeof round)[number]) => Math.atan2(o.y - c.y, o.x - c.x);
+      for (const n of round.filter((o) => o.el === "N")) {
+        const across = round.find((o) => o !== n && Math.abs(Math.abs(way(o) - way(n)) - Math.PI) < 0.05)!;
+        expect(across.el, smiles).toBe("Cl");
+      }
+    }
+  });
+
   it("keeps a macrocycle's four donors square round the metal, its two other ligands beside: cyclam's and a porphyrin's", { timeout: 120000 }, async () => {
     forgetLaidOut();
     for (const [smiles, metal] of [

@@ -226,11 +226,13 @@ function chelatesOpened(input: LayoutInput, out: Layout2D): Layout2D {
         if (x1 == null) continue;
         const x2 = near[x1].find((w) => w !== d1 && near[w].includes(d2));
         if (x2 == null || [x1, x2].some((v) => input.atoms[v].el !== "C" || input.bonds.some((b) => (b.a === v || b.b === v) && b.order !== 1))) continue;
-        const ring = new Set([m, d1, x1, x2, d2]);
+        // (what a donor carries stops at the metal's other donors: a tridentate's middle donor carries its other ring's atoms, not the
+        //  donor at its far end - that ring is set again in its own turn)
+        const ring = new Set([m, d1, x1, x2, d2, ...round]);
         const way = (v: number) => Math.atan2(out.y[v] - out.y[m], out.x[v] - out.x[m]);
         const [t1, t2] = [way(d1), way(d2)];
-        const now = Math.hypot(out.x[d1] - out.x[m], out.y[d1] - out.y[m]);
-        if (now >= CHELATE_OPENED - 1e-9) continue;
+        const reach = (d: number) => Math.hypot(out.x[d] - out.x[m], out.y[d] - out.y[m]);
+        if (Math.min(reach(d1), reach(d2)) >= CHELATE_OPENED - 1e-9) continue;
         // (the donors out along their own spokes)
         for (const [d, t] of [[d1, t1], [d2, t2]] as const) {
           moveWith(d, ring, out.x[m] + CHELATE_OPENED * Math.cos(t) - out.x[d], out.y[m] + CHELATE_OPENED * Math.sin(t) - out.y[d]);
