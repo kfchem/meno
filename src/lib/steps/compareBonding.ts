@@ -44,7 +44,7 @@ import { BOND_REACH, bondRadii, bondedPairs, bondingDistance, REACH_FLOOR } from
 import { aromaticForm, symmetryOrbits } from "../chem/identity";
 import { AROMATIC_BOND } from "../chem/kekulize";
 import { candidates } from "../chem/perception/stereo/candidates";
-import { EXACT, volumeSign } from "../chem/perception/stereo/geometry";
+import { senseAt, torsionSide } from "../chem/perception/stereo/from3d";
 
 export type PassOver = { atoms?: readonly number[]; elements?: readonly string[]; bonds?: readonly (readonly [number, number])[] };
 /** What to compare: R or S, E or Z; what to pass over; and how far, times their covalent radii together, two atoms may stand and be bonded (`BOND_REACH` unless given). */
@@ -59,18 +59,15 @@ const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] 
 const key = (p: number, q: number) => (p < q ? `${p}-${q}` : `${q}-${p}`);
 
 /**
- * The sign of the volume a centre's first three neighbours make about it, exactly (perception/stereo/geometry `volumeSign`): (n0 x n1) . n2,
+ * The sign of the volume a centre's first three neighbours make about it, exactly (perception/stereo/from3d `senseAt`): (n0 x n1) . n2,
  * the same as n2 . (n0 x n1), so asked in the order n2, n0, n1 - the order this has always been worked out in, so that a centre flat to
  * the last bit is called flat or not as before (found in review).
  */
-const wayRound = (xyz: readonly number[], c: number, n: readonly number[]) => volumeSign(at(xyz, n[2]), at(xyz, n[0]), at(xyz, n[1]), at(xyz, c), EXACT);
+const wayRound = (xyz: readonly number[], c: number, n: readonly number[]) => senseAt(at(xyz, c), [at(xyz, n[2]), at(xyz, n[0]), at(xyz, n[1])]);
 
-/** Whether the first neighbours of a double bond's two ends stand cis: the dihedral between them under 90 degrees. */
+/** Whether the first neighbours of a double bond's two ends stand cis: the dihedral between them under 90 degrees (perception/stereo/from3d `torsionSide`). */
 function cis(xyz: readonly number[], a: number, p: number, q: number, b: number): boolean {
-  const b1 = sub(at(xyz, p), at(xyz, a));
-  const b2 = sub(at(xyz, q), at(xyz, p));
-  const b3 = sub(at(xyz, b), at(xyz, q));
-  return dot(cross(b1, b2), cross(b2, b3)) > 0;
+  return torsionSide(at(xyz, a), at(xyz, p), at(xyz, q), at(xyz, b)) > 0;
 }
 
 /**
@@ -122,10 +119,11 @@ export function numberedCentres(structure: Entry["structure"]): { tetrahedral: {
 
 /** "nS" at an atom of four, as ConfoTS reads it: the volume of its three highest-numbered neighbours about its lowest-numbered (`a`, `b`, `c` about `d`) positive. */
 function numberedS(xyz: readonly number[], [a, b, c, d]: readonly number[]): boolean {
-  return volumeSign(at(xyz, a), at(xyz, b), at(xyz, c), at(xyz, d), EXACT) > 0;
+  return senseAt(at(xyz, d), [at(xyz, a), at(xyz, b), at(xyz, c)]) > 0;
 }
 
-/** "nE" at a double bond's end, as ConfoTS reads it: the dihedral a-b=c-d past 90 degrees either way. */
+/** "nE" at a double bond's end, as ConfoTS reads it: the dihedral a-b=c-d past 90 degrees either way - ConfoTS's own arithmetic, kept as
+ *  ported (its normals both against c - b, not perception/stereo/from3d `torsionSide`'s), as a port is kept close to its source. */
 function numberedE(xyz: readonly number[], [a, b, c, d]: readonly number[]): boolean {
   const cb = sub(at(xyz, c), at(xyz, b));
   return dot(cross(sub(at(xyz, a), at(xyz, b)), cb), cross(sub(at(xyz, d), at(xyz, c)), cb)) < 0;

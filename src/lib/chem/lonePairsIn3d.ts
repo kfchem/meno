@@ -19,7 +19,7 @@
 import { identityKey, type IdentityAtom } from "./identity";
 import { AROMATIC_BOND, kekuleOrders } from "./kekulize";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
-import { EXACT, volumeSign } from "./perception/stereo/geometry";
+import { senseAt } from "./perception/stereo/from3d";
 
 /** An atom of a molecule in 3D as this reads it. */
 export type AtomIn3d = { el: string; charge?: number; isotope?: number };
@@ -90,7 +90,7 @@ export function lonePairsIn3d(atoms: readonly AtomIn3d[], bonds: readonly BondIn
       flat.set(c, sum);
       continue;
     }
-    const volume = volumeSign(u, v, w, [0, 0, 0], EXACT);
+    const volume = senseAt([0, 0, 0], [u, v, w]);
     // (three bonds in one plane, all to one side: their angles short of 360, but no side the centre lies to)
     if (volume === 0) continue;
     read.set(c, { neighbours: [...around[c]], volume });

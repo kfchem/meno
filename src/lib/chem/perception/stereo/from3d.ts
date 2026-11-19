@@ -36,6 +36,20 @@ export function cisAt(a: V3, b: V3, p: V3, q: V3): boolean | null {
   return side > 0 ? true : side < 0 ? false : null;
 }
 
+/**
+ * Which way a torsion a-b-c-d turns, by the dot product of its two planes' normals, (b-a) x (c-b) and (c-b) x (d-c): positive where `a`
+ * and `d` stand on one side (the torsion under 90 degrees either way), negative where on opposite sides, 0 where either plane is none.
+ * The same number, worked out in the same order, as Compare bonding's and the reference numbering's readings of a double bond have it.
+ */
+export function torsionSide(a: V3, b: V3, c: V3, d: V3): number {
+  const b1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const b2 = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
+  const b3 = [d[0] - c[0], d[1] - c[1], d[2] - c[2]];
+  const cross = (u: readonly number[], v: readonly number[]) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const [m, n] = [cross(b1, b2), cross(b2, b3)];
+  return m[0] * n[0] + m[1] * n[1] + m[2] * n[2];
+}
+
 /** A bond as these read it: its atoms and order. */
 type PlacedBond = { a: number; b: number; order: number };
 
