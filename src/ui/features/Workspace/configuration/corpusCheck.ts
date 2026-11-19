@@ -55,7 +55,13 @@ function drawnOf(entry: CorpusEntry, mirrored = false): Model {
   const narrow = new Set(m.bonds.flatMap((b) => ((b.stereo === "up" || b.stereo === "down") && b.narrow != null ? [b.narrow] : [])));
   return {
     atoms: entry.group ? m.atoms.map((a) => (narrow.has(a.id) ? { ...a, stereoGroup: { kind: entry.group!, n: 1 } } : a)) : m.atoms,
-    bonds: entry.wavy ? m.bonds.map((b) => (b.stereo === "up" || b.stereo === "down" ? { ...b, stereo: "wavy" as const } : b)) : m.bonds,
+    bonds: m.bonds.map((b) => {
+      const wedge = b.stereo === "up" || b.stereo === "down";
+      if (entry.wavy && wedge) return { ...b, stereo: "wavy" as const };
+      const toH = [b.a, b.b].some((id) => m.atoms.find((a) => a.id === id)?.el === "H");
+      if (entry.onlyH && wedge && !toH) return { ...b, stereo: undefined, narrow: undefined };
+      return b;
+    }),
   };
 }
 
