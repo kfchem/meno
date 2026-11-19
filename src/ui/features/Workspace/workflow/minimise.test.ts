@@ -53,6 +53,16 @@ describe("Minimise with restraints", () => {
     expect(held(workedOf("optimise", water(), out(true), [], undefined, [], true) as Worked)).toBeUndefined();
   });
 
+  it("inside a Repeat, carries on the rows it held, in their numbering, with where they were first held: its next pass holds them again", () => {
+    const rows = [{ kind: "dihedral" as const, atoms: [0, 1, 2, 1], value: 180, strength: 50 }];
+    const first = workedOf("minimise", water(), out(true), [], undefined, [], { rows, numbering: "own" }) as Worked;
+    expect(held(first)).toEqual({ restraints: rows, start: XYZ, numbering: "own" });
+    // (held again in a later pass, with more: its first start kept, the rows it held this pass carried)
+    const more = [...rows, { kind: "dihedral" as const, atoms: [1, 0, 2, 1], value: 180, strength: 100 }];
+    const again = workedOf("minimise", water({ restraints: firstHeldAt([1, 2, 3, 4, 5, 6, 7, 8, 9]) }), out(true), [], undefined, [], { rows: more, numbering: "own" }) as Worked;
+    expect(held(again)).toEqual({ restraints: more, start: [1, 2, 3, 4, 5, 6, 7, 8, 9], numbering: "own" });
+  });
+
   it("is not done where it did not converge in the steps it was given: out of Failed, saying so", () => {
     expect((workedOf("minimise", water({ restraints: restraints() }), out(false), []) as Worked).failed).toEqual({ kind: "not-converged", why: "The minimisation did not converge in the steps it was given" });
   });

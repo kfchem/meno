@@ -228,7 +228,9 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
     }
     bonds[Number(k)] = swapped ? SWAP[text] : text;
   }
-  return { ...st, atoms, bonds };
+  // (why a unit had none - nearly flat, say - is not known of the places it has now: not kept)
+  const { said: _said, ...rest } = st;
+  return { ...rest, atoms, bonds };
 }
 
 /**

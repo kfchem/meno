@@ -18,10 +18,11 @@ import { textOf, type PageText } from "./text";
 /** A box on a page, in points from its top left: left, top, right, bottom. */
 export type Box = [number, number, number, number];
 
-/** What a page is made of: each thing, what it is and where it lies - "plus", words that are a "+" alone. */
-export type PageObject = { kind: "text" | "path" | "image" | "shading" | "form" | "plus"; box: Box };
+/** What a page is made of: each thing, what it is and where it lies - "plus", words that are a "+" alone. A form's things are listed, each where it lies, never the form. */
+export type PageObject = { kind: "text" | "path" | "image" | "shading" | "plus"; box: Box };
 
-const KINDS = [undefined, "text", "path", "image", "shading", "form", "plus"] as const;
+/** By the reader's number for each: 5, a form, is listed no more. */
+const KINDS = [undefined, "text", "path", "image", "shading", undefined, "plus"] as const;
 
 /** A page's things, from what the reader answers: 20 bytes each (src-tauri/src/pdf.rs, `objects`). */
 export function pageObjectsOf(buf: ArrayBuffer): PageObject[] {
@@ -302,8 +303,15 @@ export function figuresOf(objects: readonly PageObject[], wordsIn?: (box: Box) =
     return Math.max(w, h) >= ARROW_LINE_PT && Math.min(w, h) <= ARROW_LINE_THIN * Math.max(w, h);
   });
   const arrows = parts.filter((g) => arrowLike(g) && lines.some((l) => l[0] >= g[0] - 0.5 && l[1] >= g[1] - 0.5 && l[2] <= g[2] + 0.5 && l[3] <= g[3] + 0.5));
+  // (a rule - a journal's under a scheme, between columns - no word is taken across: `between`)
+  const ruled = objects
+    .filter((o) => o.kind === "path")
+    .map((o) => o.box)
+    .filter(([x0, y0, x1, y1]) => Math.min(x1 - x0, y1 - y0) <= RULE_THICK_PT && Math.max(x1 - x0, y1 - y0) >= RULE_LONG_PT);
   // (each compound measured with the labels right beside it - an OH at the end nearest the arrow - an arrow as it is, its line thin)
-  const withLabels = parts.map((g) => (arrows.includes(g) ? g : words.reduce((b, w) => (meet(grow(g, LABEL_PT), w) && w[2] - w[0] < Math.max(SHORT_WORD_PT, 0.6 * (g[2] - g[0])) ? union(b, w) : b), g)));
+  const withLabels = parts.map((g) =>
+    arrows.includes(g) ? g : words.reduce((b, w) => (meet(grow(g, LABEL_PT), w) && w[2] - w[0] < Math.max(SHORT_WORD_PT, 0.6 * (g[2] - g[0])) && !ruled.some((r) => between(r, g, w)) ? union(b, w) : b), g),
+  );
   const groups = schemesOf(withLabels, arrows, pluses);
   // (its labels: words over it, or beside it - none as wide as most of it, as a column's line is; a short word,
   // a compound's number, a little farther off; the words over and under its arrows, a line or two of them)
@@ -316,9 +324,15 @@ export function figuresOf(objects: readonly PageObject[], wordsIn?: (box: Box) =
     if (wide <= SHORT_WORD_PT && mid >= g[0] && mid <= g[2] && meet(grow(g, NUMBER_PT), w)) return true;
     return arrows.some((a) => meet(a, g) && conditionOf(a, w));
   };
+  // (each pass judged against the box as it stood before it - a line of labels at a time, two at most: taken word by word, each
+  // against the box the words before it had widened, a column's lines under a scheme were taken in one after another, to the
+  // page's foot; and none across a rule between it and the figure - the rule a journal sets under a scheme, the column beyond it)
   const labelled = groups.map((g) => {
     let b = g;
-    for (let pass = 0; pass < 2; pass++) b = words.reduce((acc, w) => (labelOf(g, acc, w) ? union(acc, w) : acc), b);
+    for (let pass = 0; pass < 2; pass++) {
+      const was = b;
+      b = words.reduce((acc, w) => (labelOf(g, was, w) && !ruled.some((r) => between(r, g, w)) ? union(acc, w) : acc), b);
+    }
     return b;
   });
   // (none that is a page scanned after all - most of the page, most of it
@@ -363,6 +377,16 @@ function withIons(figures: Box[], words: readonly Box[], charges: readonly Box[]
     }
   }
   return out;
+}
+
+/** Whether a rule - level or upright - lies between a figure and a word: across the way from the one to the other, over all the span they share. */
+function between(rule: Box, f: Box, w: Box): boolean {
+  const level = rule[2] - rule[0] >= rule[3] - rule[1];
+  const [lo, hi, a0, a1, b0, b1] = level ? [rule[0], rule[2], f[0], f[2], w[0], w[2]] : [rule[1], rule[3], f[1], f[3], w[1], w[3]];
+  const [at, f0, f1, w0, w1] = level ? [(rule[1] + rule[3]) / 2, f[1], f[3], w[1], w[3]] : [(rule[0] + rule[2]) / 2, f[0], f[2], w[0], w[2]];
+  const shared: [number, number] = [Math.max(a0, b0), Math.min(a1, b1)];
+  if (shared[0] > shared[1] || lo > shared[0] || hi < shared[1]) return false;
+  return (f1 <= at && w0 >= at) || (w1 <= at && f0 >= at);
 }
 
 /** How far apart two boxes lie: nothing where they meet. */
