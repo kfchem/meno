@@ -151,6 +151,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
+import { fischerCentres } from "./utils/fischer";
 import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
@@ -2304,6 +2305,19 @@ function WorkspaceContent({
           onStepOptions={() => {
             if (menu.kind === "step" && menu.id != null) store.getState().setWorkflowView({ openStep: menu.id });
           }}
+          onRepeatSteps={(() => {
+            if (menu.kind !== "step" || menu.id == null) return undefined;
+            const st = store.getState();
+            const pointed = st.steps.find((s) => s.id === menu.id);
+            // (not a Repeat's own card, nor a step a Repeat holds already)
+            if (!pointed || pointed.kind === "repeat" || st.steps.some((s) => s.kind === "repeat" && s.holds?.includes(pointed.id))) return undefined;
+            const chosen = st.selFlow.steps.has(pointed.id) ? [...st.selFlow.steps] : [pointed.id];
+            return () => {
+              const made = store.getState().repeatSteps(chosen);
+              // (one that cannot be made round them: why, said where the page's notices are)
+              if (made && typeof made === "object") useNotices.getState().show({ id: "repeat-steps", title: "Repeat these steps", text: made.why });
+            };
+          })()}
           onSaveProcedure={(menu.kind === "step" || menu.kind === "set") && menu.id != null ? () => {
             const st = store.getState();
             const start = menu.kind === "step" ? { step: menu.id! } : { set: menu.id! };
@@ -2696,6 +2710,12 @@ function WorkspaceContent({
             return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
           stereo={stereoAtMenu ? { name: stereoAtMenu.name, run: () => showStereo(stereoAtMenu) } : undefined}
+          fischer={(() => {
+            // (the structure right-clicked drawn as a Fischer projection: read so, on the chemist's word - one step)
+            if (menu.kind !== "atom" && menu.kind !== "bond") return undefined;
+            const at = structureAt(menu.kind, menu.id);
+            return at != null && fischerCentres(store.getState().model, at).length ? { run: () => void store.getState().readFischer(at) } : undefined;
+          })()}
           numbers={(() => {
             const st = store.getState();
             const got = numbersItemsFor(st, menu);
