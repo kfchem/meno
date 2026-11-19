@@ -929,9 +929,13 @@ place to give and the count stands; where they are not (norbornan-2-ol,
 camphor, tropan-3-ol, twistane), no count is given, and that is said; so
 too for a cage's N of three unlike groups whose sense identity does not yet
 keep (Troeger's base: two, a resolved pair, once it does) - a
-bridgehead being one joined to another atom by three paths with three
-atoms or fewer between (decalin's ring junctions are none; their bridges
-have four). Past 1024 ways (ten open places), none is written and the
+bridgehead being one joined to another atom by three paths, each with
+one to three atoms between - a bond is no bridge, so a fused system's
+junctions are none. A fused bicycle counts its cis and trans forms; a
+small one, bicyclo[m.n.0] with m + n of four or fewer ([1.1.0], [2.1.0],
+[2.2.0], [3.1.0]), whose rings can only be joined cis, gets no count when
+a junction is left open, and that is said. Past 1024 ways (ten open
+places), none is written and the
 count of ways is said. No step takes it yet: *Stereoisomers* will, in its
 own change.
 

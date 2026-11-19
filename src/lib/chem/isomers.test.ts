@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { smilesInput } from "../layout/smilesInput";
 import type { IdentityInput } from "./identity";
 import { cipInput } from "./cip/testdata/cipFrom";
-import { isomersOf, NOT_COUNTED_CAGE } from "./isomers";
+import { isomersOf, NOT_COUNTED_CAGE, NOT_COUNTED_SMALL_FUSED } from "./isomers";
 
 const count = (smiles: string) => {
   const r = isomersOf(smilesInput(smiles) as unknown as IdentityInput);
@@ -88,6 +88,26 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
       expect(isomersOf(smilesInput(caged) as unknown as IdentityInput)).toEqual({ notCounted: NOT_COUNTED_CAGE });
     // (a fused system is no cage: decalin's two junctions counted)
     expect(count("C1CCC2CCCCC2C1")).toBe(2);
+  });
+
+  it("counts a fused bicycle's cis and trans, a bond being no bridge; gives a small one, whose rings join only cis, no count, said (found in review; the chemistry check's ruling)", () => {
+    // ([3.2.0], [3.3.0], 1-methyl[3.3.0], hexahydrofuro[2,3-b]furan, [4.1.0], [4.2.0], [4.3.0], decalin)
+    const counted: [string, number][] = [
+      ["C1CC2CCC2C1", 3],
+      ["C1CC2CCCC2C1", 2],
+      ["CC12CCCC1CCC2", 2],
+      ["C1COC2OCCC12", 2],
+      ["C1CCC2CC2C1", 3],
+      ["C1CCC2CCC2C1", 3],
+      ["C1CCC2CCCC2C1", 3],
+      ["C1CCC2CCCCC2C1", 2],
+    ];
+    for (const [smiles, n] of counted) expect(count(smiles), smiles).toBe(n);
+    // ([1.1.0], [2.1.0], [2.2.0], [3.1.0], and a [2.1.0] with a methyl at its junction)
+    for (const small of ["C1C2CC12", "C1CC2CC12", "C1CC2CCC12", "C1CC2CC2C1", "CC12CC1CC2"])
+      expect(isomersOf(smilesInput(small) as unknown as IdentityInput), small).toEqual({ notCounted: NOT_COUNTED_SMALL_FUSED });
+    // (its junctions given: what is given is kept, one)
+    expect(count("C1C[C@H]2C[C@H]2C1")).toBe(1);
   });
 
   it("gives Troeger's base no count, said: its N's senses identity does not yet keep (two, a resolved pair); a quinuclidine's N and an aziridine's as before", () => {

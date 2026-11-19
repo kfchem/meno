@@ -31,6 +31,12 @@ type Open = { at?: number; set: (g: IdentityInput, up: boolean) => IdentityInput
 export const NOT_COUNTED_CAGE = "Its stereoisomers are not counted: a cage or a bridged ring system in it has a configuration not given";
 
 /**
+ * What is said where a small fused bicycle's junction is left open (`isomersOf`): bicyclo[m.n.0] with m + n of four or fewer -
+ * [1.1.0], [2.1.0], [2.2.0], [3.1.0] - whose rings no trans form joins (none is reported; strain), the chemistry check's ruling.
+ */
+export const NOT_COUNTED_SMALL_FUSED = "Not counted: in a bicycle this small its rings can only be joined cis, which the count does not yet take";
+
+/**
  * What is said beside a count (`isomersOf`): what it leaves out - an axis no drawing states, and a bridged ring's in,in and out,out
  * forms, which share one configuration (bicyclo[4.4.1]undecane's: told apart by shape, never by a sense).
  */
@@ -38,8 +44,8 @@ export const NOT_COUNTED_AXES = "Atropisomers, and a bridged ring's in,in and ou
 
 /**
  * The atoms of `g` a cage holds: an atom joined to another by three paths that share no atom but their ends, each with
- * `BRIDGE_MOST` atoms or fewer between them - a bridgehead of norbornane, of camphor, of tropane, every atom of cubane and of
- * adamantane's cage. A fused system's junction is none (decalin's: its other two paths have four atoms), nor a bridgehead whose
+ * one to `BRIDGE_MOST` atoms between them - a bridgehead of norbornane, of camphor, of tropane, every atom of cubane and of
+ * adamantane's cage. A fused system's junction is none (its two junctions are bonded: a bond is no bridge - bicyclo[3.3.0]octane's, decalin's), nor a bridgehead whose
  * bridges are long enough to stand in or out (bicyclo[4.4.1]undecane's), whose senses are its own.
  */
 function cageAtoms(g: IdentityInput): Set<number> {
@@ -57,7 +63,8 @@ function cageAtoms(g: IdentityInput): Set<number> {
     const walk = (at: number, between: number[]) => {
       for (const n of around[at]) {
         if (n === a || between.includes(n)) continue;
-        paths.set(n, [...(paths.get(n) ?? []), between]);
+        // (a bond straight to it is no bridge: a fused system's junctions are bonded, a cage's bridgeheads are not - found in review)
+        if (between.length) paths.set(n, [...(paths.get(n) ?? []), between]);
         if (between.length < BRIDGE_MOST) walk(n, [...between, n]);
       }
     };
@@ -80,6 +87,41 @@ function cageAtoms(g: IdentityInput): Set<number> {
   }
   return out;
 }
+
+/**
+ * The junction atoms of `g`'s small fused bicycles: two bonded atoms joined also by two paths that share no atom, of m and n atoms
+ * between, each one or more, m + n `SMALL_FUSED_MOST` or fewer - bicyclo[1.1.0]butane's, [2.1.0]'s, [2.2.0]'s, [3.1.0]'s.
+ */
+function smallFusedJunctions(g: IdentityInput): Set<number> {
+  const around: number[][] = g.atoms.map(() => []);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  const out = new Set<number>();
+  for (const { a, b } of g.bonds) {
+    if (around[a].length < 3 || around[b].length < 3) continue;
+    // (every path from a to b, not by their bond, with one to SMALL_FUSED_MOST - 1 atoms between: its atoms between)
+    const paths: number[][] = [];
+    const walk = (at: number, between: number[]) => {
+      for (const n of around[at]) {
+        if (n === a || between.includes(n) || (at === a && n === b)) continue;
+        if (n === b) {
+          if (between.length) paths.push(between);
+          continue;
+        }
+        if (between.length < SMALL_FUSED_MOST - 1) walk(n, [...between, n]);
+      }
+    };
+    walk(a, []);
+    const apart = (p: number[], q: number[]) => !p.some((x) => q.includes(x));
+    if (paths.some((p, i) => paths.some((q, j) => j > i && p.length + q.length <= SMALL_FUSED_MOST && apart(p, q)))) out.add(a).add(b);
+  }
+  return out;
+}
+
+/** The most atoms a small fused bicycle's two rings have between its junctions (`smallFusedJunctions`): six atoms in all, with the junctions. */
+const SMALL_FUSED_MOST = 4;
 
 /** The most atoms a cage's bridge has between its bridgeheads for their senses to be tied (`cageAtoms`): with four, in,out isomers begin. */
 const BRIDGE_MOST = 3;
@@ -105,6 +147,9 @@ export function isomersOf(input: IdentityInput, most = ASSIGNMENTS_TRIED): { iso
   };
   const open = openPlaces(g).filter((o) => o.at == null || !caged.has(o.at) || keptNot(o.at) || identity(o.set(g, true)).text !== identity(o.set(g, false)).text);
   if (open.some((o) => o.at != null && caged.has(o.at))) return { notCounted: NOT_COUNTED_CAGE };
+  // (a small fused bicycle's junction left open: its trans form, which identity writes, cannot be made - none counted, said)
+  const small = smallFusedJunctions(g);
+  if (small.size && open.some((o) => o.at != null && small.has(o.at))) return { notCounted: NOT_COUNTED_SMALL_FUSED };
   const ways = 2 ** open.length;
   if (ways > most) return { tooMany: ways };
   const found = new Map<string, IdentityInput>();
