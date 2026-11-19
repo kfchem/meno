@@ -56,6 +56,9 @@ export const CLASS = {
 
 const HALOGEN = new Set(["F", "Cl", "Br", "I"]);
 
+/** The elements an acyl group may hang on besides carbon, as A3 step 0's parents: Si, Ge, Sn, Pb, B. */
+const STEP_ZERO = new Set(["Si", "Ge", "Sn", "Pb", "B"]);
+
 /** The characteristic groups of the molecule given by its heavy atoms and bonds (indices), each once. */
 export function groupsOf(atoms: readonly GroupAtom[], bonds: readonly GroupBond[], inRing: readonly boolean[]): Group[] {
   const n = atoms.length;
@@ -88,8 +91,11 @@ export function groupsOf(atoms: readonly GroupAtom[], bonds: readonly GroupBond[
       const imino = around[c].find((x) => x.order === 2 && el(x.to) === "N" && !inRing[x.to])?.to;
       const nitrileN = around[c].find((x) => x.order === 3 && el(x.to) === "N")?.to;
       const others = singles(c);
-      const hetero = others.filter((x) => el(x) !== "C" && el(x) !== "H");
-      const carbons = others.filter((x) => el(x) === "C");
+      // (the atom an acyl group hangs on: a carbon, or a senior element of A3 step 0 - silanecarboxylic acid - which is no heteroatom of
+      //  the group's own)
+      const hangsOn = (x: number) => el(x) === "C" || STEP_ZERO.has(el(x));
+      const hetero = others.filter((x) => !hangsOn(x) && el(x) !== "H");
+      const carbons = others.filter(hangsOn);
       if (nitrileN != null) {
         // (C#N on carbon: a nitrile; N-C#N, O-C#N, S-C#N are cyanamides and cyanates, not built)
         const on = carbons[0];

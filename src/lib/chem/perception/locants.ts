@@ -132,6 +132,13 @@ function contextOf(input: LocantsInput): Ctx {
   return { input, heavy, around, bondIndex: (a, b) => f.bondBetween(a, b), orders, inRing, systemOf, systems: f.ringSystems, rings: f.rings };
 }
 
+/** A charge drawn inside a neutral group - a nitro's, an azide's, a diazo's, an isocyanide's - which is no charged group (B7). */
+function neutralInside(c: Ctx, i: number): boolean {
+  const q = c.input.atoms[i].charge ?? 0;
+  // (an opposite charge on a neighbour: the pair is one neutral group)
+  return c.around[i].some((j) => (c.input.atoms[j].charge ?? 0) === -q);
+}
+
 /** An atom's hydrogens: as given, else its element's valence less its bonds (Kekule orders). */
 function hydrogensAt(c: Ctx, i: number): number {
   const a = c.input.atoms[i];
@@ -696,7 +703,12 @@ function a5(
       : keepLeast(left, (cd) => bestOverForms(c, cd, set), compareMultiple);
   }
   // (what hangs from this unit's atoms: a multiplied parent's twin and what hangs from it are not its own)
-  const hang = hangers(c, parent).filter((h) => set.has(h.on));
+  // (and at level 2 what an amine's N carries besides the parent, as on that N's carbon: N1-(2-aminoethyl)ethane-1,2-diamine)
+  const onN = (c.principal ?? []).filter((g) => g.rank === CLASS.amine).flatMap((g) => {
+    const on = heldIn(c, g, set);
+    return on == null ? [] : c.around[g.at].filter((a) => a !== on && !parent.has(a)).map((first) => ({ on, first }));
+  });
+  const hang = [...hangers(c, parent).filter((h) => set.has(h.on)), ...onN];
   left = keepLeast(left, (cd) => { const k = keyIn(cd); return hang.map((h) => k.get(h.on)!); }, compareSets);
   if (left.length > 1) {
     // (g) the first-cited prefix: different groups at the tied locants need the alphabet - not built
@@ -924,7 +936,8 @@ function parentOf2(c: Ctx, atoms: readonly number[]): ParentPick {
   //  the two ways never mixed, B2.3)
   const heldBy = (unit: readonly number[], hanging = false) => {
     const set = new Set(unit);
-    return principal.filter((g) => (g.carbon != null && !hanging && c.inRing[g.at] === false && !set.has(g.carbon) ? false : heldIn(c, g, set) != null));
+    // (on a carbon chain only: an acid on a step-0 element's chain - on Si - hangs there, as on a ring)
+    return principal.filter((g) => (g.carbon != null && !hanging && !c.inRing[g.at] && c.input.atoms[g.at].el === "C" && !set.has(g.carbon) ? false : heldIn(c, g, set) != null));
   };
   const holds = (unit: readonly number[]) => heldBy(unit).length;
   // (the carboxy and cyano carbons that are not principal: never in a chain)
@@ -939,10 +952,22 @@ function parentOf2(c: Ctx, atoms: readonly number[]): ParentPick {
   const carbons = new Set(principal.flatMap((g) => (g.carbon != null ? [g.carbon] : [])));
   const hung = carbons.size ? chainPaths(c, atoms, (a) => el(a) === "C" && !c.inRing[a] && !notChain.has(a) && !carbons.has(a)) : [];
   const chains = [...ends, ...hung];
+  // (A3 step 0 among those holding the most: an acyclic chain of the senior element - 2-(2-carboxyethyl)disilane-1-carboxylic acid)
+  const elements = [...new Set(atoms.filter((a) => !c.inRing[a] && ACYCLIC_PARENT.has(el(a))).map(el))];
+  const senior = PARENT_ELEMENTS.find((e) => elements.includes(e));
+  const elementChains = senior ? chainPaths(c, atoms, (a) => el(a) === senior && !c.inRing[a]) : [];
+  const elementCounts = elementChains.map(holds);
   const ringCounts = ringUnits.map(holds);
   const chainCounts = [...ends.map(holds), ...hung.map((p) => { const n = heldBy(p, true).length; return n >= 3 ? n : 0; })];
-  const most = Math.max(0, ...ringCounts, ...chainCounts);
+  const most = Math.max(0, ...elementCounts, ...ringCounts, ...chainCounts);
   if (!most) return parentOf(c, atoms);
+  const elementBest = elementChains.filter((_, i) => elementCounts[i] === most);
+  if (elementBest.length) {
+    const longestE = Math.max(...elementBest.map((p) => p.length));
+    const e = elementBest.find((p) => p.length === longestE)!;
+    c.principal = heldBy(e);
+    return { unit: { kind: e.length > 1 ? "chain" : "atom", atoms: e }, own: null };
+  }
   // (the groups the parent chosen holds are its principal groups, numbered as such; any other of their class is a substituent)
   const chosen = (unit: readonly number[]) => {
     const hanging = hung.includes(unit as number[]);
@@ -962,6 +987,16 @@ function parentOf2(c: Ctx, atoms: readonly number[]): ParentPick {
   if (best.length === 1) {
     chosen(best[0]);
     return { unit: { kind: "chain", atoms: best[0] }, own: null };
+  }
+  // (identical chains, one orbit apart, each holding its principal groups - ethane-1,2-diyl diacetate, 2,2'-sulfanediyldiacetic acid:
+  //  multiplied, as rings are; B3.2, B3.4. Never through the principal group itself: two chains on one amine's N are not multiplied)
+  const orbits = c.input.orbits;
+  const distinct = best.filter((p, i) => best.findIndex((q) => q.length === p.length && new Set(q).size === new Set([...q, ...p]).size) === i);
+  const disjoint = distinct.every((p, i) => distinct.every((q, j) => j <= i || !p.some((a) => q.includes(a))));
+  if (orbits && disjoint && distinct.length > 1 && distinct.every((p) => p.length === distinct[0].length) && sameOrbitSets(orbits, distinct) && !principal.some((g) => distinct.some((p) => !p.includes(g.at)) && distinct.every((p) => c.around[g.at].some((a) => p.includes(a)) && !p.includes(g.at)))) {
+    const units = [...distinct].sort((p, q) => Math.min(...p) - Math.min(...q)).map((p) => ({ kind: "chain", atoms: p }) as Unit);
+    c.principal = units.flatMap((u) => heldBy(u.atoms));
+    return { unit: units[0], own: null, multiplied: units };
   }
   const tied = tiedParents(c, best.map((p) => ({ kind: "chain", atoms: p }) as Unit));
   chosen(best.find((p) => p.every((a, k) => tied.unit.atoms[k] === a)) ?? tied.unit.atoms);
@@ -1176,7 +1211,10 @@ function numberUnit(c: Ctx, unit: Unit, parent: ReadonlySet<number>, attach?: nu
   }
   cands = primed(cands, primes);
   if (attach != null && cands.length > 1) cands = keepLeast(cands, (cd) => [keyIn(cd).get(attach)!], compareSets);
-  if (link != null && cands.length > 1) cands = keepLeast(cands, (cd) => [keyIn(cd).get(link)!], compareSets);
+  // (the link low, unless the unit holds a principal group: that comes first - 4,4'-azanediyldibenzonitrile, P-14.4 (c) - and the link
+  //  then as a substituent)
+  const holdsPrincipal = !!c.principal?.some((g) => heldIn(c, g, new Set(unit.atoms)) != null);
+  if (link != null && cands.length > 1 && !holdsPrincipal) cands = keepLeast(cands, (cd) => [keyIn(cd).get(link)!], compareSets);
   if (ownAll) return { cand: cands[0], own: { atoms: [...cands[0].atoms], why: ownAll } };
   // (a substituent's unit has no indicated-hydrogen step of its own before its free valence: P-29.2 puts the free valence first)
   const r = a5(c, cands, { atoms: unit.atoms, mancude, indicated, parts }, parent, attach != null ? 3 : 1);
@@ -1257,15 +1295,21 @@ export function locants(input: LocantsInput, level: 1 | 2 = 1): Locants {
     if (groups.length) {
       const first = Math.min(...groups.map((g) => g.rank));
       const top = groups.filter((g) => g.rank === first);
-      const endsChain = (g: Group) => c.input.atoms[g.at].el === "C" && !c.inRing[g.at] && c.around[g.at].filter((b) => c.input.atoms[b].el === "C").length <= 1;
-      if (top.some((g) => !g.built) || groups.some((g) => !g.built && g.rank > first && endsChain(g))) notBuilt = true;
+      const endsChain = (g: Group) => c.input.atoms[g.at].el === "C" && !c.inRing[g.at] && c.around[g.at].filter((b) => c.input.atoms[b].el === "C").length === 1;
+      // (B7: a cation or an anion that is not of the principal class - the aminium beside an ester - stands above it: not built)
+      const charged = c.input.atoms.some((a, i) => (a.charge ?? 0) !== 0 && !groups.some((g) => g.rank === first && (g.atoms.includes(i) || g.at === i)) && !neutralInside(c, i));
+      if (charged || top.some((g) => !g.built) || groups.some((g) => !g.built && g.rank > first && endsChain(g))) notBuilt = true;
       else {
         c.groups = groups;
         c.principal = top;
       }
     }
   }
+  const wanted = c.principal?.length ?? 0;
   const pick = c.principal ? parentOf2(c, heavyAtoms) : parentOf(c, heavyAtoms);
+  // (esters of one alcohol whose acids are not one parent - esters of different acids, or of identical ones in two orbits: the text has
+  //  no single parent for them, B3.2)
+  if (c.principal && c.principal.length < wanted && c.principal.every((g) => g.rank === CLASS.carboxylicEster)) notBuilt = true;
   const units = pick.multiplied ?? [pick.unit];
   const parentSet = new Set(units.flatMap((u) => u.atoms));
   // (multiplied parents: each numbered alike, the link's point of attachment as low as it allows, the second primed, the third twice)
