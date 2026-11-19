@@ -574,8 +574,8 @@ const BRIDGE_MOST = 3;
 
 /**
  * The atoms of `g` a cage holds: an atom joined to another by three paths that share no atom but their ends, each with
- * `BRIDGE_MOST` atoms or fewer between them - a bridgehead of norbornane, of camphor, of tropane, quinuclidine's N, every atom
- * of cubane and of adamantane's cage. A fused system's junction is none (decalin's: its other two paths have four atoms), nor a
+ * one to `BRIDGE_MOST` atoms between them - a bridgehead of norbornane, of camphor, of tropane, quinuclidine's N, every atom
+ * of cubane and of adamantane's cage. A fused system's junction is none (its two junctions are bonded: a bond is no bridge - bicyclo[3.3.0]octane's, decalin's), nor a
  * bridgehead whose bridges are long enough to stand in or out (bicyclo[4.4.1]undecane's), whose senses are its own. Such an
  * atom's configuration is tied to the cage's other bridgehead's - turned alone it makes no structure - yet it is a real one,
  * which names cite (camphor's 1R,4R): the CIP labels it as its rules give, whatever identity's turning says (the chemistry
@@ -598,7 +598,8 @@ export function cageAtoms(g: { readonly atoms: readonly unknown[]; readonly bond
     const walk = (at: number, between: number[]) => {
       for (const n of around[at]) {
         if (n === a || between.includes(n)) continue;
-        paths.set(n, [...(paths.get(n) ?? []), between]);
+        // (a bond straight to it is no bridge: a fused system's junctions are bonded, a cage's bridgeheads are not - found in review)
+        if (between.length) paths.set(n, [...(paths.get(n) ?? []), between]);
         if (between.length < BRIDGE_MOST) walk(n, [...between, n]);
       }
     };
