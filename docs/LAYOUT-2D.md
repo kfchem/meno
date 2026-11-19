@@ -25,9 +25,10 @@ tried. `npm run layout-order` lists the molecules still drawn otherwise in
 another order. Where the rules below leave a tie, it is settled so:
 
 - **By structure.** Each atom is classed by what it is and what it is
-  bonded to, refined through its neighbours, each stereocentre and each
-  double bond (`ranks.ts`): atoms of one class are alike in everything
-  the layout looks at. A branch's slots go by the weight of what hangs,
+  bonded to, refined through its neighbours, each stereocentre, each
+  double bond and each axis - the core's ranks of the structure
+  (`src/lib/chem/perception/symmetry.ts`, which `ranks.ts` asks): atoms of
+  one class are alike in everything the layout looks at. A branch's slots go by the weight of what hangs,
   then a single bond before a double one, then by class; the ring a
   system is started from, and each ring after it, by the rings' ranks,
   then the one with the most bonds out of the system, then by its atoms'
