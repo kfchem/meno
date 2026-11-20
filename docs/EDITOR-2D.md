@@ -644,9 +644,10 @@ on a page); the Newman projection follows.
   as ST-1.9 prefers (never the wedge shapes without the bold bond); the ring O behind - at the back right for the six, at the back for the
   five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The ring is drawn
   larger than the style's bond (`HAWORTH_SCALE`, 1.8: the look check's to settle; never under 1.25). The free positions are *up* and *down*
-  at each ring atom, straight up and down the page, a group's bond drawn 0.745 of a bond out of the ring's picture and 0.40 into it (a front
-  atom's up group, a back atom's down group), so that every place stands clear of the ring and of every other place: Meno's own lengths, no
-  text gives one. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  at each ring atom, straight up and down the page, each group's bond as long as the figures under Brecher 2006's ST-1.9
+  draw it for that ring, place and way (`HAWORTH_GROUP`, measured from them; no text states a length) - in a six-ring 0.44 of the level
+  bond up from a front atom and 0.39 down from a back atom, into the ring's picture, and 0.65 to 0.83 out of it - so that every place
+  stands clear of the ring and of every other place. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with

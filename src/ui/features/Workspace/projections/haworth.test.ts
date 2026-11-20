@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
 import { measured } from "../../../../testing/timeouts";
 import type { Atom, Bond, Model } from "../store/types";
 import { seenPlaces, snapTo } from "./chair";
@@ -303,9 +304,9 @@ describe("a Haworth ring at another scale", () => {
         expect(found, `${size} at ${length}`).not.toBeNull();
         expect(found.scale).toBeCloseTo(length, 9);
         expect(isProjection(d, new Set(d.atoms.map((a) => a.id)))).toBe(true);
-        // (an up place out of a side atom: the true view's length of the ring's own bond)
+        // (a down place out of a side atom, C-1: its length of the ring's own bond, as the text's figure draws it)
         const side = seenPlaces(d, 1).find((p) => p.free.kind === "down")!;
-        expect(Math.hypot(side.place.x - d.atoms[1].x, side.place.y - d.atoms[1].y)).toBeCloseTo(Math.sqrt(5) / 3 * length, 9);
+        expect(Math.hypot(side.place.x - d.atoms[1].x, side.place.y - d.atoms[1].y)).toBeCloseTo(HAWORTH_GROUP[size].side.down * length, 9);
       }
     }
   });
