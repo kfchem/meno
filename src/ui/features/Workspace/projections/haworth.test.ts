@@ -315,6 +315,18 @@ describe("a Haworth ring at another scale", () => {
   });
 });
 
+/** The box round every text the layout writes for atom `i`'s label: all its letters, not the first alone. */
+function wholeLabel(lay: ReturnType<typeof layoutMolecule>, set: ReturnType<typeof labelSetOf>, i: number) {
+  const boxes = lay.texts
+    .filter((t) => (t as { atom?: number }).atom === i)
+    .map((t) => {
+      const b = labelBox(t, t.fontPx, set);
+      return { minX: t.x - b.left, maxX: t.x + b.right, minY: t.y - b.bottom, maxY: t.y + b.top };
+    });
+  expect(boxes.length).toBeGreaterThan(0);
+  return boxes.reduce((u, b) => ({ minX: Math.min(u.minX, b.minX), maxX: Math.max(u.maxX, b.maxX), minY: Math.min(u.minY, b.minY), maxY: Math.max(u.maxY, b.maxY) }));
+}
+
 describe("a labelled group inside a Haworth ring", () => {
   /** A six-ring from the tool with labels led out to the places named - [ring atom, up or down, label] - laid out as the page draws it. */
   const laidWith = (groups: readonly (readonly [number, "up" | "down", string])[]) => {
@@ -345,7 +357,7 @@ describe("a labelled group inside a Haworth ring", () => {
     }
   });
 
-  it("keeps a front atom's up label off every ring bond, in the six-ring and the five-ring, whatever the label", () => {
+  it("keeps a front atom's up label - all its letters - off every ring bond, in the six-ring and the five-ring, whatever the label: a CH2OH on the right reads HOH2C, into the ring", () => {
     for (const size of [6, 5] as const) {
       const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
       const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
@@ -358,9 +370,7 @@ describe("a labelled group inside a Haworth ring", () => {
           atoms.push({ x: p.place.x, y: p.place.y, el: label });
           bonds.push({ a1: k, a2: atoms.length - 1, order: 1 });
           const lay = layoutMolecule(atoms as never, bonds as never, opts, 40);
-          const t = lay.texts.find((x) => Math.hypot(x.x - p.place.x, x.y - p.place.y) < 1e-6)!;
-          const b = labelBox(t, t.fontPx, set);
-          const box = { minX: t.x - b.left, maxX: t.x + b.right, minY: t.y - b.bottom, maxY: t.y + b.top };
+          const box = wholeLabel(lay, set, atoms.length - 1);
           for (const bd of d.bonds) {
             if (bd.a - 1 === k || bd.b - 1 === k) continue;
             expect(segmentMeetsBox(atoms[bd.a - 1], atoms[bd.b - 1], box), `${size}-ring atom ${k} ${label}: bond ${bd.a - 1}-${bd.b - 1}`).toBe(false);
@@ -374,13 +384,9 @@ describe("a labelled group inside a Haworth ring", () => {
     // (C-3, atom 3, front left; C-5, atom 5, back left, on the same vertical)
     const w = laidWith([[3, "up", "OH"], [5, "down", "H"]]);
     const set = labelSetOf(w.opts);
-    const boxAt = (i: number) => {
-      const t = w.lay.texts.find((x) => Math.hypot(x.x - w.atoms[i].x, x.y - w.atoms[i].y) < 1e-6)!;
-      const b = labelBox(t, t.fontPx, set);
-      return { bottom: t.y - b.bottom, top: t.y + b.top };
-    };
-    const [front, back] = [boxAt(6), boxAt(7)];
-    expect(back.bottom).toBeGreaterThan(front.top);
+    const [front, back] = [wholeLabel(w.lay, set, 6), wholeLabel(w.lay, set, 7)];
+    // (apart by more than a hair: 0.04 of the level bond, about a twentieth of a label's height, at the least)
+    expect((back.minY - front.maxY) / w.d.scale).toBeGreaterThan(0.04);
     expect(stemOf(w, 3, w.atoms[6].y)).toBeGreaterThanOrEqual(0.29);
   });
 });

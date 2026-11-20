@@ -188,7 +188,7 @@ describe("the Haworth ring as drawn (rule (H)): a true view of the ring, its gro
   it("puts each group straight up or down, as long as its ring, place and way give: shorter into the ring's picture", () => {
     // (each to 0.01 of the level bond: [front up, front down, side up, side down, back up, back down] - out of the ring as MEASURED from
     //  Brecher 2006's figures under ST-1.9, into it by the stem that is to show: haworth.test, "a labelled group inside a Haworth ring")
-    const want = { 6: [0.51, 0.68, 0.65, 0.83, 0.65, 0.35], 5: [0.51, 0.68, 0.66, 0.68, 0.65, 0.46] } as const;
+    const want = { 6: [0.51, 0.68, 0.65, 0.83, 0.65, 0.3], 5: [0.51, 0.68, 0.66, 0.68, 0.65, 0.46] } as const;
     for (const size of [6, 5] as const) {
       const g = HAWORTH_GROUP[size];
       expect([g.front.up, g.front.down, g.side.up, g.side.down, g.back.up, g.back.down], `${size}`).toEqual([...want[size]]);
@@ -210,10 +210,10 @@ describe("the Haworth ring as drawn (rule (H)): a true view of the ring, its gro
       // (each way of each place is drawn: the five-ring's back atom, its ring O in a furanose, too, at the six-ring's lengths)
       expect([...seen].sort(), `${size}`).toEqual(["back down", "back up", "front down", "front up", "side down", "side up"]);
     }
-    // (a front atom's up group and the back atom's down group on one vertical of the six-ring: 0.30 between their places, for two labels)
+    // (a front atom's up group and the back atom's down group on one vertical of the six-ring: 0.345 between their places, two labels apart)
     const six = drawn(haworth(6))!;
     const tall = Math.max(...six.atoms.map((p) => p.y)) - Math.min(...six.atoms.map((p) => p.y));
-    close(tall - HAWORTH_GROUP[6].front.up - HAWORTH_GROUP[6].back.down, 0.295, 3);
+    close(tall - HAWORTH_GROUP[6].front.up - HAWORTH_GROUP[6].back.down, 0.345, 3);
   });
 
   it("leaves every group place clear - at least 0.24 of the level bond - of every other ring atom, every ring bond not at its own atom and every other group place; and no group's bond touches a ring bond but at its own atom", () => {

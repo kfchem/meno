@@ -648,8 +648,8 @@ on a page); the Newman projection follows.
   no text states a length, and the texts ask only that groups be vertical and not overlap): out of the ring's picture as the figures under
   Brecher 2006's ST-1.9 draw them (0.65 to 0.83 of the level bond, measured there); into it - a front atom's up group, a back atom's
   down group - long enough that the stem still shows once trimmed to its label: up from a front atom 0.51, a stem of 0.29 like the
-  figures', whatever the label (OH, H, CH2OH). A six-ring's back atom's down group, on the vertical of the front atom's up group below
-  it, takes what is left so that the two labels clear each other (0.35, a shorter stem than the figures'); in the five-ring a front
+  figures', whatever the label (OH, H, CH2OH; a CH2OH on the right reads HOH2C, into the ring). A six-ring's back atom's down group, on the vertical of the front atom's up group below
+  it, takes what is left so that the two labels stand visibly apart (0.30, a shorter stem than the figures'); in the five-ring a front
   atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are

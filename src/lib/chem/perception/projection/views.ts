@@ -73,13 +73,14 @@ export type HaworthPlace = "front" | "side" | "back";
  * that is to SHOW once the bond is trimmed to its label: the figures' own visible stem (0.29 of the level bond in a six-ring, 0.33 in a
  * five-ring, MEASURED from the ink) plus what Meno's label takes off a vertical bond (`HAWORTH_LABEL_TRIM`), so that a front atom's OH or
  * CH2OH stands on a stem that can be seen. A six-ring's back atom's down group shares its vertical with the front atom's up group below
- * it, and the two labels need 0.30 of the level bond between their centres: it takes what is left, 0.35 - a shorter stem than the
- * figures' 0.25. In the five-ring a front atom's up label at more than 0.51 meets the bond to the ring O, so it stands at 0.51 - a stem
+ * it, and the two labels need 0.35 of the level bond between their centres to stand visibly apart (Meno's label is about 0.28 tall):
+ * it takes what is left, 0.30 - a stem of about 0.11, short of the figures' 0.25; such a group is most often an H, which a Haworth
+ * drawing may leave out. In the five-ring a front atom's up label at more than 0.51 meets the bond to the ring O, so it stands at 0.51 - a stem
  * of 0.29, short of the figures' 0.33; its back atom, which carries no group in the figures, has no front atom under it. No text states a length
  * (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6, McNaught 1996 2-Carb-5.4); the texts ask only that groups be vertical and not overlap.
  */
 export const HAWORTH_GROUP: Readonly<Record<5 | 6, Readonly<Record<HaworthPlace, { up: number; down: number }>>>> = {
-  6: { front: { up: 0.51, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.35 } },
+  6: { front: { up: 0.51, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.3 } },
   5: { front: { up: 0.51, down: 0.68 }, side: { up: 0.66, down: 0.68 }, back: { up: 0.65, down: 0.46 } },
 };
 
