@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Atom, Bond, Model } from "../store/types";
 import { identityOfDrawn } from "../chem/identityOf";
+import { editorModelOf } from "../utils/io";
+import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
+import { blocksOf } from "../chem/make3d";
 import { identityText } from "../../../../lib/chem/identity";
 import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { angleFrom, isEndOn, newmanDrawing, newmanExtension, newmansIn, newmanTurn, setOf, spokeAngles, turnedAbout, turnedTo, turnOf } from "./newman";
@@ -185,6 +188,48 @@ describe("a Newman pair read as Meno reads a drawing (known answers)", () => {
     expect([meso.complete, chiral.complete]).toEqual([true, true]);
     expect(meso.text).toBe(identityText(fromSmiles(MESO)));
     expect([identityText(fromSmiles("F[C@H](Cl)[C@H](F)Cl")), identityText(fromSmiles("F[C@@H](Cl)[C@@H](F)Cl"))]).toContain(chiral.text);
+  });
+
+  it("is written for 3D and the files as the compound it is, read back from the MOL file: 2,3-dibromobutane in six arrangements, three meso, three chiral", () => {
+    /** The tool's pair with its groups at the angles given, front and back (an H left undrawn). */
+    const at = (front: [string, number][], back: [string, number][]): Model => {
+      const d = newmanDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 });
+      const atoms: Atom[] = [...d.atoms];
+      const bonds: Bond[] = [...d.bonds];
+      let id = 10;
+      for (const [on, groups] of [[1, front], [2, back]] as const) {
+        for (const [el, deg] of groups) {
+          const t = (deg * Math.PI) / 180;
+          atoms.push({ id, el, r: 0.9, x: L * Math.cos(t), y: L * Math.sin(t) });
+          bonds.push({ id: 100 + id, a: on, b: id, order: 1 });
+          id++;
+        }
+      }
+      return { atoms, bonds };
+    };
+    // (the front's CH3 at 90 and Br at 210; the back's in each of three turns, each way round)
+    const front: [string, number][] = [["C", 90], ["Br", 210]];
+    const meso = [at(front, [["C", 270], ["Br", 30]]), at(front, [["C", 30], ["Br", 150]]), at(front, [["C", 150], ["Br", 270]])];
+    const chiral = [at(front, [["C", 270], ["Br", 150]]), at(front, [["C", 30], ["Br", 270]]), at(front, [["C", 150], ["Br", 30]])];
+    const fromFile = (m: Model) => identityOfDrawn(editorModelOf(moleculesToEditorModel(readMoleculesFromText(blocksOf(m, [1])[0].molblock, "mol")).model));
+    const MESO = identityText(fromSmiles("C[C@@H](Br)[C@H](C)Br"));
+    // (no bond of the file is of no length: another reader of the MOL file, one that reads no configuration at a zero-length bond, has a
+    //  centre to read)
+    const shortest = (m: Model) => {
+      const read = editorModelOf(moleculesToEditorModel(readMoleculesFromText(blocksOf(m, [1])[0].molblock, "mol")).model);
+      const byId = new Map(read.atoms.map((a) => [a.id, a]));
+      return Math.min(...read.bonds.map((b) => Math.hypot(byId.get(b.a)!.x - byId.get(b.b)!.x, byId.get(b.a)!.y - byId.get(b.b)!.y)));
+    };
+    for (const m of [...meso, ...chiral]) {
+      expect(shortest(m)).toBeGreaterThan(0.25);
+      const read = fromFile(m);
+      expect(read.complete).toBe(true);
+      expect(read.text).toBe(identityOfDrawn(m).text);
+    }
+    expect(meso.map((m) => fromFile(m).text)).toEqual([MESO, MESO, MESO]);
+    const one = fromFile(chiral[0]).text;
+    expect(one).not.toBe(MESO);
+    expect(chiral.map((m) => fromFile(m).text)).toEqual([one, one, one]);
   });
 
   it("is the same compound after a spoke is turned round the circle: a turn changes the conformation, not the configuration", () => {

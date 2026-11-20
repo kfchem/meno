@@ -108,8 +108,10 @@ function bridged(rings: readonly (readonly number[])[], of: readonly number[]): 
  * does: 3D and a file take the configuration read, never the shape drawn.
  * The drawing is left as it is.
  */
-export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Stereo {
-  const { tetra } = readStereo(atoms, bonds);
+export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], given?: ReadonlyMap<number, Tetrahedral>): Stereo {
+  // (the centres' configuration: as given - read from the drawing as it stood, where its atoms are then moved to be written - else as
+  //  its marks and depth read)
+  const tetra = given ?? readStereo(atoms, bonds).tetra;
   const seen = withRecognisedDepth(atoms, bonds, cageViews);
   const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [b.wedge.narrow] : [])));
   const shown = new Map([...tetra].filter(([c]) => seen[c].z != null && !wedged.has(c)));
