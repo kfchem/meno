@@ -9,10 +9,10 @@ import { haworthDrawing, haworthOf, haworthsIn } from "./haworth";
 /** A projection found: what it is, its ring's atoms in order round it, the tool's drawing of it where it stands, and each atom's place in that drawing. */
 export type FoundProjection = { kind: "chair" | "haworth"; ring: number[]; drawing: ChairDrawing; index: Map<number, number> };
 
-/** The projections among the atoms `ids` (a structure's) of a drawing, or among all of it. */
 /** The projections of a whole drawing, found once for each drawing (its atoms and bonds as they are): every frame of a stroke asks again. */
 const found = new WeakMap<readonly Atom[], { bonds: readonly Bond[]; out: FoundProjection[] }>();
 
+/** The ring projections among the atoms `only` (a structure's) of a drawing, or among all of it. */
 export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, only?: ReadonlySet<number>): FoundProjection[] {
   // (nothing drawn with depth: nothing to look for, at every frame of every drag)
   if (!model.atoms.some((a) => a.z != null)) return [];

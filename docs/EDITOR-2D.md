@@ -631,7 +631,7 @@ again from Quick Add opened on the chair it put down - within two bonds of its r
 was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
 "Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
 (`Workspace/projections/`: `chair`, `extend`, `flip`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
-on a page); the Newman projection follows.
+on a page), and the **Newman projection** (`newman`).
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
@@ -728,6 +728,24 @@ on a page); the Newman projection follows.
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
   the chair tool, every group equatorial; the MOL written for 3D reads back as the same.
+- **The Newman projection** (Quick Add, *Projections*). Two carbons on the line of sight - the front one nearer - drawn at ONE place on the page, with the
+  circle round it: the front atom's bonds meet at the circle's centre, the back atom's start at its rim (Moss 1996, *Newman Projection*). The central bond is
+  seen end-on: it has no drawn length and no direction, and the page draws none of it (`isEndOn`, `newmanPairs`, lib/chem/layout2d: no line for that bond, the
+  back atom's bonds drawn from the rim, the circle one of the drawing's circles, so that SVG, EMF and print have it as the canvas does). Free positions: three
+  spokes on each atom, staggered - the front's at 90, 210 and 330 degrees, the back's at 30, 150 and 270 - a bond length from the centre; a group is led
+  out to the nearest that no group holds, the tip saying "front" or "back". A spoke dragged round the circle turns all three groups of its atom together,
+  with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
+  12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
+  back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the
+  front atom, a press on the circle's line the back atom - a choice of handling only, by eye. A label typed on either atom is refused,
+  in words that say why: they are drawn at one place and have no room for one; both are carbon. Clean-up leaves it as drawn and says so (a pair
+  at one place is no ring a flat layout can keep); *Draw flat* lays it out. Written for 3D,
+  a file or the clipboard (chem/drawing `forFlatReaders`), the pair's back atom is put half a bond off
+  its front one, so that a reader that knows only wedges sees each centre's four bonds go four ways, and
+  each centre's configuration - read from the pair as drawn - is written in wedges. The pair is read by its depth, as a ring in perspective is. Known
+  answers (`newman.test.ts`): 1,2-dichloro-1,2-difluoroethane with its groups in one order front and back is the meso form, with the back's
+  two swapped one of the chiral pair; a spoke turned round the circle leaves the compound the same.
+  Not yet checked in the sweep of what reads a bond's length or direction: label places for a labelled or charged atom of the pair.
 - **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no ring fused on a chair by the tool yet (Fuse comes in its
   own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
   offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
