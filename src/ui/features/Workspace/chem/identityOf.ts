@@ -9,7 +9,7 @@
 import { identity, identityText, type IdentityGroup, type IdentityInput } from "../../../../lib/chem/identity";
 import { earlierPicture, pairingDrawn, pairsDrawnAcross, pairsOf } from "../../../../lib/chem/arrangement";
 import { isMetal, squarePlanarMetal, type Arranged } from "../../../../lib/layout/perceive";
-import { valencesAt } from "../../../../lib/chem/molecule";
+import { implicitHydrogens, valencesAt } from "../../../../lib/chem/molecule";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { readStereo } from "../../../../lib/layout/drawn";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
@@ -19,6 +19,7 @@ import { drawingOf, readAs } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { piSystems, unreadWedges } from "./engineLayout";
 import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
+import { reversedLabel } from "../../../../lib/chem/abbreviations";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 
@@ -116,7 +117,21 @@ export function labelsDrawnOut(part: Model): Model {
   for (const a of part.atoms) {
     const bond = a.abbrev ? undefined : part.bonds.find((b) => b.a === a.id || b.b === a.id);
     const other = bond && part.atoms.find((x) => x.id === (bond.a === a.id ? bond.b : bond.a));
-    const s = a.abbrev ?? (isElementSymbol(a.el) ? null : placedAbbreviation(a.el, other ? { x: other.x - a.x, y: other.y - a.y } : null, NOMINAL_BOND_LENGTH));
+    // (a label of one element and its H - OH, HO, SH, NH2, H2N - is that element, where its bonds leave it as many H)
+    const one = a.abbrev || isElementSymbol(a.el) ? null : elementWithHydrogens(a.el);
+    if (one) {
+      const order = part.bonds.reduce((sum, b) => sum + (b.a === a.id || b.b === a.id ? b.order : 0), 0);
+      if (implicitHydrogens(one.el, order, a.charge ?? 0, a.radical) === one.h) {
+        atoms.push({ ...a, el: one.el });
+        continue;
+      }
+    }
+    // (a group's label as read outward from a bond on its right - MeO, AcO, HO2C - the group written the other way)
+    const placed = (text: string) => {
+      const q = placedAbbreviation(text, other ? { x: other.x - a.x, y: other.y - a.y } : null, NOMINAL_BOND_LENGTH);
+      return q?.atoms.length ? q : null;
+    };
+    const s = a.abbrev ?? (isElementSymbol(a.el) ? null : (placed(a.el) ?? placed(reversedLabel(a.el))));
     if (!s?.atoms.length) {
       atoms.push(a);
       continue;
@@ -130,6 +145,14 @@ export function labelsDrawnOut(part: Model): Model {
     }
   }
   return { atoms, bonds };
+}
+
+/** A label of one element and its H, either way round - OH, HO, SH, NH2, H2N - as the element and the count; null for any other. */
+function elementWithHydrogens(text: string): { el: string; h: number } | null {
+  const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(text);
+  if (!m || (m[1] === undefined) === (m[3] === undefined) || m[2] === "H" || !isElementSymbol(m[2])) return null;
+  const n = m[1] ?? m[3];
+  return { el: m[2], h: n ? Number.parseInt(n, 10) : 1 };
 }
 
 /**
