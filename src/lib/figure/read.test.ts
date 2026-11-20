@@ -694,12 +694,12 @@ describe("a figure read as a structure", () => {
         stroke(a, [m[0] - gap, 40]),
         stroke([m[0] + gap, 40], b),
         stroke(b, step(b, 30)),
-        // (the bond in front, crossing the gap)
-        stroke([m[0], 40 - 0.6 * L], [m[0], 40 + 0.6 * L]),
+        // (the bond in front, crossing the gap - a bond of a chain of its own, no line alone)
+        stroke(step([m[0], 40 - 0.6 * L], 60), [m[0], 40 - 0.6 * L], [m[0], 40 + 0.6 * L]),
       ]),
     );
-    expect(s.bonds).toHaveLength(4);
-    expect(s.atoms).toHaveLength(6);
+    expect(s.bonds).toHaveLength(5);
+    expect(s.atoms).toHaveLength(7);
   });
 
   describe("a row of dashes along a line - a bond forming or breaking, a weak bond", () => {
@@ -2275,10 +2275,11 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     expect(s.atoms.length).toBe(4);
   });
 
-  it("is not seen where there is no count - lines across a bond read as before - nor where a number stands by no bracket", () => {
+  it("is not seen where there is no count - lines across a bond read as any lines are - nor where a number stands by no bracket", () => {
     const uncounted = read(counted(false, null));
     expect(uncounted.atoms.some((a) => a.unsure?.some((u) => u.startsWith("A repeat unit")))).toBe(false);
-    expect(uncounted.bonds.length).toBe(7);
+    // (the chain's five bonds; each bracket's upright line, alone and a bond long, is no ethane: left out)
+    expect(uncounted.bonds.length).toBe(5);
     // (a compound's number under it, by no bracket: its own word, left as it was)
     const p0: P = [40, 80];
     const f = figure([stroke(p0, step(p0, -30), step(step(p0, -30), 30))], word("6", [step(p0, -30)[0], step(p0, -30)[1] + 1.5 * L]));
