@@ -580,6 +580,12 @@ hydrogens `implicitHydrogens`). So a P(=O) with two groups carries one H
 one; triphenylphosphine oxide, DMSO, a sulfone, PPh3 and a
 methyltriphenylphosphonium carry none. A bond to a metal does not lift
 the valence: a phosphine on a metal (Pd(PPh3)4's P) is P(III), with no H.
+A MOL file Meno writes says so: such a P, S or Se is given the valence
+Meno counts (its V2000 valence field, V3000's VAL), so that no reader of
+the file - a plugin asked for the structure's SMILES, a program it is
+opened in - lifts it by a rule of its own (lib/chem/molWriter
+`metalBoundValences`). In 3D, where its hydrogens are all atoms, its
+valence is its bonds.
 Where no such form closes them, the SMILES is refused, never read by
 adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
 2, 3 and 4) have no form with single and double bonds: is a charge
