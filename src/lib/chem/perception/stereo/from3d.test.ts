@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cisAt, configuredFrom, FLAT_ALLENE, runsFrom3d, senseAt, type Place } from "./from3d";
+import { cisAt, configuredFrom, FLAT_ALLENE, runsFrom3d, senseAt, torsionSide, type Place } from "./from3d";
 import { FLAT_VOLUME_3D, HANDED } from "./geometry";
 import { cipIn3d } from "../../cip/in3d";
 
@@ -102,5 +102,16 @@ describe("a configuration read from places", () => {
     expect(cisAt(a, b, [-0.7, 1.2, 0], [2.04, 1.2, 0])).toBe(true);
     expect(cisAt(a, b, [-0.7, 1.2, 0], [2.04, -1.2, 0])).toBe(false);
     expect(cisAt(a, b, [-0.7, 1.2, 0], [2.84, 0, 0])).toBe(null);
+  });
+
+  it("reads a torsion's way: its ends on one side under 90 degrees, on opposite sides past it, none where a plane is none", () => {
+    const [a, b, c]: Place[] = [[-0.7, 1.2, 0], [0, 0, 0], [1.34, 0, 0]];
+    expect(torsionSide(a, b, c, [2.04, 1.2, 0])).toBeGreaterThan(0);
+    expect(torsionSide(a, b, c, [2.04, -1.2, 0])).toBeLessThan(0);
+    // (turned 80 degrees and 100 about the bond: either side of square)
+    const turned = (deg: number): Place => [2.04, 1.2 * Math.cos((deg * Math.PI) / 180), 1.2 * Math.sin((deg * Math.PI) / 180)];
+    expect(torsionSide(a, b, c, turned(80))).toBeGreaterThan(0);
+    expect(torsionSide(a, b, c, turned(100))).toBeLessThan(0);
+    expect(torsionSide(a, b, c, [2.84, 0, 0])).toBe(0);
   });
 });
