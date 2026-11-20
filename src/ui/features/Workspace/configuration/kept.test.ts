@@ -10,6 +10,7 @@ import { configurationChanges, readingOf } from "./changes";
 import { chair } from "../../../../lib/chem/perception/projection/solids";
 import { drawn } from "../../../../lib/chem/perception/projection/views";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
+import { measured } from "../../../../testing/timeouts";
 
 // Foundation part 15, phase 2, its second half: the configuration kept on the drawing's own atoms and bonds, in the step that made it, saved
 // and copied with it, and what an edit changed said against what is kept.
@@ -69,8 +70,10 @@ describe("the configuration kept on the drawing (part 15, phase 2)", () => {
     store.getState().moveAtoms([{ id: 5, x: 2.6 * L, y: 0 }], "drag-2");
     await vi.runAllTimersAsync();
     expect(notes()).toEqual([]);
-    // (what is kept made the other sense - as a fault of keeping would leave it - and the structure touched: the difference said)
-    doc.edit("other", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => (a.id === 1 ? { ...a, config: { set: { neighbours: [2, 3, 4, -1], sense: -1 as const } } } : a)) } }));
+    // (what is kept made the other sense - as a fault of keeping would leave it, set as the drawing stands, no edit of the chemist's - and
+    //  the structure touched: the difference said)
+    const d0 = doc.getState();
+    doc.reset({ ...d0, model: { ...d0.model, atoms: d0.model.atoms.map((a) => (a.id === 1 ? { ...a, config: { set: { neighbours: [2, 3, 4, -1], sense: -1 as const } } } : a)) } });
     store.getState().moveAtoms([{ id: 5, x: 2.7 * L, y: 0 }], "drag-3");
     await vi.runAllTimersAsync();
     // (the drawing read R before and after the touch: no descriptor tells the two apart, so it is said turned - a fault of keeping, shown)
@@ -256,7 +259,7 @@ describe("an axis kept with the neighbours its sense is taken against", () => {
       const turned = renumbered(kept, (id) => 10_000 - swap(id));
       expect(keptReading(turned, readingOf(turned).said).said.axes, name).toEqual(readingOf(turned).said.axes);
     }
-  });
+  }, measured(460));
 
   it("keeps a unit whose ends are not bonded - an allene's axis, an odd cumulene's cis or trans - on its run's first bond, its ends named", () => {
     for (const [name, m, kind] of [["an allene", allene(), "axis"], ["a hexatriene's cumulene", drawnFromSmiles("C/C=C=C=C/C"), "set"]] as const) {

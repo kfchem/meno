@@ -11,8 +11,11 @@
  */
 import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
+import { metal } from "../../../../lib/chem/perception/elements";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
-import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { readStereo, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { saidOf } from "../../../../lib/chem/perception/stereo/compare";
+import { keepsAny, keptAsDrawn, keptReading } from "../configuration/kept";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
 import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
@@ -84,11 +87,15 @@ export function undrawnHydrogens(model: Model): Map<number, number> {
   // (and toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - lib/chem/molecule `setValenceOrder`)
   const setSum = new Map<number, number>();
   const el = new Map(model.atoms.map((a) => [a.id, a.el]));
+  const toMetals = new Map<number, number>();
   for (const b of model.bonds) {
     // (a dative bond lends a pair, and takes no H from either end - but a
     // carbon lending it; nor does a coordination or a hydrogen bond)
     sum.set(b.a, (sum.get(b.a) ?? 0) + valenceOrder(b, el.get(b.a)));
     sum.set(b.b, (sum.get(b.b) ?? 0) + valenceOrder(b, el.get(b.b)));
+    // (and of it, the bonds to metals: a P's or an S's valence is chosen by its other bonds - a phosphine on Pd has no H)
+    if (metal.has(el.get(b.b) ?? "")) toMetals.set(b.a, (toMetals.get(b.a) ?? 0) + valenceOrder(b, el.get(b.a)));
+    if (metal.has(el.get(b.a) ?? "")) toMetals.set(b.b, (toMetals.get(b.b) ?? 0) + valenceOrder(b, el.get(b.b)));
     setSum.set(b.a, (setSum.get(b.a) ?? 0) + setValenceOrder(b, el.get(b.a)));
     setSum.set(b.b, (setSum.get(b.b) ?? 0) + setValenceOrder(b, el.get(b.b)));
   }
@@ -100,7 +107,7 @@ export function undrawnHydrogens(model: Model): Map<number, number> {
         : a.valence != null
           ? // (a valence a file sets: what the bonds leave of it)
             Math.max(0, a.valence - (setSum.get(a.id) ?? 0))
-          : implicitHydrogens(a.el, sum.get(a.id) ?? 0, a.charge ?? 0, a.radical),
+          : implicitHydrogens(a.el, sum.get(a.id) ?? 0, a.charge ?? 0, a.radical, toMetals.get(a.id) ?? 0),
     ]),
   );
 }
@@ -178,8 +185,12 @@ function holdsRing(model: Model): boolean {
  */
 export function forFlatReaders(model: Model, recognised = true): WriterModel {
   if (!model.atoms.some((a) => a.z != null) && !(recognised && holdsRing(model))) return model;
-  const { atoms, bonds } = drawingOf(model);
-  const flat = wedgesForFlat(atoms, bonds);
+  const drawing = drawingOf(model);
+  const { atoms, bonds } = drawing;
+  // (each centre a perspective drawing shows written from what the drawing keeps, where it keeps any - part 15, phase 3: 3D and the
+  //  files take the configuration kept - else from what its marks and depth read)
+  const kept = keepsAny(model) ? keptAsDrawn(model, drawing, keptReading(model, saidOf(atoms, bonds, model.atoms.map((a) => a.id), () => false, readStereo(atoms, bonds))).said).tetra : undefined;
+  const flat = wedgesForFlat(atoms, bonds, kept);
   if (!flat.wedges.length) return model;
   const ids = model.atoms.map((a) => a.id);
   let next = Math.max(0, greatest(ids), greatest(model.bonds.map((b) => b.id))) + 1;

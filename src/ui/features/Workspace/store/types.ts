@@ -2211,6 +2211,11 @@ export type EditorState = {
    */
   putChair: (at: { x: number; y: number }) => void;
   /**
+   * A flat ring drawn as a chair (projections/fromFlat `chairFromFlat`'s atoms and bonds) as one step - "draw as chair" - where the drawing
+   * reads as the same compound after it; else nothing changed and the words that say so returned (Meno's fault).
+   */
+  drawAsChair: (made: { atoms: Atom[]; bonds: Bond[] }) => string | null;
+  /**
    * A Haworth ring of six (a pyranose's) put down from Quick Add, its middle at `at`; or, where the ring this put down is still as it was,
    * nothing done since, that ring made a ring of five (a furanose's) in its place as one step - and back (docs/EDITOR-2D.md, *Projections*).
    */
@@ -2340,7 +2345,7 @@ export type EditorState = {
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */
-  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => void;
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides" | "molecules3d">, scheme?: ImportedScheme) => void;
   /** Joins what readers reading an output as well have found to each molecule read from it (lib/calc/readings): learnt of the document, not done to it - nothing to undo. */
   joinReadings: () => void;
   /** A file opened over the canvas's contents, as one undo step. */

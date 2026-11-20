@@ -9,9 +9,9 @@
 import { describe, expect, it } from "vitest";
 import { analogues, CORE_SMILES } from "../layout/testdata/analogues";
 import { readSmiles } from "./smiles";
-import { halfOrderSums, lacksHydrogens, type SkeletonAtom } from "./skeleton";
+import { halfOrderHydrogens, lacksHydrogens, type SkeletonAtom } from "./skeleton";
 import { writeMolfile3d } from "./molWriter";
-import { hydrogenCounts, implicitHydrogens } from "./perception/hydrogens";
+import { hydrogenCounts } from "./perception/hydrogens";
 
 const HETEROAROMATICS = [
   "c1ccccc1", "c1ccncc1", "c1cc[nH]c1", "c1ccoc1", "c1ccsc1", "c1c[nH]cn1", "c1ccc2[nH]ccc2c1", "c1ccc2ccccc2c1",
@@ -34,10 +34,10 @@ describe("a skeleton's count against the core's", () => {
   const wholeDiffers: string[] = [];
   for (const smiles of CORPUS) {
     const { atoms, bonds, aromaticN } = asIn3d(smiles);
-    const half = halfOrderSums(atoms.length, bonds);
+    const half = halfOrderHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
     const core = hydrogenCounts(atoms, bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })));
-    atoms.forEach((a, i) => {
-      const h = implicitHydrogens(a.el, Math.round(half[i]), a.charge);
+    atoms.forEach((_, i) => {
+      const h = half[i];
       if (h !== core[i]) differing.push({ smiles, atom: i, half: h, core: core[i], aromaticN: aromaticN.has(i) });
     });
     const placed: SkeletonAtom[] = atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 }));
@@ -86,5 +86,36 @@ describe("the valence a 3D molfile writes, by the core's count", () => {
         if (a.el === "N") expect([smiles, i, vvv[i] + hs[i]]).toEqual([smiles, i, 3]);
       });
     }
+  });
+});
+
+describe("a skeleton's aromatic S and P take no higher valence's H (the chemistry check's ruling)", () => {
+  it("thiophene's, thiazole's and thiadiazole's S, and phosphinine's P: none", () => {
+    for (const [smiles, el] of [["c1ccsc1", "S"], ["c1cscn1", "S"], ["c1nncs1", "S"], ["c1ccpcc1", "P"]] as const) {
+      const { atoms, bonds } = asIn3d(smiles);
+      const half = halfOrderHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
+      expect(half[atoms.findIndex((a) => a.el === el)], smiles).toBe(0);
+    }
+  });
+});
+
+describe("a skeleton's P or S on a metal takes no higher valence's H (found in review)", () => {
+  it("Ni(PF3)4 and an Fe4S4 core, their orders given: no hydrogens lacking; free PF3 and SF4 as before", () => {
+    const at = (el: string) => ({ el, x: 0, y: 0, z: 0 });
+    // (Ni(PF3)4: the Ni, then each P with its three F)
+    const ni = { atoms: [at("Ni")], bonds: [] as { a1: number; a2: number; order: number }[] };
+    for (let k = 0; k < 4; k++) {
+      const p = ni.atoms.push(at("P")) - 1;
+      ni.bonds.push({ a1: 0, a2: p, order: 1 });
+      for (let f = 0; f < 3; f++) ni.bonds.push({ a1: p, a2: ni.atoms.push(at("F")) - 1, order: 1 });
+    }
+    expect(lacksHydrogens(ni.atoms, ni.bonds, false)).toBe(false);
+    // (an Fe4S4 cube: each S on three Fe)
+    const cube = { atoms: [...["Fe", "Fe", "Fe", "Fe"], ...["S", "S", "S", "S"]].map(at), bonds: [] as { a1: number; a2: number; order: number }[] };
+    for (let s = 4; s < 8; s++) for (let fe = 0; fe < 4; fe++) if (fe !== s - 4) cube.bonds.push({ a1: fe, a2: s, order: 1 });
+    expect(lacksHydrogens(cube.atoms, cube.bonds, false)).toBe(false);
+    // (free PF3 and SF4: whole, as before)
+    expect(lacksHydrogens([at("P"), at("F"), at("F"), at("F")], [1, 2, 3].map((f) => ({ a1: 0, a2: f, order: 1 })), false)).toBe(false);
+    expect(lacksHydrogens([at("S"), at("F"), at("F"), at("F"), at("F")], [1, 2, 3, 4].map((f) => ({ a1: 0, a2: f, order: 1 })), false)).toBe(false);
   });
 });

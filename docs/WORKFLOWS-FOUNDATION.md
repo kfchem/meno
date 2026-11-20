@@ -926,14 +926,20 @@ are its out,out-or-in,in and its in,out); both said beside a count. A
 bridgehead is an atom joined to another by three paths that share no atom
 but their ends, each with one to three atoms between; a bond is no
 bridge, so a fused system's junctions are none. A cage ties its
-bridgeheads' senses to each other. Where an open bridgehead's two senses
-are one structure (norbornane's, adamantane's, cubane's), it is no place
-to give and the count stands. Where they are not (norbornan-2-ol,
-camphor, tropan-3-ol, twistane, Troeger's base's two N), no count is
-given, and that is said. A fused bicycle counts its cis and trans forms.
-A small one, bicyclo[m.n.0] with m + n of four or fewer ([1.1.0],
-[2.1.0], [2.2.0], [3.1.0]), whose rings can only be joined cis, gets no
-count when a junction is left open, and that is said. Past 1024 ways
+bridgeheads' senses to each other: they stand only out,out, the volumes
+of their three bridges about each opposite (the other way, in,out, no
+bridge of three atoms or fewer can take). So each set of tied
+bridgeheads is one place: norbornan-2-ol has four, camphor two, twistane
+two, adamantane one, cubane one, Troeger's base two (its two N), sparteine
+six. A fused bicycle counts its cis and trans forms; a small one,
+bicyclo[m.n.0] with m + n of four or fewer ([1.1.0], [2.1.0], [2.2.0],
+[3.1.0]), whose rings can only be joined cis, its cis form alone. A
+structure given the impossible way round - a cage in,out, a small
+bicycle trans - gets no count, and that is said. Ties that share a
+bridgehead are one set (adamantane's, cubane's, twistane's); where one
+ring system holds two sets (homoadamantane, sesquinorbornene), whether
+they are tied to each other is not yet decided, so no count is given,
+and that is said. Past 1024 ways
 (ten open places), none is written and the count of ways is said. No
 step takes it yet: *Stereoisomers* will, in its own change.
 
@@ -1176,9 +1182,14 @@ Its rules are identity's where the two meet:
 - a query's hydrogens are no condition, but for a hydrogen drawn as an
   atom: that asks for a hydrogen on its atom's match, drawn there or not. A
   methyl drawn as "C" is found in any carbon, a quaternary one too. A
-  hydrogen is its atom's only by one single bond to an atom not a
-  hydrogen: a bridging H (B-H-B), H2 and a lone H are atoms of their own,
-  matched as any atom is;
+  hydrogen is its atom's only by one single bond to an atom neither a
+  hydrogen nor a metal of the d or f block whose complexes are drawn (Sc
+  to Hg, La to Lr; not Rf to Cn): a bridging H (B-H-B), H2, a lone H and
+  an H on such a metal (Pd-H) are atoms of their own, matched as any atom
+  is, as identity keeps them - and so is each H counted on such a metal,
+  so that a hydride is one graph however it was written ([PdH]Cl2 and
+  Cl2Pd-H drawn are found by each other); an H on a main-group metal (Li,
+  Mg, Al, Sn) is its metal's;
 - configurations are not compared: a query is a constitution.
 
 It says where it found it: each query atom, other than a hydrogen drawn,

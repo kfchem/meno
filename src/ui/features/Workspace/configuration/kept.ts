@@ -7,6 +7,8 @@
  * still read the marks (phase 3). Pure: no DOM, no store.
  */
 import { lowestOthers, type Said } from "../../../../lib/chem/perception/stereo/compare";
+import type { DrawnStereo } from "../../../../lib/chem/perception/stereo/from2d";
+import type { CisTrans } from "../../../../lib/chem/perception/stereo/types";
 import { drawingOf } from "../chem/drawing";
 import type { Atom, Bond, Model } from "../store/types";
 import type { Reading } from "./changes";
@@ -240,4 +242,55 @@ export function keptBondMoved(k: KeptBond, to: ReadonlyMap<number, number>): Kep
   if (!refs || ends === null) return undefined;
   const named = ends ? { ends } : {};
   return "axis" in k ? { axis: { refs, sense: k.axis.sense, ...named } } : { set: { refs, cis: k.set.cis, ...named } };
+}
+
+/**
+ * What `part` keeps (`kept`, a reading's `said`: by atom id), put as the drawing's reader puts what it reads (`DrawnStereo`: by index
+ * in `drawing`, its bonds by index) - for a user of the configuration to take what is kept where it took what the marks say (part 15,
+ * phase 3). A centre, a double bond or an axis whose atoms are not all in `drawing` is left out.
+ */
+export function keptAsDrawn(part: Model, drawing: ReturnType<typeof drawingOf>, kept: Said): DrawnStereo {
+  const index = new Map(part.atoms.map((a, i) => [a.id, i]));
+  const ids = part.atoms.map((a) => a.id);
+  const has = (id: number) => id === -1 || index.has(id);
+  const ix = (id: number) => (id === -1 ? -1 : index.get(id)!);
+  const tetra: DrawnStereo["tetra"] = new Map();
+  for (const [id, c] of kept.centres) if (index.has(id) && c.neighbours.every(has)) tetra.set(ix(id), { neighbours: c.neighbours.map(ix), volume: c.volume });
+  const cisTrans = new Map<number, CisTrans>();
+  const cumulated: DrawnStereo["cumulated"] = [];
+  for (const [key, d] of kept.doubles) {
+    const [p, q] = key.split(",").map(Number);
+    if (!index.has(p) || !index.has(q) || !d.refs.every(has)) continue;
+    // (its refs listed from the lower-id end: put back from the bond's own first end, as the reader lists them)
+    const k = drawing.bonds.findIndex((b) => b.order === 2 && ((ids[b.a] === p && ids[b.b] === q) || (ids[b.a] === q && ids[b.b] === p)));
+    if (k >= 0) {
+      const b = drawing.bonds[k];
+      const refs: [number, number] = ids[b.a] < ids[b.b] ? [ix(d.refs[0]), ix(d.refs[1])] : [ix(d.refs[1]), ix(d.refs[0])];
+      cisTrans.set(k, { refs, cis: d.cis });
+    } else cumulated.push({ atoms: [ix(p), ix(q)], refs: [ix(d.refs[0]), ix(d.refs[1])], cis: d.cis });
+  }
+  const axes: DrawnStereo["axes"] = [];
+  for (const [key, sense] of kept.axes) {
+    const [p, q] = key.split(",").map(Number);
+    if (!index.has(p) || !index.has(q)) continue;
+    const atoms: [number, number] = [ix(p), ix(q)];
+    const [r, t] = lowestOthers(drawing.bonds, ids, atoms);
+    if (r != null && t != null) axes.push({ atoms, refs: [r, t], sense });
+  }
+  return { tetra, cisTrans, axes, cumulated };
+}
+
+/** `model` with what it keeps set aside: its configuration read from its marks alone (a change note's descriptors; part 15 phase 3's
+ *  differential check). */
+export function marksOnly(model: Model): Model {
+  if (!keepsAny(model)) return model;
+  const atoms = model.atoms.map((a) => {
+    const { config, ...rest } = a;
+    return config == null ? a : rest;
+  });
+  const bonds = model.bonds.map((b) => {
+    const { config, ...rest } = b;
+    return config == null ? b : rest;
+  });
+  return { ...model, atoms, bonds };
 }
