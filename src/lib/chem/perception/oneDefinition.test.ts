@@ -45,7 +45,7 @@ export const CONCEPTS: Record<string, RegExp> = {
   "aromatic tests": /^(?:export )?(?:function|const) (aromaticRing|aromaticBonds|isFlat)\b/,
   // a configuration read from atoms' places in space (perception/stereo/from3d.ts, part 14 D); the copies under names of no pattern -
   // compareBonding's `cis`, referenceNumbering's `across`, settle's inner `handedness` - are a reviewer's to see, as the header says
-  "from places": /^(?:export )?(?:function|const) (configuredFrom|runsFrom3d|runsIn3d|lonePairsIn3d)\b/,
+  "from places": /^(?:export )?(?:function|const) (configuredFrom|runsFrom3d|runsIn3d)\b/,
 };
 
 /**
@@ -103,8 +103,6 @@ export const STILL_APART: Copy[] = [
   { concept: "aromatic tests", file: "lib/chem/reactionMap.ts", name: "aromaticBonds", part: "stays", why: "a use of the core's aromaticForm, not a rule: its bonds of order 4 as a set of atom pairs" },
   { concept: "aromatic tests", file: "lib/chem/ordersFromGeometry.ts", name: "isFlat", part: "stays", why: "from geometry, by design: a ring flat in space, where orders are read from 3D coordinates" },
   { concept: "aromatic tests", file: "lib/chem/protonation.ts", name: "isFlat", part: "stays", why: "by its bonds, by design: a five- or six-ring each of whose atoms has a multiple bond or is N, O or S - flat, for where an H goes; no count of electrons" },
-  // a configuration read from places: each caller onto perception/stereo/from3d, one by one with a differential (part 14 D, D3)
-  { concept: "from places", file: "lib/chem/lonePairsIn3d.ts", name: "lonePairsIn3d", part: 14, why: "part 14 D: onto perception/stereo/from3d with a differential, after configuredFrom" },
 ];
 
 /** The top-level declarations in a file's text that a concept's pattern names: name and line. */

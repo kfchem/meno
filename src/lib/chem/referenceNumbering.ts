@@ -39,7 +39,7 @@ import { aromaticForm, symmetryOrbits } from "./identity";
 import { AROMATIC_BOND } from "./kekulize";
 import type { EntryAtom, EntryBond } from "../entry";
 import type { Molecule } from "./molecule";
-import { EXACT, volumeSign } from "./perception/stereo/geometry";
+import { senseAt, torsionSide } from "./perception/stereo/from3d";
 
 /** A structure as its numbering is matched: its atoms and bonds, in the reference's numbering. */
 export type NumberedStructure = { atoms: readonly EntryAtom[]; bonds: readonly EntryBond[] };
@@ -52,22 +52,16 @@ const COORDINATION = 8;
 
 type V = [number, number, number];
 const at = (xyz: readonly number[], i: number): V => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
-const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-/** Whether the volume four atoms span, taken in the order of their numbers - the three highest seen from the lowest - is positive: exactly 0 counts as not (perception/stereo/geometry `volumeSign`, `EXACT`). */
+/** Whether the volume four atoms span, taken in the order of their numbers - the three highest seen from the lowest - is positive: exactly 0 counts as not (perception/stereo/from3d `senseAt`, exact). */
 function positiveInNumberOrder(place: (i: number) => V, atoms: readonly number[]): boolean {
   const [o, a, b, c] = [...atoms].sort((p, q) => p - q).map(place);
-  return volumeSign(a, b, c, o, EXACT) > 0;
+  return senseAt(o, [a, b, c]) > 0;
 }
 
-/** Whether the torsion a-b-c-d is beyond 90° either way. */
+/** Whether the torsion a-b-c-d is beyond 90° either way (perception/stereo/from3d `torsionSide`). */
 function across(place: (i: number) => V, [a, b, c, d]: readonly number[]): boolean {
-  const b1 = sub(place(b), place(a));
-  const b2 = sub(place(c), place(b));
-  const b3 = sub(place(d), place(c));
-  return dot(cross(b1, b2), cross(b2, b3)) < 0;
+  return torsionSide(place(a), place(b), place(c), place(d)) < 0;
 }
 
 function read(centre: Pick<NumberingCentre, "kind" | "atoms">, place: (i: number) => V): boolean {
