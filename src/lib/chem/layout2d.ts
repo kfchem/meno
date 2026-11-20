@@ -652,7 +652,8 @@ export type Layout = {
    * The same molecules drawn as the canvas draws them, lit and in depth, as
    * an image (a data URL) and where on the page it goes: a picture shows
    * that rather than the marks, which as flat discs one over another cannot
-   * show balls running into one another.
+   * show balls running into one another. With no href, the image is drawn
+   * under the SVG by whoever draws it, and the SVG holds only what is over it.
    */
   solidsImage?: { href: string; bounds: { min: Vec2; max: Vec2 } };
   /** Measurements on the molecules in 3D, drawn over them. */
@@ -5514,9 +5515,12 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
+  // (an image with no href: the molecules are drawn under the SVG, not in it - a copy's picture lays what is over them on its own canvas)
   s += img
-    ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
-      ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
+    ? img.href
+      ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
+        ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
+      : ""
     : svgSolids(layout.solids ?? []);
   // (R, S, E and Z on them, over them)
   for (const t of layout.solidsTexts ?? []) {

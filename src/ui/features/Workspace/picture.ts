@@ -26,14 +26,14 @@ import { clipboardTakes, type ClipItem, type Flavor } from "../../../lib/clipboa
 import { cfbStreams } from "../../../lib/binary/cfb";
 import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
-import { createSVG } from "../../../lib/chem/layout2d";
+import { createSVG, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { style3dOf } from "./style3d";
 import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout, type PictureState } from "./fileActions";
 import type { Drawn } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
-import { withSolidsImage } from "./render3d";
+import { solidsDrawn, solidsImageOn, type SolidsDrawn } from "./render3d";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 
 /** What marks Meno's record in an EMF's comment, and names it in a PNG. */
@@ -65,6 +65,28 @@ export function pictureDpiFor(width: number, height: number, dpi: number): numbe
 const utf8 = new TextEncoder();
 
 /**
+ * Meno's record of `part`, and the drawing of it laid out as a picture
+ * draws it: its molecules in 3D as seen, and the layout of the rest.
+ */
+function laidOut(part: Drawn, aromatic: PictureState, style: DrawingStyle) {
+  // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
+  const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
+  // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
+  const drawing = seenDrawing(part);
+  const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;
+  return { record, molecules3d: seen.molecules3d ?? [], ...drawingLayout(seen, aromatic, style) };
+}
+
+/** `drawn` (render3d's `solidsDrawn`), or none where it cannot be drawn. */
+function tried<T>(drawn: () => T | null): T | null {
+  try {
+    return drawn();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Meno's record of `part` and the EMF of it that carries the record - what a
  * copy puts in Office's clip format, and what a document holding the
  * structure as an object keeps and shows. A reaction's arrows and "+" signs
@@ -72,26 +94,29 @@ const utf8 = new TextEncoder();
  * to draw one in.
  */
 export async function structurePicture(part: Drawn, aromatic: PictureState, style: DrawingStyle, dpi = pictureDpi()) {
-  // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
-  const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
-  // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
-  const drawing = seenDrawing(part);
-  const seen = drawing.molecules3d ? { ...drawing, molecules3d: seenOnly(drawing.molecules3d) } : drawing;
-  const { layout, opts } = drawingLayout(seen, aromatic, style);
+  const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
   // (the layout then draws them so too, for the PNG)
-  let solids: SolidsPicture | null = null;
-  try {
-    solids = withSolidsImage(seen.molecules3d ?? [], layout, style3dOf(aromatic), dpi);
-  } catch {
-    solids = null;
-  }
-  return { record, layout, opts, ...layoutEmf(layout, opts, utf8.encode(EMF_MARK + record), solids ?? undefined) };
+  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  return { record, layout, opts, ...withEmf(record, layout, opts, drawn) };
+}
+
+/** The EMF of `layout`, carrying `record`, its molecules in 3D the bitmap `drawn`. */
+function withEmf(record: string, layout: Layout, opts: LayoutOptions, drawn: SolidsDrawn | null) {
+  const solids: SolidsPicture | null = drawn ? tried(() => solidsImageOn(drawn, layout)) : null;
+  return layoutEmf(layout, opts, utf8.encode(EMF_MARK + record), solids ?? undefined);
 }
 
 /**
  * The pictures of `part` that go on the clipboard with it: those this
  * platform's clipboard takes (lib/clipboard's clipboardTakes), none made for
  * nothing.
+ *
+ * A picture of molecules in 3D alone is the canvas they are drawn on, as a
+ * PNG, what is written over them (R and S, a measurement's value) laid on it
+ * at the same resolution; and Office's clip format carries that PNG. Its EMF
+ * is made only where the platform takes one. A picture with anything drawn
+ * flat in it carries its EMF in the clip format, its letters and lines drawn
+ * as they are, sharp at any size.
  */
 export async function pictureItems(
   part: Drawn,
@@ -102,19 +127,94 @@ export async function pictureItems(
 ): Promise<ClipItem[]> {
   const takes = platformTakes === undefined ? await clipboardTakes() : platformTakes;
   const wanted = (f: ClipItem["flavor"]) => !takes || takes.has(f);
-  const { record, layout, opts, emf, widthPt, heightPt } = await structurePicture(part, aromatic, style, dpi);
+  const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
+  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
+  const pictured = wanted("gvml") || wanted("png") || wanted("dib");
+  const own = drawn && onlySolids(layout) && pictured ? await solidsPng(layout, opts, drawn, dpi).catch(() => null) : null;
+  if (own) {
+    const png = withText(withDpi(own.png, own.dpi), PNG_KEY, record);
+    const emf = wanted("emf") ? withEmf(record, layout, opts, drawn).emf : null;
+    const items: ClipItem[] = [];
+    if (wanted("gvml")) items.push({ flavor: "gvml", bytes: gvmlPicture(png, "png", own.widthPt, own.heightPt, "Structure") });
+    if (emf) items.push({ flavor: "emf", bytes: emf });
+    // (made into an object for Office from this and the EMF, on Windows)
+    if (wanted("embed")) items.push({ flavor: "embed", text: record });
+    if (wanted("png") || wanted("dib")) items.push({ flavor: "png", bytes: png });
+    return items;
+  }
+  const { emf, widthPt, heightPt } = withEmf(record, layout, opts, drawn);
   const items: ClipItem[] = [
     { flavor: "gvml", bytes: gvmlPicture(emf, "emf", widthPt, heightPt, "Structure") },
     { flavor: "emf", bytes: emf },
     // (made into an object for Office from this and the EMF, on Windows)
     { flavor: "embed", text: record },
   ].filter((i) => wanted(i.flavor as ClipItem["flavor"])) as ClipItem[];
-  // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
   if (wanted("png") || wanted("dib")) {
     const raster = await rasterized(createSVG(layout, opts), dpi).catch(() => null);
     if (raster) items.push({ flavor: "png", bytes: withText(withDpi(raster.png, raster.dpi), PNG_KEY, record) });
   }
   return items;
+}
+
+/** Whether `layout` draws molecules in 3D and nothing flat: no bond, label, shape, arrow or stroke of a pen. */
+export function onlySolids(layout: Layout): boolean {
+  const none = (xs: readonly unknown[] | undefined) => !xs?.length;
+  return (
+    !none(layout.solids) &&
+    [layout.lines, layout.polys, layout.texts, layout.circles, layout.fills, layout.curves, layout.under, layout.shapes, layout.inks].every(none)
+  );
+}
+
+/**
+ * A picture of molecules in 3D alone, as a PNG: the canvas they were drawn
+ * on (`drawn`), on one the size the picture's SVG gives at `wantedDpi`
+ * (`rasterFrame`), and what is written over them - R and S, a measurement's
+ * value - drawn from the SVG over it, at the same resolution. No second
+ * drawing of the molecules: where the two resolutions agree, as they do
+ * unless the picture is too large for one, the canvas is copied pixel for
+ * pixel. Its size in points, for Office, is its pixels at its resolution.
+ */
+async function solidsPng(
+  layout: Layout,
+  opts: LayoutOptions,
+  drawn: SolidsDrawn,
+  wantedDpi: number,
+): Promise<{ png: Uint8Array; dpi: number; widthPt: number; heightPt: number } | null> {
+  if (typeof document === "undefined") return null;
+  const over: Layout = { ...layout, solidsImage: { href: "", bounds: drawn.bounds } };
+  const frame = rasterFrame(createSVG(over, opts), wantedDpi);
+  if (!frame.view || !frame.perUnit) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = frame.width;
+  canvas.height = frame.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  // (the molecules where the SVG would put them: its view's unit is the layout's, y down)
+  const x = (drawn.bounds.min.x - frame.view[0]) * frame.perUnit;
+  const y = (-drawn.bounds.max.y - frame.view[1]) * frame.perUnit;
+  const k = frame.perUnit / drawn.pxPerWorld;
+  if (Math.abs(k - 1) < 1e-6) ctx.drawImage(drawn.canvas, Math.round(x), Math.round(y));
+  else ctx.drawImage(drawn.canvas, x, y, drawn.canvas.width * k, drawn.canvas.height * k);
+  if (layout.solidsTexts?.length || layout.measures?.length) {
+    const url = URL.createObjectURL(new Blob([frame.svg], { type: "image/svg+xml" }));
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
+  if (!blob) return null;
+  return {
+    png: new Uint8Array(await blob.arrayBuffer()),
+    dpi: frame.dpi,
+    widthPt: (frame.width * 72) / frame.dpi,
+    heightPt: (frame.height * 72) / frame.dpi,
+  };
 }
 
 /** The structure a picture on the clipboard carries, if it carries one. */
@@ -167,8 +267,13 @@ function fromPng(png: Uint8Array): Drawn | null {
  * the right and below. Drawn from the size it said, a browser takes an
  * image's size in whole pixels (WebKit: 278.9 as 278) and the drawing was
  * squeezed to them - its bonds a little short, and not alike across and down.
+ * With it, the view (x, y, width, height, in the layout's unit, y down) and
+ * the pixels to that unit, where the SVG says them.
  */
-export function rasterFrame(svg: string, wantedDpi: number): { svg: string; width: number; height: number; dpi: number } {
+export function rasterFrame(
+  svg: string,
+  wantedDpi: number,
+): { svg: string; width: number; height: number; dpi: number; view?: number[]; perUnit?: number } {
   const head = /<svg\b[^>]*>/.exec(svg)?.[0] ?? "";
   const attr = (name: string) => Number(new RegExp(` ${name}="([^"]+)"`).exec(head)?.[1]);
   const width = attr("width");
@@ -185,7 +290,7 @@ export function rasterFrame(svg: string, wantedDpi: number): { svg: string; widt
     .replace(/ width="[^"]+"/, ` width="${W}"`)
     .replace(/ height="[^"]+"/, ` height="${H}"`)
     .replace(/ viewBox="[^"]+"/, ` viewBox="${view[0]} ${view[1]} ${W / perUnit} ${H / perUnit}"`);
-  return { svg: svg.replace(head, fitted), width: W, height: H, dpi };
+  return { svg: svg.replace(head, fitted), width: W, height: H, dpi, view, perUnit };
 }
 
 /**

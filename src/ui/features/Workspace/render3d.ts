@@ -495,20 +495,21 @@ export function rendered3d(
  */
 const PICTURE_MOST_PIXELS = 48_000_000;
 
+/** A picture's molecules in 3D drawn (`solidsDrawn`): the canvas, where on the page it goes, and its pixels to the page's unit. */
+export type SolidsDrawn = { canvas: HTMLCanvasElement; bounds: Bounds; pxPerWorld: number };
+
 /**
  * A picture's molecules in 3D (`ms`, laid out in `layout`) drawn as the
  * canvas draws them, at `dpi` (a copied picture's, as Settings says) -
- * lower only where that would come to more than `PICTURE_MOST_PIXELS`: set
- * on the layout, for its SVG and anything drawn from that, and given as a
- * bitmap, for an EMF. Null, the layout as it was, where there are none or
- * no WebGL.
+ * lower only where that would come to more than `PICTURE_MOST_PIXELS` - and
+ * where on the page the drawing goes. Null where there are none or no WebGL.
  */
-export function withSolidsImage(
+export function solidsDrawn(
   ms: readonly Carried3D[],
-  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0]; solidsImage?: { href: string; bounds: Bounds } },
+  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0] },
   style: Style3D,
   dpi = 300,
-) {
+): SolidsDrawn | null {
   const marks = solidsBounds(layout.solids ?? []);
   if (!marks || !ms.length) return null;
   const zoom = layout.zoom > 0 ? layout.zoom : 1;
@@ -518,6 +519,17 @@ export function withSolidsImage(
   if (!drawn) return null;
   // (atom numbers too small in the picture to read, or with no room on their balls, are left out of it: how many, said in Meno's log)
   if (drawn.numbersLeftOut > 0) console.warn(`Meno: a picture of molecules in 3D left out ${drawn.numbersLeftOut} of their atom numbers, too small to read in it or with no room on their balls.`);
+  return { canvas: drawn.canvas, bounds: drawn.bounds, pxPerWorld: zoom * scale };
+}
+
+/**
+ * The molecules of `drawn` (`solidsDrawn`) set on `layout` as an image, for
+ * its SVG and anything drawn from that, and given as a bitmap, for an EMF.
+ */
+export function solidsImageOn(
+  drawn: { canvas: HTMLCanvasElement; bounds: Bounds },
+  layout: { solidsImage?: { href: string; bounds: Bounds } },
+) {
   const { canvas, bounds } = drawn;
   const href = canvas.toDataURL("image/png");
   const binary = atob(href.slice(href.indexOf(",") + 1));
@@ -526,4 +538,19 @@ export function withSolidsImage(
   const rgba = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
   layout.solidsImage = { href, bounds };
   return { png, rgba, width: canvas.width, height: canvas.height, bounds };
+}
+
+/**
+ * `solidsDrawn` and `solidsImageOn` together: the molecules drawn, set on the
+ * layout and given as a bitmap. Null, the layout as it was, where there are
+ * none or no WebGL.
+ */
+export function withSolidsImage(
+  ms: readonly Carried3D[],
+  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0]; solidsImage?: { href: string; bounds: Bounds } },
+  style: Style3D,
+  dpi = 300,
+) {
+  const drawn = solidsDrawn(ms, layout, style, dpi);
+  return drawn ? solidsImageOn(drawn, layout) : null;
 }
