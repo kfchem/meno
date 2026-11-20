@@ -511,10 +511,12 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     const list: Placed[] = [
       ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
-        const w = wasMiddle(ids);
         // (with its record: a step's, which a structure keeps however it moves - and its lasting id, given where it has none)
         const stays = ids.some((id) => atomAt.has(id) && inside(set, atomAt.get(id)!));
-        return { member: structureMember(ids, memberRecord(held.records[i], doc.model, ids, set.id)), at, wasIn: !!(prior && w && inside(prior, w)), stays };
+        // (in before the edit by the same test: any of its atoms in the frame - so a drag that takes its middle out first, an atom still
+        //  in, and then the rest, takes it out; found in the GUI run)
+        const wasIn = !!prior && ids.some((id) => wasAtom.has(id) && inside(prior, wasAtom.get(id)!));
+        return { member: structureMember(ids, memberRecord(held.records[i], doc.model, ids, set.id)), at, wasIn, stays };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
