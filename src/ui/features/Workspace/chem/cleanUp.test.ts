@@ -813,6 +813,22 @@ describe("cleanUp", () => {
     expect((t * 180) / Math.PI).toBeGreaterThan(175);
   });
 
+  it("refuses, rather than lose it, a wedge at a metal of four or an N+ with an H, saying why: no configuration is read there", async () => {
+    const metal: Model = {
+      atoms: [atom(1, 0, 0, "Pt"), atom(2, 0, 1, "Cl"), atom(3, -1, -0.5, "N"), atom(4, 1, -0.5, "Br"), atom(5, 0, -1)],
+      bonds: [2, 3, 4, 5].map((b, k) => ({ id: 10 + k, a: 1, b, order: 1 as const, ...(b === 2 ? { stereo: "up" as const } : {}) })),
+    };
+    const m = canvas(metal);
+    await expect(cleanUp(m.store)).rejects.toThrow(/at Pt do not say its configuration in a way Clean-up can keep \(it is a metal, whose groups are not surely tetrahedral, so a wedge at it states none\)/);
+    expect(m.store.getState().model).toEqual(metal);
+    const ammonium: Model = {
+      atoms: [{ ...atom(1, 0, 0, "N"), charge: 1 }, atom(2, 0, 1), atom(3, -1, -0.5), atom(4, 1, -0.5)],
+      bonds: [2, 3, 4].map((b, k) => ({ id: 10 + k, a: 1, b, order: 1 as const, ...(b === 2 ? { stereo: "up" as const } : {}) })),
+    };
+    const n = canvas(ammonium);
+    await expect(cleanUp(n.store)).rejects.toThrow(/at N do not say its configuration in a way Clean-up can keep \(it is an N\+ with an H, which loses its configuration through the free amine \(Meno's rule\), so a wedge at it states none\)/);
+  });
+
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
     // an amine's N, wedged: its lone pair keeps no configuration
     // (lib/chem/lonePairCentres), so the wedge states none that Clean-up

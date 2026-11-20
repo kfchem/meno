@@ -18,7 +18,13 @@ export type FigurePath = { fill: string | null; stroke: string | null; width: nu
 export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string; loose?: Box | null; dir?: number | null };
 
 /** A figure as drawn, within a box of its page. */
-export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictures: Box[] };
+export type FigureDrawn = {
+  paths: FigurePath[];
+  letters: FigureLetter[];
+  pictures: Box[];
+  /** Each picture's own size, in the pixels it is stored with, where the PDF says: by the pictures' places. */
+  pixels?: ([number, number] | null)[];
+};
 
 export type Point = { x: number; y: number };
 
@@ -539,7 +545,52 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       }
     }
   }
-  return out;
+  return withoutCurvedArrows(out);
+}
+
+/**
+ * The shapes without their curved arrows - an electron-pushing arrow, its curve stroked or drawn as a thin filled outline, its head a dart at an end
+ * of it: no bond, nor a letter, of either. A dart is a filled shape of four corners, the fourth cut in from its wide end toward its tip (a wedge has
+ * none cut in), the curve's end at that corner. A straight arrow's head, at a line's end, is the scheme reader's (./scheme).
+ */
+export function withoutCurvedArrows(shapes: Shapes): Shapes {
+  const curves = [...shapes.curves.filter((c) => !c.closed).map((c) => ({ of: c as object, pts: c.pts, w: c.w })), ...shapes.blobs.filter(thinCurve).map((b) => ({ of: b as object, pts: b.pts, w: 0 }))];
+  if (!curves.length) return shapes;
+  const gone = new Set<object>();
+  for (const w of shapes.wedges) {
+    const notch = w.outline && dartNotch(w.outline);
+    if (!notch) continue;
+    // (the curve's end at the notch: within its line's width, and half a line's more, of the curve's points)
+    const reach = Math.max(0.5, 0.15 * dist(w.tip, w.base));
+    const curve = curves.find((c) => c.pts.some((p) => dist(p, notch) <= reach + c.w));
+    if (!curve) continue;
+    gone.add(w).add(curve.of);
+  }
+  if (!gone.size) return shapes;
+  return { strokes: shapes.strokes, wedges: shapes.wedges.filter((w) => !gone.has(w)), curves: shapes.curves.filter((c) => !gone.has(c)), blobs: shapes.blobs.filter((b) => !gone.has(b)) };
+}
+
+/** A curve drawn as a filled outline: curved, one part, filling under half its box - a dot, a round blob, fills more (its dart tells it from a letter). */
+function thinCurve(b: Blob): boolean {
+  const [w, h] = [b.box[2] - b.box[0], b.box[3] - b.box[1]];
+  return b.curved && b.parts.length === 1 && w * h > 0 && Math.abs(area(b.pts)) < 0.5 * w * h;
+}
+
+/** A dart's cut-in corner: of a filled shape's four corners, the one inside the triangle of the other three, at the middle of its wide end; or none. */
+function dartNotch(outline: readonly Point[]): Point | null {
+  const corners = outline.filter((p, i) => !outline.slice(0, i).some((q) => dist(p, q) < 1e-3));
+  if (corners.length !== 4) return null;
+  const side = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  for (let i = 0; i < 4; i++) {
+    const [n, a, tip, b] = [corners[i], corners[(i + 1) % 4], corners[(i + 2) % 4], corners[(i + 3) % 4]];
+    const s = [side(a, tip, n), side(tip, b, n), side(b, a, n)];
+    if (!(s.every((v) => v > 0) || s.every((v) => v < 0))) continue;
+    // (cut in a little - a fifth of the way to the tip at the least - and not past the middle: a dart's, not a sliver's)
+    const base = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const depth = dist(base, n) / dist(base, tip);
+    if (depth >= 0.1 && depth <= 0.6) return n;
+  }
+  return null;
 }
 
 export function boxOf(pts: readonly Point[]): Box {

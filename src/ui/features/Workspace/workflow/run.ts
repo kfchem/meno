@@ -666,7 +666,7 @@ export function rowMost(rooms: readonly (Frame & { chip: number })[]): number {
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
 /** The room a numbered structure's number takes under it (Workflow2D `numbered`): half a bond, and a line of 16 px. */
-const NUMBER_ROOM = NOMINAL_BOND_LENGTH / 2 + 16 * PX;
+export const NUMBER_ROOM = NOMINAL_BOND_LENGTH / 2 + 16 * PX;
 
 /** How many of a large result set's molecules are measured to size its frame (`heldFrame`): a run of thousands is not measured through, each. */
 export const HELD_SIZED = 500;
