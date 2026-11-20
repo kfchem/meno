@@ -121,11 +121,18 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
 /** Why a figure gave no structure: what to say - and, a picture Meno read nothing from, the plugin chosen to read pictures, by name, to offer. */
 export type Unread = { none: string; plugin?: string };
 
-/** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
 /** What is said where marks drawn over a figure's pictures were left out. */
 export const MARKS_OVER = "Marks drawn over a picture: not read.";
 
-export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes - what to say of them. */ left?: string };
+/** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
+export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes, a line alone - what to say of them. */ left?: string };
+
+/** What is said of a single line alone, a bond long, in a figure: it is not read as ethane. */
+export const LONE_LINE = "A line standing alone was not read as ethane.";
+export const LONE_LINES = "Lines standing alone were not read as ethane.";
+/** And of a triple line alone, a bond long: it is not read as ethyne - a sign of equivalence, a separator. */
+export const LONE_TRIPLE_LINE = "A triple line standing alone was not read as ethyne.";
+export const LONE_TRIPLE_LINES = "Triple lines standing alone were not read as ethyne.";
 
 /**
  * A picture's figure as read made a structure, each atom tied to its place - `spot`: a structure with an atom with more bonds than it
@@ -193,7 +200,12 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const { drawn, back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
+  // (a single or a triple line alone, a bond long: no ethane, no ethyne - a dash, a minus, a rule, a sign - said)
+  const lone = read.figure.left.lines ?? 0;
+  const triples = read.figure.left.triples ?? 0;
+  const loneSaid = [lone ? (lone === 1 ? LONE_LINE : LONE_LINES) : null, triples ? (triples === 1 ? LONE_TRIPLE_LINE : LONE_TRIPLE_LINES) : null].filter((x) => x).join(" ");
   if (!structure && !read.arrows.length) {
+    if (loneSaid) return { none: loneSaid };
     // (all of it marks over its picture: said so, not that it holds no lines)
     if (read.figure.left.marks) return { none: `This figure is a picture with marks drawn over it, no structure. ${MARKS_OVER}` };
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
@@ -208,7 +220,7 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const scheme = schemeOf(read, about);
   const over = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
   // (what is drawn over its pictures - a 3D model's distances, its numbers - left out: said)
-  const said = [over, read.figure.left.marks ? MARKS_OVER : null].filter((x) => x).join(" ") || null;
+  const said = [over, read.figure.left.marks ? MARKS_OVER : null, loneSaid].filter((x) => x).join(" ") || null;
   return { model: kept, ...(scheme ? { scheme } : {}), ...(said ? { left: said } : {}) };
 }
 

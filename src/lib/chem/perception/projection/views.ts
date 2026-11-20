@@ -63,16 +63,33 @@ export const CHAIR_ELEVATION_DEG = 15;
 export const HAWORTH_SIN = 2 / 3;
 export const HAWORTH_ELEVATION_DEG = Math.asin(HAWORTH_SIN) / DEG;
 
+/** Where a Haworth ring's atom stands: on the front edge (the lowest on the page), the back (the highest) or a side. */
+export type HaworthPlace = "front" | "side" | "back";
+
 /**
- * How long a Haworth ring's group is drawn, as a share of a bond, NOT a true view: straight up or down, `HAWORTH_OUT` - the true view's own
- * length, the cosine - where the bond leaves the ring's picture (both groups of a side atom, the down group of a front atom, the up group of a
- * back atom), and `HAWORTH_IN` where it goes into it (the up group of a front atom, the down group of a back atom), so that two on one
- * vertical - a front atom's up group and the back atom's down group above it - pass clear of each other. Meno's own numbers: no text gives a
- * group's length (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6 and McNaught 1996 2-Carb-5.4 say none); read off the same figure (0.38 to 0.44
- * into the ring), a matter of look, the look check's to settle.
+ * How long a Haworth ring's group is drawn, as a share of the ring's level bond, by the ring's size, its atom's place and whether it goes
+ * up or down - NOT a true view. Out of the ring's picture, as the figures under Brecher 2006's ST-1.9 draw them (MEASURED there, atom to
+ * label centre: the text sets its labels on rows, so up and down differ). Into it - a front atom's up, a back atom's down - by the stem
+ * that is to SHOW once the bond is trimmed to its label: the figures' own visible stem (0.29 of the level bond in a six-ring, 0.33 in a
+ * five-ring, MEASURED from the ink) plus what Meno's label takes off a vertical bond (`HAWORTH_LABEL_TRIM`), so that a front atom's OH or
+ * CH2OH stands on a stem that can be seen. A six-ring's back atom's down group shares its vertical with the front atom's up group below
+ * it: it stands at the figures' 0.39, which a bond drawn on from it needs, and where both are labels and meet, it gives way as the label
+ * is typed, to as little as 0.30 (projections/haworthLabels) - Meno's label is about 0.28 tall, and two need 0.35 between their
+ * centres to stand visibly apart. In the five-ring a front atom's up label at more than 0.51 meets the bond to the ring O, so it stands at 0.51 - a stem
+ * of 0.29, short of the figures' 0.33; its back atom, which carries no group in the figures, has no front atom under it. No text states a length
+ * (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6, McNaught 1996 2-Carb-5.4); the texts ask only that groups be vertical and not overlap.
  */
-export const HAWORTH_OUT = Math.sqrt(1 - HAWORTH_SIN * HAWORTH_SIN);
-export const HAWORTH_IN = 0.4;
+export const HAWORTH_GROUP: Readonly<Record<5 | 6, Readonly<Record<HaworthPlace, { up: number; down: number }>>>> = {
+  6: { front: { up: 0.51, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.39 } },
+  5: { front: { up: 0.51, down: 0.68 }, side: { up: 0.66, down: 0.68 }, back: { up: 0.65, down: 0.46 } },
+};
+
+/**
+ * What a one-line label takes off a vertical bond at Meno's default style, as a share of a Haworth ring's level bond (the ring drawn at
+ * 1.8 times the style's bond): MEASURED in Meno's layout - the same for OH, H, CH2OH and HOH2C, since a vertical bond is trimmed by the
+ * height of the letter at its end.
+ */
+export const HAWORTH_LABEL_TRIM = 0.216;
 
 /**
  * How far a chair is turned about its axis in its form-0 view, in degrees: the eye is atan(sqrt(3)/5) = 19.107 degrees from the line through
@@ -220,9 +237,8 @@ export function drawn(solid: Solid, form = 0): Drawn | null {
 /**
  * A Haworth ring as drawn (rule (H)): its atoms the regular planar ring seen in its view (`standardView`: the eye's height `HAWORTH_SIN`, an
  * edge level at the front, the ring O at the back), their depth that view's; each group straight up or down the page, the ring's normal, at
- * `HAWORTH_OUT` of a bond where its bond leaves the ring's picture and `HAWORTH_IN` where it goes into it - into it is up from an atom with
- * another ring atom straight above it or on the front edge, and down from an atom on the back edge. Its depth is the normal's (toward the
- * viewer for up) times that length, as a group's depth is read.
+ * the length `HAWORTH_GROUP` gives for the ring's size, its atom's place - the front edge, the back, a side - and its way. Its depth is
+ * the normal's (toward the viewer for up) times that length, as a group's depth is read.
  */
 function haworthDrawn(solid: Solid): Drawn {
   const view = standardView(solid);
@@ -230,13 +246,11 @@ function haworthDrawn(solid: Solid): Drawn {
   const ys = atoms.map((p) => p.y);
   const [lo, hi] = [Math.min(...ys), Math.max(...ys)];
   const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
-  const inside = (k: number, up: boolean) => {
-    const p = atoms[k];
-    return up ? near(p.y, lo) || atoms.some((q, j) => j !== k && near(q.x, p.x) && q.y > p.y) : near(p.y, hi);
-  };
+  const placeOf = (k: number): HaworthPlace => (near(atoms[k].y, lo) ? "front" : near(atoms[k].y, hi) ? "back" : "side");
+  const lengths = HAWORTH_GROUP[atoms.length === 5 ? 5 : 6];
   const free = solid.free.map((f) => {
     const up = f.direction[2] > 0;
-    const length = inside(f.at, up) ? HAWORTH_IN : HAWORTH_OUT;
+    const length = lengths[placeOf(f.at)][up ? "up" : "down"];
     const normal = project(view, f.direction);
     return { free: f, x: 0, y: (up ? 1 : -1) * length, z: normal.z * length };
   });
