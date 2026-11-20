@@ -126,7 +126,7 @@ export function combinedSet(entries: readonly SetEntry[]): Outcome3D {
   if ("failed" in out) return { ok: false, said: out.failed };
   const made = setEntryOfEntry(out.entry, { compound: 0, number: 1 });
   if (!made) return { ok: false, said: "The complex has no places in 3D" };
-  return { ok: true, holds: "molecules", kept: [made], aside: [], said: [`${plural(entries.length, "part")} as one complex`, ...out.said].join(". ") };
+  return { ok: true, holds: "molecules", kept: [made], aside: [], said: [`${plural(entries.length, "part")} as one complex.`, ...out.said].join(" ") };
 }
 
 /** *Measure* (lib/steps `measured`): each entry with its measurements as properties; one that does not apply to it says why on itself. */
@@ -768,7 +768,12 @@ function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[
   return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
 }
 
-/** Several step's entries as one entry record, their atoms one after another (lib/steps `combined`), or why not. */
+/**
+ * Several step's entries as one entry record, their atoms one after another
+ * (lib/steps `combined`), or why not - with none of its parts' values: the
+ * side is then placed where the map sets it, where a measure carried would
+ * be of places it no longer has.
+ */
 function combinedOf(parts: readonly SetEntry[]): Entry | { failed: string } {
   const out = combined(
     parts.map((e, i) => {
@@ -777,7 +782,7 @@ function combinedOf(parts: readonly SetEntry[]): Entry | { failed: string } {
     }),
     "side",
   );
-  return "failed" in out ? out : out.entry;
+  return "failed" in out ? out : { ...out.entry, properties: {} };
 }
 
 /**
