@@ -851,6 +851,8 @@ const DOT = 0.16;
 
 /** How far an ion is set from the structure at most - or from the ion before it, in a row of them - in bonds, the gap between them. */
 const ION_BY = 2.5;
+/** How short of the bond its labels' letters say the drawing's lines may measure, at the most, for a label's reach to be taken from the letters. */
+const CUT_SHORT = 0.7;
 const BOND_PER_SIZE = 1.4;
 
 /**
@@ -1293,6 +1295,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
   const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w, reads)));
+  const elementLabel = words.map((w) => isElementSymbolLike(labelText(w, reads)) && reads(labelText(w, reads)));
   for (const e of ends) {
     const d = drawnBonds[e.bond];
     const out = unit(e.side === 0 ? d.b : d.a, e.p);
@@ -1329,7 +1332,15 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
       // (a bond drawn short - under half a bond, cut back at a label stacked tall, an NH with its H over it - may stop farther off)
       const within = len({ a: d.a, b: d.b }) < 0.5 * bond ? 0.6 : 0.35;
-      if ((meeting.get(e)! === 0 || onCapital) && reaches(e.p, out, w.box, bond, within)) {
+      // (measured by a bond as long as the label's letters say one is drawn, where that is longer and the word reads as an element's
+      //  label, its hydrogens with it: a drawing whose every bond runs between labels, each cut back at both ends, measures its bonds
+      //  half as long as they are drawn - a metal's chlorides, by a label set in a typeface whose ink sits a little lower, would be
+      //  lost. Only where the drawing's lines measure under 0.7 of that bond - cut back so, as such a drawing's are; an agent written
+      //  large by a scheme's arrow, its letters large for the bonds, is no label of theirs. Any other word - a chart's number by its
+      //  tick, a legend's word, a group's name - keeps the drawing's own)
+      const floor = BOND_PER_SIZE * w.size;
+      const reach = elementLabel[k] && bond < CUT_SHORT * floor ? floor : bond;
+      if ((meeting.get(e)! === 0 || onCapital) && reaches(e.p, out, w.box, reach, within)) {
         const q = { x: Math.min(Math.max(e.p.x, w.box[0]), w.box[2]), y: Math.min(Math.max(e.p.y, w.box[1]), w.box[3]) };
         if (dd > 0 && dot(out, unit(e.p, q)) < 0) {
           if (dd < awayD) [away, awayD] = [k, dd];

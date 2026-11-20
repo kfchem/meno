@@ -1579,7 +1579,14 @@ it where it lies out of view.
   Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
-  word (one so short both its ends lie in the word's box, its other end
+  word within a third of a bond - for a word that reads as an element's
+  label, its hydrogens with it, a bond as long as its letters say one is
+  drawn, 1.4 times their size, where the drawing's lines measure its
+  bonds under 0.7 of that: a drawing whose every bond runs
+  between labels, each cut back at both ends, measures its bonds short.
+  An agent written large by a scheme's arrow, a chart's number by
+  its tick, a legend's word, a group's name keep the drawing's own
+  (2026-11-20) - (one so short both its ends lie in the word's box, its other end
   coming to another label - a metal's - at the end nearer its element;
   of two it comes by, the nearer, unless it points away from that one and
   into the other - an H set under the NH it goes to)
