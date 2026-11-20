@@ -34,9 +34,12 @@ import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
+import type { KeptBond, KeptCentre } from "../configuration/kept";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), where it is, and more. */
 export type Atom = EditorAtom & {
+  /** The configuration it states as a centre, kept (configuration/kept): read after every change, said where an edit changed it. */
+  config?: KeptCentre;
   /**
    * How near the viewer the atom is, where its structure is drawn in
    * perspective - a cage, as Clean-up draws one: a bond passing behind
@@ -119,6 +122,8 @@ export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
 export type MarkAt = { x: number; y: number };
 export type Bond = BondChem & {
+  /** The configuration it states as a double bond or an axis, kept (configuration/kept). */
+  config?: KeptBond;
   id: number;
   a: number;
   b: number;
@@ -2343,6 +2348,11 @@ export type EditorState = {
   addArrowBetween: (from: { x: number; y: number }, to: { x: number; y: number }) => number;
   /** An arrow moved or reshaped; a run of changes in one gesture - a drag - is one step. */
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => void;
+  /**
+   * An arrow dragged by itself: moved to `at`, its words left where they stand - over it (`links`, by word, the arrow's id) or let go
+   * of it (null) - a run of them in one gesture one step (document `arrowMovedAlone`).
+   */
+  moveArrowAlone: (id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>, gesture: string) => void;
   /** Arrows given a kind, heads, dashes, a weight, corners or a colour - or theirs taken away - as one step. */
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */

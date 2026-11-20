@@ -1063,6 +1063,20 @@ round, as elements either).
 - **A metal's bonds are long.** A bond between a metal and a ligand is
   drawn 1.4 bond lengths long (Pd-P is 2.3 Å against C-C's 1.5 Å), which
   gives the ligands room - but in a chelate's ring, which is drawn regular.
+- **A metal with six bonds is drawn as the text draws an octahedron**
+  (Brecher 2006, ST-2.11; its own samples, SF6 and PCl6-): three lines
+  through it, 60 degrees apart, one of them upright, plain bonds - the
+  two donors on one line across from each other, any two not on one line
+  next to each other. A chelate's two ends stand on neighbouring spokes,
+  its ring drawn between them, never on one line; [Co(en)3]3+ has its
+  three chelates on the three neighbouring pairs, and trans-[Co(en)2Cl2]+
+  its two Cl on one line. A metal in a macrocycle - its donors closing a
+  ring round it, cyclam's four N or a porphyrin's - keeps them square,
+  as a metal of four bonds in a ring does, with its other two ligands
+  beside: four donors cannot stand on neighbouring spokes and close round
+  it. The wedge forms of the text are never made by
+  Meno - they state the hand, which Meno holds no record of - but one
+  drawn so is read and kept (EDITOR-2D.md, *Clean-up*).
 - **A donor bonded to a metal** (a phosphine's P) spreads what it carries
   away from the metal, as a tripod's legs, 75 degrees apart.
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the

@@ -98,8 +98,11 @@ export function saidOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[],
   return { centres, doubles, axes, hydrogens, plain: plainAt };
 }
 
-/** An axis's sense taken against the lowest-id other neighbour at each end: against the other neighbour at an end, the sense turns. */
-export function againstLowest(drawn: readonly DrawnBond[], ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 }): 1 | -1 {
+/**
+ * An axis's other neighbour of the lowest id at each end (`atoms`, by index), by index - what its sense is taken against
+ * (`againstLowest`): undefined at an end with none.
+ */
+export function lowestOthers(drawn: readonly DrawnBond[], ids: readonly number[], atoms: readonly [number, number]): [number | undefined, number | undefined] {
   // (the structure's bonds: a hydrogen bond is none)
   const bonds = drawn.filter(ofTheStructure);
   // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's -
@@ -110,9 +113,15 @@ export function againstLowest(drawn: readonly DrawnBond[], ids: readonly number[
     const skip = through(x, end);
     return bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));
   };
-  const lowest = (x: number, not: number) => others(x, not).reduce((p, q) => (ids[p] < ids[q] ? p : q));
-  const [i, j] = ax.atoms;
-  return (ax.sense * (ax.refs[0] === lowest(i, j) ? 1 : -1) * (ax.refs[1] === lowest(j, i) ? 1 : -1)) as 1 | -1;
+  const lowest = (x: number, not: number) => others(x, not).reduce<number | undefined>((p, q) => (p == null || ids[q] < ids[p] ? q : p), undefined);
+  const [i, j] = atoms;
+  return [lowest(i, j), lowest(j, i)];
+}
+
+/** An axis's sense taken against the lowest-id other neighbour at each end: against the other neighbour at an end, the sense turns. */
+export function againstLowest(drawn: readonly DrawnBond[], ids: readonly number[], ax: { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 }): 1 | -1 {
+  const [p, q] = lowestOthers(drawn, ids, ax.atoms);
+  return (ax.sense * (ax.refs[0] === p ? 1 : -1) * (ax.refs[1] === q ? 1 : -1)) as 1 | -1;
 }
 
 /**
