@@ -10,7 +10,6 @@ import {
   NO_CONFIGURATION,
   NO_GROUPS,
   stereoGraphOf,
-  stereoLeft,
   type Configuration,
   type IsomerConfiguration,
   type DrawnGroups,
@@ -21,17 +20,18 @@ import { sentOf } from "../../../../lib/chem/perception/stereo/configuration";
 import { identityKey, type IdentityInput } from "../../../../lib/chem/identity";
 import { isMetal } from "../../../../lib/layout/perceive";
 import { halvesOf, onBondSaid, type Half } from "./groupHalves";
+import { blocksRead, isomersByMeno, leftByMeno, type BlocksRead } from "./menoIsomers";
 import { withConfiguration } from "./pageMirror";
 
 /**
- * What a structure leaves open, as Meno decides it (lib/chem/stereoOpen) on
- * what the plugin that finds stereoisomers perceives in it: `drawn`, the
+ * What a structure leaves open, as Meno decides it (lib/chem/stereoOpen) by
+ * its candidates read from the structure's own blocks (chem/menoIsomers): `drawn`, the
  * stereocentres and double bonds its drawing leaves open; `configured`, the
  * configurations places made before give some of them (`like`: a molecule
  * in 3D made from the same drawing), with the structure's AND and OR
  * groups; `left`, what is open still; `groups`, those groups as drawn
  * (lib/chem/stereoOpen `drawnGroupsOf`); and `perceived`, every centre and
- * double bond the plugin perceives, by index, and whether it perceives an
+ * double bond the candidates give it, by index, and whether it has an
  * element a mirror cannot be told of by its centres (an axis, a cumulene).
  */
 export type OpenStereo = {
@@ -40,6 +40,8 @@ export type OpenStereo = {
   left: StereoLeft;
   groups: DrawnGroups;
   perceived: { centres: number[]; doubles: number[]; handed: boolean };
+  /** The blocks as Meno reads them (chem/menoIsomers `blocksRead`): what its stereoisomers are counted on. */
+  read: BlocksRead;
 };
 
 /** A structure the plugin could not read (`problem` none), or could not make sense of (`problem`, in its words). */
@@ -54,26 +56,22 @@ export class StereoNotRead extends Error {
 
 /**
  * What a structure - its parts' MOL blocks, read as one - leaves open
- * (`OpenStereo`): its elements asked of the plugin (`stereo_elements`),
- * Meno's rules on them. One the plugin cannot read, or make sense of, is
- * refused, saying so; `program` names the toolkit that read it.
+ * (`OpenStereo`): read by Meno itself, its candidates (chem/menoIsomers),
+ * the plugin asked nothing. One Meno cannot read is refused, saying so.
+ * (`chem`, `program` and `ms` are its callers' still: nothing is asked here.)
  */
-export async function openStereo(chem: ChemClient, molblocks: readonly string[], like?: Like, program = "The plugin", ms?: number): Promise<OpenStereo> {
-  const found = await chem.request("stereo_elements", { molblocks: [...molblocks] }, ms);
+export async function openStereo(_chem: ChemClient, molblocks: readonly string[], like?: Like, _program = "Meno", _ms?: number): Promise<OpenStereo> {
   const graph = stereoGraphOf(molblocks);
-  if (!found.read || !graph) throw new StereoNotRead(`${program} could not read it`);
-  if (found.problem != null || !found.elements) throw new StereoNotRead(`${program} could not read it (${found.problem ?? "no elements"})`, found.problem ?? "no elements");
-  const drawn = stereoLeft(found.elements, graph.atoms, graph.bonds);
+  const read = graph ? blocksRead(molblocks) : null;
+  if (!graph || !read) throw new StereoNotRead("Meno could not read it");
+  const byMeno = leftByMeno(molblocks, read);
+  const drawn = byMeno.left;
   const groups = drawnGroupsOf(molblocks) ?? NO_GROUPS;
   // (an allene's axis left open is none places can give as cis or trans of its double bonds: left as it is)
   const from = like ? configuredFrom(graph.bonds, like, drawn.atoms, drawn.bonds.filter((b) => !drawn.cumulenes.includes(b))) : NO_CONFIGURATION;
   const configured = { ...from, groups: groups.groups };
-  const perceived = {
-    centres: found.elements.filter((e) => e.kind === "centre").map((e) => e.at),
-    doubles: found.elements.filter((e) => e.kind === "double").map((e) => e.at),
-    handed: found.elements.some((e) => e.kind === "axis" || e.kind === "cumulene" || e.kind === "other"),
-  };
-  return { drawn, configured, left: like ? leftOver(drawn, configured, graph.bonds) : drawn, groups, perceived };
+  const perceived = { centres: byMeno.centres, doubles: byMeno.doubles, handed: byMeno.handed };
+  return { drawn, configured, left: like ? leftOver(drawn, configured, graph.bonds) : drawn, groups, perceived, read };
 }
 
 /** Whether a structure leaves anything open. */
@@ -106,7 +104,16 @@ function readBack(open: OpenStereo): { atoms: number[]; bonds: number[] } {
  * plugin's toolkit turns each AND or OR group whole, as it reads them in the
  * block).
  */
-export async function stereoisomersOf(chem: ChemClient, molblocks: readonly string[], open: OpenStereo, asked: IsomersAsked, ms?: number): Promise<IsomersMade> {
+export async function stereoisomersOf(chem: ChemClient, molblocks: readonly string[], open: OpenStereo, asked: IsomersAsked, ms?: number): Promise<IsomersMade & { said?: string[] }> {
+  // (no group: Meno's stereoisomers, each made whole by the plugin - chem/menoIsomers. A structure Meno does not count - a cage left
+  //  open - and one with groups, whose halves the plugin's toolkit turns: its enumeration, as before)
+  // (one Meno does not count is made as the toolkit enumerates it, and said so on what is made: never one hand unsaid)
+  let notCounted: string[] = [];
+  if (!anyGroup(open) && !open.configured.centres.length && !open.configured.doubles.length) {
+    const byMeno = await isomersByMeno(chem, molblocks, open.read, readBack(open), open.drawn.notEnumerated, asked, ms);
+    if (!("notCounted" in byMeno)) return { ...byMeno.made, ...(byMeno.said.length ? { said: byMeno.said } : {}) };
+    notCounted = [byMeno.notCounted];
+  }
   const made = await chem.request(
     "stereoisomers",
     {
@@ -124,7 +131,7 @@ export async function stereoisomersOf(chem: ChemClient, molblocks: readonly stri
   );
   // (each configuration once: the plugin's toolkit may enumerate what Meno's rules leave out, an aziridine's N - but isomers differing where
   //  a configuration does not tell stay, and so do the halves of a group: their centres are in the configuration read back)
-  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers, open.drawn) } : made;
+  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers, open.drawn), ...(notCounted.length ? { said: notCounted } : {}) } : made;
 }
 
 /**
@@ -174,9 +181,10 @@ export async function isomersToMake(chem: ChemClient, molblock: string, like: Li
     if (!anyOpen(open.left)) return { open, count: 1, free: false, isomers: [open.configured], said: bonds };
     const made = await stereoisomersOf(chem, [molblock], open, { most: MOST_ISOMERS }, ms);
     if (!("isomers" in made)) throw new Error("its stereoisomers could not be made");
-    if (!made.isomers.length) return { open, count: 1, free: true, isomers: [open.configured], said: bonds };
+    const said = [...bonds, ...(made.said ?? [])];
+    if (!made.isomers.length) return { open, count: 1, free: true, isomers: [open.configured], said };
     const all = made.isomers.map((i) => ({ ...i.configured, groups: [] }));
-    return { open, count: all.length, free: false, isomers: which === "one" ? all.slice(0, 1) : all, said: bonds };
+    return { open, count: all.length, free: false, isomers: which === "one" ? all.slice(0, 1) : all, said };
   }
   // (with groups: every half asked for, at most MOST_ISOMERS of all of them, refused whole past that - never a few of them)
   const made = await stereoisomersOf(chem, [molblock], open, { most: MOST_ISOMERS, whole: true }, ms);

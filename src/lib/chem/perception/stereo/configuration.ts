@@ -21,10 +21,18 @@ export type ConfiguredGroup = { kind: "and" | "or"; n: number; centres: number[]
  * Some of a structure's elements given configurations, in Meno's terms (the plugin makes them its own toolkit's), and the groups its
  * centres are in - an empty list where there are none: whatever builds a configuration says what it did with the groups.
  */
-export type Configuration = { centres: ConfiguredCentre[]; doubles: ConfiguredDouble[]; groups: ConfiguredGroup[] };
+export type Configuration = { centres: ConfiguredCentre[]; doubles: ConfiguredDouble[]; groups: ConfiguredGroup[]; axes?: ConfiguredAxis[]; cumulated?: ConfiguredRun[] };
 
-/** What the plugin is given of a configuration, and gives back of a stereoisomer it made: its centres and double bonds, never groups. */
-export type IsomerConfiguration = Pick<Configuration, "centres" | "doubles">;
+/**
+ * An axis's configuration (an allene's, a biaryl's): its two atoms, an atom bonded to each, and the sign of the torsion from one to the
+ * other about it. Meno's own: the plugin is never given one, and Meno keeps among what it makes those that have it (chem/make3d).
+ */
+export type ConfiguredAxis = { atoms: [number, number]; refs: [number, number]; sense: 1 | -1 };
+/** An odd cumulated run's cis or trans: its two ends, an atom on each, and whether they are on the same side. Meno's own, as an axis's. */
+export type ConfiguredRun = { atoms: [number, number]; refs: [number, number]; cis: boolean };
+
+/** What the plugin is given of a configuration, and gives back of a stereoisomer it made: its centres and double bonds, never groups - and, Meno's own, never given: an axis's and a run's. */
+export type IsomerConfiguration = Pick<Configuration, "centres" | "doubles" | "axes" | "cumulated">;
 
 /** Nothing configured, no group. */
 export const NO_CONFIGURATION: Configuration = { centres: [], doubles: [], groups: [] };

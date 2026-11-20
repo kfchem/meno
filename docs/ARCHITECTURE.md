@@ -1114,9 +1114,11 @@ undo step.
 
 A drawn structure made in 3D (`Workspace/chem/make3d.ts`, stage 2 of
 docs/WORKSPACE.md): what its drawing leaves open is Meno's to say
-(`chem/openStereo`, on the elements `stereo_elements` perceives - lib/chem/
-stereoOpen), and `stereoisomers` makes each way it can go in 3D, which
-Meno asks about first; `conformers` makes each stereoisomer asked for
+(`chem/openStereo`, on Meno's candidates read from the structure's own
+blocks - chem/menoIsomers, foundation part 13), and Meno counts its
+stereoisomers (lib/chem/isomers `isomersOf`); `stereoisomers` makes each,
+given whole, or says it cannot be made in 3D - a structure with AND or OR
+groups, its halves, as the toolkit turns them; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal complex held as Meno
 works it out, `lib/chem/metalHolds.ts`, sent as `holds`: its bonds
 embedded at their covalent lengths and the metal typed for UFF, or, where

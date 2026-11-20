@@ -379,7 +379,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number, in the order the step before gave them (a conformer search's, as its program made them; a *Rank* step's, as it ranked them); the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a ring, ticked (drawn) | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it. Meno's, on what the plugin that does the checks makes of each structure (PLUGINS.md, `structure_facts`): what that toolkit alone could not read or make sense of is said in its name and words ("RDKit could not read it (SANITIZE_KEKULIZE)") |
-| Stereoisomers | the letters R/S, as a drawing writes them | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); each with AND or OR groups as each of its halves that can be made in 3D, the half as drawn first, said on each (*Stereoisomers is Meno's*, below); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than *At most* stereoisomers (32 unless changed: whole, never some of them - counted only as far as one past it, saying the most its open stereo could give), one that takes longer than its *Time for one* to look at (30 s unless changed: alone, the rest as they are), or - as the option says - all that leave stereo open. Meno's, on what the plugin that finds stereoisomers perceives and makes (*Stereoisomers is Meno's*, below) |
+| Stereoisomers | the letters R/S, as a drawing writes them | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); each with AND or OR groups as each of its halves that can be made in 3D, the half as drawn first, said on each (*Stereoisomers is Meno's*, below); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than *At most* stereoisomers (32 unless changed: whole, never some of them - counted only as far as one past it, saying the most its open stereo could give), one that takes longer than its *Time for one* to look at (30 s unless changed: alone, the rest as they are), or - as the option says - all that leave stereo open. Meno's: what is open and how many by Meno's own reading and count, each made by the plugin that makes stereoisomers; an axis's or a run's configuration chosen by Meno among the embeddings made (*Stereoisomers is Meno's*, below) |
 | Descriptors | a ring and the lines of what is worked out for it (drawn) | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus and a minus, each in a circle (drawn) | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
@@ -3444,13 +3444,33 @@ reaches them only once they are on the page.
 ### Stereoisomers is Meno's (2026-11-04)
 
 What a structure leaves open, and what *Stereoisomers* does with it, are
-Meno's (lib/chem/stereoOpen, workflow/stereoisomers); the plugin that
-finds stereoisomers perceives and makes, as it is asked (PLUGINS.md,
-`stereo_elements` and `stereoisomers`). The same rules serve the page's
+Meno's (lib/chem/stereoOpen, workflow/stereoisomers): what is open, by
+Meno's candidates read from the structure itself, and how many
+stereoisomers it has, by Meno's count (lib/chem/isomers `isomersOf`,
+docs/WORKFLOWS-FOUNDATION.md); the plugin that makes stereoisomers makes
+each as it is given it, whole, or says it cannot be made in 3D (PLUGINS.md,
+`stereoisomers`). One with an AND or OR group is made in its halves, as
+the toolkit turns them (below); one whose cage Meno does not count (a
+bridgehead left open) is made as the toolkit enumerates it, as before.
+An axis's or a cumulated run's configuration is never given to the plugin:
+its toolkit embeds such a structure either way, and Meno chooses among the
+embeddings it makes by their sense - those that turn the axis, or set the
+run cis or trans, as asked are kept, the rest set aside and said ("3 of 10
+embedded with the other configuration at its axis or run: set aside");
+where none comes back so, that stereoisomer cannot be made in 3D, and that
+is said. A centre is kept among the embeddings by its sense only where it
+is one: turned alone, it makes another stereoisomer (an isopropyl's CH, a
+DMSO's S does not, and is left to the toolkit); and a set of bridgeheads a
+ring system ties, all or none, only where turning the whole set, all else
+kept, makes another - no automorphism of the constitution takes it back:
+Tröger's base's two N and camphor's bridgeheads are kept, quinuclidine's,
+DABCO's, adamantane's and cubane's are not, nor bicyclo[2.2.2]octan-2-ol's
+pair, which its two plain bridges swapped turn back (the chemistry check's
+ruling, 2026-11-21). The same rules serve the page's
 *3D structure*, *Conformers* on structures drawn, *Enumerate*'s count of
 those left open, *Generate*'s, and a SMILES pasted.
 
-- **Left open**: a stereocentre or double bond the toolkit perceives as
+- **Left open**: a stereocentre or double bond Meno's candidates take as
   one that could have a configuration, drawn without one or with one
   drawn as not known (a wavy bond, a double bond of either) - but a C=N
   whose E/Z is none of its own (below), an atom of three neighbours
@@ -3795,10 +3815,10 @@ the build settled:
   template and each option are checked first, and anything flagged stops
   the step in the checks' words. Otherwise the set says *Valence not
   checked*.
-- **Configurations left open.** Where a plugin finds stereoisomers and is
-  at hand, the products made are each asked, and the set counts and names
-  by number those with a configuration left open. Otherwise it says they
-  were not looked for.
+- **Configurations left open.** The products made are each read by Meno
+  (its candidates, docs/WORKFLOWS-FOUNDATION.md), a few at a time, the page
+  going on between, and the set counts and names by number those with a
+  configuration left open. No plugin is asked.
 - **The products.** Each is drawn as the join draws it and is not laid
   out again. Each keeps its record (*A structure drawn's record*): its
   number, how it was made, and, if it was set aside, why (*Same as 2*).
