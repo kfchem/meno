@@ -22,7 +22,7 @@ import { againstLowest, compared, saidOf, type Difference, type Said, type SaidC
 import { pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { etaBondedAtomByAtom, isMetal, type Arranged, type CisTrans } from "../../../../lib/layout/perceive";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { arrangementNotGiven } from "./arrangementsMarked";
 import { allylCurve } from "../../../../lib/chem/allylArc";
@@ -32,6 +32,7 @@ import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf, readAs } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
+import { factsOf } from "../../../../lib/chem/perception/facts";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
@@ -114,17 +115,43 @@ export function wedgeOctahedron(drawing: ReturnType<typeof drawingOf>, at: numbe
   if (spokes.some((s) => s.stereo === null || s.order !== 1) || !spokes.some((s) => s.stereo)) return null;
   // (how far two spokes are from straight across)
   const off = (p: number, q: number) => Math.abs((((p - q) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - Math.PI);
-  const left = new Set(spokes.map((_, i) => i));
-  for (const i of [...left]) {
-    if (!left.has(i)) continue;
-    left.delete(i);
-    const j = [...left].sort((p, q) => off(spokes[i].angle, spokes[p].angle) - off(spokes[i].angle, spokes[q].angle))[0];
-    if (j == null || off(spokes[i].angle, spokes[j].angle) > Math.PI / 6) return null;
-    left.delete(j);
-    const kinds = [spokes[i].stereo ?? "plain", spokes[j].stereo ?? "plain"].sort().join(",");
-    if (kinds !== "plain,plain" && kinds !== "down,up") return null;
-  }
-  return { at, donors: spokes.map(({ d, angle, stereo }) => ({ d, angle, ...(stereo ? { stereo } : {}) })) };
+  const kinds = (i: number) => spokes[i].stereo ?? "plain";
+  // (of the fifteen ways to pair the six, those whose every pair is within 30 degrees of across and is two plain bonds or a solid and a
+  // hashed wedge: the straightest kept - not the first found)
+  let best: { worst: number } | null = null;
+  const pairings = (left: number[], acc: [number, number][]): void => {
+    if (!left.length) {
+      const worst = Math.max(...acc.map(([i, j]) => off(spokes[i].angle, spokes[j].angle)));
+      if (acc.every(([i, j]) => [kinds(i), kinds(j)].sort().join(",") === "plain,plain" || [kinds(i), kinds(j)].sort().join(",") === "down,up") && worst <= Math.PI / 6 && (!best || worst < best.worst)) best = { worst };
+      return;
+    }
+    const [i, ...rest] = left;
+    rest.forEach((j) => pairings(rest.filter((k) => k !== j), [...acc, [i, j]]));
+  };
+  pairings([0, 1, 2, 3, 4, 5], []);
+  if (!best) return null;
+  // (the order of the bonds' kinds round the metal one of the forms': the first, H P H S P S - its solid and hashed pairs each about
+  // a plain spoke - or the same solid and hashed changed round; the third, solid and hashed in turn; the fourth, P H P P S P. Two
+  // solid wedges on one side of the plain line, three side by side: none of them, and no hand is read from them)
+  const round = spokes.map((sp, i) => ({ t: sp.angle, k: kinds(i) === "up" ? "S" : kinds(i) === "down" ? "H" : "P" })).sort((p, q) => p.t - q.t);
+  const canonical = (seq: string) => {
+    const forms: string[] = [];
+    for (const w of [seq, [...seq].reverse().join("")]) for (const sw of [w, w.replace(/S/g, "x").replace(/H/g, "S").replace(/x/g, "H")]) for (let r = 0; r < 6; r++) forms.push(sw.slice(r) + sw.slice(0, r));
+    return forms.sort()[0];
+  };
+  const form = ["HPHSPS", "SHSHSH", "PHPPSP"].findIndex((f) => canonical(f) === canonical(round.map((x) => x.k).join("")));
+  if (form < 0) return null;
+  // (straightened as a whole onto its form's lines: 60 degrees apart for the first and third, 45 for the fourth - the set turned by the
+  // middle one of how far each spoke is off them, so that one spoke drawn astray moves none of the others, each then put on the nearest)
+  const step = form === 2 ? Math.PI / 4 : Math.PI / 3;
+  const offGrid = (t: number) => t - step * Math.round(t / step);
+  const offs = spokes.map((sp) => offGrid(sp.angle));
+  const middle = offs.reduce((b, u) => (offs.reduce((t, v) => t + Math.abs(offGrid(v - u)), 0) < offs.reduce((t, v) => t + Math.abs(offGrid(v - b)), 0) ? u : b), offs[0]);
+  // (and upright, as the text draws each form - a line straight up - where the set is drawn within 7.5 degrees of that)
+  const upright = form === 2 ? 0 : Math.PI / 6;
+  const turn = Math.abs(offGrid(middle - upright)) < Math.PI / 24 ? upright : middle;
+  const straight = (t: number) => turn + step * Math.round((t - turn) / step);
+  return { at, donors: spokes.map(({ d, angle, stereo }) => ({ d, angle: straight(angle), ...(stereo ? { stereo } : {}) })) };
 }
 
 /**
@@ -266,7 +293,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   // a star at a haptic bond's end: the pi system it stands for (an H of a stereocentre is none of one)
   const pi = new Map<number, number[]>();
   for (const [star, atoms] of piSystems(part, drawing)) if (atoms.every((i) => at.has(i))) pi.set(star, atoms.map((i) => at.get(i)!));
-  const input: LayoutInput = {
+  const built: LayoutInput = {
     atoms: kept.map((i) => {
       const t = configuration(i);
       return {
@@ -307,6 +334,10 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
         }
       : {}),
   };
+  // (a six-bond metal's tridentate meridional or facial as drawn: which donors are across, for the layout to put them so - a picture
+  //  made by turning its units round the metal could not make the one of the other)
+  const across = tridentatesDrawn(built, kept.map((i) => part.atoms[i]));
+  const input: LayoutInput = across.length ? { ...built, arrangements: across } : built;
   const ids = kept.map((i) => part.atoms[i].id);
   // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
   const seen = withRecognisedDepth(drawing.atoms, drawing.bonds, cageViews);
@@ -358,6 +389,20 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
   const opposite = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
   const laid = octahedraKept(job, opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite));
+  // (a six-bond metal with a tridentate - three of its donors in one ligand - laid out other than as three lines through it: the
+  // layout cannot yet put a fused tridentate's metal on its spokes, and a picture off the lines can show two donors
+  // side by side that are across - refused, saying so, rather than drawn so)
+  for (const [i, a] of input.atoms.entries()) {
+    // (a macrocycle's metal is no such case: its donors close round it, and it keeps the square they are drawn in - ringSystem metalHub)
+    if (i >= n || !sixWithTridentate(input, i) || donorsCloseRound(input, i)) continue;
+    const round = input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
+    const ways = round.map((o) => Math.atan2(laid.y[o] - laid.y[i], laid.x[o] - laid.x[i]));
+    const onLines = ways.every((t) => {
+      const u = (t - ways[0]) / (Math.PI / 3);
+      return Math.abs(u - Math.round(u)) * (Math.PI / 3) < (5 * Math.PI) / 180;
+    });
+    if (!onLines) throw new Error(`the ${a.el} with its tridentate could not be laid out as three lines through it, so nothing was moved`);
+  }
   // (a four-bond metal drawn in one form - the X or the upright cross, by the chemist, or a plugin's for an arrangement its input
   // gave - laid out in the other would say another thing of its arrangement: refused, saying so, its donors left as drawn; the X
   // grown as the X where its donors go on is backlog 118)
@@ -1023,6 +1068,87 @@ export function nextFree(model: Model): number {
  * trans-[Pt2Cl4(NH3)2]) - nor by mirroring a chelate drawn so, nor where a
  * change would need a donor of a larger chelate to move.
  */
+/**
+ * Whether atom `m` of a layout's input is a metal of six bonds, none to a star or another metal, three or more of whose donors are
+ * joined to each other not through it - a tridentate's (dien, tacn, terpy): the one kind of ligand whose meridional or facial form a
+ * turn of it round the metal cannot change (`oppositesKept`), so the layout is told which (`tridentatesDrawn`).
+ */
+/**
+ * Whether a metal's donors close a ring round it - a macrocycle's, cyclam's four N or a porphyrin's, a triazacyclononane's three - as
+ * ringSystem `metalHub` reads it: the two donors each smallest ring through the metal binds it by, linked, run round in a cycle.
+ */
+export function donorsCloseRound(input: LayoutInput, m: number): boolean {
+  const pairs = new Set<string>();
+  const donors = new Set<number>();
+  for (const r of factsOf(input).rings) {
+    const i = r.indexOf(m);
+    if (i < 0) continue;
+    const [p, q] = [r[(i + r.length - 1) % r.length], r[(i + 1) % r.length]];
+    pairs.add(p < q ? `${p},${q}` : `${q},${p}`);
+    donors.add(p).add(q);
+  }
+  // (a cycle among the links: a link between two donors already joined)
+  const root = new Map([...donors].map((d) => [d, d]));
+  const find = (d: number): number => (root.get(d) === d ? d : find(root.get(d)!));
+  for (const k of pairs) {
+    const [p, q] = k.split(",").map(Number);
+    const [a, b] = [find(p), find(q)];
+    if (a === b) return true;
+    root.set(a, b);
+  }
+  return false;
+}
+
+export function sixWithTridentate(input: LayoutInput, m: number): boolean {
+  if (!isMetal(input.atoms[m].el)) return false;
+  const round = input.bonds.flatMap((b) => (b.a === m ? [b.b] : b.b === m ? [b.a] : []));
+  if (round.length !== 6 || round.some((o) => input.atoms[o].el === "*" || isMetal(input.atoms[o].el))) return false;
+  const near = new Map<number, number[]>();
+  for (const b of input.bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  return round.some((d) => {
+    const seen = new Set([d]);
+    for (const todo = [d]; todo.length; ) {
+      for (const v of near.get(todo.pop()!) ?? []) {
+        if (v === m || seen.has(v)) continue;
+        seen.add(v);
+        todo.push(v);
+      }
+    }
+    // (a tridentate: three donors, and a chain of them - each next to the next in a chelate ring of six atoms or fewer through the metal,
+    //  dien's and terpy's. A ligand of four donors or more - EDTA's, a tetradentate tren's - or one whose three are joined only through a
+    //  ring wider than that - a tren whose middle N is not bound, its three arms meeting there - is laid out as it was before the three
+    //  lines, and kept as Clean-up keeps any arrangement)
+    const mine = round.filter((e) => seen.has(e));
+    if (mine.length !== 3) return false;
+    const links = new Set<string>();
+    for (const r of factsOf(input).rings) {
+      const i = r.indexOf(m);
+      if (i < 0 || r.length > 6) continue;
+      const [p, q] = [r[(i + r.length - 1) % r.length], r[(i + 1) % r.length]];
+      if (mine.includes(p) && mine.includes(q)) links.add(p < q ? `${p},${q}` : `${q},${p}`);
+    }
+    // (two links among three donors, sharing one: a chain)
+    return links.size >= 2;
+  });
+}
+
+/**
+ * Which donors of each six-bond metal with a tridentate (`sixWithTridentate`) are drawn across from each other, by the angles round it
+ * (`pairingDrawn`, the reading identity and `oppositesKept` use): none where the drawing does not say. `at`: each input atom's place.
+ */
+export function tridentatesDrawn(input: LayoutInput, at: readonly { x: number; y: number }[]): Arranged[] {
+  return input.atoms.flatMap((_, m) => {
+    if (!sixWithTridentate(input, m)) return [];
+    const round = input.bonds.flatMap((b) => (b.a === m ? [b.b] : b.b === m ? [b.a] : []));
+    const partner = pairingDrawn(round.map((d) => Math.atan2(at[d].y - at[m].y, at[d].x - at[m].x)));
+    if (!partner) return [];
+    return [{ metal: m, pairs: partner.flatMap((j, i) => (i < j ? [[round[i], round[j]] as const] : [])) }];
+  });
+}
+
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
 
@@ -1266,12 +1392,9 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   return { ...laid, x, y, hydrogens, wedges };
 }
 
-/** A spoke's way, drawn by hand, put on the nearest of every 15 degrees: the form's own angles, a hand's slip straightened out. */
-const onForm = (t: number) => Math.round(t / (Math.PI / 12)) * (Math.PI / 12);
-
 /**
  * `laid` with each octahedron drawn with wedges (`LayoutJob.octahedra`) kept as drawn: each donor on its drawn spoke, straightened
- * (`onForm`), at the length the layout gave it - the rest of its ligand turned with it about the metal - and its bond's wedge as
+ * onto its form's lines (`wedgeOctahedron`), at the length the layout gave it - the rest of its ligand turned with it about the metal - and its bond's wedge as
  * drawn, narrow at the metal; the order round the metal, and so its hand, as drawn. Refused, saying so, where one ligand holds two
  * of the metal's donors (a chelate drawn so is no case this keeps). The same layout where there is none.
  */
@@ -1301,7 +1424,7 @@ export function octahedraKept(job: Pick<LayoutJob, "input" | "octahedra">, laid:
       if ([...unit].some((v) => v !== d && donors.has(v))) {
         throw new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
       }
-      const turn = onForm(angle) - Math.atan2(y[d] - m.y, x[d] - m.x);
+      const turn = angle - Math.atan2(y[d] - m.y, x[d] - m.x);
       const cs = Math.cos(turn);
       const sn = Math.sin(turn);
       for (const v of unit) {
