@@ -213,7 +213,8 @@ describe("a Newman pair read as Meno reads a drawing (known answers)", () => {
     const chiral = [at(front, [["C", 270], ["Br", 150]]), at(front, [["C", 30], ["Br", 270]]), at(front, [["C", 150], ["Br", 30]])];
     const fromFile = (m: Model) => identityOfDrawn(editorModelOf(moleculesToEditorModel(readMoleculesFromText(blocksOf(m, [1])[0].molblock, "mol")).model));
     const MESO = identityText(fromSmiles("C[C@@H](Br)[C@H](C)Br"));
-    // (no bond of the file is of no length: a reader that drops the stereo at a zero-length bond - as RDKit does - has a centre to read)
+    // (no bond of the file is of no length: another reader of the MOL file, one that reads no configuration at a zero-length bond, has a
+    //  centre to read)
     const shortest = (m: Model) => {
       const read = editorModelOf(moleculesToEditorModel(readMoleculesFromText(blocksOf(m, [1])[0].molblock, "mol")).model);
       const byId = new Map(read.atoms.map((a) => [a.id, a]));
