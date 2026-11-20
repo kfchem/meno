@@ -11,6 +11,7 @@ import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
 import { isMetal } from "../layout/perceive";
+import { coordinatedByDonors } from "./perception/elements";
 import { boundLigandStructure } from "./boundLigand";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
@@ -247,8 +248,11 @@ export function overBonded(model: WriterModel): Set<number> {
   // halogen, an oxygen or a carbon too: PhICl2, PhI(OAc)2, Ph3I)
   const plain = new Map<number, number>();
   const add = (m: Map<number, number>, id: number, v: number) => m.set(id, (m.get(id) ?? 0) + v);
+  // (a metal's bonds - a transition metal's, or a Lewis-acidic main-group metal's - counted as a metal's: left out of its donor's count, and
+  // against no valence of its own)
+  const metalCounted = (el: string) => coordinatedByDonors.has(el);
   for (const b of out.bonds) {
-    const metal = [b.a, b.b].some((id) => isMetal(byId.get(id)?.el ?? ""));
+    const metal = [b.a, b.b].some((id) => metalCounted(byId.get(id)?.el ?? ""));
     for (const [end, other] of [
       [b.a, b.b],
       [b.b, b.a],
@@ -257,7 +261,7 @@ export function overBonded(model: WriterModel): Set<number> {
       // aluminium's, which take a pair: H3N->BH3)
       const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "") && ELEMENT_SYMBOLS.has(byId.get(other)?.el ?? "");
       add(sums, end, lent ? b.order : valenceOrder(b, byId.get(end)?.el));
-      if (isMetal(byId.get(other)?.el ?? "")) byMetal.add(end);
+      if (metalCounted(byId.get(other)?.el ?? "")) byMetal.add(end);
       const el = byId.get(end)?.el ?? "";
       if (HALOGENS.has(el) && !(el === "I" ? IODINE_TAKES : ["O", "F"]).includes(byId.get(other)?.el ?? "")) add(plain, end, b.order);
     }
@@ -271,7 +275,7 @@ export function overBonded(model: WriterModel): Set<number> {
     // as an alkynyl benziodoxolone's - and one more for each positive charge, as a diaryliodonium's)
     const h = a.el === "H" && sum + Math.abs(a.charge ?? 0) + unpaired(a) > 1;
     const halogen = HALOGENS.has(a.el) && (plain.get(a.id) ?? 0) + unpaired(a) > (a.el === "I" ? 2 : 1) + Math.max(0, a.charge ?? 0);
-    const most = mostBonds(a.el, a.charge ?? 0, a.radical);
+    const most = coordinatedByDonors.has(a.el) ? null : mostBonds(a.el, a.charge ?? 0, a.radical);
     // (and a charge more than any atom carries: four either way)
     if (h || halogen || Math.abs(a.charge ?? 0) > 4 || (most != null && sum > most)) over.add(drawn.get(a.id) ?? a.id);
   }

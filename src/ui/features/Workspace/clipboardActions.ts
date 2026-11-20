@@ -26,6 +26,11 @@ import { carriedByCycle, cycleThings } from "./utils/cycles";
 
 type Pt = { x: number; y: number };
 
+/** What a copy says where there is nothing to copy: nothing selected, and no structure under the pointer. */
+export const NOTHING_TO_COPY = "Nothing to copy: select something, or point at a structure.";
+/** What a cut says likewise. */
+export const NOTHING_TO_CUT = "Nothing to cut: select something, or point at a structure.";
+
 /**
  * Copy, cut and paste, for the keys and the menu alike.
  *
@@ -125,8 +130,13 @@ export function useClipboardActions(
   }, [store]);
 
   const copyNow = useCallback(async (only?: number) => {
+    if (busy()) return false;
     const taken = part(only);
-    if (!taken || busy()) return false;
+    // (nothing selected and no structure under the pointer: said, rather than the clipboard left as it was without a word)
+    if (!taken) {
+      onError(NOTHING_TO_COPY);
+      return false;
+    }
     const state0 = store.getState();
     // (its record says the bond's printed length of the style it is copied in: pasted into another, it is converted)
     const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt, labelPt: labelPtOf(state0.docStyle) };
@@ -167,14 +177,16 @@ export function useClipboardActions(
   const copy = useCallback((only?: number) => copying(() => copyNow(only)), [copyNow]);
 
   const cut = useCallback(async (only?: number) => {
+    if (busy()) return;
     const taken = part(only);
-    if (!taken || !(await copy(only))) return;
+    if (!taken) return onError(NOTHING_TO_CUT);
+    if (!(await copy(only))) return;
     // what was copied is what goes: the selection, or the structure, and
     // the arrows and pluses that went with it, and the molecules in 3D
     const left = store.getState().deleteDrawn(taken.part, taken.ids3d);
     // (a set that holds its molecules itself, on no page, which the copy does not carry: left where it was, and said)
     if (left) onError(leftByCut(left));
-  }, [part, copy, store, onError]);
+  }, [busy, part, copy, store, onError]);
 
   // (the pastes asked for at one place: a paste there again lands a step on - utils/copyPaste#pastePlace)
   const pastes = useRef<PastesAt | null>(null);

@@ -12,7 +12,7 @@
  *
  * | name | user | at zero | units |
  * |---|---|---|---|
- * | `FLAT_VOLUME_3D` | `stereoOpen` `configuredFrom` | under it: no configuration (a centre, and a double bond's side test) | A^3 (A^4 for the side test) |
+ * | `FLAT_VOLUME_3D` | `from3d` `configuredFrom` | under it: no configuration (a centre, and a double bond's side test) | A^3 (A^4 for the side test) |
  * | `FLAT_VOLUME_DRAWN` | `layout/readBack` | under it: not counted as turned | drawing units (bond lengths) cubed |
  * | `EXACT` | `lonePairsIn3d` (after its angle sum), `pageMirror`, `edit3d`, `compareBonding`, `referenceNumbering` | the exact sign, 0 only at 0 | A^3 |
  * | `HANDED` | `settle` | at or under it: no way round | A^3 (a tetrahedral centre's are some 0.9) |
@@ -21,7 +21,7 @@
  * No basis from a text is claimed for any of them: they are each user's own, kept as they were (a move: no answer changes).
  */
 
-/** Under this, a volume in 3D (A^3) says no configuration: `stereoOpen` `configuredFrom`'s centres; its double bonds' side test, in A^4. */
+/** Under this, a volume in 3D (A^3) says no configuration: `from3d` `configuredFrom`'s centres; its double bonds' side test, in A^4. */
 export const FLAT_VOLUME_3D = 1e-6;
 /** Under this, a volume as drawn (bond lengths cubed) says nothing turned: `layout/readBack`. One number with `FLAT_VOLUME_3D`, another unit. */
 export const FLAT_VOLUME_DRAWN = 1e-6;

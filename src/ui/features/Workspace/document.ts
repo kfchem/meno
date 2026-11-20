@@ -17,6 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
 import { ARRANGEMENT_SAID, arrangementAs } from "./utils/arrangement";
+import { atomAs } from "./utils/atomAs";
 import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
@@ -611,7 +612,12 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  * taken away with their bonds where no longer drawn.
  */
 export type Relayout = {
-  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean }[];
+  /**
+   * Each atom moved: where to; its depth and whether it is a centre in space; whether its metal's arrangement is not given; and, a centre
+   * of a projection laid flat whose group its reading could not place (lib/chem/perception/projection/depth), why its configuration is
+   * not given.
+   */
+  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean; configurationOpen?: string }[];
   bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
@@ -647,7 +653,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (gone.has(a.id)) return [];
     const p = to.get(a.id);
     if (!p) return [a];
-    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen) return [a];
+    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen && !p.configurationOpen) return [a];
     changed = true;
     const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, ...rest } = a;
     return [
@@ -686,6 +692,12 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
   for (const [i, a] of atoms.entries()) {
     if (!to.get(a.id)?.arrangementOpen) continue;
     atoms[i] = { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, atoms, bonds) } };
+  }
+  // (a centre of a chair laid flat whose group was drawn where its reading could not place it: left open, and marked
+  // so, why with it, until it is changed - nothing silent)
+  for (const [i, a] of atoms.entries()) {
+    const why = to.get(a.id)?.configurationOpen;
+    if (why) atoms[i] = { ...a, unsure: { said: [`No configuration given: ${why}.`], as: atomAs(a, bonds) } };
   }
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
@@ -1582,9 +1594,10 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
-    if (n === a.map) return a;
-    const { map: _m, ...rest } = a;
-    return n ? { ...rest, map: n } : rest;
+    const t = n ? marks?.texts.get(a.id) : undefined;
+    if (n === a.map && JSON.stringify(t) === JSON.stringify(a.mapText)) return a;
+    const { map: _m, mapText: _t, ...rest } = a;
+    return n ? { ...rest, map: n, ...(t ? { mapText: t } : {}) } : rest;
   });
   const bonds = doc.model.bonds.map((b) => {
     if (!inside.has(b.a) || !inside.has(b.b)) return b;
@@ -1616,18 +1629,27 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
   const inside = new Set<number>([...before, ...maps].flatMap((m) => [...mapAtoms(m.map)]));
   const numbers = new Map<number, number>();
   const centres = new Map<number, number>();
-  for (const { map } of maps) {
+  const texts = new Map<number, { base: string; sup?: string }>();
+  // (each map's texts by number, for its own molecules in 3D: two maps on a page both number from 1)
+  const textsByNumber = maps.map(() => new Map<number, { base: string; sup?: string }>());
+  for (const [k, { map }] of maps.entries()) {
     if (!map.shown || !mapShows(mapStanding({ atomMap: map }, doc.model))) continue;
     const marks = mapMarks(map, doc.model);
     for (const [id, n] of marks.numbers) numbers.set(id, n);
     for (const [id, c] of marks.centres) centres.set(id, c);
+    for (const [id, t] of marks.texts) {
+      texts.set(id, t);
+      const n = marks.numbers.get(id);
+      if (n) textsByNumber[k].set(n, t);
+    }
   }
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = numbers.get(a.id);
-    if (n === a.map) return a;
-    const { map: _m, ...rest } = a;
-    return n ? { ...rest, map: n } : rest;
+    const t = n ? texts.get(a.id) : undefined;
+    if (n === a.map && JSON.stringify(t) === JSON.stringify(a.mapText)) return a;
+    const { map: _m, mapText: _t, ...rest } = a;
+    return n ? { ...rest, map: n, ...(t ? { mapText: t } : {}) } : rest;
   });
   const bonds = doc.model.bonds.map((b) => {
     if (!inside.has(b.a) || !inside.has(b.b)) return b;
@@ -1636,7 +1658,9 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
     const { reactingCentre: _c, ...rest } = b;
     return c ? { ...rest, reactingCentre: c } : rest;
   });
-  // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on)
+  // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on -
+  //  where the drawing shows a number as its IUPAC locant, 4a, the same: by number, as a conformer's frames number alike atoms anew - the
+  //  numbers of the map that numbered that molecule)
   const molecules = doc.molecules3d ?? [];
   const now = numbers3d(maps, molecules, doc.model);
   const touched = new Set([...numbers3d(before, molecules, doc.model).touched, ...now.touched]);
@@ -1649,10 +1673,18 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
       const { map: _m, ...rest } = a;
       return k ? { ...rest, map: k } : rest;
     });
-    const { atomNumbers: shownBefore, mapFrames: _f, ...rest } = m;
+    const { atomNumbers: shownBefore, mapFrames: _f, mapTexts: _t, ...rest } = m;
     const atomNumbers = n ? { kind: "map" as const } : shownBefore?.kind === "map" ? undefined : shownBefore;
+    const has = new Set(n ? [...n.first, ...n.rest.flatMap((f) => f ?? [])] : []);
+    const mapTexts = n ? [...textsByNumber[n.from]].filter(([k]) => has.has(k)).sort((a, b) => a[0] - b[0]) : [];
     // (each frame after the first numbered as its own: chem/structureMaps `framesNumbered`)
-    return { ...rest, atoms: atoms3d, ...(atomNumbers ? { atomNumbers } : {}), ...(n?.rest.length ? { mapFrames: n.rest } : {}) };
+    return {
+      ...rest,
+      atoms: atoms3d,
+      ...(atomNumbers ? { atomNumbers } : {}),
+      ...(n?.rest.length ? { mapFrames: n.rest } : {}),
+      ...(mapTexts.length ? { mapTexts } : {}),
+    };
   });
   const { structureMaps: _s, ...restDoc } = doc;
   return {

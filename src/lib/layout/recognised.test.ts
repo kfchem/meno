@@ -416,7 +416,7 @@ describe("a bridged system drawn bond by bond, a bold bond its near edge (norbor
     });
     expect(got[0]).not.toBe(got[1]);
     expect(got[2]).not.toBe(got[3]);
-  });
+  }, measured(1_700));
 
   it("reads quinuclidin-3-ol's C3 by a mark as drawn - and, a known limit, gives its bridgeheads a sense identity keeps (identity's to drop)", () => {
     for (const smi of ["O[C@@H]1CN2CCC1CC2", "O[C@H]1CN2CCC1CC2"]) {
