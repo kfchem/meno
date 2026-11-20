@@ -8,7 +8,7 @@
  */
 import { chargeMarks, withoutMarks } from "./charges";
 import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
-import { bondOf, readFigure, sizedOutlines, type FigureRead } from "./read";
+import { bondOf, dativeArrows, readFigure, sizedOutlines, type FigureRead } from "./read";
 import { shapeLetters, sureEnough, type GlyphShape } from "./glyphs";
 import type { ArrowForm, ArrowWeight } from "../chem/reactionArrow";
 import type { WordsMark, WordsStyle } from "../chem/captions";
@@ -958,7 +958,12 @@ export function readScheme(
   // (letters drawn as outlines and read surely from their shapes - an S, a C, an N of one part - no arrow's head, however like one)
   const asLetters = new Set((known.length ? shapeLetters(marked, bond, known) : []).filter((l) => /^[A-Za-z0-9]$/.test(l.c) && sureEnough(l)).flatMap((l) => l.from));
   const free = asLetters.size ? without(marked, asLetters) : marked;
-  const { arrows, used, usedLetters } = arrowsOf(free, drawn.letters, bond, lineWidth);
+  // (a dative bond's arrow - short, an atom at each end: a letter, or another line's end - is the structure's bond, no scheme's arrow:
+  //  left for the structure's reading, lib/figure/read `dativeArrows`)
+  const toBox = (p: Point, b: readonly number[]) => Math.hypot(Math.max(b[0] - p.x, 0, p.x - b[2]), Math.max(b[1] - p.y, 0, p.y - b[3]));
+  const atAtom = (p: Point, own: Stroke) => drawn.letters.some((l) => toBox(p, l.box) < 0.5 * bond) || free.strokes.some((s) => s !== own && Math.min(dist(s.a, p), dist(s.b, p)) < 0.1 * bond);
+  const dative = new Set<object>(dativeArrows(free, bond).filter((d) => atAtom(d.from, d.stroke) && atAtom(d.to, d.stroke)).flatMap((d) => [d.stroke, d.head, ...(d.dot ? [d.dot] : [])]));
+  const { arrows, used, usedLetters } = arrowsOf(dative.size ? without(free, dative) : free, drawn.letters, bond, lineWidth);
   const signs = plusesOf(free, bond, used);
   for (const o of signs.taken) used.add(o);
   const rest = without(shapes, used);
