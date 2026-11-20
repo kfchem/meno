@@ -242,6 +242,7 @@ export default function PartMenu({
   records,
   stereo,
   projection,
+  asChair,
   fischer,
   figure,
   numbers,
@@ -585,6 +586,8 @@ export default function PartMenu({
   stereo?: { name: string; run: () => void };
   /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
   projection?: { flat: () => void; flip?: () => void };
+  /** A flat six-ring right-clicked that *Draw as chair* draws (projections/fromFlat): to do it, or why it is not offered (its configuration not drawn). */
+  asChair?: { run: () => void } | { why: string };
   /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
   fischer?: { run: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
@@ -1101,6 +1104,14 @@ export default function PartMenu({
                 ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
                 { name: "Draw flat", keys: "", run: projection.flat },
               ]
+            : []),
+          ...(asChair
+            ? "run" in asChair
+              ? [{ name: "Draw as chair", keys: "", run: asChair.run }]
+              : [
+                  { name: "Draw as chair", keys: "", run: () => {}, disabled: true },
+                  { name: asChair.why, keys: "", run: () => {}, disabled: true },
+                ]
             : []),
           ...partsItems,
           ...pageMapItems,

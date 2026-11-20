@@ -648,6 +648,35 @@ on a page); the Newman projection follows.
   keeps as drawn, *Draw flat* lays out flat, and 3D made from it says it takes the configuration only, as from the tool's chair. *Flip chair*
   stays the tool's chair's. A cage or a bridged system drawn by hand in perspective is not asked after for it: fitting one to the engine's
   views takes up to a second, too long for a menu.
+- **Draw as chair** (a flat six-membered ring right-clicked, an atom or a bond of it; `projections/fromFlat`): the ring drawn as a chair of the
+  tool's, each group moved onto the free position that states the configuration the flat drawing states (the reader's, asked of the solid's
+  own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
+  gives the other chair, *Draw flat* or Undo the flat drawing again. Which of the two chairs is drawn is this tool's convention, not a rule of
+  any text and no statement of the favoured conformer (1-methyl-1-phenylcyclohexane comes out phenyl equatorial; 5 of the 16
+  D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): each group given a kind by the atom bound to the ring, ordered after published conformational energies (A-values) -
+  no value of them is in Meno, only their order: 5, a carbon of four single bonds and no H (tert-butyl, CF3); 4, one with one H, an
+  aromatic carbon, Si, an S with two S=O (isopropyl, phenyl, SiMe3, SO2Ph); 3, one with two or three H (methyl, ethyl, CH2OTs); 2, a
+  carbon with a double bond, an N with single bonds only or a nitro N, an S with one S=O (CO2H, CO2CH3, NH2, NO2) - and any atom not
+  named here (P, B, Se, an azide's N, an aromatic N), a default with no measured basis; 1, O and an S with no S=O (OH, OTs, OSiMe3,
+  SMe); 0, a halogen, a carbon with a triple bond, an N whose one other neighbour is a carbon bound to it by a double or triple bond, Hg
+  (F, Cl, CN, ethynyl, NCO). The chair drawn is the first of: fewer tertiary alkyl groups axial (kind 5 with three carbons beside it -
+  tert-butyl, not CF3 or CMe2OH); fewer groups axial; the axial groups' kinds, the smaller axial; their sizes by their non-hydrogen
+  atoms; the group whose first atom ranks lowest in the canonical order equatorial. So cis-4-tert-butylcyclohexanol, its tosylate, its
+  TBS ether and its benzoate have the tert-butyl equatorial; cis-4-methylcyclohexyl chloride its methyl equatorial; 1-tert-butyl-
+  2,5-difluorocyclohexane the tert-butyl equatorial though the two F go axial. A group typed as a label (tBu, iPr, Ph, OMe) is read as
+  the atoms it holds, so it goes where the same group drawn out goes. It lies as near to the flat drawing as it can, a tie to form 1. A pyranose's ring - its ring O beside a carbon carrying an O
+  outside the ring on a single bond - lies with that O behind and that carbon at the right-hand end, in either chair (McNaught 1996, 2-Carb-7,
+  Chart III): so a pyranose in its 1C4 chair is drawn with its up end at the right, not as form 1, as the chart draws it. Where both carbons
+  beside the ring O carry one (a 2,6-dialkoxyoxane), the ring lies as any other. A ring centre the drawing leaves open keeps it open: its group
+  equatorial, on a wavy bond. Where the ring has centres and the drawing gives the configuration of none, it is not drawn as a chair (IUPAC
+  2006 ST-3.2: a perspective drawing states every centre's configuration): the item is greyed with the reason, "Its configuration is not
+  drawn: a chair would state one." The centres counted are those of the whole ring together, so two ring atoms that are centres only to each
+  other count: 1,4-dimethylcyclohexane, 4-tert-butylcyclohexanol and scyllo-inositol drawn with no wedge are not drawn as chairs, and
+  4-methylcyclohexanol with a wedge on its OH alone - which sets nothing - has its methyl on a wavy bond. Guarded: if the chair would read
+  as another compound - a configuration changed, or one stated that the drawing leaves open - nothing is changed and Meno says it is its
+  own fault. Offered on a single
+  ring of single bonds at saturated atoms, nothing fused, spiro or bridged on it, not yet drawn with depth: no cyclohexanone or cyclohexene,
+  no fused rings yet (they wait for the depth reader, with Fuse). Groups that come to lie over each other are left for the chemist.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
   below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
