@@ -895,6 +895,13 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **Where a wedge is read.** A wedge or hashes narrow at an atom state a
+  configuration only where Meno's candidates put a centre (four groups, or
+  three and a lone pair it keeps: docs/WORKFLOWS-FOUNDATION.md;
+  `perception/stereo/candidates`). A wedge at a metal of the d or f block,
+  or at an N+ with an H (which loses its configuration through the free
+  amine), states none, and the atom's tip says why: "it is a metal, whose
+  groups are not surely tetrahedral, so a wedge at it states none".
 - **A hashed line read** (2026-11-19; IUPAC 2006 ST-0.3). Hashes drawn as
   a line (the bold dashed bond), and a hashed wedge drawn the wrong way
   round, are read as "below" at a stereocentre only where the text grades
