@@ -568,8 +568,10 @@ its output and its errors alike, until both are read to their ends, after
 it was stopped too. A reply's words sent as they come are taken out of
 across their parts: the end of a part that may begin a key is held back
 and given with the next part of that reply, so that a key said in two
-parts is found whole (src-tauri/src/model.rs `scrub`). A safeguard, not a
-promise for the plugin: it finds the
+parts is found whole (src-tauri/src/model.rs `scrub`) - read as the words
+they are, so that a key a JSON writer gives escaped there is found too;
+the end held back of a reply stopped as it came is not given. A
+safeguard, not a promise for the plugin: elsewhere it finds the
 key as it was given, and not one the plugin writes otherwise (a `/` a JSON
 writer gives as `\/`, say); what a plugin does with the key is its
 review's to check.

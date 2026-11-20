@@ -394,6 +394,29 @@ mod tests {
     }
 
     #[test]
+    fn a_key_said_across_parts_is_taken_out_wherever_it_is_split() {
+        let m = models();
+        m.converse_line("w1", r#"{"id":6,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
+        let part = |text: &str| m.scrub("w1", &json!({"id": 6, "partial": text}).to_string()).into_owned();
+        let said = |line: String| serde_json::from_str::<Value>(&line).unwrap()["partial"].as_str().unwrap().to_string();
+        // (split before its last character: all of it but one held back)
+        let (a, b) = KEY.split_at(KEY.len() - 1);
+        assert_eq!(said(part(&format!("It is {a}"))), "It is ");
+        assert_eq!(said(part(&format!("{b}."))), "[key].");
+        // (split after its first character)
+        let (a, b) = KEY.split_at(1);
+        assert_eq!(said(part(&format!("It is {a}"))), "It is ");
+        assert_eq!(said(part(&format!("{b}."))), "[key].");
+        // (said a character at a time: no part holds it, and the page is given it taken out whole at the end)
+        let mut told = String::new();
+        for c in KEY.chars() {
+            told += &said(part(&c.to_string()));
+        }
+        told += &said(part("!"));
+        assert_eq!(told, "[key]!");
+    }
+
+    #[test]
     fn the_key_is_added_on_the_way_to_the_worker_and_taken_out_of_what_it_says() {
         let m = models();
         let line = m.converse_line("w1", r#"{"id":3,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
