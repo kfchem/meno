@@ -1764,6 +1764,21 @@ export function addArrow(
   };
 }
 
+/**
+ * The arrow `id` moved to `at` by itself, its words left where they stand (the maintainer, 2026-11-09: an arrow and its words move
+ * apart, each on its own; both move when both are selected) - and its words, by id, over it (`links`, the arrow's id) or over none
+ * (null): let go of it while it is moved, so that it is not drawn out to them, and over it again where it is put within their reach.
+ */
+export function arrowMovedAlone(doc: WorkspaceDocument, id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>): WorkspaceDocument {
+  const index = doc.arrows.findIndex((a) => a.id === id);
+  if (index < 0) return doc;
+  const arrows = doc.arrows.slice();
+  arrows[index] = { ...arrows[index], x: at.x, y: at.y };
+  let out: WorkspaceDocument = { ...doc, arrows };
+  for (const [word, arrow] of links) out = updateCaption(out, word, { arrow: arrow === id ? id : null });
+  return out;
+}
+
 export function updateArrow(
   doc: WorkspaceDocument,
   id: number,
