@@ -269,7 +269,8 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
     if (!plainH(a) || mine.length !== 1) return;
     const b = drawing.bonds[mine[0]];
     const c = b.a === h ? b.b : b.a;
-    if (b.order === 1 && part.atoms[c].el !== "H" && tetra.has(c)) foldedInto.set(h, c);
+    // (never into a metal of the d or f block: its H is an atom of its own, as identity keeps it - backlog 177)
+    if (b.order === 1 && part.atoms[c].el !== "H" && !isMetal(readAs(part.atoms[c])) && tetra.has(c)) foldedInto.set(h, c);
   });
   const kept = part.atoms.map((_, i) => i).filter((i) => !foldedInto.has(i));
   const at = new Map(kept.map((i, k) => [i, k]));
@@ -1037,7 +1038,9 @@ export function stereoAgainst(stated: StereoShown, now: StereoShown): "changed" 
  */
 export function stereoOf(m: Model): Said {
   const d = drawingOf(m);
-  return saidOf(d.atoms, d.bonds, m.atoms.map((a) => a.id), (i) => plainH(m.atoms[i]), readStereo(d.atoms, d.bonds));
+  // (an H on a metal of the d or f block is no plain H, as identity keeps it an atom: backlog 177)
+  const onMetal = new Set(d.bonds.flatMap((b) => (isMetal(readAs(m.atoms[b.a])) ? [b.b] : isMetal(readAs(m.atoms[b.b])) ? [b.a] : [])));
+  return saidOf(d.atoms, d.bonds, m.atoms.map((a) => a.id), (i) => plainH(m.atoms[i]) && !onMetal.has(i), readStereo(d.atoms, d.bonds));
 }
 
 /** The first id no atom or bond of `model` has. */
