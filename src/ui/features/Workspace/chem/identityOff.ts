@@ -11,10 +11,14 @@
 import { create } from "zustand";
 import { constitutionKey, identity, type IdentityInput } from "../../../../lib/chem/identity";
 import { NOT_YET } from "../../../../lib/table";
+import { cageLabelled } from "./cageLabelled";
 
 export type Found = { text: string; complete: boolean };
-/** What is asked of a structure: its identity, or its constitution's key (lib/chem/identity `constitutionKey`) as the text. */
-export type Asked = "identity" | "constitution";
+/**
+ * What is asked of a structure: its identity, or its constitution's key (lib/chem/identity `constitutionKey`) as the text, or
+ * which of its cage atoms the CIP labels (chem/cageLabelled).
+ */
+export type Asked = "identity" | "constitution" | "cage labels";
 
 /**
  * The most atoms a structure not yet answered may have to be worked out on the drawing thread. Not by its cost, which
@@ -49,7 +53,8 @@ export const useIdentitiesAnswered = create<{ answered: number }>(() => ({ answe
 
 const keyOf = (input: IdentityInput, kind: Asked) => `${kind}|${JSON.stringify(input)}`;
 /** What is asked, worked out here. */
-const hereNow = (input: IdentityInput, kind: Asked): Found => (kind === "constitution" ? { text: constitutionKey(input), complete: true } : identity(input));
+const hereNow = (input: IdentityInput, kind: Asked): Found =>
+  kind === "constitution" ? { text: constitutionKey(input), complete: true } : kind === "cage labels" ? { text: cageLabelled(input), complete: true } : identity(input);
 
 function keep(key: string, found: Found): Found {
   if (known.size >= KEPT) known.clear();
