@@ -156,4 +156,19 @@ describe("the chemistry client", () => {
       vi.useRealTimers();
     }
   });
+
+  it("is not hurt by what hears a part failing: the parts after it are heard, and the answer settles it", async () => {
+    const w = fakeWorker();
+    const c = new ChemClient(w.transport, 1000);
+    const parts: string[] = [];
+    const r = c.request("converse", { told: "", said: [], tools: [], options: {}, stream: true }, 1000, (t) => {
+      parts.push(t);
+      if (t === "boom") throw new Error("the view failed");
+    });
+    expect(() => w.say({ id: 1, partial: "boom" })).not.toThrow();
+    w.say({ id: 1, partial: "after" });
+    w.say({ id: 1, ok: true, result: { text: "boomafter" } });
+    await expect(r).resolves.toEqual({ text: "boomafter" });
+    expect(parts).toEqual(["boom", "after"]);
+  });
 });

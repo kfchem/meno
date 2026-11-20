@@ -69,7 +69,10 @@ export function heardShown(text: string): string {
   if (text.length <= HEARD_SHOWN) return text;
   const tail = text.slice(-HEARD_SHOWN);
   const line = tail.indexOf("\n");
-  return `\u2026\n${line >= 0 ? tail.slice(line + 1) : tail}`;
+  // (no line in it: cut where it begins, never in a character's two halves)
+  const first = tail.charCodeAt(0);
+  const whole = first >= 0xdc00 && first <= 0xdfff ? tail.slice(1) : tail;
+  return `\u2026\n${line >= 0 ? tail.slice(line + 1) : whole}`;
 }
 
 const BULLET = /^\s*(?:[-*•])\s+(.*)$/;

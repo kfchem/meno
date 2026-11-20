@@ -8,7 +8,7 @@ import { connectionFor } from "./connections";
 import { LIMITS, NO_CONNECTION } from "./turn";
 import { writeClipboard } from "../../../../lib/clipboard";
 import Fold from "./Fold";
-import { answerLine, callJson, callSaid, exchangeRows, foundRows, type ExchangeRow } from "./said";
+import { answerLine, callJson, callSaid, exchangeRows, foundRows, heardParagraphs, type ExchangeRow } from "./said";
 import type { Conversation } from "./types";
 
 /** One row of the exchange: words as words, never drawn as a page; a call with what came of it on its line, what it found folded below in Meno's words - the call as it went, copied as JSON on asking. */
@@ -108,7 +108,10 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
         ))}
         {heard && (
           <div className="max-w-[92%] text-sm text-gh-black whitespace-pre-wrap break-words" aria-busy="true">
-            {heard}
+            {/* (a paragraph each, kept as it was drawn: as more comes, only the last is drawn anew - a long reply never redrawn whole) */}
+            {heardParagraphs(heard).map((p, k) => (
+              <span key={k}>{p}</span>
+            ))}
           </div>
         )}
         {running && <div className="text-xs text-gh-gray meno-fade-in">Talking…</div>}

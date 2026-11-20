@@ -70,6 +70,13 @@ describe("a conversation's words as the card's blocks", () => {
     expect(shown.length).toBeLessThanOrEqual(HEARD_SHOWN + 2);
     expect(long.endsWith(shown.slice(2))).toBe(true);
     expect(heardShown("Short.")).toBe("Short.");
+    // (no line in it, cut where a character's two halves meet: never half of one)
+    const face = "\u{1F642}";
+    const unbroken = `${face}${"a".repeat(HEARD_SHOWN - 1)}`;
+    expect(heardShown(`xx${unbroken}`)).toBe(`\u2026\n${"a".repeat(HEARD_SHOWN - 1)}`);
+    // (cut where it begins: the character whole)
+    const begins = `${face}${"a".repeat(HEARD_SHOWN - 2)}`;
+    expect(heardShown(`x${begins}`)).toBe(`\u2026\n${begins}`);
   });
 });
 

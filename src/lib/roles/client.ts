@@ -310,7 +310,12 @@ export class ChemClient {
       if (typeof m.partial !== "string" || !p.heard || !p.again) return;
       clearTimeout(p.timer);
       p.timer = p.again();
-      p.heard(m.partial);
+      // (what hears it may fail: the request is not hurt, and the lines after it are still read)
+      try {
+        p.heard(m.partial);
+      } catch {
+        /* nothing to do: the answer still comes */
+      }
       return;
     }
     this.pending.delete(m.id!);
