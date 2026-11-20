@@ -288,7 +288,14 @@ pointer does; put back by an undo, they glide back.
   just outside, on the nearest side, half a bond from the frame. A frame
   that grows into a thing no set holds eases it out the same way, once:
   where that leaves it over another frame, it stays. A step's result set
-  takes nothing in, so anything over it is eased out. All of it is part
+  takes nothing in, so anything over it is eased out - the shortest way
+  that leaves it over no frame, never into the next one. A frame that
+  grows over another set's frame pushes that set away from it, its frame
+  and all it holds: a set below it as it was, down to just under it; one
+  above, up to just over it - never across it. A set so pushed pushes the
+  next in turn, each set once, each to the first place free of the sets
+  already pushed, so that no two come to one place (a step's later exits
+  keep their own order under its first). All of it is part
   of the gesture's step: one undo takes back the drag, the frame and what
   was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
@@ -3446,9 +3453,14 @@ those left open, *Generate*'s, and a SMILES pasted.
 - **Left open**: a stereocentre or double bond the toolkit perceives as
   one that could have a configuration, drawn without one or with one
   drawn as not known (a wavy bond, a double bond of either) - but a C=N
-  whose E/Z is none of its own (below), and an atom of three neighbours
+  whose E/Z is none of its own (below), an atom of three neighbours
   whose lone pair keeps no configuration (an amine's N: *Centres by a lone
-  pair*, docs/EDITOR-2D.md). An open double bond on an atom
+  pair*, docs/EDITOR-2D.md), and an atom Meno holds no candidate for a
+  centre by its kind (lib/chem/perception/stereo/candidates): a metal, at
+  any count of groups - of the d or f block, or Li, Mg, Al and the like,
+  not Sn, Pb or Bi - and an N+ with an H, as Meno's reading of a drawing
+  refuses them. So a toolkit's "possible" metal centre, Pd(PPh3)4's Pd, is
+  never said to be open. An open double bond on an atom
   of two double bonds is an allene's axis, and the bonds of a run are
   one element: an allene's axis, of two or four; cis or trans, of three.
 - **At most** (an option, 32 unless changed): the most stereoisomers one
@@ -3505,7 +3517,7 @@ those left open, *Generate*'s, and a SMILES pasted.
   what the drawing leaves open is given the configuration the molecule
   made before has, read from its places by Meno - a centre's by the
   sign of the volume its neighbours span, a double bond's by the side
-  its neighbours are on (lib/chem/stereoOpen `configuredFrom`) - where
+  its neighbours are on (lib/chem/perception/stereo/from3d `configuredFrom`) - where
   it and every atom bonded to it are placed. Before, a double bond left
   open came back as the first stereoisomer, whatever the molecule made
   before had: of 236 such remakes of a 70-structure set, 185 came back

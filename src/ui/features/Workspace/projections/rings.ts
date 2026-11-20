@@ -31,6 +31,3 @@ export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, only?: Re
   if (!only) found.set(model.atoms, { bonds: model.bonds, out });
   return out;
 }
-
-/** Whether a structure holds a projection: Clean-up leaves it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
-export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => projectionsIn(model, ids).length > 0;

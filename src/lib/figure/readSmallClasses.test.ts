@@ -290,9 +290,12 @@ describe("the thresholds of a bold bond and its thin neighbours, each one just o
   const ringOfThin = (): FigurePath[] => hex(60, 60).map((p, i, all) => line(p, all[(i + 1) % 6], thin));
   const at: P = [300, 300];
   const end: P = [at[0] + L, at[1]];
-  const read = (extra: FigurePath[]) => readFigure(figure([...ringOfThin(), ...extra]));
-  /** The bonds the test's own part of the figure reads as: those to the right of the ring. */
-  const own = (r: ReturnType<typeof readFigure>) => r.bonds.filter((b) => Math.min(r.atoms[b.a].x, r.atoms[b.b].x) > 200);
+  /** A thin bond on at the start of the part under test, up and back: the part no line alone (no ethane), and none of its own bonds. */
+  const tail = (w = thin): FigurePath => line([at[0] - 0.5 * L, at[1] - 0.87 * L], at, w);
+  const read = (extra: FigurePath[]) => readFigure(figure([...ringOfThin(), ...extra, tail()]));
+  /** The bonds the test's own part of the figure reads as: those to the right of the ring, within half a bond of its level - no tail's. */
+  const own = (r: ReturnType<typeof readFigure>) =>
+    r.bonds.filter((b) => Math.min(r.atoms[b.a].x, r.atoms[b.b].x) > 200 && [r.atoms[b.a], r.atoms[b.b]].every((p) => Math.abs(p.y - at[1]) < 0.5 * L));
 
   it("is bold at 1.8 times the thin lines' width, no less - and a bond long enough over a tenth of its own", () => {
     // (a bar 1.8 times 0.073 of a bond, a hair over it and a hair under it: the line's width, not a drawing program's rounding, tells)
@@ -302,7 +305,7 @@ describe("the thresholds of a bold bond and its thin neighbours, each one just o
 
   it("is bold only above 0.12 of a bond across, however thin the thin lines are", () => {
     const finer = hex(60, 60).map((p, i, all) => line(p, all[(i + 1) % 6], 0.04 * L));
-    const fine = (w: number) => readFigure(figure([...finer, bar(at, end, w * L)]));
+    const fine = (w: number) => readFigure(figure([...finer, bar(at, end, w * L), tail(0.04 * L)]));
     expect(own(fine(0.121)).map((b) => !!b.bold)).toEqual([true]);
     expect(own(fine(0.119)).map((b) => !!b.bold)).toEqual([false]);
   });
@@ -317,7 +320,9 @@ describe("the thresholds of a bold bond and its thin neighbours, each one just o
     const under = own(read([bar(at, end, wide), shorter(0.84)]));
     expect(under).toHaveLength(1);
     expect(under[0]).toMatchObject({ order: 2, bold: true });
-    const over = own(read([bar(at, end, wide), shorter(0.86)]));
+    // (the back bond a chair's, bonded on at its far end - no line alone)
+    const back = (ratio: number): FigurePath => line([(p[0] + q[0]) / 2 + (ratio * L) / 2, p[1]], [(p[0] + q[0]) / 2 + (ratio * L) / 2 + 0.5 * L, p[1] + 0.87 * L], thin);
+    const over = own(read([bar(at, end, wide), shorter(0.86), back(0.86)]));
     expect(over).toHaveLength(2);
     expect(over.every((b) => b.order === 1)).toBe(true);
     expect(over.filter((b) => b.bold)).toHaveLength(1);
@@ -328,7 +333,8 @@ describe("the thresholds of a bold bond and its thin neighbours, each one just o
     const [r, s] = beside(at, end, -0.2);
     const inner = (a: P, b: P): FigurePath => line([a[0] + 0.2 * L, a[1]], [b[0] - 0.2 * L, b[1]], thin);
     const withBold = own(read([bar(at, end, 0.15 * L), inner(p, q), inner(r, s)]));
-    expect(withBold.map((b) => [b.order, !!b.bold]).sort()).toEqual([[1, false], [2, true]]);
+    // (the other thin line, left over, is a line alone well short of a bond: no structure - withoutStrays)
+    expect(withBold.map((b) => [b.order, !!b.bold]).sort()).toEqual([[2, true]]);
     const triple = own(read([line(at, end, thin), line(p, q, thin), line(r, s, thin)]));
     expect(triple.map((b) => b.order)).toEqual([3]);
   });

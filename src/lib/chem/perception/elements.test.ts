@@ -4,6 +4,7 @@ import { ELEMENTS } from "../elements";
 import {
   alwaysIonic,
   bridgesToMetal,
+  coordinatedByDonors,
   drawnRoundMetal,
   inValenceSums,
   ionic,
@@ -132,5 +133,15 @@ describe("each caller takes the set that was its list: nothing moved", () => {
   });
   it("reads the same elements as no metals but Ts and Og, which join At and Rn so that every element is one or the other", () => {
     expect(differ((el) => old.notMetals.has(el), (el) => notMetal.has(el))).toEqual(["Ts", "Og"]);
+  });
+});
+
+describe("the metals a donor's bond to is a coordination (found in review)", () => {
+  it("are the transition metals and the main-group metals of groups 1, 2 and 13 - a subset of the metals, Zn, Cd and Hg among them, not Sn, Pb, Bi nor Nh", () => {
+    for (const el of coordinatedByDonors) expect(metal.has(el), el).toBe(true);
+    for (const el of transitionMetal) expect(coordinatedByDonors.has(el), el).toBe(true);
+    expect(sorted([...coordinatedByDonors].filter((el) => !transitionMetal.has(el)))).toEqual(sorted("Li Na K Rb Cs Fr Be Mg Ca Sr Ba Ra Al Ga In Tl".split(" ")));
+    for (const el of ["Zn", "Cd", "Hg"]) expect(coordinatedByDonors.has(el), el).toBe(true);
+    for (const el of ["Sn", "Pb", "Bi", "Nh", "B", "Si", ...notSymbols]) expect(coordinatedByDonors.has(el), el).toBe(false);
   });
 });
