@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { withWordsNeed, wordsNeed, wordsSet, type ArrowWords } from "../../../../lib/chem/captions";
+import { inArrowReach, withWordsNeed, wordsNeed, wordsSet, type ArrowWords } from "../../../../lib/chem/captions";
+import { wordsLine } from "../../../../lib/chem/reactionScheme";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
 import { useEditor, useEditorStore } from "../store";
 import type { Arrow, EditorState } from "../store/types";
@@ -23,6 +24,22 @@ function wordsOver(captions: EditorState["captions"], sizes: Sizes, set: LabelSe
       const s = wordsSet(c, sizes, set);
       return { arrow: c.arrow, x: c.x, y: c.y, halfW: s.halfW, halfH: s.halfH };
     });
+}
+
+/**
+ * An arrow put down by itself (`id`, as it now stands): which of `words` - its words before it was moved - are over it again, by id
+ * the arrow's (within its reach, where they stand: lib/chem/captions `inArrowReach`), and which are theirs alone (null).
+ */
+export function wordsKeptBy(s: Pick<EditorState, "arrows" | "captions">, id: number, words: readonly number[], sizes: Sizes, set: LabelSet): Map<number, number | null> {
+  const arrow = s.arrows.find((a) => a.id === id);
+  return new Map(
+    words.map((w) => {
+      const c = s.captions.find((x) => x.id === w);
+      if (!c || !arrow) return [w, null];
+      const r = wordsSet(c, sizes, set);
+      return [w, inArrowReach(c, { w: r.halfW, h: r.halfH }, wordsLine(arrow), sizes.fontPx) ? id : null];
+    }),
+  );
 }
 
 /** The arrows as they are drawn, with the words being written - in place of those of the caption `editing`, if any. */

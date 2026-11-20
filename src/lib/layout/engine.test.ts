@@ -1378,3 +1378,25 @@ describe("an end of a double bond asked to be straight (`LayoutAtom.linear`)", (
     expect(measureLaidOut(input(true), out).angleError).toBeLessThan(measureLaidOut(input(false), out).angleError);
   });
 });
+
+describe("an allene's axis drawn by a wedge only where it sets something", () => {
+  /** The SMILES laid out: its wedges, and what reading the drawing back gives of its axes. */
+  const drawn = (smiles: string) => {
+    const g = fromSmiles(smiles);
+    const out = layout2D(g);
+    const atoms = g.atoms.map((a, i) => ({ el: a.el, x: out.x[i], y: out.y[i], hs: a.hs ?? 0 }));
+    const bonds = g.bonds.map(({ a, b, order }) => {
+      const w = out.wedges.find((x) => (x.from === a && x.to === b) || (x.from === b && x.to === a));
+      return { a, b, order, ...(w ? { wedge: { narrow: w.from, stereo: w.stereo } } : {}) };
+    });
+    return { wedges: out.wedges.length, axes: readStereo(atoms, bonds).axes.length };
+  };
+
+  it("penta-2,3-diene given its axis: one wedge, read back as one axis", () => {
+    expect(drawn("CC=[C@]=CC")).toEqual({ wedges: 1, axes: 1 });
+  });
+
+  it("2-methylpenta-2,3-diene and cyclohexylideneallene given an axis - an end of two alike groups: no wedge, none read", () => {
+    for (const smiles of ["CC(C)=[C@]=CC", "CC=[C@]=C1CCCCC1"]) expect(drawn(smiles), smiles).toEqual({ wedges: 0, axes: 0 });
+  });
+});
