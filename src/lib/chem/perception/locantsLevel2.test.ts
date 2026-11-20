@@ -668,3 +668,46 @@ describe("own at level 2: each said, none numbered as something else", () => {
     expect(ownOf("Cc1ccc([N+](=O)[O-])c2ccccc12").length).toBeGreaterThan(0);
   });
 });
+
+describe("isotopes and configuration where they decide (P-14.4 (i), (j)): the text's own examples", () => {
+  /** A chain of `n` carbons, 0 to n-1, single bonds, as one input; `extra` atoms bonded where given. */
+  const chain = (n: number, extra: { el: string; on: number; isotope?: number }[] = [], doubles: number[] = []) => {
+    const atoms: { el: string; isotope?: number }[] = Array.from({ length: n }, () => ({ el: "C" }));
+    const bonds: { a: number; b: number; order: number }[] = Array.from({ length: n - 1 }, (_, i) => ({ a: i, b: i + 1, order: doubles.includes(i) ? 2 : 1 }));
+    for (const x of extra) {
+      atoms.push({ el: x.el, ...(x.isotope ? { isotope: x.isotope } : {}) });
+      bonds.push({ a: x.on, b: atoms.length - 1, order: 1 });
+    }
+    return { atoms, bonds };
+  };
+  /** Each atom's locant as text, of the atoms `ids`. */
+  const locantsOf = (input: LocantsInput, ids: number[], level: 1 | 2 = 1) => {
+    const r = locants({ ...input, orbits: symmetryOrbits(input as never).orbit }, level);
+    return ids.map((i) => r.locant[i]?.base);
+  };
+
+  it("(2-14C,3-2H1)butane: as a set, 2 and 3 either way; then the nuclide of the higher atomic number - the 14C - lowest", () => {
+    // (atom 2 the 14C, atom 1 bearing the 2H: numbered from the other end, the 14C is 2)
+    const b = chain(4, [{ el: "H", on: 1, isotope: 2 }]);
+    b.atoms[2] = { el: "C", isotope: 14 };
+    expect(locantsOf(b, [2, 1])).toEqual(["2", "3"]);
+  });
+
+  it("(2S,4R)-(4-2H1,2-3H1)pentane: 3H before 2H, the higher mass number lowest - before any configuration is looked at", () => {
+    const p = chain(5, [{ el: "H", on: 3, isotope: 3 }, { el: "H", on: 1, isotope: 2 }]);
+    expect(locantsOf(p, [3, 1])).toEqual(["2", "4"]);
+  });
+
+  it("(2Z,5E)-hepta-2,5-dienedioic acid: both acids principal, the Z double bond at 2", () => {
+    // (HOOC-CH=CH-CH2-CH=CH-COOH: carbons 0 to 6, the double bonds 1=2 and 4=5; the 4=5 one Z, the 1=2 one E: numbered from C6)
+    const acid = chain(7, [{ el: "O", on: 0 }, { el: "O", on: 0 }, { el: "O", on: 6 }, { el: "O", on: 6 }], [1, 4]);
+    // (each acid's C=O)
+    acid.bonds[6].order = 2;
+    acid.bonds[8].order = 2;
+    const zAt45 = { ...acid, descriptors: { bonds: new Map([[1, "E"], [4, "Z"]]) } };
+    // (the Z bond's lower-numbered end, C5, is 2)
+    expect(locantsOf(zAt45, [5, 4], 2)).toEqual(["2", "3"]);
+    const zAt12 = { ...acid, descriptors: { bonds: new Map([[1, "Z"], [4, "E"]]) } };
+    expect(locantsOf(zAt12, [1, 2], 2)).toEqual(["2", "3"]);
+  });
+});

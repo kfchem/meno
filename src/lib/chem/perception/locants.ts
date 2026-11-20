@@ -15,6 +15,7 @@
  * The core takes no symmetry search of its own (lib/chem/identity is outside it): the molecule's orbits come in with it, as do the CIP
  * descriptors where it has them. Without orbits every tie a rule cannot break is said (`own`), never guessed as a symmetry.
  */
+import { ELEMENTS } from "../elements";
 import type { ChemAtom, ChemBond } from "./graph";
 import { factsOf } from "./facts";
 import { valencesAt } from "./hydrogens";
@@ -51,6 +52,9 @@ export type Locants = {
   shown: Locant[];
   own: { atom: number; why: OwnWhy }[];
 };
+
+/** Each element's atomic number, by its symbol. */
+const ATOMIC_NUMBER = new Map(ELEMENTS.map((e) => [e.symbol, e.number]));
 
 /** The order of the heteroatoms for numbering (P-14.4, P-22.2.3.2, P-31.1.4.2.4): earlier is more senior. */
 const NUMBERING_SENIORITY = ["F", "Cl", "Br", "I", "O", "S", "Se", "Te", "N", "P", "As", "Sb", "Bi", "Si", "Ge", "Sn", "Pb", "B", "Al", "Ga", "In", "Tl"];
@@ -763,7 +767,16 @@ function a5(
   const labelled = unit.atoms.filter((a) => c.input.atoms[a].isotope || c.labelledH[a]);
   if (labelled.length) {
     left = keepLeast(left, (cd) => { const k = keyIn(cd); return labelled.map((a) => k.get(a)!); }, compareSets);
-    left = keepLeast(left, (cd) => [...cd.atoms].filter((a) => c.input.atoms[a].isotope).map((a) => -(c.input.atoms[a].isotope ?? 0)), (p, q) => compareKeys(p, q));
+    // (then the nuclides one by one, the higher atomic number first and, of one element, the higher mass number: each the lowest locant
+    //  it can have in turn - 14C before 2H in (2-14C,3-2H1)butane, 3H before 2H in (4-2H1,2-3H1)pentane)
+    const nuclides = labelled
+      .flatMap((a) => {
+        const x = c.input.atoms[a];
+        const own = x.isotope ? [{ a, z: ATOMIC_NUMBER.get(x.el) ?? 0, mass: x.isotope }] : [];
+        return c.labelledH[a] ? [...own, { a, z: 1, mass: c.labelledH[a] }] : own;
+      })
+      .sort((p, q) => q.z - p.z || q.mass - p.mass);
+    left = keepLeast(left, (cd) => { const k = keyIn(cd); return nuclides.map((n) => k.get(n.a)!); }, (p, q) => compareKeys(p.flat(), q.flat()));
   }
   // (j) configuration: R before S, Z before E, r before s, at the first point of difference - a double bond's at its lower-numbered end
   const desc = c.input.descriptors;
