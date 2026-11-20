@@ -9,6 +9,7 @@ import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
+import { coordinatedByDonors } from "../chem/perception/elements";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
 
@@ -76,6 +77,8 @@ const MOST_CHARGE = 4;
  * bonds; null where nothing says (a metal, a label that names no group).
  */
 function mostTaken(el: string, charge: number): number | null {
+  // (a Lewis-acidic main-group metal's bonds are counted against no valence, as a transition metal's are not)
+  if (coordinatedByDonors.has(el)) return null;
   const element = mostBonds(el, charge);
   if (element != null || NAMES.has(el)) return element;
   const g = abbreviationStructure(el);
@@ -87,6 +90,9 @@ function mostTaken(el: string, charge: number): number | null {
   // (its hydrogens where its SMILES says them, in brackets; else as many as its valence leaves, however it is bonded - =NOAc)
   return most - own - (a.hs ?? 0);
 }
+
+/** Whether an atom's bonds are counted as a metal's in the over-bond check: a transition metal's, or a Lewis-acidic main-group metal's. */
+const metalCounted = (el: string) => coordinatedByDonors.has(el);
 
 /** What an atom read as `el` is called, saying it has too many bonds: a carbon, oxygen, "OMe". */
 const calledAs = (el: string) => (el === "C" ? "a carbon" : (NAMES.get(el) ?? `"${el}"`));
@@ -172,8 +178,8 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   // (its bonds to metals left out, as the canvas leaves them: a pyridine's N bound to a nickel has its three)
   const unbound = valence.slice();
   read.bonds.forEach((b, i) => {
-    if (isMetal(els[b.b])) unbound[b.a] -= orders[i];
-    if (isMetal(els[b.a])) unbound[b.b] -= orders[i];
+    if (metalCounted(els[b.b])) unbound[b.a] -= orders[i];
+    if (metalCounted(els[b.a])) unbound[b.b] -= orders[i];
   });
   const tooMany = read.atoms.map((_, i): string | null => {
     const most = mostTaken(els[i], charges[i]);

@@ -1650,8 +1650,17 @@ it where it lies out of view.
     takes: none of it is taken."); a figure read whole leaves out each such
     structure on its own - the rest placed - and says how many it left out. A
     drawing can itself show five bonds, a transition state's forming bond: the
-    words say "as read". A picture read by the plugin that reads pictures is
-    that plugin's, and is not refused so;
+    words say "as read". A donor's bond to a metal it lends a pair to is left
+    out of the donor's count: to a transition metal, or to a Lewis-acidic
+    metal of groups 1, 2 or 13 (Li to Fr, Be to Ra, Al to Tl) - a fluorine on
+    carbon bridging to a magnesium, an ether's O on a Grignard reagent's Mg,
+    a carbonyl's O on a lithium; these metals take any number of bonds, as
+    a transition metal does, so a Grignard reagent with two ethers on its
+    Mg, a chloride bridging two magnesiums, (MeLi)4 read; not tin, lead nor
+    bismuth, whose bonds to O, N and a halogen are drawn covalent
+    (2026-11-20; lib/chem/perception/elements `coordinatedByDonors`). A
+    picture read by the plugin that reads pictures is that plugin's, and is
+    not refused so;
   - a radical's dots by an atom whose bonds leave it no unpaired electron:
     no radical is read - a speck, or a letter's round shape, lies there
     as often ("A dot by it, but its bonds leave it no unpaired electron:
