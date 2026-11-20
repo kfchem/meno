@@ -1109,7 +1109,9 @@ export function sixWithTridentate(input: LayoutInput, m: number): boolean {
         todo.push(v);
       }
     }
-    return round.filter((e) => seen.has(e)).length >= 3;
+    // (exactly three: a tridentate - dien's, terpy's. A ligand of four donors or more - tren's, EDTA's - is laid out as it was before
+    //  the three lines, and kept as Clean-up keeps any arrangement)
+    return round.filter((e) => seen.has(e)).length === 3;
   });
 }
 

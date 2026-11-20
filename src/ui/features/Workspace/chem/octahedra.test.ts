@@ -7,7 +7,8 @@ import { ARRANGEMENT_SAID } from "../utils/arrangement";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { laidOut } from "./cleanUp";
 import { drawingOf } from "./drawing";
-import { wedgeOctahedron } from "./engineLayout";
+import { sixWithTridentate, wedgeOctahedron } from "./engineLayout";
+import { smilesInput } from "../../../../lib/layout/smilesInput";
 
 // A six-bond metal laid out as the text draws an octahedron (Brecher 2006, ST-2.11; docs/LAYOUT-2D.md, section 7): three lines
 // through it, one upright; drawn with wedges in one of the text's forms, read and kept as drawn.
@@ -172,6 +173,19 @@ describe("a six-bond metal laid out from its SMILES", () => {
         expect(across.el, smiles).toBe("Cl");
       }
     }
+  });
+
+  it("holds only a tridentate to three lines - dien's, terpy's - not a ligand of four donors or more: Co(EDTA)- is laid out as before", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const tri = (smiles: string) => {
+      const input = smilesInput(smiles);
+      return sixWithTridentate(input, input.atoms.findIndex((a) => a.el === "Co" || a.el === "Ru"));
+    };
+    expect(tri("Cl[Co]123(Cl)Cl.N1CCN2CCN3")).toBe(true);
+    expect(tri("[Co-]123456.N1(CC(=O)O2)(CC(=O)O3)CCN4(CC(=O)O5)CC(=O)O6")).toBe(false);
+    expect(tri("Cl[Co+]1234Cl.N1(CCN2)(CCN3)CCN4")).toBe(false);
+    // (EDTA's six donors: laid out, not refused for want of three lines)
+    await expect(laidOut(drawnFromSmiles("[Co-]123456.N1(CC(=O)O2)(CC(=O)O3)CCN4(CC(=O)O5)CC(=O)O6"), MENO, undefined, undefined, true)).resolves.toBeDefined();
   });
 
   it("keeps a macrocycle's four donors square round the metal, its two other ligands beside: cyclam's and a porphyrin's", { timeout: 120000 }, async () => {

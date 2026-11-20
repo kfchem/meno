@@ -1098,7 +1098,9 @@ round, as elements either).
   the one of the other. Two of its joined donors drawn across each other
   are refused, as any chelate's are. A tridentate that cannot be set on
   three lines (a terpyridine's metal, its rings fused) is refused by
-  Clean-up, saying so, until the layout can.
+  Clean-up, saying so, until the layout can. A ligand of four donors or
+  more - tren's, EDTA's - is no tridentate: it is laid out as before the
+  three lines, and kept as Clean-up keeps any arrangement.
 - **A donor bonded to a metal** (a phosphine's P) spreads what it carries
   away from the metal, as a tripod's legs, 75 degrees apart.
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the
