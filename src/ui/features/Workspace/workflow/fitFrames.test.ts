@@ -6,7 +6,7 @@ import type { DocumentStore } from "../../../../lib/doc";
 import { addMolecule3d, addPicture, createWorkspaceDocument, moveMolecule3d, type WorkspaceDocument } from "../document";
 import type { Model, Molecule3D } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
-import type { Frame } from "./entries";
+import { setMembers, type Frame } from "./entries";
 import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
 import { BETWEEN, CARD_H, CARD_W, CHIP, PX, SET_PAD, SET_TOP } from "./look";
 import { addSet, markMade } from "./model";
@@ -67,6 +67,10 @@ function dragged(doc: DocumentStore<WorkspaceDocument>, id: number, to: { x: num
   doc.edit("fit frames", (d) => framesSettled(d, down, reach), { joinTop: true });
   return { down, during };
 }
+
+/** Whether two boxes overlap by more than a rounding. */
+const overlaps = (p: { x0: number; x1: number; y0: number; y1: number }, q: { x0: number; x1: number; y0: number; y1: number }) =>
+  p.x0 < q.x1 - 1e-9 && q.x0 < p.x1 - 1e-9 && p.y0 < q.y1 - 1e-9 && q.y0 < p.y1 - 1e-9;
 
 describe("a set's frame", () => {
   it("is its members' room: their padding about them, a name's room above, never narrower than a name needs", () => {
@@ -213,8 +217,8 @@ describe("what is let go over a frame", () => {
     expect(over(2e-6)).toBeCloseTo(edge + SET_PAD + R, 9);
   });
 
-  it("is not pushed on - once eased out, what it lies over then is not moved, nor is it eased again", () => {
-    // (a second set to its right, whose frame lies over where it is eased to)
+  it("is eased out where it lies over no frame - never into the next one - and moves nothing it would have lain over", () => {
+    // (a second set to its right, whose frame lies over where the smallest move would ease it to)
     const doc = workspace();
     doc.edit("place", (d) => addMolecule3d(addMolecule3d(addMolecule3d(d, mol(0, 0)), mol(8.3, 0)), mol(40, 40)));
     doc.edit("sets", (d) => addSet(addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }), { x0: 5, y0: -3, x1: 12, y1: 3 }));
@@ -222,9 +226,11 @@ describe("what is let go over a frame", () => {
     const second = frameOf(doc.getState(), 2);
     expect(second.x0).toBeCloseTo(8.3 - (LEAST_W + 2 * SET_PAD) / 2, 9);
     dragged(doc, 3, { x: edge + PX, y: 0 });
-    // (it lies over the second now, and stays there; neither frame nor the molecule inside it moved)
-    expect(at(doc.getState(), 3).x - R).toBeCloseTo(edge + SET_PAD, 9);
-    expect(at(doc.getState(), 3).x + R).toBeGreaterThan(second.x0);
+    // (not to the right, over the second: up or down, out of both - and neither frame nor the molecule inside the second moved)
+    const p = at(doc.getState(), 3);
+    const box = { x0: p.x - R, x1: p.x + R, y0: p.y - R, y1: p.y + R };
+    for (const id of [1, 2]) expect(overlaps(box, frameOf(doc.getState(), id)), `over set ${id}`).toBe(false);
+    expect(p.x).toBeCloseTo(edge + PX, 9);
     close(frameOf(doc.getState(), 2), second);
     expect(at(doc.getState(), 2)).toEqual({ x: 8.3, y: 0 });
   });
@@ -353,7 +359,7 @@ describe("what the gesture did not touch", () => {
     expect([p.molecule.x === from.molecule.x, p.atom === from.atom, p.picture === from.picture]).toEqual([true, true, false]);
   });
 
-  it("is eased out of the frame it lies most over, once: over two frames, it goes to the greater overlap and stays over the other", () => {
+  it("is eased out of the frames it lies over to where it lies over none: over two side by side, up or down, clear of both", () => {
     const build = (x: number) => {
       const doc = workspace();
       doc.edit("place", (d) => addMolecule3d(addMolecule3d(addMolecule3d(d, mol(0, 0)), mol(6.5, 0)), mol(40, 40)));
@@ -365,16 +371,15 @@ describe("what the gesture did not touch", () => {
       dragged(doc, 3, { x, y: 0 });
       return doc.getState();
     };
-    // (its box 2.0 to 4.4: 1.15 over the first frame, 1.05 over the second: it goes right, out of the first, and lies over the second still)
-    const first = build(3.2);
-    expect(at(first, 3).x - R).toBeCloseTo(3.15 + SET_PAD, 9);
-    expect(at(first, 3).x - R).toBeLessThan(frameOf(first, 2).x1);
-    expect(at(first, 3).x + R).toBeGreaterThan(frameOf(first, 2).x0);
-    // (its box 2.1 to 4.5: 1.05 and 1.15 - the second: it goes left, to 0.9 from the second's left edge, and lies over the first)
-    const second = build(3.3);
-    expect(at(second, 3).x + R).toBeCloseTo(3.35 - SET_PAD, 9);
-    expect(at(second, 3).x + R).toBeGreaterThan(frameOf(second, 1).x0);
-    expect(at(second, 3).x - R).toBeLessThan(frameOf(second, 1).x1);
+    // (its box 2.0 to 4.4, over both: right or left would leave it over the other - it goes up or down, its padding from the frame, over neither)
+    for (const x of [3.2, 3.3]) {
+      const d = build(x);
+      const p = at(d, 3);
+      const box = { x0: p.x - R, x1: p.x + R, y0: p.y - R, y1: p.y + R };
+      expect(p.x, `at ${x}`).toBeCloseTo(x, 9);
+      expect(Math.min(Math.abs(box.y0 - frameOf(d, 1).y1), Math.abs(frameOf(d, 1).y0 - box.y1)), `at ${x}`).toBeCloseTo(SET_PAD, 9);
+      for (const id of [1, 2]) expect(overlaps(box, frameOf(d, id)), `at ${x}, over set ${id}`).toBe(false);
+    }
   });
 
   it("does not ease what a set holds: a picture one set holds, lying over another set's frame, stays - though the gesture changed it", () => {
@@ -559,5 +564,75 @@ describe("a frame that grows pushes the sets it would lie over (backlog 257)", (
     const down = doc.getState();
     doc.edit("fit", (d) => framesSettled(d, down, reach));
     close(frameOf(doc.getState(), 2), frameOf(down, 2));
+  });
+
+  /** Sets as given, each its frame and the molecules it holds, then the loose molecules: all fitted. */
+  const page = (sets: { frame: Frame; mols: [number, number][] }[], loose: [number, number][] = []) => {
+    const doc = workspace();
+    for (const s of sets) {
+      for (const [x, y] of s.mols) doc.edit("place", (d) => addMolecule3d(d, mol(x, y)));
+      doc.edit("set", (d) => addSet(d, s.frame));
+    }
+    for (const [x, y] of loose) doc.edit("place", (d) => addMolecule3d(d, mol(x, y)));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    return doc;
+  };
+  /** A molecule placed in a set, and the gesture let go. */
+  const grown = (doc: DocumentStore<WorkspaceDocument>, x: number, y: number) => {
+    const down = doc.getState();
+    doc.edit("place", (d) => addMolecule3d(d, mol(x, y)));
+    doc.edit("fit", (d) => framesSettled(d, down, reach));
+    return { down, now: doc.getState() };
+  };
+  const held = (d: WorkspaceDocument, id: number) => setMembers(d, d.sets!.find((b) => b.id === id)!).molecules.slice().sort((p, q) => p - q);
+  const overlaps = (d: WorkspaceDocument) => {
+    const f = (d.sets ?? []).map((b) => frameOf(d, b.id));
+    return f.flatMap((p, i) => f.slice(i + 1).filter((q) => overlap(p, q))).length;
+  };
+
+  it("set 1 grown up over the set above it: that set pushed up just over it, never down across it", () => {
+    const doc = page([{ frame: { x0: -3, y0: -3, x1: 3, y1: 3 }, mols: [[0, 0]] }, { frame: { x0: -3, y0: 3.5, x1: 3, y1: 9 }, mols: [[0, 6]] }]);
+    const { down, now } = grown(doc, 0, 2.5);
+    const f1 = frameOf(now, 1);
+    const f2 = frameOf(now, 2);
+    expect(f1.y1).toBeGreaterThan(frameOf(down, 1).y1);
+    expect(f2.y0).toBeCloseTo(f1.y1 + BETWEEN, 9);
+    expect(at(now, 2).y - at(down, 2).y).toBeCloseTo(f2.y0 - frameOf(down, 2).y0, 9);
+    expect(overlaps(now)).toBe(0);
+  });
+
+  it("a loose molecule where a pushed set comes to lie: eased out to where no frame is, taken into no set", () => {
+    const sets = [{ frame: { x0: -3, y0: -3, x1: 3, y1: 3 }, mols: [[0, 0]] as [number, number][] }, { frame: { x0: -3, y0: -9, x1: 3, y1: -3.5 }, mols: [[0, -6]] as [number, number][] }];
+    // (where set 2 comes to lie, pushed: its foot as it goes, which a loose molecule just under it now lies in)
+    const probe = page(sets);
+    const landed = frameOf(grown(probe, 0, -1.5).now, 2);
+    const doc = page(sets, [[0, (landed.y0 + frameOf(probe.getState(), 2).y0) / 2 - 0.6]]);
+    expect([held(doc.getState(), 1), held(doc.getState(), 2)]).toEqual([[1], [2]]);
+    const { now } = grown(doc, 0, -1.5);
+    expect([held(now, 1), held(now, 2)]).toEqual([[1, 4], [2]]);
+    const m3 = now.molecules3d!.find((m) => m.id === 3)!;
+    const box = { x0: m3.at.x - R, x1: m3.at.x + R, y0: m3.at.y - R, y1: m3.at.y + R };
+    for (const id of [1, 2]) expect(overlap(box, frameOf(now, id)), `over set ${id}`).toBe(false);
+  });
+
+  it("two sets side by side under a frame grown over both: each pushed just under it, neither over the other", () => {
+    const side = page([
+      { frame: { x0: -9, y0: -3, x1: 9, y1: 3 }, mols: [[-6, 0], [6, 0]] },
+      { frame: { x0: -9, y0: -9, x1: -3, y1: -3.5 }, mols: [[-6, -6]] },
+      { frame: { x0: 3, y0: -9, x1: 9, y1: -3.5 }, mols: [[6, -6]] },
+    ]);
+    const s = grown(side, -6, -1.5).now;
+    expect(frameOf(s, 2).y1).toBeCloseTo(frameOf(s, 1).y0 - BETWEEN, 9);
+    expect(frameOf(s, 3).y1).toBeCloseTo(frameOf(s, 1).y0 - BETWEEN, 9);
+    expect(overlaps(s)).toBe(0);
+  });
+
+  it("a long chain, each set nearer the next than BETWEEN: each pushed on in turn, one under another, never two in one place, however many", () => {
+    for (const n of [6, 12, 16]) {
+      const doc = page(Array.from({ length: n }, (_, k) => ({ frame: { x0: -3, y0: -3 - 5 * k, x1: 3, y1: 3 - 5 * k }, mols: [[0, -5 * k]] as [number, number][] })));
+      const s = grown(doc, 0, -1.5).now;
+      expect(overlaps(s), `${n} sets`).toBe(0);
+      for (let k = 2; k <= n; k++) expect(frameOf(s, k - 1).y0 - frameOf(s, k).y1, `${n} sets, gap ${k}`).toBeCloseTo(BETWEEN, 9);
+    }
   });
 });

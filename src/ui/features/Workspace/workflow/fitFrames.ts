@@ -283,38 +283,65 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
   return out;
 }
 
-/** The most rounds a frame's growth pushes sets on (`framesCleared`): a set pushed may push the next, so far. */
-const PUSH_ROUNDS = 8;
-
 /**
  * `doc` with no frame over another (backlog 257, the maintainer's rule that nothing overlaps a frame): each set whose frame grew past what
- * it was as the pointer was pressed (`down`) - or was pushed itself - pushes every other set its frame now lies over down, frame and all it
- * holds (model `moveSet`), to just under it, `BETWEEN` clear. A set pushed pushes the next in turn, `PUSH_ROUNDS` rounds at most, each set
- * moved once; a step's later exits, kept under its first (run `keepExitsUnder`), and a set held off the page are left to their own rules.
- * The frames ease to their places as any frame does (Workflow2D `useShownFrames`), in the gesture's step: one undo takes it all back.
+ * it was as the pointer was pressed (`down`) - or was pushed itself - pushes, frame and all it holds (model `moveSet`), each other set
+ * that its frame now lies over away from it, by where it lay as it was: one below it down, to just under it, one above it up, to just over
+ * it - never across it - `BETWEEN` clear - one beside another alike, one past another stacked in turn,
+ * never two in one place. A set pushed pushes the next in turn, each set moved once; a step's later exits, kept under its first (run
+ * `keepExitsUnder`), and a set held off the page are left to their own rules. The frames ease to their places as any frame does
+ * (Workflow2D `useShownFrames`), in the gesture's step: one undo takes it all back.
  */
 export function framesCleared(doc: WorkspaceDocument, down: WorkspaceDocument): WorkspaceDocument {
-  const was = new Map((down.sets ?? []).map((b) => [b.id, b]));
+  const was = new Map((down.sets ?? []).map((b) => [b.id, b as Frame]));
   const grew = (b: WorkflowSet) => {
     const w = was.get(b.id);
     return !!w && (b.x0 < w.x0 - EPS || b.x1 > w.x1 + EPS || b.y0 < w.y0 - EPS || b.y1 > w.y1 + EPS);
   };
   const unseen = unseenSets(doc);
-  const over = (p: Frame, q: Frame) => p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
+  const across = (p: Frame, q: Frame) => p.x0 < q.x1 - EPS && q.x0 < p.x1 - EPS;
   // (two sets of one step: its exits, which keep their own order under its first)
   const sameStep = (p: WorkflowSet, q: WorkflowSet) => !!p.made && !!q.made && p.made.step === q.made.step;
+  const middle = (f: Frame) => (f.y0 + f.y1) / 2;
   let out = doc;
-  let pushers = (out.sets ?? []).filter((b) => grew(b) && !unseen.has(b.id)).map((b) => b.id);
-  const moved = new Set<number>(pushers);
-  for (let round = 0; round < PUSH_ROUNDS && pushers.length; round++) {
-    const next: number[] = [];
-    for (const id of pushers) {
+  // (each pusher, with its frame before this gesture changed it: what lay under it then is what it may push)
+  let pushers: { id: number; before: Frame }[] = (out.sets ?? []).filter((b) => grew(b) && !unseen.has(b.id)).map((b) => ({ id: b.id, before: was.get(b.id)! }));
+  const moved = new Set<number>(pushers.map((p) => p.id));
+  while (pushers.length) {
+    const next: typeof pushers = [];
+    for (const { id, before } of pushers) {
       const g = out.sets!.find((b) => b.id === id)!;
-      for (const b of out.sets!) {
-        if (b.id === g.id || moved.has(b.id) || unseen.has(b.id) || sameStep(g, b) || !over(g, b)) continue;
-        out = moveSet(out, b.id, 0, g.y0 - BETWEEN - b.y1);
+      const hit = out.sets!.filter((b) => b.id !== g.id && !moved.has(b.id) && !unseen.has(b.id) && !sameStep(g, b) && overlap(g, b));
+      // (those below it as it was pushed down, the highest first; those above, up, the lowest first: each that follows goes past those
+      //  already placed across from it)
+      const below = hit.filter((b) => middle(b) < middle(before)).sort((p, q) => q.y1 - p.y1);
+      const above = hit.filter((b) => middle(b) >= middle(before)).sort((p, q) => p.y0 - q.y0);
+      const push = (b: WorkflowSet, dy: number) => {
+        out = moveSet(out, b.id, 0, dy);
         moved.add(b.id);
-        next.push(b.id);
+        next.push({ id: b.id, before: { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 } });
+      };
+      // (the first place past it free of every set moved so far - by this pusher or another - across from it: none two in one place)
+      const placedAcross = (b: WorkflowSet) => out.sets!.filter((f) => f.id !== b.id && f.id !== g.id && moved.has(f.id) && across(f, b));
+      for (const b of below) {
+        const h = b.y1 - b.y0;
+        let top = g.y0 - BETWEEN;
+        for (let hit = true; hit; ) {
+          const f = placedAcross(b).find((f) => f.y0 < top + BETWEEN - EPS && top - h - BETWEEN < f.y1 - EPS);
+          hit = !!f;
+          if (f) top = f.y0 - BETWEEN;
+        }
+        push(b, top - b.y1);
+      }
+      for (const b of above) {
+        const h = b.y1 - b.y0;
+        let foot = g.y1 + BETWEEN;
+        for (let hit = true; hit; ) {
+          const f = placedAcross(b).find((f) => f.y1 > foot - BETWEEN + EPS && foot + h + BETWEEN > f.y0 + EPS);
+          hit = !!f;
+          if (f) foot = f.y1 + BETWEEN;
+        }
+        push(b, foot - b.y0);
       }
     }
     pushers = next;
@@ -331,7 +358,8 @@ export function framesCleared(doc: WorkspaceDocument, down: WorkspaceDocument): 
  */
 export function framesSettled(doc: WorkspaceDocument, down: WorkspaceDocument | undefined, extentOf: Reach | undefined): WorkspaceDocument {
   const fitted = framesFitted(doc, undefined, extentOf);
-  return down ? framesCleared(cardsCleared(pushedOut(fitted, down, extentOf), down, extentOf), down) : fitted;
+  // (sets pushed clear first: what a pushed frame comes to lie over is then eased out of it, as of any frame that moved)
+  return down ? cardsCleared(pushedOut(framesCleared(fitted, down), down, extentOf), down, extentOf) : fitted;
 }
 
 /** `p` and `q` overlap by more than a rounding in both directions. */
@@ -340,16 +368,20 @@ const overlap = (p: Frame, q: Frame) => p.x0 < q.x1 - EPS && q.x0 < p.x1 - EPS &
 /**
  * Where a box lying over a frame goes to lie just outside it, by the
  * smallest move of the four - to the left, the right, up or down, its edge
- * `SET_PAD` from the frame's.
+ * `SET_PAD` from the frame's - that leaves it over none of `others`, the
+ * other frames; where every move does, the smallest.
  */
-export function easedOut(box: Frame, frame: Frame): { dx: number; dy: number } {
+export function easedOut(box: Frame, frame: Frame, others: readonly Frame[] = []): { dx: number; dy: number } {
   const moves = [
     { dx: frame.x0 - SET_PAD - box.x1, dy: 0 },
     { dx: frame.x1 + SET_PAD - box.x0, dy: 0 },
     { dx: 0, dy: frame.y0 - SET_PAD - box.y1 },
     { dx: 0, dy: frame.y1 + SET_PAD - box.y0 },
-  ];
-  return moves.reduce((best, m) => (Math.abs(m.dx) + Math.abs(m.dy) < Math.abs(best.dx) + Math.abs(best.dy) ? m : best));
+  ].sort((p, q) => Math.abs(p.dx) + Math.abs(p.dy) - (Math.abs(q.dx) + Math.abs(q.dy)));
+  // (the smallest of them that leaves it over no other frame - a thing between two frames pushed together goes out to the side, not
+  //  into the next frame - else the smallest)
+  const clear = moves.find((m) => !others.some((f) => overlap({ x0: box.x0 + m.dx, x1: box.x1 + m.dx, y0: box.y0 + m.dy, y1: box.y1 + m.dy }, f)));
+  return clear ?? moves[0];
 }
 
 /** A structure's atoms moved by (dx, dy), with the marks put by hand that go with them. */
@@ -412,7 +444,7 @@ export function pushedOut(doc: WorkspaceDocument, down: WorkspaceDocument, exten
       }
     }
     if (!most) return null;
-    const m = easedOut(box, most);
+    const m = easedOut(box, most, sets.filter((b) => b !== most));
     return m.dx || m.dy ? m : null;
   };
   for (const ids of structuresOf(doc.model, true)) {
