@@ -84,3 +84,42 @@ describe("a conversation's search reads a structure as a record's key does: its 
     expect(search(d, s, ENOL_FROM_THE_OTHER_END, "same")).toEqual({ found: [seenId("structure", 1)] });
   });
 });
+
+describe("a conversation's search asks a SMILES's mass numbers of what it searches (found in review)", () => {
+  // (methanol drawn three ways: plain, its methyl deuterated, its carbon a carbon-13)
+  const plain = pageOf(drawnFromSmiles("CO"));
+  const deuterated = pageOf(drawnFromSmiles("[2H]C([2H])([2H])O"));
+  const labelled = pageOf(drawnFromSmiles("[13CH3]O"));
+
+  it("a deuterium asked for is held by a CD3, not by a CH3", () => {
+    expect(search(deuterated.d, deuterated.s, "[2H]C", "holds")).toEqual({ found: [seenId("structure", 1)] });
+    expect(search(plain.d, plain.s, "[2H]C", "holds")).toEqual({ found: [] });
+  });
+
+  it("a carbon-13 asked for is held by a 13CH3 only; a plain carbon asked for is held by both", () => {
+    expect(search(labelled.d, labelled.s, "[13CH3]O", "holds")).toEqual({ found: [seenId("structure", 1)] });
+    expect(search(plain.d, plain.s, "[13CH3]O", "holds")).toEqual({ found: [] });
+    expect(search(labelled.d, labelled.s, "CO", "holds")).toEqual({ found: [seenId("structure", 1)] });
+  });
+
+  it("a compound asked to be the same is not its isotopologue", () => {
+    expect(search(labelled.d, labelled.s, "CO", "same")).toEqual({ found: [] });
+    expect(search(deuterated.d, deuterated.s, "[2H]C([2H])([2H])O", "same")).toEqual({ found: [seenId("structure", 1)] });
+  });
+
+  // (one mass number of the same element asked, not any other (found in review): methanol's carbon a carbon-14, its methyl tritiated)
+  const c14 = pageOf(drawnFromSmiles("[14CH3]O"));
+  const tritiated = pageOf(drawnFromSmiles("[3H]C([3H])([3H])O"));
+
+  it("a carbon-13 asked for is not held by a carbon-14", () => {
+    expect(search(c14.d, c14.s, "[13CH3]O", "holds")).toEqual({ found: [] });
+    expect(search(c14.d, c14.s, "[14CH3]O", "holds")).toEqual({ found: [seenId("structure", 1)] });
+    expect(search(c14.d, c14.s, "[13CH3]O", "same")).toEqual({ found: [] });
+  });
+
+  it("a deuterium asked for is not held by a tritium, nor a tritium by a deuterium", () => {
+    expect(search(tritiated.d, tritiated.s, "[2H]C", "holds")).toEqual({ found: [] });
+    expect(search(deuterated.d, deuterated.s, "[3H]C", "holds")).toEqual({ found: [] });
+    expect(search(tritiated.d, tritiated.s, "[3H]C", "holds")).toEqual({ found: [seenId("structure", 1)] });
+  });
+});

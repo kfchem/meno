@@ -8,9 +8,9 @@ import type { Model, Molecule3D } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
 import type { Frame } from "./entries";
 import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
-import { CHIP, PX, SET_PAD, SET_TOP } from "./look";
+import { CARD_H, CARD_W, CHIP, PX, SET_PAD, SET_TOP } from "./look";
 import { addSet, markMade } from "./model";
-import { LEAST_W, roomOf, type RunWith } from "./run";
+import { LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
 /** Each molecule reaching R about its middle, as a look draws it: 2.4 across, less than a name's room (LEAST_W). */
 const R = 1.2;
@@ -474,5 +474,50 @@ describe("a structure's box beside another a hydrogen bond joins it to: its labe
     // (the water's box no wider than its label as drawn: OH2 from its O rightward)
     const alone = drawnBox({ atoms: [model.atoms[2]], bonds: [] });
     expect(water.x1 - water.x0).toBeLessThan(alone.maxX - alone.minX + 0.5);
+  });
+});
+
+describe("a set emptied keeps no tall frame (backlog 232)", () => {
+  it("a step's result set, its last member gone: back to a card wide and half a card high (an exit of no step on the page), its top-left where it was", () => {
+    const doc = fitted();
+    doc.edit("made", (d) => markMade(d, 1, { step: 7, exit: "out", holds: "molecules" }));
+    const was = frameOf(doc.getState());
+    doc.edit("delete", (d) => ({ ...d, molecules3d: [] }));
+    const now = frameOf(doc.getState());
+    close(now, { x0: was.x0, x1: was.x0 + CARD_W, y0: was.y1 - CARD_H / 2, y1: was.y1 });
+  });
+
+  it("a chemist's set, its last member gone, keeps its frame: what is drawn into it again where it was joins it", () => {
+    const doc = fitted();
+    const was = frameOf(doc.getState());
+    doc.edit("delete", (d) => ({ ...d, molecules3d: [] }));
+    close(frameOf(doc.getState()), was);
+    doc.edit("place", (d) => addMolecule3d(d, mol(0, 0)));
+    expect(doc.getState().sets![0].members).toHaveLength(1);
+  });
+
+  it("a set left empty from the first is as it was made: never shrunk unasked", () => {
+    const doc = createWorkspaceDocument(undefined, undefined, undefined, () => reach);
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }));
+    doc.edit("place", (d) => addMolecule3d(d, mol(20, 20)));
+    close(frameOf(doc.getState()), { x0: -3, y0: -3, x1: 3, y1: 3 });
+  });
+});
+
+describe("a numbered structure's frame holds its number (backlog 232)", () => {
+  it("a structure whose record carries a number has its number's room below it in the box its set fits", () => {
+    const model: Model = {
+      atoms: [
+        { id: 1, x: 0, y: 0, el: "C", r: 0.9 },
+        { id: 2, x: 1.5, y: 0, el: "O", r: 0.9 },
+      ],
+      bonds: [{ id: 3, a: 1, b: 2, order: 1 }],
+    };
+    const base = { ...createWorkspaceDocument(undefined, undefined, undefined, () => reach).getState(), model };
+    const set = (record?: object) => ({ id: 9, x0: -3, y0: -3, x1: 3, y1: 3, members: [{ structure: [1, 2], ...(record ? { record } : {}) }] });
+    const plain = memberBoxes(base, set() as never, reach)!;
+    const numbered = memberBoxes(base, set({ properties: { number: { value: 4 } } }) as never, reach)!;
+    expect(numbered[0].y0).toBeCloseTo(plain[0].y0 - NUMBER_ROOM, 9);
+    expect(numbered[0].y1).toBeCloseTo(plain[0].y1, 9);
   });
 });
