@@ -163,7 +163,7 @@ describe("a conversation, talked to from the page", () => {
       vi.advanceTimersByTime(HEARD_MS);
       expect(store.getState().talking[id]).toMatchObject({ running: false });
       expect(store.getState().talking[id]?.heard).toBeUndefined();
-      expect(doc.getState().conversations![0].said.at(-1)).toMatchObject({ by: "model", text: "Methanol is here." });
+      expect(doc.getState().conversations![0].said.slice(-1)[0]).toMatchObject({ by: "model", text: "Methanol is here." });
       // (Stop as one comes: ended there, its words so far kept, said to have stopped)
       heard = undefined;
       const again = store.getState().sendToConversation(id, "And?");
