@@ -1453,6 +1453,20 @@ describe("a stereocentre whose configuration the figure does not show", () => {
     expect(marked(drawn(false))).toBe(1);
   });
 
+  it("is where a configuration can be (the core's candidates): an N+ with an H among its four, which loses its configuration, is not marked", () => {
+    // (an N labelled NH+ - methyl, ethyl and propyl on it - and the same drawn as a carbon with an OH, its groups as unlike)
+    const c: P = [100, 100];
+    const [a, b, d] = [step(c, 90), step(c, -30), step(c, 210)];
+    const arms = [stroke(along(c, a, 0.35), a), stroke(a, step(a, 30)), stroke(along(c, b, 0.35), b), stroke(b, step(b, -90)), stroke(step(b, -90), step(step(b, -90), -30)), stroke(along(c, d, 0.35), d)];
+    // (and a carbon of four whose H is drawn as an atom: its H counted on it, a centre - marked)
+    const h = step([100, 100], -90);
+    const withH = drawn(false);
+    expect(marked(figure([...withH.paths, stroke([100, 100], along([100, 100], h, 0.7))], [...withH.letters, ...word("H", h)]))).toBe(1);
+    const ammonium = read(figure(arms, word("NH^+", c)));
+    expect(ammonium.atoms.find((x) => x.el === "N")?.charge).toBe(1);
+    expect(marked(figure(arms, word("NH^+", c)))).toBe(0);
+  });
+
   it("drawn as a cross of plain bonds on the page's axes - a Fischer projection's - says so, and that it is read as one only when asked", () => {
     // (a centre at (100, 100): a methyl up, an ethyl down, OH right and Br left, each bond a plain line on an axis)
     const c: P = [100, 100];
