@@ -573,6 +573,52 @@ function bridgesAlike(g: SymmetryInput, places: ReadonlySet<number>, classes: re
  */
 const BRIDGE_MOST = 3;
 
+/**
+ * The atoms of `g` a cage holds: an atom joined to another by three paths that share no atom but their ends, each with
+ * one to `BRIDGE_MOST` atoms between them - a bridgehead of norbornane, of camphor, of tropane, quinuclidine's N, every atom
+ * of cubane and of adamantane's cage. A fused system's junction is none (its two junctions are bonded: a bond is no bridge - bicyclo[3.3.0]octane's, decalin's), nor a
+ * bridgehead whose bridges are long enough to stand in or out (bicyclo[4.4.1]undecane's), whose senses are its own. Such an
+ * atom's configuration is tied to the cage's other bridgehead's - turned alone it makes no structure - yet it is a real one,
+ * which names cite (camphor's 1R,4R): the CIP labels it as its rules give, whatever identity's turning says (the chemistry
+ * check's ruling).
+ */
+export function cageAtoms(g: { readonly atoms: readonly unknown[]; readonly bonds: readonly { readonly a: number; readonly b: number }[] }): Set<number> {
+  const around: number[][] = g.atoms.map(() => []);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  const out = new Set<number>();
+  // (three paths sharing no atom between)
+  const apart = (p: readonly number[], q: readonly number[]) => !p.some((x) => q.includes(x));
+  for (let a = 0; a < g.atoms.length; a++) {
+    // (three paths need three bonds)
+    if (around[a].length < 3) continue;
+    // (every path out of `a` of up to BRIDGE_MOST + 1 bonds, by the atom it ends at: its atoms between)
+    const paths = new Map<number, number[][]>();
+    const walk = (at: number, between: number[]) => {
+      for (const n of around[at]) {
+        if (n === a || between.includes(n)) continue;
+        // (a bond straight to it is no bridge: a fused system's junctions are bonded, a cage's bridgeheads are not - found in review)
+        if (between.length) paths.set(n, [...(paths.get(n) ?? []), between]);
+        if (between.length < BRIDGE_MOST) walk(n, [...between, n]);
+      }
+    };
+    walk(a, []);
+    let found = false;
+    for (const ps of paths.values()) {
+      for (let i = 0; i < ps.length && !found; i++)
+        for (let j = i + 1; j < ps.length && !found; j++) {
+          if (!apart(ps[i], ps[j])) continue;
+          for (let k = j + 1; k < ps.length && !found; k++) if (apart(ps[i], ps[k]) && apart(ps[j], ps[k])) found = true;
+        }
+      if (found) break;
+    }
+    if (found) out.add(a);
+  }
+  return out;
+}
+
 /** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */
 const GROUP_MOST = 64;
 
