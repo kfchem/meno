@@ -8,6 +8,7 @@ import type { IdentityInput } from "../../../../lib/chem/identity";
 import { candidatesDrawn } from "./candidatesDrawn";
 import { forgetIdentities } from "./identityOff";
 import { drawnFromSmiles } from "./testdata/identityCases";
+import { measured } from "../../../../testing/timeouts";
 
 const onThread = vi.hoisted(() => ({ identities: 0 }));
 vi.mock("../../../../lib/chem/identity", async (actual) => {
@@ -63,7 +64,7 @@ describe("the menu asks identity off the drawing thread (found in review)", () =
     expect(offered(`Cl[Pd](Cl)(${ph3p})${ph3p}`)).toEqual([]);
     expect(onThread.identities).toBe(0);
     expect(asked).toEqual([]);
-  });
+  }, measured(800));
 
   it("a large structure's centre: offered by its shape while identity is asked, none worked out here; as identity says once answered", async () => {
     withWorker();
@@ -74,7 +75,7 @@ describe("the menu asks identity off the drawing thread (found in review)", () =
     await answered();
     expect(offered(smiles)).toEqual(["C10"]);
     expect(onThread.identities).toBe(0);
-  });
+  }, measured(350));
 
   it("a large cage's bridgeheads: offered by shape while the CIP is asked off the thread; once answered, where the CIP labels them", async () => {
     withWorker();
@@ -85,5 +86,5 @@ describe("the menu asks identity off the drawing thread (found in review)", () =
     await answered();
     expect(offered(smiles)).toEqual(["C3", "C6"]);
     expect(onThread.identities).toBe(0);
-  });
+  }, measured(1_000));
 });
