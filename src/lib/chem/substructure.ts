@@ -69,6 +69,18 @@ function graphOf(input: IdentityInput): Graph {
     atoms.push({ ...(a as IdentityAtom), hTotal: a.hs ?? 0, hDrawn: 0, at: i });
   });
   const around: Graph["around"] = atoms.map(() => []);
+  // (a d- or f-block metal's hydrogens counted on it, each an atom bonded to it, as one drawn there is: a hydride is one graph however it
+  //  was written - [PdH]Cl2 and Cl2Pd-H drawn alike; an atom of none of the drawing's, `at` -1)
+  atoms.slice().forEach((a, m) => {
+    if (!drawnRoundMetal.has(a.el) || !a.hTotal) return;
+    for (let k = 0; k < a.hTotal; k++) {
+      const h = atoms.length;
+      atoms.push({ el: "H", hTotal: 0, hDrawn: 0, at: -1 } as Graph["atoms"][number]);
+      around.push([{ to: m, order: 1 }]);
+      around[m].push({ to: h, order: 1 });
+    }
+    a.hTotal = 0;
+  });
   for (const b of form.bonds as readonly LayoutBond[]) {
     const p = place.get(b.a);
     const q = place.get(b.b);
@@ -145,6 +157,7 @@ export function holdsSubstructure(query: IdentityInput, target: IdentityInput, m
     }
     return false;
   };
-  if (place(0)) return { found: true, map: map.map((t, i) => [Q.atoms[i].at, T.atoms[t].at]) };
+  // (the atoms of each drawing: an H counted on a metal, matched as an atom, is none of them)
+  if (place(0)) return { found: true, map: map.flatMap((t, i): [number, number][] => (Q.atoms[i].at < 0 || T.atoms[t].at < 0 ? [] : [[Q.atoms[i].at, T.atoms[t].at]])) };
   return { found: false, finished: !stopped };
 }

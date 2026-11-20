@@ -1177,10 +1177,13 @@ Its rules are identity's where the two meet:
   atom: that asks for a hydrogen on its atom's match, drawn there or not. A
   methyl drawn as "C" is found in any carbon, a quaternary one too. A
   hydrogen is its atom's only by one single bond to an atom neither a
-  hydrogen nor a metal of the d or f block: a bridging H (B-H-B), H2, a
-  lone H and an H on a transition metal (Pd-H) are atoms of their own,
-  matched as any atom is, as identity keeps them; an H on a main-group
-  metal (Li, Mg, Al, Sn) is its metal's;
+  hydrogen nor a metal of the d or f block whose complexes are drawn (Sc
+  to Hg, La to Lr; not Rf to Cn): a bridging H (B-H-B), H2, a lone H and
+  an H on such a metal (Pd-H) are atoms of their own, matched as any atom
+  is, as identity keeps them - and so is each H counted on such a metal,
+  so that a hydride is one graph however it was written ([PdH]Cl2 and
+  Cl2Pd-H drawn are found by each other); an H on a main-group metal (Li,
+  Mg, Al, Sn) is its metal's;
 - configurations are not compared: a query is a constitution.
 
 It says where it found it: each query atom, other than a hydrogen drawn,
