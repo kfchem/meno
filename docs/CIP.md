@@ -275,6 +275,7 @@ A unit with no label always says why; none is ever guessed.
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement, which takes a tetrahedron: three bonds and no lone pair; three bonds and two lone pairs (a three-bonded halogen such as the I of an aryl-lambda3-iodane or the Cl of ClF3 is T-shaped, its three ligands in one plane with it); four bonds and a lone pair (SF4, a sulfurane SR4, TeCl4: a see-saw, whose configuration is a five-coordinate polyhedron's, not R or S's); four bonds and two lone pairs (IF4-, XeF4: square planar). |
 | large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |
+| impossible | A cage's bridgehead, or a small fused bicycle's junction, drawn the way round its ring system cannot take with the centre it is tied to: in,out (its three bridges' volumes about the two the same, not opposite), or joined trans. No label for a compound that cannot be. |
 
 On the drawing two more: a unit asked for with no configuration drawn, and
 a protonated amine's N (*Where it is used*).

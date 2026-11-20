@@ -20,6 +20,7 @@ import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
 import { runsThrough } from "../perception/stereo/runs";
 import { cageAtoms } from "../perception/stereo/units";
+import { tiesOf, volumeOfThree } from "../perception/stereo/ties";
 
 /**
  * Why a unit has no descriptor:
@@ -31,9 +32,11 @@ import { cageAtoms } from "../perception/stereo/units";
  *   star - or it is no centre the rules can complement (three bonds and no
  *   lone pair, or two: T-shaped, its ligands in one plane; four bonds and
  *   a lone pair or two: a see-saw or a square);
- * - `large`: its digraph grows past what is worked out.
+ * - `large`: its digraph grows past what is worked out;
+ * - `impossible`: a cage's bridgehead, or a small fused bicycle's junction, drawn the way round its ring system cannot take - in,out, or
+ *   joined trans - with the centre it is tied to (perception/stereo/ties): no label for a compound that cannot be (225).
  */
-export type CipWhy = "alike" | "open" | "unsure" | "large";
+export type CipWhy = "alike" | "open" | "unsure" | "large" | "impossible";
 /**
  * A unit's descriptor: R or S, or r or s for a pseudoasymmetric centre; E or
  * Z, `turns` where it turns in the mirror image (seqCis or seqTrans, Hanson
@@ -381,8 +384,15 @@ export function cipLabels(
   const bonds = new Map<number, CipResult>();
   const atomsAsked = ask?.centres ? [...ask.centres] : input.atoms.map((_, i) => i);
   const bondsAsked = ask?.bonds ? [...ask.bonds] : input.bonds.map((_, i) => i);
+  // (a tied pair - a cage's bridgeheads, a small fused bicycle's junctions - both given, the impossible way round: neither labelled, said)
+  const impossible = new Set<number>();
+  for (const t of tiesOf(input)) {
+    const [ta, tb] = [input.atoms[t.a]?.tetra, input.atoms[t.b]?.tetra];
+    if (ta && tb && volumeOfThree(ta.neighbours, ta.volume, t.ta) === volumeOfThree(tb.neighbours, tb.volume, t.tb)) impossible.add(t.a).add(t.b);
+  }
   for (const c of atomsAsked) {
-    if (input.atoms[c]?.tetra) centres.set(c, onUnit(agreed(p, (q) => centre(q, c), variants), { kind: "centre", at: c }));
+    if (!input.atoms[c]?.tetra) continue;
+    centres.set(c, impossible.has(c) ? no("impossible") : onUnit(agreed(p, (q) => centre(q, c), variants), { kind: "centre", at: c }));
   }
   for (const i of bondsAsked) {
     if (input.bonds[i]?.stereo) bonds.set(i, onUnit(agreed(p, (q) => doubleBond(q, i), variants), { kind: "bond", at: i }));
