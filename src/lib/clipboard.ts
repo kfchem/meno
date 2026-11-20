@@ -76,22 +76,31 @@ export function copying<T>(make: () => Promise<T>): Promise<T> {
   const made = make();
   const before = making;
   making = Promise.all([before, made.catch(() => undefined)]);
-  copiesMaking++;
+  const started = { at: now() };
+  copiesMaking.add(started);
   heard();
   void made.catch(() => undefined).then(() => {
-    copiesMaking--;
+    copiesMaking.delete(started);
     heard();
   });
   return made;
 }
 
-let copiesMaking = 0;
+const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+const copiesMaking = new Set<{ at: number }>();
 const listeners = new Set<() => void>();
 const heard = () => listeners.forEach((l) => l());
 
 /** Whether a copy is being made (`copying`), its pictures not yet on the clipboard. */
 export function copyBeingMade(): boolean {
-  return copiesMaking > 0;
+  return copiesMaking.size > 0;
+}
+
+/** How long, in ms, the earliest copy still being made has been made; null where none is. */
+export function copyMadeFor(): number | null {
+  let first = Infinity;
+  for (const c of copiesMaking) first = Math.min(first, c.at);
+  return Number.isFinite(first) ? now() - first : null;
 }
 
 /** `listener` told each time a copy starts being made or is done; the function returned stops it. */

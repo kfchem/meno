@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { copyBeingMade, copying, forTheClipboard, framed, onCopyMade, readClipboard, writeClipboard } from "./clipboard";
+import { describe, expect, it, vi } from "vitest";
+import { copyBeingMade, copyMadeFor, copying, forTheClipboard, framed, onCopyMade, readClipboard, writeClipboard } from "./clipboard";
 
 /**
  * A copy takes a moment - its pictures are drawn before anything goes on
@@ -71,5 +71,30 @@ describe("a copy being made", () => {
     stop();
     await copying(async () => undefined);
     expect(told).toEqual([true, false, true, false]);
+  });
+});
+
+describe("how long a copy has been made", () => {
+  it("is timed from the earliest copy still being made: a small one begun and done beside a large one neither restarts it nor ends it", async () => {
+    vi.useFakeTimers({ toFake: ["performance", "setTimeout"] });
+    try {
+      expect(copyMadeFor()).toBeNull();
+      let finishLarge!: () => void;
+      const large = copying(() => new Promise<void>((done) => (finishLarge = done)));
+      vi.advanceTimersByTime(200);
+      let finishSmall!: () => void;
+      const small = copying(() => new Promise<void>((done) => (finishSmall = done)));
+      vi.advanceTimersByTime(100);
+      finishSmall();
+      await small;
+      await Promise.resolve();
+      expect(copyMadeFor()).toBe(300);
+      finishLarge();
+      await large;
+      await Promise.resolve();
+      expect(copyMadeFor()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

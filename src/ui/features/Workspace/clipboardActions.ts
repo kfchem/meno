@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { clipboardFiles, copyBeingMade, copying, onCopyMade, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { clipboardFiles, copyBeingMade, copyMadeFor, copying, onCopyMade, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { quotedTables } from "../../../lib/io/kinds";
 import { isWorkspaceFile } from "./utils/workspace";
@@ -49,16 +49,20 @@ export const COPYING_SHOWN_AFTER_MS = 250;
 
 /**
  * Whether "Copying…" is shown: a copy being made (lib/clipboard
- * `copyBeingMade`) for `COPYING_SHOWN_AFTER_MS` or longer, until it is done.
+ * `copyBeingMade`) for `COPYING_SHOWN_AFTER_MS` or longer - timed from the
+ * earliest still being made - until every one is done.
  */
 export function useCopyingShown(): boolean {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // (from the start of the earliest copy still being made: a small one beside a large one neither shows it nor puts it off)
     const now = () => {
       clearTimeout(timer);
-      if (!copyBeingMade()) setShown(false);
-      else timer = setTimeout(() => setShown(copyBeingMade()), COPYING_SHOWN_AFTER_MS);
+      const made = copyMadeFor();
+      if (made == null) setShown(false);
+      else if (made >= COPYING_SHOWN_AFTER_MS) setShown(true);
+      else timer = setTimeout(() => setShown(copyBeingMade()), COPYING_SHOWN_AFTER_MS - made);
     };
     const stop = onCopyMade(now);
     now();
@@ -150,9 +154,12 @@ export function useClipboardActions(
     };
   }, [store]);
 
+  // (which copy was begun last: one made after it, its pictures done sooner, writes nothing over it)
+  const begun = useRef(0);
   const copyNow = useCallback(async (only?: number) => {
     const taken = part(only);
     if (!taken || busy()) return false;
+    const mine = ++begun.current;
     const state0 = store.getState();
     // (its record says the bond's printed length of the style it is copied in: pasted into another, it is converted)
     const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt, labelPt: labelPtOf(state0.docStyle) };
@@ -177,6 +184,8 @@ export function useClipboardActions(
       // (a text's sheet alone: its words too, for other programs)
       const lone = !p.atoms.length && !p.molecules3d?.length && !hasFlow(p) && !p.pictures?.length && !p.pdfs?.length && !p.captions?.length && p.sheets?.length === 1 ? p.sheets[0] : null;
       const words: ClipItem[] = lone ? [{ flavor: "text", text: lone.text }] : [];
+      // (a copy begun since: the clipboard is that one's)
+      if (mine !== begun.current) return true;
       await writeClipboard([...clipItems(p), ...words, ...pictures]).catch(async (e: unknown) => {
         // a picture the system would not take is left out, not the structure
         if (!pictures.length) throw e;

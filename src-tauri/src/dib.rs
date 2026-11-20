@@ -122,6 +122,28 @@ mod tests {
         assert_eq!(&dib[40..43], [255, 255, 255]);
     }
 
+    // (what the tests above leave unheld: the header's planes and y resolution, the rest zero; a pHYs of no unit, an aspect ratio
+    //  only, is no resolution; a pixel blended over white rounded to the nearest level, not cut)
+    #[test]
+    fn the_header_is_whole_a_pixel_over_white_is_rounded_and_a_phys_with_no_unit_is_none() {
+        let dib = dib_of_png(&png_of(1, 1, png::ColorType::Rgba, &[200, 100, 50, 100], Some(11811))).unwrap();
+        assert_eq!(&dib[40..43], [175, 194, 233]);
+        assert_eq!(u16::from_le_bytes([dib[12], dib[13]]), 1, "planes");
+        assert_eq!(i32::from_le_bytes(dib[28..32].try_into().unwrap()), 11811, "y resolution as x's");
+        assert!(dib[16..20].iter().chain(&dib[32..40]).all(|&b| b == 0), "no compression, no palette");
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, 1, 1);
+            enc.set_color(png::ColorType::Rgb);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.set_pixel_dims(Some(png::PixelDimensions { xppu: 3000, yppu: 3000, unit: png::Unit::Unspecified }));
+            let mut w = enc.write_header().unwrap();
+            w.write_image_data(&[1, 2, 3]).unwrap();
+        }
+        let dib = dib_of_png(&out).unwrap();
+        assert_eq!((i32::from_le_bytes(dib[24..28].try_into().unwrap()), i32::from_le_bytes(dib[28..32].try_into().unwrap())), (0, 0));
+    }
+
     #[test]
     fn what_is_no_png_gives_no_bitmap() {
         assert!(dib_of_png(b"\x89PNG not one").is_err());
