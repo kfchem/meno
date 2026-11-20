@@ -56,7 +56,8 @@ export type ReadBond = {
 
 /** A figure read: its atoms and bonds, how long its bonds are drawn, in points, and the letters in it not read as labels. */
 /** A figure read: its atoms and bonds, how long its bonds are drawn, the letters no atom took - and the cells of a table drawn in it (`tableLines`), where one is. */
-export type FigureRead = { atoms: ReadAtom[]; bonds: ReadBond[]; bond: number; left: { letters: FigureLetter[] }; table?: Box[] };
+/** `left.lines`, `left.triples`: lone single and triple lines about a bond long, not read as ethane or ethyne (`withoutStrays`); `left.marks`: the pieces and words drawn over its pictures, left out (lib/figure/scheme `marksOver`). */
+export type FigureRead = { atoms: ReadAtom[]; bonds: ReadBond[]; bond: number; left: { letters: FigureLetter[]; lines?: number; triples?: number; marks?: number }; table?: Box[] };
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 const len = (s: { a: Point; b: Point }) => dist(s.a, s.b);
@@ -203,9 +204,22 @@ export function barBond(shapes: Shapes, letters: readonly FigureLetter[] = []): 
   return near(bars, byBars) > near(lines, byLines) ? byBars : byLines || byBars;
 }
 
-/** Shapes with their chains of bars told by `barBond`: kept as bonds, or given up (`outlineChains`). */
+/**
+ * How wide a line may be drawn, in its figure's usual letter size, and be a bond's: a bond is drawn thinner than its labels' letters are
+ * tall - a bold bond of a perspective drawing a third of them - and a highlight laid along a bond about as wide as them, which may be the
+ * bond's only line; a line wider is a band - a table's shaded row, half as tall again as its letters - drawn as a wide line.
+ */
+const BAND = 1.2;
+
+/**
+ * Shapes with their chains of bars told by `barBond`: kept as bonds, or given up (`outlineChains`); and without the lines drawn as bands
+ * (`BAND`), wider than the figure's usual letter size allows a bond's - by its letters, where it has any.
+ */
 export function sizedOutlines(shapes: Shapes, letters: readonly FigureLetter[] = []): Shapes {
-  return outlineChains(shapes, barBond(shapes, letters));
+  const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
+  const usual = sizes.length ? sizes[Math.floor(sizes.length / 2)] : 0;
+  const lined = usual ? { ...shapes, strokes: shapes.strokes.filter((s) => s.w <= BAND * usual) } : shapes;
+  return outlineChains(lined, barBond(lined, letters));
 }
 
 /**
@@ -678,6 +692,13 @@ function dashes(bits: readonly Stroke[], words: readonly Word[], bond: number, r
     for (let i = 0; i < near.length && !pair; i++)
       for (let j = i + 1; j < near.length && !pair; j++) if (dot(unit(c, near[i].c), unit(c, near[j].c)) < -0.5) pair = [near[i], near[j]];
     if (!pair) continue;
+    // (a mark by a word that reads as no label - the colon of a yield's "8: 40%", a dot between two lines of words - is the text's: both
+    // ends of a bond drawn so short are labels)
+    if (pair.some((w) => !reads(labelText(words[w.k], reads)))) continue;
+    // (nor a mark down at the words' foot between two side by side - a comma, "Cs2CO3, acetone": a bond between labels is drawn at their middle)
+    const [p0, p1] = [words[pair[0].k], words[pair[1].k]];
+    const middle = (p0.box[1] + p0.box[3] + p1.box[1] + p1.box[3]) / 4;
+    if (Math.abs(unit(pair[0].c, pair[1].c).x) >= 0.9 && c.y - middle > LOW_MARK * Math.max(p0.size, p1.size)) continue;
     // (a sign between two words of a line of text is none: lineGoesOn)
     const [l, r] = pair[0].c.x < pair[1].c.x ? pair : [pair[1], pair[0]];
     if (Math.abs(unit(l.c, r.c).x) >= 0.9 && lineGoesOn(words[l.k], words, false, reads) && lineGoesOn(words[r.k], words, true, reads)) continue;
@@ -829,6 +850,89 @@ const TOGETHER = 0.1;
 
 /** How many bonds an element in a label takes, its hydrogens and charge aside: an NH2's N one, an OH's O one. */
 const BONDS_LEFT: Record<string, number> = { N: 3, O: 2, S: 2, P: 3, B: 3, Si: 4, Se: 2 };
+
+/** How long a sign of a line of text is drawn at most - a hyphen, one line of an = - in its letters' size: an = is about half as wide as they are tall. */
+const SIGN_LONG = 0.6;
+/** How far a variable's = stands from the words either side at most, in their letters' size: a space. */
+const SIGN_GAP = 0.6;
+/** How far a hyphen stands from the word it is set by at most, in its letters' size: it all but touches it. */
+const HYPHEN_GAP = 0.3;
+/** How far under the middle of two words side by side a mark between them lies at the least, in their size, to be at their foot: a comma's, a full stop's. */
+const LOW_MARK = 0.25;
+/** How far a line taken for a letter stands from the letter beside it at most, in its size: a letter's room. */
+const LETTER_GAP = 0.6;
+/** How tall a capital is, in its letters' size, at the least and the most: a line that tall on a line of text may be one. */
+const CAPITAL: readonly [number, number] = [0.55, 0.85];
+
+/** How far a line alone may be from the figure's bond, as a part of it, and still be a bond: a fifth. */
+const ALONE_WITHIN = 0.2;
+
+/** What is said of a double line alone about a bond long, kept as ethylene. */
+export const LONE_DOUBLE = "A double line alone: read as ethylene.";
+
+/**
+ * A figure's atoms and bonds without what stands alone and is no structure:
+ * a point with no label and no bond, and one line - single or multiple, two
+ * ends with no label - not about a bond long (within `ALONE_WITHIN`): a
+ * chart's level, a dagger's or a numeral's strokes, a letter drawn as lines.
+ * A double line a bond long alone stays, said: a scheme draws an ethylene
+ * so, beside a "+". A single or a triple line a bond long alone is left out
+ * too, and counted (`lone`, `triples`): in a figure it is a dash, a minus,
+ * a rule, a letter, or a sign of equivalence or a separator; an ethane or
+ * an ethyne is all but never drawn so. What lies within one of the
+ * figure's `pictures` stays: a mark drawn over a picture, said as one
+ * (lib/figure/scheme `marksOver`).
+ */
+export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBond[], bond: number, pictures: readonly Box[] = []): { atoms: ReadAtom[]; bonds: ReadBond[]; lone: number; triples: number } {
+  const overPicture = (a: ReadAtom) => pictures.some((b) => a.x >= b[0] && a.x <= b[2] && a.y >= b[1] && a.y <= b[3]);
+  const bare = (a: ReadAtom) => !a.label && !a.el && !a.marked && !a.dots && !a.repeat && !overPicture(a);
+  const count = atoms.map(() => 0);
+  for (const b of bonds) {
+    count[b.a]++;
+    count[b.b]++;
+  }
+  const out = new Set<number>();
+  atoms.forEach((a, i) => {
+    if (bare(a) && !count[i]) out.add(i);
+  });
+  let lone = 0;
+  let triples = 0;
+  const said = new Map<ReadBond, string>();
+  for (const b of bonds) {
+    const [p, q] = [atoms[b.a], atoms[b.b]];
+    if (count[b.a] !== 1 || count[b.b] !== 1 || !bare(p) || !bare(q)) continue;
+    const long = Math.abs(Math.hypot(p.x - q.x, p.y - q.y) - bond) <= ALONE_WITHIN * bond;
+    if (long && b.order === 2) said.set(b, LONE_DOUBLE);
+    else {
+      out.add(b.a).add(b.b);
+      if (long && b.order === 3) triples++;
+      else if (long) lone++;
+    }
+  }
+  const told = (b: ReadBond): ReadBond => {
+    const s = said.get(b);
+    return s && !b.unsure?.includes(s) ? { ...b, unsure: [...(b.unsure ?? []), s] } : b;
+  };
+  if (!out.size) return { atoms: [...atoms], bonds: bonds.map(told), lone, triples };
+  const to = new Map<number, number>();
+  const kept: ReadAtom[] = [];
+  atoms.forEach((a, i) => {
+    if (out.has(i)) return;
+    to.set(i, kept.length);
+    kept.push(a);
+  });
+  return { atoms: kept, bonds: bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...told(b), a: to.get(b.a)!, b: to.get(b.b)! })), lone, triples };
+}
+
+/** Whether a line is set level: a hyphen, an ='s lines. */
+const level = (s: Stroke) => Math.abs(s.a.y - s.b.y) <= 0.15 * len(s);
+
+/** Whether a word is a variable's name - R, R', R1, Ar (VARIABLE_NAMES) - its letters as large as its own, its primes and number smaller. */
+function variableName(w: Word): boolean {
+  const own = w.letters.filter((l) => l.size >= 0.85 * w.size);
+  const rest = w.letters.filter((l) => l.size < 0.85 * w.size);
+  return VARIABLE_NAMES.has(own.map((l) => l.c).join("")) && rest.every((l) => /^[\d'\u2032\u2033]$/.test(l.c) || l.box[3] < own[0].box[3] - 0.4 * w.size);
+}
 
 /** How large a radical's dot is drawn at most, in bonds (at least half as wide again as a line). */
 const DOT = 0.16;
@@ -1056,8 +1160,10 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
  * arrows and signs were taken out of) read as bonds, their ends where they
  * meet as atoms, the words beside their ends as those atoms' labels, and a
  * word near the rest but at no bond's end - an ion - as an atom alone.
+ * `traced`: a picture traced from its pixels, whose reading says what
+ * stands alone rather than have it left out (`withoutStrays`).
  */
-export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes): FigureRead {
+export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes, traced = false): FigureRead {
   // (a chain of bars the polygon of one filled outline made - ./drawn `barsOfOutline` - is the drawing's bonds, or not: told by the drawing's own bond;
   // shapes given - a scheme's - have been told already)
   const all = given ?? sizedOutlines(shapesOf(drawn), drawn.letters);
@@ -1164,7 +1270,39 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   };
   const stub = (s: Stroke) => len(s) > 0.15 * bond && (outOf(s, s.a, s.b) || outOf(s, s.b, s.a));
   // (a short line between two words of a line of text - a caption's = - is its sign, however long a bond's line it might be)
-  const textSign = (s: Stroke) => len(s) < 0.6 * bond && labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b)) && inText(s);
+  // (or after a variable's name - an R' = OH under a structure, its sign two short lines set level, a space from each word - is its sign:
+  // the line names what R' is, never a double bond)
+  const wordAt = (p: Point, out: Point) => words.find((v) => reaches(p, out, v.box, bond));
+  const naming = (s: Stroke) => {
+    const [l, r] = s.a.x < s.b.x ? [s.a, s.b] : [s.b, s.a];
+    const [w, v] = [wordAt(l, unit(r, l)), wordAt(r, unit(l, r))];
+    return !!w && !!v && level(s) && len(s) < SIGN_LONG * w.size && l.x - w.box[2] < SIGN_GAP * w.size && v.box[0] - r.x < SIGN_GAP * w.size && variableName(w);
+  };
+  const textSign = (s: Stroke) => len(s) < 0.6 * bond && labelled(s.a, unit(s.b, s.a)) && labelled(s.b, unit(s.a, s.b)) && (inText(s) || naming(s));
+  // (a short level line at the side of a word that reads as no label - a hyphen, trans-TS1, t-BuOOH, cis-II - is the text's, at a
+  // word's height and as long as a letter at most: a bond into a label is cut back from it, and longer)
+  const hyphen = (s: Stroke) =>
+    len(s) < 0.45 * bond &&
+    level(s) &&
+    words.some((w) => {
+      const [x0, x1] = [Math.min(s.a.x, s.b.x), Math.max(s.a.x, s.b.x)];
+      const gap = Math.min(Math.abs(x0 - w.box[2]), Math.abs(w.box[0] - x1));
+      const y = (s.a.y + s.b.y) / 2;
+      return len(s) < SIGN_LONG * w.size && y > w.box[1] && y < w.box[3] && gap < HYPHEN_GAP * w.size && !reads(labelText(w, reads));
+    });
+  // (and a line upright by a letter of a line of text, standing on its baseline and as tall as its capitals - an I drawn as a line, the
+  // I of an I2 under an arrow - is that letter: a bond by a label meets it, never stands beside it as tall)
+  const asLetter = (s: Stroke) => {
+    if (Math.abs(s.a.x - s.b.x) > 0.1 * len(s)) return false;
+    const [top, foot] = [Math.min(s.a.y, s.b.y), Math.max(s.a.y, s.b.y)];
+    const x = (s.a.x + s.b.x) / 2;
+    return words.some((w) =>
+      w.letters.some((l) => {
+        const gap = Math.max(l.box[0] - x, x - l.box[2]);
+        return gap > 0 && gap < LETTER_GAP * l.size && Math.abs(foot - l.box[3]) < 0.12 * l.size && foot - top > CAPITAL[0] * l.size && foot - top < CAPITAL[1] * l.size && /[A-Za-z]/.test(l.c);
+      }),
+    );
+  };
   // (and a line more than six bonds long is none - a table's rule, a graph's axis, a frame round a part of the figure: a bond is drawn at
   // about its length, stretched in a large ring to five at most, and an arrow's line is the arrow's)
   const ruled = (s: Stroke) => len(s) > 6 * bond;
@@ -1192,9 +1330,13 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
   const toLabel = (s: Stroke) =>
     len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
-  const lines = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
+  // (a row of dashes along one line - a bond forming or breaking in a transition state, a weak bond - is no bond: its ends' atoms are said so)
+  const rows = dashedRows(shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !table.has(s)), bond);
+  const inRows = new Set(rows.flat());
+  const ofText = (s: Stroke) => textSign(s) || hyphen(s) || asLetter(s);
+  const lines = shapes.strokes.filter((s) => !inRows.has(s) && !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !ofText(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
-  const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
+  const loose = shapes.strokes.filter((s) => !inRows.has(s) && !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && !hyphen(s) && !asLetter(s) && len(s) > 0.04 * bond);
   // (the line in front may be a wedge, or a bond drawn bold and read as one: a perspective drawing's near edge)
   const joined = joinedAcross([...lines, ...loose], bond, shapes.wedges.map((w) => ({ a: w.tip, b: w.base })));
   // (a line lying along another - the same middle line, within a sixteenth of a bond, as long as the other or shorter, within its stretch -
@@ -1534,9 +1676,49 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     atoms.push({ x: c.x, y: c.y, ...labelOf(w, reads), box: w.box });
     bonds.push({ a: i, b: atoms.length - 1, order: 1 });
   });
+  // (a charge's sign set alone by a label that reads - a borate's minus over the B of its Bpin, or before it, as a mechanism draws an ate
+  // complex - is that atom's, as one drawn in a ring by it is. A minus: right over or under its letters, no further off than a letter's
+  // height; or beside it, level with it or set high, within four fifths of the label's height, nothing written on its other side - a dash between two
+  // words is a bond's - and no bracket's side drawn between them: a sign at a bracket's corner is the whole ion's, left as words. A plus only
+  // beside it and set high (Py+): one level with a word, over it or under it is a scheme's "+")
+  const signed = new Map<number, number>();
+  const besides = (k: number): Box[] => [...words.filter((_, j) => j !== k).map((v) => v.box), ...atoms.flatMap((a) => (a.box ? [a.box] : []))];
+  words.forEach((w, k) => {
+    if (atomOfWord.has(k) || ions.has(k)) return;
+    const sign = /^(\d?)([+\-\u2212\u2013\u2295\u2296])$/.exec(w.letters.map((l) => l.c).join(""));
+    if (!sign) return;
+    const plus = /[+\u2295]/.test(sign[2]);
+    const c = centre(w.box);
+    let best = -1;
+    let off = Infinity;
+    atoms.forEach((a, i) => {
+      if (!a.box || !(a.el || (a.label && reads(a.label)))) return;
+      if (c.x >= a.box[0] && c.x <= a.box[2]) {
+        if (plus) return;
+        const gap = Math.max(a.box[1] - w.box[3], w.box[1] - a.box[3]);
+        if (gap > -0.2 * w.size && gap < w.size && gap < off) [best, off] = [i, gap];
+        return;
+      }
+      if (c.y < a.box[1] - 0.5 * w.size || c.y > (plus ? a.box[1] + 0.3 * (a.box[3] - a.box[1]) : a.box[3])) return;
+      const before = c.x < a.box[0];
+      const gap = before ? a.box[0] - w.box[2] : w.box[0] - a.box[2];
+      // (set close by it: within four fifths of the label's height - a scheme's "+" stands a letter or more off a word)
+      if (gap < -0.2 * w.size || gap >= Math.min(off, w.size, 0.8 * (a.box[3] - a.box[1]))) return;
+      // (nothing on its far side, level with it, within a letter's height: no word it joins to this label as a bond would)
+      const far = besides(k).some((b) => b !== a.box && b[3] > w.box[1] && b[1] < w.box[3] && (before ? w.box[0] - b[2] : b[0] - w.box[2]) > -0.2 * w.size && (before ? w.box[0] - b[2] : b[0] - w.box[2]) < w.size);
+      // (nor a line drawn upright between them - a bracket's side: a sign at its corner, [BF4]-, is the whole ion's, no atom's)
+      const [x0, x1] = before ? [w.box[2], a.box[0]] : [a.box[2], w.box[0]];
+      const bracketed = shapes.strokes.some((t) => Math.abs(t.a.x - t.b.x) < 0.3 * Math.abs(t.a.y - t.b.y) && Math.min(t.a.x, t.b.x) > x0 - 0.1 * w.size && Math.max(t.a.x, t.b.x) < x1 + 0.1 * w.size && Math.min(t.a.y, t.b.y) < c.y && Math.max(t.a.y, t.b.y) > c.y);
+      if (!far && !bracketed) [best, off] = [i, gap];
+    });
+    if (best < 0) return;
+    const charge = (sign[1] ? Number(sign[1]) : 1) * (plus ? 1 : -1);
+    signed.set(k, best);
+    atoms[best] = { ...atoms[best], marked: (atoms[best].marked ?? 0) + charge };
+  });
   const left: FigureLetter[] = [];
   words.forEach((w, k) => {
-    if (atomOfWord.has(k)) return;
+    if (atomOfWord.has(k) || signed.has(k)) return;
     if (ions.has(k)) {
       const c = centre(w.letters.find((l) => /[A-Z]/.test(l.c))?.box ?? w.box);
       atoms.push({ x: c.x, y: c.y, ...labelOf(w, reads), box: w.box });
@@ -1569,9 +1751,74 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     for (let i = 0; i < atoms.length; i++) if (from(atoms[i], at) < 0.6 * bond && (best < 0 || from(atoms[i], at) < from(atoms[best], at))) best = i;
     if (best >= 0) atoms[best] = { ...atoms[best], dots: (atoms[best].dots ?? 0) + 1 };
   }
+  // (a row of dashes: the atom at each end of it, within a third of a bond, said to have one read as no bond)
+  for (const row of rows) {
+    const ends = rowEnds(row);
+    for (const p of ends) {
+      let best = -1;
+      for (let i = 0; i < atoms.length; i++) if (from(atoms[i], p) < DASHED_REACH * bond && (best < 0 || from(atoms[i], p) < from(atoms[best], p))) best = i;
+      if (best >= 0 && !atoms[best].unsure?.includes(DASHED_ROW)) atoms[best] = { ...atoms[best], unsure: [...(atoms[best].unsure ?? []), DASHED_ROW] };
+    }
+  }
   // (each repeat unit in brackets: a whole count's unit marked to be read so many times, else the atoms its brackets cross saying why not)
   repeatsRead(repeats.pairs, atoms, bonds, bond, from);
-  return { atoms, bonds, bond, left: { letters: left }, ...(tableCells.length ? { table: tableCells } : {}) };
+  // (a picture traced from its pixels keeps what stands alone: its reading says each small piece - ink it may have read as bonds - rather
+  //  than leave it out unsaid, lib/figure/tracedRead)
+  const { lone, triples, ...kept } = traced ? { lone: 0, triples: 0, atoms, bonds } : withoutStrays(atoms, bonds, bond, drawn.pictures);
+  return { ...kept, bond, left: { letters: left, ...(lone ? { lines: lone } : {}), ...(triples ? { triples } : {}) }, ...(tableCells.length ? { table: tableCells } : {}) };
+}
+
+/** What an atom at the end of a row of dashes says. */
+export const DASHED_ROW = "A dashed line meets it - a bond forming or breaking, or a weak bond: read as no bond.";
+/** How near a row of dashes' end an atom is, in bonds, to be said to have it. */
+const DASHED_REACH = 0.35;
+
+/**
+ * Rows of dashes: three short lines or more - each a tenth to two fifths of a bond, not drawn dashed - along one line, each the next's way and
+ * on its line, evenly spaced with gaps shorter than the dashes are long and longer than a twentieth of a bond, the row half a bond long at the
+ * least. A hash's strokes lie across their line, not along it; a line broken where another passes is two pieces.
+ */
+function dashedRows(strokes: readonly Stroke[], bond: number): Stroke[][] {
+  const bits = strokes.filter((s) => !s.dash && len(s) >= 0.1 * bond && len(s) <= 0.4 * bond);
+  const used = new Set<Stroke>();
+  const rows: Stroke[][] = [];
+  for (const s of bits) {
+    if (used.has(s)) continue;
+    const u = unit(s.a, s.b);
+    const onLine = (t: Stroke) =>
+      Math.abs(cross(u, unit(t.a, t.b))) < Math.sin((6 * Math.PI) / 180) &&
+      [t.a, t.b].every((p) => Math.abs(cross(u, { x: p.x - s.a.x, y: p.y - s.a.y })) < 0.05 * bond);
+    // (the dashes on its line, in order along it, each next one a gap on)
+    const at = (p: Point) => dot(u, { x: p.x - s.a.x, y: p.y - s.a.y });
+    const on = bits.filter((t) => !used.has(t) && onLine(t)).sort((p, q) => Math.min(at(p.a), at(p.b)) - Math.min(at(q.a), at(q.b)));
+    const row: Stroke[] = [];
+    for (const t of on) {
+      const prev = row[row.length - 1];
+      if (prev) {
+        const gap = Math.min(at(t.a), at(t.b)) - Math.max(at(prev.a), at(prev.b));
+        if (gap < 0.05 * bond || gap > Math.min(len(t), len(prev))) {
+          if (row.length >= 3) break;
+          row.length = 0;
+        }
+      }
+      row.push(t);
+    }
+    if (row.length < 3) continue;
+    const gaps = row.slice(1).map((t, i) => Math.min(at(t.a), at(t.b)) - Math.max(at(row[i].a), at(row[i].b)));
+    const span = Math.max(...row.flatMap((t) => [at(t.a), at(t.b)])) - Math.min(...row.flatMap((t) => [at(t.a), at(t.b)]));
+    if (span < 0.5 * bond || Math.max(...gaps) > 1.5 * Math.min(...gaps)) continue;
+    for (const t of row) used.add(t);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** A row of dashes' two ends: its first and its last dash's outer ends. */
+function rowEnds(row: readonly Stroke[]): [Point, Point] {
+  const u = unit(row[0].a, row[0].b);
+  const pts = row.flatMap((t) => [t.a, t.b]);
+  const at = (p: Point) => dot(u, p);
+  return [pts.reduce((p, q) => (at(q) < at(p) ? q : p)), pts.reduce((p, q) => (at(q) > at(p) ? q : p))];
 }
 
 /**

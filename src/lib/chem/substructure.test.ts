@@ -114,3 +114,35 @@ describe("whether one structure holds another", () => {
     expect(holdsSubstructure(of("OC"), of(`${"C".repeat(50)}O`), 60)).toEqual({ found: true, map: [[0, 50], [1, 49]] });
   });
 });
+
+describe("a hydrogen is one of its atom's only by one single bond to an atom not an H (backlog 176)", () => {
+  it("a bridging H, B-H-B, is an atom of its own: asked for, it is not found where two borons are bonded with none between", () => {
+    expect(holds("B1[H]B[H]1", "B[H]B")).toBe(true);
+    expect(holds("BB", "B[H]B")).toBe(false);
+  });
+
+  it("H2 asked for is found in H2, and not in methane, whose H are its carbon's", () => {
+    expect(holds("[H][H]", "[H][H]")).toBe(true);
+    expect(holds("C", "[H][H]")).toBe(false);
+  });
+
+  it("a plain H drawn asks for an H on its atom's match, as before; its map number no matter", () => {
+    expect(holds("CO", "[H]O")).toBe(true);
+    expect(holds("CO", "[H:1]O")).toBe(true);
+    expect(holds("CF", "[H]O")).toBe(false);
+  });
+});
+
+describe("an H on a metal of the d or f block is an atom of its own; on a main-group metal, its metal's (backlog 177, the chemistry check's ruling)", () => {
+  it("Pd-H asked for is found where a palladium carries an H, and not on a bare palladium", () => {
+    expect(holds("[H][Pd](Cl)Cl", "[H][Pd]")).toBe(true);
+    expect(holds("Cl[Pd]Cl", "[H][Pd]")).toBe(false);
+    // (the H itself an atom to find: a lone H asked for is found on the palladium, never on a carbon)
+    expect(holds("[H][Pd](Cl)Cl", "[H]")).toBe(true);
+    expect(holds("C", "[H]")).toBe(false);
+  });
+
+  it("an H on lithium or tin is its metal's, as on a carbon: Sn-H asked for asks for an H on the tin", () => {
+    expect(holds("[H][Sn](C)(C)C", "[H][Sn]")).toBe(true);
+  });
+});

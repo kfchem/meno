@@ -3,13 +3,15 @@ import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import { COORDINATION_BOND, type AbbreviationStructure, type AtomChem, type BondChem, type SgroupMark } from "./molecule";
-import { mostBonds, valenceOrder, type Radical } from "./perception/hydrogens";
+import { ladderElement, mostBonds, valenceCounts, valenceOrder, type Radical } from "./perception/hydrogens";
+import { metal } from "./perception/elements";
 import { valenceOrders } from "./perception/kekule";
 import { ELEMENTS } from "./elements";
 import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
 import { isMetal } from "../layout/perceive";
+import { coordinatedByDonors } from "./perception/elements";
 import { boundLigandStructure } from "./boundLigand";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
@@ -219,7 +221,8 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
     }
     sups.push({ label: a.el, atoms: [a.id, ...ids.filter((id) => id !== a.id)] });
   }
-  return { model: { atoms, bonds }, sups, aliases };
+  // (and each P, S or Se on a metal - one a label held among them - with the valence the core gives it)
+  return { model: metalBoundValences({ atoms, bonds }), sups, aliases };
 }
 
 /**
@@ -245,8 +248,11 @@ export function overBonded(model: WriterModel): Set<number> {
   // halogen, an oxygen or a carbon too: PhICl2, PhI(OAc)2, Ph3I)
   const plain = new Map<number, number>();
   const add = (m: Map<number, number>, id: number, v: number) => m.set(id, (m.get(id) ?? 0) + v);
+  // (a metal's bonds - a transition metal's, or a Lewis-acidic main-group metal's - counted as a metal's: left out of its donor's count, and
+  // against no valence of its own)
+  const metalCounted = (el: string) => coordinatedByDonors.has(el);
   for (const b of out.bonds) {
-    const metal = [b.a, b.b].some((id) => isMetal(byId.get(id)?.el ?? ""));
+    const metal = [b.a, b.b].some((id) => metalCounted(byId.get(id)?.el ?? ""));
     for (const [end, other] of [
       [b.a, b.b],
       [b.b, b.a],
@@ -255,7 +261,7 @@ export function overBonded(model: WriterModel): Set<number> {
       // aluminium's, which take a pair: H3N->BH3)
       const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "") && ELEMENT_SYMBOLS.has(byId.get(other)?.el ?? "");
       add(sums, end, lent ? b.order : valenceOrder(b, byId.get(end)?.el));
-      if (isMetal(byId.get(other)?.el ?? "")) byMetal.add(end);
+      if (metalCounted(byId.get(other)?.el ?? "")) byMetal.add(end);
       const el = byId.get(end)?.el ?? "";
       if (HALOGENS.has(el) && !(el === "I" ? IODINE_TAKES : ["O", "F"]).includes(byId.get(other)?.el ?? "")) add(plain, end, b.order);
     }
@@ -269,7 +275,7 @@ export function overBonded(model: WriterModel): Set<number> {
     // as an alkynyl benziodoxolone's - and one more for each positive charge, as a diaryliodonium's)
     const h = a.el === "H" && sum + Math.abs(a.charge ?? 0) + unpaired(a) > 1;
     const halogen = HALOGENS.has(a.el) && (plain.get(a.id) ?? 0) + unpaired(a) > (a.el === "I" ? 2 : 1) + Math.max(0, a.charge ?? 0);
-    const most = mostBonds(a.el, a.charge ?? 0, a.radical);
+    const most = coordinatedByDonors.has(a.el) ? null : mostBonds(a.el, a.charge ?? 0, a.radical);
     // (and a charge more than any atom carries: four either way)
     if (h || halogen || Math.abs(a.charge ?? 0) > 4 || (most != null && sum > most)) over.add(drawn.get(a.id) ?? a.id);
   }
@@ -709,6 +715,30 @@ export function writeMolfile(
     : writeV2000(model, title);
 }
 
+/**
+ * `model` with the valence the core gives each P, S or Se bonded to a metal written as its own (`valence`): the core chooses such an
+ * atom's valence by its bonds to non-metals alone (perception/hydrogens `LADDER`), and a reader left to its own rule would not - a
+ * phosphine on Pd read as P(V) with an H. Its bonds and its hydrogens as the core counts them; one whose valence or hydrogen count is
+ * set already keeps it.
+ */
+function metalBoundValences(model: WriterModel): WriterModel {
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const bonds = model.bonds.flatMap((b) => {
+    const [a, c] = [index.get(b.a), index.get(b.b)];
+    return a == null || c == null ? [] : [{ a, b: c, order: b.order, ...(b.dative ? { dative: true } : {}), ...(b.coordination ? { coordination: true } : {}), ...(b.hydrogen ? { hydrogen: true } : {}) }];
+  });
+  // (the atoms bonded to a metal, in one pass over the bonds)
+  const onMetal = new Set<number>();
+  for (const b of bonds) {
+    if (metal.has(model.atoms[b.b].el)) onMetal.add(b.a);
+    if (metal.has(model.atoms[b.a].el)) onMetal.add(b.b);
+  }
+  const held = model.atoms.map((a, i) => ladderElement(a.el) && a.valence == null && a.hCount == null && onMetal.has(i));
+  if (!held.some(Boolean)) return model;
+  const counts = valenceCounts(model.atoms.map((a) => ({ el: a.el, charge: a.charge, ...(a.radical ? { radical: a.radical } : {}) })), bonds);
+  return { ...model, atoms: model.atoms.map((a, i) => (held[i] ? { ...a, valence: Math.round(counts.sum[i]) + counts.hs[i] } : a)) };
+}
+
 /** A title as a header's line: one line, of no more than 80 characters - cut between characters, never in one (an emoji's two halves). */
 function titleLine(title: string | undefined): string {
   return Array.from((title ?? "").replace(/[\r\n]+/g, " ")).slice(0, 80).join("");
@@ -890,6 +920,14 @@ export function writeMolfile3d(
     valence[b.a2] += order;
   });
   const valenceOf = (i: number) => valence[i];
+  // (and a P, S or Se on a metal: its hydrogens all atoms here, its valence its bonds - a reader left to its own rule would lift it,
+  //  a phosphine on Pd read as P(V) with an H: `metalBoundValences`, as the 2D writer says it)
+  const touchesMetal = new Set<number>();
+  for (const b of bonds) {
+    if (metal.has(atoms[b.a2].el)) touchesMetal.add(b.a1);
+    if (metal.has(atoms[b.a1].el)) touchesMetal.add(b.a2);
+  }
+  const valenceWritten = (i: number) => !!atoms[i].noImplicitH || (ladderElement(atoms[i].el) && touchesMetal.has(i));
   if (version === "V3000" || (version === "auto" && needsV3000In3d(atoms, bonds))) {
     const lines = [
       ...head,
@@ -904,7 +942,7 @@ export function writeMolfile3d(
           (a.charge ? ` CHG=${a.charge}` : "") +
           (a.radical ? ` RAD=${RADICAL_CODE[a.radical]}` : "") +
           (a.isotope ? ` MASS=${a.isotope}` : "") +
-          (a.noImplicitH ? ` VAL=${valenceOf(i) || -1}` : ""),
+          (valenceWritten(i) ? ` VAL=${valenceOf(i) || -1}` : ""),
       ),
     );
     lines.push("M  V30 END ATOM");
@@ -926,7 +964,7 @@ export function writeMolfile3d(
   atoms.forEach((a, i) => {
     const { dd, ccc } = oldRangeFields(a);
     // (past 14 the field cannot say it: left unmarked)
-    const v = a.noImplicitH ? valenceOf(i) : -1;
+    const v = valenceWritten(i) ? valenceOf(i) : -1;
     const vvv = v === 0 ? " 15" : v >= 1 && v <= 14 ? i3(v) : "  0";
     lines.push(`${f10(a.x)}${f10(a.y)}${f10(a.z)} ${a.el.padEnd(3)}${String(dd).padStart(2)}${i3(ccc)}  0  0  0${vvv}  0  0  0  0  0  0`);
   });

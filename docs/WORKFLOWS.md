@@ -262,8 +262,10 @@ pointer does; put back by an undo, they glide back.
   in 3D or a picture whose middle is inside it - in the order it lies
   (top to bottom, left to right);
 - dragged into a set the chemist made, a structure or a molecule joins it,
-  at its place in that order among the members; dragged out of any set,
-  it leaves; moved within the frame, it keeps its place;
+  at its place in that order among the members; dragged wholly out of any
+  set - a structure with none of its atoms left inside, a molecule or a
+  picture with its middle outside - it leaves; moved within the frame, or
+  half out of it, it keeps its place, and the frame grows round it;
 - what joins or leaves is marked a moment as it does;
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
@@ -271,25 +273,37 @@ pointer does; put back by an undo, they glide back.
 - a step's result set holds what its step made, in its order, and takes
   nothing in: dragged into it, a structure stays outside the set;
 - **the frame is its members' room** (the maintainer, 2026-11-11), never
-  sized by hand: each member's box as it is drawn - a structure's labels
-  and a molecule's frames chip below it included - and half a bond about
+  sized by hand: each member's box as it is drawn - a structure's labels,
+  its record's number below it (Enumerate's #n) and a molecule's frames
+  chip below it included - and half a bond about
   them, with room for the name above and never narrower than a name needs
   (`workflow/fitFrames`). It grows and shrinks as they change - a structure
   drawn on, a bigger look, a member deleted - its edges eased, in the same
   step as the edit; a workspace saved with frames of other sizes is fitted
   as it opens. Its tab drags it, with all it holds;
 - **nothing lies half over a frame.** While a member is dragged its frame
-  stays where it is, so that it can be dragged out. Let go, a thing with
-  its middle in the frame is its member, and the frame grows round it
+  stays where it is, so that it can be dragged out. Let go, a member with
+  any of it still in the frame is its member, and the frame grows round it
   whole; a thing no set holds, with its middle outside, is eased out to
   just outside, on the nearest side, half a bond from the frame. A frame
   that grows into a thing no set holds eases it out the same way, once:
   where that leaves it over another frame, it stays. A step's result set
-  takes nothing in, so anything over it is eased out. All of it is part
+  takes nothing in, so anything over it is eased out - the shortest way
+  that leaves it over no frame, never into the next one. A frame that
+  grows over another set's frame pushes that set away from it, its frame
+  and all it holds: a set below it as it was, down to just under it; one
+  above, up to just over it - never across it. A set so pushed pushes the
+  next in turn, each set once, each to the first place free of the sets
+  already pushed, so that no two come to one place (a step's later exits
+  keep their own order under its first). All of it is part
   of the gesture's step: one undo takes back the drag, the frame and what
   was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
-  it held; a set left empty stays, empty, until it is deleted;
+  it held; a set left empty stays, empty, until it is deleted. A step's
+  result set left empty - its step run on nothing, or its last member
+  taken - goes back to its "Not run yet" frame, its top-left corner where
+  it was, never the tall frame of what it last held; a chemist's set keeps
+  its frame, so that what is drawn into it again where it was joins it;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
   and structures drawn are not written to the workspace's file - only how
   many it held and their collection's hash - and opened again, the set
@@ -369,7 +383,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Descriptors | a ring and the lines of what is worked out for it (drawn) | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus and a minus, each in a circle (drawn) | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
-| Combine | two lines coming into one (drawn) | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
+| Combine | two lines coming into one (drawn) | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; a part's restraints and measures carried, its atoms numbered as in the complex, and none of its other properties, each named (STRUCTURE-STEPS.md, *Combine*) |
 | Measure | a distance between two marks (drawn) | molecules in 3D, or a conformer set; and, where wanted, *Atoms*: a table | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them, or each row's of the table wired into *Atoms*, its columns saying how they count them (STRUCTURE-STEPS.md, *Measure*) |
 | Mode on atoms | two atoms moving, a third still (drawn) | molecules in 3D with vibrations, or a conformer set; and, where wanted, *Atoms*: a table | **the same kind of set**, every entry kept: where its lowest, imaginary vibration ranks the reacting atoms - a table's bonds formed or broken, or atoms typed - written on it (`mode.window`, `mode.ranks`, `mode.outside`) for a Filter to choose on (STRUCTURE-STEPS.md, *Mode on atoms*) |
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind: a wire of the other kind is refused as it is drawn | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
@@ -3439,9 +3453,14 @@ those left open, *Generate*'s, and a SMILES pasted.
 - **Left open**: a stereocentre or double bond the toolkit perceives as
   one that could have a configuration, drawn without one or with one
   drawn as not known (a wavy bond, a double bond of either) - but a C=N
-  whose E/Z is none of its own (below), and an atom of three neighbours
+  whose E/Z is none of its own (below), an atom of three neighbours
   whose lone pair keeps no configuration (an amine's N: *Centres by a lone
-  pair*, docs/EDITOR-2D.md). An open double bond on an atom
+  pair*, docs/EDITOR-2D.md), and an atom Meno holds no candidate for a
+  centre by its kind (lib/chem/perception/stereo/candidates): a metal, at
+  any count of groups - of the d or f block, or Li, Mg, Al and the like,
+  not Sn, Pb or Bi - and an N+ with an H, as Meno's reading of a drawing
+  refuses them. So a toolkit's "possible" metal centre, Pd(PPh3)4's Pd, is
+  never said to be open. An open double bond on an atom
   of two double bonds is an allene's axis, and the bonds of a run are
   one element: an allene's axis, of two or four; cis or trans, of three.
 - **At most** (an option, 32 unless changed): the most stereoisomers one
@@ -3498,7 +3517,7 @@ those left open, *Generate*'s, and a SMILES pasted.
   what the drawing leaves open is given the configuration the molecule
   made before has, read from its places by Meno - a centre's by the
   sign of the volume its neighbours span, a double bond's by the side
-  its neighbours are on (lib/chem/stereoOpen `configuredFrom`) - where
+  its neighbours are on (lib/chem/perception/stereo/from3d `configuredFrom`) - where
   it and every atom bonded to it are placed. Before, a double bond left
   open came back as the first stereoisomer, whatever the molecule made
   before had: of 236 such remakes of a 70-structure set, 185 came back

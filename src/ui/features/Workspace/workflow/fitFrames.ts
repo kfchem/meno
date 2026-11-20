@@ -23,11 +23,12 @@ import type { Atom, Bond, Model, Molecule3D, PictureItem, WorkflowSet } from "..
 import { drawnBox } from "../../../../utils/importers";
 import { cornersOf } from "../utils/selection";
 import { cardRect } from "../pageGl/conversationCard";
-import { drawnIn, inside, structuresOf, setMembers, type Frame } from "./entries";
-import { SET_PAD, SET_TOP } from "./look";
-import { resizeSet } from "./model";
+import { drawnIn, inside, recordNumber, structuresOf, setMembers, type Frame } from "./entries";
+import { BETWEEN, CARD_H, CARD_W, SET_PAD, SET_TOP } from "./look";
+import { exitsOf } from "./kinds";
+import { moveSet, resizeSet } from "./model";
 import { unseenSets } from "./onPage";
-import { keepExitsUnder, LEAST_W, roomOf, type RunWith } from "./run";
+import { keepExitsUnder, LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
 type Reach = RunWith["extentOf"];
 
@@ -37,6 +38,27 @@ const EPS = 1e-6;
 /** Whether a set's frame is its members' room: one holding structures, molecules in 3D or pictures it knows of, and nothing a frame says otherwise - no table, number or chart, none held in the set itself (a large set), none not read. */
 export function holdsToFit(set: WorkflowSet): boolean {
   return !!set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread;
+}
+
+/**
+ * Whether a step's result set's frame is left over from what it no longer holds: one with no member left - its step run on nothing (model
+ * `holdNothing`), or its last member dragged out or deleted - and nothing else a frame says. A chemist's set keeps its frame emptied: what
+ * is drawn into it again, where it was, is its member (members `membersSettled`).
+ */
+export function emptied(set: WorkflowSet): boolean {
+  return !!set.made && !set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread;
+}
+
+/**
+ * An emptied step's set's frame (`emptied`): as large as the frame made for it before it held anything - its exit's "Not run yet" frame,
+ * a card wide and a card high, or half as high for an exit of one of its others (model `withExits`) - kept where its top-left corner is,
+ * never the tall frame of what it last held (backlog 232, found in a GUI run).
+ */
+export function emptyFrame(doc: WorkspaceDocument, set: WorkflowSet): Frame {
+  const step = set.made && doc.steps?.find((s) => s.id === set.made!.step);
+  const exit = step && exitsOf(step.kind).find((e) => e.id === set.made!.exit);
+  const high = exit && !exit.of ? CARD_H : CARD_H / 2;
+  return { x0: set.x0, x1: set.x0 + CARD_W, y0: set.y1 - high, y1: set.y1 };
 }
 
 /** The bonds of a model by the atoms they join, worked out once for each list of bonds. */
@@ -122,7 +144,11 @@ export function memberBoxes(doc: WorkspaceDocument, set: WorkflowSet, extentOf: 
   const molecules = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
   const pictures = new Map((doc.pictures ?? []).map((p) => [p.id, p]));
   const boxes: Frame[] = [
-    ...held.structures.map((ids) => on.structure(ids)),
+    // (a structure numbered by its record - Enumerate's #n, drawn under it - its number's room below it, as the run gave it: run `NUMBER_ROOM`)
+    ...held.structures.map((ids, i) => {
+      const b = on.structure(ids);
+      return recordNumber(held.records[i]) != null ? { ...b, y0: b.y0 - NUMBER_ROOM } : b;
+    }),
     ...held.molecules.flatMap((id) => (molecules.has(id) ? [on.molecule(molecules.get(id)!)] : [])),
     ...held.pictures.flatMap((id) => (pictures.has(id) ? [on.picture(pictures.get(id)!)] : [])),
   ];
@@ -232,6 +258,13 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
   // (the frames fitted all at once, each from the page as it was: a step's other exits' sets are kept under its first only then, moving with what they hold)
   const steps = new Set<number>();
   for (const set of doc.sets) {
+    // (one this edit emptied - it held members before it: back to the frame it had before it held anything, where it is)
+    if (emptied(set)) {
+      const prior = before?.sets?.find((b) => b.id === set.id);
+      const frame = emptyFrame(doc, set);
+      if (prior?.members?.length && !sameFrame(set, frame)) out = resizeSet(out, set.id, frame);
+      continue;
+    }
     if (!holdsToFit(set)) continue;
     // (a set the edit added is as it was made; and one whose member is being dragged keeps its frame)
     const prior = before?.sets?.find((b) => b.id === set.id);
@@ -251,6 +284,73 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
 }
 
 /**
+ * `doc` with no frame over another (backlog 257, the maintainer's rule that nothing overlaps a frame): each set whose frame grew past what
+ * it was as the pointer was pressed (`down`) - or was pushed itself - pushes, frame and all it holds (model `moveSet`), each other set
+ * that its frame now lies over away from it, by where it lay as it was: one below it down, to just under it, one above it up, to just over
+ * it - never across it - `BETWEEN` clear - one beside another alike, one past another stacked in turn,
+ * never two in one place. A set pushed pushes the next in turn, each set moved once; a step's later exits, kept under its first (run
+ * `keepExitsUnder`), and a set held off the page are left to their own rules. The frames ease to their places as any frame does
+ * (Workflow2D `useShownFrames`), in the gesture's step: one undo takes it all back.
+ */
+export function framesCleared(doc: WorkspaceDocument, down: WorkspaceDocument): WorkspaceDocument {
+  const was = new Map((down.sets ?? []).map((b) => [b.id, b as Frame]));
+  const grew = (b: WorkflowSet) => {
+    const w = was.get(b.id);
+    return !!w && (b.x0 < w.x0 - EPS || b.x1 > w.x1 + EPS || b.y0 < w.y0 - EPS || b.y1 > w.y1 + EPS);
+  };
+  const unseen = unseenSets(doc);
+  const across = (p: Frame, q: Frame) => p.x0 < q.x1 - EPS && q.x0 < p.x1 - EPS;
+  // (two sets of one step: its exits, which keep their own order under its first)
+  const sameStep = (p: WorkflowSet, q: WorkflowSet) => !!p.made && !!q.made && p.made.step === q.made.step;
+  const middle = (f: Frame) => (f.y0 + f.y1) / 2;
+  let out = doc;
+  // (each pusher, with its frame before this gesture changed it: what lay under it then is what it may push)
+  let pushers: { id: number; before: Frame }[] = (out.sets ?? []).filter((b) => grew(b) && !unseen.has(b.id)).map((b) => ({ id: b.id, before: was.get(b.id)! }));
+  const moved = new Set<number>(pushers.map((p) => p.id));
+  while (pushers.length) {
+    const next: typeof pushers = [];
+    for (const { id, before } of pushers) {
+      const g = out.sets!.find((b) => b.id === id)!;
+      const hit = out.sets!.filter((b) => b.id !== g.id && !moved.has(b.id) && !unseen.has(b.id) && !sameStep(g, b) && overlap(g, b));
+      // (those below it as it was pushed down, the highest first; those above, up, the lowest first: each that follows goes past those
+      //  already placed across from it)
+      // (one level with it goes down, as a step's sets flow down the page)
+      const below = hit.filter((b) => middle(b) <= middle(before) + EPS).sort((p, q) => q.y1 - p.y1);
+      const above = hit.filter((b) => middle(b) > middle(before) + EPS).sort((p, q) => p.y0 - q.y0);
+      const push = (b: WorkflowSet, dy: number) => {
+        out = moveSet(out, b.id, 0, dy);
+        moved.add(b.id);
+        next.push({ id: b.id, before: { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 } });
+      };
+      // (the first place past it free of every set moved so far - by this pusher or another - across from it: none two in one place)
+      const placedAcross = (b: WorkflowSet) => out.sets!.filter((f) => f.id !== b.id && f.id !== g.id && moved.has(f.id) && across(f, b));
+      for (const b of below) {
+        const h = b.y1 - b.y0;
+        let top = g.y0 - BETWEEN;
+        for (let hit = true; hit; ) {
+          const f = placedAcross(b).find((f) => f.y0 < top + BETWEEN - EPS && top - h - BETWEEN < f.y1 - EPS);
+          hit = !!f;
+          if (f) top = f.y0 - BETWEEN;
+        }
+        push(b, top - b.y1);
+      }
+      for (const b of above) {
+        const h = b.y1 - b.y0;
+        let foot = g.y1 + BETWEEN;
+        for (let hit = true; hit; ) {
+          const f = placedAcross(b).find((f) => f.y1 > foot - BETWEEN + EPS && foot + h + BETWEEN > f.y0 + EPS);
+          hit = !!f;
+          if (f) foot = f.y1 + BETWEEN;
+        }
+        push(b, foot - b.y0);
+      }
+    }
+    pushers = next;
+  }
+  return out;
+}
+
+/**
  * `doc` as the pointer is let go (`down`: the document as it was when it was
  * pressed): every frame its members' room (`framesFitted`), and what no set
  * holds - what the gesture moved, drew or let go on a frame, and anything a
@@ -259,7 +359,8 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
  */
 export function framesSettled(doc: WorkspaceDocument, down: WorkspaceDocument | undefined, extentOf: Reach | undefined): WorkspaceDocument {
   const fitted = framesFitted(doc, undefined, extentOf);
-  return down ? cardsCleared(pushedOut(fitted, down, extentOf), down, extentOf) : fitted;
+  // (sets pushed clear first: what a pushed frame comes to lie over is then eased out of it, as of any frame that moved)
+  return down ? cardsCleared(pushedOut(framesCleared(fitted, down), down, extentOf), down, extentOf) : fitted;
 }
 
 /** `p` and `q` overlap by more than a rounding in both directions. */
@@ -268,16 +369,20 @@ const overlap = (p: Frame, q: Frame) => p.x0 < q.x1 - EPS && q.x0 < p.x1 - EPS &
 /**
  * Where a box lying over a frame goes to lie just outside it, by the
  * smallest move of the four - to the left, the right, up or down, its edge
- * `SET_PAD` from the frame's.
+ * `SET_PAD` from the frame's - that leaves it over none of `others`, the
+ * other frames; where every move does, the smallest.
  */
-export function easedOut(box: Frame, frame: Frame): { dx: number; dy: number } {
+export function easedOut(box: Frame, frame: Frame, others: readonly Frame[] = []): { dx: number; dy: number } {
   const moves = [
     { dx: frame.x0 - SET_PAD - box.x1, dy: 0 },
     { dx: frame.x1 + SET_PAD - box.x0, dy: 0 },
     { dx: 0, dy: frame.y0 - SET_PAD - box.y1 },
     { dx: 0, dy: frame.y1 + SET_PAD - box.y0 },
-  ];
-  return moves.reduce((best, m) => (Math.abs(m.dx) + Math.abs(m.dy) < Math.abs(best.dx) + Math.abs(best.dy) ? m : best));
+  ].sort((p, q) => Math.abs(p.dx) + Math.abs(p.dy) - (Math.abs(q.dx) + Math.abs(q.dy)));
+  // (the smallest of them that leaves it over no other frame - a thing between two frames pushed together goes out to the side, not
+  //  into the next frame - else the smallest)
+  const clear = moves.find((m) => !others.some((f) => overlap({ x0: box.x0 + m.dx, x1: box.x1 + m.dx, y0: box.y0 + m.dy, y1: box.y1 + m.dy }, f)));
+  return clear ?? moves[0];
 }
 
 /** A structure's atoms moved by (dx, dy), with the marks put by hand that go with them. */
@@ -340,7 +445,7 @@ export function pushedOut(doc: WorkspaceDocument, down: WorkspaceDocument, exten
       }
     }
     if (!most) return null;
-    const m = easedOut(box, most);
+    const m = easedOut(box, most, sets.filter((b) => b !== most));
     return m.dx || m.dy ? m : null;
   };
   for (const ids of structuresOf(doc.model, true)) {

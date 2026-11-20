@@ -11,7 +11,8 @@
  * Meno's one rule for whether some atoms are a skeleton. Pure: over atoms
  * and bonds.
  */
-import { implicitHydrogens, type Radical } from "./perception/hydrogens";
+import { implicitHydrogens, valencesAt, type Radical } from "./perception/hydrogens";
+import { metal } from "./perception/elements";
 import { orderFromLength, ordersFromGeometry } from "./ordersFromGeometry";
 
 export type SkeletonAtom = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical };
@@ -97,9 +98,39 @@ export function halfOrderSums(n: number, bonds: readonly SkeletonBond[]): Float6
   return sum;
 }
 
-/** Whether atoms with their bonds' orders summed (`sum`) take hydrogens their valence leaves room for. */
-const roomFor = (atoms: readonly SkeletonAtom[], among: readonly number[], sum: ArrayLike<number>, charges?: readonly number[]) =>
-  among.some((i) => implicitHydrogens(atoms[i].el, Math.round(sum[i]), charges ? charges[i] : (atoms[i].charge ?? 0), atoms[i].radical) > 0);
+/**
+ * Each atom's hydrogens over its half-order sum (`halfOrderSums`): its valence's room, but an atom with an aromatic bond at its own
+ * valence alone - a thiophene's S, a phosphinine's P, their two aromatic bonds summing to three, take no S(IV) or P(V) step and no H
+ * (the chemistry check's ruling: kept so until part 12's fix of the skeleton's sum, which counts them by Kekule orders).
+ */
+export function halfOrderHydrogens(atoms: readonly SkeletonAtom[], bonds: readonly SkeletonBond[]): number[] {
+  const sum = halfOrderSums(atoms.length, bonds);
+  const toMetals = metalSums(atoms, bonds, (b) => (b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0));
+  const aromatic = new Set(bonds.flatMap((b) => (b.order === 4 ? [b.a1, b.a2] : [])));
+  return atoms.map((a, i) => {
+    const charge = a.charge ?? 0;
+    if (!aromatic.has(i)) return implicitHydrogens(a.el, Math.round(sum[i]), charge, a.radical, Math.round(toMetals[i]));
+    const own = valencesAt(a.el, charge, a.radical)[0];
+    return own == null ? 0 : Math.max(0, own - Math.round(sum[i]));
+  });
+}
+
+/**
+ * Each atom's bonds to metals, their orders summed (`order`): its share of its bonds that does not lift a P's or an S's valence
+ * (perception/hydrogens `implicitHydrogens`) - PF3 on nickel, an Fe4S4 core's S, found in review.
+ */
+function metalSums(atoms: readonly SkeletonAtom[], bonds: readonly SkeletonBond[], order: (b: SkeletonBond) => number): Float64Array {
+  const sum = new Float64Array(atoms.length);
+  for (const b of bonds) {
+    if (metal.has(atoms[b.a2]?.el ?? "")) sum[b.a1] += order(b);
+    if (metal.has(atoms[b.a1]?.el ?? "")) sum[b.a2] += order(b);
+  }
+  return sum;
+}
+
+/** Whether atoms with their bonds' orders summed (`sum`, of which `toMetals` to metals) take hydrogens their valence leaves room for. */
+const roomFor = (atoms: readonly SkeletonAtom[], among: readonly number[], sum: ArrayLike<number>, toMetals: ArrayLike<number>, charges?: readonly number[]) =>
+  among.some((i) => implicitHydrogens(atoms[i].el, Math.round(sum[i]), charges ? charges[i] : (atoms[i].charge ?? 0), atoms[i].radical, Math.round(toMetals[i])) > 0);
 
 /**
  * Whether some atoms of a molecule (`among`; all, unset) are a skeleton:
@@ -124,7 +155,10 @@ export function lacksHydrogens(
   among: readonly number[] = atoms.map((_, i) => i),
 ): boolean {
   if (!among.length || among.some((i) => atoms[i].el === "H")) return false;
-  if (!ordersUnknown) return roomFor(atoms, among, halfOrderSums(atoms.length, bonds));
+  if (!ordersUnknown) {
+    const hs = halfOrderHydrogens(atoms, bonds);
+    return among.some((i) => hs[i] > 0);
+  }
   const near: number[][] = atoms.map(() => []);
   for (const b of bonds) {
     near[b.a1]?.push(b.a2);
@@ -132,7 +166,8 @@ export function lacksHydrogens(
   }
   if (among.some((i) => atoms[i].el === "C" && wantsHydrogens(atoms, i, near[i]))) return true;
   // (no carbon says so, and no other atom could carry one whatever its orders - each bond single, its valence met: C60, CCl4, SF6)
-  if (!among.some((i) => atoms[i].el !== "C" && implicitHydrogens(atoms[i].el, near[i].length, atoms[i].charge ?? 0, atoms[i].radical) > 0)) return false;
+  const toMetalsSingle = metalSums(atoms, bonds, () => 1);
+  if (!among.some((i) => atoms[i].el !== "C" && implicitHydrogens(atoms[i].el, near[i].length, atoms[i].charge ?? 0, atoms[i].radical, toMetalsSingle[i]) > 0)) return false;
   // (else its orders as its shape gives them, and what they leave room for - on these atoms, and the bonds among them)
   const inside = new Map(among.map((i, k) => [i, k]));
   const part = among.map((i) => atoms[i]);
@@ -149,5 +184,11 @@ export function lacksHydrogens(
     if (inside.has(b.a1) !== inside.has(b.a2)) sum[inside.get(b.a1) ?? inside.get(b.a2)!] += 1;
   }
   // (its carbons told by their shape above - a metal's carbonyl's is no C=O the estimate knows: its other atoms by what is left them)
-  return roomFor(part, part.flatMap((a, k) => (a.el === "C" ? [] : [k])), sum, part.map((a, k) => a.charge || estimate.charges[k]));
+  return roomFor(
+    part,
+    part.flatMap((a, k) => (a.el === "C" ? [] : [k])),
+    sum,
+    among.map((i) => toMetalsSingle[i]),
+    part.map((a, k) => a.charge || estimate.charges[k]),
+  );
 }

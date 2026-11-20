@@ -60,13 +60,14 @@ describe("aromatic bonds outside any ring", () => {
     expect(outsideRingRefusal(nitro.atoms, kek(nitro))).toBe("its bonds marked aromatic outside a ring (atoms 2, 3 and 4) have no form with single and double bonds: is a charge missing?");
   });
 
-  it("refuse a centre that needs more than one double bond - CO2 written O:C:O, a sulfone, a phosphate: never filled with an H", () => {
+  it("refuse a centre that needs more than one double bond - CO2 written O:C:O, a sulfone: never filled with an H; phosphoric acid read", () => {
     const co2 = g(["O", "C", "O"], [[0, 1, AROMATIC_BOND], [1, 2, AROMATIC_BOND]]);
     expect(outsideRingRefusal(co2.atoms, kek(co2))).toBe("its bonds marked aromatic outside a ring (atoms 1, 2 and 3) have no form with single and double bonds: is a charge missing?");
     const sulfone = g(["C", "S", "O", "O", "C"], [[0, 1, 1], [1, 2, AROMATIC_BOND], [1, 3, AROMATIC_BOND], [1, 4, 1]]);
     expect(outsideRingRefusal(sulfone.atoms, kek(sulfone))).not.toBeNull();
+    // (a phosphoric acid's P, of five: one P=O closes it, the other O an OH - phosphoric acid itself, read)
     const phosphate = g(["O", "P", "O", "O", "O"], [[0, 1, 1], [1, 2, AROMATIC_BOND], [1, 3, AROMATIC_BOND], [1, 4, 1]]);
-    expect(outsideRingRefusal(phosphate.atoms, kek(phosphate))).not.toBeNull();
+    expect(outsideRingRefusal(phosphate.atoms, kek(phosphate))).toBeNull();
   });
 
   it("leave a ring's aromatic bonds as they were: benzene, pyridine, pyrrole - and a ring with a carboxyl written so beside it", () => {

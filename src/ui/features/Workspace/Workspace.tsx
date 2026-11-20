@@ -234,7 +234,7 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
-import { isProjection } from "./projections/chair";
+import { isProjection } from "./projections/projection";
 import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";
 import type { SelectableKind } from "./store/slices/selectionSlice";
@@ -242,7 +242,7 @@ import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menu
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, numberingSaid, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
@@ -456,6 +456,9 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
+  // (what the chemistry's line offers to do, where it offers something: a plugin chosen to read pictures, by name, where Meno read none -
+  //  with the words it was offered beside, shown only while the line says them: another error put there lets it go)
+  const [chemOffer, setChemOffer] = useState<{ what: string; run: () => void; beside: string | null } | null>(null);
   // (the role a chemistry asked of that no plugin here fills: what the line of its error offers plugins for)
   const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
@@ -1631,6 +1634,7 @@ function WorkspaceContent({
       text: chemError,
       dismiss: () => {
         setChemError(null);
+        setChemOffer(null);
         useRoleOffer.setState({ role: null });
       },
     },
@@ -1796,6 +1800,20 @@ function WorkspaceContent({
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
           <span className="break-words">{a.text}</span>
           {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          {/* (a picture Meno read nothing from: the plugin chosen to read pictures, by name, run when asked) */}
+          {a.key === "chem" && chemOffer && chemOffer.beside === chemError && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const { run } = chemOffer;
+                setChemOffer(null);
+                run();
+              }}
+              className="shrink-0 rounded-md border border-gh-line px-2 py-0.5 transition-colors duration-150 ease-meno hover:bg-gh-base"
+            >
+              {chemOffer.what}
+            </button>
+          )}
           {/* (a role no plugin here fills: the plugins online that fill it, each to add) */}
           {a.key === "chem" && offerRole && chemError?.includes(noPluginSaid(offerRole)) && (
             <RoleOffer
@@ -2143,6 +2161,8 @@ function WorkspaceContent({
               // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth; clicked again while it is as it was
               // put down, the view from the other side)
               else if (what === "chair") st.putChair(at);
+              // (and a Haworth ring, a pyranose's of six; clicked again while it is as it was put down, a furanose's of five)
+              else if (what === "haworth") st.putHaworth(at);
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -2364,7 +2384,17 @@ function WorkspaceContent({
           } : undefined}
           onReadStructure={(() => {
             const st = store.getState();
-            const ui = { working: setWorking3d, say: setChemError };
+            // (what it says lets go of what was offered before; an offer comes after it)
+            let said: string | null = null;
+            const ui = {
+              working: setWorking3d,
+              say: (why: string | null) => {
+                said = why;
+                setChemError(why);
+                setChemOffer(null);
+              },
+              offer: (what: string, run: () => void) => setChemOffer({ what, run, beside: said }),
+            };
             // (the figure in a box drawn on a PDF: the structure beside the PDF)
             const pdf = menu.kind === "pdf" ? st.pdfs.find((x) => x.id === menu.id) : undefined;
             const box = st.pdfBox;
@@ -2373,7 +2403,7 @@ function WorkspaceContent({
             const pic = menu.kind === "picture" ? st.pictures.find((x) => x.id === menu.id) : undefined;
             const from = pic?.from;
             if (pic && from && st.pdfs.some((p) => p.sha256 === from.sha256)) return () => void readStructure(store, from, pictureRegion(pic), ui);
-            // (any other picture: read by the plugin that reads pictures, the structure beside it)
+            // (any other picture: read by Meno - the plugin chosen to read pictures offered where it reads none - the structure beside it)
             if (pic && !isFilm(pic.media)) return () => void readStructure(store, { picture: pic }, pictureRegion(pic), ui);
             return undefined;
           })()}
@@ -2799,6 +2829,7 @@ function WorkspaceContent({
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
                     onRenumber: () => store.getState().renumberAtomMap(a.id),
+                    ...(a.atomMap && numberingSaid(a.atomMap) ? { numbering: numberingSaid(a.atomMap)! } : {}),
                     onExport: () => void files.exportReaction3d({ arrow: a.id }),
                     ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
@@ -2850,6 +2881,7 @@ function WorkspaceContent({
                       onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
                       onOther: () => store.getState().otherStructureMaps(ids),
                       onRenumber: () => store.getState().renumberStructureMaps(ids),
+                      ...(numberingSaid(first.map) ? { numbering: numberingSaid(first.map)! } : {}),
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
                       unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
                       conformers: conformersSaid(first.map, st.molecules3d, st.model),

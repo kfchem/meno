@@ -6,7 +6,7 @@ import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
-import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+import type { AtomNumberKind, AtomNumbersShown, MapText } from "../utils/atomNumbers";
 import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -209,8 +209,8 @@ export type Arrow = ArrowForm & {
  */
 export type ArrowAtomMap = {
   drawnAs: string;
-  reactant: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
-  product: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  reactant: { atoms: { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  product: { atoms: { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
   maps: number[][];
   complete: boolean;
   chosen: number;
@@ -221,6 +221,13 @@ export type ArrowAtomMap = {
    * order, then its hydrogens.
    */
   numbers?: number[];
+  /**
+   * What Before's atoms show for their numbers where that is not the number - a parent's IUPAC locant, 4a, 1', 3a with a superscript 1
+   * (*Renumber atoms*, chem/atomMap `iupacNumbering`) - by its atom; null for one that shows its number. Kept with `numbers`.
+   */
+  texts?: ({ base: string; sup?: string } | null)[];
+  /** Before's heavy atoms, by index, whose numbers are Meno's own order where no rule of IUPAC's decided them (`iupacNumbering`'s own). Kept with `numbers`. */
+  own?: number[];
   /**
    * The conformers paired (*Pair conformers*, chem/structureMaps): Before's
    * frames and After's, each with each - frame 0 a molecule's own - to be
@@ -657,6 +664,11 @@ export type Molecule3D = {
    * where its numbering could not be resolved, and it shows none.
    */
   mapFrames?: (number[] | null)[];
+  /**
+   * The atom-map numbers an atom map on the page shows as IUPAC locants rather than as themselves (4a, 1' - chem/atomMap
+   * `iupacNumbering`), by number: in every frame alike, as the drawing shows them.
+   */
+  mapTexts?: [number, MapText][];
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -2198,6 +2210,11 @@ export type EditorState = {
    * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).
    */
   putChair: (at: { x: number; y: number }) => void;
+  /**
+   * A Haworth ring of six (a pyranose's) put down from Quick Add, its middle at `at`; or, where the ring this put down is still as it was,
+   * nothing done since, that ring made a ring of five (a furanose's) in its place as one step - and back (docs/EDITOR-2D.md, *Projections*).
+   */
+  putHaworth: (at: { x: number; y: number }) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;
@@ -2323,7 +2340,7 @@ export type EditorState = {
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */
-  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => void;
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides" | "molecules3d">, scheme?: ImportedScheme) => void;
   /** Joins what readers reading an output as well have found to each molecule read from it (lib/calc/readings): learnt of the document, not done to it - nothing to undo. */
   joinReadings: () => void;
   /** A file opened over the canvas's contents, as one undo step. */
@@ -2343,6 +2360,11 @@ export type EditorState = {
   addArrowBetween: (from: { x: number; y: number }, to: { x: number; y: number }) => number;
   /** An arrow moved or reshaped; a run of changes in one gesture - a drag - is one step. */
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => void;
+  /**
+   * An arrow dragged by itself: moved to `at`, its words left where they stand - over it (`links`, by word, the arrow's id) or let go
+   * of it (null) - a run of them in one gesture one step (document `arrowMovedAlone`).
+   */
+  moveArrowAlone: (id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>, gesture: string) => void;
   /** Arrows given a kind, heads, dashes, a weight, corners or a colour - or theirs taken away - as one step. */
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */

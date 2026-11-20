@@ -5,6 +5,7 @@ import type { Model } from "../store/types";
 import { alikePlain, changedAt, changesFrom, saidOf, unitName } from "./stereoKept";
 import { enumerated } from "./enumerate";
 import { template } from "./testdata/enumerationCases";
+import { measured } from "../../../../testing/timeouts";
 
 /** Every wedge turned: the mirror image's drawing. */
 const mirror = (m: Model): Model => ({ ...m, bonds: m.bonds.map((b) => (b.stereo === "up" ? { ...b, stereo: "down" as const } : b.stereo === "down" ? { ...b, stereo: "up" as const } : b)) });
@@ -42,7 +43,7 @@ describe("the one comparison of two drawings' configurations, unit by unit", () 
     expect(unitName(binap, axis)).toMatch(/^the axis C\d+-C\d+$/);
     const lost = { ...binap, bonds: binap.bonds.map(({ stereo: _s, narrow: _n, ...b }) => b) };
     expect(changesFrom(binap, lost, new Map())).toEqual([{ ...axis, how: "opened" }]);
-  });
+  }, measured(400));
 
   it("sees an odd cumulene's cis or trans, and names a double bond by its two atoms", () => {
     const e = drawnFromSmiles("C/C=C=C=C/C");

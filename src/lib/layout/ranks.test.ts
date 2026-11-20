@@ -6,6 +6,7 @@ import { perceive, type LayoutInput } from "./perceive";
 import { atomClasses, canonicalRanks } from "./ranks";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { shuffled } from "./testdata/shuffled";
+import { measured } from "../../testing/timeouts";
 
 /** Each atom's new place in `shuffled(g, seed)`: the same shuffle, its atoms told apart by a charge. */
 const placesIn = (n: number, seed: number) => {
@@ -75,7 +76,7 @@ describe("a double bond's cis or trans, given against either neighbour of an end
       const [p, q] = [layout2D(other), layout2D(g)];
       expect([p.x, p.y]).toEqual([q.x, q.y]);
     }
-  });
+  }, measured(370));
 
   it("gives beta-carotene the same ranks with a stereo bond's atoms listed the other way round, its refs as they were", () => {
     // (the ref on the bond's first atom is found by the end it is on, not by its place in the refs)

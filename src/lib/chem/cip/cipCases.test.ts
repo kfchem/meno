@@ -106,6 +106,7 @@ const CASES: Case[] = [
     said: ["C3:S", "N1=C2:Z"],
   },
   {
+    // (a label only on a unit: its two bridges' Z stand only where identity reads the bridges as double bonds, not aromatic)
     vs: "VS155",
     cite: "BB 2013 P-93.5.5.1 as given in the suite",
     smiles: String.raw`OC(=O)C1=CC2=CC=C1/C=C\C1=CC(Br)=C(/C=C\2)C=C1`,
