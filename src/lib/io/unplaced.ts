@@ -11,6 +11,7 @@ import type { LayoutInput } from "../layout/perceive";
 import { ELEMENTS } from "../chem/elements";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens, type Molecule } from "../chem/molecule";
+import { metal } from "../chem/perception/elements";
 
 const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** The CTfile bond types that take no H from either end: a coordination bond, a hydrogen bond. */
@@ -86,17 +87,21 @@ export function laidOutWhereUnplaced(mols: readonly Molecule[]): Molecule[] {
 function laidOut(m: Molecule, length: number | null): Molecule {
   const orders = kekuleOrders(m.atoms, m.bonds);
   const used = m.atoms.map(() => 0);
+  // (and of it, each atom's bonds to metals: a P's or an S's valence is chosen by its other bonds, as the page counts it)
+  const toMetals = m.atoms.map(() => 0);
   m.bonds.forEach((b, i) => {
     if (NO_VALENCE.has(b.order)) return;
     used[b.a1] += orders[i];
     used[b.a2] += orders[i];
+    if (metal.has(m.atoms[b.a2].el)) toMetals[b.a1] += orders[i];
+    if (metal.has(m.atoms[b.a1].el)) toMetals[b.a2] += orders[i];
   });
   const input: LayoutInput = {
     atoms: m.atoms.map((a, i) => ({
       el: a.el,
       ...(a.charge ? { charge: a.charge } : {}),
       // (the H it carries: as the file says, or by its valence - none for a label)
-      hs: !ELEMENT_SYMBOLS.has(a.el) ? 0 : a.hCount ?? implicitHydrogens(a.el, used[i], a.charge ?? 0, a.radical),
+      hs: !ELEMENT_SYMBOLS.has(a.el) ? 0 : a.hCount ?? implicitHydrogens(a.el, used[i], a.charge ?? 0, a.radical, toMetals[i]),
     })),
     bonds: m.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
   };

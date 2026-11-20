@@ -1,15 +1,15 @@
 /**
  * The writers against the core's one hydrogen count (foundation part 12, the order's: what is written to a file first). A skeleton's test
- * (./skeleton) sums an aromatic bond as one and a half; the core (perception/hydrogens `hydrogenCounts`) takes it by its Kekule order.
- * This holds them side by side over every atom of a thousand analogues and their cores (lib/layout/testdata/analogues) and a set of
- * heteroaromatics, each read with no hydrogens given, as a molecule in 3D has them: they differ on an aromatic N-H's nitrogen and nowhere
- * else, which is part 12's fix of the skeleton's sum, to come (`halfOrderSums`). The valence a 3D molfile writes for an atom with no
- * hydrogens beyond its bonds (./molWriter) is the core's count: an aromatic bond by its Kekule order.
+ * (./skeleton `skeletonHydrogens`) takes the core's count (perception/hydrogens `hydrogenCounts`), an aromatic bond by its Kekule order
+ * (part 12's fix of the skeleton's sum: before, one and a half, which left a pyrrole's N no room). This holds the two side by side over
+ * every atom of a thousand analogues and their cores (lib/layout/testdata/analogues) and a set of heteroaromatics, each read with no
+ * hydrogens given, as a molecule in 3D has them. The valence a 3D molfile writes for an atom with no hydrogens beyond its bonds
+ * (./molWriter) is the core's count too.
  */
 import { describe, expect, it } from "vitest";
 import { analogues, CORE_SMILES } from "../layout/testdata/analogues";
 import { readSmiles } from "./smiles";
-import { halfOrderHydrogens, lacksHydrogens, type SkeletonAtom } from "./skeleton";
+import { lacksHydrogens, skeletonHydrogens, type SkeletonAtom } from "./skeleton";
 import { writeMolfile3d } from "./molWriter";
 import { hydrogenCounts } from "./perception/hydrogens";
 
@@ -34,7 +34,7 @@ describe("a skeleton's count against the core's", () => {
   const wholeDiffers: string[] = [];
   for (const smiles of CORPUS) {
     const { atoms, bonds, aromaticN } = asIn3d(smiles);
-    const half = halfOrderHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
+    const half = skeletonHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
     const core = hydrogenCounts(atoms, bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })));
     atoms.forEach((_, i) => {
       const h = half[i];
@@ -44,14 +44,14 @@ describe("a skeleton's count against the core's", () => {
     if (lacksHydrogens(placed, bonds, false) !== core.some((n) => n > 0)) wholeDiffers.push(smiles);
   }
 
-  it("differs only on an aromatic nitrogen, which it leaves no H where the core counts one (a pyrrole's, an indole's)", () => {
-    expect(differing.length).toBeGreaterThan(0);
-    expect(differing.filter((d) => !(d.aromaticN && d.half === 0 && d.core === 1))).toEqual([]);
-    expect(differing.map((d) => d.smiles)).toContain("c1cc[nH]c1");
+  it("equals it on every atom: a pyrrole's and an indole's N-H counted (part 12's fix, the chemistry check's ruling)", () => {
+    expect(differing).toEqual([]);
   });
 
-  it("so takes one molecule of the set for whole that the core's count would call a skeleton: tetrachloropyrrole, its N-H not there", () => {
-    expect(wholeDiffers).toEqual(["Clc1c(Cl)c(Cl)[nH]c1Cl"]);
+  it("so a molecule whole by the core's count is whole to it, and one short of H short: tetrachloropyrrole, its N-H not there, a skeleton", () => {
+    expect(wholeDiffers).toEqual([]);
+    const { atoms, bonds } = asIn3d("Clc1c(Cl)c(Cl)[nH]c1Cl");
+    expect(lacksHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds, false)).toBe(true);
   });
 });
 
@@ -93,7 +93,7 @@ describe("a skeleton's aromatic S and P take no higher valence's H (the chemistr
   it("thiophene's, thiazole's and thiadiazole's S, and phosphinine's P: none", () => {
     for (const [smiles, el] of [["c1ccsc1", "S"], ["c1cscn1", "S"], ["c1nncs1", "S"], ["c1ccpcc1", "P"]] as const) {
       const { atoms, bonds } = asIn3d(smiles);
-      const half = halfOrderHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
+      const half = skeletonHydrogens(atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds);
       expect(half[atoms.findIndex((a) => a.el === el)], smiles).toBe(0);
     }
   });

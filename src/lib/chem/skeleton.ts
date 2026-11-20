@@ -11,7 +11,7 @@
  * Meno's one rule for whether some atoms are a skeleton. Pure: over atoms
  * and bonds.
  */
-import { implicitHydrogens, valencesAt, type Radical } from "./perception/hydrogens";
+import { hydrogenCounts, implicitHydrogens, type Radical } from "./perception/hydrogens";
 import { metal } from "./perception/elements";
 import { orderFromLength, ordersFromGeometry } from "./ordersFromGeometry";
 
@@ -83,36 +83,16 @@ function wantsHydrogens(atoms: readonly SkeletonAtom[], i: number, near: readonl
 }
 
 /**
- * Each atom's bonds' orders summed, an aromatic bond (order 4) as one and a half: not the core's count (perception/hydrogens
- * `hydrogenCounts`, an aromatic bond by its Kekule order), from which it differs on an aromatic N-H's nitrogen, its two aromatic bonds
- * summing to three and leaving it no room where the core counts one H (a pyrrole's, an indole's). Kept so (foundation part 12a: a move
- * changes no answer); which is meant for a skeleton is part 12's fixes' question.
+ * Each atom's hydrogens by the core's one count (perception/hydrogens `hydrogenCounts`): an aromatic bond by its Kekule order - a pyrrole's
+ * N-H counted, a thiophene's S and a phosphinine's P none - a file's other bond types nothing, a P's or an S's valence chosen by its bonds
+ * to non-metals (part 12's fix of the skeleton's sum, the chemistry check's ruling: before, an aromatic bond counted one and a half, which
+ * left a pyrrole's N no room).
  */
-export function halfOrderSums(n: number, bonds: readonly SkeletonBond[]): Float64Array {
-  const sum = new Float64Array(n);
-  for (const b of bonds) {
-    const order = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
-    sum[b.a1] += order;
-    sum[b.a2] += order;
-  }
-  return sum;
-}
-
-/**
- * Each atom's hydrogens over its half-order sum (`halfOrderSums`): its valence's room, but an atom with an aromatic bond at its own
- * valence alone - a thiophene's S, a phosphinine's P, their two aromatic bonds summing to three, take no S(IV) or P(V) step and no H
- * (the chemistry check's ruling: kept so until part 12's fix of the skeleton's sum, which counts them by Kekule orders).
- */
-export function halfOrderHydrogens(atoms: readonly SkeletonAtom[], bonds: readonly SkeletonBond[]): number[] {
-  const sum = halfOrderSums(atoms.length, bonds);
-  const toMetals = metalSums(atoms, bonds, (b) => (b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0));
-  const aromatic = new Set(bonds.flatMap((b) => (b.order === 4 ? [b.a1, b.a2] : [])));
-  return atoms.map((a, i) => {
-    const charge = a.charge ?? 0;
-    if (!aromatic.has(i)) return implicitHydrogens(a.el, Math.round(sum[i]), charge, a.radical, Math.round(toMetals[i]));
-    const own = valencesAt(a.el, charge, a.radical)[0];
-    return own == null ? 0 : Math.max(0, own - Math.round(sum[i]));
-  });
+export function skeletonHydrogens(atoms: readonly SkeletonAtom[], bonds: readonly SkeletonBond[]): number[] {
+  return hydrogenCounts(
+    atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) })),
+    bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+  );
 }
 
 /**
@@ -156,7 +136,7 @@ export function lacksHydrogens(
 ): boolean {
   if (!among.length || among.some((i) => atoms[i].el === "H")) return false;
   if (!ordersUnknown) {
-    const hs = halfOrderHydrogens(atoms, bonds);
+    const hs = skeletonHydrogens(atoms, bonds);
     return among.some((i) => hs[i] > 0);
   }
   const near: number[][] = atoms.map(() => []);
