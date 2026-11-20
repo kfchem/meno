@@ -248,7 +248,7 @@ group of each, and whether the two are on one side (`Cumulated`).
   turns in the mirror image says so.
 - **On a molecule in 3D** (lib/chem/cip/in3d): every candidate unit read
   from where its atoms are - an atom of four bonds and a double bond by
-  its places (lib/chem/stereoOpen `configuredFrom`), an atom of three by
+  its places (lib/chem/perception/stereo/from3d `configuredFrom`), an atom of three by
   Meno's rule on lone pairs (lib/chem/lonePairsIn3d) - never the toolkit's
   list of centres, and the CIP's own ranking deciding which have a
   descriptor. A double bond in a ring of seven atoms or fewer has none of
@@ -271,7 +271,7 @@ A unit with no label always says why; none is ever guessed.
 
 | Why | What it means |
 |---|---|
-| alike | Two of its ligands are alike by every rule, rule 6 with them: no centre, or no E/Z. |
+| alike | Two of its ligands are alike by every rule, rule 6 with them: no centre, or no E/Z. Or its configuration sets nothing by Meno's identity: turned over, the structure is the same structure (lib/chem/identity `unitsOf`, the one test of a unit), so a label goes only on a unit. A cage's atom is the exception: an atom joined to another by three paths with three atoms or fewer between (a bridgehead of norbornane, of camphor; quinuclidine's N) keeps the label the ranking gives, since turned alone it makes no structure, yet its configuration is real - camphor is (1R,4R). Measured on the validation suite, the ranking and identity agree on every labelled unit. |
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement, which takes a tetrahedron: three bonds and no lone pair; three bonds and two lone pairs (a three-bonded halogen such as the I of an aryl-lambda3-iodane or the Cl of ClF3 is T-shaped, its three ligands in one plane with it); four bonds and a lone pair (SF4, a sulfurane SR4, TeCl4: a see-saw, whose configuration is a five-coordinate polyhedron's, not R or S's); four bonds and two lone pairs (IF4-, XeF4: square planar). |
 | large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |

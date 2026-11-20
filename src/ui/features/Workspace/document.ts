@@ -17,6 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
 import { ARRANGEMENT_SAID, arrangementAs } from "./utils/arrangement";
+import { atomAs } from "./utils/atomAs";
 import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
@@ -49,6 +50,7 @@ import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
 import type { Conversation } from "./conversation/types";
+import { straightenedGroup } from "./projections/extend";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -610,7 +612,12 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  * taken away with their bonds where no longer drawn.
  */
 export type Relayout = {
-  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean }[];
+  /**
+   * Each atom moved: where to; its depth and whether it is a centre in space; whether its metal's arrangement is not given; and, a centre
+   * of a projection laid flat whose group its reading could not place (lib/chem/perception/projection/depth), why its configuration is
+   * not given.
+   */
+  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean; configurationOpen?: string }[];
   bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
@@ -646,7 +653,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (gone.has(a.id)) return [];
     const p = to.get(a.id);
     if (!p) return [a];
-    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen) return [a];
+    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen && !p.configurationOpen) return [a];
     changed = true;
     const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, ...rest } = a;
     return [
@@ -685,6 +692,12 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
   for (const [i, a] of atoms.entries()) {
     if (!to.get(a.id)?.arrangementOpen) continue;
     atoms[i] = { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, atoms, bonds) } };
+  }
+  // (a centre of a chair laid flat whose group was drawn where its reading could not place it: left open, and marked
+  // so, why with it, until it is changed - nothing silent)
+  for (const [i, a] of atoms.entries()) {
+    const why = to.get(a.id)?.configurationOpen;
+    if (why) atoms[i] = { ...a, unsure: { said: [`No configuration given: ${why}.`], as: atomAs(a, bonds) } };
   }
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
@@ -992,7 +1005,15 @@ export function updateBond(
   }
   const next = bonds.slice();
   next[index] = merged;
-  return { ...doc, model: { atoms: doc.model.atoms, bonds: next } };
+  // (a projection's group made linear by this order - a nitrile, an alkyne on a ring atom of the tool's - drawn straight on: projections/extend)
+  let atoms = doc.model.atoms;
+  if ("order" in patch && merged.order !== bond.order && merged.order >= 2) {
+    for (const end of [merged.a, merged.b]) {
+      const moved = straightenedGroup({ atoms, bonds: next }, end);
+      if (moved) atoms = atoms.map((a) => (moved.has(a.id) ? { ...a, ...moved.get(a.id)! } : a));
+    }
+  }
+  return { ...doc, model: { atoms, bonds: next } };
 }
 
 /**
@@ -1782,6 +1803,21 @@ export function addArrow(
     nextArrowId: doc.nextArrowId + 1,
     arrows: [...doc.arrows, arrow],
   };
+}
+
+/**
+ * The arrow `id` moved to `at` by itself, its words left where they stand (the maintainer, 2026-11-09: an arrow and its words move
+ * apart, each on its own; both move when both are selected) - and its words, by id, over it (`links`, the arrow's id) or over none
+ * (null): let go of it while it is moved, so that it is not drawn out to them, and over it again where it is put within their reach.
+ */
+export function arrowMovedAlone(doc: WorkspaceDocument, id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>): WorkspaceDocument {
+  const index = doc.arrows.findIndex((a) => a.id === id);
+  if (index < 0) return doc;
+  const arrows = doc.arrows.slice();
+  arrows[index] = { ...arrows[index], x: at.x, y: at.y };
+  let out: WorkspaceDocument = { ...doc, arrows };
+  for (const [word, arrow] of links) out = updateCaption(out, word, { arrow: arrow === id ? id : null });
+  return out;
 }
 
 export function updateArrow(

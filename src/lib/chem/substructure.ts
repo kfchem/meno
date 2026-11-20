@@ -23,6 +23,7 @@
  */
 import type { LayoutBond } from "../layout/perceive";
 import { aromaticForm, type IdentityAtom, type IdentityInput } from "./identity";
+import { drawnRoundMetal } from "./perception/elements";
 
 /** How many placements a search tries before it stops, saying so. */
 export const STEPS_MOST = 1_000_000;
@@ -37,11 +38,29 @@ export type Holds = { found: true; map: [query: number, target: number][] } | { 
 /** A structure as the search reads it: its atoms other than hydrogens drawn, each with the hydrogens it has (drawn or not) and those drawn on it; their bonds. */
 type Graph = { atoms: (IdentityAtom & { hTotal: number; hDrawn: number; at: number })[]; around: { to: number; order: number }[][] };
 
-const isPlainH = (a: IdentityAtom) => a.el === "H" && !a.isotope && !a.charge && !a.radical;
+/**
+ * The hydrogens of `form` that are one of their atom's (`graphOf`): an H, of no mass number, charge or unpaired electron, by exactly one
+ * single bond to an atom not an H nor a metal of the d or f block - its map number no matter (a query is matched whatever it numbers).
+ * A bridging H (B-H-B), H2, a lone H, an H by any other bond (backlog 176) and an H on a transition metal (177) are atoms of their own.
+ */
+function plainH(form: { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[] }): boolean[] {
+  const bonds = form.atoms.map(() => [] as { to: number; order: number }[]);
+  for (const b of form.bonds) {
+    bonds[b.a].push({ to: b.b, order: b.order });
+    bonds[b.b].push({ to: b.a, order: b.order });
+  }
+  // (an H on a metal of the d or f block stays an atom, as identity keeps it: a search finds Pd-H - backlog 177, the chemistry check's ruling)
+  return form.atoms.map((a, i) => {
+    if (a.el !== "H" || a.isotope || a.charge || a.radical || bonds[i].length !== 1 || bonds[i][0].order !== 1) return false;
+    const on = form.atoms[bonds[i][0].to].el;
+    return on !== "H" && !drawnRoundMetal.has(on);
+  });
+}
 
 function graphOf(input: IdentityInput): Graph {
   const form = aromaticForm(input);
-  const keep = form.atoms.map((a) => !isPlainH(a as IdentityAtom));
+  const plain = plainH({ atoms: form.atoms as readonly IdentityAtom[], bonds: form.bonds as readonly LayoutBond[] });
+  const keep = plain.map((p) => !p);
   const place = new Map<number, number>();
   const atoms: Graph["atoms"] = [];
   form.atoms.forEach((a, i) => {
@@ -50,6 +69,18 @@ function graphOf(input: IdentityInput): Graph {
     atoms.push({ ...(a as IdentityAtom), hTotal: a.hs ?? 0, hDrawn: 0, at: i });
   });
   const around: Graph["around"] = atoms.map(() => []);
+  // (a d- or f-block metal's hydrogens counted on it, each an atom bonded to it, as one drawn there is: a hydride is one graph however it
+  //  was written - [PdH]Cl2 and Cl2Pd-H drawn alike; an atom of none of the drawing's, `at` -1)
+  atoms.slice().forEach((a, m) => {
+    if (!drawnRoundMetal.has(a.el) || !a.hTotal) return;
+    for (let k = 0; k < a.hTotal; k++) {
+      const h = atoms.length;
+      atoms.push({ el: "H", hTotal: 0, hDrawn: 0, at: -1 } as Graph["atoms"][number]);
+      around.push([{ to: m, order: 1 }]);
+      around[m].push({ to: h, order: 1 });
+    }
+    a.hTotal = 0;
+  });
   for (const b of form.bonds as readonly LayoutBond[]) {
     const p = place.get(b.a);
     const q = place.get(b.b);
@@ -126,6 +157,7 @@ export function holdsSubstructure(query: IdentityInput, target: IdentityInput, m
     }
     return false;
   };
-  if (place(0)) return { found: true, map: map.map((t, i) => [Q.atoms[i].at, T.atoms[t].at]) };
+  // (the atoms of each drawing: an H counted on a metal, matched as an atom, is none of them)
+  if (place(0)) return { found: true, map: map.flatMap((t, i): [number, number][] => (Q.atoms[i].at < 0 || T.atoms[t].at < 0 ? [] : [[Q.atoms[i].at, T.atoms[t].at]])) };
   return { found: false, finished: !stopped };
 }

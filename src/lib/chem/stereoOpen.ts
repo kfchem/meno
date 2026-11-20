@@ -9,10 +9,12 @@ import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
-import { FLAT_VOLUME_3D, sideOfLine, signedVolume } from "./perception/stereo/geometry";
 import { runsOf } from "./perception/stereo/runs";
 import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
 import { readStereo, type DrawnAtom, type DrawnBond } from "./perception/stereo/from2d";
+import { CENTRE_ELEMENTS, NOT_CANDIDATE, notCandidate } from "./perception/stereo/candidates";
+import { metal } from "./perception/elements";
+import type { SymmetryInput } from "./perception/symmetry";
 
 // (the C=N bonds whose E/Z is none of their own, with why: the core's - perception/stereo/movingCN)
 export { MOVING_CN, movingCN, type MovingWhy } from "./perception/stereo/movingCN";
@@ -64,6 +66,28 @@ function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]):
   return (at) => lonePairOfThree(atoms[at].el, atoms[at].charge ?? 0, around[at], orders[at], hs[at]) && !keeps(at);
 }
 
+/**
+ * The centres the toolkit perceives that the core refuses by the atom's
+ * kind (perception/stereo/candidates): a metal, at any count of groups -
+ * of the d or f block, or Li, Mg, Al and the like, not Sn, Pb or Bi
+ * (`CENTRE_ELEMENTS`) - and an N+ with an H (`notCandidate`), as Meno's reading of a drawing refuses them (perception/stereo/from2d).
+ * Whatever the toolkit flags as possible there - Pd(PPh3)4's Pd - no such
+ * atom is left open on the page. (Its count of groups and hydrogens is the
+ * toolkit's own to read, as it perceives the centre.)
+ */
+function notCandidateCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): (at: number) => boolean {
+  const hs = implicitOf(atoms, bonds);
+  const g: SymmetryInput = {
+    atoms: atoms.map((a, i) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), hs: hs[i] })),
+    bonds: bonds.map(({ a, b, order }) => ({ a, b, order })),
+  };
+  // (a metal at any count of groups - one of five or six is asked of its count first - but tin, lead and bismuth, which are centres)
+  // (the core asked only of an N+, where an ammonium can be: each ask reads the whole structure again)
+  return (at) =>
+    (metal.has(atoms[at].el) && !CENTRE_ELEMENTS.has(atoms[at].el)) ||
+    (atoms[at].el === "N" && (atoms[at].charge ?? 0) > 0 && notCandidate(g, { kind: "centre", at }) === NOT_CANDIDATE.ammonium);
+}
+
 /** What a structure's C=N bonds left open whose E/Z is none of their own are, in a line - each reason once - or null. */
 export function movingSaid(whys: readonly MovingWhy[]): string | null {
   if (!whys.length) return null;
@@ -112,49 +136,8 @@ export function openCumulenes(bonds: readonly StereoBond[], open: readonly numbe
   return open.filter((i) => (doubles.get(bonds[i].a) ?? 0) > 1 || (doubles.get(bonds[i].b) ?? 0) > 1);
 }
 
-/** A place in 3D, in ångströms. */
-export type Place = readonly [number, number, number];
-
-/**
- * The configurations open stereocentres and double bonds have in places
- * made before (a molecule in 3D made from the same drawing: the page's
- * `like`), to be made so again: a centre's by its neighbours in the order
- * of its bonds and the sign of the volume the first three span seen from it
- * (lib/layout/stereo's `Tetrahedral` reading, an implicit H the fourth); a
- * double bond's by an atom bonded to each end, the first other than the
- * other end, and whether the two are on the same side. Only where the atom,
- * or the bond's two, and every atom bonded to them have a place; none
- * where the places are flat (a volume, or a side, of nought).
- */
-export function configuredFrom(
-  bonds: readonly StereoBond[],
-  places: Readonly<Record<number, Place>>,
-  openAtoms: readonly number[],
-  openBonds: readonly number[],
-): IsomerConfiguration {
-  const around = new Map<number, number[]>();
-  for (const b of bonds) {
-    around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
-    around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
-  }
-  const placed = (x: number) => x in places && (around.get(x) ?? []).every((n) => n in places);
-  const centres = openAtoms.flatMap((c) => {
-    const ns = around.get(c) ?? [];
-    if (ns.length < 3 || !placed(c)) return [];
-    const volume = signedVolume(places[ns[0]], places[ns[1]], places[ns[2]], places[c]);
-    return Math.abs(volume) < FLAT_VOLUME_3D ? [] : [{ atom: c, neighbours: ns, sense: (volume > 0 ? 1 : -1) as 1 | -1 }];
-  });
-  const doubles = openBonds.flatMap((i) => {
-    const { a, b } = bonds[i];
-    if (!placed(a) || !placed(b)) return [];
-    const na = (around.get(a) ?? []).find((n) => n !== b);
-    const nb = (around.get(b) ?? []).find((n) => n !== a);
-    if (na == null || nb == null) return [];
-    const side = sideOfLine(places[a], places[b], places[na], places[nb]);
-    return Math.abs(side) < FLAT_VOLUME_3D ? [] : [{ bond: i, ends: [na, nb] as [number, number], cis: side > 0 }];
-  });
-  return { centres, doubles };
-}
+// (a configuration read from places: the core's, one reading - perception/stereo/from3d)
+export { configuredFrom, type Place } from "./perception/stereo/from3d";
 
 /**
  * The most stereoisomers one structure is made in, all at once: 32 = 2^5,
@@ -241,8 +224,9 @@ export function stereoLeft(elements: readonly StereoElement[], atoms: readonly S
   const left = doubles.filter((i) => !moving.has(i)).sort(byIndex);
   const cumulenes = openCumulenes(bonds, left);
   const none = notCentres(atoms, bonds);
+  const refused = notCandidateCentres(atoms, bonds);
   return {
-    atoms: open.filter((e) => e.kind === "centre" && !none(e.at)).map((e) => e.at).sort(byIndex),
+    atoms: open.filter((e) => e.kind === "centre" && !none(e.at) && !refused(e.at)).map((e) => e.at).sort(byIndex),
     bonds: left,
     cumulenes,
     cumulated: cumulatedRuns(bonds, cumulenes),

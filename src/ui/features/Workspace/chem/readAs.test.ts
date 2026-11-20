@@ -12,8 +12,9 @@ const SRC = resolve(__dirname, "../../../..");
 const READ_ALREADY: Record<string, number> = {
   // (a view of a layout's input, or of a plugin's model: arrangementNotGiven, arrangementsMarked)
   "ui/features/Workspace/chem/arrangementsMarked.ts": 2,
-  // (a layout's input, made by layoutJob through readAs: relayoutFrom, oppositesKept; and poseAllyls's map of readAs)
-  "ui/features/Workspace/chem/engineLayout.ts": 4,
+  // (a layout's input, made by layoutJob through readAs: relayoutFrom, oppositesKept; poseAllyls's map of readAs; and the drawing read,
+  //  `drawingOf`, made through readAs: wedgeOctahedron; relayoutFrom's check of a six-bond metal with a tridentate, on the layout's input)
+  "ui/features/Workspace/chem/engineLayout.ts": 7,
   // (an atom holding a group passed by first: `a.abbrev || isMetal(a.el)`)
   "ui/features/Workspace/chem/etaBound.ts": 1,
   // (a SMILES's atoms: no drawing's)

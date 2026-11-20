@@ -62,12 +62,33 @@ The entries that come in, as one entry holding them all: a complex
   that is their high-spin coupling, and it is said, since another coupling
   is the chemist's to set (*Species*). Where a part is a skeleton, without
   its hydrogens, the complex has no species either, and this is said.
-- **Properties.** No part's properties are carried: each was worked out on
-  its part alone, not on the complex, and what refers to a part's atoms (its
-  restraints, its measures) would name the wrong atoms in the complex's
-  numbering. What each part held is said, part by part and by kind: "part
-  2: restraints, 2 measures, energy". The parts' ids stay as the complex's
+- **Properties that name atoms are carried**, each atom numbered as the
+  complex numbers it: a part's atom k is the complex's k plus the atoms of
+  the parts before it.
+  - Its restraints, where they are in the part's own numbering (an Atom
+    map's, where one numbered it). Those of one name from every part become
+    one list. Where every part held them first somewhere (*start*), that is
+    carried too, part after part; else it is not, and a minimisation starts
+    from where the complex stands.
+  - Its measures, where each was measured at the geometry the part has. No
+    part is moved, so each is the complex's too, at its geometry, named by
+    its atoms as the complex numbers them: a measure of part 2's `distance
+    1-2`, after a part of three atoms, is the complex's `distance 4-5`, the
+    same value Measure gives on the complex.
+
+  What is carried is said, part by part: "part 2 (its atoms from 4):
+  restraints, 1 measure".
+- **Other properties are not carried.** Each was worked out on its part
+  alone, not on the complex: its energy, and a list per atom of its own
+  calculation, such as its charges. Nor is a restraint in another numbering
+  or naming an atom the part has not, or a measure at another geometry or
+  not made: what names atoms is never
+  carried onto other atoms. What is not carried is said, part by part and by
+  kind: "part 1: energy, charges". The parts' ids stay as the complex's
   lineage.
+- **A side of an Atom map** made of several entries is combined so too, but
+  with none of its parts' values: the map then places it, and a measure
+  carried would be of places it no longer has.
 
 ## Measure
 
@@ -528,7 +549,9 @@ conformers, case F, F2).
   `src/lib/steps/reaction.ts`): its atoms where they stand in it, in the
   order of the reference atoms they map to, its bonds with them. What names
   atoms by number is renumbered too: a list per atom, a vibration's modes,
-  restraints, its stereo elements. A value worked out at its geometry
+  restraints, its stereo elements, and a measure's name - `distance 1-2`
+  of a hydrogen and its oxygen, the oxygen now atom 1, is `distance 2-1`.
+  A value worked out at its geometry
   still names that geometry, in the new order. An entry keeps its place in
   its set - its compound and its number - and with every map, each entry
   is a compound of its own, its maps numbered from 1. A side of several

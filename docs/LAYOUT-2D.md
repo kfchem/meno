@@ -1063,6 +1063,48 @@ round, as elements either).
 - **A metal's bonds are long.** A bond between a metal and a ligand is
   drawn 1.4 bond lengths long (Pd-P is 2.3 Å against C-C's 1.5 Å), which
   gives the ligands room - but in a chelate's ring, which is drawn regular.
+- **A metal with six bonds is drawn as the text draws an octahedron**
+  (Brecher 2006, ST-2.11; its own samples, SF6 and PCl6-): three lines
+  through it, 60 degrees apart, one of them upright, plain bonds - the
+  two donors on one line across from each other, any two not on one line
+  next to each other. A chelate's two ends stand on neighbouring spokes,
+  its ring drawn between them, never on one line; [Co(en)3]3+ has its
+  three chelates on the three neighbouring pairs, and trans-[Co(en)2Cl2]+
+  its two Cl on one line. A metal in a macrocycle - its donors closing a
+  ring round it, cyclam's four N or a porphyrin's - keeps them square,
+  as a metal of four bonds in a ring does, with its other two ligands
+  beside: four donors cannot stand on neighbouring spokes and close round
+  it. The wedge forms of the text are never made by
+  Meno - they state the hand, which Meno holds no record of - but one
+  drawn so is read and kept (EDITOR-2D.md, *Clean-up*).
+  Where a chelate's two donors are labelled and carry H - ethane-1,2-
+  diamine's NH2 - and stand on neighbouring spokes, their H would meet
+  each other and the metal's label: the two bonds to the metal are drawn
+  longer, to 1.8 bonds (`CHELATE_OPENED`), each donor still on its own
+  spoke, and the ring's other atoms set again with its own bonds one long
+  and its angles opened (Brecher 2008, GR-4.3.5: of rings sharing an atom,
+  only the bonds to it lengthened; GR-4.3.7: no further than needed). A
+  chelate ring of other atoms - a glycinate's carbonyl, a bipyridine's
+  aromatic rings - is left as it is. A metal of four bonds with one
+  chelate is laid out square: the chelate's two ends side by side, its
+  other two ligands on the right angles left. A tridentate - dien, tacn -
+  is set meridional (its two outer donors on one line, its middle one on
+  a spoke of another) or facial (no two of its donors on one line). Put
+  down from a SMILES that says neither, the layout's choice stands.
+  Cleaned up, it is the one drawn: Clean-up gives the layout the pairs the
+  drawing has across (`tridentatesDrawn`, `LayoutInput.arrangements`), and
+  the metal's arrangements tried are only those that put those pairs on
+  one line (`metalHub`), since no turn of the ligand round the metal makes
+  the one of the other. Two of its joined donors drawn across each other
+  are refused, as any chelate's are. A tridentate that cannot be set on
+  three lines (a terpyridine's metal, its rings fused) is refused by
+  Clean-up, saying so, until the layout can. A ligand of four donors or
+  more - EDTA's, a tetradentate tren's - is no tridentate, nor is one whose
+  three donors are joined only through a wider ring (a tren whose middle N
+  is not bound, its three arms meeting there): such a ligand is laid out as
+  before the three lines, and kept as Clean-up keeps any arrangement. A
+  tridentate is three donors chained by chelate rings of six atoms or fewer
+  through the metal - dien's, terpy's.
 - **A donor bonded to a metal** (a phosphine's P) spreads what it carries
   away from the metal, as a tripod's legs, 75 degrees apart.
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the

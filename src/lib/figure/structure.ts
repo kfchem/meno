@@ -8,7 +8,8 @@ import { abbreviationStructure, reversedLabel } from "../chem/abbreviations";
 import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
-import { isMetal } from "../layout/perceive";
+import { coordinatedByDonors } from "../chem/perception/elements";
+import { candidates } from "../chem/perception/stereo/candidates";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
 
@@ -76,6 +77,8 @@ const MOST_CHARGE = 4;
  * bonds; null where nothing says (a metal, a label that names no group).
  */
 function mostTaken(el: string, charge: number): number | null {
+  // (a Lewis-acidic main-group metal's bonds are counted against no valence, as a transition metal's are not)
+  if (coordinatedByDonors.has(el)) return null;
   const element = mostBonds(el, charge);
   if (element != null || NAMES.has(el)) return element;
   const g = abbreviationStructure(el);
@@ -87,6 +90,9 @@ function mostTaken(el: string, charge: number): number | null {
   // (its hydrogens where its SMILES says them, in brackets; else as many as its valence leaves, however it is bonded - =NOAc)
   return most - own - (a.hs ?? 0);
 }
+
+/** Whether an atom's bonds are counted as a metal's in the over-bond check: a transition metal's, or a Lewis-acidic main-group metal's. */
+const metalCounted = (el: string) => coordinatedByDonors.has(el);
 
 /** What an atom read as `el` is called, saying it has too many bonds: a carbon, oxygen, "OMe". */
 const calledAs = (el: string) => (el === "C" ? "a carbon" : (NAMES.get(el) ?? `"${el}"`));
@@ -172,8 +178,8 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   // (its bonds to metals left out, as the canvas leaves them: a pyridine's N bound to a nickel has its three)
   const unbound = valence.slice();
   read.bonds.forEach((b, i) => {
-    if (isMetal(els[b.b])) unbound[b.a] -= orders[i];
-    if (isMetal(els[b.a])) unbound[b.b] -= orders[i];
+    if (metalCounted(els[b.b])) unbound[b.a] -= orders[i];
+    if (metalCounted(els[b.a])) unbound[b.b] -= orders[i];
   });
   const tooMany = read.atoms.map((_, i): string | null => {
     const most = mostTaken(els[i], charges[i]);
@@ -218,6 +224,10 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
       ...(multiple[i] ? { multiple: multiple[i] } : {}),
     };
   });
+  // (where a configuration can be, by the core's candidates - lib/chem/perception/stereo/candidates, foundation part 13: an atom
+  //  of four groups, a P=O's or an S=O's too, or of three and a lone pair it keeps, never a metal's nor an N+ with an H - read
+  //  with each H drawn as an atom counted on its atom)
+  const centres = centresOf(read, orders, els, charges, (i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]));
   // a hashed bond whose narrow end is not drawn - its hashes even: a hashed line, read by the reader's one rule for it (perception/stereo/
   // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
   const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + implicitHydrogens(els[i], valence[i], charges[i], radicals[i]) === 4;
@@ -278,11 +288,11 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
     return [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((to) => ways.filter((t) => near(t, to)).length === 1);
   };
   atoms.forEach((a, i) => {
-    // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
-    if (isMetal(els[i]) || shown.has(i) || wavy.has(i) || lined.has(i)) return;
-    // (four groups, each other than the rest: its hydrogens one group at most)
+    // (where a configuration can be, by the candidates, and none is drawn)
+    if (!centres.has(i) || shown.has(i) || wavy.has(i) || lined.has(i)) return;
+    // (its groups each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
-    if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
+    if (hs[i] > 1 || new Set(groups).size !== groups.length) return;
     (a.unsure ??= []).push(crossed(i) ? FISCHER_CROSS : "A stereocentre whose configuration is not drawn: none is read.");
   });
   // a bond's open end - an atom of one bond, with no label - drawn short, as a bond to a label is: a letter there not read (an
@@ -393,4 +403,24 @@ function atomKinds(atoms: readonly StructureAtom[], bonds: readonly StructureBon
     kinds = next;
   }
   return kinds;
+}
+
+/**
+ * The atoms of a figure read where a configuration can be: the core's candidate centres (lib/chem/perception/stereo/candidates),
+ * of the structure with each H drawn as an atom of one bond counted among its atom's hydrogens, as identity reads it.
+ */
+function centresOf(read: FigureRead, orders: readonly number[], els: readonly string[], charges: readonly number[], carried: (i: number) => number): Set<number> {
+  const around: number[][] = read.atoms.map(() => []);
+  read.bonds.forEach((b) => {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  });
+  const plainH = (n: number) => els[n] === "H" && around[n].length === 1 && !charges[n];
+  const kept = read.atoms.flatMap((_, i) => (plainH(i) ? [] : [i]));
+  const at = new Map(kept.map((i, k) => [i, k]));
+  const g = {
+    atoms: kept.map((i) => ({ el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), hs: carried(i) + around[i].filter(plainH).length })),
+    bonds: read.bonds.flatMap((b, k) => (at.has(b.a) && at.has(b.b) ? [{ a: at.get(b.a)!, b: at.get(b.b)!, order: orders[k] === AROMATIC_BOND ? 4 : orders[k] }] : [])),
+  };
+  return new Set(candidates(g).flatMap((c) => (c.kind === "centre" ? [kept[c.at]] : [])));
 }

@@ -117,6 +117,18 @@ describe("Combine, as a step", () => {
     // (what each part held: the water its energy; the ammonia nothing - its place in the set not a value it held)
     expect(o.said).toBe("2 parts as one complex. Not carried over, as each was worked out on its part alone - part 1: energy.");
   });
+
+  it("carries a part's measure onto the complex, its atoms as the complex numbers them, the same as Measure gives on it", () => {
+    const nh = ok(runMeno("measure", [ammonia()], "molecules", { measurements: "1-2" })).kept[0];
+    const o = ok(runMeno("combine", [water(1), nh], "molecules"));
+    // (the ammonia's atoms 1 and 2 are the complex's 4 and 5)
+    const carried = o.kept[0].properties!["distance 4-5"];
+    const again = ok(runMeno("measure", [{ ...o.kept[0], properties: {} }], "molecules", { measurements: "4-5" })).kept[0].properties!["distance 4-5"];
+    expect(carried.value).toBe(nh.properties!["distance 1-2"].value);
+    expect(carried.value).toBe(again.value);
+    expect(o.kept[0].properties!["distance 1-2"]).toBeUndefined();
+    expect(o.said).toBe("2 parts as one complex. Carried over, its atoms numbered as in the complex - part 2 (its atoms from 4): 1 measure. Not carried over, as each was worked out on its part alone - part 1: energy.");
+  });
 });
 
 describe("Measure, as a step", () => {

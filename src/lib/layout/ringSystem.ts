@@ -346,7 +346,10 @@ export function placeRingSystem(
     const order = metal.orders[variant % metal.orders.length];
     const p = new Map<number, Point>([[metal.at, { x: 0, y: 0 }]]);
     const n = order.length;
-    order.forEach((d, k) => p.set(d, dir(-Math.PI / 2 - ((n - 1) / 2) * metal.step + k * metal.step)));
+    // (a six-bond metal's spokes from straight down, round, a free spoke's place left; a four-bond one with a free spoke, as the X: from
+    //  45 degrees off straight down)
+    const start = metal.spokes === 6 ? -Math.PI / 2 : metal.spokes === 4 && order.length === 4 && order.includes(-1) ? -Math.PI / 2 - Math.PI / 4 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
+    order.forEach((d, k) => d >= 0 && p.set(d, dir(start + k * metal.step)));
     return placeRest(p, new Set());
   }
   return placeRest(pos, placedRing);
@@ -369,12 +372,17 @@ export function placeRingSystem(
  * arrangement of separate chains round the metal (the first kept as it is:
  * the rest are the same turned or mirrored). Null where no metal has two
  * rings through it, or a ring through it is a macrocycle, or two rings
- * close between the same two donors.
+ * close between the same two donors. `spokes`: 6 where a six-bond metal's
+ * donors are set on three lines through it, from straight down; 4 where a
+ * four-bond metal's are set a right angle apart; 0 where they go round it
+ * as before, centred below.
  */
-export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][] } | null {
+export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][]; spokes: number } | null {
   const through = (a: number) => rings.filter((r) => r.includes(a));
   const metals = [...new Set(rings.flat())]
-    .filter((a) => isMetal(mol.el[a]) && through(a).length >= 2)
+    // (a six-bond metal with a chelate; a four-bond one with a chelate of a small ring - six atoms or fewer, as an en's, a bpy's, an
+    // acac's: a larger one, BINAP's of seven, is laid out as before)
+    .filter((a) => isMetal(mol.el[a]) && (through(a).length >= 2 || (mol.neighbours[a].length === 6 && through(a).length >= 1) || (mol.neighbours[a].length === 4 && through(a).length >= 1 && through(a).every((r) => r.length <= 6))))
     .sort((p, q) => through(q).length - through(p).length || byStructure(mol)(p, q));
   const at = metals[0];
   if (at == null) return null;
@@ -415,7 +423,16 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     chains.push(chain);
   }
   const n = donors.length;
-  const step = closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
+  // (a metal of six bonds: its six spokes three lines through it, 60 degrees apart, as the text draws an octahedron - Brecher 2006,
+  // ST-2.11 - its chelates' donors on spokes side by side and the spokes between them left to its other ligands)
+  // (not where its donors close a ring round it - a macrocycle's, cyclam's or a porphyrin's four N: those cannot stand on spokes side by
+  // side, and keep the square they are drawn in)
+  const six = mol.neighbours[at].length === 6 && !closed;
+  // (a metal of four bonds with one chelate - Pt(en)Cl2: its four spokes a right angle apart, the chelate's two ends side by side and
+  // its other two ligands on the spokes left, as a square-planar metal is drawn)
+  const four = mol.neighbours[at].length === 4 && n < 4 && !closed && through(at).every((r) => r.length <= 6);
+  const spokes = six ? 6 : four ? 4 : 0;
+  const step = six ? Math.PI / 3 : closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
   // the first chain as it is; the others in every order, each either way round
   const orders: number[][] = [];
   const go = (left: number[][], acc: number[]) => {
@@ -427,8 +444,48 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     });
   };
   if (chains.length > 4) return null;
+  if (spokes && n < spokes) {
+    // (each order of the chains round the six spokes, each but the first either way round, with the free spokes - the metal's other
+    // ligands' - shared out among the gaps between them in every way: the arrangement that reads best kept, and Clean-up's own
+    // check keeping which donors are opposite as drawn; -1 a free spoke)
+    // (a chain of three - a tridentate - also meridional: its two outer donors on one line, a free spoke between its middle donor and
+    // one end, so that the middle stands 60 degrees from one end and 120 from the other; laid flat round the metal, a terpyridine or a
+    // pincer has no other way)
+    const waysOf = (c: number[]): number[][] => {
+      const turned = c.length > 1 ? [c, [...c].reverse()] : [c];
+      if (c.length !== 3 || !six) return turned;
+      return turned.flatMap((w) => [w, [w[0], w[1], -1, w[2]]]);
+    };
+    const spread = (left: number[][], acc: number[], free: number) => {
+      if (!left.length) return void orders.push([...acc, ...Array<number>(free).fill(-1)]);
+      left.forEach((c, i) => {
+        const rest = left.filter((_, j) => j !== i);
+        for (const way of waysOf(c)) {
+          const uses = way.filter((d) => d < 0).length;
+          if (uses > free) continue;
+          for (let g = 0; g <= free - uses; g++) spread(rest, [...acc, ...Array<number>(g).fill(-1), ...way], free - uses - g);
+        }
+      });
+    };
+    for (const first of waysOf(chains[0])) {
+      const uses = first.filter((d) => d < 0).length;
+      if (uses <= spokes - n) spread(chains.slice(1), first, spokes - n - uses);
+    }
+    // (where the input says which donors are across - a drawing Clean-up lays out again, its tridentate meridional or facial as drawn:
+    // `LayoutInput.arrangements` - only the orders that put each pair given on one line and no other two of the chains' donors on one;
+    // none such, all of them, and Clean-up's own check refuses what does not keep the drawing)
+    const given = six ? mol.input.arrangements?.find((x) => x.metal === at) : undefined;
+    if (given) {
+      const across = new Set(given.pairs.map(([p, q]) => (p < q ? `${p},${q}` : `${q},${p}`)));
+      const keeps = (o: number[]) =>
+        o.every((p, i) => p < 0 || o.every((q, j) => q < 0 || j <= i || (j - i === 3) === across.has(p < q ? `${p},${q}` : `${q},${p}`)));
+      const kept = orders.filter(keeps);
+      if (kept.length) return { at, step, orders: kept, spokes };
+    }
+    return { at, step, orders, spokes };
+  }
   go(chains.slice(1), chains[0]);
-  return { at, step, orders };
+  return { at, step, orders, spokes: six ? 6 : 0 };
 }
 
 /** How many layouts of a ring system are tried at most where rings alike could each go next (`placeRingSystem`). */
@@ -1079,7 +1136,7 @@ function easeRings(
   // (a metal two chelates or more close at, and its donors, held where its
   // geometry put them: the chelates' rings give round them)
   const hub = metalHub(mol, sys.rings.map((i) => mol.rings[i]));
-  const held = new Set(hub ? [hub.at, ...hub.orders[0]] : []);
+  const held = new Set(hub ? [hub.at, ...hub.orders[0].filter((d) => d >= 0)] : []);
   for (let it = 0; it < 300; it++) {
     const pull = new Map<number, { x: number; y: number; w: number }>();
     const add2 = (a: number, d: Point, w: number) => {

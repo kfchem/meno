@@ -538,6 +538,27 @@ function assign(
     // II's two Cl together on one side of its carbene, by the mesityl's
     // methyl, the other side bare).
     const own = placed.filter((v) => mol.systemOf[v] === mol.systemOf[a]);
+    // (a six-bond metal whose chelates' donors stand on its spokes - three lines through it, 60 degrees apart (ringSystem metalHub) -
+    // has its other ligands on the spokes left free: the heaviest first, nearest the middle of those left;
+    // (and a four-bond one with a chelate - Pt(en)Cl2 - its other two on the right angles left)
+    const nSpokes = mol.neighbours[a].length;
+    if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && (nSpokes === 6 || nSpokes === 4) && own.length >= 2) {
+      const grid = (2 * Math.PI) / nSpokes;
+      const ownAt = own.map((v) => angleOf(sub(pos.get(v)!, at)));
+      const onGrid = ownAt.every((t) => Math.abs(wrap(t - ownAt[0] - grid * Math.round(wrap(t - ownAt[0]) / grid))) < 1e-3);
+      if (onGrid) {
+        const taken = placed.map((v) => angleOf(sub(pos.get(v)!, at)));
+        const spokes = Array.from({ length: nSpokes }, (_, k) => ownAt[0] + k * grid).filter((t) => taken.every((u) => Math.abs(wrap(t - u)) > grid / 2));
+        if (spokes.length >= k) {
+          const mid = Math.atan2(
+            spokes.reduce((t, u) => t + Math.sin(u), 0),
+            spokes.reduce((t, u) => t + Math.cos(u), 0),
+          );
+          const byCentre = [...spokes].sort((p, q) => Math.abs(wrap(p - mid)) - Math.abs(wrap(q - mid)));
+          return byWeight.map((c, i) => [c, byCentre[i]]);
+        }
+      }
+    }
     if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && own.length >= 2 && own.length < placed.length) {
       const ownAt = own.map((v) => angleOf(sub(pos.get(v)!, at)));
       // (two evenly as well, a third of the room apart - not a

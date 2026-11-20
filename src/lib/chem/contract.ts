@@ -274,7 +274,8 @@ function formulas(g: ContractGraph, P: Prepared): Found[] {
       if (els.every((x) => HALOGENS.includes(x)) && !(g.atoms[c].charge ?? 0)) {
         // its H, drawn or not, after it; then the halogens, the most first
         const heavyOrders = P.heavy(c).reduce((t, v) => t + (P.order.get(key(c, v)) || 1), 0);
-        const hs = implicitHydrogens(el, heavyOrders, 0) + P.next[c].filter(P.isH).length;
+        const toMetals = P.heavy(c).reduce((t, v) => t + (isMetal(g.atoms[v].el) ? P.order.get(key(c, v)) || 1 : 0), 0);
+        const hs = implicitHydrogens(el, heavyOrders, 0, undefined, toMetals) + P.next[c].filter(P.isH).length;
         const counts = HALOGENS.map((x) => [x, els.filter((y) => y === x).length] as const)
           .filter(([, n]) => n > 0)
           .sort((u, v) => v[1] - u[1]);
@@ -413,9 +414,12 @@ function merged(g: ContractGraph, P: Prepared, chosen: Found[], keep: ReadonlySe
     const own = ELEMENT.test(atom.el) && atom.el !== "C" && !isMetal(atom.el) && !(atom.charge ?? 0);
     if (own && !keep.has(p) && others.length === 1 && labels.size === 1 && !inRing) {
       // its H, drawn or not: what its bonds to heavy atoms leave of its valence
-      const heavyOrders = P.heavy(p).reduce((s, v) => s + (g.bonds.find((b) => key(b.a, b.b) === key(p, v))?.order ?? 1), 0);
+      const orderTo = (v: number) => g.bonds.find((b) => key(b.a, b.b) === key(p, v))?.order ?? 1;
+      const heavyOrders = P.heavy(p).reduce((s, v) => s + orderTo(v), 0);
       const drawnH = P.next[p].filter((v) => P.isH(v));
-      const hs = implicitHydrogens(atom.el, heavyOrders, 0);
+      // (its bonds to metals apart: a phosphine on a metal is PPh3, no P-H - the core's count)
+      const toMetals = P.heavy(p).reduce((s, v) => s + (isMetal(g.atoms[v].el) ? orderTo(v) : 0), 0);
+      const hs = implicitHydrogens(atom.el, heavyOrders, 0, undefined, toMetals);
       const name = fs[0].group.label;
       const label = `${atom.el}${hs ? `H${hs > 1 ? hs : ""}` : ""}${name}${fs.length > 1 ? fs.length : ""}`;
       const read = abbreviationStructure(label);
