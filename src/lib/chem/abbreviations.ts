@@ -185,6 +185,9 @@ const CONTRACTED: Abbreviation[] = [
   { label: "CO2H", also: ["COOH"], smiles: "*C(=O)O", name: "carboxy" },
   { label: "CHO", smiles: "*C=O", name: "formyl" },
   { label: "CN", smiles: "*C#N", name: "cyano" },
+  // (read outward from the bond, as every label is: its first symbol bonded - N, the iso form; OCN, O bonded, is composed. No NC: typed,
+  //  it is CN as drawn on a bond's left, a nitrile - the maintainer, 2026-10-11)
+  { label: "NCO", smiles: "*N=C=O", name: "isocyanato" },
   { label: "NO2", smiles: "*[N+](=O)[O-]", name: "nitro" },
   { label: "N3", smiles: "*N=[N+]=[N-]", name: "azido" },
   { label: "CF3", smiles: "*C(F)(F)F", name: "trifluoromethyl" },
@@ -835,6 +838,18 @@ function groupStructure(label: string): GroupStructure | null {
   const a = BY_LABEL.get(label) ?? custom.get(label) ?? composedGroupOf(label);
   // (an atom carrying groups, its other bonds the drawing's, is no part of a formula: BPh4 is an anion, no BPh four times)
   return a && !a.carrying ? smilesGroup(a.smiles) : null;
+}
+
+/**
+ * Labels read otherwise where they are bonded than alone: NCS, bonded by one bond, the isothiocyanato group - read outward from its
+ * bond, its N bonded, as NCO and NC are - and alone, N-chlorosuccinimide, the reagent.
+ */
+const BONDED: ReadonlyMap<string, Abbreviation> = new Map([["NCS", { label: "NCS", smiles: "*N=C=S", name: "isothiocyanato" }]]);
+
+/** The structure a label stands for where it is bonded (`BONDED`), or null where it reads the same bonded or alone. */
+export function bondedAbbreviationStructure(label: string): GroupStructure | null {
+  const a = BONDED.get(label.trim());
+  return a ? smilesGroup(a.smiles) : null;
 }
 
 /** A group's SMILES, "*" first, as its structure. */

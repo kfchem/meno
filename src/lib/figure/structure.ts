@@ -4,11 +4,12 @@
  * Meno draws a bond, the page's y turned up as the drawing's is.
  */
 import { NOMINAL_BOND_LENGTH } from "../chem/acs";
-import { abbreviationStructure, reversedLabel } from "../chem/abbreviations";
+import { abbreviationStructure, bondedAbbreviationStructure, reversedLabel } from "../chem/abbreviations";
 import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
+import { bondsFromRight } from "../layout/names";
 import { candidates } from "../chem/perception/stereo/candidates";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
@@ -23,9 +24,13 @@ export type LabelReader = (label: string) => { el: string; charge?: number; isot
  * A label as drawn, read: as it is, or - drawn on its bond's left, read
  * from the bond outward - turned round (HO as OH, TBSO as OTBS, MeO2C as
  * CO2Me, H2N as NH2), or an HN before a group as NH (BocHN as NHBoc).
+ * Where its bonds are known to come in from the right (`fromRight`), turned
+ * round first.
  */
-export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; isotope?: number; read: boolean } {
-  const tries = [drawn, reversedLabel(drawn)];
+export function readDrawnLabel(drawn: string, reads: LabelReader, fromRight = false): { el: string; charge?: number; isotope?: number; read: boolean } {
+  // (text read off a picture is the label as shown: where its bond comes in from the right, read outward from it first - NCO
+  //  there is a cyanate, O bonded (IUPAC GR-2.1.6); elsewhere as it is first - NCO an isocyanate)
+  const tries = fromRight ? [reversedLabel(drawn), drawn] : [drawn, reversedLabel(drawn)];
   // (a charge written last stays last, turned round or not: H3N+ as NH3+)
   const charged = /^(.+?)(\d*[+-]+\d*)$/.exec(drawn);
   if (charged) tries.push(`${reversedLabel(charged[1])}${charged[2]}`);
@@ -79,7 +84,8 @@ const MOST_CHARGE = 4;
 function mostTaken(el: string, charge: number): number | null {
   const element = mostBonds(el, charge);
   if (element != null || NAMES.has(el)) return element;
-  const g = abbreviationStructure(el);
+  // (bonded, as a label taking bonds is: NCS, isothiocyanato)
+  const g = bondedAbbreviationStructure(el) ?? abbreviationStructure(el);
   if (!g || g.attach.length !== 1 || g.haptic?.length || g.lends?.some(Boolean)) return null;
   const a = g.atoms[g.attach[0]];
   const most = mostBonds(a.el, (a.charge ?? 0) + charge);
@@ -131,13 +137,14 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const cx = about?.x ?? (Math.min(...xs) + Math.max(...xs)) / 2;
   const cy = about?.y ?? (Math.min(...ys) + Math.max(...ys)) / 2;
   // (a label drawn as shapes that reads as nothing: the next likeliest of its readings that reads)
-  const labels = read.atoms.map((a) => {
+  const labels = read.atoms.map((a, i) => {
     if (a.el) return { el: a.el, ...(a.charge ? { charge: a.charge } : {}), read: true };
     if (!a.label) return null;
-    const first = readDrawnLabel(a.label, reads);
+    const fromRight = bondsFromRight(read.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : [])).map((j) => ({ x: read.atoms[j].x - a.x, y: read.atoms[j].y - a.y })));
+    const first = readDrawnLabel(a.label, reads, fromRight);
     if (first.read || !a.alts) return first;
     for (const alt of a.alts) {
-      const r = readDrawnLabel(alt, reads);
+      const r = readDrawnLabel(alt, reads, fromRight);
       if (r.read) return { ...r, as: alt };
     }
     return first;

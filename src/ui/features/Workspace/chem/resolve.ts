@@ -17,7 +17,7 @@
  * A label typed on an atom is read by the same reader (utils/labelTyping),
  * and stays a label there: nothing here draws it out.
  */
-import { abbreviationOf, abbreviationStructure, smilesGroup, structureProblem } from "../../../../lib/chem/abbreviations";
+import { abbreviationOf, abbreviationStructure, bondedAbbreviationStructure, smilesGroup, structureProblem } from "../../../../lib/chem/abbreviations";
 import { aromaticRefusal, kekuleOrders } from "../../../../lib/chem/kekulize";
 import type { GroupStructure } from "../../../../lib/chem/ligands";
 import { structureFormula } from "../../../../lib/chem/ligands";
@@ -85,7 +85,8 @@ function asGroup(typed: string): Resolved {
     const formula = `${read.isotope ? `${read.isotope}` : ""}${read.el}${read.charge ? (read.charge > 0 ? "+" : "-").repeat(Math.abs(read.charge)) : ""}`;
     return { readings: [{ typed, as: "element", el: read.el, ...(read.charge ? { charge: read.charge } : {}), ...(read.isotope ? { isotope: read.isotope } : {}), formula }] };
   }
-  const group = read.kind === "charge" ? null : abbreviationStructure(label);
+  // (an R group is bonded: a label read otherwise bonded - NCS, isothiocyanato - is read so)
+  const group = read.kind === "charge" ? null : (bondedAbbreviationStructure(label) ?? abbreviationStructure(label));
   if (!group) return no(`"${text}" is not a group, an element or a SMILES with "*"`);
   if (!group.attach.length) return no(`${label} is a whole molecule, not a group: it is attached by none of its atoms`);
   if (group.attach.length > 1) return no(`${label} is attached by ${group.attach.length} atoms: an R group is attached by one`);
