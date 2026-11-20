@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { geometryKey, type Entry } from "../entry";
 import { bondChangesTable, renumberedEntry } from "./reaction";
+import { measured } from "./measure";
 import { atomsOfRows, tableIn } from "../table";
 
 /** Water, numbered H, O, H: its geometry, a value at it, a list and a vibration by atom, a restraint, and its stereo elements. */
@@ -60,6 +61,18 @@ describe("an entry renumbered as the reactants are", () => {
     expect(e.stereo).toMatchObject({ elements: [{ atoms: [0] }] });
     expect(e.properties.energy.value).toBe(-76.4);
     expect(e.properties.name).toEqual(water().properties.name);
+  });
+
+  it("names each measure by its atoms as numbered now: the same measure, as Measure gives it on the entry renumbered", () => {
+    // (H1-O2 and H1-O2-H3, measured; renumbered O, H, H: the oxygen's bond to the first hydrogen is 2-1, its angle 2-1-3)
+    const m = renumberedEntry(measured(water(), [[0, 1], [0, 1, 2], [0, 9]]), order, "r") as Entry;
+    expect(Object.keys(m.properties).filter((k) => /^(distance|angle)/.test(k)).sort()).toEqual(["angle 2-1-3", "distance 1-10", "distance 2-1"]);
+    const again = measured({ ...m, properties: {} }, [[1, 0], [1, 0, 2]]);
+    expect(m.properties["distance 2-1"]).toEqual(again.properties["distance 2-1"]);
+    expect(m.properties["angle 2-1-3"]).toEqual(again.properties["angle 2-1-3"]);
+    expect(m.properties["distance 2-1"].value).toBeCloseTo(0.96, 12);
+    // (one that named an atom the entry does not have, not made: as it was)
+    expect(m.properties["distance 1-10"].status).toEqual({ failed: expect.any(String) });
   });
 
   it("says a value at its geometry is at it still, the geometry now in the new order", () => {
