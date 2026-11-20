@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { imageInfo, isPictureName, printedSize, SCREEN_DPI } from "./image";
 import { withDpi } from "../binary/png";
-import { dibOf, rgbaOfDib } from "../binary/dib";
+import { rgbaOfDib } from "../binary/dib";
 import { crc32 } from "../binary/zip";
 
 /** A PNG's signature, its header for `w` by `h`, and its end - no pixels: enough for its headers to be read. */
@@ -50,7 +50,18 @@ describe("an image file", () => {
 describe("a DIB on the clipboard", () => {
   it("reads back as pixels top row first, its resolution with it", () => {
     const rgba = new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]);
-    const read = rgbaOfDib(dibOf(rgba, 2, 2, 144));
+    // (24 bits, bottom row first, each row filled out to 8 bytes, as the app writes one: src-tauri/src/dib.rs)
+    const dib = new Uint8Array(40 + 8 * 2);
+    const v = new DataView(dib.buffer);
+    v.setUint32(0, 40, true);
+    v.setInt32(4, 2, true);
+    v.setInt32(8, 2, true);
+    v.setUint16(12, 1, true);
+    v.setUint16(14, 24, true);
+    v.setInt32(24, Math.round(144 / 0.0254), true);
+    dib.set([255, 0, 0, 255, 255, 255], 40);
+    dib.set([0, 0, 255, 0, 255, 0], 48);
+    const read = rgbaOfDib(dib);
     expect(read).not.toBeNull();
     expect([read!.width, read!.height]).toEqual([2, 2]);
     expect(Array.from(read!.rgba)).toEqual(Array.from(rgba));

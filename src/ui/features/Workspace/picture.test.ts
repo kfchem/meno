@@ -62,6 +62,12 @@ describe("pictures of a structure", () => {
     expect(items.map((i) => i.flavor)).toEqual(["gvml"]);
   });
 
+  it("never hold a bitmap: the app makes Windows' from the PNG (src-tauri/src/dib.rs)", async () => {
+    const windows = new Set(["meno", "mol", "text", "gvml", "emf", "png", "dib", "embed"] as const);
+    const items = await pictureItems(model, aromatic, ACS_1996, windows);
+    expect(items.map((i) => i.flavor)).not.toContain("dib");
+  });
+
   it("give the structure back when pasted, as Office hands the clip format back", async () => {
     const items = await pictureItems(model, aromatic, ACS_1996);
     // only the picture: as Word or PowerPoint put it on the clipboard

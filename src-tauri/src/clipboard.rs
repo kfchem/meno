@@ -186,9 +186,31 @@ pub fn clipboard_write(request: tauri::ipc::Request<'_>) -> Result<(), String> {
             entries.push((name, item.payload.clone()));
         }
     }
+    entries.extend(bitmap(&given, names("dib")));
     #[cfg(target_os = "windows")]
     embed(&given, &mut entries);
     platform::write(&entries)
+}
+
+/// A bitmap of the copy's PNG under `names` - the names this platform gives
+/// one, none on a Mac - where the page sent no bitmap of its own. The page
+/// sends the PNG alone: a bitmap is the same picture, several times its
+/// size, and is made here at no cost to the page. If it cannot be made, the
+/// copy goes without it.
+fn bitmap(given: &[Given], names: &'static [&'static str]) -> Vec<(&'static str, Payload<'static>)> {
+    if names.is_empty() || given.iter().any(|i| i.flavor == "dib") {
+        return Vec::new();
+    }
+    let Some(Payload::Bytes(png)) = given.iter().find(|i| i.flavor == "png").map(|i| &i.payload) else {
+        return Vec::new();
+    };
+    match crate::dib::dib_of_png(png) {
+        Ok(dib) => names.iter().map(|&name| (name, Payload::Bytes(Cow::Owned(dib.clone())))).collect(),
+        Err(e) => {
+            crate::logfile::logged!("{e}");
+            Vec::new()
+        }
+    }
 }
 
 /// An object for Office to embed, ahead of the pictures, made from the
@@ -721,6 +743,30 @@ mod tests {
         assert_eq!(given[2].payload, Payload::Text("h\u{e9}"));
         assert_eq!(framed("", b"").unwrap(), []);
         assert_eq!(framed("text:t:0", b"").unwrap()[0].payload, Payload::Text(""));
+    }
+
+    #[test]
+    fn a_bitmap_is_made_from_the_png_where_the_platform_takes_one_and_the_page_sent_none() {
+        let mut png = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut png, 1, 1);
+            enc.set_color(png::ColorType::Rgb);
+            let mut w = enc.write_header().unwrap();
+            w.write_image_data(&[10, 20, 30]).unwrap();
+        }
+        let given = |kinds: &[&str]| -> Vec<Given> {
+            kinds.iter().map(|&k| Given { flavor: k.into(), payload: if k == "mol" { Payload::Text("x") } else { Payload::Bytes(Cow::Owned(png.clone())) } }).collect()
+        };
+        let made = bitmap(&given(&["mol", "png"]), &["CF_DIB"]);
+        assert_eq!(made.len(), 1);
+        assert_eq!(made[0].0, "CF_DIB");
+        let Payload::Bytes(dib) = &made[0].1 else { panic!("a bitmap is bytes") };
+        assert_eq!(dib.as_ref(), crate::dib::dib_of_png(&png).unwrap());
+        // (none: no names for one, as on a Mac; one sent already; no PNG; a PNG that is none)
+        assert!(bitmap(&given(&["png"]), &[]).is_empty());
+        assert!(bitmap(&given(&["png", "dib"]), &["CF_DIB"]).is_empty());
+        assert!(bitmap(&given(&["mol"]), &["CF_DIB"]).is_empty());
+        assert!(bitmap(&[Given { flavor: "png".into(), payload: Payload::Bytes(Cow::Borrowed(b"no png")) }], &["CF_DIB"]).is_empty());
     }
 
     #[test]

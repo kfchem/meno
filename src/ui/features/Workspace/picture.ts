@@ -14,7 +14,8 @@
  *   app: src-tauri/src/ole.rs);
  * - a PNG for everything else, at the resolution Settings says (Files,
  *   *Copied pictures*: 600 dpi unless changed), the record in a text chunk;
- * - the same picture as a DIB, for Windows' programs that take only a bitmap.
+ * - the same picture as a DIB, for Windows' programs that take only a bitmap,
+ *   made from the PNG by the app (src-tauri/src/dib.rs).
  *
  * Where Meno serves its objects (Windows, installed), the app hands over the
  * object in place of the clip format and the PNG: Word and PowerPoint take
@@ -23,7 +24,6 @@
 import { seenDrawing, seenOnly } from "./utils/stacks";
 import { clipboardTakes, type ClipItem, type Flavor } from "../../../lib/clipboard";
 import { cfbStreams } from "../../../lib/binary/cfb";
-import { dibOf } from "../../../lib/binary/dib";
 import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
 import { createSVG } from "../../../lib/chem/layout2d";
@@ -109,10 +109,10 @@ export async function pictureItems(
     // (made into an object for Office from this and the EMF, on Windows)
     { flavor: "embed", text: record },
   ].filter((i) => wanted(i.flavor as ClipItem["flavor"])) as ClipItem[];
+  // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
   if (wanted("png") || wanted("dib")) {
-    const raster = await rasterized(createSVG(layout, opts), dpi, wanted("dib")).catch(() => null);
-    if (raster && wanted("png")) items.push({ flavor: "png", bytes: withText(withDpi(raster.png, raster.dpi), PNG_KEY, record) });
-    if (raster?.dib && wanted("dib")) items.push({ flavor: "dib", bytes: raster.dib });
+    const raster = await rasterized(createSVG(layout, opts), dpi).catch(() => null);
+    if (raster) items.push({ flavor: "png", bytes: withText(withDpi(raster.png, raster.dpi), PNG_KEY, record) });
   }
   return items;
 }
@@ -191,15 +191,13 @@ export function rasterFrame(svg: string, wantedDpi: number): { svg: string; widt
 /**
  * An SVG drawn at `dpi` - its pixels CSS pixels, 96 to the inch - or lower
  * where it is large (`pictureDpiFor`), at its own scale (`rasterFrame`): as
- * a PNG, and - `dib` asked for - as a DIB for Windows' bitmap-only programs,
- * and the resolution it was drawn at; null where there is no page to draw
- * it in.
+ * a PNG, and the resolution it was drawn at; null where there is no page to
+ * draw it in.
  */
 async function rasterized(
   svg: string,
   wantedDpi: number,
-  dib: boolean,
-): Promise<{ png: Uint8Array; dib: Uint8Array | null; dpi: number } | null> {
+): Promise<{ png: Uint8Array; dpi: number } | null> {
   if (typeof document === "undefined") return null;
   const frame = rasterFrame(svg, wantedDpi);
   const dpi = frame.dpi;
@@ -218,7 +216,6 @@ async function rasterized(
     if (!blob) return null;
     return {
       png: new Uint8Array(await blob.arrayBuffer()),
-      dib: dib ? dibOf(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, dpi) : null,
       dpi,
     };
   } finally {
