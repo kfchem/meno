@@ -32,8 +32,9 @@ const READ_ALREADY_VALENCE: Record<string, number> = {
   "ui/features/Workspace/chem/arrangementsMarked.ts": 1,
   // (whether an atom's valence set by a file says more than its element's own: a held group carries none - its label no valence table's)
   "ui/features/Workspace/chem/cleanUp.ts": 1,
-  // (a callback handed the drawing read's element, `drawingOf`, made through readAs)
-  "ui/features/Workspace/chem/identityOf.ts": 1,
+  // (a callback handed the drawing read's element, `drawingOf`, made through readAs; and the element read out of a label of one element
+  //  and its H - OH's O - asked the H its bonds leave: labelsDrawnOut)
+  "ui/features/Workspace/chem/identityOf.ts": 2,
   // (an atom holding a group is passed first: `!isElementSymbol(a.el) || a.abbrev ? 0 : ...`)
   "ui/features/Workspace/chem/drawing.ts": 1,
   // (a selection to make an abbreviation of, refused first where an atom holds a group: "expand it first")
@@ -53,6 +54,8 @@ const LABEL_AS_TEXT: Record<string, number> = {
   "ui/features/Workspace/chem/engineLayout.ts": 2,
   // (a formula written for a person, the label as it reads - partFormula; the drawing read, `drawingOf`, made through readAs - runsOpenOf)
   "ui/features/Workspace/chem/cleanUp.ts": 2,
+  // (the element read out of a label of one element and its H - OH as O - in place of the label: labelsDrawnOut)
+  "ui/features/Workspace/chem/identityOf.ts": 1,
 };
 
 function files(dir: string): string[] {
