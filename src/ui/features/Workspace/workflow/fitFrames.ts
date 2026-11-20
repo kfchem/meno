@@ -314,8 +314,9 @@ export function framesCleared(doc: WorkspaceDocument, down: WorkspaceDocument): 
       const hit = out.sets!.filter((b) => b.id !== g.id && !moved.has(b.id) && !unseen.has(b.id) && !sameStep(g, b) && overlap(g, b));
       // (those below it as it was pushed down, the highest first; those above, up, the lowest first: each that follows goes past those
       //  already placed across from it)
-      const below = hit.filter((b) => middle(b) < middle(before)).sort((p, q) => q.y1 - p.y1);
-      const above = hit.filter((b) => middle(b) >= middle(before)).sort((p, q) => p.y0 - q.y0);
+      // (one level with it goes down, as a step's sets flow down the page)
+      const below = hit.filter((b) => middle(b) <= middle(before) + EPS).sort((p, q) => q.y1 - p.y1);
+      const above = hit.filter((b) => middle(b) > middle(before) + EPS).sort((p, q) => p.y0 - q.y0);
       const push = (b: WorkflowSet, dy: number) => {
         out = moveSet(out, b.id, 0, dy);
         moved.add(b.id);

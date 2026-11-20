@@ -627,6 +627,14 @@ describe("a frame that grows pushes the sets it would lie over (backlog 257)", (
     expect(overlaps(s)).toBe(0);
   });
 
+  it("a set level with a frame that grows sideways over it: pushed down, as a step's sets flow down the page", () => {
+    const doc = page([{ frame: { x0: -3, y0: -3, x1: 3, y1: 3 }, mols: [[0, 0]] }, { frame: { x0: 3.4, y0: -3, x1: 9.4, y1: 3 }, mols: [[6.4, 0]] }]);
+    const { down, now } = grown(doc, 2.4, 0);
+    expect(frameOf(now, 1).x1).toBeGreaterThan(frameOf(down, 1).x1);
+    expect(frameOf(now, 2).y1).toBeCloseTo(frameOf(now, 1).y0 - BETWEEN, 9);
+    expect(overlaps(now)).toBe(0);
+  });
+
   it("a long chain, each set nearer the next than BETWEEN: each pushed on in turn, one under another, never two in one place, however many", () => {
     for (const n of [6, 12, 16]) {
       const doc = page(Array.from({ length: n }, (_, k) => ({ frame: { x0: -3, y0: -3 - 5 * k, x1: 3, y1: 3 - 5 * k }, mols: [[0, -5 * k]] as [number, number][] })));
