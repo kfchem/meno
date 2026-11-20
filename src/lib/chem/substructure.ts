@@ -37,11 +37,24 @@ export type Holds = { found: true; map: [query: number, target: number][] } | { 
 /** A structure as the search reads it: its atoms other than hydrogens drawn, each with the hydrogens it has (drawn or not) and those drawn on it; their bonds. */
 type Graph = { atoms: (IdentityAtom & { hTotal: number; hDrawn: number; at: number })[]; around: { to: number; order: number }[][] };
 
-const isPlainH = (a: IdentityAtom) => a.el === "H" && !a.isotope && !a.charge && !a.radical;
+/**
+ * The hydrogens of `form` that are one of their atom's (`graphOf`): an H, of no mass number, charge or unpaired electron, by exactly one
+ * single bond to an atom not an H - its map number no matter (a query is matched whatever it numbers). A bridging H (B-H-B), H2, a
+ * lone H and an H by any other bond are atoms of their own (backlog 176, found in the hydrogen counts' measure).
+ */
+function plainH(form: { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[] }): boolean[] {
+  const bonds = form.atoms.map(() => [] as { to: number; order: number }[]);
+  for (const b of form.bonds) {
+    bonds[b.a].push({ to: b.b, order: b.order });
+    bonds[b.b].push({ to: b.a, order: b.order });
+  }
+  return form.atoms.map((a, i) => a.el === "H" && !a.isotope && !a.charge && !a.radical && bonds[i].length === 1 && bonds[i][0].order === 1 && form.atoms[bonds[i][0].to].el !== "H");
+}
 
 function graphOf(input: IdentityInput): Graph {
   const form = aromaticForm(input);
-  const keep = form.atoms.map((a) => !isPlainH(a as IdentityAtom));
+  const plain = plainH({ atoms: form.atoms as readonly IdentityAtom[], bonds: form.bonds as readonly LayoutBond[] });
+  const keep = plain.map((p) => !p);
   const place = new Map<number, number>();
   const atoms: Graph["atoms"] = [];
   form.atoms.forEach((a, i) => {
