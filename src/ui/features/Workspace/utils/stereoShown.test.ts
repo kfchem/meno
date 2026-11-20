@@ -6,7 +6,7 @@ import { readRecord, recordText } from "./copyPaste";
 import { readWorkspace, workspaceText } from "./workspace";
 import { stereoItemFor } from "./stereoShown";
 
-// (2-butanol drawn - C2 a stereocentre, three bonds - and but-2-ene beside it; and a molecule in 3D with two labels and a double bond)
+// (2-butanol drawn - C2 a stereocentre, its H not drawn - and but-2-ene beside it; and a molecule in 3D with two labels and a double bond)
 function editor() {
   const doc = createWorkspaceDocument();
   const store = createEditorStore(doc);
@@ -24,6 +24,8 @@ function editor() {
   const e1 = st().addAtom(10, 0, "C");
   const e2 = st().addAtom(11.5, 0.9, "C");
   st().addBond(e1, e2, 2);
+  st().addBond(e1, st().addAtom(8.5, 0.9, "C"), 1);
+  st().addBond(e2, st().addAtom(13, 0, "C"), 1);
   const m3d: Omit<Molecule3D, "id"> = {
     atoms: [
       { el: "C", x: 0, y: 0, z: 0 },
@@ -53,6 +55,44 @@ describe("R/S and E/Z, shown on what they are asked for on", () => {
     expect(stereoItemFor(st(), { ...none, kind: "bond", id: double })).toMatchObject({ name: "Show E/Z", of: { bonds: [double] } });
     expect(stereoItemFor(st(), { ...none, kind: "bond", id: single })).toBeNull();
     expect(stereoItemFor(st(), none)).toBeNull();
+  });
+
+  it("are offered only where a configuration can be and sets something: not at an amine's N, a metal, ethene, a benzene ring's bond or PMe3's P", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const at = (x: number, el: string) => st().addAtom(x, 0, el);
+    const bond = (a: number, b: number, order: 1 | 2 | 3 = 1) => (st().addBond(a, b, order), st().model.bonds.find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a))!.id);
+    // (N(CH3)(C2H5)(propyl): three groups and a lone pair, which an amine's N does not keep)
+    const n = at(0, "N");
+    bond(n, at(-1.5, "C"));
+    bond(n, st().addAtom(0, 1.5, "C"));
+    bond(n, st().addAtom(0, -1.5, "C"));
+    // (PtCl2(NH3)2: a metal of four)
+    const pt = at(20, "Pt");
+    for (const [el, dx] of [["Cl", 1.5], ["Cl", -1.5]] as const) bond(pt, at(20 + dx, el));
+    bond(pt, st().addAtom(20, 1.5, "N"));
+    bond(pt, st().addAtom(20, -1.5, "N"));
+    const ethene = bond(at(40, "C"), at(41.5, "C"), 2);
+    // (a benzene ring: its double bonds in a ring of six)
+    const ring = Array.from({ length: 6 }, (_, k) => st().addAtom(60 + 1.5 * Math.cos((k * Math.PI) / 3), 1.5 * Math.sin((k * Math.PI) / 3), "C"));
+    const inRing = ring.map((a, k) => bond(a, ring[(k + 1) % 6], k % 2 ? 1 : 2));
+    // (a phosphine's P of three unlike groups: a centre by its lone pair; and PMe3's P, its groups alike: none)
+    const p = at(80, "P");
+    bond(p, at(78.5, "C"));
+    const ethyl = st().addAtom(80, 1.5, "C");
+    bond(p, ethyl);
+    bond(ethyl, st().addAtom(81.5, 2.4, "C"));
+    bond(p, st().addAtom(80, -1.5, "O"));
+    const pMe3 = at(100, "P");
+    for (const [x, y] of [[98.5, 0], [100, 1.5], [100, -1.5]]) bond(pMe3, st().addAtom(x, y, "C"));
+    expect(stereoItemFor(st(), { ...none, kind: "atom", id: n })).toBeNull();
+    expect(stereoItemFor(st(), { ...none, kind: "atom", id: pt })).toBeNull();
+    expect(stereoItemFor(st(), { ...none, kind: "bond", id: ethene })).toBeNull();
+    expect(stereoItemFor(st(), { ...none, kind: "bond", id: inRing[0] })).toBeNull();
+    expect(stereoItemFor(st(), { ...none, kind: "atom", id: p })).toMatchObject({ name: "Show R/S", of: { atoms: [p] } });
+    expect(stereoItemFor(st(), { ...none, kind: "atom", id: pMe3 })).toBeNull();
   });
 
   it("are shown on an atom asked, one undo step, and then offered to be hidden", () => {

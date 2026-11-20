@@ -57,6 +57,20 @@ export function rolePlugin(role: RoleId): PythonPlugin | undefined {
   return picked ?? (added.length ? (added.length === 1 ? added[0] : undefined) : can.length === 1 ? can[0] : undefined);
 }
 
+/**
+ * The plugin the chemist chose for a role, or added that fills it: one they
+ * took a step for - never one that only could, from the catalogue. What a
+ * role Meno does itself first offers by name where Meno's own answer is none
+ * (reading a picture: docs/PDF.md, *A picture traced*). None, where none is.
+ */
+export function roleChosen(role: RoleId): PythonPlugin | undefined {
+  const { roles, removed } = useAppSettings.getState().plugins;
+  const picked = pluginsFilling(role).find((p) => p.id === roles[role] && !removed.includes(p.id));
+  if (picked) return picked;
+  const added = addedFilling(role);
+  return added.length === 1 ? added[0] : undefined;
+}
+
 /** The plugins that could fill a role where nothing says which does (`rolePlugin` none): those added, or, none added, all that fill it. None, where it is decided or nothing fills it. */
 export function roleUndecided(role: RoleId): PythonPlugin[] {
   if (rolePlugin(role)) return [];
