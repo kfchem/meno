@@ -2532,8 +2532,21 @@ lipids each have their own way of being drawn, which it should know.
      bond's axis is read from wedges at its other end, as a hindered
      biaryl's is (ST-1.7's form, by analogy). An aryl allene drawn with its
      wedge on either group of an end is then one structure, as its SMILES
-     is. The end of a butatriene, or an alkene's carbon, is read as before:
-     its double bonds lie in the page.
+     is. An allene with an end whose two other groups are alike has no
+     axis, however it is wedged: its mirror image is the molecule itself
+     (2-methylpenta-2,3-diene's two methyls, a cyclohexylidene's two ring
+     arms), so none is read there, by the same test as a double bond's
+     (`settingCisTrans`, above), and a wedge at either end of it, its CH's
+     as its CMe2's, carries the unread mark and is said to state nothing -
+     *an end of these double bonds carries two alike groups* - as a wedge
+     at a terminal allene's end is; Clean-up keeps it rather than drop it
+     unsaid. Drawn from a SMILES or from a
+     molecule in 3D, such an axis gets no wedge. "Alike" counts
+     the rest of what the drawing shows, as for a double bond:
+     (4-methylcyclohexylidene)allene's axis is none while its C4 is plain,
+     and with C4 wedged the two together state one enantiomer. The end of
+     a butatriene, or an alkene's carbon, is read as before: its double
+     bonds lie in the page.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
