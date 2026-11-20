@@ -204,9 +204,22 @@ export function barBond(shapes: Shapes, letters: readonly FigureLetter[] = []): 
   return near(bars, byBars) > near(lines, byLines) ? byBars : byLines || byBars;
 }
 
-/** Shapes with their chains of bars told by `barBond`: kept as bonds, or given up (`outlineChains`). */
+/**
+ * How wide a line may be drawn, in its figure's usual letter size, and be a bond's: a bond is drawn thinner than its labels' letters are
+ * tall - a bold bond of a perspective drawing a third of them - and a highlight laid along a bond about as wide as them, which may be the
+ * bond's only line; a line wider is a band - a table's shaded row, half as tall again as its letters - drawn as a wide line.
+ */
+const BAND = 1.2;
+
+/**
+ * Shapes with their chains of bars told by `barBond`: kept as bonds, or given up (`outlineChains`); and without the lines drawn as bands
+ * (`BAND`), wider than the figure's usual letter size allows a bond's - by its letters, where it has any.
+ */
 export function sizedOutlines(shapes: Shapes, letters: readonly FigureLetter[] = []): Shapes {
-  return outlineChains(shapes, barBond(shapes, letters));
+  const sizes = letters.map((l) => l.size).sort((a, b) => a - b);
+  const usual = sizes.length ? sizes[Math.floor(sizes.length / 2)] : 0;
+  const lined = usual ? { ...shapes, strokes: shapes.strokes.filter((s) => s.w <= BAND * usual) } : shapes;
+  return outlineChains(lined, barBond(lined, letters));
 }
 
 /**

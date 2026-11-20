@@ -1513,6 +1513,13 @@ it where it lies out of view.
     bonds read shorter than they are;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
+  - no line drawn wider than 1.2 times the figure's usual letter size -
+    a band: a table's shaded row, drawn as wide lines end to end, half as
+    tall again as its letters - since a bond is drawn thinner than its
+    labels' letters are tall, a bold one a third of them, and a highlight
+    laid along a bond about as wide as them, which may be the bond's only
+    line, is kept (2026-11-20; a table's shaded row was read as a straight
+    chain of carbons, its headings that chain's compounds' numbers);
   - no line more than six bonds long - a table's rule, a graph's axis, a
     frame round part of the figure - nor a short line or dash between two
     words of a line of text, a caption's "3aa, R = H, 73%": the line goes
