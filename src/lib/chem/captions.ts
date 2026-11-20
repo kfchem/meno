@@ -752,6 +752,20 @@ const ARROW_REACH = 2.5;
 export const ARROW_CLEAR = 0.5;
 
 /**
+ * Whether words whose middle is at `at`, reaching `half` either way of it,
+ * are within reach of the arrow `a` (its straight line: `wordsLine`): along
+ * it, within its length; across it, within `ARROW_REACH` ems - near enough
+ * to be put over it or under it, or to stay its words.
+ */
+export function inArrowReach(at: { x: number; y: number }, half: { w: number; h: number }, a: SchemeArrow, fontSize: number): boolean {
+  const ux = Math.cos(a.angle);
+  const uy = Math.sin(a.angle);
+  const along = (at.x - a.x) * ux + (at.y - a.y) * uy;
+  const across = -(at.x - a.x) * uy + (at.y - a.y) * ux;
+  return Math.abs(along) <= a.length / 2 && Math.abs(across) <= ARROW_REACH * fontSize + half.h;
+}
+
+/**
  * Where a caption put down at `at` - reaching `half` either way of its
  * middle - goes: near an arrow, within its length and `ARROW_REACH` ems
  * across, over it or under it on that side, centred on its middle and
@@ -769,13 +783,8 @@ export function captionPlace(
   let best: { a: SchemeArrow & { id: number }; across: number } | null = null;
   // (each over the straight line its words go by: an arrow that turns, its longest stretch)
   for (const a of arrows.map(wordsLine)) {
-    const ux = Math.cos(a.angle);
-    const uy = Math.sin(a.angle);
-    const dx = at.x - a.x;
-    const dy = at.y - a.y;
-    const along = dx * ux + dy * uy;
-    const across = -dx * uy + dy * ux;
-    if (Math.abs(along) > a.length / 2 || Math.abs(across) > ARROW_REACH * fontSize + half.h) continue;
+    if (!inArrowReach(at, half, a, fontSize)) continue;
+    const across = -(at.x - a.x) * Math.sin(a.angle) + (at.y - a.y) * Math.cos(a.angle);
     if (!best || Math.abs(across) < Math.abs(best.across)) best = { a, across };
   }
   if (!best) return { x: at.x, y: at.y };

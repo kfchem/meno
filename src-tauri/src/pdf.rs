@@ -169,10 +169,12 @@ fn affine_of(m: &PdfMatrix) -> Affine {
     [m.a(), m.b(), m.c(), m.d(), m.e(), m.f()]
 }
 
-/// The paths and pictures of a figure, each where it lies on the page as drawn (`figure`).
+/// The paths and pictures of a figure, each where it lies on the page as drawn (`figure`); and each picture's own size, in the pixels it
+/// is stored with, where the PDF says (a picture is traced at its own resolution, never finer: docs/PDF.md, *A picture traced*).
 struct Drawn {
     paths: Vec<Value>,
     pictures: Vec<[f32; 4]>,
+    pixels: Vec<Option<[i32; 2]>>,
 }
 
 impl Drawn {
@@ -221,8 +223,12 @@ impl Drawn {
                 "d": d,
                 "dash": dash,
             }));
-        } else if obj.as_image_object().is_some() {
+        } else if let Some(image) = obj.as_image_object() {
             self.pictures.push(q);
+            self.pixels.push(match (image.width(), image.height()) {
+                (Ok(w), Ok(h)) if w > 0 && h > 0 => Some([w, h]),
+                _ => None,
+            });
         }
     }
 }
@@ -444,7 +450,7 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let b: Vec<f32> = ask["box"].as_array().map(|v| v.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect()).unwrap_or_default();
             let within = if b.len() == 4 { [b[0], b[1], b[2], b[3]] } else { [f32::MIN, f32::MIN, f32::MAX, f32::MAX] };
-            let mut drawn = Drawn { paths: vec![], pictures: vec![] };
+            let mut drawn = Drawn { paths: vec![], pictures: vec![], pixels: vec![] };
             for obj in page.objects().iter() {
                 drawn.take(&obj, IDENTITY, &at, &within);
             }
@@ -474,7 +480,7 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                 };
                 letters.push(json!({"c": ch.to_string(), "box": bx, "loose": loose, "at": o.map(|o| [o.0, o.1]), "size": c.scaled_font_size().value, "font": c.font_name(), "dir": dir}));
             }
-            Ok((json!({"paths": drawn.paths, "letters": letters, "pictures": drawn.pictures, "ms": ms(t)}), vec![]))
+            Ok((json!({"paths": drawn.paths, "letters": letters, "pictures": drawn.pictures, "pixels": drawn.pixels, "ms": ms(t)}), vec![]))
         }
         "close" => {
             docs.remove(&sha);
@@ -1428,6 +1434,38 @@ mod tests {
         let (x0, x1) = (f(0), f(2));
         // 30 to 70 across, the line's width a point either side of the 2 w of its doubling
         assert!((x0 - 29.0).abs() < 1.5 && (x1 - 71.0).abs() < 1.5, "{x0} {x1}");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_figures_pictures_are_read_with_the_pixels_they_are_stored_with() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-pixels-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "e".repeat(64);
+        // (a picture 40 by 20 pixels, grey, drawn 72 by 36 points - an inch across - at 100, 200 from the page's foot)
+        let hex: String = "80".repeat(40 * 20) + ">";
+        let page = "q 72 0 0 36 100 200 cm /Im1 Do Q";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (5, format!("<< /Type /XObject /Subtype /Image /Width 40 /Height 20 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length {} >>\nstream\n{hex}\nendstream", hex.len())),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "figure", "sha": sha, "page": 0})).unwrap();
+        let pictures = head["pictures"].as_array().unwrap();
+        assert_eq!(pictures.len(), 1);
+        let near = |v: &Value, want: f64| (v.as_f64().unwrap() - want).abs() < 0.05;
+        assert!(near(&pictures[0][0], 100.0) && near(&pictures[0][1], 842.0 - 236.0) && near(&pictures[0][2], 172.0) && near(&pictures[0][3], 842.0 - 200.0), "{pictures:?}");
+        assert_eq!(head["pixels"], json!([[40, 20]]));
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }
