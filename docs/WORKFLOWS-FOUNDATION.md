@@ -913,6 +913,30 @@ chirality; a metal's own geometry. Each candidate says why it is one, and
 a place asked of that is none says why not, in the words the page shows.
 No reader, step or mark takes them yet: each will, in its own change.
 
+**The stereoisomers Meno counts** (`isomersOf`, `src/lib/chem/isomers.ts`):
+every way of giving a configuration to each candidate left open, those
+given kept, each written by Meno's identity; the distinct identities are
+the stereoisomers, each with one way that makes it. Places that depend on
+each other fall out by identity: tartaric acid has three, inositol nine,
+1,3,5-trimethylcyclohexane two, 2,6-dimethylspiro[3.3]heptane two (its
+enantiomers). A biaryl's axis is given only where the drawing states one,
+so atropisomers are not counted; nor are a bridged ring's in,in and out,out
+forms apart, which share one configuration (bicyclo[4.4.1]undecane's two
+are its out,out-or-in,in and its in,out); both said beside a count. A
+bridgehead is an atom joined to another by three paths that share no atom
+but their ends, each with one to three atoms between; a bond is no
+bridge, so a fused system's junctions are none. A cage ties its
+bridgeheads' senses to each other. Where an open bridgehead's two senses
+are one structure (norbornane's, adamantane's, cubane's), it is no place
+to give and the count stands. Where they are not (norbornan-2-ol,
+camphor, tropan-3-ol, twistane, Troeger's base's two N), no count is
+given, and that is said. A fused bicycle counts its cis and trans forms.
+A small one, bicyclo[m.n.0] with m + n of four or fewer ([1.1.0],
+[2.1.0], [2.2.0], [3.1.0]), whose rings can only be joined cis, gets no
+count when a junction is left open, and that is said. Past 1024 ways
+(ten open places), none is written and the count of ways is said. No
+step takes it yet: *Stereoisomers* will, in its own change.
+
 **Which structures are the same is judged by Meno's identity**:
 - the identity text, `identityText` (*Identity* above, and
   `src/lib/chem/identity.ts`);
