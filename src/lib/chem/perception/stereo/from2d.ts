@@ -1081,6 +1081,11 @@ function structureOf(bonds: readonly DrawnBond[]): { bonds: readonly DrawnBond[]
 }
 
 /** What a centre a hashed line leaves open says (the look owner's words). */
+/** Why each centre a hashed line leaves open is left open (`hashedLinesRead`), by the centre's index: what a look states says it. */
+export function hashedLinesOpen(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Map<number, string> {
+  return hashedLinesRead(atoms, structureOf(bonds).bonds).why;
+}
+
 export const HASHED_BETWEEN = "a hashed line between two stereocentres states neither";
 export const HASHED_TO_LARGE = "a hashed line to a group of this size does not say which end it belongs to";
 export const HASHED_TWO = "two hashed lines at one atom";

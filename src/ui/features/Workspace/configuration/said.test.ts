@@ -42,6 +42,22 @@ describe("what a look states, where the pointer rests (part 15, phase 4)", () =>
     expect(bondSaid(m, reading, wedge.id, none)).toBe(`the axis through ${name(p)} and ${name(q)}: set, by this wedge`);
   });
 
+  it("a hashed line: the centre it sets, as its atom says, or why it sets none (IUPAC ST-0.3)", () => {
+    // (butan-2-ol's C-O drawn as a hashed line, no wedge: an end group, read as the hashed wedge it states)
+    const plain = butanol();
+    const m: Model = { ...plain, bonds: plain.bonds.map((b) => (b.id === 12 ? { ...b, display: "hashed" as const } : b)) };
+    const reading = readingOf(m);
+    expect(reading.said.centres.has(1)).toBe(true);
+    expect(atomSaid(m, reading, 1, none)).toBe("C1: set");
+    expect(bondSaid(m, reading, 12, none)).toBe("C1: set, by this hashed line");
+    expect(bondSaid(m, reading, 12, r)).toBe("C1: R, by this hashed line");
+    // (butane-2,3-diol's C2-C3 drawn as a hashed line: between two stereocentres, it states neither)
+    const diol = drawnFromSmiles("CC(O)C(O)C");
+    const mid = diol.bonds.find((b) => [b.a, b.b].every((x) => diol.bonds.filter((y) => y.a === x || y.b === x).length === 3))!;
+    const between: Model = { ...diol, bonds: diol.bonds.map((b) => (b.id === mid.id ? { ...b, display: "hashed" as const } : b)) };
+    expect(bondSaid(between, readingOf(between), mid.id, none)).toMatch(/^C\d+: not read: a hashed line between two stereocentres states neither$/);
+  });
+
   it("a centre: its R or S, set, or open on a wavy bond; any other atom says nothing", () => {
     const m = butanol("up");
     expect(atomSaid(m, readingOf(m), 1, r)).toBe("C1: R");

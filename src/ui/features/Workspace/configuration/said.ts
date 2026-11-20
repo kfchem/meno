@@ -4,6 +4,8 @@
  * centre, what it is - its R or S where the drawing shows one, open, or not read and why; an atom drawn with depth, that the drawing
  * shows it. What it is, never how it is worked out. Pure: no DOM, no store.
  */
+import { hashedLinesOpen } from "../../../../lib/chem/perception/stereo/from2d";
+import { drawingOf } from "../chem/drawing";
 import { atomName, type Reading } from "./changes";
 import type { Model } from "../store/types";
 
@@ -35,7 +37,20 @@ export function bondSaid(model: Model, reading: Reading, bond: number, label: La
   if (b.stereo === "either") return `${atomName(model, b.a)}=${atomName(model, b.b)}: open (either)`;
   if (b.display === "bold") return deep(model, b.a) && deep(model, b.b) ? "a bold line: the near edge" : "a bold line: no configuration";
   if (b.display === "dashed") return "a dashed line: no configuration";
-  if (b.display === "hashed") return "a hashed line: no configuration";
+  if (b.display === "hashed") {
+    // (a hashed line read as IUPAC grades it (ST-0.3; perception/stereo/from2d `hashedLinesRead`): the centre it sets, as a wedge's;
+    //  why it sets none where a centre at its end is left open by it; else nothing)
+    const drawing = drawingOf(model);
+    const open = hashedLinesOpen(drawing.atoms, drawing.bonds);
+    for (const c of [b.a, b.b]) {
+      const why = open.get(model.atoms.findIndex((a) => a.id === c));
+      if (why) return `${atomName(model, c)}: not read: ${why}`;
+    }
+    const wedgedAt = (c: number) => model.bonds.some((x) => (x.stereo === "up" || x.stereo === "down") && (x.narrow ?? x.a) === c);
+    const set = [b.a, b.b].find((c) => reading.said.centres.has(c) && !wedgedAt(c) && !deep(model, c));
+    if (set != null) return `${atomName(model, set)}: ${label(`centre-${set}`) ?? "set"}, by this hashed line`;
+    return "a hashed line: no configuration";
+  }
   if (b.order === 2) {
     const key = b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`;
     const d = reading.said.doubles.get(key);
@@ -58,3 +73,4 @@ export function atomSaid(model: Model, reading: Reading, atom: number, label: La
 
 /** Whether the atom `id` is drawn with depth (a ring in perspective). */
 const deep = (model: Model, id: number) => model.atoms.find((a) => a.id === id)?.z != null;
+

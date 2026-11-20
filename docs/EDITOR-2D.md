@@ -1597,7 +1597,12 @@ All hover-based, as above.
     (IUPAC ST-1.7): that axis, set by it ("the axis through C2 and C5:
     set, by this wedge"; no R or S is shown for an axis);
   - a wavy bond: its centre open; an "either" double bond: open;
-  - a bold, dashed or hashed line on a flat drawing: no configuration; a
+  - a hashed line: the centre it sets, where IUPAC grades it acceptable
+    (ST-0.3: from a centre to an end group, read as the hashed wedge it
+    states - "C3: R, by this hashed line", as the centre itself says), or
+    why it sets none ("C3: not read: a hashed line between two
+    stereocentres states neither"); else no configuration;
+  - a bold or dashed line on a flat drawing: no configuration; a
     bold line of a ring drawn with depth: the near edge;
   - a double bond whose cis or trans is stated: its E or Z where shown;
   - a centre: its R or S, "set", "open", or "not read" and why; an atom of
