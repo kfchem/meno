@@ -80,8 +80,9 @@ The entries that come in, as one entry holding them all: a complex
   restraints, 1 measure".
 - **Other properties are not carried.** Each was worked out on its part
   alone, not on the complex: its energy, and a list per atom of its own
-  calculation, such as its charges. Nor is a restraint in another numbering,
-  or a measure at another geometry or not made: what names atoms is never
+  calculation, such as its charges. Nor is a restraint in another numbering
+  or naming an atom the part has not, or a measure at another geometry or
+  not made: what names atoms is never
   carried onto other atoms. What is not carried is said, part by part and by
   kind: "part 1: energy, charges". The parts' ids stay as the complex's
   lineage.

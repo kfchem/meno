@@ -54,17 +54,21 @@ function partCarried(p: Entry, offset: number, geometry: Geometry): PartCarried 
   const out: PartCarried = { measures: [], restraints: [], carried: [], not: [] };
   const count = (k: number, one: string, many: string) => (k ? [`${k} ${k === 1 ? one : many}`] : []);
   let measuresNot = 0;
-  let restraintsNot = false;
+  // (restraints not carried, by why: one naming an atom the part has not, or in a numbering not the part's)
+  let restraintsOff = false;
+  let restraintsElsewhere = false;
   const others: string[] = [];
   for (const [name, prop] of Object.entries(p.properties)) {
     const held = restraintsIn(prop);
     if (held) {
       // (in its own numbering, every atom one of its own: each as the complex numbers it)
       const inRange = held.restraints.every((r) => r.atoms.every((a) => Number.isInteger(a) && a >= 0 && a < n));
-      if (inRange && oneNumbering(held.numbering ?? OWN_NUMBERING, numberingOfPart(p))) {
+      const own = oneNumbering(held.numbering ?? OWN_NUMBERING, numberingOfPart(p));
+      if (inRange && own) {
         const start = held.start && held.start.length === 3 * n ? held.start : undefined;
         out.restraints.push([name, held.restraints.map((r) => ({ ...r, atoms: r.atoms.map((a) => a + offset) })), start]);
-      } else restraintsNot = true;
+      } else if (!own) restraintsElsewhere = true;
+      else restraintsOff = true;
       continue;
     }
     if (isMeasurementName(name)) {
@@ -79,7 +83,7 @@ function partCarried(p: Entry, offset: number, geometry: Geometry): PartCarried 
     others.push(name);
   }
   out.carried = [...(out.restraints.length ? ["restraints"] : []), ...count(out.measures.length, "measure", "measures")];
-  out.not = [...(restraintsNot ? ["restraints in another numbering"] : []), ...count(measuresNot, "measure not made at its geometry", "measures not made at its geometry"), ...others];
+  out.not = [...(restraintsElsewhere ? ["restraints in another numbering"] : []), ...(restraintsOff ? ["restraints on atoms it has not"] : []), ...count(measuresNot, "measure not made at its geometry", "measures not made at its geometry"), ...others];
   return out;
 }
 
