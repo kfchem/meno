@@ -5,6 +5,8 @@ import { identityOfDrawn } from "../chem/identityOf";
 import { editorModelOf } from "../utils/io";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { blocksOf } from "../chem/make3d";
+import { readingOf } from "../configuration/changes";
+import { keptFrom, withKept } from "../configuration/kept";
 import { identityText } from "../../../../lib/chem/identity";
 import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { angleFrom, isEndOn, newmanDrawing, newmanExtension, newmansIn, newmanTurn, setOf, spokeAngles, turnedAbout, turnedTo, turnOf } from "./newman";
@@ -230,6 +232,14 @@ describe("a Newman pair read as Meno reads a drawing (known answers)", () => {
     const one = fromFile(chiral[0]).text;
     expect(one).not.toBe(MESO);
     expect(chiral.map((m) => fromFile(m).text)).toEqual([one, one, one]);
+    // (a pair keeping a configuration - kept as an edit keeps it - is written from what it keeps, read back from the file as that: itself
+    //  kept, the compound drawn; its mirror image's kept, picture mirrored left to right with the same atoms, the mirror image's compound)
+    const keeping = (m: Model, as: Model) => withKept(m, new Set(m.atoms.map((a) => a.id)), keptFrom(as, readingOf(as)));
+    const mirror: Model = { ...chiral[0], atoms: chiral[0].atoms.map((a) => ({ ...a, x: -a.x })) };
+    expect(identityOfDrawn(mirror).text).not.toBe(one);
+    expect(fromFile(keeping(chiral[0], chiral[0])).text).toBe(one);
+    expect(fromFile(keeping(chiral[0], mirror)).text).toBe(identityOfDrawn(mirror).text);
+    expect(fromFile(keeping(meso[0], meso[0])).text).toBe(MESO);
   });
 
   it("is the same compound after a spoke is turned round the circle: a turn changes the conformation, not the configuration", () => {
