@@ -1579,7 +1579,14 @@ it where it lies out of view.
   Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
-  word (one so short both its ends lie in the word's box, its other end
+  word within a third of a bond - for a word that reads as an element's
+  label, its hydrogens with it, a bond as long as its letters say one is
+  drawn, 1.4 times their size, where the drawing's lines measure its
+  bonds under 0.7 of that: a drawing whose every bond runs
+  between labels, each cut back at both ends, measures its bonds short.
+  An agent written large by a scheme's arrow, a chart's number by
+  its tick, a legend's word, a group's name keep the drawing's own
+  (2026-11-20) - (one so short both its ends lie in the word's box, its other end
   coming to another label - a metal's - at the end nearer its element;
   of two it comes by, the nearer, unless it points away from that one and
   into the other - an H set under the NH it goes to)
@@ -1662,6 +1669,21 @@ it where it lies out of view.
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
+- **A dative bond** (`dativeArrows`, lib/figure/read; 2026-11-20): an
+  arrow from the donor to the acceptor, as Meno draws one - a line no
+  longer than a bond and a fifth, a small filled head at its end (no
+  longer than half a bond, nor than three times as wide; its base at the
+  line's end, its point on along the line) and, in some styles, a dot at
+  the line's tail. It is one dative bond, from the atom at its tail to
+  the atom at its point (each within half a bond, a label measured from
+  its box): never a bond and a wedge, nor a scheme's arrow. A word at
+  either end is an atom alone, as an ion is - an NH3 lending its pair to
+  a platinum - for the arrow to bond. It takes none of either atom's
+  valence, as the core counts one, but two of a carbon's: an NH3 keeps
+  its three hydrogens, a BH3 by an amine its three. An arrow with an atom
+  at one end only is no bond, and that atom says so: "A dative bond's
+  arrow meets it, with no atom read at its other end: read as no bond."
+  A wedge bond is long for its width; a scheme's arrow is longer.
 - **What is drawn over a picture** (`marksOver`, lib/figure/scheme;
   2026-11-18, narrowed 2026-11-20 by the chemistry check's ruling): a 3D
   model's rendering placed as an image, with its distances and their
@@ -1867,7 +1889,9 @@ being arrows.
   its point it is under 0.6 as wide as at its widest (a triangle is a
   quarter). A filled disk a bond runs into - an atom marked, as a scope
   table marks where its compounds differ - is as wide there as 0.87 of
-  it, and no head; nor is a letter drawn as its outline, round as a C or
+  it, and no head; nor is a dative bond's arrow, an atom at each end (a
+  letter, or another line's end) - the structure's bond, *A dative bond*
+  (2026-11-20); nor is a letter drawn as its outline, round as a C or
   an O is, by a bond's end (2026-11-20).
   An arrow drawn as one filled outline, its line and its head in one
   shape, is read by how wide it is along its length, measured from its
