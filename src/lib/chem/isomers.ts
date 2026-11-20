@@ -93,10 +93,10 @@ const SMALL_FUSED_MOST = 4;
  * the three in that order, are opposite: a cage's out,out form, a small fused bicycle's cis (the chemistry check's ruling). The other way is the in,out form,
  * or a trans fusion, which a bridge of three atoms or fewer, or rings of six atoms in all, cannot take.
  */
-type Tie = { a: number; b: number; ta: readonly number[]; tb: readonly number[] };
+export type Tie = { a: number; b: number; ta: readonly number[]; tb: readonly number[] };
 
 /** Every tie of `g` (`Tie`): a cage's bridgeheads, pair by pair, and a small fused bicycle's two junctions. */
-function tiesOf(g: IdentityInput): Tie[] {
+export function tiesOf(g: IdentityInput): Tie[] {
   const around: number[][] = g.atoms.map(() => []);
   for (const b of g.bonds) {
     around[b.a].push(b.b);

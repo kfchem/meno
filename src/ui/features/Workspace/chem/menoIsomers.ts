@@ -4,8 +4,8 @@
  * `isomersOf`) - each given whole to the plugin that makes structures in 3D, which makes it or says it cannot. The plugin is asked
  * nothing of which places are open or how many ways they go: that is Meno's.
  */
-import type { IdentityInput } from "../../../../lib/chem/identity";
-import { isomersOf, type Stereoisomer } from "../../../../lib/chem/isomers";
+import { identityKey, type IdentityInput } from "../../../../lib/chem/identity";
+import { isomersOf, tiesOf, type Stereoisomer } from "../../../../lib/chem/isomers";
 import { hydrogensFolded, plainHydrogenAtoms } from "../../../../lib/chem/perception/fold";
 import { candidates } from "../../../../lib/chem/perception/stereo/candidates";
 import { sentOf, type IsomerConfiguration } from "../../../../lib/chem/perception/stereo/configuration";
@@ -119,8 +119,18 @@ export function asGiven(read: BlocksRead, molblocks: readonly string[], isomer: 
   const plain = plainHydrogenAtoms(read.input);
   const drawnH = (c: number) => graph.bonds.flatMap((b) => (b.a === c && plain[b.b] ? [b.b] : b.b === c && plain[b.a] ? [b.a] : []))[0];
   const g = isomer.input;
+  // (a centre kept among the frames made only where it is one: turned alone it makes another stereoisomer, or it is a bridgehead
+  //  its ring system ties to another - Troeger's base's N. An isopropyl's CH, a DMSO's S, which two alike groups leave none, is
+  //  left to the toolkit, its sense none of Meno's to keep)
+  const here = identityKey(g);
+  const tied = new Set(tiesOf(g).flatMap((t) => [t.a, t.b]));
+  const stereogenic = (k: number) => {
+    if (tied.has(k)) return true;
+    const t = g.atoms[k].tetra!;
+    return identityKey({ ...g, atoms: g.atoms.map((x, i) => (i === k ? { ...x, tetra: { ...t, volume: t.volume > 0 ? -1 : 1 } } : x)) }) !== here;
+  };
   const centres = g.atoms.flatMap((a, k) => {
-    if (!a.tetra) return [];
+    if (!a.tetra || !stereogenic(k)) return [];
     const c = inputAt[k];
     const neighbours = a.tetra.neighbours.flatMap((n) => (n >= 0 ? [inputAt[n]] : drawnH(c) != null ? [drawnH(c)] : []));
     return [{ atom: c, neighbours, sense: a.tetra.volume }];
