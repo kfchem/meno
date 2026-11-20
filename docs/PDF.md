@@ -397,12 +397,29 @@ PDFs there - one step, which an undo takes back. It is held as any other
   workspace keeps its place, size, turn and source.
 - **Read as a structure in stage 5**, from its right-click menu.
 
-### A picture traced (`lib/figure/trace`; built, not yet used by the app)
+### A picture traced (`lib/figure/trace`, `lib/figure/tracedRead`)
 
 A picture of a drawing is traced to the shapes a PDF's paths make, so that
-Meno's own figure reader reads it as it reads a PDF's figure. The app does
-not offer it yet: reading a picture this way is wired in later, after its
-measurements.
+Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
+
+- **Where it is used**: *Read as structure* on a figure of a PDF that is a
+  picture, and on any picture on the page that is not a film, reads it so
+  first (*A picture read*), in a worker of its own, the drawing never
+  kept waiting. Where it reads nothing, the line says why - drawn too
+  small to read, shaded as a photograph is, no structure found - and the
+  plugin chosen to read pictures, if any, is offered by name, never run
+  unasked. The lens reads a PDF's figures that are pictures so too, in its
+  worker, as it reads ahead (*In the column, as built*): the pointer on a
+  compound's number in such a PDF finds its structure.
+- **How finely**: a figure of a PDF is drawn as finely as the picture
+  covering most of it is stored - the PDF says how many pixels each
+  picture holds - at most 600 dpi, and never finer, which would only
+  enlarge its pixels and hide that it is drawn too small to read; where
+  the PDF does not say, at 300 dpi. A picture on the page is read as it is
+  stored.
+- **What is kept**: as a figure's, a structure with an atom with more bonds
+  than it takes is left out and said; a lone atom left is no structure
+  (the ring of a charge read as an O, once its structure is left out).
 
 - **Its ink**: the paper is the picture's commonest colour; a pixel is ink
   as far as its farthest channel lies from the paper's, above one
@@ -446,7 +463,12 @@ measurements.
 - **The bond** is measured as the reader measures a PDF's, on the lines
   of the patches at least six tenths as large as the largest: a
   structure's, not its letters'. An H or a D is three strokes, and a small
-  molecule's labels hold more strokes than its bonds (2026-11-18).
+  molecule's labels hold more strokes than its bonds (2026-11-18). The
+  largest is the largest patch that is not a line - one piece spanning
+  three quarters of it, the others at most a third of that piece, as a
+  reaction arrow and its head are: a scheme's arrow may be far longer
+  than any of its structures, and measured beside it the structures
+  were taken for letters (2026-11-19).
 - **What else it is**: a round line closed on itself, with four lines or
   more of patches larger than a letter round it, each running across the
   way out of its middle within 30 degrees and lying within a bond of it,
@@ -459,8 +481,22 @@ measurements.
   letters stand up to four fifths of its bond where its bonds are drawn
   short). One upright line alone, free at both ends and as tall as a
   letter, is a letter where a letter as tall stands beside it on its line
-  - the l of Cl, the 1 of 13 - and a line where none does. Every tolerance
-  is in the drawing's own line width or bond.
+  - the l of Cl, the 1 of 13 - and a line where none does. A patch up to
+  a bond across of two such pieces bent at a corner, no line of a patch
+  larger than a letter within three tenths of a bond of it - a 7, a 1
+  with its flag, standing apart - is matched as a letter first, among the
+  picture's other letters, and is a letter where the matcher reads it
+  surely, else lines (2026-11-19): a compound's number, a yield's digits
+  are words, not bonds. One straight line alone never is: a bond from a
+  label to its free end, a methyl's, is one, and read so it was an l or
+  an I - an iodine on the round trip. A patch up to a bond across of
+  three lines or more, joined, whose pieces are longer than that - an N
+  printed large beside short bonds, its slant a bond long - is a letter
+  where two lines of the structure or more stop short of it, each end
+  within half a bond of its box and pointing into it, as bonds to a
+  label do (2026-11-19): read as lines, its strokes joined those ends
+  as carbons, and the label's element was lost with nothing said. Every
+  tolerance is in the drawing's own line width or bond.
 - **Not read** (2026-11-18): a picture whose bond is under 25 of its
   pixels is drawn too small to read, and is said to be: the round trip
   read such pictures wrong, with no mark, more often than it said them
@@ -475,6 +511,32 @@ measurements.
   unsure, and says so. A label the matcher cannot read, or whose bond was
   lost, would otherwise be left out with what it holds, and what is left
   can be a whole structure that is not the picture's.
+- **A small piece of carbons alone** (2026-11-19): read from a picture,
+  a piece - atoms joined by bonds - of six atoms or fewer, all of them
+  carbons with no label, is unsure and says that it may be a number or
+  letters read as bonds: a digit or a letter the matcher does not read
+  is traced as a line or two. So is such a piece holding a carbon with
+  no label beside a larger one, saying it may be part of the structure,
+  its bond not read: an OH come off with a stray carbon, a tert-butyl
+  with its CH-OH. Neither is ever left out - a cyclohexane or a hexane
+  drawn alone is such a piece, and comes through said. Six is inferred,
+  not measured on papers: set on Meno's made pictures, above every stray
+  piece of carbons read there, and so that a cyclohexane or a hexane
+  drawn alone is said.
+- **Two bonds in line at a carbon** (2026-11-19): read from a picture, a
+  carbon with no label and exactly two bonds, both single, lying within
+  ten degrees of a line, is unsure and says one bond may have been read
+  as two: a skeletal drawing sets carbons in line only on a triple bond
+  or cumulated double bonds, and a bond traced broken reads so - an extra
+  CH2 in a chain or a ring. Ethyne's, a nitrile's, an allene's and a
+  cumulene's straight carbons are not said.
+- **A label lost** (2026-11-19): read from a picture, two carbons with
+  no label and one bond each, whose bonds carried on past them cross
+  within three quarters of a bond of each, where no atom was read
+  within half of that, are unsure and say a label there was not read:
+  bonds stop so short of a label, and of nothing else - two methyls'
+  ends point apart. A heteroatom's letter faint in a picture, or not
+  traced, would otherwise leave its ring open with nothing said.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes
@@ -1259,6 +1321,9 @@ Two kinds of figure, read two ways:
    the picture, no more.
 7. **A figure in a PDF that is a picture is read by the chosen plugin**
    from the same *Read as structure*, without being asked again.
+   (Since 2026-11-18 Meno reads a picture itself first, traced, and offers
+   the chosen plugin by name only where it reads nothing: *A picture
+   traced*.)
 
 ### Coordinates in a PDF (built 2026-10-15)
 
@@ -2035,11 +2100,15 @@ mention a number, and the card.
 
 ### A picture read (part B, built 2026-10-11)
 
-*Read as structure* reads, by the plugin chosen for the role *Structures
-read from pictures* (Settings, *Chemistry*): a figure in a box of a PDF
-that is a picture - Meno finds no lines in it - and any picture on the
-page that is not a film. The first time, the plugin is set up as any is:
-Meno asks first, saying what it downloads, how large, and from where.
+*Read as structure* reads a figure in a box of a PDF that is a picture -
+Meno finds no lines in it - and any picture on the page that is not a
+film, by Meno's own reader first, traced (*A picture traced*, since
+2026-11-18). Where Meno reads nothing, its line says why and, where the
+chemist chose a plugin for the role *Structures read from pictures*
+(Settings, *Chemistry*) or added one, offers it by name: "Read with ...".
+Only then does the plugin read it. The first time, the plugin is set up
+as any is: Meno asks first, saying what it downloads, how large, and from
+where.
 
 **The plugins** - folders of their own, neither knowing of the other;
 each one's code installed from its makers' repository at a fixed commit,

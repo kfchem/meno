@@ -18,7 +18,13 @@ export type FigurePath = { fill: string | null; stroke: string | null; width: nu
 export type FigureLetter = { c: string; box: Box; at: [number, number] | null; size: number; font?: string; loose?: Box | null; dir?: number | null };
 
 /** A figure as drawn, within a box of its page. */
-export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictures: Box[] };
+export type FigureDrawn = {
+  paths: FigurePath[];
+  letters: FigureLetter[];
+  pictures: Box[];
+  /** Each picture's own size, in the pixels it is stored with, where the PDF says: by the pictures' places. */
+  pixels?: ([number, number] | null)[];
+};
 
 export type Point = { x: number; y: number };
 

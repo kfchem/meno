@@ -37,7 +37,7 @@
  */
 import { distances, type Pixels } from "./inkFit";
 import { boxOf, type Blob, type Box, type Curve, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
-import { shapeLetters, type GlyphShape } from "./glyphs";
+import { shapeLetters, sureEnough, type GlyphShape } from "./glyphs";
 import { figureBond, type FigureRead } from "./read";
 
 /** A picture traced: its shapes, how wide its lines are drawn and how long its bonds, in its pixels. */
@@ -82,6 +82,26 @@ const BOND_PATCH = 0.6;
 const LEAST_BOND = 25;
 /** A picture this much of whose ink is shaded (`shadedOf`) is a photograph or a rendering, not a drawing. */
 const SHADED = 0.1;
+/**
+ * A patch one piece of which spans at least this share of its extent, every other piece of it at most `LINE_REST` of that piece, is a line
+ * - a reaction arrow, its head - not a structure: the largest patch the bond is measured beside is the largest that is not one.
+ */
+const LINE_SPAN = 0.75;
+const LINE_REST = 0.35;
+/**
+ * A patch letter-sized, of two short pieces bent at a corner, with no line of a patch larger than a letter within this share of a bond of
+ * it - a 7, a 1 with its flag, standing apart - is matched as a letter first where the system's letters are given; read as one surely, it
+ * is a letter (a compound's number is words, not bonds), else lines. One straight piece alone is never: a bond from a label to its free
+ * end - a methyl's, a CH2OH's - is one, and would be read as an l or an I.
+ */
+const APART = 0.3;
+/**
+ * A letter-sized patch of three lines or more, joined - an N, a W - whose pieces are longer than `LETTER_PIECE`'s (a letter printed
+ * large beside short bonds: its slant longer than a bond's share), is a letter where two lines of a structure or more stop short of it,
+ * pointing at it, each end within this share of a bond of its box: bonds to a label. Never lines: read as bonds, its strokes join those
+ * ends as carbons, and the label's element is lost with nothing to say so.
+ */
+const LABEL_STOPS = 0.5;
 /** A piece between two joints shorter than this, in the bond, is a joint thinning left open: `closedJoints`. */
 const JOINT_SHORT = 0.35;
 
@@ -787,9 +807,11 @@ function outlinesOf(patch: Int32Array, own: number, width: number, box: [number,
  * A picture traced: the shapes its ink makes, as the figure reader takes a
  * PDF's (see the head of this file); or why it gave none. Ink lying within
  * `drop` - boxes in its pixels, where a PDF's own letters lie over the
- * picture - is left out: those letters are read as written.
+ * picture - is left out: those letters are read as written. `known`, the
+ * system's letters: a patch that may be a letter or lines (`APART`) is
+ * matched against them first.
  */
-export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced | Untraced {
+export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: readonly GlyphShape[] = []): Traced | Untraced {
   const ink = inkOf(pixels);
   if (!ink) return { none: "Nothing is drawn in the picture." };
   const shaded = shadedOf(ink);
@@ -868,7 +890,15 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
   const largest = Math.max(0, ...lines.map((l) => extent(l.piece.patch)));
   const asStrokes = (ls: readonly Laid[]): Stroke[] => ls.map((l) => ({ a: l.a, b: l.b, w: line }));
   const empty = { wedges: [], curves: [], blobs: [] };
-  const bond = figureBond({ strokes: asStrokes(lines.filter((l) => extent(l.piece.patch) >= BOND_PATCH * largest)), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
+  // (a scheme's reaction arrow may be far longer than any of its structures: the largest patch that is not a line - one piece spanning
+  //  it, the others short - is what a structure's patch is near as large as; where every patch is one, the largest of them)
+  const isLine = (k: number) => {
+    const own = (byPatch.get(k) ?? []).map((i) => laid[i].length).sort((p, q) => q - p);
+    return own.length > 0 && own[0] >= LINE_SPAN * extent(k) && own.slice(1).every((v) => v <= LINE_REST * own[0]);
+  };
+  const sized = Math.max(0, ...lines.filter((l) => !isLine(l.piece.patch)).map((l) => extent(l.piece.patch))) || largest;
+  const structural = (k: number) => extent(k) >= BOND_PATCH * sized;
+  const bond = figureBond({ strokes: asStrokes(lines.filter((l) => structural(l.piece.patch))), ...empty }, []) || figureBond({ strokes: asStrokes(lines), ...empty }, []) || largest;
   if (bond < LEAST_BOND) return { none: "The picture is drawn too small to read." };
   const gone = closedJoints(laid, bond);
   // (a circle's ring: lines of other patches whose middles lie within half a bond of its line)
@@ -888,6 +918,31 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
   };
   const shapes: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
   const stems: { k: number; box: [number, number, number, number]; stroke: Stroke }[] = [];
+  // (a patch that may be a letter or lines, as `APART`: its lines, for where it is read as no letter)
+  const maybe: { k: number; box: [number, number, number, number]; strokes: Stroke[] }[] = [];
+  const near = (p: Point, l: Laid) => {
+    const [dx, dy] = [l.b.x - l.a.x, l.b.y - l.a.y];
+    const t = Math.max(0, Math.min(1, ((p.x - l.a.x) * dx + (p.y - l.a.y) * dy) / (dx * dx + dy * dy || 1)));
+    return dist(p, { x: l.a.x + t * dx, y: l.a.y + t * dy });
+  };
+  const apart = (k: number, own: readonly number[]) =>
+    lines.every((l) => l.piece.patch === k || extent(l.piece.patch) < LETTER * bond || own.every((i) => [laid[i].a, laid[i].b].every((p) => near(p, l) > APART * bond)));
+  // (whether two lines of a structure or more stop short of patch `k`, as bonds to a label do: each a free end within `LABEL_STOPS` of
+  //  its box, the line pointing into the box)
+  const stoppedAt = (k: number, box: readonly number[]) => {
+    const reach = LABEL_STOPS * bond;
+    const inBox = (p: Point, pad: number) => p.x >= box[0] - pad && p.x <= box[2] + pad && p.y >= box[1] - pad && p.y <= box[3] + pad;
+    const stops = lines.filter((l) => {
+      if (l.piece.patch === k || extent(l.piece.patch) < LETTER * bond || !l.length) return false;
+      return ([[l.piece.a, l.a, l.b], [l.piece.b, l.b, l.a]] as const).some(([v, end, from]) => {
+        if (!v.free || !inBox(end, reach) || inBox(end, 0)) return false;
+        // (the line carried on past its end by `reach` comes into the box)
+        const t = reach / l.length;
+        return inBox({ x: end.x + (end.x - from.x) * t, y: end.y + (end.y - from.y) * t }, 0);
+      });
+    });
+    return stops.length >= 2;
+  };
   for (let k = 0; k < count; k++) {
     if (dropped[k]) continue;
     const own = byPatch.get(k) ?? [];
@@ -909,8 +964,10 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
     const longest = Math.max(0, ...own.map((i) => laid[i].length));
     const joined = own.some((i) => [laid[i].piece.a, laid[i].piece.b].some((v) => !v.free && v.pieces.length > 2));
     const closed = own.some((i) => laid[i].piece.a === laid[i].piece.b) || chains.some((c) => !c.gone && c.patch === k && !c.from);
-    // (a letter: small, its strokes short and joined, bent or closed - its outlines, for the letters' matcher)
-    if (across < SMALL * bond || (across < LETTER * bond && longest < LETTER_PIECE * bond && (joined || closed || own.length >= 3))) {
+    // (a letter: small, its strokes short and joined, bent or closed - its outlines, for the letters' matcher; or of three lines or more,
+    //  as large as a letter, where a structure's bonds stop short of it - `LABEL_STOPS`)
+    const letter = across < LETTER * bond && (joined || closed || own.length >= 3) && (longest < LETTER_PIECE * bond || (own.length >= 3 && stoppedAt(k, box)));
+    if (across < SMALL * bond || letter) {
       const parts = outlinesOf(patch, k, width, box);
       const all = parts.flat();
       if (all.length) shapes.blobs.push({ pts: all, parts, box: boxOf(all), curved: true } satisfies Blob);
@@ -925,6 +982,12 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
         continue;
       }
     }
+    // (a 1 with its flag, a 7 standing apart - two pieces meeting at a corner: matched as a letter first, where the letters are given)
+    const bent = own.length === 2 && [laid[own[0]].piece.a, laid[own[0]].piece.b].some((v) => v === laid[own[1]].piece.a || v === laid[own[1]].piece.b);
+    if (known.length && across < LETTER * bond && longest < LETTER_PIECE * bond && bent && apart(k, own)) {
+      maybe.push({ k, box, strokes: own.filter((i) => !gone.has(i)).map((i) => ({ a: laid[i].a, b: laid[i].b, w: profiles[i].length ? median(profiles[i].map((q) => q.w)) : line })) });
+      continue;
+    }
     for (const i of own) {
       if (gone.has(i)) continue;
       const { a, b } = laid[i];
@@ -938,6 +1001,20 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = []): Traced 
       }
       shapes.strokes.push({ a, b, w });
     }
+  }
+  // (each that may be a letter, matched among the letters traced: a letter where read as one surely, else its lines - before the stems,
+  //  which a letter so read may stand beside)
+  if (maybe.length) {
+    const asBlob = maybe.map(({ k, box }) => {
+      const parts = outlinesOf(patch, k, width, box);
+      return parts.flat().length ? ({ pts: parts.flat(), parts, box: boxOf(parts.flat()), curved: true } satisfies Blob) : null;
+    });
+    const read = new Set(shapeLetters({ ...shapes, blobs: [...shapes.blobs, ...asBlob.flatMap((b) => (b ? [b] : []))] }, bond, known).filter(sureEnough).flatMap((l) => l.from));
+    maybe.forEach((m, i) => {
+      const b = asBlob[i];
+      if (b && read.has(b)) shapes.blobs.push(b);
+      else shapes.strokes.push(...m.strokes);
+    });
   }
   // (a stem beside a letter, as tall as it, on its line - the l of Cl, the 1 of 13 - is a letter too: its outline for the matcher; else a line)
   const letterBoxes = shapes.blobs.map((b) => b.box);
