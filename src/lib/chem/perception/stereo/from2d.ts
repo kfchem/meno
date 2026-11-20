@@ -33,7 +33,10 @@
  *   hashes), the other end's neighbours in it. Not a wedge out of an
  *   allene's end: that states the allene's axis (ST-1.6) and nothing else,
  *   so a single bond from there is read only from wedges at its other end
- *   (ST-1.7's form, by analogy).
+ *   (ST-1.7's form, by analogy). An allene with an end whose two other
+ *   groups are alike has no axis, however it is wedged - its mirror image is
+ *   the molecule itself (2-methylpenta-2,3-diene's): none is read there, by
+ *   the same test, and `unreadWhy` says so.
  *
  * The rules it follows (Brecher 2006, by rule number):
  * - ST-0.3: a wedge is narrow at its stereocentre, and is read there only
@@ -63,6 +66,35 @@ import { runsOf } from "./runs";
 import { factsOf, OPEN_RING } from "../facts";
 import { settingCisTrans, type SymmetryInput } from "../symmetry";
 import { ofTheStructure } from "../graph";
+import { candidates, notCandidate } from "./candidates";
+
+/**
+ * The drawing as the core's candidates read a structure (./candidates): each H drawn as an atom of one bond, plain - no charge,
+ * no isotope - counted among its atom's hydrogens, as identity reads it. Its atoms by the drawing's index, an H so counted with
+ * no bonds.
+ */
+function candidateGraph(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): SymmetryInput {
+  const degree = atoms.map(() => 0);
+  for (const b of bonds) if (b.a !== b.b) [b.a, b.b].forEach((i) => degree[i]++);
+  const plainH = (i: number) => atoms[i].el === "H" && degree[i] === 1 && !atoms[i].charge && atoms[i].isotope == null && !atoms[i].radical;
+  const hs = atoms.map((a) => a.hs);
+  const kept = bonds.filter((b) => {
+    if (b.a === b.b) return false;
+    if (plainH(b.a) && !plainH(b.b)) return hs[b.b]++, false;
+    if (plainH(b.b) && !plainH(b.a)) return hs[b.a]++, false;
+    return true;
+  });
+  return {
+    atoms: atoms.map((a, i) => ({ el: a.el ?? "C", ...(a.charge ? { charge: a.charge } : {}), hs: hs[i] })),
+    bonds: kept.map((b) => ({ a: b.a, b: b.b, order: b.order })),
+  };
+}
+
+/** Whether atom `i` of the drawing can be a centre: one of the core's candidates (./candidates, `candidateGraph`). */
+function candidateCentres(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): (i: number) => boolean {
+  const at = new Set(candidates(candidateGraph(atoms, bonds)).flatMap((c) => (c.kind === "centre" ? [c.at] : [])));
+  return (i) => at.has(i);
+}
 
 /** A pair of atoms as one key, the lower first. */
 const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -372,16 +404,17 @@ function readCentres(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], f
   };
   // (which atoms of three bonds keep a configuration by their lone pair: Meno's rule, lib/chem/lonePairCentres)
   const keepsPyramid = lonePairCentres(atoms, [...bondOf.values()]);
+  // (where a configuration can be: the core's candidates - never a metal of the d or f block, nor an N+ with an H)
+  const candidate = candidateCentres(atoms, [...bondOf.values()]);
 
   const centres = (fits: Map<number, CageFit>) => {
     const found = new Map<number, Tetrahedral>();
     atoms.forEach((atom, c) => {
       const around = neighbours[c];
-      // (a sulfoxide's S, a phosphine's P, an aziridine's N: three groups and
-      // a lone pair for the fourth, undrawn, where the lone pair keeps its
-      // configuration (lib/chem/lonePairCentres) - read as a centre with its
-      // H left out is, its configuration the volume of the three, as the
-      // SMILES reader keeps one)
+      // (a centre where the core's candidates put one: of four groups; or a sulfoxide's S, a phosphine's P, an aziridine's N,
+      // three groups and a lone pair for the fourth, undrawn, where the lone pair keeps its configuration - read, its three
+      // drawn, as a centre with its H left out is, its configuration the volume of the three, as the SMILES reader keeps one)
+      if (!candidate(c)) return;
       const lonePair = atom.hs === 0 && around.length === 3 && keepsPyramid(c);
       if (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4)) return;
       if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
@@ -578,20 +611,30 @@ function readStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], 
   });
 
   // (none where it sets nothing - an end of two alike groups: perception/symmetry `settingCisTrans`, asked of the molecule as
-  //  read, its atoms as identity writes them, every other configuration kept. Asked when first wanted: a reader that wants
-  //  only the centres - the layout's checks of each centre it draws, many times over - asks nothing of the symmetry)
-  let setting: { cisTrans: Map<number, CisTrans>; cumulated: Cumulated[] } | null = null;
+  //  read, its atoms as identity writes them, every other configuration kept; an allene's axis likewise, a biaryl's as read.
+  //  Asked when first wanted: a reader that wants only the centres - the layout's checks of each centre it draws, many times
+  //  over - asks nothing of the symmetry)
+  let setting: { cisTrans: Map<number, CisTrans>; axes: Axial[]; cumulated: Cumulated[] } | null = null;
   const settled = () => {
     if (setting) return setting;
     const { graph: read, bondAt: unique } = drawnGraph(atoms, bonds, { tetra, cisTrans, axes, cumulated: odd });
     const kept = settingCisTrans(read);
     const set = new Set(unique.filter((_, j) => kept.bonds[j].stereo));
-    setting = kept === read ? { cisTrans, cumulated: odd } : { cisTrans: new Map([...cisTrans].filter(([k]) => set.has(k))), cumulated: odd.filter((x) => kept.cumulated.includes(x)) };
+    setting =
+      kept === read
+        ? { cisTrans, axes, cumulated: odd }
+        : {
+            cisTrans: new Map([...cisTrans].filter(([k]) => set.has(k))),
+            axes: axes.filter((x) => kept.axes!.includes(x)),
+            cumulated: odd.filter((x) => kept.cumulated.includes(x)),
+          };
     return setting;
   };
   return {
     tetra,
-    axes,
+    get axes() {
+      return settled().axes;
+    },
     get cisTrans() {
       return settled().cisTrans;
     },
@@ -652,7 +695,10 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * rule, lib/chem/lonePairCentres); a centre by its lone pair drawn with
  * two bonds, its H carried (a secondary phosphine's P), its H and its lone
  * pair both left out; two of its bonds in line or on top of each other (a T, ST-1.2.12);
- * or else wedges and hashes that cancel, saying neither way round.
+ * or else wedges and hashes that cancel, saying neither way round. At an
+ * allene's end: its other end with fewer than two different groups, an end
+ * of two alike groups (`settingCisTrans`), or wedges at its two ends that
+ * say opposite ways.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
   const read = hashedLinesRead(atoms, structureOf(bonds).bonds);
@@ -683,11 +729,23 @@ function unreadWhyOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c
     const hs = atoms[end].hs + onEnd.filter((n) => atoms[n].el === "H").length;
     // (a ketene's O, with no group; a ketenimine's N, with one; a terminal allene's CH2, with two H: no axis for the wedge to state)
     if (onEnd.length + atoms[end].hs < 2 || hs >= 2) return "the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state";
+    // (an end of two alike groups - 2-methylpenta-2,3-diene's two methyls: the axis, given either way, sets nothing - perception/symmetry
+    //  `settingCisTrans`, asked as readStereo asks it, every other configuration as read)
+    const near = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c) && b.a !== run && b.b !== run).map((b) => (b.a === c ? b.b : b.a));
+    if (near.length && onEnd.length) {
+      const read = readStereo(atoms, bonds);
+      const axis: Axial = { atoms: [c, end], refs: [near[0], onEnd[0]], sense: 1 };
+      const { graph } = drawnGraph(atoms, bonds, { ...read, axes: [...read.axes, axis] });
+      if (!settingCisTrans(graph).axes!.includes(axis)) return "an end of these double bonds carries two alike groups, so there is no axis for a wedge to state";
+    }
     return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
   }
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
+  // (no centre where the core's candidates put none - a metal of the d or f block, an N+ with an H: their words)
+  const not = notCandidate(candidateGraph(atoms, bonds), { kind: "centre", at: c });
+  if (not) return `${not}, so a wedge at it states none`;
   // (a centre by its lone pair, two bonds drawn and its H carried: the two corners left are each other's mirror image, and
   //  which holds the H, which the lone pair, is not drawn)
   if (around.length === 2 && atom.hs === 1 && lonePairCentres(atoms, bonds)(c)) return "its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom";
@@ -740,13 +798,15 @@ function unsureStereoOf(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
   };
-  // (which atoms of three bonds keep a configuration by their lone pair: Meno's rule, as readStereo asks it)
+  // (which atoms of three bonds keep a configuration by their lone pair: Meno's rule, as readStereo asks it - and where the core's
+  // candidates put a centre)
   const keepsPyramid = lonePairCentres(atoms, [...bondOf.values()]);
+  const candidate = candidateCentres(atoms, [...bondOf.values()]);
   const centres: number[] = [];
   atoms.forEach((atom, c) => {
     const around = neighbours[c];
     const lonePair = atom.hs === 0 && around.length === 3 && keepsPyramid(c);
-    if (atom.centre || (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4))) return;
+    if (atom.centre || !candidate(c) || (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4))) return;
     if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
     if (!around.some((n) => lift(c, n) !== 0)) return;
     // (as readStereo reads it: an H left out a fourth group, a lone pair none - the volume of its three)
@@ -1126,8 +1186,9 @@ function hashedLinesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[
     }
     return false;
   };
-  // (four groups, its hydrogens counted: as the reader takes a stereocentre)
-  const centre = (i: number) => around[i].length + atoms[i].hs === 4 && atoms[i].hs <= 1;
+  // (four groups, its hydrogens counted, where the core's candidates put a centre: as the reader takes a stereocentre)
+  const candidate = candidateCentres(atoms, bonds);
+  const centre = (i: number) => around[i].length + atoms[i].hs === 4 && atoms[i].hs <= 1 && candidate(i);
   // (its other groups not hydrogens, the bond to `from` aside)
   const others = (i: number, from: number) => around[i].filter((n) => n !== from && !isH(n)).length;
   const endGroup = (i: number, from: number) => others(i, from) <= 1 && !cumulatedEnd(i);

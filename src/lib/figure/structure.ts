@@ -10,6 +10,7 @@ import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { hydrogenCounts } from "../chem/perception/hydrogens";
 import { isMetal } from "../layout/perceive";
+import { candidates } from "../chem/perception/stereo/candidates";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
 
@@ -229,6 +230,10 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
       ...(multiple[i] ? { multiple: multiple[i] } : {}),
     };
   });
+  // (where a configuration can be, by the core's candidates - lib/chem/perception/stereo/candidates, foundation part 13: an atom
+  //  of four groups, a P=O's or an S=O's too, or of three and a lone pair it keeps, never a metal's nor an N+ with an H - read
+  //  with each H drawn as an atom counted on its atom)
+  const centres = centresOf(read, orders, els, charges, (i) => implicitHydrogens(els[i], valence[i], charges[i], radicals[i]));
   // a hashed bond whose narrow end is not drawn - its hashes even: a hashed line, read by the reader's one rule for it (perception/stereo/
   // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
   const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + counted[i] === 4;
@@ -289,11 +294,11 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
     return [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((to) => ways.filter((t) => near(t, to)).length === 1);
   };
   atoms.forEach((a, i) => {
-    // (as Meno takes a stereocentre - lib/layout/drawn readStereo - any atom of four groups, a P=O's or an S=O's too, but a metal's)
-    if (isMetal(els[i]) || shown.has(i) || wavy.has(i) || lined.has(i)) return;
-    // (four groups, each other than the rest: its hydrogens one group at most)
+    // (where a configuration can be, by the candidates, and none is drawn)
+    if (!centres.has(i) || shown.has(i) || wavy.has(i) || lined.has(i)) return;
+    // (its groups each other than the rest: its hydrogens one group at most)
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
-    if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
+    if (hs[i] > 1 || new Set(groups).size !== groups.length) return;
     (a.unsure ??= []).push(crossed(i) ? FISCHER_CROSS : "A stereocentre whose configuration is not drawn: none is read.");
   });
   // a bond's open end - an atom of one bond, with no label - drawn short, as a bond to a label is: a letter there not read (an
@@ -404,4 +409,24 @@ function atomKinds(atoms: readonly StructureAtom[], bonds: readonly StructureBon
     kinds = next;
   }
   return kinds;
+}
+
+/**
+ * The atoms of a figure read where a configuration can be: the core's candidate centres (lib/chem/perception/stereo/candidates),
+ * of the structure with each H drawn as an atom of one bond counted among its atom's hydrogens, as identity reads it.
+ */
+function centresOf(read: FigureRead, orders: readonly number[], els: readonly string[], charges: readonly number[], carried: (i: number) => number): Set<number> {
+  const around: number[][] = read.atoms.map(() => []);
+  read.bonds.forEach((b) => {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  });
+  const plainH = (n: number) => els[n] === "H" && around[n].length === 1 && !charges[n];
+  const kept = read.atoms.flatMap((_, i) => (plainH(i) ? [] : [i]));
+  const at = new Map(kept.map((i, k) => [i, k]));
+  const g = {
+    atoms: kept.map((i) => ({ el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), hs: carried(i) + around[i].filter(plainH).length })),
+    bonds: read.bonds.flatMap((b, k) => (at.has(b.a) && at.has(b.b) ? [{ a: at.get(b.a)!, b: at.get(b.b)!, order: orders[k] === AROMATIC_BOND ? 4 : orders[k] }] : [])),
+  };
+  return new Set(candidates(g).flatMap((c) => (c.kind === "centre" ? [kept[c.at]] : [])));
 }
