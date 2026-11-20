@@ -248,7 +248,7 @@ group of each, and whether the two are on one side (`Cumulated`).
   turns in the mirror image says so.
 - **On a molecule in 3D** (lib/chem/cip/in3d): every candidate unit read
   from where its atoms are - an atom of four bonds and a double bond by
-  its places (lib/chem/stereoOpen `configuredFrom`), an atom of three by
+  its places (lib/chem/perception/stereo/from3d `configuredFrom`), an atom of three by
   Meno's rule on lone pairs (lib/chem/lonePairsIn3d) - never the toolkit's
   list of centres, and the CIP's own ranking deciding which have a
   descriptor. A double bond in a ring of seven atoms or fewer has none of
