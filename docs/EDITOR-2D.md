@@ -586,6 +586,16 @@ the file - a plugin asked for the structure's SMILES, a program it is
 opened in - lifts it by a rule of its own (lib/chem/molWriter
 `metalBoundValences`). In 3D, where its hydrogens are all atoms, its
 valence is its bonds.
+The elements that carry hydrogens they are not drawn with: B, C, Si, Ge,
+N, P, As, Sb, O, S, Se, Te and the halogens to I, by their standard
+bonding numbers (IUPAC 2013, P-14.1.2) - "As" alone is AsH3, "Te" H2Te,
+"Ge" GeH4, As and Sb taking 3 or 5 as P does, Te 2, 4 or 6 as S does.
+Sn, Pb, Al, Ga, In, Tl, Bi, Po and At carry none unless one is written:
+they are drawn with fewer bonds and no hydrogen (SnCl2, PbCl2, AlCl3,
+Bi3+), and a hydrogen written on one (Bu3SnH, an Al-H) is kept and
+counted. An As, Sb, Ge or Te drawn bonded only to metals (a bridging
+arsenide or telluride) carries the hydrogens its bonds leave, as a
+phosphide or a selenide does; say "none" there by its charge.
 Where no such form closes them, the SMILES is refused, never read by
 adding an H: CN(:O):O - "its bonds marked aromatic outside a ring (atoms
 2, 3 and 4) have no form with single and double bonds: is a charge
@@ -621,7 +631,7 @@ again from Quick Add opened on the chair it put down - within two bonds of its r
 was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
 "Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
 (`Workspace/projections/`: `chair`, `extend`, `flip`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
-on a page); the Newman projection follows.
+on a page), and the **Newman projection** (`newman`).
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
@@ -718,6 +728,24 @@ on a page); the Newman projection follows.
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
   the chair tool, every group equatorial; the MOL written for 3D reads back as the same.
+- **The Newman projection** (Quick Add, *Projections*). Two carbons on the line of sight - the front one nearer - drawn at ONE place on the page, with the
+  circle round it: the front atom's bonds meet at the circle's centre, the back atom's start at its rim (Moss 1996, *Newman Projection*). The central bond is
+  seen end-on: it has no drawn length and no direction, and the page draws none of it (`isEndOn`, `newmanPairs`, lib/chem/layout2d: no line for that bond, the
+  back atom's bonds drawn from the rim, the circle one of the drawing's circles, so that SVG, EMF and print have it as the canvas does). Free positions: three
+  spokes on each atom, staggered - the front's at 90, 210 and 330 degrees, the back's at 30, 150 and 270 - a bond length from the centre; a group is led
+  out to the nearest that no group holds, the tip saying "front" or "back". A spoke dragged round the circle turns all three groups of its atom together,
+  with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
+  12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
+  back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the
+  front atom, a press on the circle's line the back atom - a choice of handling only, by eye. A label typed on either atom is refused,
+  in words that say why: they are drawn at one place and have no room for one; both are carbon. Clean-up leaves it as drawn and says so (a pair
+  at one place is no ring a flat layout can keep); *Draw flat* lays it out. Written for 3D,
+  a file or the clipboard (chem/drawing `forFlatReaders`), the pair's back atom is put half a bond off
+  its front one, so that a reader that knows only wedges sees each centre's four bonds go four ways, and
+  each centre's configuration - read from the pair as drawn - is written in wedges. The pair is read by its depth, as a ring in perspective is. Known
+  answers (`newman.test.ts`): 1,2-dichloro-1,2-difluoroethane with its groups in one order front and back is the meso form, with the back's
+  two swapped one of the chiral pair; a spoke turned round the circle leaves the compound the same.
+  Not yet checked in the sweep of what reads a bond's length or direction: label places for a labelled or charged atom of the pair.
 - **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no ring fused on a chair by the tool yet (Fuse comes in its
   own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
   offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
@@ -1710,6 +1738,33 @@ All hover-based, as above.
   files, the clipboard's MOL and the copied SMILES** (chem/drawing
   `forFlatReaders`): each centre a perspective drawing shows is written as
   a wedge from what is kept, for a reader that knows only wedges.
+- **What a look states** (foundation part 15, phase 4;
+  `configuration/said.ts`, shown by `ChemMarks2D` in the tip it gives an
+  R or S of its own words). The pointer resting on a bond or an atom of a
+  structure says, in one line under it, what that look states - what it
+  is, never how it is worked out:
+  - a wedge: the centre it is narrow at, with its R or S where the drawing
+    shows one ("C3: R, by this wedge"; "C3: set, by this wedge" where R
+    or S is not shown), or why it is not read ("C3: not read: ..."); where
+    the atom at its wide end is a centre too, that it says nothing of it;
+    a wedge from an end of an axis it states - an allene's, a biaryl's
+    (IUPAC ST-1.7): that axis, set by it ("the axis through C2 and C5:
+    set, by this wedge"; no R or S is shown for an axis);
+  - a wavy bond: its centre open; an "either" double bond: open;
+  - a hashed line: the centre it sets, where IUPAC grades it acceptable
+    (ST-0.3: from a centre to an end group, read as the hashed wedge it
+    states - "C3: R, by this hashed line", as the centre itself says), or
+    why it sets none ("C3: not read: a hashed line between two
+    stereocentres states neither"); else no configuration;
+  - a bold or dashed line on a flat drawing: no configuration; a
+    bold line of a ring drawn with depth: the near edge;
+  - a double bond whose cis or trans is stated: its E or Z where shown;
+  - a centre: its R or S, "set", "open", or "not read" and why; an atom of
+    a ring drawn with depth: that the drawing shows its configuration.
+  A plain bond and an atom with no configuration say nothing. The words
+  follow the drawing as it is edited. Where a centre has no mark at all,
+  nothing is said: whether it could carry one is the identity's search,
+  too long to make as the pointer moves.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

@@ -37,27 +37,27 @@
   },
   {
    "name": "(R)-bromochlorofluoromethane",
-   "molfile": "f6db16a0be8aa90dbc5e741d68fc2346a53d893f8f824894a9d5ad29ddada489",
+   "molfile": "156eb4f8b08ae67fd5dc65013ded729b64e4eb27b7e7240cc14b8bb3b912cf6a",
    "smiles": "F[C@@H](Cl)Br"
   },
   {
    "name": "(S)-bromochlorofluoromethane",
-   "molfile": "9e540c239ba71a75de2fc509ba7a885116ed05ef3f98f7a9622821a6298016af",
+   "molfile": "146b0eb160802f807b54d697235048d828b87ae168e958baef845610c1e39360",
    "smiles": "F[C@H](Cl)Br"
   },
   {
    "name": "(R)-bromochlorofluoromethane, its H drawn",
-   "molfile": "9c4f993e6ba29339483c140382b96b69e3e7b2a9abfe051aa2e6105ca5bc0c61",
+   "molfile": "fc00db6828f770b80313693429a93b0af88add1101c30ce4b749336a0d6dd624",
    "smiles": "F[C@@H](Cl)Br"
   },
   {
    "name": "(S)-alanine",
-   "molfile": "5c7c3ada4b119cd9dfa2f475945456077d1406d50c25f139c355eaaadda051ca",
+   "molfile": "1c4ffc6acc9772d954364589fb5b7c6f39353eb599c70e3cdbe00e32acd1d941",
    "smiles": "C[C@H](N)C(=O)O"
   },
   {
    "name": "(R)-alanine",
-   "molfile": "1197b855f88156fdf7e4cb72296766d314bbb0230dd9217bcec62c6ef0f1c11d",
+   "molfile": "1851bcf5f2487545574b0e0ee44d0210e1920d74ccdb2a834038a528a8d49f90",
    "smiles": "C[C@@H](N)C(=O)O"
   },
   {

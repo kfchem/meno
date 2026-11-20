@@ -24,6 +24,7 @@ import {
 import { useEditor } from "../store";
 import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
+import { hasLooks, pointedSaid } from "../configuration/pointedSaid";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
@@ -84,7 +85,10 @@ export default function ChemMarks2D({
   // (the view's zoom, where there is anything to mark: with nothing, a zoom
   // draws nothing here again - and marks fading out keep the size they had)
   const zoomWanted = useRef(1);
-  const zoom = useDrawnZoom((z) => (wanted ? (zoomWanted.current = z) : zoomWanted.current));
+  // (and while the pointer rests on an atom or a bond of a drawing with a look: what it states is said, at the view's zoom)
+  const looks = useMemo(() => hasLooks(model), [model]);
+  const tipWanted = looks && (hoveredAtom != null || hoveredBond != null);
+  const zoom = useDrawnZoom((z) => (wanted || tipWanted ? (zoomWanted.current = z) : zoomWanted.current));
   // each atom where it is drawn this frame: a dragged atom where it is
   const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
   // the structure where it is drawn this frame
@@ -299,16 +303,10 @@ export default function ChemMarks2D({
   // (a stereocentre or double bond asked for, pointed at, with words of its own - why it has no R or S, E or Z, or that its Z or E
   //  turns in the mirror image: said under it as a box's words are, with no box)
   const saidPointed = (() => {
-    if (pointed || !marks?.said?.size || !marksRead) return null;
-    const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom && a.stereoShown) : undefined;
-    const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond && b.stereoShown) : undefined;
-    const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
-    const text = key && marks.said.get(key);
-    if (!text) return null;
-    const p = atom ? at.get(atom.id) : bond ? at.get(bond.a) : undefined;
-    const q = bond ? at.get(bond.b) : p;
-    if (!p || !q) return null;
-    return { key, text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, size: 0.6 * labelFont };
+    if (pointed || !marksRead) return null;
+    // (each atom where it is drawn this frame - looked up here, not from `at`, which is empty while nothing is marked)
+    const said = pointedSaid(model, marks, hoveredAtom, hoveredBond, (id) => at.get(id) ?? atoms.find((a) => a.id === id));
+    return said && { ...said, size: 0.6 * labelFont };
   })();
   if (!valenceShown.length && !stereoShown.length && !saidPointed) return null;
 
@@ -335,7 +333,7 @@ export default function ChemMarks2D({
       {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
       {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
       {pointed && <PageTip tipKey={pointed.key} x={pointed.x} y={pointed.y} w={pointed.w} h={pointed.h} zoom={z} text={pointed.message} zIndexRange={Z_RANGE} />}
-      {saidPointed && <PageTip tipKey={`said-${saidPointed.key}`} x={saidPointed.x} y={saidPointed.y} w={saidPointed.size} h={saidPointed.size} zoom={z} text={saidPointed.text} zIndexRange={Z_RANGE} />}
+      {saidPointed && <PageTip tipKey={`said-${saidPointed.key}`} x={saidPointed.x} y={saidPointed.y} w={saidPointed.w + saidPointed.size} h={saidPointed.h + saidPointed.size} zoom={z} text={saidPointed.text} zIndexRange={Z_RANGE} />}
       {stereoTexts.length > 0 && (
         <Texts2D
           texts={stereoTexts}

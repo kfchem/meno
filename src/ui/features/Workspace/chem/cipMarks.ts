@@ -209,6 +209,9 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string 
       return `No ${what}: a group it depends on cannot be told from the drawing.`;
     case "large":
       return `No ${what}: the structure is too large to work it out.`;
+    // (a cage's bridgehead or a small fused bicycle's junction drawn the way round its rings cannot take: perception/stereo/ties)
+    case "impossible":
+      return "No R or S: drawn the way round its rings cannot take (in,out, or joined trans).";
     case "exchanges":
       return "No R or S: this N does not keep a configuration.";
     case "undrawn":

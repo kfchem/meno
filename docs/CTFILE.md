@@ -32,6 +32,10 @@ title, its first line; the record's data items are not kept:
   ring bond counts; alias (A) and value (V) lines; Rgroup labels
   (M  RGP, RGROUPS) and attachment points and order (M  APO, M  AAL,
   ATTCHPT, ATTCHORD).
+- **Not read**: the atom stereo parity (V2000's sss, V3000's CFG on an
+  atom). The text has readers ignore it ("Ignored when read", both atom
+  block tables; Appendix A): a file's configuration is read from its
+  wedges and its coordinates.
 - **Bonds**: types 1 to 10 (single, double, triple, aromatic, the four
   query types, coordination, hydrogen); stereo (a single bond's up, down,
   either - a wedge or hashes narrow at the bond's first atom, as the file
@@ -156,6 +160,7 @@ leaves it its drawing's.
 | Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. A label that reads as nothing at all (CH2CH2, xyz) is never turned round: drawn in the order typed on either side. No hydrogens of its own. | GR-2.3.3; reversed when bonded on its right, GR-2.1.6. |
 | The prefixes n-, s-, t-, sec-, tert-, i- (hyphenated) and o-, m-, p- | In italics: *t*-Bu, *s*-Bu, *p*-Ts; iPr and iBu upright, unhyphenated. The canvas leans the label's own letters; an SVG or EMF asks for the typeface's italic. | Table II sets them so, and prefers it (upright is acceptable); the names have them so (isopropyl, *tert*-butyl). |
 | A substituted aryl group named ring last (2,6-diMeBz, 4-MeOC6H4) | As written on either side of its bond - it is not read outward - the ring's group, or a formula's C6, at the bond when that comes in from the right. Positions are no counts: not subscript. | Meno's own: such labels name the ring last. |
+| An atom with no valence set and no H count | The hydrogens its element's bonding number leaves (docs/EDITOR-2D.md, *The hydrogens an atom carries that are not drawn*): B, C, Si, Ge, N, P, As, Sb, O, S, Se, Te, the halogens; Sn, Pb, Al, Ga, In, Tl, Bi none. Written back with them, so a file of an arsine written "As" with three bonds to carbon is trimethylarsine, and "As" alone AsH3. | P-14.1.2's standard bonding numbers. |
 | A valence the file sets (V2000's vvv, V3000's VAL) | Hydrogens counted to it; a carbon of other than four shows its label, CH2. At a metal, its coordination and dative bonds count toward it, as the file's own valence counts them: cisplatin written with Pt VAL=4 - two bonds to Cl, two coordination bonds from NH3 - has no H on its Pt (until 2026-11-13 they counted as nothing there, and the Pt was given two H nobody wrote: PtH2, and [Pt(NH3)4]2+ PtH4). | |
 | A query hydrogen count | Kept, and written back; not drawn. | |
 
@@ -592,6 +597,24 @@ to 4 from the table's), beside M  CHG, M  RAD and M  ISO: *CTfile Formats*
 reader of the atom block alone sees them (2026-10-22; before, the atom
 block's were 0). Enhanced stereo is written as V3000 collections
 - V2000 says only the chiral flag, set where every group is absolute.
+
+Each stereocentre's atom stereo parity goes in its atom line - V2000's
+sss (*CTfile Formats*, Chemistry 2026, the V2000 atom block, pp. 64-65),
+V3000's CFG (the V3000 atom line, p. 9) - as Appendix A, *Stereo Notes*
+(pp. 120-121) defines it: the atoms round the centre numbered in
+increasing atom number, a hydrogen the highest, whether drawn or not; seen
+with the bond to atom 4 behind the plane of atoms 1, 2 and 3, 1 where they
+turn clockwise, 2 where counterclockwise; 3 for a centre at a wavy bond
+(`lib/chem/ctfileParity`). It is worked out from the wedges the file
+carries, so the two never disagree: a reader that takes the parity finds
+what one that reads the wedges finds. Not written: a parity for a centre
+by its lone pair (the text defines it for four atoms only), and the 3 the
+text gives an unmarked stereocentre - such an atom is written 0, as a
+centre the drawing does not mark (telling a stereocentre from a centre of
+two alike groups is the identity's search, not the writer's). A wedge
+that sets nothing (an isopropyl's CH) has its parity as any wedge, the
+file stating what the drawing states (2026-11-20; before, every atom's
+was 0).
 
 An abbreviation is written out - the atoms a file gave it, or the
 dictionary's, laid out by Meno's own engine on from its bond - with an

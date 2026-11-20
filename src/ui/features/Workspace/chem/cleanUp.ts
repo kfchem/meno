@@ -22,6 +22,7 @@ import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Cumulated } from "../../../../lib/layout/stereo";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
+import { newmansIn } from "../projections/newman";
 
 /**
  * An atom and every atom bonded to it, however far along - a haptic bond
@@ -212,7 +213,7 @@ export async function cleanUp(
   const held = store.getState().model;
   const model = atTrueSize(held);
   const expanded = store.getState().justExpanded();
-  const parts = (
+  const all = (
     // (each piece as it is: a structure of several parts is laid out piece by piece, its parts keeping where they stand)
     around == null
       ? fragmentsOf(model, false)
@@ -220,7 +221,13 @@ export async function cleanUp(
   )
     .map((ids) => partOf(model, ids))
     .filter((part) => part.bonds.length > 0);
-  if (!parts.length) return; // nothing to lay out
+  if (!all.length) return; // nothing to lay out
+  // (a Newman pair is drawn as it is: two atoms at one place, which no flat layout keeps - Draw flat lays it out. A ring in perspective is
+  //  kept by the layout itself, `relayoutFrom`)
+  const isKept = (part: Model) => !flat && newmansIn(part).length > 0;
+  const parts = all.filter((part) => !isKept(part));
+  const pairs = all.filter(isKept).map((part) => ({ formula: partFormula(part), why: "it is a Newman projection, drawn as it is - Draw flat, in its right-click menu, lays it out flat" }));
+  if (!parts.length) throw new CleanUpRefused(pairs, all.length);
   // (each on its own: one whose wedges cannot be kept, refused before it is laid out, named with the rest below)
   const settled = await Promise.allSettled(parts.map((part) => laidOutWithLabels(part, expanded)));
   const cleaned = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
@@ -259,7 +266,8 @@ export async function cleanUp(
     );
   }
   const left = [...unlaid, ...refused.map((t) => ({ part: t.c.part, why: t.why! }))];
-  if (left.length) throw new CleanUpRefused(left.map((l) => ({ formula: partFormula(l.part), why: l.why })), parts.length);
+  const named = [...left.map((l) => ({ formula: partFormula(l.part), why: l.why })), ...pairs];
+  if (named.length) throw new CleanUpRefused(named, all.length);
 }
 
 /**

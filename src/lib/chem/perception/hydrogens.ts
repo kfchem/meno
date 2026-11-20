@@ -69,16 +69,25 @@ export function valenceOrder(b: ValenceBond, el?: string): number {
 /**
  * Valences used to work out how many hydrogens an atom carries, for the
  * elements that take them; any other carries none it is not drawn with.
+ * The standard bonding numbers (IUPAC 2013, P-14.1.2) for the elements a
+ * chemist draws with fewer bonds and means hydrogens: Ge as Si, As and Sb
+ * as P, Te as Se. Not Sn, Pb, Al, Ga, In, Tl, Bi, Po or At: drawn as
+ * cations and in salts with fewer bonds and no hydrogen (SnCl2, Bi3+), they
+ * carry none unless one is written - the chemistry check's ruling, part 12.
  */
 const VALENCE: Record<string, { valence: number; group: number }> = {
   B: { valence: 3, group: 13 },
   C: { valence: 4, group: 14 },
   Si: { valence: 4, group: 14 },
+  Ge: { valence: 4, group: 14 },
   N: { valence: 3, group: 15 },
   P: { valence: 3, group: 15 },
+  As: { valence: 3, group: 15 },
+  Sb: { valence: 3, group: 15 },
   O: { valence: 2, group: 16 },
   S: { valence: 2, group: 16 },
   Se: { valence: 2, group: 16 },
+  Te: { valence: 2, group: 16 },
   F: { valence: 1, group: 17 },
   Cl: { valence: 1, group: 17 },
   Br: { valence: 1, group: 17 },
@@ -123,7 +132,7 @@ export function implicitHydrogens(
  * The valences a P, an S or an Se takes, lowest first, for `implicitHydrogens`: P 3 and 5, S and Se 2, 4 and 6 (as a charge or an
  * unpaired electron leaves each). Any other element its own alone.
  */
-const LADDER: Record<string, readonly number[]> = { P: [3, 5], S: [2, 4, 6], Se: [2, 4, 6] };
+const LADDER: Record<string, readonly number[]> = { P: [3, 5], As: [3, 5], Sb: [3, 5], S: [2, 4, 6], Se: [2, 4, 6], Te: [2, 4, 6] };
 
 /**
  * The valences an atom of `el` takes at its charge, as `implicitHydrogens`
@@ -149,7 +158,7 @@ function valenceAs(v: { group: number }, valence: number, charge: number, radica
 }
 
 /** The highest valence an element below the second row takes, past its own: P(V), S(VI), I(VII). */
-const HIGHEST: Record<string, number> = { P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
+const HIGHEST: Record<string, number> = { P: 5, As: 5, Sb: 5, S: 6, Se: 6, Te: 6, Cl: 7, Br: 7, I: 7 };
 
 /**
  * The most an atom's bonds' orders can sum to: its element's valence as its
@@ -162,8 +171,9 @@ const HIGHEST: Record<string, number> = { P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 
 export function mostBonds(el: string, charge = 0, radical?: Radical): number | null {
   const v = VALENCE[el];
   if (!v) return null;
-  // (a silicon's four, and one more for each negative charge, to six: a siliconate's five, SiF6 2-'s six - a neutral one none past four)
-  if (el === "Si") return Math.min(6, 4 + Math.max(0, -charge)) - (radical === "doublet" ? 1 : radical ? 2 : 0);
+  // (a silicon's or a germanium's four, and one more for each negative charge, to six: a siliconate's five, SiF6 2-'s and GeF6 2-'s
+  //  six - a neutral one none past four)
+  if (el === "Si" || el === "Ge") return Math.min(6, 4 + Math.max(0, -charge)) - (radical === "doublet" ? 1 : radical ? 2 : 0);
   // (a heavier one's highest, its charge either way taking it further: PF6-'s six, a sulfonium's)
   const highest = HIGHEST[el];
   return highest != null ? highest + Math.abs(charge) - (radical === "doublet" ? 1 : radical ? 2 : 0) : valenceAs(v, v.valence, charge, radical);
