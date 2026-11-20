@@ -31,7 +31,7 @@
  */
 import { geometryKey, type Entry, type EntryBond, type Geometry, type Property, type Restraint } from "../entry";
 import { speciesOf } from "../io/writers";
-import { isMeasurementName, measurementName } from "./measure";
+import { isMeasurementName, measurementAtoms, measurementName } from "./measure";
 import { NUMBERING, OWN_NUMBERING, oneNumbering } from "./restraints";
 
 /** A property's restraints, where it holds them. */
@@ -43,9 +43,6 @@ function numberingOfPart(p: Entry): string {
   const n = p.properties[NUMBERING];
   return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
 }
-
-/** A measure's atoms (from 0), read from its name (`measurementName`). */
-const measureAtoms = (name: string): number[] => name.split(" ")[1].split("-").map((a) => Number(a) - 1);
 
 /** What of a part is carried into the complex - each property renumbered, by its name there - and what is said of what is and is not, by kind: "restraints", "2 measures", "energy". */
 type PartCarried = { measures: [string, Property][]; restraints: [string, Restraint[], number[] | undefined][]; carried: string[]; not: string[] };
@@ -72,7 +69,7 @@ function partCarried(p: Entry, offset: number, geometry: Geometry): PartCarried 
     }
     if (isMeasurementName(name)) {
       // (measured at the geometry the part has, which the complex keeps: as true of it, at its geometry)
-      const atoms = measureAtoms(name);
+      const atoms = measurementAtoms(name);
       const at = xyz && prop.status === "computed" && typeof prop.value === "number" && prop.at?.geometry === geometryKey(xyz) && atoms.every((a) => a < n);
       if (at && geometry.kind === "3d") out.measures.push([measurementName(atoms.map((a) => a + offset)), { ...prop, at: { ...prop.at!, geometry: geometryKey(geometry.xyz) } }]);
       else measuresNot++;

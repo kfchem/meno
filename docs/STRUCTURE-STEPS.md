@@ -548,7 +548,9 @@ conformers, case F, F2).
   `src/lib/steps/reaction.ts`): its atoms where they stand in it, in the
   order of the reference atoms they map to, its bonds with them. What names
   atoms by number is renumbered too: a list per atom, a vibration's modes,
-  restraints, its stereo elements. A value worked out at its geometry
+  restraints, its stereo elements, and a measure's name - `distance 1-2`
+  of a hydrogen and its oxygen, the oxygen now atom 1, is `distance 2-1`.
+  A value worked out at its geometry
   still names that geometry, in the new order. An entry keeps its place in
   its set - its compound and its number - and with every map, each entry
   is a compound of its own, its maps numbered from 1. A side of several
