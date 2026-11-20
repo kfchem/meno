@@ -723,8 +723,13 @@ function metalBoundValences(model: WriterModel): WriterModel {
     const [a, c] = [index.get(b.a), index.get(b.b)];
     return a == null || c == null ? [] : [{ a, b: c, order: b.order, ...(b.dative ? { dative: true } : {}), ...(b.coordination ? { coordination: true } : {}), ...(b.hydrogen ? { hydrogen: true } : {}) }];
   });
-  const bonded = (i: number) => bonds.some((b) => (b.a === i && metal.has(model.atoms[b.b].el)) || (b.b === i && metal.has(model.atoms[b.a].el)));
-  const held = model.atoms.map((a, i) => ladderElement(a.el) && a.valence == null && a.hCount == null && bonded(i));
+  // (the atoms bonded to a metal, in one pass over the bonds)
+  const onMetal = new Set<number>();
+  for (const b of bonds) {
+    if (metal.has(model.atoms[b.b].el)) onMetal.add(b.a);
+    if (metal.has(model.atoms[b.a].el)) onMetal.add(b.b);
+  }
+  const held = model.atoms.map((a, i) => ladderElement(a.el) && a.valence == null && a.hCount == null && onMetal.has(i));
   if (!held.some(Boolean)) return model;
   const counts = valenceCounts(model.atoms.map((a) => ({ el: a.el, charge: a.charge, ...(a.radical ? { radical: a.radical } : {}) })), bonds);
   return { ...model, atoms: model.atoms.map((a, i) => (held[i] ? { ...a, valence: Math.round(counts.sum[i]) + counts.hs[i] } : a)) };
@@ -913,8 +918,12 @@ export function writeMolfile3d(
   const valenceOf = (i: number) => valence[i];
   // (and a P, S or Se on a metal: its hydrogens all atoms here, its valence its bonds - a reader left to its own rule would lift it,
   //  a phosphine on Pd read as P(V) with an H: `metalBoundValences`, as the 2D writer says it)
-  const onMetal = atoms.map((a, i) => ladderElement(a.el) && bonds.some((b) => (b.a1 === i && metal.has(atoms[b.a2].el)) || (b.a2 === i && metal.has(atoms[b.a1].el))));
-  const valenceWritten = (i: number) => !!atoms[i].noImplicitH || onMetal[i];
+  const touchesMetal = new Set<number>();
+  for (const b of bonds) {
+    if (metal.has(atoms[b.a2].el)) touchesMetal.add(b.a1);
+    if (metal.has(atoms[b.a1].el)) touchesMetal.add(b.a2);
+  }
+  const valenceWritten = (i: number) => !!atoms[i].noImplicitH || (ladderElement(atoms[i].el) && touchesMetal.has(i));
   if (version === "V3000" || (version === "auto" && needsV3000In3d(atoms, bonds))) {
     const lines = [
       ...head,
