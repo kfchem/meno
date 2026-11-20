@@ -935,7 +935,11 @@ six. A fused bicycle counts its cis and trans forms; a small one,
 bicyclo[m.n.0] with m + n of four or fewer ([1.1.0], [2.1.0], [2.2.0],
 [3.1.0]), whose rings can only be joined cis, its cis form alone. A
 structure given the impossible way round - a cage in,out, a small
-bicycle trans - gets no count, and that is said. Past 1024 ways
+bicycle trans - gets no count, and that is said. Ties that share a
+bridgehead are one set (adamantane's, cubane's, twistane's); where one
+ring system holds two sets (homoadamantane, sesquinorbornene), whether
+they are tied to each other is not yet decided, so no count is given,
+and that is said. Past 1024 ways
 (ten open places), none is written and the count of ways is said. No
 step takes it yet: *Stereoisomers* will, in its own change.
 

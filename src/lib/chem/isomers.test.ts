@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { smilesInput } from "../layout/smilesInput";
 import type { IdentityInput } from "./identity";
 import { cipInput } from "./cip/testdata/cipFrom";
-import { isomersOf, NOT_COUNTED_TIED } from "./isomers";
+import { isomersOf, NOT_COUNTED_JOINED, NOT_COUNTED_TIED } from "./isomers";
 
 const count = (smiles: string) => {
   const r = isomersOf(smilesInput(smiles) as unknown as IdentityInput);
@@ -137,5 +137,23 @@ describe("the stereoisomers counted by Meno, against the known counts", () => {
 
   it(`says how many ways there were past the most it writes`, () => {
     expect(isomersOf(smilesInput("CC(O)CC(O)CC(O)C") as unknown as IdentityInput, 4)).toEqual({ tooMany: 8 });
+  });
+});
+
+describe("two sets of tied bridgeheads in one ring system", () => {
+  it("are not counted, said: homoadamantane, sesquinorbornene - never one structure too few, nor a form no ring system takes", () => {
+    for (const [name, smiles] of [
+      ["homoadamantane", "C1CC2CC3CC1CC(C2)C3"],
+      ["sesquinorbornene", "C1CC2CC1C1=C2C2CCC1C2"],
+    ]) {
+      const r = isomersOf(smilesInput(smiles) as unknown as IdentityInput);
+      expect(r, name).toEqual({ notCounted: NOT_COUNTED_JOINED });
+    }
+  });
+
+  it("leave one set, joined where its ties share a centre, counted as before: adamantane 1, camphor 2, norbornan-2-ol 4", () => {
+    expect(count("C1C2CC3CC1CC(C2)C3")).toBe(1);
+    expect(count("CC1(C)C2CCC1(C)C(=O)C2")).toBe(2);
+    expect(count("OC1CC2CCC1C2")).toBe(4);
   });
 });
