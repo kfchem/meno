@@ -1002,6 +1002,10 @@ export const createModelSlice = (
     doc.edit("move arrow", (d) => ops.updateArrow(d, id, patch), gesture ? gestureStep(`arrow:${id}:${gesture}`) : { coalesceKey: `arrow:${id}:` });
   },
 
+  moveArrowAlone: (id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>, gesture: string) => {
+    doc.edit("move arrow", (d) => ops.arrowMovedAlone(d, id, at, links), gestureStep(`arrow:${id}:${gesture}`));
+  },
+
   addPlus: (x: number, y: number) => {
     const id = doc.getState().nextPlusId ?? 1;
     doc.edit("add plus", (d) => ops.addPlus(d, x, y));
