@@ -1109,9 +1109,21 @@ export function sixWithTridentate(input: LayoutInput, m: number): boolean {
         todo.push(v);
       }
     }
-    // (exactly three: a tridentate - dien's, terpy's. A ligand of four donors or more - tren's, EDTA's - is laid out as it was before
-    //  the three lines, and kept as Clean-up keeps any arrangement)
-    return round.filter((e) => seen.has(e)).length === 3;
+    // (a tridentate: three donors, and a chain of them - each next to the next in a chelate ring of six atoms or fewer through the metal,
+    //  dien's and terpy's. A ligand of four donors or more - EDTA's, a tetradentate tren's - or one whose three are joined only through a
+    //  ring wider than that - a tren whose middle N is not bound, its three arms meeting there - is laid out as it was before the three
+    //  lines, and kept as Clean-up keeps any arrangement)
+    const mine = round.filter((e) => seen.has(e));
+    if (mine.length !== 3) return false;
+    const links = new Set<string>();
+    for (const r of factsOf(input).rings) {
+      const i = r.indexOf(m);
+      if (i < 0 || r.length > 6) continue;
+      const [p, q] = [r[(i + r.length - 1) % r.length], r[(i + 1) % r.length]];
+      if (mine.includes(p) && mine.includes(q)) links.add(p < q ? `${p},${q}` : `${q},${p}`);
+    }
+    // (two links among three donors, sharing one: a chain)
+    return links.size >= 2;
   });
 }
 

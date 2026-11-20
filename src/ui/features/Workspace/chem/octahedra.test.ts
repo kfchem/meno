@@ -175,7 +175,7 @@ describe("a six-bond metal laid out from its SMILES", () => {
     }
   });
 
-  it("holds only a tridentate to three lines - dien's, terpy's - not a ligand of four donors or more: Co(EDTA)- is laid out as before", { timeout: 120000 }, async () => {
+  it("holds only a tridentate to three lines - dien's, terpy's, three donors chained by chelate rings - not a ligand of four donors or more nor a tripod: Co(EDTA)- and a tren tripod are laid out as before", { timeout: 120000 }, async () => {
     forgetLaidOut();
     const tri = (smiles: string) => {
       const input = smilesInput(smiles);
@@ -184,6 +184,9 @@ describe("a six-bond metal laid out from its SMILES", () => {
     expect(tri("Cl[Co]123(Cl)Cl.N1CCN2CCN3")).toBe(true);
     expect(tri("[Co-]123456.N1(CC(=O)O2)(CC(=O)O3)CCN4(CC(=O)O5)CC(=O)O6")).toBe(false);
     expect(tri("Cl[Co+]1234Cl.N1(CCN2)(CCN3)CCN4")).toBe(false);
+    // (a tren whose middle N is not bound: its three N joined only through rings of eight through the metal - no chain of chelate rings)
+    expect(tri("Cl[Co+3]1234Cl.N1CCN(CCN2)CCN3.N4")).toBe(false);
+    await expect(laidOut(drawnFromSmiles("Cl[Co+3]1234Cl.N1CCN(CCN2)CCN3.N4"), MENO, undefined, undefined, true)).resolves.toBeDefined();
     // (EDTA's six donors: laid out, not refused for want of three lines)
     await expect(laidOut(drawnFromSmiles("[Co-]123456.N1(CC(=O)O2)(CC(=O)O3)CCN4(CC(=O)O5)CC(=O)O6"), MENO, undefined, undefined, true)).resolves.toBeDefined();
   });
