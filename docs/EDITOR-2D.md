@@ -602,11 +602,22 @@ that it is a drawing like any other - nothing remembers that a tool made it - an
 again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
 was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
 "Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
-(`Workspace/projections/`: `chair`, `extend`, `flip`); the Haworth ring and the Newman projection follow.
+(`Workspace/projections/`: `chair`, `extend`, `flip`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
+on a page); the Newman projection follows.
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+  Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
+  group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
+  atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
+  never goes on along the group's line (`groupBend`): two bonds in one line hide the atom between them, and a CH2OH drawn straight up would read
+  as one bond to an OH. A chain led out of it zigzags from it as from any atom. No saturated atom has two bonds in one line (Brecher 2008,
+  GR-4.1.1, GR-2.1.2); an atom with a triple bond or two double bonds has (GR-4.1.1), and the order is set after the stroke: where a group's
+  first atom is made linear so - a nitrile, an alkyne on a ring atom - what lies beyond it is turned about it, as drawn, until it is straight
+  on (`straightenedGroup`, from the document's `updateBond`). A group pointing into a Haworth ring's picture - the inside places - has room
+  for one label at the end of its short bond: the carbohydrate convention writes such a group as one label there (a CH2OH on C-5 pointing
+  down, McNaught 1996, 2-Carb-5.5, Chart II), nothing else moved; drawn atom by atom, its further atoms are the chemist's to place.
 - **R and S** are shown at once on the ring's atoms (`stereoShown`): none while there is no centre, each as a group makes one.
 - **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
   goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard
@@ -624,8 +635,25 @@ was with nothing done since, turns it to form 0, the view from the other side, a
 - **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
-- **Limits.** No five-ring or bridged ring from the tools; no ring fused on a chair by the tool yet (Fuse comes in its own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered; a fused system is not
-  flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
+- **The Haworth ring** (Quick Add, *Projections*: one icon - a ring of six, a pyranose's; the icon chosen again from Quick Add opened on the ring it put
+  down, while that ring is as it was with nothing done since, makes it a ring of five, a furanose's, in its place as one step, and again back
+  (opened anywhere else, another ring is put down there) - `putHaworth`, the icon's tip saying
+  so, as the chair's does). Drawn as the figure under IUPAC 2006 ST-1.9 draws one - Meno's choice, as the chair's drawing is; IUPAC's
+  carbohydrate text's own figures are drawn otherwise - a true view of the regular ring from above, the eye's height the angle whose sine is
+  2/3, so that the nearer edge is drawn lower: its bottommost bond bold and the two ring bonds that run to it wedge-shaped, broad at its ends,
+  as ST-1.9 prefers (never the wedge shapes without the bold bond); the ring O behind - at the back right for the six, at the back for the
+  five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The ring is drawn
+  larger than the style's bond (`HAWORTH_SCALE`, 1.8: the look check's to settle; never under 1.25). The free positions are *up* and *down*
+  at each ring atom, straight up and down the page, a group's bond drawn 0.745 of a bond out of the ring's picture and 0.40 into it (a front
+  atom's up group, a back atom's down group), so that every place stands clear of the ring and of every other place: Meno's own lengths, no
+  text gives one. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
+  its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
+  each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
+  the chair tool, every group equatorial; the MOL written for 3D reads back as the same.
+- **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no ring fused on a chair by the tool yet (Fuse comes in its
+  own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
+  offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,
