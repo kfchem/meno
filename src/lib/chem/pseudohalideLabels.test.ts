@@ -45,10 +45,12 @@ describe("the side a label's bonds come in from", () => {
 
 describe("a pseudohalide's label read off a picture, as shown (IUPAC GR-2.1.6)", () => {
   const reads = (l: string) => (abbreviationOf(l) ? { el: l } : null);
-  it("left of its bond, read outward from it: NCO a cyanate, SCN an isothiocyanate - and NC, CN, a nitrile either side", () => {
+  it("left of its bond, read outward from it: NCO a cyanate, SCN an isothiocyanate, NCS a thiocyanate - and NC, CN, a nitrile either side", () => {
     expect(readDrawnLabel("NCO", reads, true).el).toBe("OCN");
     expect(readDrawnLabel("NC", reads, true).el).toBe("CN");
     expect(readDrawnLabel("CN", reads, true).el).toBe("CN");
+    // (NCS, one unit of the table, turned element by element: SCN, S bonded - a thiocyanate)
+    expect(readDrawnLabel("NCS", reads, true).el).toBe("SCN");
     expect(readDrawnLabel("SCN", reads, true).el).toBe("NCS");
   });
 

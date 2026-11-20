@@ -30,7 +30,11 @@ export type LabelReader = (label: string) => { el: string; charge?: number; isot
 export function readDrawnLabel(drawn: string, reads: LabelReader, fromRight = false): { el: string; charge?: number; isotope?: number; read: boolean } {
   // (text read off a picture is the label as shown: where its bond comes in from the right, read outward from it first - NCO
   //  there is a cyanate, O bonded (IUPAC GR-2.1.6); elsewhere as it is first - NCO an isocyanate)
-  const tries = fromRight ? [reversedLabel(drawn), drawn] : [drawn, reversedLabel(drawn)];
+  // (a label of elements alone is turned element by element too: NCS, one unit of the table - the reagent's name - shown left of
+  //  its bond is SCN, S bonded)
+  const symbols = /^(?:[A-Z][a-z]?\d*)+$/.test(drawn) ? drawn.match(/[A-Z][a-z]?\d*/g)!.reverse().join("") : null;
+  const turned = [...new Set([reversedLabel(drawn), ...(symbols ? [symbols] : [])])].filter((t) => t !== drawn);
+  const tries = fromRight ? [...turned, drawn] : [drawn, ...turned];
   // (a charge written last stays last, turned round or not: H3N+ as NH3+)
   const charged = /^(.+?)(\d*[+-]+\d*)$/.exec(drawn);
   if (charged) tries.push(`${reversedLabel(charged[1])}${charged[2]}`);
