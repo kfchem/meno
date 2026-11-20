@@ -2286,3 +2286,21 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     expect(readFigure(f).left.letters.map((l) => l.c)).toEqual(["6"]);
   });
 });
+
+describe("a donor's bond to a Lewis-acidic main-group metal, read from a figure (found in review)", () => {
+  /** A fluorine on a carbon, bonded to `metal` too - as read, before anything else. */
+  const bridged = (metal: string) =>
+    structureOf(
+      { atoms: [{ x: 0, y: 0, el: "C" }, { x: 1, y: 0, el: "F" }, { x: 2, y: 0, el: metal }], bonds: [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }], bond: 1, left: { letters: [] } },
+      reads,
+    );
+  const over = (s: ReturnType<typeof bridged>) => s.atoms.filter((a) => a.unsure?.some((w) => w.startsWith("More bonds meet here"))).map((a) => a.el);
+
+  it("is left out of the donor's count, as a bond to a transition metal is: a fluorine bridging to a magnesium, a lithium or a palladium is no fluorine of two bonds", () => {
+    for (const metal of ["Mg", "Li", "Al", "Pd"]) expect(over(bridged(metal)), metal).toEqual([]);
+  });
+
+  it("but not to tin, whose bonds to a halogen are drawn covalent: that fluorine has more bonds than it takes", () => {
+    expect(over(bridged("Sn"))).toEqual(["F"]);
+  });
+});
