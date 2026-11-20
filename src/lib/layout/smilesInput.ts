@@ -1,4 +1,5 @@
 import { implicitHydrogens } from "../chem/molecule";
+import { metal } from "../chem/perception/elements";
 import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "../chem/kekulize";
 import { typedRingRefused } from "../chem/smilesWhy";
 import { readSmiles } from "../chem/smiles";
@@ -22,14 +23,18 @@ export function smilesInput(smiles: string): LayoutInput {
   if (outside) throw new Error(`This SMILES could not be read: ${outside}`);
   const orders = kekuleOrders(s.atoms, s.bonds);
   const sum = s.atoms.map(() => 0);
+  // (and of it, each atom's bonds to metals: a P's or an S's valence is chosen by its other bonds - a phosphine on Pd has no H)
+  const toMetals = s.atoms.map(() => 0);
   s.bonds.forEach((b, i) => {
     sum[b.a1] += orders[i];
     sum[b.a2] += orders[i];
+    if (metal.has(s.atoms[b.a2].el)) toMetals[b.a1] += orders[i];
+    if (metal.has(s.atoms[b.a1].el)) toMetals[b.a2] += orders[i];
   });
   const input: LayoutInput = {
     atoms: s.atoms.map((a, i) => ({
       el: a.el,
-      hs: a.hs ?? implicitHydrogens(a.el, sum[i], a.charge ?? 0),
+      hs: a.hs ?? implicitHydrogens(a.el, sum[i], a.charge ?? 0, undefined, toMetals[i]),
       ...(a.charge ? { charge: a.charge } : {}),
       ...(a.tetra ? { tetra: a.tetra } : {}),
     })),

@@ -41,6 +41,8 @@ const structures = (() => {
 })();
 const core = (s: (typeof structures)[number]) => hydrogenCounts(s.atoms, s.bonds);
 
+// (each copy says its atoms' bonds to metals, as the core's count does - none here, 0: a P, S or Se's valence then chosen by its bonds, as
+//  the core's count chooses it)
 describe("part 12b: each caller moved onto the core's one count counts as before", () => {
   it("the structures are many: the benchmark, the held-out set and the probes, each with its hydrogens implicit and drawn", () => {
     expect(structures.length).toBe(2 * (molecules.molecules.length + heldOut.molecules.length + PROBES.length));
@@ -53,7 +55,7 @@ describe("part 12b: each caller moved onto the core's one count counts as before
         sums[b.a] += valenceOrder(b, s.atoms[b.a].el);
         sums[b.b] += valenceOrder(b, s.atoms[b.b].el);
       }
-      expect(core(s), s.name).toEqual(s.atoms.map((a, i) => implicitHydrogens(a.el, sums[i], a.charge ?? 0)));
+      expect(core(s), s.name).toEqual(s.atoms.map((a, i) => implicitHydrogens(a.el, sums[i], a.charge ?? 0, undefined, 0)));
     }
   });
 
@@ -65,7 +67,7 @@ describe("part 12b: each caller moved onto the core's one count counts as before
         sums[b.a] += o;
         sums[b.b] += o;
       }
-      expect(core(s).some((h) => h > 0), s.name).toBe(s.atoms.some((a, i) => implicitHydrogens(a.el, Math.round(sums[i]), a.charge ?? 0) > 0));
+      expect(core(s).some((h) => h > 0), s.name).toBe(s.atoms.some((a, i) => implicitHydrogens(a.el, Math.round(sums[i]), a.charge ?? 0, undefined, 0) > 0));
     }
   });
 
@@ -76,7 +78,7 @@ describe("part 12b: each caller moved onto the core's one count counts as before
         drawn[b.a] += b.order;
         drawn[b.b] += b.order;
       }
-      expect(core(s), s.name).toEqual(s.atoms.map((a, i) => implicitHydrogens(a.el, drawn[i], a.charge ?? 0)));
+      expect(core(s), s.name).toEqual(s.atoms.map((a, i) => implicitHydrogens(a.el, drawn[i], a.charge ?? 0, undefined, 0)));
     }
   });
 });
