@@ -1467,6 +1467,8 @@ describe("a group's name stacked over an atom's label", () => {
 
 describe("a frame, a graph's axes and a page's rules", () => {
   const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath[] => [stroke([x0, y0], [x1, y0]), stroke([x1, y0], [x1, y1]), stroke([x1, y1], [x0, y1]), stroke([x0, y1], [x0, y0])];
+  /** A line `width` wide, of colour `ink`, from `p` to `q`. */
+  const wide = (p: P, q: P, width: number, ink: string): FigurePath => ({ ...stroke(p, q), width, stroke: ink });
   const hexagon = (from: P): FigurePath[] => {
     const pts: P[] = [from];
     for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
@@ -1488,6 +1490,28 @@ describe("a frame, a graph's axes and a page's rules", () => {
     const title = Array.from("Conversion over time", (c, k): FigureLetter => ({ c, box: [120 + 12 * k, 100, 132 + 12 * k, 113], at: [120 + 12 * k, 113], size: 18 }));
     const f = figure([...chain, ...chart], [...oh, ...title]);
     expect(figureBond(shapesOf(f), f.letters)).toBeCloseTo(L, 0);
+  });
+
+  it("reads no structure in a table's shaded row: a band drawn as wide lines end to end, its headings in it", () => {
+    // (a header row 14 points tall drawn as four lines 14 wide, end to end, pale - its words in 10-point letters over it)
+    const band = [[40, 130], [130, 175], [175, 215], [215, 255]].map(([a, b]) => wide([a, 300], [b, 300], 14, "#e6e6e6ff"));
+    const headings = [...word("strain", [60, 300]), ...word("1a", [150, 300]), ...word("1b", [190, 300]), ...word("1c", [230, 300])];
+    const r = readFigure(figure(band, headings));
+    expect(r.atoms).toHaveLength(0);
+    expect(r.bonds).toHaveLength(0);
+  });
+
+  it("reads a structure with a highlight laid along a bond as without it, a highlight that is a bond's only line as that bond, and a bold bond a third of its letters wide as a bond", () => {
+    // (a hexagon with one side highlighted by a pale line 8 wide under it; one whose side is drawn only by its highlight, 11 wide - about
+    //  a letter, never a table's row, which is half as tall again as its letters; another with one side bold, 3.4 wide; 10-point letters)
+    const ring = hexagon([100, 120]);
+    const side = [[100, 120], step([100, 120], 60)] as P[];
+    const lit = readFigure(figure([wide(side[0], side[1], 8, "#ffd0d0ff"), ...ring], word("L1", [130, 160])));
+    expect([lit.atoms.length, lit.bonds.length]).toEqual([6, 6]);
+    const only = readFigure(figure([...ring.slice(1), wide(side[0], side[1], 11, "#e7e7e7ff")], word("L1", [130, 160])));
+    expect([only.atoms.length, only.bonds.length]).toEqual([6, 6]);
+    const bold = readFigure(figure([...ring.slice(1), wide(side[0], side[1], 3.4, "#000000ff")], word("L1", [130, 160])));
+    expect([bold.atoms.length, bold.bonds.length]).toEqual([6, 6]);
   });
 
   it("reads a structure drawn in a frame without the frame: its sides meet only each other, square", () => {
