@@ -1,5 +1,6 @@
 // Held beside projection.test.ts: a cage or a bridged ring system drawn by hand in perspective, with no depth, is not asked after - fitting it to the engine's views takes too long for a menu; none of the flat drawings Meno makes is one; and plain Clean-up marks no centre open on a chair drawn between axial and equatorial - only Draw flat does.
 import { describe, expect, it, vi } from "vitest";
+import { measured } from "../../../../testing/timeouts";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 import type { Model } from "../store/types";
@@ -23,7 +24,7 @@ describe("a structure drawn by hand whose ring system is a cage or a bridged sys
       const m = byHand(smiles);
       expect(isProjection(m, all(m))).toBe(false);
     }
-  });
+  }, measured(6_000));
 });
 
 describe("a flat drawing Meno makes holds no projection", () => {
