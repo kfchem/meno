@@ -1538,9 +1538,49 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     atoms.push({ x: c.x, y: c.y, ...labelOf(w, reads), box: w.box });
     bonds.push({ a: i, b: atoms.length - 1, order: 1 });
   });
+  // (a charge's sign set alone by a label that reads - a borate's minus over the B of its Bpin, or before it, as a mechanism draws an ate
+  // complex - is that atom's, as one drawn in a ring by it is. A minus: right over or under its letters, no further off than a letter's
+  // height; or beside it, level with it or set high, within four fifths of the label's height, nothing written on its other side - a dash between two
+  // words is a bond's - and no bracket's side drawn between them: a sign at a bracket's corner is the whole ion's, left as words. A plus only
+  // beside it and set high (Py+): one level with a word, over it or under it is a scheme's "+")
+  const signed = new Map<number, number>();
+  const besides = (k: number): Box[] => [...words.filter((_, j) => j !== k).map((v) => v.box), ...atoms.flatMap((a) => (a.box ? [a.box] : []))];
+  words.forEach((w, k) => {
+    if (atomOfWord.has(k) || ions.has(k)) return;
+    const sign = /^(\d?)([+\-\u2212\u2013\u2295\u2296])$/.exec(w.letters.map((l) => l.c).join(""));
+    if (!sign) return;
+    const plus = /[+\u2295]/.test(sign[2]);
+    const c = centre(w.box);
+    let best = -1;
+    let off = Infinity;
+    atoms.forEach((a, i) => {
+      if (!a.box || !(a.el || (a.label && reads(a.label)))) return;
+      if (c.x >= a.box[0] && c.x <= a.box[2]) {
+        if (plus) return;
+        const gap = Math.max(a.box[1] - w.box[3], w.box[1] - a.box[3]);
+        if (gap > -0.2 * w.size && gap < w.size && gap < off) [best, off] = [i, gap];
+        return;
+      }
+      if (c.y < a.box[1] - 0.5 * w.size || c.y > (plus ? a.box[1] + 0.3 * (a.box[3] - a.box[1]) : a.box[3])) return;
+      const before = c.x < a.box[0];
+      const gap = before ? a.box[0] - w.box[2] : w.box[0] - a.box[2];
+      // (set close by it: within four fifths of the label's height - a scheme's "+" stands a letter or more off a word)
+      if (gap < -0.2 * w.size || gap >= Math.min(off, w.size, 0.8 * (a.box[3] - a.box[1]))) return;
+      // (nothing on its far side, level with it, within a letter's height: no word it joins to this label as a bond would)
+      const far = besides(k).some((b) => b !== a.box && b[3] > w.box[1] && b[1] < w.box[3] && (before ? w.box[0] - b[2] : b[0] - w.box[2]) > -0.2 * w.size && (before ? w.box[0] - b[2] : b[0] - w.box[2]) < w.size);
+      // (nor a line drawn upright between them - a bracket's side: a sign at its corner, [BF4]-, is the whole ion's, no atom's)
+      const [x0, x1] = before ? [w.box[2], a.box[0]] : [a.box[2], w.box[0]];
+      const bracketed = shapes.strokes.some((t) => Math.abs(t.a.x - t.b.x) < 0.3 * Math.abs(t.a.y - t.b.y) && Math.min(t.a.x, t.b.x) > x0 - 0.1 * w.size && Math.max(t.a.x, t.b.x) < x1 + 0.1 * w.size && Math.min(t.a.y, t.b.y) < c.y && Math.max(t.a.y, t.b.y) > c.y);
+      if (!far && !bracketed) [best, off] = [i, gap];
+    });
+    if (best < 0) return;
+    const charge = (sign[1] ? Number(sign[1]) : 1) * (plus ? 1 : -1);
+    signed.set(k, best);
+    atoms[best] = { ...atoms[best], marked: (atoms[best].marked ?? 0) + charge };
+  });
   const left: FigureLetter[] = [];
   words.forEach((w, k) => {
-    if (atomOfWord.has(k)) return;
+    if (atomOfWord.has(k) || signed.has(k)) return;
     if (ions.has(k)) {
       const c = centre(w.letters.find((l) => /[A-Z]/.test(l.c))?.box ?? w.box);
       atoms.push({ x: c.x, y: c.y, ...labelOf(w, reads), box: w.box });

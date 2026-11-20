@@ -1439,6 +1439,58 @@ describe("a figure's charges drawn in rings", () => {
   });
 });
 
+describe("a charge's sign set alone by a label", () => {
+  // (an ammonium's N, four bonds from it at the corners; an alkoxide's O, one bond to the right)
+  const c: P = [60, 60];
+  const four = [45, 135, 225, 315].map((d) => stroke(along(c, step(c, d), 0.35), step(c, d)));
+  const one = stroke(along(c, step(c, 0), 0.35), step(c, 0));
+  const MORE = "More bonds meet here than nitrogen has.";
+  const chargeOf = (f: FigureDrawn, el: string) => read(f).atoms.find((a) => a.el === el)?.charge ?? 0;
+
+  it("is a minus, the atom's charge, set right over its label or under it, as a mechanism sets a borate's over its B", () => {
+    for (const at of [[c[0], c[1] - 10], [c[0], c[1] + 10]] as P[]) expect(chargeOf(figure([one], [...word("O", c), ...word("\u2013", at)]), "O")).toBe(-1);
+  });
+
+  it("is a minus set before the label, level with it - an en dash or a minus - or after it set high, nothing beyond it", () => {
+    // (each set apart from the label by four tenths of a letter, as a word of its own: one touching it is the label's own, O-)
+    for (const minus of ["\u2013", "\u2212"]) expect(chargeOf(figure([one], [...word("O", c), ...word(minus, [c[0] - 11, c[1]])]), "O")).toBe(-1);
+    const back = stroke(along(c, step(c, 180), 0.35), step(c, 180));
+    expect(chargeOf(figure([back], [...word("O", c), ...word("\u2013", [c[0] + 11, c[1] - 5])]), "O")).toBe(-1);
+  });
+
+  it("is a plus only set high beside its label, not joined to it: an ammonium's N then takes its four bonds", () => {
+    const s = read(figure(four, [...word("N", c), ...word("+", [c[0] + 11, c[1] - 5])]));
+    const n = s.atoms.find((a) => a.el === "N")!;
+    expect(n.charge).toBe(1);
+    expect(n.unsure ?? []).not.toContain(MORE);
+    expect(bondsOf(s)).toEqual(["N-C", "N-C", "N-C", "N-C"]);
+  });
+
+  it("is none where it is a scheme's plus - over a word, under it or level beside it - or stands a letter's height off", () => {
+    for (const at of [[c[0], c[1] - 10], [c[0], c[1] + 10]] as P[]) expect(chargeOf(figure([one], [...word("O", c), ...word("+", at)]), "O")).toBe(0);
+    // (the one beside a space after the word, its bond the other way, as a scheme sets it: one touching it is the word's own, O+)
+    const back = stroke(along(c, step(c, 180), 0.35), step(c, 180));
+    expect(chargeOf(figure([back], [...word("O", c), ...word("+", [c[0] + 11, c[1]])]), "O")).toBe(0);
+    // (one set high but a letter off the word, as a scheme's "+" set larger than its words stands)
+    expect(chargeOf(figure([back], [...word("O", c), ...word("+", [c[0] + 15, c[1] - 5])]), "O")).toBe(0);
+    expect(chargeOf(figure([one], [...word("O", c), ...word("\u2013", [c[0], c[1] - 18])]), "O")).toBe(0);
+  });
+
+  it("is none where a word is set just beyond it - a bond written between two words - or the label reads as nothing", () => {
+    // (Me, a space, the dash, a space, the O: each a word of its own)
+    expect(chargeOf(figure([one], [...word("Me", [c[0] - 31, c[1]]), ...word("\u2013", [c[0] - 11, c[1]]), ...word("O", c)]), "O")).toBe(0);
+    // (an ion in brackets set tight round its last label, its sign at the bracket's corner just beyond it: the whole ion's, no atom's)
+    const p1 = step(c, 150);
+    const p2 = step(p1, 210);
+    const chain = stroke(along(c, p1, 0.35), p1, p2, step(p2, 150));
+    const bracket = stroke([c[0] + 4, c[1] - 4.5], [c[0] + 5, c[1] - 4.5], [c[0] + 5, c[1] + 4.5], [c[0] + 4, c[1] + 4.5]);
+    expect(chargeOf(figure([chain, bracket], [...word("O", c), ...word("\u2013", [c[0] + 9.4, c[1] - 3.5])]), "O")).toBe(0);
+    // (a bond's end at words that read as no atom nor group - a table's cell where a label would be - its dash under them: no atom's)
+    const s = read(figure([one], [...word("Qz", c), ...word("\u2013", [c[0], c[1] + 10])]));
+    expect(s.atoms.every((a) => !a.charge)).toBe(true);
+  });
+});
+
 describe("a stereocentre whose configuration the figure does not show", () => {
   const NOT_DRAWN = "A stereocentre whose configuration is not drawn: none is read.";
   /** CH(OH)(Cl)CH3, its centre at (100, 100): the OH up, the Cl down right, the methyl down left - its bond to the Cl a wedge, or not. */
