@@ -26,6 +26,23 @@ export const mainGroupMetal: ReadonlySet<string> = new Set("Li Na K Rb Cs Fr Be 
 /** The metals: a transition metal or a main-group one. Every element is a `metal` or a `notMetal`, never both. */
 export const metal: ReadonlySet<string> = new Set([...transitionMetal, ...mainGroupMetal]);
 
+/** The atomic numbers of groups 1, 2 and 13, period by period (Li to Fr, Be to Ra, B to Nh). */
+const GROUPS_1_2_13: ReadonlySet<number> = new Set([3, 11, 19, 37, 55, 87, 4, 12, 20, 38, 56, 88, 5, 13, 31, 49, 81, 113]);
+
+/**
+ * The metals a donor's bond to is a coordination: the `transitionMetal`s (Zn, Cd and Hg among them), and the Lewis-acidic main-group
+ * metals of groups 1, 2 and 13 - the `mainGroupMetal`s of those groups, not nihonium, whose compounds are not made. Asked by the two
+ * over-bond checks only (lib/chem/molWriter `overBonded`, lib/figure/structure): a donor's bond to one is left out of the donor's own count,
+ * so a fluorine on carbon bridging to a magnesium, an ether's O on a Grignard reagent's Mg, a carbonyl's O on a lithium read; and the
+ * metal's own bonds are counted against no valence, a chloride bridging two magnesiums read with them. The bond stands, and an atom's
+ * hydrogens are still by all its bonds: RO-Li has none. Not tin, lead nor bismuth, whose bonds to O, N and a halogen are drawn covalent
+ * (a ruling of 2026-11-20). Not the layout's metals drawn round (`drawnRoundMetal`), nor a bridge's partner (`bridgesToMetal`).
+ */
+export const coordinatedByDonors: ReadonlySet<string> = new Set([
+  ...transitionMetal,
+  ...[...mainGroupMetal].filter((el) => el !== "Nh" && GROUPS_1_2_13.has(ELEMENTS.find((e) => e.symbol === el)?.number ?? 0)),
+]);
+
 /**
  * The elements that are no metals: hydrogen, the noble gases, the nonmetals and the metalloids (B, Si, Ge, As, Sb, Te, At; Ts with At). A label's
  * smart reading reads every other symbol as a metal's (lib/chem/smartLabel), and only an atom of these carries groups written after it

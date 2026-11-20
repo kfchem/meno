@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { identityOfDrawn } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairDrawing, chairOf, depthRings, seenPlaces } from "./chair";
-import { isProjection } from "./rings";
+import { isProjection } from "./projection";
 import { flipOf } from "./flip";
 
 const draw = () => chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });
@@ -75,10 +75,10 @@ describe("Flip chair", () => {
     expect(flipOf(two, everything(two))).toBeNull();
   });
 
-  it("marks the structure a projection: a chair of the tool's, and no other drawing", () => {
+  it("marks the structure a projection: a chair of the tool's, and the same chair with its depth taken away - a chair drawn by hand, read as one", () => {
     const m = methylated([[0, 1]]);
     expect(isProjection(m, everything(m))).toBe(true);
-    expect(isProjection({ atoms: m.atoms.map((a) => ({ ...a, z: undefined })), bonds: m.bonds }, everything(m))).toBe(false);
+    expect(isProjection({ atoms: m.atoms.map((a) => ({ ...a, z: undefined })), bonds: m.bonds }, everything(m))).toBe(true);
   });
 
   it("is not offered on a chair that does not stand alone - a ring spiro on one atom, a ring fused through a bond, a chain from one atom to another - but is on one with a ring of its own hung from it", () => {

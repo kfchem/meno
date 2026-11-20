@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ballNumberUniforms, DIGIT_CELL, digitAtlas, NUMBER_DIGITS_MOST, NUMBER_HEIGHT, NUMBER_WIDTH_MOST, type BallNumberUniforms } from "./atomNumbers";
+import { ballNumberUniforms, DIGIT_CELL, digitAtlas, glyphsGlsl, NUMBER_HEIGHT, NUMBER_WIDTH_MOST, type BallNumberUniforms } from "./atomNumbers";
 import { menoShader } from "./menoShader";
 import { withStickBend } from "./stickBend";
 import { FADE_MOST } from "../../../../lib/chem/style3d";
@@ -185,31 +185,18 @@ function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void
       varying vec4 vNumberPlace;
       varying float vNumberPx;
       varying float vNumberH;
+      ${glyphsGlsl("numbersAtlas")}
       // (how much of a point on a ball, at p in its radius's units from where its number stands, the number covers)
       float ballNumberCover( vec2 p, vec2 dx, vec2 dy ) {
-        float num = floor( vNumber + 0.5 );
-        float digits = num < 10.0 ? 1.0 : num < 100.0 ? 2.0 : num < 1000.0 ? 3.0 : num < 10000.0 ? 4.0 : 0.0;
-        if ( digits < 1.0 ) return 0.0;
-        float h = min( vNumberH, ${NUMBER_WIDTH_MOST.toFixed(3)} / ( digits * ${DIGIT_CELL.toFixed(3)} ) ) * vNumberPlace.z;
+        float w = glyphsWidth( vNumber );
+        if ( w <= 0.0 ) return 0.0;
+        float h = min( vNumberH, ${NUMBER_WIDTH_MOST.toFixed(3)} / ( max( w, 1.0 ) * ${DIGIT_CELL.toFixed(3)} ) ) * vNumberPlace.z;
         float shown = numbersShown * vNumberPlace.w * smoothstep( 0.4, 0.6, vNumberPlace.z ) * smoothstep( numbersLeast * 0.75, numbersLeast * 1.25, h * 0.7 * vNumberPx );
         if ( shown <= 0.0 ) return 0.0;
-        float x = p.x / ( h * ${DIGIT_CELL.toFixed(3)} ) + digits * 0.5;
-        // (the digits' picture is the right way up: its rows from the bottom)
-        float y = 0.5 + p.y / h;
-        // (read at every point of the ball, the point held within the cells, and what lies outside them let go after:
-        // where the digits' picture is read only inside them, some graphics read it amiss at their edge - a line
-        // a pixel wide along it, seen on an AMD Radeon through Direct3D 11, fainter on a Mac)
-        float inside = x >= 0.0 && x < digits && y >= 0.0 && y <= 1.0 ? 1.0 : 0.0;
-        float xc = clamp( x, 0.0, digits - 1e-4 );
-        float yc = clamp( y, 0.0, 1.0 );
-        float d = floor( xc );
-        // (its place's power of ten, multiplied out: exact, as pow is not)
-        float place = 1.0;
-        for ( int k = 0; k < ${NUMBER_DIGITS_MOST - 1}; k++ ) if ( float( k ) < digits - 1.0 - d ) place *= 10.0;
-        float value = mod( floor( num / place + 1e-4 ), 10.0 );
-        vec2 uv = vec2( ( value + fract( xc ) ) / 10.0, yc );
-        vec2 per = vec2( 1.0 / ( 10.0 * h * ${DIGIT_CELL.toFixed(3)} ), 1.0 / h );
-        return textureGrad( numbersAtlas, uv, dx * per, dy * per ).a * shown * inside;
+        // (in the glyphs' own units: cells across from their left, their height up from their foot - the picture's rows from the bottom)
+        vec2 to = vec2( 1.0 / ( h * ${DIGIT_CELL.toFixed(3)} ), 1.0 / h );
+        vec2 q = vec2( p.x * to.x + w * 0.5, 0.5 + p.y * to.y );
+        return glyphsCover( vNumber, q, dx * to, dy * to ) * shown;
       }`,
     )
     .replace(

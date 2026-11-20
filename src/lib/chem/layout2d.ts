@@ -4881,8 +4881,10 @@ function atomNotes(
   const labelOf = new Map<number, TextItem>();
   for (const t of labels) if (t.atom != null && !t.beside && !labelOf.has(t.atom)) labelOf.set(t.atom, t);
   atoms.forEach((a, i) => {
+    // (a mapping number shown as its IUPAC locant, where it has one: 4a, 1' - a superscript after it, smaller and higher, where it has one)
+    const supOf = a.map ? a.mapText?.sup : undefined;
     const parts = [
-      a.map ? String(a.map) : "",
+      a.map ? (a.mapText?.base ?? String(a.map)) : "",
       a.invRet === "invert" ? "inv" : a.invRet === "retain" ? "ret" : "",
       a.exactChange ? "exact" : "",
       groupsAt.has(i) && a.stereoGroup ? groupText(a.stereoGroup) : "",
@@ -4901,12 +4903,16 @@ function atomNotes(
     // (a group's label - and1, or1 - reads as the ring's where it stands inside the ring its centre is on, beside another centre's R
     //  or S: a way pointing into such a ring costs half a thing covered, so that it goes inside only where nothing outside is clear -
     //  the maintainer's call, 2026-11-17)
+    // (with a superscript: the rest set at the size a note's letters have, the superscript after the locant's own letters)
+    const runs: TextRun[] = supOf
+      ? [{ text: parts[0] }, { text: supOf, sup: true }, ...(parts.length > 1 ? [{ text: ` ${parts.slice(1).join(" ")}` }] : [])]
+      : [{ text, sup: true }];
     const insideRings = groupsAt.has(i) && a.stereoGroup ? ringsInward(i) : [];
     const item = besideVertex(
       a,
       ways.get(i) ?? [],
-      [{ text, sup: true }],
-      { fontPx },
+      runs,
+      { fontPx: supOf ? fontPx * set.subscriptSize : fontPx },
       (dir) => {
         // clear of its label's letters, or of the bare vertex, by half a capital
         let far = 0;
