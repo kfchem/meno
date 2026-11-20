@@ -6,7 +6,8 @@
  * another (`urgent` or not). Where there are no workers - tests - it is read
  * here.
  */
-import { figureRead, type FigureJob, type FigureStructures } from "./structuresRead";
+import { figureRead, type FigurePngJob, type FigureStructures } from "./structuresRead";
+import { pngPixels } from "./pictures";
 
 type Answer = { id: number; ok: true; read: FigureStructures } | { id: number; ok: false; error: string };
 type Lane = { worker: Worker | null; waiting: Map<number, { done: (r: FigureStructures) => void; fail: (e: Error) => void }> };
@@ -36,13 +37,18 @@ function started(lane: Lane): Worker {
 }
 
 /** A figure's structures, read in a worker - the urgent one for a figure the pointer is on, the other for those read ahead. */
-export function figureReadOff(job: FigureJob, urgent: boolean): Promise<FigureStructures> {
-  if (typeof Worker === "undefined") return Promise.resolve().then(() => figureRead(job));
+export function figureReadOff(job: FigurePngJob, urgent: boolean): Promise<FigureStructures> {
+  if (typeof Worker === "undefined") {
+    const { picture, ...rest } = job;
+    if (!picture) return Promise.resolve().then(() => figureRead(rest));
+    const { png, ...p } = picture;
+    return pngPixels(new Uint8Array(png)).then((px) => figureRead({ ...rest, picture: { ...p, width: px.width, height: px.height, data: px.data.buffer as ArrayBuffer } }));
+  }
   const lane = lanes[urgent ? "urgent" : "background"];
   return new Promise((done, fail) => {
     const id = ++asked;
     lane.waiting.set(id, { done, fail });
-    // (the bytes the reader gave go over as they are: no copy)
-    started(lane).postMessage({ id, job }, job.drawn instanceof ArrayBuffer ? [job.drawn] : []);
+    // (the bytes the reader gave, and a picture's PNG, go over as they are: no copy)
+    started(lane).postMessage({ id, job }, [...(job.drawn instanceof ArrayBuffer ? [job.drawn] : []), ...(job.picture ? [job.picture.png] : [])]);
   });
 }
