@@ -35,7 +35,7 @@ import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
-import { recognisedSaid, withRecognisedDepth } from "../../../../lib/chem/perception/projection/depth";
+import { BETWEEN_AXIAL_AND_EQUATORIAL, recognisedSaid, withRecognisedDepth } from "../../../../lib/chem/perception/projection/depth";
 import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 
@@ -426,12 +426,20 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
     if ((drawnSo && !marked) || job.arranged?.has(ids[i])) return false;
     return arrangementNotGiven(input, view, i);
   };
+  // (laid flat, a chair drawn by hand: each centre whose group its reading could not place - drawn half way between its
+  //  two places - left open, and why: lib/chem/perception/projection/depth)
+  const unplaced = new Map<number, string>();
+  if (flat) {
+    const d = drawingOf(part);
+    for (const [i, words] of recognisedSaid(d.atoms, d.bonds, cageViews)) if (words === BETWEEN_AXIAL_AND_EQUATORIAL) unplaced.set(part.atoms[i].id, words);
+  }
   const atoms: Relayout["atoms"] = ids.map((id, i) => ({
     id,
     ...place(laid.x[i], laid.y[i]),
     ...(laid.depth[i] != null ? { z: laid.depth[i]! * k } : {}),
     ...(laid.solid[i] && input.atoms[i].tetra ? { stereoCentre: true } : {}),
     ...(open(i) ? { arrangementOpen: true } : {}),
+    ...(unplaced.has(id) ? { configurationOpen: unplaced.get(id)! } : {}),
   }));
   // a ring system the drawing shows in perspective, that the engine lays flat - a chair, a Haworth ring - kept where it is, depth and
   // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)

@@ -993,7 +993,7 @@ export function readScheme(
   const words = all.filter((w) => !molecules.includes(w) && !inTable(w) && !within(w));
   const marks = over.marks + all.filter(within).length;
   const { table: _table, ...read } = over.read;
-  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [], ...(marks ? { marks } : {}) } }, arrows, pluses: signed, words, bond: atBond };
+  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [], ...(read.left.lines ? { lines: read.left.lines } : {}), ...(read.left.triples ? { triples: read.left.triples } : {}), ...(marks ? { marks } : {}) } }, arrows, pluses: signed, words, bond: atBond };
 }
 
 /** A measurement written over a picture - a distance, an angle, an energy: a number with a decimal point, or with a unit. A compound's number (3, 12a, 4') is none. */

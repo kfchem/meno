@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn } from "../../../../lib/figure/drawn";
 import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
-import { compoundLabelsOf, labelText, pageStructuresOf, wordsJoined, type PageMarks, type PageStructure } from "./pageStructures";
+import { compoundLabelsOf, labelText, leadingLabel, pageStructuresOf, wordsJoined, type PageMarks, type PageStructure } from "./pageStructures";
 
 type P = { x: number; y: number };
 /** cos 30°: a zigzag's step along its length, in bonds. */
@@ -189,6 +189,54 @@ describe("the compounds' numbers on a page drawn as Meno draws one", () => {
     const figures: B[] = [[98, 298, 104 + 4 * L * ALONG, one[3] + 2]];
     const read = pageStructuresOf({ objects, wordsIn: (b) => (b === one ? "1" : b === two ? "2" : "") }, figures, () => drawn, "pdf", 0);
     expect(read.labels.map((l) => l.label)).toEqual(["12"]);
+  });
+
+  describe("set on a line with the compound's yield, as a scope table sets them", () => {
+    /**
+     * A zigzag, and under it its line set as runs of text, each its own thing on the page, side by side: [what it says, whether bold] - the
+     * line set so that its first bold run, or else its start, lies under the zigzag's middle, as a scope table centres a compound's number.
+     */
+    const scopeRow = (runs: [string, boolean][]) => {
+      const drawn: FigureDrawn = { paths: [zig(100)], letters: [], pictures: [] };
+      const y = 300 + 1.4 * L;
+      const before = runs.slice(0, Math.max(0, runs.findIndex(([, bold]) => bold))).reduce((t, [text]) => t + 5 * text.length + 0.5, 0);
+      let x = 100 + 2 * L * ALONG - 5 - before;
+      const left = x;
+      const placed = runs.map(([text, bold]) => {
+        const box: B = [x, y - 3.6, x + 5 * text.length, y + 3.6];
+        x = box[2] + 0.5;
+        return { text, bold, box };
+      });
+      const objects: PageObject[] = [{ kind: "path", box: [100, 300, 100 + 4 * L * ALONG, 300 + L * 0.5] }, ...placed.map((r) => ({ kind: "text" as const, box: r.box }))];
+      const figures: B[] = [[Math.min(left, 98) - 2, 298, Math.max(x, 104 + 4 * L * ALONG) + 2, y + 6]];
+      const find = (b: B) => placed.find((r) => r.box === b);
+      return (fonts: boolean) =>
+        pageStructuresOf({ objects, wordsIn: (b) => find(b)?.text ?? "", ...(fonts ? { boldIn: (b: B) => find(b)?.bold ?? false } : {}) }, figures, () => drawn, "pdf", 0).labels.map((l) => l.label);
+    };
+
+    it("is the bold number before its plain yield - \"21, 83%, 1:1 d.r.\" - read as 21", () => {
+      expect(scopeRow([["21", true], [", 83%, 1:1 d.r.", false]])(true)).toEqual(["21"]);
+    });
+
+    it("is the number heading the line where its yield is set in the same weight: the number before the line's first comma", () => {
+      expect(scopeRow([["21", false], [", 83%, 1:1 d.r.", false]])(true)).toEqual(["21"]);
+      expect(scopeRow([["21, 83%, 1:1 d.r.", false]])(false)).toEqual(["21"]);
+    });
+
+    it("is the bold number set after words or mid-line: \"From the alcohol 12, 64%\", \"R = Me, 14, 41%\"", () => {
+      expect(scopeRow([["From the alcohol ", false], ["12", true], [", 64%", false]])(true)).toEqual(["12"]);
+      expect(scopeRow([["R = Me, ", false], ["14", true], [", 41% 2:1 d.r.", false]])(true)).toEqual(["14"]);
+    });
+
+    it("is none in a line of yields, ratios, equivalents and times: no number of the shape heads it before a comma, nor is set bold", () => {
+      for (const line of ["83%, 1:1 d.r.", "n = 2", "2.0 equiv, 80 °C", "3 h, 80%", "1:1 d.r., 75%"]) expect(scopeRow([[line, false]])(true), line).toEqual([]);
+      expect(["21, 83%", "(3a), 70%", " 7', 91%", "21,83%", "21 , 83%", "21; 83%", "1.5, 2"].map(leadingLabel)).toEqual(["21", "3a", "7'", null, null, null, null]);
+      // (a list of numbers of the shape - atoms' locants, a table's - is no number with its yield)
+      expect(["6', 8a', 11'", "2, 4, 5", "9a, 9b, 9c", "4, alkene", "12, 95:5 e.r.", "3c, <2%"].map(leadingLabel)).toEqual([null, null, null, "4", "12", "3c"]);
+      // (what follows, where it begins with a digit, a yield or a ratio - no list, locant, size or heat; a word, as it comes)
+      expect(["8d, <2%", "8d, 96:4 e.r.", "8d, 1.3:1 d.r.", "8d, Pd(OAc)2", "8d, E"].map(leadingLabel)).toEqual(["8d", "8d", "8d", "8d", "8d"]);
+      expect(["1, 3-dichlorobenzene", "1, 2-diol", "6, 8", "10, 20 nm", "21, 83", "10, 80 °C", "8d, 7"].map(leadingLabel)).toEqual(Array(7).fill(null));
+    });
   });
 
   it("are read from the page's own words too, where the figure's drawing holds no letters of them", () => {

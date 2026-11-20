@@ -14,7 +14,7 @@ import { saysChargeTooMuch } from "../../../../lib/figure/structure";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { atomAs, atomAtSpot, bondAs, figureFrom, MARKS_OVER, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, LONE_LINE, LONE_LINES, LONE_TRIPLE_LINE, LONE_TRIPLE_LINES, MARKS_OVER, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
 import { measured } from "../../../../testing/timeouts";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { identityOfDrawn } from "../chem/identityOf";
@@ -123,6 +123,27 @@ describe("a figure read as a structure for the page", () => {
     const m = structureFrom({ paths: [stroke(a, b, [b[0] + (o[0] - b[0]) * 0.6, b[1] + (o[1] - b[1]) * 0.6]), disc([o[0] + 5, o[1] - 3.5], 0.75), disc(a, 0.3)], letters: letters("O", o), pictures: [] }, SHA, 1) as Model;
     expect(m.atoms.find((x) => x.el === "O")?.radical).toBe("doublet");
     expect(m.atoms.filter((x) => x.radical)).toHaveLength(1);
+  });
+
+  it("says a single line alone, a bond long, is not read as ethane: alone in the figure, or by a structure", () => {
+    expect(figureFrom({ paths: [stroke([100, 100], [100 + L, 100])], letters: [], pictures: [] }, SHA, 0)).toEqual({ none: LONE_LINE });
+    const by = drawn();
+    const one = figureFrom({ ...by, paths: [...by.paths, stroke([200, 260], [200 + L, 260])] }, SHA, 0) as FigureResult;
+    expect(one.model.atoms).toHaveLength(5);
+    expect(one.left).toBe(LONE_LINE);
+    const two = figureFrom({ ...by, paths: [...by.paths, stroke([200, 260], [200 + L, 260]), stroke([200, 300], [200 + L, 300])] }, SHA, 0) as FigureResult;
+    expect(two.left).toBe(LONE_LINES);
+    expect((figureFrom(by, SHA, 0) as FigureResult).left).toBeUndefined();
+  });
+
+  it("says a triple line alone, a bond long, is not read as ethyne - a sign, a separator - one or more, with a single line alone too", () => {
+    const triple = (y: number) => [0, -0.18, 0.18].map((d) => stroke([200, y + d * L], [200 + L, y + d * L]));
+    expect(figureFrom({ paths: triple(100), letters: [], pictures: [] }, SHA, 0)).toEqual({ none: LONE_TRIPLE_LINE });
+    const by = drawn();
+    const both = figureFrom({ ...by, paths: [...by.paths, ...triple(260), stroke([200, 320], [200 + L, 320])] }, SHA, 0) as FigureResult;
+    expect(both.model.atoms).toHaveLength(5);
+    expect(both.left).toBe(`${LONE_LINE} ${LONE_TRIPLE_LINE}`);
+    expect((figureFrom({ ...by, paths: [...by.paths, ...triple(260), ...triple(320)] }, SHA, 0) as FigureResult).left).toBe(LONE_TRIPLE_LINES);
   });
 
   it("leaves out what is drawn over a picture - a distance's line and its number on a 3D model's rendering - and says so; a structure reaching out of it stays whole", () => {
