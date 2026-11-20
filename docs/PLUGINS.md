@@ -1097,8 +1097,9 @@ The same for every plugin and for Meno's own parts:
     its words may be sent as they come, before its answer, each part a
     line of its own - `{id, partial: "..."}`, the words that part says on
     from the last, plain text - and its answer then still holds them all.
-    Meno waits for the answer from each part again. A part is no answer: a
-    line with `ok` is. A request without `stream` - from an earlier Meno -
+    Meno waits for the answer from each part again: a part may be empty,
+    to say the reply is still coming while the model says nothing. A part
+    is no answer: a line with `ok` is. A request without `stream` - from an earlier Meno -
     is answered whole, with no part;
   - each role's own requests, by the role (*Roles*): `from_smiles
     {smiles}` (answered with `molblock`, and with `configuration` beside

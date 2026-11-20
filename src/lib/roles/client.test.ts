@@ -120,8 +120,11 @@ describe("the chemistry client", () => {
       vi.advanceTimersByTime(900);
       w.say({ id: 1, partial: "boils at 78 C." });
       vi.advanceTimersByTime(900);
+      // (an empty part: nothing said, the reply still coming - waited for again)
+      w.say({ id: 1, partial: "" });
+      vi.advanceTimersByTime(900);
       await Promise.resolve();
-      expect([parts, settled]).toEqual([["Ethanol ", "boils at 78 C."], false]);
+      expect([parts, settled]).toEqual([["Ethanol ", "boils at 78 C.", ""], false]);
       w.say({ id: 1, ok: true, result: { text: "Ethanol boils at 78 C." } });
       await expect(r).resolves.toEqual({ text: "Ethanol boils at 78 C." });
     } finally {
