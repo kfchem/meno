@@ -10,7 +10,7 @@ import * as THREE from "three";
 import type { Molecule3D } from "../store/types";
 import { kindOf, measureValue, type MeasureKind } from "./measure3d";
 import { bondsAt, WORLD_PER_ANGSTROM } from "./molecule3d";
-import { EXACT, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
+import { senseAt } from "../../../../lib/chem/perception/stereo/from3d";
 
 type Bonded = { atoms: readonly unknown[]; bonds: readonly { a1: number; a2: number }[] };
 
@@ -206,7 +206,7 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
   const volume = (xyz: readonly number[], i: number) => {
     const n = near[i];
     if (n.length < 3) return 0;
-    return volumeSign(place(xyz, n[0]), place(xyz, n[1]), place(xyz, n[2]), place(xyz, i), EXACT);
+    return senseAt(place(xyz, i), [place(xyz, n[0]), place(xyz, n[1]), place(xyz, n[2])]);
   };
   const SWAP: Record<string, string> = { R: "S", S: "R", r: "s", s: "r", E: "Z", Z: "E" };
   const atoms: Record<number, string> = {};
@@ -222,6 +222,8 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
     const n2 = b && near[b.a2].find((x) => x !== b.a1);
     let swapped = false;
     if (b && n1 != null && n2 != null && SWAP[text]) {
+      // (turned past square, by its torsion's cosine - kept its own, not perception/stereo/from3d `cisAt`: where an end group lies in
+      //  line with the bond the torsion is none and nothing is swapped, where the side would be decided by noise)
       const was = Math.cos(THREE.MathUtils.degToRad(valueOf(before, [n1, b.a1, b.a2, n2])));
       const now = Math.cos(THREE.MathUtils.degToRad(valueOf(after, [n1, b.a1, b.a2, n2])));
       swapped = Math.sign(was) * Math.sign(now) < 0;

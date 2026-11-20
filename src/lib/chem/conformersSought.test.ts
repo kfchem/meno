@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
 import { smallestRings } from "../layout/rings";
 import { factor, GAS_CONSTANT_HARTREE } from "../units";
-import { canFlip, conformersSought, conformersSoughtOf, FEW_CONFORMERS, flatRingAtoms, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber, soughtOptions, turningBonds, WITHIN_GUIDE, WITHIN_NEEDED, type SoughtAtom, type SoughtBond } from "./conformersSought";
+import { canFlip, conformersSought, conformersSoughtOf, FEW_CONFORMERS, flatRingAtoms, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber, soughtOptions, soughtRefusal, turningBonds, WITHIN_GUIDE, WITHIN_NEEDED, type SoughtAtom, type SoughtBond } from "./conformersSought";
 
 /** A molecule as the count reads it, from SMILES written with its double bonds (a Kekulé structure, as Meno draws one). */
 function mol(smiles: string): { atoms: SoughtAtom[]; bonds: SoughtBond[] } {
@@ -21,6 +21,35 @@ const flips = (smiles: string) => {
   const m = mol(smiles);
   return canFlip(m.atoms, m.bonds);
 };
+
+describe("bonds marked aromatic outside a ring, counted in the core's Kekule form", () => {
+  it("turn as the molecule's own Kekule structure does: acetic acid's OH, acetate's none, nitromethane's none - and a ring's as before", () => {
+    // (acetic acid written with two aromatic C-O: one C=O and one C-OH, the OH's bond turning, as CC(=O)O's does)
+    expect(turns("CC(:O):O")).toBe(turns("CC(=O)O"));
+    expect(sought("CC(:O):O")).toBe(sought("CC(=O)O"));
+    // (acetate with its charge: C=O and C-O-, no H to turn; nitromethane with its charges: nothing turns but the methyl, a top)
+    expect(turns("CC(:O):[O-]")).toBe(turns("CC(=O)[O-]"));
+    expect(turns("C[N+](:O):[O-]")).toBe(turns("C[N+](=O)[O-]"));
+    // (a ring's aromatic bonds: unchanged - toluene, phenol, benzoic acid with its ring written aromatic)
+    for (const [aromatic, kekule] of [["Cc1ccccc1", "CC1=CC=CC=C1"], ["Oc1ccccc1", "OC1=CC=CC=C1"], ["OC(=O)c1ccccc1", "OC(=O)C1=CC=CC=C1"]]) {
+      expect(turns(aromatic), aromatic).toBe(turns(kekule));
+    }
+  });
+
+  it("are refused, with the core's words and no count, where they have no form with single and double bonds - never counted on H nobody wrote", () => {
+    // (methanesulfonic acid with three marked S-O, nitromethane with no charges, malonic acid's carboxyls with their C-OH marked too)
+    for (const smiles of ["CS(:O)(:O):O", "CN(:O):O", "OC(:O)CC(:O)O"]) {
+      const m = mol(smiles);
+      expect(soughtRefusal(m.atoms, m.bonds), smiles).toMatch(/have no form with single and double bonds/);
+      expect(conformersSought(m.atoms, m.bonds), smiles).toBeNull();
+    }
+    // (and those with a form, counted as their Kekule structure: no refusal)
+    for (const smiles of ["CC(:O):O", "CC(:O):[O-]", "C[N+](:O):[O-]", "Cc1ccccc1"]) {
+      const m = mol(smiles);
+      expect(soughtRefusal(m.atoms, m.bonds), smiles).toBeNull();
+    }
+  });
+});
 
 describe("how many conformers are tried of a molecule", () => {
   it("tries few of a molecule that has only the one shape", () => {

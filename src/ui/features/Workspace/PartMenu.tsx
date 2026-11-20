@@ -174,6 +174,8 @@ function mapShownItems(
     onShow: (shown: boolean) => void;
     onOther: () => void;
     onRenumber?: () => void;
+    /** What its numbering is, once renumbered (chem/atomMap `numberingSaid`): the line under *Renumber atoms*. */
+    numbering?: string;
     onExport: () => void;
     unpaired?: string;
     conformers?: string[];
@@ -186,9 +188,10 @@ function mapShownItems(
   return [
     { name: m.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => m.onShow(!m.shown), divider },
     ...(m.maps > 1 ? [{ name: "Other map", keys: `${m.chosen + 1} of ${m.maps}`, run: m.onOther, keep: true }] : []),
-    // (Before's atoms numbered by the drawing's order, the rest following: a complete map's only)
+    // (Before's atoms numbered as IUPAC numbers each molecule, the rest following - a complete map's only - and, once so, a line saying
+    //  whether a rule decided every number)
     ...(m.onRenumber
-      ? [m.standing === "ready" ? { name: "Renumber atoms", keys: "", run: m.onRenumber } : { name: "Renumber atoms (needs every atom mapped)", keys: "", run: () => {}, disabled: true }]
+      ? [m.standing === "ready" ? { name: "Renumber atoms", keys: "", run: m.onRenumber, ...(m.numbering ? { note: m.numbering } : {}) } : { name: "Renumber atoms (needs every atom mapped)", keys: "", run: () => {}, disabled: true }]
       : []),
     ...(m.standing === "ready"
       ? [{ name: m.paired ? `Export reaction in 3D… (${m.paired} ${m.paired === 1 ? "pair" : "pairs"} of conformers)` : "Export reaction in 3D…", keys: "", run: m.onExport }]
@@ -239,6 +242,7 @@ export default function PartMenu({
   records,
   stereo,
   projection,
+  asChair,
   fischer,
   figure,
   numbers,
@@ -493,8 +497,9 @@ export default function PartMenu({
       onMake: () => void;
       onShow: (shown: boolean) => void;
       onOther: () => void;
-      /** Its reactants' atoms numbered by the drawing's order, the rest following. */
+      /** Its reactants' atoms numbered as IUPAC numbers each molecule, the molecules in the drawing's order (chem/atomMap `renumbering`), and the line saying so. */
       onRenumber?: () => void;
+      numbering?: string;
       onExport: () => void;
       /** A partial map's atoms that do not pair, in words. */
       unpaired?: string;
@@ -524,6 +529,7 @@ export default function PartMenu({
       onShow: (shown: boolean) => void;
       onOther: () => void;
       onRenumber?: () => void;
+      numbering?: string;
       onExport: () => void;
       onAgain?: () => void;
       unpaired?: string;
@@ -580,6 +586,8 @@ export default function PartMenu({
   stereo?: { name: string; run: () => void };
   /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
   projection?: { flat: () => void; flip?: () => void };
+  /** A flat six-ring right-clicked that *Draw as chair* draws (projections/fromFlat): to do it, or why it is not offered (its configuration not drawn). */
+  asChair?: { run: () => void } | { why: string };
   /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
   fischer?: { run: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
@@ -1096,6 +1104,14 @@ export default function PartMenu({
                 ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
                 { name: "Draw flat", keys: "", run: projection.flat },
               ]
+            : []),
+          ...(asChair
+            ? "run" in asChair
+              ? [{ name: "Draw as chair", keys: "", run: asChair.run }]
+              : [
+                  { name: "Draw as chair", keys: "", run: () => {}, disabled: true },
+                  { name: asChair.why, keys: "", run: () => {}, disabled: true },
+                ]
             : []),
           ...partsItems,
           ...pageMapItems,

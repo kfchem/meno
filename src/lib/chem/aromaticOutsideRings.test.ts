@@ -45,7 +45,11 @@ describe("a structure typed with bonds marked aromatic outside a ring", () => {
   it("refuses CO2 written O:C:O and a sulfone written CS(:O)(:O)C: a centre needing two double bonds, never read as formic acid or a diol", () => {
     expect(() => smilesInput("O:C:O")).toThrow("have no form with single and double bonds");
     expect(() => smilesInput("CS(:O)(:O)C")).toThrow("have no form with single and double bonds");
-    expect(() => smilesInput("OP(:O)(:O)O")).toThrow("have no form with single and double bonds");
+  });
+
+  it("reads phosphoric acid written OP(:O)(:O)O as phosphoric acid, H3PO4: its P of five, one P=O, no H on P (the chemistry check's ruling)", () => {
+    expect(formulaOf("OP(:O)(:O)O")).toBe("H3O4P");
+    expect(smilesInput("OP(:O)(:O)O").atoms[1].hs ?? 0).toBe(0);
   });
 
   it("leaves rings as they were: benzoic acid written all aromatic reads as benzoic acid", () => {

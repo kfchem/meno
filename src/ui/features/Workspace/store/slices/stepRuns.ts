@@ -41,7 +41,7 @@ import { entryOfSet, compoundLetter, numberingOf, frameXyz, framesOf, madeFrom, 
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
-import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from "../../../../../lib/chem/conformersSought";
+import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber, soughtRefusalOf } from "../../../../../lib/chem/conformersSought";
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
@@ -996,6 +996,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           if (anyOpen(left) && which.free) free.push(place + 1);
           // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same - the step's
           //  own number, or as many as the molecule needs: lib/chem/conformersSought)
+          // (none worked out where the core refuses its bonds marked aromatic outside a ring: set aside in the core's words - no count of
+          //  rotors on H nobody wrote: lib/chem/conformersSought `soughtRefusal`)
+          const soughtWhy = soughtRefusalOf(block.molblock);
+          if (soughtWhy) throw new Error(soughtWhy);
           const tries = soughtNumber(options, () => conformersSoughtOf(block.molblock));
           // (as many as the molecule needs, in rounds, where the plugin's search takes draws: until a round brings no conformer new within
           //  the step's window - chem/conformerRounds; a workflow's search has no time it must end in)

@@ -4,6 +4,7 @@ import type { IdentityInput } from "../../../../lib/chem/identity";
 import { candidatesDrawn } from "./candidatesDrawn";
 import { forgetIdentities } from "./identityOff";
 import { drawnFromSmiles } from "./testdata/identityCases";
+import { measured } from "../../../../testing/timeouts";
 
 const offered = (smiles: string) => {
   const m = drawnFromSmiles(smiles);
@@ -62,5 +63,5 @@ describe("an undrawn cage atom of a large structure", () => {
     expect(asked).not.toContain("cage labels");
     await new Promise((done) => setTimeout(done, 50));
     expect(offered(smiles)).toEqual([]);
-  });
+  }, measured(550));
 });

@@ -12,6 +12,8 @@ import { isMetal, squarePlanarMetal, type Arranged } from "../../../../lib/layou
 import { valencesAt } from "../../../../lib/chem/molecule";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { readStereo } from "../../../../lib/layout/drawn";
+import { saidOf } from "../../../../lib/chem/perception/stereo/compare";
+import { keepsAny, keptAsDrawn, keptReading } from "../configuration/kept";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
 import { cageViews } from "../../../../lib/layout/recognised";
 import type { Model } from "../store/types";
@@ -35,7 +37,10 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
  */
 export function identityInputOf(part: Model): { input: IdentityInput; unread: number[]; bondAt: number[]; perspective: ReadonlyMap<number, string> } {
   const drawing = drawingOf(part);
-  const stereo = readStereo(drawing.atoms, drawing.bonds);
+  // (what the drawing keeps, where it keeps any - part 15, phase 3: the configuration as kept, not read again from its marks - else what
+  //  its marks say: configuration/kept)
+  const read = readStereo(drawing.atoms, drawing.bonds);
+  const stereo = keepsAny(part) ? keptAsDrawn(part, drawing, keptReading(part, saidOf(drawing.atoms, drawing.bonds, part.atoms.map((a) => a.id), () => false, read)).said) : read;
   const pi = piSystems(part, drawing);
   const input: IdentityInput = {
     atoms: part.atoms.map((a, i) => {
@@ -70,7 +75,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     return texts.size === 1 ? ways[0] : null;
   };
   const arrangements = arrangementsDrawn(drawing, part, oneOf);
-  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds, cageViews) };
+  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, read).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds, cageViews) };
 }
 
 /** A structure drawn's identity (lib/chem `identity`), its AND and OR groups with it (`withGroups`), and the atoms whose wedges it could not read (`identityInputOf`). */
