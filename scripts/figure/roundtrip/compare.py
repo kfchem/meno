@@ -117,8 +117,8 @@ def main():
         v, got = verdict(m["truth"], r.get("mol"))
         if r.get("none"):
             v = f"nothing read: {r['none']}"
-        # (said: nothing read, or what was read marked unsure somewhere - the reader saying it may be wrong)
-        said = bool(r.get("none")) or r.get("marked", 0) > 0
+        # (said: nothing read, what was read marked unsure somewhere, or structures said to be left out - the reader saying it may be wrong)
+        said = bool(r.get("none")) or r.get("marked", 0) > 0 or bool(r.get("left"))
         rows.append({"name": r["name"], "category": m["category"], "stage": "read", "preset": r["preset"], "variant": r["variant"], "verdict": v, "got": got, "truth": m["truth"], "said": said})
     (at / "report.json").write_text(json.dumps(rows, indent=1))
     # the match rate: drawn, then read by preset and by variant

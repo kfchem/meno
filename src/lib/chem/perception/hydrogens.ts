@@ -201,6 +201,14 @@ export type CountedBond = { a: number; b: number } & ValenceBond;
  * bond as `valenceOrder` counts it, and any other bond type nothing.
  */
 export function hydrogenCounts(atoms: readonly CountedAtom[], bonds: readonly CountedBond[]): number[] {
+  return valenceCounts(atoms, bonds).hs;
+}
+
+/**
+ * The one count, with what it is counted from: each atom's bonds' orders summed (`sum`), the share of them to metals (`toMetals`),
+ * and its hydrogens (`hs`, `hydrogenCounts`) - so that a writer can say the valence the core gives an atom (lib/chem/molWriter).
+ */
+export function valenceCounts(atoms: readonly CountedAtom[], bonds: readonly CountedBond[]): { sum: number[]; toMetals: number[]; hs: number[] } {
   const sum = atoms.map(() => 0);
   // (and of it, each atom's bonds to metals: a P, S or Se's valence step is chosen by its other bonds - `implicitHydrogens`)
   const toMetals = atoms.map(() => 0);
@@ -216,8 +224,11 @@ export function hydrogenCounts(atoms: readonly CountedAtom[], bonds: readonly Co
       if (metal.has(atoms[other]?.el ?? "")) toMetals[end] += o;
     }
   });
-  return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0, a.radical, Math.round(toMetals[i])));
+  return { sum, toMetals, hs: atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0, a.radical, Math.round(toMetals[i]))) };
 }
+
+/** Whether an atom of `el` takes a higher valence by its bonds to non-metals alone (`LADDER`): a P, S or Se. */
+export const ladderElement = (el: string): boolean => el in LADDER;
 
 /** One atom's hydrogens by the one count (`hydrogenCounts`). */
 export function hydrogensOn(atoms: readonly CountedAtom[], bonds: readonly CountedBond[], atom: number): number {
