@@ -262,8 +262,10 @@ pointer does; put back by an undo, they glide back.
   in 3D or a picture whose middle is inside it - in the order it lies
   (top to bottom, left to right);
 - dragged into a set the chemist made, a structure or a molecule joins it,
-  at its place in that order among the members; dragged out of any set,
-  it leaves; moved within the frame, it keeps its place;
+  at its place in that order among the members; dragged wholly out of any
+  set - a structure with none of its atoms left inside, a molecule or a
+  picture with its middle outside - it leaves; moved within the frame, or
+  half out of it, it keeps its place, and the frame grows round it;
 - what joins or leaves is marked a moment as it does;
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
@@ -271,16 +273,17 @@ pointer does; put back by an undo, they glide back.
 - a step's result set holds what its step made, in its order, and takes
   nothing in: dragged into it, a structure stays outside the set;
 - **the frame is its members' room** (the maintainer, 2026-11-11), never
-  sized by hand: each member's box as it is drawn - a structure's labels
-  and a molecule's frames chip below it included - and half a bond about
+  sized by hand: each member's box as it is drawn - a structure's labels,
+  its record's number below it (Enumerate's #n) and a molecule's frames
+  chip below it included - and half a bond about
   them, with room for the name above and never narrower than a name needs
   (`workflow/fitFrames`). It grows and shrinks as they change - a structure
   drawn on, a bigger look, a member deleted - its edges eased, in the same
   step as the edit; a workspace saved with frames of other sizes is fitted
   as it opens. Its tab drags it, with all it holds;
 - **nothing lies half over a frame.** While a member is dragged its frame
-  stays where it is, so that it can be dragged out. Let go, a thing with
-  its middle in the frame is its member, and the frame grows round it
+  stays where it is, so that it can be dragged out. Let go, a member with
+  any of it still in the frame is its member, and the frame grows round it
   whole; a thing no set holds, with its middle outside, is eased out to
   just outside, on the nearest side, half a bond from the frame. A frame
   that grows into a thing no set holds eases it out the same way, once:
@@ -289,7 +292,11 @@ pointer does; put back by an undo, they glide back.
   of the gesture's step: one undo takes back the drag, the frame and what
   was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
-  it held; a set left empty stays, empty, until it is deleted;
+  it held; a set left empty stays, empty, until it is deleted. A step's
+  result set left empty - its step run on nothing, or its last member
+  taken - goes back to its "Not run yet" frame, its top-left corner where
+  it was, never the tall frame of what it last held; a chemist's set keeps
+  its frame, so that what is drawn into it again where it was joins it;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
   and structures drawn are not written to the workspace's file - only how
   many it held and their collection's hash - and opened again, the set
@@ -369,7 +376,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Descriptors | a ring and the lines of what is worked out for it (drawn) | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus and a minus, each in a circle (drawn) | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
-| Combine | two lines coming into one (drawn) | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
+| Combine | two lines coming into one (drawn) | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; a part's restraints and measures carried, its atoms numbered as in the complex, and none of its other properties, each named (STRUCTURE-STEPS.md, *Combine*) |
 | Measure | a distance between two marks (drawn) | molecules in 3D, or a conformer set; and, where wanted, *Atoms*: a table | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them, or each row's of the table wired into *Atoms*, its columns saying how they count them (STRUCTURE-STEPS.md, *Measure*) |
 | Mode on atoms | two atoms moving, a third still (drawn) | molecules in 3D with vibrations, or a conformer set; and, where wanted, *Atoms*: a table | **the same kind of set**, every entry kept: where its lowest, imaginary vibration ranks the reacting atoms - a table's bonds formed or broken, or atoms typed - written on it (`mode.window`, `mode.ranks`, `mode.outside`) for a Filter to choose on (STRUCTURE-STEPS.md, *Mode on atoms*) |
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind: a wire of the other kind is refused as it is drawn | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |

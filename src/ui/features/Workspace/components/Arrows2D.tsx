@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { arrowEnds, arrowPoints, reshapedArrow } from "../../../../lib/chem/reactionScheme";
+import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { arrowPath, cornerAt, squareCorner, type ArrowCorner } from "../../../../lib/chem/reactionArrow";
 import { COLORS } from "../../../theme/colors";
 import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
@@ -13,9 +14,9 @@ import { strokeTriangles } from "../../../../lib/chem/shapes";
 import { dragSelection } from "../utils/dragSelection";
 import { carriedWithMore } from "../utils/selectionScheme";
 import ReactionArrow2D from "./ReactionArrow2D";
-import { useDrawnArrows } from "./drawnArrows";
+import { useDrawnArrows, wordsKeptBy } from "./drawnArrows";
 import { TAU, follow } from "../../../theme/motion";
-import { useDrawnZoom } from "./drawnLayoutContext";
+import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { glidden, poseOf, type Pose } from "../utils/arrowGlide";
 
 /** An end handle's radius on the screen, in pixels, and how far round it a press takes it. */
@@ -54,6 +55,8 @@ const native = (e: unknown): Pointerish => ((e as { nativeEvent?: Pointerish }).
  */
 export default function Arrows2D() {
   const arrows = useDrawnArrows();
+  // (the words' sizes, as they are drawn: whether they are still within an arrow's reach where it is put)
+  const { opts } = useDrawnLayout();
   const madeArrows = useEditor((s) => s.arrows);
   const hoveredArrow = useEditor((s) => s.hoveredArrow);
   const selArrows = useEditor((s) => s.selArrows);
@@ -170,17 +173,28 @@ export default function Arrows2D() {
     const off = { x: a.x - p.x, y: a.y - p.y };
     const gesture = `move-${performance.now()}`;
     let moved = false;
+    // (it goes alone, its words left where they stand: let go of it as it moves - so that it is not drawn out to them -
+    // and over it again where it is put within their reach. Both go when both are selected: dragSelection, above)
+    const words = st.captions.filter((c) => c.arrow === id).map((c) => c.id);
+    const letGo = new Map(words.map((w) => [w, null]));
+    const at = (m: PointerEvent) => {
+      const q = toWorld(m.clientX, m.clientY);
+      return { x: q.x + off.x, y: q.y + off.y };
+    };
     const onMove = (m: PointerEvent) => {
       if (!moved && Math.hypot(m.clientX - ev.clientX, m.clientY - ev.clientY) < MOV_PX) return;
       moved = true;
-      const q = toWorld(m.clientX, m.clientY);
-      store.getState().updateArrow(id, { x: q.x + off.x, y: q.y + off.y }, gesture);
+      store.getState().moveArrowAlone(id, at(m), letGo, gesture);
     };
     const onUp = (u: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
       const s = store.getState();
       s.endPanHold(u.pointerId);
+      if (moved && words.length) {
+        s.moveArrowAlone(id, at(u), letGo, gesture);
+        s.moveArrowAlone(id, at(u), wordsKeptBy(store.getState(), id, words, opts, labelSetOf(opts)), gesture);
+      }
       // (a click: it alone selected)
       if (!moved) {
         s.clearSel();
