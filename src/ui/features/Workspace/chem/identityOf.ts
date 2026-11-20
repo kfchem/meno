@@ -126,12 +126,14 @@ export function labelsDrawnOut(part: Model): Model {
         continue;
       }
     }
-    // (a group's label as read outward from a bond on its right - MeO, AcO, HO2C - the group written the other way)
+    // (a group's label as read outward from a bond on its right - MeO, AcO, HO2C - the group written the other way: only there, its
+    //  bonded atom the symbol at the bond's end (IUPAC GR-2.1.6) - NCO right of its bond is no cyanate)
     const placed = (text: string) => {
       const q = placedAbbreviation(text, other ? { x: other.x - a.x, y: other.y - a.y } : null, NOMINAL_BOND_LENGTH);
       return q?.atoms.length ? q : null;
     };
-    const s = a.abbrev ?? (isElementSymbol(a.el) ? null : (placed(a.el) ?? placed(reversedLabel(a.el))));
+    const fromRight = !!other && other.x - a.x > Math.hypot(other.x - a.x, other.y - a.y) * FROM_RIGHT;
+    const s = a.abbrev ?? (isElementSymbol(a.el) ? null : (placed(a.el) ?? (fromRight ? placed(reversedLabel(a.el)) : null)));
     if (!s?.atoms.length) {
       atoms.push(a);
       continue;
@@ -146,6 +148,9 @@ export function labelsDrawnOut(part: Model): Model {
   }
   return { atoms, bonds };
 }
+
+/** How far a bond must lean right of upright for a label on its left to be read outward from it: the label band's 10 degrees. */
+const FROM_RIGHT = Math.sin((10 * Math.PI) / 180);
 
 /** A label of one element and its H, either way round - OH, HO, SH, NH2, H2N - as the element and the count; null for any other. */
 function elementWithHydrogens(text: string): { el: string; h: number } | null {
