@@ -13,7 +13,9 @@ import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
 import { metal } from "../../../../lib/chem/perception/elements";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
-import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { readStereo, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { saidOf } from "../../../../lib/chem/perception/stereo/compare";
+import { keepsAny, keptAsDrawn, keptReading } from "../configuration/kept";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
 import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
@@ -183,8 +185,12 @@ function holdsRing(model: Model): boolean {
  */
 export function forFlatReaders(model: Model, recognised = true): WriterModel {
   if (!model.atoms.some((a) => a.z != null) && !(recognised && holdsRing(model))) return model;
-  const { atoms, bonds } = drawingOf(model);
-  const flat = wedgesForFlat(atoms, bonds);
+  const drawing = drawingOf(model);
+  const { atoms, bonds } = drawing;
+  // (each centre a perspective drawing shows written from what the drawing keeps, where it keeps any - part 15, phase 3: 3D and the
+  //  files take the configuration kept - else from what its marks and depth read)
+  const kept = keepsAny(model) ? keptAsDrawn(model, drawing, keptReading(model, saidOf(atoms, bonds, model.atoms.map((a) => a.id), () => false, readStereo(atoms, bonds))).said).tetra : undefined;
+  const flat = wedgesForFlat(atoms, bonds, kept);
   if (!flat.wedges.length) return model;
   const ids = model.atoms.map((a) => a.id);
   let next = Math.max(0, greatest(ids), greatest(model.bonds.map((b) => b.id))) + 1;

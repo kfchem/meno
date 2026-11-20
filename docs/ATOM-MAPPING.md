@@ -634,8 +634,41 @@ holding a metal. And, so that the page never waits on a numbering, what
 is over the budget: a molecule of more than 150 heavy atoms, numbered in
 the drawing's order, and tied parents too many to compare for the
 molecule's size (a poly(ethylene glycol) of fifteen units and more), the
-first of them taken. Level 2 - the principal characteristic group leading - is
-part 16's second half.
+first of them taken.
+
+**The principal characteristic group leads** (level 2; `perception/locantGroups.ts`,
+`perception/locants.ts`). The groups are found by their patterns and by what
+each must not match, in the order of P-41 Table 4.1: carboxylic, sulfonic and
+sulfinic acids; esters, acid halides and amides, each as its acid ranks (a
+sulfonyl chloride and a sulfonamide after every carboxylic one); nitriles;
+aldehydes; ketones (a C=O between two carbons, a lactone's or a lactam's ring
+C=O, an acyl group on a ring N, a ketene: P-64); a thioketone; OH, then SH;
+hydroperoxides; amines; imines (an oxime is one). The class that stands first
+is the principal one:
+- the parent is the unit holding the most principal groups (P-44.1.1),
+  before every other criterion; among those, A3 as at level 1 - a step-0
+  element's chain, then a ring before a chain, then the longest chain;
+- at a chain's end an acid's, an amide's, a nitrile's or an aldehyde's carbon
+  is the chain's own (two at most); where three or more such groups are
+  linked to one unbranched chain, all of them hang on it, none of their
+  carbons in it (citric acid is a propane: P-65.1.2.2.1); a carboxy or cyano
+  carbon that is not principal is never in a chain (B2.4);
+- an ester is numbered from its acid, whatever its alcohol (P-65.6.3.2.1),
+  and an amide from its acyl side; identical acids or chains one orbit apart,
+  each holding its groups, are multiplied, but never through the principal
+  group itself (two rings on one amine's N: one is the parent);
+- the principal groups' locants, as a set, are lowest after indicated
+  hydrogen and before saturation (P-14.4 (c)).
+Said as Meno's own (`not built`): a molecule whose first group is of a
+class not built - the carbonic family (carbonates, carbamates, ureas),
+thio acids and their esters and amides, anhydrides, hydrazides, amidines,
+the oxoacids of P, B and S and their esters and amides, N-halo amines and
+hydroxylamines - or that holds one below the principal class whose carbon
+ends a chain of carbons; a charged group that is not of the principal class
+(an aminium beside an ester); and esters of one alcohol whose acids
+are not one parent. A not-built group whose carbon cannot be in a chain - a
+Boc carbamate, a urea - beside a built class above it is a substituent like
+any other.
 
 ## For a workflow's *Atom map* step
 

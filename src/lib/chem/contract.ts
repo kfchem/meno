@@ -275,7 +275,9 @@ function formulas(g: ContractGraph, P: Prepared): Found[] {
         // its H, drawn or not, after it; then the halogens, the most first
         const heavyOrders = P.heavy(c).reduce((t, v) => t + (P.order.get(key(c, v)) || 1), 0);
         const toMetals = P.heavy(c).reduce((t, v) => t + (isMetal(g.atoms[v].el) ? P.order.get(key(c, v)) || 1 : 0), 0);
-        const hs = implicitHydrogens(el, heavyOrders, 0, undefined, toMetals) + P.next[c].filter(P.isH).length;
+        // (an H drawn takes its place among the bonds, so it is not counted again: CHCl2 with its H drawn is CHCl2)
+        const drawnH = P.next[c].filter(P.isH).length;
+        const hs = implicitHydrogens(el, heavyOrders + drawnH, 0, undefined, toMetals) + drawnH;
         const counts = HALOGENS.map((x) => [x, els.filter((y) => y === x).length] as const)
           .filter(([, n]) => n > 0)
           .sort((u, v) => v[1] - u[1]);
