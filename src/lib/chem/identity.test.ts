@@ -355,17 +355,19 @@ describe("a hydrogen atom kept an atom in a structure's identity", () => {
     expect(hydrogensFolded(g).atoms).toHaveLength(4);
   });
 
-  it("on a metal: a hydride is not a metal with an H of its own", () => {
+  it("on a metal: a hydride is kept, and is the one structure however its H is written - drawn, or counted on the metal", () => {
     const g = fromSmiles("[Pd][H]");
     expect(hydrogensFolded(g).atoms).toHaveLength(2);
-    expect(identityText(g)).not.toBe(identityText({ atoms: [{ el: "Pd", hs: 1 }], bonds: [] }));
+    expect(identityText(g)).toBe(identityText({ atoms: [{ el: "Pd", hs: 1 }], bonds: [] }));
+    expect(identityText(g)).not.toBe(identityText({ atoms: [{ el: "Pd", hs: 0 }], bonds: [] }));
   });
 
   it("on an actinide: a hydride on U or Th is kept, as on Pd (foundation part 3, B1)", () => {
     for (const el of ["U", "Th"]) {
       const g = fromSmiles(`[${el}][H]`);
       expect(hydrogensFolded(g).atoms, el).toHaveLength(2);
-      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 0 }], bonds: [] }));
     }
   });
 
@@ -373,7 +375,8 @@ describe("a hydrogen atom kept an atom in a structure's identity", () => {
     for (const el of ["Pr", "Ac", "Fm"]) {
       const g = fromSmiles(`[${el}][H]`);
       expect(hydrogensFolded(g).atoms, el).toHaveLength(2);
-      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 0 }], bonds: [] }));
     }
   });
 });
