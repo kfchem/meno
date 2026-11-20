@@ -6,6 +6,7 @@ import { closedJoints, widening, inkOf, onPage, patchesOf, shadedOf, thinned, tr
 import type { FigureRead } from "./read";
 import { LOST_LABEL_SAID, readTracedPicture } from "./tracedRead";
 import { glyphShape, type GlyphShape } from "./glyphs";
+import { measured } from "../../testing/timeouts";
 
 type Pt = [number, number];
 /** Whether a point of the picture is inked by a shape. */
@@ -696,7 +697,7 @@ describe("the edges of the new numbers", () => {
     expect(wide.shapes.blobs).toHaveLength(0);
     const narrow = traced(tracePicture(picture(340, 220, [...ring6, ...zig(0.9 * bond)])));
     expect(narrow.shapes.blobs).toHaveLength(1);
-  });
+  }, measured(850));
 
   it("a letter's pieces are up to 0.85 of a bond: a T whose stem is 0.9 of the measured bond is lines, one of 0.7 is a letter (both under a bond across)", () => {
     const ring6 = hexagon([90, 110], 60).map((p, k, all) => line(p, all[(k + 1) % 6], 2.5));
@@ -706,7 +707,7 @@ describe("the edges of the new numbers", () => {
     expect(tall.shapes.blobs).toHaveLength(0);
     const short = traced(tracePicture(picture(300, 220, [...ring6, ...T(0.7 * bond)])));
     expect(short.shapes.blobs).toHaveLength(1);
-  });
+  }, measured(1_200));
 
   it("four lines round a circle are a ring's circle, three are not: a square with a circle in it, a triangle with a circle in it", { timeout: 30_000 }, () => {
     const bond = 90;

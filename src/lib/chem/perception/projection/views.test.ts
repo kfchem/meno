@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boat, chair, cross, dot, envelope, flipped, fused, halfChair, haworth, newman, sub, unit, type Solid, type V3 } from "./solids";
-import { CHAIR_ELEVATION_DEG, CHAIR_GENTLE_DEG, CHAIR_SEAT_DEG, CHAIR_STEEP_DEG, CHAIR_TURN_DEG, drawn, fromAbove, HAWORTH_ELEVATION_DEG, HAWORTH_IN, HAWORTH_OUT, project, seen, seenFree, standardView } from "./views";
+import { CHAIR_ELEVATION_DEG, CHAIR_GENTLE_DEG, CHAIR_SEAT_DEG, CHAIR_STEEP_DEG, CHAIR_TURN_DEG, drawn, fromAbove, HAWORTH_ELEVATION_DEG, HAWORTH_GROUP, project, seen, seenFree, standardView } from "./views";
 
 const close = (a: number, b: number, digits = 4) => expect(a).toBeCloseTo(b, digits);
 const order = (s: { z: number }[]) => s.map((p, k) => [p.z, k] as const).sort((a, b) => b[0] - a[0]).map(([, k]) => k);
@@ -167,7 +167,7 @@ describe("the Haworth ring's standard view (McNaught 1996, 2-Carb-5.4)", () => {
   });
 });
 
-describe("the Haworth ring as drawn (rule (H)): a true view of the ring, its groups by two drawn lengths", () => {
+describe("the Haworth ring as drawn (rule (H)): a true view of the ring, its groups as the text's figure draws them", () => {
   /** How far a point is from the segment p-q. */
   const toSegment = (x: number, y: number, p: { x: number; y: number }, q: { x: number; y: number }) => {
     const [dx, dy] = [q.x - p.x, q.y - p.y];
@@ -185,43 +185,58 @@ describe("the Haworth ring as drawn (rule (H)): a true view of the ring, its gro
     close(five.atoms[1].y - five.atoms[2].y, 0.634, 3);
   });
 
-  it("puts each group straight up or down: 0.40 of a bond into the ring's picture - a front atom's up, a back atom's down - and 0.745 out of it", () => {
+  it("puts each group straight up or down, as long as its ring, place and way give: shorter into the ring's picture", () => {
+    // (each to 0.01 of the level bond: [front up, front down, side up, side down, back up, back down] - out of the ring as MEASURED from
+    //  Brecher 2006's figures under ST-1.9, into it by the stem that is to show: haworth.test, "a labelled group inside a Haworth ring")
+    const want = { 6: [0.51, 0.68, 0.65, 0.83, 0.65, 0.39], 5: [0.51, 0.68, 0.66, 0.68, 0.65, 0.46] } as const;
     for (const size of [6, 5] as const) {
+      const g = HAWORTH_GROUP[size];
+      expect([g.front.up, g.front.down, g.side.up, g.side.down, g.back.up, g.back.down], `${size}`).toEqual([...want[size]]);
       const d = drawn(haworth(size))!;
       const ys = d.atoms.map((p) => p.y);
       const [lo, hi] = [Math.min(...ys), Math.max(...ys)];
+      const seen = new Set<string>();
       for (const f of d.free) {
         expect(f.x).toBe(0);
         const p = d.atoms[f.free.at];
         const up = f.free.kind === "up";
-        const into = up ? Math.abs(p.y - lo) < 1e-9 || d.atoms.some((q, j) => j !== f.free.at && Math.abs(q.x - p.x) < 1e-9 && q.y > p.y) : Math.abs(p.y - hi) < 1e-9;
-        close(Math.abs(f.y), into ? HAWORTH_IN : HAWORTH_OUT, 12);
+        const place = Math.abs(p.y - lo) < 1e-9 ? "front" : Math.abs(p.y - hi) < 1e-9 ? "back" : "side";
+        close(Math.abs(f.y), g[place][up ? "up" : "down"], 12);
         expect(Math.sign(f.y)).toBe(up ? 1 : -1);
+        seen.add(`${place} ${up ? "up" : "down"}`);
         // (its depth the normal's: toward the viewer for up, by the sine, times the length)
         close(f.z, (up ? 1 : -1) * (2 / 3) * Math.abs(f.y), 12);
       }
+      // (each way of each place is drawn: the five-ring's back atom, its ring O in a furanose, too, at the six-ring's lengths)
+      expect([...seen].sort(), `${size}`).toEqual(["back down", "back up", "front down", "front up", "side down", "side up"]);
     }
-    close(HAWORTH_OUT, Math.sqrt(5) / 3, 12);
+    // (a front atom's up group and the back atom's down group on one vertical of the six-ring: 0.255 between their places - where both are
+    //  labels the down one gives way as it is typed: haworthLabels.test)
+    const six = drawn(haworth(6))!;
+    const tall = Math.max(...six.atoms.map((p) => p.y)) - Math.min(...six.atoms.map((p) => p.y));
+    close(tall - HAWORTH_GROUP[6].front.up - HAWORTH_GROUP[6].back.down, 0.255, 3);
   });
 
-  it("leaves every group place clear - at least 0.3 of the level bond - of every other ring atom, every ring bond not at its own atom and every other group place; and no group's bond touches a ring bond but at its own atom", () => {
+  it("leaves every group place clear - at least 0.24 of the level bond - of every other ring atom, every ring bond not at its own atom and every other group place; and no group's bond touches a ring bond but at its own atom", () => {
+    // (the closest: the five-ring's front up place, 0.246 from the bond to its ring O, its label's ink still off it - haworth.test, "a
+    //  labelled group inside a Haworth ring", reads each label's ink against every ring bond)
     for (const size of [6, 5] as const) {
       const d = drawn(haworth(size))!;
       const n = d.atoms.length;
       const places = d.free.map((f) => ({ at: f.free.at, x: d.atoms[f.free.at].x + f.x, y: d.atoms[f.free.at].y + f.y }));
       for (const pl of places) {
-        for (let j = 0; j < n; j++) if (j !== pl.at) expect(Math.hypot(pl.x - d.atoms[j].x, pl.y - d.atoms[j].y), `${size} atom ${j}`).toBeGreaterThan(0.3);
+        for (let j = 0; j < n; j++) if (j !== pl.at) expect(Math.hypot(pl.x - d.atoms[j].x, pl.y - d.atoms[j].y), `${size} atom ${j}`).toBeGreaterThan(0.24);
         for (let j = 0; j < n; j++) {
           const k = (j + 1) % n;
           if (j === pl.at || k === pl.at) continue;
-          expect(toSegment(pl.x, pl.y, d.atoms[j], d.atoms[k]), `${size} bond ${j}-${k}`).toBeGreaterThan(0.3);
+          expect(toSegment(pl.x, pl.y, d.atoms[j], d.atoms[k]), `${size} bond ${j}-${k}`).toBeGreaterThan(0.24);
           // (the group's bond, from its atom to its place, meets no other ring bond: tried along it)
           for (let s = 1; s <= 10; s++) {
             const p = d.atoms[pl.at];
             expect(toSegment(p.x, p.y + ((pl.y - p.y) * s) / 10, d.atoms[j], d.atoms[k])).toBeGreaterThan(1e-6);
           }
         }
-        for (const other of places) if (other.at !== pl.at) expect(Math.hypot(pl.x - other.x, pl.y - other.y)).toBeGreaterThan(0.3);
+        for (const other of places) if (other.at !== pl.at) expect(Math.hypot(pl.x - other.x, pl.y - other.y)).toBeGreaterThan(0.24);
       }
     }
   });

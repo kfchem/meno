@@ -91,6 +91,12 @@ export type AtomChem = {
   abbrev?: AbbreviationStructure;
   /** [Reaction] its atom-atom mapping number. */
   map?: number;
+  /**
+   * What it shows for its mapping number, where that is not the number: its IUPAC locant in its molecule's parent (*Renumber atoms*,
+   * foundation part 16) - "4a", "1'", and a superscript where it has one ("3a" with a superscript "1"). The number is still its mapping
+   * number, in a file.
+   */
+  mapText?: { base: string; sup?: string };
   /** [Reaction] its configuration inverted or retained in the reaction. */
   invRet?: "invert" | "retain";
   /** [Reaction] the change on it is exactly as shown. */
@@ -253,6 +259,7 @@ export function chemistry(a: AtomChem): Omit<AtomChem, "el"> {
     ...(a.hCount != null ? { hCount: a.hCount } : {}),
     ...(a.abbrev ? { abbrev: a.abbrev } : {}),
     ...(a.map ? { map: a.map } : {}),
+    ...(a.map && a.mapText ? { mapText: a.mapText } : {}),
     ...(a.invRet ? { invRet: a.invRet } : {}),
     ...(a.exactChange ? { exactChange: true } : {}),
     ...(a.stereoGroup ? { stereoGroup: a.stereoGroup } : {}),
