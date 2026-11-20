@@ -83,7 +83,10 @@ function notCandidateCentres(atoms: readonly StereoAtom[], bonds: readonly Stere
     bonds: bonds.map(({ a, b, order }) => ({ a, b, order })),
   };
   // (a metal at any count of groups - one of five or six is asked of its count first - but tin, lead and bismuth, which are centres)
-  return (at) => (metal.has(atoms[at].el) && !CENTRE_ELEMENTS.has(atoms[at].el)) || notCandidate(g, { kind: "centre", at }) === NOT_CANDIDATE.ammonium;
+  // (the core asked only of an N+, where an ammonium can be: each ask reads the whole structure again)
+  return (at) =>
+    (metal.has(atoms[at].el) && !CENTRE_ELEMENTS.has(atoms[at].el)) ||
+    (atoms[at].el === "N" && (atoms[at].charge ?? 0) > 0 && notCandidate(g, { kind: "centre", at }) === NOT_CANDIDATE.ammonium);
 }
 
 /** What a structure's C=N bonds left open whose E/Z is none of their own are, in a line - each reason once - or null. */
