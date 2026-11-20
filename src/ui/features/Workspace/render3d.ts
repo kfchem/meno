@@ -11,7 +11,7 @@ import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
 import { backToFront } from "./utils/backToFront";
 import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
-import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersLeftOut as numbersLeftOutOf, numbersShownOn } from "./utils/atomNumbers";
+import { atomGlyphsOf, glyphsWidth, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersLeftOut as numbersLeftOutOf, numbersShownOn } from "./utils/atomNumbers";
 import { JOINT_NUMBER_A, jointNumbersMesh, jointUniforms, setJointAttributes } from "./utils/jointNumbers";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
@@ -233,7 +233,7 @@ export function rendered3d(
       // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above;
       // Sticks, where the sticks meet: utils/jointNumbers)
       if (m.atomNumbers && drawn.atoms === "sticks") {
-        const nums = atomNumbersOf(molecule, m.atomNumbers.kind, frameOf(solid, m.frame));
+        const nums = atomGlyphsOf(molecule, m.atomNumbers.kind, frameOf(solid, m.frame));
         const on = numbersShownOn(molecule);
         const joints = jointNumbersMesh(m.atoms.length);
         const inks = new Float32Array(3 * m.atoms.length);
@@ -247,16 +247,16 @@ export function rendered3d(
         ju.pxPer.value = pxPerWorld;
         ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM;
         // (as the shader leaves them out: under three quarters of the least, in the picture's pixels, nothing is drawn)
-        if (JOINT_NUMBER_A * WORLD_PER_ANGSTROM * mag * pxPerWorld * 0.7 < NUMBER_LEAST_PX * 0.75) numbersLeftOut += m.atoms.filter((_, i) => on[i] && !left[i] && digitsOf(nums[i]) > 0).length;
+        if (JOINT_NUMBER_A * WORLD_PER_ANGSTROM * mag * pxPerWorld * 0.7 < NUMBER_LEAST_PX * 0.75) numbersLeftOut += m.atoms.filter((_, i) => on[i] && !left[i] && glyphsWidth(nums[i]) > 0).length;
         // (in front of where the sticks meet, as on the canvas: past the sticks' own round ends)
         ju.lift.value = bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * 1.2;
         ju.shown.value = 1;
         made.push(joints.geometry, joints.material as THREE.Material);
         group.add(joints);
       } else if (m.atomNumbers) {
-        const nums = atomNumbersOf(molecule, m.atomNumbers.kind, frameOf(solid, m.frame));
+        const nums = atomGlyphsOf(molecule, m.atomNumbers.kind, frameOf(solid, m.frame));
         const on = numbersShownOn(molecule);
-        const digits = Uint8Array.from(nums, (v, i) => (on[i] ? digitsOf(v) : 0));
+        const digits = Float32Array.from(nums, (v, i) => (on[i] ? glyphsWidth(v) : 0));
         group.updateMatrixWorld(true);
         const centres = new Float32Array(3 * m.atoms.length);
         const v = new THREE.Vector3();

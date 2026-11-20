@@ -243,7 +243,7 @@ import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menu
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, numberingSaid, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
@@ -2851,6 +2851,7 @@ function WorkspaceContent({
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
                     onRenumber: () => store.getState().renumberAtomMap(a.id),
+                    ...(a.atomMap && numberingSaid(a.atomMap) ? { numbering: numberingSaid(a.atomMap)! } : {}),
                     onExport: () => void files.exportReaction3d({ arrow: a.id }),
                     ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
@@ -2902,6 +2903,7 @@ function WorkspaceContent({
                       onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
                       onOther: () => store.getState().otherStructureMaps(ids),
                       onRenumber: () => store.getState().renumberStructureMaps(ids),
+                      ...(numberingSaid(first.map) ? { numbering: numberingSaid(first.map)! } : {}),
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
                       unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
                       conformers: conformersSaid(first.map, st.molecules3d, st.model),
