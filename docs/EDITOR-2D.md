@@ -1738,6 +1738,33 @@ All hover-based, as above.
   files, the clipboard's MOL and the copied SMILES** (chem/drawing
   `forFlatReaders`): each centre a perspective drawing shows is written as
   a wedge from what is kept, for a reader that knows only wedges.
+- **What a look states** (foundation part 15, phase 4;
+  `configuration/said.ts`, shown by `ChemMarks2D` in the tip it gives an
+  R or S of its own words). The pointer resting on a bond or an atom of a
+  structure says, in one line under it, what that look states - what it
+  is, never how it is worked out:
+  - a wedge: the centre it is narrow at, with its R or S where the drawing
+    shows one ("C3: R, by this wedge"; "C3: set, by this wedge" where R
+    or S is not shown), or why it is not read ("C3: not read: ..."); where
+    the atom at its wide end is a centre too, that it says nothing of it;
+    a wedge from an end of an axis it states - an allene's, a biaryl's
+    (IUPAC ST-1.7): that axis, set by it ("the axis through C2 and C5:
+    set, by this wedge"; no R or S is shown for an axis);
+  - a wavy bond: its centre open; an "either" double bond: open;
+  - a hashed line: the centre it sets, where IUPAC grades it acceptable
+    (ST-0.3: from a centre to an end group, read as the hashed wedge it
+    states - "C3: R, by this hashed line", as the centre itself says), or
+    why it sets none ("C3: not read: a hashed line between two
+    stereocentres states neither"); else no configuration;
+  - a bold or dashed line on a flat drawing: no configuration; a
+    bold line of a ring drawn with depth: the near edge;
+  - a double bond whose cis or trans is stated: its E or Z where shown;
+  - a centre: its R or S, "set", "open", or "not read" and why; an atom of
+    a ring drawn with depth: that the drawing shows its configuration.
+  A plain bond and an atom with no configuration say nothing. The words
+  follow the drawing as it is edited. Where a centre has no mark at all,
+  nothing is said: whether it could carry one is the identity's search,
+  too long to make as the pointer moves.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
