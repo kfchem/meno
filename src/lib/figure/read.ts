@@ -1669,6 +1669,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       bonds.push({ a: donor, b: acceptor, order: 1, dative: true });
       continue;
     }
+    // (an atom at each end - one atom at both, or two already bonded - is no end without one: nothing to say of that)
+    if (donor >= 0 && acceptor >= 0) continue;
     for (const i of [donor, acceptor]) if (i >= 0 && !atoms[i].unsure?.includes(DATIVE_UNREAD)) atoms[i] = { ...atoms[i], unsure: [...(atoms[i].unsure ?? []), DATIVE_UNREAD] };
   }
   // (each repeat unit in brackets: a whole count's unit marked to be read so many times, else the atoms its brackets cross saying why not)

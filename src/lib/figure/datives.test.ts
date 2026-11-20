@@ -111,6 +111,10 @@ describe("a dative bond's arrow", () => {
     const r = labelled(figure(arrow([100, 100 + 1.2 * L - 5], [100, 100 + 0.2 * L]), word("NH_3", [100, 100 + 1.2 * L])));
     expect(r.bonds).toEqual([]);
     expect(r.atoms.map((a) => [a.label, a.unsure])).toEqual([["NH3", [DATIVE_UNREAD]]]);
+    // (an arrow beside a bond already drawn between its two atoms is no second bond, and says nothing untrue of an end without one)
+    const twice = labelled(amminePt([stroke([97, 100 + 1.2 * L - 5], [97, 105]), ...arrow([102, 100 + 1.2 * L - 5], [102, 105])]));
+    expect(twice.bonds.filter((b) => b.dative)).toEqual([]);
+    expect(twice.atoms.flatMap((a) => a.unsure ?? [])).toEqual([]);
   });
 
   it("is no scheme's arrow where an atom is at each end; a scheme's arrow, three bonds long between two structures, still is", () => {
