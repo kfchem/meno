@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copying, forTheClipboard, readClipboard, writeClipboard } from "./clipboard";
+import { copying, forTheClipboard, framed, readClipboard, writeClipboard } from "./clipboard";
 
 /**
  * A copy takes a moment - its pictures are drawn before anything goes on
@@ -33,5 +33,23 @@ describe("a text for the clipboard", () => {
     expect(forTheClipboard("CCO\nc1ccccc1\n", true)).toBe("CCO\r\nc1ccccc1\r\n");
     expect(forTheClipboard("a\r\nb\n", true)).toBe("a\r\nb\r\n");
     expect(forTheClipboard("a\nb", false)).toBe("a\nb");
+  });
+});
+
+describe("a copy sent to the app", () => {
+  it("goes as one body of its kinds' bytes, text as UTF-8, with each kind's length listed in order", () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 255]);
+    const { listed, body } = framed([
+      { flavor: "mol", text: "C1CC" },
+      { flavor: "png", bytes: png },
+      { flavor: "text", text: "hé" },
+      { flavor: "meno" },
+    ]);
+    expect(listed).toBe("mol:t:4,png:b:6,text:t:3,meno:t:0");
+    expect([...body]).toEqual([..."C1CC"].map((c) => c.charCodeAt(0)).concat([...png], [0x68, 0xc3, 0xa9]));
+  });
+
+  it("sends nothing for no kinds", () => {
+    expect(framed([])).toEqual({ listed: "", body: new Uint8Array(0) });
   });
 });

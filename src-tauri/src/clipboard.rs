@@ -5,6 +5,7 @@
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// One kind of data, as the page names it: text, or bytes as base64.
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -17,9 +18,10 @@ pub struct ClipItem {
 }
 
 /// What goes on the clipboard under one name.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Payload<'a> {
     Text(&'a str),
-    Bytes(Vec<u8>),
+    Bytes(Cow<'a, [u8]>),
 }
 
 /// Kinds that are bytes, not text: pictures, and an object Office holds.
@@ -131,22 +133,61 @@ pub fn crlf(text: &str) -> String {
     text.replace("\r\n", "\n").replace('\n', "\r\n")
 }
 
-/// Puts `items` on the clipboard, in place of whatever was there.
+/// One kind of data a copy gives, as the page sent it: text, or bytes.
+#[derive(Debug, PartialEq)]
+pub struct Given<'a> {
+    pub flavor: String,
+    pub payload: Payload<'a>,
+}
+
+/// The kinds a copy gives, out of the one body the page sends them in: the
+/// `items` header lists each kind in order as `flavor:t:length` (text, as
+/// UTF-8) or `flavor:b:length` (bytes), and the body is their bytes one after
+/// another. The bytes travel as they are, not spelled out in JSON: a picture
+/// of a large molecule is megabytes, and spelling it out and reading it back
+/// took longer than drawing it.
+pub fn framed<'a>(items: &str, body: &'a [u8]) -> Result<Vec<Given<'a>>, String> {
+    let mut given = Vec::new();
+    let mut at = 0usize;
+    for item in items.split(',').filter(|i| !i.is_empty()) {
+        let mut parts = item.split(':');
+        let (Some(flavor), Some(kind), Some(length), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
+            return Err(format!("a kind is not said as flavor:kind:length: {item}"));
+        };
+        let length: usize = length.parse().map_err(|_| format!("the length of {flavor} is no number"))?;
+        let bytes = at.checked_add(length).and_then(|end| body.get(at..end)).ok_or_else(|| format!("{flavor} runs past what was sent"))?;
+        at += length;
+        let payload = match kind {
+            "t" => Payload::Text(std::str::from_utf8(bytes).map_err(|_| format!("{flavor} is not UTF-8 text"))?),
+            "b" => Payload::Bytes(Cow::Borrowed(bytes)),
+            _ => return Err(format!("{flavor} is neither text nor bytes")),
+        };
+        given.push(Given { flavor: flavor.to_string(), payload });
+    }
+    if at != body.len() {
+        return Err("more was sent than the kinds listed".into());
+    }
+    Ok(given)
+}
+
+/// Puts the kinds the page sends (`framed`) on the clipboard, in place of
+/// whatever was there.
 #[tauri::command]
-pub fn clipboard_write(items: Vec<ClipItem>) -> Result<(), String> {
+pub fn clipboard_write(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let items = request.headers().get("items").and_then(|v| v.to_str().ok()).ok_or("the kinds to copy are not listed")?;
+    let body: &[u8] = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes,
+        _ => return Err("a copy is sent as its bytes".into()),
+    };
+    let given = framed(items, body)?;
     let mut entries: Vec<(&'static str, Payload)> = Vec::new();
-    for item in &items {
+    for item in &given {
         for name in names(&item.flavor) {
-            let payload = match (&item.text, &item.base64) {
-                (_, Some(b64)) => Payload::Bytes(STANDARD.decode(b64).map_err(|e| e.to_string())?),
-                (Some(text), None) => Payload::Text(text),
-                (None, None) => return Err(format!("nothing given for {}", item.flavor)),
-            };
-            entries.push((name, payload));
+            entries.push((name, item.payload.clone()));
         }
     }
     #[cfg(target_os = "windows")]
-    embed(&items, &mut entries);
+    embed(&given, &mut entries);
     platform::write(&entries)
 }
 
@@ -161,12 +202,15 @@ pub fn clipboard_write(items: Vec<ClipItem>) -> Result<(), String> {
 /// PowerPoint does, which carries neither. The EMF and the bitmap stay, for
 /// Windows' other programs.
 #[cfg(target_os = "windows")]
-fn embed(items: &[ClipItem], entries: &mut Vec<(&'static str, Payload)>) {
-    let Some(record) = items.iter().find(|i| i.flavor == "embed").and_then(|i| i.text.as_deref()) else {
+fn embed(items: &[Given], entries: &mut Vec<(&'static str, Payload)>) {
+    let Some(record) = items.iter().find(|i| i.flavor == "embed").and_then(|i| match i.payload {
+        Payload::Text(text) => Some(text),
+        Payload::Bytes(_) => None,
+    }) else {
         return;
     };
     let emf = entries.iter().find_map(|(name, payload)| match (*name, payload) {
-        ("CF_ENHMETAFILE", Payload::Bytes(bytes)) => Some(bytes.clone()),
+        ("CF_ENHMETAFILE", Payload::Bytes(bytes)) => Some(bytes.to_vec()),
         _ => None,
     });
     let Some(emf) = emf.filter(|_| crate::ole::is_registered()) else {
@@ -176,7 +220,7 @@ fn embed(items: &[ClipItem], entries: &mut Vec<(&'static str, Payload)>) {
         Ok(source) => {
             let at = entries.iter().position(|(n, _)| *n == "Art::GVML ClipFormat").unwrap_or(entries.len());
             let descriptor = crate::ole::object_descriptor(&emf);
-            entries.splice(at..at, [("Embed Source", Payload::Bytes(source)), ("Object Descriptor", Payload::Bytes(descriptor))]);
+            entries.splice(at..at, [("Embed Source", Payload::Bytes(Cow::Owned(source))), ("Object Descriptor", Payload::Bytes(Cow::Owned(descriptor)))]);
             entries.retain(|(name, _)| !matches!(*name, "Art::GVML ClipFormat" | "PNG"));
         }
         Err(e) => crate::logfile::logged!("{e}"),
@@ -427,7 +471,7 @@ mod platform {
     /// The bytes a kind is kept in on the clipboard.
     fn stored(name: &str, payload: &Payload) -> Vec<u8> {
         match payload {
-            Payload::Bytes(bytes) => bytes.clone(),
+            Payload::Bytes(bytes) => bytes.to_vec(),
             Payload::Text(text) => match name {
                 "CF_UNICODETEXT" => crlf(text).encode_utf16().chain(Some(0)).flat_map(u16::to_le_bytes).collect(),
                 "MDLCT" => to_mdlct(text),
@@ -668,7 +712,29 @@ mod tests {
     }
 
     #[test]
-    fn pictures_travel_as_base64_and_text_as_text() {
+    fn a_copy_is_read_out_of_one_body_kind_by_kind() {
+        let body = b"C1CC\x89PNG\x00\x01\xffh\xc3\xa9";
+        let given = framed("mol:t:4,png:b:7,text:t:3", body).unwrap();
+        assert_eq!(given.len(), 3);
+        assert_eq!(given[0], Given { flavor: "mol".into(), payload: Payload::Text("C1CC") });
+        assert_eq!(given[1].payload, Payload::Bytes(Cow::Borrowed(&body[4..11])));
+        assert_eq!(given[2].payload, Payload::Text("h\u{e9}"));
+        assert_eq!(framed("", b"").unwrap(), []);
+        assert_eq!(framed("text:t:0", b"").unwrap()[0].payload, Payload::Text(""));
+    }
+
+    #[test]
+    fn a_copy_whose_kinds_do_not_match_its_bytes_is_refused() {
+        assert!(framed("png:b:9", b"short").is_err(), "runs past the body");
+        assert!(framed("png:b:2", b"long").is_err(), "bytes left over");
+        assert!(framed("png:x:4", b"\x89PNG").is_err(), "neither text nor bytes");
+        assert!(framed("text:t:2", b"\xff\xfe").is_err(), "not UTF-8");
+        assert!(framed("png:b", b"").is_err() && framed("png:b:4:9", b"\x89PNG").is_err(), "not flavor:kind:length");
+        assert!(framed("png:b:-1", b"").is_err() && framed(&format!("png:b:{}", usize::MAX), b"x").is_err(), "no length");
+    }
+
+    #[test]
+    fn pictures_read_travel_as_base64_and_text_as_text() {
         assert!(is_binary("gvml") && is_binary("png") && is_binary("emf") && is_binary("dib"));
         assert!(!is_binary("meno") && !is_binary("mol") && !is_binary("rxn") && !is_binary("text"));
         let item: ClipItem = serde_json::from_str(r#"{"flavor":"png","base64":"iVBO"}"#).unwrap();
