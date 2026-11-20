@@ -154,7 +154,7 @@ export function useClipboardActions(
     };
   }, [store]);
 
-  // (which copy was begun last: one made after it, its pictures done sooner, writes nothing over it)
+  // (which copy was begun last - a copy, a SMILES, a picture: one begun before it, done later, writes nothing over it)
   const begun = useRef(0);
   const copyNow = useCallback(async (only?: number) => {
     const taken = part(only);
@@ -271,6 +271,7 @@ export function useClipboardActions(
       copying(async () => {
         const p = part()?.part;
         if (!p?.atoms.length) return;
+        const mine = ++begun.current;
         try {
           // (a reaction as a reaction SMILES - never its molecules as one mixture; one it cannot be, said why)
           const reaction = reactionForSmiles(p);
@@ -280,6 +281,7 @@ export function useClipboardActions(
           }
           const c = await chemWorker("smiles");
           const { smiles } = reaction ? await c.request("rxn_to_smiles", { rxnblock: reaction.rxn }) : await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
+          if (mine !== begun.current) return;
           await writeClipboard([{ flavor: "text", text: smiles }]);
         } catch (e) {
           onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -294,8 +296,10 @@ export function useClipboardActions(
       copying(async () => {
         const p = store.getState().pictures.find((x) => x.id === id);
         if (!p) return;
+        const mine = ++begun.current;
         try {
           const png = await picturePng(p);
+          if (mine !== begun.current) return;
           await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p], bondPt: styleOf(store.getState().docStyle).bondLengthPt, labelPt: labelPtOf(store.getState().docStyle) }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
         } catch (e) {
           onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
