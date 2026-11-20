@@ -122,6 +122,9 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
 export type Unread = { none: string; plugin?: string };
 
 /** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
+/** What is said where marks drawn over a figure's pictures were left out. */
+export const MARKS_OVER = "Marks drawn over a picture: not read.";
+
 export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes - what to say of them. */ left?: string };
 
 /**
@@ -191,6 +194,8 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
+    // (all of it marks over its picture: said so, not that it holds no lines)
+    if (read.figure.left.marks) return { none: `This figure is a picture with marks drawn over it, no structure. ${MARKS_OVER}` };
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
   }
   // (one middle and one scale for all of it)
@@ -201,7 +206,9 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const { kept, left } = structure ? withoutOverBonded(model) : { kept: model, left: 0 };
   if (structure && !kept.atoms.length) return { none: overBondedWhy(model)! };
   const scheme = schemeOf(read, about);
-  const said = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  const over = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  // (what is drawn over its pictures - a 3D model's distances, its numbers - left out: said)
+  const said = [over, read.figure.left.marks ? MARKS_OVER : null].filter((x) => x).join(" ") || null;
   return { model: kept, ...(scheme ? { scheme } : {}), ...(said ? { left: said } : {}) };
 }
 
