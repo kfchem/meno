@@ -127,13 +127,18 @@ export async function pictureItems(
 ): Promise<ClipItem[]> {
   const takes = platformTakes === undefined ? await clipboardTakes() : platformTakes;
   const wanted = (f: ClipItem["flavor"]) => !takes || takes.has(f);
+  // (each step its own task, the page drawn between them: a large picture is made without holding the drawing up)
+  await breath();
   const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
+  await breath();
   const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  await breath();
   // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
   const pictured = wanted("gvml") || wanted("png") || wanted("dib");
   const own = drawn && onlySolids(layout) && pictured ? await solidsPng(layout, opts, drawn, dpi).catch(() => null) : null;
   if (own) {
     const png = withText(withDpi(own.png, own.dpi), PNG_KEY, record);
+    if (wanted("emf")) await breath();
     const emf = wanted("emf") ? withEmf(record, layout, opts, drawn).emf : null;
     const items: ClipItem[] = [];
     if (wanted("gvml")) items.push({ flavor: "gvml", bytes: gvmlPicture(png, "png", own.widthPt, own.heightPt, "Structure") });
@@ -144,6 +149,7 @@ export async function pictureItems(
     return items;
   }
   const { emf, widthPt, heightPt } = withEmf(record, layout, opts, drawn);
+  await breath();
   const items: ClipItem[] = [
     { flavor: "gvml", bytes: gvmlPicture(emf, "emf", widthPt, heightPt, "Structure") },
     { flavor: "emf", bytes: emf },
@@ -151,10 +157,29 @@ export async function pictureItems(
     { flavor: "embed", text: record },
   ].filter((i) => wanted(i.flavor as ClipItem["flavor"])) as ClipItem[];
   if (wanted("png") || wanted("dib")) {
-    const raster = await rasterized(createSVG(layout, opts), dpi).catch(() => null);
+    const svg = createSVG(layout, opts);
+    await breath();
+    const raster = await rasterized(svg, dpi).catch(() => null);
     if (raster) items.push({ flavor: "png", bytes: withText(withDpi(raster.png, raster.dpi), PNG_KEY, record) });
   }
   return items;
+}
+
+/**
+ * A moment for the page: the rest of the work in a task of its own, after
+ * whatever is waiting - a frame to draw, a key pressed. Not a frame's
+ * callback, which a window out of sight is not given: a copy made just
+ * before switching to another program finishes all the same.
+ */
+function breath(): Promise<void> {
+  return new Promise((done) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      done();
+    };
+    channel.port2.postMessage(null);
+  });
 }
 
 /** Whether `layout` draws molecules in 3D and nothing flat: no bond, label, shape, arrow or stroke of a pen. */
