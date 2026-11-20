@@ -5,7 +5,6 @@
 import type { Atom, Bond } from "../store/types";
 import { chairOf, chairsIn, chairDrawing, type ChairDrawing } from "./chair";
 import { haworthDrawing, haworthOf, haworthsIn } from "./haworth";
-import { newmansIn } from "./newman";
 
 /** A projection found: what it is, its ring's atoms in order round it, the tool's drawing of it where it stands, and each atom's place in that drawing. */
 export type FoundProjection = { kind: "chair" | "haworth"; ring: number[]; drawing: ChairDrawing; index: Map<number, number> };
@@ -32,6 +31,3 @@ export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, only?: Re
   if (!only) found.set(model.atoms, { bonds: model.bonds, out });
   return out;
 }
-
-/** Whether a structure holds a projection: Clean-up leaves it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
-export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => projectionsIn(model, ids).length > 0 || newmansIn(model, ids).length > 0;

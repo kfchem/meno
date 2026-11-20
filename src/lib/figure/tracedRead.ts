@@ -38,7 +38,7 @@ export function readTracedPicture(
   if ("none" in t) return t;
   measured?.({ line: t.line, bond: t.bond, shaded: t.shaded });
   const shapes = onPage(t.shapes, at.scale, at.x, at.y);
-  const read = readFigure({ paths: [], letters: [...letters], pictures: [] }, reads, known, shapes);
+  const read = readFigure({ paths: [], letters: [...letters], pictures: [] }, reads, known, shapes, true);
   if (!read.atoms.length || !read.bonds.length) return { none: "No structure was found in the picture." };
   // (ink beside the structure read as nothing: the atom nearest it said)
   for (const [i, said] of unreadInk(read, shapes, known)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];

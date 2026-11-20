@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import type { DrawnAtom, DrawnBond } from "./drawn";
 import { layout2D } from "./engine";
-import { recognisedSaid, withRecognisedDepth, type CageViewsOf } from "../chem/perception/projection/depth";
+import { BETWEEN_AXIAL_AND_EQUATORIAL, recognisedSaid, withRecognisedDepth, type CageViewsOf } from "../chem/perception/projection/depth";
 import { cageViews } from "./recognised";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { chair, haworth } from "./testdata/projections";
@@ -155,4 +155,39 @@ describe("the seam between the core's reading and the engine's views of cages", 
     expect(bridged.n.provider).toBe(1);
     expect(bridged.n.views).toBeGreaterThan(0);
   }, 60_000);
+});
+
+describe("a chair's group drawn between axial and equatorial (found in review)", () => {
+  /** A chair drawn by hand, no depth: a methyl on ring atom 0, axial or slanted half way to equatorial; ring atom 0 an N+ with its H where asked. */
+  const drawnChair = (slanted: boolean, ammonium: boolean) => {
+    const ax = chair({ 0: "axial" });
+    const eq = chair({ 0: "equatorial" });
+    const g = ax.atoms.length - 1;
+    const at = ax.atoms[0];
+    const unit = (p: { x: number; y: number }) => {
+      const l = Math.hypot(p.x - at.x, p.y - at.y);
+      return { x: (p.x - at.x) / l, y: (p.y - at.y) / l };
+    };
+    const [u, v] = [unit(ax.atoms[g]), unit(eq.atoms[g])];
+    const l = Math.hypot(u.x + v.x, u.y + v.y);
+    const bond = Math.hypot(ax.atoms[g].x - at.x, ax.atoms[g].y - at.y);
+    const atoms = ax.atoms.map((a, i) => {
+      const plain = { ...a, z: undefined, centre: undefined };
+      if (i === g && slanted) return { ...plain, x: at.x + ((u.x + v.x) / l) * bond, y: at.y + ((u.y + v.y) / l) * bond };
+      if (i === 0 && ammonium) return { ...plain, el: "N", charge: 1, hs: 1 };
+      return plain;
+    });
+    return { atoms, bonds: ax.bonds };
+  };
+  const between = (d: ReturnType<typeof drawnChair>) => [...recognisedSaid(d.atoms, d.bonds, cageViews)].filter(([, w]) => w === BETWEEN_AXIAL_AND_EQUATORIAL).map(([i]) => i);
+
+  it("is said so at its ring atom, and only there", () => {
+    expect(between(drawnChair(true, false))).toEqual([0]);
+    expect(between(drawnChair(false, false))).toEqual([]);
+  });
+
+  it("is said nothing of at an ammonium's N with its H, which carries no configuration, its methyl axial or slanted", () => {
+    expect(between(drawnChair(false, true))).toEqual([]);
+    expect(between(drawnChair(true, true))).toEqual([]);
+  });
 });

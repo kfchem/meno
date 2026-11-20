@@ -235,7 +235,7 @@ import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { newmanDrawing } from "./projections/newman";
-import { isProjection } from "./projections/rings";
+import { isProjection } from "./projections/projection";
 import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";
 import type { SelectableKind } from "./store/slices/selectionSlice";
