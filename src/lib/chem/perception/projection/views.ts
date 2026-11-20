@@ -68,16 +68,27 @@ export type HaworthPlace = "front" | "side" | "back";
 
 /**
  * How long a Haworth ring's group is drawn, as a share of the ring's level bond, by the ring's size, its atom's place and whether it goes
- * up or down - NOT a true view. MEASURED (atom to label centre) from Brecher 2006's figures under ST-1.9, its Acceptable pyranose and
- * furanose rings: the text sets its labels on rows and the lengths follow, so up and down differ, and a group going into the ring's
- * picture (a front atom's up, a back atom's down) is short, so that two on one vertical pass clear of each other - by short bonds, not
- * by labels offset. The five-ring's back atom, which carries no group in the figures, takes the six-ring's. No text states a length
- * (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6 and McNaught 1996 2-Carb-5.4 give none): these are that figure's.
+ * up or down - NOT a true view. Out of the ring's picture, as the figures under Brecher 2006's ST-1.9 draw them (MEASURED there, atom to
+ * label centre: the text sets its labels on rows, so up and down differ). Into it - a front atom's up, a back atom's down - by the stem
+ * that is to SHOW once the bond is trimmed to its label: the figures' own visible stem (0.29 of the level bond in a six-ring, 0.33 in a
+ * five-ring, MEASURED from the ink) plus what Meno's label takes off a vertical bond (`HAWORTH_LABEL_TRIM`), so that a front atom's OH or
+ * CH2OH stands on a stem that can be seen. A six-ring's back atom's down group shares its vertical with the front atom's up group below
+ * it, and the two labels need 0.30 of the level bond between their centres: it takes what is left, 0.35 - a shorter stem than the
+ * figures' 0.25. In the five-ring a front atom's up label at more than 0.51 meets the bond to the ring O, so it stands at 0.51 - a stem
+ * of 0.29, short of the figures' 0.33; its back atom, which carries no group in the figures, has no front atom under it. No text states a length
+ * (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6, McNaught 1996 2-Carb-5.4); the texts ask only that groups be vertical and not overlap.
  */
 export const HAWORTH_GROUP: Readonly<Record<5 | 6, Readonly<Record<HaworthPlace, { up: number; down: number }>>>> = {
-  6: { front: { up: 0.44, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.39 } },
-  5: { front: { up: 0.48, down: 0.68 }, side: { up: 0.66, down: 0.68 }, back: { up: 0.65, down: 0.39 } },
+  6: { front: { up: 0.51, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.35 } },
+  5: { front: { up: 0.51, down: 0.68 }, side: { up: 0.66, down: 0.68 }, back: { up: 0.65, down: 0.46 } },
 };
+
+/**
+ * What a one-line label takes off a vertical bond at Meno's default style, as a share of a Haworth ring's level bond (the ring drawn at
+ * 1.8 times the style's bond): MEASURED in Meno's layout - the same for OH, H, CH2OH and HOH2C, since a vertical bond is trimmed by the
+ * height of the letter at its end.
+ */
+export const HAWORTH_LABEL_TRIM = 0.216;
 
 /**
  * How far a chair is turned about its axis in its form-0 view, in degrees: the eye is atan(sqrt(3)/5) = 19.107 degrees from the line through

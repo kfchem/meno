@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
+import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox } from "../../../../lib/chem/layout2d";
+import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
+import { editorLayoutOptions } from "../layoutOptions";
 import { measured } from "../../../../testing/timeouts";
 import type { Atom, Bond, Model } from "../store/types";
 import { seenPlaces, snapTo } from "./chair";
@@ -309,5 +312,75 @@ describe("a Haworth ring at another scale", () => {
         expect(Math.hypot(side.place.x - d.atoms[1].x, side.place.y - d.atoms[1].y)).toBeCloseTo(HAWORTH_GROUP[size].side.down * length, 9);
       }
     }
+  });
+});
+
+describe("a labelled group inside a Haworth ring", () => {
+  /** A six-ring from the tool with labels led out to the places named - [ring atom, up or down, label] - laid out as the page draws it. */
+  const laidWith = (groups: readonly (readonly [number, "up" | "down", string])[]) => {
+    const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
+    const atoms: { x: number; y: number; el: string }[] = d.atoms.map((a) => ({ x: a.x, y: a.y, el: a.el }));
+    const bonds = d.bonds.map((b) => ({ a1: b.a - 1, a2: b.b - 1, order: 1 as const }));
+    for (const [k, kind, el] of groups) {
+      const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
+      atoms.push({ x: p.place.x, y: p.place.y, el });
+      bonds.push({ a1: k, a2: atoms.length - 1, order: 1 });
+    }
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
+    return { d, atoms, opts, lay: layoutMolecule(atoms as never, bonds as never, opts, 40) };
+  };
+  /** The drawn stem of the vertical bond out of ring atom `k` toward `toward`, as a share of the level bond. */
+  const stemOf = (w: ReturnType<typeof laidWith>, k: number, toward: number) => {
+    const a = w.atoms[k];
+    const [lo, hi] = [Math.min(a.y, toward), Math.max(a.y, toward)];
+    const along = w.lay.lines.filter((l) => Math.abs(l.x1 - a.x) < 1e-6 && Math.abs(l.x2 - a.x) < 1e-6 && Math.min(l.y1, l.y2) >= lo - 1e-6 && Math.max(l.y1, l.y2) <= hi + 1e-6);
+    return along.reduce((t, l) => t + Math.abs(l.y2 - l.y1), 0) / w.d.scale;
+  };
+
+  it("stands on a stem that shows at least the text's own - 0.29 of the level bond up from a front atom - whatever the label: OH, H, HOH2C", () => {
+    // (C-2, atom 2, front right, under the ring O: the CH2OH written HOH2C, as the page showed it on a stub before)
+    for (const label of ["OH", "H", "HOH2C"]) {
+      const w = laidWith([[2, "up", label]]);
+      expect(stemOf(w, 2, w.atoms[6].y), label).toBeGreaterThanOrEqual(0.29);
+    }
+  });
+
+  it("keeps a front atom's up label off every ring bond, in the six-ring and the five-ring, whatever the label", () => {
+    for (const size of [6, 5] as const) {
+      const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
+      const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
+      const set = labelSetOf(opts);
+      for (const k of [2, 3]) {
+        for (const label of ["OH", "H", "HOH2C", "CH2OH"]) {
+          const atoms: { x: number; y: number; el: string }[] = d.atoms.map((a) => ({ x: a.x, y: a.y, el: a.el }));
+          const bonds = d.bonds.map((b) => ({ a1: b.a - 1, a2: b.b - 1, order: 1 as const }));
+          const p = seenPlaces(d, k).find((q) => q.free.kind === "up")!;
+          atoms.push({ x: p.place.x, y: p.place.y, el: label });
+          bonds.push({ a1: k, a2: atoms.length - 1, order: 1 });
+          const lay = layoutMolecule(atoms as never, bonds as never, opts, 40);
+          const t = lay.texts.find((x) => Math.hypot(x.x - p.place.x, x.y - p.place.y) < 1e-6)!;
+          const b = labelBox(t, t.fontPx, set);
+          const box = { minX: t.x - b.left, maxX: t.x + b.right, minY: t.y - b.bottom, maxY: t.y + b.top };
+          for (const bd of d.bonds) {
+            if (bd.a - 1 === k || bd.b - 1 === k) continue;
+            expect(segmentMeetsBox(atoms[bd.a - 1], atoms[bd.b - 1], box), `${size}-ring atom ${k} ${label}: bond ${bd.a - 1}-${bd.b - 1}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps a front atom's up label clear of the label of the back atom's down group above it: C-3's OH under C-5's H", () => {
+    // (C-3, atom 3, front left; C-5, atom 5, back left, on the same vertical)
+    const w = laidWith([[3, "up", "OH"], [5, "down", "H"]]);
+    const set = labelSetOf(w.opts);
+    const boxAt = (i: number) => {
+      const t = w.lay.texts.find((x) => Math.hypot(x.x - w.atoms[i].x, x.y - w.atoms[i].y) < 1e-6)!;
+      const b = labelBox(t, t.fontPx, set);
+      return { bottom: t.y - b.bottom, top: t.y + b.top };
+    };
+    const [front, back] = [boxAt(6), boxAt(7)];
+    expect(back.bottom).toBeGreaterThan(front.top);
+    expect(stemOf(w, 3, w.atoms[6].y)).toBeGreaterThanOrEqual(0.29);
   });
 });
