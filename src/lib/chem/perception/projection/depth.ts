@@ -13,6 +13,7 @@ import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseByViews, recogniseChairs
 import { ringSystemsOf, sharesThreeAtoms, smallestRings } from "../rings";
 import { ofTheStructure } from "../graph";
 import { readStereo, type DrawnAtom, type DrawnBond } from "../stereo/from2d";
+import { notCandidate } from "../stereo/candidates";
 
 /** What is said of a chair's ring atom whose group is drawn half way between axial and equatorial, its configuration not read. */
 export const BETWEEN_AXIAL_AND_EQUATORIAL = "a group drawn between axial and equatorial: not read";
@@ -134,13 +135,17 @@ function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[], cag
   }
   // (a ring atom of a chair read with a group out of the ring whose configuration the reading of it in depth finds none for - its group
   //  drawn half way between axial and equatorial: said so at it, as the reading leaves it open; nothing silent)
+  //  - asked only of an atom the core takes as able to carry a configuration (../stereo/candidates): one it takes as none - an ammonium's
+  //  N with its H - carries none to read, wherever its group is drawn
   if (out && chairsRead.length) {
     const read = readStereo(out, bonds).tetra;
+    const graph = { atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, ...(a.charge ? { charge: a.charge } : {}) })), bonds: bonds.map((b) => ({ a: b.a, b: b.b, order: b.order })) };
     for (const ring of chairsRead) {
       const inRing = new Set(ring);
       for (const i of ring) {
         const around = neighbours[i];
         if (read.has(i) || atoms[i].hs > 1 || around.length + atoms[i].hs !== 4 || !around.some((n) => !inRing.has(n))) continue;
+        if (notCandidate(graph, { kind: "centre", at: i }) != null) continue;
         said.set(i, BETWEEN_AXIAL_AND_EQUATORIAL);
       }
     }

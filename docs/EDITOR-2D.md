@@ -2290,7 +2290,9 @@ lipids each have their own way of being drawn, which it should know.
        cannot place, has no R or S there, and says so: "No R or S: a group
        drawn between axial and equatorial: not read."; *Draw flat* leaves
        that centre open, no wedge guessed, and marks it "No configuration
-       given:" with the same words, until it is changed (2026-11-20).
+       given:" with the same words, until it is changed (2026-11-20). An
+       atom that carries no configuration at all - an ammonium's N with
+       its H - is said nothing of, wherever its group is drawn.
        Which atoms are centres is the CIP's, so an
        atom that is no centre is told nothing. (A limit: a bridged system
        read by a mark makes every atom of it a centre, as a tool's
