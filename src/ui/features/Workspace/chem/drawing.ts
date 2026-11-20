@@ -9,10 +9,10 @@
  * drawing itself, which such a reader cannot see, so it is given the wedges
  * (and H) that say it.
  */
-import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
+import { isEndOn, wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
-import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { readStereo, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
 import { cageViews } from "../../../../lib/layout/recognised";
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
@@ -166,6 +166,29 @@ function holdsRing(model: Model): boolean {
 }
 
 /**
+ * The Newman pairs of a drawing - two bonded atoms at one place, seen end-on (`isEndOn`) - each with its back atom (the one further
+ * from the viewer) moved, for a flat reader, half a bond to the right of its front one.
+ */
+function endOnPairs(model: Model): { back: number; at: Model["atoms"][number] }[] {
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const lengths = model.bonds
+    .map((b) => {
+      const [p, q] = [byId.get(b.a), byId.get(b.b)];
+      return p && q ? Math.hypot(p.x - q.x, p.y - q.y) : 0;
+    })
+    .filter((d) => d > 1e-9)
+    .sort((x, y) => x - y);
+  const half = (lengths[lengths.length >> 1] ?? 1) / 2;
+  return model.bonds.flatMap((b) => {
+    const [p, q] = [byId.get(b.a), byId.get(b.b)];
+    if (!p || !q || !isEndOn(p, q)) return [];
+    const back = p.z! < q.z! ? p : q;
+    const front = back === p ? q : p;
+    return [{ back: back.id, at: { ...back, x: front.x + half, y: front.y } }];
+  });
+}
+
+/**
  * The structure for a reader that knows only wedges: as it is, and for each
  * centre a perspective drawing shows, a wedge that says it - on a bond out
  * of it, or on an H added for the purpose (after every atom there is, so
@@ -176,11 +199,17 @@ function holdsRing(model: Model): boolean {
  * asks nothing of stereochemistry (the valence marks): reading every ring
  * of a page is not done on the page's own thread for nothing.
  */
-export function forFlatReaders(model: Model, recognised = true): WriterModel {
-  if (!model.atoms.some((a) => a.z != null) && !(recognised && holdsRing(model))) return model;
-  const { atoms, bonds } = drawingOf(model);
-  const flat = wedgesForFlat(atoms, bonds);
-  if (!flat.wedges.length) return model;
+export function forFlatReaders(given: Model, recognised = true): WriterModel {
+  if (!given.atoms.some((a) => a.z != null) && !(recognised && holdsRing(given))) return given;
+  const drawn = drawingOf(given);
+  // (a Newman pair's two atoms are drawn at one place: read as they stand, then the back atom written half a bond off the front one -
+  //  for a reader of a flat file each centre's four bonds go four ways, the wedges placed for that - never two atoms at one place)
+  const pairs = endOnPairs(given);
+  const read = pairs.length ? readStereo(drawn.atoms, drawn.bonds).tetra : undefined;
+  const model: Model = pairs.length ? { ...given, atoms: given.atoms.map((a) => pairs.find((p) => p.back === a.id)?.at ?? a) } : given;
+  const { atoms, bonds } = pairs.length ? drawingOf(model) : drawn;
+  const flat = wedgesForFlat(atoms, bonds, read);
+  if (!flat.wedges.length) return pairs.length ? model : given;
   const ids = model.atoms.map((a) => a.id);
   let next = Math.max(0, greatest(ids), greatest(model.bonds.map((b) => b.id))) + 1;
   const outAtoms = [...model.atoms];

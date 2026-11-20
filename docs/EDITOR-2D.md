@@ -662,7 +662,10 @@ on a page), and the **Newman projection** (`newman`).
   back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the
   front atom, a press on the circle's line the back atom - a choice of handling only, by eye. A label typed on either atom is refused,
   in words that say why: they are drawn at one place and have no room for one; both are carbon. Clean-up leaves it as drawn and says so (a pair
-  at one place is no ring a flat layout can keep); *Draw flat* lays it out. The pair is read by its depth, as a ring in perspective is. Known
+  at one place is no ring a flat layout can keep); *Draw flat* lays it out. Written for 3D,
+  a file or the clipboard (chem/drawing `forFlatReaders`), the pair's back atom is put half a bond off
+  its front one, so that a reader that knows only wedges sees each centre's four bonds go four ways, and
+  each centre's configuration - read from the pair as drawn - is written in wedges. The pair is read by its depth, as a ring in perspective is. Known
   answers (`newman.test.ts`): 1,2-dichloro-1,2-difluoroethane with its groups in one order front and back is the meso form, with the back's
   two swapped one of the chiral pair; a spoke turned round the circle leaves the compound the same.
   Not yet checked in the sweep of what reads a bond's length or direction: label places for a labelled or charged atom of the pair.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Atom, Bond, Model } from "../store/types";
 import { identityOfDrawn } from "../chem/identityOf";
+import { forFlatReaders } from "../chem/drawing";
 import { identityText } from "../../../../lib/chem/identity";
 import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { angleFrom, isEndOn, newmanDrawing, newmanExtension, newmansIn, newmanTurn, setOf, spokeAngles, turnedAbout, turnedTo, turnOf } from "./newman";
@@ -185,6 +186,23 @@ describe("a Newman pair read as Meno reads a drawing (known answers)", () => {
     expect([meso.complete, chiral.complete]).toEqual([true, true]);
     expect(meso.text).toBe(identityText(fromSmiles(MESO)));
     expect([identityText(fromSmiles("F[C@H](Cl)[C@H](F)Cl")), identityText(fromSmiles("F[C@@H](Cl)[C@@H](F)Cl"))]).toContain(chiral.text);
+  });
+
+  it("is written for 3D and the files as the compound it is - the two carbons apart, the configuration in wedges: the meso form and one of the chiral pair", () => {
+    // (as a reader of a flat file takes it: the wedges written, no depth)
+    const written = (m: Model) => {
+      const w = forFlatReaders(m) as Model;
+      const [front, back] = [w.atoms.find((a) => a.id === 1)!, w.atoms.find((a) => a.id === 2)!];
+      expect(Math.hypot(front.x - back.x, front.y - back.y)).toBeGreaterThan(0.25 * L);
+      return identityOfDrawn({ ...w, atoms: w.atoms.map(({ z: _z, ...a }) => a) });
+    };
+    for (const m of [pair(["F", "Cl", "H"], ["F", "Cl", "H"]), pair(["F", "Cl", "H"], ["Cl", "F", "H"])]) {
+      const drawn = identityOfDrawn(m);
+      const read = written(m);
+      expect(read.complete).toBe(true);
+      expect(read.text).toBe(drawn.text);
+    }
+    expect(written(pair(["F", "Cl", "H"], ["F", "Cl", "H"])).text).not.toBe(written(pair(["F", "Cl", "H"], ["Cl", "F", "H"])).text);
   });
 
   it("is the same compound after a spoke is turned round the circle: a turn changes the conformation, not the configuration", () => {
