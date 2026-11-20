@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
+import { haworthLabelsStepped } from "./haworthLabels";
 import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox } from "../../../../lib/chem/layout2d";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -331,14 +332,18 @@ describe("a labelled group inside a Haworth ring", () => {
   /** A six-ring from the tool with labels led out to the places named - [ring atom, up or down, label] - laid out as the page draws it. */
   const laidWith = (groups: readonly (readonly [number, "up" | "down", string])[]) => {
     const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
-    const atoms: { x: number; y: number; el: string }[] = d.atoms.map((a) => ({ x: a.x, y: a.y, el: a.el }));
-    const bonds = d.bonds.map((b) => ({ a1: b.a - 1, a2: b.b - 1, order: 1 as const }));
-    for (const [k, kind, el] of groups) {
+    const model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
+    groups.forEach(([k, kind, el], i) => {
       const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
-      atoms.push({ x: p.place.x, y: p.place.y, el });
-      bonds.push({ a1: k, a2: atoms.length - 1, order: 1 });
-    }
+      model.atoms.push({ id: 50 + i, x: p.place.x, y: p.place.y, r: 0.9, el } as Atom);
+      model.bonds.push({ id: 200 + i, a: d.atoms[k].id, b: 50 + i, order: 1 } as Bond);
+    });
     const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
+    // (as the labels are typed: a label with no clear way where it stands steps along its vertical - projections/haworthLabels)
+    const steps = new Map(haworthLabelsStepped(model, opts).map((s) => [s.id, s]));
+    const atoms = model.atoms.map((a) => ({ x: steps.get(a.id)?.x ?? a.x, y: steps.get(a.id)?.y ?? a.y, el: a.el }));
+    const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+    const bonds = model.bonds.map((b) => ({ a1: index.get(b.a)!, a2: index.get(b.b)!, order: 1 as const }));
     return { d, atoms, opts, lay: layoutMolecule(atoms as never, bonds as never, opts, 40) };
   };
   /** The drawn stem of the vertical bond out of ring atom `k` toward `toward`, as a share of the level bond. */
@@ -380,7 +385,7 @@ describe("a labelled group inside a Haworth ring", () => {
     }
   });
 
-  it("keeps a front atom's up label clear of the label of the back atom's down group above it: C-3's OH under C-5's H", () => {
+  it("keeps a front atom's up label clear of the label of the back atom's down group above it - the down one giving way: C-3's OH under C-5's H", () => {
     // (C-3, atom 3, front left; C-5, atom 5, back left, on the same vertical)
     const w = laidWith([[3, "up", "OH"], [5, "down", "H"]]);
     const set = labelSetOf(w.opts);

@@ -99,6 +99,25 @@ describe("labels up from a Haworth ring's front atoms, side by side", () => {
     }
   });
 
+  it("gives way first with a back atom's down label over a front atom's up label: C-5's H shortens, C-3's OH keeps its stem", () => {
+    const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
+    const model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
+    ([[3, "up", "OH", 50], [5, "down", "H", 51]] as const).forEach(([k, kind, el, id]) => {
+      const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
+      model.atoms.push({ id, x: p.place.x, y: p.place.y, r: 0.9, el } as Model["atoms"][number]);
+      model.bonds.push({ id: 200 + id, a: d.atoms[k].id, b: id, order: 1 } as Model["bonds"][number]);
+    });
+    const steps = haworthLabelsStepped(model, opts);
+    expect(steps.map((s) => s.id)).toEqual([51]);
+    const h = steps[0];
+    const length = Number(((d.atoms[5].y - h.y) / d.scale).toFixed(2));
+    expect(length).toBeLessThan(0.39);
+    expect(length).toBeGreaterThanOrEqual(0.3);
+    // (a drawn-out carbon there - a CH2OH's C of an L-sugar, with its OH beyond - is never moved, labelled or not beyond it)
+    const drawnOut: Model = { atoms: model.atoms.map((a) => (a.id === 51 ? { ...a, el: "C" } : a)), bonds: model.bonds };
+    expect(haworthLabelsStepped(drawnOut, opts)).toEqual([]);
+  });
+
   it("steps as the label is typed, in the same undo step: an OH up from C-3, then a CH2OH up from C-2 beside it", () => {
     // (the two groups led out as carbons, then named)
     const { d, model: withGroups } = ringWith(6, "OH", "OH");
