@@ -2198,6 +2198,11 @@ export type EditorState = {
    * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).
    */
   putChair: (at: { x: number; y: number }) => void;
+  /**
+   * A Haworth ring of six (a pyranose's) put down from Quick Add, its middle at `at`; or, where the ring this put down is still as it was,
+   * nothing done since, that ring made a ring of five (a furanose's) in its place as one step - and back (docs/EDITOR-2D.md, *Projections*).
+   */
+  putHaworth: (at: { x: number; y: number }) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;
@@ -2343,6 +2348,11 @@ export type EditorState = {
   addArrowBetween: (from: { x: number; y: number }, to: { x: number; y: number }) => number;
   /** An arrow moved or reshaped; a run of changes in one gesture - a drag - is one step. */
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => void;
+  /**
+   * An arrow dragged by itself: moved to `at`, its words left where they stand - over it (`links`, by word, the arrow's id) or let go
+   * of it (null) - a run of them in one gesture one step (document `arrowMovedAlone`).
+   */
+  moveArrowAlone: (id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>, gesture: string) => void;
   /** Arrows given a kind, heads, dashes, a weight, corners or a colour - or theirs taken away - as one step. */
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */

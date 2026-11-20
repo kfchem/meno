@@ -5,13 +5,13 @@
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
 import { drawingOf } from "../chem/drawing";
 import type { Model } from "../store/types";
-import { chairsIn } from "./chair";
+import { projectionsIn } from "./rings";
 
 /** What was asked of each drawing, by its atoms: a menu asks it at every turn while it is open, and the drawing is a new one when changed. */
 const asked = new WeakMap<Model, Map<string, boolean>>();
 
 /**
- * Whether the structure of the atoms `ids` holds a projection: a chair the Projections tool put down, or a ring system Meno reads as drawn
+ * Whether the structure of the atoms `ids` holds a projection: a chair or a Haworth ring the Projections tool put down (./rings `projectionsIn`), or a ring system Meno reads as drawn
  * in perspective - a chair or a Haworth ring drawn by hand, read from the ring as drawn, or taken for one whose near and far are not marked
  * (lib/chem/perception/projection/depth `recognisedSaid`), as Clean-up keeps it where it is. A cage or a bridged system drawn by hand is
  * not asked after: fitting it to the engine's views of it takes up to a second, too long for a menu (found in review). Each drawing is
@@ -29,7 +29,7 @@ export function isProjection(model: Model, ids: ReadonlySet<number>): boolean {
 }
 
 function projectionIn(model: Model, ids: ReadonlySet<number>): boolean {
-  if (chairsIn(model, ids).length > 0) return true;
+  if (projectionsIn(model, ids).length > 0) return true;
   const part: Model = { ...model, atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
   if (!part.bonds.length) return false;
   const { atoms, bonds } = drawingOf(part);

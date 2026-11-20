@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { figureReadOff } from "./structuresOff";
-import type { FigureJob } from "./structuresRead";
+import type { FigurePngJob } from "./structuresRead";
 
 /** A worker played here: which it is, and what it was given - answering when told to. */
 const made: FakeWorker[] = [];
 class FakeWorker {
   onmessage: ((e: MessageEvent) => void) | null = null;
   onerror: ((e: ErrorEvent) => void) | null = null;
-  posted: { message: { id: number; job: FigureJob }; transfer: Transferable[] }[] = [];
+  posted: { message: { id: number; job: FigurePngJob }; transfer: Transferable[] }[] = [];
   constructor(public url: URL) {
     made.push(this);
   }
-  postMessage(message: { id: number; job: FigureJob }, transfer: Transferable[] = []) {
+  postMessage(message: { id: number; job: FigurePngJob }, transfer: Transferable[] = []) {
     this.posted.push({ message, transfer });
   }
   answer(i: number, read: unknown) {
@@ -19,7 +19,7 @@ class FakeWorker {
   }
 }
 
-const job = (): FigureJob => ({ objects: [], text: null, figures: [[0, 0, 10, 10]], k: 0, drawn: new TextEncoder().encode('{"paths":[],"letters":[],"pictures":[]}').buffer as ArrayBuffer, sha256: "a", page: 0 });
+const job = (): FigurePngJob => ({ objects: [], text: null, figures: [[0, 0, 10, 10]], k: 0, drawn: new TextEncoder().encode('{"paths":[],"letters":[],"pictures":[]}').buffer as ArrayBuffer, sha256: "a", page: 0 });
 
 describe("a figure's structures read off the drawing's thread", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -42,12 +42,23 @@ describe("a figure's structures read off the drawing's thread", () => {
     expect(await Promise.all([urgent, ahead, more])).toEqual(["urgent", "ahead", "more"]);
   });
 
+  it("hands a picture over as its PNG, to be decoded in the worker - never its pixels, decoded on the drawing's thread", () => {
+    vi.stubGlobal("Worker", FakeWorker);
+    const png = new Uint8Array([137, 80, 78, 71]).buffer as ArrayBuffer;
+    const j = { ...job(), picture: { png, at: { scale: 1, x: 0, y: 0 }, known: [] } };
+    void figureReadOff(j, true);
+    const sent = made[0].posted[made[0].posted.length - 1];
+    expect(sent.transfer).toEqual([j.drawn, png]);
+    expect(Object.keys(sent.message.job.picture!).sort()).toEqual(["at", "known", "png"]);
+    made[0].answer(made[0].posted.length - 1, "read");
+  });
+
   it("says why where the worker could not read it, and the next is asked of a worker started afresh", async () => {
     vi.stubGlobal("Worker", FakeWorker);
-    // (the pointer's worker, kept from before: its next message is its second)
+    // (the pointer's worker, kept from before: its next message is its third)
     const urgent = made[0];
     const failed = figureReadOff(job(), true);
-    expect(urgent.posted).toHaveLength(2);
+    expect(urgent.posted).toHaveLength(3);
     urgent.onerror?.({ message: "gone" } as ErrorEvent);
     await expect(failed).rejects.toThrow("gone");
     const started = made.length;

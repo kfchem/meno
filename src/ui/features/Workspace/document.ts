@@ -50,6 +50,7 @@ import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
 import type { Conversation } from "./conversation/types";
+import { straightenedGroup } from "./projections/extend";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -1004,7 +1005,15 @@ export function updateBond(
   }
   const next = bonds.slice();
   next[index] = merged;
-  return { ...doc, model: { atoms: doc.model.atoms, bonds: next } };
+  // (a projection's group made linear by this order - a nitrile, an alkyne on a ring atom of the tool's - drawn straight on: projections/extend)
+  let atoms = doc.model.atoms;
+  if ("order" in patch && merged.order !== bond.order && merged.order >= 2) {
+    for (const end of [merged.a, merged.b]) {
+      const moved = straightenedGroup({ atoms, bonds: next }, end);
+      if (moved) atoms = atoms.map((a) => (moved.has(a.id) ? { ...a, ...moved.get(a.id)! } : a));
+    }
+  }
+  return { ...doc, model: { atoms, bonds: next } };
 }
 
 /**
@@ -1774,6 +1783,21 @@ export function addArrow(
     nextArrowId: doc.nextArrowId + 1,
     arrows: [...doc.arrows, arrow],
   };
+}
+
+/**
+ * The arrow `id` moved to `at` by itself, its words left where they stand (the maintainer, 2026-11-09: an arrow and its words move
+ * apart, each on its own; both move when both are selected) - and its words, by id, over it (`links`, the arrow's id) or over none
+ * (null): let go of it while it is moved, so that it is not drawn out to them, and over it again where it is put within their reach.
+ */
+export function arrowMovedAlone(doc: WorkspaceDocument, id: number, at: { x: number; y: number }, links: ReadonlyMap<number, number | null>): WorkspaceDocument {
+  const index = doc.arrows.findIndex((a) => a.id === id);
+  if (index < 0) return doc;
+  const arrows = doc.arrows.slice();
+  arrows[index] = { ...arrows[index], x: at.x, y: at.y };
+  let out: WorkspaceDocument = { ...doc, arrows };
+  for (const [word, arrow] of links) out = updateCaption(out, word, { arrow: arrow === id ? id : null });
+  return out;
 }
 
 export function updateArrow(
