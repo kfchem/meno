@@ -168,6 +168,9 @@ struct Worker {
     given: Vec<String>,
     reading: u8,
     ended: bool,
+    /// The end of each request's words sent as they come that may begin a key, held back from the page till the next
+    /// part shows whether it does (`scrub`): by the request's id.
+    held: HashMap<i64, String>,
 }
 
 /// The streams of a worker read: its output and its errors.
@@ -195,7 +198,7 @@ impl Models {
 
     /// A model plugin's worker started, as `sidecar`, before its streams are read.
     pub fn started(&self, sidecar: &str, plugin: &str, task: Option<TaskHandle>) {
-        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), task, given: Vec::new(), reading: STREAMS, ended: false });
+        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), task, given: Vec::new(), reading: STREAMS, ended: false, held: HashMap::new() });
     }
 
     /// A worker gone, or stopped: its network task ended with it, and nothing
@@ -261,10 +264,18 @@ impl Models {
     }
 
     /// A line `sidecar` said, with every key given to it taken out, wherever
-    /// it is: what the page and the log are given.
+    /// it is: what the page and the log are given. A part of a reply's words
+    /// sent as they come (`{id, partial}`) is taken out of across the parts:
+    /// the end of one that may begin a key is held back and said with the
+    /// next part of the same request, so that a key said in two parts is
+    /// taken out whole (`partial_scrubbed`); the answer, which holds the
+    /// words whole, lets go of what was held.
     pub fn scrub<'a>(&self, sidecar: &str, line: &'a str) -> Cow<'a, str> {
-        let workers = self.workers();
-        let Some(w) = workers.get(sidecar) else { return Cow::Borrowed(line) };
+        let mut workers = self.workers();
+        let Some(w) = workers.get_mut(sidecar) else { return Cow::Borrowed(line) };
+        if let Some(part) = partial_scrubbed(w, line) {
+            return Cow::Owned(part);
+        }
         let mut out = Cow::Borrowed(line);
         for key in &w.given {
             if out.contains(key.as_str()) {
@@ -273,6 +284,41 @@ impl Models {
         }
         out
     }
+}
+
+/// A part of a reply's words, `{id, partial}`, as the page is given it: what
+/// was held back of the parts before it, then its words, each key given to
+/// the worker taken out - but for its end, where that may begin a key, held
+/// back for the next part. None where the line is no such part; an answer to
+/// a request lets go of what was held back of its parts.
+fn partial_scrubbed(w: &mut Worker, line: &str) -> Option<String> {
+    if w.given.is_empty() {
+        return None;
+    }
+    let v: Value = serde_json::from_str(line).ok()?;
+    let o = v.as_object()?;
+    let id = o.get("id")?.as_i64()?;
+    if o.contains_key("ok") {
+        w.held.remove(&id);
+        return None;
+    }
+    let part = o.get("partial")?.as_str()?;
+    let mut text = w.held.remove(&id).unwrap_or_default() + part;
+    for key in &w.given {
+        text = text.replace(key.as_str(), "[key]");
+    }
+    // (the longest end of it that is the start of a key: held back)
+    let held = w.given.iter().map(|key| begins(&text, key)).max().unwrap_or(0);
+    let (now, later) = text.split_at(text.len() - held);
+    if !later.is_empty() {
+        w.held.insert(id, later.to_string());
+    }
+    Some(serde_json::json!({ "id": id, "partial": now }).to_string())
+}
+
+/// How long the end of `text` is that is the start of `key`, short of the whole of it: 0 where none is.
+fn begins(text: &str, key: &str) -> usize {
+    (1..key.len()).rev().find(|&n| n <= text.len() && text.is_char_boundary(text.len() - n) && key.starts_with(&text[text.len() - n..])).unwrap_or(0)
 }
 
 /// A converse request with `key` added: one JSON object, whose `op` is
@@ -323,6 +369,51 @@ mod tests {
         let m = Models::new(Box::new(keys));
         m.started("w1", "talker", None);
         m
+    }
+
+    #[test]
+    fn a_key_said_across_two_parts_of_a_reply_is_taken_out_whole() {
+        let m = models();
+        m.converse_line("w1", r#"{"id":4,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
+        let part = |text: &str| m.scrub("w1", &json!({"id": 4, "partial": text}).to_string()).into_owned();
+        let said = |line: String| serde_json::from_str::<Value>(&line).unwrap()["partial"].as_str().unwrap().to_string();
+        // (its first half held back, then said with the rest - taken out whole)
+        let (a, b) = KEY.split_at(9);
+        assert_eq!(said(part(&format!("Your key is {a}"))), "Your key is ");
+        assert_eq!(said(part(&format!("{b}, it seems."))), "[key], it seems.");
+        // (an end that only looked like a key's start: said with the next part, nothing lost)
+        assert_eq!(said(part("Methanol, s")), "Methanol, ");
+        assert_eq!(said(part("o it is.")), "so it is.");
+        // (a part with nothing held, and nothing like a key: as it was)
+        assert_eq!(said(part("Done.")), "Done.");
+        // (the answer lets go of what was held of its parts; another request's parts are their own)
+        part("sk-");
+        assert!(m.scrub("w1", r#"{"id":4,"ok":true,"result":{"text":"x"}}"#).contains("\"ok\""));
+        assert_eq!(said(m.scrub("w1", &json!({"id": 5, "partial": "test"}).to_string()).into_owned()), "test");
+        assert_eq!(said(part("one more")), "one more");
+    }
+
+    #[test]
+    fn a_key_said_across_parts_is_taken_out_wherever_it_is_split() {
+        let m = models();
+        m.converse_line("w1", r#"{"id":6,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
+        let part = |text: &str| m.scrub("w1", &json!({"id": 6, "partial": text}).to_string()).into_owned();
+        let said = |line: String| serde_json::from_str::<Value>(&line).unwrap()["partial"].as_str().unwrap().to_string();
+        // (split before its last character: all of it but one held back)
+        let (a, b) = KEY.split_at(KEY.len() - 1);
+        assert_eq!(said(part(&format!("It is {a}"))), "It is ");
+        assert_eq!(said(part(&format!("{b}."))), "[key].");
+        // (split after its first character)
+        let (a, b) = KEY.split_at(1);
+        assert_eq!(said(part(&format!("It is {a}"))), "It is ");
+        assert_eq!(said(part(&format!("{b}."))), "[key].");
+        // (said a character at a time: no part holds it, and the page is given it taken out whole at the end)
+        let mut told = String::new();
+        for c in KEY.chars() {
+            told += &said(part(&c.to_string()));
+        }
+        told += &said(part("!"));
+        assert_eq!(told, "[key]!");
     }
 
     #[test]

@@ -154,3 +154,6 @@ export function exchangeRows(said: readonly Said[]): ExchangeRow[] {
   }
   return rows;
 }
+
+/** A reply's words so far, by paragraph - each with the blank line that ends it - so that what is shown of them grows at its end alone. */
+export const heardParagraphs = (text: string): string[] => text.split(/(?<=\n\n)/);

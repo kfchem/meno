@@ -4,14 +4,17 @@ import { gestureStep } from "../../../../../lib/doc/document";
 import type { WorkspaceDocument } from "../../document";
 import { addConversation, clearSaid, removeConversations, scrolledConversation, updateConversation, type ConversationPatch } from "../../conversation/ops";
 import { connectionFor } from "../../conversation/connections";
-import { runTurn } from "../../conversation/turn";
+import { runTurn, type Connection } from "../../conversation/turn";
 import type { EditorState } from "../types";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
-/** A turn's state, the view's: whether it runs, whether Stop was asked, and what it changed - its change set's key, and the steps it makes run again. */
-export type Talking = { running: boolean; stop?: true; changed?: string; runsAgain?: string[]; said?: string };
+/** A turn's state, the view's: whether it runs, whether Stop was asked, the model's words so far as its reply comes (`heard`), and what it changed - its change set's key, and the steps it makes run again. */
+export type Talking = { running: boolean; stop?: true; heard?: string; changed?: string; runsAgain?: string[]; said?: string };
+
+/** How often the words of a reply coming in are shown anew, at most, in ms: a long reply never redrawn for each word. */
+export const HEARD_MS = 150;
 
 /**
  * Conversations on the page (conversation/types; docs/CONVERSATIONS.md):
@@ -19,6 +22,8 @@ export type Talking = { running: boolean; stop?: true; changed?: string; runsAga
  * read in the column; and talked to, a turn at a time (conversation/turn).
  */
 export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState) {
+  // (each turn's connection while it runs: Stop ends a reply it has under way)
+  const live = new Map<number, Connection>();
   const talk = (id: number, patch: Partial<Talking> | null) =>
     set((prev: EditorState) => {
       const talking = { ...prev.talking };
@@ -75,13 +80,32 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
         return;
       }
       const before = new Map((doc.getState().steps ?? []).map((s) => [s.id, s]));
-      talk(id, { running: true, stop: undefined, changed: undefined, runsAgain: undefined, said: undefined });
+      talk(id, { running: true, stop: undefined, heard: undefined, changed: undefined, runsAgain: undefined, said: undefined });
+      // (the words of a reply as they come, shown at most each HEARD_MS: the latest, once the wait is up; none once it has come)
+      let latest = "";
+      let showing: ReturnType<typeof setTimeout> | null = null;
+      const heard = (soFar: string) => {
+        latest = soFar;
+        if (!soFar) {
+          if (showing) clearTimeout(showing);
+          showing = null;
+          if (get().talking[id]?.heard !== undefined) talk(id, { heard: undefined });
+          return;
+        }
+        showing ??= setTimeout(() => {
+          showing = null;
+          if (latest && get().talking[id]?.running) talk(id, { heard: latest });
+        }, HEARD_MS);
+      };
       let turn: Awaited<ReturnType<typeof runTurn>> = { sent: true };
+      live.set(id, connection);
       try {
         // (asked from a card left scrolled up: it goes to its latest, where the question and what follows are)
         doc.amend((d) => scrolledConversation(d, id, null));
-        turn = await runTurn({ doc, calls: get(), id, words, connection, turn: `${Date.now()}`, stop: () => !!get().talking[id]?.stop });
+        turn = await runTurn({ doc, calls: get(), id, words, connection, turn: `${Date.now()}`, stop: () => !!get().talking[id]?.stop, heard });
       } finally {
+        live.delete(id);
+        heard("");
         // (never left talking: whatever came of it, it may be sent to again, and taken away)
         if (get().talking[id]?.running) talk(id, { running: false, stop: undefined });
       }
@@ -94,7 +118,11 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
         : [];
       talk(id, { running: false, stop: undefined, ...(turn.changed ? { changed: turn.changed } : {}), ...(runsAgain.length ? { runsAgain } : {}), ...(turn.sent ? {} : { said: turn.why }) });
     },
-    stopConversation: (id: number) => talk(id, { stop: true }),
+    /** Stop: the turn ends - a reply under way where it is, what it said so far kept; else at its next reply. */
+    stopConversation: (id: number) => {
+      talk(id, { stop: true });
+      live.get(id)?.stop?.("Stopped, as asked");
+    },
     /** A turn's changes kept: nothing to undo of them but by undo itself. */
     keepConversationChanges: (id: number) => talk(id, { changed: undefined, runsAgain: undefined }),
     /** A turn's changes dropped, as an undo would - unless a step it made is running, which the person stops first. */

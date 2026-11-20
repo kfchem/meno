@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { setConnectionMaker } from "./connections";
 import { scriptedModel } from "./scripted";
-import type { ModelReply } from "./turn";
+import type { Connection, ModelReply } from "./turn";
+import { HEARD_MS } from "../store/slices/conversationsSlice";
 
 /** A page with a conversation on it, read in the column; its connection, where given, a scripted test model. */
 function page(replies?: readonly ModelReply[]) {
@@ -122,5 +123,59 @@ describe("a conversation, talked to from the page", () => {
     store.getState().removeConversation(id);
     expect(doc.getState().conversations).toHaveLength(0);
     expect(store.getState().conversationShown).toBeNull();
+  });
+
+  it("shows the words of a reply as they come, at most each HEARD_MS, and none once it has come; Stop ends one under way, its words kept", async () => {
+    vi.useFakeTimers();
+    try {
+      const { store, doc, id } = page();
+      let heard: ((t: string) => void) | undefined;
+      let answer!: (r: ModelReply) => void;
+      let ended!: (e: Error) => void;
+      const stops: string[] = [];
+      const coming: Connection = {
+        id: "coming",
+        to: "this computer",
+        send: (_r, h) => {
+          heard = h;
+          return new Promise<ModelReply>((go, fail) => {
+            answer = go;
+            ended = fail;
+          });
+        },
+        stop: (why) => {
+          stops.push(why);
+          ended(new Error(why));
+        },
+      };
+      setConnectionMaker(() => coming);
+      const sent = store.getState().sendToConversation(id, "What is here?");
+      await vi.waitFor(() => expect(heard).toBeDefined());
+      heard!("Methanol ");
+      heard!("is ");
+      // (not shown at once, each word: once the wait is up, the latest)
+      expect(store.getState().talking[id]?.heard).toBeUndefined();
+      vi.advanceTimersByTime(HEARD_MS);
+      expect(store.getState().talking[id]?.heard).toBe("Methanol is ");
+      heard!("here.");
+      answer({ text: "Methanol is here." });
+      await sent;
+      vi.advanceTimersByTime(HEARD_MS);
+      expect(store.getState().talking[id]).toMatchObject({ running: false });
+      expect(store.getState().talking[id]?.heard).toBeUndefined();
+      expect(doc.getState().conversations![0].said.slice(-1)[0]).toMatchObject({ by: "model", text: "Methanol is here." });
+      // (Stop as one comes: ended there, its words so far kept, said to have stopped)
+      heard = undefined;
+      const again = store.getState().sendToConversation(id, "And?");
+      await vi.waitFor(() => expect(heard).toBeDefined());
+      heard!("Nothing ");
+      store.getState().stopConversation(id);
+      await again;
+      expect(stops).toEqual(["Stopped, as asked"]);
+      expect(doc.getState().conversations![0].said.slice(-2)).toMatchObject([{ by: "model", text: "Nothing " }, { by: "meno", text: "Stopped, as asked." }]);
+      expect(store.getState().talking[id]?.heard).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
