@@ -41,6 +41,12 @@ export type Atom = EditorAtom & {
   /** The configuration it states as a centre, kept (configuration/kept): read after every change, said where an edit changed it. */
   config?: KeptCentre;
   /**
+   * Which way its label reads where its one bond is upright and either way reads - leftward (HO, HOH2C) or rightward (OH, CH2OH): put so
+   * by a Haworth ring's labels where the other way would run into the drawing (projections/haworthLabels; lib/chem/layout2d `Atom.reads`).
+   * Clean-up takes it away.
+   */
+  reads?: "left" | "right";
+  /**
    * How near the viewer the atom is, where its structure is drawn in
    * perspective - a cage, as Clean-up draws one: a bond passing behind
    * another is drawn broken there. World units.
