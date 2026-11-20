@@ -13,6 +13,7 @@ import { greatest, least } from "./lists";
 import { isMetal } from "../layout/perceive";
 import { coordinatedByDonors } from "./perception/elements";
 import { boundLigandStructure } from "./boundLigand";
+import { atomParities } from "./ctfileParity";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number; magnified?: number };
@@ -507,15 +508,15 @@ export function oldRangeFields(a: { el: string; charge?: number; radical?: Radic
   return { dd: d >= -3 && d <= 4 ? d : 0, ccc };
 }
 
-/** V2000's atom block fields after the symbol: dd ccc sss hhh bbb vvv HHH rrr iii mmm nnn eee. */
-function atomFields(a: WriterAtom): string {
+/** V2000's atom block fields after the symbol: dd ccc sss hhh bbb vvv HHH rrr iii mmm nnn eee - sss the atom's stereo parity (`parity`). */
+function atomFields(a: WriterAtom, parity = 0): string {
   // a query hydrogen count is one more than the count; a valence of none, 15
   const hhh = a.hCount != null ? a.hCount + 1 : 0;
   const vvv = a.valence == null ? 0 : a.valence === 0 ? 15 : a.valence;
   // the reaction's: mapping, inversion (1) or retention (2), exact change
   const nnn = a.invRet === "invert" ? 1 : a.invRet === "retain" ? 2 : 0;
   const { dd, ccc } = oldRangeFields(a);
-  return [dd, ccc, 0, hhh, 0, vvv, 0, 0, 0, a.map ?? 0, nnn, a.exactChange ? 1 : 0]
+  return [dd, ccc, parity, hhh, 0, vvv, 0, 0, 0, a.map ?? 0, nnn, a.exactChange ? 1 : 0]
     .map((v, i) => (i === 0 ? String(v).padStart(2) : i3(v)))
     .join("");
 }
@@ -571,8 +572,10 @@ function writeV2000(given: WriterModel, title: string): string {
     "",
     `${i3(model.atoms.length)}${i3(bonds.length)}  0  0${i3(chiralFlag(model) ? 1 : 0)}  0  0  0  0  0999 V2000`,
   ];
+  // (each stereocentre's parity, as the text defines it: ./ctfileParity)
+  const parity = atomParities(model);
   for (const a of model.atoms) {
-    lines.push(`${f10(a.x * scale)}${f10(a.y * scale)}${f10(0)} ${symbolOf(a, aliases).padEnd(3)}` + atomFields(a));
+    lines.push(`${f10(a.x * scale)}${f10(a.y * scale)}${f10(0)} ${symbolOf(a, aliases).padEnd(3)}` + atomFields(a, parity.get(a.id)));
   }
   for (const b of bonds) {
     lines.push(
@@ -620,7 +623,10 @@ function ctabV3000(given: WriterModel): string[] {
     `M  V30 COUNTS ${model.atoms.length} ${bonds.length} ${groups.length} 0 ${chiralFlag(model) ? 1 : 0}`,
     "M  V30 BEGIN ATOM",
   ];
+  // (each stereocentre's parity, CFG, as the text defines it: ./ctfileParity)
+  const parity = atomParities(model);
   model.atoms.forEach((a, i) => {
+    const p = parity.get(a.id);
     const props =
       (a.charge ? ` CHG=${a.charge}` : "") +
       (a.radical ? ` RAD=${RADICAL_CODE[a.radical]}` : "") +
@@ -629,7 +635,8 @@ function ctabV3000(given: WriterModel): string[] {
       (a.hCount != null ? ` HCOUNT=${a.hCount === 0 ? -1 : a.hCount}` : "") +
       (a.rgroups?.length ? ` RGROUPS=(${a.rgroups.length} ${a.rgroups.join(" ")})` : "") +
       (a.invRet ? ` INVRET=${a.invRet === "invert" ? 1 : 2}` : "") +
-      (a.exactChange ? " EXACHG=1" : "");
+      (a.exactChange ? " EXACHG=1" : "") +
+      (p ? ` CFG=${p}` : "");
     // an atom list's type is the list
     const type = a.list
       ? `${a.list.not ? '"NOT ' : ""}[${a.list.symbols.join(",")}]${a.list.not ? '"' : ""}`

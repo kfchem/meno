@@ -32,6 +32,10 @@ title, its first line; the record's data items are not kept:
   ring bond counts; alias (A) and value (V) lines; Rgroup labels
   (M  RGP, RGROUPS) and attachment points and order (M  APO, M  AAL,
   ATTCHPT, ATTCHORD).
+- **Not read**: the atom stereo parity (V2000's sss, V3000's CFG on an
+  atom). The text has readers ignore it ("Ignored when read", both atom
+  block tables; Appendix A): a file's configuration is read from its
+  wedges and its coordinates.
 - **Bonds**: types 1 to 10 (single, double, triple, aromatic, the four
   query types, coordination, hydrogen); stereo (a single bond's up, down,
   either - a wedge or hashes narrow at the bond's first atom, as the file
@@ -593,6 +597,24 @@ to 4 from the table's), beside M  CHG, M  RAD and M  ISO: *CTfile Formats*
 reader of the atom block alone sees them (2026-10-22; before, the atom
 block's were 0). Enhanced stereo is written as V3000 collections
 - V2000 says only the chiral flag, set where every group is absolute.
+
+Each stereocentre's atom stereo parity goes in its atom line - V2000's
+sss (*CTfile Formats*, Chemistry 2026, the V2000 atom block, pp. 64-65),
+V3000's CFG (the V3000 atom line, p. 9) - as Appendix A, *Stereo Notes*
+(pp. 120-121) defines it: the atoms round the centre numbered in
+increasing atom number, a hydrogen the highest, whether drawn or not; seen
+with the bond to atom 4 behind the plane of atoms 1, 2 and 3, 1 where they
+turn clockwise, 2 where counterclockwise; 3 for a centre at a wavy bond
+(`lib/chem/ctfileParity`). It is worked out from the wedges the file
+carries, so the two never disagree: a reader that takes the parity finds
+what one that reads the wedges finds. Not written: a parity for a centre
+by its lone pair (the text defines it for four atoms only), and the 3 the
+text gives an unmarked stereocentre - such an atom is written 0, as a
+centre the drawing does not mark (telling a stereocentre from a centre of
+two alike groups is the identity's search, not the writer's). A wedge
+that sets nothing (an isopropyl's CH) has its parity as any wedge, the
+file stating what the drawing states (2026-11-20; before, every atom's
+was 0).
 
 An abbreviation is written out - the atoms a file gave it, or the
 dictionary's, laid out by Meno's own engine on from its bond - with an
