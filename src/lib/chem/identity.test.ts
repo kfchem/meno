@@ -820,3 +820,26 @@ describe("a double bond between rings in an aromatic form", () => {
     expect(meta.bonds.filter((x) => x.stereo && x.order === 2)).toHaveLength(2);
   });
 });
+
+describe("an H on a metal", () => {
+  const text = (smiles: string) => identity(fromSmiles(smiles)).text;
+  it("is folded into a main-group metal's H count, as on any atom, its count kept - Li, Mg, Al, Sn: drawn as an atom or counted, one identity", () => {
+    for (const [drawn, counted] of [
+      ["[Li][H]", "[LiH]"],
+      ["[H][Mg][H]", "[MgH2]"],
+      ["[H][Al]([H])[H]", "[AlH3]"],
+      ["C[Sn]([H])(C)C", "C[SnH](C)C"],
+    ]) {
+      expect(text(drawn), drawn).toBe(text(counted));
+    }
+  });
+
+  it("stays an atom on a d- or f-block metal: a hydride on Pd or U is not one of the metal's own H", () => {
+    for (const [drawn, counted] of [
+      ["[H][Pd][H]", "[PdH2]"],
+      ["[H][U]([H])([H])[H]", "[UH4]"],
+    ]) {
+      expect(text(drawn), drawn).not.toBe(text(counted));
+    }
+  });
+});

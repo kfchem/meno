@@ -43,6 +43,9 @@ export const CONCEPTS: Record<string, RegExp> = {
   "plain hydrogen": /^(?:export )?(?:function|const) (isPlainH|plainH|plainHydrogen|plainHydrogenAtoms|hydrogensFolded|foldedOf)\b/,
   // other tests of a ring as aromatic, each its own by design - a ring drawn so, a ring flat in space - and none Meno's rule or its forms
   "aromatic tests": /^(?:export )?(?:function|const) (aromaticRing|aromaticBonds|isFlat)\b/,
+  // a configuration read from atoms' places in space (perception/stereo/from3d.ts, part 14 D); the copies under names of no pattern -
+  // compareBonding's `cis`, referenceNumbering's `across`, settle's inner `handedness` - are a reviewer's to see, as the header says
+  "from places": /^(?:export )?(?:function|const) (configuredFrom|runsFrom3d|runsIn3d|hasConfiguration|stereoAfter|lonePairsIn3d)\b/,
 };
 
 /**
@@ -71,9 +74,9 @@ export const STILL_APART: Copy[] = [
   { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: "stays", why: "a question of its own: the hydrogens a site can hold with and without its bonds to metals (each form offered), a P and an S at their higher valences where the bonds pass the lower (an H-phosphonate's P-H, which the core's count does not give: for the chemistry check, part 12's fixes)" },
   { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: "stays", why: "the page's count: a valence a file sets on the atom first, else the core's hydrogenCounts (part 12c)" },
   // a plain hydrogen: each a variant for its own question, named, or onto the core's test in its file's queue
-  { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "plainH", part: 12, why: "a match ignores a map number (a named variant); one on a metal plain, which the core's test keeps an atom: backlog 177" },
+  { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "plainH", part: "stays", why: "a match ignores a map number (a named variant); else the core's test: one single bond to an atom neither an H nor a metal of the d or f block" },
   { concept: "plain hydrogen", file: "ui/features/Workspace/workflow/substituents.ts", name: "isPlainH", part: 12, why: "an option typed as H, not a drawn atom: an H, not D or T, with no charge - a question of its own: part 12c" },
-  { concept: "plain hydrogen", file: "ui/features/Workspace/chem/engineLayout.ts", name: "plainH", part: 12, why: "an H with no chemistry, one on a metal too, which the core's test keeps an atom: onto the core's with that fix, its own change" },
+  { concept: "plain hydrogen", file: "ui/features/Workspace/chem/engineLayout.ts", name: "plainH", part: "stays", why: "an H with no chemistry, its bonds asked by each caller: never folded into a metal of the d or f block, nor said one of its H (backlog 177)" },
   // the types for a centre, a double bond, an axis, a whole configuration
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "StereoElement", part: 14 },
   { concept: "stereo types", file: "lib/chem/smiles.ts", name: "Configuration", part: 14 },
@@ -99,6 +102,10 @@ export const STILL_APART: Copy[] = [
   { concept: "aromatic tests", file: "lib/chem/reactionMap.ts", name: "aromaticBonds", part: "stays", why: "a use of the core's aromaticForm, not a rule: its bonds of order 4 as a set of atom pairs" },
   { concept: "aromatic tests", file: "lib/chem/ordersFromGeometry.ts", name: "isFlat", part: "stays", why: "from geometry, by design: a ring flat in space, where orders are read from 3D coordinates" },
   { concept: "aromatic tests", file: "lib/chem/protonation.ts", name: "isFlat", part: "stays", why: "by its bonds, by design: a five- or six-ring each of whose atoms has a multiple bond or is N, O or S - flat, for where an H goes; no count of electrons" },
+  // a configuration read from places: each caller onto perception/stereo/from3d, one by one with a differential (part 14 D, D2 and D3)
+  { concept: "from places", file: "ui/features/Workspace/chem/pageMirror.ts", name: "hasConfiguration", part: 14, why: "part 14 D: onto perception/stereo/from3d with a differential, after configuredFrom" },
+  { concept: "from places", file: "ui/features/Workspace/utils/edit3d.ts", name: "stereoAfter", part: 14, why: "part 14 D: onto perception/stereo/from3d with a differential, after configuredFrom" },
+  { concept: "from places", file: "lib/chem/lonePairsIn3d.ts", name: "lonePairsIn3d", part: 14, why: "part 14 D: onto perception/stereo/from3d with a differential, after configuredFrom" },
 ];
 
 /** The top-level declarations in a file's text that a concept's pattern names: name and line. */
@@ -174,6 +181,7 @@ describe("the ratchet's own reading, so that it bites", () => {
     expect(declarationsIn("function implicitOf(atoms, bonds) {}\nconst hydrogensOfThem = 1;\n", CONCEPTS["hydrogen count"])).toEqual([{ name: "implicitOf", line: 1 }]);
     expect(declarationsIn("const isPlainH = (a) => a.el === 'H';\nconst plainHydrogens = 1;\n", CONCEPTS["plain hydrogen"])).toEqual([{ name: "isPlainH", line: 1 }]);
     expect(declarationsIn("function aromaticRing(ring) {}\nconst isFlatter = 1;\n", CONCEPTS["aromatic tests"])).toEqual([{ name: "aromaticRing", line: 1 }]);
+    expect(declarationsIn("export function configuredFrom(bonds, places) {}\nconst configuredFromAbove = 1;\n", CONCEPTS["from places"])).toEqual([{ name: "configuredFrom", line: 1 }]);
   });
 
   it("leaves a use, a local and an import alone: only a declaration counts", () => {

@@ -694,12 +694,12 @@ describe("a figure read as a structure", () => {
         stroke(a, [m[0] - gap, 40]),
         stroke([m[0] + gap, 40], b),
         stroke(b, step(b, 30)),
-        // (the bond in front, crossing the gap)
-        stroke([m[0], 40 - 0.6 * L], [m[0], 40 + 0.6 * L]),
+        // (the bond in front, crossing the gap - a bond of a chain of its own, no line alone)
+        stroke(step([m[0], 40 - 0.6 * L], 60), [m[0], 40 - 0.6 * L], [m[0], 40 + 0.6 * L]),
       ]),
     );
-    expect(s.bonds).toHaveLength(4);
-    expect(s.atoms).toHaveLength(6);
+    expect(s.bonds).toHaveLength(5);
+    expect(s.atoms).toHaveLength(7);
   });
 
   describe("a row of dashes along a line - a bond forming or breaking, a weak bond", () => {
@@ -2275,10 +2275,11 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     expect(s.atoms.length).toBe(4);
   });
 
-  it("is not seen where there is no count - lines across a bond read as before - nor where a number stands by no bracket", () => {
+  it("is not seen where there is no count - lines across a bond read as any lines are - nor where a number stands by no bracket", () => {
     const uncounted = read(counted(false, null));
     expect(uncounted.atoms.some((a) => a.unsure?.some((u) => u.startsWith("A repeat unit")))).toBe(false);
-    expect(uncounted.bonds.length).toBe(7);
+    // (the chain's five bonds; each bracket's upright line, alone and a bond long, is no ethane: left out)
+    expect(uncounted.bonds.length).toBe(5);
     // (a compound's number under it, by no bracket: its own word, left as it was)
     const p0: P = [40, 80];
     const f = figure([stroke(p0, step(p0, -30), step(step(p0, -30), 30))], word("6", [step(p0, -30)[0], step(p0, -30)[1] + 1.5 * L]));
@@ -2308,5 +2309,23 @@ describe("a P of four bonds or an S of three, drawn with no H (the chemistry che
   it("a P of three, an S of two: whole, nothing said", () => {
     expect(note("P", 3).filter((u) => u.startsWith("Drawn as"))).toEqual([]);
     expect(note("S", 2).filter((u) => u.startsWith("Drawn as"))).toEqual([]);
+  });
+});
+
+describe("a donor's bond to a Lewis-acidic main-group metal, read from a figure (found in review)", () => {
+  /** A fluorine on a carbon, bonded to `metal` too - as read, before anything else. */
+  const bridged = (metal: string) =>
+    structureOf(
+      { atoms: [{ x: 0, y: 0, el: "C" }, { x: 1, y: 0, el: "F" }, { x: 2, y: 0, el: metal }], bonds: [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }], bond: 1, left: { letters: [] } },
+      reads,
+    );
+  const over = (s: ReturnType<typeof bridged>) => s.atoms.filter((a) => a.unsure?.some((w) => w.startsWith("More bonds meet here"))).map((a) => a.el);
+
+  it("is left out of the donor's count, as a bond to a transition metal is: a fluorine bridging to a magnesium, a lithium or a palladium is no fluorine of two bonds", () => {
+    for (const metal of ["Mg", "Li", "Al", "Pd"]) expect(over(bridged(metal)), metal).toEqual([]);
+  });
+
+  it("but not to tin, whose bonds to a halogen are drawn covalent: that fluorine has more bonds than it takes", () => {
+    expect(over(bridged("Sn"))).toEqual(["F"]);
   });
 });
