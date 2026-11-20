@@ -46,11 +46,12 @@ describe("a double bond given in the block, and the bounds of a request", () => 
     expect([made.made.isomers.length, asked.length]).toEqual([2, 2]);
   });
 
-  it("counts the stereoisomers of penta-2,3-diene, which differ only at its axis, once against a whole bound of one: made, not refused", async () => {
+  it("counts penta-2,3-diene's two stereoisomers, one for each sense of its axis - kept apart, as an axis is kept in 3D: two against a whole bound of one are too many, both made against two", async () => {
     const b = v2000(["C", "C", "C", "C", "C"], [[0, 1, 1], [1, 2, 2], [2, 3, 2], [3, 4, 1]]);
-    const { chem, asked } = plugin();
-    const made = await isomersByMeno(chem, [b], blocksRead([b])!, { atoms: [], bonds: [1, 2] }, [], { most: 1, whole: true });
+    const one = await isomersByMeno(plugin().chem, [b], blocksRead([b])!, { atoms: [], bonds: [1, 2] }, [], { most: 1, whole: true });
+    expect("made" in one && "tooMany" in one.made ? one.made.tooMany.counted : null).toBe(2);
+    const made = await isomersByMeno(plugin().chem, [b], blocksRead([b])!, { atoms: [], bonds: [1, 2] }, [], { most: 2, whole: true });
     if ("notCounted" in made || !("isomers" in made.made)) throw new Error(`not made: ${JSON.stringify(made).slice(0, 100)}`);
-    expect([made.made.isomers.length, asked.length]).toEqual([1, 1]);
+    expect(made.made.isomers.length).toBe(2);
   });
 });
