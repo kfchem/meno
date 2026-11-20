@@ -115,19 +115,36 @@ export function reflectedConformers<C extends Omit<Conformers, "chosen">>(c: C):
  * to be made itself.
  */
 export function hasConfiguration(c: Pick<Conformers, "frames">, part: Model, isomer: IsomerConfiguration): boolean {
+  const missed = notKept(c, part, isomer);
+  return missed != null && !missed.length;
+}
+
+/**
+ * Where conformers do not have a configuration a stereoisomer asks for, or its drawing shows (`hasConfiguration`), in any frame:
+ * each such centre by its atom ("N9", numbered from 1) and double bond by its atoms ("C2=C3") - none where every one is kept;
+ * null where `isomer` names an atom or a bond the structure has not. So what was asked and not made in 3D is said, never passed
+ * by: a bridgehead N whose given sense the toolkit drops (Troeger's base's).
+ */
+export function notKept(c: Pick<Conformers, "frames">, part: Model, isomer: IsomerConfiguration): string[] | null {
   const { input } = identityInputOf(part);
   const own = withConfiguration(input, isomer);
-  if (!own) return false;
+  if (!own) return null;
   const at = (f: number[], i: number) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]];
-  return c.frames.every((f) =>
-    own.atoms.every((a, i) => {
-      if (!a.tetra) return true;
-      const [u, v, w] = a.tetra.neighbours.slice(0, 3).map((n) => at(f, n));
-      return senseAt(at(f, i), [u, v, w]) === a.tetra.volume;
-    }) &&
-    own.bonds.every((b) => {
-      if (!b.stereo) return true;
-      return (cisAt(at(f, b.a), at(f, b.b), at(f, b.stereo.refs[0]), at(f, b.stereo.refs[1])) === true) === b.stereo.cis;
-    }),
-  );
+  const name = (i: number) => `${own.atoms[i].el}${i + 1}`;
+  const out: string[] = [];
+  own.atoms.forEach((a, i) => {
+    if (!a.tetra) return;
+    const t = a.tetra;
+    const kept = c.frames.every((f) => {
+      const [u, v, w] = t.neighbours.slice(0, 3).map((n) => at(f, n));
+      return senseAt(at(f, i), [u, v, w]) === t.volume;
+    });
+    if (!kept) out.push(name(i));
+  });
+  own.bonds.forEach((b) => {
+    const st = b.stereo;
+    if (!st) return;
+    if (!c.frames.every((f) => (cisAt(at(f, b.a), at(f, b.b), at(f, st.refs[0]), at(f, st.refs[1])) === true) === st.cis)) out.push(`${name(b.a)}=${name(b.b)}`);
+  });
+  return out;
 }

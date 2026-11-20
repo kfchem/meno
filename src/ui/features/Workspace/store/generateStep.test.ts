@@ -11,6 +11,18 @@ import type { Model } from "./types";
 
 /** What the plugin was asked, and what it answers, by the test. */
 const run = vi.fn<(step: string, entries: unknown[], options: Record<string, unknown>, holds: string, ms?: number) => Promise<unknown>>();
+// (what Meno reads a structure to leave open, scripted: a "?" in its block an open centre each, a "!" it cannot be read - chem/menoIsomers)
+vi.mock("../chem/menoIsomers", async (actual) => ({
+  ...(await actual<typeof import("../chem/menoIsomers")>()),
+  blocksRead: () => ({ input: { atoms: [], bonds: [] }, bondAt: [], folded: { atoms: [], bonds: [] }, inputAt: [] }),
+  leftByMeno: (molblocks: readonly string[]) => {
+    const block = molblocks[0];
+    if (block.includes("!")) throw new Error("it could not be asked");
+    const atoms = Array.from({ length: (block.match(/\?/g) ?? []).length }, (_, k) => k);
+    return { left: { atoms, bonds: [], cumulenes: [], cumulated: [], notEnumerated: [], said: null }, centres: atoms, doubles: [], handed: false };
+  },
+}));
+
 vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => ({ run, version: "4.8.24" }),

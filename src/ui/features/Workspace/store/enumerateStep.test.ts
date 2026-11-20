@@ -46,7 +46,7 @@ function page(lists: string) {
   const step = st().addStep("enumerate", "meno", 80, 0);
   st().updateStep(step, { options: { lists } });
   st().connect({ set }, step);
-  return { st, step };
+  return { st, step, store };
 }
 
 describe("Enumerate as a step, its checks at hand", () => {
@@ -72,20 +72,21 @@ describe("Enumerate as a step, its checks at hand", () => {
     expect(st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.members).toHaveLength(2);
   });
 
-  it("is stopped while its products are asked about: nothing put in, and said to have stopped", async () => {
-    held.open = true;
-    const { st, step } = page("R1: Me\nCl\nBr");
-    const run = st().runStep(step);
-    await vi.waitFor(() => expect(st().menoWorking[step]).toBeDefined());
-    await vi.waitFor(() => expect(letGo.length).toBe(1));
-    st().stopStep(step);
-    while (letGo.length) letGo.shift()!();
-    await run;
+  it("is stopped while Meno reads its products for configurations left open: nothing put in, and said to have stopped", async () => {
+    const { st, step, store } = page("R1: Me\nCl\nBr");
+    // (stopped the moment it starts reading them: its card says it is working)
+    const off = store.subscribe((s) => {
+      if (s.menoWorking[step]) {
+        off();
+        st().stopStep(step);
+      }
+    });
+    await st().runStep(step);
     const ran = st().steps.find((s) => s.id === step)!.ran!;
     expect(ran).toMatchObject({ ok: false, stopped: true });
     expect(ran.said).toMatch(/^Stopped after /);
-    // (asked of the first product alone: the others never)
-    expect(held.asked.filter((op) => op === "stereo_elements")).toHaveLength(1);
+    // (the plugin asked nothing of what is left open: Meno reads that itself)
+    expect(held.asked.filter((op) => op === "stereo_elements")).toHaveLength(0);
     expect(st().sets.some((b) => b.made?.step === step && (b.members?.length ?? 0) > 0)).toBe(false);
     expect(st().menoWorking[step]).toBeUndefined();
   });
@@ -93,6 +94,6 @@ describe("Enumerate as a step, its checks at hand", () => {
   it("says how many it looked at and found none left open", async () => {
     const { st, step } = page("R1: Me\nCl");
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran!.said).toMatch(/ · No configuration left open \(Stand-in\)$/);
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toMatch(/ · No configuration left open$/);
   });
 });
