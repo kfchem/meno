@@ -145,6 +145,22 @@ describe("createDocument", () => {
     expect(doc.getState()).toEqual({ atoms: ["C"], title: "b" });
   });
 
+  it("joins an edit to a plain step on top where it says it settles that very step (`onto`): one undo for both - and not once that step is gone", () => {
+    const { doc } = withClock();
+    doc.edit("type", (d) => ({ ...d, title: "a" }));
+    const typed = doc.getState();
+    expect(doc.edit("keep", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true, onto: typed })).toBe(true);
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoLabel: "type" });
+    doc.undo();
+    expect(doc.getState()).toBe(initial);
+    // (the step on top no longer the one named: a step of its own)
+    doc.edit("type", (d) => ({ ...d, title: "b" }));
+    const stale = doc.getState();
+    doc.edit("type", (d) => ({ ...d, title: "c" }));
+    doc.edit("keep", (d) => ({ ...d, atoms: ["N"] }), { joinTop: true, onto: stale });
+    expect(doc.history()).toMatchObject({ undoDepth: 3, undoLabel: "keep" });
+  });
+
   it("makes a step of its own of an edit that joins nothing: no gesture on top, or one by another maker", () => {
     const { doc } = withClock();
     // (nothing yet: a step of its own)
