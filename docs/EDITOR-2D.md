@@ -617,7 +617,8 @@ was with nothing done since, turns it to form 0, the view from the other side, a
   would not be. It is offered too on a chair or a Haworth ring drawn by hand that Meno reads as drawn in perspective, or takes for one whose near
   and far are not marked (*Drawn in perspective*; `projections/projection` `isProjection`, by the recognition Clean-up keeps it by): what Clean-up
   keeps as drawn, *Draw flat* lays out flat, and 3D made from it says it takes the configuration only, as from the tool's chair. *Flip chair*
-  stays the tool's chair's.
+  stays the tool's chair's. A cage or a bridged system drawn by hand in perspective is not asked after for it: fitting one to the engine's
+  views takes up to a second, too long for a menu.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
   below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
