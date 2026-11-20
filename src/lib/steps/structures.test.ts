@@ -111,27 +111,70 @@ describe("Combine", () => {
     expect(r.said).toEqual(["A part has no hydrogens, so the complex's charge and spin are not known either."]);
   });
 
-  it("carries none of what refers to a part's atoms - its restraints, its measures - and names each, part by part and by kind", () => {
-    const held = (e: Entry, measures: number[][], atoms: number[]): Entry => {
+  it("carries a part's restraints and measures, its atoms numbered as in the complex: each measure as the complex measures it", () => {
+    const held = (e: Entry, measures: number[][], atoms: number[], start?: number[]): Entry => {
       const m = measured(e, measures);
-      return { ...m, properties: { ...m.properties, restraints: { value: { restraints: [{ kind: "distance", atoms, value: 1, strength: 1 }] }, unit: "none", status: "computed" } } };
+      return { ...m, properties: { ...m.properties, restraints: { value: { restraints: [{ kind: "distance", atoms, value: 1, strength: 1 }], ...(start ? { start } : {}) }, unit: "none", status: "computed" } } };
     };
+    const ohAt = [3, 0, 0, 3.97, 0, 0];
     const a = held(water("a"), [[0, 1], [1, 0, 2]], [0, 1]);
-    const b = held(hydroxyl("b"), [[0, 1]], [0, 1]);
-    expect(Object.keys(a.properties).sort()).toEqual(["angle 2-1-3", "distance 1-2", "restraints"]);
-    expect(Object.keys(b.properties).sort()).toEqual(["distance 1-2", "restraints"]);
+    const b = held(entry("b", ["O", "H"], ohAt), [[0, 1]], [0, 1]);
     const r = combined([a, b], "c");
     if ("failed" in r) throw new Error(r.failed);
-    // (none of them: in the complex part 2's atom 1 is its atom 4, so none would still mean what it says)
-    expect(r.entry.properties).toEqual({});
-    expect(r.said).toEqual(["Not carried over, as each was worked out on its part alone - part 1: restraints, 2 measures; part 2: restraints, 1 measure."]);
+    // (part 2's atoms 1 and 2 are the complex's 4 and 5)
+    expect(Object.keys(r.entry.properties).sort()).toEqual(["angle 2-1-3", "distance 1-2", "distance 4-5", "restraints"]);
+    // (no part is moved: each measure is what Measure gives on the complex, at the complex's geometry)
+    const again = measured({ ...r.entry, properties: {} }, [[0, 1], [1, 0, 2], [3, 4]]);
+    for (const name of ["distance 1-2", "angle 2-1-3", "distance 4-5"]) expect(r.entry.properties[name]).toEqual(again.properties[name]);
+    expect(r.entry.properties["distance 4-5"].value).toBeCloseTo(0.97, 12);
+    expect(r.entry.properties.restraints.value).toEqual({
+      restraints: [
+        { kind: "distance", atoms: [0, 1], value: 1, strength: 1 },
+        { kind: "distance", atoms: [3, 4], value: 1, strength: 1 },
+      ],
+    });
+    expect(r.said).toEqual(["Carried over, its atoms numbered as in the complex - part 1: restraints, 2 measures; part 2 (its atoms from 4): restraints, 1 measure."]);
+    // (where each part held them first somewhere, that too, part after part; where one did not, none)
+    const wStart = (water().geometry as { xyz: number[] }).xyz;
+    const both = combined([held(water("a"), [], [0, 2], wStart), held(entry("b", ["O", "H"], ohAt), [], [0, 1], ohAt)], "c");
+    if ("failed" in both) throw new Error(both.failed);
+    expect(both.entry.properties.restraints.value).toMatchObject({ start: [...wStart, ...ohAt] });
+    const one = combined([held(water("a"), [], [0, 2], wStart), held(entry("b", ["O", "H"], ohAt), [], [0, 1])], "c");
+    if ("failed" in one) throw new Error(one.failed);
+    expect(one.entry.properties.restraints.value).not.toHaveProperty("start");
   });
 
-  it("carries no part's properties, and says so; refuses frames and mixed places, with the reason", () => {
-    const e = { ...water(), properties: { energy: { value: -76.4, unit: "Eh" as const, status: "computed" as const } } };
+  it("carries restraints an Atom map numbered as the part is; never those in another numbering, nor a measure not of the part's geometry", () => {
+    const mapped = { value: "as r (k1)", unit: "none" as const, status: "computed" as const, label: true as const };
+    const rows = (numbering: string) => ({ value: { restraints: [{ kind: "fixed" as const, atoms: [1] }], numbering }, unit: "none" as const, status: "computed" as const });
+    // (numbered by the map as the part is: carried)
+    const same = combined([water("a"), { ...hydroxyl("b"), properties: { numbering: mapped, restraints: rows("as r (k1)") } }], "c");
+    if ("failed" in same) throw new Error(same.failed);
+    expect(same.entry.properties.restraints.value).toEqual({ restraints: [{ kind: "fixed", atoms: [4] }] });
+    expect(same.said).toEqual([
+      "Carried over, its atoms numbered as in the complex - part 2 (its atoms from 4): restraints.",
+      "Not carried over, as each was worked out on its part alone - part 2: numbering.",
+    ]);
+    // (in a numbering not the part's: its atoms would be others in the complex - not carried, said)
+    const other = combined([water("a"), { ...hydroxyl("b"), properties: { restraints: rows("as q (k2)") } }], "c");
+    if ("failed" in other) throw new Error(other.failed);
+    expect(other.entry.properties).toEqual({});
+    expect(other.said).toEqual(["Not carried over, as each was worked out on its part alone - part 2: restraints in another numbering."]);
+    // (measured at another geometry, or not made: not carried)
+    const m = measured(water("a"), [[0, 1], [0, 9]]);
+    const moved = { ...m, geometry: { kind: "3d" as const, xyz: [0, 0, 0, 1.1, 0, 0, -0.24, 0.93, 0] } };
+    const r = combined([moved, hydroxyl("b")], "c");
+    if ("failed" in r) throw new Error(r.failed);
+    expect(r.entry.properties).toEqual({});
+    expect(r.said).toEqual(["Not carried over, as each was worked out on its part alone - part 1: 2 measures not made at its geometry."]);
+  });
+
+  it("carries none of a part's other properties - a list per atom of its own calculation among them - and says so; refuses frames and mixed places, with the reason", () => {
+    const charges = { value: { list: [-0.8, 0.4, 0.4], per: "atom" as const }, unit: "none" as const, status: "computed" as const };
+    const e = { ...water(), properties: { energy: { value: -76.4, unit: "Eh" as const, status: "computed" as const }, charges } };
     const r = combined([e, hydroxyl()], "c");
     expect("failed" in r ? r : r.entry.properties).toEqual({});
-    expect("failed" in r ? [] : r.said).toEqual(["Not carried over, as each was worked out on its part alone - part 1: energy."]);
+    expect("failed" in r ? [] : r.said).toEqual(["Not carried over, as each was worked out on its part alone - part 1: energy, charges."]);
     const path = { ...water(), geometry: { kind: "frames" as const, frames: [[0, 0, 0, 1, 0, 0, 0, 1, 0]] } };
     expect(combined([path, water()], "x")).toEqual({ failed: expect.stringMatching(/frames/) });
     expect(combined([entry("g", ["C"], null), water()], "x")).toEqual({ failed: expect.stringMatching(/different kinds/) });

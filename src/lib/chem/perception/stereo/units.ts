@@ -267,14 +267,15 @@ function unconfigured(g: SymmetryInput): SymmetryInput {
  * at a centre or double bond two of whose groups are alike - two ends, or
  * two whole groups (`groupsAlike`) - which sets nothing however the rest is
  * given: there no configuration is written, drawn or not; and a double
- * bond's or an odd cumulene's cis or trans that sets nothing with the rest
- * as given (perception/symmetry `settingCisTrans`) is taken off. A
+ * bond's or an odd cumulene's cis or trans, or an allene's sense, that sets
+ * nothing with the rest as given (perception/symmetry `settingCisTrans`) is
+ * taken off. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
  * nothing, so writing it changes no compound - an isopropyl's CH, the
  * third centre of the cis,trans 1,2,3-trimethylcyclopropane written with
- * its trans pair; a double bond or an odd cumulene so is left with none,
- * and asked no more (below). A place whose
+ * its trans pair; a double bond, an odd cumulene or an allene's axis so is
+ * left with none, and asked no more (below). A place whose
  * two senses write two texts is open, and stays so: the cis pair's third
  * centre, which decides between two compounds.
  *
@@ -290,9 +291,9 @@ function unconfigured(g: SymmetryInput): SymmetryInput {
  * and a writing that states one compound has that compound's text. Where
  * writings that leave the same thing unsaid in different ways get two
  * identities, they are alike told apart, never two unlike joined, and only
- * where no single compound is stated. A double bond or an odd cumulene
- * that sets nothing is left with none, never filled: a cis or trans given
- * there is none to every canonical reading (perception/symmetry
+ * where no single compound is stated. A double bond, an odd cumulene or an
+ * allene's axis that sets nothing is left with none, never filled: a cis or
+ * trans or a sense given there is none to every canonical reading (perception/symmetry
  * `settingCisTrans`) while the rest stays open, so filled, it would turn
  * into a configuration again once another place was filled - that acid
  * with its double bond filled and then its centre would have one
@@ -320,8 +321,8 @@ function unconfigured(g: SymmetryInput): SymmetryInput {
  * and wrote two, that place is left as it is, and `complete` says so.
  */
 export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete: boolean; text?: string; searches: number; settledMetals: number[] } {
-  // (a cis or trans given where it sets nothing, the rest as given - a cyclohexylidene's with its ring's C4 left open - taken
-  //  off: perception/symmetry `settingCisTrans`, as every canonical reading takes it)
+  // (a cis or trans or an allene's sense given where it sets nothing, the rest as given - a cyclohexylidene's with its ring's
+  //  C4 left open - taken off: perception/symmetry `settingCisTrans`, as every canonical reading takes it)
   let g = settingCisTrans(input);
   let complete = true;
   // (how many canonical searches the fill made - its cost, the same for the same structure whatever its atoms' order)
@@ -372,12 +373,12 @@ export function filledIn(input: SymmetryInput): { input: SymmetryInput; complete
   if (plainMetal.size) g = { ...g, arrangements: (g.arrangements ?? []).filter((x) => !plainMetal.has(x.metal)) };
   // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
   const settledMetals = [...plainMetal];
-  // (a double bond or an odd cumulene found to set nothing below: left with none, never given one - a cis or trans given there
-  //  would be taken off by every canonical reading while its place stays open, and become a configuration again once
-  //  another place was filled: (4-methylcyclohexylidene)acetic acid's C=C filled and then its C4, one enantiomer's text for
-  //  a writing that states neither)
+  // (a double bond, an odd cumulene or an allene's axis found to set nothing below: left with none, never given one - a cis or
+  //  trans or a sense given there would be taken off by every canonical reading while its place stays open, and become a
+  //  configuration again once another place was filled: (4-methylcyclohexylidene)acetic acid's C=C filled and then its C4,
+  //  one enantiomer's text for a writing that states neither; an allene ending in that ring likewise)
   const leftNone = new Set<string>();
-  const noneKey = (b: Blank) => (b.kind === "bond" ? `b${b.at}` : b.kind === "cumulated" ? `c${b.ends.join(",")}` : null);
+  const noneKey = (b: Blank) => (b.kind === "bond" ? `b${b.at}` : b.kind === "cumulated" || b.kind === "axis" ? `${b.kind[0]}${b.ends.join(",")}` : null);
   // (the places left: those not settled so)
   const open = (b: Blank) => !settledHere(b) && !(b.kind === "metal" && plainMetal.has(b.at)) && !leftNone.has(noneKey(b) ?? "");
   // (an axis or a cumulene of alike end atoms: filled, as before)
@@ -571,6 +572,52 @@ function bridgesAlike(g: SymmetryInput, places: ReadonlySet<number>, classes: re
  * left to the search, never two compounds joined.
  */
 const BRIDGE_MOST = 3;
+
+/**
+ * The atoms of `g` a cage holds: an atom joined to another by three paths that share no atom but their ends, each with
+ * one to `BRIDGE_MOST` atoms between them - a bridgehead of norbornane, of camphor, of tropane, quinuclidine's N, every atom
+ * of cubane and of adamantane's cage. A fused system's junction is none (its two junctions are bonded: a bond is no bridge - bicyclo[3.3.0]octane's, decalin's), nor a
+ * bridgehead whose bridges are long enough to stand in or out (bicyclo[4.4.1]undecane's), whose senses are its own. Such an
+ * atom's configuration is tied to the cage's other bridgehead's - turned alone it makes no structure - yet it is a real one,
+ * which names cite (camphor's 1R,4R): the CIP labels it as its rules give, whatever identity's turning says (the chemistry
+ * check's ruling).
+ */
+export function cageAtoms(g: { readonly atoms: readonly unknown[]; readonly bonds: readonly { readonly a: number; readonly b: number }[] }): Set<number> {
+  const around: number[][] = g.atoms.map(() => []);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  const out = new Set<number>();
+  // (three paths sharing no atom between)
+  const apart = (p: readonly number[], q: readonly number[]) => !p.some((x) => q.includes(x));
+  for (let a = 0; a < g.atoms.length; a++) {
+    // (three paths need three bonds)
+    if (around[a].length < 3) continue;
+    // (every path out of `a` of up to BRIDGE_MOST + 1 bonds, by the atom it ends at: its atoms between)
+    const paths = new Map<number, number[][]>();
+    const walk = (at: number, between: number[]) => {
+      for (const n of around[at]) {
+        if (n === a || between.includes(n)) continue;
+        // (a bond straight to it is no bridge: a fused system's junctions are bonded, a cage's bridgeheads are not - found in review)
+        if (between.length) paths.set(n, [...(paths.get(n) ?? []), between]);
+        if (between.length < BRIDGE_MOST) walk(n, [...between, n]);
+      }
+    };
+    walk(a, []);
+    let found = false;
+    for (const ps of paths.values()) {
+      for (let i = 0; i < ps.length && !found; i++)
+        for (let j = i + 1; j < ps.length && !found; j++) {
+          if (!apart(ps[i], ps[j])) continue;
+          for (let k = j + 1; k < ps.length && !found; k++) if (apart(ps[i], ps[k]) && apart(ps[j], ps[k])) found = true;
+        }
+      if (found) break;
+    }
+    if (found) out.add(a);
+  }
+  return out;
+}
 
 /** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */
 const GROUP_MOST = 64;

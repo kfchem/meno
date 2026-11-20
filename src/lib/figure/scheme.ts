@@ -145,6 +145,23 @@ function colourOf(ink: string | undefined): string | undefined {
  * outline; or a single barb, a half head's. Its point lies on the line
  * ahead of the end, or at it, and its back by the end.
  */
+/**
+ * How wide an outline is across its line at `t` along it, each of its corners at `ts[k]` along the line and `cs[k]` off it: between where
+ * its sides cross there - none, where none does.
+ */
+function acrossAt(ts: readonly number[], cs: readonly number[], t: number): number {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let k = 0; k < ts.length; k++) {
+    const j = (k + 1) % ts.length;
+    if ((ts[k] - t) * (ts[j] - t) > 0) continue;
+    const c = ts[k] === ts[j] ? [cs[k], cs[j]] : [cs[k] + ((t - ts[k]) / (ts[j] - ts[k])) * (cs[j] - cs[k])];
+    lo = Math.min(lo, ...c);
+    hi = Math.max(hi, ...c);
+  }
+  return hi > lo ? hi - lo : 0;
+}
+
 /** How nearly along the line a wedge-shaped head points, from its wide end to its narrow one: within 35 degrees (a half head's leans off it by half its width). */
 const HEAD_ALONG = Math.cos((35 * Math.PI) / 180);
 
@@ -172,6 +189,10 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     // (as wide as a head is for its length: a wedge is narrower)
     const wide = side === 0 ? (left + right) / length : Math.max(left, right) / length;
     if (wide < (side === 0 ? 0.33 : 0.15)) continue;
+    // (narrowing to its point: a quarter of its length back from it, under 0.6 as wide as at its widest - a triangle a quarter, a disk
+    //  drawn at a bond's end, as a figure marks an atom, 0.87)
+    const widest = Math.max(...ts.map((t) => acrossAt(ts, cs, t)));
+    if (acrossAt(ts, cs, ts[i] - 0.25 * length) >= 0.6 * widest) continue;
     const off = Math.abs(cs[i]) + Math.abs(ts[i]) * 0.1;
     if (!best || off < best.off) best = { tip, side, open: h.open, length, of: h.of, off, ...(h.open ? {} : { outline: h.pts }) };
   }
@@ -959,9 +980,78 @@ export function readScheme(
   const inside = (p: Point, b: readonly number[]) => p.x > b[0] && p.x < b[2] && p.y > b[1] && p.y < b[3];
   const dataCells = (figure.table ?? []).filter((b) => !figure.atoms.some((a) => inside(a, b)) && !arrows.some((a) => [a.tail, a.point, ...a.corners].some((p) => inside(p, b))));
   const inTable = (w: SchemeWords) => w.arrow == null && dataCells.some((b) => inside({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 }, b));
-  const words = all.filter((w) => !molecules.includes(w) && !inTable(w));
-  const { table: _table, ...read } = figure;
-  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [] } }, arrows, pluses: signed, words, bond: atBond };
+  // (marks drawn over a picture - a 3D model's distances and their numbers, drawn over its rendering: `marksOver` - and a measurement
+  // wholly within one, a number with a decimal point or a unit, are the picture's, no structure: left out, and counted to be said.
+  // Where nothing of the figure lies outside its pictures, the picture is a background: nothing is taken)
+  const over = marksOver(
+    figure,
+    drawn.pictures,
+    shapes.strokes.filter((s) => s.dash),
+  );
+  const within = (w: SchemeWords) =>
+    !over.background && MEASUREMENT.test(w.text) && drawn.pictures.some((b) => w.box[0] >= b[0] && w.box[1] >= b[1] && w.box[2] <= b[2] && w.box[3] <= b[3]);
+  const words = all.filter((w) => !molecules.includes(w) && !inTable(w) && !within(w));
+  const marks = over.marks + all.filter(within).length;
+  const { table: _table, ...read } = over.read;
+  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [], ...(marks ? { marks } : {}) } }, arrows, pluses: signed, words, bond: atBond };
+}
+
+/** A measurement written over a picture - a distance, an angle, an energy: a number with a decimal point, or with a unit. A compound's number (3, 12a, 4') is none. */
+export const MEASUREMENT = /\d[.,]\d|\d\s*(Å|°|pm\b|nm\b|kcal|kJ)/;
+
+/** What is said of a short labelled piece lying wholly within a picture: read, but perhaps no structure. */
+export const OVER_PICTURE = "Drawn over a picture: it may be a label of the picture.";
+
+/**
+ * A figure read without what is drawn over its pictures (the chemistry check's ruling): of each piece - atoms joined by bonds, or an atom
+ * alone - whose atoms all lie within one picture's box, a mark is left out: a line drawn dashed or dotted (`dashed`, its two ends a
+ * bond's), whatever is at its ends - a distance, a contact; a bare line of one or two bonds - no label, no ring - a distance's line, an
+ * angle's two; an atom alone. A labelled piece of one or two bonds is read but said (`OVER_PICTURE`): it may be the picture's label. A
+ * ring, or three bonds or more, is a structure, read as before; a structure reaching out of the picture is kept whole. Where nothing of the
+ * figure lies outside its pictures, the picture is a background - a graphical abstract's - and nothing is taken (`background`).
+ */
+export function marksOver(read: FigureRead, pictures: readonly Box[], dashed: readonly { a: Point; b: Point }[] = []): { read: FigureRead; marks: number; background: boolean } {
+  if (!pictures.length || !read.atoms.length) return { read, marks: 0, background: false };
+  const up = read.atoms.map((_, i) => i);
+  const root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i])));
+  for (const b of read.bonds) up[root(b.a)] = root(b.b);
+  const pieces = new Map<number, number[]>();
+  read.atoms.forEach((_, i) => pieces.set(root(i), [...(pieces.get(root(i)) ?? []), i]));
+  const inBox = (p: Point, b: Box) => p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3];
+  const overPicture = (ids: readonly number[]) => pictures.some((b) => ids.every((i) => inBox(read.atoms[i], b)));
+  if ([...pieces.values()].every(overPicture)) return { read, marks: 0, background: true };
+  // (a bond drawn as one dashed line: its two ends that line's, within a fifth of a bond)
+  const near = 0.2 * (read.bond || 14.4);
+  const close = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) <= near;
+  const isDashed = (b: { a: number; b: number }) => {
+    const [p, q] = [read.atoms[b.a], read.atoms[b.b]];
+    return dashed.some((s) => (close(s.a, p) && close(s.b, q)) || (close(s.a, q) && close(s.b, p)));
+  };
+  const out = new Set<number>();
+  const said = new Set<number>();
+  let marks = 0;
+  for (const ids of pieces.values()) {
+    if (!overPicture(ids)) continue;
+    const own = new Set(ids);
+    const bonds = read.bonds.filter((b) => own.has(b.a));
+    const labelled = ids.some((i) => read.atoms[i].label);
+    // (a ring: as many bonds as atoms or more)
+    const ring = bonds.length >= ids.length;
+    const mark = !bonds.length || bonds.every(isDashed) || (!labelled && !ring && bonds.length <= 2);
+    if (mark) {
+      ids.forEach((i) => out.add(i));
+      marks++;
+    } else if (labelled && !ring && bonds.length <= 2) ids.forEach((i) => said.add(i));
+  }
+  if (!marks && !said.size) return { read, marks: 0, background: false };
+  const to = new Map<number, number>();
+  const atoms = read.atoms.flatMap((a, i) => {
+    if (out.has(i)) return [];
+    to.set(i, to.size);
+    return [said.has(i) ? { ...a, unsure: [...(a.unsure ?? []), OVER_PICTURE] } : a];
+  });
+  const bonds = read.bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...b, a: to.get(b.a)!, b: to.get(b.b)! }));
+  return { read: { ...read, atoms, bonds }, marks, background: false };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */
