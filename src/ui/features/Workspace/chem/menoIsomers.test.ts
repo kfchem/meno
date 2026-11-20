@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
-import { NOT_COUNTED_CAGE } from "../../../../lib/chem/isomers";
+import { NOT_COUNTED_JOINED } from "../../../../lib/chem/isomers";
 import { v2000 } from "../../../../lib/chem/testdata/v2000";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { asGiven, blocksRead, HANDED_NOT_MADE, isomersByMeno, leftByMeno } from "./menoIsomers";
@@ -108,8 +108,9 @@ describe("Meno's stereoisomers, each made whole", () => {
     const { chem, asked } = plugin();
     expect(await isomersByMeno(chem, [b], blocksRead([b])!, { atoms: [], bonds: [] }, [], { most: 2, whole: true })).toEqual({ made: { tooMany: { counted: 3, bound: 3 } }, said: [] });
     expect(asked).toEqual([]);
-    const camphor = block("CC1(C)C2CCC1(C)C(=O)C2");
-    expect(await isomersByMeno(chem, [camphor], blocksRead([camphor])!, { atoms: [], bonds: [] }, [], { most: 32 })).toEqual({ notCounted: NOT_COUNTED_CAGE });
+    // (homoadamantane: two sets of tied bridgeheads in one ring system - not yet counted, said)
+    const homoadamantane = block("C1CC2CC3CC1CC(C2)C3");
+    expect(await isomersByMeno(chem, [homoadamantane], blocksRead([homoadamantane])!, { atoms: [], bonds: [] }, [], { most: 32 })).toEqual({ notCounted: NOT_COUNTED_JOINED });
   });
 
   it("makes as one those that differ only at an allene's axis, and says the rest cannot be made in 3D", async () => {
