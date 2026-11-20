@@ -90,6 +90,34 @@ describe("a structure drawn, as identity reads it", () => {
     expect(identityOfDrawn(phosphine(true)).unread).toEqual([]);
   });
 
+  it("says an allene's end is unread where its wedge states no axis - at its CH as at its end of two methyls - and reads it where the axis is one", () => {
+    // (2-methylpenta-2,3-diene: C2 (id 2) with its methyls 1 and 6, = C3 3 = C4 4, C4's methyl 5; a wedge at C4 or at C2;
+    //  `ethyl` an ethyl in place of the methyl 6 - 4-methylhexa-2,3-diene, an axis)
+    const allene = (at: "CH" | "CMe2", ethyl = false) => ({
+      atoms: [
+        { id: 1, el: "C", x: -1.3, y: 0.75, r: 0.9 },
+        { id: 2, el: "C", x: 0, y: 0, r: 0.9 },
+        { id: 3, el: "C", x: 1.3, y: 0, r: 0.9 },
+        { id: 4, el: "C", x: 2.6, y: 0, r: 0.9 },
+        { id: 5, el: "C", x: 3.9, y: 0.75, r: 0.9 },
+        { id: 6, el: "C", x: -1.3, y: -0.75, r: 0.9 },
+        ...(ethyl ? [{ id: 7, el: "C", x: -2.6, y: -1.5, r: 0.9 }] : []),
+      ],
+      bonds: [
+        { id: 11, a: 2, b: 1, order: 1 as const, ...(at === "CMe2" ? { stereo: "up" as const } : {}) },
+        { id: 12, a: 2, b: 3, order: 2 as const },
+        { id: 13, a: 3, b: 4, order: 2 as const },
+        { id: 14, a: 4, b: 5, order: 1 as const, ...(at === "CH" ? { stereo: "up" as const } : {}) },
+        { id: 15, a: 2, b: 6, order: 1 as const },
+        ...(ethyl ? [{ id: 16, a: 6, b: 7, order: 1 as const }] : []),
+      ],
+    });
+    expect(identityOfDrawn(allene("CH")).unread).toEqual([4]);
+    expect(identityOfDrawn(allene("CMe2")).unread).toEqual([2]);
+    expect(identityOfDrawn(allene("CH", true)).unread).toEqual([]);
+    expect(identityOfDrawn(allene("CMe2", true)).unread).toEqual([]);
+  });
+
   it("ignores a double bond drawn bent where one end's two other groups are alike, and keeps one where they are not", () => {
     // (HO-CH2-CH=C(CH3)R, its C=C across: the CH2 drawn up or down off it, in line with it, or by a wave; R a methyl - prenol - or none)
     const drawn = (ch2: "up" | "down" | "straight" | "wavy", second = true) => {
