@@ -7,8 +7,8 @@
  *
  * - **Renumbered**: the same structure and geometry, its atoms in the
  *   reference's order. What names atoms by number - a list per atom, a
- *   vibration's modes, restraints, its stereo elements - is renumbered with
- *   them, and a value worked out at its geometry still names that geometry,
+ *   vibration's modes, restraints, its stereo elements, a measure's name
+ *   (./measure) - is renumbered with them, and a value worked out at its geometry still names that geometry,
  *   now in the new order. Nothing else changes: its species, its other
  *   properties, its status.
  * - **Bond changes**: one row a bond, its atoms from 1 as a chemist reads
@@ -18,6 +18,7 @@
 import { geometryKey, type Entry, type Property, type PropertyValue } from "../entry";
 import type { BondChangeRow } from "../chem/reactionMap";
 import { ATOMS_FROM_1, type Table } from "../table";
+import { isMeasurementName, measurementAtoms, measurementName } from "./measure";
 
 /**
  * `e` renumbered: `order[i]` is the atom of `e` that is atom `i` now (from
@@ -49,6 +50,12 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
     return v;
   };
   const property = (p: Property): Property => ({ ...p, value: value(p.value), ...(p.at && keys.has(p.at.geometry) ? { at: { ...p.at, geometry: keys.get(p.at.geometry)! } } : {}) });
+  // (a measure named by its atoms as numbered now - one that names an atom it has not, never made, as it was)
+  const nameNow = (k: string) => {
+    if (!isMeasurementName(k)) return k;
+    const atoms = measurementAtoms(k);
+    return atoms.every((a) => a < n) ? measurementName(atoms.map((a) => now[a])) : k;
+  };
   const bonds = e.structure.bonds
     .map((b) => {
       const [a1, a2] = [now[b.a1], now[b.a2]].sort((x, y) => x - y);
@@ -61,7 +68,7 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
     from: [e.id],
     structure: { atoms: order.map((j) => ({ ...e.structure.atoms[j] })), bonds },
     geometry,
-    properties: Object.fromEntries(Object.entries(e.properties).map(([k, p]) => [k, property(p)])),
+    properties: Object.fromEntries(Object.entries(e.properties).map(([k, p]) => [nameNow(k), property(p)])),
     ...(e.stereo ? { stereo: e.stereo.perceived ? { ...e.stereo, elements: e.stereo.elements.map((s) => ({ ...s, atoms: s.atoms.map((a) => now[a]) })) } : e.stereo } : {}),
   };
 }
