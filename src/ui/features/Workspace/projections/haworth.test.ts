@@ -354,12 +354,13 @@ describe("a labelled group inside a Haworth ring", () => {
     return along.reduce((t, l) => t + Math.abs(l.y2 - l.y1), 0) / w.d.scale;
   };
 
-  it("stands on a stem that shows at least the text's own - 0.29 of the level bond up from a front atom - whatever the label: OH, H, HOH2C", () => {
-    // (C-2, atom 2, front right, under the ring O: the CH2OH written HOH2C, as the page showed it on a stub before)
-    // (an OH typed is an O, its H written beside it)
-    for (const label of ["O", "H", "HOH2C"]) {
-      const w = laidWith([[2, "up", label]]);
-      expect(stemOf(w, 2, w.atoms[6].y), label).toBeGreaterThanOrEqual(0.29);
+  it("stands on a stem that shows at least the text's own - 0.29 of the level bond up from a front atom - where its label is clear there", () => {
+    // (C-2, atom 2, front right, under the ring O: the CH2OH written HOH2C, as the page showed it on a stub before; C-3, atom 3, front
+    //  left. An OH typed is an O, its H written beside it - up from C-2 its H lies across the bond going up from C-2 at any length, and it
+    //  stands where main draws it: haworthLabels.test)
+    for (const [k, label] of [[2, "H"], [2, "HOH2C"], [3, "O"], [3, "H"], [3, "CH2OH"]] as const) {
+      const w = laidWith([[k, "up", label]]);
+      expect(stemOf(w, k, w.atoms[6].y), `C-${k} ${label}`).toBeGreaterThanOrEqual(0.29);
     }
   });
 

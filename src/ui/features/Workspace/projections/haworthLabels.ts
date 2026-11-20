@@ -56,14 +56,20 @@ export function meetsInk(box: Box, ink: ReturnType<typeof ringInk>): boolean {
 }
 
 /**
- * The labelled groups down from a Haworth ring's back atoms whose labels meet another inside the ring's picture - a back atom's H over a
- * front atom's OH, on one vertical - each moved up its vertical toward its ring atom by the smallest step that sets its label clear, all
- * its letters, of the ring's bonds as drawn (`ringInk`) and of the labels of the ring's other groups, to as little as
- * `HAWORTH_DOWN_LEAST`. A group whose label is clear where it stands stays there, and a group that is no label - a carbon drawn out - is
- * never moved. What each moved group carries goes with it. Where no step within reach sets them clear, they are left where they stand.
- * (A front atom's up group is not moved: its label is clear at its stem wherever it is clear at a shorter one - every pair of an O, an
- * H and a CH2OH up from the two front atoms, in either ring, MEASURED - so a shorter stem would clear nothing.) The moves, as atoms'
- * new places.
+ * How deep a label must reach into a line or a filled shape of the drawing for the two to meet, in the drawing's units: a tenth of one,
+ * about a tenth of a label's height - a label that only grazes a line, as many do on main, is not taken for one across it.
+ */
+export const INK_DEPTH = 0.1;
+
+/**
+ * The labelled groups inside a Haworth ring's picture - down from its back atoms, up from its front atoms - whose labels meet the
+ * drawing's ink or another label, each moved along its vertical toward its ring atom by the smallest step that sets every label clear:
+ * read against the whole drawing as the page lays it out (`layoutMolecule`, the bonds as drawn, the near edge's bold and wedge shapes
+ * among them; every line but a label's own bond; a meeting deeper than `INK_DEPTH`) and against the other labels. A back atom's down
+ * group gives way first, to as little as `HAWORTH_DOWN_LEAST`; then a front atom's up group, to as little as `HAWORTH_UP_BEFORE`, main's
+ * length. Where no step within reach sets them all clear, every front atom's up group goes to `HAWORTH_UP_BEFORE` and every back atom's
+ * down group back to where it was - as main draws them, so that nothing is drawn worse than there. A group that is no label - a carbon
+ * drawn out - is never moved; what each moved group carries goes with it. The moves, as atoms' new places.
  */
 export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts: LayoutOptions): { id: number; x: number; y: number }[] {
   const found = projectionsIn(model as Model).filter((p) => p.kind === "haworth");
@@ -90,7 +96,7 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
         const g = (around.get(id) ?? []).map((n) => byId.get(n)!).find((n) => !inRing.has(n.id) && Math.abs(n.x - a.x) < 1e-6 * h.scale && way * (n.y - a.y) > 0);
         return g && g.el !== "C" ? [{ ring: a, group: g, way, least: least * h.scale }] : [];
       });
-    const movers = inside(edge(Math.max(...ys)), -1, HAWORTH_DOWN_LEAST);
+    const movers = [...inside(edge(Math.max(...ys)), -1, HAWORTH_DOWN_LEAST), ...inside(edge(Math.min(...ys)), 1, HAWORTH_UP_BEFORE)];
     if (!movers.length) continue;
     // (what each group carries: reached from it without passing its ring atom)
     const carried = (g: number, from: number) => {
@@ -104,16 +110,16 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
       }
       return seen;
     };
-    // (what the labels are kept off: the ring's bonds as drawn - every one, its ink - and the labels of the ring's groups)
-    const ink = ringInk(model, ring, opts);
+    // (what the labels are kept off: the drawing's ink - the ring, its groups and theirs, as the page lays them out - and each other)
     const groupsOfRing = new Set(model.bonds.flatMap((b) => (inRing.has(b.a) && !inRing.has(b.b) ? [b.b] : inRing.has(b.b) && !inRing.has(b.a) ? [b.a] : [])));
-    const part = [...new Set([...ring, ...movers.flatMap((u) => [...carried(u.group.id, u.ring.id)]), ...groupsOfRing])];
+    // (each group of the ring, with what it carries: its ring atom the one it is bonded to in the ring)
+    const ringAtomOf = (g: number) => (around.get(g) ?? []).find((n) => inRing.has(n))!;
+    const part = [...new Set([...ring, ...[...groupsOfRing].flatMap((g) => [...carried(g, ringAtomOf(g))])])];
     const index = new Map(part.map((id, i) => [id, i]));
     const set = labelSetOf(opts);
     const faults = () => {
       const atoms = part.map((id) => ({ ...byId.get(id)!, ...place.get(id)! }));
-      const bonds = model.bonds.filter((b) => index.has(b.a) && index.has(b.b)).map((b) => ({ a1: index.get(b.a)!, a2: index.get(b.b)!, order: b.order }));
-      const lay = layoutMolecule(atoms as never, bonds as never, opts, 40);
+      const lay = layoutMolecule(atoms as never, layoutBonds(model.bonds.filter((b) => index.has(b.a) && index.has(b.b)), index) as never, opts, INK_ZOOM);
       const boxOf = (id: number): Box | null => {
         const i = index.get(id)!;
         const boxes = lay.texts
@@ -128,33 +134,45 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
       return movers.filter((u) => {
         const box = boxOf(u.group.id);
         if (!box) return false;
-        if (meetsInk(box, ink)) return true;
+        // (every line but the label's own bond - the one along its vertical, between its ring atom and itself - and every filled shape)
+        const g = place.get(u.group.id)!;
+        const [lo, hi] = [Math.min(u.ring.y, g.y), Math.max(u.ring.y, g.y)];
+        const own = (l: { x1: number; y1: number; x2: number; y2: number }) =>
+          Math.abs(l.x1 - u.ring.x) < 1e-6 && Math.abs(l.x2 - u.ring.x) < 1e-6 && Math.min(l.y1, l.y2) >= lo - 1e-6 && Math.max(l.y1, l.y2) <= hi + 1e-6;
+        const ink = { lines: lay.lines.filter((l) => !own(l)).map((l) => ({ p: { x: l.x1, y: l.y1 }, q: { x: l.x2, y: l.y2 }, half: 0 })), polys: lay.polys.map((q) => q.points) };
+        const deep = { minX: box.minX + INK_DEPTH, maxX: box.maxX - INK_DEPTH, minY: box.minY + INK_DEPTH, maxY: box.maxY - INK_DEPTH };
+        if (deep.minX < deep.maxX && deep.minY < deep.maxY && meetsInk(deep, ink)) return true;
         // (two labels visibly apart: a gap of `LABELS_APART` between them at the least)
         const gap = LABELS_APART * h.scale;
         return others.some((o) => o.id !== u.group.id && o.box.minX < box.maxX + gap && box.minX < o.box.maxX + gap && o.box.minY < box.maxY + gap && box.minY < o.box.maxY + gap);
       });
     };
     const lengthOf = (u: (typeof movers)[number]) => u.way * (place.get(u.group.id)!.y - u.ring.y);
-    // (where it began: a ring whose labels no step within reach sets clear is left as it was - a shorter stem that clears nothing is
-    //  no gain)
-    const began = new Map([...new Set(movers.flatMap((u) => [...carried(u.group.id, u.ring.id)]))].map((id) => [id, place.get(id)!]));
-    const movedHere = new Set<number>();
-    const longest = HAWORTH_GROUP[h.size].back.down * h.scale;
-    for (let k = 0; k <= 2 * Math.ceil(longest / (STEP * h.scale)); k++) {
-      const faulty = faults().filter((u) => lengthOf(u) > u.least + 1e-9);
-      if (!faulty.length) break;
-      for (const u of faulty) {
-        const now = lengthOf(u);
-        const dy = u.way * (Math.max(u.least, now - STEP * h.scale) - now);
-        for (const id of carried(u.group.id, u.ring.id)) {
-          const q = place.get(id)!;
-          place.set(id, { x: q.x, y: q.y + dy });
-          movedHere.add(id);
-        }
+    const moveTo = (u: (typeof movers)[number], length: number) => {
+      const dy = u.way * (length - lengthOf(u));
+      if (Math.abs(dy) < 1e-12) return;
+      for (const id of carried(u.group.id, u.ring.id)) {
+        const q = place.get(id)!;
+        place.set(id, { x: q.x, y: q.y + dy });
+        moved.add(id);
       }
+    };
+    const began = new Map(movers.map((u) => [u, lengthOf(u)]));
+    const longest = Math.max(HAWORTH_GROUP[h.size].front.up, HAWORTH_GROUP[h.size].back.down) * h.scale;
+    let clear = false;
+    for (let k = 0; k <= 2 * Math.ceil(longest / (STEP * h.scale)) + 2; k++) {
+      const faulty = faults().filter((u) => lengthOf(u) > u.least + 1e-9);
+      if (!faults().length) {
+        clear = true;
+        break;
+      }
+      if (!faulty.length) break;
+      // (a back atom's down group gives way first; a front atom's up group only where none is left to)
+      const giving = faulty.some((u) => u.way === -1) ? faulty.filter((u) => u.way === -1) : faulty;
+      for (const u of giving) moveTo(u, Math.max(u.least, lengthOf(u) - STEP * h.scale));
     }
-    if (faults().length) for (const [id, q] of began) place.set(id, q);
-    else for (const id of movedHere) moved.add(id);
+    // (none within reach clears them: as main draws them)
+    if (!clear) for (const u of movers) moveTo(u, u.way === 1 ? HAWORTH_UP_BEFORE * h.scale : began.get(u)!);
   }
   return [...moved].map((id) => ({ id, ...place.get(id)! })).filter((m) => m.y !== byId.get(m.id)!.y);
 }
