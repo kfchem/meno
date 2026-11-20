@@ -2774,6 +2774,10 @@ traced from reference drawings.
   letters and lines sharp at any size. A copy reaches the app as its bytes
   (`clipboard_write`, one body, the kinds listed in a header), and the
   bitmap for Windows is made there from the PNG (`src-tauri/src/dib.rs`).
+  Its pictures are made a step at a time, the drawing drawn between the
+  steps; a copy still being made after a quarter of a second says
+  "Copying…" in the corner, where other work in hand is said, until it is on
+  the clipboard. A paste waits for it, as before.
 - Drops are routed to the part of the page they land on (`src/lib/drop.ts`):
   a part that takes them - the drawing now; a tab strip, a workflow's node
   or a 3D view in time - registers as a drop zone, which says what it

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copying, forTheClipboard, framed, readClipboard, writeClipboard } from "./clipboard";
+import { copyBeingMade, copying, forTheClipboard, framed, onCopyMade, readClipboard, writeClipboard } from "./clipboard";
 
 /**
  * A copy takes a moment - its pictures are drawn before anything goes on
@@ -51,5 +51,25 @@ describe("a copy sent to the app", () => {
 
   it("sends nothing for no kinds", () => {
     expect(framed([])).toEqual({ listed: "", body: new Uint8Array(0) });
+  });
+});
+
+describe("a copy being made", () => {
+  it("is said from when it starts till it is done, or has failed, to whoever listens", async () => {
+    const told: boolean[] = [];
+    const stop = onCopyMade(() => told.push(copyBeingMade()));
+    let finish!: () => void;
+    const copied = copying(() => new Promise<void>((done) => (finish = done)));
+    expect(copyBeingMade()).toBe(true);
+    finish();
+    await copied;
+    await Promise.resolve();
+    expect(copyBeingMade()).toBe(false);
+    await copying(() => Promise.reject(new Error("no picture"))).catch(() => undefined);
+    await Promise.resolve();
+    expect(copyBeingMade()).toBe(false);
+    stop();
+    await copying(async () => undefined);
+    expect(told).toEqual([true, false, true, false]);
   });
 });

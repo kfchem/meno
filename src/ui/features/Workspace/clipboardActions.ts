@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef } from "react";
-import { clipboardFiles, copying, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clipboardFiles, copyBeingMade, copying, onCopyMade, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { quotedTables } from "../../../lib/io/kinds";
 import { isWorkspaceFile } from "./utils/workspace";
@@ -44,6 +44,32 @@ type Pt = { x: number; y: number };
  *   to be placed in 3D (`onCoordinates`; lib/io/coordinates).
  * - `copySmiles` puts the SMILES alone on the clipboard, as plain text.
  */
+/** How long a copy is made before "Copying…" is shown: a small one is done first, with nothing flashed. */
+export const COPYING_SHOWN_AFTER_MS = 250;
+
+/**
+ * Whether "Copying…" is shown: a copy being made (lib/clipboard
+ * `copyBeingMade`) for `COPYING_SHOWN_AFTER_MS` or longer, until it is done.
+ */
+export function useCopyingShown(): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const now = () => {
+      clearTimeout(timer);
+      if (!copyBeingMade()) setShown(false);
+      else timer = setTimeout(() => setShown(copyBeingMade()), COPYING_SHOWN_AFTER_MS);
+    };
+    const stop = onCopyMade(now);
+    now();
+    return () => {
+      stop();
+      clearTimeout(timer);
+    };
+  }, []);
+  return shown;
+}
+
 export function useClipboardActions(
   store: EditorStore,
   onError: (message: string) => void,

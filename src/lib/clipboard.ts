@@ -76,7 +76,28 @@ export function copying<T>(make: () => Promise<T>): Promise<T> {
   const made = make();
   const before = making;
   making = Promise.all([before, made.catch(() => undefined)]);
+  copiesMaking++;
+  heard();
+  void made.catch(() => undefined).then(() => {
+    copiesMaking--;
+    heard();
+  });
   return made;
+}
+
+let copiesMaking = 0;
+const listeners = new Set<() => void>();
+const heard = () => listeners.forEach((l) => l());
+
+/** Whether a copy is being made (`copying`), its pictures not yet on the clipboard. */
+export function copyBeingMade(): boolean {
+  return copiesMaking > 0;
+}
+
+/** `listener` told each time a copy starts being made or is done; the function returned stops it. */
+export function onCopyMade(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /** Puts `items` on the clipboard, in place of whatever was there. */
