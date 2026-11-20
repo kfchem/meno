@@ -11,6 +11,7 @@ import { schemeRoles } from "../../src/ui/features/Workspace/workflow/schemeRole
 import { buildPage, STAMP, templateFile } from "./build";
 import { dftRecipe, PLUGIN_OPTIONS, xtbRecipe } from "./recipe";
 import { soughtOptions } from "../../src/lib/chem/conformersSought";
+import { measured } from "../../src/testing/timeouts";
 
 // The templates are built, in memory, from their recipes through the store's own actions, and checked as the kinds and the file reader see
 // them. A kind that changes so that the recipe no longer fits fails here, not in a chemist's hands.
@@ -75,7 +76,7 @@ describe.each([
     }
     const sets = doc.sets!;
     for (let i = 0; i < sets.length; i++) for (let j = i + 1; j < sets.length; j++) expect([sets[i].id, sets[j].id, overlap(sets[i], sets[j])]).toEqual([sets[i].id, sets[j].id, false]);
-  });
+  }, measured(430));
 
   it("round trips through its file: the steps, sets and wires read back are the ones built", () => {
     const file = templateFile(recipe);

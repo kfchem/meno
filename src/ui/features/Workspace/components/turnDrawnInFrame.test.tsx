@@ -51,6 +51,7 @@ afterEach(async () => {
   for (const unmount of mounted.splice(0)) await unmount();
 
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 /** Whether something in the scene is turned as `turn` is: the molecule's view, placed. */
@@ -100,11 +101,16 @@ describe("a molecule let go while turning", () => {
     mounted.push(() => act(async () => void root.unmount()));
     const state = (_roots as unknown as Map<HTMLCanvasElement, { store: { getState(): RootState } }>).get(canvas)!.store.getState();
     const start = performance.now();
+    // (the frames' clock is the frames' own: each frame a sixtieth of a second after the last, however long the machine takes over it -
+    //  a busy machine's real time between frames would slow the coast to a stop, and the test would ask of a turn no frame makes)
+    let clock = start;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
     coasts.set(id, { axis: new THREE.Vector3(0, 1, 0), speed: 6, at: start });
     const seen: Turn3D[] = [];
     for (let k = 1; k <= 4; k++) {
       // (one frame; React let draw the page only between frames, as it is)
-      state.advance(start + k * (1000 / 60));
+      clock = start + k * (1000 / 60);
+      state.advance(clock);
       const now = store.getState().turns3d[id];
       expect(now, `frame ${k}`).toBeDefined();
       expect(drawnTurned(state.scene, now), `frame ${k}`).toBe(true);

@@ -12,6 +12,9 @@ import { implicitHydrogens } from "./molecule";
 import { runsOf } from "./perception/stereo/runs";
 import { configurationKey, groupsIn, type IsomerConfiguration, type ConfiguredCentre, type ConfiguredGroup, type GroupOnBond } from "./perception/stereo/configuration";
 import { readStereo, type DrawnAtom, type DrawnBond } from "./perception/stereo/from2d";
+import { CENTRE_ELEMENTS, NOT_CANDIDATE, notCandidate } from "./perception/stereo/candidates";
+import { metal } from "./perception/elements";
+import type { SymmetryInput } from "./perception/symmetry";
 
 // (the C=N bonds whose E/Z is none of their own, with why: the core's - perception/stereo/movingCN)
 export { MOVING_CN, movingCN, type MovingWhy } from "./perception/stereo/movingCN";
@@ -61,6 +64,28 @@ function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]):
     bonds.filter((b) => b.order === 4 || (b.order >= 1 && b.order <= 3)),
   );
   return (at) => lonePairOfThree(atoms[at].el, atoms[at].charge ?? 0, around[at], orders[at], hs[at]) && !keeps(at);
+}
+
+/**
+ * The centres the toolkit perceives that the core refuses by the atom's
+ * kind (perception/stereo/candidates): a metal, at any count of groups -
+ * of the d or f block, or Li, Mg, Al and the like, not Sn, Pb or Bi
+ * (`CENTRE_ELEMENTS`) - and an N+ with an H (`notCandidate`), as Meno's reading of a drawing refuses them (perception/stereo/from2d).
+ * Whatever the toolkit flags as possible there - Pd(PPh3)4's Pd - no such
+ * atom is left open on the page. (Its count of groups and hydrogens is the
+ * toolkit's own to read, as it perceives the centre.)
+ */
+function notCandidateCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): (at: number) => boolean {
+  const hs = implicitOf(atoms, bonds);
+  const g: SymmetryInput = {
+    atoms: atoms.map((a, i) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), hs: hs[i] })),
+    bonds: bonds.map(({ a, b, order }) => ({ a, b, order })),
+  };
+  // (a metal at any count of groups - one of five or six is asked of its count first - but tin, lead and bismuth, which are centres)
+  // (the core asked only of an N+, where an ammonium can be: each ask reads the whole structure again)
+  return (at) =>
+    (metal.has(atoms[at].el) && !CENTRE_ELEMENTS.has(atoms[at].el)) ||
+    (atoms[at].el === "N" && (atoms[at].charge ?? 0) > 0 && notCandidate(g, { kind: "centre", at }) === NOT_CANDIDATE.ammonium);
 }
 
 /** What a structure's C=N bonds left open whose E/Z is none of their own are, in a line - each reason once - or null. */
@@ -199,8 +224,9 @@ export function stereoLeft(elements: readonly StereoElement[], atoms: readonly S
   const left = doubles.filter((i) => !moving.has(i)).sort(byIndex);
   const cumulenes = openCumulenes(bonds, left);
   const none = notCentres(atoms, bonds);
+  const refused = notCandidateCentres(atoms, bonds);
   return {
-    atoms: open.filter((e) => e.kind === "centre" && !none(e.at)).map((e) => e.at).sort(byIndex),
+    atoms: open.filter((e) => e.kind === "centre" && !none(e.at) && !refused(e.at)).map((e) => e.at).sort(byIndex),
     bonds: left,
     cumulenes,
     cumulated: cumulatedRuns(bonds, cumulenes),

@@ -102,7 +102,7 @@ export function layout2D(input: LayoutInput): Layout2D {
     laidOutBefore.set(key, laid);
     if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
   }
-  const out = onSpokes(input, restored(structuredClone(laid), to));
+  const out = chelatesOpened(input, onSpokes(input, restored(structuredClone(laid), to)));
   laidOutAsGiven.set(given, structuredClone(out));
   if (laidOutAsGiven.size > LAID_OUT_KEPT) laidOutAsGiven.delete(laidOutAsGiven.keys().next().value!);
   return out;
@@ -139,8 +139,7 @@ function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
     };
     // (laid out as three lines: four donors or more on their spokes already, each on its own; the others turned onto the spokes left -
     // however far a step after the lines were set moved them, an NH2's H given room, say)
-    // (laid out as three lines at all: four donors on their spokes as the lines set them, not merely near - a macrocycle's square, its N
-    // 15 degrees off the spokes, is no three lines)
+    // (laid out as three lines at all: four donors on or by their spokes - a macrocycle's square, its N 15 degrees off them, is none)
     if (round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_ON).length < 4) return;
     const onIt = round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_SNAP);
     const usedSpokes = new Set(onIt.map((v) => spokeOf(angle(v))));
@@ -179,6 +178,81 @@ function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
         const [dx, dy] = [h.at.x - out.x[m], h.at.y - out.y[m]];
         return { ...h, at: { x: out.x[m] + dx * c - dy * sn, y: out.y[m] + dx * sn + dy * c } };
       });
+    }
+  });
+  return out;
+}
+
+/**
+ * Each six-bond metal laid out as three lines whose chelates of five atoms - the metal, two donors and two atoms between them in a
+ * chain of their own (ethane-1,2-diamine's) - have labelled donors carrying H: those donors moved out along their own spokes to
+ * `CHELATE_OPENED` and the two atoms between them set again, each bond of the ring still one long and its angles opened (Brecher
+ * 2008, GR-4.3.5: of rings sharing an atom, only the bonds to it lengthened; GR-4.3.7: no further than needed), what each carries
+ * moved with it. Next to each other on spokes 60 degrees apart, two such donors stood a bond and a little apart and their H met each
+ * other and the metal's label. A ring of other atoms - an aromatic ring's, a carbonyl's - is left as it is. `out` itself, changed.
+ */
+function chelatesOpened(input: LayoutInput, out: Layout2D): Layout2D {
+  const near = input.atoms.map(() => [] as number[]);
+  for (const { a, b } of input.bonds) {
+    near[a].push(b);
+    near[b].push(a);
+  }
+  const labelled = (v: number) => input.atoms[v].el !== "C" && (input.atoms[v].hs ?? 0) > 0;
+  const moveWith = (v: number, ring: Set<number>, dx: number, dy: number) => {
+    // (what an atom carries out of the ring, moved as it is)
+    const side = new Set([v]);
+    for (const todo = [v]; todo.length; ) {
+      for (const w of near[todo.pop()!]) {
+        if (ring.has(w) || side.has(w)) continue;
+        side.add(w);
+        todo.push(w);
+      }
+    }
+    for (const w of side) {
+      out.x[w] += dx;
+      out.y[w] += dy;
+    }
+    out.hydrogens = out.hydrogens.map((h) => (side.has(h.on) ? { ...h, at: { x: h.at.x + dx, y: h.at.y + dy } } : h));
+  };
+  near.forEach((round, m) => {
+    if (round.length !== 6 || out.depth[m] != null || !isMetal(input.atoms[m].el)) return;
+    // (laid out as three lines: its six spokes 60 degrees apart - a macrocycle's metal, its donors square, is left as it is)
+    const ways = round.map((v) => Math.atan2(out.y[v] - out.y[m], out.x[v] - out.x[m])).sort((p, q) => p - q);
+    if (!ways.every((t, i) => Math.abs((i + 1 < 6 ? ways[i + 1] : ways[0] + 2 * Math.PI) - t - Math.PI / 3) <= SPOKES_EVEN)) return;
+    for (const d1 of round) {
+      for (const d2 of round) {
+        if (d2 <= d1 || !labelled(d1) || !labelled(d2)) continue;
+        // (a chain d1 - x1 - x2 - d2, x1 and x2 in no other ring and bound to nothing else of the ring)
+        const x1 = near[d1].find((v) => v !== m && near[v].some((w) => w !== d1 && near[w].includes(d2) && w !== m));
+        if (x1 == null) continue;
+        const x2 = near[x1].find((w) => w !== d1 && near[w].includes(d2));
+        if (x2 == null || [x1, x2].some((v) => input.atoms[v].el !== "C" || input.bonds.some((b) => (b.a === v || b.b === v) && b.order !== 1))) continue;
+        // (what a donor carries stops at the metal's other donors: a tridentate's middle donor carries its other ring's atoms, not the
+        //  donor at its far end - that ring is set again in its own turn)
+        const ring = new Set([m, d1, x1, x2, d2, ...round]);
+        const way = (v: number) => Math.atan2(out.y[v] - out.y[m], out.x[v] - out.x[m]);
+        const [t1, t2] = [way(d1), way(d2)];
+        const reach = (d: number) => Math.hypot(out.x[d] - out.x[m], out.y[d] - out.y[m]);
+        if (Math.min(reach(d1), reach(d2)) >= CHELATE_OPENED - 1e-9) continue;
+        // (the donors out along their own spokes)
+        for (const [d, t] of [[d1, t1], [d2, t2]] as const) {
+          moveWith(d, ring, out.x[m] + CHELATE_OPENED * Math.cos(t) - out.x[d], out.y[m] + CHELATE_OPENED * Math.sin(t) - out.y[d]);
+        }
+        // (the two between them set again: a bond from each donor and one between, away from the metal, the ring as an even trapezoid)
+        const [p, q] = [{ x: out.x[d1], y: out.y[d1] }, { x: out.x[d2], y: out.y[d2] }];
+        const half = Math.hypot(q.x - p.x, q.y - p.y) / 2;
+        if (half > 1.5) continue;
+        const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        const along = { x: (q.x - p.x) / (2 * half), y: (q.y - p.y) / (2 * half) };
+        let outward = { x: -along.y, y: along.x };
+        if (outward.x * (mid.x - out.x[m]) + outward.y * (mid.y - out.y[m]) < 0) outward = { x: -outward.x, y: -outward.y };
+        // (the two between stand 0.5 either side of the middle across, at the height a bond from each donor reaches)
+        const rise = Math.sqrt(Math.max(0, 1 - (half - 0.5) ** 2));
+        const at1 = { x: mid.x - 0.5 * along.x + rise * outward.x, y: mid.y - 0.5 * along.y + rise * outward.y };
+        const at2 = { x: mid.x + 0.5 * along.x + rise * outward.x, y: mid.y + 0.5 * along.y + rise * outward.y };
+        moveWith(x1, ring, at1.x - out.x[x1], at1.y - out.y[x1]);
+        moveWith(x2, ring, at2.x - out.x[x2], at2.y - out.y[x2]);
+      }
     }
   });
   return out;
@@ -1838,10 +1912,16 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
 
 /** How far from 60 degrees apart a six-bond metal's neighbours may stand and still be three lines through it, as laid out. */
 const SPOKES_EVEN = rad(10);
+/** How long a six-bond metal's bond to a chelate's labelled donor is drawn where the donors' labels would meet (`chelatesOpened`). */
+export const CHELATE_OPENED = 1.8;
+
 /** How far off its spoke a donor of such a metal may lie and still count as on it, its slip turned back (`onSpokes`). */
 const SPOKES_SNAP = rad(15);
-/** How near its spoke a donor stands where the three lines set it: four such show the metal laid out so (`onSpokes`). */
-const SPOKES_ON = rad(2);
+/**
+ * How near its spoke a donor stands where the three lines set it, or a step after moved it a little: four such show the metal laid out
+ * so (`onSpokes`). A square's donors stand 15 degrees off every spoke, whichever way it is turned: never taken for three lines.
+ */
+const SPOKES_ON = rad(10);
 
 /**
  * A six-bond atom of `piece` - a metal, or SF6's S - whose neighbours

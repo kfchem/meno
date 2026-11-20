@@ -245,3 +245,38 @@ describe("stereoisomers each once, by their configuration", () => {
     expect(configurationKey(two)).toBe(configurationKey({ centres: [...two.centres].reverse(), doubles: [] }));
   });
 });
+
+describe("a centre the toolkit flags that Meno holds no candidate", () => {
+  const centre = (at: number) => ({ kind: "centre" as const, at, state: "unspecified" as const });
+  const ph = "c1ccccc1";
+
+  it("is never left open: a metal - Pd(PPh3)4's Pd, PdCl2(PPh3)2's, the Ru of Grubbs' first catalyst", () => {
+    const p = `P(${ph})(${ph})${ph}`;
+    for (const smiles of [`[Pd](${p})(${p})(${p})${p}`, `Cl[Pd](Cl)(${p})${p}`, "Cl[Ru](Cl)(=Cc1ccccc1)(P(C1CCCCC1)(C1CCCCC1)C1CCCCC1)P(C1CCCCC1)(C1CCCCC1)C1CCCCC1"]) {
+      const m = mol(smiles);
+      const metal = m.atoms.findIndex((a) => a.el === "Pd" || a.el === "Ru");
+      expect(stereoLeft([centre(metal)], m.atoms, m.bonds).atoms, smiles).toEqual([]);
+    }
+  });
+
+  it("is never left open: a metal of the main groups - a magnesium the toolkit flags", () => {
+    const m = mol("C[Mg](CC)(Br)Cl");
+    expect(stereoLeft([centre(1)], m.atoms, m.bonds).atoms).toEqual([]);
+  });
+
+  it("is never left open: an N+ with an H", () => {
+    const m = mol("C[NH+](CC)CCC");
+    expect(stereoLeft([centre(1)], m.atoms, m.bonds).atoms).toEqual([]);
+  });
+
+  it("is left open where Meno holds one: a phosphine's P chiral on palladium, PMePhPr on PdCl2, a carbon, a tin", () => {
+    const m = mol("Cl[Pd](Cl)P(C)(c1ccccc1)CCC");
+    const p = m.atoms.findIndex((a) => a.el === "P");
+    expect(stereoLeft([centre(p)], m.atoms, m.bonds).atoms).toEqual([p]);
+    const c = mol("CC(O)CC");
+    expect(stereoLeft([centre(1)], c.atoms, c.bonds).atoms).toEqual([1]);
+    // (tin, a metal that is a centre of four: a stannane of four unlike groups)
+    const sn = mol("C[Sn](CC)(CCC)c1ccccc1");
+    expect(stereoLeft([centre(1)], sn.atoms, sn.bonds).atoms).toEqual([1]);
+  });
+});

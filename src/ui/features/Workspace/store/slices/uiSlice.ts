@@ -9,7 +9,7 @@ import type { WorkspaceDocument } from "../../document";
 import { EditorState, type Atom } from "../types";
 import type { LeftOut } from "../../utils/readNotes";
 import { StoreApi } from "zustand";
-import type { StyleChoice } from "../../../../../lib/chem/style";
+import { styleOf, type StyleChoice } from "../../../../../lib/chem/style";
 import { style3dIn, type Workspace3D } from "../../../../../lib/chem/workspaceStyle3d";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { fitResultSets } from "../../workflow/run";
@@ -20,6 +20,8 @@ import { abbreviationOf, labelRefused, readsAsNothing } from "../../../../../lib
 import { implicitHydrogens } from "../../../../../lib/chem/molecule";
 import { restyledDocument } from "../../restyle";
 import { easeStyle } from "../../styleEase";
+import { haworthLabelsStepped } from "../../projections/haworthLabels";
+import { editorLayoutOptions } from "../../layoutOptions";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -151,12 +153,16 @@ export function createUiSlice(
             return a && !readsAsNothing(a.el) ? [[i, a.el] as const] : [];
           }),
         );
-        changed = doc.edit(ids.length > 1 ? `label ${ids.length} atoms: ${value}` : "rename atom", (d) =>
-          ids.reduce((acc, i) => {
+        changed = doc.edit(ids.length > 1 ? `label ${ids.length} atoms: ${value}` : "rename atom", (d) => {
+          const labelled = ids.reduce((acc, i) => {
             const at = acc.model.atoms.find((a) => a.id === i);
             return at ? ops.setAtomChemistry(acc, i, chem(acc, at), as) : acc;
-          }, d),
-        );
+          }, d);
+          // (a labelled group up from a Haworth ring's front atom, its label with no clear way where it stands - beside another inside
+          //  the ring - stepped down its vertical until it is clear, in the same step: projections/haworthLabels)
+          const steps = haworthLabelsStepped(labelled.model, editorLayoutOptions(styleOf(labelled.style)));
+          return steps.length ? ops.placeAtoms(labelled, steps) : labelled;
+        });
         // (the H typed are not what its bonds give - CH2 on a carbon of three bonds - said: it is drawn with its bonds' own, the
         // compound as drawn; a label never changes it)
         if (changed && typedH) {

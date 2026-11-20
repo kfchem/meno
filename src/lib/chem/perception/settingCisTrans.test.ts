@@ -242,7 +242,7 @@ describe("a cis or trans needs two trigonal-planar ends", () => {
 
   it("(E)- and (Z)-propanethial S-oxide (a sulfine: its S of two neighbours and a lone pair), a disilene, a C=C, an N=N and a C=N: kept, two identities each", () => {
     for (const [a, b] of [
-      ["CC/C=S/O", "CC/C=S\\O"],
+      ["CC/C=[S+]/[O-]", "CC/C=[S+]\\[O-]"],
       ["C/[Si](c1ccccc1)=[Si](/C)c1ccccc1", "C/[Si](c1ccccc1)=[Si](\\C)c1ccccc1"],
       ["C/C=C/C", "C/C=C\\C"],
       ["C/N=N/C", "C/N=N\\C"],

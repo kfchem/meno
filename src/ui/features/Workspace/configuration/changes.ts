@@ -111,7 +111,9 @@ export function changesAgainstKept(before: Model, after: Model): { changes: Conf
   const parts = partsTouched(before, after);
   if (!parts) return null;
   const now = readingOf(parts.now);
-  const was = keepsAny(parts.now) ? keptReading(parts.now, now.said) : readingOf(parts.was);
+  // (against what was kept before the edit - the drawing's before, not its after, which the keep made at once may already have rewritten)
+  const read = readingOf(parts.was);
+  const was = keepsAny(parts.was) ? keptReading(parts.was, read.said) : read;
   return { changes: changesBetween(was, now, parts.now), ids: new Set(parts.now.atoms.map((a) => a.id)), kept: keptFrom(parts.now, now) };
 }
 
