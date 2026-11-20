@@ -82,6 +82,14 @@ describe("groups written as their formulas", () => {
     expect(written(fromSmiles("FC(F)(F)Oc1ccccc1"))).toEqual(["OCF3"]);
   });
 
+  it("counts an H drawn on the atom once: CHCl2 and CHF2 with their H drawn are written as with it not drawn (the chemistry check's ruling)", () => {
+    expect(written(fromSmiles("ClC(Cl)c1ccccc1"))).toEqual(["CHCl2"]);
+    expect(written(fromSmiles("[H]C(Cl)(Cl)c1ccccc1"))).toEqual(["CHCl2"]);
+    expect(written(fromSmiles("[H]C(F)(F)c1ccccc1"))).toEqual(["CHF2"]);
+    // (a CH2Cl, one halogen: no group of halogens, its H drawn or not)
+    for (const smiles of ["ClCc1ccccc1", "[H]C(Cl)c1ccccc1", "[H]C([H])(Cl)c1ccccc1"]) expect(written(fromSmiles(smiles)), smiles).toEqual(written(fromSmiles("ClCc1ccccc1")));
+  });
+
   it("draws acids, amides, nitriles and sulfonyl groups, and the group's own small molecule", () => {
     // trifluoroacetic acid: its CF3 by formula, its CO2H drawn
     expect(written(fromSmiles("OC(=O)C(F)(F)F"))).toEqual(["CF3"]);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
 import { FISCHER_CROSS } from "./structure";
-import { bondLength, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
+import { bondLength, DASHED_ROW, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import atp from "./fixtures/atp-rdkit.json";
@@ -702,6 +702,158 @@ describe("a figure read as a structure", () => {
     expect(s.atoms).toHaveLength(6);
   });
 
+  describe("a row of dashes along a line - a bond forming or breaking, a weak bond", () => {
+    /** Dashes from `p` to `q`: `n` of them, each `long` points, evenly spaced, filled bars as some programs draw them. */
+    const dashes = (p: P, q: P, n: number, long: number): FigurePath[] => {
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const [ux, uy] = [(q[0] - p[0]) / d, (q[1] - p[1]) / d];
+      const gap = (d - n * long) / (n - 1);
+      return Array.from({ length: n }, (_, k) => {
+        const s = k * (long + gap);
+        const a: P = [p[0] + ux * s, p[1] + uy * s];
+        const b: P = [a[0] + ux * long, a[1] + uy * long];
+        return filled([a[0] - uy * 0.3, a[1] + ux * 0.3], [b[0] - uy * 0.3, b[1] + ux * 0.3], [b[0] + uy * 0.3, b[1] - ux * 0.3], [a[0] + uy * 0.3, a[1] - ux * 0.3]);
+      });
+    };
+    // (two chains of three, the end of one a bond from the end of the other)
+    const left: P[] = [[40, 60], step([40, 60], 30), step(step([40, 60], 30), -30)];
+    const right: P[] = [[left[2][0] + L, left[2][1]], [left[2][0] + L + L * 0.866, left[2][1] - L / 2], [left[2][0] + L + 2 * L * 0.866, left[2][1]]];
+    const chains = [stroke(left[0], left[1]), stroke(left[1], left[2]), stroke(right[0], right[1]), stroke(right[1], right[2])];
+    it("is no bond between the atoms at its ends, and each says so: two structures, not one", () => {
+      const f = readFigure(figure([...chains, ...dashes([left[2][0] + 0.12 * L, left[2][1]], [right[0][0] - 0.12 * L, right[0][1]], 4, 0.13 * L)]));
+      expect(f.bonds).toHaveLength(4);
+      expect(f.atoms).toHaveLength(6);
+      const marked = f.atoms.filter((a) => a.unsure?.includes(DASHED_ROW));
+      expect(marked.map((a) => [Math.round(a.x), Math.round(a.y)])).toEqual([left[2], right[0]].map((p) => p.map(Math.round)));
+    });
+    it("is no chain of short bonds where a chart draws its line dashed: forty dashes, none of them a bond", () => {
+      const f = readFigure(figure([...chains, ...dashes([60, 200], [60 + 12 * L, 200 - 3 * L], 40, 0.2 * L)]));
+      expect(f.bonds).toHaveLength(4);
+    });
+    it("is not two dashes: a line broken once, where another passes, is joined as before", () => {
+      const f = readFigure(figure([...chains, ...dashes([left[2][0] + 0.12 * L, left[2][1]], [right[0][0] - 0.12 * L, right[0][1]], 2, 0.3 * L)]));
+      expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
+    });
+    it("is not a row whose gaps differ: three short lines, gaps of 0.06 and 0.15 of a bond, stay as they were", () => {
+      const p: P = [left[2][0] + 0.12 * L, left[2][1]];
+      const bits = [stroke(p, [p[0] + 0.2 * L, p[1]]), stroke([p[0] + 0.26 * L, p[1]], [p[0] + 0.46 * L, p[1]]), stroke([p[0] + 0.61 * L, p[1]], [p[0] + 0.81 * L, p[1]])];
+      const f = readFigure(figure([...chains, ...bits]));
+      expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
+    });
+    /** Short lines on the line from `p` level to the right: each `long` of a bond, `gap` of a bond apart, all but the first turned `deg` about its middle. */
+    const row = (n: number, long: number, gap: number, deg = 0): FigurePath[] => {
+      const p: P = [left[2][0] + 0.12 * L, left[2][1]];
+      return Array.from({ length: n }, (_, k) => {
+        // (the first level: the row's line is its)
+        const [c, s] = [Math.cos(((k ? deg : 0) * Math.PI) / 180), Math.sin(((k ? deg : 0) * Math.PI) / 180)];
+        const m = p[0] + (k * (long + gap) + long / 2) * L;
+        return stroke([m - (c * long * L) / 2, p[1] - (s * long * L) / 2], [m + (c * long * L) / 2, p[1] + (s * long * L) / 2]);
+      });
+    };
+    const said = (paths: FigurePath[]) => readFigure(figure([...chains, ...paths])).atoms.some((a) => a.unsure?.includes(DASHED_ROW));
+    it("is not three pieces of half a bond each, as a line broken twice where two lines pass in front of it: no dashed line is said", () => {
+      expect(said(row(3, 0.5, 0.15))).toBe(false);
+    });
+    it("is not a row of marks under a tenth of a bond long: six of 0.08, 0.06 apart", () => {
+      expect(said(row(6, 0.08, 0.06))).toBe(false);
+    });
+    it("is not a row whose gaps are longer than its dashes: three of 0.15, 0.3 apart", () => {
+      expect(said(row(3, 0.15, 0.3))).toBe(false);
+    });
+    it("is not a row under half a bond long in all: three of 0.12, 0.06 apart", () => {
+      expect(said(row(3, 0.12, 0.06))).toBe(false);
+      expect(said(row(3, 0.14, 0.06))).toBe(true);
+    });
+    it("is not three short lines on one line, the second and third turned 30 degrees from it", () => {
+      expect(said(row(3, 0.15, 0.08, 30))).toBe(false);
+      expect(said(row(3, 0.2, 0.08, 0))).toBe(true);
+    });
+    it("is not a line drawn in pieces end to end, a fiftieth of a bond apart: no dashed line is said", () => {
+      const p: P = left[2];
+      const bits = [0, 1, 2, 3].map((k) => stroke([p[0] + k * 0.25 * L, p[1]], [p[0] + (k * 0.25 + 0.23) * L, p[1]]));
+      const f = readFigure(figure([...chains, ...bits]));
+      expect(f.atoms.some((a) => a.unsure?.includes(DASHED_ROW))).toBe(false);
+    });
+  });
+
+  describe("a curved arrow - an electron-pushing arrow - drawn over a structure", () => {
+    // (a ring of six, and an arrow's curve over it: an arc of a third of a bond's radius, its head a dart at its end, as a mechanism draws one)
+    const ring: P[] = Array.from({ length: 6 }, (_, i) => step([80, 80], 60 * i));
+    const lines = ring.map((p, i) => stroke(p, ring[(i + 1) % 6]));
+    const c: P = [80 + 0.5 * L, 80 - 0.9 * L];
+    const r = 0.35 * L;
+    const on = (rad: number, deg: number): P => [c[0] + rad * Math.cos((deg * Math.PI) / 180), c[1] - rad * Math.sin((deg * Math.PI) / 180)];
+    const degs = Array.from({ length: 13 }, (_, k) => 200 - 10 * k);
+    // (the dart at the arc's end, 80 degrees: its notch there, its tip half a bond on along the arc's way, cut in a sixth)
+    const end = on(r, degs[degs.length - 1]);
+    const way: P = [Math.sin((80 * Math.PI) / 180), Math.cos((80 * Math.PI) / 180)];
+    const tip: P = [end[0] + 5 * way[0], end[1] + 5 * way[1]];
+    const back: P = [tip[0] - 6 * way[0], tip[1] - 6 * way[1]];
+    const dart = filled([back[0] - 2 * way[1], back[1] + 2 * way[0]], end, [back[0] + 2 * way[1], back[1] - 2 * way[0]], tip);
+    it("is no part of the structure, its curve drawn as a thin filled outline: its head no wedge", () => {
+      const outline: FigurePath = { fill: "#000000ff", stroke: null, width: 0, d: [...degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r + 0.4, d)]), ...[...degs].reverse().map((d): PathStep => ["C", ...on(r - 0.4, d)]), ["Z"]] };
+      const s = read(figure([...lines, outline, dart]));
+      expect(s.bonds).toHaveLength(6);
+      expect(s.bonds.some((b) => b.stereo)).toBe(false);
+      expect(s.atoms).toHaveLength(6);
+    });
+    it("is no part of the structure, its curve stroked", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      const s = read(figure([...lines, curve, dart]));
+      expect(s.bonds).toHaveLength(6);
+      expect(s.bonds.some((b) => b.stereo)).toBe(false);
+    });
+    it("takes the curve and its head out of the shapes, a tight curve too, filling a third of its box: no letter of it", () => {
+      // (an arc of an eighth of a bond's radius, 0.8 thick, over 120 degrees - as tight as a short arrow over a bond: it fills 0.4 of its box)
+      const r2 = 0.12 * L;
+      const at = (rad: number, deg: number): P => [c[0] + rad * Math.cos((deg * Math.PI) / 180), c[1] - rad * Math.sin((deg * Math.PI) / 180)];
+      const ds = Array.from({ length: 13 }, (_, k) => 200 - 10 * k);
+      const e = at(r2, 80);
+      const tp: P = [e[0] + 5 * way[0], e[1] + 5 * way[1]];
+      const bk: P = [tp[0] - 6 * way[0], tp[1] - 6 * way[1]];
+      const head = filled([bk[0] - 2 * way[1], bk[1] + 2 * way[0]], e, [bk[0] + 2 * way[1], bk[1] - 2 * way[0]], tp);
+      const outline: FigurePath = { fill: "#000000ff", stroke: null, width: 0, d: [...ds.map((d, k): PathStep => [k ? "C" : "M", ...at(r2 + 0.4, d)]), ...[...ds].reverse().map((d): PathStep => ["C", ...at(r2 - 0.4, d)]), ["Z"]] };
+      const shapes = shapesOf(figure([...lines, outline, head]));
+      expect(shapes.wedges).toHaveLength(0);
+      expect(shapes.blobs).toHaveLength(0);
+      expect(shapes.strokes).toHaveLength(6);
+    });
+    it("leaves a wedge a wedge where its wide end, cut in a little where it meets two bonds, meets a curve", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (its wide end 4 wide, cut in a twentieth of its length at the middle)
+      const [ux, uy] = unit(ring[1], end);
+      const l = Math.hypot(end[0] - ring[1][0], end[1] - ring[1][1]);
+      const notched = filled(ring[1], [end[0] - uy * 2, end[1] + ux * 2], [end[0] - ux * 0.05 * l, end[1] - uy * 0.05 * l], [end[0] + uy * 2, end[1] - ux * 2]);
+      const s = read(figure([...lines, curve, notched]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+    it("leaves a dart a wedge where no curve's end meets its cut-in corner: a curve elsewhere", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (a dart out of the ring's lowest corner, pointing into it, its cut-in corner far from the curve over the ring's top)
+      const at = ring[4];
+      const [ox, oy] = unit([80 + 0.5 * L, 80 + 0.87 * L * 0], at);
+      const wide: P = [at[0] + 6 * ox, at[1] + 6 * oy];
+      const notch: P = [at[0] + 5 * ox, at[1] + 5 * oy];
+      const s = read(figure([...lines, curve, filled([wide[0] - 2 * oy, wide[1] + 2 * ox], notch, [wide[0] + 2 * oy, wide[1] - 2 * ox], at)]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+    it("leaves a wedge a wedge whose wide end comes to a point, convex, where it meets a curve: no corner cut in", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (narrow at the ring's top corner, its two wide corners 4 apart, and past them a point a quarter of its length on, at the curve's end)
+      const [ux, uy] = unit(ring[1], end);
+      const l = Math.hypot(end[0] - ring[1][0], end[1] - ring[1][1]);
+      const mid: P = [end[0] - ux * 0.2 * l, end[1] - uy * 0.2 * l];
+      const s = read(figure([...lines, curve, filled(ring[1], [mid[0] - uy * 2, mid[1] + ux * 2], end, [mid[0] + uy * 2, mid[1] - ux * 2])]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+    it("leaves a wedge a wedge where its wide end meets a curve: a wedge has no corner cut in", () => {
+      const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: degs.map((d, k): PathStep => [k ? "C" : "M", ...on(r, d)]) };
+      // (a wedge out of the ring's top corner, its wide end at the curve's end)
+      const s = read(figure([...lines, curve, wedge(ring[1], end)]));
+      expect(s.bonds.filter((b) => b.stereo === "up")).toHaveLength(1);
+    });
+  });
+
   it("joins a bond broken where a wedge passes in front of it, as a perspective drawing's near edge does", () => {
     const a: P = [40, 40];
     const b: P = [40 + 2 * L, 40];
@@ -742,6 +894,24 @@ describe("a figure read as a structure", () => {
     const corner = f.atoms.findIndex((a) => !a.label && Math.hypot(a.x - k[0], a.y - k[1]) < 1);
     expect(corner).toBeGreaterThanOrEqual(0);
     expect(bondsOf(corner)).toHaveLength(2);
+  });
+
+  // (the edge of the tenth of a bond at which two ends meet, held on both sides; found in review)
+  it("a bar's end and a wedge's 0.075 or 0.09 bond apart meet: the corner is a carbon; 0.11 or 0.125 apart they do not: the Me takes both", () => {
+    const read = (d: number) => {
+      // (the Me test's drawing, the wedge cut short `d` bonds, its base that far from the bar's end)
+      const k: P = [100, 100];
+      const r: P = [k[0] + L * 0.96, k[1] - L * 0.29];
+      const t: P = [k[0] - L * 0.5, k[1] - L * 0.87];
+      const v: P = [103, 98.5 - L];
+      const [ux, uy] = unit(k, r);
+      const bar = filled([k[0] - uy, k[1] + ux], [r[0] - uy, r[1] + ux], [r[0] + uy, r[1] - ux], [k[0] + uy, k[1] - ux]);
+      const f = readFigure(figure([bar, wedge(t, along(t, k, 1 - d)), stroke(v, [103, 98.5]), stroke(step(t, 150), t), stroke(r, step(r, -30)), stroke(step(v, 30), v)], word("Me", [99.4, 104.2])), () => true);
+      const me = f.atoms.findIndex((a) => a.label === "Me");
+      return { me: f.bonds.filter((b) => b.a === me || b.b === me).length, corner: f.atoms.some((a) => !a.label && Math.hypot(a.x - k[0], a.y - k[1]) < 1) };
+    };
+    for (const d of [0.075, 0.09]) expect(read(d), `${d}`).toEqual({ me: 1, corner: true });
+    for (const d of [0.11, 0.125]) expect(read(d), `${d}`).toEqual({ me: 3, corner: false });
   });
 
   it("reads a word that reads as nothing and has no capital, with bonds to either side of it, as one label", () => {
@@ -1269,6 +1439,58 @@ describe("a figure's charges drawn in rings", () => {
   });
 });
 
+describe("a charge's sign set alone by a label", () => {
+  // (an ammonium's N, four bonds from it at the corners; an alkoxide's O, one bond to the right)
+  const c: P = [60, 60];
+  const four = [45, 135, 225, 315].map((d) => stroke(along(c, step(c, d), 0.35), step(c, d)));
+  const one = stroke(along(c, step(c, 0), 0.35), step(c, 0));
+  const MORE = "More bonds meet here than nitrogen has.";
+  const chargeOf = (f: FigureDrawn, el: string) => read(f).atoms.find((a) => a.el === el)?.charge ?? 0;
+
+  it("is a minus, the atom's charge, set right over its label or under it, as a mechanism sets a borate's over its B", () => {
+    for (const at of [[c[0], c[1] - 10], [c[0], c[1] + 10]] as P[]) expect(chargeOf(figure([one], [...word("O", c), ...word("\u2013", at)]), "O")).toBe(-1);
+  });
+
+  it("is a minus set before the label, level with it - an en dash or a minus - or after it set high, nothing beyond it", () => {
+    // (each set apart from the label by four tenths of a letter, as a word of its own: one touching it is the label's own, O-)
+    for (const minus of ["\u2013", "\u2212"]) expect(chargeOf(figure([one], [...word("O", c), ...word(minus, [c[0] - 11, c[1]])]), "O")).toBe(-1);
+    const back = stroke(along(c, step(c, 180), 0.35), step(c, 180));
+    expect(chargeOf(figure([back], [...word("O", c), ...word("\u2013", [c[0] + 11, c[1] - 5])]), "O")).toBe(-1);
+  });
+
+  it("is a plus only set high beside its label, not joined to it: an ammonium's N then takes its four bonds", () => {
+    const s = read(figure(four, [...word("N", c), ...word("+", [c[0] + 11, c[1] - 5])]));
+    const n = s.atoms.find((a) => a.el === "N")!;
+    expect(n.charge).toBe(1);
+    expect(n.unsure ?? []).not.toContain(MORE);
+    expect(bondsOf(s)).toEqual(["N-C", "N-C", "N-C", "N-C"]);
+  });
+
+  it("is none where it is a scheme's plus - over a word, under it or level beside it - or stands a letter's height off", () => {
+    for (const at of [[c[0], c[1] - 10], [c[0], c[1] + 10]] as P[]) expect(chargeOf(figure([one], [...word("O", c), ...word("+", at)]), "O")).toBe(0);
+    // (the one beside a space after the word, its bond the other way, as a scheme sets it: one touching it is the word's own, O+)
+    const back = stroke(along(c, step(c, 180), 0.35), step(c, 180));
+    expect(chargeOf(figure([back], [...word("O", c), ...word("+", [c[0] + 11, c[1]])]), "O")).toBe(0);
+    // (one set high but a letter off the word, as a scheme's "+" set larger than its words stands)
+    expect(chargeOf(figure([back], [...word("O", c), ...word("+", [c[0] + 15, c[1] - 5])]), "O")).toBe(0);
+    expect(chargeOf(figure([one], [...word("O", c), ...word("\u2013", [c[0], c[1] - 18])]), "O")).toBe(0);
+  });
+
+  it("is none where a word is set just beyond it - a bond written between two words - or the label reads as nothing", () => {
+    // (Me, a space, the dash, a space, the O: each a word of its own)
+    expect(chargeOf(figure([one], [...word("Me", [c[0] - 31, c[1]]), ...word("\u2013", [c[0] - 11, c[1]]), ...word("O", c)]), "O")).toBe(0);
+    // (an ion in brackets set tight round its last label, its sign at the bracket's corner just beyond it: the whole ion's, no atom's)
+    const p1 = step(c, 150);
+    const p2 = step(p1, 210);
+    const chain = stroke(along(c, p1, 0.35), p1, p2, step(p2, 150));
+    const bracket = stroke([c[0] + 4, c[1] - 4.5], [c[0] + 5, c[1] - 4.5], [c[0] + 5, c[1] + 4.5], [c[0] + 4, c[1] + 4.5]);
+    expect(chargeOf(figure([chain, bracket], [...word("O", c), ...word("\u2013", [c[0] + 9.4, c[1] - 3.5])]), "O")).toBe(0);
+    // (a bond's end at words that read as no atom nor group - a table's cell where a label would be - its dash under them: no atom's)
+    const s = read(figure([one], [...word("Qz", c), ...word("\u2013", [c[0], c[1] + 10])]));
+    expect(s.atoms.every((a) => !a.charge)).toBe(true);
+  });
+});
+
 describe("a stereocentre whose configuration the figure does not show", () => {
   const NOT_DRAWN = "A stereocentre whose configuration is not drawn: none is read.";
   /** CH(OH)(Cl)CH3, its centre at (100, 100): the OH up, the Cl down right, the methyl down left - its bond to the Cl a wedge, or not. */
@@ -1281,6 +1503,20 @@ describe("a stereocentre whose configuration the figure does not show", () => {
 
   it("is marked where no wedge or hash is drawn at it - none read, none guessed", () => {
     expect(marked(drawn(false))).toBe(1);
+  });
+
+  it("is where a configuration can be (the core's candidates): an N+ with an H among its four, which loses its configuration, is not marked", () => {
+    // (an N labelled NH+ - methyl, ethyl and propyl on it - and the same drawn as a carbon with an OH, its groups as unlike)
+    const c: P = [100, 100];
+    const [a, b, d] = [step(c, 90), step(c, -30), step(c, 210)];
+    const arms = [stroke(along(c, a, 0.35), a), stroke(a, step(a, 30)), stroke(along(c, b, 0.35), b), stroke(b, step(b, -90)), stroke(step(b, -90), step(step(b, -90), -30)), stroke(along(c, d, 0.35), d)];
+    // (and a carbon of four whose H is drawn as an atom: its H counted on it, a centre - marked)
+    const h = step([100, 100], -90);
+    const withH = drawn(false);
+    expect(marked(figure([...withH.paths, stroke([100, 100], along([100, 100], h, 0.7))], [...withH.letters, ...word("H", h)]))).toBe(1);
+    const ammonium = read(figure(arms, word("NH^+", c)));
+    expect(ammonium.atoms.find((x) => x.el === "N")?.charge).toBe(1);
+    expect(marked(figure(arms, word("NH^+", c)))).toBe(0);
   });
 
   it("drawn as a cross of plain bonds on the page's axes - a Fischer projection's - says so, and that it is read as one only when asked", () => {
@@ -1467,6 +1703,8 @@ describe("a group's name stacked over an atom's label", () => {
 
 describe("a frame, a graph's axes and a page's rules", () => {
   const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath[] => [stroke([x0, y0], [x1, y0]), stroke([x1, y0], [x1, y1]), stroke([x1, y1], [x0, y1]), stroke([x0, y1], [x0, y0])];
+  /** A line `width` wide, of colour `ink`, from `p` to `q`. */
+  const wide = (p: P, q: P, width: number, ink: string): FigurePath => ({ ...stroke(p, q), width, stroke: ink });
   const hexagon = (from: P): FigurePath[] => {
     const pts: P[] = [from];
     for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
@@ -1488,6 +1726,28 @@ describe("a frame, a graph's axes and a page's rules", () => {
     const title = Array.from("Conversion over time", (c, k): FigureLetter => ({ c, box: [120 + 12 * k, 100, 132 + 12 * k, 113], at: [120 + 12 * k, 113], size: 18 }));
     const f = figure([...chain, ...chart], [...oh, ...title]);
     expect(figureBond(shapesOf(f), f.letters)).toBeCloseTo(L, 0);
+  });
+
+  it("reads no structure in a table's shaded row: a band drawn as wide lines end to end, its headings in it", () => {
+    // (a header row 14 points tall drawn as four lines 14 wide, end to end, pale - its words in 10-point letters over it)
+    const band = [[40, 130], [130, 175], [175, 215], [215, 255]].map(([a, b]) => wide([a, 300], [b, 300], 14, "#e6e6e6ff"));
+    const headings = [...word("strain", [60, 300]), ...word("1a", [150, 300]), ...word("1b", [190, 300]), ...word("1c", [230, 300])];
+    const r = readFigure(figure(band, headings));
+    expect(r.atoms).toHaveLength(0);
+    expect(r.bonds).toHaveLength(0);
+  });
+
+  it("reads a structure with a highlight laid along a bond as without it, a highlight that is a bond's only line as that bond, and a bold bond a third of its letters wide as a bond", () => {
+    // (a hexagon with one side highlighted by a pale line 8 wide under it; one whose side is drawn only by its highlight, 11 wide - about
+    //  a letter, never a table's row, which is half as tall again as its letters; another with one side bold, 3.4 wide; 10-point letters)
+    const ring = hexagon([100, 120]);
+    const side = [[100, 120], step([100, 120], 60)] as P[];
+    const lit = readFigure(figure([wide(side[0], side[1], 8, "#ffd0d0ff"), ...ring], word("L1", [130, 160])));
+    expect([lit.atoms.length, lit.bonds.length]).toEqual([6, 6]);
+    const only = readFigure(figure([...ring.slice(1), wide(side[0], side[1], 11, "#e7e7e7ff")], word("L1", [130, 160])));
+    expect([only.atoms.length, only.bonds.length]).toEqual([6, 6]);
+    const bold = readFigure(figure([...ring.slice(1), wide(side[0], side[1], 3.4, "#000000ff")], word("L1", [130, 160])));
+    expect([bold.atoms.length, bold.bonds.length]).toEqual([6, 6]);
   });
 
   it("reads a structure drawn in a frame without the frame: its sides meet only each other, square", () => {
