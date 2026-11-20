@@ -1395,30 +1395,30 @@ All hover-based, as above.
     it says none, and the layout's stands. What is handed back keeps the
     drawing where each pair drawn across (more than a right angle apart)
     stands plainly across in it, within 30 degrees of a line, and - with
-    six - no two drawn side by side do: a cis-[Co(en)2Cl2]+ drawn as the
-    layout draws it, its N an X and its Cl side by side, is kept so, and a
-    cis-M(gly)2Cl2 drawn so keeps the lines it was drawn with (N to N and
-    O to O, or N to O), its chelates never mirrored into the other. Six
-    donors drawn as six spokes, which the layout sets as two lines and
-    two side by side, are kept where that picture can be read only as the
-    isomer drawn - one of its lines truly across, the other's two ends
-    each across one of the two side by side, either way the same donors
-    across as drawn: cis-[Co(en)2Cl2]+, and a cis-M(gly)2Cl2 with an N
-    across an O. Where no move gives a picture that keeps the drawing -
-    trans-[Co(en)2Cl2]+, which the layout has no two places across for
-    its Cl; a cis-M(gly)2Cl2 with N across N or O across O, which its
-    picture could not tell apart; a chelate's two donors drawn opposite -
-    Clean-up lays nothing out and says so: never another isomer. Two
-    metals joined by two bridges (cis- and trans-[Pt2Cl4(NH3)2], the
-    three isomers of a dimer with a Cl and a Br bridge) keep, at each
-    metal, which bridge each of its other donors stands across: the
-    bridges, which carry the other metal, stay where the layout put them,
-    their ring seen a little from above, and each metal's other donors
-    change places round it. In a chain of three, the middle metal's
-    bridges - laid flat - turn or mirror round it with the end metals and
-    all they carry, whose own pairs stay as they were. Two square-planar
-    metals joined by one bridge, each drawn as an upright cross, are
-    refused, saying so.
+    six - no two drawn side by side do. Six donors are laid out as three
+    lines through the metal (LAYOUT-2D.md, section 7), so each pairing has
+    its own picture: trans- and cis-[Co(en)2Cl2]+, and each of M(gly)2Cl2's
+    five arrangements, are kept as drawn. A drawing in the earlier picture -
+    its N an X, its Cl side by side - is read for the pairs it says and laid
+    out in the three lines; a cis-M(gly)2Cl2 drawn so with N across N or O
+    across O, which that picture could not tell apart, is refused. **An
+    octahedron drawn with wedges** in one of the text's forms (Brecher 2006,
+    ST-2.11: the first, third and fourth) is read for its pairs and kept as
+    drawn - every donor on its spoke, straightened onto the form's angles,
+    every bond its kind, so its hand is as drawn (`wedgeOctahedron`,
+    `octahedraKept`); a trigonal prism (ST-2.12), and a chelate drawn in a
+    wedge form, are refused. Where no move gives a picture that keeps the
+    drawing - a chelate's two donors drawn opposite - Clean-up lays nothing
+    out and says so: never another isomer. Two metals joined by two bridges
+    (cis- and trans-[Pt2Cl4(NH3)2], the three isomers of a dimer with a Cl
+    and a Br bridge) keep, at each metal, which bridge each of its other
+    donors stands across: the bridges, which carry the other metal, stay
+    where the layout put them, their ring seen a little from above, and each
+    metal's other donors change places round it. In a chain of three, the
+    middle metal's bridges - laid flat - turn or mirror round it with the
+    end metals and all they carry, whose own pairs stay as they were. Two
+    square-planar metals joined by one bridge, each drawn as an upright
+    cross, are refused, saying so.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
