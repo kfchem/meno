@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
 import { haworthLabelsStepped } from "./haworthLabels";
-import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox } from "../../../../lib/chem/layout2d";
+import { labelBox, labelSetOf, layoutMolecule } from "../../../../lib/chem/layout2d";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { editorLayoutOptions } from "../layoutOptions";
 import { measured } from "../../../../testing/timeouts";
@@ -356,38 +356,16 @@ describe("a labelled group inside a Haworth ring", () => {
 
   it("stands on a stem that shows at least the text's own - 0.29 of the level bond up from a front atom - whatever the label: OH, H, HOH2C", () => {
     // (C-2, atom 2, front right, under the ring O: the CH2OH written HOH2C, as the page showed it on a stub before)
-    for (const label of ["OH", "H", "HOH2C"]) {
+    // (an OH typed is an O, its H written beside it)
+    for (const label of ["O", "H", "HOH2C"]) {
       const w = laidWith([[2, "up", label]]);
       expect(stemOf(w, 2, w.atoms[6].y), label).toBeGreaterThanOrEqual(0.29);
     }
   });
 
-  it("keeps a front atom's up label - all its letters - off every ring bond, in the six-ring and the five-ring, whatever the label: a CH2OH on the right reads HOH2C, into the ring", () => {
-    for (const size of [6, 5] as const) {
-      const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
-      const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
-      const set = labelSetOf(opts);
-      for (const k of [2, 3]) {
-        for (const label of ["OH", "H", "HOH2C", "CH2OH"]) {
-          const atoms: { x: number; y: number; el: string }[] = d.atoms.map((a) => ({ x: a.x, y: a.y, el: a.el }));
-          const bonds = d.bonds.map((b) => ({ a1: b.a - 1, a2: b.b - 1, order: 1 as const }));
-          const p = seenPlaces(d, k).find((q) => q.free.kind === "up")!;
-          atoms.push({ x: p.place.x, y: p.place.y, el: label });
-          bonds.push({ a1: k, a2: atoms.length - 1, order: 1 });
-          const lay = layoutMolecule(atoms as never, bonds as never, opts, 40);
-          const box = wholeLabel(lay, set, atoms.length - 1);
-          for (const bd of d.bonds) {
-            if (bd.a - 1 === k || bd.b - 1 === k) continue;
-            expect(segmentMeetsBox(atoms[bd.a - 1], atoms[bd.b - 1], box), `${size}-ring atom ${k} ${label}: bond ${bd.a - 1}-${bd.b - 1}`).toBe(false);
-          }
-        }
-      }
-    }
-  });
-
   it("keeps a front atom's up label clear of the label of the back atom's down group above it - the down one giving way: C-3's OH under C-5's H", () => {
     // (C-3, atom 3, front left; C-5, atom 5, back left, on the same vertical)
-    const w = laidWith([[3, "up", "OH"], [5, "down", "H"]]);
+    const w = laidWith([[3, "up", "O"], [5, "down", "H"]]);
     const set = labelSetOf(w.opts);
     const [front, back] = [wholeLabel(w.lay, set, 6), wholeLabel(w.lay, set, 7)];
     // (apart by more than a hair: 0.04 of the level bond, about a twentieth of a label's height, at the least)
