@@ -1,27 +1,22 @@
 /**
  * Structures read from figures (docs/PDF.md, *Stage 5*): a figure in a box
  * of a PDF's page - its lines read by Meno; or, where it is a picture, the
- * picture read by the plugin that reads structures from pictures - or a
+ * picture traced and read by Meno, or by the plugin that reads structures
+ * from pictures where the chemist asks (./readFigure, which reads them; the
+ * workers import this file, so it starts none) - or a
  * picture on the page, read as a structure drawn as the figure draws it:
  * where its atoms lie, as long as Meno draws a bond, each atom tied to the
  * place in the figure it was drawn at; what Meno or the plugin was unsure
  * of, marked while the part is as it was read; and where the structure goes
  * on the page: beside what it was read from, clear of what lies there.
  */
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import { shapesOf, uprightOf, type Box, type FigureDrawn } from "../../../../lib/figure/drawn";
+import { shapesOf, uprightOf, type FigureDrawn } from "../../../../lib/figure/drawn";
 import { figureBond, type FigureRead } from "../../../../lib/figure/read";
 import { readScheme, schemeBox, type SchemeRead } from "../../../../lib/figure/scheme";
 import { cornerAt } from "../../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import type { ImportedScheme } from "../document";
-import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
-import { fitToPicture } from "../../../../lib/figure/inkFit";
-import { boxPicture } from "../../../../lib/pdf/reader";
 import { setAtomLabel } from "../../../../lib/pdf/figures";
-import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
-import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
-import { toBase64 } from "../../../../lib/clipboard";
 import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { abbreviationOf } from "../../../../lib/chem/abbreviations";
@@ -39,8 +34,7 @@ import { ELEMENTS } from "../../../../lib/chem/elements";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
-import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
-import { picturePng, pngPixels } from "./pictures";
+import type { Atom, Bond, FigureSpot, Model } from "../store/types";
 import { labelBoxes, labelledPart } from "./freePlace";
 import { captionBox } from "./extent";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -124,8 +118,11 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
   return drawn.paths.some((p) => p.fill && (p.d.filter((s) => s[0] === "M").length > 1 || p.d.some((s) => s[0] === "C") || p.d.filter((s) => s[0] === "L").length >= 6));
 }
 
-/** Why a figure gave no structure: what to say. */
-export type Unread = { none: string };
+/** Why a figure gave no structure: what to say - and, a picture Meno read nothing from, the plugin chosen to read pictures, by name, to offer. */
+export type Unread = { none: string; plugin?: string };
+
+/** What is said where marks drawn over a figure's pictures were left out. */
+export const MARKS_OVER = "Marks drawn over a picture: not read.";
 
 /** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
 export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes, a line alone - what to say of them. */ left?: string };
@@ -138,69 +135,16 @@ export const LONE_TRIPLE_LINE = "A triple line standing alone was not read as et
 export const LONE_TRIPLE_LINES = "Triple lines standing alone were not read as ethyne.";
 
 /**
- * A figure within a box of a PDF's page, read as a structure: its atoms
- * where the figure has them - its middle at naught, a bond as long as Meno
- * draws one - each tied to where it was drawn; or why it gave none.
+ * A picture's figure as read made a structure, each atom tied to its place - `spot`: a structure with an atom with more bonds than it
+ * takes left out and said, as a figure's is; what is left must hold a bond - a lone atom is no structure read (the ring of a charge
+ * read as an O, once its structure is left out). Or why none.
  */
-export async function readBox(sha256: string, page: number, box: Box, working?: (what: string) => void): Promise<FigureResult | Unread> {
-  if (!isTauri()) return { none: "Figures are read in the app." };
-  const drawn = await invoke<FigureDrawn>("pdf_figure", { sha: sha256, page, box });
-  const read = figureFrom(drawn, sha256, page);
-  // (a figure that is a picture: the picture read, by the plugin that reads them)
-  if ("none" in read && drawn.pictures.length) {
-    working?.("Reading the picture…");
-    return readBoxPicture(sha256, page, box);
-  }
-  return read;
-}
-
-/** How finely a figure that is a picture is drawn to be read: enough for its letters, more than a picture's reader looks at. */
-const READ_DPI = 200;
-/** How long the first picture a worker reads may take: it loads the plugin's model first - a minute or more, the first time a computer loads it. */
-export const FIRST_READ_MS = 300_000;
-/**
- * How long a picture may take once the worker has read one, its model
- * loaded: a picture is read in seconds, the slowest in half a minute; one
- * taking longer is not going to end, and its worker is started afresh for
- * the next (lib/plugins/queue).
- */
-export const READ_MS = 90_000;
-/** The workers that have read a picture: their model loaded. One started afresh is another, and loads its model again. */
-const loaded = new WeakSet<ChemClient>();
-
-/** A picture read by the plugin that reads structures from pictures, laid on the picture: what it read, in the picture's pixels; or why nothing came of it. */
-async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
-  const worker = await chemWorker("pictures");
-  try {
-    const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, loaded.has(worker) ? READ_MS : FIRST_READ_MS);
-    loaded.add(worker);
-    const fitted = fitToPicture(answer, await pngPixels(bytes), rolePlugin("pictures")?.roleUnsure.pictures);
-    return pictureFigure(fitted) ?? { none: "No structure was found in the picture." };
-  } catch (e) {
-    if (e instanceof ChemTimeout) return { none: "Reading the picture took too long, so nothing was read from it." };
-    throw e;
-  }
-}
-
-/** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page. */
-async function readBoxPicture(sha256: string, page: number, box: Box): Promise<FigureResult | Unread> {
-  const shot = await boxPicture(sha256, page, box, READ_DPI);
-  const read = await readByPlugin(shot.png);
-  if ("none" in read) return read;
-  // (its pixels made the page's points: a pixel is 72/dpi of a point, from the box's top left)
-  const k = 72 / shot.dpi;
-  const onPage = scaledFigure(read, k, box[0], box[1]);
-  return { model: modelOf(onPage, (x, y) => ({ sha256, page, x, y, bond: onPage.bond })) };
-}
-
-/** A picture on the page read by the plugin that reads pictures, each atom tied to its place in the picture, in its pixels. */
-export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">): Promise<FigureResult | Unread> {
-  if (!isTauri()) return { none: "Pictures are read in the app." };
-  const png = await picturePng(picture);
-  if (!png) return { none: "A film is not read as a structure." };
-  const read = await readByPlugin(png);
-  if ("none" in read) return read;
-  return { model: modelOf(read, (x, y) => ({ sha256: picture.sha256, x, y, bond: read.bond })) };
+export function pictureResult(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): FigureResult | Unread {
+  const model = modelOf(read, spot, about);
+  const { kept, left } = withoutOverBonded(model);
+  if (!kept.bonds.length) return { none: overBondedWhy(model) ?? "No structure was found in the picture." };
+  const said = left ? `${left === 1 ? "A structure of this picture was" : `${left} structures of this picture were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  return { model: kept, ...(said ? { left: said } : {}) };
 }
 
 /**
@@ -262,6 +206,8 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const loneSaid = [lone ? (lone === 1 ? LONE_LINE : LONE_LINES) : null, triples ? (triples === 1 ? LONE_TRIPLE_LINE : LONE_TRIPLE_LINES) : null].filter((x) => x).join(" ");
   if (!structure && !read.arrows.length) {
     if (loneSaid) return { none: loneSaid };
+    // (all of it marks over its picture: said so, not that it holds no lines)
+    if (read.figure.left.marks) return { none: `This figure is a picture with marks drawn over it, no structure. ${MARKS_OVER}` };
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
   }
   // (one middle and one scale for all of it)
@@ -273,7 +219,8 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   if (structure && !kept.atoms.length) return { none: overBondedWhy(model)! };
   const scheme = schemeOf(read, about);
   const over = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
-  const said = [over, loneSaid].filter((x) => x).join(" ") || null;
+  // (what is drawn over its pictures - a 3D model's distances, its numbers - left out: said)
+  const said = [over, read.figure.left.marks ? MARKS_OVER : null, loneSaid].filter((x) => x).join(" ") || null;
   return { model: kept, ...(scheme ? { scheme } : {}), ...(said ? { left: said } : {}) };
 }
 

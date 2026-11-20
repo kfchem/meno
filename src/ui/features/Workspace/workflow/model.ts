@@ -503,14 +503,20 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     if (samePage && prior && prior.x0 === set.x0 && prior.x1 === set.x1 && prior.y0 === set.y0 && prior.y1 === set.y1 && prior.members === set.members) return set;
     // (each member as the page has it now: a structure as the structures that hold its atoms, in its place)
     const held = setMembers(doc, set);
-    type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean };
+    // (`stays`: still in the frame - a structure while any of its atoms is, so only one dragged wholly out leaves, its frame growing round
+    //  one left half in (backlog 232); a molecule or a picture while its middle is)
+    type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean; stays?: boolean };
+    const atomAt = new Map(doc.model.atoms.map((a) => [a.id, a]));
     const nowAt = new Map(now.structures.map((s) => [s.ids[0], s]));
     const list: Placed[] = [
       ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
-        const w = wasMiddle(ids);
         // (with its record: a step's, which a structure keeps however it moves - and its lasting id, given where it has none)
-        return { member: structureMember(ids, memberRecord(held.records[i], doc.model, ids, set.id)), at, wasIn: !!(prior && w && inside(prior, w)) };
+        const stays = ids.some((id) => atomAt.has(id) && inside(set, atomAt.get(id)!));
+        // (in before the edit by the same test: any of its atoms in the frame - so a drag that takes its middle out first, an atom still
+        //  in, and then the rest, takes it out; found in the GUI run)
+        const wasIn = !!prior && ids.some((id) => wasAtom.has(id) && inside(prior, wasAtom.get(id)!));
+        return { member: structureMember(ids, memberRecord(held.records[i], doc.model, ids, set.id)), at, wasIn, stays };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
@@ -530,7 +536,7 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     const keyOf = (m: Member) => ("structure" in m ? Math.min(...m.structure.map((id) => rank.get(`s${id}`) ?? Infinity)) : (rank.get("molecule" in m ? `m${m.molecule}` : `p${m.picture}`) ?? Infinity));
     list.sort((p, q) => keyOf(p.member) - keyOf(q.member));
     // what the edit took out
-    let kept = prior ? list.filter((p) => !(p.wasIn && !inside(set, p.at))) : list;
+    let kept = prior ? list.filter((p) => !(p.wasIn && !(p.stays ?? inside(set, p.at)))) : list;
     // what the edit brought into a chemist's set, each at its place in reading order - but one that holds its molecules itself (a large set its step left), or a table or a number, which takes in nothing: what it holds is its own
     if (!set.made && !set.collection && !set.table && !set.number && prior) {
       const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));

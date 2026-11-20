@@ -33,6 +33,7 @@ describe("a kind's exits, as a list", () => {
       combine: [first("Combined", "molecules")],
       measure: [first("Measured", "same")],
       merge: [first("Merged", "same"), rest("The rest", "same")],
+      "fewer-side": [first("First's", "same"), rest("Second's", "same")],
       rebond: [first("Re-bonded", "same"), rest("Not re-bonded", "same")],
       "compare-bonding": [first("Same", "same"), rest("Different", "same")],
       "take-frames": [first("Frames", "molecules")],
