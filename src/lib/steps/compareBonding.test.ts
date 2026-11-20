@@ -67,6 +67,21 @@ describe("Compare bonding", () => {
     expect(comparedBonding(entryOf(chiral, "c"), entryOf(chiral, "ref"), { rs: true })).toEqual({ same: true, differences: [] });
   });
 
+  it("compares the centres the core's candidates give: a sulfoxide's S by its lone pair, a metal's four never", () => {
+    // (a sulfoxide's S: its =O, a CH3 and an F about it, the lone pair the fourth place - read on its own bonds)
+    const sulfoxide = mol(
+      [["S", 0, 0, 0], ...(["O", "C", "F"].map((el, i) => [el, ...t[i + 1].map((v) => v * [1.5, 1.8, 1.6][i])]) as [string, number, number, number][])],
+      [[0, 1, 2], [0, 2, 1], [0, 3, 1]],
+    );
+    expect(comparedBonding(entryOf(mirrored(sulfoxide), "m"), entryOf(sulfoxide, "ref"), { rs: true })).toEqual({ same: false, differences: ["S1 has the other configuration from the reference's."] });
+    // (a Pt of four unlike groups: no centre, a metal's own geometry is not a configuration the candidates give)
+    const pt = mol(
+      [["Pt", 0, 0, 0], ...(["F", "Cl", "Br", "I"].map((el, i) => [el, ...t[i].map((v) => v * [2.0, 2.3, 2.45, 2.6][i])]) as [string, number, number, number][])],
+      [[0, 1, 1], [0, 2, 1], [0, 3, 1], [0, 4, 1]],
+    );
+    expect(comparedBonding(entryOf(mirrored(pt), "m"), entryOf(pt, "ref"), { rs: true })).toEqual({ same: true, differences: [] });
+  });
+
   it("takes a methylene's two hydrogens swapped as no difference: CH2FCl is no stereocentre", () => {
     const ch2 = mol(
       [["C", 0, 0, 0], ...(["H", "H", "F", "Cl"].map((el, i) => [el, ...t[i].map((v) => v * [1.09, 1.09, 1.35, 1.77][i])]) as [string, number, number, number][])],

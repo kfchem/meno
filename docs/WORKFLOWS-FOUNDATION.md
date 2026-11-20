@@ -935,7 +935,11 @@ six. A fused bicycle counts its cis and trans forms; a small one,
 bicyclo[m.n.0] with m + n of four or fewer ([1.1.0], [2.1.0], [2.2.0],
 [3.1.0]), whose rings can only be joined cis, its cis form alone. A
 structure given the impossible way round - a cage in,out, a small
-bicycle trans - gets no count, and that is said. Past 1024 ways
+bicycle trans - gets no count, and that is said. Ties that share a
+bridgehead are one set (adamantane's, cubane's, twistane's); where one
+ring system holds two sets (homoadamantane, sesquinorbornene), whether
+they are tied to each other is not yet decided, so no count is given,
+and that is said. Past 1024 ways
 (ten open places), none is written and the count of ways is said. No
 step takes it yet: *Stereoisomers* will, in its own change.
 
@@ -995,7 +999,11 @@ drawn, aromatic rings as one form.* What that means, plainly:
   double bond with none rather than filling one in: so
   (4-methylcyclohexylidene)acetic acid drawn with its double bond bent,
   with its C4 wedged, or with neither is one structure (either
-  enantiomer), and drawn with both, one of its two enantiomers. The filled form is
+  enantiomer), and drawn with both, one of its two enantiomers. An
+  allene's axis is held the same way: one with an end of two alike groups
+  (2-methylpenta-2,3-diene's) is none, and identity leaves such an axis
+  with none, so (4-methylcyclohexylidene)allene drawn with its axis
+  wedged, with its C4 wedged, or with neither is one structure. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
 - **an oxygen (or S, Se, Te) at the end of a bond to P, As, Sb, S, Se or
@@ -1173,7 +1181,10 @@ Its rules are identity's where the two meet:
   other, and never in a cyclohexene;
 - a query's hydrogens are no condition, but for a hydrogen drawn as an
   atom: that asks for a hydrogen on its atom's match, drawn there or not. A
-  methyl drawn as "C" is found in any carbon, a quaternary one too;
+  methyl drawn as "C" is found in any carbon, a quaternary one too. A
+  hydrogen is its atom's only by one single bond to an atom not a
+  hydrogen: a bridging H (B-H-B), H2 and a lone H are atoms of their own,
+  matched as any atom is;
 - configurations are not compared: a query is a constitution.
 
 It says where it found it: each query atom, other than a hydrogen drawn,

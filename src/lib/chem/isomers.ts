@@ -12,6 +12,7 @@ import { hydrogensFolded } from "./perception/fold";
 import { candidates } from "./perception/stereo/candidates";
 import { identity, type IdentityInput } from "./identity";
 import { tiesOf, volumeOfThree, type Tie } from "./perception/stereo/ties";
+import { ringSystemsOf, smallestRings } from "./perception/rings";
 
 /**
  * The most ways of giving the open places their configurations `isomersOf` writes: two to the tenth, ten open places. MEASURED,
@@ -126,12 +127,11 @@ function tiedPlaces(g: IdentityInput, open: Open[]): { open: Open[]; base: Ident
     ...h,
     atoms: h.atoms.map((a, i) => (vs.has(i) ? { ...a, tetra: { neighbours: neighboursOf(i)!, volume: vs.get(i)! } } : a)),
   });
-  let base = g;
-  const left = open.filter((o) => o.at == null || !by.has(o.at));
+  // (the sets tied together: ties that share a centre, joined - adamantane's, cubane's and twistane's each one)
+  const sets: Set<number>[] = [];
   const seen = new Set<number>();
   for (const x of by.keys()) {
     if (seen.has(x)) continue;
-    // (a set of tied centres: those given decide it; none given, one place)
     const all = new Set<number>([x]);
     const todo = [x];
     while (todo.length)
@@ -142,6 +142,22 @@ function tiedPlaces(g: IdentityInput, open: Open[]): { open: Open[]; base: Ident
             todo.push(y);
           }
     all.forEach((y) => seen.add(y));
+    sets.push(all);
+  }
+  // (two sets in one ring system - homoadamantane's, sesquinorbornene's: whether they are tied to each other is not yet decided, so
+  //  none counted, said - never one structure too few, nor one no ring system can take)
+  if (sets.length > 1) {
+    const systems = ringSystemsOf(g.atoms.length, smallestRings(g.atoms.length, g.bonds.map((b) => [b.a, b.b] as const)));
+    const systemOf = new Map<number, number>();
+    systems.forEach((sys, k) => sys.atoms.forEach((a) => systemOf.set(a, k)));
+    const holding = sets.map((all) => systemOf.get([...all][0]));
+    if (holding.some((k, i) => k != null && holding.indexOf(k) !== i)) return { notCounted: NOT_COUNTED_JOINED };
+  }
+  let base = g;
+  const left = open.filter((o) => o.at == null || !by.has(o.at));
+  for (const all of sets) {
+    const x = [...all][0];
+    // (a set of tied centres: those given decide it; none given, one place)
     const given = [...all].find((y) => g.atoms[y].tetra);
     if (given != null) {
       const vs = follow(given, g.atoms[given].tetra!.volume);
@@ -159,6 +175,9 @@ function tiedPlaces(g: IdentityInput, open: Open[]): { open: Open[]; base: Ident
 
 /** What is said where a cage's bridgeheads or a small fused bicycle's junctions are given in a way their rings cannot take (`isomersOf`). */
 export const NOT_COUNTED_TIED = "Not counted: its bridgeheads or ring junctions are given in a way the ring system cannot take (in,out, or a small bicycle joined trans)";
+
+/** What is said where one ring system holds two sets of tied bridgeheads (`isomersOf`): homoadamantane, sesquinorbornene. */
+export const NOT_COUNTED_JOINED = "Not counted: its cage's bridgeheads are joined in a way the count does not yet take";
 
 /** The most atoms a cage's bridge has between its bridgeheads for their senses to be tied (`cageAtoms`): with four, in,out isomers begin. */
 const BRIDGE_MOST = 3;

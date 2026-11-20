@@ -18,12 +18,15 @@
  *   double bond is cis or trans as its first neighbours (by number) at each
  *   end stand, the dihedral between them under or over 90 degrees. With
  *   the same bonds, the same sign is the same R or S, the same E or Z.
- * - **Which atoms are stereocentres**, of the reference's structure: an atom
- *   with four neighbours, no two of them alike (in one symmetry orbit,
+ * - **Which atoms are stereocentres**, of the reference's structure: where
+ *   the core's candidates put one (perception/stereo/candidates, foundation
+ *   part 13: four groups, or three and a lone pair it keeps - a sulfoxide's
+ *   S, a phosphine's P; never a metal, an amine's N or an N+ with an H),
+ *   no two of its neighbours alike (in one symmetry orbit,
  *   src/lib/chem/identity.ts) - so a methylene's two hydrogens swapped are
- *   no difference. Which double bonds can be cis or trans: one whose ends
- *   each have one other neighbour, or two not alike. Three-coordinate
- *   centres (amines, phosphines, sulfoxides) are not compared.
+ *   no difference. Which double bonds can be cis or trans: a candidate (in
+ *   no ring of seven or fewer, not a C=N whose E/Z is none of its own)
+ *   whose ends each have one other neighbour, or two not alike.
  * - **Every centre by its atoms' numbers**, where asked: ConfoTS's check of
  *   a structure against its reference (its `check_chirality`, by ACCeL's
  *   `calc_stereo` labels by number), which also sees a methylene's two
@@ -40,6 +43,7 @@ import type { Entry } from "../entry";
 import { BOND_REACH, bondRadii, bondedPairs, bondingDistance, REACH_FLOOR } from "../../utils/structureParsers";
 import { aromaticForm, symmetryOrbits } from "../chem/identity";
 import { AROMATIC_BOND } from "../chem/kekulize";
+import { candidates } from "../chem/perception/stereo/candidates";
 import { EXACT, volumeSign } from "../chem/perception/stereo/geometry";
 
 export type PassOver = { atoms?: readonly number[]; elements?: readonly string[]; bonds?: readonly (readonly [number, number])[] };
@@ -128,9 +132,9 @@ function numberedE(xyz: readonly number[], [a, b, c, d]: readonly number[]): boo
 }
 
 /**
- * A structure's stereo units, by the rules above: its stereocentres (four
- * neighbours, no two in one symmetry orbit), each with its neighbours by
- * number; and its double bonds that can be cis or trans, each as the four
+ * A structure's stereo units, by the rules above: its stereocentres (the
+ * core's candidates, no two neighbours in one symmetry orbit), each with its
+ * neighbours by number; and its double bonds that can be cis or trans, each as the four
  * atoms whose dihedral tells which - the first neighbour (by number) at one
  * end, the two ends, the first neighbour at the other.
  */
@@ -146,15 +150,38 @@ export function stereoUnits(structure: Entry["structure"]): { centres: { atom: n
     bonds: structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
   });
   const unlike = (xs: readonly number[]) => new Set(xs.map((x) => orbit[x])).size === xs.length;
-  const centres = nbrs.flatMap((n, atom) => (n.length === 4 && unlike(n) ? [{ atom, neighbours: n }] : []));
+  const can = candidatesOf(structure, nbrs);
+  const centres = nbrs.flatMap((n, atom) => (can.centres.has(atom) && unlike(n) ? [{ atom, neighbours: n }] : []));
   const doubleBonds: [number, number, number, number][] = [];
   for (const b of structure.bonds) {
-    if (b.order !== 2) continue;
+    if (b.order !== 2 || !can.doubles.has(key(b.a1, b.a2))) continue;
     const ends = [nbrs[b.a1].filter((y) => y !== b.a2), nbrs[b.a2].filter((y) => y !== b.a1)];
     if (ends.some((x) => x.length < 1 || x.length > 2 || (x.length === 2 && !unlike(x)))) continue;
     doubleBonds.push([ends[0][0], b.a1, b.a2, ends[1][0]]);
   }
   return { centres, doubleBonds };
+}
+
+/**
+ * The core's candidates of a structure whose every atom is given (lib/chem/perception/stereo/candidates): its centres by atom - four
+ * groups, or three and a lone pair it keeps - and its double bonds that can be cis or trans, by their atoms. Asked of the structure
+ * with each plain H counted on its atom, as the candidates read one.
+ */
+function candidatesOf(structure: Entry["structure"], nbrs: readonly number[][]): { centres: Set<number>; doubles: Set<string> } {
+  const plainH = (i: number) => structure.atoms[i].el === "H" && nbrs[i].length === 1 && !structure.atoms[i].charge && !structure.atoms[i].isotope;
+  const kept = structure.atoms.flatMap((_, i) => (plainH(i) ? [] : [i]));
+  const place = new Map(kept.map((i, k) => [i, k]));
+  const g = {
+    atoms: kept.map((i) => ({ el: structure.atoms[i].el, ...(structure.atoms[i].charge ? { charge: structure.atoms[i].charge } : {}), hs: nbrs[i].filter(plainH).length })),
+    bonds: structure.bonds.flatMap((b) => (place.has(b.a1) && place.has(b.a2) ? [{ a: place.get(b.a1)!, b: place.get(b.a2)!, order: b.order }] : [])),
+  };
+  const centres = new Set<number>();
+  const doubles = new Set<string>();
+  for (const c of candidates(g)) {
+    if (c.kind === "centre") centres.add(kept[c.at]);
+    else if (c.kind === "bond") doubles.add(key(kept[g.bonds[c.at].a], kept[g.bonds[c.at].b]));
+  }
+  return { centres, doubles };
 }
 
 /** How far two atoms of these radii together may stand and be bonded, in words: the reach, or the floor where it is the more (`bondingDistance`). */
