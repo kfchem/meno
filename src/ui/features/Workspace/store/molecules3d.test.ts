@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { principalTurn } from "../utils/align3d";
 import { describe, expect, it, vi } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
-import { addMolecule3d, createWorkspaceDocument } from "../document";
+import { addMolecule3d, createWorkspaceDocument, schemeOf } from "../document";
 import { molecules3dIn } from "../utils/selection";
 import { readRecord, recordText } from "../utils/copyPaste";
 import { linkOf, signatureOf } from "../utils/drawnLink";
@@ -353,6 +353,25 @@ describe("molecules in 3D and their drawings", () => {
     expect(state().overlay3d).toEqual({ 2: true });
     state().setOverlay3d(2, false);
     expect(state().overlay3d).toEqual({});
+  });
+});
+
+describe("a document's object opened again (on Windows, a double-click on it in Word or PowerPoint)", () => {
+  it("shows its molecules in 3D as they were copied: turned, and showing the frame they showed - not as a file is first seen", () => {
+    // (copied turned a quarter round x, showing its second frame: its record, as the document keeps it)
+    const turn: Turn3D = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    const shown = { ...water, frames: [water.atoms.flatMap((a) => [a.x, a.y, a.z]), water.atoms.flatMap((a) => [a.x, a.y, a.z + 0.1])], at: { x: 0, y: 0 } };
+    const record = readRecord(recordText({ atoms: [], bonds: [], molecules3d: [{ ...shown, turn, frame: 2 }] }))!;
+    expect(record.molecules3d![0].turn).toEqual(turn);
+    const { state } = editor();
+    state().openModel(record, schemeOf(record));
+    expect(state().turns3d[1]).toEqual(turn);
+    expect(state().frames3d[1]).toBe(2);
+    // (one copied as it was first seen, never turned: seen as a file's is, along its principal axes)
+    const plain = readRecord(recordText({ atoms: [], bonds: [], molecules3d: [{ ...water, at: { x: 0, y: 0 } }] }))!;
+    state().openModel(plain, schemeOf(plain));
+    expect(state().turns3d[1]).toEqual(principalTurn(water.atoms.flatMap((a) => [a.x, a.y, a.z])) ?? undefined);
+    expect(state().frames3d).toEqual({});
   });
 });
 
