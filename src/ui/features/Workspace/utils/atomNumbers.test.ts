@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { atomNumbersOf, digitsOf, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX } from "./atomNumbers";
+import { atomGlyphsOf, atomNumbersOf, glyphCode, glyphsWidth, PRIME_WIDTH, SUP_SIZE, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX } from "./atomNumbers";
 
 describe("atom numbers", () => {
   it("are each atom's place, counted from 1, or its atom-map number where it has one", () => {
     const m = { atoms: [{ el: "C", x: 0, y: 0, z: 0, map: 3 }, { el: "O", x: 1, y: 0, z: 0 }] };
     expect([...atomNumbersOf(m, "order")]).toEqual([1, 2]);
     expect([...atomNumbersOf(m, "map")]).toEqual([3, 0]);
-    expect([0, 7, 42, 999, 1000, 10000].map(digitsOf)).toEqual([0, 1, 2, 3, 4, 0]);
   });
 
   it("stand as high as a share of the ball, never past a height of their own, and narrower with more digits", () => {
@@ -61,5 +60,41 @@ describe("the numbers a picture leaves out", () => {
     expect(numbersLeftOut(h, shares, radii, digits, NUMBER_LEAST_PX)).toBe(2);
     // (an atom the look leaves out - no ball - is none of them)
     expect(numbersLeftOut([0.78], [1], [0], [1], NUMBER_LEAST_PX)).toBe(0);
+  });
+});
+
+describe("a number on a ball as its glyphs: digits, a locant's letters, primes and superscript (part 16a)", () => {
+  it("writes a number as its digits, as wide as they are many, and none past four", () => {
+    expect([0, 7, 42, 999, 1000, 10000].map((n) => glyphsWidth(glyphCode(n)))).toEqual([0, 1, 2, 3, 4, 0]);
+  });
+
+  it("writes a locant as it is shown: 4a two cells, 1' a cell and a prime, 3a with its superscript 1 smaller", () => {
+    expect(glyphsWidth(glyphCode(9, { base: "4a" }))).toBe(2);
+    expect(glyphsWidth(glyphCode(7, { base: "1'" }))).toBeCloseTo(1 + PRIME_WIDTH, 9);
+    expect(glyphsWidth(glyphCode(12, { base: "1''" }))).toBeCloseTo(1 + 2 * PRIME_WIDTH, 9);
+    expect(glyphsWidth(glyphCode(15, { base: "3a", sup: "1" }))).toBeCloseTo(2 + SUP_SIZE, 9);
+    expect(glyphsWidth(glyphCode(3, { base: "1", sup: "2" }))).toBeCloseTo(1 + SUP_SIZE, 9);
+    // (each text its own code: none taken for another, nor for a number)
+    const codes = [glyphCode(9, { base: "4a" }), glyphCode(9, { base: "8a" }), glyphCode(9, { base: "4b" }), glyphCode(9, { base: "1'" }), glyphCode(9, { base: "1", sup: "2" }), glyphCode(9, { base: "12" }), glyphCode(9)];
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  it("writes the number where its text has a glyph a ball does not draw, or more than four", () => {
+    expect(glyphCode(11, { base: "10g" })).toBe(glyphCode(11));
+    expect(glyphCode(11, { base: "12a'", sup: "1" })).toBe(glyphCode(11));
+    expect(glyphCode(11, { base: "4a", sup: "x" })).toBe(glyphCode(11));
+    expect(glyphCode(0, { base: "4a" })).toBe(0);
+  });
+
+  it("holds every code exactly in a float, as the ball's attribute is", () => {
+    const code = glyphCode(9999, { base: "9f'", sup: "9" });
+    expect(Math.fround(code)).toBe(code);
+  });
+
+  it("gives a molecule's atom-map numbers its texts in every frame, by number; the order's numbers none", () => {
+    const m = { atoms: [{ el: "C", x: 0, y: 0, z: 0, map: 9 }, { el: "C", x: 1, y: 0, z: 0, map: 1 }], mapFrames: [[1, 9]], mapTexts: [[9, { base: "4a" }]] as [number, { base: string }][] };
+    expect([...atomGlyphsOf(m, "map")]).toEqual([glyphCode(9, { base: "4a" }), glyphCode(1)]);
+    expect([...atomGlyphsOf(m, "map", 1)]).toEqual([glyphCode(1), glyphCode(9, { base: "4a" })]);
+    expect([...atomGlyphsOf(m, "order")]).toEqual([glyphCode(1), glyphCode(2)]);
   });
 });

@@ -35,7 +35,7 @@ import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
 import { ballLinesOf, ballNumbersOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
 import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAttributes } from "../utils/jointNumbers";
-import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
+import { atomGlyphsOf, glyphsWidth, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
@@ -325,8 +325,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const recolour = useRef(true);
   // (the kind of number its balls show, or last showed: kept as they fade out)
   const numbersKind = useRef<AtomNumberKind>("order");
-  // (how many digits each atom's number has; and, worked out each frame they are shown, where each goes)
-  const numberDigits = useRef<Uint8Array>(new Uint8Array(0));
+  // (how wide each atom's number is, in its glyphs' cells; and, worked out each frame they are shown, where each goes)
+  const numberDigits = useRef<Float32Array>(new Float32Array(0));
   const numbersWanted = useRef<Uint8Array>(new Uint8Array(0));
   // (and where an atom has no ball to carry its number - Sticks - drawn where the sticks meet: utils/jointNumbers)
   const numbersNow = useRef<Float32Array>(new Float32Array(0));
@@ -338,7 +338,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const jointScratch = useRef<{ shown: Float32Array; at: THREE.Matrix4 } | null>(null);
   const numbersPlaced = useRef(false);
   const numbersAt = useRef("");
-  const numberScratch = useRef<{ centres: Float32Array; radii: Float32Array; heights: Float32Array; digits: Uint8Array; places: Float32Array; was: Float32Array; now: Float32Array } | null>(null);
+  const numberScratch = useRef<{ centres: Float32Array; radii: Float32Array; heights: Float32Array; digits: Float32Array; places: Float32Array; was: Float32Array; now: Float32Array } | null>(null);
   const bondHull = useRef<THREE.InstancedMesh>(null);
   // the lines that curve in to a lone atom (utils/stickBend), drawn apart - their sticks, the line round them, their highlight: none, where none curves
   const bentSticks = useRef<THREE.InstancedMesh>(null);
@@ -626,10 +626,10 @@ function Molecule3DView(props: Molecule3DViewProps) {
     atoms.current.geometry.setAttribute("ballLined", new THREE.InstancedBufferAttribute(lined, 1));
     // (each atom's number, of the kind shown - or that last shown, as it fades out - and which are to be shown)
     if (props.atomNumbers) numbersKind.current = props.atomNumbers.kind;
-    const nums = atomNumbersOf(m, numbersKind.current);
+    const nums = atomGlyphsOf(m, numbersKind.current);
     numbersNow.current = nums;
     setBallNumbers(atoms.current.geometry, nums);
-    numberDigits.current = Uint8Array.from(nums, digitsOf);
+    numberDigits.current = Float32Array.from(nums, glyphsWidth);
     numbersWanted.current = numbersShownOn({ atoms: m.atoms, atomNumbers: props.atomNumbers ?? undefined });
     numbersPlaced.current = false;
     if ((atoms.current.geometry.getAttribute("ballNumberPlace")?.count ?? -1) !== n) setBallNumberPlaces(atoms.current.geometry, restingPlaces(n));
@@ -641,10 +641,10 @@ function Molecule3DView(props: Molecule3DViewProps) {
   // (atom-map numbers by the frame shown: a conformer may put alike atoms in each other's places - chem/structureMaps)
   useEffect(() => {
     if (!atoms.current || numbersKind.current !== "map" || !m.mapFrames) return;
-    const nums = atomNumbersOf(m, "map", frame);
+    const nums = atomGlyphsOf(m, "map", frame);
     numbersNow.current = nums;
     setBallNumbers(atoms.current.geometry, nums);
-    numberDigits.current = Uint8Array.from(nums, digitsOf);
+    numberDigits.current = Float32Array.from(nums, glyphsWidth);
     numbersPlaced.current = false;
     dirty.current = true;
     invalidate();
@@ -1239,7 +1239,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
           centres: new Float32Array(3 * n),
           radii: new Float32Array(n),
           heights: new Float32Array(n),
-          digits: new Uint8Array(n),
+          digits: new Float32Array(n),
           places: new Float32Array(3 * n),
           was: new Float32Array(3 * n),
           now: restingPlaces(n),
