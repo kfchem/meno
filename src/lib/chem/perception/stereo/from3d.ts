@@ -7,13 +7,34 @@
  * **The tolerances** stay what each reader had, each named where it is used (./geometry's table; `FLAT_ALLENE` here): a move, no answer
  * changes. Which atoms and bonds can carry a configuration is each caller's, as today (its candidates passed in).
  */
-import { FLAT_VOLUME_3D, sideOfLine, signedVolume, torsionSense } from "./geometry";
+import { EXACT, FLAT_VOLUME_3D, sideOfLine, signedVolume, torsionSense, volumeSign } from "./geometry";
 import { runsOf } from "./runs";
 import type { IsomerConfiguration } from "./configuration";
 import type { Axial, Cumulated } from "./types";
 
 /** A place in 3D, in ångströms. */
 export type Place = readonly [number, number, number];
+
+/** A place as these read it: three numbers, x, y, z. */
+type V3 = readonly number[];
+
+/**
+ * A centre's sense from places: the sign of the volume its first three neighbours, in the order given, span seen from it (the
+ * `Tetrahedral` reading) - 0 where its size is at or under `tolerance` (./geometry's table names each reader's: `EXACT` for the page's
+ * mirror and the 3D editor, `HANDED` for settling a molecule's places).
+ */
+export function senseAt(centre: V3, neighbours: readonly V3[], tolerance = EXACT): 1 | -1 | 0 {
+  return volumeSign(neighbours[0], neighbours[1], neighbours[2], centre, tolerance);
+}
+
+/**
+ * A double bond's side from places: whether `p`, on its end `a`, and `q`, on its end `b`, stand on one side of its line (cis, true) or
+ * on opposite sides (trans, false) - none where either lies on it.
+ */
+export function cisAt(a: V3, b: V3, p: V3, q: V3): boolean | null {
+  const side = sideOfLine(a, b, p, q);
+  return side > 0 ? true : side < 0 ? false : null;
+}
 
 /** A bond as these read it: its atoms and order. */
 type PlacedBond = { a: number; b: number; order: number };
