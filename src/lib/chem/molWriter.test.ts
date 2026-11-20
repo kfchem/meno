@@ -622,6 +622,18 @@ describe("overBonded", () => {
     expect([...overBonded(star({ el: "H" }, [["C", 2]]))]).toEqual([1]);
   });
 
+  it("leaves a donor's bond to a Lewis-acidic main-group metal out of its count, as to a transition metal's, and counts the metal's against no valence (found in review)", () => {
+    // (a C-F bridging to a magnesium; an ether's O on a Grignard reagent's Mg; a carbonyl's O on a lithium)
+    expect([...overBonded(star({ el: "F" }, [["C", 1], ["Mg", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "O" }, [["C", 1], ["C", 1], ["Mg", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "O" }, [["C", 2], ["Li", 1]]))]).toEqual([]);
+    // (a Grignard reagent's Mg with two ethers on it: four bonds; a chloride bridging two magnesiums)
+    expect([...overBonded(star({ el: "Mg" }, [["C", 1], ["Br", 1], ["O", 1], ["O", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "Cl" }, [["Mg", 1], ["Mg", 1]]))]).toEqual([]);
+    // (but not tin's: its bonds to a halogen are drawn covalent - a fluorine on carbon and tin is over)
+    expect([...overBonded(star({ el: "F" }, [["C", 1], ["Sn", 1]]))]).toEqual([1]);
+  });
+
   it("finds a halogen bonded to two carbons, but not perchlorate's chlorine nor a diaryliodonium's iodine", () => {
     expect([...overBonded(star({ el: "Cl" }, [["C", 1], ["C", 1]]))]).toEqual([1]);
     expect([...overBonded(star({ el: "Cl" }, [["O", 2], ["O", 2], ["O", 2], ["O", 1, -1]]))]).toEqual([]);

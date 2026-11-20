@@ -22,7 +22,8 @@ import { huckelForm } from "../../../../lib/chem/huckel";
 import { symmetryClasses } from "../../../../lib/layout/canonical";
 import { eigenvalues } from "../workflow/rmsd";
 import { bestTurn } from "../workflow/sameConformer";
-import { HANDED, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
+import { HANDED } from "../../../../lib/chem/perception/stereo/geometry";
+import { senseAt } from "../../../../lib/chem/perception/stereo/from3d";
 
 /** How many whole branches a group may have for every way of laying them out to be tried (4! = 24). */
 const MOST_BRANCHES = 4;
@@ -210,7 +211,7 @@ export function settleEquivalents(atoms: readonly Atom[], bonds: readonly Bond[]
       for (let j = i + 1; j < vs.length; j++)
         for (let l = j + 1; l < vs.length; l++) {
           if (i >= k) continue;
-          signs.push(volumeSign(vs[i], vs[j], vs[l], [0, 0, 0], HANDED));
+          signs.push(senseAt([0, 0, 0], [vs[i], vs[j], vs[l]], HANDED));
         }
     return signs;
   };

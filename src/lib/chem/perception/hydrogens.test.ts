@@ -3,6 +3,7 @@
  * lib/chem/molecule (moved with it), and the one count on a graph, `hydrogenCounts`, an aromatic bond by its Kekule order.
  */
 import { describe, expect, it } from "vitest";
+import { readSmiles } from "../smiles";
 import { canTakeBond, hydrogenCounts, hydrogensOn, implicitHydrogens, mostBonds, valenceOrder, valencesAt, type CountedAtom, type CountedBond } from "./hydrogens";
 
 describe("implicitHydrogens", () => {
@@ -117,5 +118,64 @@ describe("hydrogenCounts: the one count on a graph", () => {
   it("counts a hydrogen bond, and a bond type past four, as nothing", () => {
     expect(hydrogenCounts(...graph(["O", "N"], [[0, 1, 1, "hydrogen"]]))).toEqual([2, 3]);
     expect(hydrogenCounts(...graph(["O", "N"], [[0, 1, 9]]))).toEqual([2, 3]);
+  });
+});
+
+describe("the lowest valence at or above an atom's bonds (the chemistry check's ruling)", () => {
+  /** Each atom's hydrogens of a SMILES, by the one count, its plain atoms' hydrogens left to it. */
+  const counted = (smiles: string) => {
+    const s = readSmiles(smiles);
+    return hydrogenCounts(
+      s.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), ...(a.hs != null ? { hs: a.hs } : {}) })),
+      s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+    );
+  };
+  const onFirst = (smiles: string, el: string) => counted(smiles)[readSmiles(smiles).atoms.findIndex((a) => a.el === el)];
+
+  it("a P(V) of four bonds carries one H: dimethyl phosphite C2H7O3P, diphenylphosphine oxide; an S(IV) of three, one", () => {
+    expect(onFirst("P(=O)(OC)OC", "P")).toBe(1);
+    expect(counted("P(=O)(OC)OC").reduce((s, h) => s + h, 0)).toBe(7);
+    expect(onFirst("O=P(c1ccccc1)c1ccccc1", "P")).toBe(1);
+    expect(onFirst("CS=O", "S")).toBe(1);
+    expect(implicitHydrogens("P", 4, 0, undefined, 0)).toBe(1);
+    expect(implicitHydrogens("S", 3, 0, undefined, 0)).toBe(1);
+    expect(implicitHydrogens("S", 5, 0, undefined, 0)).toBe(1);
+    // (a caller that does not say which bonds go to metals: its element's own valence alone, as before - found in review)
+    expect(implicitHydrogens("P", 4)).toBe(0);
+    expect(implicitHydrogens("S", 3)).toBe(0);
+  });
+
+  it("none where none belongs: DMSO, triphenylphosphine oxide, a methyltriphenylphosphonium, a sulfone, PPh3, a phosphate, PF6-", () => {
+    expect(onFirst("CS(C)=O", "S")).toBe(0);
+    expect(onFirst("O=P(c1ccccc1)(c1ccccc1)c1ccccc1", "P")).toBe(0);
+    expect(onFirst("C[P+](c1ccccc1)(c1ccccc1)c1ccccc1", "P")).toBe(0);
+    expect(onFirst("CS(=O)(=O)C", "S")).toBe(0);
+    expect(onFirst("P(c1ccccc1)(c1ccccc1)c1ccccc1", "P")).toBe(0);
+    expect(onFirst("OP(=O)(O)O", "P")).toBe(0);
+    expect(onFirst("F[P-](F)(F)(F)(F)F", "P")).toBe(0);
+    expect(implicitHydrogens("P", 6, 0, undefined, 0)).toBe(0);
+    expect(implicitHydrogens("S", 7, 0, undefined, 0)).toBe(0);
+  });
+
+  it("the lower valence first where it is enough: PH3, H2S, a phosphine's PH2, a thiol", () => {
+    expect(implicitHydrogens("P", 0)).toBe(3);
+    expect(implicitHydrogens("S", 0)).toBe(2);
+    expect(onFirst("CP", "P")).toBe(2);
+    expect(onFirst("CS", "S")).toBe(1);
+  });
+});
+
+describe("a P, S or Se's valence step chosen by its bonds to non-metals (the chemistry check's ruling)", () => {
+  it("a phosphine on a metal stays P(III), no H: Pd(PPh3)4's P; a P(V) of four bonds to non-metals carries one", () => {
+    const ph = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
+    const s = readSmiles(`[Pd](${ph})(${ph})(${ph})${ph}`);
+    const hs = hydrogenCounts(
+      s.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), ...(a.hs != null && a.el !== "P" ? { hs: a.hs } : {}) })),
+      s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+    );
+    expect(s.atoms.flatMap((a, i) => (a.el === "P" ? [hs[i]] : []))).toEqual([0, 0, 0, 0]);
+    expect(implicitHydrogens("P", 4, 0, undefined, 1)).toBe(0);
+    expect(implicitHydrogens("S", 3, 0, undefined, 1)).toBe(0);
+    expect(implicitHydrogens("P", 4, 0, undefined, 0)).toBe(1);
   });
 });

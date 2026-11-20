@@ -57,10 +57,16 @@ describe("ends that share their bonds", () => {
     expect(diester.atoms[2].tetra).toBeUndefined();
   });
 
-  it("are read by the lone-pair rule as drawn: a sulfinate anion's S asked as a centre, as a sulfoxide's is; a P with an =O and an O- and one group not", () => {
+  it("are read by the lone-pair rule as drawn: a sulfinate anion's S asked as a centre, as a sulfoxide's is", () => {
     expect(centres("CS(=O)[O-]")).toEqual([1]);
     expect(centres("CS(C)=O")).toEqual([1]);
-    expect(centres("CP(=O)[O-]")).toEqual([]);
+  });
+
+  it("a methylphosphinate anion, CH3P(H)(=O)O-, its P of four groups, is asked, but sets nothing: its two O ends are alike; its ester's P sets something (the chemistry check's ruling)", () => {
+    expect(centres("CP(=O)[O-]")).toEqual([1]);
+    expect(text("C[P@H](=O)[O-]")).toBe(text("C[P@@H](=O)[O-]"));
+    expect(centres("CP(=O)OC")).toEqual([1]);
+    expect(text("C[P@H](=O)OC")).not.toBe(text("C[P@@H](=O)OC"));
   });
 });
 

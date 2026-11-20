@@ -19,7 +19,7 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { identityInputOf } from "./identityOf";
-import { EXACT, sideOfLine, volumeSign } from "../../../../lib/chem/perception/stereo/geometry";
+import { cisAt, senseAt } from "../../../../lib/chem/perception/stereo/from3d";
 
 /** A drawing seen in a mirror: each wedge turned over (up for down), each depth turned (a cage drawn in perspective). */
 export function mirroredPart(part: Model): Model {
@@ -109,7 +109,8 @@ export function reflectedConformers<C extends Omit<Conformers, "chosen">>(c: C):
  * chosen centres and double bonds (`isomer`), and those its drawing shows
  * (`drawn`, identity's input of it) - in every frame: a centre's the sign
  * of the volume its first three neighbours span, a double bond's cis or
- * trans by the dihedral of an atom on each end. A conformer that has not
+ * trans by the side of its line an atom on each end stands
+ * (lib/chem/perception/stereo/from3d `senseAt`, `cisAt`). A conformer that has not
  * (a reflection that did not give the stereoisomer after all) says it is
  * to be made itself.
  */
@@ -122,11 +123,11 @@ export function hasConfiguration(c: Pick<Conformers, "frames">, part: Model, iso
     own.atoms.every((a, i) => {
       if (!a.tetra) return true;
       const [u, v, w] = a.tetra.neighbours.slice(0, 3).map((n) => at(f, n));
-      return volumeSign(u, v, w, at(f, i), EXACT) === a.tetra.volume;
+      return senseAt(at(f, i), [u, v, w]) === a.tetra.volume;
     }) &&
     own.bonds.every((b) => {
       if (!b.stereo) return true;
-      return sideOfLine(at(f, b.a), at(f, b.b), at(f, b.stereo.refs[0]), at(f, b.stereo.refs[1])) > 0 === b.stereo.cis;
+      return (cisAt(at(f, b.a), at(f, b.b), at(f, b.stereo.refs[0]), at(f, b.stereo.refs[1])) === true) === b.stereo.cis;
     }),
   );
 }

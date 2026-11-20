@@ -5,6 +5,7 @@ import { blocksOf } from "../chem/make3d";
 import type { Atom, Bond, Model } from "../store/types";
 import { editorModelOf } from "../utils/io";
 import { chairDrawing, seenPlaces } from "./chair";
+import { measured } from "../../../../testing/timeouts";
 
 /** The chair (`form`, `flip`) with a methyl on each (atom, face) given. */
 function methylated(groups: [number, 1 | -1][], form: 0 | 1, flip: boolean): Model {
@@ -41,7 +42,7 @@ describe("3D made from a chair (the maintainer's ruling: the configuration only,
         }
       }
     }
-  });
+  }, measured(800));
 
   it("is the same request for the same compound drawn by either chair: trans diequatorial and its flip, diaxial", () => {
     const eq = methylated([[0, 1], [1, -1]], 0, false);

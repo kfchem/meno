@@ -7,6 +7,8 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { centredAt, restyledDrawn } from "../../utils/copyPaste";
 import { chairDrawing, FIRST_FORM } from "../../projections/chair";
+import { CHAIR_CHANGED, withChair } from "../../projections/fromFlat";
+import { sameStereo } from "../../chem/engineLayout";
 import { HAWORTH_SCALE, haworthDrawing } from "../../projections/haworth";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
@@ -17,13 +19,13 @@ import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import { depthStored, recognisedDepthOf } from "../../chem/depthHeld";
-import { renumbered } from "../../chem/atomMap";
+import { renumbering } from "../../chem/atomMap";
 import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Atom, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
 import { endsRenamed } from "../../utils/cycles";
@@ -377,7 +379,7 @@ export const createModelSlice = (
       const drawn = new Map(d.model.atoms.map((a, i) => [a.id, i]));
       return ops.setStructureMaps(
         d,
-        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.complete ? { ...m, map: { ...m.map, numbers: renumbered(m.map, drawn), shown: true } } : m)),
+        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.complete ? { ...m, map: { ...m.map, ...renumbering(m.map, drawn), shown: true } } : m)),
       );
     });
   },
@@ -389,7 +391,10 @@ export const createModelSlice = (
   renumberAtomMap: (arrowId: number) => {
     const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
     if (!map?.complete) return;
-    doc.edit("renumber atoms", (d) => ops.setAtomMap(d, arrowId, { ...map, numbers: renumbered(map, new Map(d.model.atoms.map((a, i) => [a.id, i]))), shown: true }));
+    doc.edit("renumber atoms", (d) => {
+      const drawn = new Map(d.model.atoms.map((a, i) => [a.id, i]));
+      return ops.setAtomMap(d, arrowId, { ...map, ...renumbering(map, drawn), shown: true });
+    });
   },
 
   showAtomMap: (arrowId: number, shown: boolean) => {
@@ -584,7 +589,7 @@ export const createModelSlice = (
    * - an Office document's object opened again - brings its slides and its
    * writing by hand with it, numbered from the first.
    */
-  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => {
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides" | "molecules3d">, scheme?: ImportedScheme) => {
     const opened = ops.withImportedScheme(ops.replaceModel(doc.getState(), next), scheme);
     const withSlides = (next.slides ?? []).reduce((d, { id: _, ...s }) => ops.addSlide(d, s), opened);
     doc.reset(
@@ -596,7 +601,22 @@ export const createModelSlice = (
     // the first, in order, as replaceModel left them to be - and each stack
     // of drawings the record marked, where it carries one: utils/stacks)
     const recordsShown = recordsShownOf(next.atoms);
-    set((prev: EditorState) => ({ ...prev, turns3d: shownTurns(scheme, 1, {}), frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    const turns3d = shownTurns(scheme, 1, {});
+    const frames3d = shownFrames(scheme, 1, {});
+    const lists3d = shownLists(scheme, 1, {});
+    // (a record's molecules in 3D - a document's object opened again - as its copy had them: turned, showing the frame and the
+    //  list it showed, as a paste or a workspace opened has them; the view is not the document's, so the scheme does not carry it)
+    // (and of a stack of them, the one it showed: utils/stacks)
+    const opened3d = doc.getState().molecules3d ?? [];
+    const stacksShown: EditorState["stacksShown"] = {};
+    (next.molecules3d ?? []).forEach((m, i) => {
+      if (m.turn) turns3d[i + 1] = m.turn;
+      if (m.frame) frames3d[i + 1] = m.frame;
+      if (m.list) lists3d[i + 1] = { list: m.list.id, row: m.list.row, pointed: null, ...(m.list.iso != null ? { iso: m.list.iso } : {}) };
+      const stack = opened3d[i]?.stack;
+      if (m.shown && stack) stacksShown[stack.id] = i + 1;
+    });
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   joinReadings: () => {
@@ -766,6 +786,14 @@ export const createModelSlice = (
     const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
     if (new Set(ids).size !== 6) return;
     chairPuts.set(get().model, { ids, at: middle, form: FIRST_FORM, length: drawing.scale });
+  },
+
+  drawAsChair: (made: { atoms: Atom[]; bonds: Bond[] }) => {
+    // (the guard: the chair read as the compound the flat drawing was, or nothing done - Meno's fault, said)
+    const was = get().model;
+    if (!sameStereo(was, withChair(was, made))) return CHAIR_CHANGED;
+    doc.edit("draw as chair", (d) => ({ ...d, model: withChair(d.model, made) }));
+    return null;
   },
 
   putHaworth: (at: { x: number; y: number }) => {

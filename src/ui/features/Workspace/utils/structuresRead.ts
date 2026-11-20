@@ -23,7 +23,7 @@ export type FigureStructures = { structures: PageStructure[]; marks: PageMarks; 
 /** What a figure's reading is given: the page's things and letters, its figures, which one this is, and the figure as the reader drew it - its JSON as bytes, as it comes, for the worker to unpack. */
 export type FigureJob = {
   objects: PageObject[];
-  text: Pick<PageText, "codes" | "boxes"> | null;
+  text: Pick<PageText, "codes" | "boxes" | "bold"> | null;
   figures: Box[];
   k: number;
   drawn: ArrayBuffer | FigureDrawn;
@@ -46,6 +46,19 @@ export function wordsInBox(t: Pick<PageText, "codes" | "boxes"> | null, box: Box
   return out.replace(/\s+/g, " ").trim();
 }
 
+/** Whether the letters a box of a page holds are set bold - every one with a box, and one at least - as their font says. */
+export function boldInBox(t: Pick<PageText, "codes" | "boxes" | "bold"> | null, box: Box): boolean {
+  if (!t?.bold) return false;
+  let any = false;
+  for (let i = 0; i < t.codes.length; i++) {
+    const [a, b, c, d] = [t.boxes[i * 4], t.boxes[i * 4 + 1], t.boxes[i * 4 + 2], t.boxes[i * 4 + 3]];
+    if (!(c > a) || (a + c) / 2 < box[0] || (a + c) / 2 > box[2] || (b + d) / 2 < box[1] || (b + d) / 2 > box[3]) continue;
+    if (!t.bold[i]) return false;
+    any = true;
+  }
+  return any;
+}
+
 /** The figure a reader's answer holds: its JSON as bytes - unpacked here, where it is read - or already as it is. */
 export function drawnOf(given: ArrayBuffer | FigureDrawn): FigureDrawn {
   return given instanceof ArrayBuffer ? (JSON.parse(new TextDecoder().decode(given)) as FigureDrawn) : given;
@@ -58,7 +71,7 @@ export function figureRead(job: FigureJob): FigureStructures {
   const p = job.picture;
   const traced = p ? pictureRead({ width: p.width, height: p.height, data: p.data, at: p.at, known: p.known, letters: drawn.letters }) : null;
   const tracedRead = traced && !("none" in traced) ? traced : null;
-  const read = pageStructuresOf({ objects: job.objects, wordsIn: (b) => wordsInBox(job.text, b) }, job.figures, (j) => (j === job.k ? drawn : null), job.sha256, job.page, undefined, (j) => (j === job.k ? tracedRead : null));
+  const read = pageStructuresOf({ objects: job.objects, wordsIn: (b) => wordsInBox(job.text, b), boldIn: (b) => boldInBox(job.text, b) }, job.figures, (j) => (j === job.k ? drawn : null), job.sha256, job.page, undefined, (j) => (j === job.k ? tracedRead : null));
   // (a figure that is a picture, its lines giving nothing: to be drawn and asked for again - once)
   const picture = !p && !read.structures.length && drawn.pictures.length ? { dpi: pictureDpi(drawn, job.figures[job.k], PICTURE_DPI, PICTURE_DPI_MOST) } : undefined;
   return { structures: read.structures, marks: read.marks[0] ?? { segments: [], points: [], boxes: [] }, labels: read.labels, ...(picture ? { picture } : {}) };

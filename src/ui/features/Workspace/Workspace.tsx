@@ -234,7 +234,8 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
-import { isProjection } from "./projections/rings";
+import { isProjection } from "./projections/projection";
+import { chairFromFlat } from "./projections/fromFlat";
 import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";
 import type { SelectableKind } from "./store/slices/selectionSlice";
@@ -242,7 +243,7 @@ import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menu
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, numberingSaid, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
@@ -2692,6 +2693,27 @@ function WorkspaceContent({
             const at = structureAt(menu.kind, menu.id);
             if (at != null) store.getState().selectStructure(at);
           }}
+          asChair={(() => {
+            // (a flat six-ring right-clicked: drawn as a chair - or why not, where its configuration is not drawn)
+            if (menu.kind !== "atom" && menu.kind !== "bond") return undefined;
+            const at = structureAt(menu.kind, menu.id);
+            if (at == null || menu.id == null) return undefined;
+            const st = store.getState();
+            const ids = fragmentOf(st.model, at);
+            if (isProjection(st.model, ids)) return undefined;
+            const part = { atoms: st.model.atoms.filter((a) => ids.has(a.id)), bonds: st.model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
+            const atom = menu.kind === "atom" ? menu.id : st.model.bonds.find((b) => b.id === menu.id)?.a;
+            if (atom == null) return undefined;
+            const made = chairFromFlat(part, atom);
+            if (!made) return undefined;
+            if ("refused" in made) return { why: made.refused };
+            return {
+              run: () => {
+                const said = store.getState().drawAsChair(made);
+                if (said) setChemError(said);
+              },
+            };
+          })()}
           projection={(() => {
             // (a chair the Projections tool put down: laid out flat, wedges for its depth - and flipped, where it can be)
             const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
@@ -2829,6 +2851,7 @@ function WorkspaceContent({
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
                     onRenumber: () => store.getState().renumberAtomMap(a.id),
+                    ...(a.atomMap && numberingSaid(a.atomMap) ? { numbering: numberingSaid(a.atomMap)! } : {}),
                     onExport: () => void files.exportReaction3d({ arrow: a.id }),
                     ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
@@ -2880,6 +2903,7 @@ function WorkspaceContent({
                       onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
                       onOther: () => store.getState().otherStructureMaps(ids),
                       onRenumber: () => store.getState().renumberStructureMaps(ids),
+                      ...(numberingSaid(first.map) ? { numbering: numberingSaid(first.map)! } : {}),
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
                       unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
                       conformers: conformersSaid(first.map, st.molecules3d, st.model),
