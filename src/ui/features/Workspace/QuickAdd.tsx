@@ -26,7 +26,7 @@ import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair" | "haworth";
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
@@ -175,6 +175,19 @@ const PROJECTIONS: typeof ROW = [
     tip: "Chair. Chosen again on the chair just put down: the view from the other side",
     // (a chair as it is first put down, seen from the right: its up end at the left, every bond plain)
     icon: <path d="M3.4 9 L6.7 8.7 L13.3 6.5 L16.6 11 L13.3 11.3 L6.7 13.5 Z" />,
+  },
+  {
+    id: "haworth",
+    name: "Haworth ring",
+    // (what it does a second time, said as the pointer rests on it: a ring of five, a furanose's)
+    tip: "Haworth ring. Chosen again on the ring just put down: a ring of five",
+    // (a Haworth ring of six seen from slightly above: the ring O behind, the front edge heavier)
+    icon: (
+      <>
+        <path d="M5 7.5 L8.5 5.2 L13.5 5.2 L17 7.5 L14 9.8 L8 9.8 Z" />
+        <path d="M14 9.8 L8 9.8" strokeWidth={2.8} />
+      </>
+    ),
   },
 ];
 

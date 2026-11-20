@@ -21,6 +21,8 @@ const set = (g: SymmetryInput, ...cis: boolean[]): SymmetryInput => {
 };
 /** How many cis or trans `g` carries, double bonds' and odd cumulenes'. */
 const given = (g: SymmetryInput) => g.bonds.filter((b) => b.stereo).length + (g.cumulated?.length ?? 0);
+/** How many axes `g` carries. */
+const axes = (g: SymmetryInput) => g.axes?.length ?? 0;
 const text = (g: SymmetryInput) => canonicalWritten(g).text;
 /** Whether the SMILES are one structure, as identity has them. */
 const one = (...gs: (string | IdentityInput)[]) => new Set(gs.map((g) => identityText(typeof g === "string" ? fromSmiles(g) : g))).size === 1;
@@ -132,6 +134,83 @@ describe("a cis or trans that sets something: kept", () => {
     expect(one(labelled(set(g, true)), labelled(set(g, false)))).toBe(false);
     // (the same atoms without the label: one)
     expect(one(set(g, true) as IdentityInput, set(g, false) as IdentityInput)).toBe(true);
+  });
+});
+
+// Backlog 184: an allene's axis with an end of two alike groups sets nothing in the same way - its two senses are each other's
+// mirror image, and with two alike groups on an end the mirror image is the molecule itself - so the same test reads it as none.
+describe("an allene's axis that sets nothing: an end of two alike groups", () => {
+  /** `g` with an axis between the run's ends `ends`, against `refs`, given `sense`. */
+  const axis = (g: SymmetryInput, ends: [number, number], refs: [number, number], sense: 1 | -1): SymmetryInput => ({ ...g, axes: [{ atoms: ends, refs, sense }] });
+
+  it("2-methylpenta-2,3-diene given either sense: none, written as given none, its two methyls one orbit", () => {
+    // (C0 - C1(C2) = C3 = C4 - C5: the run's ends 1 and 4, C1's methyls 0 and 2)
+    const g = fromSmiles("CC(C)=C=CC");
+    const plain = symmetryOrbits(g).orbit;
+    expect(plain[0]).toBe(plain[2]);
+    for (const sense of [1, -1] as const) {
+      const s = axis(g, [1, 4], [0, 5], sense);
+      expect(axes(settingCisTrans(s))).toBe(0);
+      expect(text(s)).toBe(text(g));
+      expect(symmetryOrbits(s).orbit).toEqual(plain);
+      expect(one(s as IdentityInput, g as IdentityInput)).toBe(true);
+    }
+    // (as SMILES writes it, either mark)
+    expect(fromSmiles("CC(C)=[C@]=CC").axes).toHaveLength(1);
+    expect(axes(settingCisTrans(fromSmiles("CC(C)=[C@]=CC")))).toBe(0);
+    expect(one("CC(C)=[C@]=CC", "CC(C)=[C@@]=CC", "CC(C)=C=CC")).toBe(true);
+  });
+
+  it("3-methylbuta-1,2-diene given an axis against its CH2's two H: none - both ends of two alike groups", () => {
+    // (H0 H1 on C2 = C3 = C4(C5)C6)
+    const g = fromSmiles("[H]C([H])=C=C(C)C");
+    for (const sense of [1, -1] as const) {
+      const s = axis(g, [1, 4], [0, 5], sense);
+      expect(axes(settingCisTrans(s))).toBe(0);
+      expect(text(s)).toBe(text(g));
+    }
+  });
+
+  it("cyclohexylideneallene - its ring's two arms alike - and (4-methylcyclohexylidene)allene with its C4 open: none", () => {
+    for (const smiles of ["CC=[C@]=C1CCCCC1", "CC=[C@@]=C1CCC(C)CC1"]) {
+      expect(fromSmiles(smiles).axes, smiles).toHaveLength(1);
+      expect(axes(settingCisTrans(fromSmiles(smiles))), smiles).toBe(0);
+    }
+    expect(one("CC=[C@]=C1CCCCC1", "CC=[C@@]=C1CCCCC1", "CC=C=C1CCCCC1")).toBe(true);
+  });
+});
+
+describe("an allene's axis that sets something: kept", () => {
+  it("penta-2,3-diene's Ra and Sa: kept, two texts, two identities, either from none", () => {
+    const [p, m] = [fromSmiles("CC=[C@]=CC"), fromSmiles("CC=[C@@]=CC")];
+    expect(axes(settingCisTrans(p))).toBe(1);
+    expect(axes(settingCisTrans(m))).toBe(1);
+    expect(text(p)).not.toBe(text(m));
+    expect(one("CC=[C@]=CC", "CC=[C@@]=CC")).toBe(false);
+    expect(one("CC=[C@]=CC", "CC=C=CC")).toBe(false);
+  });
+
+  it("an end of a methyl and an ethyl (4-methylhexa-2,3-diene) and of a (13C)methyl and a methyl: kept", () => {
+    expect(axes(settingCisTrans(fromSmiles("CCC(C)=[C@]=CC")))).toBe(1);
+    expect(one("CCC(C)=[C@]=CC", "CCC(C)=[C@@]=CC")).toBe(false);
+    const labelled = (smiles: string): IdentityInput => {
+      const g = fromSmiles(smiles);
+      return { ...g, atoms: g.atoms.map((a, i) => (i === 2 ? { ...a, isotope: 13 } : a)) };
+    };
+    expect(one(labelled("CC(C)=[C@]=CC"), labelled("CC(C)=[C@@]=CC"))).toBe(false);
+  });
+
+  it("(4-methylcyclohexylidene)allene with its C4 set: kept - the two together set the molecule's axis - and the two enantiomers two identities; its C4 set with the axis open, none either way: the same as nothing given", () => {
+    const [r, s, sTurned] = ["CC=[C@]=C1CC[C@H](C)CC1", "CC=[C@]=C1CC[C@@H](C)CC1", "CC=[C@@]=C1CC[C@@H](C)CC1"];
+    expect(axes(settingCisTrans(fromSmiles(r)))).toBe(1);
+    expect(text(fromSmiles(r))).not.toBe(text(fromSmiles(s)));
+    expect(one(r, s)).toBe(false);
+    // (turning both, the axis and C4, is the same enantiomer)
+    expect(one(r, sTurned)).toBe(true);
+    // (one of the two given and the other open states neither enantiomer: one structure with nothing given, never one
+    //  enantiomer's text from a fill)
+    expect(one("CC=[C@]=C1CCC(C)CC1", "CC=[C@@]=C1CCC(C)CC1", "CC=C=C1CC[C@H](C)CC1", "CC=C=C1CC[C@@H](C)CC1", "CC=C=C1CCC(C)CC1")).toBe(true);
+    expect(one("CC=C=C1CCC(C)CC1", r)).toBe(false);
   });
 });
 

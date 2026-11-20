@@ -1287,6 +1287,55 @@ describe("a double bond with an end of two alike groups, drawn: none read, howev
   });
 });
 
+describe("an allene with an end of two alike groups, drawn: no axis read, however it is wedged", () => {
+  // (2-methylpenta-2,3-diene drawn straight through: C1 1 with its methyls 0 and 5, = C2 2 = C3 3, C3's methyl 4; a wedge out
+  //  of C3 to its methyl, or out of C1 to its methyl 0; `ethyl` an ethyl in place of the methyl 5 - 4-methylhexa-2,3-diene)
+  const diene = (at: "near" | "far", ethyl = false) => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 3 },
+      { x: 0, y: 0, hs: 0 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 1 },
+      { x: 3.9, y: 0.75, hs: 3 },
+      { x: -1.3, y: -0.75, hs: ethyl ? 2 : 3 },
+      ...(ethyl ? [{ x: -2.6, y: -1.5, hs: 3 }] : []),
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1, ...(at === "far" ? { wedge: { narrow: 1, stereo: "up" as const } } : {}) },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1, ...(at === "near" ? { wedge: { narrow: 3, stereo: "up" as const } } : {}) },
+      { a: 1, b: 5, order: 1 },
+      ...(ethyl ? [{ a: 5, b: 6, order: 1 }] : []),
+    ];
+    return { atoms, bonds, read: readStereo(atoms, bonds) };
+  };
+  const ALIKE = "an end of these double bonds carries two alike groups, so there is no axis for a wedge to state";
+
+  it("2-methylpenta-2,3-diene wedged at its CH end or at its end of two methyls: none, and says why", () => {
+    const near = diene("near");
+    expect(near.read.axes).toEqual([]);
+    expect(unreadWhy(near.atoms, near.bonds, 3)).toBe(ALIKE);
+    const far = diene("far");
+    expect(far.read.axes).toEqual([]);
+    expect(unreadWhy(far.atoms, far.bonds, 1)).toBe(ALIKE);
+  });
+
+  it("4-methylhexa-2,3-diene - a methyl and an ethyl on that end - wedged either end: its axis read", () => {
+    expect(diene("near", true).read.axes).toHaveLength(1);
+    expect(diene("far", true).read.axes).toHaveLength(1);
+  });
+
+  it("3-methylbuta-1,2-diene wedged at its end of two methyls: none - its CH2 carries no two different groups, as before", () => {
+    const { atoms, bonds } = diene("far");
+    // (C3 a CH2: its methyl 4 taken off)
+    atoms[3] = { ...atoms[3], hs: 2 };
+    const ch2 = bonds.filter((b) => b.a !== 4 && b.b !== 4);
+    expect(readStereo(atoms, ch2).axes).toEqual([]);
+    expect(unreadWhy(atoms, ch2, 1)).toBe("the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state");
+  });
+});
+
 describe("a hydrogen bond is no bond of the structure", () => {
   // (Z)-4-hydroxypent-3-en-2-one drawn flat, its O-H...O=C hydrogen bond closing a hexagon: C2 1, C3 3, C4 4, O 5, H 7, O 2; a methyl
   // out from C2 (0) and from C4 (6)

@@ -83,6 +83,29 @@ describe("words on the page", () => {
     expect(state().captions.find((c) => c.id === over)).toEqual({ id: over, x: 4, y: 0, text: "Pd(PPh3)4" });
   });
 
+  it("stay where they stand when their arrow is dragged by itself - let go of it as it goes, over it again where it is put near them", () => {
+    const { doc, state } = editor();
+    const arrow = state().addArrow(0, 0);
+    const over = state().addCaption("Pd(PPh3)4", 0, 1, arrow);
+    const depth = doc.history().undoDepth;
+    // (the drag, a run of moves: its words let go of it as it goes, and stood where they were)
+    for (const x of [0.5, 1, 1.5]) state().moveArrowAlone(arrow, { x, y: 0 }, new Map([[over, null]]), "drag");
+    expect(state().arrows[0]).toMatchObject({ x: 1.5, y: 0 });
+    expect(state().captions.find((c) => c.id === over)).toEqual({ id: over, x: 0, y: 1, text: "Pd(PPh3)4" });
+    // (put down near them: over it again, still where they stood - one step for the whole drag)
+    state().moveArrowAlone(arrow, { x: 1.5, y: 0 }, new Map([[over, arrow]]), "drag");
+    expect(state().captions.find((c) => c.id === over)).toEqual({ id: over, x: 0, y: 1, text: "Pd(PPh3)4", arrow });
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(state().arrows[0]).toMatchObject({ x: 0, y: 0 });
+    expect(state().captions.find((c) => c.id === over)).toMatchObject({ x: 0, y: 1, arrow });
+    // (put down far from them: theirs no more; the arrow then goes alone wherever it goes, and is drawn no longer for them)
+    state().moveArrowAlone(arrow, { x: 20, y: 0 }, new Map([[over, null]]), "far");
+    expect(state().captions.find((c) => c.id === over)!.arrow).toBeUndefined();
+    state().updateArrow(arrow, { x: 25, y: 0 });
+    expect(state().captions.find((c) => c.id === over)).toMatchObject({ x: 0, y: 1 });
+  });
+
   it("go with a selection among them - over an arrow that is among it too - and are copied, pasted and saved with it", () => {
     const { state } = editor();
     const a = state().addAtom(0, 0, "C");
