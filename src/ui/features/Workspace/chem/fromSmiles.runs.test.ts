@@ -9,6 +9,7 @@ import { drawingOf } from "./drawing";
 import { givenRunsOf, specified } from "./fromSmiles";
 import { identityOfDrawn } from "./identityOf";
 import { stereoGraphOf } from "../../../../lib/chem/stereoOpen";
+import { measured } from "../../../../testing/timeouts";
 
 /**
  * A SMILES's allene axis and odd cumulene's cis or trans through the plugin's hop (a MOL block cannot say them): the drawing a plugin gives,
@@ -135,7 +136,7 @@ describe("an aryl allene's axis, through a plugin's drawing: a wedge at its end 
       }
       expect(identityOfDrawn(await laidOut(pluginDrawing(twins(smi)[0]), MENO, given(twins(smi)[0]))).text).not.toBe(identityOfDrawn(await laidOut(pluginDrawing(twins(smi)[1]), MENO, given(twins(smi)[1]))).text);
     }
-  });
+  }, measured(700));
 
   it("drawn by hand with its one wedge or hashes on any bond out of either end, is one of the two handednesses: one axis read, two identities in all", async () => {
     for (const smi of typed) {

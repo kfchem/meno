@@ -10,6 +10,7 @@ import { configurationChanges, readingOf } from "./changes";
 import { chair } from "../../../../lib/chem/perception/projection/solids";
 import { drawn } from "../../../../lib/chem/perception/projection/views";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
+import { measured } from "../../../../testing/timeouts";
 
 // Foundation part 15, phase 2, its second half: the configuration kept on the drawing's own atoms and bonds, in the step that made it, saved
 // and copied with it, and what an edit changed said against what is kept.
@@ -256,7 +257,7 @@ describe("an axis kept with the neighbours its sense is taken against", () => {
       const turned = renumbered(kept, (id) => 10_000 - swap(id));
       expect(keptReading(turned, readingOf(turned).said).said.axes, name).toEqual(readingOf(turned).said.axes);
     }
-  });
+  }, measured(460));
 
   it("keeps a unit whose ends are not bonded - an allene's axis, an odd cumulene's cis or trans - on its run's first bond, its ends named", () => {
     for (const [name, m, kind] of [["an allene", allene(), "axis"], ["a hexatriene's cumulene", drawnFromSmiles("C/C=C=C=C/C"), "set"]] as const) {

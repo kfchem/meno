@@ -653,7 +653,11 @@ on a page); the Newman projection follows.
   and every group stands at one of its atom's free positions (a group drawn by hand is not guessed at), and where the chair stands alone (`ringAlone`:
   a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
   *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
-  would not be.
+  would not be. It is offered too on a chair or a Haworth ring drawn by hand that Meno reads as drawn in perspective, or takes for one whose near
+  and far are not marked (*Drawn in perspective*; `projections/projection` `isProjection`, by the recognition Clean-up keeps it by): what Clean-up
+  keeps as drawn, *Draw flat* lays out flat, and 3D made from it says it takes the configuration only, as from the tool's chair. *Flip chair*
+  stays the tool's chair's. A cage or a bridged system drawn by hand in perspective is not asked after for it: fitting one to the engine's
+  views takes up to a second, too long for a menu.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
   below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
@@ -672,9 +676,25 @@ on a page); the Newman projection follows.
   as ST-1.9 prefers (never the wedge shapes without the bold bond); the ring O behind - at the back right for the six, at the back for the
   five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The ring is drawn
   larger than the style's bond (`HAWORTH_SCALE`, 1.8: the look check's to settle; never under 1.25). The free positions are *up* and *down*
-  at each ring atom, straight up and down the page, a group's bond drawn 0.745 of a bond out of the ring's picture and 0.40 into it (a front
-  atom's up group, a back atom's down group), so that every place stands clear of the ring and of every other place: Meno's own lengths, no
-  text gives one. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  at each ring atom, straight up and down the page, each group's bond as long as its ring, place and way give (`HAWORTH_GROUP`;
+  no text states a length, and the texts ask only that groups be vertical and not overlap): out of the ring's picture as the figures under
+  Brecher 2006's ST-1.9 draw them (0.65 to 0.83 of the level bond, measured there); into it - a front atom's up group, a back atom's
+  down group - long enough that the stem still shows once trimmed to its label: up from a front atom 0.51, a stem of 0.29 like the
+  figures', whatever the label (OH, H, CH2OH; a CH2OH on the right reads HOH2C, into the ring). A six-ring's back atom's down group, on the vertical of the front atom's up group below
+  it, stands at the figures' 0.39; where both are labels and meet, the down one gives way as its label is typed, to as little as
+  0.30, so that the two stand visibly apart; in the five-ring a front
+  atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
+  inside the ring is read against the whole drawing as the page lays it out - every line but its own
+  bond, the bold and wedge-shaped bonds of the near edge, the other labels - a graze of less than a tenth
+  of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),
+  one that meets something steps along its vertical toward its atom by the least that clears every label:
+  a back atom's down label first, to as little as 0.30, then a front atom's up label, to as little as
+  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 as
+  before, so that nothing is drawn worse than it was. A group that is no label - a carbon drawn out, with
+  what it carries - is never moved, so a bond drawn on from it has its room. Not yet clear, as before
+  these lengths: an OH up from the right-hand front atom (its H written across the bond going up from
+  it), a CH2OH up from a front atom beside a second label inside the ring, and in a five-ring an OH or a
+  CH2OH up from C-2. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
@@ -2154,6 +2174,8 @@ All hover-based, as above.
     place for them, and does not keep them.
 - Copy and paste, within Meno and between tabs. (PR #68, as above; and
   between Meno and other programs, through the system clipboard.)
+  A copy or a cut with nothing selected and no structure under the
+  pointer says so ("Nothing to copy"), and leaves the clipboard as it was.
 - **One structure of several parts** (the maintainer, 2026-10-30; built
   2026-11-05). Structures not bonded to one another can be one structure:
   a salt, a complex, the reactants on one side of an atom map. With two or
@@ -2362,7 +2384,15 @@ lipids each have their own way of being drawn, which it should know.
        but could not read has no R or S, and its tip says why and what to
        draw: "No R or S: the ring is drawn in perspective, but its near and
        far are not marked: draw its near bonds bold." (or "... but not
-       clearly as one shape."). Which atoms are centres is the CIP's, so an
+       clearly as one shape."). A chair read whose group at a ring atom is
+       drawn half way between axial and equatorial, which the reading
+       cannot place, has no R or S there, and says so: "No R or S: a group
+       drawn between axial and equatorial: not read."; *Draw flat* leaves
+       that centre open, no wedge guessed, and marks it "No configuration
+       given:" with the same words, until it is changed (2026-11-20). An
+       atom that carries no configuration at all - an ammonium's N with
+       its H - is said nothing of, wherever its group is drawn.
+       Which atoms are centres is the CIP's, so an
        atom that is no centre is told nothing. (A limit: a bridged system
        read by a mark makes every atom of it a centre, as a tool's
        projection does; quinuclidin-3-ol's N and other bridgehead, whose
@@ -2746,7 +2776,9 @@ traced from reference drawings.
   already running; with none running, Windows starts one, unseen, which
   goes again once Office is done with its objects and nothing else is open
   (Office also starts one only to have a picture). The structure opens in a
-  tab of its own; each change goes back into the document as it is drawn -
+  tab of its own - its molecules in 3D turned as they were copied, and
+  showing the frame they showed, as the document's picture has them, not
+  as a file's are first seen; each change goes back into the document as it is drawn -
   Meno's record, and the same EMF (EMF+ and all) as the picture shown - and
   closing the tab, or the document, lets it go. Insert > Object makes a new
   one. The installers register the class (the NSIS hooks run

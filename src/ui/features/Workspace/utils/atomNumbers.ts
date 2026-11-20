@@ -8,6 +8,9 @@
 import * as THREE from "three";
 import type { Molecule3D } from "../store/types";
 
+/** What an atom-map number is shown as where it is not the number itself: its IUPAC locant, 4a, 1', with a superscript after it (chem/atomMap). */
+export type MapText = { base: string; sup?: string };
+
 /** What an atom's number is: its place, counted from 1; its atom-map number. */
 export type AtomNumberKind = "order" | "map";
 
@@ -66,13 +69,132 @@ export function atomNumbersOf(m: Pick<Molecule3D, "atoms" | "mapFrames">, kind: 
   return ATOM_NUMBER_KINDS.find((k) => k.kind === kind)?.of(m) ?? new Float32Array(m.atoms.length);
 }
 
+/**
+ * What each atom's number is drawn with, of the kind given, in the frame shown (`glyphCode`): an atom-map number shown as its IUPAC
+ * locant where the molecule has one for it (`mapTexts`: 4a, 1'), the number itself otherwise; 0 where it has none.
+ */
+export function atomGlyphsOf(m: Pick<Molecule3D, "atoms" | "mapFrames" | "mapTexts">, kind: AtomNumberKind, frame = 0): Float32Array {
+  const nums = atomNumbersOf(m, kind, frame);
+  const texts = kind === "map" && m.mapTexts?.length ? new Map(m.mapTexts) : null;
+  return Float32Array.from(nums, (n) => glyphCode(n, texts?.get(n)));
+}
+
 /** The most digits a number on a ball has: past it, none is drawn. */
 export const NUMBER_DIGITS_MOST = 4;
 
 /**
- * The digits' picture the balls read their numbers from: 0 to 9, a cell
- * each, `DIGIT_CELL` as wide as it is high, each digit set in the middle
- * of its cell - in white, the shader colouring it.
+ * What a number on a ball is written with: the digits, the letters of a
+ * fusion atom's locant (4a, 10b), a prime (1'), and the digits again as
+ * a superscript after them (an interior atom's 3a¹, a ring of an assembly's
+ * 1²). Each glyph a code: 1 to 17 for these, by place, 21 to 30 a
+ * superscript digit; a number's codes, up to `NUMBER_DIGITS_MOST` of
+ * them, written in one value, the first in its lowest five bits - exact in
+ * a float, as a ball's attribute is.
+ */
+export const GLYPHS = "0123456789abcdef'";
+const SUP_CODE = 21;
+const GLYPH_BITS = 32;
+/** A superscript's size, as a share of a glyph's, and how high its foot stands; a prime's width, as a share of a cell. */
+export const SUP_SIZE = 0.62;
+export const SUP_FOOT = 0.38;
+export const PRIME_WIDTH = 0.42;
+
+/** How wide a glyph's code is, in cells: none, 0. */
+function glyphWidth(g: number): number {
+  return g <= 0 ? 0 : g >= SUP_CODE ? SUP_SIZE : g === GLYPHS.length ? PRIME_WIDTH : 1;
+}
+
+/** A number's glyphs as one code (`GLYPHS`): 0 where it is none, or past `NUMBER_DIGITS_MOST` digits. */
+function numberCode(num: number): number {
+  const n = Math.round(num);
+  if (n < 1 || String(n).length > NUMBER_DIGITS_MOST) return 0;
+  return [...String(n)].reduceRight((code, ch) => code * GLYPH_BITS + Number(ch) + 1, 0);
+}
+
+/**
+ * What a ball shows for its number `num`: its glyphs' code - of `text`,
+ * where the number is shown as one (an IUPAC locant: chem/atomMap), and of
+ * the number where that text has a glyph Meno does not draw on a ball or
+ * more of them than a ball takes; 0, none.
+ */
+export function glyphCode(num: number, text?: MapText | null): number {
+  if (!text || !(num >= 1)) return numberCode(num);
+  const codes = [...text.base].map((ch) => GLYPHS.indexOf(ch) + 1);
+  for (const ch of text.sup ?? "") codes.push(/[0-9]/.test(ch) ? SUP_CODE + Number(ch) : 0);
+  if (!codes.length || codes.length > NUMBER_DIGITS_MOST || codes.some((c) => c <= 0)) return numberCode(num);
+  return codes.reduceRight((code, c) => code * GLYPH_BITS + c, 0);
+}
+
+/** How wide a code's glyphs are together, in cells (`DIGIT_CELL` of a glyph's height each): 0, none. */
+export function glyphsWidth(code: number): number {
+  let w = 0;
+  for (let c = Math.round(code); c > 0; c = Math.floor(c / GLYPH_BITS)) w += glyphWidth(c % GLYPH_BITS);
+  return w;
+}
+
+/**
+ * The shaders' reading of a code (utils/occlusionMaterial, utils/jointNumbers): how wide its glyphs are (`glyphsWidth`), and - given
+ * the picture, `atlas` - how much
+ * of a point they cover - `q` in cells across from their left and in their height up from their foot, `dq` how fast it moves across the
+ * screen - from the glyphs' picture `atlas` (`digitAtlas`). Read wherever it is asked, the point held within the glyphs and what lies
+ * outside them let go after (some graphics read the picture amiss at a glyph's edge where it is read only inside it).
+ */
+export function glyphsGlsl(atlas: string | null): string {
+  const f = (x: number) => x.toFixed(4);
+  const widths = `
+      float glyphAt( float code, int k ) {
+        float c = floor( code + 0.5 );
+        for ( int j = 0; j < ${NUMBER_DIGITS_MOST}; j++ ) if ( j < k ) c = floor( c / ${GLYPH_BITS}.0 );
+        return mod( c, ${GLYPH_BITS}.0 );
+      }
+      float glyphW( float g ) {
+        return g < 0.5 ? 0.0 : g > ${SUP_CODE - 0.5} ? ${f(SUP_SIZE)} : abs( g - ${GLYPHS.length}.0 ) < 0.5 ? ${f(PRIME_WIDTH)} : 1.0;
+      }
+      float glyphsWidth( float code ) {
+        float w = 0.0;
+        for ( int k = 0; k < ${NUMBER_DIGITS_MOST}; k++ ) w += glyphW( glyphAt( code, k ) );
+        return w;
+      }`;
+  // (a vertex shader asks only how wide: `atlas` null)
+  if (atlas == null) return widths;
+  return `${widths}
+      float glyphsCover( float code, vec2 q, vec2 dx, vec2 dy ) {
+        float w = glyphsWidth( code );
+        float inside = q.x >= 0.0 && q.x < w && q.y >= 0.0 && q.y <= 1.0 ? 1.0 : 0.0;
+        vec2 qc = vec2( clamp( q.x, 0.0, max( w - 1e-4, 0.0 ) ), clamp( q.y, 0.0, 1.0 ) );
+        float g = 0.0;
+        float from = 0.0;
+        float gw = 1.0;
+        float start = 0.0;
+        for ( int k = 0; k < ${NUMBER_DIGITS_MOST}; k++ ) {
+          float gk = glyphAt( code, k );
+          float wk = glyphW( gk );
+          if ( wk > 0.0 && qc.x >= start && qc.x < start + wk ) { g = gk; from = start; gw = wk; }
+          start += wk;
+        }
+        float u = ( qc.x - from ) / max( gw, 1e-4 );
+        float y = qc.y;
+        float cell = g - 1.0;
+        vec2 per = vec2( 1.0 / ${GLYPHS.length}.0, 1.0 );
+        if ( g > ${SUP_CODE - 0.5} ) {
+          // (a superscript: a digit's cell, smaller and higher)
+          cell = g - ${SUP_CODE}.0;
+          y = ( qc.y - ${f(SUP_FOOT)} ) / ${f(SUP_SIZE)};
+          inside *= y >= 0.0 && y <= 1.0 ? 1.0 : 0.0;
+          per /= ${f(SUP_SIZE)};
+        } else if ( abs( g - ${GLYPHS.length}.0 ) < 0.5 ) {
+          // (a prime: the middle of its cell, as wide as its box)
+          u = 0.5 + ( u - 0.5 ) * ${f(PRIME_WIDTH)};
+        }
+        vec2 uv = vec2( ( cell + clamp( u, 0.0, 1.0 - 1e-4 ) ) / ${GLYPHS.length}.0, clamp( y, 0.0, 1.0 ) );
+        return textureGrad( ${atlas}, uv, dx * per, dy * per ).a * inside;
+      }`;
+}
+
+/**
+ * The glyphs' picture the balls read their numbers from (`GLYPHS`): a cell
+ * each, `DIGIT_CELL` as wide as it is high, each glyph set in the middle
+ * of its cell on the digits' line - in white, the shader colouring it.
  */
 export const DIGIT_CELL = 0.62;
 const CELL_PX = 160;
@@ -84,7 +206,7 @@ export function digitAtlas(): THREE.Texture {
   if (typeof document === "undefined") return new THREE.DataTexture(new Uint8Array(4), 1, 1);
   const canvas = document.createElement("canvas");
   const w = Math.round(CELL_PX * DIGIT_CELL);
-  canvas.width = w * 10;
+  canvas.width = w * GLYPHS.length;
   canvas.height = CELL_PX;
   const texture = new THREE.CanvasTexture(canvas);
   texture.generateMipmaps = true;
@@ -104,7 +226,8 @@ export function digitAtlas(): THREE.Texture {
     const m = g.measureText("0");
     const up = m.actualBoundingBoxAscent;
     const down = m.actualBoundingBoxDescent;
-    for (let d = 0; d < 10; d++) g.fillText(String(d), w * d + w / 2, CELL_PX / 2 + (up - down) / 2);
+    // (a prime as the prime it is, ′)
+    [...GLYPHS].forEach((ch, d) => g.fillText(ch === "'" ? "\u2032" : ch, w * d + w / 2, CELL_PX / 2 + (up - down) / 2));
     texture.needsUpdate = true;
   };
   draw();
@@ -156,15 +279,7 @@ export const NUMBER_HEIGHT = 0.78;
 export const NUMBER_WIDTH_MOST = 1.5;
 export const NUMBER_HEIGHT_MOST_A = 0.95;
 
-/** How many digits a number is written with: 0 where it is none, or past `NUMBER_DIGITS_MOST`. */
-export function digitsOf(num: number): number {
-  const n = Math.round(num);
-  if (n < 1) return 0;
-  const d = String(n).length;
-  return d <= NUMBER_DIGITS_MOST ? d : 0;
-}
-
-/** How high a ball's number is, as a share of its radius: `radiusA` its radius in ångströms. */
+/** How high a ball's number is, as a share of its radius: `digits` how wide its glyphs are, in cells (`glyphsWidth`), `radiusA` its radius in ångströms. */
 export function numberHeight(digits: number, radiusA: number): number {
   return Math.min(NUMBER_HEIGHT, NUMBER_HEIGHT_MOST_A / Math.max(radiusA, 1e-6), NUMBER_WIDTH_MOST / (Math.max(digits, 1) * DIGIT_CELL));
 }
@@ -175,7 +290,7 @@ export function numberHeight(digits: number, radiusA: number): number {
  * under 0.4 of their size for room on their ball, or standing under three
  * quarters of `least` pixels high - `heights` each a share of its ball's
  * radius, `shares` how much of its size it has room for (`numberPlaces`),
- * `radiiPx` each ball's radius in the picture's pixels; `digits` 0 for none.
+ * `radiiPx` each ball's radius in the picture's pixels; `digits` how wide each one's glyphs are, in cells (`glyphsWidth`), 0 for none.
  */
 export function numbersLeftOut(heights: ArrayLike<number>, shares: ArrayLike<number>, radiiPx: ArrayLike<number>, digits: ArrayLike<number>, least: number): number {
   let n = 0;
@@ -202,7 +317,7 @@ for (let i = 0; i < GRID; i++)
  * whole - and how large, as a share of its full size, where that part is
  * too small for it (under 1). `centres` the balls' middles in the camera's
  * space (x, y, z of each, z towards the viewer), `radii` theirs, `heights`
- * each number's height as a share of its radius and `digits` its digits (0,
+ * each number's height as a share of its radius and `digits` how wide its glyphs are, in cells (0,
  * none) - and the sticks between them, where they are drawn; written into
  * `out`, x and y in the ball's radius's units from its middle, and the
  * share, for each.
