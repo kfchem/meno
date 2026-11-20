@@ -376,7 +376,8 @@ export function iupacNumbering(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number
       atoms: piece.map((i) => ({ el: atoms[i].el, ...(atoms[i].charge ? { charge: atoms[i].charge } : {}), ...(atoms[i].isotope ? { isotope: atoms[i].isotope } : {}) })),
       bonds: pieceBonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
     };
-    const r = locants({ ...input, orbits: heavyOrbits(input), descriptors: descriptorsOf(input.atoms, pieceBonds, piece.map((i) => atoms[i])) });
+    // (level 2: the principal characteristic group leads - an ester numbered from its acid, a ketone on the chain: perception/locants)
+    const r = locants({ ...input, orbits: heavyOrbits(input), descriptors: descriptorsOf(input.atoms, pieceBonds, piece.map((i) => atoms[i])) }, 2);
     r.order.forEach((k) => order.push(piece[k]));
     r.order.forEach((k) => {
       const l = r.locant[k];
