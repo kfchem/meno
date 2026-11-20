@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
+import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { readingOf } from "./changes";
 import { atomSaid, bondSaid } from "./said";
 
@@ -29,6 +30,16 @@ describe("what a look states, where the pointer rests (part 15, phase 4)", () =>
     const m = butanol("up");
     expect(bondSaid(m, readingOf(m), 12, r)).toBe("C1: R, by this wedge");
     expect(bondSaid(m, readingOf(m), 12, none)).toBe("C1: set, by this wedge");
+  });
+
+  it("a wedge that states an axis from one of its ends: the axis set by it, never 'no configuration' - an allene", () => {
+    const m = drawnFromSmiles("OC(Cl)=[C@]=C(C)F");
+    const wedge = m.bonds.find((b) => b.stereo === "up" || b.stereo === "down")!;
+    const reading = readingOf(m);
+    expect(reading.said.axes.size).toBe(1);
+    const [p, q] = [...reading.said.axes.keys()][0].split(",").map(Number);
+    const name = (id: number) => `${m.atoms.find((a) => a.id === id)!.el}${id}`;
+    expect(bondSaid(m, reading, wedge.id, none)).toBe(`the axis through ${name(p)} and ${name(q)}: set, by this wedge`);
   });
 
   it("a centre: its R or S, set, or open on a wavy bond; any other atom says nothing", () => {

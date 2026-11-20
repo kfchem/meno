@@ -19,11 +19,15 @@ export function bondSaid(model: Model, reading: Reading, bond: number, label: La
     const wide = centre === b.a ? b.b : b.a;
     const name = atomName(model, centre);
     const why = reading.unread.get(centre);
+    // (an axis the wedge states from one of its ends - an allene's, a biaryl's (IUPAC ST-1.7): its hand set by this wedge)
+    const axis = [...reading.said.axes.keys()].map((key) => key.split(",").map(Number)).find((ends) => ends.includes(centre));
     const first = why
       ? `${name}: not read: ${why}`
       : reading.said.centres.has(centre)
         ? `${name}: ${label(`centre-${centre}`) ?? "set"}, by this wedge`
-        : `${name}: no configuration, though this wedge is drawn`;
+        : axis
+          ? `the axis through ${atomName(model, axis[0])} and ${atomName(model, axis[1])}: set, by this wedge`
+          : `${name}: no configuration, though this wedge is drawn`;
     // (a centre at its wide end too: the wedge says nothing of it)
     return reading.said.centres.has(wide) || reading.unread.has(wide) ? `${first}; it says nothing of ${atomName(model, wide)}` : first;
   }

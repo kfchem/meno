@@ -1593,6 +1593,9 @@ All hover-based, as above.
     shows one ("C3: R, by this wedge"; "C3: set, by this wedge" where R
     or S is not shown), or why it is not read ("C3: not read: ..."); where
     the atom at its wide end is a centre too, that it says nothing of it;
+    a wedge from an end of an axis it states - an allene's, a biaryl's
+    (IUPAC ST-1.7): that axis, set by it ("the axis through C2 and C5:
+    set, by this wedge"; no R or S is shown for an axis);
   - a wavy bond: its centre open; an "either" double bond: open;
   - a bold, dashed or hashed line on a flat drawing: no configuration; a
     bold line of a ring drawn with depth: the near edge;
