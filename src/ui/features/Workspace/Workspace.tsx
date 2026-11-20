@@ -234,6 +234,7 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
+import { newmanDrawing } from "./projections/newman";
 import { isProjection } from "./projections/rings";
 import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";
@@ -2163,6 +2164,8 @@ function WorkspaceContent({
               else if (what === "chair") st.putChair(at);
               // (and a Haworth ring, a pyranose's of six; clicked again while it is as it was put down, a furanose's of five)
               else if (what === "haworth") st.putHaworth(at);
+              // (and a Newman pair: the two carbons at one place, the circle round it drawn by the page)
+              else if (what === "newman") st.pasteModel(centredAt(newmanDrawing({ at, firstId: 1, firstBondId: 1 }), at));
               else st.addPlus(at.x, at.y);
             }}
           />
