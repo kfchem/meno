@@ -12,7 +12,10 @@
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseByViews, recogniseChairs, recogniseHaworth, type Recognised } from "./recognise";
 import { ringSystemsOf, sharesThreeAtoms, smallestRings } from "../rings";
 import { ofTheStructure } from "../graph";
-import type { DrawnAtom, DrawnBond } from "../stereo/from2d";
+import { readStereo, type DrawnAtom, type DrawnBond } from "../stereo/from2d";
+
+/** What is said of a chair's ring atom whose group is drawn half way between axial and equatorial, its configuration not read. */
+export const BETWEEN_AXIAL_AND_EQUATORIAL = "a group drawn between axial and equatorial: not read";
 
 /** A point of a view of a ring system, its depth too. */
 export type ViewPoint = { x: number; y: number; z: number };
@@ -70,6 +73,9 @@ function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[], cag
   let out: DrawnAtom[] | null = null;
   const bondOf = new Map(bonds.map((b) => [key(b.a, b.b), b]));
   let views: ReturnType<CageViewsOf> | null = null;
+  // (the chairs read in depth, each ring system's atoms: their groups asked after, below - a Haworth ring's group drawn neither up nor down
+  //  is no Haworth ring's, read as drawn)
+  const chairsRead: (readonly number[])[] = [];
   for (const sys of ringSystemsOf(atoms.length, allRings)) {
     if (sys.atoms.some((i) => atoms[i].z != null)) continue;
     // (a wedge at any atom of it: read as it always was)
@@ -124,6 +130,20 @@ function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[], cag
       out![i] = { ...atoms[i], z: z[k], centre: true };
       said.set(i, words);
     });
+    if (!haworthRing) chairsRead.push(sys.atoms);
+  }
+  // (a ring atom of a chair read with a group out of the ring whose configuration the reading of it in depth finds none for - its group
+  //  drawn half way between axial and equatorial: said so at it, as the reading leaves it open; nothing silent)
+  if (out && chairsRead.length) {
+    const read = readStereo(out, bonds).tetra;
+    for (const ring of chairsRead) {
+      const inRing = new Set(ring);
+      for (const i of ring) {
+        const around = neighbours[i];
+        if (read.has(i) || atoms[i].hs > 1 || around.length + atoms[i].hs !== 4 || !around.some((n) => !inRing.has(n))) continue;
+        said.set(i, BETWEEN_AXIAL_AND_EQUATORIAL);
+      }
+    }
   }
   return { atoms: out ?? atoms, said };
 }

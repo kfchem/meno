@@ -2285,7 +2285,13 @@ lipids each have their own way of being drawn, which it should know.
        but could not read has no R or S, and its tip says why and what to
        draw: "No R or S: the ring is drawn in perspective, but its near and
        far are not marked: draw its near bonds bold." (or "... but not
-       clearly as one shape."). Which atoms are centres is the CIP's, so an
+       clearly as one shape."). A chair read whose group at a ring atom is
+       drawn half way between axial and equatorial, which the reading
+       cannot place, has no R or S there, and says so: "No R or S: a group
+       drawn between axial and equatorial: not read."; *Draw flat* leaves
+       that centre open, no wedge guessed, and marks it "No configuration
+       given:" with the same words, until it is changed (2026-11-20).
+       Which atoms are centres is the CIP's, so an
        atom that is no centre is told nothing. (A limit: a bridged system
        read by a mark makes every atom of it a centre, as a tool's
        projection does; quinuclidin-3-ol's N and other bridgehead, whose
