@@ -64,6 +64,12 @@ export type EditMeta = {
    * what followed it). Never a change set's first edit.
    */
   joinTop?: true;
+  /**
+   * With `joinTop`: the state the step on top is to end at for this edit to join it, a gesture's step or not - an edit that settles at
+   * once what the step on top did (what a chemist's change states, kept in that change's own step: Workspace/configuration/watch), so
+   * that one undo takes back the two. Where the step on top ends anywhere else, as `joinTop` alone.
+   */
+  onto?: unknown;
 };
 
 /**
@@ -312,7 +318,7 @@ export function createDocument<T>(
       const at = now();
       const window = meta.coalesceWithinMs ?? DEFAULT_COALESCE_MS;
       // (joining the gesture on top: only one that is one - a step made with a key - and the same maker's; never a change set's first edit)
-      const joins = !first && meta.joinTop === true && present.coalesceKey != null && present.by === meta.by;
+      const joins = !first && meta.joinTop === true && (present.coalesceKey != null || (meta.onto !== undefined && present.state === meta.onto)) && present.by === meta.by;
       const coalesce =
         !first &&
         meta.coalesceKey != null &&

@@ -153,7 +153,8 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     if (withKept(model, ids, kept) === model) return;
     keeping = true;
     try {
-      doc.edit(step.label ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, ids, kept) }), { joinTop: true });
+      // (joined to the step that made the change, a click's as much as a drag's: one undo takes back the change and what it keeps)
+      doc.edit(step.label ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, ids, kept) }), { joinTop: true, onto: step.state });
     } finally {
       keeping = false;
     }

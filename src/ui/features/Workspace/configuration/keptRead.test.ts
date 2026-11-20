@@ -107,3 +107,65 @@ describe("what a chemist's own change states, kept at once", () => {
     stop();
   });
 });
+
+describe("a chemist's change and what it keeps, one undo step", () => {
+  it("takes both back with one undo - a wedge turned, an atom deleted, a group drawn on - never leaving a step that undoes nothing", async () => {
+    vi.useFakeTimers();
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model: butanol("up"), nextId: 100 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const stop = watchConfiguration(store, doc);
+    const st = () => store.getState();
+    // (kept first: a change the watch has had its look at)
+    st().moveAtoms([{ id: 5, x: 2.6 * L, y: 0 }], "drag-1");
+    await vi.runAllTimersAsync();
+    expect(doc.getState().model.atoms.find((a) => a.id === 1)!.config).toBeDefined();
+    /** One action: one undo step, and one undo gives back the drawing exactly as it was before it. */
+    const oneStep = async (what: string, act: () => void) => {
+      const before = doc.getState().model;
+      const depth = doc.history().undoDepth;
+      act();
+      await vi.runAllTimersAsync();
+      expect(doc.history().undoDepth, what).toBe(depth + 1);
+      doc.undo();
+      expect(doc.getState().model, what).toBe(before);
+    };
+    await oneStep("a wedge turned", () => st().updateBond(12, { stereo: "down" }));
+    await oneStep("an atom deleted", () => st().deleteAtom(5));
+    await oneStep("an atom drawn on", () => st().addAtom(-2 * L, 0, "Cl"));
+    // (and a bond drawn to it: each action its own step, one undo each)
+    const cl = st().addAtom(-2 * L, 0, "Cl");
+    await vi.runAllTimersAsync();
+    await oneStep("a bond drawn", () => st().addBond(2, cl, 1));
+    stop();
+  });
+
+  it("keeps a drag's change once, as it ends: nothing kept while the atom is still being dragged, then the drag and its keep one step", async () => {
+    vi.useFakeTimers();
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model: butanol("up"), nextId: 100 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const stop = watchConfiguration(store, doc);
+    const centre = () => doc.getState().model.atoms.find((a) => a.id === 1)!.config;
+    store.getState().moveAtoms([{ id: 5, x: 2.6 * L, y: 0 }], "drag-1");
+    await vi.runAllTimersAsync();
+    const kept = centre();
+    expect(kept).toBeDefined();
+    // (the methyl dragged from 210 degrees round to 30, so that the order round the centre - and the hand - turns: under way, nothing kept
+    //  anew)
+    const depth = doc.history().undoDepth;
+    store.setState({ moveDrag: { ...store.getState().moveDrag, active: true, atomId: 2 } });
+    store.getState().moveAtoms([{ id: 2, x: L * Math.cos(Math.PI / 6), y: L * Math.sin(Math.PI / 6) }], "drag-2");
+    await vi.runAllTimersAsync();
+    expect(centre()).toEqual(kept);
+    // (let go: kept at once, in the drag's own step)
+    store.setState({ moveDrag: { ...store.getState().moveDrag, active: false } });
+    expect(centre()).not.toEqual(kept);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(centre()).toEqual(kept);
+    stop();
+  });
+});
