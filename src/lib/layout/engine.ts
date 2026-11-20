@@ -42,6 +42,7 @@ import { misreadCentres, turnedDoubleBonds } from "./readBack";
 import { atomClasses, byStructure, canonicalRanks } from "./ranks";
 import { canonicalRanks as canonicalOrderRanks, reordered, restored, walkOrder } from "./canonical";
 import { greatest, least } from "../chem/lists";
+import { settingCisTrans } from "../chem/perception/symmetry";
 
 export type { LayoutInput } from "./perceive";
 
@@ -1059,7 +1060,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   // H drawn in the widest gap and wedged instead: drawn.ts hydrogensWhereUnread)
   const drawnAtoms: DrawnAtom[] = input.atoms.map((a, i) => ({ x: x[i], y: y[i], el: a.el, hs: mol.hs[i], ...(a.charge ? { charge: a.charge } : {}) }));
   const stereo = hydrogensWhereUnread(drawnAtoms, input.bonds.map(({ a, b, order }) => ({ a, b, order })), tetra, placeStereo(mol, final, tetra), 1);
-  for (const axis of input.axes ?? []) {
+  // (none for an allene's axis that sets nothing - an end of two alike groups, 2-methylpenta-2,3-diene's, given by a SMILES or
+  //  read from 3D: such a wedge states nothing, and Meno reads none there - chem/perception/symmetry `settingCisTrans`)
+  for (const axis of settingAxes(input)) {
     const w = axisWedge(mol, final, axis);
     if (w) stereo.wedges.push(w);
   }
@@ -1071,6 +1074,18 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     for (const a of ms) for (const b of mol.neighbours[a]) if (a < b && ms.includes(b)) dashed.push([a, b]);
   }
   return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo, wholeToo };
+}
+
+/**
+ * `input`'s axes that set something: an allene's with an end of two alike groups taken out (chem/perception/symmetry
+ * `settingCisTrans`, asked only where there is an allene's axis - its ends not bonded to each other - to ask of).
+ */
+function settingAxes(input: LayoutInput): readonly NonNullable<LayoutInput["axes"]>[number][] {
+  const axes = input.axes ?? [];
+  const bonded = (u: number, v: number) => input.bonds.some((b) => (b.a === u && b.b === v) || (b.a === v && b.b === u));
+  if (!axes.some((x) => !bonded(x.atoms[0], x.atoms[1]))) return axes;
+  const kept = settingCisTrans(input).axes ?? [];
+  return axes.filter((x) => kept.includes(x));
 }
 
 /** Each group's first atom off a solid, at the mean depth of the solid's atoms it leaves (`laidOut`). */

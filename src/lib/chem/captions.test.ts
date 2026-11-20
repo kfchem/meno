@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, keptWords, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed } from "./captions";
+import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, inArrowReach, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, keptWords, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed } from "./captions";
 import { labelBox, placeLabel, runsWidth } from "./layout2d";
 
 const shown = (line: string) =>
@@ -472,5 +472,24 @@ describe("words over an arrow that turns", () => {
     const grown = withWordsNeed([bent], new Map([[1, 2 * stretch]]))[0];
     expect(grown.length).toBeCloseTo(20, 9);
     expect(withWordsNeed([bent], new Map([[1, stretch / 2]]))[0]).toBe(bent);
+  });
+});
+
+describe("words within an arrow's reach", () => {
+  it("are those along it, within its length, and across it within two and a half ems and their own half height - as words are put by it", () => {
+    const arrow = { x: 0, y: 0, angle: 0, length: 4 };
+    const half = { w: 1, h: 0.3 };
+    // (font of 1: the reach across is 2.5 + 0.3)
+    expect(inArrowReach({ x: 0, y: 1 }, half, arrow, 1)).toBe(true);
+    expect(inArrowReach({ x: 2, y: -2.8 }, half, arrow, 1)).toBe(true);
+    expect(inArrowReach({ x: 2.01, y: 0.5 }, half, arrow, 1)).toBe(false);
+    expect(inArrowReach({ x: 0, y: 2.81 }, half, arrow, 1)).toBe(false);
+    // (an arrow at an angle: measured along it and across it)
+    const turned = { x: 0, y: 0, angle: Math.PI / 2, length: 4 };
+    expect(inArrowReach({ x: 1, y: 1.9 }, half, turned, 1)).toBe(true);
+    expect(inArrowReach({ x: 1, y: 2.1 }, half, turned, 1)).toBe(false);
+    // (where one is put by it, it is within its reach: captionPlace and this agree)
+    expect(captionPlace({ x: 0, y: 2.8 }, half, [{ ...arrow, id: 1 }], 1).arrow).toBe(1);
+    expect(captionPlace({ x: 0, y: 2.81 }, half, [{ ...arrow, id: 1 }], 1).arrow).toBeUndefined();
   });
 });

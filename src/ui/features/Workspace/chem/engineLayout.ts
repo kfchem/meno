@@ -161,7 +161,9 @@ export function wedgeOctahedron(drawing: ReturnType<typeof drawingOf>, at: numbe
  * states no configuration - an amine's N, a plain N-alkyl aziridine's, a B:
  * none whose lone pair
  * keeps one (lib/chem/lonePairCentres; a sulfoxide's S, a phosphine's P,
- * an aziridine's N are read, lib/layout/drawn).
+ * an aziridine's N are read, lib/layout/drawn); or an allene's end whose
+ * wedge states no axis, its CH's as its CMe2's (lib/layout/drawn
+ * `unreadWhy` says why).
  */
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
   // (the structure's bonds only, as the reader takes them: a hydrogen bond takes no place round an atom)
@@ -170,10 +172,20 @@ export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: Retu
   const out = new Set<number>();
   // (a centre by its lone pair drawn with two bonds, its H carried - a secondary phosphine's P: a centre its wedge cannot state)
   const keepsPyramid = lonePairCentres(drawing.atoms, structure);
+  // (an allene's end: a double bond from it to an atom of two double bonds, the run's middle)
+  const doubles = (x: number) => (bondsOf.get(x) ?? []).filter((k) => structure[k].order === 2);
+  const otherEnd = (k: number, x: number) => (structure[k].a === x ? structure[k].b : structure[k].a);
+  const endsARun = (x: number) => doubles(x).some((k) => doubles(otherEnd(k, x)).length === 2);
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
     // (an axis of chirality's end, either: its wedge says how the axis turns)
     if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms.includes(c))) continue;
+    // (an allene's end whose wedge states no axis - its other end of fewer than two different groups, an end of two alike
+    //  groups, wedges at its two ends that disagree: unread whatever its count of bonds, its CH's as its CMe2's - nothing silent)
+    if (endsARun(c)) {
+      out.add(c);
+      continue;
+    }
     const n = bondsOf.get(c)?.length ?? 0;
     if ((n >= 3 && drawing.atoms[c].hs <= 1) || (n === 2 && drawing.atoms[c].hs === 1 && keepsPyramid(c))) out.add(c);
   }
@@ -539,7 +551,15 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const display = (b: Bond): Pick<Bond, "display" | "narrow"> | null => {
     const u = indexOf.get(b.a);
     const v = indexOf.get(b.b);
-    if (u == null || v == null || laid.depth[u] == null || laid.depth[v] == null || b.endpoints?.length) return null;
+    if (u == null || v == null || b.endpoints?.length) return null;
+    if (laid.depth[u] == null || laid.depth[v] == null) {
+      // (a look of depth - a Haworth ring's near edge, bold and wedge-shaped - on a bond whose two ends were drawn with depth, laid out
+      //  flat (*Draw flat*): plain, since it stated only the depth that is gone, and wedge-shaped on a flat ring would read as a
+      //  configuration. A look the chemist gave a flat bond stays)
+      // (only where the structure is laid out flat - Draw flat: a projection Clean-up keeps keeps its depth and its looks)
+      const deep = (id: number) => byId.get(id)?.z != null;
+      return flat && (b.display === "bold" || b.display === "wedge") && deep(b.a) && deep(b.b) ? { display: undefined } : null;
+    }
     const key = pairKey(b.a, b.b);
     const far = farEnd.get(key);
     if (far != null) {

@@ -89,14 +89,19 @@ export function piElectrons(s: PiState): number | null {
 
 /**
  * The atoms that lie on an aromatic ring (above), by index: of `rings` (the
- * smallest set) each, and each two that share a bond, whose atoms'
+ * smallest set) each, and each two fused at a bond - sharing that one bond
+ * and no more - whose atoms'
  * electrons (`electrons`, null where not known) add up to 4n + 2, at most
  * `MOST_PI` - but never a ring or pair each of whose atoms gives a lone
  * pair, two: with no pi bond in it and no empty p orbital (a C+, a B of
  * three bonds), there is no pi system for lone pairs to complete, and its
  * atoms stay pyramidal - As4's and P4's three-rings, a triaziridine,
  * cyclotriphosphane (backlog 182). Lone pairs complete a pi
- * system; they never make one alone.
+ * system; they never make one alone. Two rings that share more than one
+ * bond - two or more - are no fused pair: together they are no ring, so
+ * their atoms' sum is no count of one. A [2.2]paracyclophane-1,9-diene's
+ * twelve-ring runs across each benzene ring along three of its bonds; a
+ * seven-ring set about a six-ring's corner shares two.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {
   const out = new Set<number>();
@@ -116,7 +121,8 @@ export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: 
   rings.forEach((r, i) => {
     if (huckel(r)) r.forEach((a) => out.add(a));
     for (let j = i + 1; j < rings.length; j++) {
-      if (![...edges[i]].some((e) => edges[j].has(e))) continue;
+      // (fused at one bond: two rings sharing more are no ring together)
+      if ([...edges[i]].filter((e) => edges[j].has(e)).length !== 1) continue;
       const both = new Set([...r, ...rings[j]]);
       if (huckel(both)) both.forEach((a) => out.add(a));
     }
