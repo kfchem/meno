@@ -565,7 +565,11 @@ The key is never shown to the page or written to Meno's log. Should a
 worker say it back, the backend takes it out of what the worker says
 before the page or the log sees it - every key given to that worker, on
 its output and its errors alike, until both are read to their ends, after
-it was stopped too. A safeguard, not a promise for the plugin: it finds the
+it was stopped too. A reply's words sent as they come are taken out of
+across their parts: the end of a part that may begin a key is held back
+and given with the next part of that reply, so that a key said in two
+parts is found whole (src-tauri/src/model.rs `scrub`). A safeguard, not a
+promise for the plugin: it finds the
 key as it was given, and not one the plugin writes otherwise (a `/` a JSON
 writer gives as `\/`, say); what a plugin does with the key is its
 review's to check.
