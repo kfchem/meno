@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { identityOfDrawn } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
-import { chairDrawing, chairOf, depthRings, isProjection, seenPlaces } from "./chair";
+import { chairDrawing, chairOf, depthRings, seenPlaces } from "./chair";
+import { isProjection } from "./rings";
 import { flipOf } from "./flip";
 
 const draw = () => chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });

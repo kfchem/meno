@@ -39,11 +39,11 @@ import { it } from "vitest";
 import { figuresOf, pageObjectsOf, type Box } from "../../../src/lib/pdf/figures";
 import type { FigureDrawn } from "../../../src/lib/figure/drawn";
 import { structureFileText } from "../../../src/ui/features/Workspace/fileActions";
-import { figureFrom, figureLabels, lettersAsShapes, modelOf, withoutOverBonded } from "../../../src/ui/features/Workspace/utils/figures";
-import { readFigure } from "../../../src/lib/figure/read";
+import { unsureOf } from "../../../src/ui/features/Workspace/chem/drawing";
+import { figureFrom, figureLabels, lettersAsShapes, pictureResult } from "../../../src/ui/features/Workspace/utils/figures";
 import type { GlyphShape } from "../../../src/lib/figure/glyphs";
 import { readDrawnLabel } from "../../../src/lib/figure/structure";
-import { onPage, tracePicture, unreadInk } from "../../../src/lib/figure/trace";
+import { readTracedPicture } from "../../../src/lib/figure/tracedRead";
 import type { Model } from "../../../src/ui/features/Workspace/store/types";
 import { fileName } from "./names";
 import { asScan, viaJpeg, type Raw } from "./spoil";
@@ -61,8 +61,14 @@ const TRACED_LETTERS = process.env.RT_LETTERS === "traced";
 /** RT_JPEG=quality: each picture saved as JPEG at that quality and opened again before it is traced; RT_SCAN=1: made a scan of (spoil.ts). */
 const JPEG = Number(process.env.RT_JPEG) || null;
 const SCAN = !!process.env.RT_SCAN;
-/** How many of a structure's atoms and bonds are marked unsure: what it says it may have read wrong. */
-const markedOf = (m: Model) => m.atoms.filter((a) => a.unsure).length + m.bonds.filter((b) => b.unsure).length;
+/**
+ * How many of a structure's atoms and bonds are marked unsure - what it says it may have read wrong: as read, or as the canvas marks the
+ * drawing's stereochemistry (`unsureOf`: a centre a hashed line leaves open, one drawn by luck).
+ */
+const markedOf = (m: Model) => {
+  const shown = unsureOf(m);
+  return m.atoms.filter((a) => a.unsure || shown.atoms.has(a.id)).length + m.bonds.filter((b) => b.unsure || shown.bonds.has(b.id)).length;
+};
 /** How far round the figures found the box goes, in points: as a hand draws one. */
 const PAD_PT = 6;
 
@@ -137,7 +143,7 @@ export function sidesOf(model: Model, arrows: readonly { x: number; y: number; a
  * A figure's box read as a picture of it (RT_DPI): drawn by the reader at that resolution, white under it, traced, the shapes laid
  * back on the page and read with the PDF's own letters, as written - a structure, or why none. A page turned is not traced.
  */
-async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn, variant: string, known: readonly GlyphShape[] = []): Promise<({ model: Model; scheme?: undefined } | { none: string }) & { pixels?: { line: number; bond: number; shaded: number } }> {
+async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn, variant: string, known: readonly GlyphShape[] = []): Promise<({ model: Model; scheme?: undefined; left?: string } | { none: string }) & { pixels?: { line: number; bond: number; shaded: number } }> {
   if (variant === "turned") return { none: "a page turned is not traced" };
   const s = DPI! / 72;
   const [x, y] = [Math.max(0, Math.floor(box[0] * s)), Math.max(0, Math.floor(box[1] * s))];
@@ -147,23 +153,18 @@ async function traced(reader: Reader, sha: string, box: Box, drawn: FigureDrawn,
   let raw: Raw = { width: Number(head.w), height: Number(head.h), data: body };
   if (SCAN) raw = asScan(raw, parseInt(sha.slice(0, 8), 16));
   if (JPEG) raw = viaJpeg(raw, JPEG);
-  // (where the PDF's letters lie, in the picture's pixels: their ink left out, the letters read as written)
-  const given = TRACED_LETTERS ? [] : drawn.letters;
-  const drop = given.map((l) => [l.box[0] * s - x, l.box[1] * s - y, l.box[2] * s - x, l.box[3] * s - y] as [number, number, number, number]);
-  const t = tracePicture(raw, drop);
-  if ("none" in t) return t;
-  // (how the picture draws it, in its pixels: its line and its bond)
-  const pixels = { line: +t.line.toFixed(2), bond: +t.bond.toFixed(1), shaded: +t.shaded.toFixed(3) };
-  const shapes = onPage(t.shapes, 1 / s, x / s, y / s);
-  const read = readFigure({ paths: [], letters: given, pictures: [] }, (l) => readDrawnLabel(l, figureLabels).read, TRACED_LETTERS ? known : [], shapes);
-  if (!read.atoms.length || !read.bonds.length) return { none: "No structure was read in the picture.", pixels };
-  // (ink beside the structure read as nothing: the atom nearest it said)
-  for (const [i, said] of unreadInk(read, shapes, known)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];
+  // (the PDF's letters given, read as written - or none, the picture's own traced: lib/figure/tracedRead, as the app reads a picture)
+  let pixels: { line: number; bond: number; shaded: number } | undefined;
+  const read = readTracedPicture(raw, { scale: 1 / s, x: x / s, y: y / s }, known, (l) => readDrawnLabel(l, figureLabels).read, TRACED_LETTERS ? [] : drawn.letters, (m) => {
+    pixels = { line: +m.line.toFixed(2), bond: +m.bond.toFixed(1), shaded: +m.shaded.toFixed(3) };
+  });
+  if ("none" in read) return { ...read, pixels };
   const xs = read.atoms.map((a) => a.x);
   const ys = read.atoms.map((a) => a.y);
   const about = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
-  const { kept } = withoutOverBonded(modelOf(read, (px, py) => ({ sha256: sha, page: 0, x: px, y: py, bond: read.bond }), about));
-  return kept.atoms.length ? { model: kept, pixels } : { none: "As read, an atom has more bonds than it takes.", pixels };
+  // (as the app makes a picture's structure: over-bonded structures left out, a lone atom none)
+  const got = pictureResult(read, (px, py) => ({ sha256: sha, page: 0, x: px, y: py, bond: read.bond }), about);
+  return "none" in got ? { none: got.none, pixels } : { model: got.model, ...(got.left ? { left: got.left } : {}), pixels };
 }
 
 it("reads every PDF back", async () => {
@@ -224,6 +225,8 @@ it("reads every PDF back", async () => {
         if ("none" in got) entry.none = got.none;
         else {
           entry.marked = markedOf(got.model);
+          // (structures left out for an atom with more bonds than it takes: said, as Read as structure says it)
+          if (got.left) entry.left = got.left;
           // (what it says, each thing once: why it is marked)
           const said = [...new Set([...got.model.atoms, ...got.model.bonds].flatMap((x) => x.unsure?.said ?? []))];
           if (said.length) entry.said = said;
