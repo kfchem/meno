@@ -5,8 +5,9 @@
  *
  * - Once a change is done: never while a gesture is still going (a drag says it once, as it ends), and never for undo or redo, which give
  *   back a drawing and its configuration as they were.
- * - Only the structures the change touched are read, in a moment the page is idle after the change has been drawn, so that neither the
- *   edit nor the next frame waits.
+ * - What the structures the change touched state is kept at once, in the change's own step - a gesture's once it ends - so that no
+ *   reader of what is kept takes it from before the change; the notes are said in a moment the page is idle after the change has been
+ *   drawn, their descriptors asked of the CIP off the drawing's thread.
  * - Dropped where the drawing has changed again by the time the descriptors come.
  * - A change made by one of Meno's own moves (Clean-up, Turn over, Rotate...) is no change the move should make: it is said as that
  *   move's, and logged for a bug report.
@@ -19,7 +20,7 @@ import type { ConfigurationNote, Model } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
-import { changeWords, changesAgainstKept, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
+import { changeWords, changesAgainstKept, partsTouched, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
 import { keptFrom, marksOnly, withKept } from "./kept";
 
 /**
@@ -137,6 +138,28 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
   // (what is kept being written: no change of the chemist's to look at)
   let keeping = false;
   let timer: (() => void) | null = null;
+  /**
+   * What the structures a step touched state now, kept on their atoms and bonds - at once, in the step itself (`joinTop`), so that undo
+   * takes it back with the drawing and no reader of what is kept takes it from before the change; not where there is no step - a file just
+   * opened keeps it with the first change made to it. It asks no CIP.
+   */
+  const keepNow = (step: Step) => {
+    if (doc.getState() !== step.state || doc.history().undoDepth === 0) return;
+    const parts = partsTouched(step.before, step.after);
+    if (!parts) return;
+    const ids = new Set(parts.now.atoms.map((a) => a.id));
+    const model = doc.getState().model;
+    const kept = keptFrom(parts.now, readingOf(parts.now));
+    if (withKept(model, ids, kept) === model) return;
+    keeping = true;
+    try {
+      doc.edit(step.label ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, ids, kept) }), { joinTop: true });
+    } finally {
+      keeping = false;
+    }
+    step.state = doc.getState();
+    step.after = step.state.model;
+  };
   const run = () => {
     timer = null;
     if (gestureUnderWay(store.getState())) {
@@ -149,24 +172,7 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     if (!taken.length) return;
     // (each step on its own, against what is kept: what it did said as its own - a chemist's turn never taken for the Clean-up after it)
     const found = taken.map((step) => (step.before === step.after ? null : changesAgainstKept(step.before, step.after)));
-    // (what the structures every step touched state now, kept on their atoms and bonds - in the step that is undo's now, so that an undo
-    //  takes it back with the drawing; not where there is no step - a file just opened keeps it with the first change made to it)
     const last = taken[taken.length - 1];
-    const ids = new Set(found.flatMap((f) => (f ? [...f.ids] : [])));
-    if (ids.size && doc.getState() === last.state && doc.history().undoDepth > 0) {
-      const model = doc.getState().model;
-      const kept = keptFrom({ atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) }, readingOf({ atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) }));
-      if (withKept(model, ids, kept) !== model) {
-        keeping = true;
-        try {
-          doc.edit(last.label ?? "keep configuration", (d) => ({ ...d, model: withKept(d.model, ids, kept) }), { joinTop: true });
-        } finally {
-          keeping = false;
-        }
-        last.state = doc.getState();
-        last.after = last.state.model;
-      }
-    }
     stable = last.after;
     const now = stable;
     // (a unit's change said once in a look: two steps against one thing kept wrongly say it once, by the first)
@@ -232,10 +238,16 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     // (an edit gone on with - a drag's next frame: the same step, its drawing now this)
     if (top && top.undoTo === undoTo) Object.assign(top, { after: state.model, label, state });
     else steps.push({ before: was, after: state.model, label, state, undoTo });
+    // (kept at once, wherever no gesture is going on - a drag keeps once, as it ends; said when the page is idle)
+    if (!gestureUnderWay(store.getState())) keepNow(steps[steps.length - 1]);
     later();
   });
   const offStore = store.subscribe((st) => {
-    if (waiting && !gestureUnderWay(st)) later();
+    if (waiting && !gestureUnderWay(st)) {
+      const top = steps[steps.length - 1];
+      if (top) keepNow(top);
+      later();
+    }
   });
   return () => {
     offDoc();

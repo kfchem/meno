@@ -1601,9 +1601,13 @@ All hover-based, as above.
   Brecher 2008, GR-3), Rotate, Expand, Contract, a stack gathered again - keep
   every configuration; where one did not, that is Meno's fault: the same
   note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
-  Meno's log records which move. The structures are read in a moment the
-  page is idle after the change (where the page has no such moments, after
-  the next frame), only those it touched, each step said as its own
+  Meno's log records which move. Only the structures a change touched are
+  read: what they state is kept at once, in the change's own step - a
+  gesture's once it ends - so that no reader of what is kept takes it from
+  before the change; the notes are said in a moment the page is idle after
+  the change (where the page has no such moments, after the next frame),
+  their descriptors asked of the CIP off the drawing's thread, each step
+  said as its own
   (`Workspace/configuration`: `configurationChanges`, `watchConfiguration`;
   `components/ConfigurationNotes2D`).
   **The configuration kept.** What a structure states is kept on its own
@@ -1620,7 +1624,8 @@ All hover-based, as above.
   on the first bond of its run, its ends named. It is kept after each change, in the
   change's own step, so that undo takes it back with the drawing - and a
   drawing just opened keeps it with the first change made to it, no step
-  of its own. The note says what an edit changed against what is kept:
+  of its own. The note says what an edit changed against what was kept
+  before it:
   where keeping went wrong - a copy pasted on new ids, a file read - the
   note shows it. It is saved in the workspace's file and in a copy, read
   back only where it is whole and of the drawing's own atoms, and goes
@@ -1634,8 +1639,10 @@ All hover-based, as above.
   corpus (configuration/corpus) checks that the two agree after every one
   of Meno's own moves. **Clean-up takes what is kept too** (chem/engineLayout
   `layoutJob`): the configuration it lays out, and draws the looks again
-  from, is the one kept, where the drawing keeps one. 3D, the files and
-  the clipboard still read the marks.
+  from, is the one kept, where the drawing keeps one. **So do 3D, the
+  files, the clipboard's MOL and the copied SMILES** (chem/drawing
+  `forFlatReaders`): each centre a perspective drawing shows is written as
+  a wedge from what is kept, for a reader that knows only wedges.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
