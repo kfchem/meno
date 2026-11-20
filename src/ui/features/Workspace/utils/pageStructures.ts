@@ -292,6 +292,7 @@ export function pageStructuresOf(
   sha256: string,
   page: number,
   known?: readonly GlyphShape[],
+  tracedOf: (k: number) => FigureRead | null = () => null,
 ): { structures: PageStructure[]; marks: PageMarks[]; labels: CompoundLabel[] } {
   const structures: PageStructure[] = [];
   const marks: PageMarks[] = [];
@@ -303,7 +304,7 @@ export function pageStructuresOf(
     // little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
     // (a "+" written between a scheme's compounds is none of that: no line of a structure cut in two)
     const beside = made.objects.filter((o) => o.kind !== "plus" && !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, kind: o.kind, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
-    const read = figureOn(drawn, k, sha256, page, beside, known);
+    const read = figureOn(drawn, k, sha256, page, beside, known, tracedOf(k));
     // (and the words of the page within this figure that are none of a structure's labels, at one of its open ends: a label
     // its figure's drawing did not hold, the structure refused - a compound's number aside)
     const own = made.objects.filter((o) => o.kind === "text" && centreWithin(o.box, box));
@@ -324,7 +325,24 @@ const boxBack = (b: Box, back: (p: Point) => Point): Box => {
 };
 
 /** One figure of a page: its structures (`structuresOf`), and what else it has drawn - its arrows, "+" signs and words - where the pointer takes none. */
-export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, beside: readonly Beside[], known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks; words: PageWord[] } {
+export function figureOn(
+  given: FigureDrawn,
+  figure: number,
+  sha256: string,
+  page: number,
+  beside: readonly Beside[],
+  known?: readonly GlyphShape[],
+  traced?: FigureRead | null,
+): { structures: PageStructure[]; marks: PageMarks; words: PageWord[] } {
+  // (a figure that is a picture, traced and read (lib/figure/tracedRead): its structures as a drawing's are, checked alike; no arrows read)
+  if (traced) {
+    const same = (p: Point) => p;
+    return {
+      structures: structuresHere(traced, same, figure, sha256, page, []).map((st) => besideChecked(atEndChecked(st, traced, [], same), beside, traced.bond)),
+      marks: { segments: [], points: [], boxes: [] },
+      words: [],
+    };
+  }
   const { back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { structures: [], marks: { segments: [], points: [], boxes: [] }, words: [] };
   const marks: PageMarks = {

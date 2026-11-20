@@ -14,7 +14,7 @@ import { saysChargeTooMuch } from "../../../../lib/figure/structure";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, MARKS_OVER, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
 import { measured } from "../../../../testing/timeouts";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { identityOfDrawn } from "../chem/identityOf";
@@ -123,6 +123,38 @@ describe("a figure read as a structure for the page", () => {
     const m = structureFrom({ paths: [stroke(a, b, [b[0] + (o[0] - b[0]) * 0.6, b[1] + (o[1] - b[1]) * 0.6]), disc([o[0] + 5, o[1] - 3.5], 0.75), disc(a, 0.3)], letters: letters("O", o), pictures: [] }, SHA, 1) as Model;
     expect(m.atoms.find((x) => x.el === "O")?.radical).toBe("doublet");
     expect(m.atoms.filter((x) => x.radical)).toHaveLength(1);
+  });
+
+  it("leaves out what is drawn over a picture - a distance's line and its number on a 3D model's rendering - and says so; a structure reaching out of it stays whole", () => {
+    // (the chain with its OH, and beside it a picture: over it, a bent line of two bonds and a number, as a model's distance is marked)
+    const by = drawn();
+    const picture: [number, number, number, number] = [200, 150, 300, 260];
+    const mark = [stroke([220, 200], step([220, 200], 30)), stroke(step([220, 200], 30), step(step([220, 200], 30), -30))];
+    const over = figureFrom({ ...by, paths: [...by.paths, ...mark], letters: [...by.letters, ...letters("2.1", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
+    expect(over.model.atoms).toHaveLength(5);
+    expect(over.left).toBe(MARKS_OVER);
+    expect(over.scheme?.captions ?? []).toEqual([]);
+    // (a measurement alone over the picture, no line: left out, and said - but a compound's number there stays a word, for the lens)
+    const number = figureFrom({ ...by, letters: [...by.letters, ...letters("2.1", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
+    expect(number.left).toBe(MARKS_OVER);
+    const compound = figureFrom({ ...by, letters: [...by.letters, ...letters("2", [260, 180])], pictures: [picture] }, SHA, 0) as FigureResult;
+    expect(compound.left).toBeUndefined();
+    // (the same lines with no picture under them: a structure of their own, read)
+    const bare = figureFrom({ ...by, paths: [...by.paths, ...mark], pictures: [] }, SHA, 0) as FigureResult;
+    expect(bare.model.atoms).toHaveLength(8);
+    expect(bare.left).toBeUndefined();
+    // (a picture over half the chain: the chain runs out of it - kept whole, nothing said)
+    const half = figureFrom({ ...by, pictures: [[90, 150, 125, 260]] }, SHA, 0) as FigureResult;
+    expect(half.model.atoms).toHaveLength(5);
+    expect(half.left).toBeUndefined();
+  });
+
+  it("says that all it held were marks over its picture, where nothing else is a structure: a model's distance, and a word beside the picture", () => {
+    const picture: [number, number, number, number] = [200, 150, 300, 260];
+    // (a distance's line over the rendering, drawn dashed; beside the picture, outside it, an ion alone - an atom, no structure)
+    const dashed: FigurePath = { ...stroke([220, 200], [260, 200]), dash: true };
+    const said = figureFrom({ paths: [dashed], letters: letters("Na+", [330, 200]), pictures: [picture] }, SHA, 0);
+    expect(said).toEqual({ none: `This figure is a picture with marks drawn over it, no structure. ${MARKS_OVER}` });
   });
 
   it("says why there is nothing to read: no lines, or a picture", () => {
