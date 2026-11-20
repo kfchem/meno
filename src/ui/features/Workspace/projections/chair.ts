@@ -11,8 +11,8 @@ import { chair, flipped, type FreePosition, type Solid } from "../../../../lib/c
 import { drawn, type Drawn } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond } from "../store/types";
 
-/** The drawing a tool makes: its atoms and bonds, the ring atoms' ids in the solid's order (atom 0 first), the solid drawn, and how long a bond is drawn. */
-export type ChairDrawing = { atoms: Atom[]; bonds: Bond[]; ring: number[]; solid: Solid; drawing: Drawn; scale: number };
+/** The drawing a tool makes: its atoms and bonds, the ring atoms' ids in the solid's order (atom 0 first), the solid as drawn (`drawn`), and how long a bond is drawn. */
+export type ChairDrawing = { atoms: Atom[]; bonds: Bond[]; ring: number[]; solid: Solid; scale: number; drawing: Drawn };
 
 /**
  * The form a chair is first drawn in: form 1, the view from above and from the right, which the text prefers (Brecher 2006, ST-3.1). Form 0,
@@ -47,7 +47,11 @@ export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1;
 /** A free position as the page sees it from atom `k` of a drawing: where a group's atom goes (page units), and what the position is. */
 export type SeenPlace = { place: { x: number; y: number }; direction: { x: number; y: number; z: number }; free: FreePosition };
 
-/** The free positions of atom `k` of a chair drawing, each as the page has it: the group's atom one bond along its drawn direction (an axial one vertical, an equatorial one parallel to the ring bonds one removed), with its depth. */
+/**
+ * The free positions of atom `k` of a drawing, each as the page has it: the group's atom along its drawn direction (`drawn`: a chair's axial
+ * one vertical and its equatorial one parallel to the ring bonds one removed; a Haworth ring's straight up or down, at its drawn length),
+ * scaled as the ring is, with its depth.
+ */
 export function seenPlaces(d: ChairDrawing, k: number): SeenPlace[] {
   const atom = d.atoms[k];
   return d.drawing.free
@@ -75,8 +79,8 @@ export function snapTo(d: ChairDrawing, k: number, pointer: { x: number; y: numb
 /** A chair found on a page: which of its two forms and whether flipped, how long its bonds are drawn and where its middle is, and each ring atom's place in the solid. */
 export type FoundChair = { form: 0 | 1; flip: boolean; scale: number; at: { x: number; y: number }; index: Map<number, number> };
 
-/** The six-rings of a drawing whose atoms all carry a depth, each as atom ids in order round it. */
-export function depthRings(model: Pick<{ atoms: Atom[]; bonds: Bond[] }, "atoms" | "bonds">): number[][] {
+/** The rings of `size` of a drawing whose atoms all carry a depth, each as atom ids in order round it. */
+export function depthRings(model: Pick<{ atoms: Atom[]; bonds: Bond[] }, "atoms" | "bonds">, size = 6): number[][] {
   const deep = new Set(model.atoms.filter((a) => a.z != null).map((a) => a.id));
   const near = new Map<number, number[]>();
   for (const b of model.bonds) {
@@ -88,8 +92,8 @@ export function depthRings(model: Pick<{ atoms: Atom[]; bonds: Bond[] }, "atoms"
   const walk = (path: number[]) => {
     const last = path[path.length - 1];
     for (const n of near.get(last) ?? []) {
-      if (path.length === 6 && n === path[0]) found.set([...path].sort((p, q) => p - q).join(","), [...path]);
-      else if (path.length < 6 && n > path[0] && !path.includes(n)) walk([...path, n]);
+      if (path.length === size && n === path[0]) found.set([...path].sort((p, q) => p - q).join(","), [...path]);
+      else if (path.length < size && n > path[0] && !path.includes(n)) walk([...path, n]);
     }
   };
   for (const id of near.keys()) walk([id]);
@@ -223,6 +227,3 @@ export function chairsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlyS
   const part = { atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
   return depthRings(part).filter((ring) => chairOf(part, ring) != null);
 }
-
-/** Whether a structure holds a projection - for now, a chair of the tool's: Clean-up keeps it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
-export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => chairsIn(model, ids).length > 0;
