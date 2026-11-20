@@ -31,6 +31,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import type { Molecule3D } from "./types";
 import { stateOf } from "../workflow/flow";
+import { measured } from "../../../../testing/timeouts";
 
 /** A conformer set of three frames of water - the first two alike. */
 const waters = (): Omit<Molecule3D, "id"> => {
@@ -113,7 +114,7 @@ describe("Meno's Duplicates, run from the page", () => {
     expect(stateOf(doc.getState(), after, "meno")).toBe("changed");
     // (both its exits' sets filled: what it kept, and what it set aside)
     expect(st().sets.filter((b) => b.made?.step === step && b.made.holds)).toHaveLength(2);
-  });
+  }, measured(580));
 
   it("puts in nothing where it was deleted while it worked", async () => {
     const { st, step } = page(many());

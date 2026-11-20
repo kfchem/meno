@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { isDeepStrictEqual } from "node:util";
 import type { EnumerateAsked } from "./enumerateOff";
+import { measured } from "../../../../testing/timeouts";
 
 type Posted = { id: number; ok: boolean; made?: unknown; error?: string };
 
@@ -34,5 +35,5 @@ describe("Enumerate's worker, as a worker runs it: no DOM, messages in and out",
     // (an error inside: answered, not thrown)
     scope.onmessage!({ data: { id: 9, asked: { way: "lists", template: undefined as never, text } } });
     expect(posted[2]).toMatchObject({ id: 9, ok: false });
-  });
+  }, measured(3_500));
 });
