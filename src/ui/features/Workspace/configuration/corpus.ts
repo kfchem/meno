@@ -24,6 +24,10 @@ export type CorpusEntry = {
   wavy?: true;
   /** Its wedges kept only on bonds to a drawn H: the centre stated by the wedge to its H alone. */
   onlyH?: true;
+  /** Its axis stated by a wedge out of an end of the axis, the first of these two atoms of its SMILES (from 0), narrow there, onto the
+   *  second - one of that end's other neighbours (Brecher 2006, ST-1.7); the mirror image's wedge is hashed. Its SMILES then gives only
+   *  its constitution. */
+  axisWedge?: readonly [number, number];
   /** Drawn by expanding this label, not from a SMILES; `mirror` is the label of its mirror image. Read against its own first drawing. */
   label?: { label: string; mirror: string };
 };
@@ -41,6 +45,16 @@ export type CorpusKind =
   | "chair"
   | "group"
   | "axis";
+
+/** 1,11-Dimethyl-6,7-dihydro-5H-dibenzo[a,c]cycloheptene's constitution: its biaryl bond, atoms 6 and 7, in a ring of seven; atom 1, beside
+ *  atom 6, carries a methyl. */
+export const AXIS_IN_7 = "Cc1cccc2c1-c1c(C)cccc1CCC2";
+/** 4,5-Dimethyl-9,10-dihydrophenanthrene's: its biaryl bond, atoms 6 and 7, in a ring of six; atom 1 as above. */
+export const AXIS_IN_6 = "Cc1cccc2c1-c1c(C)cccc1CC2";
+/** (4-Methylcyclohexylidene)acetic acid, one hand: its C4 and its C=C set; the other hand has either turned. */
+export const CYCLOHEXYLIDENE = "C[C@H]1CC/C(=C/C(=O)O)CC1";
+/** chiro-Inositol, one hand: (1R,2R,3S,4S,5S,6S). */
+export const CHIRO = "O[C@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O";
 
 export const CORPUS: readonly CorpusEntry[] = [
   // centres: C with its H left out, and with four drawn groups; a ring atom's two groups; ring fusions; a quaternary centre in a chain
@@ -80,6 +94,12 @@ export const CORPUS: readonly CorpusEntry[] = [
   { name: "trans-1,4-dimethylcyclohexane", smiles: "C[C@H]1CC[C@H](C)CC1", kind: "ring" },
   { name: "2,6-dimethylspiro[3.3]heptane, one hand", smiles: "C[C@H]1CC2(C1)C[C@@H](C)C2", kind: "ring" },
   { name: "2,6-dimethylspiro[3.3]heptane, the other hand", smiles: "C[C@H]1CC2(C1)C[C@H](C)C2", kind: "ring" },
+  { name: "cis-inositol", smiles: "O[C@H]1[C@@H](O)[C@@H](O)[C@@H](O)[C@@H](O)[C@H]1O", kind: "ring", labels: ["s", "s", "s", "s", "s", "s"] },
+  { name: "epi-inositol", smiles: "O[C@H]1[C@H](O)[C@H](O)[C@H](O)[C@H](O)[C@@H]1O", kind: "ring", labels: ["r", "s", "R", "R", "S", "S"] },
+  { name: "neo-inositol", smiles: "O[C@H]1[C@H](O)[C@H](O)[C@H](O)[C@@H](O)[C@H]1O", kind: "ring", labels: ["R", "R", "S", "S", "s", "s"] },
+  { name: "chiro-inositol, (1R,2R,3S,4S,5S,6S)", smiles: CHIRO, kind: "ring", labels: ["R", "R", "S", "S", "S", "S"] },
+  { name: "(5R)-1,6-diazaspiro[4.4]nonane-4,9-dione: a spiro centre of two alike pairs", smiles: "O=C1CCN[C@@]12NCCC2=O", kind: "ring", labels: ["R"] },
+  { name: "(5S)-1,6-diazaspiro[4.4]nonane-4,9-dione", smiles: "O=C1CCN[C@]12NCCC2=O", kind: "ring", labels: ["S"] },
   { name: "(2R,3R)-tartaric acid", smiles: "O[C@H]([C@@H](O)C(=O)O)C(=O)O", kind: "centre", labels: ["R", "R"] },
   { name: "(2S,3S)-tartaric acid", smiles: "O[C@@H]([C@H](O)C(=O)O)C(=O)O", kind: "centre", labels: ["S", "S"] },
   { name: "meso-tartaric acid", smiles: "O[C@H]([C@H](O)C(=O)O)C(=O)O", kind: "centre", labels: ["R", "S"] },
@@ -95,6 +115,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   { name: "(E)-acetophenone oxime", smiles: "C/C(=N\\O)c1ccccc1", kind: "double bond", labels: ["E"] },
   { name: "(Z)-acetophenone oxime", smiles: "C/C(=N/O)c1ccccc1", kind: "double bond", labels: ["Z"] },
   { name: "(E)-azobenzene", smiles: "c1ccc(cc1)/N=N/c1ccccc1", kind: "double bond", labels: ["E"] },
+  // (an axis of a ring and a double bond: its C4 and its C=C each set - named by its axis, so its labels are not pinned)
+  { name: "(4-methylcyclohexylidene)acetic acid, one hand", smiles: CYCLOHEXYLIDENE, kind: "double bond" },
   { name: "(Z)-azobenzene", smiles: "c1ccc(cc1)/N=N\\c1ccccc1", kind: "double bond", labels: ["Z"] },
   { name: "acetamidine (never a unit)", smiles: "CC(=N)N", kind: "no unit" },
   // cumulated runs
@@ -121,6 +143,9 @@ export const CORPUS: readonly CorpusEntry[] = [
   { name: "rac-trans-1,2-dimethylcyclohexane: AND", smiles: "C[C@@H]1CCCC[C@H]1C", kind: "group", group: "and", self: "a SMILES says no group" },
   // axes, drawn from the label's own structure
   { name: "(R)-BINAP", smiles: "", kind: "axis", label: { label: "(R)-BINAP", mirror: "(S)-BINAP" }, self: "a SMILES says no axis" },
+  // (a biaryl axis in a ring of seven, held - in a ring of six, too nearly flat to hold a twist, its wedge states nothing and Clean-up
+  //  refuses it, so it is no entry: corpusHands.test)
+  { name: "1,11-dimethyl-6,7-dihydro-5H-dibenzo[a,c]cycloheptene, one hand", smiles: AXIS_IN_7, kind: "axis", axisWedge: [6, 1], self: "a SMILES says no axis" },
   { name: "(S)-BINAP", smiles: "", kind: "axis", label: { label: "(S)-BINAP", mirror: "(R)-BINAP" }, self: "a SMILES says no axis" },
   // a centre drawn with its H, the wedge on the H's bond alone
   { name: "(S)-butan-2-ol drawn with its H, the wedge on the H", from: "[H][C@@](C)(O)CC", smiles: "[H][C@@](C)(O)CC", kind: "centre", onlyH: true, labels: ["S"] },
