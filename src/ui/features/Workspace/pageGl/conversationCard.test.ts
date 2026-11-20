@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import type { Said } from "../conversation/types";
-import { CARD, cardBlocks, cardLayout, cardRect, cardWindow, clampScroll, FRAME_LEAST, historyHeight, replyBlocks, scrollMax, spansOf, type CardBlock } from "./conversationCard";
+import { CARD, cardBlocks, cardLayout, cardRect, cardWindow, clampScroll, FRAME_LEAST, HEARD_SHOWN, heardShown, historyHeight, replyBlocks, scrollMax, spansOf, type CardBlock } from "./conversationCard";
 import { textWidth } from "./texts";
 
 const text = (l: { runs: { text: string }[] }) => l.runs.map((r) => r.text).join("");
@@ -54,6 +54,22 @@ describe("a conversation's words as the card's blocks", () => {
     ]);
     expect(cardBlocks(said, { running: true, changed: true }).slice(-2)).toEqual<CardBlock[]>([{ kind: "note", text: "Talking…" }, { kind: "changes" }]);
     expect(cardBlocks([])).toEqual([]);
+  });
+
+  it("lays a reply coming in as it will be laid whole, before that it is working; its latest alone where it is long", () => {
+    expect(cardBlocks([], { running: true, heard: "It is:\n- methanol" })).toEqual<CardBlock[]>([
+      { kind: "reply", spans: [{ text: "It is:" }] },
+      { kind: "item", marker: "•", spans: [{ text: "methanol" }] },
+      { kind: "note", text: "Talking…" },
+    ]);
+    // (its words not running: none)
+    expect(cardBlocks([], { heard: "It is" })).toEqual([]);
+    const long = Array.from({ length: 400 }, (_, k) => `Line ${k} of what it says.`).join("\n");
+    const shown = heardShown(long);
+    expect(shown.startsWith("\u2026\nLine ")).toBe(true);
+    expect(shown.length).toBeLessThanOrEqual(HEARD_SHOWN + 2);
+    expect(long.endsWith(shown.slice(2))).toBe(true);
+    expect(heardShown("Short.")).toBe("Short.");
   });
 });
 

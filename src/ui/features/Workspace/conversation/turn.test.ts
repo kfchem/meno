@@ -247,6 +247,28 @@ describe("a turn of a conversation", () => {
     expect(last(said())).toMatchObject({ by: "meno", text: "Stopped, as asked." });
   });
 
+  it("gives the model's words so far as its reply comes, and none once it has come; ended by Stop, keeps them, and says it stopped", async () => {
+    const { doc, store, said } = page();
+    const shown: string[] = [];
+    const parted = { id: "parted", to: "this computer", send: async (_r: unknown, heard?: (t: string) => void) => {
+      heard?.("Methanol ");
+      heard?.("is in the frame.");
+      return { text: "Methanol is in the frame." };
+    } };
+    expect(await runTurn({ doc, calls: store.getState(), id: 1, words: "What is here?", connection: parted, turn: "t1", heard: (s) => shown.push(s) })).toEqual({ sent: true });
+    expect(shown).toEqual(["Methanol ", "Methanol is in the frame.", ""]);
+    expect(last(said())).toMatchObject({ by: "model", text: "Methanol is in the frame." });
+    // (Stop asked as it comes: its request ended - the words so far its reply, then that it stopped)
+    let stop = false;
+    const ended = { id: "ended", to: "this computer", send: async (_r: unknown, heard?: (t: string) => void) => {
+      heard?.("Methanol is");
+      stop = true;
+      throw new Error("Stopped, as asked");
+    } };
+    expect(await runTurn({ doc, calls: store.getState(), id: 1, words: "And?", connection: ended, turn: "t2", stop: () => stop })).toEqual({ sent: true, stopped: "asked" });
+    expect(said().slice(-2)).toMatchObject([{ by: "model", text: "Methanol is" }, { by: "meno", text: "Stopped, as asked." }]);
+  });
+
   it("keeps a reply's words as plain text, whatever they hold", async () => {
     const { turn, said } = page();
     const html = '<img src="https://example.org/x?data=secret"><a href="https://example.org">here</a>';

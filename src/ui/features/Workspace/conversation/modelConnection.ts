@@ -23,9 +23,10 @@ const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join(""
 export const MODEL_ROLE = "language-model" as const;
 
 /**
- * How long a model may take to answer, whole - nothing of a reply is shown
- * till it is: 10 minutes, as long as a model service's own SDK waits for one
- * request by default. A plugin gives up within it, in words.
+ * How long a model may take to answer - whole, or, where its plugin sends
+ * its words as they come, from the last of them: 10 minutes, as long as a
+ * model service's own SDK waits for one request by default. A plugin gives
+ * up within it, in words.
  */
 export const REPLY_MS = 600_000;
 
@@ -105,18 +106,30 @@ const rememberedOptions = (p: PythonPlugin): OptionValues => valuesOf(p.roleOpti
  */
 export function modelConnection(p: PythonPlugin, steps: ModelSteps = MENO_STEPS): Connection {
   const hosts = p.roleHosts?.[MODEL_ROLE] ?? [];
+  // (a request of this connection's under way: its worker, to stop where Stop is asked - none, nothing to stop)
+  let asking = false;
   return {
     id: p.id,
     to: hosts.join(", "),
-    async send(request: ModelRequest): Promise<ModelReply> {
+    async send(request: ModelRequest, heard?: (text: string) => void): Promise<ModelReply> {
       const purpose = modelPurpose(p.id, hosts);
       const before = steps.allowed(purpose);
       if (!(await steps.ask(consentOf(p)))) throw new Error(`Nothing was sent: sending to ${listSaid(hosts)} was not allowed.`);
       // (its worker started before it was allowed went out nowhere: started again, now it may - the backend begins its task as it starts)
       if (!before && steps.running(p.id)) await steps.stop(p.id, `${p.name} was started again: it may now talk to ${listSaid(hosts)}`);
       const worker = await steps.worker(p);
-      const raw = await worker.chem.request("converse", { told: request.told, said: request.said, tools: request.tools, options: steps.options(p) }, REPLY_MS);
-      return replyOf(raw);
+      // (`stream`: its words may be sent as they come, each part a line of its own - docs/PLUGINS.md, *converse*)
+      asking = true;
+      try {
+        const raw = await worker.chem.request("converse", { told: request.told, said: request.said, tools: request.tools, options: steps.options(p), stream: true }, REPLY_MS, heard);
+        return replyOf(raw);
+      } finally {
+        asking = false;
+      }
+    },
+    // (a reply ended where it is: its worker stopped - its request failing at once - and started afresh for the next)
+    stop(why: string) {
+      if (asking) void steps.stop(p.id, why);
     },
   };
 }

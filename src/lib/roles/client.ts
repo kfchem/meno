@@ -23,7 +23,7 @@ export type ChemRequests = {
    * alone (src-tauri/src/model.rs). Its answer is read by the caller, as
    * whatever the plugin gave (conversation/modelConnection `replyOf`).
    */
-  converse: { args: { told: string; said: readonly unknown[]; tools: readonly { name: string; does: string }[]; options: OptionValues }; result: unknown };
+  converse: { args: { told: string; said: readonly unknown[]; tools: readonly { name: string; does: string }[]; options: OptionValues; stream?: boolean }; result: unknown };
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
@@ -241,6 +241,9 @@ type Pending = {
   resolve: (value: unknown) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** What is heard of its answer as it comes, where it was asked for so (`request`'s `heard`); and its wait, begun again at each. */
+  heard?: (text: string) => void;
+  again?: () => ReturnType<typeof setTimeout>;
 };
 
 /** How long an answer may take before it is given up on. */
@@ -287,6 +290,7 @@ export class ChemClient {
       error?: string;
       event?: string;
       version?: string;
+      partial?: unknown;
     };
     try {
       m = JSON.parse(line);
@@ -300,6 +304,15 @@ export class ChemClient {
     }
     const p = typeof m.id === "number" ? this.pending.get(m.id) : undefined;
     if (!p) return;
+    // (a part of its answer as it comes - its words so far, said on: heard, and the answer waited for again from now; one not
+    //  asked for so is no answer, and ends nothing)
+    if ("partial" in m && !("ok" in m)) {
+      if (typeof m.partial !== "string" || !p.heard || !p.again) return;
+      clearTimeout(p.timer);
+      p.timer = p.again();
+      p.heard(m.partial);
+      return;
+    }
     this.pending.delete(m.id!);
     clearTimeout(p.timer);
     this.watch?.settled(m.id!);
@@ -309,28 +322,34 @@ export class ChemClient {
 
   /**
    * Asks the worker; the answer, or an error saying why there is none -
-   * after `timeoutMs`, if given, for what takes long.
+   * after `timeoutMs`, if given, for what takes long. With `heard`, each
+   * part of the answer the worker sends as it comes (`{id, partial}`, its
+   * words so far said on) is given to it, and the answer is waited for
+   * `timeoutMs` again from each.
    */
   request<Op extends ChemOp>(
     op: Op,
     args: ChemRequests[Op]["args"],
     timeoutMs = this.timeoutMs,
+    heard?: (text: string) => void,
   ): Promise<ChemRequests[Op]["result"]> {
     // (its worker stopped unused: asked of the one started in its place)
-    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(op, args, timeoutMs));
+    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(op, args, timeoutMs, heard));
     // (its worker gone: asked of no one, so failing at once - not after its time, nor stopping the worker that runs now)
     if (this.closed !== null) return Promise.reject(new ChemError(this.closed));
     const id = this.ids();
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new ChemTimeout(`${this.name} did not answer ${op} in time`));
-        this.watch?.overdue(id);
-      }, timeoutMs);
+      const wait = () =>
+        setTimeout(() => {
+          this.pending.delete(id);
+          reject(new ChemTimeout(`${this.name} did not answer ${op} in time`));
+          this.watch?.overdue(id);
+        }, timeoutMs);
       this.pending.set(id, {
         resolve: resolve as (v: unknown) => void,
         reject,
-        timer,
+        timer: wait(),
+        ...(heard ? { heard, again: wait } : {}),
       });
       this.watch?.sent(id);
       // (a sending refused - a converse with no key kept - fails the question at once, in the backend's words)

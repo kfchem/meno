@@ -1088,12 +1088,18 @@ The same for every plugin and for Meno's own parts:
     {kind, name, molecules, options}` (answered `{text}`) - the file
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
-  - for *Talking with a model*, `converse {told, said, tools, options, key}`
-    (answered `{text, calls?, keep?}`: its words, plain text; the tools it
-    calls, `{tool, args?}`; and what it keeps of the reply - its service's
-    own record of it, opaque to Meno, given back with what was said and
-    never saved), `key` added by the backend alone
-    (CONVERSATIONS.md, *Talking through a plugin*);
+  - for *Talking with a model*, `converse {told, said, tools, options,
+    stream, key}` (answered `{text, calls?, keep?}`: its words, plain text;
+    the tools it calls, `{tool, args?}`; and what it keeps of the reply -
+    its service's own record of it, opaque to Meno, given back with what
+    was said and never saved), `key` added by the backend alone
+    (CONVERSATIONS.md, *Talking through a plugin*). With `stream: true`,
+    its words may be sent as they come, before its answer, each part a
+    line of its own - `{id, partial: "..."}`, the words that part says on
+    from the last, plain text - and its answer then still holds them all.
+    Meno waits for the answer from each part again. A part is no answer: a
+    line with `ok` is. A request without `stream` - from an earlier Meno -
+    is answered whole, with no part;
   - each role's own requests, by the role (*Roles*): `from_smiles
     {smiles}` (answered with `molblock`, and with `configuration` beside
     it: see below), `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a

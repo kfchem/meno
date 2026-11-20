@@ -67,9 +67,11 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
   // (the last thing said kept in view as more is said - and as the bar for its changes comes or goes, which takes room from the exchange: eased there)
   const changed = !!talking?.changed;
   // (in a block: a scroll may give back a promise, never a clean-up to run)
+  // (and the words of a reply as they come, kept in view as they grow)
+  const heard = running ? talking?.heard : undefined;
   useEffect(() => {
     void end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [c.said.length, changed, running]);
+  }, [c.said.length, changed, running, heard?.length]);
   const go = () => {
     if (!words.trim() || running) return;
     void send(c.id, words);
@@ -104,6 +106,11 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
         {exchangeRows(c.said).map((r, k) => (
           <Row key={k} r={r} />
         ))}
+        {heard && (
+          <div className="max-w-[92%] text-sm text-gh-black whitespace-pre-wrap break-words" aria-busy="true">
+            {heard}
+          </div>
+        )}
         {running && <div className="text-xs text-gh-gray meno-fade-in">Talking…</div>}
         <div ref={end} />
       </div>

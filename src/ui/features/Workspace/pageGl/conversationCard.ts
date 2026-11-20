@@ -59,7 +59,18 @@ export type CardBlock =
   | { kind: "changes"; notes?: string[] };
 
 /** What else the card says besides what was said: that the model is working, and that it changed the page, its changes waiting to be kept or discarded. */
-export type CardState = { running?: boolean; changed?: boolean; notes?: string[] };
+export type CardState = { running?: boolean; heard?: string; changed?: boolean; notes?: string[] };
+
+/** How much of a reply coming in a card shows, at most, in characters: its latest - the whole of it once it has come. */
+export const HEARD_SHOWN = 4000;
+
+/** Of a reply's words so far, what a card shows: the last HEARD_SHOWN characters at most, from a line's start, after an ellipsis. */
+export function heardShown(text: string): string {
+  if (text.length <= HEARD_SHOWN) return text;
+  const tail = text.slice(-HEARD_SHOWN);
+  const line = tail.indexOf("\n");
+  return `\u2026\n${line >= 0 ? tail.slice(line + 1) : tail}`;
+}
 
 const BULLET = /^\s*(?:[-*•])\s+(.*)$/;
 const NUMBERED = /^\s*(\d+[.)])\s+(.*)$/;
@@ -136,6 +147,8 @@ export function cardBlocks(said: readonly Said[], state: CardState = {}): CardBl
     else if (s.by === "model") blocks.push(...replyBlocks(s.text));
     else if (s.by === "meno") blocks.push({ kind: "note", text: s.text });
   }
+  // (a reply coming in: its words so far, as it will be laid once whole - then that it is working)
+  if (state.running && state.heard) blocks.push(...replyBlocks(heardShown(state.heard)));
   if (state.running) blocks.push({ kind: "note", text: "Talking…" });
   if (state.changed) blocks.push({ kind: "changes", ...(state.notes?.length ? { notes: state.notes } : {}) });
   return blocks;
