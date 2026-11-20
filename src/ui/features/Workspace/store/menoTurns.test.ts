@@ -129,7 +129,7 @@ describe("Meno's Duplicates, run from the page", () => {
     expect(st().steps.some((s) => s.id === step)).toBe(false);
     expect(st().sets).toHaveLength(1);
     expect(st().menoWorking[step]).toBeUndefined();
-  });
+  }, measured(200));
 
   it("says it is running while it works, and puts its results in at the end, as one edit", async () => {
     const { doc, st, step } = page(waters());
