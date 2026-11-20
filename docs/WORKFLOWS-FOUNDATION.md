@@ -1117,7 +1117,13 @@ drawn, aromatic rings as one form.* What that means, plainly:
     tritium);
   - bonded to another hydrogen (H2);
   - bridging, with more than one bond;
-  - on a metal (a hydride ligand).
+  - on a metal (a hydride ligand). An H counted on such a metal - a
+    SMILES's `[PdH]`, a file's hydrogen count - is read as that atom
+    (`perception/fold` `metalHydrogensDrawn`), so a hydride is one
+    structure however it is written: [PdH]Cl2 is Cl2Pd-H, its identity and
+    its constitution alike. The metals are those ligands are drawn round
+    (`drawnRoundMetal`); on any other, a tin's or a lithium's, the H is
+    folded in as before, either way.
 
   P3 adds this to the identity rule itself, so it changes `identityText`
   for every user of it. P3 lists every caller of `identityText` and
