@@ -20,7 +20,7 @@ import { cellOf, nearestCell, neighboursOf } from "./honeycomb";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { etaBondAt, etaRingAt } from "../chem/eta";
 import { ATOM_PICK_RADIUS_RATIO } from "../constants";
-import { chairExtension } from "../projections/extend";
+import { chairExtension, groupBend } from "../projections/extend";
 import type { Atom, Bond } from "../store/types";
 
 /**
@@ -326,8 +326,13 @@ export function strokeTarget(
   let turn: 1 | -1 | undefined;
   // (a bond out of an atom of a chair goes to one of its free positions, held or not by a pause: a group is never left between two)
   const chair = s.kind === "bond" && s.nodes.length === 0 && t.tipAtom != null ? chairExtension({ atoms: model.atoms as Atom[], bonds: model.bonds as unknown as Bond[] }, t.tipAtom, pointer) : null;
+  // (and the bond after a projection's group bends, 120 degrees, held or not: never on along the group's line, which would hide its atom)
+  const bend = !chair && s.kind === "bond" && s.nodes.length === 0 && t.tipAtom != null ? groupBend({ atoms: model.atoms as Atom[], bonds: model.bonds as unknown as Bond[] }, t.tipAtom, pointer, length) : null;
   if (chair) {
     end = chair.end;
+  } else if (bend) {
+    end = bend.end;
+    trigonalTo = bend.from;
   } else if (s.free) {
     end = pointer;
   } else {
@@ -348,7 +353,11 @@ export function strokeTarget(
   let bestFar = reach;
   let join: { atomId?: number; pathIndex?: number; at: Pt } | null = null;
   // (a bond goes to the atom the pointer is on, however far that is: a
-  // ring is closed with a long bond as well as a short one)
+  // ring is closed with a long bond as well as a short one - but from a
+  // projection's atom, which goes to a free position, only to the atom the
+  // pointer is let go ON, never by the join's reach: a group led up into a
+  // Haworth ring's picture toward the atom above it stays a group)
+  if (chair) bestFar = ATOM_PICK_RADIUS_RATIO * length;
   if (s.kind === "bond") {
     for (const a of model.atoms) {
       if (a.id === t.tipAtom || t.bonded.has(a.id)) continue;
@@ -366,7 +375,8 @@ export function strokeTarget(
       if (eta) return { tip: t.tip, end: eta.centre, ring: eta.ring };
     }
   }
-  for (const a of model.atoms) {
+  // (and where the bond's end comes near an atom: not from a projection's atom, whose end is its free position)
+  for (const a of chair ? [] : model.atoms) {
     if (a.id === t.tipAtom || t.bonded.has(a.id)) continue;
     const far = Math.hypot(a.x - end.x, a.y - end.y);
     if (far < bestFar) {

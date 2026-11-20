@@ -36,7 +36,8 @@ import {
   orderedMaps,
   type MapperTrace,
 } from "./accelMapper";
-import { implicitHydrogens, type Molecule, type ParsedAtom, type ParsedBond } from "./molecule";
+import { type Molecule, type ParsedAtom, type ParsedBond } from "./molecule";
+import { hydrogenCounts } from "./perception/hydrogens";
 import { aromaticForm } from "./identity";
 import { AROMATIC_BOND } from "./kekulize";
 
@@ -117,19 +118,18 @@ const flat = (ms: readonly Molecule[]) => ms.every((m) => m.atoms.every((a) => a
 
 /**
  * Whether some atom of the structures is short of the hydrogens its valence
- * asks, as a drawn atom whose hydrogens are implicit is (an aromatic bond
- * counting one and a half).
+ * asks, as a drawn atom whose hydrogens are implicit is, by the core's one
+ * count (perception/hydrogens `hydrogenCounts`).
  */
 function shortOfHydrogens(ms: readonly Molecule[]): boolean {
-  return ms.some((m) => {
-    const sums = new Array(m.atoms.length).fill(0);
-    for (const b of m.bonds) {
-      const o = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
-      sums[b.a1] += o;
-      sums[b.a2] += o;
-    }
-    return m.atoms.some((a, i) => implicitHydrogens(a.el, Math.round(sums[i]), a.charge ?? 0, a.radical) > 0);
-  });
+  // (the core's one count, perception/hydrogens `hydrogenCounts`: an aromatic bond by its Kekule order, a file's other bond types -
+  //  a coordination bond's 9 among them - nothing)
+  return ms.some((m) =>
+    hydrogenCounts(
+      m.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) })),
+      m.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+    ).some((h) => h > 0),
+  );
 }
 
 /**
