@@ -234,7 +234,7 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
-import { isProjection } from "./projections/rings";
+import { isProjection } from "./projections/projection";
 import { chairFromFlat } from "./projections/fromFlat";
 import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";

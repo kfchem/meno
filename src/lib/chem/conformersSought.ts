@@ -25,6 +25,13 @@ import { readMolfile } from "./ctfile";
 import { flatRingAtoms, neighboursOf } from "./perception/flatRings";
 import { HELD_FLAT_BY_AN_ACYL } from "./perception/stereo/lonePairs";
 import { implicitHydrogens } from "./molecule";
+import { AROMATIC_BOND, outsideRingRefusal, valenceOrders } from "./perception/kekule";
+
+/** The bonds with those marked aromatic given their Kekule orders, as the core counts them; the rest as given. */
+function kekuleRead(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): SoughtBond[] {
+  const orders = valenceOrders(atoms, bonds);
+  return bonds.map((b, i) => (b.order === orders[i] ? b : { ...b, order: orders[i] }));
+}
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -101,7 +108,10 @@ export function bondsInRings(atoms: readonly SoughtAtom[], bonds: readonly Sough
  * The rule (above) is by the bonds that turn; which those are is Meno's
  * definition, here: a bond whose turn gives conformers of their own.
  */
-export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): number[] {
+export function turningBonds(atoms: readonly SoughtAtom[], given: readonly SoughtBond[]): number[] {
+  // (bonds marked aromatic read in the core's Kekule form - the same matching in a ring or outside one: a carboxyl written with two
+  //  aromatic C-O bonds is a C=O and a C-OH, whose OH turns, as the molecule's own structure has it - perception/kekule `valenceOrders`)
+  const bonds = given.some((b) => b.order === AROMATIC_BOND) ? kekuleRead(atoms, given) : given;
   const around = neighboursOf(atoms, bonds);
   const inRing = bondsInRings(atoms, bonds);
   const heavyAround = (i: number) => around[i].filter(([j]) => heavy(atoms[j]));
@@ -200,8 +210,18 @@ export function canFlip(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond
   });
 }
 
-/** How many conformers to try of a molecule where none is asked for: as many as its shape needs (above). `held`: atoms bound to a metal through a star at their centre. */
-export function conformersSought(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[], held: readonly (readonly number[])[] = []): number {
+/**
+ * Why no number of conformers is worked out for a molecule: its bonds marked aromatic outside any ring have no form with single and
+ * double bonds (perception/kekule `outsideRingRefusal`, the core's own words). Counted anyway, they would turn on H nobody wrote.
+ */
+export function soughtRefusal(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): string | null {
+  if (!bonds.some((b) => b.order === AROMATIC_BOND)) return null;
+  return outsideRingRefusal(atoms, bonds.map((b) => ({ a1: b.a, a2: b.b, order: b.order })));
+}
+
+/** How many conformers to try of a molecule where none is asked for: as many as its shape needs (above), or none where it is refused (`soughtRefusal`). `held`: atoms bound to a metal through a star at their centre. */
+export function conformersSought(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[], held: readonly (readonly number[])[] = []): number | null {
+  if (soughtRefusal(atoms, bonds)) return null;
   const turns = turningBonds(atoms, bonds).length;
   const many = BY_TURNS.find(([most]) => turns <= most)![1];
   if (canFlip(atoms, bonds, held)) return Math.max(many, RING_CONFORMERS);
@@ -221,6 +241,16 @@ export function conformersSoughtOf(molblock: string): number | null {
   const bonds = ct.bonds.filter((b) => !b.endpoints?.length).map((b) => ({ a: b.a1, b: b.a2, order: b.type }));
   const held = ct.bonds.flatMap((b) => (b.endpoints?.length ? [[...b.endpoints]] : []));
   return conformersSought(atoms, bonds, held);
+}
+
+/** Why no number is worked out for a structure as Meno writes it for a plugin (`soughtRefusal`), or null. */
+export function soughtRefusalOf(molblock: string): string | null {
+  const ct = readMolfile(molblock);
+  if (!ct) return null;
+  return soughtRefusal(
+    ct.atoms.map((a) => ({ el: a.symbol, charge: a.charge ?? 0 })),
+    ct.bonds.filter((b) => !b.endpoints?.length).map((b) => ({ a: b.a1, b: b.a2, order: b.type })),
+  );
 }
 
 /**
