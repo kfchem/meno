@@ -9,7 +9,9 @@ import { signatureOf } from "../utils/drawnLink";
 import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readSDfile } from "../../../../lib/chem/ctfile";
-import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, unpairedSaid } from "./atomMap";
+import { atomGlyphsOf, glyphCode, glyphsWidth } from "../utils/atomNumbers";
+import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, numberingSaid, NUMBERING_ATOMS_BUDGET, renumbered, renumbering, renumberedTexts, unpairedSaid } from "./atomMap";
+import { cipIn3d } from "../../../../lib/chem/cip/in3d";
 import { conformerPairs, conformersSaid, MOST_PAIRS, numbers3d, pairedCounts, pairedSdf, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -24,9 +26,10 @@ const R_NAMES = ["C1", "C2", "C3", "C4", "H2", "H3", "H1a", "H1b", "H4a", "H4b",
 
 let partial: ReturnType<typeof keptMap>;
 
-function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
-  const at = (id: number, x: number, y: number): Atom => ({ id, el: "C", x: x * L, y: y * L, r: 0 }) as Atom;
-  const bond = (id: number, a: number, b: number, order: 1 | 2): Bond => ({ id, a, b, order }) as Bond;
+/** `o`: every id moved on by it, for a second pair on one page. */
+function page(o = 0): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
+  const at = (id: number, x: number, y: number): Atom => ({ id: id + o, el: "C", x: x * L, y: y * L, r: 0 }) as Atom;
+  const bond = (id: number, a: number, b: number, order: 1 | 2): Bond => ({ id: id + o, a: a + o, b: b + o, order }) as Bond;
   const atoms: Atom[] = [
     at(1, -9, 0), at(2, -8.5, 0.87), at(3, -7.5, 0.87), at(4, -7, 0), at(5, -5, 0), at(6, -4, 0),
     at(11, 4, 0), at(12, 4.5, 0.87), at(13, 5.5, 0.87), at(14, 6, 0), at(16, 5.5, -0.87), at(15, 4.5, -0.87),
@@ -37,8 +40,8 @@ function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
   ];
   const model = { atoms, bonds } as Model;
   const da = dielsAlder();
-  const rFrom = R_NAMES.map((k) => R_ID[k] ?? null);
-  const pFrom = da.productOrder.map((k) => P_ID[k] ?? null);
+  const rFrom = R_NAMES.map((k) => (R_ID[k] != null ? R_ID[k] + o : null));
+  const pFrom = da.productOrder.map((k) => (P_ID[k] != null ? P_ID[k] + o : null));
   const in3d = (id: number, m: typeof da.product, drawnFrom: (number | null)[]): Molecule3D => ({
     id,
     atoms: m.atoms.map((a) => ({ ...a })),
@@ -54,7 +57,7 @@ function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
   const c1 = da.productOrder.indexOf("C1");
   const cut = { ...result, maps: result.maps.map((m) => m.map((r, j) => (j === c1 ? -1 : r))), complete: result.maps.map(() => false) };
   partial = keptMap(model, cut, [{ molecule: da.reactants[0], drawnFrom: rFrom }], [{ molecule: da.product, drawnFrom: pFrom }]);
-  const doc = { ...emptyWorkspaceDocument(), model, nextId: 100, molecules3d: [in3d(1, da.reactants[0], rFrom), in3d(2, da.product, pFrom)], nextMolecule3dId: 3 };
+  const doc = { ...emptyWorkspaceDocument(), model, nextId: 100, molecules3d: [in3d(1 + o, da.reactants[0], rFrom), in3d(2 + o, da.product, pFrom)], nextMolecule3dId: 3 + o };
   return { doc, kept };
 }
 
@@ -409,21 +412,24 @@ describe("an atom map renumbered", () => {
   };
   const named = (numbers: readonly number[]) => Object.fromEntries(R_NAMES.map((k, i) => [k, numbers[i]]));
 
-  it("numbers Before's heavy atoms in the drawing's order, then each one's hydrogens in its turn - every number once", () => {
+  it("numbers Before's heavy atoms in IUPAC's order, then each one's hydrogens in its turn - every number once, however it was drawn", () => {
     const { kept } = page();
-    // (as drawn: C1 to C6 are 1 to 6, then C1's two H, C2's, C3's, C4's two, C5's two and C6's two)
-    expect(named(renumbered(kept, drawnOrder()))).toMatchObject({ C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6, H1a: 7, H1b: 8, H2: 9, H3: 10, H4a: 11, H4b: 12, H5a: 13, H6b: 16 });
-    // (Before's carbons drawn the other way round: C6 first, its hydrogens first after the heavy atoms)
-    expect(named(renumbered(kept, drawnOrder(true)))).toMatchObject({ C6: 1, C5: 2, C4: 3, C1: 6, H6a: 7, H6b: 8, H1b: 16 });
+    // (Before is butadiene, C1=C2-C3=C4, and ethylene, C5=C6: each molecule numbered as IUPAC numbers it - foundation part 16a - the
+    //  molecules in the drawing's order)
+    const sorted = (xs: number[]) => xs.sort((p, q) => p - q);
+    const n = named(renumbered(kept, drawnOrder()));
+    expect(sorted([n.C1, n.C4])).toEqual([1, 4]);
+    expect(sorted([n.C2, n.C3])).toEqual([2, 3]);
+    expect(sorted([n.C5, n.C6])).toEqual([5, 6]);
+    // (drawn the other way round: ethylene first)
+    const r = named(renumbered(kept, drawnOrder(true)));
+    expect(sorted([r.C5, r.C6])).toEqual([1, 2]);
+    expect(sorted([r.C1, r.C4])).toEqual([3, 6]);
+    // (the hydrogens after the heavy atoms, by the number of the atom each is on: those on 1 first)
+    const onOne = r.C5 === 1 ? ["H5a", "H5b"] : ["H6a", "H6b"];
+    expect(sorted(onOne.map((k) => r[k]))).toEqual([7, 8]);
     const all = renumbered(kept, drawnOrder(true));
     expect([...all].sort((p, q) => p - q)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1));
-    // (heavy atoms with no place in the drawing - none here has one - in their own order, after any that have)
-    const atoms = kept.reactant.atoms;
-    const heavy = atoms.flatMap((a, i) => (a.el === "H" ? [] : [i]));
-    const unplaced = renumbered(kept, new Map());
-    expect(heavy.map((i) => unplaced[i])).toEqual(heavy.map((_, k) => k + 1));
-    const two = renumbered(kept, new Map([[kept.reactant.drawnFrom[heavy[3]]!, 0]]));
-    expect(heavy.map((i) => two[i])).toEqual([2, 3, 4, 1, 5, 6]);
     // (numbers kept on the map, but not one for each of Before's atoms: not taken - the map's own instead)
     const own = beforeNumbers({ ...kept, numbers: undefined });
     expect(beforeNumbers({ ...kept, numbers: [1, 2] })).toEqual(own);
@@ -438,14 +444,168 @@ describe("an atom map renumbered", () => {
     const n = sideNumbers(map);
     const mapping = map.maps[map.chosen];
     n.after.forEach((k, j) => expect(k).toBe(numbers[mapping[j]]));
-    // (on the drawing: C6 numbered 1)
-    expect(mapMarks(map, page().doc.model).numbers.get(R_ID.C6)).toBe(1);
-    // (in the export, C6 written first, where it is in 3D)
+    // (on the drawing: the atom numbered 1 shows 1)
+    const one = R_NAMES[numbers.indexOf(1)] as keyof typeof R_ID;
+    expect(mapMarks(map, page().doc.model).numbers.get(R_ID[one])).toBe(1);
+    // (in the export, the atom numbered 1 written first, where it is in 3D)
     const records = readSDfile(mappedPairSdf(map, "da"));
-    const c6 = kept.reactant.atoms[R_NAMES.indexOf("C6")];
-    expect([records[0].atoms[0].x, records[0].atoms[0].y, records[0].atoms[0].z]).toEqual([c6.x, c6.y, c6.z].map((v) => Number(v.toFixed(4))));
+    const first = kept.reactant.atoms[numbers.indexOf(1)];
+    expect([records[0].atoms[0].x, records[0].atoms[0].y, records[0].atoms[0].z]).toEqual([first.x, first.y, first.z].map((v) => Number(v.toFixed(4))));
     // (a partial map keeps its own: those it pairs, as it holds them)
     expect(beforeNumbers({ ...partial, numbers })).toEqual(beforeNumbers(partial));
+  });
+
+  it("shows a renumbered map's texts - a parent's locants where they are not the numbers - on Before's atoms and their partners", () => {
+    const { kept } = page();
+    const numbers = renumbered(kept, drawnOrder());
+    // (butadiene and ethylene: every locant is its number, so none shown otherwise)
+    expect(renumberedTexts(kept, drawnOrder()).every((t) => t == null)).toBe(true);
+    // (a text given to C1: shown on it and on the product atom it becomes)
+    const c1 = R_NAMES.indexOf("C1");
+    const texts = kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "4a" } : null));
+    const marks = mapMarks({ ...kept, numbers, texts }, page().doc.model);
+    expect(marks.texts.get(R_ID.C1)).toEqual({ base: "4a" });
+    const mapping = kept.maps[kept.chosen];
+    const j = mapping.indexOf(c1);
+    expect(marks.texts.get(kept.product.drawnFrom[j]!)).toEqual({ base: "4a" });
+    // (two naphthalenes in one reaction: only the first shows its letters - no text repeats)
+    const twoNaphthalenes = {
+      ...kept,
+      reactant: {
+        atoms: Array.from({ length: 20 }, (_, i) => ({ el: "C", x: i, y: 0, z: 0 })),
+        bonds: [0, 10].flatMap((o) => [
+          [0, 1, 2], [1, 2, 1], [2, 3, 2], [3, 4, 1], [4, 5, 2], [5, 6, 1], [6, 7, 2], [7, 8, 1], [8, 9, 2], [9, 0, 1], [4, 9, 1],
+        ].map(([a, b, order]) => ({ a1: a + o, a2: b + o, order }))),
+        drawnFrom: Array.from({ length: 20 }, (_, i) => i + 100),
+      },
+    };
+    const shown = renumberedTexts(twoNaphthalenes as never, new Map()).filter((t) => t != null).map((t) => t!.base).sort();
+    expect(shown).toEqual(["4a", "8a"]);
+    // (not renumbered: no texts, whatever the map holds)
+    expect(mapMarks({ ...kept, numbers: undefined, texts }, page().doc.model).texts.size).toBe(0);
+  });
+
+  it("says under Renumber atoms whether a rule of IUPAC's decided every number, or names those Meno's own order decided", () => {
+    const { kept } = page();
+    const done = { ...kept, ...renumbering(kept, drawnOrder()) };
+    // (butadiene and ethylene: every number by a rule; the one pass gives what the two functions give)
+    expect(done.own).toEqual([]);
+    expect(done.numbers).toEqual(renumbered(kept, drawnOrder()));
+    expect(done.texts).toEqual(renumberedTexts(kept, drawnOrder()));
+    expect(numberingSaid(done)).toBe("IUPAC numbering");
+    // (some by Meno's own order: named by the numbers they show, in order; more than six, counted)
+    const heavy = kept.reactant.atoms.map((a, i) => (a.el === "H" ? -1 : i)).filter((i) => i >= 0);
+    const two = [heavy[3], heavy[0]];
+    const shown = two.map((i) => done.numbers![i]).sort((p, q) => p - q);
+    expect(numberingSaid({ ...done, own: two })).toBe(`IUPAC numbering, except ${shown[0]} and ${shown[1]} (Meno's own order)`);
+    expect(numberingSaid({ ...done, own: [heavy[2]] })).toBe(`IUPAC numbering, except ${done.numbers![heavy[2]]} (Meno's own order)`);
+    const three = [heavy[0], heavy[1], heavy[2]];
+    const s3 = three.map((i) => done.numbers![i]).sort((p, q) => p - q);
+    expect(numberingSaid({ ...done, own: three })).toBe(`IUPAC numbering, except ${s3[0]}, ${s3[1]} and ${s3[2]} (Meno's own order)`);
+    const many = kept.reactant.atoms.map((_, i) => i).slice(0, 7);
+    expect(numberingSaid({ ...done, own: many })).toBe("IUPAC numbering, except 7 atoms (Meno's own order)");
+    // (nothing said where it was not renumbered so - the drawing's order, a version's before this - nor of a partial map)
+    expect(numberingSaid(kept)).toBeNull();
+    expect(numberingSaid({ ...done, own: undefined })).toBeNull();
+    expect(numberingSaid({ ...done, complete: false })).toBeNull();
+  });
+
+  it("shows the same texts on the molecules in 3D, by number, Before's and After's alike - and takes them off with the map", () => {
+    const { doc, kept } = page();
+    const numbers = renumbered(kept, drawnOrder());
+    const c1 = R_NAMES.indexOf("C1");
+    const texts = kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "4a" } : null));
+    const map = { ...kept, numbers, texts };
+    const { doc: shown } = ops.addStructureMaps(doc, [map]);
+    const [before3d, after3d] = shown.molecules3d!;
+    expect(before3d.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    expect(after3d.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    // (drawn so on the balls: the atom numbered as C1 shows 4a, the rest their numbers)
+    const glyphs = atomGlyphsOf(before3d, "map");
+    expect(glyphsWidth(glyphs[c1])).toBe(2);
+    expect(glyphs[c1]).toBe(glyphCode(numbers[c1], { base: "4a" }));
+    const other = numbers.findIndex((k, i) => i !== c1 && k >= 10);
+    expect(glyphs[other]).toBe(glyphCode(numbers[other]));
+    // (hidden: no texts left on them)
+    const hidden = ops.setStructureMaps(shown, [{ id: 1, map: { ...map, shown: false } }]);
+    expect(hidden.molecules3d!.every((m) => m.mapTexts == null)).toBe(true);
+  });
+
+  it("keeps each map's texts on its own molecules in 3D: two maps on one page both number from 1", () => {
+    const a = page();
+    const b = page(100);
+    const numbers = renumbered(a.kept, drawnOrder());
+    const c1 = R_NAMES.indexOf("C1");
+    const mapA = { ...a.kept, numbers, texts: a.kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "4a" } : null)) };
+    const doc = {
+      ...a.doc,
+      model: { atoms: [...a.doc.model.atoms, ...b.doc.model.atoms], bonds: [...a.doc.model.bonds, ...b.doc.model.bonds] } as Model,
+      molecules3d: [...a.doc.molecules3d!, ...b.doc.molecules3d!],
+      nextId: 300,
+      nextMolecule3dId: 300,
+    };
+    const { doc: shown } = ops.addStructureMaps(doc, [mapA, b.kept]);
+    const byId = new Map(shown.molecules3d!.map((m) => [m.id, m]));
+    expect(byId.get(1)!.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    expect(byId.get(2)!.mapTexts).toEqual([[numbers[c1], { base: "4a" }]]);
+    // (the second map's molecules carry the same number, its atoms their own: no 4a on them)
+    expect(byId.get(101)!.atoms.some((x) => x.map === numbers[c1])).toBe(true);
+    expect(byId.get(101)!.mapTexts).toBeUndefined();
+    expect(byId.get(102)!.mapTexts).toBeUndefined();
+  });
+
+  it("numbers by isotopes - of a hydrogen too - and by configuration where they decide a tie (P-14.4 (i), (j))", () => {
+    const { kept } = page();
+    type Reactant = typeof kept.reactant;
+    const withReactant = (atoms: Reactant["atoms"], bonds: [number, number][]) => ({
+      ...kept,
+      reactant: { atoms, bonds: bonds.map(([a1, a2]) => ({ a1, a2, order: 1 })), drawnFrom: atoms.map(() => null) },
+    });
+    const c = (x: number, y: number, z = 0, el = "C") => ({ el, x, y, z });
+    // (propane, its last carbon 13C: that carbon is 1)
+    const labelled = withReactant([c(0, 0), c(1.25, 0.8), { ...c(2.5, 0), isotope: 13 }], [[0, 1], [1, 2]]);
+    const r = renumbering(labelled, new Map());
+    expect(r.numbers!.slice(0, 3)).toEqual([3, 2, 1]);
+    expect(r.own).toEqual([]);
+    // (propane with its hydrogens, one on the last carbon 2H: that carbon is 1)
+    const h = (x: number, y: number, z: number) => c(x, y, z, "H");
+    const deuterated = withReactant(
+      [c(0, 0), c(1.25, 0.8), c(2.5, 0), h(-0.5, 0.5, 0.8), h(-0.5, 0.5, -0.8), h(0, -1, 0), h(1.25, 1.4, 0.9), h(1.25, 1.4, -0.9), h(3, 0.5, 0.8), { ...h(3, 0.5, -0.8), isotope: 2 }, h(2.5, -1, 0)],
+      [[0, 1], [1, 2], [0, 3], [0, 4], [0, 5], [1, 6], [1, 7], [2, 8], [2, 9], [2, 10]],
+    );
+    expect(renumbering(deuterated, new Map()).numbers!.slice(0, 3)).toEqual([3, 2, 1]);
+    // (meso-2,4-dichloropentane, drawn both ways round: its R centre is 2 - by atom order alone, one drawing would give it 4)
+    const rAt: number[] = [];
+    for (const side of [1, -1]) {
+      const meso = withReactant(
+        [c(0, 0), c(1.25, 0.75), c(2.5, 0), c(3.75, 0.75), c(5, 0), c(1.25, 1.5, side, "Cl"), c(3.75, 1.5, side, "Cl"), h(1.25, 1.5, -side), h(3.75, 1.5, -side)],
+        [[0, 1], [1, 2], [2, 3], [3, 4], [1, 5], [3, 6], [1, 7], [3, 8]],
+      );
+      const cip = cipIn3d({ atoms: meso.reactant.atoms, bonds: meso.reactant.bonds, xyz: meso.reactant.atoms.flatMap((x) => [x.x, x.y, x.z]) });
+      const rCentre = [1, 3].find((i) => cip.atoms[i] === "R")!;
+      expect(cip.atoms[4 - rCentre]).toBe("S");
+      const done = renumbering(meso, new Map());
+      expect(done.numbers![rCentre]).toBe(2);
+      expect(done.own).toEqual([]);
+      rAt.push(rCentre);
+    }
+    expect(new Set(rAt).size).toBe(2);
+  });
+
+  it("leaves a molecule too large to number while the page waits as Meno's own, at once", () => {
+    const { kept } = page();
+    const n = NUMBERING_ATOMS_BUDGET + 1;
+    const big = {
+      ...kept,
+      reactant: {
+        atoms: Array.from({ length: n }, (_, i) => ({ el: i % 3 ? "C" : "O", x: i, y: i % 2, z: 0 })),
+        bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
+        drawnFrom: Array.from({ length: n }, () => null),
+      },
+    };
+    const done = renumbering(big, new Map());
+    expect(done.own).toHaveLength(n);
+    expect(numberingSaid({ ...big, ...done })).toBe(`IUPAC numbering, except ${n} atoms (Meno's own order)`);
   });
 
   it("is kept in the workspace's file, and numbers that are not each of 1 to n once are left out", () => {
@@ -454,6 +614,23 @@ describe("an atom map renumbered", () => {
     expect(readStructureMaps([{ map: { ...kept, numbers } }]).maps[0].map.numbers).toEqual(numbers);
     expect(readStructureMaps([{ map: { ...kept, numbers: numbers.map(() => 1) } }]).maps[0].map.numbers).toBeUndefined();
     expect(readStructureMaps([{ map: { ...kept, numbers: numbers.slice(1) } }]).maps[0].map.numbers).toBeUndefined();
+  });
+
+  it("keeps what its atoms show for their numbers and those Meno's own order numbered, with the numbers only, each read whole or left out", () => {
+    const { kept } = page();
+    const c1 = R_NAMES.indexOf("C1");
+    const done = { ...kept, ...renumbering(kept, drawnOrder()), texts: kept.reactant.atoms.map((_, i) => (i === c1 ? { base: "3a", sup: "1" } : null)), own: [2, 0] };
+    const back = readStructureMaps(JSON.parse(JSON.stringify([{ map: done }]))).maps[0].map;
+    expect(back.texts).toEqual(done.texts);
+    expect(back.own).toEqual([2, 0]);
+    expect(numberingSaid(back)).toBe(numberingSaid(done));
+    // (without numbers, neither; a text of another shape, or an atom not there, leaves that one out)
+    const bare = readStructureMaps([{ map: { ...done, numbers: undefined } }]).maps[0].map;
+    expect([bare.texts, bare.own]).toEqual([undefined, undefined]);
+    expect(readStructureMaps([{ map: { ...done, texts: done.texts!.slice(1) } }]).maps[0].map.texts).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...done, texts: done.texts!.map((t) => (t ? { base: 4 } : t)) } }]).maps[0].map.texts).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...done, own: [kept.reactant.atoms.length] } }]).maps[0].map.own).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...done, own: [1, 1] } }]).maps[0].map.own).toBeUndefined();
   });
 });
 

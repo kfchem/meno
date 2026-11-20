@@ -2148,6 +2148,8 @@ All hover-based, as above.
     place for them, and does not keep them.
 - Copy and paste, within Meno and between tabs. (PR #68, as above; and
   between Meno and other programs, through the system clipboard.)
+  A copy or a cut with nothing selected and no structure under the
+  pointer says so ("Nothing to copy"), and leaves the clipboard as it was.
 - **One structure of several parts** (the maintainer, 2026-10-30; built
   2026-11-05). Structures not bonded to one another can be one structure:
   a salt, a complex, the reactants on one side of an atom map. With two or
