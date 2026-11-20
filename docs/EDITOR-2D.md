@@ -2718,7 +2718,9 @@ traced from reference drawings.
   already running; with none running, Windows starts one, unseen, which
   goes again once Office is done with its objects and nothing else is open
   (Office also starts one only to have a picture). The structure opens in a
-  tab of its own; each change goes back into the document as it is drawn -
+  tab of its own - its molecules in 3D turned as they were copied, and
+  showing the frame they showed, as the document's picture has them, not
+  as a file's are first seen; each change goes back into the document as it is drawn -
   Meno's record, and the same EMF (EMF+ and all) as the picture shown - and
   closing the tab, or the document, lets it go. Insert > Object makes a new
   one. The installers register the class (the NSIS hooks run

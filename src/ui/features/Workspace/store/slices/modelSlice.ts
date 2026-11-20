@@ -584,7 +584,7 @@ export const createModelSlice = (
    * - an Office document's object opened again - brings its slides and its
    * writing by hand with it, numbered from the first.
    */
-  openModel: (next: Model & Pick<Drawn, "inks" | "slides">, scheme?: ImportedScheme) => {
+  openModel: (next: Model & Pick<Drawn, "inks" | "slides" | "molecules3d">, scheme?: ImportedScheme) => {
     const opened = ops.withImportedScheme(ops.replaceModel(doc.getState(), next), scheme);
     const withSlides = (next.slides ?? []).reduce((d, { id: _, ...s }) => ops.addSlide(d, s), opened);
     doc.reset(
@@ -596,7 +596,17 @@ export const createModelSlice = (
     // the first, in order, as replaceModel left them to be - and each stack
     // of drawings the record marked, where it carries one: utils/stacks)
     const recordsShown = recordsShownOf(next.atoms);
-    set((prev: EditorState) => ({ ...prev, turns3d: shownTurns(scheme, 1, {}), frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    const turns3d = shownTurns(scheme, 1, {});
+    const frames3d = shownFrames(scheme, 1, {});
+    const lists3d = shownLists(scheme, 1, {});
+    // (a record's molecules in 3D - a document's object opened again - as its copy had them: turned, showing the frame and the
+    //  list it showed, as a paste or a workspace opened has them; the view is not the document's, so the scheme does not carry it)
+    (next.molecules3d ?? []).forEach((m, i) => {
+      if (m.turn) turns3d[i + 1] = m.turn;
+      if (m.frame) frames3d[i + 1] = m.frame;
+      if (m.list) lists3d[i + 1] = { list: m.list.id, row: m.list.row, pointed: null, ...(m.list.iso != null ? { iso: m.list.iso } : {}) };
+    });
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   joinReadings: () => {
