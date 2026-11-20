@@ -419,3 +419,42 @@ describe("Merge of two kinds of set", () => {
     expect(runStep(doc, step, W).steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: "First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind" });
   });
 });
+
+describe("Pass the side with fewer", () => {
+  /** `n` conformers of each of `compounds` compounds. */
+  const side = (compounds: number, n: number) => Array.from({ length: compounds * n }, (_, k) => water(k + 1, Math.floor(k / n)));
+  const run = (first: SetEntry[], second: SetEntry[], pass?: string) =>
+    runMenoPair("fewer-side", { entries: first, holds: "conformers" }, { entries: second, holds: "conformers" }, pass ? { pass } : undefined) as Extract<ReturnType<typeof runMenoPair>, { ok: true }>;
+
+  it("passes only the side with fewer entries per compound, by default, where they are a quarter of their sum apart or more - ConfoTS's rule", () => {
+    // (a flexible reactant, 14 conformers, against two compact products of 3 and 4: 14 and 3.5 per compound - the products only, as ConfoTS runs its paths from them)
+    const reactant = side(1, 14);
+    const products = [...side(1, 3), ...side(1, 4).map((e) => ({ ...e, compound: 1 }))];
+    const out = run(reactant, products);
+    expect([out.kept.length, out.aside.length]).toEqual([0, 7]);
+    expect(out.said).toBe("First 14.0, Second 3.5 per compound · Second only passed (the side with fewer)");
+    // (the other way round: First is the side with fewer)
+    expect([run(products, reactant).kept.length, run(products, reactant).aside.length]).toEqual([7, 0]);
+  });
+
+  it("passes both where their entries per compound are within a quarter of their sum", () => {
+    // (10 and 7: 3 of 17 apart, under a quarter - both; 10 and 6: 4 of 16, a quarter - the side with fewer)
+    const both = run(side(1, 10), side(1, 7));
+    expect([both.kept.length, both.aside.length, both.said]).toEqual([10, 7, "First 10.0, Second 7.0 per compound · both passed (within a quarter of their sum)"]);
+    const edge = run(side(1, 10), side(1, 6));
+    expect([edge.kept.length, edge.aside.length]).toEqual([0, 6]);
+  });
+
+  it("passes what it is set to whatever the counts: both, First only, Second only", () => {
+    const [a, b] = [side(1, 14), side(2, 2)];
+    expect([run(a, b, "both").kept.length, run(a, b, "both").aside.length]).toEqual([14, 4]);
+    expect([run(a, b, "first").kept.length, run(a, b, "first").aside.length, run(a, b, "first").said]).toEqual([14, 0, "First 14.0, Second 2.0 per compound · First only passed (as set)"]);
+    expect([run(a, b, "second").kept.length, run(a, b, "second").aside.length]).toEqual([0, 4]);
+  });
+
+  it("says what came in where an input is empty, as any step of two inputs does", () => {
+    const out = runMenoPair("fewer-side", { entries: [], holds: "conformers" }, { entries: side(1, 3), holds: "conformers" });
+    expect(out).toEqual({ ok: false, said: "Nothing came into its first input" });
+    expect(kindInfo("fewer-side").name).toBe("Pass the side with fewer");
+  });
+});

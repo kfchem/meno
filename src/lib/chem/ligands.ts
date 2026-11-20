@@ -2,7 +2,7 @@ import type { Axial } from "../layout/stereo";
 import { axesWith, shownAs, splitDescriptor, withConfiguration, type Enantiomers } from "./enantiomers";
 import { anionOf, longestGroup, partsOf } from "./formula";
 import { kekuleOrders } from "./kekulize";
-import { implicitHydrogens, valenceOrder } from "./molecule";
+import { hydrogenCounts } from "./perception/hydrogens";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
 import { ELEMENTS } from "./elements";
 import { drawnRoundMetal, labelNotElement } from "./perception/elements";
@@ -395,22 +395,22 @@ export function ligandPicture(l: Ligand): GroupStructure {
 /**
  * A structure's molecular formula, in Hill order (C, H, then the rest
  * alphabetically; alphabetically throughout where there is no carbon): its
- * hydrogens as its atoms say or by valence, as a drawing counts them
- * (molecule.valenceOrder) - stars not counted.
+ * hydrogens as its atoms say or by valence, by the core's one count
+ * (perception/hydrogens `hydrogenCounts`) - stars not counted.
  */
 export function structureFormula(s: GroupStructure): string {
-  const sums = s.atoms.map(() => 0);
-  for (const b of s.bonds) {
-    sums[b.a1] += valenceOrder(b, s.atoms[b.a1].el);
-    sums[b.a2] += valenceOrder(b, s.atoms[b.a2].el);
-  }
+  // (the core's one count: perception/hydrogens `hydrogenCounts`)
+  const hs = hydrogenCounts(
+    s.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), ...(a.hs != null ? { hs: a.hs } : {}) })),
+    s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order, ...(b.coordination ? { coordination: true } : {}) })),
+  );
   const count = new Map<string, number>();
   const add = (el: string, n: number) => n && count.set(el, (count.get(el) ?? 0) + n);
   s.atoms.forEach((a, i) => {
     if (a.el === "*") return;
     // (deuterium as D, after H: CDCl3)
     add(a.el === "H" && a.isotope === 2 ? "D" : a.el, 1);
-    add("H", a.hs ?? implicitHydrogens(a.el, sums[i], a.charge ?? 0));
+    add("H", hs[i]);
   });
   const others = [...count.keys()].filter((e) => e !== "C" && e !== "H" && e !== "D").sort();
   const order = count.has("C") ? ["C", "H", "D", ...others] : [...count.keys()].sort();
@@ -755,6 +755,17 @@ export function complexStructure(
         parts.push(`${it.n > 1 ? `${it.n} ` : ""}${it.bridging ? "μ-" : ""}${word}`);
       }
     }
+    // (mercury(I): two Hg and two groups each bound by one bond, one on each - Hg2Cl2, Hg2(OAc)2 - is X-Hg-Hg-X, the Hg2 2+ pair bonded,
+    //  as a salt of it is read: ./condensed `metalSaltStructure`)
+    const xs = unit.filter((it) => it.kind === "x");
+    if (
+      metals.length === 2 &&
+      metals.every((m) => atoms[m].el === "Hg") &&
+      unit.every((it) => it.kind === "metal" || it.kind === "x") &&
+      xs.reduce((n, it) => n + it.n, 0) === 2 &&
+      xs.every((it) => it.kind === "x" && it.label !== "O" && !it.bridging)
+    )
+      bonds.push({ a1: metals[0], a2: metals[1], order: 1 });
     if (!named) parts.length = named0;
     return metals[0];
   };

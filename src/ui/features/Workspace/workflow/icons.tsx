@@ -151,6 +151,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M13.5 4 H17.5 M13.5 8 H17.5 M13.5 12 H17.5 M13.5 16 H17.5" />
     </>
   ),
+  // (two sets: the longer held at a bar, the shorter passing on)
+  fewer: (
+    <>
+      <path d="M2.5 2.5 H8 M2.5 5 H8 M2.5 7.5 H8 M2.5 10 H8" />
+      <path d="M10.5 1.8 V10.7" strokeWidth={1.8} />
+      <path d="M2.5 14 H8 M2.5 16.5 H8" />
+      <path d="M10 15.2 H17 M14.8 13 L17.1 15.2 L14.8 17.4" />
+    </>
+  ),
   // (three atoms where they stand, then the same atoms bonded)
   rebond: (
     <>

@@ -431,75 +431,69 @@ describe("oppositesKept, its parts", () => {
 });
 
 describe("a metal's donors kept opposite as drawn, or the drawing refused", () => {
-  it("keeps cis-[Co(en)2Cl2]+ drawn with six spokes, laid out with its Cl side by side; refuses the trans - the layout has no two places across for its Cl", { timeout: 180000 }, async () => {
+  // (six spokes 60 degrees apart, the k-th across the (k+3)-th: the pairs drawn across, by name, each sorted, a ring's two ends never)
+  const drawnAcross = (names: readonly string[]) => [0, 1, 2].map((k) => [names[k], names[k + 3]].sort().join("-")).sort();
+
+  it("keeps [Co(en)2Cl2]+ drawn with six spokes, cis or trans, as three lines through the metal with the pairs drawn across (Brecher 2006, ST-2.11)", { timeout: 180000 }, async () => {
     forgetLaidOut();
     for (const names of [
       ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"],
       ["Na", "Oa", "Cl", "Cl", "Nb", "Ob"],
-    ]) {
-      const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
-      const out = await laidOut(m.model, MENO);
-      // (its four N two lines through the metal, its two Cl across nothing: side by side, the picture of the cis)
-      expect(lines(out, m.names).map((p) => p.replace(/[NO][ab]/g, "N")), names.join(" ")).toEqual(["N-N", "N-N"]);
-    }
-    for (const names of [
       ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"],
       ["Na", "Oa", "Cl", "Nb", "Ob", "Cl"],
     ]) {
       const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
-      await expect(laidOut(m.model, MENO), names.join(" ")).rejects.toThrow(/opposite each other as drawn/);
+      const out = await laidOut(m.model, MENO);
+      expect(lines(out, m.names), names.join(" ")).toEqual(drawnAcross(names));
     }
   });
 
-  it("keeps cis-[Co(en)2Cl2]+ drawn as it is laid out - its N an X, its Cl side by side", { timeout: 180000 }, async () => {
+  it("lays a cis-[Co(en)2Cl2]+ drawn as an earlier layout drew it - its N an X, its Cl side by side - out as three lines, each Cl across an N", { timeout: 180000 }, async () => {
     forgetLaidOut();
     const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Na", "Oa", "Nb", "Ob", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
     const out = await laidOut(m.model, MENO);
-    expect(lines(out, m.names).map((p) => p.replace(/[NO][ab]/g, "N"))).toEqual(["N-N", "N-N"]);
+    expect(lines(out, m.names).map((p) => p.replace(/[NO][ab]/g, "N"))).toEqual(["Cl-N", "Cl-N", "N-N"]);
   });
 
-  it("never puts across two donors drawn side by side: a cis-[CoCl2(NH3)4]+ drawn with its NH3 an X and its Cl side by side is not handed back trans", { timeout: 180000 }, async () => {
+  it("never puts across two donors drawn side by side: a cis-[CoCl2(NH3)4]+ drawn as an earlier layout drew it - its NH3 an X, its Cl side by side - is laid out as three lines, each Cl across an NH3", { timeout: 180000 }, async () => {
     forgetLaidOut();
     const m = complex("Co", 1, ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"], [0, 1, 2, 3, 4, 5], ["NH3", "NH3", "NH3", "NH3", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
-    const out = await laidOut(m.model, MENO).catch(() => null);
-    if (out) expect(lines(out, m.names)).not.toContain("Cl-Cl");
+    const out = await laidOut(m.model, MENO);
+    expect(lines(out, m.names)).toEqual(["Cl-NH3", "Cl-NH3", "NH3-NH3"]);
   });
 
-  it("keeps a cis-M(gly)2Cl2 drawn with six spokes only where its picture says it - one N across an O - and refuses N across N, O across O and the trans", { timeout: 180000 }, async () => {
+  it("keeps each of M(gly)2Cl2's five arrangements drawn with six spokes, as three lines with the pairs drawn across", { timeout: 180000 }, async () => {
     forgetLaidOut();
-    // (Cl at 0 and 60: the chelate ends at 120 and 300 are across each other, those at 180 and 240 across a Cl)
-    const nAcrossO = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"]);
-    const out = await laidOut(nAcrossO.model, MENO);
-    expect(lines(out, nAcrossO.names)).toEqual(["Na-Ob", "Nb-Oa"]);
     for (const [isomer, names] of [
-      ["N across N", ["Cl", "Cl", "Na", "Oa", "Ob", "Nb"]],
-      ["O across O", ["Cl", "Cl", "Oa", "Na", "Nb", "Ob"]],
-      ["trans", ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"]],
+      ["cis, N across O", ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"]],
+      ["cis, N across N", ["Cl", "Cl", "Na", "Oa", "Ob", "Nb"]],
+      ["cis, O across O", ["Cl", "Cl", "Oa", "Na", "Nb", "Ob"]],
+      ["trans, N across N", ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"]],
+      ["trans, N across O", ["Cl", "Na", "Oa", "Cl", "Ob", "Nb"]],
     ] as const) {
       const m = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
-      await expect(laidOut(m.model, MENO), isomer).rejects.toThrow(/opposite each other as drawn/);
+      expect(lines(await laidOut(m.model, MENO), m.names), isomer).toEqual(drawnAcross(names));
     }
   });
 
-  it("refuses a cis-M(gly)2XY drawn with six spokes whose picture could not say which of its two others is across which chelate end: Cl and Br; NH3 and MeNH2", { timeout: 180000 }, async () => {
+  it("keeps a cis-M(gly)2XY drawn with six spokes with which of its two others is across which chelate end: Cl and Br; NH3 and MeNH2", { timeout: 180000 }, async () => {
     forgetLaidOut();
-    // (N across O between the chelates, as kept for two Cl; the two others different: which stands across the N and which across the O
-    // is the isomer, and two lines and two side by side cannot show it)
     for (const [x, y] of [["Cl", "Br"], ["NH3", "MeNH2"]]) {
-      const m = complex("Co", 1, [gly("a"), gly("b"), x, y], [0, 1, 2, 3, 4, 5], [x, y, "Na", "Oa", "Nb", "Ob"]);
-      await expect(laidOut(m.model, MENO), `${x} ${y}`).rejects.toThrow(/opposite each other as drawn/);
+      const names = [x, y, "Na", "Oa", "Nb", "Ob"];
+      const m = complex("Co", 1, [gly("a"), gly("b"), x, y], [0, 1, 2, 3, 4, 5], names);
+      expect(lines(await laidOut(m.model, MENO), m.names), `${x} ${y}`).toEqual(drawnAcross(names));
     }
   });
 
-  it("keeps a cis-M(gly)2Cl2 drawn as it is laid out with the lines through the metal it was drawn with - N to N and O to O, or N to O - never the other", { timeout: 180000 }, async () => {
+  it("lays a cis-M(gly)2Cl2 drawn as an earlier layout drew it out as three lines where that picture says which ends are across - N to O - and refuses it where it does not - N to N and O to O", { timeout: 180000 }, async () => {
     forgetLaidOut();
-    for (const [names, want] of [
-      [["Na", "Oa", "Nb", "Ob", "Cl", "Cl"], ["Na-Nb", "Oa-Ob"]],
-      [["Na", "Oa", "Ob", "Nb", "Cl", "Cl"], ["Na-Ob", "Nb-Oa"]],
-    ] as const) {
-      const m = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names, [45, 135, 225, 315, 260, 280]);
-      expect(lines(await laidOut(m.model, MENO), m.names), names.join(" ")).toEqual(want);
-    }
+    const said = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Na", "Oa", "Ob", "Nb", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
+    const out = lines(await laidOut(said.model, MENO), said.names);
+    // (one N across an O, each Cl across a chelate end: N across one, O across the other)
+    expect(out.filter((p) => !p.startsWith("Cl")).map((p) => p.replace(/[ab]/g, ""))).toEqual(["N-O"]);
+    expect(out.filter((p) => p.startsWith("Cl")).map((p) => p.replace(/[ab]/g, ""))).toEqual(["Cl-N", "Cl-O"]);
+    const unsaid = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Na", "Oa", "Nb", "Ob", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
+    await expect(laidOut(unsaid.model, MENO)).rejects.toThrow(/opposite each other as drawn/);
   });
 
   it("puts opposite the two drawn straightest across, the other two beside them on one side: Br 0, Cl 180, N 250, O 290 - and Br 0, N 60, O 120, Cl 185", () => {
