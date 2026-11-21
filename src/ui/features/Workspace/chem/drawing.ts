@@ -10,8 +10,8 @@
  * (and H) that say it.
  */
 import { isEndOn, wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
-import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
-import { metal } from "../../../../lib/chem/perception/elements";
+import { setValenceOrder } from "../../../../lib/chem/molecule";
+import { hydrogenCounts } from "../../../../lib/chem/perception/hydrogens";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
 import { readStereo, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { saidOf } from "../../../../lib/chem/perception/stereo/compare";
@@ -81,33 +81,36 @@ export function wedgesHeld(model: Model, before?: Model): Model {
   return { ...model, bonds };
 }
 
-/** The H an atom carries and the drawing does not show: by its valence, for an element; none for a label. */
+/**
+ * The H an atom carries and the drawing does not show: a valence a file sets, first - what its bonds leave of it, a metal's coordination
+ * bonds counted as the file counts them (lib/chem/molecule `setValenceOrder`); else by the core's one count (lib/chem/perception/hydrogens
+ * `hydrogenCounts`: a dative, coordination or hydrogen bond as a drawing counts it, a P's or an S's valence chosen by its bonds to
+ * non-metals); none for a label.
+ */
 export function undrawnHydrogens(model: Model): Map<number, number> {
-  const sum = new Map<number, number>();
-  // (and toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - lib/chem/molecule `setValenceOrder`)
-  const setSum = new Map<number, number>();
+  const at = new Map(model.atoms.map((a, i) => [a.id, i]));
   const el = new Map(model.atoms.map((a) => [a.id, a.el]));
-  const toMetals = new Map<number, number>();
+  const setSum = new Map<number, number>();
   for (const b of model.bonds) {
-    // (a dative bond lends a pair, and takes no H from either end - but a
-    // carbon lending it; nor does a coordination or a hydrogen bond)
-    sum.set(b.a, (sum.get(b.a) ?? 0) + valenceOrder(b, el.get(b.a)));
-    sum.set(b.b, (sum.get(b.b) ?? 0) + valenceOrder(b, el.get(b.b)));
-    // (and of it, the bonds to metals: a P's or an S's valence is chosen by its other bonds - a phosphine on Pd has no H)
-    if (metal.has(el.get(b.b) ?? "")) toMetals.set(b.a, (toMetals.get(b.a) ?? 0) + valenceOrder(b, el.get(b.a)));
-    if (metal.has(el.get(b.a) ?? "")) toMetals.set(b.b, (toMetals.get(b.b) ?? 0) + valenceOrder(b, el.get(b.b)));
     setSum.set(b.a, (setSum.get(b.a) ?? 0) + setValenceOrder(b, el.get(b.a)));
     setSum.set(b.b, (setSum.get(b.b) ?? 0) + setValenceOrder(b, el.get(b.b)));
   }
+  const counted = hydrogenCounts(
+    model.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) })),
+    model.bonds.flatMap((b) => {
+      const [p, q] = [at.get(b.a), at.get(b.b)];
+      return p == null || q == null ? [] : [{ ...b, a: p, b: q }];
+    }),
+  );
   return new Map(
-    model.atoms.map((a) => [
+    model.atoms.map((a, i) => [
       a.id,
       !isElementSymbol(a.el) || a.abbrev
         ? 0
         : a.valence != null
           ? // (a valence a file sets: what the bonds leave of it)
             Math.max(0, a.valence - (setSum.get(a.id) ?? 0))
-          : implicitHydrogens(a.el, sum.get(a.id) ?? 0, a.charge ?? 0, a.radical, toMetals.get(a.id) ?? 0),
+          : counted[i],
     ]),
   );
 }

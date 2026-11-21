@@ -3127,6 +3127,40 @@ describe("a double bond at an atom a label is being written over", () => {
   });
 });
 
+describe("a P's label writes the H the page counts (part 12c)", () => {
+  it("a P(V) of four bonds to non-metals writes its H: PH; a phosphine on Pd by a plain bond writes none", () => {
+    const L = 1.5;
+    // (dimethyl phosphite's P: =O, two OMe - drawn with its O's)
+    const phosphite: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "P" },
+      { id: 2, x: 0, y: L, el: "O" },
+      { id: 3, x: L, y: 0, el: "O" },
+      { id: 4, x: -L, y: 0, el: "O" },
+    ];
+    const p = buildTextLabels(phosphite, opts(), [
+      { a1: 0, a2: 1, order: 2 },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 0, a2: 3, order: 1 },
+    ]);
+    expect(p.find((l) => l.atom === 0)?.text).toMatch(/^(PH|HP)$/);
+    // (a P with three methyls on a Pd: P(III), no H)
+    const onPd: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "P" },
+      { id: 2, x: 0, y: -L, el: "Pd" },
+      { id: 3, x: L, y: 0, el: "C" },
+      { id: 4, x: -L, y: 0, el: "C" },
+      { id: 5, x: 0, y: L, el: "C" },
+    ];
+    const q = buildTextLabels(onPd, opts(), [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+    ]);
+    expect(q.find((l) => l.atom === 0)?.text).toBe("P");
+  });
+});
+
 describe("a Newman projection's primitives", () => {
   const OPTS = opts();
   const L = NOMINAL_BOND_LENGTH;

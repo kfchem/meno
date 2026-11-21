@@ -16,7 +16,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { NOMINAL_BOND_LENGTH } from "./acs";
-import { notMetal } from "./perception/elements";
+import { metal, notMetal } from "./perception/elements";
 import { factsOf } from "./perception/facts";
 import { runsOf } from "./perception/stereo/runs";
 import { symmetryClasses } from "./perception/symmetry";
@@ -2508,6 +2508,7 @@ export function buildTextLabels(
   // the bands that decide where the hydrogens and the symbol go
   const band = Math.sin(((opts.hydrogenBandDeg ?? 10) * Math.PI) / 180);
   const sideways = Math.cos(((opts.symbolCentringDeg ?? 25) * Math.PI) / 180);
+  const toMetals = new Map<number, number>();
   const orderSum = new Map<number, number>();
   // (toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - molecule `setValenceOrder`)
   const setSum = new Map<number, number>();
@@ -2546,6 +2547,10 @@ export function buildTextLabels(
     const order = valenceOrder(kind);
     note(b.a1, b.a2, order, valenceOrder(kind, atoms[b.a1]?.el));
     note(b.a2, b.a1, order, valenceOrder(kind, atoms[b.a2]?.el));
+    // (and of it, each end's bonds to metals: a P's or an S's valence is chosen by its other bonds, as the page counts it - a phosphine
+    //  on Pd writes no H, a P(V) of four bonds to non-metals its one)
+    if (metal.has(atoms[b.a2]?.el ?? "")) toMetals.set(b.a1, (toMetals.get(b.a1) ?? 0) + valenceOrder(kind, atoms[b.a1]?.el));
+    if (metal.has(atoms[b.a1]?.el ?? "")) toMetals.set(b.a2, (toMetals.get(b.a2) ?? 0) + valenceOrder(kind, atoms[b.a2]?.el));
     setSum.set(b.a1, (setSum.get(b.a1) ?? 0) + setValenceOrder(kind, atoms[b.a1]?.el));
     setSum.set(b.a2, (setSum.get(b.a2) ?? 0) + setValenceOrder(kind, atoms[b.a2]?.el));
   }
@@ -2569,7 +2574,7 @@ export function buildTextLabels(
       ? 0
       : a.valence != null
         ? Math.max(0, a.valence - (setSum.get(i) ?? 0))
-        : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
+        : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical, toMetals.get(i) ?? 0);
   const names = namesLaid(
     {
       x: atoms.map((a) => a.x),
@@ -4206,13 +4211,21 @@ function depthsOf(atoms: Atom[], bonds: Bond[]): (i: number) => number | undefin
 function drawnOf(atoms: Atom[], drawn: Bond[]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } {
   const orderSum = new Map<number, number>();
   for (const b of drawn) for (const i of [b.a1, b.a2]) orderSum.set(i, (orderSum.get(i) ?? 0) + (b.dative ? 0 : b.order));
+  // (each atom's bonds to metals, of that sum: as the page counts its H)
+  const toMetals = new Map<number, number>();
+  for (const b of drawn)
+    for (const [i, j] of [
+      [b.a1, b.a2],
+      [b.a2, b.a1],
+    ])
+      if (metal.has(atoms[j]?.el ?? "")) toMetals.set(i, (toMetals.get(i) ?? 0) + (b.dative ? 0 : b.order));
   const deg = degreeMap(drawn);
   return {
     atoms: atoms.map((a, i) => ({
       x: a.x,
       y: a.y,
       el: a.el,
-      hs: a.valence != null ? Math.max(0, a.valence - (orderSum.get(i) ?? 0)) : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
+      hs: a.valence != null ? Math.max(0, a.valence - (orderSum.get(i) ?? 0)) : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical, toMetals.get(i) ?? 0),
       ...(a.charge ? { charge: a.charge } : {}),
       ...(a.z != null ? { z: a.z } : {}),
     })),

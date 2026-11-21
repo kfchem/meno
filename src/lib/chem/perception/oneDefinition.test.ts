@@ -71,9 +71,8 @@ export const STILL_APART: Copy[] = [
   // the lone pair: the CIP's own count stands apart by design
   { concept: "lone pair", file: "lib/chem/cip/prepare.ts", name: "lonePairs", part: "14 B", why: "the conventions' count, for describing a configuration given (a carbanion's lone pair counted with its charge, its fourth place a phantom): not which atoms keep one - the core's rule would refuse a carbanion's label (cip.test.ts)" },
   // the hydrogen count: each onto the core's one count, in its file's queue (the order's section 4)
-  { concept: "hydrogen count", file: "lib/chem/stereoOpen.ts", name: "implicitOf", part: 12, why: "the core's hydrogenCounts as it stands, unflagged bonds: it is called through the core when stereoOpen.ts' queue reaches part 12" },
   { concept: "hydrogen count", file: "lib/chem/protonation.ts", name: "hydrogensOf", part: "stays", why: "a question of its own: the hydrogens a site can hold with and without its bonds to metals (each form offered), a P and an S at their higher valences where the bonds pass the lower (an H-phosphonate's P-H, which the core's count does not give: for the chemistry check, part 12's fixes)" },
-  { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: 12, why: "a drawn atom's own valence first: part 12c" },
+  { concept: "hydrogen count", file: "ui/features/Workspace/chem/drawing.ts", name: "undrawnHydrogens", part: "stays", why: "the page's count: a valence a file sets on the atom first, else the core's hydrogenCounts (part 12c)" },
   // a plain hydrogen: each a variant for its own question, named, or onto the core's test in its file's queue
   { concept: "plain hydrogen", file: "lib/chem/substructure.ts", name: "plainH", part: "stays", why: "a match ignores a map number (a named variant); else the core's test: one single bond to an atom neither an H nor a metal of the d or f block" },
   { concept: "plain hydrogen", file: "ui/features/Workspace/workflow/substituents.ts", name: "isPlainH", part: 12, why: "an option typed as H, not a drawn atom: an H, not D or T, with no charge - a question of its own: part 12c" },
