@@ -21,8 +21,8 @@ export const STEREO_OPTIONS: readonly Option[] = [
 
 /**
  * *Stereoisomers* on one structure - its parts' MOL blocks, read as one -
- * asked of the plugin that finds stereoisomers (`chem`; `program`, the
- * toolkit it runs, named where it alone failed). Kept as drawn where
+ * counted by Meno (chem/openStereo, chem/menoIsomers) and each made by
+ * the plugin that makes stereoisomers (`chem`). Kept as drawn where
  * nothing is left open, or nothing it leaves open can go more than one way
  * in 3D (a bridgehead its rings fix; a strained cage none of whose forms
  * holds); else each stereoisomer that can be made in 3D, every open
@@ -47,9 +47,12 @@ export async function stereoisomersAnswer(chem: ChemClient, molblocks: readonly 
   const bonds = open.groups.onBonds.map(onBondSaid);
   const groupsNote = (lines: string[]): Record<string, DrawnValue> =>
     lines.length ? { stereo_groups: { value: lines.join("; "), unit: "none", method: "AND and OR groups (V3000 enhanced stereo), each turned as a whole" } } : {};
+  // (what Meno's count says of what it made: those differing only at an axis, a cage it does not count - chem/menoIsomers)
+  let counted: string[] = [];
   const note = (lines: string[] = bonds): { properties?: Record<string, DrawnValue> } => {
     const properties: Record<string, DrawnValue> = {
       ...(said ? { stereo_not_enumerated: { value: said, unit: "none" as const, method: "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)" } } : {}),
+      ...(counted.length ? { stereoisomers_said: { value: counted.join("; "), unit: "none" as const, method: "Meno's count of stereoisomers, each made whole in 3D" } } : {}),
       ...groupsNote(lines),
     };
     return Object.keys(properties).length ? { properties } : {};
@@ -63,6 +66,7 @@ export async function stereoisomersAnswer(chem: ChemClient, molblocks: readonly 
   const made = await stereoisomersOf(chem, molblocks, open, { most, whole: true, withinMs: within * 1000, drawings: !aside }, within * 1000 + 2 * 60_000);
   if ("tooMany" in made) return { aside: `more than the ${most} stereoisomers made of one (up to ${made.tooMany.bound})`, kind: "too many" };
   if ("tooLong" in made) return { aside: `took more than ${within} s to examine`, kind: "too long" };
+  counted = made.said ?? [];
   const sorted = [...made.isomers].sort((p, q) => (p.smiles < q.smiles ? -1 : p.smiles > q.smiles ? 1 : 0));
   // (of a structure with groups: its halves, in Meno's order - each that is left open by SMILES, within it the half as drawn first -
   //  what is said of them on each: chem/groupHalves)

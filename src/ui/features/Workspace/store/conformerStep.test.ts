@@ -40,19 +40,32 @@ vi.mock("../../../../lib/plugins/process", async (actual) => ({
   },
 }));
 
+// (what Meno reads a structure to leave open, scripted as `openAs` says - chem/menoIsomers; how many stereoisomers it makes, likewise)
+vi.mock("../chem/menoIsomers", async (actual) => {
+  const real = await actual<typeof import("../chem/menoIsomers")>();
+  const { stereoGraphOf, openCumulenes, cumulatedRuns } = await import("../../../../lib/chem/stereoOpen");
+  return {
+    ...real,
+    leftByMeno: (molblocks: readonly string[]) => {
+      const open = leftOpen(molblocks[0]);
+      const atoms = open ? (worker.openAs.atoms ?? [0]) : [];
+      const bonds = open ? (worker.openAs.bonds ?? []) : [];
+      const cumulenes = openCumulenes(stereoGraphOf(molblocks)!.bonds, bonds);
+      return { left: { atoms, bonds, cumulenes, cumulated: cumulatedRuns(stereoGraphOf(molblocks)!.bonds, cumulenes), notEnumerated: [], said: null }, centres: atoms, doubles: bonds, handed: cumulenes.length > 0 };
+    },
+    isomersByMeno: async () => {
+      const n = worker.openAs.free ? 0 : (worker.openAs.isomers ?? 2);
+      return { made: { isomers: Array.from({ length: n }, (_, k) => ({ configured: { centres: [], doubles: [] }, smiles: `isomer ${k}` })), free: n === 0 }, said: [] };
+    },
+  };
+});
+
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
   // (the plugin that finds stereoisomers: the elements it perceives, as `openAs` says, and as many stereoisomers - none where none holds)
   chemWorker: async (role: string) => ({
-    request: async (op: string, payload: { molblocks: string[] }) => {
+    request: async (op: string, _payload: { molblocks: string[] }) => {
       if (role !== "stereoisomers") throw new Error(`no ${role} here`);
-      const open = leftOpen(payload.molblocks[0]);
-      if (op === "stereo_elements") {
-        const elements = open
-          ? [...(worker.openAs.atoms ?? [0]).map((at) => ({ kind: "centre", at, state: "unspecified" })), ...(worker.openAs.bonds ?? []).map((at) => ({ kind: "double", at, state: "unspecified" }))]
-          : [];
-        return { read: true, elements };
-      }
       if (op === "stereoisomers") {
         const n = worker.openAs.free ? 0 : (worker.openAs.isomers ?? 2);
         return { isomers: Array.from({ length: n }, (_, k) => ({ configured: { centres: [], doubles: [] }, smiles: `isomer ${k}` })), free: n === 0 };

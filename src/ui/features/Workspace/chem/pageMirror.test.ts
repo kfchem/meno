@@ -287,18 +287,21 @@ describe("the page's mirror images", () => {
     return { chem, asked };
   }
 
-  /** The plugin that finds stereoisomers: `at` its centres left open, `isomers` the stereoisomers it gives, in order. */
-  const opener = (at: number[], isomers: { centres: ReturnType<typeof centre>[]; doubles: [] }[]) =>
+  /**
+   * The plugin that makes stereoisomers: given one whole (Meno's count, chem/menoIsomers), it makes it where it is one of `isomers`,
+   * and says it cannot be made in 3D where it is not. `_at`: the centres Meno leaves open, by its own reading.
+   */
+  const opener = (_at: number[], isomers: { centres: ReturnType<typeof centre>[]; doubles: [] }[]) =>
     ({
-      request: async (op: string) =>
-        op === "stereo_elements"
-          ? { read: true, elements: at.map((a) => ({ kind: "centre", at: a, state: "unspecified" })) }
-          : op === "stereoisomers"
-            ? { isomers: isomers.map((configured, k) => ({ configured, smiles: `isomer ${k}` })), free: false }
-            : Promise.reject(new Error(`no ${op} here`)),
+      request: async (op: string, args: { configured: { centres: ReturnType<typeof centre>[] } }) => {
+        if (op !== "stereoisomers") return Promise.reject(new Error(`no ${op} here`));
+        const key = (cs: readonly ReturnType<typeof centre>[]) => JSON.stringify([...cs].sort((p, q) => p.atom - q.atom));
+        const one = isomers.find((i) => key(i.centres) === key(args.configured.centres));
+        return one ? { isomers: [{ configured: one, smiles: key(one.centres) }], free: false } : { isomers: [], free: true };
+      },
     }) as unknown as ChemClient;
 
-  it("gives each stereoisomer asked for its own, in the order asked, where one is made itself and the other as its mirror image", async () => {
+  it("gives each stereoisomer its own, where one is made itself and the other as its mirror image", async () => {
     // (butan-2-ol drawn with no wedge, both its enantiomers asked for)
     const open: Model = { ...butanol("up"), bonds: butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)) };
     // (asked for in either order: so that the one made as a mirror image comes first in one of them)
@@ -310,11 +313,11 @@ describe("the page's mirror images", () => {
       const { chem, asked } = shaper();
       const [block] = blocksOf(open, [1]);
       const made = await conformersOf(chem, opener([1], isomers), block, "all");
-      // (one asked for itself, one as its mirror image)
+      // (one asked for itself, one as its mirror image: each its own, in Meno's order whichever way they were listed)
       expect(asked).toEqual([1, 1]);
       expect(made).toHaveLength(2);
-      made.forEach((c, k) => expect(hasConfiguration(c, block.part, isomers[k]), `${order} ${k}`).toBe(true));
-      expect(made.map((c) => c.cip.atoms["1"])).toEqual(order.map((s) => (s > 0 ? "R" : "S")));
+      made.forEach((c, k) => expect(isomers.some((i) => hasConfiguration(c, block.part, i)), `${order} ${k}`).toBe(true));
+      expect(made.map((c) => c.cip.atoms["1"]).sort()).toEqual(["R", "S"]);
     }
   });
 
@@ -456,6 +459,7 @@ describe("the page's mirror images", () => {
     // (the two made themselves asked together, answered one short, then each alone; the third as a mirror image)
     expect(asked.filter((n) => n === 2)).toHaveLength(1);
     expect(made).toHaveLength(3);
-    made.forEach((c, k) => expect(hasConfiguration(c, block.part, isomers[k]), `${k}`).toBe(true));
+    // (each one of the three, every one of them made: in Meno's order)
+    expect(isomers.map((i) => made.filter((c) => hasConfiguration(c, block.part, i)).length)).toEqual([1, 1, 1]);
   });
 });

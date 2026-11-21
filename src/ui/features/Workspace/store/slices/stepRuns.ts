@@ -25,6 +25,7 @@ import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf, stereoRows } from "../../chem/make3d";
 import { sentOf } from "../../../../../lib/chem/perception/stereo/configuration";
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
+import { blocksRead, leftByMeno } from "../../chem/menoIsomers";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS, type IsomerConfiguration } from "../../../../../lib/chem/stereoOpen";
@@ -568,15 +569,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /**
    * Of Enumerate's products, those with a stereocentre or double bond whose
    * configuration is not given - a group that makes one its definition
-   * does not set (a sec-butyl, as written) - asked of the plugin that finds
-   * a structure's stereoisomers, where one is at hand without setting one
-   * up: counted, and named by number. Made all the same: such a product is
-   * a real structure, its configuration open. Its card says how many it has
-   * been through as it asks; stopped, it stops asking, and says none (null).
+   * does not set (a sec-butyl, as written) - read by Meno itself (its
+   * candidates: chem/menoIsomers), counted and named by number. Made all the
+   * same: such a product is a real structure, its configuration open. Worked
+   * a few at a time, letting the page go on between (`LEFT_OPEN_TURN`); its
+   * card says how many it has been through; stopped, it stops reading, and
+   * says none (null).
    */
   async function leftOpen(id: number, at: number, kept: readonly DrawnEntry[]): Promise<string | null> {
-    const by = rolePlugin("stereoisomers");
-    if (!by || !(await chemAtHand("stereoisomers"))) return "Configurations left open not looked for: no plugin finds stereoisomers";
     const working = (patch: { done: number } | null) =>
       set((prev) => {
         const rest = { ...prev.menoWorking };
@@ -585,32 +585,35 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         return { ...prev, menoWorking: rest };
       });
     const open: number[] = [];
-    // (those that could not be written for it to read: never counted as having none open)
+    // (those that could not be written or read: never counted as having none open)
     const unasked: number[] = [];
     working({ done: 0 });
     try {
-      const chem = await chemWorker("stereoisomers");
       for (const [k, e] of kept.entries()) {
         if (menoStops.has(id)) return null;
         // (an entry is one structure, so one block: its first is all of it - workflow/hydrogenBondEntries.test pins that)
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
-        if (block) {
-          if (anyOpen((await openStereo(chem, [block.molblock])).left)) open.push(recordNumber(e.record) ?? k + 1);
+        const read = block ? blocksRead([block.molblock]) : null;
+        if (block && read) {
+          if (anyOpen(leftByMeno([block.molblock], read).left)) open.push(recordNumber(e.record) ?? k + 1);
         } else unasked.push(recordNumber(e.record) ?? k + 1);
-        if (k % 25 === 24) working({ done: k + 1 });
+        if (k % LEFT_OPEN_TURN === LEFT_OPEN_TURN - 1) {
+          working({ done: k + 1 });
+          await new Promise<void>((go) => setTimeout(go, 0));
+        }
       }
-    } catch {
-      if (menoStops.has(id)) return null;
-      return `Configurations left open not looked for: ${by.name} could not be asked`;
     } finally {
       working(null);
     }
+    if (menoStops.has(id)) return null;
     const listed = (ns: number[]) => (ns.length > 12 ? `${ns.slice(0, 12).join(", ")} and ${ns.length - 12} more` : ns.join(", "));
-    const notAsked = unasked.length ? ` \u00b7 ${unasked.length} not looked at, as ${by.name} could not be given ${unasked.length === 1 ? "it" : "them"}: ${listed(unasked)}` : "";
-    if (!open.length) return `No configuration left open${unasked.length ? " in those looked at" : ""} (${by.name})${notAsked}`;
-    return `${open.length} with a configuration left open: ${listed(open)} (${by.name})${notAsked}`;
+    const notAsked = unasked.length ? ` \u00b7 ${unasked.length} not looked at, as ${unasked.length === 1 ? "it" : "they"} could not be read: ${listed(unasked)}` : "";
+    if (!open.length) return `No configuration left open${unasked.length ? " in those looked at" : ""}${notAsked}`;
+    return `${open.length} with a configuration left open: ${listed(open)}${notAsked}`;
   }
 
+  /** How many of Enumerate's products Meno reads for configurations left open before letting the page go on (`leftOpen`). */
+  const LEFT_OPEN_TURN = 10;
   /** Meno's steps working in turns asked to stop: given up at their next turn. */
   const menoStops = new Set<number>();
   /** How to stop at once a step worked in a plugin's worker as Meno's are (a conformer search on structures drawn): its worker stopped. */

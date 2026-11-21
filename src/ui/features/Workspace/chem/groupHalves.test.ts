@@ -220,7 +220,8 @@ describe("a configuration's groups: the halves made (known answers)", () => {
     const m = await isomersToMake(p.chem, block, undefined, "all");
     expect([m.count, m.halves, m.said]).toEqual([1, undefined, []]);
     expect(m.isomers).toEqual([{ centres: [], doubles: [], groups: [] }]);
-    expect(p.asked.map((a) => a.op)).toEqual(["stereo_elements"]);
+    // (what is open read by Meno itself: the plugin asked nothing)
+    expect(p.asked.map((a) => a.op)).toEqual([]);
   });
 
   it("9: a group's centre that does not read: the group made as drawn, the atom named, no half called so", async () => {
@@ -245,9 +246,11 @@ describe("a configuration's groups: the halves made (known answers)", () => {
     expect(n.count).toBe(1);
   });
 
-  it("11: a structure with an axis the plugin perceives: both halves searched, none reflected", async () => {
-    const block = blockOf(TRANS, [{ name: "STERAC1", atoms: [0, 1] }]);
-    const p = plugin(block, [isomer(block, []), isomer(block, [0, 1])], [], [{ kind: "axis", at: 3, state: "specified" }]);
+  it("11: a structure with an axis: both halves searched, none reflected", async () => {
+    // (TRANS with a buta-1,2-dienyl on C4: its allene's axis, which a reflection would turn too)
+    const allene = { atoms: [...TRANS.atoms, { el: "C", x: 0, y: -3 }, { el: "C", x: 0, y: -4.3 }, { el: "C", x: 0, y: -5.6 }, { el: "C", x: 1.3, y: -6.3 }], bonds: [...TRANS.bonds, { a: 3, b: 8, order: 1 }, { a: 8, b: 9, order: 2 }, { a: 9, b: 10, order: 2 }, { a: 10, b: 11, order: 1 }] };
+    const block = blockOf(allene, [{ name: "STERAC1", atoms: [0, 1] }]);
+    const p = plugin(block, [isomer(block, []), isomer(block, [0, 1])]);
     const m = await isomersToMake(p.chem, block, undefined, "all");
     expect(m.count).toBe(2);
     expect(m.halves?.map((h) => h?.mirrorOf)).toEqual([undefined, undefined]);

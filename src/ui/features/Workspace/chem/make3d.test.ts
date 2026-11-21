@@ -987,8 +987,9 @@ describe("a configuration's groups on the page (foundation part 7)", () => {
       { id: 207, a: 101, b: 107, order: 1 as const, stereo: "down" as const },
     ],
   };
-  // (one conformer of the half as drawn: the ring a little puckered, the OH above it, the methyl below)
-  const zs = [0.25, -0.25, 0.25, -0.25, 0.25, -0.25, 1.2, -1.2];
+  // (one conformer of the half as drawn, as Meno reads its wedges - read back so, chem/pageMirror `notKept`: the ring a little puckered,
+  //  the OH and the methyl on its two faces)
+  const zs = [-0.25, 0.25, -0.25, 0.25, -0.25, 0.25, -1.2, 1.2];
   const frame = [...HEXAGON, { x: 0, y: 3 }, { x: 2.598, y: 1.5 }].flatMap((p, i) => [p.x, p.y, zs[i]]);
   const volume = (f: number[], c: number, [a, b, d]: number[]) => {
     const v = (i: number) => [f[3 * i] - f[3 * c], f[3 * i + 1] - f[3 * c + 1], f[3 * i + 2] - f[3 * c + 2]];
