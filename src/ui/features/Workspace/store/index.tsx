@@ -9,7 +9,7 @@ import {
 import type { Conversation } from "../conversation/types";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, opensReadingFilled, type WorkspaceDocument } from "../document";
-import { extentIn } from "../style3d";
+import { extentIn } from "../style3dOf";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
 import type { Caption, Cycle, EditorState, Growing3D, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./types";

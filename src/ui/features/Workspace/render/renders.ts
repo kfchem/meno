@@ -28,7 +28,7 @@ import { withPresets } from "./presets";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pictureToAdd } from "../utils/pictures";

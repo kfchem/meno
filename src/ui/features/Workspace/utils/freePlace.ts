@@ -8,7 +8,7 @@ import { CARD_W } from "../workflow/look";
 import { cardHighOf } from "../workflow/kinds";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ImportedScheme } from "../document";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { lookOf, notesOf, poseOf, seenBounds, solidOf } from "./molecule3d";
 import { principalTurn } from "./align3d";

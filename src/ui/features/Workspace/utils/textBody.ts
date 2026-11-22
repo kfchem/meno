@@ -1,7 +1,7 @@
 /** Where a text's body lies on the page, for its flight to the column and back (PdfColumn). */
 import { drawnSheetBox } from "./textSheets";
 import { lookOf, poseOf, seenBounds, solidOf } from "./molecule3d";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { cardFrameOf } from "../workflow/place";
 import type { EditorState, WorkspaceText } from "../store/types";
 

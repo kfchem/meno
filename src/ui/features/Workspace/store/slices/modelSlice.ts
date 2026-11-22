@@ -43,7 +43,7 @@ import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../wor
 import { holdsOwn } from "../../workflow/entries";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { editAtTrueSize } from "../../utils/trueSize";
-import { extentIn, style3dOf } from "../../style3d";
+import { extentIn, style3dOf } from "../../style3dOf";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 import { principalTurn } from "../../utils/align3d";

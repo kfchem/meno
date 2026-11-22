@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../lib/chem/style3d";
 import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
 import { useAppSettings } from "../../../lib/settings/appSettings";
-import { style3dOf, styleGoesOver } from "./style3d";
+import { styleGoesOver } from "./style3d";
+import { style3dOf } from "./style3dOf";
 
 describe("the 3D style a workspace's molecules are drawn in", () => {
   it("is the workspace's own - its looks and light - with how a drag turns them Settings'", () => {

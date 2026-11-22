@@ -23,7 +23,7 @@ function arrowBox(a: Parameters<typeof arrowPoints>[0]): { x0: number; y0: numbe
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import type { EditorState } from "../store/types";
 import { lookOf, poseOf, seenBounds, solidOf } from "./molecule3d";
 import { cornersOf } from "./selection";

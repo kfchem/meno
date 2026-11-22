@@ -43,7 +43,7 @@ import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE, STEREO_GAP, stereoPictureItems, stereoTextItem } from "./chem/marks";
 import { stereoShownOf } from "./document";
 import { COLORS } from "../../theme/colors";
-import { style3dOf } from "./style3d";
+import { style3dOf } from "./style3dOf";
 import { withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";

@@ -69,7 +69,7 @@ import { askOf, CANVAS_LOOK, finishEntry, looksOffered } from "../../render/rend
 import { handOff, stepRefused, withPresets } from "../../render/presets";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
-import { style3dOf } from "../../style3d";
+import { style3dOf } from "../../style3dOf";
 import { holdPicture } from "../../../../../lib/picture/held";
 import { entryCarried, picturesSaid, placePictures, type Rendered } from "../../workflow/renderStep";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";

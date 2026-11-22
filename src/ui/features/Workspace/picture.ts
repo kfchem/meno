@@ -27,7 +27,7 @@ import { dibOf } from "../../../lib/binary/dib";
 import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
 import { createSVG } from "../../../lib/chem/layout2d";
-import { style3dOf } from "./style3d";
+import { style3dOf } from "./style3dOf";
 import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout, type PictureState } from "./fileActions";

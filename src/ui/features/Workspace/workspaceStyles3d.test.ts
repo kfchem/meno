@@ -4,7 +4,7 @@ import { workspace3dOf, workspaceCards } from "../../../lib/chem/workspaceStyle3
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { createWorkspaceDocument } from "./document";
 import { connectStoreToDocument, createEditorStore } from "./store";
-import { style3dOf } from "./style3d";
+import { style3dOf } from "./style3dOf";
 import { readWorkspace, workspaceText } from "./utils/workspace";
 
 const OWN = "own-00000000-0000-4000-8000-000000000002";
