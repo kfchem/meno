@@ -662,7 +662,9 @@ export default function PartMenu({
   const drawing = target.drawing !== false;
   const del = (name: string, withKey = true): Item => ({ name, keys: withKey ? deleteKey : "", run: onDelete, icon: MENU_ICONS.delete, del: true });
   // (an electron-pushing arrow from the atom or bond right-clicked: a pair's, or one electron's)
-  const pushFrom: Item[] = onPush
+  // (what is set on an atom or a bond - charge, kind, label, electron - is not for a selection of whole structures: what it does to those is, as a whole)
+  const wholeSel = !!scope?.whole;
+  const pushFrom: Item[] = onPush && !wholeSel
     ? [
         { name: "Electron-pushing arrow", keys: "", run: () => onPush(false), press: (e) => onPush(false, e), icon: MENU_ICONS.pushArrow },
         { name: "Fishhook arrow", keys: "", run: () => onPush(true), press: (e) => onPush(true, e), icon: MENU_ICONS.fishhook },
@@ -1054,13 +1056,13 @@ export default function PartMenu({
           ]
         : [
           // an atom's charge - the + and - keys do it too - and its radical
-          ...(target.kind === "atom"
+          ...(target.kind === "atom" && !wholeSel
             ? [
                 { name: "Charge one up", keys: "+", run: () => onCharge(1), icon: MENU_ICONS.chargeUp },
                 { name: "Charge one down", keys: "\u2212", run: () => onCharge(-1), icon: MENU_ICONS.chargeDown },
               ]
             : []),
-          ...(target.kind === "bond" && bondKind
+          ...(target.kind === "bond" && bondKind && !wholeSel
             ? [
                 // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
                 // (the bond's own kind drawn as the bond lies - a wedge narrow where it is, a double bond's second line on its side -
@@ -1081,15 +1083,15 @@ export default function PartMenu({
             { name: "3D structure", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
             ...pushFrom,
             ...colour,
-          ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined } : i)),
+          ].map((i): Item => (target.kind === "bond" && bondKind && !wholeSel ? { ...i, icon: undefined } : i)),
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
-          ...(target.kind === "bond" && crossing
+          ...(target.kind === "bond" && crossing && !wholeSel
             ? [
                 { name: "In front", keys: "", run: crossing.onFront, checked: crossing.front, divider: true },
                 { name: "Behind", keys: "", run: crossing.onBehind, checked: crossing.behind },
               ]
             : []),
-          ...(target.kind === "atom"
+          ...(target.kind === "atom" && !wholeSel
             ? [
                 ...(onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
                 ...(onChain ? [{ name: "Chain from here", keys: "", run: onChain }] : []),

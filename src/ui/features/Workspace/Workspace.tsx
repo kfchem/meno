@@ -2288,7 +2288,7 @@ function WorkspaceContent({
             if (menu.selection !== "here") return undefined;
             if (menu.kind != null && menu.id != null && isScopedKind(menu.kind)) return menuScope(st, menu.kind, menu.id);
             const all = selectionCount(st);
-            return all ? { thing: all, count: all, more: true, ofKind: "" } : undefined;
+            return all ? { thing: all, count: all, more: true, ofKind: "", whole: false } : undefined;
           })()}
 
           molecule3d={menu3d}

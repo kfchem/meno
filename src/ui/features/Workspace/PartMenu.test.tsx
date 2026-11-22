@@ -151,7 +151,7 @@ describe("the right-click menu", () => {
 
   it("on empty space with a selection, is the page's menu - Paste, Select all - with the selection's own under it: cut, copy, clean-up, 3D, Delete, and Export among the rest", () => {
     const here = target({ selection: "here", drawing: true });
-    const { icons, selIcons, listed, lines } = menu(here, { onExport: none, scope: { thing: "3 atoms", count: "3 atoms", more: true, ofKind: "" } });
+    const { icons, selIcons, listed, lines } = menu(here, { onExport: none, scope: { thing: "3 atoms", count: "3 atoms", more: true, ofKind: "", whole: false } });
     expect(icons).toEqual(["Paste", "Select all"]);
     expect(selIcons).toEqual(["Cut", "Copy", "Clean up these structures", "3D structures", "Delete selection"]);
     expect(listed).toEqual(["Copy as SMILES", "Export…", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
@@ -451,10 +451,10 @@ describe("an arrow's menu and its atom map", () => {
 });
 
 describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
-  const atomHere = (scope: { thing: string; count: string; more: boolean; ofKind: string }) => ({ ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope });
+  const atomHere = (scope: { thing: string; count: string; more: boolean; ofKind: string; whole: boolean }) => ({ ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope });
 
   it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy in a second row", () => {
-    const t = atomHere({ thing: "This atom", count: "This atom", more: false, ofKind: "1 atom" });
+    const t = atomHere({ thing: "This atom", count: "This atom", more: false, ofKind: "1 atom", whole: false });
     const m = menu(t, { scope: t.scope, onColour: none });
     expect(m.lines).toEqual(["This atom"]);
     expect(m.icons).toEqual(["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Delete atom"]);
@@ -463,7 +463,7 @@ describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
   });
 
   it("on an atom selected with others is still the atom's menu, every icon in its place, its own items named for the atoms they reach and the first line counting them", () => {
-    const t = atomHere({ thing: "This atom", count: "3 atoms", more: true, ofKind: "3 atoms" });
+    const t = atomHere({ thing: "This atom", count: "3 atoms", more: true, ofKind: "3 atoms", whole: false });
     const m = menu(t, { scope: t.scope, onColour: none });
     expect(m.lines).toEqual(["3 atoms"]);
     expect(m.icons).toEqual(["Charge one up on 3 atoms", "Charge one down on 3 atoms", "Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
@@ -475,7 +475,7 @@ describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
 
   it("on a shape selected with more is the shape's menu under one line counting the selection: its own items reaching the shapes selected, Delete the selection", () => {
     const shape = { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none };
-    const scope = { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape" };
+    const scope = { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape", whole: false };
     const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope, shape, onColour: none });
     expect(m.lines).toEqual(["2 atoms, 1 shape"]);
     expect(m.icons).toEqual(["Colour…", "Delete selection"]);
@@ -488,5 +488,41 @@ describe("a structure drawn as a Fischer projection", () => {
   it("is offered Read as Fischer projection where it is so drawn, and not where it is not", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { fischer: { run: none } }).listed).toContain("Read as Fischer projection");
     expect(menu(target({ kind: "atom", id: 1 })).listed).not.toContain("Read as Fischer projection");
+  });
+});
+
+describe("the menu of whole structures selected", () => {
+  const whole = { thing: "This atom", count: "3 atoms, 2 bonds", more: true, ofKind: "3 atoms", whole: true };
+  const boundHere = (kind: "atom" | "bond") => ({ ...target({ selection: "here", drawing: true }), kind, id: 1, scope: whole });
+  const sets = ["Charge one up", "Charge one down", "Charge one up on 3 atoms", "Edit label", "Chain from here", "Unpaired electron", "Unpaired electron on 3 atoms", "Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "More kinds of bond", "In front", "Behind", "Electron-pushing arrow", "Fishhook arrow"];
+  const extra = { scope: whole, onColour: none, onEditLabel: none, onChain: none, onPush: none, bondKind: { current: "single" as const, choose: none }, crossing: { front: false, behind: false, onFront: none, onBehind: none } };
+
+  it("on an atom of them lists nothing that sets an atom's property, and keeps what acts on the structures as a whole", () => {
+    const m = menu(boundHere("atom"), extra);
+    for (const name of sets) {
+      expect(m.icons).not.toContain(name);
+      expect(m.listed).not.toContain(name);
+    }
+    expect(m.icons).toEqual(["Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toContain("Select this structure");
+    expect(m.listed).toContain("Copy as SMILES");
+    expect(m.listed).toContain("Turn over left to right");
+  });
+
+  it("on a bond of them lists nothing that sets a bond's kind or order", () => {
+    const m = menu(boundHere("bond"), extra);
+    for (const name of sets) {
+      expect(m.icons).not.toContain(name);
+      expect(m.listed).not.toContain(name);
+    }
+    expect(m.icons).toEqual(["Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
+  });
+
+  it("is the same menu as before where the selection is not whole structures", () => {
+    const m = menu(boundHere("atom"), { ...extra, scope: { ...whole, whole: false } });
+    expect(m.icons).toEqual(["Charge one up on 3 atoms", "Charge one down on 3 atoms", "Clean up these structures", "3D structures", "Electron-pushing arrow", "Fishhook arrow", "Colour…", "Delete selection"]);
+    expect(m.listed).toContain("Edit label");
+    expect(m.listed).toContain("Chain from here");
   });
 });

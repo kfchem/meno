@@ -427,7 +427,13 @@ item listed that does not apply is left out: a molecule's bond orders
 where they are known, say. With no atom or bond in the selection -
 molecules in 3D, words or shapes alone - what only a drawing has is left
 out of its menu: clean up, 3D, colour, copy as SMILES, turning over and
-save as abbreviation. What Quick Add puts down - an arrow, a "+",
+save as abbreviation. With whole structures selected - every atom and bond of each, more than
+one atom or bond - the menu of an atom or a bond in them lists only what acts on
+them as a whole: what sets one atom's or one bond's own (charge, kind and
+order, label, an unpaired electron, a chain from it, an electron-pushing
+arrow from it, which bond is in front) is left out, as nobody means to give every
+bond of a molecule a double bond; one atom, one bond, or part of a structure
+selected keeps its menu as above (`wholeStructures`, utils/menuScope). What Quick Add puts down - an arrow, a "+",
 words - is no longer on the menus on empty space; and what concerns the
 whole workspace is done by selecting all of it first.
 
