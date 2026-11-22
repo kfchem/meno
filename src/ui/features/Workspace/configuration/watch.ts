@@ -18,7 +18,7 @@ import type { EditorStore } from "../store";
 import { gestureUnderWay } from "../store/gesture";
 import type { ConfigurationNote, Model } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { cipMarksAsked } from "../chem/cipRun";
+import { atomNamesAsked, cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
 import { changeWords, changesAgainstKept, partsTouched, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
 import { keptFrom, marksOnly, withKept } from "./kept";
@@ -98,8 +98,8 @@ export function placeOf(model: Model, change: ConfigurationChange): { x: number;
 }
 
 /**
- * The notes of `changes` from `before` to `after`, in words: each unit's descriptors asked of the CIP for both drawings (`ask`), `by`
- * naming Meno's move that made them.
+ * The notes of `changes` from `before` to `after`, in words: each unit's descriptors asked of the CIP for both drawings (`ask`), its atoms'
+ * names in their own molecule (`name`: configuration/names), `by` naming Meno's move that made them.
  */
 export async function notesOf(
   before: Model,
@@ -107,16 +107,20 @@ export async function notesOf(
   changes: readonly ConfigurationChange[],
   by: string | undefined,
   ask: typeof cipMarksAsked = cipMarksAsked,
+  name: typeof atomNamesAsked = atomNamesAsked,
 ): Promise<Omit<ConfigurationNote, "id" | "since">[]> {
-  const named = changes.some((c) => c.how === "inverted" || c.how === "read");
+  const named = changes.some((c) => c.how !== "mirror");
+  const ids = [...new Set(changes.flatMap((c) => (c.how === "mirror" ? [] : unitAtoms(c.unit))))].filter((id) => after.atoms.some((a) => a.id === id));
   // (each drawing's descriptors as its marks say them, what it keeps set aside: a note says what the marks turned to, against what was
   //  kept, and the CIP, given a drawing that keeps, takes what is kept - chem/identityOf)
-  const [was, now] = named ? await Promise.all([ask(marksOnly(before), unitsAsked(before, changes)), ask(marksOnly(after), unitsAsked(after, changes))]) : [null, null];
+  const [was, now, names] = named
+    ? await Promise.all([ask(marksOnly(before), unitsAsked(before, changes)), ask(marksOnly(after), unitsAsked(after, changes)), name(after, ids).catch(() => undefined)])
+    : [null, null, undefined];
   return changes.flatMap((c) => {
     const at = placeOf(after, c);
     if (!at) return [];
     const label = { was: was ? descriptor(was, before, c) : undefined, now: now ? descriptor(now, after, c) : undefined };
-    return [{ text: changeWords(after, c, label, by), at }];
+    return [{ text: changeWords(after, c, label, by, names), at }];
   });
 }
 

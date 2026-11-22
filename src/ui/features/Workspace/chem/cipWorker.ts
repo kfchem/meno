@@ -6,10 +6,12 @@
  * one more label on a large drawing works out only the structure it is on.
  */
 import { cipAnswersOf, type CipAnswer, type CipJob } from "./cipMarks";
+import { ownNames } from "../configuration/names";
+import type { Model } from "../store/types";
 
 // (the app is typed against the DOM's window, not a worker's scope)
 const scope = self as unknown as {
-  onmessage: (e: MessageEvent<{ id: number; jobs: CipJob[] }>) => void;
+  onmessage: (e: MessageEvent<{ id: number; jobs: CipJob[]; names?: { model: Model; ids: number[] } }>) => void;
   postMessage: (message: unknown) => void;
 };
 
@@ -18,8 +20,13 @@ const KEPT = 64;
 const kept = new Map<string, CipAnswer[]>();
 
 scope.onmessage = (e) => {
-  const { id, jobs } = e.data;
+  const { id, jobs, names } = e.data;
   try {
+    // (atoms' names in a note: configuration/names)
+    if (names) {
+      scope.postMessage({ id, ok: true, answers: [], names: [...ownNames(names.model, names.ids)] });
+      return;
+    }
     const answers = jobs.map((job) => {
       const key = JSON.stringify(job);
       const known = kept.get(key);

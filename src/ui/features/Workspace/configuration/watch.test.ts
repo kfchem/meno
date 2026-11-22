@@ -45,26 +45,26 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     // (the methyl dragged over to the other side of the C2-C3 bond)
     store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-1");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S"]);
+    expect(notes()).toEqual(["C2: R, now S"]);
     // (the step named with what it did: the note's words, as an undo would take it back)
-    expect(doc.history().undoLabel).toBe("move atoms: C1: R, now S");
+    expect(doc.history().undoLabel).toBe("move atoms: C2: R, now S");
     doc.undo();
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S"]);
+    expect(notes()).toEqual(["C2: R, now S"]);
     stop();
   });
 
-  it("says the wedge clicked through its cycle: drawn, nothing; the other way, turned; plain, now open", async () => {
+  it("says the wedge clicked through its cycle: drawn, nothing; the other way, inverted; plain, now unspecified", async () => {
     const { store, notes, stop } = page(butanol(null));
     store.getState().setBondStereo(12, "up");
     await vi.runAllTimersAsync();
     expect(notes()).toEqual([]);
     store.getState().setBondStereo(12, "down");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S"]);
+    expect(notes()).toEqual(["C2: R, now S"]);
     store.getState().setBondStereo(12, "none");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S", "C1: now open"]);
+    expect(notes()).toEqual(["C2: R, now S", "C2: S, now unspecified"]);
     stop();
   });
 
@@ -118,10 +118,10 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     const { store, notes, stop } = page(butanol());
     store.getState().moveAtoms([{ id: 2, x: -L, y: 0 }, { id: 3, x: L, y: 0 }, { id: 5, x: 2 * L, y: 0.5 * L }], "drag-2");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: no longer read: two of its bonds in line or on top of each other"]);
+    expect(notes()).toEqual(["C2: R, now unclear: two of its bonds in line or on top of each other"]);
     store.getState().moveAtoms(butanol().atoms.filter((a) => [2, 3, 5].includes(a.id)).map(({ id, x, y }) => ({ id, x, y })), "drag-3");
     await vi.runAllTimersAsync();
-    expect(notes()[1]).toBe("C1: now read: R");
+    expect(notes()[1]).toBe("C2: now R");
     stop();
   });
 
@@ -133,7 +133,7 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     expect(notes()).toEqual([]);
     store.setState({ moveDrag: { ...store.getState().moveDrag, active: false } });
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S"]);
+    expect(notes()).toEqual(["C2: R, now S"]);
     stop();
   });
 
@@ -168,17 +168,17 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-6");
     store.getState().addAtom(20 * L, 0, "N");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S"]);
+    expect(notes()).toEqual(["C2: R, now S"]);
     // (the atom's step keeps its own name; the turn's step, no longer the one undo takes back, is not renamed)
     expect(doc.history().undoLabel).toBe("add atom");
     stop();
   });
 
-  it("says a centre drawn wavy now open, though its bonds would leave its marks unread: the drawing says it is not known", () => {
+  it("says a centre drawn wavy now marked unknown, though its bonds would leave its marks unread: the drawing says it is not known", () => {
     const t = butanol();
     t.atoms = t.atoms.map((x) => (x.id === 3 ? { ...x, x: L, y: 0 } : x.id === 2 ? { ...x, x: -L, y: 0 } : x));
     t.bonds = t.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "wavy" as const } : b));
-    expect(configurationChanges(butanol(), t)).toEqual([{ unit: { kind: "centre", at: 1 }, how: "opened" }]);
+    expect(configurationChanges(butanol(), t)).toEqual([{ unit: { kind: "centre", at: 1 }, how: "unknown" }]);
   });
 
   it("says nothing of an edit undone before the page was idle, and one note for a drag's frames, one step", async () => {
@@ -191,7 +191,7 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     store.getState().moveAtoms([{ id: 2, x: L * 0.5, y: L * 0.2 }], "drag-8");
     store.getState().moveAtoms([{ id: 2, x: L * 0.9, y: L * 0.5 }], "drag-8");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C1: R, now S"]);
+    expect(notes()).toEqual(["C2: R, now S"]);
     stop();
   });
 
@@ -220,7 +220,7 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     // (a move that turned the drawing over and kept its wedges as they were: what Turn over must never do)
     doc.edit("turn over", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, x: -a.x })) } }));
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["changed by Turn over: C1: R, now S"]);
+    expect(notes()).toEqual(["changed by Turn over: C2: R, now S"]);
     // (a move of Meno's keeps its own step's name)
     expect(doc.history().undoLabel).toBe("turn over");
     expect(warn).toHaveBeenCalledWith("Meno: Turn over changed a configuration");

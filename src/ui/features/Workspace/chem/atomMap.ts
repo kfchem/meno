@@ -290,7 +290,7 @@ export const NUMBERING_ATOMS_BUDGET = 150;
  * Each atom's orbit under the molecule's symmetry, as `locants` reads them - of its heavy atoms, worked out on the molecule with its
  * hydrogens as counts: the same orbits, without the search through every hydrogen's place (seconds for a long chain). Each hydrogen its own.
  */
-function heavyOrbits(input: { atoms: readonly { el: string; charge?: number }[]; bonds: readonly { a: number; b: number; order: number }[] }): number[] {
+export function heavyOrbits(input: { atoms: readonly { el: string; charge?: number }[]; bonds: readonly { a: number; b: number; order: number }[] }): number[] {
   const heavy = input.atoms.map((_, i) => i).filter((i) => input.atoms[i].el !== "H");
   const at = new Map(heavy.map((i, k) => [i, k]));
   const hs = heavy.map(() => 0);
