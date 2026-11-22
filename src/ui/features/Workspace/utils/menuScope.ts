@@ -11,6 +11,11 @@ export type MenuScope = {
   more: boolean;
   /** How many of the right-clicked kind are selected, said: "3 atoms" - what its own items reach, where they reach the selection. */
   ofKind: string;
+  /**
+   * The atoms and bonds selected are whole structures - every atom and bond of each, with more than the one thing selected -
+   * so that what is set on one atom or bond is not what the menu is for.
+   */
+  whole: boolean;
 };
 
 /** Each kind's name, one and many, as a menu's first line says it. */
@@ -57,6 +62,34 @@ function counts(st: Held): [ScopedKind, number][] {
   return all.filter(([, n]) => n > 0);
 }
 
+/** Whether the atoms and bonds selected are each structure whole - every atom of it and every bond between them - and some are. */
+export function wholeStructures(st: Pick<Held, "sel" | "model">): boolean {
+  const { atoms, bonds } = st.sel;
+  if (!atoms.size) return false;
+  const next = new Map<number, number[]>();
+  for (const b of st.model.bonds) {
+    (next.get(b.a) ?? next.set(b.a, []).get(b.a)!).push(b.b);
+    (next.get(b.b) ?? next.set(b.b, []).get(b.b)!).push(b.a);
+  }
+  const seen = new Set<number>();
+  for (const start of atoms) {
+    if (seen.has(start)) continue;
+    const stack = [start];
+    seen.add(start);
+    while (stack.length) {
+      const a = stack.pop()!;
+      if (!atoms.has(a)) return false;
+      for (const n of next.get(a) ?? []) {
+        if (!seen.has(n)) {
+          seen.add(n);
+          stack.push(n);
+        }
+      }
+    }
+  }
+  return st.model.bonds.every((b) => !atoms.has(b.a) || bonds.has(b.id));
+}
+
 /** The menu's scope, right-clicked on `kind` `id` with the selection `st` holds. */
 export function menuScope(st: Held, kind: ScopedKind, id: number): MenuScope {
   const thing = `This ${NAMES[kind][0]}`;
@@ -69,9 +102,9 @@ export function menuScope(st: Held, kind: ScopedKind, id: number): MenuScope {
       : held.length === 1 && held[0][0] === kind && held[0][1] === 1;
   const said = (k: ScopedKind, n: number) => `${n} ${NAMES[k][n === 1 ? 0 : 1]}`;
   const ofKind = said(kind, held.find(([k]) => k === kind)?.[1] ?? 1);
-  if (alone) return { thing, count: thing, more: false, ofKind };
+  if (alone) return { thing, count: thing, more: false, ofKind, whole: false };
   const count = held.map(([k, n]) => said(k, n)).join(", ");
-  return { thing, count: count || thing, more: true, ofKind };
+  return { thing, count: count || thing, more: true, ofKind, whole: (kind === "atom" || kind === "bond") && wholeStructures(st) };
 }
 
 /** Whether a menu's kind is one a first line names (a selectable thing's). */

@@ -120,6 +120,16 @@ describe("an arrow drawn out by one end", () => {
     expect(free.angle).toBeCloseTo(0.1, 9);
   });
 
+  it("snaps to level and plumb on the page whatever slant it lay at before", () => {
+    const tail = { x: 1, y: 2 };
+    const at = (deg: number) => ({ x: tail.x + 4 * Math.cos((deg * Math.PI) / 180), y: tail.y + 4 * Math.sin((deg * Math.PI) / 180) });
+    // (an arrow that lay at 30 degrees: its point dragged 4 off level, 5 off plumb, 3 off a half turn, 5 off plumb the other way)
+    expect(reshapedArrow("head", tail, at(4), { step, minLength: 0.5 }).angle).toBeCloseTo(0, 9);
+    expect(reshapedArrow("head", tail, at(85), { step, minLength: 0.5 }).angle).toBeCloseTo(Math.PI / 2, 9);
+    expect(reshapedArrow("head", tail, at(177), { step, minLength: 0.5 }).angle).toBeCloseTo(Math.PI, 9);
+    expect(reshapedArrow("head", tail, at(-95), { step, minLength: 0.5 }).angle).toBeCloseTo(-Math.PI / 2, 9);
+  });
+
   it("takes its tail to the pointer, its point staying where it was", () => {
     // the tail dragged up and to the left of the point at (3, 0): pointing down and right
     const a = reshapedArrow("tail", { x: 3, y: 0 }, { x: 0, y: 3 }, { step, minLength: 0.5 });

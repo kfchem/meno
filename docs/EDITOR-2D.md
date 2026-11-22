@@ -427,7 +427,13 @@ item listed that does not apply is left out: a molecule's bond orders
 where they are known, say. With no atom or bond in the selection -
 molecules in 3D, words or shapes alone - what only a drawing has is left
 out of its menu: clean up, 3D, colour, copy as SMILES, turning over and
-save as abbreviation. What Quick Add puts down - an arrow, a "+",
+save as abbreviation. With whole structures selected - every atom and bond of each, more than
+one atom or bond - the menu of an atom or a bond in them lists only what acts on
+them as a whole: what sets one atom's or one bond's own (charge, kind and
+order, label, an unpaired electron, a chain from it, an electron-pushing
+arrow from it, which bond is in front) is left out, as nobody means to give every
+bond of a molecule a double bond; one atom, one bond, or part of a structure
+selected keeps its menu as above (`wholeStructures`, utils/menuScope). What Quick Add puts down - an arrow, a "+",
 words - is no longer on the menus on empty space; and what concerns the
 whole workspace is done by selecting all of it first.
 
@@ -1964,16 +1970,19 @@ All hover-based, as above.
   - **Corners**, any kind (the maintainer, 2026-10-12: corners anywhere,
     not curves): the arrow under the pointer shows a handle at each corner
     and a smaller one in the middle of each stretch. One dragged moves its
-    corner, or makes one there - at a right angle, an L, its corner on the
-    circle whose diameter joins what is either side of it, until the
-    pointer pauses, and then freely (2026-10-28); a corner let go in line
+    corner, or makes one there - snapped to horizontal and vertical on the
+    page, an L: its corner level or plumb with the corner or end either
+    side of it (each way alone, where the pointer is within 0.3 bond of
+    it), until the pointer pauses, and then freely (2026-10-28; a right
+    angle means level and plumb, not a quarter turn at whatever slant the
+    arrow lies); a corner let go in line
     with what is either side of it is taken away; *Straighten* in its menu takes them
     all away. A corner is kept as a share along the arrow and a distance
     across it, so that it goes with the arrow as it is moved, drawn out by
     an end or grown by its words. Words put by it go over its longest
     stretch. While an end or a corner is dragged, the arrow is drawn going
-    over to each place it snaps to - an end's 15-degree steps, a corner's
-    right angle - as a bond moved is, never jumping there
+    over to each place it snaps to - an end's 15-degree steps (0, 90, 180 and 270 among them), a corner's
+    level and plumb - as a bond moved is, never jumping there
     (`utils/arrowGlide`). Words already by it go with the point of its line they are
     by, as a corner is made, moved or taken away, or an end is drawn
     out. They keep the same share of the way along the line, and the

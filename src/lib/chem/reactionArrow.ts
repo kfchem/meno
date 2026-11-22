@@ -125,16 +125,25 @@ export function cornerAt(from: P, to: P, p: P): ArrowCorner {
 }
 
 /**
- * Where a corner between `p` and `q` makes a right angle nearest `pointer`: on the circle whose
- * diameter is `pq` (Thales), along the line from its middle through the pointer - the line an L.
- * The pointer itself where it is at the middle, which says no way.
+ * Where a corner between `p` and `q` goes for `pointer`, snapped to horizontal and vertical on the
+ * page: its x to that of `p` or `q`, and its y to that of `p` or `q`, each where the pointer is
+ * within `near` of it - so that a stretch lies exactly level or plumb. Where both snap and `p`, `q`
+ * lie apart each way, the corner makes the L whose two stretches are one level and one plumb.
  */
-export function squareCorner(p: P, q: P, pointer: P): P {
-  const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-  const r = Math.hypot(q.x - p.x, q.y - p.y) / 2;
-  const d = Math.hypot(pointer.x - mid.x, pointer.y - mid.y);
-  if (!(r > 0) || !(d > 1e-9)) return pointer;
-  return { x: mid.x + ((pointer.x - mid.x) / d) * r, y: mid.y + ((pointer.y - mid.y) / d) * r };
+export function levelCorner(p: P, q: P, pointer: P, near: number): P {
+  const snap = (v: number, to: readonly number[]) => {
+    let best = v;
+    let gap = near;
+    for (const t of to) {
+      const d = Math.abs(v - t);
+      if (d <= gap) {
+        best = t;
+        gap = d;
+      }
+    }
+    return best;
+  };
+  return { x: snap(pointer.x, [p.x, q.x]), y: snap(pointer.y, [p.y, q.y]) };
 }
 
 const dist = (a: P, b: P) => Math.hypot(b.x - a.x, b.y - a.y);

@@ -1753,7 +1753,9 @@ space-filling side by side is better science than either alone.
   style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
-  each card going to its new place eased, not jumping. A slot's molecule
+  each card going to its new place eased, not jumping. The style given a
+  slot, by a drag or *Use as primary* / *Use as secondary* in its menu, is the
+  one set below and shown in the preview beside, at once. A slot's molecule
   is turned by a drag that begins on its atoms or bonds, the pointer the
   turning one only there; a drag anywhere else on the card moves the card
   (the maintainer, 2026-10-28: a drag on the card had always turned its
