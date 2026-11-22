@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative as relativeTo, resolve, sep } from "node:path";
 
 // Every worker of the app is served by the dev server module by module, and a React component's module (.tsx) carries the
 // fast-refresh code, which needs a window that a worker has not: a worker reaching one dies at once in the dev server
 // ("window is not defined") though the app built runs it. So no worker may reach a component, through any import it runs.
 
 const SRC = resolve(__dirname, "..");
+
+/** A path below src, with forward slashes on every system. */
+const relative = (from: string, to: string) => relativeTo(from, to).split(sep).join("/");
 
 /** The workers: each file named *Worker.ts under src. */
 function workers(dir = SRC): string[] {
