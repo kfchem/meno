@@ -10,7 +10,7 @@ import {
 import { editorLayoutOptions, layoutBonds, maxFitZoom } from "../layoutOptions";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { chemistry } from "../../../../lib/chem/molecule";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf, middleAfterPan } from "../utils/page";
 import { setViewGoal } from "./viewGoal";

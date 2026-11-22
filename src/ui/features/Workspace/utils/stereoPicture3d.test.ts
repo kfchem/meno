@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelSpot, solidOf, stereoMarks3d, stereoPictureSpots3d, stereoSpotsShown, STEREO_APART, WORLD_PER_ANGSTROM, type StereoMark3D } from "./molecule3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { MARK_SCALE, stereoTextEms } from "../chem/marks";
 import type { Carried3D, Molecule3D } from "../store/types";
 

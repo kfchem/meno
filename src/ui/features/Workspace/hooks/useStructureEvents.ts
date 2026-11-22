@@ -18,7 +18,7 @@ import { openWorkspacesFrom } from "../../../../lib/clipboard";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
 import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
 import { openedAsStack } from "../utils/stacks";
 import type { DropZone, Dropped } from "../../../../lib/drop";

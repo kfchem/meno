@@ -14,7 +14,7 @@ import { repeatBox } from "../workflow/repeat";
 import { cardHighOf } from "../workflow/kinds";
 import { CARD_W, GAP } from "../workflow/look";
 import { unseenSets } from "../workflow/onPage";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { reachOverFrames } from "../utils/molecule3d";
 import type { Turn3D } from "./types";
 

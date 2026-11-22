@@ -7,7 +7,7 @@ import type { EditorState, Growing3D, Grown3D, Look3D, Model, Molecule3D, Rising
 import { chosenPath, lookOf, reachOf, solidOf, bondsAt, reachOverFrames, withGrowth, withLooks } from "../../utils/molecule3d";
 import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
 import { kindOf } from "../../utils/measure3d";
-import { style3dOf } from "../../style3d";
+import { style3dOf } from "../../style3dOf";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { noteTurns } from "../turnJournal";
 import { principalTurn } from "../../utils/align3d";

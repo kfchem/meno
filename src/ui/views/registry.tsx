@@ -11,7 +11,7 @@ import type {
 import { Workspace } from "../../ui/features/Workspace";
 import { useAppSettings } from "../../lib/settings/appSettings";
 import { workspace3dOf } from "../../lib/chem/workspaceStyle3d";
-import { extentIn } from "../features/Workspace/style3d";
+import { extentIn } from "../features/Workspace/style3dOf";
 import {
   createWorkspaceDocument,
   type WorkspaceDocument,

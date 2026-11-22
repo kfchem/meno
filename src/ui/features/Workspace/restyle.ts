@@ -17,7 +17,7 @@ import type { Model, PictureItem, WorkflowSet } from "./store/types";
 import { restyled3d } from "./utils/restyle3d";
 import { setMembers, type Frame } from "./workflow/entries";
 import type { Style3D } from "../../../lib/chem/style3d";
-import { style3dOf } from "./style3d";
+import { style3dOf } from "./style3dOf";
 
 type Pt = { x: number; y: number };
 const ORIGIN: Pt = { x: 0, y: 0 };

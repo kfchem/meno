@@ -35,7 +35,7 @@ import { bandsAbout, frameOnScreen, rectBetween, stageOf } from "./stage";
 import { setViewDriven, setViewGoal } from "../components/viewGoal";
 import { setPresentingWindow, windowFullScreen } from "../../../presenting";
 import { filmPlaying, playFilm, restartFilm } from "../components/pictureTextures";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { lookOf, onMolecule, poseOf, solidOf } from "../utils/molecule3d";
 import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";

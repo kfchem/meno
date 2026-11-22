@@ -8,7 +8,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
 import { setMolecules } from "../workflow/entries";
 import type { Turn3D } from "./types";
-import { style3dOf } from "../style3d";
+import { style3dOf } from "../style3dOf";
 import { reachOverFrames } from "../utils/molecule3d";
 import { viewKept } from "../workflow/run";
 import type { SetEntry } from "../workflow/entries";

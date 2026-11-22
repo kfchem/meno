@@ -5,7 +5,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import { givenOnly, valuesOf } from "../../../../../lib/options";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import type { WorkspaceDocument } from "../../document";
-import { extentIn, style3dOf } from "../../style3d";
+import { extentIn, style3dOf } from "../../style3dOf";
 import { ONE_INPUT } from "../../workflow/kinds";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
