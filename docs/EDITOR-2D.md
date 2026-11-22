@@ -1580,6 +1580,14 @@ All hover-based, as above.
     two side by side do not read as one, and off what the drawing says
     beside its atoms - an enhanced stereo group's "and1", a mapping
     number, a charge beside a vertex.
+    Placed again as the structure changes, each glides to its new place
+    rather than jump (the maintainer's report on 0.1.27: they jumped),
+    eased over Meno's time for the drawing going somewhere
+    (`DURATION.move`, `EASE`), on from where it had reached when its place
+    changes again - with an atom being dragged too; one dragged by hand
+    follows the pointer. A descriptor that changes - S to R as a wedge is
+    made a hash - fades out as the new one fades in, one cross-fade
+    (`utils/markGlide`, `ChemMarks2D`).
   - How far off its atom: a setting of the drawing style, *R and S:
     distance from the atom*, from the atom to the nearest of the letters,
     as a share of the labels' size. IUPAC puts them about half a capital's
@@ -1666,34 +1674,48 @@ All hover-based, as above.
     (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
     alike. Atom numbers on a molecule in 3D still fade below their own least
     size with the zoom, atom by atom, in the 3D view's shaders.
-- **When an edit turns a configuration** (foundation part 15, phase 2;
+- **When an edit changes a configuration** (foundation part 15, phase 2;
   the maintainer's direction of 2026-11-04: the configuration is read
   from the drawing, and a change of it is said). After each edit is done,
   the structures it touched are read again with the one reader (with depth
   and the cage fit) and compared with what they stated before, unit by
-  unit (part 14 C's one comparison). Where the edit turned, opened or
-  closed a configuration, a short note by that atom or bond - in the
+  unit (part 14 C's one comparison). Where the edit inverted a stated
+  configuration, or lost it, a short note by that atom or bond - in the
   widest gap between the bonds there, a bond out, clear of every label of
-  an atom bound to it (`placeOf`) - eases in, stays a moment and eases out:
-  - "C3: R, now S" where a centre turned (an atom dragged across its
-    centre's other bond; a wedge made a hash), "C4=C5: E, now Z" for a
-    double bond, its descriptors before and after (Meno's own CIP, worked
-    out off the drawing's thread); "C3: turned" where the CIP gives none;
-  - "C3: now open" where the drawing no longer states it - a wedge made
-    plain, a wavy bond, a double bond drawn "either";
-  - "C3: no longer read: " and why, where its marks are there but say
-    nothing the reader can read (two of its bonds dragged into line), and
-    "C3: now read: R" where they say it again;
-  - "every centre turned: the mirror image" where every unit of a
-    structure turned at once - one note, not one for each.
-  The atom's name is its element and its place in the drawing, counted
-  from 1. Nothing is said where nothing changed, where a unit is simply
+  an atom bound to it (`placeOf`) - eases in, stays a moment and eases out
+  (the words plain to a chemist, after the maintainer's report on
+  0.1.27; for a double bond E and Z in the same patterns):
+  - "C2: S, now R" where it inverted (an atom dragged across its centre's
+    other bond; a wedge made a hash), its descriptors before and after
+    (Meno's own CIP, worked out off the drawing's thread); "C2: inverted"
+    where the CIP does not give both;
+  - "C2: S, now unspecified" where a plain bond now states nothing (a
+    wedge made plain); "C2: S, now marked unknown" where the drawing now
+    says it is not known (a wavy bond, a double bond drawn "either");
+    "C2: S, now unclear: " and the reader's reason where its marks are
+    there but say nothing readable (two of its bonds dragged into line) -
+    each without its "S, " where it had no descriptor;
+  - "C2: now R" where its marks, unclear before, state it again ("C2:
+    stated again" without a descriptor);
+  - "Every stereocentre inverted: the mirror image" where every unit of a
+    structure inverted at once - one note, not one for each.
+  An atom is named by its element and its number in its own molecule,
+  never by its place among all the page's atoms (`configuration/names`,
+  worked out off the drawing's thread with the CIP): the number the page
+  shows by it where a reaction's atom map shows one (its text where it is
+  no plain number, 4a); else IUPAC's numbering of the molecule, as
+  *Renumber atoms* numbers it (lib/chem/perception/locants, level 2: the
+  parent's locants, the principal characteristic group first, then the
+  rest - so C2 of 2-methylbutan-1-ol is C2); else, a molecule over that
+  numbering's budget, its place among its own molecule's atoms. The step's
+  name in Edit's Undo carries the same words.
+ Nothing is said where nothing changed, where a unit is simply
   new (a wedge just drawn), gone with its atom or with one of its groups,
   or no longer a unit because two of its groups are now alike; nor while
   a gesture is still going (a drag says it once, as it ends), nor for undo
   or redo, which give a drawing back with its configuration, nor for a
   file opened, a drawing put in anew. Another
-  centre's R or S may follow a turned one without its own configuration
+  centre's R or S may follow an inverted one without its own configuration
   changing (its groups' ranks moved): its mark changes, and no note calls
   it changed. The note asks nothing and stops nothing: the drawing wins,
   and undo gives back what the edit changed. A note that would come after
@@ -1704,8 +1726,11 @@ All hover-based, as above.
   note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
   Meno's log records which move. Only the structures a change touched are
   read: what they state is kept at once, in the change's own step - a
-  gesture's once it ends - so that no reader of what is kept takes it from
-  before the change; the notes are said in a moment the page is idle after
+  gesture's once it ends, a click's too, whose turn of a bond is made
+  while the press holds the view (in 0.1.27 such a step was never kept, so
+  R and S stayed as before the click and every later edit said the change
+  again) - so that no reader of what is kept takes it from before the
+  change; the notes are said in a moment the page is idle after
   the change (where the page has no such moments, after the next frame),
   their descriptors asked of the CIP off the drawing's thread, each step
   said as its own
@@ -1744,33 +1769,13 @@ All hover-based, as above.
   files, the clipboard's MOL and the copied SMILES** (chem/drawing
   `forFlatReaders`): each centre a perspective drawing shows is written as
   a wedge from what is kept, for a reader that knows only wedges.
-- **What a look states** (foundation part 15, phase 4;
-  `configuration/said.ts`, shown by `ChemMarks2D` in the tip it gives an
-  R or S of its own words). The pointer resting on a bond or an atom of a
-  structure says, in one line under it, what that look states - what it
-  is, never how it is worked out:
-  - a wedge: the centre it is narrow at, with its R or S where the drawing
-    shows one ("C3: R, by this wedge"; "C3: set, by this wedge" where R
-    or S is not shown), or why it is not read ("C3: not read: ..."); where
-    the atom at its wide end is a centre too, that it says nothing of it;
-    a wedge from an end of an axis it states - an allene's, a biaryl's
-    (IUPAC ST-1.7): that axis, set by it ("the axis through C2 and C5:
-    set, by this wedge"; no R or S is shown for an axis);
-  - a wavy bond: its centre open; an "either" double bond: open;
-  - a hashed line: the centre it sets, where IUPAC grades it acceptable
-    (ST-0.3: from a centre to an end group, read as the hashed wedge it
-    states - "C3: R, by this hashed line", as the centre itself says), or
-    why it sets none ("C3: not read: a hashed line between two
-    stereocentres states neither"); else no configuration;
-  - a bold or dashed line on a flat drawing: no configuration; a
-    bold line of a ring drawn with depth: the near edge;
-  - a double bond whose cis or trans is stated: its E or Z where shown;
-  - a centre: its R or S, "set", "open", or "not read" and why; an atom of
-    a ring drawn with depth: that the drawing shows its configuration.
-  A plain bond and an atom with no configuration say nothing. The words
-  follow the drawing as it is edited. Where a centre has no mark at all,
-  nothing is said: whether it could carry one is the identity's search,
-  too long to make as the pointer moves.
+- **Nothing is said on a wedge or an atom for what the drawing states**
+  (the maintainer's report on 0.1.27: a chip on a wedge nobody
+  understood; before, the pointer resting on a wedge, a bond or an atom
+  said what its look stated - "C3: set, by this wedge"). A wedge and an R
+  or S speak for themselves. What stays is the tip of an R, S, E or Z
+  asked for that has none: why, under its atom or bond
+  (`configuration/pointedSaid`, *Meno's own* above).
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

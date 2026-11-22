@@ -18,7 +18,7 @@ import type { EditorStore } from "../store";
 import { gestureUnderWay } from "../store/gesture";
 import type { ConfigurationNote, Model } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { cipMarksAsked } from "../chem/cipRun";
+import { atomNamesAsked, cipMarksAsked } from "../chem/cipRun";
 import type { CipMarks } from "../chem/cipMarks";
 import { changeWords, changesAgainstKept, partsTouched, readingOf, unitAtoms, type ConfigurationChange } from "./changes";
 import { keptFrom, marksOnly, withKept } from "./kept";
@@ -98,8 +98,8 @@ export function placeOf(model: Model, change: ConfigurationChange): { x: number;
 }
 
 /**
- * The notes of `changes` from `before` to `after`, in words: each unit's descriptors asked of the CIP for both drawings (`ask`), `by`
- * naming Meno's move that made them.
+ * The notes of `changes` from `before` to `after`, in words: each unit's descriptors asked of the CIP for both drawings (`ask`), its atoms'
+ * names in their own molecule (`name`: configuration/names), `by` naming Meno's move that made them.
  */
 export async function notesOf(
   before: Model,
@@ -107,16 +107,20 @@ export async function notesOf(
   changes: readonly ConfigurationChange[],
   by: string | undefined,
   ask: typeof cipMarksAsked = cipMarksAsked,
+  name: typeof atomNamesAsked = atomNamesAsked,
 ): Promise<Omit<ConfigurationNote, "id" | "since">[]> {
-  const named = changes.some((c) => c.how === "inverted" || c.how === "read");
+  const named = changes.some((c) => c.how !== "mirror");
+  const ids = [...new Set(changes.flatMap((c) => (c.how === "mirror" ? [] : unitAtoms(c.unit))))].filter((id) => after.atoms.some((a) => a.id === id));
   // (each drawing's descriptors as its marks say them, what it keeps set aside: a note says what the marks turned to, against what was
   //  kept, and the CIP, given a drawing that keeps, takes what is kept - chem/identityOf)
-  const [was, now] = named ? await Promise.all([ask(marksOnly(before), unitsAsked(before, changes)), ask(marksOnly(after), unitsAsked(after, changes))]) : [null, null];
+  const [was, now, names] = named
+    ? await Promise.all([ask(marksOnly(before), unitsAsked(before, changes)), ask(marksOnly(after), unitsAsked(after, changes)), name(after, ids).catch(() => undefined)])
+    : [null, null, undefined];
   return changes.flatMap((c) => {
     const at = placeOf(after, c);
     if (!at) return [];
     const label = { was: was ? descriptor(was, before, c) : undefined, now: now ? descriptor(now, after, c) : undefined };
-    return [{ text: changeWords(after, c, label, by), at }];
+    return [{ text: changeWords(after, c, label, by, names), at }];
   });
 }
 
@@ -131,7 +135,7 @@ const IDLE_WITHIN_MS = 400;
  */
 export function watchConfiguration(store: EditorStore, doc: DocumentStore<WorkspaceDocument>, ask: typeof cipMarksAsked = cipMarksAsked): () => void {
   /** A step made since the last look: its drawing before and after, its name, the document it came to, and the state its undo goes back to. */
-  type Step = { before: Model; after: Model; label: string | undefined; state: WorkspaceDocument; undoTo: WorkspaceDocument | undefined };
+  type Step = { before: Model; after: Model; label: string | undefined; state: WorkspaceDocument; undoTo: WorkspaceDocument | undefined; kept: boolean };
   let stable: Model = doc.getState().model;
   let steps: Step[] = [];
   let waiting = false;
@@ -144,7 +148,8 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
    * opened keeps it with the first change made to it. It asks no CIP.
    */
   const keepNow = (step: Step) => {
-    if (doc.getState() !== step.state || doc.history().undoDepth === 0) return;
+    if (step.kept || doc.getState() !== step.state || doc.history().undoDepth === 0) return;
+    step.kept = true;
     const parts = partsTouched(step.before, step.after);
     if (!parts) return;
     const ids = new Set(parts.now.atoms.map((a) => a.id));
@@ -168,6 +173,10 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
       return;
     }
     waiting = false;
+    // (a step made and done within one gesture - a click's turn of a bond, made while the press holds the view - kept now, before it is
+    //  compared: else what its structures keep stays as it was before it, and every reader of what is kept - R and S among them - with it)
+    const top = steps[steps.length - 1];
+    if (top) keepNow(top);
     const taken = steps;
     steps = [];
     if (!taken.length) return;
@@ -237,18 +246,21 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     const undoTo = doc.peek("undo");
     const label = doc.history().undoLabel;
     // (an edit gone on with - a drag's next frame: the same step, its drawing now this)
-    if (top && top.undoTo === undoTo) Object.assign(top, { after: state.model, label, state });
-    else steps.push({ before: was, after: state.model, label, state, undoTo });
+    if (top && top.undoTo === undoTo) Object.assign(top, { after: state.model, label, state, kept: false });
+    else steps.push({ before: was, after: state.model, label, state, undoTo, kept: false });
     // (kept at once, wherever no gesture is going on - a drag keeps once, as it ends; said when the page is idle)
     if (!gestureUnderWay(store.getState())) keepNow(steps[steps.length - 1]);
     later();
   });
+  // (a gesture ended: its step kept at once - whether or not the look was put off for it - and looked at when the page is idle)
+  let under = gestureUnderWay(store.getState());
   const offStore = store.subscribe((st) => {
-    if (waiting && !gestureUnderWay(st)) {
-      const top = steps[steps.length - 1];
-      if (top) keepNow(top);
-      later();
-    }
+    const was = under;
+    under = gestureUnderWay(st);
+    if (under || (!was && !waiting)) return;
+    const top = steps[steps.length - 1];
+    if (top) keepNow(top);
+    if (waiting) later();
   });
   return () => {
     offDoc();

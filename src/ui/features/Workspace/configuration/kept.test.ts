@@ -65,7 +65,7 @@ describe("the configuration kept on the drawing (part 15, phase 2)", () => {
     stop();
   });
 
-  it("says what an edit changed against what is kept: a kept sense that no longer reads so is said turned", async () => {
+  it("says what an edit changed against what is kept: a kept sense that no longer reads so is said inverted", async () => {
     const { store, doc, notes, stop } = page();
     store.getState().moveAtoms([{ id: 5, x: 2.6 * L, y: 0 }], "drag-2");
     await vi.runAllTimersAsync();
@@ -77,7 +77,7 @@ describe("the configuration kept on the drawing (part 15, phase 2)", () => {
     store.getState().moveAtoms([{ id: 5, x: 2.7 * L, y: 0 }], "drag-3");
     await vi.runAllTimersAsync();
     // (the drawing read R before and after the touch: no descriptor tells the two apart, so it is said turned - a fault of keeping, shown)
-    expect(notes()).toEqual(["C1: turned"]);
+    expect(notes()).toEqual(["C2: inverted"]);
     stop();
   });
 

@@ -24,7 +24,8 @@ import {
 import { useEditor } from "../store";
 import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
-import { hasLooks, pointedSaid } from "../configuration/pointedSaid";
+import { pointedSaid } from "../configuration/pointedSaid";
+import { markGlideStep, type MarkGlides } from "../utils/markGlide";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
@@ -85,10 +86,7 @@ export default function ChemMarks2D({
   // (the view's zoom, where there is anything to mark: with nothing, a zoom
   // draws nothing here again - and marks fading out keep the size they had)
   const zoomWanted = useRef(1);
-  // (and while the pointer rests on an atom or a bond of a drawing with a look: what it states is said, at the view's zoom)
-  const looks = useMemo(() => hasLooks(model), [model]);
-  const tipWanted = looks && (hoveredAtom != null || hoveredBond != null);
-  const zoom = useDrawnZoom((z) => (wanted || tipWanted ? (zoomWanted.current = z) : zoomWanted.current));
+  const zoom = useDrawnZoom((z) => (wanted ? (zoomWanted.current = z) : zoomWanted.current));
   // each atom where it is drawn this frame: a dragged atom where it is
   const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
   // the structure where it is drawn this frame
@@ -270,7 +268,22 @@ export default function ChemMarks2D({
   // (each comes into view and goes out of it, rather than appearing and
   // vanishing as the marks are worked out again after an edit)
   const valenceShown = usePresence(boxesOf, (m) => m.key);
-  const stereoShown = usePresence(marks ? stereo : [], (m) => m.key);
+  // (each glides to a new place rather than jump - one dragged by hand excepted, which follows the pointer - and a change of letters
+  //  is one fading out as the other fades in, keyed by its letters too: utils/markGlide, the maintainer's report of 0.1.27)
+  const held = useEditor((s) => s.panHold.active);
+  const glides = useRef<MarkGlides>(new Map());
+  const [glideFrame, setGlideFrame] = useState(0);
+  const glided = useMemo(
+    () => markGlideStep(glides.current, stereo, performance.now(), (key) => held && fixed.has(key)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- glideFrame: a frame of a glide under way, drawn again
+    [stereo, held, fixed, glideFrame],
+  );
+  const gliding = useRef(false);
+  gliding.current = glided.moving;
+  useEffect(() => {
+    if (glided.moving) invalidate();
+  }, [glided, invalidate]);
+  const stereoShown = usePresence(marks ? glided.marks : [], (m) => `${m.key}:${m.text}`);
 
   // R, S, E and Z as texts on the page, each its middle where it is placed,
   // as large as the drawing's labels times MARK_SCALE (or MARK_MIN_PX on the
@@ -294,6 +307,7 @@ export default function ChemMarks2D({
   const seen = useRef<SwitchFade>(switchFade(marksRead));
   const stereoSeen = useRef(seen.current.v);
   useFrame((_, dt) => {
+    if (gliding.current) setGlideFrame((n) => n + 1);
     if (switchStep(seen.current, marksRead, Math.min(dt, 1 / 20))) invalidate();
     stereoSeen.current = seen.current.v;
   });
@@ -313,7 +327,8 @@ export default function ChemMarks2D({
   return (
     <group>
       {/* each R, S, E and Z taken hold of on its letters, and moved by hand */}
-      {stereoShown.map(({ key, item: m, leaving }) => {
+      {stereoShown.map(({ item: m, leaving }) => {
+        const key = m.key;
         const base = from.get(key);
         // (none to take hold of where they are switched off with the zoom)
         if (leaving || !base || !marksRead) return null;

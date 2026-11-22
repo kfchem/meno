@@ -1,34 +1,14 @@
 import type { ChemMarks } from "../chem/marks";
 import type { Model } from "../store/types";
-import { readingOf, type Reading } from "./changes";
-import { atomSaid, bondSaid } from "./said";
 
-// What a look states, said where the pointer rests on an atom or a bond (docs/EDITOR-2D.md, *What a look states*): the words and the
-// place they stand, apart from the component that draws them (components/ChemMarks2D).
-
-/** What the look the pointer rests on states (configuration/said), the drawing read once for each model it is asked of. */
-const readings = new WeakMap<Model, Reading>();
-/** Whether a drawing has any look a word could be said of: a wedge, a wavy bond, a bold or dashed line, or depth. */
-export function hasLooks(model: Model): boolean {
-  return model.bonds.some((b) => (b.stereo && b.stereo !== "none") || b.display) || model.atoms.some((a) => a.z != null);
-}
-
-function lookSaid(model: Model, atom: number | undefined, bond: number | undefined, marks: ChemMarks | null): string | null {
-  if (!hasLooks(model)) return null;
-  let reading = readings.get(model);
-  if (!reading) readings.set(model, (reading = readingOf(model)));
-  const label = (key: string) => {
-    const id = Number(key.slice(key.indexOf("-") + 1));
-    return key.startsWith("centre-") ? marks?.centres.get(id) : marks?.doubleBonds.get(id);
-  };
-  return atom != null ? atomSaid(model, reading, atom, label) : bond != null ? bondSaid(model, reading, bond, label) : null;
-}
+// Why an R, S, E or Z asked for is not there, said where the pointer rests on its atom or bond (docs/EDITOR-2D.md, *Meno's own*): the
+// words and the place they stand, apart from the component that draws them (components/ChemMarks2D). Nothing else is said on a wedge or
+// an atom: a wedge and an R or S speak for themselves.
 
 /**
- * What is said under the atom or bond the pointer rests on, and where: its own words where its R, S, E or Z is shown with some - why
- * it has none - else what its look states (configuration/said); at the atom, or the bond's middle, where each is drawn (`placeOf`), with
- * the extent it is to stand clear of (`w`, `h`: a bond's, from end to end).
- * Null where nothing is said. Whether the drawing shows any R, S or other mark at all does not enter into it.
+ * What is said under the atom or bond the pointer rests on, and where: where its R, S, E or Z is asked for and it has none, why - or
+ * that its Z or E turns in the mirror image; at the atom, or the bond's middle, where each is drawn (`placeOf`), with the extent it is to
+ * stand clear of (`w`, `h`: a bond's, from end to end). Null where nothing is said.
  */
 export function pointedSaid(
   model: Model,
@@ -42,7 +22,7 @@ export function pointedSaid(
   const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
   if (!key) return null;
   const shown = atom ? atom.stereoShown : bond?.stereoShown;
-  const text = (shown && marks?.said?.get(key)) || lookSaid(model, atom?.id, bond?.id, marks);
+  const text = shown ? marks?.said?.get(key) : undefined;
   if (!text) return null;
   const p = placeOf(atom ? atom.id : bond!.a);
   const q = bond ? placeOf(bond.b) : p;

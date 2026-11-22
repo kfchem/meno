@@ -92,9 +92,9 @@ describe("what an edit did to a drawing's configurations (part 15, phase 2)", ()
     for (const a of m.atoms.slice(1)) expect(Math.hypot(p.x - a.x, p.y - a.y), a.el).toBeGreaterThan(0.9 * L);
   });
 
-  it("says a double bond drawn 'either' is now open, and says nothing of one whose group was deleted", () => {
+  it("says a double bond drawn 'either' is now marked unknown, and says nothing of one whose group was deleted", () => {
     const either: Model = { ...butene(), bonds: butene().bonds.map((b) => (b.id === 11 ? { ...b, stereo: "either" as const } : b)) };
-    expect(configurationChanges(butene(), either)).toEqual([{ unit: { kind: "double", at: [2, 3] }, how: "opened" }]);
+    expect(configurationChanges(butene(), either)).toEqual([{ unit: { kind: "double", at: [2, 3] }, how: "unknown" }]);
     const gone: Model = { atoms: butene().atoms.filter((a) => a.id !== 4), bonds: butene().bonds.filter((b) => b.id !== 12) };
     expect(configurationChanges(butene(), gone)).toEqual([]);
   });
@@ -103,11 +103,18 @@ describe("what an edit did to a drawing's configurations (part 15, phase 2)", ()
     const m = butene();
     const unit = { kind: "centre" as const, at: 2 };
     expect(changeWords(m, { unit, how: "inverted" }, { was: "R", now: "S" })).toBe("C2: R, now S");
-    expect(changeWords(m, { unit, how: "inverted" })).toBe("C2: turned");
-    expect(changeWords(m, { unit, how: "opened" })).toBe("C2: now open");
-    expect(changeWords(m, { unit, how: "unread", why: "two of its bonds in line or on top of each other" })).toBe("C2: no longer read: two of its bonds in line or on top of each other");
-    expect(changeWords(m, { unit, how: "read" }, { now: "S" })).toBe("C2: now read: S");
-    expect(changeWords(m, { unit, how: "mirror" })).toBe("every centre turned: the mirror image");
+    expect(changeWords(m, { unit, how: "inverted" })).toBe("C2: inverted");
+    expect(changeWords(m, { unit, how: "opened" }, { was: "S" })).toBe("C2: S, now unspecified");
+    expect(changeWords(m, { unit, how: "opened" })).toBe("C2: now unspecified");
+    expect(changeWords(m, { unit, how: "unknown" }, { was: "R" })).toBe("C2: R, now marked unknown");
+    expect(changeWords(m, { unit, how: "unknown" })).toBe("C2: now marked unknown");
+    const why = "two of its bonds in line or on top of each other";
+    expect(changeWords(m, { unit, how: "unread", why }, { was: "S" })).toBe(`C2: S, now unclear: ${why}`);
+    expect(changeWords(m, { unit, how: "unread", why })).toBe(`C2: now unclear: ${why}`);
+    expect(changeWords(m, { unit, how: "read" }, { now: "S" })).toBe("C2: now S");
+    expect(changeWords(m, { unit, how: "read" })).toBe("C2: stated again");
+    expect(changeWords(m, { unit: { kind: "double", at: [2, 3] }, how: "opened" }, { was: "E" })).toBe("C2=C3: E, now unspecified");
+    expect(changeWords(m, { unit, how: "mirror" })).toBe("Every stereocentre inverted: the mirror image");
     expect(changeWords(m, { unit, how: "inverted" }, { was: "R", now: "S" }, "Clean-up")).toBe("changed by Clean-up: C2: R, now S");
     expect(unitName(m, { kind: "axis", at: [1, 2] })).toBe("the axis C1-C2");
   });

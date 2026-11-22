@@ -2,14 +2,14 @@
  * What an edit did to the configuration a drawing states (foundation part 15, phase 2; docs/EDITOR-2D.md, *When an edit turns a
  * configuration*): each structure the edit touched read before and after with the one reader (chem/engineLayout `stereoOf`: the
  * reader's `readStereo` with depth and the cage fit, by atom id) and the two compared unit by unit (lib/chem/perception/stereo/compare
- * `compared`, part 14 C's one comparison). What is said, of each unit:
- * - turned (`inverted`): its descriptor, before and after, where the CIP gives one ("C3: R, now S");
- * - no longer stated though its atom and its groups are all still there (`opened`): "now open" where the drawing says it is not known
- *   (a wavy bond, an "either" double bond), else "no longer read" with the reader's words where its marks say nothing readable, else
- *   "now open";
- * - stated again where its marks had said nothing readable (`read`): "now read".
+ * `compared`, part 14 C's one comparison). What is said, of each unit (the words: `changeWords`):
+ * - inverted (`inverted`): "C3: S, now R" where the CIP gives both descriptors, else "C3: inverted";
+ * - no longer stated though its atom and its groups are all still there: "now marked unknown" where the drawing says it is not known
+ *   (`unknown`: a wavy bond, an "either" double bond), "now unclear" with the reader's words where its marks are there but say nothing
+ *   readable (`unread`), else "now unspecified" (`opened`: a plain bond) - each after the descriptor it had, where it had one;
+ * - stated again where its marks had been unclear (`read`): "C3: now R", or "C3: stated again" without one.
  * Nothing is said where nothing changed, where a unit is simply new (a wedge just drawn), gone with its atom or one of its groups, or no
- * longer a unit because two of its groups are now alike. A structure whose every unit turned - two or more - is one note: its mirror
+ * longer a unit because two of its groups are now alike. A structure whose every unit inverted - two or more - is one note: its mirror
  * image. Pure: no DOM, no store.
  */
 import type { ConfigurationUnit } from "../../../../lib/chem/perception/stereo/compare";
@@ -20,10 +20,11 @@ import { drawingOf } from "../chem/drawing";
 import { stereoOf, unreadWedges } from "../chem/engineLayout";
 import { fragmentsHolding } from "../chem/cleanUp";
 import { keepsAny, keptFrom, keptReading, type KeptOf } from "./kept";
-import type { Atom, Bond, Model } from "../store/types";
+import type { Bond, Model } from "../store/types";
+import { placeNames } from "./names";
 
 /** How a unit's configuration changed, as it is said. */
-export type ChangeHow = "inverted" | "opened" | "unread" | "read" | "mirror";
+export type ChangeHow = "inverted" | "opened" | "unknown" | "unread" | "read" | "mirror";
 
 /** A change said at a unit: how, and for `unread` the reader's words why its marks say nothing. */
 export type ConfigurationChange = { unit: ConfigurationUnit; how: ChangeHow; why?: string };
@@ -138,7 +139,7 @@ function changesBetween(was: Reading, now: Reading, nowPart: Model): Configurati
         .map((id) => now.unread.get(id))
         .find((w) => w != null);
       const notKnown = unitAtoms(unit).some((id) => now.open.has(id));
-      out.push(notKnown || why == null ? { unit, how: "opened" } : { unit, how: "unread", why });
+      out.push(notKnown ? { unit, how: "unknown" } : why == null ? { unit, how: "opened" } : { unit, how: "unread", why });
     } else if (d.how === "closed" && unitAtoms(unit).some((id) => was.unread.has(id))) out.push({ unit, how: "read" });
   }
   // (every unit the structure states turned, two or more: the chemist drew its mirror image - one note, not one for each)
@@ -148,40 +149,54 @@ function changesBetween(was: Reading, now: Reading, nowPart: Model): Configurati
   return out;
 }
 
-/** An atom's name in a note: its element and its place in the drawing, counted from 1 ("C3"); a label's own text. */
-export function atomName(model: Model, id: number): string {
-  const i = model.atoms.findIndex((a) => a.id === id);
-  if (i < 0) return "an atom";
-  const a: Atom = model.atoms[i];
-  return `${a.el}${i + 1}`;
+/**
+ * An atom's name in a note: its element and its number in its own molecule (configuration/names) - as `names` gives it, worked out off
+ * the drawing's thread, else its place among its molecule's atoms ("C3").
+ */
+export function atomName(model: Model, id: number, names?: ReadonlyMap<number, string>): string {
+  return names?.get(id) ?? placeNames(model, [id]).get(id) ?? "an atom";
 }
 
 /** A unit's name in a note: "C3", "C4=C5" for a double bond, "the axis C4-C5". */
-export function unitName(model: Model, unit: ConfigurationUnit): string {
-  if (unit.kind === "centre") return atomName(model, unit.at);
-  const [p, q] = unit.at.map((id) => atomName(model, id));
+export function unitName(model: Model, unit: ConfigurationUnit, names?: ReadonlyMap<number, string>): string {
+  if (unit.kind === "centre") return atomName(model, unit.at, names);
+  const [p, q] = unit.at.map((id) => atomName(model, id, names));
   return unit.kind === "double" ? `${p}=${q}` : `the axis ${p}-${q}`;
 }
 
 /**
- * A change in words, at its unit (docs/EDITOR-2D.md): "C3: R, now S" where both descriptors are known, "C3: turned" where not; "C3: now
- * open"; "C3: no longer read: " and why; "C3: now read: R"; "every centre turned: the mirror image". `by` names Meno's own move that made
- * it ("Clean-up"), said first: a change no move of Meno's should make.
+ * A change in words, at its unit (docs/EDITOR-2D.md, *When an edit changes a configuration*), `label` its descriptors before and after
+ * where the CIP gives them, `names` the atoms' names (`atomName`):
+ * - "C3: S, now R" - "C3: inverted" where either descriptor is not known;
+ * - "C3: S, now unspecified" (a plain bond), "C3: S, now marked unknown" (a wavy bond, an "either" double bond), "C3: S, now unclear: "
+ *   and the reader's words - each without its "S, " where it had none;
+ * - "C3: now R" where it is stated again, "C3: stated again" without one;
+ * - "Every stereocentre inverted: the mirror image".
+ * `by` names Meno's own move that made it ("Clean-up"), said first: a change no move of Meno's should make.
  */
-export function changeWords(model: Model, change: ConfigurationChange, label: { was?: string; now?: string } = {}, by?: string): string {
-  const name = unitName(model, change.unit);
+export function changeWords(
+  model: Model,
+  change: ConfigurationChange,
+  label: { was?: string; now?: string } = {},
+  by?: string,
+  names?: ReadonlyMap<number, string>,
+): string {
+  const name = unitName(model, change.unit, names);
+  const had = label.was ? `${label.was}, ` : "";
   const said = (() => {
     switch (change.how) {
       case "inverted":
-        return label.was && label.now && label.was !== label.now ? `${name}: ${label.was}, now ${label.now}` : `${name}: turned`;
+        return label.was && label.now && label.was !== label.now ? `${name}: ${label.was}, now ${label.now}` : `${name}: inverted`;
       case "opened":
-        return `${name}: now open`;
+        return `${name}: ${had}now unspecified`;
+      case "unknown":
+        return `${name}: ${had}now marked unknown`;
       case "unread":
-        return `${name}: no longer read: ${change.why}`;
+        return `${name}: ${had}now unclear: ${change.why}`;
       case "read":
-        return label.now ? `${name}: now read: ${label.now}` : `${name}: now read`;
+        return label.now ? `${name}: now ${label.now}` : `${name}: stated again`;
       case "mirror":
-        return "every centre turned: the mirror image";
+        return "Every stereocentre inverted: the mirror image";
     }
   })();
   return by ? `changed by ${by}: ${said}` : said;

@@ -5,6 +5,8 @@ import { clustersOf, layoutByStructure, structureLayouts } from "../../../lib/ch
 import { ACS_1996 } from "../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../utils/importers";
 import { editorLayoutOptions, layoutAtomOf, layoutBonds } from "./layoutOptions";
+import { degrees, narrowEnd } from "./chem/drawing";
+import { bondKindStepPatch, singleRoundPatch } from "./utils/bondKinds";
 import type { Atom, Bond } from "./store/types";
 
 type M = { atoms: Atom[]; bonds: Bond[] };
@@ -241,4 +243,67 @@ describe("a drawing laid out a structure at a time", () => {
     // (28 000 atoms: about 2 s whole on this machine, about 20 ms for one structure)
     expect(one).toBeLessThan(all / 20);
   }, 120_000);
+});
+
+describe("a wedge laid out with its structure, narrow where the drawing has it", () => {
+  // (an ethane first, so that the alcohol's atoms are not at its places in the drawing; then 2-methylbutan-1-ol, its C2-methyl bond a
+  //  wedge: C2 has three bonds, the methyl one - narrow at the end with more bonds, C2, where the drawing names no end)
+  const C2 = 13;
+  const ME = 16;
+  const drawing = (wedge: Partial<Bond>): M => ({
+    atoms: [at(1, 0, 0), at(2, 0.87, 0.5), at(10, 4, 0), at(11, 4.87, 0.5), at(12, 5.73, 0), at(C2, 6.6, 0.5), at(14, 7.46, 0), at(15, 8.33, 0.5, "O"), at(ME, 6.6, -0.5)],
+    bonds: [bond(3, 1, 2), bond(20, 10, 11), bond(21, 11, 12), bond(22, 12, C2), bond(23, C2, 14), bond(24, 14, 15), bond(25, C2, ME, wedge)],
+  });
+  const WEDGE = 6;
+
+  /** The atom (by id) the solid wedge is narrow at, as laid out a structure at a time: the end where its shape is the narrower. */
+  function drawnNarrow(m: M): number {
+    const { atoms, bonds } = laidOut(m);
+    const split = layoutByStructure(atoms, bonds, opts, ZOOM, structureLayouts());
+    expect(marks(split)).toEqual(marks(layoutMolecule(atoms, bonds, opts, ZOOM)));
+    // (the shape whose middle is nearest the bond's)
+    const [c, e] = [C2, ME].map((id) => atoms.find((x) => x.id === id)!);
+    const off = (ps: readonly { x: number; y: number }[]) =>
+      Math.hypot(ps.reduce((s, p) => s + p.x, 0) / ps.length - (c.x + e.x) / 2, ps.reduce((s, p) => s + p.y, 0) / ps.length - (c.y + e.y) / 2);
+    const shape = [...split.polys].sort((p, q) => off(p.points) - off(q.points))[0];
+    // (how far it reaches from the bond's line on the half of it nearer each end)
+    const len = Math.hypot(e.x - c.x, e.y - c.y);
+    const [ux, uy] = [(e.x - c.x) / len, (e.y - c.y) / len];
+    const reach = (nearC2: boolean) =>
+      Math.max(...shape.points.filter((p) => ((p.x - c.x) * ux + (p.y - c.y) * uy < len / 2) === nearC2).map((p) => Math.abs((p.x - c.x) * uy - (p.y - c.y) * ux)));
+    const width = (id: number) => reach(id === C2);
+    return width(C2) < width(ME) ? C2 : ME;
+  }
+
+  /** The wedge after a click on it (`singleRoundPatch`), as the drawing has it. */
+  function clicked(m: M): M {
+    const b = m.bonds[WEDGE];
+    return { ...m, bonds: m.bonds.map((x, k) => (k === WEDGE ? { ...b, ...singleRoundPatch(b, narrowEnd(b, degrees(m.bonds))) } : x)) };
+  }
+
+  it("is drawn narrow at either end, as its `narrow` says", () => {
+    expect(drawnNarrow(drawing({ stereo: "up", narrow: C2 }))).toBe(C2);
+    expect(drawnNarrow(drawing({ stereo: "up", narrow: ME }))).toBe(ME);
+    expect(drawnNarrow(drawing({ stereo: "up" }))).toBe(C2);
+    // (a hashed wedge either way: the drawing laid out whole, which reads `narrow` by the drawing's own places - drawnNarrow's check)
+    for (const narrow of [C2, ME]) {
+      const { atoms, bonds } = laidOut(drawing({ stereo: "down", narrow }));
+      expect(marks(layoutByStructure(atoms, bonds, opts, ZOOM, structureLayouts()))).toEqual(marks(layoutMolecule(atoms, bonds, opts, ZOOM)));
+    }
+  });
+
+  it("after a click round - hashed, plain, then a wedge - is drawn narrow at the methyl, the end the round left narrow", () => {
+    let m = drawing({ stereo: "up", narrow: C2 });
+    m = clicked(clicked(clicked(m)));
+    expect(m.bonds[WEDGE]).toMatchObject({ stereo: "up", narrow: ME });
+    expect(drawnNarrow(m)).toBe(ME);
+  });
+
+  it("set to a wedge from the menu after clicks to plain is drawn narrow where the plain bond left it: at the methyl", () => {
+    let m = clicked(clicked(drawing({ stereo: "up", narrow: C2 })));
+    const b = m.bonds[WEDGE];
+    m = { ...m, bonds: m.bonds.map((x, k) => (k === WEDGE ? { ...b, ...bondKindStepPatch("wedge", b, m.atoms, m.bonds) } : x)) };
+    expect(m.bonds[WEDGE]).toMatchObject({ stereo: "up", narrow: ME });
+    expect(drawnNarrow(m)).toBe(ME);
+  });
 });

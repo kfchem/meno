@@ -133,13 +133,9 @@ export default function BondsPick2D() {
       window.clearTimeout(st.timer);
       st.timer = null;
     }
-    if (st.count === 1 && st.bondId != null) {
-      const was = store.getState().model;
-      store.getState().bondClicked(st.bondId, 1);
-      // (kept only where it turned something: a turn taken back is an undo, never of another step)
-      const now = store.getState().model;
-      st.turned = now !== was ? { id: st.bondId, releasedAt: st.lastAt, after: now } : null;
-    }
+    const was = store.getState().model;
+    const turning = st.count === 1 && st.bondId != null ? st.bondId : null;
+    if (turning != null) store.getState().bondClicked(turning, 1);
     // (its hold on the view let go here - unless the next press let it go already, before beginning its own, which this must not end)
     if (!st.holdEnded) {
       try {
@@ -148,6 +144,12 @@ export default function BondsPick2D() {
       } catch {
         endPanHold(null);
       }
+    }
+    // (kept only where it turned something: a turn taken back is an undo, never of another step - the drawing it made taken once the
+    //  hold is let go, with the configuration it keeps, joined to the turn's step as the hold ends: configuration/watch)
+    if (turning != null) {
+      const now = store.getState().model;
+      st.turned = now !== was ? { id: turning, releasedAt: st.lastAt, after: now } : null;
     }
     st.holdEnded = false;
     st.count = 0;

@@ -60,7 +60,7 @@ describe("a centre whose bonds a drag puts in line (the T)", () => {
     st().moveAtoms([1, 2].map((id) => ({ id, x: at(id).x + dx, y: at(id).y + dy })), "drag-the-t");
     await vi.runAllTimersAsync();
     expect(notes()).toHaveLength(1);
-    expect(notes()[0]).toMatch(/^C\d+: no longer read: /);
+    expect(notes()[0]).toMatch(/^C\d+: (R|S), now unclear: /);
     expect(read(st().model)).toBe(expected("CCC(C)O"));
     expect(read(st().model)).not.toBe(expected("CC[C@H](C)O"));
     expect(keptAgrees(st().model)).toBe(true);

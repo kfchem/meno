@@ -76,7 +76,7 @@ export function layoutByStructure(
       part.atoms.forEach((i, k) => (local[i] = k));
       const layout = layoutMolecule(
         part.atoms.map((i) => atoms[i]),
-        part.bonds.map((k) => ({ ...bonds[k], a1: local[bonds[k].a1], a2: local[bonds[k].a2] })),
+        part.bonds.map((k) => partBond(bonds[k], local)),
         magnifiedOptions(opts, k),
         zoom,
         moving,
@@ -258,6 +258,21 @@ export function carriedLayout(layout: Layout, was: readonly Atom[], now: readonl
     fills: layout.fills.map(circle),
     bounds: { min: { x: Math.min(...xs), y: Math.min(...ys) }, max: { x: Math.max(...xs), y: Math.max(...ys) } },
   };
+}
+
+/**
+ * A bond of the drawing as its structure is laid out alone: its atoms - and
+ * the one a wedge is narrow at, `narrow`, which names one of them - by their
+ * places in the structure (`local`, by place in the drawing). A `narrow` left
+ * at its place in the drawing would name neither end there, and the wedge be
+ * drawn narrow at its end with more bonds, whatever the drawing says.
+ */
+function partBond(b: Bond, local: Int32Array): Bond {
+  const out = { ...b, a1: local[b.a1], a2: local[b.a2] };
+  if (b.narrow === b.a1) out.narrow = out.a1;
+  else if (b.narrow === b.a2) out.narrow = out.a2;
+  else delete out.narrow;
+  return out;
 }
 
 function sameAs(it: Laid, part: Part, atoms: Atom[], bonds: Bond[]): boolean {
