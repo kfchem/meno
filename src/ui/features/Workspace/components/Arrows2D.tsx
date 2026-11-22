@@ -5,7 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { arrowEnds, arrowPoints, reshapedArrow } from "../../../../lib/chem/reactionScheme";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
-import { arrowPath, cornerAt, squareCorner, type ArrowCorner } from "../../../../lib/chem/reactionArrow";
+import { arrowPath, cornerAt, levelCorner, type ArrowCorner } from "../../../../lib/chem/reactionArrow";
 import { COLORS } from "../../../theme/colors";
 import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
@@ -24,6 +24,8 @@ const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
 /** The steps an end's direction snaps to, in degrees: a bond's. */
 const SNAP_STEP = 15;
+/** How near a corner's pointer is to level or plumb with a neighbour for it to snap there, in bonds. */
+const LEVEL_NEAR = 0.3;
 /** The shortest an arrow is drawn out to, in bonds. */
 const MIN_LENGTH = 0.5;
 /** How near the line between its neighbours a corner let go is taken away, in bonds: the line straight again. */
@@ -44,9 +46,9 @@ const native = (e: unknown): Pointerish => ((e as { nativeEvent?: Pointerish }).
  * direction in steps of 15 degrees, as a bond's, until the pointer pauses,
  * and then freely. It shows a handle at each corner its line turns at, and
  * a smaller one in the middle of each stretch: one dragged moves its
- * corner, or makes one there - a right angle, an L, until the pointer
- * pauses, and then freely; a corner let go in line with the corners or
- * ends beside it is taken away, the line straight there again. While an
+ * corner, or makes one there - level or plumb with the corners or ends
+ * beside it, an L, until the pointer pauses, and then freely; a corner
+ * let go in line with the corners or ends beside it is taken away, the line straight there again. While an
  * end or a corner is dragged, the arrow is drawn going over to each place
  * it snaps to, as a bond moved is, rather than jumping there. Each is
  * drawn as long as the words over it and under it need, if they need more
@@ -265,13 +267,13 @@ export default function Arrows2D() {
     let corners: ArrowCorner[] = [...(a.corners ?? [])];
     const gesture = `corner-${performance.now()}`;
     glides.current.set(id, poseOf(a));
-    // (where the corner goes for the pointer at `p`: a right angle between what is either side of it, until a pause lets it go)
+    // (where the corner goes for the pointer: level or plumb with what is either side of it where near, until a pause lets it go)
     let free = false;
     let pause: number | null = null;
     let last = toWorld(ev.clientX, ev.clientY);
     const apply = () => {
       const pts = arrowPath(from, to, corners);
-      const at = free ? last : squareCorner(pts[index], pts[index + 2], last);
+      const at = free ? last : levelCorner(pts[index], pts[index + 2], last, LEVEL_NEAR * NOMINAL_BOND_LENGTH);
       corners = corners.map((c, i) => (i === index ? cornerAt(from, to, at) : c));
       store.getState().updateArrow(id, { corners }, gesture);
     };

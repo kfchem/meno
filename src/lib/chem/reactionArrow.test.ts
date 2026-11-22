@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrowMeasures, arrowOutline, arrowPath, arrowPieces, cornerAt, pathLength, squareCorner, strokeOutline, type ArrowMeasures } from "./reactionArrow";
+import { arrowMeasures, arrowOutline, arrowPath, arrowPieces, cornerAt, pathLength, levelCorner, strokeOutline, type ArrowMeasures } from "./reactionArrow";
 import { ACS_1996, MENO, ofBond, pt, resolveStyle } from "./style";
 
 type P = { x: number; y: number };
@@ -228,22 +228,32 @@ describe("an arrow's kinds, heads, dashes, weight and corners", () => {
   });
 });
 
-describe("a corner dragged to a right angle", () => {
-  it("lies where the line turns a quarter turn between its neighbours, toward the pointer - an L", () => {
+describe("a corner dragged level or plumb", () => {
+  // (a stretch lies on the page's horizontal or vertical, whatever way the arrow itself lies)
+  const near = 0.5;
+  it("makes the L whose stretches are one level and one plumb between ends lying on a slant", () => {
     const p = { x: 0, y: 0 };
-    const q = { x: 4, y: 0 };
-    for (const pointer of [{ x: 0.3, y: 3 }, { x: 3.5, y: -1 }, { x: 2, y: 0.4 }]) {
-      const c = squareCorner(p, q, pointer);
-      const dot = (p.x - c.x) * (q.x - c.x) + (p.y - c.y) * (q.y - c.y);
-      expect(dot).toBeCloseTo(0, 9);
-      // (on the pointer's side, toward it from the middle)
-      expect(Math.sign(c.y)).toBe(Math.sign(pointer.y));
-    }
-    // (the pointer straight above the middle: the L's corner straight above it)
-    const top = squareCorner(p, q, { x: 2, y: 5 });
-    expect(top.x).toBeCloseTo(2, 9);
-    expect(top.y).toBeCloseTo(2, 9);
-    // (at the middle itself, no way to say: where the pointer is)
-    expect(squareCorner(p, q, { x: 2, y: 0 })).toEqual({ x: 2, y: 0 });
+    const q = { x: 4, y: 3 };
+    // (near the corner under the head: x as the head's, y as the tail's)
+    expect(levelCorner(p, q, { x: 3.8, y: 0.3 }, near)).toEqual({ x: 4, y: 0 });
+    // (near the corner over the tail: x as the tail's, y as the head's)
+    expect(levelCorner(p, q, { x: -0.2, y: 3.4 }, near)).toEqual({ x: 0, y: 3 });
+  });
+  it("snaps each coordinate alone: one stretch level, the other free", () => {
+    const p = { x: 0, y: 0 };
+    const q = { x: 4, y: 3 };
+    expect(levelCorner(p, q, { x: 2, y: 0.2 }, near)).toEqual({ x: 2, y: 0 });
+    expect(levelCorner(p, q, { x: 0.3, y: 1.5 }, near)).toEqual({ x: 0, y: 1.5 });
+  });
+  it("leaves a pointer that is not near level or plumb with a neighbour where it is", () => {
+    const p = { x: 0, y: 0 };
+    const q = { x: 4, y: 3 };
+    expect(levelCorner(p, q, { x: 2, y: 1.5 }, near)).toEqual({ x: 2, y: 1.5 });
+  });
+  it("takes the nearer of the two when both are within reach", () => {
+    expect(levelCorner({ x: 0, y: 0 }, { x: 0.6, y: 3 }, { x: 0.4, y: 1 }, near)).toEqual({ x: 0.6, y: 1 });
+  });
+  it("lets a stretch be plumb from the tail of an arrow that lies level", () => {
+    expect(levelCorner({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0.2, y: 3 }, near)).toEqual({ x: 0, y: 3 });
   });
 });
