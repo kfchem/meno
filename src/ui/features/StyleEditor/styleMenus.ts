@@ -1,6 +1,14 @@
 import { STYLE_PRESETS, type DrawingStyle, type OwnStyle2D, type StyleChoice } from "../../../lib/chem/style";
-import type { Role3D } from "../../../lib/chem/style3d";
+import { withRole, type Role3D, type Style3DChoice } from "../../../lib/chem/style3d";
 import type { CardMenuItem } from "./CardMenu";
+
+/**
+ * `choice` with style `id` given `role` (the one there going to the list, or to the other slot where `id` had it), and
+ * the style the editor sets and shows then: that one - so that the preview beside the slots shows what was chosen at once.
+ */
+export function givenRole(choice: Style3DChoice, role: Role3D, id: string): { next: Style3DChoice; shown: string } {
+  return { next: withRole(choice, role, id), shown: id };
+}
 
 /** A style's menu's items, as it has a role or not and is the user's own or not. */
 export function styleMenuItems3d(

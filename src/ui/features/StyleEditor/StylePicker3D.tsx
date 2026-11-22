@@ -11,14 +11,13 @@ import {
   withDuplicate3d,
   withoutStyle3d,
   withRenamed3d,
-  withRole,
   type Role3D,
   type Style3D,
   type Style3DChoice,
 } from "../../../lib/chem/style3d";
 import { DURATION, EASE } from "../../theme/motion";
 import CardMenu from "./CardMenu";
-import { styleMenuItems3d } from "./styleMenus";
+import { givenRole, styleMenuItems3d } from "./styleMenus";
 import Preview3D from "./Preview3D";
 import { carryEnds } from "./carryEnds";
 import { turnsSample } from "./sampleTurn";
@@ -32,7 +31,8 @@ import { keptPicture3d, useStylePicture3d } from "./stylePicture3d";
  * own, each with a picture of it. A style dragged onto a slot takes it,
  * the one there going back to the list; one slot's dragged onto the other,
  * the two change places - each card going where it goes, not jumping. A
- * press on a card, or Enter on it, sets that style below; a right-click, or
+ * press on a card, or Enter on it, sets that style below - and a style given
+ * a slot is the one set and shown beside, at once; a right-click, or
  * the menu key, offers what can be done with it.
  *
  * A workspace's (`carried`, Workspace/Styles3DPart): its own two in the
@@ -106,8 +106,12 @@ export default function StylePicker3D({
       }
       // (put down: onto a slot, it takes it - from where it was let go; else back to where it came from)
       const box = new DOMRect(drag.x - drag.dx, drag.y - drag.dy, drag.w, drag.h);
-      if (over && choice[over] !== drag.id) change(withRole(choice, over, drag.id), { id: drag.id, box });
-      else flip.capture({ id: drag.id, box });
+      // (and the preview goes over to it: the style the slot now has, set and shown beside)
+      if (over && choice[over] !== drag.id) {
+        const given = givenRole(choice, over, drag.id);
+        change(given.next, { id: drag.id, box });
+        onEdit(given.shown);
+      } else flip.capture({ id: drag.id, box });
       setDrag(null);
       setOver(null);
     };
@@ -299,7 +303,11 @@ export default function StylePicker3D({
             setMenu(null);
             if (menu.byKey) at?.focus();
           }}
-          onUse={(role) => change(withRole(choice, role, menu.id))}
+          onUse={(role) => {
+            const given = givenRole(choice, role, menu.id);
+            change(given.next);
+            onEdit(given.shown);
+          }}
           onDuplicate={() => {
             const made = withDuplicate3d(choice, menu.id);
             change(made.choice);

@@ -3,11 +3,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { STYLE_PRESETS } from "../../../lib/chem/style";
 import { BALL_AND_STICK, DEFAULT_STYLE_3D_CHOICE, style3dOf, type Style3DChoice } from "../../../lib/chem/style3d";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import Style3DEditor from "./Style3DEditor";
 import StyleEditor from "./StyleEditor";
 import StyleFileAsk from "./StyleFileAsk";
 import StylePicker3D from "./StylePicker3D";
 import { afterAnswer, withAsked } from "./styleAsks";
-import { chosenCard, presetCards, styleMenuItems3d } from "./styleMenus";
+import { chosenCard, givenRole, presetCards, styleMenuItems3d } from "./styleMenus";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws each, and what it shows is read off that.
@@ -34,6 +35,29 @@ describe("Settings' 3D styles", () => {
     const of = (role: "primary" | null, own: boolean) => styleMenuItems3d(role, own, run).map((i) => (i.disabled ? `(${i.name})` : i.name));
     expect(of("primary", false)).toEqual(["(Use as primary)", "Use as secondary", "Duplicate", "Export style…"]);
     expect(of(null, true)).toEqual(["Use as primary", "Use as secondary", "Duplicate", "Export style…", "Rename", "Delete"]);
+  });
+});
+
+describe("a style given a slot", () => {
+  it("is the one the editor sets and shows at once, whichever slot, the one it replaces going to the list", () => {
+    const first = givenRole(DEFAULT_STYLE_3D_CHOICE, "primary", "print");
+    expect(first.next.primary).toBe("print");
+    expect(first.next.secondary).toBe(DEFAULT_STYLE_3D_CHOICE.secondary);
+    expect(first.shown).toBe("print");
+    const second = givenRole(first.next, "secondary", "pastel");
+    expect([second.next.primary, second.next.secondary, second.shown]).toEqual(["print", "pastel", "pastel"]);
+  });
+
+  it("is, where it came from the other slot, shown as it lands there, the two changing places", () => {
+    const c = DEFAULT_STYLE_3D_CHOICE;
+    const swapped = givenRole(c, "primary", c.secondary);
+    expect([swapped.next.primary, swapped.next.secondary, swapped.shown]).toEqual([c.secondary, c.primary, c.secondary]);
+  });
+
+  it("starts the editor on the primary, its preview named for it and drawn in it", () => {
+    const choice = givenRole(DEFAULT_STYLE_3D_CHOICE, "primary", "print").next;
+    const html = renderToString(<Style3DEditor choice={choice} onChange={none} />);
+    expect(html).toContain('aria-label="A molecule drawn in Print"');
   });
 });
 
