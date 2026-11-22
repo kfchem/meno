@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
-import { hasLooks, pointedSaid } from "./pointedSaid";
+import type { ChemMarks } from "../chem/marks";
+import { pointedSaid } from "./pointedSaid";
 
-// What a look states, said where the pointer rests (docs/EDITOR-2D.md, *What a look states*) - on a page that shows no R, S or other
-// mark at all, as on one that does: the words and where they stand do not wait on any mark being drawn.
+// Why an R or S asked for is not there, said where the pointer rests on its atom (docs/EDITOR-2D.md, *Meno's own*); nothing said on a
+// wedge or on an atom for what the drawing states (the maintainer's report: a chip nobody understands).
 
 /** Butan-2-ol drawn flat, its C-O bond (12) a wedge narrow at C2 (id 1). */
 function butanol(): Model {
@@ -22,25 +23,29 @@ function butanol(): Model {
   } as Model;
 }
 
-describe("what a look states, with no mark on the page", () => {
-  it("is said on the wedge, at its middle, and on its centre, at the atom - no R, S or other mark drawn", () => {
+describe("what is said where the pointer rests", () => {
+  it("says nothing on a wedge, nor on its centre, whether or not R or S is shown", () => {
     const m = butanol();
     const placeOf = (id: number) => m.atoms.find((a) => a.id === id);
-    const onWedge = pointedSaid(m, null, null, 12, placeOf)!;
-    expect(onWedge.text).toBe("C1: set, by this wedge");
-    expect(onWedge.x).toBeCloseTo((m.atoms[0].x + m.atoms[3].x) / 2, 9);
-    expect(onWedge.y).toBeCloseTo((m.atoms[0].y + m.atoms[3].y) / 2, 9);
-    // (the words stand clear of the whole bond: its extent from end to end, the C-O bond upright)
-    expect(onWedge.h).toBeCloseTo(Math.abs(m.atoms[3].y - m.atoms[0].y), 9);
-    expect(onWedge.w).toBeCloseTo(Math.abs(m.atoms[3].x - m.atoms[0].x), 9);
-    const onCentre = pointedSaid(m, null, 1, null, placeOf)!;
-    expect(onCentre.text).toBe("C1: set");
-    expect([onCentre.x, onCentre.y, onCentre.w, onCentre.h]).toEqual([m.atoms[0].x, m.atoms[0].y, 0, 0]);
-    // (a plain bond, nothing pointed at, a drawing with no look: nothing)
-    expect(pointedSaid(m, null, null, 10, placeOf)).toBeNull();
-    expect(pointedSaid(m, null, null, null, placeOf)).toBeNull();
-    const plain = { ...m, bonds: m.bonds.map((b) => ({ ...b, stereo: "none" as const })) };
-    expect(hasLooks(plain)).toBe(false);
-    expect(pointedSaid(plain, null, 1, null, placeOf)).toBeNull();
+    const shown = { ...m, atoms: m.atoms.map((a) => (a.id === 1 ? { ...a, stereoShown: true as const } : a)) };
+    const marks = { centres: new Map([[1, "R"]]), doubleBonds: new Map(), valence: new Map(), said: new Map() } as unknown as ChemMarks;
+    for (const model of [m, shown]) {
+      expect(pointedSaid(model, null, null, 12, placeOf)).toBeNull();
+      expect(pointedSaid(model, null, 1, null, placeOf)).toBeNull();
+      expect(pointedSaid(model, marks, null, 12, placeOf)).toBeNull();
+      expect(pointedSaid(model, marks, 1, null, placeOf)).toBeNull();
+    }
+  });
+
+  it("says why an R or S asked for is not there, at its atom - and only where it was asked for", () => {
+    const m = butanol();
+    const placeOf = (id: number) => m.atoms.find((a) => a.id === id);
+    const why = "No R or S: no configuration is drawn here.";
+    const marks = { centres: new Map(), doubleBonds: new Map(), valence: new Map(), said: new Map([["centre-3", why]]) } as unknown as ChemMarks;
+    expect(pointedSaid(m, marks, 3, null, placeOf)).toBeNull();
+    const asked = { ...m, atoms: m.atoms.map((a) => (a.id === 3 ? { ...a, stereoShown: true as const } : a)) };
+    const said = pointedSaid(asked, marks, 3, null, placeOf)!;
+    expect(said.text).toBe(why);
+    expect([said.x, said.y, said.w, said.h]).toEqual([m.atoms[2].x, m.atoms[2].y, 0, 0]);
   });
 });

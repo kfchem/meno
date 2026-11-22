@@ -24,7 +24,7 @@ import {
 import { useEditor } from "../store";
 import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
-import { hasLooks, pointedSaid } from "../configuration/pointedSaid";
+import { pointedSaid } from "../configuration/pointedSaid";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
@@ -85,10 +85,7 @@ export default function ChemMarks2D({
   // (the view's zoom, where there is anything to mark: with nothing, a zoom
   // draws nothing here again - and marks fading out keep the size they had)
   const zoomWanted = useRef(1);
-  // (and while the pointer rests on an atom or a bond of a drawing with a look: what it states is said, at the view's zoom)
-  const looks = useMemo(() => hasLooks(model), [model]);
-  const tipWanted = looks && (hoveredAtom != null || hoveredBond != null);
-  const zoom = useDrawnZoom((z) => (wanted || tipWanted ? (zoomWanted.current = z) : zoomWanted.current));
+  const zoom = useDrawnZoom((z) => (wanted ? (zoomWanted.current = z) : zoomWanted.current));
   // each atom where it is drawn this frame: a dragged atom where it is
   const at = useMemo(() => (wanted ? new Map(atoms.map((a) => [a.id, a])) : NO_ATOMS), [wanted, atoms]);
   // the structure where it is drawn this frame
