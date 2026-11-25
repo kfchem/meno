@@ -1259,7 +1259,8 @@ export function arrowOf(s: readonly { t: number; w: number }[], a: Point, b: Poi
   // (the head thinning on to its point, never widening again; the line, at least three steps of it, as thin as the figure's lines)
   const head = toB ? s.slice(p, down + 1) : s.slice(up, p + 1).reverse();
   if (head.some((q, k) => k && q.w > head[k - 1].w + 0.15 * peak)) return null;
-  const shaft = toB ? s.slice(0, up + 1) : s.slice(down);
+  // (the step where the line meets the head's base, partly of each, left out)
+  const shaft = toB ? s.slice(0, up) : s.slice(down + 1);
   if (shaft.length < 3 || shaft.some((q) => q.w > 1.5 * line)) return null;
   const l = dist(a, b);
   const at = (t: number): Point => ({ x: a.x + ((b.x - a.x) * t) / l, y: a.y + ((b.y - a.y) * t) / l });
