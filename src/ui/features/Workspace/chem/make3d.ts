@@ -445,15 +445,23 @@ function seenAs(b: Box, view: Box, height: number, eyeHeight?: number): Box {
  * molecules in 3D), the row going on out past any of it in its way; the
  * first of those sides where the whole row is in view, as the camera sees
  * it (`eyeHeight`, for one in perspective) - and whether it is, and where
- * the row then stands. In none, to its right.
+ * the row then stands. In none, to its right. Each is placed, kept clear
+ * and seen whole with what stands on the page with it (`room`: its chip
+ * under it, its notes over it - utils/fitExtent `madeRoom`), and the row's
+ * box holds them.
  */
 export function placeRow(
-  items: Turned[],
+  placed: Turned[],
   drawing: Box,
   view: Box | null,
   eyeHeight?: number,
   taken: readonly Box[] = [],
+  room: { below: number; above: number } = { below: 0, above: 0 },
 ): { at: { x: number; y: number }[]; inView: boolean; box: Box } {
+  const items = placed.map((t) => ({ ...t, reach: { ...t.reach, y0: t.reach.y0 - room.below, y1: t.reach.y1 + room.above } }));
+  // (level with the drawing, beside it: each one's middle at its middle's height, the row as low and as high as any reaches)
+  const low = Math.min(...items.map((t) => t.reach.y0));
+  const high = Math.max(...items.map((t) => t.reach.y1));
   const cx = (drawing.x0 + drawing.x1) / 2;
   const cy = (drawing.y0 + drawing.y1) / 2;
   const across = items.reduce((a, t) => a + t.reach.x1 - t.reach.x0, 0) + GAP * Math.max(0, items.length - 1);
@@ -471,7 +479,7 @@ export function placeRow(
           x = p.x + t.reach.x1 + GAP;
           return p;
         });
-        return { at, box: { x0: drawing.x1 + GAP + out, x1: x - GAP, y0: cy - tall / 2, y1: cy + tall / 2 } };
+        return { at, box: { x0: drawing.x1 + GAP + out, x1: x - GAP, y0: cy + low, y1: cy + high } };
       },
       past: (row, b) => b.x1 + GAP - row.x0,
     },
@@ -484,7 +492,7 @@ export function placeRow(
           x = p.x + t.reach.x0 - GAP;
           return p;
         });
-        return { at, box: { x0: x + GAP, x1: drawing.x0 - GAP - out, y0: cy - tall / 2, y1: cy + tall / 2 } };
+        return { at, box: { x0: x + GAP, x1: drawing.x0 - GAP - out, y0: cy + low, y1: cy + high } };
       },
       past: (row, b) => row.x1 - (b.x0 - GAP),
     },

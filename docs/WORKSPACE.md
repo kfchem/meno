@@ -2592,7 +2592,10 @@ margin; only where that is not enough, out as little as needed, it in the
 middle of what can be seen - never in. What is seen whole already leaves
 the view as it is. Molecules made in 3D from a drawing that come out of
 view are shown with the drawing they were made from: the view eases to
-take both in, along or out as little as needed. Opened onto an empty page,
+take both in, along or out as little as needed. Such a molecule is seen
+whole only with its chip under it and its notes over it (utils/fitExtent,
+`madeRoom`): where it is put down, which side it goes to, and whether the
+view moves, all count them. Opened onto an empty page,
 it is fitted, as a canvas opens. Quick Add and a paste put what they make
 where the pointer is, in view already (the maintainer, 2026-10-18).
 

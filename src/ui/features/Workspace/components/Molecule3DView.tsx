@@ -13,6 +13,7 @@ import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
 import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
+import { NOTES_GAP_PX } from "../utils/fitExtent";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoMarks3d, stereoSpotsShown, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type StereoMark3D, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, marksReadAt } from "../chem/marks";
@@ -124,8 +125,6 @@ const STEREO_TAU = 0.07;
 const STEREO_FADE = DURATION.quick;
 /** How many frames labels shown together wait at the most for all of them to be there, before those there fade in. */
 const STEREO_WAIT_FRAMES = 30;
-/** How far above the molecule the mark of hydrogens left out stands, in pixels. */
-const MARK_GAP_PX = 8;
 /** A turn this small is followed at once - a drag's, or a turn on its own; a larger one is gone over to. */
 const TURN_FOLLOWED = 0.3;
 /** How much larger the atom under the pointer is drawn, and its spring: the 3D viewer's. */
@@ -2154,8 +2153,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
           <PageHtml zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
             <div
               className="flex flex-col items-center"
-              data-fit-notes={MARK_GAP_PX}
-              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
+              data-fit-notes={NOTES_GAP_PX}
+              style={{ transform: `translate(-50%, calc(-100% - ${NOTES_GAP_PX}px))` }}
             >
               <div className="flex flex-col items-center" style={NOTES_SIZED}>
               {notesEver.map((text) => (
