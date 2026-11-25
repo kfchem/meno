@@ -964,12 +964,13 @@ describe("a configuration's groups on the page (foundation part 7)", () => {
   it("says on the card that asks what a group stands for, and what is drawn without a configuration, each once, nothing before them", () => {
     const and1 = { kind: "and" as const, name: "and1" };
     const or1 = { kind: "or" as const, name: "or1" };
-    expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Which stereoisomer?", said: "and1 stands for both of its forms, so this structure can be either of 2 stereoisomers.", isomers: 2 });
+    expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Which stereoisomer?", said: "and1 stands for both of its forms, so this structure can be either of 2 stereoisomers.", isomers: 2, all: true });
     expect(askWords([{ atoms: [], bonds: [], groups: [or1], isomers: 2 }]).said).toBe("or1 is one of two forms, not known which, so this structure can be either of 2 stereoisomers.");
     expect(askWords([{ atoms: [4], bonds: [], groups: [and1], isomers: 4 }])).toEqual({
       title: "Which stereoisomer?",
       said: "1 stereocentre is drawn without a configuration; and1 stands for both of its forms, so this structure can be any of 4 stereoisomers.",
       isomers: 4,
+      all: true,
     });
   });
 

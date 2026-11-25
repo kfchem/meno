@@ -6,8 +6,9 @@ import { useInFront } from "../../layouts/inFront";
 /**
  * Asked before a structure is made in 3D when some of its stereo is drawn
  * without a configuration - those centres and bonds ringed on the drawing
- * meanwhile: every stereoisomer they make, one of them, or none for now, to
- * draw them first. A card over the canvas, not a dialog, so that what it
+ * meanwhile: every stereoisomer they make (only where each structure has at
+ * most MOST_ISOMERS - chem/make3d `askWords`), one of them, or none for now,
+ * to draw them first. A card over the canvas, not a dialog, so that what it
  * asks about stays in view.
  */
 export default function Ask3D({
@@ -22,7 +23,7 @@ export default function Ask3D({
   onCancel: () => void;
 }) {
   const allRef = useRef<HTMLButtonElement>(null);
-  // (the keys given to All as it opens, once: not again each time the canvas
+  // (the keys given to All as it opens - to One where All is not offered, once: not again each time the canvas
   // round it is drawn, which took them from wherever they had been put)
   useEffect(() => {
     allRef.current?.focus();
@@ -39,7 +40,7 @@ export default function Ask3D({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel, inFront]);
-  const { title, said, isomers } = askWords(open);
+  const { title, said, isomers, all } = askWords(open);
   return (
     <motion.div
       role="dialog"
@@ -61,16 +62,18 @@ export default function Ask3D({
         <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
           Cancel
         </button>
-        <button onClick={onOne} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
+        <button ref={all ? undefined : allRef} onClick={onOne} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
           Make one
         </button>
-        <button
-          ref={allRef}
-          onClick={onAll}
-          className="rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 hover:brightness-95"
-        >
-          Make all {isomers}
-        </button>
+        {all && (
+          <button
+            ref={allRef}
+            onClick={onAll}
+            className="rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 hover:brightness-95"
+          >
+            Make all {isomers}
+          </button>
+        )}
       </div>
     </motion.div>
   );

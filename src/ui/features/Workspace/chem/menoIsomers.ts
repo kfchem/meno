@@ -5,7 +5,7 @@
  * nothing of which places are open or how many ways they go: that is Meno's.
  */
 import { automorphismGroup, identityKey, type IdentityInput } from "../../../../lib/chem/identity";
-import { decidesAny, decidingOf, decidingWaited, isomersOf, type Deciding, type Stereoisomer } from "../../../../lib/chem/isomers";
+import { decidesAny, decidingOf, decidingWaited, firstWayOf, isomersOf, type Deciding, type Stereoisomer } from "../../../../lib/chem/isomers";
 import { tiesOf } from "../../../../lib/chem/perception/stereo/ties";
 import { parity } from "../../../../lib/chem/perception/stereo/geometry";
 import { symmetryOrbits } from "../../../../lib/chem/perception/symmetry";
@@ -48,6 +48,16 @@ function countedOf(read: BlocksRead): ReturnType<typeof isomersOf> {
   const counted = isomersOf(read.input);
   counts.set(read, counted);
   return counted;
+}
+
+/**
+ * How many stereoisomers a structure read has by Meno's count (`isomersOf`): `count`, or, past the ways the count tries, `upTo` its
+ * bound - two to the power of its open places, true whatever its symmetry. Null where Meno does not count it.
+ */
+export function countOf(read: BlocksRead): { count: number } | { upTo: number } | null {
+  const counted = countedOf(read);
+  if ("notCounted" in counted) return null;
+  return "tooMany" in counted ? { upTo: counted.tooMany } : { count: counted.isomers.length };
 }
 
 /** The open places of each structure read whose choice changes the compound (lib/chem/isomers `decidingOf`), found once and kept. */
@@ -286,9 +296,11 @@ export async function isomersByMeno(
 ): Promise<{ made: IsomersMade; said: string[] } | { notCounted: string }> {
   const counted = countedOf(read);
   if ("notCounted" in counted) return counted;
-  if ("tooMany" in counted) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
+  // (past the ways the count tries, one asked: the first way, made without the count - chem/openStereo `isomersToMake`)
+  const first = "tooMany" in counted && asked.most === 1 && !asked.whole ? firstWayOf(read.input) : null;
+  if ("tooMany" in counted && !first) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
   // (each whole: an axis's and a run's are Meno's to keep among what is made - chem/make3d - never the plugin's to give)
-  const kept = counted.isomers.map((i) => asGiven(read, molblocks, i));
+  const kept = ("tooMany" in counted ? [first!] : counted.isomers).map((i) => asGiven(read, molblocks, i));
   if (asked.whole && kept.length > asked.most) return { made: { tooMany: { counted: asked.most + 1, bound: kept.length } }, said: [] };
   const started = Date.now();
   const isomers: Extract<IsomersMade, { isomers: unknown }>["isomers"] = [];

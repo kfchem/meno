@@ -95,6 +95,7 @@ describe("what is circled and counted before a structure is made in 3D", () => {
       title: "Which stereoisomer?",
       said: "1 stereocentre is drawn without a configuration, so this structure can be either of 2 stereoisomers.",
       isomers: 2,
+      all: true,
     });
     expect((await wordsOf("CC(O)C(O)C")).said).toBe("2 stereocentres are drawn without a configuration, so this structure can be any of 3 stereoisomers.");
     expect((await wordsOf("CC=C=CC")).said).toBe("1 chiral axis is drawn without a configuration, so this structure can be either of 2 stereoisomers.");
@@ -118,10 +119,18 @@ describe("the words of the card that asks", () => {
     ]);
     expect(two.said).toBe("2 stereocentres are drawn without a configuration, so these 2 structures can be 4 stereoisomers in all.");
     expect(two.isomers).toBe(4);
+    expect(two.all).toBe(true);
+    // (the sum of true counts; all of them offered only where each structure has at most 32)
+    const past = askWords([
+      { atoms: [3], bonds: [], groups: [], isomers: 2 },
+      { atoms: [13, 14, 15, 16, 17, 18], bonds: [], groups: [], isomers: 64 },
+    ]);
+    expect(past.said).toBe("7 stereocentres are drawn without a configuration, so these 2 structures can be 66 stereoisomers in all.");
+    expect(past.all).toBe(false);
     expect(askWords([{ atoms: [3, 5], bonds: [], groups: [], isomers: 3 }]).said).toBe("2 stereocentres are drawn without a configuration, so this structure can be any of 3 stereoisomers.");
   });
   it("asks which stereoisomer where only a group is open too", () => {
-    expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Which stereoisomer?", said: "and1 stands for both of its forms, so this structure can be either of 2 stereoisomers.", isomers: 2 });
+    expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Which stereoisomer?", said: "and1 stands for both of its forms, so this structure can be either of 2 stereoisomers.", isomers: 2, all: true });
   });
   it("never asks where the drawing stands for one stereoisomer, whatever is open", () => {
     const one: Open = { atoms: [3], bonds: [], groups: [], isomers: 1 };
@@ -157,5 +166,46 @@ describe("a double bond drawn as not stated, as it is asked today", () => {
     const made = await isomersToMake(chem, block(onEnd, onDouble), undefined, "all");
     expect(made.count).toBe(isomers);
     expect(made.open.left.bonds).toEqual(bonds);
+  });
+});
+
+describe("the card states how many stereoisomers there are, and offers all of them only up to the 32 made at once", () => {
+  // (each count by hand: n unlike centres on a chain whose ends differ, 2^n; n centres on a chain the same from both ends, n even,
+  //  (2^n + 2^(n/2)) / 2 - the forms that read the same either way round counted once; the inositols, nine)
+  const asked = async (smiles: string) => {
+    const block = blockOf(drawnFromSmiles(smiles) as never);
+    const made = await isomersToMake(chem, block.molblock, undefined, "all");
+    return { made, words: askWords([openIn(block, made)]) };
+  };
+  it.each([
+    // (nonane-3,4,5,6,7,8-hexol, an ethyl at one end and a methyl at the other: six unlike centres, 2^6 = 64 - past 32, one made)
+    ["nonane-3,4,5,6,7,8-hexol", "CCC(O)C(O)C(O)C(O)C(O)C(O)C", 6, 64, false],
+    // (dodecane-1,2,...,12-dodecol, HOCH2-(CHOH)10-CH2OH: (2^10 + 2^5) / 2 = 528)
+    ["HOCH2-(CHOH)10-CH2OH", "OCC(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)CO", 10, 528, false],
+    // (the inositols: eight meso forms and one pair, 9 - all made)
+    ["cyclohexane-1,2,3,4,5,6-hexol", "OC1C(O)C(O)C(O)C(O)C1O", 6, 9, true],
+    // (octane-3,4,5,6,7-pentol, ends unlike: 2^5 = 32, the most made at once - all made)
+    ["octane-3,4,5,6,7-pentol", "CCC(O)C(O)C(O)C(O)C(O)C", 5, 32, true],
+  ] as const)("%s, %s: %i centres, %i stereoisomers", async (_name, smiles, centres, isomers, all) => {
+    const { made, words } = await asked(smiles);
+    expect(made.count).toBe(isomers);
+    expect(made.upTo).toBeUndefined();
+    expect(words.said).toBe(`${centres} stereocentres are drawn without a configuration, so this structure can be any of ${isomers} stereoisomers.`);
+    expect(words.all).toBe(all);
+    // (made: every one up to 32; past it, the first alone - never a part of them chosen by no chemistry)
+    expect(made.isomers.length).toBe(all ? isomers : 1);
+    // (the ten-centre chain's 1024 ways each written: more than the default few seconds on a loaded machine)
+  }, 60_000);
+  it("past the ways the count tries, says at most how many, and makes one", async () => {
+    // (tetradecane-3,...,13-undecol, ends unlike: eleven open centres, more than the 2^10 ways counted - the bound 2^11 = 2048, true
+    //  whatever the symmetry; here every centre unlike, so also the count)
+    const { made, words } = await asked("CCC(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C");
+    expect(made.count).toBe(2048);
+    expect(made.upTo).toBe(true);
+    expect(words.said).toBe("11 stereocentres are drawn without a configuration, so this structure can be any of up to 2048 stereoisomers.");
+    expect(words.all).toBe(false);
+    expect(made.isomers.length).toBe(1);
+    expect(made.isomers[0].centres.length).toBe(11);
+    expect((await isomersToMake(chem, blockOf(drawnFromSmiles("CCC(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C") as never).molblock, undefined, "one")).isomers.length).toBe(1);
   });
 });

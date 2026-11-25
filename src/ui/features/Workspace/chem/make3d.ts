@@ -45,7 +45,7 @@ import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
 import { isomersToMake, withChosen, withOwnCip, type OpenStereo, type ToMake } from "./openStereo";
 import { bySense, hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, notKept, reflectedConformers } from "./pageMirror";
-import type { Configuration, IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
+import { MOST_ISOMERS, type Configuration, type IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { groupName, sentOf } from "../../../../lib/chem/perception/stereo/configuration";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "./partsApart";
@@ -211,27 +211,30 @@ export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
 /**
  * What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id - only where the choice changes
  * the compound (chem/menoIsomers `leftByMeno`) - its runs of cumulated double bonds among those bonds (`runs`, each one place), the AND
- * and OR groups whose halves are made (by name: "and1"), and how many stereoisomers they make.
+ * and OR groups whose halves are made (by name: "and1"), and how many stereoisomers there are - past the ways Meno's count tries, at
+ * most that many (`upTo`).
  */
-export type Open = { atoms: number[]; bonds: number[]; runs?: number[][]; groups: { kind: "and" | "or"; name: string }[]; isomers: number };
+export type Open = { atoms: number[]; bonds: number[]; runs?: number[][]; groups: { kind: "and" | "or"; name: string }[]; isomers: number; upTo?: true };
 
 /** What a block leaves open (chem/openStereo `isomersToMake`), in the drawing's ids. */
-export function openIn(block: Block, made: { open: OpenStereo; count: number }): Open {
+export function openIn(block: Block, made: { open: OpenStereo; count: number; upTo?: true }): Open {
   return {
     atoms: made.open.left.atoms.map((i) => block.atoms[i]).filter((id) => id != null),
     bonds: made.open.left.bonds.map((i) => block.bonds[i]).filter((id) => id != null),
     runs: made.open.left.cumulated.map((r) => r.map((i) => block.bonds[i]).filter((id) => id != null)).filter((r) => r.length > 0),
     groups: made.open.groups.groups.map((g) => ({ kind: g.kind, name: groupName(g) })),
     isomers: made.count,
+    ...(made.upTo ? { upTo: true as const } : {}),
   };
 }
 
 /**
  * What the card that asks before 3D is made says (Ask3D): its title, and why the structure can be more than one stereoisomer - its stereo
  * drawn without a configuration (a run of two or four cumulated double bonds one chiral axis, of three one double bond), and its AND and
- * OR groups, each named as it is drawn - and how many it can be: either of two, any of more.
+ * OR groups, each named as it is drawn - and how many it can be: either of two, any of more, any of up to a bound past the ways Meno's
+ * count tries. All of them are offered (`all`) only where each structure has at most MOST_ISOMERS: never a part of them made.
  */
-export function askWords(open: readonly Open[]): { title: string; said: string; isomers: number } {
+export function askWords(open: readonly Open[]): { title: string; said: string; isomers: number; all: boolean } {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const centres = open.reduce((n, o) => n + o.atoms.length, 0);
   const runs = open.flatMap((o) => o.runs ?? []);
@@ -239,6 +242,8 @@ export function askWords(open: readonly Open[]): { title: string; said: string; 
   const axes = runs.filter((r) => r.length % 2 === 0).length;
   const bonds = open.reduce((n, o) => n + o.bonds.length, 0) - inRuns + runs.filter((r) => r.length % 2 === 1).length;
   const isomers = open.reduce((n, o) => n + o.isomers, 0);
+  const upTo = open.some((o) => o.upTo) ? "up to " : "";
+  const all = open.every((o) => !o.upTo && o.isomers <= MOST_ISOMERS);
   const kinds = [
     centres ? plural(centres, "stereocentre", "stereocentres") : "",
     bonds ? plural(bonds, "double bond", "double bonds") : "",
@@ -259,9 +264,9 @@ export function askWords(open: readonly Open[]): { title: string; said: string; 
   // (several structures asked about at once: how many, and their stereoisomers in all - what Make all makes)
   const howMany =
     open.length > 1
-      ? `these ${open.length} structures can be ${isomers} stereoisomers in all`
-      : `this structure can be ${isomers === 2 ? "either of 2 stereoisomers" : `any of ${isomers} stereoisomers`}`;
-  return { title: "Which stereoisomer?", said: isomers > 1 ? `${said}, so ${howMany}.` : `${said}.`, isomers };
+      ? `these ${open.length} structures can be ${upTo}${isomers} stereoisomers in all`
+      : `this structure can be ${isomers === 2 && !upTo ? "either of 2 stereoisomers" : `any of ${upTo}${isomers} stereoisomers`}`;
+  return { title: "Which stereoisomer?", said: isomers > 1 ? `${said}, so ${howMany}.` : `${said}.`, isomers, all };
 }
 
 /**

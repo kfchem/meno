@@ -235,6 +235,18 @@ export function isomersOf(
 }
 
 /**
+ * One stereoisomer of `input` without the count: the first way `isomersOf` tries, every open place given its first way round (a
+ * tied set as one place) - what is made of a structure with more ways than the count tries. Null where it is not counted.
+ */
+export function firstWayOf(input: IdentityInput): Stereoisomer | null {
+  const g = hydrogensFolded(input);
+  const tied = tiedPlaces(g, openPlaces(g));
+  if ("notCounted" in tied) return null;
+  const given = tied.open.reduce((h, o) => o.set(h, true), tied.base);
+  return { text: identity(given).text, input: given };
+}
+
+/**
  * The open places whose choice changes the compound (`Deciding`, the same as `isomersOf`'s), found by witnesses without the whole
  * count: a place decides where some way of giving the others has it turned alone write another identity. First the first way
  * against each place turned alone from it (n + 1 identities: every place of an ordinary molecule settled); then, for the places
