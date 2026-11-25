@@ -371,8 +371,11 @@ uv, no package), and the script Blender runs, `render.py`.
 - **Its options**: the renderer (Cycles, light traced, or EEVEE, drawn in real time),
   samples for each pixel, noise removal, where it renders (the faster of
   the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender
-  can use one - and the processor, or either), the background
-  (transparent - a film's then white - white, black or grey), the colours
+  can use one - and the processor, or either), the background (a
+  picture's transparent, white, black or grey; a film's white, black or
+  grey, a video keeping no transparency - Transparent is offered for a
+  picture alone, and a film asked for on it by a job written by hand
+  fails, said so, never put on a colour not asked for), the colours
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
   the shadows' softness, and a film's quality. The renderer and noise
@@ -563,7 +566,8 @@ one starts from its first choice.
   E and Z, a measurement's value - are not in the scene yet: they are
   words, which would be written in the scene as shapes.
 - Films with a transparent background (a video kind that keeps it, which
-  every system's web view plays, is wanted first).
+  every system's web view plays, is wanted first): until then a film's
+  Background offers white, black and grey alone.
 - A render is not picked up again as a workflow's job is: its workspace's
   tab closing stops it (*On the page*), and Meno's window closed as a
   whole leaves it running, what it makes kept only in its job's folder.
