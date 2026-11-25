@@ -10,7 +10,7 @@
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
 import { ELEMENTS } from "../chem/elements";
-import { VARIABLE_NAMES } from "../chem/abbreviations";
+import { abbreviationStructure, VARIABLE_NAMES } from "../chem/abbreviations";
 import { narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
@@ -432,7 +432,7 @@ const isElementSymbolLike = (text: string) => {
 export const COMPOUND_NUMBER = /^[([]?\d+[a-z]{0,2}['\u2032\u2033]*[)\]]?$/;
 
 /** A word: letters on a line side by side - its subscripts and superscripts with it - as drawn. */
-type Word = { letters: FigureLetter[]; box: Box; size: number };
+type Word = { letters: FigureLetter[]; box: Box; size: number; /** Said of the atom it becomes: how it was cut from its neighbour. */ cut?: string };
 
 /** Letters joined into words: each to the one before it on its line where they nearly touch. */
 export function wordsOf(letters: readonly FigureLetter[]): Word[] {
@@ -600,8 +600,9 @@ function boxOfBoxes(bs: readonly Box[]): Box {
  */
 function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label" | "alts" | "unsure"> {
   const { text: label, taken } = labelParts(w, reads);
+  const said = w.cut ? [w.cut] : [];
   // (a level number cut from the end of the label: its place cannot tell a count from an atom's number, so the atom says so)
-  const cut = taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [];
+  const cut = [...said, ...(taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [])];
   const shaped = w.letters.filter((l): l is ShapeLetter => "sure" in l);
   if (!shaped.length) return { label, ...(cut.length ? { unsure: cut } : {}) };
   const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) }, reads);
@@ -1155,6 +1156,9 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
   }
 }
 
+/** The words cut in two by `readFigure`, and the pieces' boxes: to see, once the atoms and bonds are read, that each piece is an atom with a bond of its own. */
+const CUTS = new WeakMap<FigureRead, { key: string; boxes: [Box, Box] }[]>();
+
 /**
  * A figure read: the shapes its paths make (or `given`: those a scheme's
  * arrows and signs were taken out of) read as bonds, their ends where they
@@ -1166,7 +1170,21 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
 export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes, traced = false): FigureRead {
   // (a chain of bars the polygon of one filled outline made - ./drawn `barsOfOutline` - is the drawing's bonds, or not: told by the drawing's own bond;
   // shapes given - a scheme's - have been told already)
-  const all = given ?? sizedOutlines(shapesOf(drawn), drawn.letters);
+  // (a cut is kept only where each of its pieces is an atom with a bond of its own in what is read: else the word is not cut, and is read again whole)
+  const shapes = given ?? sizedOutlines(shapesOf(drawn), drawn.letters);
+  const first = readOnce(drawn, reads, known, shapes, traced, new Set());
+  const undone = (CUTS.get(first) ?? []).filter(({ boxes }) =>
+    boxes.some((b) => {
+      const i = first.atoms.findIndex((a) => a.box === b);
+      return i < 0 || !first.bonds.some((x) => x.a === i || x.b === i);
+    }),
+  );
+  return undone.length ? readOnce(drawn, reads, known, shapes, traced, new Set(undone.map((u) => u.key))) : first;
+}
+
+function readOnce(drawn: FigureDrawn, reads: (label: string) => boolean, known: readonly GlyphShape[], given: Shapes, traced: boolean, uncut: ReadonlySet<string>): FigureRead {
+  const cuts: { key: string; boxes: [Box, Box] }[] = [];
+  const all = given;
   const bond = bondOf(all, drawn.letters);
   const empty: FigureRead = { atoms: [], bonds: [], bond, left: { letters: [...drawn.letters] } };
   if (!bond) return empty;
@@ -1205,6 +1223,47 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a repeat unit in brackets with its count: its brackets no bonds, its count no word - what is read of it, below)
   const repeats = repeatBrackets(shapes, written, bond, hashed);
   const words = written.filter((_, k) => !repeats.counts.has(k));
+  // (two labels set close - a group's name by an atom's, Me by an O - are two only where the bonds say so, and one word where they do not: cut at a capital
+  // where both pieces read, one a group's name and the other an atom's label, and two different bond ends come to the word - each counted for the piece it is
+  // nearer, one for each, so that each piece is an atom with a bond of its own; an ether or an ester has its one bond at the O: OMe, OAc, OPMB. The cut is
+  // said on both atoms where neither the size - a part at nine tenths of the other's or less - nor the line - a part set off the other's by a twelfth of its
+  // size or more - shows it too)
+  // (the ends of bonds as drawn: a hashed bond's marks are no bonds - the hash is one, with one end at each of its ends - and the two lines of a double bond, side by side and
+  // running the one way, are one bond's end)
+  const bondEnds: { p: Point; out: Point }[] = [...shapes.strokes.filter((t) => !inHashes.has(t)).flatMap((t) => [{ p: t.a, out: unit(t.b, t.a) }, { p: t.b, out: unit(t.a, t.b) }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, out: unit(w.base, w.tip) }, { p: w.base, out: unit(w.tip, w.base) }]), ...hashed.flatMap((h) => [{ p: h.a, out: unit(h.b, h.a) }, { p: h.b, out: unit(h.a, h.b) }])];
+  // (only a free end - one at which no other bond ends, the lines of one double bond not being two bonds meeting - is a label's bond: a corner, where two bonds meet at an angle, is a carbon)
+  const freeEnds = bondEnds.filter((e, k) => !bondEnds.some((o, m) => m !== k && Math.hypot(o.p.x - e.p.x, o.p.y - e.p.y) < 0.2 * bond && Math.abs(o.out.x * e.out.y - o.out.y * e.out.x) > 0.25));
+  const pieceOf = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
+  const baseline = (w: Word) => {
+    const ys = w.letters.filter((l) => l.size >= 0.85 * w.size).map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b);
+    return ys.length ? ys[ys.length >> 1] : 0;
+  };
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const key = w.box.join(",");
+    if (w.letters.length < 3 || uncut.has(key)) continue;
+    for (let j = 1; j < w.letters.length; j++) {
+      if (!/[A-Z]/.test(w.letters[j].c)) continue;
+      const [p, q] = [pieceOf(w.letters.slice(0, j)), pieceOf(w.letters.slice(j))];
+      const [tp, tq] = [labelText(p, reads), labelText(q, reads)];
+      // (a group's name and an atom's label, each read on its own: neither a lone H, a charge, nor a number)
+      const group = (t: string) => abbreviationStructure(t) != null;
+      if (!reads(tp) || !reads(tq) || tp === "H" || tq === "H" || group(tp) === group(tq)) continue;
+      // (each bond end that comes to the word is counted for the one piece it is nearer, and the cut needs one end for each: a single end reaching both is
+      // no cut - OPMB, OAc, OMe on their one bond - and a piece left with no bond of its own would be no atom)
+      const mine = freeEnds.filter((e) => reaches(e.p, e.out, p.box, bond) || reaches(e.p, e.out, q.box, bond));
+      const forP = mine.filter((e) => fromBox(e.p, p.box) <= fromBox(e.p, q.box));
+      const byBonds = forP.length > 0 && mine.length - forP.length > 0;
+      if (!byBonds) continue;
+      const bySize = Math.min(p.size, q.size) <= 0.9 * Math.max(p.size, q.size);
+      const byLine = Math.abs(baseline(p) - baseline(q)) >= (1 / 12) * Math.max(p.size, q.size);
+      const said = byBonds && !bySize && !byLine ? `Two labels, "${tp}" and "${tq}", set close: cut where the bonds come to both, nothing else says so.` : undefined;
+      const [cp, cq] = [{ ...p, ...(said ? { cut: said } : {}) }, { ...q, ...(said ? { cut: said } : {}) }];
+      words.splice(i, 1, cp, cq);
+      cuts.push({ key, boxes: [cp.box, cq.box] });
+      break;
+    }
+  }
   // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
   // charge written before a capital, where both pieces read)
   const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }, reads));
@@ -1765,7 +1824,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a picture traced from its pixels keeps what stands alone: its reading says each small piece - ink it may have read as bonds - rather
   //  than leave it out unsaid, lib/figure/tracedRead)
   const { lone, triples, ...kept } = traced ? { lone: 0, triples: 0, atoms, bonds } : withoutStrays(atoms, bonds, bond, drawn.pictures);
-  return { ...kept, bond, left: { letters: left, ...(lone ? { lines: lone } : {}), ...(triples ? { triples } : {}) }, ...(tableCells.length ? { table: tableCells } : {}) };
+  const result: FigureRead = { ...kept, bond, left: { letters: left, ...(lone ? { lines: lone } : {}), ...(triples ? { triples } : {}) }, ...(tableCells.length ? { table: tableCells } : {}) };
+  CUTS.set(result, cuts);
+  return result;
 }
 
 /** What an atom at the end of a row of dashes says. */

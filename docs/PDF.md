@@ -1626,7 +1626,23 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A number set smaller than the
+  H3N left outside the box - is no one's. Two labels set close - a group's
+  name by an atom's, Me by an O - are two only where the bonds say so, and one
+  word where they do not: a word is cut at a capital where both pieces read,
+  one a group's name and the other an atom's label (neither a lone H), and two
+  different FREE bond ends come to it - the end of a bond as drawn, at which no
+  other bond ends: where two bonds meet at an angle is a corner, a carbon, never
+  a label's bond, while the two lines of a double bond, side by side, are one
+  bond's end and a hash's marks are no bonds, the hash one - each counted
+  for the piece it is nearer, one for each; and a cut is kept only where each
+  piece is an atom with a bond of its own in what is read, else the word is read
+  whole again - so that each is an atom with a bond of its own: an ether or an
+  ester has its one bond at the O, OMe, OAc and OPMB are one label, however
+  near another bond passes. Cut where the size - a part at nine tenths of the
+  other's or less - or the line - a part set off the other's by a twelfth of
+  its size or more - show it too, the atoms say nothing; cut by the bonds alone,
+  both say so; no bond at both is one word, as MeOH is. The
+  cut comes before the number rule: Me7OH is Me7 and OH. A number set smaller than the
   label's letters, after the first of them, is an atom's number - the small
   atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
   the label (2026-11-13), by these rules: an atom's number stands at the END of its label - a small digit with a letter of the label after it is never one (inside a label it is a count, or the mass number of the letter after it: CO2Me, NH4Cl, O13CH3), each run judged on its own, primes after it no letters. (1) After the name of a point of
