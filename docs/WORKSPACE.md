@@ -2590,9 +2590,11 @@ the canvas the column beside it leaves: what lies under the column is not
 in view. The view goes along first, as little as takes it in with a
 margin; only where that is not enough, out as little as needed, it in the
 middle of what can be seen - never in. What is seen whole already leaves
-the view as it is. Opened onto an empty page, it is fitted, as a canvas
-opens. Quick Add and a paste put what they make where the pointer is, in
-view already (the maintainer, 2026-10-18).
+the view as it is. Molecules made in 3D from a drawing that come out of
+view are shown with the drawing they were made from: the view eases to
+take both in, along or out as little as needed. Opened onto an empty page,
+it is fitted, as a canvas opens. Quick Add and a paste put what they make
+where the pointer is, in view already (the maintainer, 2026-10-18).
 
 ## First steps
 

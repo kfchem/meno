@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { viewToShow } from "./viewShow";
+import * as THREE from "three";
+import { shownWith, viewToShow } from "./viewShow";
+import { letViewGoalGo, setViewGoal, viewGoalOf } from "../components/viewGoal";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
@@ -54,5 +56,52 @@ describe("a put-down asks to be shown", () => {
     st().putRead({ ...one, atoms: one.atoms.map((a) => ({ ...a, y: a.y + 50 })) });
     expect(st().showRequest?.n).toBe(n + 1);
     expect(st().showRequest?.box.y1).toBeGreaterThan(50);
+  });
+});
+
+describe("molecules made in 3D from a drawing, shown", () => {
+  // (the canvas above: x from -50 to 50, y from -30 to 30 can be seen; the margin, 48 pixels, is 4.8 of the page)
+  it("leave the view as it is where the drawing and what was made are both seen whole", () => {
+    expect(viewToShow(view, screen, shownWith([{ x0: -10, x1: 0, y0: -5, y1: 5 }], { x0: 5, x1: 15, y0: -5, y1: 5 }))).toBeNull();
+  });
+
+  it("move it along as little as takes both in with the margin, where both fit at this zoom", () => {
+    // (made out to the right, past x = 50; the drawing near the left edge: the view goes 4.8 to the right, no further, and keeps the drawing)
+    const drawing = { x0: -40, x1: -30, y0: -5, y1: 5 };
+    const made = { x0: 35, x1: 50, y0: -5, y1: 5 };
+    const to = viewToShow(view, screen, shownWith([drawing], made))!;
+    expect(to.zoom).toBe(10);
+    expect(to.x).toBeCloseTo(4.8, 9);
+    expect(to.y).toBe(0);
+    expect(drawing.x0 - 4.8).toBeGreaterThanOrEqual(to.x - 50);
+  });
+
+  it("zoom out as little as needed where both do not fit at this zoom: never the one taken in by leaving the other", () => {
+    // (together 100 wide: 100 + 2 x 4.8 is more than the 100 seen, so out to (1000 - 96) / 100 = 9.04, their middle x = 20 in the middle)
+    const drawing = { x0: -30, x1: -20, y0: -5, y1: 5 };
+    const made = { x0: 45, x1: 70, y0: -5, y1: 5 };
+    const to = viewToShow(view, screen, shownWith([drawing], made))!;
+    expect(to.zoom).toBeCloseTo(9.04, 9);
+    expect(to.x).toBeCloseTo(20, 9);
+    expect(to.y).toBeCloseTo(0, 9);
+    // (what was made alone, as the view went before: along by 70 + 4.8 - 50 = 24.8, its left edge at -25.2 - the drawing, from
+    //  -30, no longer seen whole)
+    const alone = viewToShow(view, screen, made)!;
+    expect(alone.x).toBeCloseTo(24.8, 9);
+    expect(drawing.x0).toBeLessThan(alone.x - 50);
+  });
+
+  it("take in every part of the drawing, and the drawing alone where nothing was placed", () => {
+    expect(shownWith([{ x0: -10, x1: 0, y0: -5, y1: 5 }, { x0: 20, x1: 30, y0: 0, y1: 8 }], null)).toEqual({ x0: -10, x1: 30, y0: -5, y1: 8 });
+  });
+
+  it("end, at once, as the chemist takes the view: the eased move is the page's own view goal, which a press, a wheel or a pinch lets go", () => {
+    const cam = new THREE.OrthographicCamera();
+    const to = viewToShow(view, screen, shownWith([{ x0: -40, x1: -30, y0: -5, y1: 5 }], { x0: 35, x1: 50, y0: -5, y1: 5 }))!;
+    setViewGoal(cam, to);
+    expect(viewGoalOf(cam)).toEqual(to);
+    // (what PanZoom2D does on a press, a wheel turn or a pinch's start before anything else)
+    letViewGoalGo(cam);
+    expect(viewGoalOf(cam)).toBeUndefined();
   });
 });

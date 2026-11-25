@@ -286,6 +286,7 @@ import { emptyPageLineShown, pageHoldsNothing } from "./utils/emptyPage";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
+import { shownWith } from "./utils/viewShow";
 
 function WorkspaceContent({
   active,
@@ -645,8 +646,9 @@ function WorkspaceContent({
           replacing ? [replacing.id] : [],
           growths.length ? key : undefined,
         );
-        // (with no room for them in view, the view goes to them - along, or out as little as needed)
-        if (!allInView && made3d) store.getState().requestShow(made3d);
+        // (with no room for them in view, the view eases to take them in with the drawing they were made from - along, or
+        //  out as little as needed; where they are seen whole, it stays: utils/viewShow)
+        if (!allInView && made3d) store.getState().requestShow(shownWith(blocks.map((b) => boxOf(b.part)), made3d));
         if (!growths.length) return;
         // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
