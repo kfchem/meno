@@ -200,6 +200,12 @@ describe("a plugin's manifest", () => {
       expect(talks(h), JSON.stringify(h)).toBeUndefined();
     expect(talks(["api.example.com"], "smiles")).toBeUndefined();
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "smiles" }] })?.roles[0].hosts).toBeUndefined();
+    // (a structure found by its name: its hosts as a model's are; and a plugin fills at most one role that names hosts - two, and it is none)
+    expect(talks(["pubchem.ncbi.nlm.nih.gov"], "names")?.hosts).toEqual(["pubchem.ncbi.nlm.nih.gov"]);
+    expect(talks(undefined, "names")).toBeUndefined();
+    const both = { ...good, reads: [], kinds: [], roles: [{ role: "language-model", hosts: ["api.example.com"] }, { role: "names", hosts: ["pubchem.ncbi.nlm.nih.gov"] }] };
+    expect(acceptManifest(both)).toBeNull();
+    expect(acceptManifest({ ...both, roles: [both.roles[1], { role: "smiles" }] })?.roles.map((r) => r.role)).toEqual(["names", "smiles"]);
     // (Sketchkit's, as it carries them)
     const sketchkit = MANIFESTS.find((m) => m.id === "sketchkit")!;
     expect(sketchkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);

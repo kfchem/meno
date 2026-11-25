@@ -40,7 +40,7 @@ const MOST_KEEP = 2_000_000;
 
 /**
  * The purpose a model's plugin uses the network under, its hosts in it, in
- * order (src-tauri/src/model.rs `purpose`, the same): a yes is for those
+ * order (src-tauri/src/model.rs `Hosted::purpose`, the same): a yes is for those
  * hosts - a plugin updated to name others is asked of again.
  */
 export const modelPurpose = (plugin: string, hosts: readonly string[]) => `model:${plugin}@${[...hosts].sort().join(",")}`;

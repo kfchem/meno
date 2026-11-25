@@ -1726,7 +1726,13 @@ to be able to work with nothing going out at all.
   the one before kept as `network-log.jsonl.1`, one only. A child that may
   not use the network - a plugin's worker, a job - is pointed at the proxy
   with no task, so whatever it reaches for is
-  refused and on the record. What Meno fetches itself is a task too, under
+  refused and on the record. A worker whose plugin fills a role that names
+  hosts - talking with a model, or a structure found by its name - is the
+  one other: begun as a task under its own purpose (`model:<id>@<hosts>`,
+  `lookup:<id>@<hosts>`) with the hosts its manifest in place names, read
+  by the backend (`model.rs` `hosted_of`), never taken from the page; till
+  that purpose is allowed it has no task, and goes nowhere. A plugin fills
+  at most one such role. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an
   environment needs one (`tools.rs`), a plugin's downloads as it is set up
   - a model's weights, Blender (`plugfiles.rs`, under the plugin's

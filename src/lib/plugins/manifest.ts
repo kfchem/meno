@@ -225,9 +225,10 @@ export type RoleDecl = {
    */
   unsure?: UnsureDecl;
   /**
-   * Where the role takes them (Talking with a model): the hosts it talks to,
-   * each named exactly - its only way out, through Meno's network gate, and
-   * what the consent names (docs/CONVERSATIONS.md, *Connections*).
+   * Where the role takes them (Talking with a model; A structure found by its
+   * name): the hosts it talks to, each named exactly - its only way out,
+   * through Meno's network gate, and what the consent names
+   * (docs/CONVERSATIONS.md, *Connections*; docs/PLUGINS.md, *Roles*).
    */
   hosts?: string[];
 };
@@ -1143,6 +1144,9 @@ export function acceptManifest(raw: unknown): Manifest | null {
         (r) => r.role,
       )
     : [];
+  // (at most one role that names hosts: what its worker goes out for - talking with a model, or looking names up - never in doubt,
+  //  the backend reading the same; two, and the plugin is none)
+  if (roles.filter((r) => r.hosts).length > 1) return null;
   // (each kind of step once)
   const steps = environment ? list(m.steps).flatMap((v) => stepsOf(v, roles)).filter((d, i, all) => all.findIndex((e) => e.kind === d.kind) === i) : [];
   // (a kind it reads is told: by its marks, or by asking it - and then by its files' names first)
