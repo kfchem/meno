@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Conformers } from "../../../../lib/roles/client";
 import { Sameness } from "../workflow/sameConformer";
 import { asThePageShows } from "./pageConformers";
+import { CHLOROETHANE, chloroethane } from "./testdata/turnedConformers";
 
 /** The RDKit plugin's own answers to `conformers`, as the page asks for them: every conformer it made, in its order (scripts/conformers/made_by_rdkit.py). */
 const MADE = JSON.parse(readFileSync(resolve(__dirname, "testdata/conformers.rdkit.json"), "utf8")) as {
@@ -86,5 +87,22 @@ describe("a structure's conformers, as the page shows them", () => {
     expect(shown.energies).toBeUndefined();
     expect(shown.frames[0]).toEqual(given.frames[0]);
     for (const f of shown.frames) for (const v of f) expect(Math.round(v * 1e4) / 1e4).toBe(v);
+  });
+});
+
+describe("a structure's conformers, as the page shows them while its search goes on", () => {
+  const near = (got: readonly number[], want: readonly number[]) => got.forEach((v, i) => expect(Math.abs(v - want[i])).toBeLessThan(1e-3));
+  const of = (frames: number[][], energies: number[]) => ({ ...CHLOROETHANE, frames, energies }) as unknown as Conformers;
+
+  it("keeps each one shown with its hydrogens where they were, however low the one a later round finds: chloroethane", () => {
+    // (A lowest, its methyl's H's at 60, 180 and 300 degrees; S at 30, 150, 270; then B, lower than both, at 0, 120, 240 - its
+    //  labels going round from another H, as an embedding may give them)
+    const [A, S, B] = [chloroethane([60, 180, 300]), chloroethane([30, 150, 270]), chloroethane([120, 240, 0])];
+    const before = asThePageShows(of([A, S], [0, 1]));
+    const after = asThePageShows(of([A, S, B], [0, 1, -1]), before.frames[0]);
+    expect(after.energies).toEqual([-1, 0, 1]);
+    // (A and S, each atom where it was - by hand, nothing of either moves: only B is new)
+    near(after.frames[1], before.frames[0]);
+    near(after.frames[2], before.frames[1]);
   });
 });

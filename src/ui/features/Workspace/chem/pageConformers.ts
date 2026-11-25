@@ -8,8 +8,9 @@
  * - each conformer once, by Meno's one definition (`workflow/sameConformer`),
  *   each against those kept before it;
  * - each laid over the first by its heavy atoms, turned and moved, never
- *   reflected;
- * - their equivalent branches in the first's places (`settle`).
+ *   reflected - or over `onto`, what a search that goes on showed first;
+ * - their equivalent branches in the first's places, or in `onto`'s
+ *   (`settle`).
  * What was done is said in rows after the search's own. A workflow's
  * *Conformers* step gives every one the search made, as it made it: its
  * *Duplicates* and *Rank* steps keep each once and order them, where asked.
@@ -35,8 +36,11 @@ export function asThePageShows(c: Conformers, onto?: readonly number[]): Conform
   const heavy = c.atoms.flatMap((a, i) => (a.el !== "H" && a.el !== "*" ? [i] : []));
   const first = frames[kept[0]];
   const laid = onto?.length === first.length ? kept.map((i) => laidOver(frames[i], onto, heavy)) : kept.map((i, k) => (k === 0 ? [...first] : laidOver(frames[i], first, heavy)));
-  // (the equivalent hydrogens and branches in the same places in each, as in the lowest)
-  const settled = settleEquivalents(c.atoms, c.bonds, laid).map((f) => f.map((v) => Math.round(v * 1e4) / 1e4));
+  // (the equivalent hydrogens and branches in the same places in each, as in the lowest - or as in `onto`, never as in a later
+  //  round's lowest: each frame's atoms where they were shown, whatever comes before it)
+  const settled = (onto?.length === first.length ? settleEquivalents(c.atoms, c.bonds, [onto, ...laid]).slice(1) : settleEquivalents(c.atoms, c.bonds, laid)).map((f) =>
+    f.map((v) => Math.round(v * 1e4) / 1e4),
+  );
   const aside = frames.length - kept.length;
   const { modelEnergies: _model, ...rest } = c;
   return {

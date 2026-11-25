@@ -3,6 +3,9 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { workspaceText } from "../utils/workspace";
 import type { Grown3D, Molecule3D } from "./types";
+import type { Conformers } from "../../../../lib/roles/client";
+import { Growing, type ShownWith } from "../chem/growing";
+import { CHLOROETHANE, chloroethane, roundOf } from "../chem/testdata/turnedConformers";
 
 /** A 3D structure whose search goes on (docs/WORKSPACE.md, *As its search goes on*): what it brings shown over the document, written into it once. */
 
@@ -148,5 +151,35 @@ describe("a 3D structure whose search goes on", () => {
     state().grow3d(id, null);
     expect(state().growing3d[id]).toBeUndefined();
     expect(state().molecules3d[0].frames).toHaveLength(1);
+  });
+
+  it("keeps the conformer shown shown, each atom where it was, as a later round finds a lower one: chloroethane, its methyl turned", () => {
+    // (what the page is given as it grows, made as the page makes it (chem/growing) - A at 60, 180 and 300 degrees, S at 30, 150, 270;
+    //  then B, lower, its H's named from another: by hand, S is third and nothing of it moves)
+    const plain = { open: { drawn: { atoms: [], bonds: [] } }, checks: null, parts: [[0, 1, 2, 3, 4, 5, 6, 7]], reflect: false } as unknown as ShownWith;
+    const g = new Growing(CHLOROETHANE.atoms, CHLOROETHANE.bonds, 5, plain);
+    const asGrown = (c: Conformers): Grown3D => ({
+      atoms: c.atoms.map((a, i) => ({ el: a.el, x: c.frames[0][3 * i], y: c.frames[0][3 * i + 1], z: c.frames[0][3 * i + 2] })),
+      frames: c.frames.slice(1),
+      energies: c.energies,
+      made: searching(1),
+    });
+    const one = roundOf(CHLOROETHANE, [chloroethane([60, 180, 300]), chloroethane([30, 150, 270])], [-500, -499.9999]);
+    g.add(one, one.energies!);
+    const before = asGrown(g.shown()!);
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const state = () => store.getState();
+    const m = { ...before, bonds: CHLOROETHANE.bonds, at: { x: 0, y: 0 }, conformerSet: true } as Omit<Molecule3D, "id">;
+    const [id] = state().riseMolecules3d([{ m, turn: [0, 0, 0, 1], from: { x: 0, y: 0 } }], [], "made3d:1");
+    state().startGrowing3d(id, before, "made3d:1");
+    state().setFrame3d(id, 1);
+    const two = roundOf(CHLOROETHANE, [chloroethane([120, 240, 0])], [-500.0001]);
+    g.add(two, two.energies!);
+    state().grow3d(id, asGrown(g.shown()!));
+    expect(state().frames3d[id]).toBe(2);
+    const shown = state().molecules3d[0].frames![1];
+    before.frames![0].forEach((v, i) => expect(Math.abs(shown[i] - v)).toBeLessThan(1e-3));
   });
 });

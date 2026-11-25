@@ -539,8 +539,10 @@ Taken on 2026-10-13:
     within what said with how they were made (*The same*, *The same
     within*);
   - **laid over the first** by their heavy atoms, turned and moved, never
-    reflected;
-  - **equivalent atoms in the first's places** (2026-10-15;
+    reflected - of a search that goes on, over what it first showed
+    (*As its search goes on*);
+  - **equivalent atoms in the first's places** - of a search that goes
+    on, in those of what it first showed (2026-10-15;
     `chem/settle`): an embedding does not say which of a CH2's two
     hydrogens, or of an isopropyl's two methyls, is which, so each
     equivalent group - neighbours of one atom of the same symmetry class,
