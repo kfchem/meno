@@ -13,8 +13,10 @@ export type MarkGlides = Map<string, { from: Pt; to: Pt; start: number }>;
 /** Nearer than this in the page's units is the same place: no glide. */
 const SAME = 1e-6;
 
-function placeAt(g: { from: Pt; to: Pt; start: number }, now: number, ms: number): Pt {
-  const u = eased(EASE, (now - g.start) / ms);
+const onMeno = (u: number) => eased(EASE, u);
+
+function placeAt(g: { from: Pt; to: Pt; start: number }, now: number, ms: number, ease: (u: number) => number): Pt {
+  const u = ease((now - g.start) / ms);
   return { x: g.from.x + (g.to.x - g.from.x) * u, y: g.from.y + (g.to.y - g.from.y) * u };
 }
 
@@ -28,6 +30,8 @@ export function markGlideStep<T extends { key: string; x: number; y: number }>(
   now: number,
   snap: (key: string) => boolean = () => false,
   ms = DURATION.move * 1000,
+  /** The curve it goes on: Meno's `EASE`, or another's that it goes with. */
+  ease: (u: number) => number = onMeno,
 ): { marks: T[]; moving: boolean } {
   const keys = new Set(marks.map((m) => m.key));
   for (const k of [...glides.keys()]) if (!keys.has(k)) glides.delete(k);
@@ -39,11 +43,11 @@ export function markGlideStep<T extends { key: string; x: number; y: number }>(
       glides.set(m.key, { from: to, to, start: now });
       return m;
     }
-    if (Math.hypot(g.to.x - to.x, g.to.y - to.y) > SAME) glides.set(m.key, { from: placeAt(g, now, ms), to, start: now });
+    if (Math.hypot(g.to.x - to.x, g.to.y - to.y) > SAME) glides.set(m.key, { from: placeAt(g, now, ms, ease), to, start: now });
     const h = glides.get(m.key)!;
     if (now - h.start >= ms) return m;
     moving = true;
-    const p = placeAt(h, now, ms);
+    const p = placeAt(h, now, ms, ease);
     return { ...m, x: p.x, y: p.y };
   });
   return { marks: out, moving };

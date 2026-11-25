@@ -7,7 +7,14 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { drawnOf, exportedDrawn, structureFileText } from "../fileActions";
 import { drawnOf as drawnRead } from "../utils/io";
 import { readStructures } from "../../../../lib/io/structures";
-import { rigidFit, tiedCaptionOf } from "../utils/tiedCaptions";
+import { drawnStructureBox, keptAgainstBox, tiedCaptionOf } from "../utils/tiedCaptions";
+import { markGlideStep, type MarkGlides } from "../utils/markGlide";
+import { wordsSet } from "../../../../lib/chem/captions";
+import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
+import { editorLayoutOptions } from "../layoutOptions";
+import { DURATION, easeOut } from "../../../theme/motion";
+
+const GLIDE = DURATION.move * 1000;
 import type { Molecule3D } from "./types";
 
 function editor() {
@@ -58,22 +65,6 @@ describe("text that belongs to a structure", () => {
     expect(words(state, id)).toMatchObject({ x: x0 + 1.5, y: y0 - 4.5 });
     doc.redo();
     expect(words(state, id)).toMatchObject({ x: x0 + 11.5, y: y0 + 0.5 });
-  });
-
-  it("turns with its structure about it, its words upright (no turn of their own), and is turned over with it", () => {
-    const { state, id, x0, y0 } = chainWithText();
-    // (a quarter turn about the middle atom: the text three bonds under it goes three bonds to its right... less the 1.5 across)
-    const cx = x0 + 1.5;
-    state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: cx - (a.y - y0), y: y0 + (a.x - cx) })), "turn");
-    const turned = words(state, id)!;
-    expect(turned.x).toBeCloseTo(cx + 4.5, 9);
-    expect(turned.y).toBeCloseTo(y0, 9);
-    expect(Object.keys(turned)).not.toContain("angle");
-    // (turned back, then over left to right about its middle: under it still)
-    state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: cx + (a.y - y0), y: y0 - (a.x - cx) })), "turn back");
-    state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: 2 * cx - a.x, y: a.y })), "flip");
-    expect(words(state, id)!.x).toBeCloseTo(cx, 9);
-    expect(words(state, id)!.y).toBeCloseTo(y0 - 4.5, 9);
   });
 
   it("dragged by itself, keeps its new place beside its structure and still belongs to it", () => {
@@ -203,26 +194,136 @@ describe("text that belongs to a structure", () => {
   });
 });
 
-describe("the fit that carries text with its structure", () => {
-  it("of a straight structure: turned over left to right, keeps the words under it; given a quarter turn, takes them round", () => {
-    const line = [{ x: 0, y: 0 }, { x: 1.5, y: 0 }, { x: 3, y: 0 }];
-    const words = { x: 1.5, y: -4.5 };
-    const over = rigidFit(line, line.map((p) => ({ x: 3 - p.x, y: p.y })))(words);
-    expect(over.x).toBeCloseTo(1.5, 9);
-    expect(over.y).toBeCloseTo(-4.5, 9);
-    const turned = rigidFit(line, line.map((p) => ({ x: 1.5 - p.y, y: p.x - 1.5 })))(words);
-    expect(turned.x).toBeCloseTo(6, 9);
-    expect(turned.y).toBeCloseTo(0, 9);
+// (an invented ring of six carbons with one carbon on it - no labels - and its text under it, as "Add text" puts it)
+function ringWithText() {
+  const e = editor();
+  const ring = Array.from({ length: 6 }, (_, k) => ({ id: k + 1, x: 1.5 * Math.cos(Math.PI / 2 + (k * Math.PI) / 3), y: 1.5 * Math.sin(Math.PI / 2 + (k * Math.PI) / 3), el: "C" }));
+  e.state().pasteModel(readRecord(JSON.stringify({
+    format: "meno-structure",
+    version: 1,
+    atoms: [...ring, { id: 7, x: ring[5].x + 1.3, y: ring[5].y + 0.75, el: "C" }],
+    bonds: [...ring.map((r, k) => ({ id: 10 + k, a: r.id, b: ring[(k + 1) % 6].id, order: 1 })), { id: 20, a: 6, b: 7, order: 1 }],
+  }))!);
+  const atoms = e.state().model.atoms.map((a) => a.id);
+  const b = box(e.state, atoms[0])!;
+  const id = e.state().addCaption("compound Q7", (b.x0 + b.x1) / 2, b.y0 - 1, undefined, undefined, undefined, undefined, { of: { atom: atoms[0] } });
+  return { ...e, atoms, id };
+}
+
+type State = () => ReturnType<ReturnType<typeof editor>["state"]>;
+const box = (state: State, atom: number) => drawnStructureBox(state().model, new Set(state().model.atoms.filter((a) => a.id !== atom).map((a) => a.id).concat(atom)));
+const half = (state: State, id: number) => {
+  const w = wordsSet(words(state, id)!, editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE)));
+  return { w: w.halfW, h: w.halfH };
+};
+// (a quarter turn about `c`, a turn over left to right about the line x = `m`)
+const quarter = (state: State, c: { x: number; y: number }, gesture = "turn") => state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: c.x - (a.y - c.y), y: c.y + (a.x - c.x) })), gesture);
+const overAbout = (state: State, m: number) => state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: 2 * m - a.x, y: a.y })), "flip");
+
+describe("text that belongs to a structure keeps its place against the structure's box", () => {
+  it("turned a quarter: under the new box, centred on it, at the same gap", () => {
+    const { state, atoms, id } = ringWithText();
+    const b0 = box(state, atoms[0])!;
+    const h = half(state, id);
+    const gap = b0.y0 - (words(state, id)!.y + h.h);
+    quarter(state, { x: 0.4, y: -0.3 });
+    const b1 = box(state, atoms[0])!;
+    const w = words(state, id)!;
+    expect(w.x).toBeCloseTo((b1.x0 + b1.x1) / 2, 9);
+    expect(b1.y0 - (w.y + h.h)).toBeCloseTo(gap, 9);
+    // (the box itself turned: wider than tall, then taller than wide)
+    expect(b0.x1 - b0.x0).toBeCloseTo(b1.y1 - b1.y0, 6);
   });
 
-  it("is a shift for one point, a turn for a turned body, a mirror for a mirrored one", () => {
-    expect(rigidFit([{ x: 1, y: 1 }], [{ x: 3, y: 0 }])({ x: 0, y: 0 })).toEqual({ x: 2, y: -1 });
-    const body = [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }];
-    const turned = rigidFit(body, body.map((p) => ({ x: -p.y, y: p.x })))({ x: 1, y: -3 });
-    expect(turned.x).toBeCloseTo(3, 9);
-    expect(turned.y).toBeCloseTo(1, 9);
-    const mirrored = rigidFit(body, body.map((p) => ({ x: -p.x, y: p.y })))({ x: 1, y: -3 });
-    expect(mirrored.x).toBeCloseTo(-1, 9);
-    expect(mirrored.y).toBeCloseTo(-3, 9);
+  it("turned over left to right about its box's middle: unmoved; a straight chain likewise", () => {
+    const { state, atoms, id } = ringWithText();
+    const was = { ...words(state, id)! };
+    const b = box(state, atoms[0])!;
+    overAbout(state, (b.x0 + b.x1) / 2);
+    expect(words(state, id)!.x).toBeCloseTo(was.x, 9);
+    expect(words(state, id)!.y).toBeCloseTo(was.y, 9);
+    const line = editor();
+    line.state().pasteModel(readRecord(JSON.stringify({
+      format: "meno-structure",
+      version: 1,
+      atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: 1.5, y: 0, el: "C" }, { id: 3, x: 3, y: 0, el: "C" }],
+      bonds: [{ id: 4, a: 1, b: 2, order: 1 }, { id: 5, a: 2, b: 3, order: 1 }],
+    }))!);
+    const first = line.state().model.atoms[0];
+    const lb = box(line.state, first.id)!;
+    const t = line.state().addCaption("compound Q7", (lb.x0 + lb.x1) / 2, lb.y0 - 1, undefined, undefined, undefined, undefined, { of: { atom: first.id } });
+    overAbout(line.state, (lb.x0 + lb.x1) / 2);
+    expect(words(line.state, t)!.x).toBeCloseTo((lb.x0 + lb.x1) / 2, 9);
+    expect(words(line.state, t)!.y).toBeCloseTo(lb.y0 - 1, 9);
+  });
+
+  it("an atom drawn below its lowest: lower by what the box grew, at the same gap", () => {
+    const { state, atoms, id } = ringWithText();
+    const b0 = box(state, atoms[0])!;
+    const y0 = words(state, id)!.y;
+    const lowest = state().model.atoms.reduce((l, a) => (a.y < l.y ? a : l));
+    expect(state().bondOut(lowest.id, { x: lowest.x, y: lowest.y - 3 })).not.toBeNull();
+    const b1 = box(state, atoms[0])!;
+    expect(b1.y0).toBeLessThan(b0.y0 - 1);
+    expect(words(state, id)!.y).toBeCloseTo(y0 + (b1.y0 - b0.y0), 9);
+  });
+
+  it("put at the right side: still there after a quarter turn - the same gap, the same place along the side", () => {
+    const { state, atoms, id } = ringWithText();
+    const b0 = box(state, atoms[0])!;
+    const h = half(state, id);
+    state().updateCaption(id, { x: b0.x1 + 0.8 + h.w, y: (b0.y0 + b0.y1) / 2 + 0.4 }, "drag");
+    quarter(state, { x: 0.4, y: -0.3 });
+    const b1 = box(state, atoms[0])!;
+    const w = words(state, id)!;
+    expect(w.x - h.w - b1.x1).toBeCloseTo(0.8, 9);
+    expect(w.y - (b1.y0 + b1.y1) / 2).toBeCloseTo(0.4, 9);
+  });
+
+  it("put inside the box: kept against its middle - through a move, and as the box grows", () => {
+    const { state, atoms, id } = ringWithText();
+    const b0 = box(state, atoms[0])!;
+    state().updateCaption(id, { x: (b0.x0 + b0.x1) / 2 + 0.2, y: (b0.y0 + b0.y1) / 2 - 0.1 }, "drag");
+    state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: a.x + 3, y: a.y - 2 })), "drag");
+    const b1 = box(state, atoms[0])!;
+    expect(words(state, id)!.x - (b1.x0 + b1.x1) / 2).toBeCloseTo(0.2, 9);
+    expect(words(state, id)!.y - (b1.y0 + b1.y1) / 2).toBeCloseTo(-0.1, 9);
+    expect(keptAgainstBox({ x0: 0, y0: 0, x1: 4, y1: 2 }, { x0: 0, y0: -2, x1: 6, y1: 2 }, { x: 2.5, y: 1 }, { w: 3, h: 0.5 })).toEqual({ x: 3.5, y: 0 });
+  });
+
+  it("moved by (dx, dy): by exactly (dx, dy)", () => {
+    const { state, id } = ringWithText();
+    const was = { ...words(state, id)! };
+    state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: a.x + 0.7, y: a.y - 2.25 })), "drag");
+    expect(words(state, id)!.x - was.x).toBeCloseTo(0.7, 12);
+    expect(words(state, id)!.y - was.y).toBeCloseTo(-2.25, 12);
+  });
+
+  it("keeps the side it stands at by the most, below first", () => {
+    const b = { x0: 0, y0: 0, x1: 4, y1: 2 };
+    const grown = { x0: -1, y0: -1, x1: 5, y1: 4 };
+    expect(keptAgainstBox(b, grown, { x: 2, y: -1 }, { w: 1, h: 0.25 })).toEqual({ x: 2, y: -2 });
+    expect(keptAgainstBox(b, grown, { x: 2, y: 3 }, { w: 1, h: 0.25 })).toEqual({ x: 2, y: 5 });
+    expect(keptAgainstBox(b, grown, { x: -2, y: 1.5 }, { w: 1, h: 0.25 })).toEqual({ x: -3, y: 2 });
+    expect(keptAgainstBox(b, grown, { x: 6, y: 1 }, { w: 1, h: 0.25 })).toEqual({ x: 7, y: 1.5 });
+    // (as far below as to the left: below)
+    expect(keptAgainstBox(b, grown, { x: -1.5, y: -1.5 }, { w: 0.5, h: 0.5 })).toEqual({ x: -1.5, y: -2.5 });
+  });
+
+  it("on an undo of a move, drawn part-way between where it was and where it goes as the structure eases", () => {
+    const glides: MarkGlides = new Map();
+    const at = (x: number, y: number) => [{ key: "1", x, y }];
+    markGlideStep(glides, at(10, 5), 0, () => false, GLIDE, easeOut);
+    // (the undo: placed back at once in the document; drawn on the drawing's curve, over its time)
+    const mid = markGlideStep(glides, at(0, 0), 1000, () => false, GLIDE, easeOut);
+    expect(mid.marks[0]).toEqual({ key: "1", x: 10, y: 5 });
+    const part = markGlideStep(glides, at(0, 0), 1000 + GLIDE / 2, () => false, GLIDE, easeOut);
+    expect(part.moving).toBe(true);
+    expect(part.marks[0].x).toBeCloseTo(10 * (1 - easeOut(0.5)), 9);
+    expect(part.marks[0].x).toBeGreaterThan(0);
+    expect(part.marks[0].x).toBeLessThan(10);
+    expect(markGlideStep(glides, at(0, 0), 1000 + GLIDE, () => false, GLIDE, easeOut).marks[0]).toEqual({ key: "1", x: 0, y: 0 });
+    // (with a button held - a drag, a turn by the handle - at once)
+    expect(markGlideStep(glides, at(4, 4), 3000, () => true, GLIDE, easeOut).marks[0]).toEqual({ key: "1", x: 4, y: 4 });
   });
 });

@@ -287,7 +287,7 @@ import { emptyPageLineShown, pageHoldsNothing, thingInHand } from "./utils/empty
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
-import { tiedCaptionOf } from "./utils/tiedCaptions";
+import { drawnStructureBox, tiedCaptionOf } from "./utils/tiedCaptions";
 import type { CaptionOf } from "./store/types";
 
 function WorkspaceContent({
@@ -2505,14 +2505,17 @@ function WorkspaceContent({
             return () => {
               const now = store.getState();
               const cam = camRef.current;
-              const atoms = "atom" in of ? fragmentOf(now.model, of.atom) : new Set<number>();
               const none = new Set<number>();
-              const b = selectedBox(
-                { ...now, sel: { atoms, bonds: none }, sel3d: new Set("molecule" in of ? [of.molecule] : []), selCaptions: none, selArrows: none, selPluses: none, selPictures: none, selPdfs: none, selTexts: none, selSlides: none, selShapes: none, selInks: none, captions: [], arrows: [], pluses: [] },
-                style,
-                (cam as { zoom?: number } | null)?.zoom ?? 1,
-                cam ? eyeOf(cam)?.z : undefined,
-              );
+              // (a drawing's: the box its text keeps its place against as it changes - utils/tiedCaptions)
+              const b =
+                "atom" in of
+                  ? drawnStructureBox(now.model, fragmentOf(now.model, of.atom), now.docStyle)
+                  : selectedBox(
+                      { ...now, sel: { atoms: none, bonds: none }, sel3d: new Set([of.molecule]), selCaptions: none, selArrows: none, selPluses: none, selPictures: none, selPdfs: none, selTexts: none, selSlides: none, selShapes: none, selInks: none, captions: [], arrows: [], pluses: [] },
+                      style,
+                      (cam as { zoom?: number } | null)?.zoom ?? 1,
+                      cam ? eyeOf(cam)?.z : undefined,
+                    );
               if (!b) return;
               // (its middle across, a line's height under it)
               now.setCaptionEdit({ id: null, at: { x: (b.x0 + b.x1) / 2, y: b.y0 - layoutOpts.fontPx }, of });

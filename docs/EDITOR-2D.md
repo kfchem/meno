@@ -2155,12 +2155,22 @@ All hover-based, as above.
     caret in them, as text is written anywhere; kept, they belong to it.
     Where the structure has its text already, the menu offers nothing
     new: the text is edited by a double-click as any. It is words only -
-    no mark, chip or tip, at the page's scale. It moves, turns and turns
-    over with its structure (its words upright, as all words are), is
-    copied, cut, pasted and deleted with it - in a selection, on a slide,
-    in a set - however far from it; dragged by itself it keeps the place
-    it is put beside the structure and still belongs to it, near an arrow
-    or not. Its menu's *Free from its structure* makes it free text where
+    no mark, chip or tip, at the page's scale. It keeps its place against
+    the structure's drawn box (its atoms and their labels): the side of
+    the box it stands outside of by the most - below, above, left or right;
+    below as it is added - as far from that side, and as far along it from
+    its middle; or, its middle inside the box, as far from the box's
+    middle. Whatever changes the structure - a move, a turn, a turn over,
+    an atom or bond drawn or deleted, a label, a clean-up - it is put again
+    by that against the new box: after a quarter turn it is still under the
+    structure, centred, as far below; a branch drawn downward takes it
+    down; never onto the structure. Its words stay upright, as all words
+    do, and it eases with the structure as an undo or redo takes it back.
+    It is copied, cut, pasted and deleted with it - in a selection, on a
+    slide, in a set - however far from it; dragged by itself (held still
+    a moment, then dragged, as any text) it stays where it is put and
+    still belongs to it, near an arrow or not: the next change of the
+    structure reads its side from there. Its menu's *Free from its structure* makes it free text where
     it is, one undo step. The atom it is tied by deleted, it belongs to the
     nearest atom left of its structure; the whole structure deleted, it
     goes with it. Free text is never tied by being near a structure, and
