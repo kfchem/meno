@@ -1562,23 +1562,7 @@ it, in `features/Workspace/pageGl/`:
 - **A workflow** (components/Workflow2D): its steps' cards shut
   (`cardFace`) - who does it, what and how, its state in words and an icon
   turning while it runs, a log's last line in Plex Mono and a bar of how
-  far its jobs are; zoomed out where its words are too small to read, in
-  two more bands (`pageGl/cardBands`: by the page's scale, a screen pixel
-  to a page pixel): from three quarters down to a quarter it is *named* -
-  its box at the page's size, its kind's icon and its name on one line
-  (the name 11 screen pixels high at any zoom, cut inside its box, clear
-  of its mark), a mark of its state at its top right (running
-  turns, in Meno's colour; done is filled, in the quiet ink; waiting is
-  hollow; failed is in the alert tone with how many of its entries failed,
-  where it counts them) - and none of its summary, state words, log line,
-  bar or port names; under a quarter it is *marked*: its box tinted by
-  its state, the mark, and its name only where it fits whole inside its
-  box and clear of the mark at both sides - never cut short, never over its
-  box's edge or its mark.
-  Where two names would overlap, the later in reading order fades out
-  (the earlier staying) and the page's tip says it as its card is
-  pointed at. The bands switch with a little hysteresis (5 % each way) and
-  fade over Meno's quick time. A set's tab says its name and count in page
+  far its jobs are - at every zoom, scaled with the page. A set's tab says its name and count in page
   pixels at every zoom, scaled with the page as its frame is - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
