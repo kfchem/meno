@@ -1194,6 +1194,13 @@ wavy bond on each. One that is no stereo unit, which Meno's rules read from
 the drawing (an aromatic macrocycle's, a guanidine's), is laid out as the
 drawing reads it, as before.
 A plugin that sends no configuration is read as before.
+A centre whose fourth place is a lone pair that a SMILES configures, that
+Meno keeps and the plugin's reading leaves out (an N-aryl oxaziridine's
+N), is given by Meno's own reading of the text, laid over the rest: over
+the plugin's configuration where it sends one, else over the block's own
+reading, whose other centres and double bonds stand. It never takes the
+place of the whole, so the ring carbon beside such an N keeps the hand
+its SMILES writes, by a mark of its own.
 
 ## How the engine goes about it
 

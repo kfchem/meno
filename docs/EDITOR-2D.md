@@ -2760,6 +2760,19 @@ lipids each have their own way of being drawn, which it should know.
        aziridine's N is lower, 17.7-20.5 kcal/mol (Sec. 4.3), an N-aryl's
        or N-acyl's lower still: its invertomers are the conformer search's
        to find;
+     - an oxaziridine's N with an aryl on it (the maintainer, 2026-11-18):
+       the aryl lowers its barrier, but the ring's O keeps it as high as an
+       N-chloro aziridine's - a free energy of activation of 23.4 kcal/mol,
+       measured for 3-methyl-2,3-diphenyloxaziridine by its two invertomers
+       going over to each other at room temperature (H. Ono, J. S. Splitter
+       and M. Calvin, Tetrahedron Lett. 14, 4107-4110, 1973). The aryl is
+       a C of an aromatic ring of carbons only, fused ones too (a phenyl, a
+       naphthyl), whatever is on it. A heteroaryl (a pyridyl, a thienyl) is
+       not taken as an aryl here, because no barrier has been measured for
+       one (the maintainer, 2026-11-25).
+       An N-acyl, N-sulfonyl, N-alkoxycarbonyl or N-vinyl oxaziridine's N
+       keeps none, nor does an N-aryl diaziridine's, no barrier having been
+       measured for it, nor an N-aryl aziridine's;
      - an N at a bridgehead of a small bridged ring system, every bridge of
        three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
        at most): it cannot turn over without breaking a bond. A larger cage

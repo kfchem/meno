@@ -166,6 +166,32 @@ describe("lonePairsIn3d", () => {
     expect(r.none).toEqual(new Set([0]));
   });
 
+  it("reads an N-phenyl oxaziridine's N turned over as the other configuration, not as a conformer of the same: two stereoisomers", () => {
+    // (3-methyl-2-phenyloxaziridine, heavy atoms alone, synthetic: N0 at the origin, its ring's C1 at (a, b, 0) and O2 at (a, -b, 0) - a = 1.47 cos 30,
+    //  b = 1.47 sin 30 - the phenyl's ipso C3 at (-c, 0, d), d above the ring's plane (below, turned over), the methyl C4 on C1, and the phenyl's
+    //  other five C5-C9 a hexagon of 1.39 from C3 in the xz plane, its bonds written out single and double)
+    const turned = (below: boolean) => {
+      const z = aziridine("C", 120, below);
+      const [x3, , z3] = z.xyz.slice(9, 12);
+      const away = Math.atan2(z3, x3);
+      const centre = [x3 + 1.39 * Math.cos(away), z3 + 1.39 * Math.sin(away)];
+      const ring = [1, 2, 3, 4, 5].map((k) => [centre[0] + 1.39 * Math.cos(away + Math.PI + (k * Math.PI) / 3), 0, centre[1] + 1.39 * Math.sin(away + Math.PI + (k * Math.PI) / 3)]);
+      const atoms: AtomIn3d[] = [...z.atoms.map((a, i) => (i === 2 ? { el: "O" } : a)), ...ring.map(() => ({ el: "C" }))];
+      const bonds: BondIn3d[] = [
+        ...z.bonds,
+        ...[[3, 5, 2], [5, 6, 1], [6, 7, 2], [7, 8, 1], [8, 9, 2], [9, 3, 1]].map(([a1, a2, order]) => ({ a1, a2, order })),
+      ];
+      return lonePairsIn3d(atoms, bonds, [...z.xyz, ...ring.flat()], [0]);
+    };
+    const [up, down] = [turned(false), turned(true)];
+    // (by hand, as the N-chloro aziridine's: u . (v x w) of C1, O2, C3 from the N = -2abd, negative with C3 above, positive below)
+    expect(up.read.get(0)).toEqual({ neighbours: [1, 2, 3], volume: -1 });
+    expect(down.read.get(0)).toEqual({ neighbours: [1, 2, 3], volume: 1 });
+    // (keyed apart: two configurations, never two conformers of one)
+    expect(up.key).not.toBeNull();
+    expect(up.key).not.toBe(down.key);
+  });
+
   it("reads no atom whose lone pair keeps no configuration, and says it is no centre: a plain N-methyl aziridine's N, an amine's, an O+", () => {
     const plain = aziridine("C", 120);
     const amine = { atoms: [{ el: "N" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }], bonds: phosphine().bonds };
