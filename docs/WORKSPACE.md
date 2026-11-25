@@ -1487,9 +1487,8 @@ it, in `features/Workspace/pageGl/`:
   canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
   shrinks with the page, its lines too, never thinner than one device
   pixel. A control - a port - is its page pixels too, no more than its
-  share of what it belongs to, and never under its least on the screen
-  where the page is far (`Control`; 2026-11-11, the maintainer: a port's
-  dots were far too small zoomed in).
+  share of what it belongs to, and scaled with the page at every zoom
+  (`Control`).
 - **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
   worked out from its distance to its edge in the fragment shader -
   rounded corners, a line inside the edge as a CSS inset ring is, solid or
@@ -1852,9 +1851,8 @@ space-filling side by side is better science than either alone.
   those on a heteroatom take part in hydrogen bonds and in reactions.
   Every molecule drawn so says *C–H hidden* over it, on the canvas and in
   every picture made of it (SVG, PNG, EMF), for as long as it is. On the
-  canvas it is not one of the page's chips, which go when their words are
-  too small to read: it stays at any zoom, between three quarters and one
-  and a half times its size, and folds away as the molecule goes over to a
+  canvas it is as large on the page at every zoom, as the page's chips
+  are, and folds away as the molecule goes over to a
   look that keeps the hydrogens.
 - **Not read from before.** A settings file from before keeps none of
   its 3D look (pre-alpha: no migration).

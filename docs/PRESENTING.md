@@ -41,15 +41,11 @@ page; a talk is a way through it.
   left corner, and a dashed line runs from each to the next, an arrowhead
   half way along it, from the edge of the one to the edge of the other -
   or, one within the other (a detail zoomed into), from number to number.
-  All in Meno's own colour, faint, the same on the screen at any zoom -
-  until a number's disc would be more than a sixth of its slide's
-  height on the screen: from there the number shrinks with its slide, and
-  the line and its arrowhead with the smaller of the two it joins; and
-  where its figures are too small to read - the least size the page's
-  words are read at, 8.25 px - it goes: switched there, a little either
-  way, and faded over Meno's quick time, never faded with the zoom
-  (presenting/slides `markScale`, utils/zoomSwitch; the maintainer,
-  2026-10-28).
+  All in Meno's own colour, faint, and as large on the page at every
+  zoom, growing and shrinking with it like everything on the page. A
+  number's disc is never more than a sixth of its slide's height: on a
+  smaller slide the number is smaller, and the line and its arrowhead with
+  the smaller of the two it joins (presenting/slides `markScale`).
   Gone while a talk is given, and never in a picture of the page. A number
   being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around
@@ -440,8 +436,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
 - Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
   move across or up and down, the way it has gone most.
 - `components/Guides2D.tsx`: the lines and marks in Meno's attention
-  colour (#cd4560, `COLORS.attention`), one
-  pixel on the screen at any zoom, coming and going in a short ease.
+  colour (#cd4560, `COLORS.attention`), a page pixel wide, scaled with
+  the page at every zoom, coming and going in a short ease.
 
 ### Handwriting on the page (fifth part, first half, 2026-10-12)
 

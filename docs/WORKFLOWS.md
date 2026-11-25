@@ -178,12 +178,8 @@ closed; each wire as far as it bends out past them - one going back to a
 step on the left loops out either side; and what is drawn over the page
 in HTML - each molecule's frames chip, which may be wider than its set,
 and its notes over it (2026-10-24; components/FitToContent2D, utils/
-fitExtent). A chip is as large as the page draws it at any zoom, so where
-it lies now is where it lies after; the notes are drawn as large as the
-page only between three quarters and half as large again, so how much of
-it they take is worked out at the zoom the fit comes to. Their words, and the chips on the page, go below 75 % (*How it
-looks*): a card then shows its icon and its state's icon alone, a set
-its frame and what it holds.
+fitExtent). A chip and the notes are as large as the page draws them at
+any zoom, so where they lie now is where they lie after.
 
 ### How it looks
 
@@ -849,7 +845,7 @@ are read as Export reads them (`pluginEntry`), and given with it. *Show
 log* and *Show files* are on the step's menu (right-click), once it has
 run.
 
-A double-click on its card closes it, as do its *Close* and Escape; it never closes by itself (the maintainer, 2026-10-28): a single click on it again leaves it open, and a press elsewhere, a zoom, the selection changing, or a run starting or ending do not close it - the page is worked on (panned, zoomed, other cards opened) while its options stay open (2026-10-14). A double-click on a closed card opens it and leaves it open (workflow/cardOpen). Zoomed out where its words are too small to read, its options stay open, each line of their words a grey bar where it lies, as a text's words are (workflow/TextBars), and nothing in them can be pressed until they are read again. The
+A double-click on its card closes it, as do its *Close* and Escape; it never closes by itself (the maintainer, 2026-10-28): a single click on it again leaves it open, and a press elsewhere, a zoom, the selection changing, or a run starting or ending do not close it - the page is worked on (panned, zoomed, other cards opened) while its options stay open (2026-10-14). A double-click on a closed card opens it and leaves it open (workflow/cardOpen). Zoomed out, its options stay open and keep their words, scaled with the page. The
 step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere
@@ -2492,8 +2488,7 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   of 283 molecules in 3D - some 14 700 elements in its chips - to a frame
   every 0.6 s. While the zoom moves, `--page` stays as it was last
   written and each chip is scaled from where it hangs by how far the zoom
-  has gone from there (`--page-k`; a molecule's or a figure's notes by
-  `--notes-k`, between their two scales: `pageTold`); a frame after the
+  has gone from there (`--page-k`, notes alike: `pageTold`); a frame after the
   zoom stops, `--page` is written and each is laid out at it, its words
   crisp, at the size it was shown at.
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
