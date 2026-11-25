@@ -9,6 +9,7 @@ import { drawnOf as drawnRead } from "../utils/io";
 import { readStructures } from "../../../../lib/io/structures";
 import { drawnStructureBox, keptAgainstBox, tiedCaptionOf } from "../utils/tiedCaptions";
 import { markGlideStep, type MarkGlides } from "../utils/markGlide";
+import { selectionScheme } from "../utils/selectionScheme";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -325,5 +326,80 @@ describe("text that belongs to a structure keeps its place against the structure
     expect(markGlideStep(glides, at(0, 0), 1000 + GLIDE, () => false, GLIDE, easeOut).marks[0]).toEqual({ key: "1", x: 0, y: 0 });
     // (with a button held - a drag, a turn by the handle - at once)
     expect(markGlideStep(glides, at(4, 4), 3000, () => true, GLIDE, easeOut).marks[0]).toEqual({ key: "1", x: 4, y: 4 });
+  });
+});
+
+// (the rotate handle as Selection2D turns the selection at each frame: the selected atoms and what the selection carries - its words among
+//  them - turned from where they were as the turn began, about `about`, written in one step of the gesture)
+function handleTurn(state: State, about: { x: number; y: number }) {
+  const st = state();
+  const from = st.model.atoms.filter((a) => st.sel.atoms.has(a.id));
+  const words = selectionScheme(st).captions;
+  const gesture = `turn-${Math.random()}`;
+  const turn = <T extends { x: number; y: number }>(ps: readonly T[], angle: number) =>
+    ps.map((p) => ({ ...p, x: about.x + Math.cos(angle) * (p.x - about.x) - Math.sin(angle) * (p.y - about.y), y: about.y + Math.sin(angle) * (p.x - about.x) + Math.cos(angle) * (p.y - about.y) }));
+  return {
+    words,
+    to: (angle: number) => state().moveAtoms(turn(from, angle).map((a) => ({ id: a.id, x: a.x, y: a.y })), gesture, words.length ? { captions: turn(words, angle).map((c) => ({ id: c.id, x: c.x, y: c.y })) } : undefined),
+    end: () => state().settleMove(gesture, from.map((a) => a.id)),
+  };
+}
+
+describe("text that belongs to a structure, through the turns a chemist makes", () => {
+  const under = (state: State, atom: number, id: number, gap: number) => {
+    const b = box(state, atom)!;
+    const w = words(state, id)!;
+    const h = half(state, id);
+    expect(w.x).toBeCloseTo((b.x0 + b.x1) / 2, 9);
+    expect(b.y0 - (w.y + h.h)).toBeCloseTo(gap, 9);
+  };
+  const gapOf = (state: State, atom: number, id: number) => box(state, atom)!.y0 - (words(state, id)!.y + half(state, id).h);
+
+  it("the whole structure selected - its words carried by the selection - turned a quarter by the handle: under the new box, centred, the same gap", () => {
+    const { state, atoms, id } = ringWithText();
+    const gap = gapOf(state, atoms[0], id);
+    state().selectStructure(atoms[0]);
+    const t = handleTurn(state, { x: 0.3, y: 0.2 });
+    expect(t.words.map((c) => c.id)).toEqual([id]);
+    t.to(Math.PI / 2);
+    t.end();
+    under(state, atoms[0], id, gap);
+  });
+
+  it("only the ring's atoms selected and turned a quarter: under the whole structure's new box", () => {
+    const { state, atoms, id } = ringWithText();
+    const gap = gapOf(state, atoms[0], id);
+    const ring = new Set(atoms.slice(0, 6));
+    state().setSel({ atoms: ring, bonds: new Set(state().model.bonds.filter((b) => ring.has(b.a) && ring.has(b.b)).map((b) => b.id)) });
+    const t = handleTurn(state, { x: 0, y: 0 });
+    t.to(Math.PI / 2);
+    t.end();
+    under(state, atoms[0], id, gap);
+  });
+
+  it("turned over left to right from the selection's menu after a quarter turn: still under", () => {
+    const { state, atoms, id } = ringWithText();
+    const gap = gapOf(state, atoms[0], id);
+    state().selectStructure(atoms[0]);
+    const t = handleTurn(state, { x: 0.3, y: 0.2 });
+    t.to(Math.PI / 2);
+    t.end();
+    state().turnSelectionOver("vertical");
+    under(state, atoms[0], id, gap);
+    state().turnSelectionOver("horizontal");
+    under(state, atoms[0], id, gap);
+  });
+
+  it("a live turn: under the box at every frame - sampled at three angles", () => {
+    const { state, atoms, id } = ringWithText();
+    const gap = gapOf(state, atoms[0], id);
+    state().selectStructure(atoms[0]);
+    const t = handleTurn(state, { x: 0.3, y: 0.2 });
+    for (const angle of [Math.PI / 7, Math.PI / 3, (3 * Math.PI) / 4]) {
+      t.to(angle);
+      under(state, atoms[0], id, gap);
+    }
+    t.end();
+    under(state, atoms[0], id, gap);
   });
 });

@@ -2162,8 +2162,10 @@ All hover-based, as above.
     its middle; or, its middle inside the box, as far from the box's
     middle. Whatever changes the structure - a move, a turn, a turn over,
     an atom or bond drawn or deleted, a label, a clean-up - it is put again
-    by that against the new box: after a quarter turn it is still under the
-    structure, centred, as far below; a branch drawn downward takes it
+    by that against the new box, at every frame of a turn by the handle,
+    and also when only part of the structure is turned, or the text is
+    selected and turned with it: after a quarter turn it is still under
+    the structure, centred, as far below; a branch drawn downward takes it
     down; never onto the structure. Its words stay upright, as all words
     do, and it eases with the structure as an undo or redo takes it back.
     It is copied, cut, pasted and deleted with it - in a selection, on a

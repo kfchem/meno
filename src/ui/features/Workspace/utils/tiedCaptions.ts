@@ -92,7 +92,9 @@ export function keptAgainstBox(was: Box, now: Box, at: Pt, half: { w: number; h:
  * `next` with each caption that belongs to a structure where the edit from
  * `before` left its structure: kept its place against its structure's drawn
  * box (`keptAgainstBox`) as the structure was moved, turned, turned over,
- * drawn on or relabelled - unless the edit moved the words themselves; tied
+ * drawn on or relabelled - whatever the edit did to the words with it (a
+ * selection turned carries them round): only words moved while their
+ * structure stays as it was (moved alone) stay where they are put; tied
  * to another atom of its structure where the one it named is gone; deleted
  * with its structure.
  */
@@ -114,7 +116,7 @@ export function tiedCaptionsSettled<T extends Page>(next: T, before: Page | unde
       continue;
     }
     const was = wordsWere.get(c.id);
-    // (moved by the edit itself - dragged alone, or with what was selected: where it was put)
+    // (not moved by the edit itself)
     const still = !!was && was.of && was.x === c.x && was.y === c.y;
     if ("molecule" in c.of) {
       const m = molsNow.get(c.of.molecule);
@@ -131,8 +133,8 @@ export function tiedCaptionsSettled<T extends Page>(next: T, before: Page | unde
     }
     const anchor = c.of.atom;
     const there = atomsNow.get(anchor);
-    if (!still || !before || !atomsWere.has(anchor)) {
-      // (new words, or put somewhere: kept where they are - free if the atom they name is not drawn)
+    if (!was?.of || !before || !atomsWere.has(anchor)) {
+      // (new words: kept where they are - free if the atom they name is not drawn)
       if (there) out.push(c);
       else {
         changed = true;
@@ -141,6 +143,7 @@ export function tiedCaptionsSettled<T extends Page>(next: T, before: Page | unde
       }
       continue;
     }
+    // (the drawing as it was: the words where they are - moved alone, or not at all)
     if (next.model === before.model) {
       out.push(c);
       continue;
@@ -157,7 +160,15 @@ export function tiedCaptionsSettled<T extends Page>(next: T, before: Page | unde
     const held = there ? anchor : kin.reduce((best, id) => (dist(atomsWere.get(id)!, atomsWere.get(anchor)!) < dist(atomsWere.get(best)!, atomsWere.get(anchor)!) ? id : best), kin[0]);
     byNow ??= neighbours(next.model.bonds);
     const nowIds = structureOf(next.model.bonds, held, byNow);
-    const at = placeKept(c, before, next, wasIds, nowIds, atomsWere, atomsNow);
+    // (its structure as it was: words the edit moved were moved by the chemist - alone - and stay where put)
+    const reshaped = nowIds.size !== wasIds.size || [...nowIds].some((id) => atomsNow.get(id) !== atomsWere.get(id));
+    if (!reshaped) {
+      out.push(c);
+      continue;
+    }
+    // (its structure changed - by the edit, whatever it was: words carried with a selection turned, turned over, aligned or laid out
+    //  too - seated against its whole box from where they were, at every frame of a gesture; with its structure only moved, moved as much)
+    const at = placeKept(was, before, next, wasIds, nowIds, atomsWere, atomsNow);
     if (at.x === c.x && at.y === c.y && held === anchor) {
       out.push(c);
       continue;
