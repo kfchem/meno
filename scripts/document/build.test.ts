@@ -19,6 +19,7 @@ const FILES: Record<string, string> = {
   "kept.mol": mol("kept", [["C", 0, 0], ["C", 1.5, 0], ["C", 1.5, 1.5], ["C", 0, 1.5]], [[1, 2], [2, 3], [3, 4]]),
   "water.xyz": [WATER([0.96, 0, 0], -76.4), WATER([0.97, 0, 0], -76.399), WATER([0.95, 0.02, 0], -76.398)].join("\n") + "\n",
   "scheme.rxn": reaction(),
+  "tall.mol": mol("tall", [["C", 0, 0], ["C", 0, 1.5], ["C", 0, 3], ["C", 0, 4.5]], [[1, 2], [2, 3], [3, 4]]),
   "mixed.xyz": [WATER([0.96, 0, 0], -76.4), WATER([0.97, 0, 0], -76.399, ["H", "O", "H"])].join("\n") + "\n",
 };
 const read = (p: string) => {
@@ -97,6 +98,33 @@ describe("a workspace built from a manifest", () => {
     expect(boxes[4].x0).toBeCloseTo(0);
     expect(boxes[4].y1).toBeLessThan(Math.min(...boxes.slice(0, 4).map((b) => b.y0)));
     expect(boxes[5].x0).toBeGreaterThan(boxes[4].x1);
+  });
+
+  it("sets the names of a row's structures on one line, under its tallest, each under its own; the next row under them", async () => {
+    const manifest = {
+      title: "t",
+      entries: [
+        { structure: "propane.mol", id: "1" },
+        { structure: "tall.mol", id: "2", keepLayout: true },
+        { structure: "kept.mol", id: "3", keepLayout: true },
+        { break: true },
+        { text: "notes.md" },
+      ],
+    };
+    const { built, st } = await builtAndOpened(manifest);
+    const names = st.captions.filter((c) => c.text !== "t");
+    expect(names.map((c) => c.text)).toEqual(["1", "2", "3"]);
+    // (one line: the three names' y equal, under the lowest atom of the row - the tall one's)
+    expect(names[1].y).toBeCloseTo(names[0].y, 9);
+    expect(names[2].y).toBeCloseTo(names[0].y, 9);
+    const lowest = Math.min(...st.model.atoms.map((a) => a.y));
+    expect(names[0].y).toBeLessThan(lowest);
+    // (each centred under its own: the tall chain's name at its atoms' x)
+    const tall = st.model.atoms.slice(3, 7);
+    expect(names[1].x).toBeCloseTo(tall.reduce((s, a) => s + a.x, 0) / 4, 6);
+    // (the next row starts under the names)
+    expect(built.boxes[3].y1).toBeLessThan(names[0].y);
+    expect(built.boxes[3].y1).toBeLessThan(Math.min(...built.boxes.slice(0, 3).map((b) => b.y0)));
   });
 
   it("keeps a layout it is told to keep, and lays the others out", async () => {

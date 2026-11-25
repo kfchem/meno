@@ -114,8 +114,19 @@ export function checked(manifest: unknown): Manifest {
   return manifest as unknown as Manifest;
 }
 
-/** One entry ready to put down: the room it takes about its own point (`foot`), and how it is put down there. */
-type Ready = { foot: Box; put: (at: { x: number; y: number }) => void };
+/**
+ * One entry ready to put down: the room it takes about its own point
+ * (`foot`), and how it is put down there. A structure's `foot` is its own,
+ * without its name; its name (`named`) is set with the row's other names, on
+ * one line under the row's tallest structure (`nameY`, the line's point).
+ */
+type Ready = {
+  foot: Box;
+  /** Its name: half its height, and how far its box reaches below its point. */
+  named?: { half: number; below: number };
+  structure?: true;
+  put: (at: { x: number; y: number }, nameY: number) => void;
+};
 
 /** The built workspace: its file's bytes, and where each entry went (the manifest's order, breaks left out) - each box as it stands on the page. */
 export type Built = { bytes: Uint8Array; boxes: Box[]; title: Box };
@@ -192,15 +203,18 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
       const bare = footOf(laid as ProcessedFileResult, about(-centroid.x, -centroid.y), style, style3d);
       const words = raw.id ? { x: 0, y: 0, text: raw.id } : null;
       const half = words ? (captionBox(words, opts).y1 - captionBox(words, opts).y0) / 2 : 0;
-      const nameAt = (dx: number, dy: number) => (words ? [{ ...words, x: dx, y: bare.y0 - NAME_GAP - half + dy }] : []);
-      const foot = footOf(laid as ProcessedFileResult, { ...about(-centroid.x, -centroid.y), captions: nameAt(0, 0) }, style, style3d);
+      // (how wide its name is, and how far its box reaches below its point - measured where it would stand under it alone)
+      const alone = words ? footOf(laid as ProcessedFileResult, { ...about(-centroid.x, -centroid.y), captions: [{ ...words, y: bare.y0 - NAME_GAP - half }] }, style, style3d) : bare;
+      const box = words ? captionBox({ ...words, y: bare.y0 - NAME_GAP - half }, opts) : null;
       ready.push({
-        foot,
-        put: (p) => {
+        foot: { ...bare, x0: Math.min(bare.x0, alone.x0), x1: Math.max(bare.x1, alone.x1) },
+        structure: true,
+        ...(box ? { named: { half, below: box.y0 - (bare.y0 - NAME_GAP - half) } } : {}),
+        put: (p, nameY) => {
           const dx = p.x - centroid.x;
           const dy = p.y - centroid.y;
           const shifted = { atoms: model.atoms.map((a) => ({ ...a, x: a.x + dx, y: a.y + dy })), bonds: model.bonds };
-          store.getState().appendModel(shifted, { ...about(dx, dy), captions: nameAt(p.x, p.y) });
+          store.getState().appendModel(shifted, { ...about(dx, dy), captions: words ? [{ ...words, x: p.x, y: nameY }] : [] });
         },
       });
     } else {
@@ -225,7 +239,9 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   // The title over all, from the page's top left corner; then the entries
   // in reading order: left to right, each row's tops level, a row as wide
   // as `width` at most (an entry wider than that alone in its row), the next
-  // row under the lowest foot of the one before - GAP between all.
+  // row under the lowest foot of the one before - GAP between all. The
+  // names of a row's structures stand on one line, under its tallest
+  // structure, each centred under its own (as a scheme's numbers are set).
   const titleWords = { x: 0, y: 0, text: given.title, size: TITLE_PT, align: "left" as const };
   const tb = captionBox(titleWords, opts);
   // (its box's left edge at 0 and its top at 0, however its words are set about their point)
@@ -236,11 +252,24 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   const boxes: Box[] = [];
   let top = titleBox.y0 - GAP;
   let x = 0;
-  let foot = top;
+  let row: { r: Ready; p: { x: number; y: number } }[] = [];
+  // (the row put down: its names' line under its tallest structure; the next row's top under the lowest of all)
   const newRow = () => {
-    if (x === 0) return;
+    if (!row.length) return;
+    const structures = row.filter(({ r }) => r.structure);
+    const lowest = structures.length ? Math.min(...structures.map(({ r, p }) => p.y + r.foot.y0)) : 0;
+    const half = Math.max(0, ...row.map(({ r }) => r.named?.half ?? 0));
+    const nameY = lowest - NAME_GAP - half;
+    let foot = top;
+    for (const { r, p } of row) {
+      r.put(p, nameY);
+      const y0 = Math.min(p.y + r.foot.y0, r.named ? nameY + r.named.below : Infinity);
+      boxes.push({ x0: p.x + r.foot.x0, x1: p.x + r.foot.x1, y0, y1: p.y + r.foot.y1 });
+      foot = Math.min(foot, y0);
+    }
     top = foot - GAP;
     x = 0;
+    row = [];
   };
   for (const r of ready) {
     if (r === "break") {
@@ -249,12 +278,10 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
     }
     const w = r.foot.x1 - r.foot.x0;
     if (x > 0 && x + w > most) newRow();
-    const p = { x: x - r.foot.x0, y: top - r.foot.y1 };
-    r.put(p);
-    boxes.push({ x0: p.x + r.foot.x0, x1: p.x + r.foot.x1, y0: p.y + r.foot.y0, y1: p.y + r.foot.y1 });
+    row.push({ r, p: { x: x - r.foot.x0, y: top - r.foot.y1 } });
     x += w + GAP;
-    foot = Math.min(foot, p.y + r.foot.y0);
   }
+  newRow();
   const { bytes } = await workspaceFile(store.getState());
   return { bytes, boxes, title: titleBox };
 }

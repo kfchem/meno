@@ -49,7 +49,9 @@ refused, not passed over.
 - `width`: how wide a row grows, in bond lengths (100 unless said).
 - `entries`, in reading order, each one of:
   - `text`: a Markdown file (.md), put on the page as its sheet and listed in the
-    text column; `name`, its name there (the file's name unless said).
+    text column; `name`, its name there (the file's name unless said). Meno
+    tells a Markdown text by its name's ending today, so a text given a `name`
+    without ".md" is shown as its source, not formatted.
   - `structure`: a .mol, .sdf or .rxn file, drawn; `id`, its name, under it;
     `record`, an .sdf file's record (from 1; the first unless said);
     `keepLayout`, the file's own coordinates kept (scaled to the style's bond
@@ -75,7 +77,9 @@ refused, not passed over.
   alone in its row. Each entry takes the room the app measures for a file opened
   onto a page (`footOf`: its atoms, labels, name, arrow and "+" signs; a molecule
   in 3D as it is first seen, its chip with it) and a text the room of its sheet,
-  so that nothing lies over anything else.
+  so that nothing lies over anything else. The names of a row's structures stand
+  on one line under its tallest structure, each centred under its own, as the
+  numbers of a scheme are set; the next row starts under that line.
 - A mistake - a file missing, a key not known, a structure file that is not flat,
   frames of other atoms in a file marked `conformers` - stops the build with a
   sentence naming the entry. Nothing is skipped without saying so.
