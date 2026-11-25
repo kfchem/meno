@@ -3,7 +3,8 @@ import { solidsBounds } from "../../../lib/chem/layout2d";
 import { ACS_1996 } from "../../../lib/chem/style";
 import { bondsByDistance } from "../../../utils/structureParsers";
 import { drawingLayout } from "./fileActions";
-import { solidReach } from "./render3d";
+import { pictureItems } from "./picture";
+import { solidReach, steppedThrough } from "./render3d";
 import type { Carried3D } from "./store/types";
 import { notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { pictureSurface } from "./utils/surfaceMesh";
@@ -59,5 +60,45 @@ describe("a picture of molecules in 3D", () => {
     const again = notePictureMarks(m, style, 12);
     expect(again.length).toBeGreaterThan(0);
     expect(notePictureMarks(m, style, 12, undefined, pictureMarks(m, style))).toEqual(again);
+  });
+
+  it("are none, made a step at a time, once a copy begun since no longer wants them", async () => {
+    const solid = { atoms: [], bonds: [], molecules3d: [water] };
+    expect(await pictureItems(solid, aromatic, ACS_1996, null, 300, () => true)).toEqual([]);
+    expect((await pictureItems(solid, aromatic, ACS_1996, null, 300, () => false)).length).toBeGreaterThan(0);
+  });
+});
+
+describe("a render a step at a time", () => {
+  /** Three steps, what it made let go however it ends: what happened, in order. */
+  function* steps(seen: string[]): Generator<void, string, void> {
+    try {
+      seen.push("made");
+      yield;
+      seen.push("scene");
+      yield;
+      seen.push("drawn");
+      return "picture";
+    } finally {
+      seen.push("let go");
+    }
+  }
+
+  it("gives the picture, the page given a turn between its steps", async () => {
+    const seen: string[] = [];
+    const done = steppedThrough(steps(seen));
+    // (nothing past the first step until the page has had its turn)
+    expect(seen).toEqual(["made"]);
+    expect(await done).toBe("picture");
+    expect(seen).toEqual(["made", "scene", "drawn", "let go"]);
+  });
+
+  it("stops at the next step once it is no longer wanted, and lets go of what it made", async () => {
+    const seen: string[] = [];
+    let wanted = true;
+    const done = steppedThrough(steps(seen), () => !wanted);
+    wanted = false;
+    expect(await done).toBeNull();
+    expect(seen).toEqual(["made", "let go"]);
   });
 });

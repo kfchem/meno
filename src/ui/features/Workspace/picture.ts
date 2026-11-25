@@ -33,7 +33,8 @@ import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout, type PictureState } from "./fileActions";
 import type { Drawn } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
-import { solidsDrawn, solidsImageOn, type SolidsDrawn } from "./render3d";
+import { solidsDrawn, solidsDrawnInSteps, solidsImageOn, type SolidsDrawn } from "./render3d";
+import { breath } from "./utils/breath";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 
 /** What marks Meno's record in an EMF's comment, and names it in a PNG. */
@@ -124,15 +125,21 @@ export async function pictureItems(
   style: DrawingStyle,
   platformTakes?: Set<Flavor> | null,
   dpi = pictureDpi(),
+  // (whether the pictures are no longer wanted - a copy begun since: none made, then, and what was made let go)
+  stale: () => boolean = () => false,
 ): Promise<ClipItem[]> {
   const takes = platformTakes === undefined ? await clipboardTakes() : platformTakes;
   const wanted = (f: ClipItem["flavor"]) => !takes || takes.has(f);
   // (each step its own task, the page drawn between them: a large picture is made without holding the drawing up)
   await breath();
+  if (stale()) return [];
   const { record, molecules3d, layout, opts, reach } = laidOut(part, aromatic, style);
   await breath();
-  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi, reach));
+  if (stale()) return [];
+  // (drawn a step at a time, the page drawn between them)
+  const drawn = await solidsDrawnInSteps(molecules3d, layout, style3dOf(aromatic), dpi, reach, stale).catch(() => null);
   await breath();
+  if (stale()) return [];
   // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
   const pictured = wanted("gvml") || wanted("png") || wanted("dib");
   const own = drawn && onlySolids(layout) && pictured ? await solidsPng(layout, opts, drawn, dpi).catch(() => null) : null;
@@ -163,23 +170,6 @@ export async function pictureItems(
     if (raster) items.push({ flavor: "png", bytes: withText(withDpi(raster.png, raster.dpi), PNG_KEY, record) });
   }
   return items;
-}
-
-/**
- * A moment for the page: the rest of the work in a task of its own, after
- * whatever is waiting - a frame to draw, a key pressed. Not a frame's
- * callback, which a window out of sight is not given: a copy made just
- * before switching to another program finishes all the same.
- */
-function breath(): Promise<void> {
-  return new Promise((done) => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => {
-      channel.port1.close();
-      done();
-    };
-    channel.port2.postMessage(null);
-  });
 }
 
 /** Whether `layout` draws molecules in 3D and nothing flat: no bond, label, shape, arrow or stroke of a pen. */

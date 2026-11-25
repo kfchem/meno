@@ -187,6 +187,10 @@ export function useClipboardActions(
             p,
             state,
             styleOf(state.docStyle),
+            undefined,
+            undefined,
+            // (a copy begun since: this one's pictures are not made on)
+            () => mine !== begun.current,
           ).catch((e: unknown) => {
             console.warn("the structure is copied without its pictures", e);
             return [];

@@ -2939,7 +2939,9 @@ traced from reference drawings.
   (`clipboard_write`, one body, the kinds listed in a header), and the
   bitmap for Windows is made there from the PNG (`src-tauri/src/dib.rs`).
   Its pictures are made a step at a time, the drawing drawn between the
-  steps; a copy still being made after a quarter of a second says
+  steps - molecules in 3D among them, drawn a step at a time too, each
+  molecule's balls and sticks worked out once (`render3d.ts`); a copy begun
+  meanwhile ends the one before it, which lets go of what it made; a copy still being made after a quarter of a second says
   "Copying…" in the corner, where other work in hand is said, until it is on
   the clipboard. A paste waits for it, as before.
 - Drops are routed to the part of the page they land on (`src/lib/drop.ts`):
