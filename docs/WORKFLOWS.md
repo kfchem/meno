@@ -262,7 +262,14 @@ pointer does; put back by an undo, they glide back.
   set - a structure with none of its atoms left inside, a molecule or a
   picture with its middle outside - it leaves; moved within the frame, or
   half out of it, it keeps its place, and the frame grows round it;
-- what joins or leaves is marked a moment as it does;
+- while something is held, the set's own frame shows what letting go
+  would do, eased in and out as a highlight is: a set that would take it
+  in has its edge in Meno's colour and a wash of it over its room; a set
+  a member would leave has its edge dashed grey. The same test that
+  settles membership decides it, so the frame never shows what letting go
+  would not do; a step's result set, which takes nothing in, shows
+  nothing; and nothing is shown after letting go - the set's count and its
+  frame growing round what came say it (`workflow/setSigns`);
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
   the two are one;
@@ -276,7 +283,11 @@ pointer does; put back by an undo, they glide back.
   (`workflow/fitFrames`). It grows and shrinks as they change - a structure
   drawn on, a bigger look, a member deleted - its edges eased, in the same
   step as the edit; a workspace saved with frames of other sizes is fitted
-  as it opens. Its tab drags it, with all it holds;
+  as it opens. Its tab drags it, with all it holds - except where
+  something of a member lies on the tab or the frame's edge (an atom, a
+  bond, the selection's turn handle): a press there is the member's, so a
+  member's handle on the frame's top edge turns it, and a double-click on
+  an atom under the tab's words draws on it (`pageGl/PageHits`);
 - **nothing lies half over a frame.** While a member is dragged its frame
   stays where it is, so that it can be dragged out. Let go, a member with
   any of it still in the frame is its member, and the frame grows round it
@@ -2483,7 +2494,7 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   they are seen at - not drawn at one size and scaled by a transform
   (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
-  molecule or a figure) - once the zoom stands still.
+  figure; a molecule's mark of its notes is drawn with the page) - once the zoom stands still.
 - **Chips scaled while the zoom moves, laid out once it stands**
   (2026-11-05): laying out every chip at every frame of a zoom held a page
   of 283 molecules in 3D - some 14 700 elements in its chips - to a frame
@@ -3475,7 +3486,15 @@ those left open, *Generate*'s, and a SMILES pasted.
   any count of groups - of the d or f block, or Li, Mg, Al and the like,
   not Sn, Pb or Bi - and an N+ with an H, as Meno's reading of a drawing
   refuses them. So a toolkit's "possible" metal centre, Pd(PPh3)4's Pd, is
-  never said to be open. An open double bond on an atom
+  never said to be open. Of the rest, only a place whose choice changes
+  the compound is open: in some way of giving the other open places a
+  configuration, turning it alone gives another stereoisomer, as Meno's
+  identity tells them (lib/chem/isomers `decidingOf`). An isopropyl's CH,
+  a tert-butyl's C, methylcyclohexane's C1 and 2-methylbut-2-ene's C=C
+  never are; each centre of 1,4-dimethylcyclohexane is (cis or trans), and
+  so is pentane-2,3,4-triol's C3. Where the count is not made (a cage it
+  does not count, or more ways than it tries), every such place is open.
+  An open double bond on an atom
   of two double bonds is an allene's axis, and the bonds of a run are
   one element: an allene's axis, of two or four; cis or trans, of three.
 - **At most** (an option, 32 unless changed): the most stereoisomers one

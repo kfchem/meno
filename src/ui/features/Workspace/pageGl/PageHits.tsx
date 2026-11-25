@@ -24,12 +24,22 @@ export type HitHandlers = {
   menu?: (key: string, part: string, e: PagePointer) => void;
 };
 
-type Layer = { regions: readonly Region[]; on: HitHandlers };
+/** A layer of regions, and whether they give way to what of the drawing lies over them (`usePageHits`, `usePageBeneath`). */
+type Layer = { regions: readonly Region[]; on: HitHandlers; yields?: boolean };
+
+/** Whether something of the drawing that takes a press lies at a point on the page, at a zoom (`usePageBeneath`). */
+export type Beneath = (x: number, y: number, zoom: number) => boolean;
 
 /** The page's layers of regions, in the order they were laid: a later one over an earlier one. */
 export class PageRegions {
   private readonly layers = new Map<number, Layer>();
   private next = 0;
+  private readonly beneath = new Set<{ current: Beneath }>();
+  /** What says where the drawing takes a press, asked where a yielding layer's region would take it; given back by the function returned. */
+  under(probe: { current: Beneath }): () => void {
+    this.beneath.add(probe);
+    return () => this.beneath.delete(probe);
+  }
   add(layer: Layer): number {
     const id = this.next++;
     this.layers.set(id, layer);
@@ -41,19 +51,31 @@ export class PageRegions {
   remove(id: number): void {
     this.layers.delete(id);
   }
-  /** What is under `x`, `y` on the page at `zoom`, and the layer it is in. */
+  /**
+   * What is under `x`, `y` on the page at `zoom`, and the layer it is in: a
+   * yielding layer's region - a frame's tab or edge - only where nothing of
+   * the drawing that takes a press lies there (a member's atom or bond, the
+   * selection's turn handle), which then has it.
+   */
   at(x: number, y: number, zoom: number, accept?: (key: string, part: string) => boolean): (Hit & { on: HitHandlers }) | null {
     const layers = [...this.layers.values()];
-    const hit = hitAt(
-      layers.map((l) => l.regions),
+    const find = (from: readonly Layer[]) => hitAt(
+      from.map((l) => l.regions),
       x,
       y,
       zoom,
       accept,
     );
+    let hit = find(layers);
     if (!hit) return null;
-    const on = layers.find((l) => l.regions.includes(hit.region))!.on;
-    return { ...hit, on };
+    let layer = layers.find((l) => l.regions.includes(hit!.region))!;
+    if (layer.yields && [...this.beneath].some((b) => b.current(x, y, zoom))) {
+      const firm = layers.filter((l) => !l.yields);
+      hit = find(firm);
+      if (!hit) return null;
+      layer = firm.find((l) => l.regions.includes(hit!.region))!;
+    }
+    return { ...hit, on: layer.on };
   }
 }
 
@@ -62,9 +84,11 @@ const Regions = createContext<PageRegions | null>(null);
 /**
  * `regions` taking the pointer on the page, told to `on`: laid once, over
  * those laid before, and taken up again as they change; gone with the
- * component.
+ * component. `yields`: they give way to what of the drawing lies over them
+ * (`usePageBeneath`) - a frame's tab and edges to a member's atoms and bonds
+ * and the selection's turn handle.
  */
-export function usePageHits(regions: readonly Region[], on: HitHandlers): void {
+export function usePageHits(regions: readonly Region[], on: HitHandlers, yields = false): void {
   const all = useContext(Regions);
   const id = useRef<number | null>(null);
   useEffect(() => {
@@ -77,8 +101,16 @@ export function usePageHits(regions: readonly Region[], on: HitHandlers): void {
     };
   }, [all]);
   useEffect(() => {
-    if (all && id.current != null) all.set(id.current, { regions, on });
+    if (all && id.current != null) all.set(id.current, { regions, on, yields });
   });
+}
+
+/** Where the drawing takes a press (`probe`, page units), told to the page's regions: a yielding layer gives way to it there. */
+export function usePageBeneath(probe: Beneath): void {
+  const all = useContext(Regions);
+  const latest = useRef(probe);
+  latest.current = probe;
+  useEffect(() => (all ? all.under(latest) : undefined), [all]);
 }
 
 /** The region under a point on the screen - a wire let go there, say: only those `accept` takes. */

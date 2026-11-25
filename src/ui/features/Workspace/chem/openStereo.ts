@@ -20,7 +20,7 @@ import { identityKey, type IdentityInput } from "../../../../lib/chem/identity";
 import { isMetal } from "../../../../lib/layout/perceive";
 import { hydrogenCounts } from "../../../../lib/chem/perception/hydrogens";
 import { halvesOf, onBondSaid, type Half } from "./groupHalves";
-import { blocksRead, isomersByMeno, leftByMeno, type BlocksRead } from "./menoIsomers";
+import { blocksRead, countOf, decidingAwaited, isomersByMeno, leftByMeno, type BlocksRead } from "./menoIsomers";
 import { withConfiguration } from "./pageMirror";
 
 /**
@@ -64,6 +64,8 @@ export async function openStereo(_chem: ChemClient, molblocks: readonly string[]
   const graph = stereoGraphOf(molblocks);
   const read = graph ? blocksRead(molblocks) : null;
   if (!graph || !read) throw new StereoNotRead("Meno could not read it");
+  // (which open places decide, the page given back meanwhile: a structure with many open places can write many identities)
+  await decidingAwaited(read, nextFrame);
   const byMeno = leftByMeno(molblocks, read);
   const drawn = byMeno.left;
   const groups = drawnGroupsOf(molblocks) ?? NO_GROUPS;
@@ -74,13 +76,20 @@ export async function openStereo(_chem: ChemClient, molblocks: readonly string[]
   return { drawn, configured, left: like ? leftOver(drawn, configured, graph.bonds) : drawn, groups, perceived, read };
 }
 
+/** A wait for the page's next frame - or a moment, where frames are not drawn (no page, or a hidden one, whose frames wait). */
+const nextFrame = () =>
+  new Promise<void>((go) => {
+    const timer = setTimeout(go, 50);
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => (clearTimeout(timer), go()));
+  });
+
 /** Whether a structure leaves anything open. */
 export function anyOpen(left: Pick<StereoLeft, "atoms" | "bonds">): boolean {
   return left.atoms.length + left.bonds.length > 0;
 }
 
-/** How Meno asks for a structure's stereoisomers: at most `most`, refused whole past that where `whole`; within `withinMs`, where given; as drawings too, with `drawings`. */
-export type IsomersAsked = { most: number; whole?: boolean; withinMs?: number; drawings?: boolean };
+/** How Meno asks for a structure's stereoisomers: at most `most`, refused whole past that where `whole`; only the first that can be made in 3D, at most `most` tried, with `first`; within `withinMs`, where given; as drawings too, with `drawings`. */
+export type IsomersAsked = { most: number; whole?: boolean; first?: true; withinMs?: number; drawings?: boolean };
 
 /** Whether a structure has AND or OR groups Meno reads (`OpenStereo.groups`): turned as a whole, or held as drawn. */
 export const anyGroup = (open: Pick<OpenStereo, "groups">) => open.groups.groups.length + open.groups.held.length > 0;
@@ -160,16 +169,21 @@ export function halvesMade<T extends { configured: IsomerConfiguration }>(open: 
 }
 
 /** What a structure's 3D is made of: its open stereo, how many, whether none holds, the configurations - and, of one with groups, which half each is and what is said of them. */
-export type ToMake = { open: OpenStereo; count: number; free: boolean; isomers: Configuration[]; halves?: (Half | undefined)[]; said: string[] };
+export type ToMake = { open: OpenStereo; count: number; upTo?: true; free: boolean; isomers: Configuration[]; halves?: (Half | undefined)[]; said: string[] };
 
 /**
  * The stereoisomers of a structure to make in 3D, on the page or by a
- * *Conformers* step: what it leaves open (`open`), how many ways that can go
- * in 3D (`count`: one where nothing is open) and whether none holds it
- * (`free`: made as the embedding places it, its stereo free); and the
- * configurations to make - each that can be made in 3D, at most
- * MOST_ISOMERS, the first alone for `one` - or, nothing open, or none that
- * holds, only those places made before give. A structure with AND or OR
+ * *Conformers* step: what it leaves open (`open`), how many stereoisomers
+ * it can be (`count`: one where nothing is open; up to MOST_ISOMERS by Meno's
+ * count, each tried in 3D, the number made - a bridgehead held one way by its
+ * ring is not counted twice; past that, not each tried, Meno's count, or past
+ * the ways the count tries its bound, said as at most that many, `upTo`) and
+ * whether none holds it (`free`: made as the embedding places it, its stereo
+ * free); and the configurations to make - each that can be made in 3D, the
+ * first alone for `one`; past MOST_ISOMERS by Meno's count only the first of
+ * them that can be made, at most MOST_ISOMERS tried, none made an error
+ * (never `free`: not all were tried) - or, nothing open, or none that holds,
+ * only those places made before give. A structure with AND or OR
  * groups is made in its halves (chem/groupHalves), the half as drawn
  * first; past MOST_ISOMERS of them it is refused whole; with `one`, the half
  * as drawn alone, said so.
@@ -179,11 +193,17 @@ export async function isomersToMake(chem: ChemClient, molblock: string, like: Li
   const bonds = open.groups.onBonds.map(onBondSaid);
   if (!anyGroup(open)) {
     if (!anyOpen(open.left)) return { open, count: 1, free: false, isomers: [open.configured], said: bonds };
-    const made = await stereoisomersOf(chem, [molblock], open, { most: MOST_ISOMERS }, ms);
+    // (Meno's count, where it is Meno's to make them - stereoisomersOf: past MOST_ISOMERS, the first that can be made in 3D alone)
+    const counted = !open.configured.centres.length && !open.configured.doubles.length ? countOf(open.read) : null;
+    const past = counted && ("upTo" in counted || counted.count > MOST_ISOMERS) ? counted : null;
+    const made = await stereoisomersOf(chem, [molblock], open, past ? { most: MOST_ISOMERS, first: true } : { most: MOST_ISOMERS }, ms);
     if (!("isomers" in made)) throw new Error("its stereoisomers could not be made");
+    // (past MOST_ISOMERS none of those tried made: not all were tried, so never said to hold none)
+    if (past && !made.isomers.length) throw new Error("its stereoisomers could not be made");
     const said = [...bonds, ...(made.said ?? [])];
     if (!made.isomers.length) return { open, count: 1, free: true, isomers: [open.configured], said };
     const all = made.isomers.map((i) => ({ ...i.configured, groups: [] }));
+    if (past) return { open, count: "upTo" in past ? past.upTo : past.count, upTo: true, free: false, isomers: all.slice(0, 1), said };
     return { open, count: all.length, free: false, isomers: which === "one" ? all.slice(0, 1) : all, said };
   }
   // (with groups: every half asked for, at most MOST_ISOMERS of all of them, refused whole past that - never a few of them)

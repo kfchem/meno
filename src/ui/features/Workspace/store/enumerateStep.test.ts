@@ -35,10 +35,10 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { template } from "../workflow/testdata/enumerationCases";
 
-/** A phenyl R1 of the chemist's, wired into Enumerate with `lists`. */
-function page(lists: string) {
+/** A phenyl R1 of the chemist's (or the template `smiles`), wired into Enumerate with `lists`. */
+function page(lists: string, smiles = "*c1ccccc1") {
   const doc = createWorkspaceDocument();
-  doc.edit("draw", (d) => ({ ...d, model: template("*c1ccccc1"), nextId: 5000 }));
+  doc.edit("draw", (d) => ({ ...d, model: template(smiles), nextId: 5000 }));
   const store = createEditorStore(doc);
   connectStoreToDocument(store, doc);
   const st = () => store.getState();
@@ -89,6 +89,13 @@ describe("Enumerate as a step, its checks at hand", () => {
     expect(held.asked.filter((op) => op === "stereo_elements")).toHaveLength(0);
     expect(st().sets.some((b) => b.made?.step === step && (b.members?.length ?? 0) > 0)).toBe(false);
     expect(st().menoWorking[step]).toBeUndefined();
+  });
+
+  it("counts as left open only a product with a place that sets something: of R1-CH(CH3)OH, R1 methyl or ethyl, butan-2-ol alone", async () => {
+    // (propan-2-ol's C2 has two methyls: one stereoisomer; butan-2-ol's C2 is a centre - answers by hand)
+    const { st, step } = page("R1: Me\nEt", "*C(C)O");
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toMatch(/ · 1 with a configuration left open: 2$/);
   });
 
   it("says how many it looked at and found none left open", async () => {

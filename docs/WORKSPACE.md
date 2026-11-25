@@ -492,9 +492,33 @@ Taken on 2026-10-13:
 
 - **A drawing to 3D.** A structure's right-click menu, or a selection's,
   has *3D structure*; *3D structures* on the selection's menu makes
-  everything selected (Select all first, for everything drawn). Stereo
-  drawn without a configuration is ringed on the drawing while Meno asks
-  what to make: every stereoisomer it gives, one, or none for now. Each is
+  everything selected (Select all first, for everything drawn). Where the
+  drawing stands for more than one stereoisomer, Meno asks *Which
+  stereoisomer?* - every one it gives, one, or none for now - and rings on
+  the drawing the places left without a configuration where the choice
+  changes the compound: a centre, a double bond, an allene's chiral axis.
+  A place whose two senses are one compound is not ringed (the ring CH of
+  methylcyclohexane, whose two paths round the ring are alike); places that
+  decide only together are (both ring CH of 1,4-dimethylcyclohexane, cis
+  or trans; C3 of pentane-2,3,4-triol). The card says how many places and
+  how many stereoisomers - "1 stereocentre is drawn without a
+  configuration, so this structure can be either of 2 stereoisomers" - the
+  count being the different compounds, never two to the power of the
+  places. Up to 32 the card states how many can be made in 3D, each tried
+  (a bridgehead its rings hold one way is not counted twice:
+  2-methylbicyclo[2.2.1]heptane drawn without configurations is 4), and
+  *Make all* makes those. Past 32 it states the most there can be ("...
+  any of up to 528 stereoisomers": the chain HOCH2-(CHOH)10-CH2OH; past ten
+  open places, two to the power of the places) and offers *Make one*
+  alone, which makes the first of them that can be made in 3D. A
+  *Stereoisomers* step makes more, up to its own *At most*.
+  A drawing that stands for one stereoisomer is made at once,
+  nothing asked; the note a structure read from text shows of its open
+  stereo counts the same places. Which places decide is found by trying
+  each place turned alone, from one way of the others and then from more
+  only for a place not yet shown to decide, so finding them does not
+  need every stereoisomer; the stereoisomers are counted only where their
+  number is asked for. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
   chosen - where MMFF has no parameters for the molecule, UFF in its place,
   said in how it was made, or the molecule refused, as Settings' *Where
@@ -539,8 +563,10 @@ Taken on 2026-10-13:
     within what said with how they were made (*The same*, *The same
     within*);
   - **laid over the first** by their heavy atoms, turned and moved, never
-    reflected;
-  - **equivalent atoms in the first's places** (2026-10-15;
+    reflected - of a search that goes on, over what it first showed
+    (*As its search goes on*);
+  - **equivalent atoms in the first's places** - of a search that goes
+    on, in those of what it first showed (2026-10-15;
     `chem/settle`): an embedding does not say which of a CH2's two
     hydrogens, or of an isopropyl's two methyls, is which, so each
     equivalent group - neighbours of one atom of the same symmetry class,
@@ -581,8 +607,35 @@ Taken on 2026-10-13:
   they ran, not the time they waited). Everything a round brings is
   judged and made the page's off the page's thread (`chem/growing`):
   the page never waits on it.
-  - The conformer shown stays shown as more come: where a lower one is
-    found before it, the chip moves on with it.
+  - Until the chemist picks a conformer, the lowest found so far is
+    shown: where a round finds a lower one, the molecule goes to it by
+    the same eased step as a press on the chip's bars, and the chip reads
+    1 / N throughout. Nothing else says so. A step never starts while the
+    chemist turns or drags that molecule; it waits for the release. Where
+    nothing lower came, nothing moves.
+  - Once a conformer is picked - by the chip's bars, slider or a press on
+    it, the keys, a workflow or a step - the conformer shown never changes
+    by itself: where a lower one is found before it, its number goes up
+    with it. Where a later round finds one lower than the lowest at the
+    pick, a small dot in Meno's own colour rests on the chip's outline at
+    the upper right; the chip keeps its width and its words. Pointed at,
+    the page's tip says *Lower conformer found*. A press on the dot shows
+    the lowest, eased, and the molecule follows the lowest again; a pick
+    of any conformer makes the dot go too.
+  - Where the conformer shown leaves the energy window, so that it is no
+    longer among them, the lowest is shown instead, eased, and the same
+    dot tells it in the accent colour; its tip says *The conformer shown
+    left the energy window: the lowest is shown*. This is the view's:
+    never saved, so a molecule read from a file never changes by itself.
+  - Nothing of a conformer shown changes as more come: each
+    keeps the frame it was first shown as, its own energy with it, every
+    atom where it was - its equivalent atoms in the places they had in
+    what it first showed, not in a later round's lowest. Each conformer
+    is kept once in the order the rounds came, lowest first within a
+    round, each against those kept before it, then put lowest first: a
+    later round's frame of a conformer already shown is set aside, the
+    same, even where its energy is a little lower. Of a search of one
+    round this is the rule above.
   - What the search brings is the view's until it ends, then written
     into the document once - as one step with the 3D structure's making,
     where nothing was done between; else as a step of its own. Undo takes
@@ -1533,7 +1586,9 @@ it, in `features/Workspace/pageGl/`:
   found; how it was made, folded under a chevron - laid out as its HTML
   was, in page pixels, and opened the same way (theme/opening). A press on
   its bars or its slider shows the frame under it, a drag goes through
-  them. Its words are copied from its menu (Copy, Copy energies), as no
+  them; one on its dot (*As its search goes on*) shows the lowest, and
+  its tip opens over the dot as it is pointed at. Its words are copied
+  from its menu (Copy, Copy energies), as no
   words on the page are selected; opened, the workflow's ports under it
   are not drawn. What goes under it - Make again, a list of results - is
   HTML still, a control, as far down as the chip is tall.
@@ -1580,9 +1635,11 @@ it, in `features/Workspace/pageGl/`:
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings that grow with the
   page at every zoom, lit where a wire being drawn may join them, a wire let
-  go on one found by its shape. And its small marks (`workflowMarks`):
-  what just joined a set or left it, an Enumerate step's positions, a
-  structure's number with how it was made in the tip. Frames under cards
+  go on one found by its shape. A set's frame, while something is held,
+  showing what letting go would do (`frameSign`): its edge and a wash in
+  Meno's colour, or its edge dashed, in page lengths. And its small marks
+  (`workflowMarks`): an Enumerate step's positions, a structure's number
+  with how it was made in the tip. Frames under cards
   under chips under ports, all over the molecules, as their HTML lay.
 - **The hover tip** (components/PageTip): not placed on the page, it may be
   HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
@@ -1851,11 +1908,10 @@ space-filling side by side is better science than either alone.
   understands, before *Hide hydrogens anyway* can be pressed; *Keep
   hydrogens* is what Enter and Escape give. Only hydrogens on carbon go:
   those on a heteroatom take part in hydrogen bonds and in reactions.
-  Every molecule drawn so says *C–H hidden* over it, on the canvas and in
-  every picture made of it (SVG, PNG, EMF), for as long as it is. On the
-  canvas it is as large on the page at every zoom, as the page's chips
-  are, and folds away as the molecule goes over to a
-  look that keeps the hydrogens.
+  Every picture made of a molecule drawn so (SVG, PNG, EMF) says *C–H
+  hidden* over it, for as long as it is. On the canvas it says nothing of
+  it (the maintainer, 2026-11-25): the chemist chose the look, and sees
+  it on the molecule.
 - **Not read from before.** A settings file from before keeps none of
   its 3D look (pre-alpha: no migration).
 
@@ -2285,9 +2341,18 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   it was read - a damaged file, or none of a molecule's - which are given
   no bond; *1 atom left out*, *3 atoms left out* where its file has atoms
   whose element does not read - a PDB entry's unknown atom (X, UNX) - and
-  the molecule leaves them out. Said as *C–H hidden* is:
-  over the molecule at any zoom, one over another, and in every picture
-  made of it (SVG, PNG, EMF).
+  the molecule leaves them out; and what an optimisation or a scan it was
+  opened from says of its entries and its convergence. On the canvas
+  these rest as one small mark beside the molecule's top right corner -
+  clear of a set's name over it and of its atoms - however many there
+  are - the 2D marks' ring (`MarkBoxes2D`), drawn with the page and scaled
+  with it, easing in as they come and out as they go - and their words,
+  one line to each, show only while the pointer rests on the mark, in the
+  page's tip (`PageTip`) over the mark - under it only where there is
+  no room over it in the view - never as the molecule itself is pointed at; a
+  screen reader reads them at rest (`components/NotesMark3D`; the
+  maintainer, 2026-11-25). None where there is nothing to say. Every
+  picture made of it (SVG, PNG, EMF) says them over it in words.
 - **Found from its shape.** As a molecule comes in, opened or pasted,
   with its orders unknown, they are sought once - with the request its
   formula is drawn by (`drawing_of`, `perceive`: RDKit's
@@ -2454,9 +2519,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
     as the CCD defines it, gives its O2A and O2D a
     charge and a hydrogen both: its hydrogens are not put on as they are,
     and the chemist chooses its carboxyls' forms on the card.
-  - **Said over it.** A molecule so completed says *Hydrogens added*, or
-    *Hydrogens from the CCD* (`hydrogensAdded`), as they were not in its
-    file. One undo step. Not for a molecule with other frames (an NMR
+  - **Said in its pictures.** A picture made of a molecule so completed
+    says *Hydrogens added*, or *Hydrogens from the CCD* (`hydrogensAdded`),
+    as they were not in its file; on the canvas it says nothing of them,
+    as the chemist chose them and sees them (the maintainer, 2026-11-25). One undo step. Not for a molecule with other frames (an NMR
     entry's models, a trajectory), which would be left without them; nor,
     yet, for a set of many in a workflow, which waits for the pH model.
 - **Not done: protonating a protein.** A chain's hydrogens depend on each
@@ -2578,6 +2644,6 @@ Meno's first steps (`lib/guide`, `ui/guide/GuideCard.tsx`): steps of plain text 
 - **The steps:** double-click on empty space for Quick Add; Chain and SMILES there; press and hold to select a structure; a right-click menu and its row of icons; Save, with Settings beside it; plugins, added in Settings, *Plugins*, each set up only when added, after Meno asks.
 - **Where a step points** (`at`) is a part Meno names, never how the window is built: `page`, `quick-add` (once open), `structure` (the one selected, else the last drawn), `menu` (a right-click menu, once open), `save`, `settings`. None, or a part not there now, and the card sits low in the middle of the page. A step that points at a part, while neither it nor any page is seen (Settings the tab in front), waits out of sight until a workspace is in front again.
 - **What a step waits for** (`until`), Meno names too: `quick-add` opened, a structure `selected`, a `menu` opened. A moment after the chemist does it, the guide goes on by itself; Next does as well.
-- **An empty page says one line** in quiet grey in the middle of what is seen: *Double-click to add something, or drop a file here.* - where the page in view holds nothing at all, eased out as the first thing is put on it and back where it is emptied again; not while the file a tab was opened with is still being read (its page only waits for it), a card says what could not be read, Quick Add or a menu is open, something is dragged over the window, or a talk is given (`components/EmptyPageLine`, `utils/emptyPage`). It is not on the page: never saved, exported, printed, selected or filmed, and still as the page is zoomed or moved. No other tip is shown.
+- **An empty page says two short lines under a quiet mark** in the middle of what is seen: two thin rings in Meno's colour, and under them *Double-click to add* and, smaller, *or drop a file* - where the page in view holds nothing at all and nothing is in hand or being made on it (a chain or bond being drawn out, a text being written, an arrow or a shape being dragged out, a curved arrow begun, the pen's card open), eased out as the first thing is put on it or taken in hand and back where it is emptied or let go; not while the file a tab was opened with is still being read (its page only waits for it), a card says what could not be read, Quick Add or a menu is open, something is dragged over the window, or a talk is given (`components/EmptyPageLine`, `utils/emptyPage`). As it appears the rings brighten one after the other, twice in quick succession - a double-click, drawn - and twice more a few seconds apart, then the mark rests still; where the system asks for less motion they do not brighten. A screen reader is given the whole sentence. It is not on the page: never saved, exported, printed, selected or filmed, and still as the page is zoomed or moved. No other tip is shown.
 - **Only when asked:** from Settings, *General*, *First steps* (*Show*), with a workspace brought to the front - never of itself: not on Meno's first start (2026-10-24). They close when gone through or skipped - Skip, or Escape where nothing else takes it (the maintainer, 2026-10-13).
 - **Meno's question about keeping itself up to date** waits until they are closed (it comes after the user's first action: `lib/firstAction.ts`).

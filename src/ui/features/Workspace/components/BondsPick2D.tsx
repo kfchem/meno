@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
-import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
+import { BOND_PICK_THICKNESS_RATIO, DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { pressOnBond, type BondPress } from "../utils/clickCount";
 import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
@@ -88,7 +88,6 @@ export default function BondsPick2D() {
   const tmpQ = useMemo(() => new THREE.Quaternion(), []);
   const countCap = Math.max(model.bonds.length, 1);
   const remountKey = model.bonds.length;
-  const PICK_THICKNESS_RATIO = 0.32;
 
   // (the last press on a bond: a second soon after on the same one is a double-click's)
   const lastBondPress = useRef<(BondPress & { count: number }) | null>(null);
@@ -193,7 +192,7 @@ export default function BondsPick2D() {
     const m = inst.current;
     if (!m) return;
     m.count = bonds.length;
-    const thickWorld = PICK_THICKNESS_RATIO * NOMINAL_BOND_LENGTH;
+    const thickWorld = BOND_PICK_THICKNESS_RATIO * NOMINAL_BOND_LENGTH;
     // (each atom by its id, looked up once rather than searched for at each bond)
     const byId = new Map<number, (typeof atoms)[number]>();
     for (const a of atoms) if (!byId.has(a.id)) byId.set(a.id, a);

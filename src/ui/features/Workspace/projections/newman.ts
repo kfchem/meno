@@ -48,7 +48,7 @@ const baseOf = (s: SpokeSet): number => (s === "A" ? 90 : 30);
 
 /** The angle, in degrees mod 360, a group at (dx, dy) from the centre lies at. */
 const angleOf = (dx: number, dy: number): number => (((Math.atan2(dy, dx) / DEG) % 360) + 360) % 360;
-const apart = (p: number, q: number): number => {
+export const apart = (p: number, q: number): number => {
   const d = Math.abs((((p - q) % 360) + 360) % 360);
   return d > 180 ? 360 - d : d;
 };
@@ -180,12 +180,40 @@ export function newmanExtension(model: { atoms: readonly Atom[]; bonds: readonly
   return null;
 }
 
+/** Where a double-click begins each atom's spokes: the front's first straight up, the back's straight down, so the first two groups stand anti. */
+const FIRST_SPOKE = { front: 90, back: 270 };
+
+/**
+ * Where the one bond a double-click adds to atom `tip` of a pair of the tool's ends: the next spoke of that atom's own set - the set its groups
+ * stand on, or the tool's staggered default where it has none - that no group holds, counter-clockwise from `FIRST_SPOKE` (the front 90, 210,
+ * 330; the back 270, 30, 150), a bond length from the centre. `"full"` where `tip` is such an atom and none is free, or a group of the pair lies
+ * at none of its places (nothing is guessed, and no bond goes between two spokes); none where `tip` is on no pair.
+ */
+export function nextSpoke(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, tip: number, length = NOMINAL_BOND_LENGTH): { x: number; y: number } | "full" | null {
+  for (const found of newmansIn(model)) {
+    if (tip !== found.front && tip !== found.back) continue;
+    const turn = turnOf(found);
+    if (!turn) return "full";
+    const back = tip === found.back;
+    const held = back ? found.groups.back : found.groups.front;
+    const start = back ? FIRST_SPOKE.back : FIRST_SPOKE.front;
+    const from = (a: number) => ((((a - start) % 360) + 360 + 1e-6) % 360);
+    const angle = spokeAngles(back ? turn.back : turn.front, back, turn.eclipsed)
+      .filter((a) => !held.some((g) => apart(g.angle, a) < 1e-3))
+      .sort((p, q) => from(p) - from(q))[0];
+    if (angle == null) return "full";
+    return { x: found.at.x + length * Math.cos(angle * DEG), y: found.at.y + length * Math.sin(angle * DEG) };
+  }
+  return null;
+}
+
 /**
  * A group's atom of a Newman pair dragged round the circle to `pointer` (page units): all three groups of its atom turned together - each with
  * what hangs beyond it, rigidly - so that the one dragged comes to rest at the nearest of that atom's places (`turnedTo`); and, where the
  * pair's two sets come to be the same or stop being, the other atom's groups moved the eclipsed offset so that both still show. A turn about
  * the central bond changes no configuration: the cyclic order of an atom's groups and every distance are kept. Worked from `model` as the
- * gesture began, so that the moves of one frame do not add to those of the last. None where `group` is no group of a pair of the tool's, or a
+ * gesture began, so that the moves of one frame do not add to those of the last: every group of both atoms, with what hangs beyond it, is
+ * given its place - a group turned by nothing at where it began - so that one left offset by an earlier frame comes back. None where `group` is no group of a pair of the tool's, or a
  * group of the pair lies at none of its places (drawn by hand: nothing is guessed).
  */
 export function newmanTurn(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, group: number, pointer: { x: number; y: number }): { id: number; x: number; y: number }[] | null {
@@ -219,7 +247,6 @@ export function newmanTurn(model: { atoms: readonly Atom[]; bonds: readonly Bond
     };
     const moves = new Map<number, { id: number; x: number; y: number }>();
     const turnGroups = (groups: Group[], from: number, degrees: number) => {
-      if (Math.abs(degrees) < 1e-9) return;
       for (const g of groups) {
         for (const id of beyond(from, g.id)) {
           const a = byId.get(id)!;

@@ -31,8 +31,11 @@ const GROWN_JOINS_MS = 60 * 60_000;
 const placesAt = (m: Pick<Molecule3D, "atoms" | "frames">, f: number): number[] =>
   f === 0 ? m.atoms.flatMap((a) => [a.x, a.y, a.z]) : [...(m.frames?.[f - 1] ?? [])];
 
-/** Which of `grown`'s frames is nearest `xyz`, atom by atom: the conformer shown, where it is still among them. */
-function nearestFrame(grown: Grown3D, xyz: readonly number[]): number {
+/** How far, as an RMSD over its atoms in A, a conformer kept may be from where it was and still be it: the app's one rule for the same conformer (docs/WORKSPACE.md, 0.01 A). A conformer kept never moves (chem/growing); this only takes up the places' rounding. */
+const SAME_RMSD = 0.01;
+
+/** Which of `grown`'s frames is nearest `xyz`, atom by atom - the conformer shown, where it is still among them - and whether it is that very one: no further from it than `SAME_RMSD`. */
+function nearestFrame(grown: Grown3D, xyz: readonly number[]): { frame: number; same: boolean } {
   const n = 1 + (grown.frames?.length ?? 0);
   let best = 0;
   let least = Infinity;
@@ -43,7 +46,15 @@ function nearestFrame(grown: Grown3D, xyz: readonly number[]): number {
     for (let i = 0; i < p.length && d < least; i++) d += (p[i] - xyz[i]) ** 2;
     if (d < least) [best, least] = [f, d];
   }
-  return best;
+  return { frame: best, same: least <= (xyz.length / 3) * SAME_RMSD ** 2 };
+}
+
+/** `r` without `id`'s: the same object where it has none. */
+function without<T>(r: Readonly<Record<number, T>>, id: number): Readonly<Record<number, T>> {
+  if (!(id in r)) return r;
+  const out = { ...r };
+  delete out[id];
+  return out;
 }
 const MOST_BONDS = 3;
 
@@ -168,8 +179,32 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const { [id]: _was, ...turns3d } = prev.turns3d;
         return { ...prev, turns3d };
       }),
+    // (a conformer picked - by a step through them, the keys, a workflow or a step - ends following the lowest, and says that the chemist
+    //  has seen what the chip's dot told: it goes; docs/WORKSPACE.md, *As its search goes on*)
     setFrame3d: (id: number, frame: number) =>
-      set((prev) => (prev.frames3d[id] === frame ? prev : { ...prev, frames3d: { ...prev.frames3d, [id]: frame } })),
+      set((prev) => {
+        const lowerFound3d = without(prev.lowerFound3d, id);
+        const following3d = without(prev.following3d, id);
+        if (prev.frames3d[id] === frame && lowerFound3d === prev.lowerFound3d && following3d === prev.following3d) return prev;
+        return { ...prev, lowerFound3d, following3d, frames3d: prev.frames3d[id] === frame ? prev.frames3d : { ...prev.frames3d, [id]: frame } };
+      }),
+    // (the chip's dot pressed: the lowest shown - eased, as a step to it is - the dot gone, and the lowest followed again)
+    followLowest3d: (id: number) =>
+      set((prev) => {
+        if (!prev.molecules3d.some((m) => m.id === id)) return prev;
+        const frames3d = (prev.frames3d[id] ?? 0) === 0 ? prev.frames3d : { ...prev.frames3d, [id]: 0 };
+        const following3d = prev.following3d[id] ? prev.following3d : { ...prev.following3d, [id]: true as const };
+        return { ...prev, frames3d, following3d, lowerFound3d: without(prev.lowerFound3d, id) };
+      }),
+    // (a molecule let go that follows the lowest, and a lower one came while it was in hand: shown now)
+    setInHand3d: (ids: readonly number[]) =>
+      set((prev) => {
+        if (ids.length === prev.inHand3d.length && ids.every((x, k) => prev.inHand3d[k] === x)) return prev;
+        let frames3d = prev.frames3d;
+        for (const id of prev.inHand3d)
+          if (!ids.includes(id) && prev.following3d[id] && (frames3d[id] ?? 0) !== 0) frames3d = { ...frames3d, [id]: 0 };
+        return { ...prev, inHand3d: [...ids], frames3d };
+      }),
     showInStack: (stack: number, id: number) =>
       set((prev) => {
         const was = shownOf(prev.molecules3d, stack, prev.stacksShown);
@@ -340,7 +375,10 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const there = kept.find((m) => m.id === id);
         if (!there) return prev;
         const growing: Record<number, Growing3D> = { ...prev.growing3d, [id]: { grown, key, base: { atoms: there.atoms, frames: there.frames } } };
-        return { ...prev, growing3d: growing, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
+        // (a search begun afresh: what an earlier one found is not this one's news; it follows the lowest found - where the lowest it
+        //  has is the one shown, so that nothing moves till a lower one comes)
+        const following3d = (prev.frames3d[id] ?? 0) === 0 ? { ...prev.following3d, [id]: true as const } : without(prev.following3d, id);
+        return { ...prev, growing3d: growing, following3d, lowerFound3d: without(prev.lowerFound3d, id), molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
       }),
     grow3d: (id: number, grown: Grown3D | null) =>
       set((prev) => {
@@ -353,12 +391,25 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const growing: Record<number, Growing3D> = { ...prev.growing3d };
         if (grown) growing[id] = { ...going, grown };
         else delete growing[id];
-        // (the conformer shown kept shown: the one nearest it among those it has now - a lower one found puts the rest after it)
+        // (the conformer shown kept shown: the one nearest it among those it has now - a lower one found puts the rest after it;
+        //  where it is no longer among them - a lower one took the energy window past it - the lowest shown)
         const was = prev.molecules3d.find((m) => m.id === id);
         const shown = prev.frames3d[id] ?? 0;
-        const now = grown && was ? nearestFrame(grown, placesAt(was, shown)) : shown;
+        const near = grown && was ? nearestFrame(grown, placesAt(was, shown)) : null;
+        const lowest = grown && was ? (shown === 0 ? near! : nearestFrame(grown, placesAt(was, 0))) : null;
+        const lower = !!lowest && !(lowest.same && lowest.frame === 0);
+        // (following the lowest - no conformer picked - a lower one found is shown, by the view's eased step between conformers; while
+        //  the molecule is in the chemist's hand, at its release: `setInHand3d`)
+        const following = !!prev.following3d[id];
+        const step = following && lower && !prev.inHand3d.includes(id);
+        const now = !near ? shown : step || !near.same ? 0 : near.frame;
         const frames3d = now === shown ? prev.frames3d : { ...prev.frames3d, [id]: now };
-        return { ...prev, growing3d: growing, frames3d, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
+        // (a conformer picked: its chip's dot says where a lower one than the lowest it had is found - the lowest it had no longer first -
+        //  or that the one shown left the window and the lowest is shown, till a conformer is picked or the dot pressed: docs/WORKSPACE.md,
+        //  *As its search goes on*; following, nothing is said - the chemist sees it)
+        const found = following ? undefined : near && !near.same ? "window" : lower ? "lower" : prev.lowerFound3d[id];
+        const lowerFound3d = !found ? without(prev.lowerFound3d, id) : prev.lowerFound3d[id] === found ? prev.lowerFound3d : { ...prev.lowerFound3d, [id]: found };
+        return { ...prev, growing3d: growing, frames3d, lowerFound3d, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
       }),
     settleGrown3d: (id: number) => {
       const g = get().growing3d[id];
@@ -504,6 +555,8 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
   };
   let turns3d = keep(prev.turns3d);
   let frames3d = keep(prev.frames3d);
+  const lowerFound3d = keep(prev.lowerFound3d);
+  const following3d = keep(prev.following3d);
   // (a molecule shown overlaid, undone away, is not: another made next took
   // its id and came up overlaid, unasked - but it is again, redone)
   let overlay3d = keep(prev.overlay3d);
@@ -542,6 +595,8 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     lists3d,
     turns3d,
     frames3d,
+    lowerFound3d,
+    following3d,
     overlay3d,
     sel3d,
     chosen3d: chosenStays ? c : null,

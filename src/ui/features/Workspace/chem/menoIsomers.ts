@@ -5,7 +5,7 @@
  * nothing of which places are open or how many ways they go: that is Meno's.
  */
 import { automorphismGroup, identityKey, type IdentityInput } from "../../../../lib/chem/identity";
-import { isomersOf, type Stereoisomer } from "../../../../lib/chem/isomers";
+import { decidesAny, decidingOf, decidingWaited, firstWayOf, isomersOf, type Deciding, type Stereoisomer } from "../../../../lib/chem/isomers";
 import { tiesOf } from "../../../../lib/chem/perception/stereo/ties";
 import { parity } from "../../../../lib/chem/perception/stereo/geometry";
 import { symmetryOrbits } from "../../../../lib/chem/perception/symmetry";
@@ -40,8 +40,45 @@ export function blocksRead(molblocks: readonly string[]): BlocksRead | null {
   return { input, bondAt, folded: hydrogensFolded(input), inputAt };
 }
 
-/** What a structure read (`BlocksRead`) leaves open by Meno's candidates, in the blocks' places, and every centre and double bond they give it. */
-export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { left: StereoLeft; centres: number[]; doubles: number[]; handed: boolean } {
+/** A structure's stereoisomers as Meno counts them (`isomersOf`), worked out once for each structure read and kept with it. */
+const counts = new WeakMap<BlocksRead, ReturnType<typeof isomersOf>>();
+function countedOf(read: BlocksRead): ReturnType<typeof isomersOf> {
+  const known = counts.get(read);
+  if (known) return known;
+  const counted = isomersOf(read.input);
+  counts.set(read, counted);
+  return counted;
+}
+
+/**
+ * How many stereoisomers a structure read has by Meno's count (`isomersOf`): `count`, or, past the ways the count tries, `upTo` its
+ * bound - two to the power of its open places, true whatever its symmetry. Null where Meno does not count it.
+ */
+export function countOf(read: BlocksRead): { count: number } | { upTo: number } | null {
+  const counted = countedOf(read);
+  if ("notCounted" in counted) return null;
+  return "tooMany" in counted ? { upTo: counted.tooMany } : { count: counted.isomers.length };
+}
+
+/** The open places of each structure read whose choice changes the compound (lib/chem/isomers `decidingOf`), found once and kept. */
+const decidingKept = new WeakMap<BlocksRead, Deciding | null>();
+function decidingFor(read: BlocksRead): Deciding | null {
+  if (!decidingKept.has(read)) decidingKept.set(read, decidingOf(read.input));
+  return decidingKept.get(read)!;
+}
+
+/** `decidingFor`, the page given back between every few identities written (`pause`): kept for `leftByMeno` to read. */
+export async function decidingAwaited(read: BlocksRead, pause: () => Promise<void>): Promise<void> {
+  if (!decidingKept.has(read)) decidingKept.set(read, await decidingWaited(read.input, pause));
+}
+
+/**
+ * What a structure read (`BlocksRead`) leaves open by Meno's candidates, in the blocks' places - only where the choice changes the
+ * compound, alone or with others (`isomersOf`'s `deciding`: never methylcyclohexane's ring CH; both ring atoms of
+ * 1,4-dimethylcyclohexane), every candidate where it is not counted - and every centre and double bond they give it. With `every`,
+ * every candidate left open, the count not asked.
+ */
+export function leftByMeno(molblocks: readonly string[], read: BlocksRead, every = false): { left: StereoLeft; centres: number[]; doubles: number[]; handed: boolean } {
   const graph = stereoGraphOf(molblocks)!;
   const { folded: g, inputAt, bondAt } = read;
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -78,18 +115,28 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { le
     return out;
   };
   let handed = false;
+  // (which places decide, by witnesses - never the whole count, which only the number of stereoisomers needs)
+  const deciding = every ? null : decidingFor(read);
+  const decides = (c: ReturnType<typeof candidates>[number]): boolean => {
+    if (!deciding) return true;
+    if (c.kind === "centre") return deciding.atoms.includes(c.at);
+    if (c.kind === "bond") return deciding.bonds.includes(c.at);
+    if (c.kind === "biaryl") return true;
+    const [p, q] = c.ends[0] < c.ends[1] ? [c.ends[0], c.ends[1]] : [c.ends[1], c.ends[0]];
+    return deciding.runs.some((r) => r[0] === p && r[1] === q);
+  };
   for (const c of candidates(g)) {
     if (c.kind === "centre") {
       centres.push(inputAt[c.at]);
-      if (!g.atoms[c.at].tetra) openAtoms.push(inputAt[c.at]);
+      if (!g.atoms[c.at].tetra && decides(c)) openAtoms.push(inputAt[c.at]);
     } else if (c.kind === "bond") {
       const k = bondOf(g.bonds[c.at].a, g.bonds[c.at].b);
       if (k == null) continue;
       doubles.push(k);
-      if (!g.bonds[c.at].stereo) openBonds.push(k);
+      if (!g.bonds[c.at].stereo && decides(c)) openBonds.push(k);
     } else {
       handed = true;
-      if (c.kind !== "biaryl" && !given.has(pair(c.ends[0], c.ends[1]))) runs.push(runOf(c.ends[0], c.ends[1]));
+      if (c.kind !== "biaryl" && !given.has(pair(c.ends[0], c.ends[1])) && decides(c)) runs.push(runOf(c.ends[0], c.ends[1]));
     }
   }
   // (a C=N whose E/Z is none of its own: never a candidate, said where it is drawn open)
@@ -106,6 +153,16 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { le
   };
   return { left, centres: centres.sort(byIndex), doubles: doubles.sort(byIndex), handed };
 }
+
+/**
+ * Whether a structure read leaves open some stereo whose choice changes the compound - `leftByMeno`'s centres and double bonds, not
+ * none - asked without the whole count where it is not already known (lib/chem/isomers `decidesAny`).
+ */
+export function leavesOpen(molblocks: readonly string[], read: BlocksRead): boolean {
+  if (decidingKept.has(read)) return anyLeft(leftByMeno(molblocks, read).left);
+  return anyLeft(leftByMeno(molblocks, read, true).left) && decidesAny(read.input);
+}
+const anyLeft = (left: StereoLeft) => left.atoms.length + left.bonds.length > 0;
 
 /**
  * A stereoisomer (`isomersOf`, of `read.folded`) as the plugin is given it: each centre and double bond it configures, by the
@@ -224,7 +281,8 @@ export function flipIsOwn(g: ChemGraph, set: readonly number[]): boolean {
 
 /**
  * A structure's stereoisomers made in 3D as Meno counts them: each given whole to the plugin (`stereoisomers`, its configuration
- * `configured`, one asked), those it cannot make left out - none made, `free`; at most `most`, refused whole past it where `whole`.
+ * `configured`, one asked), those it cannot make left out - none made, `free`; at most `most`, refused whole past it where `whole`;
+ * with `first`, only the first made of those tried (past the ways the count tries, the first way), none made never `free`.
  * An axis's or a run's configuration goes with each, Meno's own: the plugin is not given it, and chem/make3d keeps among the
  * conformers made those that have it. A structure Meno does not count (`isomersOf`: a cage left open) is said so.
  */
@@ -234,14 +292,16 @@ export async function isomersByMeno(
   read: BlocksRead,
   readBack: { atoms: number[]; bonds: number[] },
   notEnumerated: readonly number[],
-  asked: { most: number; whole?: boolean; withinMs?: number; drawings?: boolean },
+  asked: { most: number; whole?: boolean; first?: true; withinMs?: number; drawings?: boolean },
   ms?: number,
 ): Promise<{ made: IsomersMade; said: string[] } | { notCounted: string }> {
-  const counted = isomersOf(read.input);
+  const counted = countedOf(read);
   if ("notCounted" in counted) return counted;
-  if ("tooMany" in counted) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
+  // (past the ways the count tries, the first asked: the first way, made without the count - chem/openStereo `isomersToMake`)
+  const first = "tooMany" in counted && asked.first ? firstWayOf(read.input) : null;
+  if ("tooMany" in counted && !first) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
   // (each whole: an axis's and a run's are Meno's to keep among what is made - chem/make3d - never the plugin's to give)
-  const kept = counted.isomers.map((i) => asGiven(read, molblocks, i));
+  const kept = ("tooMany" in counted ? [first!] : counted.isomers).map((i) => asGiven(read, molblocks, i));
   if (asked.whole && kept.length > asked.most) return { made: { tooMany: { counted: asked.most + 1, bound: kept.length } }, said: [] };
   const started = Date.now();
   const isomers: Extract<IsomersMade, { isomers: unknown }>["isomers"] = [];
@@ -261,6 +321,8 @@ export async function isomersByMeno(
       ms,
     );
     if ("isomers" in made && made.isomers.length) isomers.push({ ...made.isomers[0], configured: x.configuration });
+    if (asked.first && isomers.length) break;
   }
-  return { made: { isomers, free: !isomers.length }, said: [] };
+  // (the first asked of more than are tried: none made is not none that holds - not all were tried)
+  return { made: { isomers, free: !isomers.length && !asked.first }, said: [] };
 }

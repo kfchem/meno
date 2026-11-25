@@ -1146,6 +1146,20 @@ export function hashedLinesOpen(atoms: readonly DrawnAtom[], bonds: readonly Dra
   return hashedLinesRead(atoms, structureOf(bonds).bonds).why;
 }
 
+/**
+ * The end each bond of a drawing states, and how, as it is read (`hashedLinesRead`): by the bond's index in the caller's list, a wedge or
+ * hashed wedge narrow at the end it is read at - a hashed wedge the wrong way round, or hashes drawn as a line, read at the centre they
+ * state. A bond that is no wedge, or a line that states nothing, is left out. (Whether that end is a stereocentre is the reading's to tell.)
+ */
+export function wedgesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Map<number, NonNullable<DrawnBond["wedge"]>> {
+  const kept = structureOf(bonds);
+  const out = new Map<number, NonNullable<DrawnBond["wedge"]>>();
+  hashedLinesRead(atoms, kept.bonds).bonds.forEach((b, i) => {
+    if (b.wedge) out.set(kept.at(i), b.wedge);
+  });
+  return out;
+}
+
 export const HASHED_BETWEEN = "a hashed line between two stereocentres states neither";
 export const HASHED_TO_LARGE = "a hashed line to a group of this size does not say which end it belongs to";
 export const HASHED_TWO = "two hashed lines at one atom";

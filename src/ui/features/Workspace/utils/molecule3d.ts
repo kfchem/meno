@@ -1397,15 +1397,17 @@ export function stereoPictureSpots3d(
 const lastUnfinished = (m: Pick<Molecule3D, "entryFrames" | "notConverged" | "frames">) => !!m.notConverged && !!m.entryFrames?.includes(m.frames?.length ?? 0);
 
 /**
- * What a molecule in 3D says over it, as it is drawn in a look, for as long
- * as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture that
- * leaves out what the molecule has misleads): its hydrogens on carbon
- * hidden; its file's hydrogens missing; its bond orders not known - its
- * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
- * its file's it leaves out, their element not read; an optimisation it
- * was opened from that never converged.
+ * What a molecule in 3D says of itself, as it is drawn in a look, for as
+ * long as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture
+ * that leaves out what the molecule has misleads): its hydrogens on carbon
+ * hidden; its file's hydrogens missing; hydrogens added to it; its bond
+ * orders not known - its own, or a biopolymer's chains' where they are
+ * drawn as atoms; atoms of its file's it leaves out, their element not
+ * read; an optimisation it was opened from that never converged. All of
+ * it is said in a picture made of it (`notePictureMarks`); on the page,
+ * only what is not the chemist's own choice (`notesOf`).
  */
-export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
+export function saidOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
   const hidden = solid.hidden[look];
   // (a chain's atoms drawn: every atom, or the side chains about a ligand)
@@ -1425,6 +1427,28 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
 }
 
 /**
+ * What a molecule's mark on the page says while it is pointed at: what
+ * `saidOf` says, but for what the chemist chose and sees on the molecule -
+ * hydrogens on carbon hidden by its look, hydrogens added to it, or from
+ * the CCD (the maintainer, 2026-11-25). The rest is about its data.
+ */
+export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
+  return saidOf(m, solid, look).filter((t) => !OWN_CHOICE.has(t));
+}
+
+/** What a molecule says that the chemist chose, and sees: not said on the page. */
+const OWN_CHOICE = new Set([HIDDEN_MARK, ADDED_MARK, CCD_HYDROGENS_MARK]);
+
+/** A molecule's mark of its notes, its width across and its gap over the molecule, in page pixels (a bond is 48): scaled with the page (NotesMark3D). */
+export const NOTES_MARK_PX = 10;
+export const NOTES_MARK_GAP_PX = 6;
+
+/** The words of a molecule's mark (`notesOf`), one line to a note; none, and so no mark, where it says nothing. */
+export function notesTip(notes: readonly string[]): string | null {
+  return notes.length ? notes.join("\n") : null;
+}
+
+/**
  * Of a molecule's notes (`notesOf`), the one that only says how it is, no
  * problem: an optimisation or scan whose entries are its converged points,
  * the last among them ("1 of 5 frames is an entry (the converged one)") -
@@ -1438,15 +1462,14 @@ export function plainNoteOf(m: Molecule3D): string | null {
 }
 
 /**
- * What a picture of a molecule says over it, as the canvas does
- * (`notesOf`): each `size` high, one over another, centred over its
+ * What a picture of a molecule says over it (`saidOf`): each `size` high, one over another, centred over its
  * highest atom - or ribbon - on a white ground as a measurement's value is.
  * None for a molecule with nothing to say.
  */
 export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye): MeasureMark[] {
   const molecule = { ...m, id: 0 } as Molecule3D;
   const solid = solidOf(molecule, style);
-  const notes = notesOf(molecule, solid, lookOf(m));
+  const notes = saidOf(molecule, solid, lookOf(m));
   if (!notes.length) return [];
   let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const k of pictureMarks(m, style, eye)) {

@@ -11,10 +11,12 @@
 import type { EditorState } from "../store/types";
 
 /** The store the handlers act on: read when each is called, never kept. */
-type Store = { getState: () => Pick<EditorState, "setFrame3d" | "sel3d" | "setMagnified3d" | "risen3d" | "setHoveredAtom3d" | "editMeasure3d" | "setMeasure3d"> };
+type Store = { getState: () => Pick<EditorState, "setFrame3d" | "followLowest3d" | "sel3d" | "setMagnified3d" | "risen3d" | "setHoveredAtom3d" | "editMeasure3d" | "setMeasure3d"> };
 
 export type MoleculeHandlers = {
   onFrame: (frame: number) => void;
+  /** The lowest conformer shown, and followed again: its chip's dot pressed. */
+  onLowest: () => void;
   onMagnify: (k: number, gesture?: string) => void;
   onRisen: () => void;
   onHoverAtom: (atom: number | null) => void;
@@ -33,6 +35,7 @@ export function moleculeHandlers(kept: Map<number, MoleculeHandlers>, id: number
   if (known) return known;
   const made: MoleculeHandlers = {
     onFrame: (f) => store.getState().setFrame3d(id, f),
+    onLowest: () => store.getState().followLowest3d(id),
     // (from its mark: it, and those selected with it - each about its own place)
     onMagnify: (k, gesture) => {
       const { sel3d } = store.getState();

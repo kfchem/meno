@@ -111,8 +111,8 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks" | "pro
   {
     id: "projections",
     name: "Projections",
-    // (a chair, as it is drawn: the ring's six atoms seen from above and in front)
-    icon: <path d="M16.6 9 L13.3 8.7 L6.7 6.5 L3.4 11 L6.7 11.3 L13.3 13.5 Z" />,
+    // (a chair seen from its other side, at the size of the row's other icons: the chair's own icon, below, is its mirror)
+    icon: <path d="M17.5 6.5 L13.8 13.5 L8.2 11.9 L2.5 13.5 L6.2 6.5 L11.8 8.1 Z" />,
   },
   {
     id: "conversation",
@@ -173,21 +173,16 @@ const PROJECTIONS: typeof ROW = [
     name: "Chair",
     // (what it does a second time, said as the pointer rests on it: the view from the other side)
     tip: "Chair. Chosen again on the chair just put down: the view from the other side",
-    // (a chair as it is first put down, seen from the right: its up end at the left, every bond plain)
-    icon: <path d="M3.4 9 L6.7 8.7 L13.3 6.5 L16.6 11 L13.3 11.3 L6.7 13.5 Z" />,
+    // (a chair as it is first put down: its up end at the left, the right end lower, every bond plain)
+    icon: <path d="M2.5 6.5 L6.2 13.5 L11.8 11.9 L17.5 13.5 L13.8 6.5 L8.2 8.1 Z" />,
   },
   {
     id: "haworth",
     name: "Haworth ring",
     // (what it does a second time, said as the pointer rests on it: a ring of five, a furanose's)
     tip: "Haworth ring. Chosen again on the ring just put down: a ring of five",
-    // (a Haworth ring of six seen from slightly above: the ring O behind, the front edge heavier)
-    icon: (
-      <>
-        <path d="M5 7.5 L8.5 5.2 L13.5 5.2 L17 7.5 L14 9.8 L8 9.8 Z" />
-        <path d="M14 9.8 L8 9.8" strokeWidth={2.8} />
-      </>
-    ),
+    // (a Haworth ring of six seen from slightly above, every edge at the icons' one weight)
+    icon: <path d="M2.8 9.6 L6.6 6 L13.4 6 L17.2 9.6 L13.2 13.6 L6.8 13.6 Z" />,
   },
   {
     id: "newman",
