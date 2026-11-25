@@ -8,6 +8,7 @@ import type { Shape } from "./shapes";
 import { pagePx } from "./units";
 import { NAME_PX, inReadingOrder, namesKept, onPage, type Band, type NameBox } from "./cardBands";
 import { PAGE_PX } from "../utils/pageScale";
+import { frameSignShapes, lineUnder, type FrameSign } from "./frameSign";
 
 /**
  * A frame on the page with a tab along its top, as a set's is drawn
@@ -40,6 +41,8 @@ export type FrameTab = {
   opacity?: number;
   /** Going - fading out, as it last was: drawn, never taken hold of. */
   noHits?: true;
+  /** What letting go would do while the pointer is held, as far as each has come (./frameSign): its edge and wash, or its edge dashed. */
+  sign?: FrameSign;
 };
 
 /** Meno's colours as its HTML has them (theme/colors, docs/LOOK.md *Colours*): the line at rest, under the pointer and chosen; the words; the warning. */
@@ -166,7 +169,10 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean, far?: F
     const tabRight = left + pagePx(tabWidthPx(it.tab, shown, it.iconWhenSmall)) + TAB_INSET;
     // (its frame - or, of the whole page, its tab alone, a box of its own)
     if (it.tabOnly) shapes.push({ kind: "box", key: `${it.key}:tab`, x0, y0: top - BAND, x1: tabRight, y1: top, radiusPx: FRAME_PX.radius, fill: FRAME_COLORS.fill, line, z: 1, ...fade });
-    else shapes.push({ kind: "box", key: `${it.key}:frame`, x0, y0, x1, y1, radiusPx: FRAME_PX.radius, line, z: 0, ...fade });
+    else {
+      shapes.push({ kind: "box", key: `${it.key}:frame`, x0, y0, x1, y1, radiusPx: FRAME_PX.radius, line, z: 0, opacity: (it.opacity ?? 1) * lineUnder(it.sign) });
+      shapes.push(...frameSignShapes(it.key, it.box, FRAME_PX.radius, it.sign, it.opacity));
+    }
     // (its tab's words: its icon, then - read - its name, its status, its warning)
     let x = left;
     if (!it.iconWhenSmall || (!shown && !far)) {
