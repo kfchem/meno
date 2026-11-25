@@ -4,6 +4,7 @@ import { drawnFromSmiles } from "./testdata/identityCases";
 import { isomersToMake } from "./openStereo";
 import { asksFirst, askWords, blockOf, openIn, type Open } from "./make3d";
 import { stereoOpenOf, stereoOpenSaid } from "./fromSmiles";
+import { blocksRead, leavesOpen } from "./menoIsomers";
 
 /**
  * What is asked before a structure is made in 3D, against stereoisomer counts derived by hand (standard stereochemistry,
@@ -70,6 +71,8 @@ describe("what is circled and counted before a structure is made in 3D", () => {
     // (the page's own notice of open stereo counts the same places)
     const said = stereoOpenOf(made.open.left);
     expect(said?.centres ?? 0).toBe(atoms.length);
+    // (and the yes or no a step asks, without the whole count, on a fresh reading)
+    expect(leavesOpen([block.molblock], blocksRead([block.molblock])!)).toBe(isomers > 1);
   });
 
   it("the page's own notice says nothing where the drawing stands for one compound, and only the real centre beside alike groups", async () => {
@@ -107,6 +110,15 @@ describe("the words of the card that asks", () => {
     // (a run of three cumulated double bonds is one place, cis or trans: one double bond; of two, an axis)
     expect(askWords([{ atoms: [], bonds: [7, 8, 9], runs: [[7, 8, 9]], groups: [], isomers: 2 }]).said).toBe("1 double bond is drawn without a configuration, so this structure can be either of 2 stereoisomers.");
     expect(askWords([{ atoms: [], bonds: [7, 8], runs: [[7, 8]], groups: [], isomers: 2 }]).said).toBe("1 chiral axis is drawn without a configuration, so this structure can be either of 2 stereoisomers.");
+  });
+  it("says how many structures, and their stereoisomers in all, where several are asked about at once", () => {
+    const two = askWords([
+      { atoms: [3], bonds: [], groups: [], isomers: 2 },
+      { atoms: [13], bonds: [], groups: [], isomers: 2 },
+    ]);
+    expect(two.said).toBe("2 stereocentres are drawn without a configuration, so these 2 structures can be 4 stereoisomers in all.");
+    expect(two.isomers).toBe(4);
+    expect(askWords([{ atoms: [3, 5], bonds: [], groups: [], isomers: 3 }]).said).toBe("2 stereocentres are drawn without a configuration, so this structure can be any of 3 stereoisomers.");
   });
   it("asks which stereoisomer where only a group is open too", () => {
     expect(askWords([{ atoms: [], bonds: [], groups: [and1], isomers: 2 }])).toEqual({ title: "Which stereoisomer?", said: "and1 stands for both of its forms, so this structure can be either of 2 stereoisomers.", isomers: 2 });

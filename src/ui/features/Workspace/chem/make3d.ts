@@ -256,9 +256,12 @@ export function askWords(open: readonly Open[]): { title: string; said: string; 
   ]
     .filter(Boolean)
     .join("; ");
-  const these = open.length > 1 ? "these structures" : "this structure";
-  const howMany = isomers === 2 ? `either of 2 stereoisomers` : `any of ${isomers} stereoisomers`;
-  return { title: "Which stereoisomer?", said: isomers > 1 ? `${said}, so ${these} can be ${howMany}.` : `${said}.`, isomers };
+  // (several structures asked about at once: how many, and their stereoisomers in all - what Make all makes)
+  const howMany =
+    open.length > 1
+      ? `these ${open.length} structures can be ${isomers} stereoisomers in all`
+      : `this structure can be ${isomers === 2 ? "either of 2 stereoisomers" : `any of ${isomers} stereoisomers`}`;
+  return { title: "Which stereoisomer?", said: isomers > 1 ? `${said}, so ${howMany}.` : `${said}.`, isomers };
 }
 
 /**
