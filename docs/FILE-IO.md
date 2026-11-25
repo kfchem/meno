@@ -1253,6 +1253,13 @@ style.meno (zip)
   so, "It was made by a newer Meno, and holds what this Meno cannot open",
   and nothing is opened. A `meno.json` that does not say a kind is a file
   that does not read.
+- **Built by script.** A development script, `scripts/document`, builds a
+  workspace from a JSON manifest - a title, Markdown texts, structures from
+  MOL, SD and RXN files, molecules in 3D from XYZ files with their energies
+  and the conformer mark - through the page's own actions and Save's own
+  writing, so that a change to the document breaks its build or test rather
+  than a file. Its manifest is not a promised format: it may change with
+  Meno's versions. It reads no calculation's output; the app's plugins do.
 
 ### Opening a workspace file from the system
 
