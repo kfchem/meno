@@ -27,6 +27,8 @@ import { CANVAS_LOOK, finishEntry, motionEntry, tooShort } from "./renderOptions
 import { withPresets } from "./presets";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
+import { FILM_FOR_SLIDES } from "../../../../lib/picture/image";
+import { isMatte, type Matte } from "../../../../lib/picture/matte";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { style3dOf } from "../style3dOf";
 import type { EditorStore } from "../store";
@@ -303,9 +305,9 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     const entry = withPresets({ scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) }, ask.presets, CANVAS_LOOK.id);
     const said = (await client.collect("render", [entry], options, {}, log, state)) as { why?: unknown; made?: unknown };
     if (typeof said?.why === "string") return failed(said.why.trim().slice(0, 300) || "It did not say why");
-    const made = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;
-    const file = typeof made?.file === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(made.file) ? made.file : null;
-    if (!file || (made?.media !== "image/png" && made?.media !== "video/mp4")) return fail("It said it made nothing Meno can show");
+    const { page: made, forSlides } = madeOf(said?.made);
+    const file = made?.file ?? null;
+    if (!made || !file) return fail("It said it made nothing Meno can show");
     const bytes = await readFile(await join(await jobFolder(job), file));
     const name = renderName(store, ids, made.media === "video/mp4" ? "mp4" : "png");
     // (where its frame stands now - moved since, as anything on the page is: what it made lands there)
@@ -316,7 +318,10 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
       if (held) picture = { name, sha256: held.sha256, media: held.media, px: [held.width, held.height], ...there };
     } else {
       const held = await holdFilm(bytes);
-      if (held) picture = { name, sha256: held.sha256, media: "video/mp4", px: [rendered.width, rendered.height], ...there };
+      // (a film on a transparent background: where its alpha lies, and its film for slide programs, held beside it)
+      const slides = made.matte && forSlides ? await holdFilm(await readFile(await join(await jobFolder(job), forSlides))) : null;
+      if (made.matte && !slides) return fail("It made a film on a transparent background, but not its film for slide programs");
+      if (held) picture = { name, sha256: held.sha256, media: "video/mp4", px: [rendered.width, rendered.height], ...there, ...(made.matte && slides ? { matte: made.matte, forSlides: slides.sha256 } : {}) };
     }
     if (!picture) return fail("What it made cannot be shown");
     // (its workspace closed meanwhile: put on no page, and kept in its job's folder)
@@ -327,6 +332,26 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   } catch (e) {
     fail(message(e));
   }
+}
+
+/** A job's file's name, as a plugin may give one: a name in its folder, never a path. */
+const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * What a render's job made, as its plugin says (docs/RENDER.md, *The role,
+ * and its contract*): the file for the page - a PNG, or a film, an MP4, with
+ * where its alpha lies where it is on a transparent background (`matte`) -
+ * and, beside such a film, its film for slide programs (QuickTime). None
+ * where it names nothing Meno can show.
+ */
+export function madeOf(made: unknown): { page: { file: string; media: "image/png" | "video/mp4"; matte?: Matte } | null; forSlides: string | null } {
+  const items = (Array.isArray(made) ? made : []).filter((m): m is { entry?: unknown; file?: unknown; media?: unknown; matte?: unknown } => !!m && typeof m === "object");
+  const ofFirst = items.filter((m) => (m.entry ?? 0) === 0 && typeof m.file === "string" && FILE_NAME.test(m.file));
+  const page = ofFirst.find((m) => m.media === "image/png" || m.media === "video/mp4");
+  const slides = ofFirst.find((m) => m.media === FILM_FOR_SLIDES);
+  if (!page) return { page: null, forSlides: null };
+  const matte = page.media === "video/mp4" && isMatte(page.matte) ? page.matte : undefined;
+  return { page: { file: page.file as string, media: page.media as "image/png" | "video/mp4", ...(matte ? { matte } : {}) }, forSlides: matte && slides ? (slides.file as string) : null };
 }
 
 /** A render's frame moved to stand about (x, y), in the page's units: what it makes will land there (a drag on it, Renders2D). */

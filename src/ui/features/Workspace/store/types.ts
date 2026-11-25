@@ -32,6 +32,7 @@ import type { ChartValue } from "../../../../lib/chart";
 import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
+import type { Matte } from "../../../../lib/picture/matte";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
 import type { KeptBond, KeptCentre } from "../configuration/kept";
@@ -368,6 +369,10 @@ export type PictureItem = {
   turn?: number;
   /** Where it was cut out of a PDF, if it was (docs/PDF.md, *Taking things out*). */
   from?: PictureFrom;
+  /** A film on a transparent background (docs/RENDER.md): where its alpha lies in each frame of its video (lib/picture/matte). */
+  matte?: Matte;
+  /** A film on a transparent background: its film for slide programs, by its SHA-256 - a QuickTime file, its alpha kept - held and kept beside it. */
+  forSlides?: string;
 };
 
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */

@@ -26,6 +26,7 @@ import { readPdfsAt } from "./pdfItems";
 import { anyLeftOut, leftOut, noting, type LeftOut } from "./readNotes";
 import { readStructureMaps, type StructureMap } from "../chem/structureMaps";
 import { pictureBytes } from "../../../../lib/picture/held";
+import { FILM_FOR_SLIDES } from "../../../../lib/picture/image";
 import { placesRead, readDrawn } from "./copyPaste";
 import { calcShowing, heldOutput, outputsToKeep, sha256Of } from "../../../../lib/calc/asks";
 import { writeMenoFile } from "../../../../lib/doc/menoFileWriter";
@@ -333,6 +334,12 @@ function picturesToKeep(pictures: readonly PictureItem[]): { kept: KeptData[]; n
     const data = pictureBytes(p.sha256);
     if (data) kept.push({ sha256: p.sha256, name: p.name, media: p.media, data });
     else notKept.push({ sha256: p.sha256, name: p.name, media: p.media });
+    // (a film on a transparent background: its film for slide programs beside it, once)
+    if (!p.forSlides || seen.has(p.forSlides) || kept.some((k) => k.sha256 === p.forSlides)) continue;
+    const slides = pictureBytes(p.forSlides);
+    const name = p.name.replace(/\.mp4$/i, "") + ".mov";
+    if (slides) kept.push({ sha256: p.forSlides, name, media: FILM_FOR_SLIDES, data: slides });
+    else notKept.push({ sha256: p.forSlides, name, media: FILM_FOR_SLIDES });
   }
   return { kept, notKept };
 }
@@ -431,6 +438,7 @@ export function keptNamedIn(text: string): KeptName[] {
     ...ws.texts.map((t) => ({ sha256: t.sha256, name: t.name, media: "text/plain" })),
     ...ws.pdfs.map((p) => ({ sha256: p.sha256, name: p.name, media: "application/pdf" })),
     ...(ws.drawn.pictures ?? []).map((p) => ({ sha256: p.sha256, name: p.name, media: p.media })),
+    ...(ws.drawn.pictures ?? []).flatMap((p) => (p.forSlides ? [{ sha256: p.forSlides, name: p.name.replace(/\.mp4$/i, "") + ".mov", media: FILM_FOR_SLIDES }] : [])),
   ];
 }
 
