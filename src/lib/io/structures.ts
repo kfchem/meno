@@ -334,7 +334,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           bondsFrom: "distance",
           bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
-          ...(rest.length && energies?.length === kept.size ? { energies } : {}),
+          // (none where no frame kept has one: those that had one may be among the frames left out)
+          ...(rest.length && energies?.length === kept.size && energies.some(Number.isFinite) ? { energies } : {}),
           ...(rest.length && names.some(Boolean) ? { frameNames: names } : {}),
           ...(differ ? { atomsDiffer: true as const } : {}),
           ...(filename ? { name: filename } : {}),
@@ -553,10 +554,18 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
     if (entries != null && !(Array.isArray(entries) && entries.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= (m.frames?.length ?? 0) && (k === 0 || f > all[k - 1])))) {
       throw bad("which of a molecule in 3D's frames are entries does not read");
     }
-    // (an energy for each frame, the first among them, or none: each frame's is the one at its place)
-    if (m.energies != null && !(Array.isArray(m.energies) && m.energies.length === 1 + (m.frames?.length ?? 0) && m.energies.every(finite))) {
+    // (an energy for each frame, the first among them, or none: each frame's is the one at its place - a
+    // frame given none is NaN, or null where the answer came as JSON, which cannot carry NaN; some frame
+    // has one, or the list is not given at all)
+    const energies: unknown = m.energies;
+    if (
+      energies != null &&
+      !(Array.isArray(energies) && energies.length === 1 + (m.frames?.length ?? 0) && energies.every((e) => e === null || Number.isNaN(e) || finite(e)) && energies.some(finite))
+    ) {
       throw bad("the energies of a molecule in 3D are not one for each of its frames");
     }
+    // (a frame with none is NaN on the page, as Meno's own reader gives it)
+    if (Array.isArray(energies) && energies.includes(null)) m.energies = energies.map((e) => (e === null ? NaN : (e as number)));
     // (the charge and multiplicity it was given: whole numbers, a multiplicity one or more - or none)
     const c = m.calc as { readers?: unknown; charge?: unknown; multiplicity?: unknown } | undefined;
     if (c != null && !(Array.isArray(c.readers) && !c.readers.length && (c.charge == null || Number.isInteger(c.charge)) && (c.multiplicity == null || (Number.isInteger(c.multiplicity) && (c.multiplicity as number) >= 1)))) {
