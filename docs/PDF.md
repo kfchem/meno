@@ -1532,7 +1532,11 @@ it where it lies out of view.
     under three fifths of the one before at once, and each piece is read as
     a hash of its own (2026-11-26: such a pair in a cage was read as one
     hash through its carbon, the ring at that carbon lost, with nothing
-    said); a long hash with no such fall is read as it is;
+    said); a long hash with no such fall is read as it is. In a picture, a
+    hash's widest line, where it meets the bonds at its atom, may be traced
+    cut short; an end line shorter than the line inside it by more than a
+    line's width, where the lines grow toward that end, is taken as cut, and
+    the line inside it tells that end's width, so the narrow end is still read;
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a line, or a wedge
     (a perspective drawing's near edge is often one) - a bridge's, a

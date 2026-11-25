@@ -180,7 +180,18 @@ function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): {
     // at either end, its wide end's too, may be drawn as one)
     const thickest = Math.max(0, ...order.filter((o) => !dot_(o.g)).map((o) => o.g.w));
     const lines = order.filter((o) => !dot_(o.g) && o.g.w >= 0.5 * thickest);
-    const [r0, r1] = lines.length >= 2 ? [lines[0], lines[lines.length - 1]] : [first, last];
+    let [r0, r1] = lines.length >= 2 ? [lines[0], lines[lines.length - 1]] : [first, last];
+    // (a hash's wide-end line, where it meets the bonds at its atom in a picture traced, may come out cut short - its ink run into
+    // theirs - so that both end lines look alike: an end line shorter than the line inside it by more than a line's width (a line's
+    // length is told to within its round ends, a width), where the lines inside grow toward that end, is such a cut line - the one
+    // inside tells the end's width; a hash of even lines stays even, its other end as long as that one)
+    if (lines.length >= 4) {
+      const n = lines.length;
+      const ls = lines.map((o) => len(o.g));
+      const cut = (end: number, inner: number, far: number) => ls[end] < ls[inner] - Math.max(lines[end].g.w, lines[inner].g.w) && ls[inner] > ls[far];
+      if (cut(n - 1, n - 2, 1)) r1 = lines[n - 2];
+      else if (cut(0, 1, n - 2)) r0 = lines[1];
+    }
     const l0 = len(r0.g);
     const l1 = len(r1.g);
     let [a, b] = [at(first.t - step / 2), at(last.t + step / 2)];
