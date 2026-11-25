@@ -4,6 +4,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { followLink, followsLink, goBack, isBackKey, linkHint, readerOf } from "./pdfColumnReader";
 import { pointOn } from "../../../../lib/pdf/column";
+import { lensGoesWhenMoved } from "../utils/compoundLens";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
 
@@ -188,5 +189,40 @@ describe("a PDF's links", () => {
     expect(linkHint({ rect: [0, 0, 1, 1], uri: " https://example.com/ " }, true)).toBe("\u2318-click to open https://example.com/");
     expect(linkHint({ rect: [0, 0, 1, 1], page: 2 }, false)).toBe("Ctrl+click to go to page 3");
     expect(linkHint({ rect: [0, 0, 1, 1] }, true)).toBe("");
+  });
+});
+
+describe("a compound's card in the column as the column moves", () => {
+  const card = (id: number) => ({ id, sha256: "a".repeat(64), label: "14", word: { left: 100, top: 200, right: 112, bottom: 212 }, since: 0 });
+
+  it("goes as the column is scrolled or zoomed by a hand: the word it stood by is elsewhere now", () => {
+    const { store, r } = reading();
+    const id = store.getState().pdfs[0].id;
+    const off = lensGoesWhenMoved(r, () => store.getState(), id);
+    store.getState().setPdfLens(card(id));
+    r.step(1 / 60);
+    expect(store.getState().pdfLens?.label).toBe("14");
+    r.scrollBy(0, 40, true);
+    expect(store.getState().pdfLens).toBeNull();
+    // (the pointer resting on a number again brings its card, which stays while nothing moves)
+    store.getState().setPdfLens(card(id));
+    settle(r);
+    expect(store.getState().pdfLens?.label).toBe("14");
+    r.zoomAt(1.2, 200, 300, true);
+    expect(store.getState().pdfLens).toBeNull();
+    // (no longer listening: a card stays however the column moves)
+    off();
+    store.getState().setPdfLens(card(id));
+    r.scrollBy(0, 40, true);
+    expect(store.getState().pdfLens?.label).toBe("14");
+  });
+
+  it("leaves another PDF's card alone", () => {
+    const { store, r } = reading();
+    const id = store.getState().pdfs[0].id;
+    lensGoesWhenMoved(r, () => store.getState(), id);
+    store.getState().setPdfLens(card(id + 1));
+    r.scrollBy(0, 40, true);
+    expect(store.getState().pdfLens?.id).toBe(id + 1);
   });
 });

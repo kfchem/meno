@@ -2168,7 +2168,10 @@ mention a number, and the card.
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
-  height: a superscript, a footnote's mark) is none, and a structure not
+  height: a superscript, a footnote's mark) is none - their usual height
+  measured of its words alone, not of a structure's atoms' labels set as
+  the page's own letters: an OH set larger than the one line of words under
+  its structure would make that line's number seem a superscript, and a structure not
   read takes none. Written as Meno writes it: its parentheses and spaces
   set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
 - **Each PDF's index** (`utils/compoundIndex`): each number, and every
@@ -2192,6 +2195,12 @@ mention a number, and the card.
   a compound ("compound 12", "products 3, 4 and 5": compound, product,
   intermediate, substrate, adduct, derivative, past other numbers and "and",
   "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
+  so is a display item's number, however set: after the word naming a
+  scheme, a figure (Fig.), a chart, a table or an equation (eq), singular
+  or plural, past other numbers and "and", "or", "to" within the sentence
+  ("Scheme 4" in a caption, set bold; "Schemes 2 and 3", "Figures 1-3"),
+  but not one set otherwise than the item's first number ("Scheme 1, 4a",
+  its 4a bold);
   with ⌥ (Alt) held, every number of that shape is. A number with its
   rotation's mark before it, (+)-12, is taken with its mark - its
   parentheses, sign and en dash are no word's letters - and asked whether it
@@ -2233,7 +2242,9 @@ mention a number, and the card.
   too small - its word's box taken through the view to the window. Not on a
   structure of a figure, which is the structure's own, as in the column. As
   the view moves, the card goes - its word is no longer where it stood -
-  and comes again by the word's new place once the pointer rests there. ⌥
+  and comes again by the word's new place once the pointer rests there; so
+  too in the column, scrolled or zoomed by a hand (`utils/compoundLens`
+  `lensGoesWhenMoved`), the card eased out as when the pointer leaves. ⌥
   pressed or let go over a number reads it again, in both.
 
 ### A picture read (part B, built 2026-10-11)

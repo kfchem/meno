@@ -33,7 +33,7 @@ import { printed } from "../../../lib/pdf/print";
 import PrintButton from "./components/PrintButton";
 import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
-import { indexOnce, mentionUnder } from "./utils/compoundLens";
+import { indexOnce, lensGoesWhenMoved, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
 import { dragStructure, picksAfter, sayWhy, togglesPick } from "./components/structureDrag";
 import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
@@ -1064,6 +1064,9 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       e.stopPropagation();
       move();
     };
+    // (the column moved by a hand - scrolled, zoomed: its card stood by a word that is elsewhere now - let go, eased as when the pointer
+    //  leaves; the pointer resting on a number again brings that number's - docs/PDF.md, *A compound's number*)
+    const offMoved = lensGoesWhenMoved(reader, () => store.getState(), id);
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("gesturestart", onGestureStart);
     el.addEventListener("gesturechange", onGestureChange);
@@ -1078,6 +1081,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     window.addEventListener("keydown", onModifier, true);
     window.addEventListener("keyup", onModifier, true);
     return () => {
+      offMoved();
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("gesturestart", onGestureStart);
       el.removeEventListener("gesturechange", onGestureChange);
