@@ -5,7 +5,7 @@ import { kekuleOrders } from "./kekulize";
 import { hydrogenCounts } from "./perception/hydrogens";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
 import { ELEMENTS } from "./elements";
-import { drawnRoundMetal, labelNotElement } from "./perception/elements";
+import { coordinatedByDonors, drawnRoundMetal, labelNotElement, mainGroupMetal } from "./perception/elements";
 import { movedBond } from "./structureBonds";
 
 /**
@@ -427,9 +427,19 @@ const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
  */
 const TEXT_METAL: ReadonlySet<string> = new Set([...drawnRoundMetal].filter((m) => !labelNotElement.has(m)));
 
-/** Whether a metal's symbol (`TEXT_METAL`) is written anywhere in `text`: what any complex's formula has. */
-function hasMetal(text: string): boolean {
-  for (const m of TEXT_METAL) if (text.includes(m)) return true;
+/**
+ * The metals a label's formula is read for where no other reading reads it (./abbreviations `composedOf`): `TEXT_METAL` and the
+ * main-group metals a donor's bond to is a coordination (`coordinatedByDonors`, groups 1, 2 and 13) - MgBr, AlCl2, BrMg on a carbon, a
+ * Grignard's or an organoaluminium's metal with the halides written on it (a ruling of 2026-11-20). Not tin, lead nor bismuth.
+ */
+export const DONOR_TEXT_METAL: ReadonlySet<string> = new Set([
+  ...TEXT_METAL,
+  ...[...coordinatedByDonors].filter((m) => mainGroupMetal.has(m) && !labelNotElement.has(m)),
+]);
+
+/** Whether one of `metals` is written anywhere in `text`: what any complex's formula has. */
+function hasMetal(text: string, metals: ReadonlySet<string>): boolean {
+  for (const m of metals) if (text.includes(m)) return true;
   return false;
 }
 
@@ -504,6 +514,8 @@ type Names = {
   local: Readonly<Record<string, Ligand>>;
   counters: boolean;
   seen: Readings | null;
+  /** The symbols read as a metal (`TEXT_METAL`, or `DONOR_TEXT_METAL`). */
+  metals: ReadonlySet<string>;
 };
 
 type GroupOf = (label: string) => GroupStructure | null;
@@ -625,7 +637,7 @@ function plainToken(t: string, names: Names): Item | null {
     const bridge = plainToken(mu[1], names);
     return bridge && (bridge.kind === "ligand" || bridge.kind === "x") ? { ...bridge, bridging: true } : null;
   }
-  if (TEXT_METAL.has(t)) return { kind: "metal", el: t, n: 1 };
+  if (names.metals.has(t)) return { kind: "metal", el: t, n: 1 };
   const own = Object.prototype.hasOwnProperty.call(names.local, t) ? names.local[t] : undefined;
   // (a formula's own ligand as its SMILES has it: whose configuration it is, the reagent says)
   if (own) return { kind: "ligand", ligand: { ...own, enantiomers: own.enantiomers ?? { as: [], mirror: [], plain: true } }, descriptor: null, n: 1 };
@@ -661,15 +673,17 @@ export function complexStructure(
   label: string,
   groupOf: (label: string) => GroupStructure | null,
   local: Readonly<Record<string, Ligand>> = {},
+  metals: ReadonlySet<string> = TEXT_METAL,
 ): (GroupStructure & { name: string }) | null {
   // (no metal's symbol in it, no complex: a long label - OTBS forty times,
   // a long chain written out - was read at every length of every part of it,
   // for seconds, before it was found to be none)
-  if (!hasMetal(label)) return null;
+  if (!hasMetal(label, metals)) return null;
   // (no part in brackets, no counter-anion it may have: read first with none
   // tried - most of the cost of reading what is no complex - and, where it
   // reads so, again as it always was, a counter-anion making it none)
-  const names: Names = { groupOf, local, counters: label.includes("["), seen: Object.keys(local).length ? null : readingsOf(groupOf) };
+  // (what each text was read as is kept for the formulas of `TEXT_METAL` alone: Mg is no metal there)
+  const names: Names = { groupOf, local, counters: label.includes("["), seen: Object.keys(local).length || metals !== TEXT_METAL ? null : readingsOf(groupOf), metals };
   let items = itemsOf(label, names);
   if (items && !names.counters) items = itemsOf(label, { ...names, counters: true });
   if (!items) return null;
