@@ -68,15 +68,15 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("a wedge clicked through its round: the label and the notes follow the drawing (G1-G5)", () => {
-  it("states S, R, nothing, nothing, R, nothing, S - each at once, each note only where a stated configuration changed", async () => {
+  it("states S, R, nothing, nothing, R, nothing, S - each at once, and no note: each change is the chemist's own turn of the wedge", async () => {
     const p = page(chain(), methylbutanol());
     expect(await p.said()).toEqual([]);
     expect([p.keeps(103), p.label(103)]).toEqual([true, "S"]);
-    // (hashed, narrow at C2: H toward the viewer, the sense seen reversed - R)
-    expect(await p.click(205)).toEqual(["C2: S, now R"]);
+    // (hashed, narrow at C2: H toward the viewer, the sense seen reversed - R; the label shows it, no note)
+    expect(await p.click(205)).toEqual([]);
     expect([p.kind(205), p.label(103)]).toEqual(["down@103", "R"]);
-    // (plain: nothing stated - said, as the configuration it had is lost)
-    expect(await p.click(205)).toEqual(["C2: R, now unspecified"]);
+    // (plain: nothing stated - the label goes, no note: the chemist made it plain)
+    expect(await p.click(205)).toEqual([]);
     expect([p.kind(205), p.label(103)]).toEqual(["none@106", null]);
     // (a wedge narrow at the methyl states nothing of C2: nothing said - nothing stated was there to change)
     expect(await p.click(205)).toEqual([]);
@@ -84,7 +84,7 @@ describe("a wedge clicked through its round: the label and the notes follow the 
     // (a hashed wedge narrow at the methyl is read as stating C2, as the reader reads it (docs/EDITOR-2D.md): new, nothing said)
     expect(await p.click(205)).toEqual([]);
     expect([p.kind(205), p.label(103)]).toEqual(["down@106", "R"]);
-    expect(await p.click(205)).toEqual(["C2: R, now unspecified"]);
+    expect(await p.click(205)).toEqual([]);
     expect([p.kind(205), p.label(103)]).toEqual(["none@103", null]);
     expect(await p.click(205)).toEqual([]);
     expect([p.kind(205), p.label(103)]).toEqual(["up@103", "S"]);
@@ -94,7 +94,7 @@ describe("a wedge clicked through its round: the label and the notes follow the 
   it("says nothing more of a configuration once said: an edit that changes nothing stated says nothing (report: notes where nothing changed)", async () => {
     const p = page(methylbutanol());
     await p.click(205);
-    expect(await p.click(205)).toEqual(["C2: R, now unspecified"]);
+    expect(await p.click(205)).toEqual([]);
     expect(await p.click(205)).toEqual([]);
     // (the ethyl's CH3 deleted - C2 no longer a centre at all: nothing said)
     p.doc.edit("delete", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.filter((b) => b.id !== 204) } }));
@@ -155,10 +155,10 @@ describe("known answers after a wedge clicked (G9, G10)", () => {
       bonds: [bond(21, 1, 2), bond(22, 1, 3), bond(23, 3, 4, { order: 2 }), bond(24, 3, 5), bond(25, 2, 6), bond(26, 6, 7, { order: 2 }), bond(27, 6, 8), bond(31, 1, 9, { stereo: "up", narrow: 1 }), bond(32, 2, 10, { stereo: "up", narrow: 2 })],
     };
   }
-  it("tartaric acid: (2R,3R) drawn; one wedge clicked to hashed gives the meso form, (2S,3R), and one note", async () => {
+  it("tartaric acid: (2R,3R) drawn; one wedge clicked to hashed gives the meso form, (2S,3R), and no note", async () => {
     const p = page(tartaric());
     expect([p.label(1), p.label(2)]).toEqual(["R", "R"]);
-    expect(await p.click(31)).toEqual(["C2: R, now S"]);
+    expect(await p.click(31)).toEqual([]);
     expect([p.label(1), p.label(2)]).toEqual(["S", "R"]);
     p.stop();
   });
@@ -171,10 +171,10 @@ describe("known answers after a wedge clicked (G9, G10)", () => {
       bonds: [...ring.map((a, k) => bond(11 + k, a.id, ring[(k + 1) % 6].id)), bond(17, 1, 7, { stereo: "up", narrow: 1 }), bond(18, 2, 8, { stereo: "up", narrow: 2 })],
     };
   }
-  it("1,2-dimethylcyclohexane: cis (1R,2S); one wedge clicked to hashed gives trans, (1S,2S)", async () => {
+  it("1,2-dimethylcyclohexane: cis (1R,2S); one wedge clicked to hashed gives trans, (1S,2S), and no note", async () => {
     const p = page(dimethylcyclohexane());
     expect([p.label(1), p.label(2)]).toEqual(["R", "S"]);
-    expect(await p.click(17)).toEqual(["C1: R, now S"]);
+    expect(await p.click(17)).toEqual([]);
     expect([p.label(1), p.label(2)]).toEqual(["S", "S"]);
     p.stop();
   });
@@ -182,13 +182,19 @@ describe("known answers after a wedge clicked (G9, G10)", () => {
 
 describe("atoms named by their own molecule's numbering (G6)", () => {
   it("names C2 of 2-methylbutan-1-ol C2 with a 32-atom molecule before it on the page, and by its map number where a map shows one", async () => {
+    // (the chain C1-C4 mirrored left to right about C2, the wedge left as it is: C2 inverted by atoms moved, not by a turn of its wedge
+    //  by hand - said. A click on the wedge, the chemist's own turn of it, says nothing and names nothing)
+    const across = (q: ReturnType<typeof page>) =>
+      q.doc.edit("move atoms", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ([101, 102, 104, 105].includes(a.id) ? { ...a, x: -a.x } : a)) } }));
     const p = page(chain(), methylbutanol());
-    expect(await p.click(205)).toEqual(["C2: S, now R"]);
+    across(p);
+    expect(await p.said()).toEqual(["C2: S, now R"]);
     p.stop();
     const mapped = methylbutanol();
     mapped.atoms = mapped.atoms.map((a, i) => ({ ...a, map: 11 + i }));
     const q = page(chain(), mapped);
-    expect(await q.click(205)).toEqual(["C13: S, now R"]);
+    across(q);
+    expect(await q.said()).toEqual(["C13: S, now R"]);
     q.stop();
   });
 });

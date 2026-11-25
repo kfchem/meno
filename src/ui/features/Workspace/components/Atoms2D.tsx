@@ -12,6 +12,7 @@ import { newmanTurnGesture, newmanTurnable } from "../utils/newmanTurn";
 import { NEWMAN_CIRCLE, newmansIn } from "../projections/newman";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { dropOutcome } from "../utils/dropOutcome";
+import { tapConnects } from "../utils/tapConnect";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { oncePerEvent, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -232,6 +233,8 @@ export function Atoms2D() {
         const out = dropOutcome(model as any, thisAtom.id, pEnd, { x: offset.dx, y: offset.dy }, moveFree);
         if ("merge" in out) replaceDraggedAtomWith(thisAtom.id, out.merge);
         else if ("move" in out) moveAtom(thisAtom.id, out.move.x, out.move.y);
+        // (a projection's two groups changing places: one step)
+        else if ("swap" in out) store.getState().placeSolid(out.swap, "swap groups");
       } catch {}
       endMoveDrag();
       endPanHold(ev.pointerId ?? pid);
@@ -404,7 +407,8 @@ export function Atoms2D() {
             NOMINAL_BOND_LENGTH * 0.4,
             a.id,
           );
-          if (near != null) {
+          // (an atom bonded to it already - the back atom under a Newman pair's centre - is no tap-connect: the double-click adds its bond)
+          if (tapConnects(store.getState().model, a.id, near)) {
             connectAtoms(a.id, near, 1);
             endedByInteractive.current = true;
             suppressDoubleClick?.(160);

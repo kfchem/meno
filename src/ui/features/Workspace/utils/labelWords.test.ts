@@ -87,12 +87,12 @@ describe("a label typed in place", () => {
     expect(note()).toBeUndefined();
   });
 
-  it("a metal oxoacid written as HnMOm - H2CrO4, a compound - and CrO5 are said as not read as written, never as what they were read as", () => {
+  it("a metal oxoacid at a state its metal is not read at - H2MnO4, Mn(VI) - and CrO5 are said as not read as written, never as what they were read as", () => {
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     const s = () => store.getState();
-    for (const label of ["H2CrO4", "CrO5"]) {
+    for (const label of ["H2MnO4", "CrO5"]) {
       const id = s().addAtom(0, 0, "C");
       s().beginLabelEdit(id);
       s().setLabelEditValue(label);

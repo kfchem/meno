@@ -157,17 +157,78 @@ describe("an oxo formula past its metal's highest oxidation state", () => {
     }
   });
 
-  it("refuses the metal oxoacids written as HnMOm - their H read as groups on the metal, past its highest state - though each is a compound", () => {
-    for (const [label, metal] of [["H2CrO4", "Cr"], ["HReO4", "Re"], ["HMnO4", "Mn"], ["H3VO4", "V"], ["H2MoO4", "Mo"], ["H2WO4", "W"]] as const) {
-      expect(abbreviationOf(label) ?? null, label).toBeNull();
-      expect(labelRefused(label), label).toMatchObject({ why: "past the highest state", metal });
-    }
-  });
 
   it("reads one at its highest state or below as before: CrO3, MoO3, WO3, OsO4, MoO2Cl2, ReO3Me, CrO2Cl2, VOCl3, NbOCl3, TiOCl2, MnO3Cl", () => {
     for (const label of ["CrO3", "MoO3", "WO3", "OsO4", "MoO2Cl2", "ReO3Me", "CrO2Cl2", "VOCl3", "NbOCl3", "TiOCl2", "MnO3Cl"]) {
       expect(abbreviationStructure(label), label).not.toBeNull();
       expect(labelRefused(label), label).toBeUndefined();
+    }
+  });
+});
+
+/** The metal's bonds in a structure: "O-" for each O by a single bond, "O=" for each oxo (the H, the formula's, can be on no atom but an O). */
+const metalBonds = (s: GroupStructure, el: string) => {
+  const m = s.atoms.findIndex((a) => a.el === el);
+  return s.bonds
+    .filter((b) => b.a1 === m || b.a2 === m)
+    .map((b) => {
+      const o = s.atoms[b.a1 === m ? b.a2 : b.a1];
+      return `${o.el}${b.order === 2 ? "=" : "-"}`;
+    })
+    .sort();
+};
+
+describe("a metal oxoacid, as HnMOm or with its hydroxo written out", () => {
+  it("reads H2CrO4 as Cr(=O)2(OH)2, Cr(VI); HMnO4 as Mn(=O)3(OH), Mn(VII); HReO4 as Re(=O)3(OH), Re(VII)", () => {
+    // H2CrO4: atoms Cr, 4 O, 2 H. Each H on an O of its own: two Cr-O-H, by single bonds; the other two O oxo, Cr=O. Cr: 2 x 2 (oxo)
+    // + 2 x 1 (hydroxo) = +6, chromium's highest state, the one the table holds.
+    // HMnO4: Mn, 4 O, 1 H. One Mn-O-H, three Mn=O. Mn: 3 x 2 + 1 = +7, the table's.
+    // HReO4: Re, 4 O, 1 H. One Re-O-H, three Re=O. Re: 3 x 2 + 1 = +7, the table's.
+    const cases: [string, string, string, string[]][] = [
+      ["H2CrO4", "Cr", "CrH2O4", ["O-", "O-", "O=", "O="]],
+      ["HMnO4", "Mn", "HMnO4", ["O-", "O=", "O=", "O="]],
+      ["HReO4", "Re", "HO4Re", ["O-", "O=", "O=", "O="]],
+    ];
+    for (const [label, el, formula, bonds] of cases) {
+      const s = of(label);
+      expect([structureFormula(s), metalBonds(s, el), s.bonds.length, charge(s)], label).toEqual([formula, bonds, 4, 0]);
+      expect([abbreviationOf(label)?.kind, labelRefused(label)], label).toEqual(["reagent", undefined]);
+    }
+    expect(abbreviationOf("H2CrO4")?.name).toBe("dihydroxidodioxidochromium");
+    expect(abbreviationOf("HMnO4")?.name).toBe("hydroxidotrioxidomanganese");
+  });
+
+  it("reads the hydroxo forms typed out, each the same molecule as its HnMOm: CrO2(OH)2, MoO2(OH)2 Mo(VI), ReO3(OH), VO(OH)3 V(V)", () => {
+    // CrO2(OH)2: Cr, two oxo Cr=O, two hydroxo Cr-O-H: +6, one identity with H2CrO4.
+    // ReO3(OH) and ReO3OH: three Re=O, one Re-O-H: +7, one identity with HReO4.
+    expect(of("CrO2(OH)2")).toEqual(of("H2CrO4"));
+    expect(of("ReO3(OH)")).toEqual(of("HReO4"));
+    expect(of("ReO3OH")).toEqual(of("HReO4"));
+    // MoO2(OH)2: Mo, 4 O, 2 H; two Mo=O, two Mo-O-H: 2 x 2 + 2 = +6, the table's.
+    const mo = of("MoO2(OH)2");
+    expect([structureFormula(mo), metalBonds(mo, "Mo")]).toEqual(["H2MoO4", ["O-", "O-", "O=", "O="]]);
+    expect(mo).toEqual(of("H2MoO4"));
+    // VO(OH)3: V, 4 O, 3 H; one V=O, three V-O-H: 2 + 3 = +5, the table's.
+    const v = of("VO(OH)3");
+    expect([structureFormula(v), metalBonds(v, "V")]).toEqual(["H3O4V", ["O-", "O-", "O-", "O="]]);
+    for (const label of ["CrO2(OH)2", "MoO2(OH)2", "ReO3(OH)", "VO(OH)3"]) expect(labelRefused(label), label).toBeUndefined();
+  });
+
+  it("refuses one whose formula gives its metal a state the table does not hold, never guessed: H2CrO3 Cr(IV), H2MnO4 Mn(VI)", () => {
+    // H2CrO3: two Cr-O-H and one Cr=O, Cr +4; the table holds +6 for Cr. H2MnO4 (manganic acid): two Mn-O-H and two Mn=O, Mn +6;
+    // the table holds +7 for Mn. Each kept as words, and said.
+    expect([abbreviationOf("H2CrO3") ?? null, abbreviationStructure("H2CrO3")]).toEqual([null, null]);
+    expect(labelRefused("H2CrO3")).toEqual({ why: "a state not held", metal: "Cr", oxo: 1, hydroxo: 2, state: 4, held: 6 });
+    expect(abbreviationOf("H2MnO4") ?? null).toBeNull();
+    expect(labelRefused("H2MnO4")).toEqual({ why: "a state not held", metal: "Mn", oxo: 2, hydroxo: 2, state: 6, held: 7 });
+    // (past it too, as written: CrO3(OH), Cr +7)
+    expect(labelRefused("CrO3(OH)")).toMatchObject({ why: "a state not held", state: 7, held: 6 });
+  });
+
+  it("leaves the main-group acids and a bare hydroxy as they were: H2SO4 sulfuric acid from the table, HNO3 and H3PO4 unread, HO and OH unread", () => {
+    expect([abbreviationOf("H2SO4")?.name, structureFormula(of("H2SO4"))]).toEqual(["sulfuric acid", "H2O4S"]);
+    for (const label of ["HNO3", "H3PO4", "HO", "OH"]) {
+      expect([abbreviationOf(label) ?? null, labelRefused(label) ?? null], label).toEqual([null, null]);
     }
   });
 });

@@ -1339,6 +1339,30 @@ export type EditorState = {
   turns3d: Record<number, Turn3D>;
   /** Which frame each molecule in 3D shows, by id; the first if absent. */
   frames3d: Record<number, number>;
+  /**
+   * What each molecule's frames chip marks with a dot, by id: since the
+   * chemist picked a conformer, a later round found one lower than the
+   * lowest there was at the pick (`"lower"`); or the conformer shown left
+   * the energy window, and the lowest is shown (`"window"`) - until a
+   * conformer is picked (`setFrame3d`) or the dot pressed (`followLowest3d`;
+   * docs/WORKSPACE.md, *As its search goes on*). The view's; never saved.
+   */
+  lowerFound3d: Readonly<Record<number, "lower" | "window">>;
+  /**
+   * The molecules whose search shows the lowest conformer found so far, by
+   * id: from the making, until a conformer is picked (`setFrame3d`), and
+   * again once the chip's dot is pressed (`followLowest3d`). A round that
+   * finds a lower one shows it - once the molecule is out of the chemist's
+   * hand (`inHand3d`). The view's; never saved: a molecule read from a file
+   * never changes by itself.
+   */
+  following3d: Readonly<Record<number, true>>;
+  /** The molecules being turned or moved by the chemist's drag now: a step to a lower conformer waits for the release. */
+  inHand3d: readonly number[];
+  /** The molecules being turned or moved now (`inHand3d`): those let go, and owed a step to the lowest, step to it. */
+  setInHand3d: (ids: readonly number[]) => void;
+  /** The lowest conformer shown, and the molecule follows the lowest again (the chip's dot pressed). */
+  followLowest3d: (id: number) => void;
   /** Which molecule each stack of molecules in 3D shows, by the stack's id: by the molecule's id; its first if absent (utils/stacks). */
   stacksShown: Record<number, number>;
   /** A stack shows another of its molecules - turned as the one it showed was. */

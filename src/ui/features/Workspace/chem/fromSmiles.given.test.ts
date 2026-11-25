@@ -62,8 +62,14 @@ describe("structureFromSmiles, for a SMILES with an allene's axis or a cumulene'
   it("says the run is left open where the plugin's drawing is not of the SMILES's own bonds - nothing is carried, and no hand is drawn", async () => {
     const { structureFromSmiles } = await import("./fromSmiles");
     const real = blockOf;
-    // (the same atoms in order, an end's groups joined to the other end's carbon)
-    blockOf = (smi) => real(smi).replace("  5  6  1  0", "  2  6  1  0");
+    // (the same atoms in order, an end's group joined to the other end's carbon and that end's to this one - still an allene with
+    //  two unlike groups at each end, whose axis decides the compound)
+    blockOf = (smi) => {
+      const block = real(smi);
+      const swapped = block.replace("  1  2  1  0", "  1  5  1  0").replace("  5  6  1  0", "  2  6  1  0");
+      expect(swapped).not.toBe(block);
+      return swapped;
+    };
     try {
       openBonds = [2, 3];
       const drawn = await structureFromSmiles("OC(C)=[C@]=C(Cl)C", MENO);

@@ -25,7 +25,7 @@ import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf, stereoRows } from "../../chem/make3d";
 import { sentOf } from "../../../../../lib/chem/perception/stereo/configuration";
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
-import { blocksRead, leftByMeno } from "../../chem/menoIsomers";
+import { blocksRead, leavesOpen } from "../../chem/menoIsomers";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS, type IsomerConfiguration } from "../../../../../lib/chem/stereoOpen";
@@ -595,7 +595,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
         const read = block ? blocksRead([block.molblock]) : null;
         if (block && read) {
-          if (anyOpen(leftByMeno([block.molblock], read).left)) open.push(recordNumber(e.record) ?? k + 1);
+          if (leavesOpen([block.molblock], read)) open.push(recordNumber(e.record) ?? k + 1);
         } else unasked.push(recordNumber(e.record) ?? k + 1);
         if (k % LEFT_OPEN_TURN === LEFT_OPEN_TURN - 1) {
           working({ done: k + 1 });

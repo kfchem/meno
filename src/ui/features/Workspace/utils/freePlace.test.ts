@@ -3,7 +3,7 @@ import { footOf, freePlace, labelBoxes, labelledPart, pageBoxes, shownBeside } f
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
 import type { ProcessedFileResult } from "./io";
-import { CHIP } from "../workflow/look";
+import { CHIP, PX } from "../workflow/look";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -97,23 +97,26 @@ describe("a molecule in 3D as what is put down takes it", () => {
     at,
   });
 
-  it("takes its frames chip under it and its notes over it, besides its atoms", () => {
+  it("takes its frames chip under it and its notes' mark beside its top right corner, besides its atoms", () => {
     const seen = { x0: -1, x1: 1, y0: -1, y1: 1 };
     const [chip, notes] = shownBeside(hcn(), seen, STYLE_3D);
     expect(chip.y1).toBe(seen.y0);
     expect(chip.y0).toBeCloseTo(seen.y0 - CHIP, 9);
     expect(chip.x1 - chip.x0).toBeGreaterThan(2);
-    expect(notes.y0).toBe(seen.y1);
-    expect(notes.y1).toBeGreaterThan(seen.y1);
+    // (the mark: 6 page pixels right of its right side, 10 across, its top level with the molecule's top)
+    expect(notes.x0).toBe(seen.x1);
+    expect(notes.x1).toBeCloseTo(seen.x1 + 16 * PX, 9);
+    expect(notes.y1).toBe(seen.y1);
+    expect(notes.y0).toBeCloseTo(seen.y1 - 10 * PX, 9);
   });
 
   it("takes one from a file as it will first be seen - HCN along z, side-on: wider than it is tall, its chip and note with it", () => {
     const m = hcn();
     const result = { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d: [m] } as unknown as ProcessedFileResult;
     const foot = footOf(result, { molecules3d: [{ ...m, at: { x: 0, y: 0 } }] }, styleOf({} as never), STYLE_3D);
-    // (its atoms across, about 2.2 Å and their balls; its chip below and its note above it besides)
-    expect(foot.x1 - foot.x0).toBeGreaterThan(2);
+    // (its atoms across, about 2.2 Å and their balls, and its notes' mark beside them, 16 page pixels; its chip below; nothing over its atoms' top, about 0.42)
+    expect(foot.x1 - foot.x0).toBeGreaterThan(2 + 16 * PX);
     expect(foot.y0).toBeLessThan(-CHIP);
-    expect(foot.y1).toBeGreaterThan(0.5);
+    expect(foot.y1).toBeLessThan(0.5);
   });
 });
