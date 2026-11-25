@@ -22,7 +22,8 @@ const TIP_Z: [number, number] = [30, 20];
  * while the pointer rests on the mark - not on the molecule, which is
  * pointed at all the time it is turned - in the page's tip (PageTip), one
  * line to a note; a screen reader reads them from it at rest. Drawn where
- * the parent's group stands: just over the molecule's highest atom.
+ * the parent's group stands: the molecule's top right corner as seen,
+ * the mark beside it - never over a set's name above it, nor its atoms.
  */
 export default function NotesMark3D({ notes }: { notes: readonly string[] }) {
   const words = notesTip(notes);
@@ -33,8 +34,10 @@ export default function NotesMark3D({ notes }: { notes: readonly string[] }) {
   useEffect(() => {
     if (!words) setPointed(false);
   }, [words]);
-  const at = (NOTES_MARK_GAP_PX + NOTES_MARK_PX / 2) * PAGE_PX;
-  const box = useMemo(() => ({ key: "notes", x: 0, y: at, w: NOTES_MARK_PX * PAGE_PX, h: NOTES_MARK_PX * PAGE_PX, round: true }), [at]);
+  // (its middle: beside the molecule's top right corner, the gap to its right, its top level with the molecule's top)
+  const ax = (NOTES_MARK_GAP_PX + NOTES_MARK_PX / 2) * PAGE_PX;
+  const at = (-NOTES_MARK_PX / 2) * PAGE_PX;
+  const box = useMemo(() => ({ key: "notes", x: ax, y: at, w: NOTES_MARK_PX * PAGE_PX, h: NOTES_MARK_PX * PAGE_PX, round: true }), [ax, at]);
   const leaving = useMemo(() => new Set(words ? [] : ["notes"]), [words]);
   if (!shown.length) return null;
   const said = words ?? (shown[0].item as string);
@@ -44,8 +47,8 @@ export default function NotesMark3D({ notes }: { notes: readonly string[] }) {
       {/* (its words for a screen reader, at rest; its room, for a fit to take in; and, while it says anything, a round wider
           than the mark, unseen, that takes the pointer - HTML, as the handle of a mark is (docs/LOOK.md, rule 7): a mesh of the
           molecule's there was never pointed at in a set, whose frame takes the pointer first) */}
-      <PageHtml position={[0, at, 0]} center zIndexRange={TIP_Z} style={{ pointerEvents: "none" }}>
-        <div role="note" data-notes-mark="" data-fit-notes={0} className="relative" style={{ width: pagePx(NOTES_MARK_PX), height: pagePx(NOTES_MARK_PX) }}>
+      <PageHtml position={[ax, at, 0]} center zIndexRange={TIP_Z} style={{ pointerEvents: "none" }}>
+        <div role="note" data-notes-mark="" data-fit-page="" className="relative" style={{ width: pagePx(NOTES_MARK_PX), height: pagePx(NOTES_MARK_PX) }}>
           <span className="sr-only">{said}</span>
           {words && (
             <div
@@ -59,7 +62,7 @@ export default function NotesMark3D({ notes }: { notes: readonly string[] }) {
         </div>
       </PageHtml>
       {pointed && words && (
-        <PageTip tipKey="notes" x={0} y={at} w={NOTES_MARK_PX * PAGE_PX} h={NOTES_MARK_PX * PAGE_PX} zoom={camera.zoom || 1} text={words} zIndexRange={TIP_Z} />
+        <PageTip tipKey="notes" x={ax} y={at} w={NOTES_MARK_PX * PAGE_PX} h={NOTES_MARK_PX * PAGE_PX} zoom={camera.zoom || 1} text={words} zIndexRange={TIP_Z} />
       )}
     </group>
   );

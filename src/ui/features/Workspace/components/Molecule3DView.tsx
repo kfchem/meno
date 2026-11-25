@@ -366,7 +366,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const pillAt = useRef<number | null>(null);
   // where the mark of hydrogens left out stands: over its highest atom, followed gently
   const markAnchor = useRef<THREE.Group>(null);
-  const markAt = useRef<number | null>(null);
+  const markAt = useRef<{ x: number; y: number } | null>(null);
   // where the mark of how large it is shown stands: at its top right, while it is shown magnified - and whether that mark is in use
   const magAnchor = useRef<THREE.Group>(null);
   const [magMarkActive, setMagMarkActive] = useState(false);
@@ -1595,18 +1595,23 @@ function Molecule3DView(props: Molecule3DViewProps) {
       const at = shown.current;
       const v = new THREE.Vector3();
       let high = -Infinity;
+      let right = -Infinity;
       for (let i = 0; i < n; i++) {
         const r = reachOf(i);
         if (r <= 0) continue;
         v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!).multiplyScalar(mag);
         const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
         high = Math.max(high, seen.y + r * mag * seen.k);
+        right = Math.max(right, seen.x + r * mag * seen.k);
       }
       if (Number.isFinite(high)) {
+        // (its top right corner as seen: the mark stands beside it, clear of the name over a set and of the atoms)
         const above = high - at.y;
-        markAt.current = markAt.current == null || reshaped ? above : follow(markAt.current, above, step, PILL_TAU);
-        if (Math.abs(markAt.current - above) > 1e-3) moving = true;
-        markAnchor.current.position.set(0, markAt.current / g, -at.z / g);
+        const across = right - at.x;
+        const was = markAt.current;
+        markAt.current = was == null || reshaped ? { x: across, y: above } : { x: follow(was.x, across, step, PILL_TAU), y: follow(was.y, above, step, PILL_TAU) };
+        if (Math.abs(markAt.current.y - above) > 1e-3 || Math.abs(markAt.current.x - across) > 1e-3) moving = true;
+        markAnchor.current.position.set(markAt.current.x / g, markAt.current.y / g, -at.z / g);
       }
     }
     // the mark of how large it is shown: at its top right on the page

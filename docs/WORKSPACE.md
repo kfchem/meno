@@ -2308,7 +2308,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   whose element does not read - a PDB entry's unknown atom (X, UNX) - and
   the molecule leaves them out; and what an optimisation or a scan it was
   opened from says of its entries and its convergence. On the canvas
-  these rest as one small mark just over the molecule, however many there
+  these rest as one small mark beside the molecule's top right corner -
+  clear of a set's name over it and of its atoms - however many there
   are - the 2D marks' ring (`MarkBoxes2D`), drawn with the page and scaled
   with it, easing in as they come and out as they go - and their words,
   one line to each, show only while the pointer rests on the mark, in the
