@@ -251,6 +251,7 @@ export function rendered3d(
         // (in front of where the sticks meet, as on the canvas: past the sticks' own round ends)
         ju.lift.value = bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * 1.2;
         ju.shown.value = 1;
+        ju.least.value = NUMBER_LEAST_PX;
         made.push(joints.geometry, joints.material as THREE.Material);
         group.add(joints);
       } else if (m.atomNumbers) {

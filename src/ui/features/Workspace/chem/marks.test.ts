@@ -4,9 +4,8 @@ import {
   bondSide,
   exitDistance,
   markIndex,
-  MARK_MIN_PX,
-  marksReadAt,
-  MARKS_LEAST_PX,
+  markFontPx,
+  MARK_SCALE,
   MarkObstacles,
   marksOf,
   placeMark,
@@ -335,15 +334,13 @@ describe("R and S, E and Z shown", () => {
   });
 });
 
-describe("R and S, E and Z at a far zoom", () => {
-  it("are seen while their letters would be three quarters of the least size, switched past it a little either way, never half there at a zoom", () => {
-    expect(MARKS_LEAST_PX).toBe(0.75 * MARK_MIN_PX);
-    expect(marksReadAt(false, 40)).toBe(true);
-    expect(marksReadAt(true, 1)).toBe(false);
-    // (between the two edges of the switch: as they were)
-    expect(marksReadAt(true, MARKS_LEAST_PX)).toBe(true);
-    expect(marksReadAt(false, MARKS_LEAST_PX)).toBe(false);
-    expect(marksReadAt(true, MARKS_LEAST_PX / 1.06)).toBe(false);
-    expect(marksReadAt(false, MARKS_LEAST_PX * 1.06)).toBe(true);
+describe("R and S, E and Z at any zoom", () => {
+  it("are as large on the page at every zoom, their letters on the screen in the zoom's ratio, with no least size", () => {
+    // labels 14 page px: the letters 14 x 0.6 = 8.4 page px; at a zoom of 1 that is 8.4 screen px, at 0.1 it is 0.84, at 0.05 0.42
+    expect(markFontPx(14, 1)).toBeCloseTo(8.4, 9);
+    expect(markFontPx(14, 0.1)).toBeCloseTo(0.84, 9);
+    expect(markFontPx(14, 0.05)).toBeCloseTo(0.42, 9);
+    expect(markFontPx(14, 4)).toBeCloseTo(33.6, 9);
+    for (const zoom of [0.05, 0.1, 1, 4]) expect(markFontPx(14, zoom) / zoom).toBeCloseTo(14 * MARK_SCALE, 9);
   });
 });

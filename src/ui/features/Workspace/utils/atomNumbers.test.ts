@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atomGlyphsOf, atomNumbersOf, glyphCode, glyphsWidth, PRIME_WIDTH, SUP_SIZE, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX } from "./atomNumbers";
+import { atomGlyphsOf, atomNumbersOf, glyphCode, glyphsWidth, PRIME_WIDTH, SUP_SIZE, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX, ballNumberUniforms } from "./atomNumbers";
 
 describe("atom numbers", () => {
   it("are each atom's place, counted from 1, or its atom-map number where it has one", () => {
@@ -96,5 +96,11 @@ describe("a number on a ball as its glyphs: digits, a locant's letters, primes a
     expect([...atomGlyphsOf(m, "map")]).toEqual([glyphCode(9, { base: "4a" }), glyphCode(1)]);
     expect([...atomGlyphsOf(m, "map", 1)]).toEqual([glyphCode(1), glyphCode(9, { base: "4a" })]);
     expect([...atomGlyphsOf(m, "order")]).toEqual([glyphCode(1), glyphCode(2)]);
+  });
+});
+
+describe("atom numbers on the balls on the page", () => {
+  it("have no least height there: drawn at any size, scaled with the zoom (a picture sets its own)", () => {
+    expect(ballNumberUniforms().least.value).toBe(0);
   });
 });

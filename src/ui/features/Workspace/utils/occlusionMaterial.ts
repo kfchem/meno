@@ -146,7 +146,7 @@ export function occludedMaterial(
  * Drawn flat over it, last of all - the ball's shading under them, never
  * on them, so that they read as well in its shade as in its light. Their
  * ink dark on a light ball, white on a dark one; faded out where a digit would be under
- * `numbersLeast` pixels high or squeezed to under half its size, and by
+ * `numbersLeast` pixels high (a picture's; none on the page) or squeezed to under half its size, and by
  * `numbersShown`. As high as `NUMBER_HEIGHT` of the ball's radius, never
  * over `numbersMost` in the balls' own units, and all of them no wider than
  * `NUMBER_WIDTH_MOST`.
@@ -191,7 +191,7 @@ function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void
         float w = glyphsWidth( vNumber );
         if ( w <= 0.0 ) return 0.0;
         float h = min( vNumberH, ${NUMBER_WIDTH_MOST.toFixed(3)} / ( max( w, 1.0 ) * ${DIGIT_CELL.toFixed(3)} ) ) * vNumberPlace.z;
-        float shown = numbersShown * vNumberPlace.w * smoothstep( 0.4, 0.6, vNumberPlace.z ) * smoothstep( numbersLeast * 0.75, numbersLeast * 1.25, h * 0.7 * vNumberPx );
+        float shown = numbersShown * vNumberPlace.w * smoothstep( 0.4, 0.6, vNumberPlace.z ) * ( numbersLeast > 0.0 ? smoothstep( numbersLeast * 0.75, numbersLeast * 1.25, h * 0.7 * vNumberPx ) : 1.0 );
         if ( shown <= 0.0 ) return 0.0;
         // (in the glyphs' own units: cells across from their left, their height up from their foot - the picture's rows from the bottom)
         vec2 to = vec2( 1.0 / ( h * ${DIGIT_CELL.toFixed(3)} ), 1.0 / h );
