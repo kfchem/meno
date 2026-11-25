@@ -49,8 +49,8 @@ const READ_ALREADY_VALENCE: Record<string, number> = {
 // In the files that give their readers `readAs(...)`, a drawing atom's `el` put into a reader's input as it is (`el: a.el`) is listed with
 // what it is for: one more is a reader given the label as an element.
 const LABEL_AS_TEXT: Record<string, number> = {
-  // (the label as the canvas draws it, its group carried by `chemistry(a)`: showsLabel, drawnAs)
-  "ui/features/Workspace/chem/engineLayout.ts": 2,
+  // (the label as the canvas draws it, its group carried by `chemistry(a)`: showsLabel, drawnAs, labelsDrawn)
+  "ui/features/Workspace/chem/engineLayout.ts": 3,
   // (a formula written for a person, the label as it reads - partFormula; the drawing read, `drawingOf`, made through readAs - runsOpenOf)
   "ui/features/Workspace/chem/cleanUp.ts": 2,
 };

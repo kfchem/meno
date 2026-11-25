@@ -3,11 +3,10 @@ import type { Model } from "../store/types";
 import { laidOut } from "./cleanUp";
 import { MENO } from "../../../../lib/chem/style";
 import { forgetLaidOut, type Layout2D, type LayoutInput } from "../../../../lib/layout/engine";
-import { oppositesKept } from "./engineLayout";
+import { oppositesKept, segmentInBox, segmentsCross } from "./engineLayout";
 import { drawingOf } from "./drawing";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { identityOfDrawn } from "./identityOf";
 import { drawingOf as drawingFromBlock } from "./fromSmiles";
 
@@ -428,6 +427,35 @@ describe("oppositesKept, its parts", () => {
     for (const [a, b] of [[3, 5], [5, 6], [6, 4]]) expect(len(out, a, b), `${a}-${b}`).toBeCloseTo(len(laid, a, b), 6);
   });
 
+  it("counts a bond through a label's box, or across another's bond, as no room - and one passing 0.3 of a bond from the box as room", () => {
+    // (a bond along y = 0 from x = 0 to x = 1; a box 0.2 of a bond square)
+    const [p, q] = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+    expect(segmentInBox(p, q, { x0: 0.4, y0: -0.1, x1: 0.6, y1: 0.1 }), "through the box").toBe(true);
+    expect(segmentInBox(p, q, { x0: -0.1, y0: -0.1, x1: 0.1, y1: 0.1 }), "an end inside it").toBe(true);
+    expect(segmentInBox(p, q, { x0: 0.4, y0: 0.3, x1: 0.6, y1: 0.5 }), "0.3 of a bond above it").toBe(false);
+    expect(segmentInBox(p, q, { x0: 1.3, y0: -0.1, x1: 1.5, y1: 0.1 }), "0.3 of a bond past its end").toBe(false);
+    expect(segmentsCross(p, q, { x: 0.5, y: -0.5 }, { x: 0.5, y: 0.5 }), "a bond across it").toBe(true);
+    expect(segmentsCross(p, q, { x: 0.5, y: 0.3 }, { x: 0.5, y: 0.8 }), "a bond 0.3 of a bond off it").toBe(false);
+    expect(segmentsCross(p, q, q, { x: 1, y: 1 }), "a bond from its end").toBe(false);
+  });
+
+  it("refuses, saying so, where every turn of a crowded donor's groups leaves a bond through another donor's label; draws as without labels where the label lies 0.3 of a bond off", () => {
+    // (as above: Pt; Cl 1, Cl 2, P 3 with its group atom C 5, N 4 with its group atom C 6, P and Cl 2 changing places, C 6 0.9 of a
+    // bond from where C 5 comes - room by the atoms, so nothing turned. P comes to (-1, 0), its C 5 to (-2, 0))
+    const input: LayoutInput = {
+      atoms: [{ el: "Pt" }, { el: "Cl" }, { el: "Cl" }, { el: "P" }, { el: "N" }, { el: "C" }, { el: "C" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [3, 5], [4, 6]]),
+    };
+    const c6 = { x: -2 + 0.9 * Math.cos((-60 * Math.PI) / 180), y: 0.9 * Math.sin((-60 * Math.PI) / 180) };
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(180), at(90), at(270), at(90, 2), c6]);
+    const was = [{ x: 0, y: 0 }, at(0), at(90), at(180), at(270), at(180, 2), c6];
+    const plain = oppositesKept(was, input, laid);
+    // (Cl 2's label, made by hand: 0.3 of a bond above the P-C 5 bond as laid - room; then round P itself, where every P-C bond
+    // starts, whatever its turn - no room)
+    const off = oppositesKept(was, input, laid, undefined, () => new Map([[2, { x0: -1.8, y0: 0.3, x1: -1.2, y1: 0.6 }]]));
+    expect(off).toEqual(plain);
+    expect(() => oppositesKept(was, input, laid, undefined, (x, y) => new Map([[2, { x0: x[3] - 0.1, y0: y[3] - 0.1, x1: x[3] + 0.1, y1: y[3] + 0.1 }]]))).toThrow(/one atom on another or on a bond/);
+  });
 });
 
 describe("a metal's donors kept opposite as drawn, or the drawing refused", () => {
@@ -514,45 +542,66 @@ describe("a metal's donors kept opposite as drawn, or the drawing refused", () =
 });
 
 describe("a metal with bulky donors put side by side as drawn", () => {
-  it("keeps cis-PtCl2(PCy3)2 and cis-PdCl2(PPh3)2 cis, the phosphines' groups turned clear of each other - or, where they cannot be, leaves the drawing as it is: never the trans", { timeout: 180000 }, async () => {
-    forgetLaidOut();
-    for (const [el, L, clears] of [
-      ["Pt", "P(C1CCCCC1)(C1CCCCC1)C1CCCCC1", true],
-      // (two PPh3 side by side: their rings cannot be turned clear of each other here - Clean-up then lays nothing out, saying so)
-      ["Pd", "P(c1ccccc1)(c1ccccc1)c1ccccc1", false],
+  // (the engine's own drawing, the first two Cl and the first two others; `swap`: a Cl and one of the others turned into each other's
+  // places by hand - made cis, or the octahedron's two Cl side by side)
+  const drawnSwapped = (smiles: string, el: string, swap: boolean): { drawn: Model; names: Map<number, string>; metal: number } => {
+    const m = drawnFromSmiles(smiles);
+    const metal = m.atoms.find((a) => a.el === el)!;
+    const units = donorUnits(m, metal.id);
+    const donorOf = (u: Set<number>) => m.atoms.find((a) => u.has(a.id) && m.bonds.some((b) => (b.a === a.id && b.b === metal.id) || (b.b === a.id && b.a === metal.id)))!;
+    const angle = (a: { x: number; y: number }) => Math.atan2(a.y - metal.y, a.x - metal.x);
+    const cl = units.find((u) => donorOf(u).el === "Cl")!;
+    const p = units.find((u) => donorOf(u).el !== "Cl")!;
+    const t = swap ? angle(donorOf(p)) - angle(donorOf(cl)) : 0;
+    const turned = (a: { x: number; y: number }, r: number) => ({
+      x: metal.x + (a.x - metal.x) * Math.cos(r) - (a.y - metal.y) * Math.sin(r),
+      y: metal.y + (a.x - metal.x) * Math.sin(r) + (a.y - metal.y) * Math.cos(r),
+    });
+    const drawn: Model = { ...m, atoms: m.atoms.map((a) => (cl.has(a.id) ? { ...a, ...turned(a, t) } : p.has(a.id) ? { ...a, ...turned(a, -t) } : a)) };
+    return { drawn, names: new Map(units.map((u) => [donorOf(u).id, donorOf(u).el])), metal: metal.id };
+  };
+
+  it("leaves cis-PdCl2(PPh3)2 and cis-PtCl2(PCy3)2 as drawn, saying so: no turn of their groups keeps every ring off the other phosphine's rings and the Cl - never the trans", { timeout: 180000 }, async () => {
+    // (two PPh3 side by side: their rings cannot be turned clear of each other. Two PCy3 likewise: the turns that keep their atoms
+    // apart leave a ring across the other's ring and over a Cl's label, so they are refused by the ink as PPh3 is by the atoms)
+    for (const [el, L] of [
+      ["Pd", "P(c1ccccc1)(c1ccccc1)c1ccccc1"],
+      ["Pt", "P(C1CCCCC1)(C1CCCCC1)C1CCCCC1"],
     ] as const) {
-      // (the engine's own drawing, P opposite P, made cis by hand: a Cl and a P turned into each other's places)
-      const m = drawnFromSmiles(`Cl[${el}](Cl)(${L})${L}`);
-      const metal = m.atoms.find((a) => a.el === el)!;
-      const units = donorUnits(m, metal.id);
-      const donorOf = (u: Set<number>) => m.atoms.find((a) => u.has(a.id) && m.bonds.some((b) => (b.a === a.id && b.b === metal.id) || (b.b === a.id && b.a === metal.id)))!;
-      const angle = (a: { x: number; y: number }) => Math.atan2(a.y - metal.y, a.x - metal.x);
-      const cl = units.find((u) => donorOf(u).el === "Cl")!;
-      const p = units.find((u) => donorOf(u).el === "P")!;
-      const t = angle(donorOf(p)) - angle(donorOf(cl));
-      const turned = (a: { x: number; y: number }, r: number) => ({
-        x: metal.x + (a.x - metal.x) * Math.cos(r) - (a.y - metal.y) * Math.sin(r),
-        y: metal.y + (a.x - metal.x) * Math.sin(r) + (a.y - metal.y) * Math.cos(r),
-      });
-      const drawn: Model = { ...m, atoms: m.atoms.map((a) => (cl.has(a.id) ? { ...a, ...turned(a, t) } : p.has(a.id) ? { ...a, ...turned(a, -t) } : a)) };
-      const names = new Map(units.map((u) => [donorOf(u).id, donorOf(u).el]));
-      expect(spokes(drawn, names, metal.id), `${el} as drawn`).toEqual(["Cl-P", "Cl-P"]);
-      if (!clears) {
-        await expect(laidOut(drawn, MENO), el).rejects.toThrow(/one atom on another/);
-        continue;
-      }
+      forgetLaidOut();
+      const { drawn, names, metal } = drawnSwapped(`Cl[${el}](Cl)(${L})${L}`, el, true);
+      expect(spokes(drawn, names, metal), `${el} as drawn`).toEqual(["Cl-P", "Cl-P"]);
+      await expect(laidOut(drawn, MENO), el).rejects.toThrow(/one atom on another or on a bond, so nothing was moved/);
+    }
+  });
+
+  it("refuses cis-PtCl2(PiPr3)2 too: laid out, a methyl's bond crosses the Pt-Cl bond, and the turns that clear it bring an atom onto a bond", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const { drawn } = drawnSwapped("Cl[Pt](Cl)(P(C(C)C)(C(C)C)C(C)C)P(C(C)C)(C(C)C)C(C)C", "Pt", true);
+    await expect(laidOut(drawn, MENO)).rejects.toThrow(/one atom on another or on a bond, so nothing was moved/);
+  });
+
+  it("lays out with no group's bond over another donor's ink: cis-PtCl2(NH3)2, cis-PtCl2(PMe3)2, trans-PdCl2(PPh3)2, cis-[CoCl2(NH3)4]+", { timeout: 180000 }, async () => {
+    for (const [key, smiles, el, swap, want] of [
+      ["cis-PtCl2(NH3)2", "Cl[Pt](Cl)(N)N", "Pt", true, ["Cl-N", "Cl-N"]],
+      ["cis-PtCl2(PMe3)2", "Cl[Pt](Cl)(P(C)(C)C)P(C)(C)C", "Pt", true, ["Cl-P", "Cl-P"]],
+      ["trans-PdCl2(PPh3)2", "Cl[Pd](Cl)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1", "Pd", false, ["Cl-Cl", "P-P"]],
+      ["cis-[CoCl2(NH3)4]+", "Cl[Co+](Cl)(N)(N)(N)N", "Co", true, null],
+    ] as const) {
+      forgetLaidOut();
+      const { drawn, names, metal } = drawnSwapped(smiles, el, swap);
       const out = await laidOut(drawn, MENO);
-      expect(spokes(out, names, metal.id), el).toEqual(["Cl-P", "Cl-P"]);
-      // (no two atoms of different donors within half a bond of each other)
+      if (want) expect(spokes(out, names, metal), key).toEqual(want);
+      // (no bond of one donor's unit crossing a bond of another's, the metal's bonds counted with their donors)
       const at = new Map(out.atoms.map((a) => [a.id, a]));
-      const after = donorUnits(out, metal.id);
-      let closest = Infinity;
-      after.forEach((u, i) =>
-        after.slice(i + 1).forEach((v) => {
-          for (const a of u) for (const b of v) closest = Math.min(closest, Math.hypot(at.get(a)!.x - at.get(b)!.x, at.get(a)!.y - at.get(b)!.y) / NOMINAL_BOND_LENGTH);
+      const units = donorUnits(out, metal);
+      const bondsOf = units.map((u) => out.bonds.filter((b) => (u.has(b.a) || b.a === metal) && (u.has(b.b) || b.b === metal)));
+      units.forEach((_, i) =>
+        units.forEach((__, j) => {
+          if (i >= j) return;
+          for (const b of bondsOf[i]) for (const c of bondsOf[j]) expect(segmentsCross(at.get(b.a)!, at.get(b.b)!, at.get(c.a)!, at.get(c.b)!), `${key}: ${b.a}-${b.b} x ${c.a}-${c.b}`).toBe(false);
         }),
       );
-      expect(closest, el).toBeGreaterThan(0.5);
     }
   });
 });

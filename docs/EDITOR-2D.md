@@ -1573,7 +1573,15 @@ All hover-based, as above.
     `octahedraKept`); a trigonal prism (ST-2.12), and a chelate drawn in a
     wedge form, are refused. Where no move gives a picture that keeps the
     drawing - a chelate's two donors drawn opposite - Clean-up lays nothing
-    out and says so: never another isomer. Two metals joined by two bridges
+    out and says so: never another isomer. Donors so put side by side that
+    were not have their groups turned about the donor, its bond to the
+    metal as it is, up to 60 degrees either way, clear of the other
+    donors' atoms; a bond of those groups across another donor's bonds,
+    its bond to the metal among them, or through its label as drawn
+    counts as no room too, and the turns are weighed for that first.
+    Where no turn clears it - two donors that each carry three rings, side
+    by side - Clean-up lays nothing out and says so, as where it would
+    put one atom on another. Two metals joined by two bridges
     (cis- and trans-[Pt2Cl4(NH3)2], the three isomers of a dimer with a Cl
     and a Br bridge) keep, at each metal, which bridge each of its other
     donors stands across: the bridges, which carry the other metal, stay
