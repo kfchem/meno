@@ -46,7 +46,7 @@ function Words({ text, room }: { text: string; room: () => ScreenBox }) {
   return (
     <div
       ref={ref}
-      className={"meno-fade-in absolute left-1/2 w-max max-w-[22rem] rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm " + (place?.above ? "bottom-full" : "top-full")}
+      className={"meno-fade-in absolute left-1/2 w-max max-w-[22rem] whitespace-pre-line rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm " + (place?.above ? "bottom-full" : "top-full")}
       style={{
         [place?.above ? "marginBottom" : "marginTop"]: TIP_GAP_PX,
         transform: `translateX(calc(-50% + ${place?.dx ?? 0}px))`,

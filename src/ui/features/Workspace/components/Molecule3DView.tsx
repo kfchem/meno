@@ -1,5 +1,4 @@
 import { stereoSaidRows } from "../utils/stereoSaid";
-import clsx from "clsx";
 import { longPressMs } from "../longPress";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -12,7 +11,7 @@ import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
-import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
+import { pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoMarks3d, stereoSpotsShown, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type StereoMark3D, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, marksReadAt } from "../chem/marks";
@@ -23,6 +22,7 @@ import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
 import { useFramesChip } from "./useFramesChip";
 import { PORTS_Z } from "../workflow/look";
 import { STACK_SWAP_MS } from "../utils/stacks";
+import NotesMark3D from "./NotesMark3D";
 import Overlay3D from "./Overlay3D";
 import StereoInk3D, { type StereoInk } from "./StereoInk3D";
 import type { LayoutOptions } from "../../../../lib/chem/layout2d";
@@ -112,10 +112,9 @@ const LINES_FINE_MOST = 2000;
 const LINES_COARSE = 16;
 /** Where what goes under an opened frames chip lies among the page's HTML: over the workflow's ports, as the chip is over them (Workflow2D hides those under it). */
 const CHIP_RAISED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
-/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it; and its notes, hung from their foot (utils/pageScale `pageSized`, `notesSized`). */
+/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it (utils/pageScale `pageSized`). */
 const SIZED_MIDDLE = pageSized("middle");
 const SIZED_TOP = pageSized("top");
-const NOTES_SIZED = notesSized("foot");
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
 /** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
@@ -124,8 +123,6 @@ const STEREO_TAU = 0.07;
 const STEREO_FADE = DURATION.quick;
 /** How many frames labels shown together wait at the most for all of them to be there, before those there fade in. */
 const STEREO_WAIT_FRAMES = 30;
-/** How far above the molecule the mark of hydrogens left out stands, in pixels. */
-const MARK_GAP_PX = 8;
 /** A turn this small is followed at once - a drag's, or a turn on its own; a larger one is gone over to. */
 const TURN_FOLLOWED = 0.3;
 /** How much larger the atom under the pointer is drawn, and its spring: the 3D viewer's. */
@@ -453,17 +450,12 @@ function Molecule3DView(props: Molecule3DViewProps) {
   // the other: of one a look leaves out, its ring and any measurement of it
   // go with it)
   const seenOf = (...atoms: number[]) => seenShare(hidden, atoms, fill.current);
-  // what it says of itself, as it is drawn now, and in either look
-  // (its notes - the one that says only how it is in grey, the rest as what is wrong. In a set, where molecules stand close
-  //  under its name: that one left to its frames chip, which says its frames; the rest one short line, all of them as it
-  //  is pointed at or selected - never over the set's name or a molecule beside it)
+  // what it says about its data, as it is drawn now (its notes, the one that says only how it is among them - in a set,
+  // where molecules stand close under its name, that one left to its frames chip, which says its frames): its mark's words
   const plain = useMemo(() => plainNoteOf(m), [m]);
   const notesNow = useMemo(() => notesOf(m, solid, look).filter((t) => !(props.inSet && t === plain)), [m, solid, look, props.inSet, plain]);
-  const notesEver = useMemo(
-    () => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])].filter((t) => !(props.inSet && t === plain)),
-    [m, solid, props.inSet, plain],
-  );
-  const notesShort = !!props.inSet && !props.framesOpen;
+  // (its mark kept while it eases out)
+  const markShown = usePresence(notesNow.length ? ["notes"] : [], (k) => k).length > 0;
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -2131,11 +2123,6 @@ function Molecule3DView(props: Molecule3DViewProps) {
           )}
         </group>
       )}
-      {/* (what it says of itself - its hydrogens hidden or not in its file,
-          its bond orders not known - above it while it is so, in either
-          look - its frames' chip is below - at any zoom: not a chip that goes
-          when the page's words are too small, and never too small or too
-          large to read) */}
       {/* (how large it is shown, while it is not at its true size - while it is hovered or selected, or its mark is in use) */}
       {magnifiedOf(m) !== 1 && props.onMagnify && !props.rising && (
         <group ref={magAnchor}>
@@ -2149,28 +2136,10 @@ function Molecule3DView(props: Molecule3DViewProps) {
           </PageHtml>
         </group>
       )}
-      {notesEver.length > 0 && !props.rising && (
+      {/* (what it says about its data: one mark over it while it says anything, its words while the mark is pointed at) */}
+      {markShown && !props.rising && (
         <group ref={markAnchor}>
-          <PageHtml zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
-            <div
-              className="flex flex-col items-center"
-              data-fit-notes={MARK_GAP_PX}
-              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
-            >
-              <div className="flex flex-col items-center" style={NOTES_SIZED}>
-              {notesEver.map((text) => (
-                <NoteMark
-                  key={text}
-                  text={notesShort && text === notesNow[0] && notesNow.length > 1 ? `${text} +${notesNow.length - 1}` : text}
-                  title={notesNow.join("\n")}
-                  on={notesNow.includes(text) && (!notesShort || text === notesNow[0])}
-                  plain={text === plain}
-                  short={notesShort}
-                />
-              ))}
-              </div>
-            </div>
-          </PageHtml>
+          <NotesMark3D notes={notesNow} />
         </group>
       )}
     </group>
@@ -2257,41 +2226,6 @@ function placePiece(mesh: THREE.InstancedMesh, k: number, a: THREE.Vector3, b: T
   q.setFromUnitVectors(UP, length > 1e-9 ? dir.divideScalar(length) : UP);
   mtx.compose(mid.addVectors(a, b).multiplyScalar(0.5), q, scale.set(r, length, r));
   mesh.setMatrixAt(k, mtx);
-}
-
-/**
- * What a molecule says of itself (utils/molecule3d `notesOf`): its
- * hydrogens on carbon hidden, its file's hydrogens missing, its bond
- * orders not known - said for as long as it is so, over it, where it
- * cannot be missed, as a picture without them misleads (the maintainer,
- * 2026-10-10 and 2026-10-11). It comes and goes as the molecule goes over
- * to a look it says it in or not, folding away.
- */
-function NoteMark({ text, title, on, plain, short }: { text: string; title?: string; on: boolean; plain?: boolean; short?: boolean }) {
-  return (
-    <div
-      // (as wide as it says: in a chip of no width of its own, the fold would cut it off)
-      className="grid w-max transition-[grid-template-rows,opacity] duration-[120ms] ease-[var(--ease-meno)]"
-      style={{ gridTemplateRows: on ? "1fr" : "0fr", opacity: on ? 1 : 0 }}
-      aria-hidden={!on}
-    >
-      <div className="overflow-hidden">
-        <div
-          data-note={plain ? "plain" : ""}
-          title={short ? title : undefined}
-          className={clsx(
-            "mt-1 whitespace-nowrap rounded-full border px-2 text-[11px] leading-[20px] shadow-sm",
-            // (one that only says how it is in the page's grey, as an edit's origin is; one that says what is wrong in the accent)
-            plain ? "border-gh-line bg-white/90 text-gh-gray" : "border-accel-accent/50 bg-accel-lightaccent/90 font-medium text-accel-accent",
-            // (in a set, short: within its own room, the rest of it pointed at)
-            short && "max-w-[9rem] truncate",
-          )}
-        >
-          {text}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /** Made by editing a result: what from, said quietly under it - an edited result is no longer that result. */
