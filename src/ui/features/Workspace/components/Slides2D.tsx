@@ -41,6 +41,7 @@ import { useStyleOptions } from "../useDrawingStyle";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
 import { boxOf, joinOf, markScale } from "../presenting/slides";
 import { pageLength, reachAt } from "../utils/pageScale";
+import { thinLine } from "../pageGl/units";
 
 /** Where slides' frames lie: over the drawing and what is on the page. */
 const Z = 0.6;
@@ -273,6 +274,9 @@ function SlideFrame({
   // its line, lit while the pointer is on it, coming and going
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.base, transparent: true, opacity: REST, depthTest: false, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => material.dispose(), [material]);
+  // (how much it is seen, eased; and its line's ink - thinner than a device pixel, as much fainter: pageGl/units `thinLine`)
+  const shown = useRef(REST);
+  const ink = useRef(1);
   // taken hold of by a press held on its edge: where, lit from there
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
   const [, setTick] = useState(0);
@@ -284,12 +288,10 @@ function SlideFrame({
     }
     const to = (lit || selected ? LIT : REST) * seen.current;
     material.color.set(selected ? COLORS.highlight : COLORS.base);
-    if (Math.abs(material.opacity - to) < 1e-3) {
-      material.opacity = to;
-      return;
-    }
-    material.opacity = follow(material.opacity, to, Math.min(dt, 1 / 20), TAU.quick);
-    invalidate();
+    const near = Math.abs(shown.current - to) < 1e-3;
+    shown.current = near ? to : follow(shown.current, to, Math.min(dt, 1 / 20), TAU.quick);
+    material.opacity = shown.current * ink.current;
+    if (!near) invalidate();
   });
 
   // (what is drawn on the page under its edge is pressed, not the slide)
@@ -374,7 +376,10 @@ function SlideFrame({
   const bands = useRef<(THREE.Mesh | null)[]>([]);
   useScreenSize(
     (px) => {
-      const line = pageLength(LINE_PX);
+      const drawn = thinLine(pageLength(LINE_PX), px / gl.getPixelRatio());
+      const line = drawn.width;
+      ink.current = drawn.ink;
+      material.opacity = shown.current * ink.current;
       const edge = 2 * EDGE_PX * px;
       sidesOf(s, line).forEach(([x, y, w, h], k) => {
         lines.current[k]?.position.set(x, y, 0);

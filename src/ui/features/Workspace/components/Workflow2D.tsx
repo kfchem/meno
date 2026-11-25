@@ -54,6 +54,7 @@ import { FRAME_PX, tabStart } from "../pageGl/frameParts";
 import { cardFace, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
+import { devicePx, thinLine } from "../pageGl/units";
 import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
 import type { Region } from "../pageGl/hits";
@@ -290,23 +291,27 @@ function ribbon(pts: readonly Pt[]): THREE.BufferGeometry {
   return g;
 }
 
-/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), set as it is drawn. */
-function widened(material: THREE.Material, half: { value: number }): void {
+/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), and its ink (`ink.value`, a share), set as it is drawn. */
+function widened(material: THREE.Material, half: { value: number }, ink: { value: number }): void {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.ribbonHalf = half;
+    shader.uniforms.ribbonInk = ink;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nattribute vec2 ribbonNormal;\nuniform float ribbonHalf;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.xy += ribbonNormal * ribbonHalf;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float ribbonInk;")
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.a *= ribbonInk;");
   };
   material.customProgramCacheKey = () => "ribbon";
 }
 
 /**
- * How wide a wire is, in world units, at `zoom` on a screen of `dpr`: a page
- * pixel and a quarter, as wide as the page draws it, never thinner than a
- * device pixel (the maintainer, 2026-11-05: page units, floored).
+ * How a wire is drawn at `zoom` on a screen of `dpr`: a page pixel and a
+ * quarter wide, in world units - and, thinner than a device pixel, a device
+ * pixel wide and as much fainter (`ink`: pageGl/units `thinLine`).
  */
-export const wireWidth = (zoom: number, dpr: number) => Math.max(WIRE_PX * PX, 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+export const wireWidth = (zoom: number, dpr: number) => thinLine(WIRE_PX * PX, devicePx(zoom, dpr));
 
 const DASH_VERTEX = `
 attribute float along;
@@ -324,10 +329,11 @@ uniform vec3 color;
 uniform float offset;
 uniform float dash;
 uniform float gap;
+uniform float ink;
 varying float vAlong;
 void main() {
   if (mod(vAlong - offset, dash + gap) > dash) discard;
-  gl_FragColor = vec4(color, 1.0);
+  gl_FragColor = vec4(color, ink);
 }`;
 
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn thirty times a second. */
@@ -338,9 +344,10 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 } },
+        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 }, ink: { value: 1 } },
         vertexShader: DASH_VERTEX,
         fragmentShader: DASH_FRAGMENT,
+        transparent: true,
         depthTest: false,
         depthWrite: false,
       }),
@@ -353,7 +360,9 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   useEffect(() => tick.stop, [tick]);
   useFrame((_, dt) => {
     const u = material.uniforms;
-    u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
+    const wire = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio());
+    u.ribbonHalf.value = wire.width / 2;
+    u.ink.value = wire.ink;
     u.dash.value = DASH_PX * PAGE_PX;
     u.gap.value = GAP_PX * PAGE_PX;
     u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, DASH_PX, GAP_PX);
@@ -393,24 +402,26 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
 function WireLine({ target, color, zoom, onHover, leaving = false }: { target: Pt[]; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
-  // (as wide as the page draws it, never thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
+  // (as wide as the page draws it, fainter where thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts), [pts]);
   const hit = useMemo(() => (onHover && !leaving ? ribbon(pts) : null), [pts, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   useEffect(() => () => hit?.dispose(), [hit]);
   const half = useMemo(() => ({ value: 0 }), []);
+  const ink = useMemo(() => ({ value: 1 }), []);
   const hitHalf = useMemo(() => ({ value: 0 }), []);
+  const hitInk = useMemo(() => ({ value: 1 }), []);
   const drawn = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
-    widened(m, half);
+    widened(m, half, ink);
     return m;
-  }, [half]);
+  }, [half, ink]);
   const taken = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false });
-    widened(m, hitHalf);
+    widened(m, hitHalf, hitInk);
     return m;
-  }, [hitHalf]);
+  }, [hitHalf, hitInk]);
   useEffect(() => void drawn.color.set(color), [drawn, color]);
   useEffect(
     () => () => {
@@ -425,7 +436,9 @@ function WireLine({ target, color, zoom, onHover, leaving = false }: { target: P
   const { camera, gl } = useThree();
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    half.value = wireWidth(z, gl.getPixelRatio()) / 2;
+    const wire = wireWidth(z, gl.getPixelRatio());
+    half.value = wire.width / 2;
+    ink.value = wire.ink;
     hitHalf.value = WIRE_HIT_PX / z / 2;
   });
   return (
@@ -703,11 +716,15 @@ export default function Workflow2D() {
     const still = z === hair.current.before;
     hair.current.before = z;
     const h = hair.current;
-    // (a card's and a set's lines a page pixel, never thinner than a device pixel: written only while that floor holds,
-    //  in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
+    // (a card's and a set's lines a page pixel - thinner than a device pixel, a device pixel wide and as much fainter (`--hair-ink`):
+    //  written only while they are that thin, in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
     const fresh = h.layer !== layer.current || h.ports !== portsLayer.current;
     const hairPx = hairWritten(fresh ? NaN : h.hair, z, gl.getPixelRatio());
-    if (hairPx != null) for (const el of [layer.current, portsLayer.current]) el?.style.setProperty("--hair", `${hairPx}px`);
+    if (hairPx != null)
+      for (const el of [layer.current, portsLayer.current]) {
+        el?.style.setProperty("--hair", `${hairPx}px`);
+        el?.style.setProperty("--hair-ink", `${1 / hairPx}`);
+      }
     // (the ports, laid out in the screen's pixels, their layer's scale undone on them: told it on their own layer only)
     if (fresh || zoomWritten(h.zoom, z, still)) {
       hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z, hair: hairPx ?? h.hair };

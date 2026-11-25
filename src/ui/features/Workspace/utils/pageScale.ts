@@ -65,17 +65,18 @@ export const ZOOM_WRITTEN_STEP = 0.005;
 export const zoomWritten = (written: number, zoom: number, still: boolean): boolean =>
   zoom !== written && (still || !(Math.abs(Math.log(zoom / written)) < ZOOM_WRITTEN_STEP));
 
-/** How far the hair under its floor goes, as a share, before it is written again (`hairWritten`): a quarter - a line a quarter thicker is not told from it. */
+/** How far the hair under a device pixel goes, as a share, before it is written again (`hairWritten`): a quarter - a line a quarter thicker is not told from it. */
 export const HAIR_STEP = 1.25;
 
 /**
- * How wide a line of the page's cards and sets is, in the layer's own pixels
- * - a page pixel, the layer scaled with the page - at `zoom` on a screen of
- * `dpr` device pixels to its own: one, never thinner on the screen than a
- * device pixel (the maintainer, 2026-11-05: page units, floored). And whether
- * it is written again from `written`: zoomed in, it is one and stays one - the
- * cards never laid out again for it; under the floor, as the zoom goes a
- * quarter from it, and back to one as it comes out from under it.
+ * How wide a line of the page's cards and sets is drawn, in the layer's own
+ * pixels - a page pixel, the layer scaled with the page - at `zoom` on a
+ * screen of `dpr` device pixels to its own: one; thinner on the screen than a
+ * device pixel, a device pixel wide, and as much fainter (its ink, the
+ * inverse of what is returned: pageGl/units `thinLine`). And whether it is
+ * written again from `written`: zoomed in, it is one and stays one - the
+ * cards never laid out again for it; thinner, as the zoom goes a quarter
+ * from it, and back to one as it comes out from under a device pixel.
  */
 export function hairWritten(written: number, zoom: number, dpr: number): number | null {
   const want = Math.max(1, 1 / (Math.max(zoom, 1e-9) * PAGE_PX * Math.max(dpr, 1)));

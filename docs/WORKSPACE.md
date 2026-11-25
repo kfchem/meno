@@ -1485,8 +1485,9 @@ each frame of a zoom held it to a frame every 0.6 s (2026-11-05). What draws
 it, in `features/Workspace/pageGl/`:
 - **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
   canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
-  shrinks with the page, its lines too, never thinner than one device
-  pixel. A control - a port - is its page pixels too, no more than its
+  shrinks with the page, its lines too. A line thinner than one device
+  pixel is drawn one device pixel wide and as much fainter (`thinLine`):
+  thinner and fainter far out, as a smaller picture of it would be. A control - a port - is its page pixels too, no more than its
   share of what it belongs to, and scaled with the page at every zoom
   (`Control`).
 - **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
@@ -1609,8 +1610,9 @@ space-filling side by side is better science than either alone.
   molecule's own units (the maintainer, 2026-10-15: "the outline's
   thickness to change with zoom"), set in ångströms and shown in Settings
   in picometres, so that it grows and shrinks with the molecule as the
-  balls and sticks do, never thinner on the screen than half a pixel, so
-  that far out it does not shimmer away (`lineWidth`, `LINE_LEAST_PX`) -
+  balls and sticks do; thinner than a device pixel, it is drawn a device
+  pixel wide and as much fainter, so that far out it fades rather than
+  shimmers (pageGl/units `thinLine`) -
   and in a colour of its own - and fade
   what lies further back in a molecule toward the page, from none to
   strong, so that its front reads first: nothing at the front, growing

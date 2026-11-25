@@ -9,7 +9,8 @@ import { COLORS } from "../../../theme/colors";
 import { DURATION, TAU } from "../../../theme/motion";
 import { usePresence } from "../../../theme/presence";
 import { buttonHeld } from "./buttonHeld";
-import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, linedBall, type Style3D } from "../../../../lib/chem/style3d";
+import { thinLine } from "../pageGl/units";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
 import { pagePx, pageScale, pageSized } from "../utils/pageScale";
@@ -1033,7 +1034,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
       bl.amount.value.set(...ll.circles);
       // (in the balls' own units - their radii their instances' scale - so that they grow and shrink with the molecule)
       bl.width.value = ll.circleWidth * WORLD_PER_ANGSTROM;
-      bl.least.value = LINE_LEAST_PX;
+      // (thinner than a device pixel, a device pixel wide and as much fainter: pageGl/units `thinLine`)
+      bl.least.value = 1;
       bl.colour.value.set(P.ballLinesColor).lerp(colour.set(S.ballLinesColor), ff).convertLinearToSRGB();
       // (the sticks coloured by their atoms: each line's two ends' colours, as the atoms are coloured now)
       const bm = bonds.current;
@@ -1083,10 +1085,11 @@ function Molecule3DView(props: Molecule3DViewProps) {
         // (the balls' or sticks' own instances: where they are, it is)
         if (lines.instanceMatrix !== of.instanceMatrix) lines.instanceMatrix = of.instanceMatrix;
         lines.count = of.count;
-        // (in the molecule's units, as large as it is drawn now - never under the least pixels)
-        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x * magShown.current, perPx);
+        // (in the molecule's units, as large as it is drawn now - thinner than a device pixel, a device pixel wide and as much fainter)
+        const drawn = thinLine(ll.width * WORLD_PER_ANGSTROM * placed.current.scale.x * magShown.current, perPx / gl.getPixelRatio());
+        o.width.value = drawn.width;
         o.material.color.set(P.outlineColor).lerp(colour.set(S.outlineColor), ff);
-        o.material.opacity = seenBy;
+        o.material.opacity = seenBy * drawn.ink;
       }
     }
     // the atom under the pointer, and the chosen atoms' rings

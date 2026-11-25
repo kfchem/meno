@@ -41,14 +41,16 @@ describe("a card's and a set's lines, as the zoom goes", () => {
     for (const scale of [0.6, 1, 2, 6]) expect(hairWritten(1, zoomAt(scale), 2), `${scale}`).toBeNull();
   });
 
-  it("are never thinner than a device pixel: under that floor written in steps of a quarter, and back to one as the zoom comes out from under it", () => {
-    // (a page pixel a quarter of a device pixel on a screen of two: four of the layer's)
+  it("thinner than a device pixel, are drawn a device pixel wide and as much fainter: written in steps of a quarter, and back to one as the zoom comes out from under it", () => {
+    // (a page pixel a quarter of a device pixel on a screen of two: four of the layer's, at a quarter of its ink - `--hair-ink`, 1 / 4 -
+    //  so that what it gives the screen is a quarter of a device pixel, as thin as it is)
     expect(hairWritten(1, zoomAt(0.125), 2)).toBeCloseTo(4, 9);
+    expect(1 / hairWritten(1, zoomAt(0.125), 2)!).toBeCloseTo(0.25, 9);
     // (a step too small to be seen: left)
     expect(hairWritten(4, zoomAt(0.125 * 1.1), 2)).toBeNull();
     expect(hairWritten(4, zoomAt(0.125 * HAIR_STEP * 1.01), 2)).toBeCloseTo(4 / (HAIR_STEP * 1.01), 6);
     expect(hairWritten(4, zoomAt(1), 2)).toBe(1);
-    // (on a screen of one, the floor a whole screen pixel)
+    // (on a screen of one, a device pixel is a whole screen pixel)
     expect(hairWritten(1, zoomAt(0.5), 1)).toBeCloseTo(2, 9);
   });
 });

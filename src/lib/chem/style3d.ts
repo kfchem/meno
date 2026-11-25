@@ -481,7 +481,7 @@ export function ballCircles(look: Pick<MoleculeLook, "ballLines">): 0 | 2 | 3 {
 /** The most a style's depth fade takes something at the very back toward the page (`fadeAt`). */
 export const FADE_MOST = 0.7;
 
-/** The thinnest a style's line - round the balls and sticks, or on the balls - is drawn on the screen, in pixels, however far out: thinner, it would shimmer away. */
+/** The thinnest a style's line - round the balls and sticks, or on the balls - is drawn in a picture made of a molecule, in its pixels: thinner, it would shimmer away. */
 export const LINE_LEAST_PX = 0.5;
 
 /**

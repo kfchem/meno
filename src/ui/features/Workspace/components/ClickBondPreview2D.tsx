@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { devicePx, thinLine } from "../pageGl/units";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
@@ -83,13 +84,15 @@ export default function ClickBondPreview2D() {
     const at = last.current;
     m.visible = seen.current > 0 && !!at;
     if (!m.visible || !at) return;
-    (m.material as THREE.MeshBasicMaterial).opacity = ALPHA.highlight * seen.current;
     const len = Math.hypot(at.to.x - at.from.x, at.to.y - at.from.y);
     const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+    // (as wide as the drawing's lines - thinner than a device pixel, a device pixel wide and as much fainter: pageGl/units `thinLine`)
+    const drawn = thinLine(lineWidthWorld, devicePx(zoom, gl.getPixelRatio()));
+    (m.material as THREE.MeshBasicMaterial).opacity = ALPHA.highlight * seen.current * drawn.ink;
     q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(at.to.y - at.from.y, at.to.x - at.from.x));
     m.position.set((at.from.x + at.to.x) / 2, (at.from.y + at.to.y) / 2, -0.04);
     m.quaternion.copy(q);
-    m.scale.set(Math.max(len, 1e-6), Math.max(lineWidthWorld, 1 / Math.max(zoom, 1e-6)), 1);
+    m.scale.set(Math.max(len, 1e-6), drawn.width, 1);
   });
 
   return (

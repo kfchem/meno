@@ -20,8 +20,10 @@ import { COPYABLE } from "../hooks/useKeepUnselected";
  */
 export type PortLook = "plain" | "lit";
 
-/** A hairline on the screen, whatever the zoom: the page's layer of HTML sets it (Workflow2D). */
+/** A line a page pixel wide - a device pixel where it would be thinner - and how much of its colour it takes there: the page's layer of HTML sets them (Workflow2D). */
 export const HAIR = "var(--hair, 1px)";
+/** A colour `color` (a CSS colour) as much fainter as the page's hair is (`--hair-ink`, 1 where it is a page pixel). */
+const hairInk = (color: string) => `color-mix(in srgb, ${color} calc(var(--hair-ink, 1) * 100%), transparent)`;
 /**
  * A box's line a hair thick, just inside its edge, in the colour of an
  * `inset-ring-*` class: drawn as a shadow, not a border. Chromium (Windows'
@@ -207,8 +209,8 @@ export default function StepCard(p: StepCardProps) {
         role="group"
         aria-label={`Step: ${p.who}, ${p.info.name}`}
         onPointerDown={p.onCardDown}
-        className={clsx("rounded-xl bg-white shadow-sm", HAIR_LINE, p.selected ? "inset-ring-accel-base" : "inset-ring-gh-line")}
-        style={{ padding: HAIR, cursor: "default" }}
+        className={clsx("rounded-xl bg-white shadow-sm", HAIR_LINE)}
+        style={{ padding: HAIR, cursor: "default", ["--tw-inset-ring-color" as string]: hairInk(p.selected ? "var(--color-accel-base)" : "var(--color-gh-line)") }}
       >
         <div className="grid">
           {/* (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports) */}
@@ -262,7 +264,7 @@ export default function StepCard(p: StepCardProps) {
             transition={{ duration: DURATION.base, ease: EASE }}
             style={{ overflow: "hidden" }}
           >
-          <div className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} ${hairInk("var(--color-gh-line)")}` }} onPointerDown={(e) => e.stopPropagation()}>
             {/* (another kind its doer fills to switch to - none for a kind not among them, a Repeat's: no empty choice) */}
             {p.kinds.length > 1 && p.kinds.some((k) => k.kind === p.step.kind) && (
               <div className="mb-3">

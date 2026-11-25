@@ -30,6 +30,7 @@ import { DEFAULT_LABEL_FAMILY, labelFont } from "../../../../lib/chem/labelFonts
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { pageAt } from "../utils/page";
 import { pageLength } from "../utils/pageScale";
+import { devicePx, thinLine } from "../pageGl/units";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { GRAY } from "./pdfPictures";
@@ -106,10 +107,9 @@ function Sheet({
   toWorld: (cx: number, cy: number) => Pt;
 }) {
   const store = useEditorStore();
-  const { invalidate } = useThree();
+  const { invalidate, gl } = useThree();
   // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
   const zoom = useDrawnZoom();
-  const px = 1 / zoom;
   // (kept by its text - a Markdown text's laid out again once its type has come)
   useMarkdownType();
   const s = sheetOfText(t);
@@ -237,7 +237,9 @@ function Sheet({
   const pg = pageLength(1);
   const lit = LIT_PAD_PX * pg;
   const now = performance.now();
-  const edge = px;
+  // (its edge a page pixel - thinner than a device pixel, a device pixel wide and as much fainter: pageGl/units `thinLine`)
+  const edgeLine = thinLine(pg, devicePx(zoom, gl.getPixelRatio()));
+  const edge = edgeLine.width;
   const w = b.x1 - b.x0;
   const h = b.y1 - b.y0;
   // its name under it, in the drawing's type: at its left as a sheet, at a size on the page; under its middle as an icon, at the size of the drawing's labels, as a file's under its icon - and on
@@ -319,7 +321,7 @@ function Sheet({
             )}
         </group>
       </group>
-      {/* its edge, a pixel wide - or the selection's light, where it is selected */}
+      {/* its edge, a page pixel wide - or the selection's light, where it is selected */}
       {[
         [mid.x, b.y1, w, edge],
         [mid.x, b.y0, w, edge],
@@ -328,7 +330,7 @@ function Sheet({
       ].map(([x, y, ww, hh], i) => (
         <mesh key={`edge${i}`} position={[x, y, Z_STEP / 3]} scale={[selected ? ww + edge : ww, selected ? hh + edge : hh, 1]} raycast={noRaycast}>
           <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial color={selected ? COLORS.highlight : EDGE} toneMapped={false} />
+          <meshBasicMaterial color={selected ? COLORS.highlight : EDGE} transparent opacity={edgeLine.ink} toneMapped={false} />
         </mesh>
       ))}
       <group position={[nameX, b.y0 - nameGap, Z_STEP / 4]}>

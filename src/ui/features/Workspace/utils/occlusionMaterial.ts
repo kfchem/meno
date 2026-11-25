@@ -35,8 +35,8 @@ export type Occluded = { strength: { value: number }; direct: { value: number };
  * molecule's frame (a ball's instance is never turned on its own), runs
  * square to an axis - `lines.width` wide in the balls' own units (each
  * ball's radius its instance's scale), so that they grow and shrink with
- * the molecule, but never under `lines.least` screen pixels (by the
- * normal's change across a pixel, `fwidth`) - each axis's `lines.amount` of
+ * the molecule; thinner than `lines.least` pixels (by the normal's change
+ * across a device pixel, `fwidth`), that wide and as much fainter - each axis's `lines.amount` of
  * the way there (x, y, z), in `lines.colour` (the screen's sRGB), on the
  * balls whose instance says so (`ballLined`, 1 or 0).
  */
@@ -83,9 +83,13 @@ export function occludedMaterial(
             for ( int i = 0; i < 3; i++ ) {
               float c = q[ i ];
               float w = max( fwidth( c ), 1e-6 );
-              // (half the line's width on the ball, as its normal goes - a great circle's arc over the ball's radius - and never under half the least pixels)
-              float halfWidth = max( ballLineWidth * 0.5 / vBallLined, ballLineLeast * 0.5 * w );
-              cover = max( cover, clamp( ( halfWidth - abs( c ) ) / w + 0.5, 0.0, 1.0 ) * ballLineAmount[ i ] );
+              // (half the line's width on the ball, as its normal goes - a great circle's arc over the ball's radius - and, thinner than the least pixels,
+              //  that wide and as much fainter)
+              float trueHalf = ballLineWidth * 0.5 / vBallLined;
+              float leastHalf = ballLineLeast * 0.5 * w;
+              float halfWidth = max( trueHalf, leastHalf );
+              float ink = trueHalf < leastHalf ? trueHalf / leastHalf : 1.0;
+              cover = max( cover, clamp( ( halfWidth - abs( c ) ) / w + 0.5, 0.0, 1.0 ) * ballLineAmount[ i ] * ink );
             }
             gl_FragColor.rgb = mix( gl_FragColor.rgb, ballLineColour, cover );
           }`,

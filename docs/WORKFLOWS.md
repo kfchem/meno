@@ -1901,8 +1901,9 @@ Decided while building it, for the maintainer to confirm:
   molecules with their outputs: the step that could make them again is
   gone, and a chemist's set is always kept.
 - **The look, after review** (2026-10-08): frames, tabs, cards and ports
-  in Meno's palette and its cards' hairline borders, a hair on the screen
-  at any zoom; wires a hair and a quarter; Heroicons' outline icons for
+  in Meno's palette and its cards' hairline borders, a page pixel wide
+  (thinner than a device pixel, a device pixel wide and as much fainter);
+  wires a page pixel and a quarter; Heroicons' outline icons for
   the kinds and the states; no tint or fading for a state. The canvas's
   hover blue only for a wire under the pointer, as for an atom.
 - **A step's card is 208 px wide** at 100 %, its ports 28 px below its

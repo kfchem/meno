@@ -50,12 +50,12 @@ describe("a set holding a chart", () => {
     }
   });
 
-  it("draws its axes and ticks in its numbers' grey, a screen pixel wide at least - never a frame's faint line", () => {
+  it("draws its axes and ticks in its numbers' grey, a page pixel wide (fainter where thinner than a device pixel) - never a frame's faint line", () => {
     for (const c of [chart, diagram]) {
       const svg = frame(set(c)).match(/<svg[\s\S]*<\/svg>/)![0];
       expect(svg).not.toContain("stroke-gh-line");
       // (the plot's box or the axis, and each tick: three ticks at least, all as wide)
-      expect(svg.match(/stroke-width:max\(1px, var\(--hair, 1px\)\)/g)!.length).toBeGreaterThanOrEqual(4);
+      expect(svg.match(/stroke-width:var\(--hair, 1px\);stroke-opacity:var\(--hair-ink, 1\)/g)!.length).toBeGreaterThanOrEqual(4);
     }
   });
 
