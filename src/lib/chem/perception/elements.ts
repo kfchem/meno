@@ -32,7 +32,8 @@ const GROUPS_1_2_13: ReadonlySet<number> = new Set([3, 11, 19, 37, 55, 87, 4, 12
 /**
  * The metals a donor's bond to is a coordination: the `transitionMetal`s (Zn, Cd and Hg among them), and the Lewis-acidic main-group
  * metals of groups 1, 2 and 13 - the `mainGroupMetal`s of those groups, not nihonium, whose compounds are not made. Asked by the two
- * over-bond checks only (lib/chem/molWriter `overBonded`, lib/figure/structure): a donor's bond to one is left out of the donor's own count,
+ * over-bond checks (lib/chem/molWriter `overBonded`, lib/figure/structure), and by a label's formula read where nothing else reads it
+ * (lib/chem/ligands `DONOR_TEXT_METAL`: MgBr on a carbon, C-Mg-Br): a donor's bond to one is left out of the donor's own count,
  * so a fluorine on carbon bridging to a magnesium, an ether's O on a Grignard reagent's Mg, a carbonyl's O on a lithium read; and the
  * metal's own bonds are counted against no valence, a chloride bridging two magnesiums read with them. The bond stands, and an atom's
  * hydrogens are still by all its bonds: RO-Li has none. Not tin, lead nor bismuth, whose bonds to O, N and a halogen are drawn covalent
