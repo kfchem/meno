@@ -642,6 +642,9 @@ on a page), and the **Newman projection** (`newman`).
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+  A **double-click** on a ring atom of a chair or a Haworth ring (or a click with Option or Alt held) adds one group at the atom's first free
+  position - a chair's equatorial, then its axial; a Haworth ring's up, then its down - at the length the drawing gives it, a new atom always,
+  never joined to one already near; with both positions held it adds nothing (`projectionBond`, the store's `bondOut`).
   Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
   group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
   atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
@@ -739,7 +742,11 @@ on a page), and the **Newman projection** (`newman`).
   seen end-on: it has no drawn length and no direction, and the page draws none of it (`isEndOn`, `newmanPairs`, lib/chem/layout2d: no line for that bond, the
   back atom's bonds drawn from the rim, the circle one of the drawing's circles, so that SVG, EMF and print have it as the canvas does). Free positions: three
   spokes on each atom, staggered - the front's at 90, 210 and 330 degrees, the back's at 30, 150 and 270 - a bond length from the centre; a group is led
-  out to the nearest that no group holds, the tip saying "front" or "back". A spoke dragged round the circle turns all three groups of its atom together,
+  out to the nearest that no group holds, the tip saying "front" or "back". A double-click on the centre adds a front group, one on the circle's line a
+  back group, each at the next spoke of its atom's own set that no group holds - the front's from 90 round to 210 and 330, the back's from 270 round
+  to 30 and 150, so the first front and the first back group stand anti - and nothing once three are held, or while a group of the pair stands off
+  every spoke (`nextSpoke`). The back atom under the centre is bonded to the front already, so the double-click's second press, let go there,
+  joins nothing and the bond is added (`tapConnects`). A spoke dragged round the circle turns all three groups of its atom together,
   with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
   12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
   back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the

@@ -7,6 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { centredAt, restyledDrawn } from "../../utils/copyPaste";
 import { chairDrawing, FIRST_FORM } from "../../projections/chair";
+import { projectionBond } from "../../projections/extend";
 import { CHAIR_CHANGED, withChair } from "../../projections/fromFlat";
 import { sameStereo } from "../../chem/engineLayout";
 import { HAWORTH_SCALE, haworthDrawing } from "../../projections/haworth";
@@ -205,6 +206,10 @@ export const createModelSlice = (
 
   bondOut: (id: number, toward: { x: number; y: number }, order: Bond["order"] = 1) => {
     const { model } = get();
+    // (an atom of a chair, a Haworth ring or a Newman pair: its next free position, exact, and no other atom joined there; none free, nothing)
+    const placed = projectionBond(model, id);
+    if (placed === "full") return null;
+    if (placed) return get().addAtomBonded(id, placed.x, placed.y, "C", order);
     const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
     if (!end) return null;
     // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)

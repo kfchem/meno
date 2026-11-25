@@ -5,8 +5,8 @@
  */
 import type { Atom, Bond } from "../store/types";
 import { seenPlaces, snapTo, type SeenPlace } from "./chair";
-import { newmanExtension } from "./newman";
-import { projectionsIn } from "./rings";
+import { newmanExtension, nextSpoke } from "./newman";
+import { projectionsIn, type FoundProjection } from "./rings";
 
 /** Where a bond out of `tip` ends, and what the place is called ("axial", "equatorial", "up", "down"). */
 export type ChairExtension = { end: { x: number; y: number }; name: string };
@@ -28,22 +28,58 @@ export function chairExtension(model: { atoms: readonly Atom[]; bonds: readonly 
     const d = found.drawing;
     const k = found.index.get(tip)!;
     const here = atoms.find((a) => a.id === tip)!;
-    // (the places a group holds already: a neighbour off the ring standing at one of the atom's free positions)
-    const byId = new Map(atoms.map((a) => [a.id, a]));
-    const places = seenPlaces(d, k);
-    const taken: SeenPlace["free"]["kind"][] = [];
-    for (const b of bonds) {
-      const other = b.a === tip ? b.b : b.b === tip ? b.a : null;
-      if (other == null || found.ring.includes(other)) continue;
-      const g = byId.get(other);
-      if (!g) continue;
-      const held = places.find((p) => Math.hypot(g.x - here.x - (p.place.x - d.atoms[k].x), g.y - here.y - (p.place.y - d.atoms[k].y)) < NEAR * 100);
-      if (held) taken.push(held.free.kind);
-    }
+    const taken = heldKinds({ atoms, bonds }, found.ring, tip, d, k);
     const place = snapTo(d, k, { x: pointer.x - here.x + d.atoms[k].x, y: pointer.y - here.y + d.atoms[k].y }, taken);
     if (!place) return null;
     // (the new atom where the free position says, as the ring's own atoms are: the seen vector of that bond, not a bond's length along it)
     return { end: { x: here.x + place.place.x - d.atoms[k].x, y: here.y + place.place.y - d.atoms[k].y }, name: place.free.kind };
+  }
+  return null;
+}
+
+/**
+ * The free positions of ring atom `k` of a found projection's drawing `d` (atom `tip` on the page) that a group holds already: a neighbour off the
+ * ring standing at one of them, by kind. A group drawn elsewhere by hand holds none.
+ */
+function heldKinds(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, ring: readonly number[], tip: number, d: FoundProjection["drawing"], k: number): SeenPlace["free"]["kind"][] {
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const here = byId.get(tip)!;
+  const places = seenPlaces(d, k);
+  const taken: SeenPlace["free"]["kind"][] = [];
+  for (const b of model.bonds) {
+    const other = b.a === tip ? b.b : b.b === tip ? b.a : null;
+    if (other == null || ring.includes(other)) continue;
+    const g = byId.get(other);
+    if (!g) continue;
+    const held = places.find((p) => Math.hypot(g.x - here.x - (p.place.x - d.atoms[k].x), g.y - here.y - (p.place.y - d.atoms[k].y)) < NEAR * 100);
+    if (held) taken.push(held.free.kind);
+  }
+  return taken;
+}
+
+/** The order a double-click fills an atom's free positions in: a chair's equatorial before its axial, a Haworth ring's up before its down. */
+const FILL_ORDER: readonly SeenPlace["free"]["kind"][] = ["equatorial", "axial", "up", "down"];
+
+/**
+ * Where the one bond a double-click adds to atom `tip` ends, where `tip` is an atom of a projection of the tool's (docs/EDITOR-2D.md,
+ * *Projections*): a chair's or a Haworth ring's atom at its first free position by `FILL_ORDER`, at the length the drawing gives it; a Newman
+ * pair's atom at the next free spoke of its own set (`nextSpoke`). `"full"` where `tip` is such an atom and has no free position - nothing is
+ * added, never a bond between two positions - and none where `tip` is no such atom, and the bond goes as any.
+ */
+export function projectionBond(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, tip: number): { x: number; y: number } | "full" | null {
+  const spoke = nextSpoke(model, tip);
+  if (spoke) return spoke;
+  for (const found of projectionsIn({ atoms: model.atoms as Atom[], bonds: model.bonds as Bond[] })) {
+    if (!found.ring.includes(tip)) continue;
+    const d = found.drawing;
+    const k = found.index.get(tip)!;
+    const here = model.atoms.find((a) => a.id === tip)!;
+    const taken = heldKinds(model, found.ring, tip, d, k);
+    const free = seenPlaces(d, k)
+      .filter((p) => !taken.includes(p.free.kind))
+      .sort((p, q) => FILL_ORDER.indexOf(p.free.kind) - FILL_ORDER.indexOf(q.free.kind))[0];
+    if (!free) return "full";
+    return { x: here.x + free.place.x - d.atoms[k].x, y: here.y + free.place.y - d.atoms[k].y };
   }
   return null;
 }
