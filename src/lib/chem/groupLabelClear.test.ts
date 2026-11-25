@@ -275,3 +275,36 @@ describe("the notes of a crowded drawing, as every bond and label looked at once
     expect(notes).toEqual(was);
   });
 });
+
+describe("what is said beside an atom, off every line drawn", () => {
+  it("keeps a mapped naphthalene's numbers off its double bonds' inner lines, not only off the bonds themselves", () => {
+    // (two rings sharing an upright bond, Kekule bonds, each atom mapped: the inner lines lie inside the rings, where a note
+    // would otherwise be put)
+    const h = (L * Math.sqrt(3)) / 2;
+    const p: [number, number][] = [
+      [0, L / 2], [0, -L / 2],
+      [h, L], [2 * h, L / 2], [2 * h, -L / 2], [h, -L],
+      [-h, L], [-2 * h, L / 2], [-2 * h, -L / 2], [-h, -L],
+    ];
+    const atoms: Atom[] = p.map(([x, y], i) => ({ id: i + 1, x, y, el: "C", map: i + 1 }));
+    const bond = (a1: number, a2: number, order: 1 | 2): Bond => ({ a1, a2, order });
+    const bonds: Bond[] = [
+      bond(0, 1, 2),
+      bond(0, 2, 1), bond(2, 3, 2), bond(3, 4, 1), bond(4, 5, 2), bond(5, 1, 1),
+      bond(0, 6, 1), bond(6, 7, 2), bond(7, 8, 1), bond(8, 9, 2), bond(9, 1, 1),
+    ];
+    const o = opts();
+    const set = labelSetOf(o);
+    const laid = layoutMolecule(atoms, bonds, o, 40);
+    const notes = laid.texts.filter((t) => t.beside && t.atom == null);
+    expect(notes.length).toBe(10);
+    // (the double bonds are drawn with an inner line each: more lines than bonds)
+    expect(laid.lines.length).toBeGreaterThan(bonds.length);
+    for (const t of notes) {
+      const b = labelBox(t, t.fontPx, set);
+      const box = { minX: t.x - b.left, maxX: t.x + b.right, minY: t.y - b.bottom, maxY: t.y + b.top };
+      const met = laid.lines.filter((l) => segmentMeetsBox({ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }, box));
+      expect(met, `map number ${t.text}`).toEqual([]);
+    }
+  });
+});

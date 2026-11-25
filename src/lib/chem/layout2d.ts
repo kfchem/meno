@@ -4878,6 +4878,8 @@ function atomNotes(
   groupsAt: Set<number>,
   opts: LayoutOptions,
   zoom: number,
+  /** The lines the bonds are drawn with - a double bond's inner line among them - kept off as the bonds are. */
+  drawn: readonly LineSeg[] = [],
 ): TextItem[] {
   const out: TextItem[] = [];
   const fontPx = opts.fontPx * ANNOTATION_SIZE;
@@ -4899,7 +4901,7 @@ function atomNotes(
       }
     }
   }
-  // what a note is kept off: the bonds as lines, the labels' boxes, and the notes put before it
+  // what a note is kept off: the bonds as lines, every line drawn, the labels' boxes, and the notes put before it
   const segments: [Vec2, Vec2][] = [];
   for (const b of bonds) if (b.a1 !== b.a2 && atoms[b.a1] && atoms[b.a2]) segments.push([atoms[b.a1], atoms[b.a2]]);
   // (its own atom's label is kept clear of already, by how far out it goes)
@@ -4922,7 +4924,29 @@ function atomNotes(
     if (!c) grid.set(key, (c = { segs: [], boxes: [] }));
     return c;
   };
-  segments.forEach(([p, q], k) => cellsOf({ minX: Math.min(p.x, q.x), maxX: Math.max(p.x, q.x), minY: Math.min(p.y, q.y), maxY: Math.max(p.y, q.y) }, (key) => filed(key).segs.push(k)));
+  const boxOf = ([p, q]: [Vec2, Vec2]): Box2 => ({ minX: Math.min(p.x, q.x), maxX: Math.max(p.x, q.x), minY: Math.min(p.y, q.y), maxY: Math.max(p.y, q.y) });
+  segments.forEach((s, k) => cellsOf(boxOf(s), (key) => filed(key).segs.push(k)));
+  // (every line drawn is kept off too, a double bond's inner line among them. One drawn along a bond - its single line, shortened at
+  //  a label - is that bond, kept off already: counted once, so that where no place is clear the least covered is chosen as before)
+  const bondCount = segments.length;
+  const along = ([a, b]: [Vec2, Vec2], q: Vec2) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-9) return false;
+    const t = ((q.x - a.x) * dx + (q.y - a.y) * dy) / (d * d);
+    return t > -1e-6 && t < 1 + 1e-6 && Math.abs((q.x - a.x) * dy - (q.y - a.y) * dx) / d < 1e-6 * d;
+  };
+  for (const l of drawn) {
+    const line: [Vec2, Vec2] = [{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }];
+    let ofBond = false;
+    cellsOf(boxOf(line), (key) => {
+      if (!ofBond) ofBond = (grid.get(key)?.segs ?? []).some((k) => k < bondCount && along(segments[k], line[0]) && along(segments[k], line[1]));
+    });
+    if (ofBond) continue;
+    segments.push(line);
+    cellsOf(boxOf(line), (key) => filed(key).segs.push(segments.length - 1));
+  }
   const fileBox = (k: number) => cellsOf(taken[k], (key) => filed(key).boxes.push(k));
   taken.forEach((_, k) => fileBox(k));
   /** The bonds and boxes filed in the cells a box `r` about `p` reaches, each once. */
@@ -5215,7 +5239,7 @@ export function layoutMolecule(
     ...sgroups.texts,
     ...labels,
     ...bondNotes(atoms, bonds, groups.bonds, opts, zoom),
-    ...atomNotes(atoms, bonds, labels, groups.atoms, opts, zoom),
+    ...atomNotes(atoms, bonds, labels, groups.atoms, opts, zoom, prim.lines),
     ...structureNotes(atoms, groups.notes, opts, zoom),
   ];
   // the labels' marks - a charge's circle, a radical's dots - drawn as the
