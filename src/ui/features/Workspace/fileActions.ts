@@ -45,7 +45,6 @@ import { stereoShownOf } from "./document";
 import { COLORS } from "../../theme/colors";
 import { style3dOf } from "./style3dOf";
 import { withSolidsImage } from "./render3d";
-import { pictureDensity } from "./picture";
 import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemePieces } from "../../../lib/chem/reactionScheme";
@@ -850,8 +849,8 @@ export function drawingSvg(
   const { layout, opts } = drawingLayout(seenModel.molecules3d ? { ...seenModel, molecules3d: seenOnly(seenModel.molecules3d) } : seenModel, aromatic, style);
   if (seen) {
     try {
-      // (at the resolution copied pictures are made at: a small molecule in 3D, higher - picture's pictureDensity)
-      withSolidsImage(seenOnly(model.molecules3d ?? []), layout, style3dOf(aromatic), pictureDensity(layout, opts, useAppSettings.getState().pictures.dpi));
+      // (at the resolution copied pictures are made at)
+      withSolidsImage(seenOnly(model.molecules3d ?? []), layout, style3dOf(aromatic), useAppSettings.getState().pictures.dpi);
     } catch {
       // (the marks, then)
     }

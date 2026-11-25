@@ -5410,19 +5410,6 @@ function toSvgPath(poly: Poly): string {
   return segs.join(" ");
 }
 
-/** The part of the page createSVG's view shows: the layout's bounds and its padding, in the layout's unit. */
-function framed(layout: Layout, opts: LayoutOptions): { min: Vec2; max: Vec2 } {
-  const zoom = layout.zoom > 0 ? layout.zoom : 1;
-  return expandBounds(layout.bounds, opts.paddingPx / zoom);
-}
-
-/** The size createSVG gives a drawing, in CSS pixels: its bounds and padding at the zoom the layout was built for. */
-export function svgSize(layout: Layout, opts: LayoutOptions): { width: number; height: number } {
-  const zoom = layout.zoom > 0 ? layout.zoom : 1;
-  const b = framed(layout, opts);
-  return { width: (b.max.x - b.min.x) * zoom, height: (b.max.y - b.min.y) * zoom };
-}
-
 function expandBounds(
   bounds: { min: Vec2; max: Vec2 },
   pad: number
@@ -5524,10 +5511,9 @@ function svgLabel(
 export function createSVG(layout: Layout, opts: LayoutOptions): string {
   const zoom = layout.zoom > 0 ? layout.zoom : 1;
   const toCoord = (px: number) => px / zoom;
-  const b = framed(layout, opts);
+  const b = expandBounds(layout.bounds, toCoord(opts.paddingPx));
   const width = b.max.x - b.min.x;
   const height = b.max.y - b.min.y;
-  const size = svgSize(layout, opts);
   const vb = `${b.min.x} ${-b.max.y} ${width} ${height}`;
   const stroke = opts.bondColor ?? "black";
   const fill = opts.labelColor ?? "black";
@@ -5536,7 +5522,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   const fontSize = toWorld(opts.fontPx, zoom, opts.units);
   let s = "";
   s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
-    ` width="${size.width}" height="${size.height}" fill="none">`;
+    ` width="${width * zoom}" height="${height * zoom}" fill="none">`;
   // under it all: the shapes on the page, each filled, its line over its fill
   const curvePath = (pts: readonly Vec2[]) => {
     let d = `M${pts[0].x} ${-pts[0].y}`;

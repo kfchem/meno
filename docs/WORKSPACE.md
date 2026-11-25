@@ -156,14 +156,8 @@ for each topic (one pull request per dependent chain).
   Files; 600 dpi unless changed) - drawn in tiles of at most 2048 pixels a
   side, each its part of the view, so that a picture is as sharp as asked
   however large (until 2026-10-11, the bitmap was held to
-  1600 pixels across for each 300 dpi). A molecule in 3D is never copied
-  with fewer than 2400 pixels across (the picture's long side), so that it
-  stays sharp when enlarged in a slide: a small one is made at a higher
-  resolution than the setting, its size in points the same, and the PNG
-  around it and its bitmap at that one resolution; the same for the SVG
-  export and for an object in Word or PowerPoint updated from Meno. Only
-  past 48 million pixels, as a copied picture is, is it made at a lower
-  resolution. Its balls are as
+  1600 pixels across for each 300 dpi). Only past 48 million pixels, as a
+  copied picture is, is it made at a lower resolution. Its balls are as
   smooth as they are large in it - at 1200 dpi a ball can be hundreds of
   pixels across, and one of a fixed 48 sides showed them - within twenty
   million triangles for all of them. A structure opened from Word or PowerPoint
