@@ -15,6 +15,7 @@ import { COLORS } from "../../../theme/colors";
 import { GuideFade } from "../presenting/guideFade";
 import type { Seg } from "../presenting/guides";
 import { pageLength } from "../utils/pageScale";
+import { devicePx, thinLine } from "../pageGl/units";
 
 /** Where guides lie: over the drawing and the slides' frames. */
 const Z = 0.65;
@@ -25,6 +26,8 @@ const TICK_PX = 4;
 export default function Guides2D() {
   const guides = useEditor((s) => s.guides);
   const { invalidate } = useThree();
+  const camera = useThree((st) => st.camera);
+  const dpr = useThree((st) => st.viewport.dpr);
   const px = pageLength(1);
   // (what each guide is now - its place and how opaque - taken at each frame it is on its way)
   const fade = useRef(new GuideFade());
@@ -32,8 +35,15 @@ export default function Guides2D() {
   // (a frame for each change of the guides: the canvas draws on demand)
   useEffect(() => invalidate(), [guides, invalidate]);
   const drawn = useRef<{ seg: Seg; level: number; mark: boolean }[]>([]);
+  // (a device pixel on the page, as the view is: a line thinner than it drawn a device pixel wide and as much fainter - components/drawnInk)
+  const device = useRef(0);
   useFrame(() => {
     const { drawn: now, moving } = fade.current.update(performance.now(), guides);
+    const d = devicePx((camera as { zoom?: number }).zoom || 1, dpr);
+    if (d !== device.current) {
+      device.current = d;
+      if (now.length) setStep((n) => n + 1);
+    }
     // (drawn again where it changed: while any is coming, going or gliding)
     if (moving || now.length !== drawn.current.length) {
       drawn.current = now;
@@ -42,6 +52,7 @@ export default function Guides2D() {
     if (moving) invalidate();
   });
   if (!drawn.current.length) return null;
+  const line = thinLine(LINE_PX * px, device.current || devicePx((camera as { zoom?: number }).zoom || 1, dpr));
   const pieces: { seg: Seg; level: number }[] = [];
   for (const d of drawn.current) {
     pieces.push({ seg: d.seg, level: d.level });
@@ -66,12 +77,12 @@ export default function Guides2D() {
             key={i}
             position={[(s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, 0]}
             rotation={[0, 0, Math.atan2(s.y2 - s.y1, s.x2 - s.x1)]}
-            scale={[len + LINE_PX * px, LINE_PX * px, 1]}
+            scale={[len + line.width, line.width, 1]}
             renderOrder={48}
             raycast={() => {}}
           >
             <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial color={COLORS.attention} transparent opacity={level} depthTest={false} depthWrite={false} toneMapped={false} />
+            <meshBasicMaterial color={COLORS.attention} transparent opacity={level * line.ink} depthTest={false} depthWrite={false} toneMapped={false} />
           </mesh>
         );
       })}

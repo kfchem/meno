@@ -41,7 +41,7 @@ import { useStyleOptions } from "../useDrawingStyle";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
 import { boxOf, joinOf, markScale } from "../presenting/slides";
 import { pageLength, reachAt } from "../utils/pageScale";
-import { thinLine } from "../pageGl/units";
+import { devicePx, thinLine } from "../pageGl/units";
 
 /** Where slides' frames lie: over the drawing and what is on the page. */
 const Z = 0.6;
@@ -582,25 +582,30 @@ function Join({ from, to, h, opacity }: { from: Pt; to: Pt; h: number; opacity: 
   const headMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const long = useRef(true);
   const line = useRef<THREE.Mesh>(null);
+  // (its line thinner than a device pixel: a device pixel wide and as much fainter - components/drawnInk)
+  const dpr = useThree((st) => st.viewport.dpr);
+  const ink = useRef(1);
   useScreenSize(
-    () => {
+    (screen) => {
       // (its pixel as its numbers': a page pixel, smaller with them where they are smaller with their slides)
       const px = pageLength(markScale(h, 2 * NUMBER_PX));
       // (a little apart from the frames at either end)
       const gap = Math.min(NUMBER_PX * px * 1.4, len / 3);
       material.uniforms.uFrom.value.set(from.x + ux * gap, from.y + uy * gap);
       material.uniforms.uTo.value.set(to.x - ux * gap, to.y - uy * gap);
-      material.uniforms.uWidth.value = JOIN_PX * px;
+      const drawn = thinLine(JOIN_PX * px, devicePx(1 / screen, dpr));
+      material.uniforms.uWidth.value = drawn.width;
+      ink.current = drawn.ink;
       material.uniforms.uPx.value = px;
       if (head.current) head.current.scale.setScalar(HEAD_PX * px);
       long.current = len > 6 * HEAD_PX * px;
     },
-    [from.x, from.y, to.x, to.y, h, material],
+    [from.x, from.y, to.x, to.y, h, material, dpr],
   );
   usePartFrame(() => {
     const o = opacity();
     if (head.current) head.current.visible = long.current;
-    material.uniforms.uOpacity.value = o;
+    material.uniforms.uOpacity.value = o * ink.current;
     if (headMaterial.current) headMaterial.current.opacity = o * 1.4;
   });
   return (

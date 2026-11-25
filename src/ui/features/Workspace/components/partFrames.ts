@@ -15,11 +15,18 @@ export type PartFrame = (px: number, dt: number) => void;
 
 const PartFrames = createContext<Set<PartFrame> | null>(null);
 
-/** The parts' work, for the layer to give them (`PartFramesProvider`), done at each frame by its one callback. */
-export function usePartFrames(): Set<PartFrame> {
+/**
+ * The parts' work, for the layer to give them (`PartFramesProvider`), done at
+ * each frame by its one callback - with the layer's own, `every`, first: a
+ * check at each frame, as cheap as that at rest.
+ */
+export function usePartFrames(every?: (px: number) => void): Set<PartFrame> {
   const camera = useThree((s) => s.camera);
   const parts = useMemo(() => new Set<PartFrame>(), []);
+  const own = useRef(every);
+  own.current = every;
   useFrame((_, dt) => {
+    own.current?.(1 / ((camera as THREE.OrthographicCamera).zoom || 1));
     if (!parts.size) return;
     const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
     for (const part of parts) part(px, dt);

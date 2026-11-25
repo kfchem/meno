@@ -1551,7 +1551,16 @@ it, in `features/Workspace/pageGl/`:
   in double bonds, where a wedge meets its bond, so while it is fainter
   each pixel of the drawing's ink is painted once (the first to reach it
   leaves its depth there, turning the rest away): never darker where its
-  parts meet, nor where two structures cross. Pictures of the drawing -
+  parts meet, nor where two structures cross. The gap where a bond passes
+  behind another scales with the page as well, two of its line widths
+  either side at every zoom. The page's other lines - a shape's (its
+  dashes along it, its fill as it is), a mark's box, a guide, the line
+  from a slide to the next - take the same rule: a device pixel wide at
+  least and as much fainter, each widened about its middle line in its
+  shader (components/drawnInk `thinStroke`); not painted once by depth
+  as the drawing is - a shape's line and a box's outline meet themselves
+  edge to edge, and where a guide's tick crosses its end that corner is
+  a little darker while it is faint. Pictures of the drawing -
   SVG, PDF, EMF, PNG at a size - are not the zoom and keep their own line
   widths. A control - a port - is its page pixels too, no more than its
   share of what it belongs to, and scaled with the page at every zoom

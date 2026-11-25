@@ -4092,7 +4092,8 @@ function primitivesOf(
     drawn.set(b, r);
   }
   // (every bond is built before any is broken: a bond behind is cut by the width of what is drawn in front of it)
-  const breakWith = { zoom, round: roundJoins, raster: (opts.minLinePx ?? 1) > 0 };
+  // (a drawing whose lines thin out with the zoom, the page's, keeps no least clear space either: its gap scales with it - leastLinePx)
+  const breakWith = { zoom, round: roundJoins, raster: !opts.thinDrawn && (opts.minLinePx ?? 1) > 0 };
   for (const b of bonds) {
     const r = drawn.get(b)!;
     const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith, depthOf);
@@ -4267,7 +4268,10 @@ export const CROSSING_LEAST_BREAK = 2;
  * By eye, a matter of look: the clear space is constant, so a shallower crossing cuts the bond behind over a longer way.
  */
 export const CROSSING_LEAST_ANGLE_DEG = 10;
-/** The clear space is never under this many device pixels on a page or in a picture of pixels (a floor, as a line's one device pixel is); a vector writer has none. */
+/**
+ * The clear space is never under this many pixels in a drawing laid out for pixels with a least line width (a floor, as that least width
+ * is); a vector writer has none, and nor has the page's drawing (`thinDrawn`), whose gap scales with the page as its lines do.
+ */
 export const CROSSING_CLEAR_FLOOR_PX = 3;
 
 type Built = ReturnType<typeof buildBondPrimitives>;
@@ -4381,7 +4385,7 @@ export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | und
 /**
  * A bond's lines and shapes, broken where the bond passes behind another - both drawn in perspective, their atoms' `z` saying which is
  * nearer where they cross. The gap is a band along the bond in front, of one width at every angle: the front bond's own width there and
- * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` device pixels where pixels are drawn). What the front bond
+ * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` pixels where pixels are drawn with a least width). What the front bond
  * fills is what is drawn: a plain line, a bold bond, a wedge at the crossing, a double or triple bond from its outer edge to its outer edge - one
  * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
  * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
