@@ -3,6 +3,8 @@ import { placedAbbreviation } from "./abbreviationPlace";
 import { abbreviationOf } from "./abbreviations";
 import { readDrawnLabel } from "../figure/structure";
 import { bondsFromRight } from "../layout/names";
+import { buildTextLabels, type Atom, type Bond } from "./layout2d";
+import { acsWorldOptions, NOMINAL_BOND_LENGTH as L } from "./acs";
 
 /** What a label stands for bonded (a neighbour to its right) or alone: its atoms, the bonded one first-named, and where it is bonded. */
 const read = (label: string, bonded = true) => {
@@ -82,3 +84,48 @@ describe("a pseudohalide's label read off a picture, as shown (IUPAC GR-2.1.6)",
   });
 });
 
+
+describe("a pseudohalide's label typed left of its bond: shown turned symbol by symbol, its bonded symbol at the bond", () => {
+  /** The label on an atom whose one bond comes in from the right (`left`: the label stands left of its bond) or from the left. */
+  const shown = (el: string, left: boolean) => {
+    const atoms: Atom[] = [
+      { id: 1, x: left ? 0 : L, y: 0, el },
+      { id: 2, x: left ? L : 0, y: 0, el: "C" },
+    ];
+    const bonds: Bond[] = [{ a1: 0, a2: 1, order: 1 }];
+    const [t] = buildTextLabels(atoms, acsWorldOptions([], [], { units: "world" }), bonds);
+    return { text: t.text, atom: t.runs![t.anchorRun!].text, el: atoms[0].el };
+  };
+
+  // (by hand, IUPAC GR-2.1.6: a label left of its bond reads outward from it, right to left, so the symbol written last stands
+  //  on the atom and is the one bonded. Typed NCS is the isothiocyanate, N bonded: shown SCN, its N last, at the bond; typed SCN
+  //  the thiocyanate, S bonded: shown NCS, its S at the bond. Se is one symbol: NCSe shown SeCN, its N at the bond; SeCN shown
+  //  NCSe, its Se at the bond. OCN, O bonded, shown NCO; NCO, N bonded, shown OCN)
+  const left: [typed: string, text: string, atom: string, bonded: string][] = [
+    ["NCS", "SCN", "N", "N"],
+    ["SCN", "NCS", "S", "S"],
+    ["NCSe", "SeCN", "N", "N"],
+    ["SeCN", "NCSe", "Se", "Se"],
+    ["OCN", "NCO", "O", "O"],
+    ["NCO", "OCN", "N", "N"],
+  ];
+  it.each(left)("typed %s left of its bond is shown %s, its %s at the bond, and still means %s bonded", (typed, text, atom, bonded) => {
+    const s = shown(typed, true);
+    expect(s.text).toBe(text);
+    expect(s.atom).toBe(atom);
+    // (kept as typed: the label's meaning is unchanged, only its showing turned)
+    expect(s.el).toBe(typed);
+    expect(read(typed)!.bonded).toEqual([bonded]);
+  });
+
+  it.each(left.map(([typed]) => typed))("typed %s right of its bond is shown as typed, its first symbol at the bond", (typed) => {
+    const s = shown(typed, false);
+    expect(s.text).toBe(typed);
+    // (by hand: the run on the atom begins with the first symbol written - N of NCS, S of SCN, Se of SeCN, O of OCN)
+    expect(s.atom.startsWith(typed.match(/^[A-Z][a-z]?/)![0])).toBe(true);
+  });
+
+  it("NCS alone is still the reagent", () => {
+    expect(read("NCS", false)!.atoms).toContain("Cl");
+  });
+});

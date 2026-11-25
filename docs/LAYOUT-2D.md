@@ -825,7 +825,9 @@ pseudohalide's NCO, NCS and NCSe are the iso forms, N bonded (an isocyanate,
 an isothiocyanate, an isoselenocyanate - NCS alone is N-chlorosuccinimide,
 the reagent), and CN, OCN, SCN and SeCN a nitrile, a cyanate, a thiocyanate
 and a selenocyanate, so that NCO left
-of its bond is shown OCN, its N at the bond. NC typed is CN as drawn on a
+of its bond is shown OCN, its N at the bond - and NCS SCN, its N at the
+bond, SCN NCS, its S there, each turned symbol by symbol (Se one symbol:
+NCSe is shown SeCN, SeCN NCSe; `abbreviations.ts` `reversedUnits`). NC typed is CN as drawn on a
 bond's left, a nitrile (the maintainer, 2026-10-11). Text read off a picture is a label as shown, and is read
 by its side: left of its bond, outward from it first (NCO there a
 cyanate, O bonded: GR-2.1.6; NCSe there a selenocyanate, Se bonded,

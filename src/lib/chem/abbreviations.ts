@@ -1056,6 +1056,31 @@ export function reversedLabel(text: string): string {
 }
 
 /**
+ * A label's units as written when its bond comes in from the right: its
+ * own units turned round (`reversedLabel`'s, not read again from the
+ * turned text, where SCN's N, C, S would be NCS, one name) - and a label
+ * of element symbols alone that is one name read otherwise bonded
+ * (`BONDED`: NCS, the isothiocyanato group) or whose units split a symbol
+ * (NCSe as NCS and e) turned symbol by symbol: NCS as S, C, N, NCSe as
+ * Se, C, N, so that the symbol bonded stands at the bond (IUPAC GR-2.1.6).
+ */
+export function reversedUnits(text: string): string[] {
+  const units = labelUnits(text);
+  const symbols = text.match(/[A-Z][a-z]?\d*/g);
+  const bySymbol =
+    symbols != null &&
+    symbols.join("") === text &&
+    symbols.length > 1 &&
+    symbols.every((u) => ELEMENTS.has(u.replace(/\d+$/, ""))) &&
+    (BONDED.has(text) || units.some((u) => /^[a-z]/.test(u)));
+  if (bySymbol) return symbols.reverse();
+  return units.reverse().map((u) => {
+    const m = /^\((.*)\)(\d*)$/.exec(u);
+    return m ? `(${reversedLabel(m[1])})${m[2]}` : u;
+  });
+}
+
+/**
  * The prefixes set in italics, as IUPAC's Table II sets them and names have
  * them: n-, s-, t-, sec-, tert- and i- before a hyphen (t-Bu, but iPr
  * upright, as isopropyl is), and o-, m-, p- (p-Ts, p-MeOPh).
