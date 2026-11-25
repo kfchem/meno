@@ -173,8 +173,8 @@ const PROJECTIONS: typeof ROW = [
     name: "Chair",
     // (what it does a second time, said as the pointer rests on it: the view from the other side)
     tip: "Chair. Chosen again on the chair just put down: the view from the other side",
-    // (a chair as it is first put down, seen from the right: its up end at the left, every bond plain)
-    icon: <path d="M3.4 9 L6.7 8.7 L13.3 6.5 L16.6 11 L13.3 11.3 L6.7 13.5 Z" />,
+    // (a chair as it is first put down: its up end at the left, the right end lower, every bond plain)
+    icon: <path d="M2.2 6.9 L6.1 13.1 L11.9 11.7 L17.8 13.1 L13.9 6.9 L8.1 8.3 Z" />,
   },
   {
     id: "haworth",
@@ -184,8 +184,8 @@ const PROJECTIONS: typeof ROW = [
     // (a Haworth ring of six seen from slightly above: the ring O behind, the front edge heavier)
     icon: (
       <>
-        <path d="M5 7.5 L8.5 5.2 L13.5 5.2 L17 7.5 L14 9.8 L8 9.8 Z" />
-        <path d="M14 9.8 L8 9.8" strokeWidth={2.8} />
+        <path d="M2.8 9.6 L6.6 6 L13.4 6 L17.2 9.6 L13.2 13.6 L6.8 13.6 Z" />
+        <path d="M6.8 13.6 L13.2 13.6" strokeWidth={3.2} />
       </>
     ),
   },
