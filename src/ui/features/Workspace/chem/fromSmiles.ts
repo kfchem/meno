@@ -5,7 +5,7 @@ import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
 import { laidOut, notShownOf, openAsCame, runsAsCame, type OpenDoubles } from "./cleanUp";
 import { givenOf, type Given } from "./givenConfiguration";
-import type { IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
+import type { ConfiguredCentre, IsomerConfiguration } from "../../../../lib/chem/stereoOpen";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { smilesInput } from "../../../../lib/layout/smilesInput";
 import { openDoubleBonds } from "../../../../lib/layout/drawn";
@@ -32,6 +32,10 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   //  drawn: none said where it cannot be asked, or does not answer in time - the structure comes all the same)
   // (an allene's axis and an odd cumulene's cis or trans, which the SMILES says and a MOL block cannot: Meno's own reading of the text, where it is of the same atoms)
   const given = givenRunsOf(smiles, molblock);
+  // (and a centre with a lone pair that Meno keeps and the plugin's reading leaves out - an N-aryl oxaziridine's N: Meno's own reading
+  //  of the text, by the same rule that keeps it in the drawing and in its reading back - `lonePairsGivenOf`)
+  const own = lonePairsGivenOf(smiles, molblock, configuration);
+  const configured = own.length ? { centres: [...(configuration?.centres ?? []), ...own], doubles: configuration?.doubles ?? [] } : configuration;
   // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal: the pairs the mark states, where Meno reads
   //  them (`metalPairsIn`), kept only where the drawing has them; where it does not read them, one with no chelate, whose drawing
   //  the plugin's picture carries)
@@ -41,9 +45,9 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   const opened = openDoublesOf(smiles, molblock);
   const [open, drawn] = await Promise.all([
     withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null),
-    drawingOf(molblock, style, givenOf(given?.runs, configuration), opened ?? undefined, arranged, marks),
+    drawingOf(molblock, style, givenOf(given?.runs, configured), opened ?? undefined, arranged, marks),
   ]);
-  const stereoOpen = stereoOpenOf(open && given ? specified(open, given.bonds, molblock) : open);
+  const stereoOpen = stereoOpenOf(open && (given || own.length) ? specified(open, given?.bonds ?? [], molblock, own) : open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
 }
 
@@ -383,8 +387,34 @@ export function openDoublesOf(smiles: string, molblock: string): OpenDoubles | n
   return { straight: open.straight, either: open.either.map((i) => blockBond.get(pair(input.bonds[i].a, input.bonds[i].b))!) };
 }
 
-/** What the plugin leaves open, less the double bonds of the runs the SMILES configures (`givenRunsOf`). */
-export function specified(open: Parameters<typeof leftOver>[0], bonds: readonly number[], molblock: string) {
+/** What the plugin leaves open, less the double bonds of the runs the SMILES configures (`givenRunsOf`) and the centres Meno's own reading gives (`lonePairsGivenOf`). */
+export function specified(open: Parameters<typeof leftOver>[0], bonds: readonly number[], molblock: string, centres: readonly ConfiguredCentre[] = []) {
   const graph = stereoGraphOf([molblock]);
-  return graph ? leftOver(open, { centres: [], doubles: bonds.map((bond) => ({ bond, ends: [0, 0] as [number, number], cis: true })) }, graph.bonds) : open;
+  return graph ? leftOver(open, { centres: [...centres], doubles: bonds.map((bond) => ({ bond, ends: [0, 0] as [number, number], cis: true })) }, graph.bonds) : open;
+}
+
+/**
+ * The centres with a lone pair for their fourth place that a SMILES configures and the plugin's reading of it (`configuration`) leaves out,
+ * as Meno's own reader reads them (lib/chem/smiles): only where Meno keeps such a centre - perception/stereo/lonePairs, the one rule that
+ * the reader, the layout's wedges and the reading back of a drawing all ask - and the plugin's toolkit does not (an N-aryl oxaziridine's
+ * N), by the atoms of the MOL block, which keep the SMILES's order. None where Meno's reader refuses the text, or the block's atoms or
+ * bonds are not the SMILES's.
+ */
+export function lonePairsGivenOf(smiles: string, molblock: string, configuration: IsomerConfiguration | undefined): ConfiguredCentre[] {
+  let own;
+  try {
+    own = readSmiles(smiles);
+  } catch {
+    return [];
+  }
+  const had = new Set((configuration?.centres ?? []).map((c) => c.atom));
+  // (three neighbours and no H: its lone pair left out of its neighbours, as the reader gives it - the sense the engine's, as the plugin's is)
+  const wanted = own.atoms.flatMap((a, atom) => (a.tetra && a.tetra.neighbours.length === 3 && !had.has(atom) ? [{ atom, neighbours: [...a.tetra.neighbours], sense: a.tetra.volume }] : []));
+  if (!wanted.length) return [];
+  const graph = stereoGraphOf([molblock]);
+  if (!graph || graph.atoms.length !== own.atoms.length || graph.atoms.some((a, i) => a.el !== own.atoms[i].el)) return [];
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const mine = own.bonds.map((b) => pair(b.a1, b.a2)).sort();
+  const block = graph.bonds.map((b) => pair(b.a, b.b)).sort();
+  return mine.length === block.length && mine.every((k, i) => k === block[i]) ? wanted : [];
 }
