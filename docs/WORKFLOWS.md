@@ -287,7 +287,11 @@ pointer does; put back by an undo, they glide back.
   (`workflow/fitFrames`). It grows and shrinks as they change - a structure
   drawn on, a bigger look, a member deleted - its edges eased, in the same
   step as the edit; a workspace saved with frames of other sizes is fitted
-  as it opens. Its tab drags it, with all it holds;
+  as it opens. Its tab drags it, with all it holds - except where
+  something of a member lies on the tab or the frame's edge (an atom, a
+  bond, the selection's turn handle): a press there is the member's, so a
+  member's handle on the frame's top edge turns it, and a double-click on
+  an atom under the tab's words draws on it (`pageGl/PageHits`);
 - **nothing lies half over a frame.** While a member is dragged its frame
   stays where it is, so that it can be dragged out. Let go, a member with
   any of it still in the frame is its member, and the frame grows round it

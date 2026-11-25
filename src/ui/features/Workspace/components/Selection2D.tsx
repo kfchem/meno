@@ -30,6 +30,8 @@ import { selectionScheme } from "../utils/selectionScheme";
 import { TAU, follow } from "../../../theme/motion";
 import { hiddenInStacks } from "../utils/stacks";
 import SelectionShade2D from "./SelectionShade2D";
+import { drawingUnder } from "./drawingUnder";
+import { usePageBeneath } from "../pageGl/PageHits";
 import { pressMovedUnder } from "./viewGoal";
 import { greatest, least } from "../../../../lib/chem/lists";
 
@@ -331,6 +333,9 @@ export default function Selection2D() {
   );
   const turnable = extent != null && (sel.atoms.size > 1 || sel3d.size > 0 || picked.length > 0);
   const handleAt = turnable ? { x: extent!.mid.x, y: extent!.top + NOMINAL_BOND_LENGTH * HANDLE_ABOVE } : null;
+  // (the handle, the atoms and the bonds take a press before a frame's tab or edge under them: what lies on a member is the member's -
+  //  asked only where a frame's would take it)
+  usePageBeneath((x, y, zoom) => drawingUnder(drawn.atoms, model.bonds, handleAt && { ...handleAt, reach: (HANDLE_HIT * HANDLE_PX) / Math.max(zoom, 1e-6) }, { x, y }));
 
   const startTurn = (e: PointerEvent) => {
     const st = store.getState();

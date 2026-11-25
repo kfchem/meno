@@ -48,6 +48,8 @@ export const FREE_MS = 700;
 // Atom picking hit radius (instanced circle used for raycasting)
 // Must match the hover ring radius for exact visual parity.
 export const ATOM_PICK_RADIUS_RATIO = ATOM_HOVER_RING_RADIUS_RATIO;
+/** How wide a bond takes a press, as a share of a bond's length (components/BondsPick2D). */
+export const BOND_PICK_THICKNESS_RATIO = 0.32;
 
 /**
  * How much slower a chain's guide moves than it did (the maintainer,
