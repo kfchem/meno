@@ -1525,7 +1525,14 @@ it where it lies out of view.
     through its joints' dots, are two; and a hash's narrow end set off
     from its atom, its first line taken as a joint's or stopping short,
     is carried on to the bond end it points at, under half a bond on -
-    such a hash may be two lines;
+    such a hash may be two lines. Two hashes drawn end to end at an atom,
+    the one's wide end where the next one's narrow end starts, their lines
+    near enough one way to be taken together, are two as well: a hash longer
+    than 1.4 bonds is cut where its lines, growing toward one end, fall
+    under three fifths of the one before at once, and each piece is read as
+    a hash of its own (2026-11-26: such a pair in a cage was read as one
+    hash through its carbon, the ring at that carbon lost, with nothing
+    said); a long hash with no such fall is read as it is;
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a line, or a wedge
     (a perspective drawing's near edge is often one) - a bridge's, a
@@ -1533,7 +1540,13 @@ it where it lies out of view.
     short one of its pieces, and its pieces are never a hash's lines; its
     gap may be near half a bond (nine twentieths), as a figure with many
     labels, more of its lines cut short of them than drawn whole, has its
-    bonds read shorter than they are;
+    bonds read shorter than they are. Only a line that passes across the
+    gap breaks it: a line that only ends at one of its ends (within a tenth
+    of a bond, a joint's lines meeting there) meets a bond at an atom and
+    passes across nothing (2026-11-26: in a picture, a bond ending where a
+    double bond ends was carried on into a hash's bar lying on its line,
+    a carbon too many, with nothing said); a line that does pass across
+    still breaks it where a third line ends beside the gap;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - no line drawn wider than 1.2 times the figure's usual letter size -
