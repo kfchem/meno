@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clipboardFiles, copyBeingMade, copyMadeFor, copying, onCopyMade, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { tieRenumbered } from "./utils/tiedCaptions";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { quotedTables } from "../../../lib/io/kinds";
 import { isWorkspaceFile } from "./utils/workspace";
@@ -134,8 +135,11 @@ export function useClipboardActions(
       only != null ? [only] : sel3d.size ? [...sel3d] : nothingSelected && hovered3d && !drawn ? [hovered3d.id] : [];
     const carried = copiedMolecules(state, ids3d);
     if (!drawn && !carried.length && !flow && !others) return null;
+    // (and words that belong to a molecule in 3D copied: by its place among those copied, as a paste numbers them)
+    const copied3d = state.molecules3d.filter((m) => ids3d.includes(m.id)).map((m) => m.id);
+    words.push(...state.captions.filter((c) => c.of && "molecule" in c.of && copied3d.includes(c.of.molecule) && !words.some((w) => w.id === c.id)));
     const amongWords = drawn?.captions ?? [];
-    const allWords = [...amongWords, ...words.filter((c) => !amongWords.some((a) => a.id === c.id))];
+    const allWords = [...amongWords, ...words.filter((c) => !amongWords.some((a) => a.id === c.id))].map((c) => tieRenumbered(c, (id) => id, (id) => { const at = copied3d.indexOf(id); return at < 0 ? undefined : at; }));
     // (each arrow and "+" once: among the atoms, or selected for itself)
     const allArrows = [...(drawn?.arrows ?? []), ...lone.filter((a) => !drawn?.arrows?.some((x) => x.id === a.id))];
     const allPluses = [...(drawn?.pluses ?? []), ...lonePluses.filter((p) => !drawn?.pluses?.some((x) => x.id === p.id))];

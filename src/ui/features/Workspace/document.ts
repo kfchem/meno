@@ -40,6 +40,7 @@ import { GAP_MOST, type Cycle, type CycleBranch } from "../../../lib/chem/cycle"
 import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
+import { tiedCaptionsSettled } from "./utils/tiedCaptions";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
@@ -241,7 +242,8 @@ export function createWorkspaceDocument(
       const held = heldSettled(next, before, extentOf);
       // (members as the edit leaves them, then each frame its members' room - where none is being dragged: workflow/fitFrames)
       const members = repeatsSettled(membersSettled(withOneMagnification(held, before), before));
-      return framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf);
+      // (and words that belong to a structure where it now is: utils/tiedCaptions)
+      return tiedCaptionsSettled(framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf), before);
     },
     cost: stepCost,
   });
@@ -1227,7 +1229,7 @@ export type ImportedScheme = {
   shapes?: Omit<Shape, "id">[];
   /** Catalytic cycles. */
   cycles?: Omit<Cycle, "id">[];
-  /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), where it is. */
+  /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), where it is - or belonging to a structure: an atom by its id here, a molecule in 3D by its place among those it brings. */
   captions?: (Omit<Caption, "id" | "arrow"> & { arrowAt?: number })[];
   /** Molecules in 3D a file brings, where they are to stand - and, where it says, the frame each shows (an optimisation's last). */
   molecules3d?: (Omit<Molecule3D, "id"> & { frame?: number; list?: CarriedList; shown?: true })[];
@@ -1261,7 +1263,13 @@ export function withImportedScheme(
   for (const p of scheme?.pluses ?? []) next = addPlus(next, p.x, p.y);
   for (const sh of scheme?.shapes ?? []) next = addShape(next, sh);
   for (const cy of scheme?.cycles ?? []) next = addCycle(next, cy);
-  for (const { arrowAt, ...c } of scheme?.captions ?? []) next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : {}) });
+  // (and words that belong to a molecule in 3D it brings, by its place among them, to that molecule as it is numbered here)
+  const first3d = doc.nextMolecule3dId ?? 1;
+  const brought = scheme?.molecules3d?.length ?? 0;
+  for (const { arrowAt, of, ...c } of scheme?.captions ?? []) {
+    const owner = of && "molecule" in of ? (of.molecule < brought ? { molecule: first3d + of.molecule } : undefined) : of;
+    next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : owner ? { of: owner } : {}) });
+  }
   // (the frame each shows is the canvas's to keep, not the document's; a
   // stack it brings, numbered after the document's own - utils/stacks)
   // (a stack of one - one pasted out of its stack - is that molecule alone)
@@ -2290,8 +2298,10 @@ export function updateCaption(
   const captions = doc.captions ?? [];
   const index = captions.findIndex((c) => c.id === id);
   if (index < 0) return doc;
-  const { arrow, width, align, size, font, lines, marks, ...rest } = patch;
+  const { arrow, of, width, align, size, font, lines, marks, ...rest } = patch;
   const was = captions[index];
+  // (belonging to the structure it did, unless said - none, free; put over an arrow, free of it)
+  const owner = of === undefined ? was.of : (of ?? undefined);
   // (over the arrow it was over, unless said; as wide as it was, unless said - none, as its words)
   const link = arrow === undefined ? was.arrow : (arrow ?? undefined);
   const wide = width === undefined ? was.width : width != null && width > 0 ? width : undefined;
@@ -2303,11 +2313,11 @@ export function updateCaption(
   const face = font === undefined ? was.font : font || undefined;
   const spaced = lines === undefined ? was.lines : lines != null && lines > 0 && lines !== 1 ? lines : undefined;
   const marked = marks === undefined ? was.marks : marks.length ? marks : undefined;
-  const { arrow: _was, width: _wide, align: _lie, size: _size, font: _font, lines: _lines, marks: _marks, ...kept } = was;
+  const { arrow: _was, of: _of, width: _wide, align: _lie, size: _size, font: _font, lines: _lines, marks: _marks, ...kept } = was;
   const next: Caption = {
     ...kept,
     ...rest,
-    ...(link != null ? { arrow: link } : {}),
+    ...(link != null ? { arrow: link } : owner ? { of: owner } : {}),
     ...(wide != null ? { width: wide } : {}),
     ...(lie ? { align: lie } : {}),
     ...(sized != null ? { size: sized } : {}),
@@ -2316,7 +2326,7 @@ export function updateCaption(
     ...(marked ? { marks: marked } : {}),
   };
   const sameMarks = JSON.stringify(next.marks ?? []) === JSON.stringify(was.marks ?? []);
-  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align && next.size === was.size && next.font === was.font && next.lines === was.lines && sameMarks) return doc;
+  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.of === was.of && next.width === was.width && next.align === was.align && next.size === was.size && next.font === was.font && next.lines === was.lines && sameMarks) return doc;
   const out = captions.slice();
   out[index] = next;
   return { ...doc, captions: out };

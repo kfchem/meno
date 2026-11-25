@@ -41,7 +41,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         return { ...prev, wordsWriting: words };
       }),
     setQuickAdd: (q: EditorState["quickAdd"]) => set({ quickAdd: q }),
-    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number }) => {
+    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number; of?: Caption["of"] }) => {
       const id = doc.getState().nextCaptionId ?? 1;
       doc.edit("add text", (d) =>
         ops.addCaption(d, {
@@ -55,6 +55,8 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           ...(more?.size ? { size: more.size } : {}),
           ...(more?.marks?.length ? { marks: more.marks } : {}),
           ...(more?.shape != null ? { shape: more.shape } : {}),
+          // (belonging to a structure - never over an arrow as well)
+          ...(more?.of && arrow == null ? { of: more.of } : {}),
         }),
       );
       return id;
@@ -93,6 +95,9 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       const all = doc.getState().captions?.filter((c) => take.has(c.id)).flatMap((c) => stylesOf(c.text.length, c.marks)) ?? [];
       const r = toggled(all, side);
       doc.edit("mark text", (d) => ops.markCaptions(d, ids, (c) => marksAll(c.text, c.marks, r)));
+    },
+    freeCaption: (id: number) => {
+      doc.edit("free text", (d) => ops.updateCaption(d, id, { of: null }));
     },
     removeCaption: (id: number) => {
       if (doc.edit("delete text", (d) => ops.removeCaption(d, id)))

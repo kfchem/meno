@@ -263,7 +263,8 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
           const r = wordsSet(o, opts, labelSetOf(opts));
           return { ...o, halfW: r.halfW, halfH: r.halfH };
         });
-      const placed = captionPlace(q, { w: halfW, h: halfH }, arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
+      // (words that belong to a structure stay its, put down near an arrow or not)
+      const placed = captionPlace(q, { w: halfW, h: halfH }, c.of ? [] : arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
       s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null }, gesture);
     };
     window.addEventListener("pointermove", onMove);

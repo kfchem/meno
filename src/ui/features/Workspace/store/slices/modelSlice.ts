@@ -1,5 +1,6 @@
 import { editorLayoutOptions } from "../../layoutOptions";
 import { leftTogether } from "../../utils/readNotes";
+import { tieRenumbered } from "../../utils/tiedCaptions";
 import { styleOf } from "../../../../../lib/chem/style";
 import { wordsSet } from "../../../../../lib/chem/captions";
 import { labelSetOf } from "../../../../../lib/chem/layout2d";
@@ -881,6 +882,8 @@ export const createModelSlice = (
       ...next,
       molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))),
       ...(cycles.length ? { cycles: cycles.map((c) => endsRenamed(c, (id) => idOf.get(id), (id) => wordsOf.get(id))) } : {}),
+      // (words that belong to a structure pasted with it belong to the pasted one; to one not pasted, free)
+      ...(words.some((w) => w.of) ? { captions: words.map((w) => tieRenumbered(w, (id) => idOf.get(id), (k) => (k < carried.length ? k : undefined))) } : {}),
     };
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
     const pasted = doc.edit(step ?? "paste", (d) => {

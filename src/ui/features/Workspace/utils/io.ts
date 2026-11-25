@@ -37,7 +37,9 @@ export type ProcessedFileResult = {
   pluses?: { x: number; y: number }[];
   /** Molecules in 3D, as a file of 3D structures has them: not yet placed on the page. */
   /** Its molecules in 3D, each showing its first frame, or the one `frame` says. */
-  molecules3d?: (Omit<Molecule3D, "id" | "at"> & { frame?: number })[];
+  molecules3d?: (Omit<Molecule3D, "id" | "at"> & { frame?: number; caption?: string })[];
+  /** The text that belongs to a structure drawn flat, with its atoms by id (lib/io/structures `captions`). */
+  captions?: { atoms: number[]; text: string }[];
 };
 
 /**
@@ -199,8 +201,33 @@ export function drawnOf(result: ProcessedFileResult, style3d: Style3D = STYLE_3D
         }
       : {}),
     ...(result.pluses?.length ? { pluses: result.pluses.map((p, i) => ({ id: i + 1, ...p })) } : {}),
-    ...(result.molecules3d?.length ? { molecules3d: inRow(result.molecules3d, style3d) } : {}),
+    ...(result.molecules3d?.length ? { molecules3d: inRow(result.molecules3d.map(({ caption: _c, ...m }) => m), style3d) } : {}),
+    ...captionsRead(result, style3d),
   };
+}
+
+/**
+ * The text a file gives its structures (an SD record's `Caption` item), as
+ * words on the page belonging to each: under its drawing, a bond's length
+ * under its lowest atom, or under its molecule in 3D - by its place among
+ * them - as Meno puts text under a structure.
+ */
+function captionsRead(result: ProcessedFileResult, style3d: Style3D): Pick<Drawn, "captions"> {
+  const flat = (result.captions ?? []).flatMap(({ atoms, text }) => {
+    const at = result.model.atoms.filter((a) => atoms.includes(a.id));
+    if (!at.length) return [];
+    const xs = at.map((a) => a.x);
+    return [{ x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...at.map((a) => a.y)) - NOMINAL_BOND_LENGTH, text, of: { atom: at[0].id } }];
+  });
+  const ms = result.molecules3d ?? [];
+  const placed = ms.some((m) => m.caption) ? inRow(ms.map(({ caption: _c, ...m }) => m), style3d) : [];
+  const deep = ms.flatMap((m, k) => {
+    if (!m.caption) return [];
+    const reach = solidOf({ ...placed[k], id: 0 }, style3d).reach[lookOf(placed[k])];
+    return [{ x: placed[k].at.x, y: placed[k].at.y - reach - NOMINAL_BOND_LENGTH, text: m.caption, of: { molecule: k } }];
+  });
+  const all = [...flat, ...deep];
+  return all.length ? { captions: all.map((c, i) => ({ id: i + 1, ...c })) } : {};
 }
 
 /** A file's molecules in 3D, standing in a row about the origin, each clear of the next. */

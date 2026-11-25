@@ -393,14 +393,14 @@ which looks like no other part of Meno and was not shown in every view).
 
 | Right-clicked | Icons | Listed |
 |---|---|---|
-| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
-| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in, its icons as large as the first row's: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
+| An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, add text (where its structure has none of its own), lay out as a grid or stack again (a record of a stack) |
+| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in, its icons as large as the first row's: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, add text (where its structure has none of its own), lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection - added to the menu of any thing in it, and of empty space (*Selecting*, below) | cut, copy, a second row; where the thing's own items do not reach the selection, and on empty space: clean up, 3D, colour; Delete selection | copy as SMILES, export, render, turn over left to right and top to bottom, slide around these, box around these, combine into one PDF, use as input, save as abbreviation - each where it applies |
 | Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
-| A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
-| Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
+| A molecule in 3D | cut, copy, the other look, reset its turn; Delete | add text (where it has none of its own), measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
+| Words on the page | edit, size, bold, italic, bullets, colour; Delete | free from its structure (text that belongs to one), align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page (its pages stacked), an icon or full size; Delete | copy (words chosen on it), put on the page, copy picture, read as structure (a box drawn on it), spread or gather pages, put pages in rows (spread, some in places of their own), write on it |
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture (not a film); Delete | show in the PDF (one cut out of a PDF), read as structure (not a film), play or pause (a film), save picture or save film |
@@ -2148,6 +2148,25 @@ All hover-based, as above.
 - **Text** (the maintainer, 2026-10-08: reagents' labels): words on the
   page - a reaction's reagents and conditions, or anything else
   (`lib/chem/captions`, `Captions2D`, `CaptionTyping2D`).
+  - Text that belongs to a structure - a compound's name or number under
+    it (`Caption.of`, `utils/tiedCaptions`): a structure's menu (an atom's
+    or a bond's, or a molecule in 3D's) has *Add text*, which opens new
+    words a line's height under the structure, centred across it, the
+    caret in them, as text is written anywhere; kept, they belong to it.
+    Where the structure has its text already, the menu offers nothing
+    new: the text is edited by a double-click as any. It is words only -
+    no mark, chip or tip, at the page's scale. It moves, turns and turns
+    over with its structure (its words upright, as all words are), is
+    copied, cut, pasted and deleted with it - in a selection, on a slide,
+    in a set - however far from it; dragged by itself it keeps the place
+    it is put beside the structure and still belongs to it, near an arrow
+    or not. Its menu's *Free from its structure* makes it free text where
+    it is, one undo step. The atom it is tied by deleted, it belongs to the
+    nearest atom left of its structure; the whole structure deleted, it
+    goes with it. Free text is never tied by being near a structure, and
+    copies only by where it is (within half a bond) or as selected. Of a
+    molecule in 3D it is on the page, not in a still picture made of the
+    molecule. Nothing is said as it is added, moved or freed.
   - Written in place, from Quick Add; written anew as words are anywhere
     (the maintainer, 2026-10-10): a click on them puts the caret there, a drag on them
     selects letters from where it pressed, a second click selects a word

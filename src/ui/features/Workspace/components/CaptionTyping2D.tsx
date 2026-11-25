@@ -178,8 +178,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
       const sameMarks = JSON.stringify(kept) === JSON.stringify(caption?.marks ?? []);
       if (edit.id == null) {
         if (text.trim()) {
-          const placed = captionPlace(edit.at, half(text), arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
-          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept });
+          // (text that belongs to a structure is over no arrow: where it was opened)
+          const placed = captionPlace(edit.at, half(text), edit.of ? [] : arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
+          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : {}) });
         }
       } else if (!text.trim()) {
         s.removeCaption(edit.id);

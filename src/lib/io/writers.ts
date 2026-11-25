@@ -194,6 +194,8 @@ export function speciesProblem(m: Pick<WrittenMolecule, "atoms">, charge: number
 export const SD_CHARGE = "Charge";
 export const SD_MULTIPLICITY = "Multiplicity";
 export const SD_IMAGINARY = "Imaginary frequencies (cm-1)";
+/** The data item the text that belongs to a structure is written under, plain - and read back as its text (docs/FILE-IO.md). */
+export const SD_CAPTION = "Caption";
 
 /** A molecule's charge and spin multiplicity, and where each came from: given (by the chemist, or the calculation it was read from), or its atoms. */
 export type Species = { charge: number; multiplicity: number; from: { charge: "given" | "atoms"; multiplicity: "given" | "atoms" } };

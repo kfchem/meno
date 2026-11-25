@@ -813,7 +813,7 @@ As this part of step 5 was built (#155, from main beside step 3):
     properties could not be written for ...: they are not one for each
     frame"). A property named as one of Meno's own items (`Charge`,
     `Multiplicity`, `Energy (Eh)`, `Failed`, `Imaginary frequencies
-    (cm-1)`, and a record's `State`, `Set aside`, `Stale`, `From`) is
+    (cm-1)`, `Caption`, and a record's `State`, `Set aside`, `Stale`, `From`) is
     written under that name and "(property)", here and in a structure
     drawn's record, and the export says so: read back, a second `Charge`
     would be taken for the species. A property whose value is a table - a
@@ -839,6 +839,17 @@ As this part of step 5 was built (#155, from main beside step 3):
     page shows them: a trajectory's bonds, found from distances, form and
     break as its frames go. A copy's MOL file, a PDB file and what a
     plugin's writer is given are the same.
+  - **Text that belongs to a structure** (docs/EDITOR-2D.md, *Text*) is
+    written as its record's `Caption` data item, its words plain (their
+    marks left out; a line of one space for a blank line): a structure
+    drawn with text of its own is a record of its own, titled as the
+    rest; a molecule in 3D's is in each of its records, a set's member's
+    after its record's items. Read back, a record's `Caption` item is text
+    belonging to that structure, under it - a structure drawn, where the
+    file's structures are not opened as a stack, or a molecule in 3D.
+    `Caption` is one of Meno's own items: a property of that name is
+    written as `Caption (property)`. A blank line inside the text ends the
+    item as any reader takes it, so the words after it are not read back.
   - **An SD file of a workflow's structures drawn** - a set selected,
     with the records it carries of them (a step's products, what was
     worked out of them) - has a record for each, titled with its number,

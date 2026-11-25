@@ -49,7 +49,7 @@ import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemePieces } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
-import { extensionOf, SD_CHARGE, SD_IMAGINARY, SD_MULTIPLICITY, speciesOf, type Writer, type WriterId } from "../../../lib/io/writers";
+import { extensionOf, SD_CAPTION, SD_CHARGE, SD_IMAGINARY, SD_MULTIPLICITY, speciesOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
 import { writtenAtoms, writtenOf } from "./utils/written";
@@ -59,6 +59,8 @@ import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
 import { greatest, least } from "../../../lib/chem/lists";
 import { layoutByStructure, structureLayouts } from "../../../lib/chem/layoutStructures";
 import { STYLE_3D, type Style3D } from "../../../lib/chem/style3d";
+import { fragmentOf } from "./chem/cleanUp";
+import { tieRenumbered } from "./utils/tiedCaptions";
 
 /** A file's name without its folder. */
 export function fileNameOf(path: string): string {
@@ -219,7 +221,10 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // in 3D - the frame it shows, where its file had it, or each of its
   // frames, numbered, with its energy where it is known and what else was
   // found of it - each frame with the bonds it has
-  const records = (drawn.molecules3d ?? []).flatMap((m) => {
+  // (the text that belongs to a structure - a molecule in 3D by its place, a drawing by an atom of it - written as its record's Caption item)
+  const tied = (drawn.captions ?? []).filter((c) => c.of && c.text.trim());
+  const captionOf3d = new Map(tied.flatMap((c) => (c.of && "molecule" in c.of ? [[c.of.molecule, c.text] as const] : [])));
+  const records = (drawn.molecules3d ?? []).flatMap((m, k) => {
     const name = m.name ? stem(m.name) : title;
     // (each frame's energy, where it is known: the frame shown's too)
     // (and, beside it, where the frame did not finish - it failed, or its marks did not read - why, so that no reader takes the value for a result)
@@ -235,7 +240,9 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
         speciesData(m, i, skeleton) +
         imaginaryData(m, i, n) +
         // (and what was found of it besides - a model's, a descriptor's, what it was made from - each under its own name, as a structure drawn's record writes them)
-        (m.properties?.length === n ? propertyItems(m.properties[i]) : "")
+        (m.properties?.length === n ? propertyItems(m.properties[i]) : "") +
+        // (and the text that belongs to it, plain, as Meno reads it back)
+        (captionOf3d.has(k) ? dataItem(SD_CAPTION, captionOf3d.get(k)!) : "")
       );
     };
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
@@ -258,14 +265,31 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   const inSets = setRecordsOf(drawn, loose);
   const taken = new Set(inSets.flatMap((r) => ("ids" in r ? r.ids : [])));
   const rest = { ...loose, atoms: loose.atoms.filter((a) => !taken.has(a.id)), bonds: loose.bonds.filter((b) => !taken.has(b.a) && !taken.has(b.b)) };
+  const captionOfAtom = new Map(tied.flatMap((c) => (c.of && "atom" in c.of ? [[c.of.atom, c.text] as const] : [])));
+  const captionAmong = (ids: Iterable<number>) => {
+    for (const id of ids) if (captionOfAtom.has(id)) return dataItem(SD_CAPTION, captionOfAtom.get(id)!);
+    return "";
+  };
   const ofSets = inSets.map((r, k) => {
     const ids = "ids" in r ? new Set(r.ids) : null;
     const one = "model" in r ? r.model : { ...loose, atoms: loose.atoms.filter((a) => ids!.has(a.id)), bonds: loose.bonds.filter((b) => ids!.has(b.a) && ids!.has(b.b)) };
     const number = recordNumber(r.record);
-    return writeMolfile(forFlatReaders(one), { title: `${title} ${number ?? k + 1}`, version }) + recordData(r.record) + "$$$$\n";
+    return writeMolfile(forFlatReaders(one), { title: `${title} ${number ?? k + 1}`, version }) + recordData(r.record) + (ids ? captionAmong(ids) : "") + "$$$$\n";
   });
+  // (a loose structure with text of its own a record of its own, its text beside it; the rest one record, as before)
+  const own: Set<number>[] = [];
+  const owned = new Set<number>();
+  for (const a of rest.atoms) {
+    if (!captionOfAtom.has(a.id) || owned.has(a.id)) continue;
+    const ids = fragmentOf(rest, a.id);
+    own.push(ids);
+    for (const id of ids) owned.add(id);
+  }
+  const others = owned.size ? { ...rest, atoms: rest.atoms.filter((a) => !owned.has(a.id)), bonds: rest.bonds.filter((b) => !owned.has(b.a)) } : rest;
+  const ofOwn = own.map((ids) => writeMolfile(forFlatReaders({ ...rest, atoms: rest.atoms.filter((a) => ids.has(a.id)), bonds: rest.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) }), { title, version }) + captionAmong(ids) + "$$$$\n");
   return (
-    (rest.atoms.length ? writeSdf(forFlatReaders(rest), { title, version }) : "") +
+    (others.atoms.length ? writeSdf(forFlatReaders(others), { title, version }) : "") +
+    ofOwn.join("") +
     ofSets.join("") +
     stacked.map((r) => writeSdf(forFlatReaders(r.model), { title: r.title ?? title, version })).join("") +
     records.join("")
@@ -363,7 +387,10 @@ export function withHeld(part: Drawn, state: Pick<EditorState, "sets">): Drawn {
 export function exportedDrawn(state: Parameters<typeof drawnOf>[0] & Pick<EditorState, "sets" | "steps" | "wires" | "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<EditorState, "lists3d" | "stacksShown">>, part?: Drawn): Drawn {
   if (part) return withHeld(part, state);
   const flow = state.sets.length ? partsOf(state, new Set(state.sets.map((b) => b.id)), new Set(state.steps.map((s) => s.id))) : undefined;
-  return withHeld({ ...drawnOf(state), molecules3d: carriedOf(state), ...(flow ? { flow } : {}) }, state);
+  // (text that belongs to a molecule in 3D by its place among those carried, as a copy carries it)
+  const drawn = drawnOf(state);
+  const captions = drawn.captions?.map((c) => tieRenumbered(c, (id: number) => id, (id: number) => { const at = state.molecules3d.findIndex((m) => m.id === id); return at < 0 ? undefined : at; }));
+  return withHeld({ ...drawn, ...(captions ? { captions } : {}), molecules3d: carriedOf(state), ...(flow ? { flow } : {}) }, state);
 }
 
 /** What a file of one molfile - MOL or RXN - says it left out of what is written (`drawn`): the structures its sets hold off the page, which one molfile cannot hold as records; none where they hold none. */
@@ -428,7 +455,7 @@ const dataItem = (name: string, text: string) => `> <${itemName(name)}>\n${itemL
  * record's and a molecule in 3D's frame's - which no property is written
  * under: read back, a second `Charge` would be taken for the species.
  */
-export const MENO_ITEMS: ReadonlySet<string> = new Set(["State", "Failed", "Set aside", "Stale", "From", "Energy (Eh)", SD_CHARGE, SD_MULTIPLICITY, SD_IMAGINARY]);
+export const MENO_ITEMS: ReadonlySet<string> = new Set(["State", "Failed", "Set aside", "Stale", "From", "Energy (Eh)", SD_CHARGE, SD_MULTIPLICITY, SD_IMAGINARY, SD_CAPTION]);
 
 /** The name a property would be written under: its name, a number worked out with its unit beside it. */
 function labelOf(name: string, p: Property): string {
