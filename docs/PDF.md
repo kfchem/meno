@@ -2133,7 +2133,11 @@ mention a number, and the card.
   the words' box. A number whose line sets its yield after it - a comma,
   then a percentage - may lie up to two bonds from its structure, as a
   scope table sets them (2026-11-20); a bare number stays within one: an
-  NMR figure's atoms' locants, beside their shifts, lie further. It is the
+  NMR figure's atoms' locants, beside their shifts, lie further. A
+  label's script - the 2 of an NH2, the 1 or 2 of an R1 or R2 - set
+  within the label's box past its first letter or against its right
+  side, smaller than the label and its foot no higher than the label's
+  middle, is none, as no compound's number is set so. It is the
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual

@@ -186,6 +186,37 @@ describe("the compounds' numbers a figure's drawn words set, line by line", () =
   });
 });
 
+describe("a formula's subscript beside a structure's label", () => {
+  it("is no compound's number - the 2 of an NH2, set small against the label's right side and low - though the same 2 under the structure is", () => {
+    const st = zigzag("0:0", 100);
+    // (an NH label at the zigzag's last atom, 8 high; its subscript 2 set against it, 6 high - not so small that it is a superscript by
+    //  the figure's words - low on it)
+    const last = st.atoms[4];
+    const label: B = [last.x + 2, last.y - 4, last.x + 12, last.y + 4];
+    const withLabel = { ...st, labels: [label], box: [st.box[0], st.box[1], label[2], label[3]] as B };
+    const others = [0, 1, 2].map((k) => word("text", 0, 20 * k));
+    const sub = { text: "2", box: [label[2] + 0.3, last.y - 1.5, label[2] + 3.3, last.y + 4.5] as B };
+    expect(compoundLabelsOf([withLabel], [sub, ...others], NONE)).toEqual([]);
+    const mid = (withLabel.box[0] + withLabel.box[2]) / 2;
+    const under = word("2", mid - 2.5, withLabel.box[3] + 6);
+    expect(compoundLabelsOf([withLabel], [under, ...others], NONE).map((l) => l.label)).toEqual(["2"]);
+  });
+
+  it("is none where the label's box holds it - an R2's 2, wide, beginning well left of the box's right side - nor a 1 there", () => {
+    const st = zigzag("0:0", 100);
+    const last = st.atoms[4];
+    // (an R label 10 high whose box takes in its script: its script 4 wide and 6 high - not so small that it is a superscript by the
+    //  figure's words - its foot at the label's middle)
+    const label: B = [last.x + 2, last.y - 5, last.x + 11, last.y + 5];
+    const withLabel = { ...st, labels: [label], box: [st.box[0], st.box[1], label[2], label[3]] as B };
+    const others = [0, 1, 2].map((k) => word("text", 0, 20 * k));
+    for (const text of ["2", "1"]) {
+      const script = { text, box: [label[2] - 4, last.y - 5.5, label[2], last.y + 0.5] as B };
+      expect(compoundLabelsOf([withLabel], [script, ...others], NONE)).toEqual([]);
+    }
+  });
+});
+
 describe("a figure's own words on its page", () => {
   it("are joined where a PDF sets each glyph apart on one line, and left out where the drawing holds words there already", () => {
     const glyph = (c: string, x: number, y = 300) => ({ text: c, box: [x, y, x + 5, y + 8] as B });

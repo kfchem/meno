@@ -584,6 +584,9 @@ export function compoundLabelsOf(structures: readonly PageStructure[], words: re
       if (d < near || i < ink) [best, near, ink] = [st, d, i];
     }
     if (!best || "none" in best.read || near > (found.withYield ? YIELD_REACH : LABEL_REACH) * (best.reach / REACH)) continue;
+    // (a formula's subscript - the 2 of an NH2, the 3 of a CH3 - is set against its label's right side, smaller than it and low on it:
+    //  no compound's number is)
+    if (structures.some((st) => subscriptOf(st.labels, box))) continue;
     const under = mid.x >= best.box[0] && mid.x <= best.box[2];
     const level = mid.y >= best.box[1] && mid.y <= best.box[3];
     if (!under && !level) continue;
@@ -593,6 +596,20 @@ export function compoundLabelsOf(structures: readonly PageStructure[], words: re
     if (!out.some((l) => l.key === best!.key && l.label === label)) out.push({ label, box: w.box, key: best.key });
   }
   return out;
+}
+
+/**
+ * Whether a box is a label's subscript or superscript: within the label's box past its first letter (a label's box may hold its own
+ * scripts - the 1 of an R1 - and a wide 2 begins further left in it than a narrow 1) or within a fifth of its own height past its right
+ * side; shorter than the label (under four fifths of its height), its foot at or below the label's middle and no lower than its own
+ * height past the label's foot.
+ */
+function subscriptOf(labels: readonly Box[], b: Box): boolean {
+  const h = b[3] - b[1];
+  return labels.some((l) => {
+    const lh = l[3] - l[1];
+    return h < 0.8 * lh && b[0] - l[0] >= 0.5 * h && b[0] - l[2] <= 0.2 * h && b[3] >= (l[1] + l[3]) / 2 && b[3] <= l[3] + h;
+  });
 }
 
 /**
