@@ -7,7 +7,7 @@ import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { identityOfDrawn } from "./identityOf";
 import { isNotStatedText } from "../../../../lib/chem/ligandsNotStated";
-import { notStatedLeft, NOT_STATED_3D_WHY, NOT_STATED_COMPOSITION_WHY } from "../store/slices/stepRuns";
+import { notStatedAside, notStatedLeft, NOT_STATED_3D_WHY, NOT_STATED_COMPOSITION_WHY } from "../store/slices/stepRuns";
 
 // Invented structures, worked by hand (docs/EDITOR-2D.md, *Ligands not stated*).
 const atom = (id: number, el: string, x = 0) => ({ id, x, y: 0, r: 0.9, el });
@@ -50,6 +50,26 @@ describe("a drawn metal whose ligands are not stated", () => {
     expect(NOT_STATED_3D_WHY).toBe("no 3D structure: its ligands are not stated");
     expect(NOT_STATED_COMPOSITION_WHY).toBe("no formula: its ligands are not stated");
     expect(notStatedLeft([2], 3)).toMatch(/of 3 left out: its ligands are not stated$/);
+  });
+
+  it("is a Grignard drawn either way - an X atom on the Mg, or MgX typed as one label: set aside, and compared with none", async () => {
+    const xOnMg = { atoms: [atom(1, "C"), atom(2, "Mg", 1.5), atom(3, "X", 3)], bonds: [{ id: 1, a: 1, b: 2, order: 1 }, { id: 2, a: 2, b: 3, order: 1 }] } as Model;
+    const typed = { atoms: [atom(1, "C"), atom(2, "MgX", 1.5)], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } as Model;
+    const methane = lone("C");
+    expect(notStatedIn(xOnMg).map((a) => a.el)).toEqual(["Mg"]);
+    expect(notStatedIn(typed).map((a) => a.el)).toEqual(["MgX"]);
+    // (as Check structures asks: those two set aside, never sent; the plain one asked)
+    const asked: Model[][] = [];
+    const out = await notStatedAside([xOnMg, typed, methane], async (m) => (asked.push(m), m.map(() => "checked")), "aside");
+    expect(out).toEqual(["aside", "aside", "checked"]);
+    expect(asked).toEqual([[methane]]);
+    // (as Duplicates reads them: identity is never complete, and never the same as another's)
+    for (const m of [xOnMg, typed]) {
+      const found = identityOfDrawn(m);
+      expect(isNotStatedText(found.text)).toBe(true);
+      expect(found.complete).toBe(false);
+      expect(found.text).not.toBe(identityOfDrawn(m).text);
+    }
   });
 
   it("is the same as no other drawn structure: not Pd, not itself drawn again", () => {

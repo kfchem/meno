@@ -1537,9 +1537,13 @@ All hover-based, as above.
   element's symbol is read first: Li, La and Lu stay lithium, lanthanum
   and lutetium, Xe xenon, and LiX is lithium with its halide not stated.
   An X on carbon, or on any atom that is no such metal, stays what it is
-  (a point of variability). The label is drawn as written, read so
+  (a point of variability). The label is kept as written, read so
   however it comes in - typed, read by the lens from a figure, or from a
-  file's alias - and typing one says nothing: it is not words kept. What
+  file's alias - and typing one says nothing: it is not words kept. It is
+  drawn with the metal next to its bond, whichever order it was typed in
+  (IUPAC GR-2.3.3, a label read outward from its bond): metal first on the
+  right of its bond and above or below it (PdLn, MgX), metal last on its
+  left (LnPd, XMg); words that name it name it as typed. What
   the state goes through:
   - no formula and no mass: a step on structures drawn sets one aside,
     never sending it, *no formula: its ligands are not stated*, and
@@ -1547,7 +1551,8 @@ All hover-based, as above.
   - no identity of its own: it is the same as no other structure -
     another such one, drawn alike, included - so Enumerate and
     Substituents compare it with none and say how many they did not
-    compare, a record's key holds the drawing itself, and *Copy as
+    compare, in the short form a step's line counts by why (*4 not
+    compared (4: ligands not stated)*), a record's key holds the drawing itself, and *Copy as
     SMILES* says *its ligands are not stated* and writes nothing;
   - no 3D structure and so no calculation: left out as one atom alone
     is, and said so (*LnPd has no 3D structure: its ligands are not

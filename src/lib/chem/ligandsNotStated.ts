@@ -67,6 +67,31 @@ export function metalNotStated(label: string): string | null {
   return parts && parts.metals.length === 1 && parts.tokens.length > 0 ? parts.metals[0] : null;
 }
 
+/**
+ * Such a label's units as drawn at its bond, the metal next to the bond (IUPAC GR-2.3.3: a label reads outward from its bond),
+ * whichever order it was typed in: metal first (PdLn, MgX) where the label is on the right of its bond or above or below it, metal
+ * last (LnPd, XMg) where it is on the left; the tokens read outward from the metal in the order typed. `at` is the metal's unit, the
+ * one that sits on the atom. Null for a label not in the state.
+ */
+export function unitsAtBond(label: string, metalLast: boolean): { units: string[]; at: number } | null {
+  if (!metalNotStated(label)) return null;
+  let metal = "";
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < label.length) {
+    const m = metalAt(label, i);
+    if (m) {
+      metal = label.slice(i, i + m.length);
+      i += m.length;
+      continue;
+    }
+    const t = TOKEN.exec(label.slice(i))![0];
+    tokens.push(t);
+    i += t.length;
+  }
+  return metalLast ? { units: [...tokens.reverse(), metal], at: tokens.length } : { units: [metal, ...tokens], at: 0 };
+}
+
 /** Whether a label is ligand tokens alone - L, X, L2, Xn: a ligand not stated where it is bonded to a metal. */
 export function ligandTokensOnly(label: string): boolean {
   const parts = partsOf(label);
@@ -101,5 +126,8 @@ export function notStatedText(): string {
 /** Whether an identity text is one written for a structure in the state (`notStatedText`). */
 export const isNotStatedText = (text: string): boolean => text.startsWith(NOT_STATED_PREFIX);
 
-/** What a step that judges duplicates says of the structures it made that hold a metal whose ligands are not stated: compared with none. */
-export const notComparedSaid = (n: number): string => `${n} not compared with the others: ${LIGANDS_NOT_STATED}`;
+/**
+ * What a step that judges duplicates says of the structures that hold a metal whose ligands are not stated: compared with none.
+ * In the short form a step's line counts what it set aside by why - "4 set aside (4: ligands not stated)" - so that the line fits its card.
+ */
+export const notComparedSaid = (n: number): string => `${n} not compared (${n}: ${LIGANDS_NOT_STATED})`;
