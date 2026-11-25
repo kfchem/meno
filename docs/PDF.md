@@ -2122,9 +2122,10 @@ mention a number, and the card.
   XII - a lone I, V or X is an element's or a variable's; a number with its
   enantiomer's, racemate's or rotation's mark, ent-21, rac-3, (+)-12, its
   sign and dash written as typed, (-)-12 for one set with a minus or an en
-  dash (2026-11-20) - not a supporting information's S1, as often a page's
-  number, S14, or a second compound on another's line, as its structure's:
-  `labelText`), lying within a bond of a structure - of the box
+  dash (2026-11-20); a supporting information's, S3, S14a, only where set
+  bold, as a page's number (S14) and an excited state's are set
+  plain (2026-11-20): `labelText`), lying within a bond of a structure -
+  of the box
   round all of it, as a number is set under a structure as a whole, however
   its lowest bonds lie - under or over it (its middle within the
   structure's breadth) or beside it (within its height); where two
@@ -2148,11 +2149,22 @@ mention a number, and the card.
   the words' box. A number whose line sets its yield after it - a comma,
   then a percentage - may lie up to two bonds from its structure, as a
   scope table sets them (2026-11-20); a bare number stays within one: an
-  NMR figure's atoms' locants, beside their shifts, lie further. A
+  NMR figure's atoms' locants, beside their shifts, lie further. Such a
+  number lies under its own structure: one lying over the nearest
+  structure, and under another within its reach, is the one's it lies
+  under - a scope table's row of numbers, set under one row of structures
+  and a little nearer the next row's tops (2026-11-20). A
+  second number with its own yield on the line, after the structure's
+  ("8, 72%  S3, 90%"), is another compound's - one made beside it or
+  brought back - and none of the structure's, as a second number set bold
+  within one line is (2026-11-20). A
   label's script - the 2 of an NH2, the 1 or 2 of an R1 or R2 - set
   within the label's box past its first letter or against its right
   side, smaller than the label and its foot no higher than the label's
-  middle, is none, as no compound's number is set so. It is the
+  middle, is none, as no compound's number is set so. A structure read
+  that reads the word as an atom's label - a number an arrow's tail ends
+  at, read as an atom bonded to the arrow - is passed over, and the word
+  is the nearest other structure's (2026-11-20). It is the
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual

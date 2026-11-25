@@ -28,9 +28,12 @@ describe("a compound's number, as Meno writes it", () => {
     expect(["IV", "XII", "IIb", "(VI)", "ent-21", "rac-3", "(+)-12", "((+)-12)"].map(labelText)).toEqual(["IV", "XII", "IIb", "VI", "ent-21", "rac-3", "(+)-12", "(+)-12"]);
     // (its mark's sign and dash written as typed, however set: a minus or an en dash, a hyphen)
     expect(["(\u2212)-12", "(\u2013)\u201312", "(-)-12", "(\u00b1)-5", "ent\u201321"].map(labelText)).toEqual(["(-)-12", "(-)-12", "(-)-12", "(\u00b1)-5", "ent-21"]);
-    // (a lone I, V or X is an element's or a variable's; nor is a letter alone, a mark alone, a Roman numeral miswritten, or another mark;
-    //  nor a supporting information's S3 - as often a page's number, S14, as a compound's)
-    expect(["I", "V", "X", "S", "Sa", "ent-", "(+)-", "IIII", "VV", "(R)-12", "E1", "S3", "S14"].map(labelText)).toEqual(Array(13).fill(null));
+    // (a lone I, V or X is an element's or a variable's; nor is a letter alone, a mark alone, a Roman numeral miswritten, or another mark)
+    expect(["I", "V", "X", "S", "Sa", "ent-", "(+)-", "IIII", "VV", "(R)-12", "E1", "S1234", "SS3"].map(labelText)).toEqual(Array(13).fill(null));
+  });
+
+  it("is a supporting information's number too, S3, S14a, ent-S5 (found in review)", () => {
+    expect(["S3", "S14a", "(S7)", "ent-S5"].map(labelText)).toEqual(["S3", "S14a", "S7", "ent-S5"]);
   });
 
   it("is taken at the head of a line with its yield in those shapes too", () => {
@@ -196,6 +199,88 @@ describe("the compounds' numbers a figure's drawn words set, line by line", () =
     expect(compoundLabelsOf([st], [at("7, 83%", 30)], NONE)).toEqual([]);
     // (an NMR figure's locant by its shift: no yield, one bond)
     expect(compoundLabelsOf([st], [at("5\n148.5, CH", 25)], NONE)).toEqual([]);
+  });
+});
+
+describe("a supporting information's number, and a second compound on a structure's line (found in review)", () => {
+  const box: B = [100, 300, 220, 312];
+  const labels = (w: Parameters<typeof numbersIn>[0]) => numbersIn(w).map((n) => n.label);
+  const bold = (text: string, x: number, y: number) => ({ ...word(text, x, y), bold: true });
+
+  it("is a compound's number set bold - alone, or heading its line with its yield - and none set plain: a page's number, a state's", () => {
+    expect(labels({ text: "S3", box, bold: true })).toEqual(["S3"]);
+    expect(labels({ text: "S3, 90%", box, marks: [{ from: 0, to: 2, bold: true }] })).toEqual(["S3"]);
+    expect(labels({ text: "S14", box })).toEqual([]);
+    expect(labels({ text: "S3, 90%", box })).toEqual([]);
+    // (a plain number is taken as before)
+    expect(labels({ text: "27", box })).toEqual(["27"]);
+  });
+
+  it("is a structure's, set bold under it alone", () => {
+    const st = zigzag("0:0", 100);
+    const mid = (st.box[0] + st.box[2]) / 2;
+    expect(compoundLabelsOf([st], [bold("S3", mid - 5, st.box[3] + 6)], NONE).map((l) => l.label)).toEqual(["S3"]);
+    expect(compoundLabelsOf([st], [word("S3", mid - 5, st.box[3] + 6)], NONE)).toEqual([]);
+  });
+
+  it("is none of the structure's where it follows the structure's own number on its line, each with its yield: another compound's", () => {
+    const a = zigzag("0:0", 100);
+    const b = zigzag("0:1", 200);
+    const y = a.box[3] + 6;
+    // (each line under its structure: its number and yield, then the second compound's; each number set bold, its yield plain)
+    const entry = (n: string, yld: string, x: number) => ({ ...word(`${n}, ${yld}`, x, y), marks: [{ from: 0, to: n.length, bold: true }] });
+    const line = (st: PageStructure, own: string, other: string) => {
+      // (a zigzag is some 50 wide: both numbers within its breadth)
+      const x = (st.box[0] + st.box[2]) / 2 - 24;
+      return [entry(own, "72%", x), entry(other, "90%", x + 26)];
+    };
+    expect(compoundLabelsOf([a, b], [...line(a, "8", "S3"), ...line(b, "9", "S3")], NONE).map((l) => [l.label, l.key])).toEqual([
+      ["8", "0:0"],
+      ["9", "0:1"],
+    ]);
+    // (the same, all plain, a number second: "8, 72%  10, 90%")
+    const mid = (a.box[0] + a.box[2]) / 2;
+    expect(compoundLabelsOf([a], [word("8, 72%", mid - 24, y), word("10, 90%", mid + 2, y)], NONE).map((l) => l.label)).toEqual(["8"]);
+  });
+
+  it("is the next structure's where one reads the word as an atom's label: an S3 by an arrow's tail, read as a sulfur bonded to it", () => {
+    const st = zigzag("0:0", 100);
+    const mid = (st.box[0] + st.box[2]) / 2;
+    const w = bold("S3", mid - 5, st.box[3] + 6);
+    // (the reader's: the word a label, the arrow's tail a bond from it)
+    const read: PageStructure = { ...zigzag("0:1", mid - 5, st.box[3] + 10), labels: [w.box], box: [w.box[0], w.box[1], w.box[2], w.box[3] + 6] };
+    expect(compoundLabelsOf([st, read], [w], NONE).map((l) => [l.label, l.key])).toEqual([["S3", "0:0"]]);
+    // (a number all the same; and none where no other structure is near)
+    const seven = word("7", mid - 2.5, st.box[3] + 6);
+    expect(compoundLabelsOf([st, { ...read, labels: [seven.box] }], [seven], NONE).map((l) => [l.label, l.key])).toEqual([["7", "0:0"]]);
+    expect(compoundLabelsOf([read], [w], NONE)).toEqual([]);
+    // (one not read holds it: none, as a word nearest a structure not read is)
+    expect(compoundLabelsOf([st, { ...read, read: { none: "not read" } }], [w], NONE)).toEqual([]);
+  });
+
+  it("is the structure's it is set under, with its yield, though the next row's structure begins a little nearer below it", () => {
+    // (a row: the numbers 15 under the zigzag's foot, the next row's top 13 below them)
+    const a = zigzag("0:0", 100, 300);
+    const b = zigzag("0:1", 90, a.box[3] + 15 + 8 + 13);
+    const mid = (a.box[0] + a.box[2]) / 2;
+    const yld = word("23, 72%", mid - 5, a.box[3] + 15);
+    expect(compoundLabelsOf([a, b], [yld], NONE).map((l) => [l.label, l.key])).toEqual([["23", "0:0"]]);
+    // (two such, side by side, each under its own: neither is a second compound's)
+    const c = zigzag("0:2", 200, 300);
+    const wide: PageStructure = { ...b, box: [90, b.box[1], 260, b.box[3]] };
+    const other = word("24, 58%", (c.box[0] + c.box[2]) / 2 - 5, c.box[3] + 15);
+    expect(compoundLabelsOf([a, c, wide], [yld, other], NONE).map((l) => [l.label, l.key])).toEqual([
+      ["23", "0:0"],
+      ["24", "0:2"],
+    ]);
+    // (a bare number is the nearest structure's, as before: an NMR figure's locant may be set over its atom)
+    expect(compoundLabelsOf([a, b], [word("23", mid - 2.5, a.box[3] + 15)], NONE).map((l) => [l.label, l.key])).toEqual([["23", "0:1"]]);
+  });
+
+  it("is each line's own, a series set line by line under one structure", () => {
+    const st = zigzag("0:0", 100);
+    const x = (st.box[0] + st.box[2]) / 2 - 15;
+    expect(compoundLabelsOf([st], [word("5, 57%", x, st.box[3] + 4), word("6, 71%", x, st.box[3] + 14)], NONE).map((l) => l.label)).toEqual(["5", "6"]);
   });
 });
 

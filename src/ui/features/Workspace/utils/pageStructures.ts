@@ -464,11 +464,13 @@ function lineOfWords(f: FigureRead): string | null {
 
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */
 export const COMPOUND_NUMBER = { test: (text: string): boolean => labelText(text) != null };
+/** A number: 12, 3a, 7' - or a supporting information's, S3 (a figure takes one only set bold: `numbersIn`). */
+const NUMBER = /^S?\d{1,3}[a-z]{0,2}['\u2032]*$/;
 /**
- * A number: 12, 3a, 7'. Not a supporting information's S1: as a figure sets one, it is as often a page's number (S14) or a second
- * compound on another's line ("8, 72%  S3, 90%") as its structure's.
+ * Whether a compound's number, as `labelText` writes it, is a supporting information's: S3, ent-S5. A figure sets a page's number so
+ * (S14), and an excited state's, plain; a compound's it sets bold.
  */
-const NUMBER = /^\d{1,3}[a-z]{0,2}['\u2032]*$/;
+const SUPPORTING = /^(?:.*-)?S\d/;
 /** A Roman numeral of two letters or more, II to XXXIX, with its letter: IV, XIIa - a lone I, V or X is an element's symbol or a variable's name. */
 const ROMAN = /^(?=[IVX]{2})X{0,3}(IX|IV|V?I{0,3})[a-z]?$/;
 /** The mark of an enantiomer, a racemate or a sign of rotation before a number, with its dash: ent-21, rac-3, (+)-12, (-)-12, (\u00b1)-5. */
@@ -578,14 +580,15 @@ export function wordsJoined(own: readonly PageWord[], drawn: readonly PageWord[]
  * box round all of it - under or over it, its middle within the structure's
  * breadth, or beside it, within its height - and is the nearest structure's,
  * no arrow nor "+" nearer it. A structure not read takes none; a word much shorter than the
- * figure's others (a superscript, a footnote's mark) is none.
+ * figure's others (a superscript, a footnote's mark) is none; nor is a second number with its yield on a line under the same
+ * structure, after the first's: another compound's. A structure read that reads the word as an atom's label is passed over.
  */
 export function compoundLabelsOf(structures: readonly PageStructure[], words: readonly PageWord[], marks: PageMarks): CompoundLabel[] {
   const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : 0);
   // (the figure's usual word, and its usual line - a word's lines' own boxes, a word of one line its box: each measured by its kind)
   const usual = median(words.map((w) => w.box[3] - w.box[1]));
   const usualLine = median(words.flatMap((w) => (w.lines ?? [w.box]).map((b) => b[3] - b[1])));
-  const out: CompoundLabel[] = [];
+  const out: (CompoundLabel & { withYield: boolean })[] = [];
   // (a number set much smaller than the figure's words - a superscript, a subscript, a footnote's mark - is none: by its own line's height)
   for (const found of words.flatMap((w) => numbersIn(w).filter((n) => n.box[3] - n.box[1] >= SUPERSCRIPT * (w.lines ? usualLine : usual)))) {
     const { label, box } = found;
@@ -595,11 +598,24 @@ export function compoundLabelsOf(structures: readonly PageStructure[], words: re
     let best: PageStructure | null = null;
     let near = Infinity;
     let ink = Infinity;
+    // (a structure read that reads the word as an atom's label - a number an arrow's tail ends at, read as an atom bonded to the arrow -
+    //  holds it as its drawing, not as its number: the word is the nearest other's. One not read holds it as before: none)
+    const holds = (st: PageStructure) => !("none" in st.read) && st.labels.some((l) => mid.x >= l[0] && mid.x <= l[2] && mid.y >= l[1] && mid.y <= l[3]);
     for (const st of structures) {
+      if (holds(st)) continue;
       const d = boxToBox(st.box, w.box);
       if (d > near) continue;
       const i: number = inkTo(st, w.box);
       if (d < near || i < ink) [best, near, ink] = [st, d, i];
+    }
+    // (a number set with its yield lies under its own structure: one over the nearest and under another within reach is the other's -
+    //  a scope table's row of numbers, set under one row of structures and a little nearer the next row's tops)
+    if (found.withYield && best && w.box[3] <= best.box[1]) {
+      const above = structures
+        .filter((st) => st !== best && !("none" in st.read) && !holds(st) && w.box[1] >= st.box[3] && mid.x >= st.box[0] && mid.x <= st.box[2])
+        .filter((st) => boxToBox(st.box, w.box) <= YIELD_REACH * (st.reach / REACH))
+        .sort((p, q) => boxToBox(p.box, w.box) - boxToBox(q.box, w.box))[0];
+      if (above) [best, near] = [above, boxToBox(above.box, w.box)];
     }
     if (!best || "none" in best.read || near > (found.withYield ? YIELD_REACH : LABEL_REACH) * (best.reach / REACH)) continue;
     // (a formula's subscript - the 2 of an NH2, the 3 of a CH3 - is set against its label's right side, smaller than it and low on it:
@@ -611,9 +627,15 @@ export function compoundLabelsOf(structures: readonly PageStructure[], words: re
     // (an arrow or a "+" nearer: a scheme's conditions, "2", or a step's number - none of the structure's)
     const other = Math.min(Infinity, ...marks.segments.map(([p, q]) => segmentToBox(p, q, w.box)), ...marks.points.map((q) => toBox(q, w.box)));
     if (other < near) continue;
-    if (!out.some((l) => l.key === best!.key && l.label === label)) out.push({ label, box: w.box, key: best.key });
+    out.push({ label, box: w.box, key: best.key, withYield: found.withYield });
   }
-  return out;
+  // (a structure's line names one compound with its yield: a number with its own yield after it on the line is a second compound's -
+  //  one made beside it or brought back, "8, 72%  S3, 90%" - not the structure's, as within one word: numbersIn)
+  const sameLine = (p: Box, q: Box) => Math.abs((p[1] + p[3]) / 2 - (q[1] + q[3]) / 2) <= LINE_SAME * Math.max(p[3] - p[1], q[3] - q[1]);
+  const second = (l: (typeof out)[number]) => l.withYield && out.some((m) => m !== l && m.withYield && m.key === l.key && m.box[0] < l.box[0] && sameLine(m.box, l.box));
+  const kept: CompoundLabel[] = [];
+  for (const l of out) if (!second(l) && !kept.some((k) => k.key === l.key && k.label === l.label)) kept.push({ label: l.label, box: l.box, key: l.key });
+  return kept;
 }
 
 /**
@@ -633,12 +655,12 @@ function subscriptOf(labels: readonly Box[], b: Box): boolean {
 /**
  * The compounds' numbers a word of a figure sets: the word, where it is one number; else, line by line, each run set bold that is one
  * (a scope table's number, bold, after words or mid-line, its yield plain), or - none bold - the number heading the line before its first
- * comma (`leadingLabel`). Each where it lies: its line's share of the word's box, as many lines, and its characters' share of the line -
+ * comma (`leadingLabel`); a supporting information's (S3) only where set bold. Each where it lies: its line's share of the word's box, as many lines, and its characters' share of the line -
  * the line set about the word's middle, or flush left where it is - and whether its yield follows it ("21, 83%").
  */
 export function numbersIn(w: PageWord): { label: string; box: Box; withYield: boolean }[] {
   const whole = labelText(w.text);
-  if (whole) return [{ label: whole, box: w.box, withYield: false }];
+  if (whole) return SUPPORTING.test(whole) && !(w.bold === true || (w.marks ?? []).some((m) => m.bold && m.from <= 0 && m.to >= w.text.length)) ? [] : [{ label: whole, box: w.box, withYield: false }];
   const lines = w.text.split("\n");
   const longest = Math.max(1, ...lines.map((l) => l.length));
   const [x0, y0, x1, y1] = w.box;
@@ -674,7 +696,8 @@ export function numbersIn(w: PageWord): { label: string; box: Box; withYield: bo
       //  set numbers alone in lines too)
       const alone = labelText(line);
       const head = alone ? (lines.length === 1 || runs.length ? { label: alone, chars: line.length } : null) : leading(line);
-      if (head) out.push({ label: head.label, box: place(0, head.chars), withYield: WITH_YIELD.test(line.slice(line.indexOf(",", head.chars) >= 0 ? head.chars : line.length)) });
+      // (a supporting information's number only set bold: SUPPORTING)
+      if (head && !(SUPPORTING.test(head.label) && !bold(at))) out.push({ label: head.label, box: place(0, head.chars), withYield: WITH_YIELD.test(line.slice(line.indexOf(",", head.chars) >= 0 ? head.chars : line.length)) });
     }
     at += line.length + 1;
   });
