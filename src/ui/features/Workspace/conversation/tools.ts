@@ -22,7 +22,7 @@ import { levelOf } from "../../../../lib/calc/output";
 import { formulaOf } from "../../../../lib/io/coordinates";
 import type { WorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
-import { setMembers } from "../workflow/entries";
+import { nameOf, setMembers } from "../workflow/entries";
 import { kindInfo } from "../workflow/kinds";
 import { drawnSmiles, drawnStereo } from "../workflow/structuresTable";
 import { inScope, readSeenId, seenId, SEEN_KINDS, type InScope, type Scope, type SeenId, type SeenKind } from "./scope";
@@ -63,7 +63,7 @@ export function listed(d: WorkspaceDocument, s: InScope): Listed[] {
     const m = d.molecules3d!.find((x) => x.id === id)!;
     const frames = m.frames?.length ?? 1;
     const level = m.calc ? levelOf(m.calc) : "";
-    add("molecule", id, [`a molecule in 3D: ${formulaOf(m.atoms)}`, m.name, frames > 1 ? plural(frames, "frame") : "", level].filter(Boolean).join(" · "));
+    add("molecule", id, [`a molecule in 3D: ${formulaOf(m.atoms)}`, nameOf(m), frames > 1 ? plural(frames, "frame") : "", level].filter(Boolean).join(" · "));
   }
   for (const id of s.picture) add("picture", id, `a picture: ${d.pictures!.find((x) => x.id === id)!.name}`);
   for (const id of s.text) add("text", id, `a text: ${d.texts!.find((x) => x.id === id)!.name}`);
@@ -105,7 +105,7 @@ export function readOne(d: WorkspaceDocument, s: InScope, kind: SeenKind, id: nu
       const whole = m.atoms.length <= ATOMS_MOST;
       return {
         formula: formulaOf(m.atoms),
-        ...(m.name ? { name: m.name } : {}),
+        ...(nameOf(m) ? { name: nameOf(m) } : {}),
         ...(whole ? { atoms: m.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z })) } : { atoms: `${m.atoms.length} atoms, more than are given (${ATOMS_MOST})` }),
         frames: m.frames?.length ?? 1,
         ...(m.energies?.length ? { energies: { values: m.energies, unit: "hartree" } } : {}),

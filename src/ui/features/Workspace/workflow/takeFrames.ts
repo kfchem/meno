@@ -22,7 +22,7 @@
  */
 import type { Property } from "../../../../lib/entry";
 import type { Molecule3D } from "../store/types";
-import { framesOf, refinedFrame, REFINED_SAID, setEntries } from "./entries";
+import { framesOf, nameOf, refinedFrame, REFINED_SAID, setEntries } from "./entries";
 import type { Outcome3D } from "./meno";
 
 export type Which = "highest" | "first" | "last" | "entry" | "around";
@@ -61,8 +61,8 @@ function takenHow(which: Which, either: number): string {
 // (a path search's point refined, as its frames say: ./entries, where its calculation is put on that frame)
 export { PATH_FRAME, REFINED_SAID, refinedFrame } from "./entries";
 
-/** A molecule as a step's line names it: its title, its name, or its place among those that came in. */
-const named = (m: Molecule3D, i: number) => m.title || m.name || `molecule ${i + 1}`;
+/** A molecule as a step's line names it: its name (`nameOf`), or its place among those that came in. */
+const named = (m: Molecule3D, i: number) => nameOf(m) || `molecule ${i + 1}`;
 
 /**
  * A molecule's own values, by their names: those on its entry frame, the one a set takes of it - a path's last,

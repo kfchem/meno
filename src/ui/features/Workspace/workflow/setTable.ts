@@ -10,7 +10,7 @@ import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import type { Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
-import { calcFrame, compoundLetter, frameMarks, frameXyz, framesOf, marksOf } from "./entries";
+import { calcFrame, compoundLetter, frameMarks, frameXyz, framesOf, marksOf, nameOf } from "./entries";
 import { FAILURE_WORDS } from "./failures";
 
 /** One entry of a set, as its table shows it. */
@@ -84,7 +84,7 @@ export function tableRows(molecules: readonly Molecule3D[], holds: "molecules" |
       rows.push({
         at: rows.length,
         ...(holds === "conformers" ? { compound: compoundLetter(i), number: m.numbers?.[f] ?? f + 1 } : {}),
-        ...(m.name ? { name: m.name } : {}),
+        ...(nameOf(m) ? { name: nameOf(m) } : {}),
         ...(energies ? { energy: energies[f] } : {}),
         from,
         ...(lowest != null && energies && !failed ? { above: (energies[f] - lowest) * KCAL_PER_HARTREE } : {}),
@@ -190,7 +190,7 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.conformerSet && !part && each(m.shares) ? { shares: each(m.shares) } : {}),
     ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n, calcFrame(m, n)) } : {}),
     ...(m.made ? { made: m.made } : {}),
-    ...(m.name ? { name: m.name } : {}),
+    ...(nameOf(m) ? { name: nameOf(m) } : {}),
     ...(m.madeOf?.length ? { madeOf: [...m.madeOf] } : {}),
     ...(m.drawnFrom ? { drawnFrom: m.drawnFrom } : {}),
     ...(m.drawnAs ? { drawnAs: m.drawnAs } : {}),
