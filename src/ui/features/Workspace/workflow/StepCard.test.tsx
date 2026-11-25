@@ -14,15 +14,15 @@ describe("a port", () => {
     expect(html).toMatch(/class="[^"]*\bselect-none\b/);
   });
 
-  it("is 9 page px, nor more than a sixth of its set's height, but never under 5 screen px: round, its ring at most a fifth of it", () => {
+  it("is 9 page px, nor more than a sixth of its set's height, at every zoom - no least on the screen: round, its ring a page px or a fifth of it", () => {
     // (a set 300 px tall: its own 9 px - as many of the screen's pixels as the layer's scale makes them)
-    expect(portSize(300)).toBe("max(5px, calc(var(--scale, 1) * 9.00px))");
+    expect(portSize(300)).toBe("calc(var(--scale, 1) * 9.00px)");
     // (a set 36 px tall: a sixth of it, 6 px)
-    expect(portSize(36)).toBe(`max(5px, calc(var(--scale, 1) * ${(36 * PORT_SHARE).toFixed(2)}px))`);
+    expect(portSize(36)).toBe(`calc(var(--scale, 1) * ${(36 * PORT_SHARE).toFixed(2)}px)`);
     const html = renderToString(<Port look="plain" label="Into Filter" data={{}} onPointerDown={() => {}} style={{}} of={36} />);
-    expect(html).toContain("width:max(5px, calc(var(--scale, 1) * 6.00px))");
-    expect(html).toContain("height:max(5px, calc(var(--scale, 1) * 6.00px))");
-    expect(html).toContain("border-width:min(1px, calc(max(5px, calc(var(--scale, 1) * 6.00px)) / 5))");
+    expect(html).toContain("width:calc(var(--scale, 1) * 6.00px)");
+    expect(html).toContain("height:calc(var(--scale, 1) * 6.00px)");
+    expect(html).toContain("border-width:min(calc(var(--scale, 1) * 1px), calc(calc(var(--scale, 1) * 6.00px) / 5))");
     expect(html).toMatch(/class="[^"]*\brounded-full\b/);
   });
 

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { dropOn, portColours, portControl, portCount, portOfKey, portParts, sourcesSaid } from "./ports";
+import { controlSize } from "./units";
 
 describe("a workflow's port as WebGL draws it", () => {
-  it("is 9 page pixels, nor more than a sixth of what it is on, but never under 5 screen pixels", () => {
-    expect(portControl()).toEqual({ leastScreenPx: 5, onPagePx: 9 });
-    expect(portControl(30)).toEqual({ leastScreenPx: 5, onPagePx: 9, leastOfPx: { of: 30, share: 1 / 6 } });
+  it("is 9 page pixels, nor more than a sixth of what it is on, at every zoom - no least on the screen, so in the zoom's ratio there", () => {
+    expect(portControl()).toEqual({ leastScreenPx: 0, onPagePx: 9 });
+    expect(portControl(30)).toEqual({ leastScreenPx: 0, onPagePx: 9, leastOfPx: { of: 30, share: 1 / 6 } });
+    // (its size in world units the same at a zoom and at a fifth of it: controlSize takes the larger of the floor and the page size)
+    expect(controlSize(portControl(), 1)).toBeCloseTo(controlSize(portControl(), 0.2), 12);
   });
 
   it("is white with a grey line at rest, Meno's light colour pointed at, Meno's colour lit", () => {

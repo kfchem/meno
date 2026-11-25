@@ -84,7 +84,8 @@ export function Port({
         //  that - ovals, rings as thick as dots, and out of place, on Windows; in the screen's, each is rounded to a pixel there)
         transformOrigin: "0 0",
         transform: "scale(calc(1 / var(--scale, 1))) translate(-50%, -50%)",
-        borderWidth: `min(1px, calc(${size} / 5))`,
+        // (its ring a page pixel, or a fifth of it across where it is that small: scaled with the page as the port is)
+        borderWidth: `min(calc(var(--scale, 1) * 1px), calc(${size} / 5))`,
         borderStyle: "solid",
         pointerEvents: "auto",
         cursor: "crosshair",

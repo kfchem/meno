@@ -30,7 +30,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { hairWritten, zoomWritten } from "../utils/pageScale";
+import { hairWritten, PAGE_PX, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, inputOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
@@ -76,7 +76,7 @@ const ATTENTION = "rgb(205, 69, 96)";
 /** A wire's width in page pixels (`wireWidth`); how wide it takes the pointer, in screen pixels. */
 const WIRE_PX = 1.25;
 const WIRE_HIT_PX = 10;
-/** The wire into a running step, dashed - its dashes and gaps, in px on the screen - and how fast they move along it, in px a second: slowly. */
+/** The wire into a running step, dashed - its dashes and gaps, in page px - and how fast they move along it, in page px a second: slowly. */
 const DASH_PX = 6;
 const GAP_PX = 4;
 const DASH_SPEED = 12;
@@ -354,9 +354,9 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   useFrame((_, dt) => {
     const u = material.uniforms;
     u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
-    u.dash.value = DASH_PX / zoom;
-    u.gap.value = GAP_PX / zoom;
-    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, zoom, DASH_PX, GAP_PX);
+    u.dash.value = DASH_PX * PAGE_PX;
+    u.gap.value = GAP_PX * PAGE_PX;
+    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, DASH_PX, GAP_PX);
     tick.ask(invalidate);
   });
   return (

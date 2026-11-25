@@ -1579,7 +1579,7 @@ it, in `features/Workspace/pageGl/`:
   as its icon stands from its top, a conversation's and a set's alike
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings that grow with the
-  page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
+  page at every zoom, lit where a wire being drawn may join them, a wire let
   go on one found by its shape. And its small marks (`workflowMarks`):
   what just joined a set or left it, an Enumerate step's positions, a
   structure's number with how it was made in the tip. Frames under cards

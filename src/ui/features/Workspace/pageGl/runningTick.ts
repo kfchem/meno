@@ -6,6 +6,7 @@
  * marks ask; the marks go by the clock, not by the frames, and move as fast
  * at thirty as at sixty.
  */
+import { PAGE_PX } from "../utils/pageScale";
 export const RUNNING_FRAME_MS = 33;
 
 /** A running mark's frame-asker: `ask` one frame, after RUNNING_FRAME_MS, where none is asked for yet; `stop` before it is let go. */
@@ -31,9 +32,9 @@ export function runningTick(): RunningTick {
 /**
  * Where a wire's dashes stand after `dt` seconds more (at most a tenth of
  * a second at once, a stalled page not leaping): `offset` further along at
- * `speed` px a second, on a page `zoom` px to a unit, round the length of a
- * dash and a gap, `dashPx` and `gapPx`.
+ * `speed` page px a second, round the length of a dash and a gap, `dashPx`
+ * and `gapPx` page px - in the world's units, at every zoom the same.
  */
-export function dashAdvance(offset: number, dt: number, speed: number, zoom: number, dashPx: number, gapPx: number): number {
-  return (offset + (Math.min(dt, 0.1) * speed) / zoom) % ((dashPx + gapPx) / zoom);
+export function dashAdvance(offset: number, dt: number, speed: number, dashPx: number, gapPx: number): number {
+  return (offset + Math.min(dt, 0.1) * speed * PAGE_PX) % ((dashPx + gapPx) * PAGE_PX);
 }

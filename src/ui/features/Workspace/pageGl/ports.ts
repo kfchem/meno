@@ -9,7 +9,7 @@
  * 12 screen pixels about its middle, however small it is drawn.
  */
 import { colourMix, COLORS } from "../../../theme/colors";
-import { PORT_LEAST_SCREEN_PX, PORT_PAGE_PX, PORT_SHARE, PX } from "../workflow/look";
+import { PORT_PAGE_PX, PORT_SHARE, PX } from "../workflow/look";
 import type { Region } from "./hits";
 import type { Ring } from "./shapes";
 import type { PageText } from "./texts";
@@ -18,12 +18,12 @@ import type { Control } from "./units";
 /** A port where it stands on the page; what it is on, how tall (page px); what it is called - for the page's tip and a screen reader, which say it from part 9 of drawing the page by WebGL: nothing reads it yet; whether it takes the pointer. */
 export type PortAt = { key: string; x: number; y: number; ofPx?: number; label: string; noHits?: true };
 
-/** The page pixels a port is drawn at, the least of the screen's it is drawn at, and the screen pixels it is taken hold of over. */
-export const PORT_PX = { drawn: PORT_PAGE_PX, least: PORT_LEAST_SCREEN_PX, taken: 12 } as const;
+/** The page pixels a port is drawn at, and the screen pixels it is taken hold of over. */
+export const PORT_PX = { drawn: PORT_PAGE_PX, taken: 12 } as const;
 
-/** A port's size as a control (pageGl/units `Control`): workflow/look `portSize`'s. */
+/** A port's size as a control (pageGl/units `Control`): workflow/look `portSize`'s - in page pixels at every zoom, no least on the screen. */
 export function portControl(ofPx?: number): Control {
-  return { leastScreenPx: PORT_PX.least, onPagePx: PORT_PX.drawn, ...(ofPx != null && ofPx > 0 ? { leastOfPx: { of: ofPx, share: PORT_SHARE } } : {}) };
+  return { leastScreenPx: 0, onPagePx: PORT_PX.drawn, ...(ofPx != null && ofPx > 0 ? { leastOfPx: { of: ofPx, share: PORT_SHARE } } : {}) };
 }
 
 /**
