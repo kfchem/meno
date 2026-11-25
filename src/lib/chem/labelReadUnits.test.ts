@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { buildTextLabels, type Atom, type Bond } from "./layout2d";
 import { acsWorldOptions } from "./acs";
-import { ABBREVIATIONS, GROUPS, abbreviationOf, abbreviationStructure, labelUnits, readUnits, reversedLabel } from "./abbreviations";
+import { ABBREVIATIONS, GROUPS, abbreviationOf, abbreviationStructure, labelUnits, readUnits, turnedLabel } from "./abbreviations";
 import { LIGANDS } from "./ligands";
 
 const L = 1.5;
@@ -125,13 +125,34 @@ describe("a typed label is drawn in the units it is read in", () => {
     }
   });
 
+  // A nitrile written as a formula, attached by its last atom: as typed at a left end, turned unit by unit at a right end - an atom
+  // with its H and count one unit, CH3 - never NCH3C.
+  it("MeCN and CH3CN: as typed at a left end, NCMe and NCCH3 at a right end, N on the bond; read as before", () => {
+    expect(drawn("MeCN", true)).toEqual({ text: "MeCN", atom: "N" });
+    expect(drawn("MeCN", false)).toEqual({ text: "NCMe", atom: "N" });
+    expect(drawn("CH3CN", true)).toEqual({ text: "CH3CN", atom: "N" });
+    expect(drawn("CH3CN", false)).toEqual({ text: "NCCH3", atom: "N" });
+    for (const t of ["MeCN", "CH3CN"]) {
+      const s = abbreviationStructure(t)!;
+      expect(s.atoms[s.attach[0]].el).toBe("N");
+      expect(s.atoms.filter((x) => x.el !== "H")).toHaveLength(3);
+    }
+  });
+
+  // A prefix belongs to its group, read alone or not: o-Tol is never turned to Tol-o.
+  it("P(o-Tol)3 is (o-Tol)3P at a left end; (o-Tol)3P typed is P(o-Tol)3 at a right end; P on the bond", () => {
+    expect(drawn("P(o-Tol)3", true)).toEqual({ text: "(o-Tol)3P", atom: "P" });
+    expect(drawn("P(o-Tol)3", false)).toEqual({ text: "P(o-Tol)3", atom: "P" });
+    expect(drawn("(o-Tol)3P", true)).toEqual({ text: "(o-Tol)3P", atom: "P" });
+    expect(drawn("(o-Tol)3P", false)).toEqual({ text: "P(o-Tol)3", atom: "P" });
+  });
+
   // Every label Meno knows - the groups', the contracted labels', the ligands', each with O, S, NH or N before a group, and each
   // turned round as on a bond's left - read as attached by one atom whose element is its first or its last unit: at a left end and at
-  // a right end the run on the bond is that atom's. Left as they are drawn: a ligand whose parentheses hold a prefixed name the reader
-  // reads only within the ligand ((o-Tol)3P), and a nitrile written as a formula (MeCN, CH3CN), not an atom with its groups.
+  // a right end the run on the bond is that atom's.
   it("the whole table: a label attached by its first or its last atom has that atom on its bond at both ends", () => {
     const names = new Set<string>();
-    const add = (n: string) => [n, reversedLabel(n)].forEach((x) => names.add(x));
+    const add = (n: string) => [n, turnedLabel(n)].forEach((x) => names.add(x));
     for (const a of [...ABBREVIATIONS, ...LIGANDS]) [a.label, ...(a.also ?? [])].forEach(add);
     for (const g of GROUPS) for (const p of ["O", "S", "NH", "N"]) add(p + g.label);
     const wrong: string[] = [];
@@ -150,7 +171,10 @@ describe("a typed label is drawn in the units it is read in", () => {
       if (drawn(n, true).atom !== el || drawn(n, false).atom !== el) wrong.push(n);
     }
     expect(looked).toBeGreaterThan(300);
-    expect(wrong.sort()).toEqual(["(o-Tol)3P", "CH3CN", "MeCN"]);
+    expect(wrong.sort()).toEqual([]);
+    // (and no label drawn, at either end, holds a prefix after its name: never Tol-o)
+    const turnedPrefix = [...names].filter((n) => [true, false].some((left) => /-(?:sec|tert|[nistomp])(?![a-z])/.test(drawn(n, left).text)));
+    expect(turnedPrefix).toEqual([]);
   });
 });
 

@@ -1520,8 +1520,12 @@ All hover-based, as above.
   chemist writes it on a bond's left - Ph3P, tBu3P, Cy3P, (MeO)3P - it is
   drawn as typed at a left end and turned round at a right end, PPh3,
   PtBu3, PCy3, P(OMe)3: the atom on the bond whichever way it was typed,
-  and read the same either way. A metal with its ligands, a formula and
-  words are turned as before; so is a label whose atom is neither its
+  and read the same either way. So is a formula attached by its last
+  atom: MeCN and CH3CN are drawn as typed at a left end, NCMe and NCCH3
+  at a right end, turned unit by unit, an atom with its H and count one
+  unit. A prefix stays before its group, never turned: P(o-Tol)3 is
+  (o-Tol)3P at a left end (`turnedLabel`). A metal with its ligands,
+  another formula and words are turned as before; so is a label whose atom is neither its
   first unit nor its last, and one Meno does not read (Me2N, Ph2P, MeO),
   drawn as typed with its last letter on the bond at a left end.
 - **Symbols for a kind of group** (the maintainer, 2026-10-13): PG (a

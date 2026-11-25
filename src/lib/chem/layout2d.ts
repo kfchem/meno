@@ -13,7 +13,7 @@ import {
   type SgroupMark,
   type StereoGroup,
 } from "./molecule";
-import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
+import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, turnedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import { metal, notMetal } from "./perception/elements";
@@ -2314,7 +2314,7 @@ function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: n
   // (a label read as an atom with its H and groups is drawn in the units it is read in, the atom on the bond however typed: PtBu3,
   //  the phosphine, tBu3P at a left end; Ph3P as typed there, PPh3 at a right end)
   const units =
-    fromRight && !ringFirst && !turned ? [a.el] : (readUnits(a.el, turned) ?? labelUnits(turned ? reversedLabel(a.el) : a.el));
+    fromRight && !ringFirst && !turned ? [a.el] : (readUnits(a.el, turned) ?? labelUnits(turned ? turnedLabel(a.el) : a.el));
   if (units.length < 2) {
     const runs = labelRuns(a.el);
     // one unit read outward from a bond coming in from the right - TMS on

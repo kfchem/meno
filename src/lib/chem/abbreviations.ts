@@ -1090,7 +1090,7 @@ export function reversedLabel(text: string): string {
  * tBu3P, as written on a bond's left - the typed order is the left end's,
  * and turned round it is the right end's: PPh3, PtBu3. `turned` gives the
  * units with the atom last, what parentheses hold turned as
- * `reversedLabel` turns it; else with the atom first. Null for any other
+ * `turnedLabel` turns it; else with the atom first. Null for any other
  * label - a metal with its ligands, a formula, a reagent, words - drawn in
  * its `labelUnits`.
  */
@@ -1103,12 +1103,52 @@ export function readUnits(text: string, turned = false): string[] | null {
 /** What `readUnits` has answered, by label (forgotten as the user's own change). */
 const READ_SEEN = new Map<string, { units: string[]; atomLast: boolean } | null>();
 
-/** Units in the other order, what parentheses hold turned as `reversedLabel` turns it. */
+/** Units in the other order, what parentheses hold turned as `turnedLabel` turns it, a prefix kept before its group. */
 const turnedUnits = (units: readonly string[]) =>
-  [...units].reverse().map((u) => {
-    const m = /^\((.*)\)(\d*)$/.exec(u);
-    return m ? `(${reversedLabel(m[1])})${m[2]}` : u;
-  });
+  withPrefixes(units)
+    .reverse()
+    .flat()
+    .map((u) => {
+      const m = /^\((.*)\)(\d*)$/.exec(u);
+      return m ? `(${turnedLabel(m[1])})${m[2]}` : u;
+    });
+
+/** Units as blocks, an italic prefix and its hyphen with the group it belongs to: o, -, Tol as one. */
+function withPrefixes(units: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let k = 0; k < units.length; k++) {
+    const next = units[k + 1] ?? "";
+    if (ITALIC_PREFIX.test(units[k]) && next === "-" && /^[A-Za-z(]/.test(units[k + 2] ?? "")) {
+      out.push(units.slice(k, k + 3));
+      k += 2;
+    } else if (ITALIC_PREFIX.test(units[k]) && /^-[A-Za-z(]/.test(next)) {
+      out.push(units.slice(k, k + 2));
+      k += 1;
+    } else out.push([units[k]]);
+  }
+  return out;
+}
+
+/**
+ * A label as drawn where its bond comes in from the right: as
+ * `reversedLabel` turns it, but a prefix is never turned away from its
+ * group - P(o-Tol)3 is (o-Tol)3P, never (Tol-o)3P.
+ */
+export function turnedLabel(text: string): string {
+  // (a prefixed name, as parentheses hold it - o-Tol, o-tol - one word)
+  if (/^(?:sec|tert|[nistomp])-[A-Za-z]+$/.test(text)) return text;
+  return withPrefixes(labelUnits(text))
+    .reverse()
+    .map((block) =>
+      block
+        .map((u) => {
+          const m = /^\((.*)\)(\d*)$/.exec(u);
+          return m ? `(${turnedLabel(m[1])})${m[2]}` : u;
+        })
+        .join(""),
+    )
+    .join("");
+}
 
 /** The heavy atoms of a structure. */
 const heavyAtoms = (s: GroupStructure) => s.atoms.filter((x) => x.el !== "H").length;
@@ -1140,7 +1180,12 @@ function atomAndGroupUnits(text: string): { units: string[]; atomLast: boolean }
     for (const unit of groups) {
       // (a group with its count, or in parentheses with it: tBu3, (t-Bu)3 - a name's own digits kept, C6F5)
       const m = /^(?:\((.+)\)|(.*?\D))(\d*)$/.exec(unit);
-      const named = (held: string) => groupOf(held) ?? (atomLast ? groupOf(reversedLabel(held)) : null);
+      // (a group in parentheses read with its prefix, read alone or not: (o-Tol)3)
+      const prefixed = (held: string) => {
+        const p = /^(?:sec|tert|[nistomp])-([A-Z].*)$/.exec(held);
+        return p ? groupOf(p[1]) : null;
+      };
+      const named = (held: string) => groupOf(held) ?? prefixed(held) ?? (atomLast ? groupOf(reversedLabel(held)) : null);
       const [g, n] = groupOf(unit) ? [groupOf(unit), 1] : m ? [m[1] !== undefined ? named(m[1]) : groupOf(m[2]), m[3] ? Number(m[3]) : 1] : [null, 0];
       if (!g) return null;
       heavy += heavyAtoms(g) * n;
@@ -1168,8 +1213,34 @@ function atomAndGroupUnits(text: string): { units: string[]; atomLast: boolean }
       const groups = rest ? groupsOf(rest, true) : null;
       if (groups) return { units: [...groups, ...(h ? [h] : []), el], atomLast: true };
     }
+    // (or a formula before it, unit by unit: a group the reader reads, or an atom with its count and the H after it - MeCN is Me,
+    // C, N; CH3CN CH3, C, N - so that turned round it is NCMe, NCCH3)
+    const formula = formulaUnits(before);
+    if (formula && labelUnits(text).slice(-1)[0] === el) {
+      let heavy = 1;
+      for (const u of formula) {
+        const atom = /^([A-Z][a-z]?)(\d*)(?:H\d*)?$/.exec(u);
+        const g = groupOf(u);
+        if (g) heavy += heavyAtoms(g);
+        else if (atom && ELEMENTS.has(atom[1]) && atom[1] !== "H") heavy += atom[2] ? Number(atom[2]) : 1;
+        else return null;
+      }
+      if (heavy === heavyAtoms(s)) return { units: [...formula, el], atomLast: true };
+    }
   }
   return null;
+}
+
+/** A formula's units, each H and its count with the atom before it: CH3C as CH3, C. Null where an H stands first. */
+function formulaUnits(text: string): string[] | null {
+  const out: string[] = [];
+  for (const u of labelUnits(text)) {
+    if (/^H\d*$/.test(u)) {
+      if (!out.length) return null;
+      out[out.length - 1] += u;
+    } else out.push(u);
+  }
+  return out.length ? out : null;
 }
 
 /**
