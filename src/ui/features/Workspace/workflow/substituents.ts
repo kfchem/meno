@@ -272,9 +272,9 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     aside,
     said: [
       `${made.length} made${aside.length ? ` · ${aside.length} aside` : ""}`,
-      "Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form",
       ...(missed ? [`Duplicates may be missed among ${missed}: the canonical search ran out of steps`] : []),
       ...(unstated ? [notComparedSaid(unstated)] : []),
+      "Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form",
     ],
   };
 }

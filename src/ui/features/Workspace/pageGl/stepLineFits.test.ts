@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { LIGANDS_NOT_STATED, notComparedSaid } from "../../../../lib/chem/ligandsNotStated";
+import { LIGANDS_NOT_STATED } from "../../../../lib/chem/ligandsNotStated";
 import { countsOnly, whyCounted } from "../../../../lib/whyCounted";
 import type { Model } from "../store/types";
 import type { DrawnEntry } from "../workflow/entries";
+import { enumerated } from "../workflow/enumerate";
+import { substituted } from "../workflow/substituents";
+import { template } from "../workflow/testdata/enumerationCases";
+import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { enumerateOutcome, runMenoDrawn } from "../workflow/meno";
 import { drawnSaid } from "../workflow/programs";
 import { cardLines } from "./cardFace";
@@ -15,6 +19,7 @@ const ethane = { atoms: [atom(1, "C"), atom(2, "C", 1.5)], bonds: [{ id: 1, a: 1
 /** The state's lines on the card, as the card lays them out. */
 const shown = (text: string) => cardLines({ summary: "Duplicates", state: { text, tone: "base" } }).state;
 const COUNTS = [2, 6, 12, 48, 999];
+const METHOD = "Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form";
 
 /** Duplicates' line through its own builder: `n` drawings in the state, the rest ethane - one kept, the others the same as it. */
 function duplicatesLine(all: number, n: number): string {
@@ -25,12 +30,18 @@ function duplicatesLine(all: number, n: number): string {
 }
 /** Check structures' line through its own builder: `n` set aside as in the state. */
 const checkLine = (all: number, n: number) => drawnSaid([...Array(all - n).fill({ as: "drawn" }), ...Array(n).fill({ aside: "x", kind: LIGANDS_NOT_STATED })]);
-/** Enumerate's and Substituents' line (they say the same) through Enumerate's own outcome. */
-function enumerateLine(all: number, n: number): string {
-  const said = [`${all} made`, "Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form", notComparedSaid(n)];
-  const out = enumerateOutcome({ ok: true, made: [], aside: [], said, core: { atoms: [], bonds: [], attach: {} } } as never, [{ place: 0, drawn: ethane }], ["Valence not checked"]);
-  if (!out.ok) throw new Error(out.said);
-  return out.said;
+/** A ring drawn by Meno's engine with one of its atoms a metal whose ligands are not stated: every product of it is not compared. */
+const withMetal = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a, i) => (i === m.atoms.length - 1 ? { ...a, el: "LnPd" } : a)) });
+/** Enumerate's and Substituents' line through each one's own builder and Enumerate's outcome: `n` options, each product not compared. */
+function enumerateLines(n: number): { made: number; line: string }[] {
+  const options = Array.from({ length: n }, (_, k) => `*[${k + 1}C]`).join("\n");
+  const built = [enumerated(withMetal(template("*c1ccccc1")), `R1: ${options}`), substituted(withMetal(drawnFromSmiles("c1ccccc1")), [1], options, "one")];
+  return built.map((r) => {
+    if (!r.ok) throw new Error(r.problems.join(" "));
+    const out = enumerateOutcome(r, [{ place: 0, drawn: ethane }], ["Valence not checked"]);
+    if (!out.ok) throw new Error(out.said);
+    return { made: r.made.length, line: out.said };
+  });
 }
 
 describe("a step's line on its card", () => {
@@ -55,11 +66,18 @@ describe("a step's line on its card", () => {
     }
   });
 
-  it("cuts with an ellipsis, as a last resort, only Enumerate's and Substituents' line, too long without its reasons too", () => {
-    for (const all of COUNTS) {
-      const line = enumerateLine(all, 1);
-      expect(countsOnly(line)).not.toBe(line);
-      expect(shown(line).join(" ")).toContain("…");
+  it("holds Enumerate's and Substituents' counts whole at every count, so that an ellipsis cuts only the method sentence", { timeout: 120_000 }, () => {
+    for (const n of COUNTS) {
+      for (const { made, line } of enumerateLines(n)) {
+        expect(line.indexOf(METHOD), line).toBeGreaterThan(line.indexOf("not compared"));
+        const text = shown(line).join(" ");
+        const cut = text.indexOf("…");
+        const before = cut < 0 ? text : text.slice(0, cut);
+        expect(before, line).toContain(`${made} made`);
+        expect(before, line).toContain(`${n} not compared`);
+        // (the ellipsis, where there is one, falls inside the method sentence)
+        if (cut >= 0) expect(before.slice(before.indexOf("not compared")), line).toContain("Duplicates judged");
+      }
     }
   });
 });
