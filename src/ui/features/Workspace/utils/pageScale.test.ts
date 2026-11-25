@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HAIR_STEP, hairWritten, PAGE_PX, pageLayerStep, pagePx, pageScale, pageSized, pageTold, ZOOM_WRITTEN_STEP, zoomWritten, type PageLayerState } from "./pageScale";
+import { HAIR_STEP, hairWritten, PAGE_PX, pageLayerStep, pagePx, pageScale, pageSized, pageTold, pageLength, reachAt, ZOOM_WRITTEN_STEP, zoomWritten, type PageLayerState } from "./pageScale";
 
 /** The zoom at which a page pixel is `scale` screen pixels. */
 const zoomAt = (scale: number) => scale / PAGE_PX;
@@ -148,5 +148,24 @@ describe("the page's HTML layer, told at each frame", () => {
 
   it("gives a length on its chips at the scale they are laid out at and scaled by as the zoom moves", () => {
     expect(pagePx(10)).toBe("calc(10px * var(--page, 1) * var(--page-k, 1))");
+  });
+});
+
+describe("a handle, a light round a thing, a name on the page", () => {
+  it("is as large on the page at every zoom: the same in the page's units at a fifth and at four times, on the screen in the zoom's ratio", () => {
+    // (a handle 6 page px in radius: 6 x PAGE_PX in the page's units at any zoom; on the screen 6 x 0.2 = 1.2 px at a fifth, 6 x 4 = 24 px at four times)
+    const drawn = pageLength(6);
+    expect(drawn).toBeCloseTo(6 * PAGE_PX, 12);
+    expect(drawn * zoomAt(0.2)).toBeCloseTo(1.2, 9);
+    expect(drawn * zoomAt(4)).toBeCloseTo(24, 9);
+  });
+
+  it("is taken from as far on the screen at any zoom, and all over where it is drawn larger than that", () => {
+    const drawn = pageLength(6);
+    // (a reach of 12 screen px: at a fifth 12 / zoom in the page's units, 12 px on the screen though the handle is 1.2)
+    expect(reachAt(12, zoomAt(0.2), drawn) * zoomAt(0.2)).toBeCloseTo(12, 9);
+    expect(reachAt(12, zoomAt(1), drawn) * zoomAt(1)).toBeCloseTo(12, 9);
+    // (at four times the handle is 24 px on the screen: taken all over it)
+    expect(reachAt(12, zoomAt(4), drawn)).toBe(drawn);
   });
 });

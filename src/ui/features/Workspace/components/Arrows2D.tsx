@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
+import { pageLength, reachAt } from "../utils/pageScale";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -16,10 +17,10 @@ import { carriedWithMore } from "../utils/selectionScheme";
 import ReactionArrow2D from "./ReactionArrow2D";
 import { useDrawnArrows, wordsKeptBy } from "./drawnArrows";
 import { TAU, follow } from "../../../theme/motion";
-import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
+import { useDrawnLayout } from "./drawnLayoutContext";
 import { glidden, poseOf, type Pose } from "../utils/arrowGlide";
 
-/** An end handle's radius on the screen, in pixels, and how far round it a press takes it. */
+/** An end handle's radius on the page, in page pixels; and how far round it a press takes it, as a share of that radius on the screen at the page's own scale. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
 /** The steps an end's direction snaps to, in degrees: a bond's. */
@@ -32,7 +33,7 @@ const MIN_LENGTH = 0.5;
 const STRAIGHT = 0.08;
 /** A handle in the middle of a stretch, to turn the line there: as large as an end's, by this share. */
 const MID_SHARE = 0.7;
-/** The light round an arrow selected: how far it reaches either side of its line on the screen, in pixels, and how strong it is - as a shape's (Shapes2D). */
+/** The light round an arrow selected: how far it reaches either side of its line on the page, in page pixels, and how strong it is - as a shape's (Shapes2D). */
 const LIT_PX = 4;
 const CHOSEN = 0.38;
 
@@ -125,12 +126,17 @@ export default function Arrows2D() {
       else handleLevel.current.set(a.id, next);
       moving = true;
     }
-    const k = HANDLE_PX / Math.max((camera as THREE.OrthographicCamera).zoom, 1e-6);
+    const zoomNow = (camera as THREE.OrthographicCamera).zoom;
     for (const h of handles.current) {
       if (!h) continue;
       const level = (h.userData.level as number) ?? 1;
-      h.scale.setScalar(k * (0.6 + 0.4 * level));
+      const grown = 0.6 + 0.4 * level;
+      // (as large on the page at every zoom; a press taking it from as far on the screen at any zoom)
+      const k = pageLength(HANDLE_PX) * grown;
+      h.scale.setScalar(k);
+      const reach = reachAt(HANDLE_HIT * HANDLE_PX * grown, zoomNow, k) / (HANDLE_HIT * k);
       h.traverse((o) => {
+        if (o.userData.hit) o.scale.setScalar(reach);
         const m = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
         if (m && m.userData.seen) m.opacity = level;
       });
@@ -345,8 +351,8 @@ export default function Arrows2D() {
             position={[at.x, at.y, 0.03]}
             onPointerDown={press}
           >
-            {/* (what a press takes, wider than what is seen) */}
-            <mesh>
+            {/* (what a press takes, wider than what is seen: the hand's reach on the screen) */}
+            <mesh userData={{ hit: true }}>
               <circleGeometry args={[HANDLE_HIT, 24]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
@@ -395,20 +401,18 @@ export default function Arrows2D() {
   );
 }
 
-/** The light round an arrow selected, along its line and its corners, as wide on the screen at any zoom. */
+/** The light round an arrow selected, along its line and its corners, as wide on the page at every zoom. */
 function ArrowLight({ points }: { points: readonly { x: number; y: number }[] }) {
-  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
-  const zoom = useDrawnZoom();
   const key = JSON.stringify(points);
   const geometry = useMemo(() => {
-    const t = strokeTriangles(points, false, (2 * LIT_PX) / Math.max(zoom, 1e-6));
+    const t = strokeTriangles(points, false, 2 * pageLength(LIT_PX));
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(t.positions.flatMap((v, i) => (i % 2 ? [v, 0] : [v])), 3));
     g.setIndex(t.indices);
     return g;
-    // (made again as it moves or the view zooms)
+    // (made again as it moves)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, zoom]);
+  }, [key]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
     <mesh geometry={geometry} position={[0, 0, -0.005]} frustumCulled={false} raycast={() => {}}>

@@ -200,7 +200,6 @@ function Typing({ session }: { session: Session }) {
   const cam = camera as THREE.OrthographicCamera;
   // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
   const zoom = useDrawnZoom();
-  const px = 1 / zoom;
 
   // the label as it is drawn: what the IME has so far in place of what it replaces
   const c = typing ? ed.composing : null;
@@ -363,7 +362,7 @@ function Typing({ session }: { session: Session }) {
   });
 
   const d = drawnNow.current;
-  const marks: ReactNode[] = d && typing ? writingMarks(d, { fs, lineH: fs * CAPTION_LINE, px, ink: opts.labelColor ?? "#000000", caretRef, z: 0.07, text: TEXT_ORDER }) : [];
+  const marks: ReactNode[] = d && typing ? writingMarks(d, { fs, lineH: fs * CAPTION_LINE, ink: opts.labelColor ?? "#000000", caretRef, z: 0.07, text: TEXT_ORDER }) : [];
   // (about the atom: what grows out of it, and draws back into it)
   // (the other atoms it is written on: the same letters on each, as they are typed - where they are now)
   const echoes = others.map((id) => atoms.find((a) => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a);

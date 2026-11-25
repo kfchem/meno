@@ -40,11 +40,11 @@ import { heldShows, type Held } from "./held";
 import { useStyleOptions } from "../useDrawingStyle";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
 import { boxOf, joinOf, markScale } from "../presenting/slides";
-import { switchFade, switchStep } from "../utils/zoomSwitch";
+import { pageLength, reachAt } from "../utils/pageScale";
 
 /** Where slides' frames lie: over the drawing and what is on the page. */
 const Z = 0.6;
-/** On the screen, in pixels: the frame's line; how far either side of it a press still takes it; the number's disc and its figures; the dashes of the line to the next and its arrowhead. */
+/** The frame's line, in page pixels; how far either side of it a press still takes it, in screen pixels; the number's disc and its figures, the dashes of the line to the next and its arrowhead, in page pixels. */
 const LINE_PX = 1.5;
 const EDGE_PX = 6;
 const NUMBER_PX = 11;
@@ -53,7 +53,7 @@ const JOIN_PX = 1.5;
 const DASH_PX = 7;
 const GAP_PX = 5;
 const HEAD_PX = 6;
-/** A corner's handle, on the screen: its radius, and how far off it a press still takes it, in its radii; how small a slide may be made, in pixels. */
+/** A corner's handle: its radius on the page, in page pixels, and how far off it a press still takes it, in its radii on the screen at the page's own scale; how small a slide may be made, in screen pixels. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
 const LEAST_PX = 48;
@@ -210,10 +210,9 @@ function useScreenSize(place: (px: number) => void, deps: readonly unknown[]): v
 }
 
 /**
- * A slide's number: a disc in Meno's colour, its figures in white, the same
- * size on the screen at any zoom - but never more than a sixth of its
- * slide's height there (`h`, the slide's on the page), shrinking with it
- * from there, and fading out where its figures are too small to read
+ * A slide's number: a disc in Meno's colour, its figures in white, as large
+ * on the page at every zoom - but never more than a sixth of its slide's
+ * height (`h`, the slide's on the page), smaller with a smaller slide
  * (presenting/slides `markScale`); as seen as `opacity` says, frame by frame.
  * Carried onto another slide, with no `h`, at its own size.
  */
@@ -221,27 +220,14 @@ function SlideNumber({ n, font, opacity, h }: { n: number; font: string | null; 
   const group = useRef<THREE.Group>(null);
   const disc = useRef<THREE.MeshBasicMaterial>(null);
   const figures = useRef<THREE.Mesh & { fillOpacity: number }>(null);
-  // (seen, or not, as its figures can be read: switched, and faded over a short time - utils/zoomSwitch)
-  const read = useRef(true);
-  const shown = useRef(switchFade(true));
-  const invalidate = useThree((st) => st.invalidate);
-  useScreenSize(
-    (px) => {
-      const m = h == null ? { k: 1, read: true } : markScale(h, px, 2 * NUMBER_PX, FIGURES_PX, read.current);
-      read.current = m.read;
-      group.current?.scale.setScalar(px * m.k);
-    },
-    [h],
-  );
-  usePartFrame((_, dt) => {
-    if (switchStep(shown.current, read.current, Math.min(dt, 1 / 20))) invalidate();
-    const o = opacity() * shown.current.v;
-    if (group.current) group.current.visible = shown.current.v > 0;
+  const k = pageLength(h == null ? 1 : markScale(h, 2 * NUMBER_PX));
+  usePartFrame(() => {
+    const o = opacity();
     if (disc.current) disc.current.opacity = o;
     if (figures.current) figures.current.fillOpacity = o;
   });
   return (
-    <group ref={group}>
+    <group ref={group} scale={[k, k, 1]}>
       <mesh renderOrder={44}>
         <circleGeometry args={[NUMBER_PX, 28]} />
         <meshBasicMaterial ref={disc} color={COLORS.base} transparent opacity={opacity()} depthTest={false} toneMapped={false} />
@@ -383,12 +369,12 @@ function SlideFrame({
     if (store.getState().hoveredSlide === s.id) store.getState().setHoveredSlide(null);
   };
 
-  // its edge's line and the band along it a press takes, the same width on the screen at any zoom
+  // its edge's line, as wide on the page at every zoom, and the band along it a press takes, as wide on the screen at any zoom
   const lines = useRef<(THREE.Mesh | null)[]>([]);
   const bands = useRef<(THREE.Mesh | null)[]>([]);
   useScreenSize(
     (px) => {
-      const line = LINE_PX * px;
+      const line = pageLength(LINE_PX);
       const edge = 2 * EDGE_PX * px;
       sidesOf(s, line).forEach(([x, y, w, h], k) => {
         lines.current[k]?.position.set(x, y, 0);
@@ -436,15 +422,22 @@ function SlideFrame({
 }
 
 /**
- * A selected slide's handles, one at each corner, the same size on the
- * screen at any zoom: dragged, it makes the slide larger or smaller - its
+ * A selected slide's handles, one at each corner, as large on the page at
+ * every zoom, a press taking each from as far on the screen: dragged, it makes the slide larger or smaller - its
  * proportions kept, the opposite corner where it was - as one step.
  */
 function Handles({ s, toWorld }: { s: Slide; toWorld: (cx: number, cy: number) => Pt }) {
   const store = useEditorStore();
   const { camera, gl } = useThree();
   const handles = useRef<(THREE.Group | null)[]>([]);
-  useScreenSize((px) => handles.current.forEach((h) => h?.scale.setScalar(HANDLE_PX * px)), []);
+  useScreenSize((px) => {
+    const drawn = pageLength(HANDLE_PX);
+    const reach = reachAt(HANDLE_HIT * HANDLE_PX, 1 / px, drawn) / (HANDLE_HIT * drawn);
+    handles.current.forEach((h) => {
+      h?.scale.setScalar(drawn);
+      h?.children[0]?.scale.setScalar(reach);
+    });
+  }, []);
   const corners = [
     { x: s.x - s.w / 2, y: s.y - s.h / 2 },
     { x: s.x + s.w / 2, y: s.y - s.h / 2 },
@@ -546,11 +539,11 @@ void main() {
 `;
 
 /**
- * The line from a slide to the next: dashed, the same on the screen at any
+ * The line from a slide to the next: dashed, as large on the page at every
  * zoom, with an arrowhead half way along that says which way the talk goes
- * - shrinking and fading with the smaller slide's number where that does
- * (`h`, its height on the page; presenting/slides `markScale`); as seen as
- * `opacity` says, frame by frame.
+ * - smaller with the smaller slide's number where that is (`h`, its height
+ * on the page; presenting/slides `markScale`); as seen as `opacity` says,
+ * frame by frame.
  */
 function Join({ from, to, h, opacity }: { from: Pt; to: Pt; h: number; opacity: () => number }) {
   const material = useMemo(
@@ -582,18 +575,12 @@ function Join({ from, to, h, opacity }: { from: Pt; to: Pt; h: number; opacity: 
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const head = useRef<THREE.Mesh>(null);
   const headMaterial = useRef<THREE.MeshBasicMaterial>(null);
-  // (seen, or not, as the smaller slide's number is: switched, and faded over a short time)
-  const read = useRef(true);
-  const shown = useRef(switchFade(true));
   const long = useRef(true);
-  const invalidate = useThree((st) => st.invalidate);
   const line = useRef<THREE.Mesh>(null);
   useScreenSize(
-    (screenPx) => {
-      // (its pixel as its numbers': shrunk with them, where they shrink with their slides)
-      const m = markScale(h, screenPx, 2 * NUMBER_PX, FIGURES_PX, read.current);
-      read.current = m.read;
-      const px = screenPx * m.k;
+    () => {
+      // (its pixel as its numbers': a page pixel, smaller with them where they are smaller with their slides)
+      const px = pageLength(markScale(h, 2 * NUMBER_PX));
       // (a little apart from the frames at either end)
       const gap = Math.min(NUMBER_PX * px * 1.4, len / 3);
       material.uniforms.uFrom.value.set(from.x + ux * gap, from.y + uy * gap);
@@ -605,11 +592,9 @@ function Join({ from, to, h, opacity }: { from: Pt; to: Pt; h: number; opacity: 
     },
     [from.x, from.y, to.x, to.y, h, material],
   );
-  usePartFrame((_, dt) => {
-    if (switchStep(shown.current, read.current, Math.min(dt, 1 / 20))) invalidate();
-    const o = opacity() * shown.current.v;
-    if (line.current) line.current.visible = shown.current.v > 0;
-    if (head.current) head.current.visible = shown.current.v > 0 && long.current;
+  usePartFrame(() => {
+    const o = opacity();
+    if (head.current) head.current.visible = long.current;
     material.uniforms.uOpacity.value = o;
     if (headMaterial.current) headMaterial.current.opacity = o * 1.4;
   });

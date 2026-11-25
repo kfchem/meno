@@ -1487,7 +1487,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
             : { x: o.x - own.reduce((t, q) => t + q.x, 0) / own.length, y: o.y - own.reduce((t, q) => t + q.y, 0) / own.length };
         values.push({ o, half: { x: (box.w / 2) * chipScale, y: (box.h / 2) * chipScale }, way: Math.hypot(way.x, way.y) > 1e-9 ? way : { x: 0, y: -1 }, was: valuesAbout.current.get(id), id, el: l.el });
       }
-      const goals = valueSpots(values);
+      const goals = valueSpots(values, chipScale);
       values.forEach((v, k) => {
         const about = v.was ? spotFollowed(v.was, goals[k], step, STEREO_TAU) : goals[k];
         valuesAbout.current.set(v.id, about);

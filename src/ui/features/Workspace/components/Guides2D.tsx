@@ -8,24 +8,24 @@
  * to another line gliding there, and one that lasts only a moment not
  * shown at all (presenting/guideFade).
  */
-import * as THREE from "three";
 import { useEffect, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import { COLORS } from "../../../theme/colors";
 import { GuideFade } from "../presenting/guideFade";
 import type { Seg } from "../presenting/guides";
+import { pageLength } from "../utils/pageScale";
 
 /** Where guides lie: over the drawing and the slides' frames. */
 const Z = 0.65;
-/** On the screen, in pixels: a guide's line, and a mark's ticks either side of it. */
+/** In page pixels: a guide's line, and a mark's ticks either side of it - as large on the page at every zoom. */
 const LINE_PX = 1;
 const TICK_PX = 4;
 
 export default function Guides2D() {
   const guides = useEditor((s) => s.guides);
-  const { camera, invalidate } = useThree();
-  const px = 1 / ((camera as THREE.OrthographicCamera).zoom || 1);
+  const { invalidate } = useThree();
+  const px = pageLength(1);
   // (what each guide is now - its place and how opaque - taken at each frame it is on its way)
   const fade = useRef(new GuideFade());
   const [, setStep] = useState(0);

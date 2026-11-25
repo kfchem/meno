@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { longPressMs } from "../longPress";
 import { pageAt } from "../utils/page";
+import { pageLength, reachAt } from "../utils/pageScale";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
@@ -39,7 +40,7 @@ const HANDLE_ABOVE = 0.75;
 /** Nothing selected, where it is drawn. */
 const NO_MODEL: Model = { atoms: [], bonds: [] };
 
-/** The handle's radius on the screen, in px, and how far off it a press still takes it. */
+/** The handle's radius on the page, in page px; and how far off it a press still takes it, as a share of that radius on the screen at the page's own scale. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
 
@@ -592,10 +593,14 @@ export default function Selection2D() {
       h.level = Math.abs(n - handleTo) < 0.01 ? handleTo : n;
       moving = true;
     }
-    // the handle the same size on the screen at any zoom, growing in and shrinking out
+    // the handle as large on the page at every zoom, growing in and shrinking out; a press taking it from as far on the screen at any zoom
     if (handle.current) {
-      handle.current.scale.setScalar((HANDLE_PX / Math.max((camera as THREE.OrthographicCamera).zoom, 1e-6)) * (0.6 + 0.4 * h.level));
+      const grown = 0.6 + 0.4 * h.level;
+      const k = pageLength(HANDLE_PX) * grown;
+      handle.current.scale.setScalar(k);
+      const reach = reachAt(HANDLE_HIT * HANDLE_PX * grown, (camera as THREE.OrthographicCamera).zoom, k) / (HANDLE_HIT * k);
       handle.current.traverse((o) => {
+        if (o.userData.hit) o.scale.setScalar(reach);
         const m = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
         if (m && m.userData.seen) m.opacity = h.level;
       });
@@ -670,8 +675,8 @@ export default function Selection2D() {
             startTurn(e.nativeEvent);
           }}
         >
-          {/* (what a press takes, wider than what is seen) */}
-          <mesh>
+          {/* (what a press takes, wider than what is seen: the hand's reach on the screen) */}
+          <mesh userData={{ hit: true }}>
             <circleGeometry args={[HANDLE_HIT, 24]} />
             <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           </mesh>

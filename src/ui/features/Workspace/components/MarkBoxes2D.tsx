@@ -5,11 +5,12 @@ import { COLORS } from "../../../theme/colors";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { fadingOut } from "./labelFade";
 import { boxFill, outlineBand, type MarkBoxShape } from "./markBox";
+import { pageLength } from "../utils/pageScale";
 
 /** A mark's box where it stands on the page, in the page's units: its middle, and its shape. */
 export type MarkBox = Omit<MarkBoxShape, "radius"> & { key: string; x: number; y: number; dashed?: boolean };
 
-/** Its outline's width, its corners' radius and a dashed one's dashes, in screen pixels: a CSS border's. */
+/** Its outline's width, its corners' radius and a dashed one's dashes, in page pixels: a CSS border's at the page's own scale. */
 const BORDER_PX = 1.5;
 const RADIUS_PX = 3;
 const DASH_PX = { on: 4.5, off: 3 };
@@ -22,11 +23,11 @@ const ORDER = 40;
  * The marks' boxes on the page (ChemMarks2D) - a valence problem's round
  * its atom's label, a ring round an atom with none, dashed round what can
  * be read either way - drawn by WebGL with the page, so that they never
- * lag a pan or a zoom: their place and size in the page's units, their
- * outline as wide on the screen at any zoom. Each comes in and goes out as
+ * lag a pan or a zoom: their place and size, their outline and its
+ * dashes, in the page's units: as large on the page at every zoom. Each comes in and goes out as
  * an element's meno-fade-in and -out would (`leaving`: the keys going).
  */
-export default function MarkBoxes2D({ boxes, leaving, zoom }: { boxes: readonly MarkBox[]; leaving: ReadonlySet<string>; zoom: number }) {
+export default function MarkBoxes2D({ boxes, leaving }: { boxes: readonly MarkBox[]; leaving: ReadonlySet<string> }) {
   const invalidate = useThree((s) => s.invalidate);
   const level = useRef(new Map<string, number>());
   const materials = useRef(new Map<string, THREE.MeshBasicMaterial[]>());
@@ -47,16 +48,15 @@ export default function MarkBoxes2D({ boxes, leaving, zoom }: { boxes: readonly 
     for (const k of [...level.current.keys()]) if (!boxes.some((b) => b.key === k)) level.current.delete(k);
     if (going) invalidate();
   });
-  const z = Math.max(zoom, 1e-6);
   return (
     <group renderOrder={ORDER}>
       {boxes.map((b) => (
         <Box
           key={b.key}
           box={b}
-          width={BORDER_PX / z}
-          radius={b.round ? 0 : RADIUS_PX / z}
-          dash={b.dashed ? { on: DASH_PX.on / z, off: DASH_PX.off / z } : undefined}
+          width={pageLength(BORDER_PX)}
+          radius={b.round ? 0 : pageLength(RADIUS_PX)}
+          dash={b.dashed ? { on: pageLength(DASH_PX.on), off: pageLength(DASH_PX.off) } : undefined}
           onMaterials={(ms) => {
             if (ms) materials.current.set(b.key, ms);
             else materials.current.delete(b.key);

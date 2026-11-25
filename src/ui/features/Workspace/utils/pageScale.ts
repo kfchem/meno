@@ -37,6 +37,18 @@ export const PAGE_PX = NOMINAL_BOND_LENGTH / 48;
 /** How many screen pixels a page pixel is drawn as, at `zoom` (the canvas's orthographic camera's). */
 export const pageScale = (zoom: number) => zoom * PAGE_PX;
 
+/** A length of `px` page pixels, in world units: as large on the page at every zoom - a handle's, an outline's, a name's - growing and shrinking with it on the screen. */
+export const pageLength = (px: number) => px * PAGE_PX;
+
+/**
+ * How far round a handle a press takes it, in world units at `zoom`: the
+ * hand's reach, `screenPx` on the screen at every zoom, and never less than
+ * the handle as it is drawn (`drawn`, world units) - so that one drawn small
+ * on a page far out is still taken from as far as ever, and one drawn large
+ * up close is taken all over.
+ */
+export const reachAt = (screenPx: number, zoom: number, drawn: number) => Math.max(screenPx / Math.max(zoom, 1e-6), drawn);
+
 
 /** How far the zoom goes, as a share, before what the page's HTML is sized by is written again while it moves (`zoomWritten`). */
 export const ZOOM_WRITTEN_STEP = 0.005;

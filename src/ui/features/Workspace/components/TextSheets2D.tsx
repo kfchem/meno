@@ -29,6 +29,7 @@ import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { DEFAULT_LABEL_FAMILY, labelFont } from "../../../../lib/chem/labelFonts";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { pageAt } from "../utils/page";
+import { pageLength } from "../utils/pageScale";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { GRAY } from "./pdfPictures";
@@ -43,7 +44,7 @@ const Z_STEP = 1e-3;
 /** How far a press moves before it is a drag, and how far before it moves the view, in pixels. */
 const CLICK_PX = 4;
 const PAN_PX = 3;
-/** The light round a sheet hovered, and how far out it reaches, in pixels. */
+/** The light round a sheet hovered, and how far out it reaches, in page pixels. */
 const LIT = 0.16;
 const LIT_PAD_PX = 5;
 /** The sheet's colours: its paper, its edge, its words and its strokes seen from far off. */
@@ -54,7 +55,7 @@ const STROKE = "rgb(200, 206, 213)";
 /** How large its words are on the screen, in pixels, when they begin to come up over the strokes, and when they have quite. */
 const WORDS_FROM_PX = 3.5;
 const WORDS_AT_PX = 6;
-/** Its name: how large on the screen, and how far under it - a sheet's; an icon's, the drawing's labels'. */
+/** Its name: how large on the page, and how far under it, in page pixels - a sheet's; an icon's, the drawing's labels'. */
 const NAME_PX = 12;
 const NAME_GAP_PX = 14;
 /** How long it takes to be made an icon, or full size again, in ms - as a PDF. */
@@ -232,18 +233,19 @@ function Sheet({
     window.addEventListener("pointerup", onUp, true);
   };
 
-  const lit = LIT_PAD_PX * px;
+  // (its light round it and its name as large on the page at every zoom)
+  const pg = pageLength(1);
+  const lit = LIT_PAD_PX * pg;
   const now = performance.now();
   const edge = px;
   const w = b.x1 - b.x0;
   const h = b.y1 - b.y0;
-  // its name under it, in the drawing's type: at its left as a sheet, as small on the screen however near it is
-  // seen; under its middle as an icon, at the size of the drawing's labels, as a file's under its icon - and on
+  // its name under it, in the drawing's type: at its left as a sheet, at a size on the page; under its middle as an icon, at the size of the drawing's labels, as a file's under its icon - and on
   // its way between them (as a PDF's)
   const nameX = b.x0 + (mid.x - b.x0) * iconness;
-  const nameSizeNow = NAME_PX * px * (1 - iconness) + nameSize * iconness;
-  const nameGap = NAME_GAP_PX * px * (1 - iconness) + 0.4 * nameSize * iconness;
-  const nameWidth = Math.max(120 * px, s.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
+  const nameSizeNow = NAME_PX * pg * (1 - iconness) + nameSize * iconness;
+  const nameGap = NAME_GAP_PX * pg * (1 - iconness) + 0.4 * nameSize * iconness;
+  const nameWidth = Math.max(120 * pg, s.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
   return (
     <group position={[0, 0, z]}>
       {/* (round it, not under it, as a picture's) */}

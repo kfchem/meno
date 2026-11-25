@@ -812,6 +812,22 @@ describe("measurements' values close together on the screen", () => {
     ]);
     expect(clear[1].r).toBe(0);
   });
+
+  it("keep apart by page lengths: the page drawn twice as large, the same values twice as large stand off twice as far", () => {
+    const at = (page: number) =>
+      valueSpots(
+        [
+          { o: { x: 0, y: 0 }, half: { x: half.x * page, y: half.y * page }, way: { x: 0, y: -1 } },
+          { o: { x: half.x * page, y: 0 }, half: { x: half.x * page, y: half.y * page }, way: { x: 0, y: 1 } },
+        ],
+        page,
+      )[1];
+    const one = at(1);
+    const two = at(2);
+    expect(one.r).toBeGreaterThan(0);
+    expect(two.a).toBeCloseTo(one.a, 9);
+    expect(two.r).toBeCloseTo(2 * one.r, 9);
+  });
 });
 
 describe("fadeStep", () => {

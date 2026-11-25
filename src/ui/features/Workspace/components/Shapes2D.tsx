@@ -59,18 +59,19 @@ import { type Held } from "./held";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
 import { roundHandleAt, roundInOf, roundsOf } from "./shapeRounds";
+import { pageLength, reachAt } from "../utils/pageScale";
 import { boxRaycast, NO_RAYCAST, PartFramesProvider, pixelNow, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 /** Where shapes lie: under the drawing and its fills (-0.05), over the pictures (Pictures2D's -0.3); each a little over the one before. */
 const Z = -0.2;
 const Z_STEP = 1e-4;
-/** On the screen, in pixels: how far off its line a press still takes a shape; how far either side of its line the light along it reaches. */
+/** How far off its line a press still takes a shape, in screen pixels; how far either side of its line the light along it reaches, in page pixels. */
 const EDGE_PX = 5;
 const LIT_PX = 4;
 /** How lit a shape's line is under the pointer, and selected. */
 const LIT = 0.18;
 const CHOSEN = 0.38;
-/** A handle, on the screen: its radius, how far off it a press still takes it, in its radii; how small a box may be made, in pixels. */
+/** A handle: its radius on the page, in page pixels; how far off it a press still takes it, in its radii on the screen at the page's own scale; how small a box may be made, in screen pixels. */
 const HANDLE_PX = 5;
 const HANDLE_HIT = 2;
 const LEAST_PX = 8;
@@ -391,14 +392,12 @@ function LightAlong({ s, pointPx, to, gone }: { s: Shape; pointPx: number; to: n
   const invalidate = useThree((st) => st.invalidate);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }), []);
   useEffect(() => () => material.dispose(), [material]);
-  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
-  const px = 1 / useDrawnZoom();
   const key = JSON.stringify(s);
   const band = useMemo(
-    () => shapeGeometry(lines([outlineOf(s, pointPx)], lineWidthOf(s, pointPx) + 2 * LIT_PX * px)),
+    () => shapeGeometry(lines([outlineOf(s, pointPx)], lineWidthOf(s, pointPx) + 2 * pageLength(LIT_PX))),
     // (made again when the shape changes, not when it is drawn again)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [key, pointPx, px],
+    [key, pointPx],
   );
   useEffect(() => () => band.dispose(), [band]);
   usePartFrame((_, dt) => {
@@ -458,10 +457,15 @@ function Handles({ chosen, toWorld, pointPx }: { chosen: { s: Shape; z: number }
     (px: number) => {
       const meshes = [hit.current, fill.current, ring.current];
       const m = new THREE.Matrix4();
+      // (each as large on the page at every zoom, and placed there; a press taking it from as far on the screen at any zoom)
+      const drawn = pageLength(HANDLE_PX);
+      const reach = reachAt(HANDLE_PX, 1 / px, drawn);
       all.forEach((h, i) => {
-        const at = h.handle === "round" ? (h.at = roundHandleAt(h.s, pointPx, px, rounds)) : h.at;
-        m.makeScale(HANDLE_PX * px, HANDLE_PX * px, 1).setPosition(at.x, at.y, h.z + 0.003);
-        for (const mesh of meshes) mesh?.setMatrixAt(i, m);
+        const at = h.handle === "round" ? (h.at = roundHandleAt(h.s, pointPx, pageLength(1), rounds)) : h.at;
+        m.makeScale(reach, reach, 1).setPosition(at.x, at.y, h.z + 0.003);
+        hit.current?.setMatrixAt(i, m);
+        m.makeScale(drawn, drawn, 1).setPosition(at.x, at.y, h.z + 0.003);
+        for (const mesh of [fill.current, ring.current]) mesh?.setMatrixAt(i, m);
         fill.current?.setColorAt(i, h.handle === "round" ? ROUND : WHITE);
       });
       for (const mesh of meshes) {
@@ -547,8 +551,8 @@ function Handles({ chosen, toWorld, pointPx }: { chosen: { s: Shape; z: number }
     rounds.byHand.add(s.id);
     const most = roundestOf(s.x1 - s.x0, s.y1 - s.y0);
     // (from where the pointer is on the handle, not the handle's middle: no jump as it is pressed - the handle staying under the pointer)
-    const off = toWorld(ev.clientX, ev.clientY).x - roundHandleAt(s, pointPx, pixelNow(camera), rounds).x;
-    const inset = roundInOf(s, pixelNow(camera));
+    const off = toWorld(ev.clientX, ev.clientY).x - roundHandleAt(s, pointPx, pageLength(1), rounds).x;
+    const inset = roundInOf(s, pageLength(1));
     const onMove = (m: PointerEvent) => {
       const r = Math.min(Math.max(toWorld(m.clientX, m.clientY).x - off - inset - s.x0, 0), most);
       store.getState().updateShape(s.id, { radius: r / pointPx }, gesture);

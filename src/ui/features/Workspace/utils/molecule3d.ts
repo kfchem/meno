@@ -154,9 +154,9 @@ export function fadeStep(fade: LabelFade, to: 0 | 1, goIn: boolean, dt: number, 
   return fade.v !== fade.to;
 }
 
-/** How far a measurement's value may run into another before it is in its way, in pixels; and how clear its own point must be for it to go back there - so that two side by side, the view turning, do not trade places frame by frame. */
+/** How far a measurement's value may run into another before it is in its way, in page pixels; and how clear its own point must be for it to go back there - so that two side by side, the view turning, do not trade places frame by frame. */
 export const VALUE_SLACK_PX = 3;
-/** How far off its point a value moved off it stands, in pixels. */
+/** How far off its point a value moved off it stands, in page pixels. */
 export const VALUE_OFF_PX = 3;
 
 /** A measurement's value on the screen: its point (`o`), its half size, the way off it it goes where it must (a distance's square to its line, an angle's out from its atoms), and where it stood last about its point, if it has been placed. */
@@ -169,10 +169,13 @@ export type ValueAt = { o: { x: number; y: number }; half: { x: number; y: numbe
  * it stays where it is while that is clear, and goes back once its point is
  * clear by VALUE_SLACK_PX; else off it, the way it goes, clear of them
  * (labelSpot). Two close together, the view turning slowly, keep their
- * places rather than trade them frame by frame.
+ * places rather than trade them frame by frame. All on the screen, `page`
+ * screen pixels to a page pixel: the values and how far apart they keep
+ * scaled with the page alike.
  */
-export function valueSpots(values: readonly ValueAt[]): SpotAbout[] {
+export function valueSpots(values: readonly ValueAt[], page = 1): SpotAbout[] {
   const placed: LabelBox[] = [];
+  const slack = VALUE_SLACK_PX * page;
   const boxAt = (v: ValueAt, s: SpotAbout): LabelBox => ({ x: v.o.x + s.r * Math.cos(s.a), y: v.o.y + s.r * Math.sin(s.a), hx: v.half.x, hy: v.half.y });
   // (how far a box runs into those placed: the most of any, along its lesser way)
   const into = (b: LabelBox) => {
@@ -184,11 +187,11 @@ export function valueSpots(values: readonly ValueAt[]): SpotAbout[] {
     const home: SpotAbout = { a: v.was?.a ?? Math.atan2(v.way.y, v.way.x), r: 0 };
     const off = v.was && v.was.r > 0;
     let goal: SpotAbout;
-    if (off && into(boxAt(v, home)) < -VALUE_SLACK_PX) goal = home;
-    else if (off && into(boxAt(v, v.was!)) <= VALUE_SLACK_PX) goal = v.was!;
-    else if (!off && into(boxAt(v, home)) <= VALUE_SLACK_PX) goal = home;
+    if (off && into(boxAt(v, home)) < -slack) goal = home;
+    else if (off && into(boxAt(v, v.was!)) <= slack) goal = v.was!;
+    else if (!off && into(boxAt(v, home)) <= slack) goal = home;
     else {
-      const spot = labelSpot(v.o, VALUE_OFF_PX, v.half, v.way, [], placed);
+      const spot = labelSpot(v.o, VALUE_OFF_PX * page, v.half, v.way, [], placed);
       goal = { a: Math.atan2(spot.y - v.o.y, spot.x - v.o.x), r: Math.hypot(spot.x - v.o.x, spot.y - v.o.y) };
     }
     placed.push(boxAt(v, goal));
