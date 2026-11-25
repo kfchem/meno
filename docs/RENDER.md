@@ -214,6 +214,11 @@ options are shown only while one of its looks, studios or motions is
 chosen, each in the part it says, each `when` it says. A preset motion's
 shortest length counts as a renderer's does.
 
+Under the *Look*, the *Studio* and *Moving* the card says what the chosen
+one is, in its declaration's own words (its `description`) - Meno's own
+looks' as any other's - in one quiet line; one without a description has
+no line. The lists to pick from show the labels alone.
+
 Chosen, the render's entry hands the renderer, for each plugin whose
 presets are chosen, its interface, its id, each chosen one's id and file,
 and its options' values (`presets`); a preset look or motion is said there
