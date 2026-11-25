@@ -16,7 +16,7 @@ import { figureLabels, pictureResult } from "./figures";
 import { measured } from "../../../../testing/timeouts";
 
 /** A grey PNG of the fixtures (8 bits, no filter on any row) as the RGBA pixels a picture is traced from. */
-function greyPng(path: string): { width: number; height: number; data: Uint8ClampedArray } {
+function greyPng(path: URL): { width: number; height: number; data: Uint8ClampedArray } {
   const png = readFileSync(path);
   const [width, height] = [png.readUInt32BE(16), png.readUInt32BE(20)];
   const idat: Buffer[] = [];
@@ -55,7 +55,7 @@ const LETTERS: FigureLetter[] = [
 
 describe("a dative bond's arrow in a picture", () => {
   it("reads cisplatin drawn by Meno at 300 dpi: two dative bonds N -> Pt, each N with three hydrogens, two Cl", () => {
-    const pixels = greyPng(new URL("../../../../lib/figure/fixtures/pictures/cisplatin-isothiocyanates-300dpi.png", import.meta.url).pathname);
+    const pixels = greyPng(new URL("../../../../lib/figure/fixtures/pictures/cisplatin-isothiocyanates-300dpi.png", import.meta.url));
     const read = readTracedPicture(pixels, { scale: 1, x: 0, y: 0 }, [], (l) => readDrawnLabel(l, figureLabels).read, LETTERS);
     if ("none" in read) throw new Error(read.none);
     const got = pictureResult(read, (x, y) => ({ sha256: "a".repeat(64), x, y, bond: read.bond }));
