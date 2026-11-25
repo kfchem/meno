@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
-import { laidOut } from "./cleanUp";
+import { CleanUpRefused, cleanUp, laidOut } from "./cleanUp";
 import { MENO } from "../../../../lib/chem/style";
 import { forgetLaidOut, type Layout2D, type LayoutInput } from "../../../../lib/layout/engine";
-import { oppositesKept, segmentInBox, segmentsCross } from "./engineLayout";
+import { labelsDrawn, oppositesKept, segmentInBox, segmentsCross } from "./engineLayout";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { createWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
 import { drawingOf } from "./drawing";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
@@ -561,7 +564,12 @@ describe("a metal with bulky donors put side by side as drawn", () => {
     return { drawn, names: new Map(units.map((u) => [donorOf(u).id, donorOf(u).el])), metal: metal.id };
   };
 
-  it("leaves cis-PdCl2(PPh3)2 and cis-PtCl2(PCy3)2 as drawn, saying so: no turn of their groups keeps every ring off the other phosphine's rings and the Cl - never the trans", { timeout: 180000 }, async () => {
+  // (the first three tests are of the layout with no group named - `laidOut` as called here, not as new. No gesture reaches it so: the
+  // menu's Clean-up (`cleanUp`) first writes the groups it can name as their labels and lays out that; a structure put down from a SMILES,
+  // one a workflow step makes, or a 3D structure's drawing calls `laidOut` as new, where a metal's donors are kept opposite as drawn only where the text
+  // gives its arrangement. The tests after them go through `cleanUp` as the menu calls it)
+
+  it("the layout with no group named: leaves cis-PdCl2(PPh3)2 and cis-PtCl2(PCy3)2 as drawn, saying so - no turn of their groups keeps every ring off the other phosphine's rings and the Cl; never the trans", { timeout: 180000 }, async () => {
     // (two PPh3 side by side: their rings cannot be turned clear of each other. Two PCy3 likewise: the turns that keep their atoms
     // apart leave a ring across the other's ring and over a Cl's label, so they are refused by the ink as PPh3 is by the atoms)
     for (const [el, L] of [
@@ -575,13 +583,13 @@ describe("a metal with bulky donors put side by side as drawn", () => {
     }
   });
 
-  it("refuses cis-PtCl2(PiPr3)2 too: laid out, a methyl's bond crosses the Pt-Cl bond, and the turns that clear it bring an atom onto a bond", { timeout: 180000 }, async () => {
+  it("the layout with no group named: refuses cis-PtCl2(PiPr3)2 too - laid out, a methyl's bond crosses the Pt-Cl bond, and the turns that clear it bring an atom onto a bond", { timeout: 180000 }, async () => {
     forgetLaidOut();
     const { drawn } = drawnSwapped("Cl[Pt](Cl)(P(C(C)C)(C(C)C)C(C)C)P(C(C)C)(C(C)C)C(C)C", "Pt", true);
     await expect(laidOut(drawn, MENO)).rejects.toThrow(/one atom on another or on a bond, so nothing was moved/);
   });
 
-  it("lays out with no group's bond over another donor's ink: cis-PtCl2(NH3)2, cis-PtCl2(PMe3)2, trans-PdCl2(PPh3)2, cis-[CoCl2(NH3)4]+", { timeout: 180000 }, async () => {
+  it("the layout with no group named: lays out with no group's bond over another donor's ink - cis-PtCl2(NH3)2, cis-PtCl2(PMe3)2, trans-PdCl2(PPh3)2, cis-[CoCl2(NH3)4]+", { timeout: 180000 }, async () => {
     for (const [key, smiles, el, swap, want] of [
       ["cis-PtCl2(NH3)2", "Cl[Pt](Cl)(N)N", "Pt", true, ["Cl-N", "Cl-N"]],
       ["cis-PtCl2(PMe3)2", "Cl[Pt](Cl)(P(C)(C)C)P(C)(C)C", "Pt", true, ["Cl-P", "Cl-P"]],
@@ -603,6 +611,78 @@ describe("a metal with bulky donors put side by side as drawn", () => {
         }),
       );
     }
+  });
+
+  // (Clean-up as the menu runs it on every structure of the page: what is on the page after, and the words the chemistry line shows)
+  const cleanedUp = async (drawn: Model): Promise<{ before: Model; after: Model; words: string | null }> => {
+    forgetLaidOut();
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model: drawn, nextId: Math.max(...drawn.atoms.map((a) => a.id), ...drawn.bonds.map((b) => b.id)) + 1 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const before = store.getState().model;
+    let words: string | null = null;
+    await cleanUp(store, null).catch((e: unknown) => {
+      if (!(e instanceof CleanUpRefused)) throw e;
+      words = e.message;
+    });
+    return { before, after: store.getState().model, words };
+  };
+  // (the angle at the metal between two of its donors, in whole degrees)
+  const angleAt = (m: Model, metal: number, p: number, q: number) => {
+    const [o, a, b] = [metal, p, q].map((id) => m.atoms.find((x) => x.id === id)!);
+    const d = Math.atan2(a.y - o.y, a.x - o.x) - Math.atan2(b.y - o.y, b.x - o.x);
+    return Math.round((Math.abs(Math.atan2(Math.sin(d), Math.cos(d))) * 180) / Math.PI);
+  };
+
+  it("Clean-up from the menu writes PCy3, PPh3 and PiPr3 as their labels and lays the complex out: the donors side by side as drawn, or across for the trans, nothing through a label and no bond across another - as before, and so the other four", { timeout: 180000 }, async () => {
+    for (const [key, smiles, el, swap, label, angle] of [
+      ["cis-PtCl2(PCy3)2", "Cl[Pt](Cl)(P(C1CCCCC1)(C1CCCCC1)C1CCCCC1)P(C1CCCCC1)(C1CCCCC1)C1CCCCC1", "Pt", true, "PCy3", 90],
+      ["cis-PdCl2(PPh3)2", "Cl[Pd](Cl)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1", "Pd", true, "PPh3", 90],
+      ["cis-PtCl2(PiPr3)2", "Cl[Pt](Cl)(P(C(C)C)(C(C)C)C(C)C)P(C(C)C)(C(C)C)C(C)C", "Pt", true, "PiPr3", 90],
+      ["cis-PtCl2(PMe3)2", "Cl[Pt](Cl)(P(C)(C)C)P(C)(C)C", "Pt", true, "P", 90],
+      ["cis-PtCl2(NH3)2", "Cl[Pt](Cl)(N)N", "Pt", true, "N", 90],
+      ["trans-PdCl2(PPh3)2", "Cl[Pd](Cl)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1", "Pd", false, "PPh3", 180],
+      ["cis-[CoCl2(NH3)4]+", "Cl[Co+](Cl)(N)(N)(N)N", "Co", true, "N", null],
+    ] as const) {
+      const { drawn, names, metal } = drawnSwapped(smiles, el, swap);
+      const { after, words } = await cleanedUp(drawn);
+      expect(words, key).toBeNull();
+      expect(after, key).not.toBe(drawn);
+      // (each donor where it was by id: a phosphine written as one label at its P)
+      const donors = [...names.keys()];
+      const others = donors.filter((d) => names.get(d) !== "Cl");
+      for (const d of others) expect(after.atoms.find((a) => a.id === d)?.el, key).toBe(label);
+      const cls = donors.filter((d) => names.get(d) === "Cl");
+      if (angle != null) {
+        expect(angleAt(after, metal, others[0], others[1]), key).toBe(angle);
+        expect(angleAt(after, metal, cls[0], cls[1]), key).toBe(angle);
+      } else expect(angleAt(after, metal, cls[0], cls[1]), key).toBe(60);
+      // (no bond through any label but its own atoms', and no two bonds across each other)
+      const at = new Map(after.atoms.map((a) => [a.id, { x: a.x / NOMINAL_BOND_LENGTH, y: a.y / NOMINAL_BOND_LENGTH }]));
+      const ids = after.atoms.map((a) => a.id);
+      const boxes = labelsDrawn(after, ids, MENO)(ids.map((id) => at.get(id)!.x), ids.map((id) => at.get(id)!.y));
+      for (const b of after.bonds) {
+        for (const [i, box] of boxes) if (ids[i] !== b.a && ids[i] !== b.b) expect(segmentInBox(at.get(b.a)!, at.get(b.b)!, box), `${key}: ${b.a}-${b.b} through ${ids[i]}`).toBe(false);
+        for (const c of after.bonds) if (c.id > b.id) expect(segmentsCross(at.get(b.a)!, at.get(b.b)!, at.get(c.a)!, at.get(c.b)!), `${key}: ${b.a}-${b.b} x ${c.a}-${c.b}`).toBe(false);
+      }
+    }
+  });
+
+  it("Clean-up from the menu moves nothing in cis-PtCl2(P(1-naphthyl)3)2, which it names no group of, and says so: every turn of the rings leaves a bond across another or through a label", { timeout: 180000 }, async () => {
+    const np = "P(c1cccc2ccccc12)(c1cccc2ccccc12)c1cccc2ccccc12";
+    const { drawn } = drawnSwapped(`Cl[Pt](Cl)(${np})${np}`, "Pt", true);
+    const { before, after, words } = await cleanedUp(drawn);
+    expect(after).toBe(before);
+    expect(words).toBe("Clean-up left C60H42Cl2P2Pt as drawn: the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved.");
+  });
+
+  it("Clean-up from the menu moves nothing in cis-PtCl2(P(o-tolyl)3)2 either, saying so - by its atoms, as it did before the ink was counted", { timeout: 180000 }, async () => {
+    const tol = "P(c1ccccc1C)(c1ccccc1C)c1ccccc1C";
+    const { drawn } = drawnSwapped(`Cl[Pt](Cl)(${tol})${tol}`, "Pt", true);
+    const { before, after, words } = await cleanedUp(drawn);
+    expect(after).toBe(before);
+    expect(words).toBe("Clean-up left C42H42Cl2P2Pt as drawn: the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved.");
   });
 });
 
