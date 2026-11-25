@@ -285,3 +285,47 @@ describe("a cage Clean-up draws in perspective, its centres stated by depth with
     expect(linkOf(made, mirrored)).toBe("changed");
   });
 });
+
+describe("a structure that states no configuration keeps its key", () => {
+  const key = (m: Model) => signatureOf(m, m.atoms.map((a) => a.id));
+  /** `m` with the bond from the first `centre` atom to the first `other` atom marked `stereo`, narrow at that atom. */
+  const marked = (m: Model, centre: string, other: string, stereo: "up" | "down" | "wavy"): Model => {
+    const o = m.atoms.find((a) => a.el === other)!;
+    const b = m.bonds.find((x) => (x.a === o.id || x.b === o.id) && m.atoms.find((a) => a.id === (x.a === o.id ? x.b : x.a))!.el === centre)!;
+    const c = b.a === o.id ? b.b : b.a;
+    return { ...m, bonds: m.bonds.map((x) => (x === b ? { ...x, a: c, b: o.id, stereo, narrow: c } : x)) } as Model;
+  };
+
+  it("no wedge, no hash, no wavy line and no side of a double bond stated: its atoms and bonds, each bond's order and none", () => {
+    // (each structure's atoms numbered from 1 as written; the key's text is held as it stands, so a molecule made from it, its lasting
+    //  id in a set and the keys of results made from it stay theirs)
+    const cases: [string, string][] = [
+      ["CCO", "1:C:0:,2:C:0:,3:O:0:,|,1-2:1:none,2-3:1:none"],
+      ["C=CC", "1:C:0:,2:C:0:,3:C:0:,|,1-2:2:none,2-3:1:none"],
+      ["C1=CC=CC=C1", "1:C:0:,2:C:0:,3:C:0:,4:C:0:,5:C:0:,6:C:0:,|,1-2:2:none,1-6:1:none,2-3:1:none,3-4:2:none,4-5:1:none,5-6:2:none"],
+      ["CC(=O)O", "1:C:0:,2:C:0:,3:O:0:,4:O:0:,|,1-2:1:none,2-3:2:none,2-4:1:none"],
+      // (but-2-ene drawn in a line: neither side of its double bond stated)
+      ["CC=CC", "1:C:0:,2:C:0:,3:C:0:,4:C:0:,|,1-2:1:none,2-3:2:none,3-4:1:none"],
+      ["CC(O)CC", "1:C:0:,2:C:0:,3:O:0:,4:C:0:,5:C:0:,|,1-2:1:none,2-3:1:none,2-4:1:none,4-5:1:none"],
+      ["CC(C)O", "1:C:0:,2:C:0:,3:C:0:,4:O:0:,|,1-2:1:none,2-3:1:none,2-4:1:none"],
+    ];
+    for (const [smiles, text] of cases) expect(key(drawnFromSmiles(smiles))).toBe(text);
+  });
+
+  it("a configuration stated makes another key: a wedge at a centre, a side of a double bond drawn; a wavy line is kept as drawn", () => {
+    expect(key(drawnFromSmiles("C[C@H](O)CC"))).not.toBe(key(drawnFromSmiles("CC(O)CC")));
+    expect(key(drawnFromSmiles("C[C@H](N)C(=O)O"))).not.toBe(key(drawnFromSmiles("CC(N)C(=O)O")));
+    expect(key(drawnFromSmiles("C/C=C/C"))).not.toBe(key(drawnFromSmiles("CC=CC")));
+    expect(key(marked(drawnFromSmiles("CC(O)CC"), "C", "O", "wavy"))).toBe("1:C:0:,2:C:0:,3:O:0:,4:C:0:,5:C:0:,|,1-2:1:none,2-3:1:wavy,2-4:1:none,4-5:1:none");
+  });
+
+  it("a wedge that sets nothing - at propan-2-ol's CH - states nothing: the key of the structure drawn without it", () => {
+    const plain = drawnFromSmiles("CC(C)O");
+    expect(key(marked(plain, "C", "O", "up"))).toBe(key(plain));
+    expect(key(marked(plain, "C", "O", "down"))).toBe(key(plain));
+    // (at butan-2-ol's CH it sets the hand: the other key, one for each hand)
+    const butanol = drawnFromSmiles("CC(O)CC");
+    expect(key(marked(butanol, "C", "O", "up"))).not.toBe(key(butanol));
+    expect(key(marked(butanol, "C", "O", "up"))).not.toBe(key(marked(butanol, "C", "O", "down")));
+  });
+});

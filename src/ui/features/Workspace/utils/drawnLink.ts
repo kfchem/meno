@@ -2,6 +2,8 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { readStereo } from "../../../../lib/layout/drawn";
 import { drawingOf } from "../chem/drawing";
 import { keepsAny, statedOf } from "../configuration/kept";
+import { identityInputOf } from "../chem/identityOf";
+import { unitsOf } from "../../../../lib/chem/identity";
 import type { Model, Molecule3D } from "../store/types";
 
 type Atom = Model["atoms"][number];
@@ -83,8 +85,8 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
   for (const id of of)
     for (const b of bondsOf.get(id) ?? []) {
       if (b.hydrogen) continue;
-      // (to such a hydrogen: nothing of its own, but a wedge on it that is not read)
-      if ((plainH.has(b.a) || plainH.has(b.b)) && (!b.stereo || b.stereo === "none" || read.wedges.has(b.id))) continue;
+      // (to such a hydrogen, on a structure that states a configuration: nothing of its own, but a wedge on it that is not read)
+      if ((plainH.has(b.a) || plainH.has(b.b)) && read.said.length && (!b.stereo || b.stereo === "none" || read.wedges.has(b.id))) continue;
       touching.add(b);
     }
   const bonds = [...touching]
@@ -95,8 +97,9 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
       // (a wedge whose configuration is read says nothing the configurations do not (`configurationsOf`): one moved to
       //  another bond that states the same, as Clean-up moves one, is no change; one not read - at no centre, or leaving
       //  the structure - is kept as drawn)
-      const wedge = !b.stereo || b.stereo === "none" || read.wedges.has(b.id) ? "" : `:${b.stereo}`;
-      return `${ends}:${b.order}${wedge}${binds}`;
+      // (":none" where no mark is kept: a part of the key's text that every bond carries)
+      const wedge = !b.stereo || b.stereo === "none" || read.wedges.has(b.id) ? "none" : b.stereo;
+      return `${ends}:${b.order}:${wedge}${binds}`;
     })
     .sort();
   return [...atoms, "|", ...bonds, ...(read.said.length ? ["|", ...read.said] : [])].join(",");
@@ -109,6 +112,17 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
  * ((Z)- and (E)-but-2-ene, a methyl moved; butan-2-ol's methyl and ethyl exchanged in place).
  */
 function configurationsOf(model: Model, of: ReadonlySet<number>): { said: string[]; wedges: Set<number> } {
+  const asked = [...of].sort((p, q) => p - q).join(",");
+  const known = configurations.get(model) ?? new Map<string, { said: string[]; wedges: Set<number> }>();
+  configurations.set(model, known);
+  if (!known.has(asked)) known.set(asked, configurationsRead(model, of));
+  return known.get(asked)!;
+}
+
+/** Each drawing's configurations read (`configurationsOf`), by the atoms asked of. */
+const configurations = new WeakMap<Model, Map<string, { said: string[]; wedges: Set<number> }>>();
+
+function configurationsRead(model: Model, of: ReadonlySet<number>): { said: string[]; wedges: Set<number> } {
   const atoms = model.atoms.filter((a) => of.has(a.id));
   const bonds = model.bonds.filter((b) => of.has(b.a) && of.has(b.b) && !b.hydrogen);
   const part = { atoms, bonds } as Model;
@@ -134,8 +148,13 @@ function configurationsOf(model: Model, of: ReadonlySet<number>): { said: string
   };
   // (the atom across an axis's or a run's end: its partner where bonded, else the one it is doubly bonded to)
   const across = (u: number, v: number) => (near[u].includes(v) ? v : (near[u].find((n) => order.get(n < u ? `${n},${u}` : `${u},${n}`) === 2) ?? -1));
+  // (a configuration that sets nothing - a wedge at an isopropyl's CH - states nothing: turned over, identity writes the same
+  //  structure (lib/chem/identity `unitsOf`); its input holds the same configurations as `read`, by the same places)
+  const { input, bondAt } = identityInputOf(part);
+  const sets = unitsOf(input);
   const out: string[] = [];
   for (const [c, t] of read.tetra) {
+    if (!sets({ kind: "centre", at: c })) continue;
     const ns = t.neighbours.map(id);
     // (the sense against the neighbours in id order: turned once for each swap that sorts them)
     let sign: number = t.volume;
@@ -149,11 +168,13 @@ function configurationsOf(model: Model, of: ReadonlySet<number>): { said: string
     out.push(`c${id(c)}:${sign}`);
   }
   for (const [k, ct] of read.cisTrans) {
+    if (bondAt[k] < 0 || !sets({ kind: "bond", at: bondAt[k] })) continue;
     const b = drawing.bonds[k];
     const sense = (ct.cis ? 1 : -1) * turned(b.a, ct.refs[0], b.b) * turned(b.b, ct.refs[1], b.a);
     out.push(`d${Math.min(id(b.a), id(b.b))}-${Math.max(id(b.a), id(b.b))}:${sense}`);
   }
-  for (const x of [...read.axes.map((a) => ({ ...a, kind: "a", set: a.sense })), ...read.cumulated.map((a) => ({ ...a, kind: "u", set: a.cis ? 1 : -1 }))]) {
+  for (const x of [...read.axes.map((a, at) => ({ ...a, at, kind: "a", set: a.sense })), ...read.cumulated.map((a, at) => ({ ...a, at, kind: "u", set: a.cis ? 1 : -1 }))]) {
+    if (!sets({ kind: x.kind === "a" ? "axis" : "cumulated", at: x.at })) continue;
     const [u, v] = x.atoms;
     const sense = x.set * turned(u, x.refs[0], across(u, v)) * turned(v, x.refs[1], across(v, u));
     out.push(`${x.kind}${Math.min(id(u), id(v))}-${Math.max(id(u), id(v))}:${sense}`);
