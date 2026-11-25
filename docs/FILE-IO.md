@@ -307,13 +307,16 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   selected are written as SDF export writes them: one after another, each as
   it is in its file - not placed on the page as one system.
 - Meno's own reader reads the file back: the same atoms in the same order,
-  the coordinates to the eight decimals, and, of a file of more than one
-  frame, each frame's energy by that `E = ... Eh` pattern - a pattern of
+  the coordinates to the eight decimals, and each frame's energy by that
+  `E = ... Eh` pattern - a pattern of
   Meno's own, which needs no plugin (a program's patterns are its plugin's;
-  `utils/xyzEnergies.ts`). A one-frame file's energy is written but, as for
-  any one-frame XYZ, not read.
+  `utils/xyzEnergies.ts`). A one-frame file's comment line is read by the
+  same rule as a frame's in a longer file - its name, and its energy where
+  the rule finds one - and kept with the molecule, so that a join and an
+  export keep them; a molecule of one frame shows no chip for them, and
+  looks on the page as one without them.
 - **A frame's name is its comment line** (`xyzFrameName`,
-  `lib/chem/xyzWriter.ts`): of a file of more than one frame, each frame's
+  `lib/chem/xyzWriter.ts`): of a file of one frame or more, each frame's
   comment line as written, less the energy Meno reads from it in its own
   form (`E = <n> Eh`), trimmed - none where nothing else is on it. Meno
   reads no other form into the line: a writer chooses what is shown by
@@ -1785,7 +1788,7 @@ As step 3 was built:
   unit of its number, taken from the program's documentation); xtb's,
   CREST's and ORCA's plugins declare theirs. Meno's own form, `E = <n> Eh`
   (*XYZ written*), is read with no plugin added. Meno reads an XYZ file's
-  geometry always; a frame's energy, of a file of more than one frame,
+  geometry always; a frame's energy, of a file of one frame or more,
   where Meno's own pattern or an added plugin's finds one on its line -
   each frame keeping its own, a frame whose line gives none having none -
   and where two patterns find different numbers on a line, none for that

@@ -52,8 +52,9 @@ describe("an XYZ file's energies, read by the patterns of the plugins added", ()
     expect(got[1]).toBeCloseTo(-2, 6);
   });
 
-  it("are none for one frame alone, or where no frame has one; a frame alone with none has none", () => {
-    expect(energies(["  -1.17"], "confsweep")).toBeUndefined();
+  it("are read of one frame alone by the same rule; none where no frame has one; a frame alone with none has none", () => {
+    expect(energies(["  -1.17"], "confsweep")).toEqual([-1.17]);
+    expect(energies(["a title"], "confsweep")).toBeUndefined();
     expect(energies(["a title", "another"], "confsweep")).toBeUndefined();
     expect(energies(["-1.17", "a title"], "confsweep")).toEqual([-1.17, NaN]);
   });

@@ -12,7 +12,7 @@ import { frameXyz } from "../workflow/entries";
 import { asConformers, constitutionOf } from "../workflow/meno";
 import { howUnlike, setEntries } from "../workflow/entries";
 import { stereoIdentity } from "../../../../lib/entry";
-import { perceiveStereo, type Asker } from "../workflow/configurations";
+import { NO_ANSWER, NOT_ASKED, perceiveStereo, type Asker } from "../workflow/configurations";
 
 type Framed = Pick<Molecule3D, "atoms" | "bonds" | "frames"> & Partial<Pick<Molecule3D, "bondsFrom" | "atomsDiffer" | "path">>;
 
@@ -75,8 +75,8 @@ export function joinable(ms: readonly Molecule3D[]): boolean {
 /** The words a join refused says: why, of the molecules selected, in one plain sentence (docs/WORKSPACE.md, *Frames taken as conformers*). */
 export const JOIN_REFUSED = {
   stereoisomers: "Not joined as conformers: the selected molecules are not all the same stereoisomer.",
-  nothingTells: "Not joined as conformers: nothing added tells which stereoisomer the selected molecules are.",
-  notTold: "Not joined as conformers: which stereoisomer one of the selected molecules is could not be told.",
+  nothingTells: "Not joined as conformers: no plugin added tells which stereoisomer the selected molecules are.",
+  notTold: "Not joined as conformers: the stereoisomer of one of the selected molecules could not be worked out.",
   unspecified: "Not joined as conformers: one of the selected molecules has a stereocentre or double bond left unspecified.",
   calculations: "Not joined as conformers: the selected molecules come from different calculations.",
   sources: "Not joined as conformers: the selected molecules' energies come from different sources.",
@@ -89,7 +89,9 @@ export const JOIN_REFUSED = {
  * each geometry is asked first, as that step asks it (workflow/configurations
  * `perceiveStereo`), then the same judgement - the same constitution and the
  * same stereoisomer, made alike (workflow/entries `unlikeMade`). Null where
- * they are one compound; else why not, in one plain sentence (`JOIN_REFUSED`).
+ * they are one compound; else why not, in one plain sentence (`JOIN_REFUSED`) -
+ * and, where the plugin asked gave words of its own, those after it, by its
+ * name ("<name>: <its words>"), as a plugin's own words are shown elsewhere.
  */
 export async function notOneCompound(ms: readonly Molecule3D[], asker: Asker): Promise<string | null> {
   await perceiveStereo(setEntries(ms, "molecules"), asker);
@@ -98,7 +100,14 @@ export async function notOneCompound(ms: readonly Molecule3D[], asker: Asker): P
   if (out.ok) return new Set(out.kept.map((e) => e.compound)).size > 1 ? JOIN_REFUSED.stereoisomers : null;
   // (refused: a molecule whose stereoisomer is not known - nothing to ask, not told, or left unspecified - else made unlike)
   const unknown = entries.find((e) => stereoIdentity(e.stereo) == null);
-  if (unknown) return "none" in asker ? JOIN_REFUSED.nothingTells : unknown.stereo?.perceived ? JOIN_REFUSED.unspecified : JOIN_REFUSED.notTold;
+  if (unknown) {
+    if ("none" in asker) return JOIN_REFUSED.nothingTells;
+    const st = unknown.stereo;
+    if (st?.perceived) return JOIN_REFUSED.unspecified;
+    // (its own words: what it answered for the molecule, or what went wrong asking it - none where it gave no answer)
+    const own = !st || st.why === NO_ANSWER ? "" : st.why.startsWith(NOT_ASKED) ? st.why.slice(NOT_ASKED.length) : st.why;
+    return own.trim() ? `${JOIN_REFUSED.notTold} ${asker.name || asker.plugin}: ${own.trim()}` : JOIN_REFUSED.notTold;
+  }
   return JOIN_REFUSED[howUnlike(entries) ?? "stereoisomers"];
 }
 

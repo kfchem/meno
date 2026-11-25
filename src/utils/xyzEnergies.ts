@@ -39,12 +39,12 @@ export function waysOf(decls: readonly XyzEnergyDecl[]): EnergyWay[] {
 }
 
 /**
- * Each frame's energy, in hartrees, by the ways given, of a file of more than one frame: each frame keeps what its line gives -
+ * Each frame's energy, in hartrees, by the ways given, of a file of one frame or more: each frame keeps what its line gives -
  * NaN, none, where its line gives none, or where two ways find different numbers on it - so that the frames that have one keep
  * theirs (what needs every frame's, shares, is then not worked out). None at all where no frame has one.
  */
 export function energiesOf(comments: string[], ways: readonly EnergyWay[]): number[] | undefined {
-  if (comments.length < 2 || !ways.length) return undefined;
+  if (!comments.length || !ways.length) return undefined;
   const found = comments.map((c) => {
     const values = ways.map((w) => w(c)).filter((v): v is number => v !== undefined);
     if (!values.length) return NaN;

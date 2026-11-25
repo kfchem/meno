@@ -21,8 +21,13 @@ import type { SetEntry } from "./entries";
 
 type Geometry = Pick<SetEntry, "atoms" | "bonds" | "xyz">;
 
-/** Who answers: the plugin (its id and version), and its answers for MOL blocks in order - or nothing to ask, and why. */
-export type Asker = { plugin: string; version: string; ask: (molblocks: string[]) => Promise<Configured[]> } | { none: string };
+/** Who answers: the plugin (its id and version, and the name it is shown by), and its answers for MOL blocks in order - or nothing to ask, and why. */
+export type Asker = { plugin: string; version: string; name?: string; ask: (molblocks: string[]) => Promise<Configured[]> } | { none: string };
+
+/** Why a molecule was not perceived where the plugin gave no answer for it: Meno's words, not the plugin's. */
+export const NO_ANSWER = "It gave no answer for this molecule";
+/** Why, where the plugin could not be asked at all: these words, then what went wrong, as the plugin's worker said it. */
+export const NOT_ASKED = "It could not be asked: ";
 
 const known = new Map<string, EntryStereo>();
 /** Those known only as not asked - nothing added to ask, or the plugin failed altogether: asked again next time. */
@@ -104,7 +109,7 @@ export async function perceiveStereo(entries: readonly Geometry[], asker: Asker)
     answers = await asker.ask(fresh.map(molblockOf));
   } catch (err) {
     // (asked again next time, once the plugin can answer)
-    return unasked(`It could not be asked: ${err instanceof Error ? err.message : String(err)}`);
+    return unasked(`${NOT_ASKED}${err instanceof Error ? err.message : String(err)}`);
   }
   const by = { plugin: asker.plugin, version: asker.version };
   fresh.forEach((e, i) => {
@@ -112,7 +117,7 @@ export async function perceiveStereo(entries: readonly Geometry[], asker: Asker)
     again.delete(keyOf(e));
     known.set(
       keyOf(e),
-      !a ? { perceived: false, why: "It gave no answer for this molecule" } : "error" in a ? { perceived: false, why: a.error } : { perceived: true, ...withArrangements(e, withLonePairs(e, a)), by },
+      !a ? { perceived: false, why: NO_ANSWER } : "error" in a ? { perceived: false, why: a.error } : { perceived: true, ...withArrangements(e, withLonePairs(e, a)), by },
     );
   });
 }

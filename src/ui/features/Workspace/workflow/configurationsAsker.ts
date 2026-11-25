@@ -12,6 +12,7 @@ export function askerFor(): Asker {
   if (!plugin) return { none: "Nothing added tells stereoisomers apart" };
   return {
     plugin: plugin.id,
+    name: plugin.name,
     version: plugin.version,
     ask: async (molblocks) => (await (await pluginWorker(plugin)).request("configurations", { molblocks })).molecules,
   };

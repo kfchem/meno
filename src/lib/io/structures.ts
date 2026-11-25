@@ -317,8 +317,9 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     const [first, ...rest] = whole.frames;
     // (and each frame's energy, as programs write it on the comment lines)
     const comments = xyzComments(content);
-    const energies = whole.total > 1 ? energiesOf(comments, waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i)) : undefined;
-    // (each frame's name, its comment line less the energy read from it - where several frames are kept, as for their energies)
+    const energies = energiesOf(comments, waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i));
+    // (each frame's name, its comment line less the energy read from it - a one-frame file's too, by the same rule: kept with
+    // the molecule, as a longer file's frames' are, for a join and an export to keep; a molecule of one frame shows no chip for them)
     // (Meno's own `<name> frame i/n` of an unnamed frame, numbered as the frame is in its file, gives none)
     const names = whole.kept.map((i) => xyzFrameName(comments[i] ?? "", { i, of: whole.total }));
     const elements = (atoms: readonly { el: string }[]) => atoms.map((a) => a.el).join(" ");
@@ -335,8 +336,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
           // (none where no frame kept has one: those that had one may be among the frames left out)
-          ...(rest.length && energies?.length === kept.size && energies.some(Number.isFinite) ? { energies } : {}),
-          ...(rest.length && names.some(Boolean) ? { frameNames: names } : {}),
+          ...(energies?.length === kept.size && energies.some(Number.isFinite) ? { energies } : {}),
+          ...(names.some(Boolean) ? { frameNames: names } : {}),
           ...(differ ? { atomsDiffer: true as const } : {}),
           ...(filename ? { name: filename } : {}),
           ...(kept.size < whole.total ? { framesLeftOut: whole.total - kept.size } : {}),

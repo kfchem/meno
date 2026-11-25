@@ -34,9 +34,10 @@ describe("a frame's name, from its XYZ comment line", () => {
     expect(m.atomsDiffer).toBeUndefined();
   });
 
-  it("names none where no line has more than an energy, nor of a file of one frame", () => {
+  it("names none where no line has more than an energy; names a file of one frame by the same rule", () => {
     expect(read(three("E = -1 Eh", "E = -2 Eh", "")).frameNames).toBeUndefined();
-    expect(read(block("only one", 0)).frameNames).toBeUndefined();
+    expect(read(block("only one", 0)).frameNames).toEqual(["only one"]);
+    expect(read(block("E = -1 Eh", 0)).frameNames).toBeUndefined();
   });
 
   it("keeps each frame's energy where some lines give one and others none", () => {

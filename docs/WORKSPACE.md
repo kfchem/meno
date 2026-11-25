@@ -909,9 +909,8 @@ Taken on 2026-10-13:
     frame's own, else its record's title) and the energy it had - none
     where it had none, so that, as for a file, shares are given only
     where every frame has an energy - each frame at its file's
-    coordinates (none is turned onto another). A one-frame XYZ file
-    gives no name or energy to keep: its comment line is not read
-    (docs/FILE-IO.md). Where they are not one compound they are not
+    coordinates (none is turned onto another) - a one-frame XYZ file's
+    name and energy too, read from its comment line (docs/FILE-IO.md). Where they are not one compound they are not
     joined, and why is said in one plain sentence of the molecules
     selected - not all the same stereoisomer; nothing added tells which
     stereoisomer they are; one's stereoisomer could not be told; one has
