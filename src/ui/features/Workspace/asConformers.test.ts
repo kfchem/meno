@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { forgetStereo, type Asker } from "./workflow/configurations";
 import { connectStoreToDocument, createEditorStore } from "./store";
 import * as ops from "./document";
 import { createWorkspaceDocument } from "./document";
 import { readStructures } from "../../../lib/io/structures";
-import { conformersOffered, framesAlike, joinable, joined, lowestFrame } from "./utils/asConformers";
+import { conformersOffered, framesAlike, joinable, joined, lowestFrame, notOneCompound } from "./utils/asConformers";
 import { sharesOf } from "./utils/molecule3d";
 import type { Molecule3D } from "./store/types";
 
@@ -66,6 +67,11 @@ describe("frames taken as conformers, on purpose", () => {
   });
 });
 
+/** An invented plugin that tells stereoisomers apart: every geometry one stereoisomer, or - `apart` - the one whose hydrogen stands at 0.97 another. */
+const teller = (apart = false): Asker => ({ plugin: "invented", version: "1.0.0", ask: async (blocks) => blocks.map((b) => ({ elements: [], key: apart && b.includes("0.9700") ? "B" : "A" })) });
+
+afterEach(() => forgetStereo());
+
 describe("molecules joined as conformers", () => {
   const records = readStructures("sdf", "two.sdf", record("alpha, made up", -76.1) + record("beta, made up", -76.3, 0.97)).molecules3d!;
   const placed = records.map((m, i) => ({ ...(m as never as Molecule3D), id: i + 1, at: { x: 0, y: 0 } }));
@@ -87,12 +93,29 @@ describe("molecules joined as conformers", () => {
     expect(one.title).toBeUndefined();
   });
 
-  it("is one step: the lowest shown, and undone they are as they were, at their places", () => {
+  it("are not joined where they are two stereoisomers, saying what As conformers says of them", async () => {
+    expect(await notOneCompound(placed, teller(true))).toBe("2 compounds · 2");
+    // (what each geometry is, once told, is kept: told afresh)
+    forgetStereo();
+    expect(await notOneCompound(placed, teller())).toBeNull();
+    forgetStereo();
+    const { state, add } = editor();
+    const a = add({ ...(records[0] as unknown as Molecule3D), at: { x: 0, y: 0 } });
+    const b = add({ ...(records[1] as unknown as Molecule3D), at: { x: 7, y: 2 } });
+    expect(await state().joinAsConformers([a, b], teller(true))).toBe("2 compounds · 2");
+    expect(state().molecules3d).toHaveLength(2);
+    // (nothing to tell stereoisomers apart: the words As conformers says)
+    forgetStereo();
+    expect(await state().joinAsConformers([a, b], { none: "Nothing added tells stereoisomers apart" })).toBe("Which stereoisomer entry 1 is is not known: Nothing added tells stereoisomers apart");
+    expect(state().molecules3d).toHaveLength(2);
+  });
+
+  it("is one step: the lowest shown, and undone they are as they were, at their places", async () => {
     const { doc, state, add } = editor();
     const a = add({ ...(records[0] as unknown as Molecule3D), at: { x: 0, y: 0 } });
     const b = add({ ...(records[1] as unknown as Molecule3D), at: { x: 7, y: 2 } });
     const before = state().molecules3d;
-    state().joinAsConformers([a, b]);
+    expect(await state().joinAsConformers([a, b], teller())).toBeNull();
     expect(state().molecules3d).toHaveLength(1);
     expect(state().molecules3d[0].id).toBe(a);
     expect(state().molecules3d[0].at).toEqual({ x: 0, y: 0 });

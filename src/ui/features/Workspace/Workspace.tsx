@@ -1370,7 +1370,13 @@ function WorkspaceContent({
           : {}),
         // (the molecules selected with it, one compound: joined as one set of conformers)
         ...(joinIds.length >= 2 && joinable(molecules3d.filter((m) => joinIds.includes(m.id)))
-          ? { onJoinConformers: () => store.getState().joinAsConformers(joinIds) }
+          ? {
+              onJoinConformers: () => {
+                setChemError(null);
+                // (where they are not one compound, what *As conformers* would say of them)
+                void store.getState().joinAsConformers(joinIds).then((why) => why && setChemError(`Not joined as conformers: ${why}`));
+              },
+            }
           : {}),
         ...((menuMolecule.frames?.length ?? 0) > 0
           ? {

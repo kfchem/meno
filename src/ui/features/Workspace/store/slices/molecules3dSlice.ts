@@ -17,7 +17,9 @@ import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks"
 import { fitResultSets } from "../../workflow/run";
 import { heldViewId, shownIn } from "../../workflow/heldView";
 import { whileMoving } from "../../chem/crossings";
-import { joinable, joined, lowestFrame } from "../../utils/asConformers";
+import { joinable, joined, lowestFrame, notOneCompound } from "../../utils/asConformers";
+import { askerFor } from "../../workflow/configurationsAsker";
+import type { Asker } from "../../workflow/configurations";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -369,14 +371,21 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const lowest = m ? lowestFrame(m) : null;
       if (lowest != null) get().setFrame3d(id, lowest);
     },
-    joinAsConformers: (ids: readonly number[]) => {
+    joinAsConformers: async (ids: readonly number[], asker?: Asker) => {
+      const all = get().molecules3d.filter((m) => ids.includes(m.id));
+      if (!joinable(all)) return null;
+      // (judged as *As conformers* judges, its stereoisomers asked first as that step asks them - workflow/meno `asConformers`)
+      const why = await notOneCompound(all, asker ?? askerFor());
+      if (why) return why;
+      // (what was selected may have changed while it was asked: joined only as they still are)
       const ms = get().molecules3d.filter((m) => ids.includes(m.id));
-      if (!joinable(ms)) return;
+      if (!joinable(ms)) return null;
       doc.edit("join as conformers", (d) => ops.joinMolecules3d(d, ids, joined));
       const m = get().molecules3d.find((x) => x.id === ms[0].id);
       get().selectMolecules3d([ms[0].id]);
       const lowest = m ? lowestFrame(m) : null;
       get().setFrame3d(ms[0].id, lowest ?? 0);
+      return null;
     },
     switchTalkLook3d: (id: number) =>
       set((prev) => {

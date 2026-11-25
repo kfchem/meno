@@ -9,7 +9,9 @@
 import type { Molecule3D } from "../store/types";
 import { frameBondsOf } from "./molecule3d";
 import { frameXyz } from "../workflow/entries";
-import { constitutionOf } from "../workflow/meno";
+import { asConformers, constitutionOf } from "../workflow/meno";
+import { setEntries } from "../workflow/entries";
+import { perceiveStereo, type Asker } from "../workflow/configurations";
 
 type Framed = Pick<Molecule3D, "atoms" | "bonds" | "frames"> & Partial<Pick<Molecule3D, "bondsFrom" | "atomsDiffer" | "path">>;
 
@@ -50,6 +52,22 @@ export function joinable(ms: readonly Molecule3D[]): boolean {
   if (ms.length < 2 || !ms.every(framesAlike) || ms.some((m) => m.biopolymer)) return false;
   const first = constitution(ms[0]);
   return ms.every((m) => m.atoms.length === ms[0].atoms.length && constitution(m) === first);
+}
+
+/**
+ * Why these molecules are not one compound's conformers, as *As conformers*
+ * would say it of them (workflow/meno `asConformers`): which stereoisomer
+ * each geometry is asked first, as that step asks it (workflow/configurations
+ * `perceiveStereo`), then the same judgement - the same constitution and the
+ * same stereoisomer, energies from one source. Null where they are one
+ * compound; where they are several, what the step says of them ("2
+ * compounds · 2").
+ */
+export async function notOneCompound(ms: readonly Molecule3D[], asker: Asker): Promise<string | null> {
+  await perceiveStereo(setEntries(ms, "molecules"), asker);
+  const out = asConformers(setEntries(ms, "molecules"));
+  if (!out.ok) return out.said;
+  return new Set(out.kept.map((e) => e.compound)).size > 1 ? out.said : null;
 }
 
 /**

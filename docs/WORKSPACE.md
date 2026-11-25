@@ -897,12 +897,19 @@ Taken on 2026-10-13:
     is a conformer set; chosen again, the mark is taken off. Undo and
     redo take it back and give it again.
   - *Join as conformers*, on the menu of molecules in 3D selected that
-    are one compound by the workflow's same-constitution check (*As
-    conformers*: the same atoms in the same order, bonded the same way,
-    of the same charge and spin): one set of them, in the page's order,
-    where the first stands - each record's title its frame's name, each
-    energy kept. Not offered where they differ. Undo gives them back as
-    they were, each at its place.
+    are of one constitution (the same atoms in the same order, bonded the
+    same way, of the same charge and spin; not offered where they
+    differ). Chosen, they are judged as *As conformers* judges them -
+    which stereoisomer each is asked first, as that step asks it, then
+    the same constitution and the same stereoisomer, energies from one
+    source - and, one compound, made one set of them, in the page's
+    order, where the first stands: each record's title its frame's name,
+    each energy kept, each frame at its file's coordinates (none is
+    turned onto another). Where they are not one compound - two
+    stereoisomers, or a stereoisomer not known - they are not joined, and
+    what *As conformers* would say of them is said ("Not joined as
+    conformers: 2 compounds · 2"). Undo gives a joined set back as the
+    molecules were, each at its place.
   - Either way the set is as any conformer set: its lowest shown, where
     every frame has an energy; shares where every frame has one; its
     conformers numbered. What was worked out of the molecules as wholes -
