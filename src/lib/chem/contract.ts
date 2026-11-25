@@ -26,9 +26,15 @@
  * - A group the user has just drawn out (`keep`) is left drawn out.
  *
  * A heteroatom that hangs by one bond, all else on it now named, is written
- * with them in one label, as chemists write it: OTBS, NHBoc, PPh3, PPh2.
+ * with them in one label, as chemists write it: OTBS, NHBoc, PPh3, PPh2 -
+ * and, where the atom's symbol run together with the group's name would
+ * read as something else (P and t-Bu as Pt, N and iPr as Ni, O and s-Bu as
+ * Os), with the group in parentheses, its count outside: P(t-Bu)3, N(iPr)2,
+ * drawn at a left end as (t-Bu)3P (IUPAC, Brecher 2008, GR-2.2, GR-2.3.5,
+ * GR-2.3.7; `atomWithGroups`).
  */
-import { GROUPS, abbreviationStructure, type Abbreviation } from "./abbreviations";
+import { GROUPS, abbreviationStructure, labelUnits, type Abbreviation } from "./abbreviations";
+import type { GroupStructure } from "./ligands";
 import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens } from "./molecule";
 import { readSmiles } from "./smiles";
@@ -422,12 +428,10 @@ function merged(g: ContractGraph, P: Prepared, chosen: Found[], keep: ReadonlySe
       // (its bonds to metals apart: a phosphine on a metal is PPh3, no P-H - the core's count)
       const toMetals = P.heavy(p).reduce((s, v) => s + (isMetal(g.atoms[v].el) ? orderTo(v) : 0), 0);
       const hs = implicitHydrogens(atom.el, heavyOrders, 0, undefined, toMetals);
-      const name = fs[0].group.label;
-      const label = `${atom.el}${hs ? `H${hs > 1 ? hs : ""}` : ""}${name}${fs.length > 1 ? fs.length : ""}`;
-      const read = abbreviationStructure(label);
-      const heavy = 1 + fs.reduce((s, f) => s + f.heavy, 0);
-      if (read && read.atoms.filter((a) => a.el !== "H" && a.el !== "*").length === heavy) {
-        out.push({ atoms: [p, ...drawnH, ...fs.flatMap((f) => f.atoms)], at: p, label });
+      const atoms = [p, ...drawnH, ...fs.flatMap((f) => f.atoms)];
+      const label = atomWithGroups(atom.el, hs, fs[0].group.label, fs.length, shapeOf(g, atoms));
+      if (label) {
+        out.push({ atoms, at: p, label });
         continue;
       }
     }
@@ -436,6 +440,62 @@ function merged(g: ContractGraph, P: Prepared, chosen: Found[], keep: ReadonlySe
   return out;
 }
 
+/**
+ * The label of an atom with `hs` H and `count` of the group `name` on it,
+ * as Clean-up writes it - or null where Meno would not read it back as
+ * `replaced` (`shapeOf`, the atoms it stands for). Written run together - PPh3,
+ * NHBoc, PiPr3 - where it reads, unit by unit, as the atom, its H and the
+ * groups (`labelUnits`, the label reader's own split, by the element
+ * table); otherwise with the group in parentheses, its count outside -
+ * P(t-Bu)3, not Pt-Bu3; N(iPr)2, not NiPr2; O(s-Bu), not Os-Bu; NH(Su), not
+ * NHSu - as IUPAC sets a branch apart (Brecher 2008, GR-2.3.5), no label
+ * reading as an element's symbol (GR-2.2), the group furthest from the
+ * bond (GR-2.3.7). Drawn at a left end, the units turned round: (t-Bu)3P.
+ */
+export function atomWithGroups(el: string, hs: number, name: string, count: number, replaced: string): string | null {
+  const head = `${el}${hs ? `H${hs > 1 ? hs : ""}` : ""}`;
+  const times = count > 1 ? String(count) : "";
+  for (const label of [`${head}${name}${times}`, `${head}(${name})${times}`]) {
+    const units = labelUnits(label);
+    const meant = [...labelUnits(head), ...labelUnits(label.slice(head.length))];
+    if (units.length !== meant.length || units.some((u, i) => u !== meant[i])) continue;
+    const read = abbreviationStructure(label);
+    if (read && shapeOfStructure(read) === replaced) return label;
+  }
+  return null;
+}
+
+/**
+ * The heavy atoms and the bonds between them, as one text alike for alike
+ * structures however numbered: each atom's element, and then, round by
+ * round, its neighbours' - what a label must be read back as.
+ */
+function shape(els: readonly string[], bonds: readonly (readonly [number, number])[]): string {
+  const next: number[][] = els.map(() => []);
+  for (const [a, b] of bonds) {
+    next[a].push(b);
+    next[b].push(a);
+  }
+  let names = [...els];
+  for (let round = 0; round < 4; round++) names = names.map((n, i) => `${n}(${next[i].map((j) => names[j]).sort().join(",")})`);
+  return [...names].sort().join(" ");
+}
+
+/** The shape (`shape`) of `atoms` of `g`, their H left out. */
+export function shapeOf(g: ContractGraph, atoms: readonly number[]): string {
+  const heavy = atoms.filter((a) => g.atoms[a].el !== "H");
+  const at = new Map(heavy.map((a, i) => [a, i]));
+  const bonds = g.bonds.flatMap((b) => (at.has(b.a) && at.has(b.b) && b.order > 0 ? [[at.get(b.a)!, at.get(b.b)!] as const] : []));
+  return shape(heavy.map((a) => g.atoms[a].el), bonds);
+}
+
+/** The shape (`shape`) of a label's structure, its H and stars left out. */
+export function shapeOfStructure(s: GroupStructure): string {
+  const heavy = s.atoms.flatMap((a, i) => (a.el !== "H" && a.el !== "*" ? [i] : []));
+  const at = new Map(heavy.map((a, i) => [a, i]));
+  const bonds = s.bonds.flatMap((b) => (at.has(b.a1) && at.has(b.a2) ? [[at.get(b.a1)!, at.get(b.a2)!] as const] : []));
+  return shape(heavy.map((a) => s.atoms[a].el), bonds);
+}
 
 /**
  * How much a layout hides: atoms on each other, and atoms lying on bonds

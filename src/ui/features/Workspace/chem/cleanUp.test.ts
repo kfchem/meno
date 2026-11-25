@@ -18,7 +18,9 @@ import { MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
-import { identityOfDrawn } from "./identityOf";
+import { identityInputOf, identityOfDrawn } from "./identityOf";
+import { formulaOfDrawn, formulaWritten } from "./nameLookup";
+import { constitutionKey } from "../../../../lib/chem/identity";
 import { drawingOf as drawnFromBlock } from "./fromSmiles";
 import { blocksOf } from "./make3d";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
@@ -971,6 +973,37 @@ describe("cleanUp", () => {
     // took 26 s and the whole test 47 s, at 42 the test 87 s - the second
     // Clean-up is 0.25 s. The headroom is for such a machine, not for the work.)
   }, measured(68_000));
+
+  it("writes tri-tert-butylphosphine on a metal as P(t-Bu)3, read as the phosphine it is (IUPAC GR-2.2, GR-2.3.5)", async () => {
+    const tBu = "C(C)(C)C";
+    const read = readSmiles(`P(${tBu})(${tBu})(${tBu})[Pd]P(${tBu})(${tBu})${tBu}`);
+    const orders = kekuleOrders(read.atoms, read.bonds);
+    const { doc, store } = canvas(
+      flatDrawing({ atoms: read.atoms.map((a) => ({ el: a.el })), bonds: read.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })) }),
+    );
+    // what Meno takes the drawing to be: each label drawn out, its formula and constitution
+    const compound = (m: Model) => {
+      let d = { ...emptyWorkspaceDocument(), model: m, nextId: 5000 };
+      for (const a of m.atoms) if (!/^[A-Z][a-z]?$/.test(a.el)) d = expandAbbreviation(d, a.id);
+      return { formula: formulaWritten(formulaOfDrawn(d.model)!), constitution: constitutionKey(identityInputOf(d.model).input) };
+    };
+    const before = compound(store.getState().model);
+    expect(before.formula).toBe("C24H54P2Pd");
+    const labels = () => store.getState().model.atoms.filter((a) => !/^[A-Z][a-z]?$/.test(a.el)).map((a) => a.el);
+    await cleanUp(store);
+    expect(labels()).toEqual(["P(t-Bu)3", "P(t-Bu)3"]);
+    expect(compound(store.getState().model)).toEqual(before);
+    // drawn as written at a right end, turned round at a left end - P never beside a t
+    const s = store.getState();
+    const texts = drawingLayout(drawnOf(s), s, MENO).layout.texts.map((t) => t.text).sort();
+    expect(texts).toEqual(["(t-Bu)3P", "P(t-Bu)3", "Pd"]);
+    // undone, the atoms are back; redone, the labels
+    doc.undo();
+    expect(labels()).toEqual([]);
+    expect(store.getState().model.atoms.filter((a) => a.el === "C")).toHaveLength(24);
+    doc.redo();
+    expect(labels()).toEqual(["P(t-Bu)3", "P(t-Bu)3"]);
+  });
 
   it("writes a protecting group by name, in the same step, and leaves one just drawn out drawn", async () => {
     // tert-butyldimethylsilyl ethyl ether, drawn atom by atom

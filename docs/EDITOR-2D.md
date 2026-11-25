@@ -2897,7 +2897,16 @@ lipids each have their own way of being drawn, which it should know.
        on a bond - the largest groups left, alike ones together, are
        written by name too, for as long as each time hides less;
      - a heteroatom hanging by one bond, everything else on it written by
-       name, goes into the label with them: OTBS, NHBoc, PPh3, PPh2;
+       name, goes into the label with them: OTBS, NHBoc, PPh3, PPh2,
+       PiPr3. Where the atom's symbol run together with the group's name
+       would read as another element or another group - P and t-Bu as
+       Pt, N and iPr as Ni, O and s-Bu as Os, Se and s-Bu as the Ses
+       group - the group is set in parentheses with its count outside:
+       P(t-Bu)3, N(iPr)2, O(s-Bu), drawn at a left end as (t-Bu)3P
+       (IUPAC, Brecher 2008, GR-2.2, GR-2.3.5, GR-2.3.7). Which it is, is
+       decided by Meno's own label reader: the label must split into the
+       atom, its H and the groups, and be read back as exactly the atoms
+       it stands for, or it is not written;
      - what the last edit drew out of a label stays drawn out for the
        Clean-up straight after it, and for that one only, so that nothing
        is left drawn out for good;

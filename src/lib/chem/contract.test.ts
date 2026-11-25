@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { picturedStructure } from "./abbreviationPlace";
-import { abbreviationOf, abbreviationStructure } from "./abbreviations";
+import { GROUPS, abbreviationOf, abbreviationStructure, labelUnits, reversedLabel } from "./abbreviations";
+import { ELEMENTS } from "./elements";
+import { implicitHydrogens } from "./molecule";
+import { isMetal } from "../layout/perceive";
 import { counterIonStructure, ligandPicture, namedLigand } from "./ligands";
-import { contractGraph, contractionTrials, contractions, type ContractGraph } from "./contract";
+import { atomWithGroups, contractGraph, contractionTrials, contractions, shapeOf, shapeOfStructure, type ContractGraph } from "./contract";
 import { kekuleOrders } from "./kekulize";
 import { readSmiles } from "./smiles";
 import { smilesStructure } from "./reagents";
@@ -150,6 +153,75 @@ describe("a label of an atom and its groups", () => {
     }
     // (molecules, their valence full)
     for (const label of ["PCl3", "SiCl4", "BF3", "CHCl3"]) expect(abbreviationStructure(label)?.attach, label).toEqual([]);
+  });
+});
+
+describe("an atom and its groups in one label, read as they are", () => {
+  // (a long chain to hang them on, so that each group is small beside the molecule)
+  const chain = "C".repeat(40);
+  const labels = (smiles: string) => {
+    const g = fromSmiles(smiles);
+    return contractions(g).map((c) => {
+      // what Meno reads the label as is the atoms it stands for
+      expect(shapeOfStructure(abbreviationStructure(c.label)!), c.label).toBe(shapeOf(g, c.atoms));
+      return c.label;
+    });
+  };
+
+  it("sets a group in parentheses where the atom's symbol and the group's name run together would read as another element (IUPAC GR-2.2, GR-2.3.5)", () => {
+    const tBu = "C(C)(C)C";
+    // tri-tert-butylphosphine on palladium: P and t-Bu, not Pt
+    expect(labels(`P(${tBu})(${tBu})(${tBu})[Pd]P(${tBu})(${tBu})${tBu}`)).toEqual(["P(t-Bu)3", "P(t-Bu)3"]);
+    // N and iPr, not Ni; O and s-Bu, not Os; Se and s-Bu, not the Ses group
+    expect(labels(`CC(C)N(C(C)C)c1ccc(${chain})cc1`)).toEqual(["N(iPr)2"]);
+    expect(labels(`CCC(C)Oc1ccc(${chain})cc1`)).toEqual(["O(s-Bu)"]);
+    expect(labels(`CCC(C)[Se]c1ccc(${chain})cc1`)).toEqual(["Se(s-Bu)"]);
+    // drawn at a left end, the units turned round, the group still whole
+    expect(reversedLabel("P(t-Bu)3")).toBe("(t-Bu)3P");
+    expect(reversedLabel("N(iPr)2")).toBe("(iPr)2N");
+  });
+
+  it("leaves a label that reads as it is run together", () => {
+    const iPr = "C(C)C";
+    expect(labels(`P(${iPr})(${iPr})(${iPr})[Pd]P(${iPr})(${iPr})${iPr}`)).toEqual(["PiPr3", "PiPr3"]);
+    expect(labels(`${chain}P(C1CCCCC1)C1CCCCC1`)).toEqual(["PCy2"]);
+    expect(labels(`CC(C)(C)[Si](C)(C)Oc1ccc(${chain})cc1`)).toEqual(["OTBS"]);
+  });
+
+  it("writes every group on every atom the rules allow so that Meno reads it back as the same atoms, the atom first", () => {
+    // (each atom that is no carbon, no H and no metal, with each of the
+    //  dictionary's groups - as many as its valence leaves beside the bond
+    //  to the rest - on a rest heavy enough that each group is small)
+    const starts = ELEMENTS.map((e) => e.symbol).filter((el) => el !== "C" && el !== "H" && !isMetal(el) && implicitHydrogens(el, 1) >= 1);
+    let merged = 0;
+    for (const el of starts) {
+      for (const group of GROUPS) {
+        if (!group.smiles.startsWith("*")) continue;
+        for (let n = 1; n <= implicitHydrogens(el, 1); n++) {
+          const g = fromSmiles(`${chain}${chain}[${el}]${`(${group.smiles.slice(1)})`.repeat(n)}`);
+          for (const c of contractions(g)) {
+            const read = abbreviationStructure(c.label);
+            expect(read && shapeOfStructure(read), `${el} ${group.label} x${n}: ${c.label}`).toBe(shapeOf(g, c.atoms));
+            // (the atom itself, after the chain, with its groups - not a group of the dictionary's it makes, Si and three Me a TMS)
+            if (c.at !== 2 * chain.length || GROUPS.some((x) => x.label === c.label)) continue;
+            merged++;
+            // the atom's symbol a unit of its own, first - and last, at a left end
+            expect(labelUnits(c.label)[0], c.label).toBe(el);
+            const turned = labelUnits(reversedLabel(c.label));
+            expect(turned[turned.length - 1], c.label).toBe(el);
+          }
+        }
+      }
+    }
+    expect(merged).toBeGreaterThan(500);
+  }, 60_000);
+
+  it("writes a label only where it is read as the atoms it stands for", () => {
+    // (Ses is a group's name: Se and s-Bu run together are read as it)
+    const shape = shapeOfStructure(abbreviationStructure("Se(s-Bu)")!);
+    expect(atomWithGroups("Se", 0, "s-Bu", 1, shape)).toBe("Se(s-Bu)");
+    expect(atomWithGroups("P", 0, "Ph", 3, shapeOfStructure(abbreviationStructure("PPh3")!))).toBe("PPh3");
+    expect(atomWithGroups("P", 0, "Ph", 3, shape)).toBeNull();
   });
 });
 
