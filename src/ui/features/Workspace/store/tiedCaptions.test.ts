@@ -161,6 +161,13 @@ describe("text that belongs to a structure", () => {
     expect(c.y).toBeLessThan(Math.min(...drawn.atoms.map((a) => a.y)));
   });
 
+  it("of three lines with a blank line among them goes out and comes back as three lines", () => {
+    const { state, id } = chainWithText();
+    state().updateCaption(id, { text: "line one\nline two\n\nline three" });
+    const sdf = structureFileText(exportedDrawn(state()), "q.sdf");
+    expect(drawnRead(readStructures("sdf", "q.sdf", sdf)).captions?.[0].text).toBe("line one\nline two\nline three");
+  });
+
   it("of a molecule in 3D: moves with it, goes out as its record's item, is deleted with it", () => {
     const { doc, state } = editor();
     const water: Omit<Molecule3D, "id"> = {
@@ -197,6 +204,17 @@ describe("text that belongs to a structure", () => {
 });
 
 describe("the fit that carries text with its structure", () => {
+  it("of a straight structure: turned over left to right, keeps the words under it; given a quarter turn, takes them round", () => {
+    const line = [{ x: 0, y: 0 }, { x: 1.5, y: 0 }, { x: 3, y: 0 }];
+    const words = { x: 1.5, y: -4.5 };
+    const over = rigidFit(line, line.map((p) => ({ x: 3 - p.x, y: p.y })))(words);
+    expect(over.x).toBeCloseTo(1.5, 9);
+    expect(over.y).toBeCloseTo(-4.5, 9);
+    const turned = rigidFit(line, line.map((p) => ({ x: 1.5 - p.y, y: p.x - 1.5 })))(words);
+    expect(turned.x).toBeCloseTo(6, 9);
+    expect(turned.y).toBeCloseTo(0, 9);
+  });
+
   it("is a shift for one point, a turn for a turned body, a mirror for a mirrored one", () => {
     expect(rigidFit([{ x: 1, y: 1 }], [{ x: 3, y: 0 }])({ x: 0, y: 0 })).toEqual({ x: 2, y: -1 });
     const body = [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }];

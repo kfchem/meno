@@ -841,15 +841,16 @@ As this part of step 5 was built (#155, from main beside step 3):
     plugin's writer is given are the same.
   - **Text that belongs to a structure** (docs/EDITOR-2D.md, *Text*) is
     written as its record's `Caption` data item, its words plain (their
-    marks left out; a line of one space for a blank line): a structure
+    marks left out): a structure
     drawn with text of its own is a record of its own, titled as the
     rest; a molecule in 3D's is in each of its records, a set's member's
     after its record's items. Read back, a record's `Caption` item is text
     belonging to that structure, under it - a structure drawn, where the
     file's structures are not opened as a stack, or a molecule in 3D.
     `Caption` is one of Meno's own items: a property of that name is
-    written as `Caption (property)`. A blank line inside the text ends the
-    item as any reader takes it, so the words after it are not read back.
+    written as `Caption (property)`. Every line of the words is written,
+    in order, without the blank lines among them - a blank line ends an
+    item - so every word is read back.
   - **An SD file of a workflow's structures drawn** - a set selected,
     with the records it carries of them (a step's products, what was
     worked out of them) - has a record for each, titled with its number,

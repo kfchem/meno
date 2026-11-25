@@ -242,7 +242,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
         // (and what was found of it besides - a model's, a descriptor's, what it was made from - each under its own name, as a structure drawn's record writes them)
         (m.properties?.length === n ? propertyItems(m.properties[i]) : "") +
         // (and the text that belongs to it, plain, as Meno reads it back)
-        (captionOf3d.has(k) ? dataItem(SD_CAPTION, captionOf3d.get(k)!) : "")
+        (captionOf3d.has(k) ? dataItem(SD_CAPTION, wordsLines(captionOf3d.get(k)!)) : "")
       );
     };
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
@@ -267,7 +267,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   const rest = { ...loose, atoms: loose.atoms.filter((a) => !taken.has(a.id)), bonds: loose.bonds.filter((b) => !taken.has(b.a) && !taken.has(b.b)) };
   const captionOfAtom = new Map(tied.flatMap((c) => (c.of && "atom" in c.of ? [[c.of.atom, c.text] as const] : [])));
   const captionAmong = (ids: Iterable<number>) => {
-    for (const id of ids) if (captionOfAtom.has(id)) return dataItem(SD_CAPTION, captionOfAtom.get(id)!);
+    for (const id of ids) if (captionOfAtom.has(id)) return dataItem(SD_CAPTION, wordsLines(captionOfAtom.get(id)!));
     return "";
   };
   const ofSets = inSets.map((r, k) => {
@@ -449,6 +449,13 @@ function recordData(r: DrawnRecord): string {
 
 /** One SD data item: its name and its lines as an SD file can hold them. */
 const dataItem = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
+
+/** Words as an SD data item holds them whole: every line of them, in order, without their blank lines - a blank line ends an item. */
+const wordsLines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .join("\n");
 
 /**
  * The names of the data items Meno writes of its own - a structure drawn's

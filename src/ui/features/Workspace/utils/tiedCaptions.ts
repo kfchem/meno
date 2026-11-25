@@ -42,7 +42,8 @@ function neighbours(bonds: readonly Bond[]): Map<number, number[]> {
 /**
  * The turn, mirror and shift that take the points `from` most nearly onto
  * `to`, pair by pair (least squares, about their centres): applied to a
- * point. A mirror only where it fits better than any turn.
+ * point. A mirror only where it fits better than any turn; where both fit
+ * alike (a straight structure), the one that moves the point least.
  */
 export function rigidFit(from: readonly Pt[], to: readonly Pt[]): (p: Pt) => Pt {
   const n = from.length;
@@ -72,7 +73,15 @@ export function rigidFit(from: readonly Pt[], to: readonly Pt[]): (p: Pt) => Pt 
   if (n < 2) return (p) => ({ x: p.x + c1.x - c0.x, y: p.y + c1.y - c0.y });
   const turned = fit(1);
   const mirrored = fit(-1);
-  return mirrored.miss < turned.miss - 1e-9 * (1 + turned.miss) ? mirrored.map : turned.map;
+  const tolerance = 1e-9 * (1 + turned.miss + mirrored.miss);
+  if (mirrored.miss < turned.miss - tolerance) return mirrored.map;
+  if (turned.miss < mirrored.miss - tolerance) return turned.map;
+  // (a turn and a mirror fitting alike - a straight structure: with equal evidence, the words stay where the chemist put them - the one that moves them least)
+  return (p) => {
+    const a = turned.map(p);
+    const b = mirrored.map(p);
+    return Math.hypot(b.x - p.x, b.y - p.y) < Math.hypot(a.x - p.x, a.y - p.y) ? b : a;
+  };
 }
 
 /**
