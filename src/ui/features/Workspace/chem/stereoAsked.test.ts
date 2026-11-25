@@ -57,6 +57,30 @@ const rows: Row[] = [
   ["(4-methylcyclohexylidene)acetic acid", "CC1CCC(=CC(=O)O)CC1", 2, [1], [4]],
   // (an allene with two unlike ends at each: its axis, a pair of enantiomers)
   ["penta-2,3-diene", "CC=C=CC", 2, [], [1, 2]],
+  // (two or three alike groups on the one candidate carbon: one compound, nothing circled)
+  ["propan-2-ol", "CC(C)O", 1, []],
+  ["isobutane", "CC(C)C", 1, []],
+  ["propan-2-amine", "CC(C)N", 1, []],
+  ["2-chloropropane", "CC(C)Cl", 1, []],
+  ["2-methylpropan-2-ol", "CC(C)(C)O", 1, []],
+  ["propan-2-ol, drawn with a wedge", "C[C@H](C)O", 1, []],
+  // (glycerol: C2's two CH2OH alike)
+  ["glycerol", "OCC(O)CO", 1, []],
+  // (valine drawn plain: the alpha carbon only, never the isopropyl CH)
+  ["valine", "CC(C)C(N)C(=O)O", 2, [3]],
+  // (1,3 on a ring of four: cis or trans, both achiral)
+  ["1,3-dimethylcyclobutane", "CC1CC(C)C1", 2, [1, 3]],
+  // (pentane-2,3,4-triol with C2 and C4 drawn: alike, one compound; unlike, the two meso forms told by C3)
+  ["pentane-2,3,4-triol, C2 and C4 drawn alike", "C[C@@H](O)C(O)[C@@H](C)O", 1, []],
+  ["pentane-2,3,4-triol, C2 and C4 drawn unlike", "C[C@@H](O)C(O)[C@H](C)O", 2, [3]],
+  // (a double bond: each end's two groups unlike, E or Z; one end with two methyls, none)
+  ["but-2-ene", "CC=CC", 2, [], [1]],
+  ["2-methylbut-2-ene", "CC=C(C)C", 1, []],
+  // (an allene one of whose ends has two methyls: no axis)
+  ["3-methylbuta-1,2-diene", "C=C=C(C)C", 1, []],
+  // (a cage's bridgeheads: camphor's a pair of enantiomers, both circled; norbornane's one compound)
+  ["camphor", "CC1(C)C2CCC1(C)C(=O)C2", 2, [3, 6]],
+  ["norbornane", "C1CC2CCC1C2", 1, []],
 ];
 
 describe("what is circled and counted before a structure is made in 3D", () => {

@@ -3480,7 +3480,15 @@ those left open, *Generate*'s, and a SMILES pasted.
   any count of groups - of the d or f block, or Li, Mg, Al and the like,
   not Sn, Pb or Bi - and an N+ with an H, as Meno's reading of a drawing
   refuses them. So a toolkit's "possible" metal centre, Pd(PPh3)4's Pd, is
-  never said to be open. An open double bond on an atom
+  never said to be open. Of the rest, only a place whose choice changes
+  the compound is open: in some way of giving the other open places a
+  configuration, turning it alone gives another stereoisomer, as Meno's
+  identity tells them (lib/chem/isomers `decidingOf`). An isopropyl's CH,
+  a tert-butyl's C, methylcyclohexane's C1 and 2-methylbut-2-ene's C=C
+  never are; each centre of 1,4-dimethylcyclohexane is (cis or trans), and
+  so is pentane-2,3,4-triol's C3. Where the count is not made (a cage it
+  does not count, or more ways than it tries), every such place is open.
+  An open double bond on an atom
   of two double bonds is an allene's axis, and the bonds of a run are
   one element: an allene's axis, of two or four; cis or trans, of three.
 - **At most** (an option, 32 unless changed): the most stereoisomers one
