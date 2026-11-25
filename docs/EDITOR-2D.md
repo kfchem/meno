@@ -721,11 +721,13 @@ on a page), and the **Newman projection** (`newman`).
   at each ring atom, straight up and down the page, each group's bond as long as its ring, place and way give (`HAWORTH_GROUP`;
   no text states a length, and the texts ask only that groups be vertical and not overlap): out of the ring's picture as the figures under
   Brecher 2006's ST-1.9 draw them (0.65 to 0.83 of the level bond, measured there); into it - a front atom's up group, a back atom's
-  down group - long enough that the stem still shows once trimmed to its label: up from a front atom 0.51, a stem of 0.29 like the
-  figures', whatever the label (OH, H, CH2OH; a CH2OH on the right reads HOH2C, into the ring). A six-ring's back atom's down group, on the vertical of the front atom's up group below
-  it, stands at the figures' 0.39; where both are labels and meet, the down one gives way as its label is typed, to as little as
-  0.30, so that the two stand visibly apart; in the five-ring a front
-  atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
+  down group - long enough that its stem shows as long as the figures' once trimmed to its label, its bond stopping closer to a label
+  there than a bond does (`Bond.close`, 0.3 of the style's label clearance, `LABEL_MARGIN_CLOSE`; put as the label is typed, and taken
+  away by Clean-up): up from a front atom of the six-ring 0.464, a stem of 0.29 like the figures', whatever the label (OH, H, CH2OH; a
+  CH2OH on the right reads HOH2C, into the ring); down from its back atom, on the vertical of the front atom's up group below it, 0.391, a
+  stem of 0.25 like the figures', the two labels apart; where a CH2OH down meets the label below it, the down one gives way as its label
+  is typed, to as little as 0.30, so that the two stand visibly apart; in the five-ring a front atom's up group stands at 0.51, a stem of
+  0.33 like the figures', clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
   inside the ring is read against the whole drawing as the page lays it out - every line but its own
   bond, the bold and wedge-shaped bonds of the near edge, the other labels and the ring O's - a graze of less than a tenth
   of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),

@@ -159,6 +159,12 @@ export type Bond = BondChem & {
    * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
    */
   behind?: number[];
+  /**
+   * Its line stops close to the label at its end (lib/chem/layout2d `Bond.close`): a labelled group's bond inside a Haworth ring's
+   * picture, so that its stem shows as the figures draw it - put so as the label is typed (projections/haworthLabels). Clean-up takes it
+   * away.
+   */
+  close?: true;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
