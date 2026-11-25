@@ -209,7 +209,7 @@ describe("the card states how many stereoisomers can be made in 3D, past 32 the 
     // (the ten-centre chain's 1024 ways each written: more than the default few seconds on a loaded machine)
   }, 60_000);
   it("up to 32, states the number that can be made in 3D, and makes all of those: never Meno's count of the drawing", async () => {
-    // (heptane-3,4,5-triol, ends unlike: three unlike centres, 2^3 = 8 by the drawing; the stand-in makes every second one asked, 4 -
+    // (hexane-2,3,4-triol, ends unlike: three unlike centres, 2^3 = 8 by the drawing; the stand-in makes every second one asked, 4 -
     //  as a bridged ring's bridgeheads go one way only in 3D: the card says 4, Make all 4)
     const { by, calls } = making((k) => k % 2 === 1);
     const { made, words } = await asked("CCC(O)C(O)C(O)C", by);
