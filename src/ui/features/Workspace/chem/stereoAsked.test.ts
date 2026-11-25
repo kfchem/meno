@@ -169,18 +169,30 @@ describe("a double bond drawn as not stated, as it is asked today", () => {
   });
 });
 
-describe("the card states how many stereoisomers there are, and offers all of them only up to the 32 made at once", () => {
+describe("the card states how many stereoisomers can be made in 3D, past 32 the most there can be, and offers all only up to 32", () => {
   // (each count by hand: n unlike centres on a chain whose ends differ, 2^n; n centres on a chain the same from both ends, n even,
   //  (2^n + 2^(n/2)) / 2 - the forms that read the same either way round counted once; the inositols, nine)
-  const asked = async (smiles: string) => {
+  const asked = async (smiles: string, by: ChemClient = chem, which: "all" | "one" = "all") => {
     const block = blockOf(drawnFromSmiles(smiles) as never);
-    const made = await isomersToMake(chem, block.molblock, undefined, "all");
+    const made = await isomersToMake(by, block.molblock, undefined, which);
     return { made, words: askWords([openIn(block, made)]) };
   };
+  /** A stand-in that cannot make in 3D the stereoisomers asked for in the places `not` gives (counted from 0), and records each asked. */
+  const making = (not: (k: number) => boolean) => {
+    const calls: unknown[] = [];
+    const by = {
+      request: async (_op: string, args: { configured: unknown }) => {
+        calls.push(args.configured);
+        return { isomers: not(calls.length - 1) ? [] : [{ configured: args.configured, smiles: "x" }], free: false };
+      },
+    } as unknown as ChemClient;
+    return { by, calls };
+  };
   it.each([
-    // (nonane-3,4,5,6,7,8-hexol, an ethyl at one end and a methyl at the other: six unlike centres, 2^6 = 64 - past 32, one made)
+    // (nonane-3,4,5,6,7,8-hexol, an ethyl at one end and a methyl at the other: six unlike centres, 2^6 = 64 - past 32, not each tried
+    //  in 3D: at most 64, one made)
     ["nonane-3,4,5,6,7,8-hexol", "CCC(O)C(O)C(O)C(O)C(O)C(O)C", 6, 64, false],
-    // (dodecane-1,2,...,12-dodecol, HOCH2-(CHOH)10-CH2OH: (2^10 + 2^5) / 2 = 528)
+    // (dodecane-1,2,...,12-dodecol, HOCH2-(CHOH)10-CH2OH: (2^10 + 2^5) / 2 = 528 - at most 528, one made)
     ["HOCH2-(CHOH)10-CH2OH", "OCC(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)CO", 10, 528, false],
     // (the inositols: eight meso forms and one pair, 9 - all made)
     ["cyclohexane-1,2,3,4,5,6-hexol", "OC1C(O)C(O)C(O)C(O)C1O", 6, 9, true],
@@ -189,13 +201,41 @@ describe("the card states how many stereoisomers there are, and offers all of th
   ] as const)("%s, %s: %i centres, %i stereoisomers", async (_name, smiles, centres, isomers, all) => {
     const { made, words } = await asked(smiles);
     expect(made.count).toBe(isomers);
-    expect(made.upTo).toBeUndefined();
-    expect(words.said).toBe(`${centres} stereocentres are drawn without a configuration, so this structure can be any of ${isomers} stereoisomers.`);
+    expect(made.upTo).toBe(all ? undefined : true);
+    expect(words.said).toBe(`${centres} stereocentres are drawn without a configuration, so this structure can be any of ${all ? "" : "up to "}${isomers} stereoisomers.`);
     expect(words.all).toBe(all);
     // (made: every one up to 32; past it, the first alone - never a part of them chosen by no chemistry)
     expect(made.isomers.length).toBe(all ? isomers : 1);
     // (the ten-centre chain's 1024 ways each written: more than the default few seconds on a loaded machine)
   }, 60_000);
+  it("up to 32, states the number that can be made in 3D, and makes all of those: never Meno's count of the drawing", async () => {
+    // (heptane-3,4,5-triol, ends unlike: three unlike centres, 2^3 = 8 by the drawing; the stand-in makes every second one asked, 4 -
+    //  as a bridged ring's bridgeheads go one way only in 3D: the card says 4, Make all 4)
+    const { by, calls } = making((k) => k % 2 === 1);
+    const { made, words } = await asked("CCC(O)C(O)C(O)C", by);
+    expect(calls).toHaveLength(8);
+    expect(made.count).toBe(4);
+    expect(made.upTo).toBeUndefined();
+    expect(made.isomers).toHaveLength(4);
+    expect(words.said).toBe("3 stereocentres are drawn without a configuration, so this structure can be any of 4 stereoisomers.");
+    expect(words).toMatchObject({ isomers: 4, all: true });
+  });
+  it("past 32, Make one makes the first that can be made in 3D, and fails - never made with its stereo free - where none of the 32 tried can", async () => {
+    // (six unlike centres, 64: the stand-in cannot make the first two asked - the third is made, and nothing after it asked)
+    const some = making((k) => k < 2);
+    const { made } = await asked("CCC(O)C(O)C(O)C(O)C(O)C(O)C", some.by, "one");
+    expect(some.calls).toHaveLength(3);
+    expect(made).toMatchObject({ count: 64, upTo: true, free: false });
+    expect(made.isomers).toHaveLength(1);
+    // (none it can make: 32 tried, not all 64 - so none is not said to hold none)
+    const none = making(() => true);
+    await expect(asked("CCC(O)C(O)C(O)C(O)C(O)C(O)C", none.by, "one")).rejects.toThrow("its stereoisomers could not be made");
+    expect(none.calls).toHaveLength(32);
+    // (eleven unlike centres, past the ways the count tries: the first way alone asked, and not made - the same)
+    const past = making(() => true);
+    await expect(asked("CCC(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C", past.by, "one")).rejects.toThrow("its stereoisomers could not be made");
+    expect(past.calls).toHaveLength(1);
+  });
   it("past the ways the count tries, says at most how many, and makes one", async () => {
     // (tetradecane-3,...,13-undecol, ends unlike: eleven open centres, more than the 2^10 ways counted - the bound 2^11 = 2048, true
     //  whatever the symmetry; here every centre unlike, so also the count)

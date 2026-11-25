@@ -504,13 +504,14 @@ Taken on 2026-10-13:
   how many stereoisomers - "1 stereocentre is drawn without a
   configuration, so this structure can be either of 2 stereoisomers" - the
   count being the different compounds, never two to the power of the
-  places. The card states how many stereoisomers there are, however many;
-  all of them are made from it only up to 32 (*Make all 32*), and past 32
-  it offers *Make one* alone ("... can be any of 528 stereoisomers": the
-  chain HOCH2-(CHOH)10-CH2OH). Past ten open places, more ways than the
-  count tries, it states the most there can be, two to the power of the
-  places ("... any of up to 2048 stereoisomers"), and *Make one* makes the
-  first. A *Stereoisomers* step makes more, up to its own *At most*.
+  places. Up to 32 the card states how many can be made in 3D, each tried
+  (a bridgehead its rings hold one way is not counted twice:
+  2-methylbicyclo[2.2.1]heptane drawn without configurations is 4), and
+  *Make all* makes those. Past 32 it states the most there can be ("...
+  any of up to 528 stereoisomers": the chain HOCH2-(CHOH)10-CH2OH; past ten
+  open places, two to the power of the places) and offers *Make one*
+  alone, which makes the first of them that can be made in 3D. A
+  *Stereoisomers* step makes more, up to its own *At most*.
   A drawing that stands for one stereoisomer is made at once,
   nothing asked; the note a structure read from text shows of its open
   stereo counts the same places. Which places decide is found by trying

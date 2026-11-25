@@ -281,7 +281,8 @@ export function flipIsOwn(g: ChemGraph, set: readonly number[]): boolean {
 
 /**
  * A structure's stereoisomers made in 3D as Meno counts them: each given whole to the plugin (`stereoisomers`, its configuration
- * `configured`, one asked), those it cannot make left out - none made, `free`; at most `most`, refused whole past it where `whole`.
+ * `configured`, one asked), those it cannot make left out - none made, `free`; at most `most`, refused whole past it where `whole`;
+ * with `first`, only the first made of those tried (past the ways the count tries, the first way), none made never `free`.
  * An axis's or a run's configuration goes with each, Meno's own: the plugin is not given it, and chem/make3d keeps among the
  * conformers made those that have it. A structure Meno does not count (`isomersOf`: a cage left open) is said so.
  */
@@ -291,13 +292,13 @@ export async function isomersByMeno(
   read: BlocksRead,
   readBack: { atoms: number[]; bonds: number[] },
   notEnumerated: readonly number[],
-  asked: { most: number; whole?: boolean; withinMs?: number; drawings?: boolean },
+  asked: { most: number; whole?: boolean; first?: true; withinMs?: number; drawings?: boolean },
   ms?: number,
 ): Promise<{ made: IsomersMade; said: string[] } | { notCounted: string }> {
   const counted = countedOf(read);
   if ("notCounted" in counted) return counted;
-  // (past the ways the count tries, one asked: the first way, made without the count - chem/openStereo `isomersToMake`)
-  const first = "tooMany" in counted && asked.most === 1 && !asked.whole ? firstWayOf(read.input) : null;
+  // (past the ways the count tries, the first asked: the first way, made without the count - chem/openStereo `isomersToMake`)
+  const first = "tooMany" in counted && asked.first ? firstWayOf(read.input) : null;
   if ("tooMany" in counted && !first) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
   // (each whole: an axis's and a run's are Meno's to keep among what is made - chem/make3d - never the plugin's to give)
   const kept = ("tooMany" in counted ? [first!] : counted.isomers).map((i) => asGiven(read, molblocks, i));
@@ -320,6 +321,8 @@ export async function isomersByMeno(
       ms,
     );
     if ("isomers" in made && made.isomers.length) isomers.push({ ...made.isomers[0], configured: x.configuration });
+    if (asked.first && isomers.length) break;
   }
-  return { made: { isomers, free: !isomers.length }, said: [] };
+  // (the first asked of more than are tried: none made is not none that holds - not all were tried)
+  return { made: { isomers, free: !isomers.length && !asked.first }, said: [] };
 }
