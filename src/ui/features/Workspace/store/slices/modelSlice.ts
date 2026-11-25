@@ -239,6 +239,22 @@ export const createModelSlice = (
     doc.edit(name, (d) => ops.placeAtoms(d, moves));
   },
 
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => {
+    doc.edit(name, (d) => {
+      const ids = atoms.map((_, n) => d.nextId + n);
+      const end = (e: { id: number } | { new: number }) => ("id" in e ? e.id : ids[e.new]);
+      return {
+        ...d,
+        nextId: d.nextId + atoms.length + bonds.length,
+        model: {
+          ...d.model,
+          atoms: [...d.model.atoms, ...atoms.map((a, n) => ({ ...a, id: ids[n] }))],
+          bonds: [...d.model.bonds, ...bonds.map((b, n): Bond => ({ id: d.nextId + atoms.length + n, a: end(b.a), b: end(b.b), order: 1 }))],
+        },
+      };
+    });
+  },
+
   dropMoveAtoms: (gesture: string) => {
     doc.drop(`move-atoms:${gesture}`);
   },

@@ -2193,6 +2193,8 @@ export type EditorState = {
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
   /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
   placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
+  /** Atoms with their depth, and bonds to them or from them to atoms already there, added together - a ring fused on a chair (../projections/fuse) - as one undo step. */
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => void;
   /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
   settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
