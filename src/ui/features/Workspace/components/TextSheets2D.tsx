@@ -23,7 +23,7 @@ import { COLORS } from "../../../theme/colors";
 import { ICON_NAME_WIDTH, pointOf, scaleOf } from "../../../../lib/pdf/layout";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { DOUBLE_CLICK_MS } from "../constants";
-import { iconScaleOf, SHEET_LINE_PT, SHEET_NAME_GAP_PX, SHEET_NAME_LEAST_PX, SHEET_NAME_PX, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetOfText } from "../utils/textSheets";
+import { iconScaleOf, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetNameRoom, sheetOfText } from "../utils/textSheets";
 import { dragSelection } from "../utils/dragSelection";
 import { follow, TAU } from "../../../theme/motion";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
@@ -256,7 +256,7 @@ function Sheet({
     window.addEventListener("pointerup", onUp, true);
   };
 
-  // (its light round it and its name as large on the page at every zoom)
+  // (its light round it as large on the page at every zoom)
   const pg = pageLength(1);
   const lit = LIT_PAD_PX * pg;
   const now = performance.now();
@@ -268,9 +268,11 @@ function Sheet({
   // its name under it, in the drawing's type: at its left as a sheet, at a size on the page; under its middle as an icon, at the size of the drawing's labels, as a file's under its icon - and on
   // its way between them (as a PDF's)
   const nameX = b.x0 + (mid.x - b.x0) * iconness;
-  const nameSizeNow = SHEET_NAME_PX * pg * (1 - iconness) + nameSize * iconness;
-  const nameGap = SHEET_NAME_GAP_PX * pg * (1 - iconness) + 0.4 * nameSize * iconness;
-  const nameWidth = Math.max(SHEET_NAME_LEAST_PX * pg, s.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
+  // (a sheet's: its size, gap and width as the built document's layout counts them - ../utils/textSheets `sheetNameRoom`)
+  const full = sheetNameRoom({ x0: b.x0, x1: b.x0 + s.w, y0: b.y0 });
+  const nameSizeNow = full.size * (1 - iconness) + nameSize * iconness;
+  const nameGap = full.gap * (1 - iconness) + 0.4 * nameSize * iconness;
+  const nameWidth = full.width * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
   return (
     <group position={[0, 0, z]}>
       {/* (round it, not under it, as a picture's) */}

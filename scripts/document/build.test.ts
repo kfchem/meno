@@ -217,17 +217,12 @@ describe("a built workspace's names", () => {
     const { built, st } = await builtAndOpened(manifest);
     const boxes = built.boxes;
     for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(overlap(a, b)).toBe(false);
-    // (each sheet's name, as the page draws it seen whole on the least canvas, 640 by 480 pixels - and further
-    //  out, a canvas a tenth smaller - in its own box and on none other)
-    const all = [built.title, ...boxes];
-    const w = Math.max(...all.map((b) => b.x1)) - Math.min(...all.map((b) => b.x0));
-    const h = Math.max(...all.map((b) => b.y1)) - Math.min(...all.map((b) => b.y0));
-    const px = Math.max(w / 640, h / 480);
+    // (each sheet's name, as the page draws it - at a size on the page, the same at every zoom: in its own box and on none other)
     for (const t of st.texts.filter((t) => t.at)) {
-      const name = sheetNameRoom(drawnSheetBox(t)!, px);
+      const name = sheetNameRoom(drawnSheetBox(t)!).room;
       const own = boxes.filter((b) => b.x0 <= name.x0 + 1e-9 && b.y1 >= name.y1 - 1e-9 && b.y0 <= name.y0 + 1e-9 && b.x1 >= name.x1 - 1e-9);
       expect(own).toHaveLength(1);
-      for (const b of boxes.filter((b) => b !== own[0])) expect(overlap(sheetNameRoom(drawnSheetBox(t)!, px * 1.1), b)).toBe(false);
+      for (const b of boxes.filter((b) => b !== own[0])) expect(overlap(name, b)).toBe(false);
     }
     // (every structure's name in the box of its own structure)
     for (const c of st.captions.filter((c) => c.of)) {

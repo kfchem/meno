@@ -62,13 +62,6 @@ const NAME_GAP = 0.8;
 export const WIDTH = 100;
 /** The title's size, in points. */
 const TITLE_PT = 18;
-/**
- * The least canvas the app shows a page in, in screen pixels: its window's
- * least size (src-tauri/tauri.conf.json). A sheet's name is set at one size
- * on the screen, so the page room it takes grows as the view draws back;
- * it is measured as the whole built page, fitted into this, draws it.
- */
-const LEAST_CANVAS = { w: 640, h: 480 };
 
 const KEYS = {
   manifest: ["title", "out", "style", "width", "entries"],
@@ -128,7 +121,7 @@ export function checked(manifest: unknown): Manifest {
  * without its name; its name (`named`) is set with the row's other names, on
  * one line under the row's tallest structure (`nameY`, the line's point). A
  * sheet's (`sheet`) is its paper's; its name under it is added as the page
- * draws it at the zoom the built page is seen whole at (`sheetNameRoom`).
+ * draws it, at a size on the page the same at every zoom (`sheetNameRoom`).
  */
 type Ready = {
   foot: Box;
@@ -260,7 +253,7 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   // names of a row's structures stand on one line, under its tallest
   // structure, each centred under its own (as a scheme's numbers are set),
   // each the words that belong to its structure. A sheet's name under it
-  // takes room too, as large as the page draws it seen whole.
+  // takes room too, as large as the page draws it at every zoom.
   const titleWords = { x: 0, y: 0, text: given.title, size: TITLE_PT, align: "left" as const };
   const tb = captionBox(titleWords, opts);
   // (its box's left edge at 0 and its top at 0, however its words are set about their point)
@@ -268,12 +261,12 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   held.edit("title", (d) => addCaption(d, title));
   const titleBox = captionBox(title, opts);
   const most = (given.width ?? WIDTH) * L;
-  // (where each entry goes, a sheet's name measured at `px` page units to a screen pixel - and its box on the page, its name's with it)
-  const planned = (px: number) => {
+  // (where each entry goes - and its box on the page, a sheet's name's with it)
+  const planned = () => {
     const out: { r: Ready; p: { x: number; y: number }; nameY: number; box: Box }[] = [];
     const roomOf = (r: Ready): Box => {
       if (!r.sheet) return r.foot;
-      const name = sheetNameRoom(r.foot, px);
+      const name = sheetNameRoom(r.foot).room;
       return { ...r.foot, x1: Math.max(r.foot.x1, name.x1), y0: name.y0 };
     };
     let top = titleBox.y0 - GAP;
@@ -310,22 +303,7 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
     newRow();
     return out;
   };
-  // (page units to a screen pixel where the whole page fits the least canvas: the names' room grows with it, so
-  //  measured again until what it takes fits - a step over each time, to come to an end)
-  const seenAt = (boxes: Box[]) => {
-    const all = [titleBox, ...boxes];
-    const w = Math.max(...all.map((b) => b.x1)) - Math.min(...all.map((b) => b.x0));
-    const h = Math.max(...all.map((b) => b.y1)) - Math.min(...all.map((b) => b.y0));
-    return Math.max(w / LEAST_CANVAS.w, h / LEAST_CANVAS.h);
-  };
-  let px = 0;
-  let plan = planned(px);
-  for (let i = 0; i < 12; i++) {
-    const need = seenAt(plan.map((q) => q.box));
-    if (need <= px) break;
-    px = need * 1.02;
-    plan = planned(px);
-  }
+  const plan = planned();
   for (const { r, p, nameY } of plan) r.put(p, nameY);
   const boxes = plan.map((q) => q.box);
   const { bytes } = await workspaceFile(store.getState());
