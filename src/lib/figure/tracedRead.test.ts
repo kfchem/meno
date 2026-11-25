@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
+import { alkaliOnCarbon, atOnePlace, besidePieces, BESIDE_PIECE, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
 import type { ReadAtom, ReadBond } from "./read";
 
 describe("how finely a box holding pictures is drawn to be traced", () => {
@@ -127,5 +127,58 @@ describe("bonds stopping short of one point where nothing was read - a label los
     const labelled = corner(0.4);
     labelled.atoms[3] = { ...labelled.atoms[3], label: "OH" };
     expect(lostLabelEnds(labelled)).toEqual([]);
+  });
+});
+
+describe("three things a picture's read says, never reads silently", () => {
+  // (bonds a unit long, as a picture's read has them in its units)
+  const at = (x: number, y: number, more: Partial<ReadAtom> = {}): ReadAtom => ({ x, y, ...more });
+  const bond = (a: number, b: number, order: 1 | 2 | 3 = 1): ReadBond => ({ a, b, order });
+  /** A hexagon of carbons a bond across its sides, its middle at 0, 0 - atoms 0 to 5. */
+  const ring = (): ReadAtom[] => Array.from({ length: 6 }, (_, k) => at(Math.sin((k * Math.PI) / 3), -Math.cos((k * Math.PI) / 3)));
+  const ringBonds = (): ReadBond[] => Array.from({ length: 6 }, (_, k) => bond(k, (k + 1) % 6));
+
+  it("a piece of two to four atoms, labels and all, within a bond of a larger piece's box: a C-OH cut off a ring", () => {
+    expect(BESIDE_PIECE).toBe(4);
+    // (a CH and its OH half a bond right of the ring's box: a cyclohexylmethanol whose joint was traced open)
+    const read = { atoms: [...ring(), at(1.4, 0), at(2.4, 0, { label: "OH" })], bonds: [...ringBonds(), bond(6, 7)], bond: 1 };
+    expect(besidePieces(read)).toEqual([6, 7]);
+    // (two bonds away from the box: a second structure of the figure, not said)
+    const apart = { ...read, atoms: [...ring(), at(3.2, 0), at(4.2, 0, { label: "OH" })] };
+    expect(besidePieces(apart)).toEqual([]);
+  });
+
+  it("is not said of a counter-ion - charged, or one atom - nor of a piece as large as the other, nor of a structure alone", () => {
+    const ion = { atoms: [...ring(), at(1.4, 0, { label: "N", charge: 1 }), at(2.4, 0)], bonds: [...ringBonds(), bond(6, 7)], bond: 1 };
+    expect(besidePieces(ion)).toEqual([]);
+    const sign = { atoms: [...ring(), at(1.4, 0), at(2.4, 0, { label: "O-" })], bonds: [...ringBonds(), bond(6, 7)], bond: 1 };
+    expect(besidePieces(sign)).toEqual([]);
+    const lone = { atoms: [...ring(), at(1.4, 0, { label: "Br" })], bonds: ringBonds(), bond: 1 };
+    expect(besidePieces(lone)).toEqual([]);
+    // (two ethanes side by side: neither is larger)
+    const two = { atoms: [at(0, 0), at(1, 0), at(0, 0.8), at(1, 0.8)], bonds: [bond(0, 1), bond(2, 3)], bond: 1 };
+    expect(besidePieces(two)).toEqual([]);
+    expect(besidePieces({ atoms: ring(), bonds: ringBonds(), bond: 1 })).toEqual([]);
+  });
+
+  it("an alkali metal bonded to a carbon: the metal is said; on an oxygen, or charged, it is not", () => {
+    // (sodium acetate whose O- sign was read as a bond to a carbon: Na on a CH2)
+    const onCarbon = { atoms: [at(0, 0), at(1, 0, { label: "Na" }), at(-1, 0, { label: "O" })], bonds: [bond(0, 1), bond(0, 2)] };
+    expect(alkaliOnCarbon(onCarbon)).toEqual([1]);
+    expect(alkaliOnCarbon({ atoms: [at(0, 0, { label: "CH2" }), at(1, 0, { el: "Li" })], bonds: [bond(0, 1)] })).toEqual([1]);
+    expect(alkaliOnCarbon({ atoms: [at(0, 0, { label: "O" }), at(1, 0, { label: "Na" })], bonds: [bond(0, 1)] })).toEqual([]);
+    expect(alkaliOnCarbon({ atoms: [at(0, 0), at(1, 0, { label: "K", charge: 1 })], bonds: [bond(0, 1)] })).toEqual([]);
+    // (magnesium on a carbon - a Grignard reagent - is no alkali metal)
+    expect(alkaliOnCarbon({ atoms: [at(0, 0), at(1, 0, { label: "Mg" })], bonds: [bond(0, 1)] })).toEqual([]);
+  });
+
+  it("two atoms not bonded to each other within a third of a bond and a little: both said; bonded, or further, neither", () => {
+    expect(ONE_PLACE).toBe(0.35);
+    // (a ring opened at a joint: its two ends a quarter of a bond apart)
+    const atoms = [...ring().slice(0, 6), at(0.25, -1)];
+    const bonds = [bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5), bond(5, 6)];
+    expect(atOnePlace({ atoms, bonds, bond: 1 })).toEqual([0, 6]);
+    expect(atOnePlace({ atoms, bonds: [...bonds, bond(6, 0)], bond: 1 })).toEqual([]);
+    expect(atOnePlace({ atoms: [...ring().slice(0, 6), at(0.4, -1)], bonds, bond: 1 })).toEqual([]);
   });
 });

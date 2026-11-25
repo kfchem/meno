@@ -9,7 +9,7 @@ import type { Pixels } from "./inkFit";
 import type { GlyphShape } from "./glyphs";
 import { glyphShape } from "./glyphs";
 import { tracePicture, type Traced } from "./trace";
-import { inLineCarbons, readTracedPicture, tinyPieces } from "./tracedRead";
+import { ALKALI_SAID, APART_SAID, inLineCarbons, ONE_PLACE_SAID, readTracedPicture, tinyPieces } from "./tracedRead";
 import type { ReadAtom, ReadBond } from "./read";
 
 type Pt = [number, number];
@@ -114,5 +114,50 @@ describe("a picture's pixels put where the page has them, a PDF's letters over i
     expect(withLetter.atoms).toHaveLength(10);
     expect(marked(withLetter)).toBe(0);
     expect(marked(without)).toBeGreaterThan(0);
+  });
+});
+
+describe("three things a made picture's read says, never reads silently", () => {
+  // (made pictures: bonds 40 pixels long, lines 3 wide; a pixel a quarter of a point, as at 288 dpi)
+  const at = { scale: 0.25, x: 0, y: 0 };
+  const ringLines = (c: Pt) => hexagon(c, 40).map((p, k, all) => line(p, all[(k + 1) % 6], 3));
+  /** A letter the PDF gives over the picture, in points, `x`, `y` its pixels' top left, 14 pixels high. */
+  const letter = (c: string, x: number, y: number) => ({ c, box: [x / 4, y / 4, (x + 10) / 4, (y + 14) / 4] as [number, number, number, number], at: [x / 4, (y + 14) / 4] as [number, number], size: 3.5 });
+  const said = (r: ReturnType<typeof readTracedPicture>, words: string) => ("none" in r ? [] : r.atoms.filter((a) => a.unsure?.includes(words)));
+
+  it("a C-OH standing half a bond off a ring - a joint traced open - is said, the ring itself not", { timeout: 30_000 }, () => {
+    const c: Pt = [80, 80];
+    const h = hexagon(c, 40);
+    // (from 20 pixels right of the ring's right corner, a bond out to an OH)
+    const from: Pt = [h[1][0] + 20, h[1][1]];
+    const to: Pt = [from[0] + 34.6, from[1] - 20];
+    const px = picture(200, 160, [...ringLines(c), line(from, to, 3)]);
+    const r = readTracedPicture(px, at, [], () => true, [letter("O", to[0] + 4, to[1] - 16), letter("H", to[0] + 14, to[1] - 16)]);
+    if ("none" in r) throw new Error(r.none);
+    expect(said(r, APART_SAID).length).toBeGreaterThanOrEqual(2);
+    // (the ring's atoms, a bond from its middle, are not said)
+    expect(said(r, APART_SAID).filter((a) => Math.hypot(a.x * 4 - c[0], a.y * 4 - c[1]) < 41)).toHaveLength(0);
+  });
+
+  it("a Na on a ring's carbon - a sign read as a bond - is said on the metal", { timeout: 30_000 }, () => {
+    const c: Pt = [80, 90];
+    const h = hexagon(c, 40);
+    const to: Pt = [h[1][0] + 34.6, h[1][1] - 20];
+    const px = picture(200, 160, [...ringLines(c), line(h[1], to, 3)]);
+    const r = readTracedPicture(px, at, [], () => true, [letter("N", to[0] + 4, to[1] - 7), letter("a", to[0] + 14, to[1] - 7)]);
+    if ("none" in r) throw new Error(r.none);
+    const metal = said(r, ALKALI_SAID);
+    expect(metal).toHaveLength(1);
+    expect(metal[0].label ?? metal[0].el).toBe("Na");
+  });
+
+  it("a ring whose joint was traced open - its two ends a third of a bond apart - says both ends", { timeout: 30_000 }, () => {
+    const c: Pt = [80, 80];
+    const h = hexagon(c, 40);
+    // (the top corner's two bonds end 13 pixels apart: one at the corner, the other 13 pixels left of it)
+    const shapes = h.map((p, k, all) => line(p, k === 5 ? [all[0][0] - 13, all[0][1]] : all[(k + 1) % 6], 3));
+    const r = readTracedPicture(picture(170, 160, shapes), at, [], () => true, []);
+    if ("none" in r) throw new Error(r.none);
+    expect(said(r, ONE_PLACE_SAID).length).toBeGreaterThanOrEqual(2);
   });
 });

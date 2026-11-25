@@ -537,6 +537,24 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   bonds stop so short of a label, and of nothing else - two methyls'
   ends point apart. A heteroatom's letter faint in a picture, or not
   traced, would otherwise leave its ring open with nothing said.
+- **A small piece beside a structure** (2026-11-26): read from a picture,
+  a piece of two to four atoms, labels and all, none of them charged,
+  within a bond of the box of a larger piece, is unsure and says it may
+  be part of the structure, its bond not read - a joint traced open cuts
+  off a side chain's carbons, a C-N or a C-OH so. A counter-ion is
+  charged or a single atom and is not said; a piece further off is a
+  structure of its own. Nothing is joined or left out: Meno does not
+  claim which bond was lost.
+- **An alkali metal on a carbon** (2026-11-26): read from a picture, Li,
+  Na, K, Rb or Cs with no charge, bonded to a carbon, is unsure and says
+  such a metal is mostly drawn as an ion, and a charge's sign may have
+  been read as a bond (a sodium salt's O- so becomes a carbon). The bond
+  is kept as read - an organolithium is drawn so - and nothing else is
+  claimed.
+- **Two atoms at one place** (2026-11-26): read from a picture, two
+  atoms not bonded to each other and within 0.35 of a bond of each other
+  are both unsure and say they may be one atom, its bonds traced apart -
+  a ring so read gains a carbon, or opens. They are not merged.
 - **A label shown one way and read another**: read from a picture, NC
   with its bond at the N (right of the bond, or upright) is read as a
   nitrile, as NC typed is, and the atom says it may be an isocyanide.

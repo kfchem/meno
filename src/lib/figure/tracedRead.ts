@@ -49,6 +49,10 @@ export function readTracedPicture(
   for (const i of inLineCarbons(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), IN_LINE_SAID];
   // (bonds stopping short of one point where nothing was read: a label lost - its ink faint, or never traced - said, never taken for carbons)
   for (const i of lostLabelEnds(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), LOST_LABEL_SAID];
+  // (a small piece beside a larger one, labels and all; an alkali metal on a carbon; two atoms at one place: each said, never read silently)
+  for (const i of besidePieces(read)) if (!read.atoms[i].unsure?.includes(APART_SAID)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), APART_SAID];
+  for (const i of alkaliOnCarbon(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ALKALI_SAID];
+  for (const i of atOnePlace(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ONE_PLACE_SAID];
   return read;
 }
 
@@ -138,6 +142,70 @@ export function tinyPieces(read: Pick<FigureRead, "atoms" | "bonds">): { atoms: 
     if (p.every(bare)) return [{ atoms: p, apart: false }];
     return larger ? [{ atoms: p, apart: true }] : [];
   });
+}
+
+/** The pieces of a read - atoms joined by bonds - each its atoms. */
+function piecesOf(read: Pick<FigureRead, "atoms" | "bonds">): number[][] {
+  const up = read.atoms.map((_, i) => i);
+  const root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i])));
+  for (const b of read.bonds) up[root(b.a)] = root(b.b);
+  const pieces = new Map<number, number[]>();
+  read.atoms.forEach((_, i) => (pieces.get(root(i)) ?? pieces.set(root(i), []).get(root(i))!).push(i));
+  return [...pieces.values()];
+}
+
+/**
+ * A piece standing beside a structure (`besidePieces`): of two atoms to this many, none of them charged, within a bond of a larger piece's
+ * box. A joint traced open cuts a group off so - a side chain's two or three carbons, a C-N, a C-O - and drawings rarely set a free
+ * ethane or methylamine beside a molecule; a counter-ion is charged or one atom, and is not said.
+ */
+export const BESIDE_PIECE = 4;
+
+/** The atoms of a read's pieces standing beside a larger piece (`BESIDE_PIECE`), said as `APART_SAID` says. */
+export function besidePieces(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number[] {
+  const all = piecesOf(read);
+  const charged = (i: number) => !!read.atoms[i].charge || !!read.atoms[i].marked || /[+\u2212-]$/.test(read.atoms[i].label ?? "");
+  const boxOf = (p: number[]) => [Math.min(...p.map((i) => read.atoms[i].x)), Math.min(...p.map((i) => read.atoms[i].y)), Math.max(...p.map((i) => read.atoms[i].x)), Math.max(...p.map((i) => read.atoms[i].y))];
+  return all.flatMap((p) => {
+    if (p.length < 2 || p.length > BESIDE_PIECE || p.some(charged)) return [];
+    const beside = all.some((q) => {
+      if (q.length <= p.length) return false;
+      const [x0, y0, x1, y1] = boxOf(q);
+      return p.some((i) => read.atoms[i].x >= x0 - read.bond && read.atoms[i].x <= x1 + read.bond && read.atoms[i].y >= y0 - read.bond && read.atoms[i].y <= y1 + read.bond);
+    });
+    return beside ? p : [];
+  });
+}
+
+/** The alkali metals, said where a picture's read bonds one to a carbon (`alkaliOnCarbon`). */
+const ALKALI = new Set(["Li", "Na", "K", "Rb", "Cs"]);
+export const ALKALI_SAID = "An alkali metal bonded to a carbon: such a metal is mostly drawn as an ion, and a charge's sign may have been read as a bond.";
+
+/** The atoms of a read that are an alkali metal, uncharged, bonded to a carbon - one with no label, or labelled as a carbon is. */
+export function alkaliOnCarbon(read: Pick<FigureRead, "atoms" | "bonds">): number[] {
+  const metal = (i: number) => ALKALI.has(read.atoms[i].el ?? read.atoms[i].label ?? "") && !read.atoms[i].charge;
+  const carbon = (i: number) => {
+    const a = read.atoms[i];
+    return a.el ? a.el === "C" : !a.label || /^(C|CH|CH2|H2C|CH3|H3C|Me)$/.test(a.label);
+  };
+  return read.atoms.flatMap((_, i) => (metal(i) && read.bonds.some((b) => (b.a === i && carbon(b.b)) || (b.b === i && carbon(b.a))) ? [i] : []));
+}
+
+/** How near two atoms not bonded to each other may be read, in a bond, before both are said (`atOnePlace`): a joint traced open reads so. */
+export const ONE_PLACE = 0.35;
+export const ONE_PLACE_SAID = "Two atoms read at one place: they may be one atom, its bonds traced apart.";
+
+/** The atoms of a read lying within `ONE_PLACE` of a bond of another they are not bonded to. */
+export function atOnePlace(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number[] {
+  const bonded = new Set(read.bonds.flatMap((b) => [`${b.a},${b.b}`, `${b.b},${b.a}`]));
+  const out = new Set<number>();
+  read.atoms.forEach((a, i) =>
+    read.atoms.forEach((b, j) => {
+      if (j <= i || bonded.has(`${i},${j}`)) return;
+      if (Math.hypot(a.x - b.x, a.y - b.y) < ONE_PLACE * read.bond) out.add(i).add(j);
+    }),
+  );
+  return [...out].sort((p, q) => p - q);
 }
 
 /**
