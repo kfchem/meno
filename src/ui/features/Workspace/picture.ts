@@ -26,7 +26,7 @@ import { clipboardTakes, type ClipItem, type Flavor } from "../../../lib/clipboa
 import { cfbStreams } from "../../../lib/binary/cfb";
 import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
-import { createSVG, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
+import { createSVG, svgSize, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { style3dOf } from "./style3dOf";
 import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
@@ -62,6 +62,30 @@ export function pictureDpiFor(width: number, height: number, dpi: number): numbe
   return Math.max(1, Math.min(byArea, bySide));
 }
 
+/**
+ * The fewest pixels a copied picture holding molecules in 3D has on its long
+ * side, whatever its size on the page: a small molecule pasted into a slide
+ * and enlarged to 8 inches there is still 300 pixels to the inch.
+ */
+export const LEAST_SIDE = 2400;
+
+/**
+ * The resolution a copied picture of `layout` is made at, as `opts` lay it
+ * out: `dpi` (Settings), or, where it holds molecules in 3D, as much higher
+ * as gives it `LEAST_SIDE` pixels on its long side - its size in points the
+ * same, its density higher - and lower only past what any picture is held to
+ * (`pictureDpiFor`). Worked out once and given to every maker of the
+ * picture, the molecules' bitmap and the PNG around them, so that they agree
+ * and the bitmap is copied pixel for pixel.
+ */
+export function pictureDensity(layout: Layout, opts: LayoutOptions, dpi: number): number {
+  if (!layout.solids?.length) return dpi;
+  const size = svgSize(layout, opts);
+  const width = size.width > 0 ? size.width : 1;
+  const height = size.height > 0 ? size.height : 1;
+  return pictureDpiFor(width, height, Math.max(dpi, Math.ceil((96 * LEAST_SIDE) / Math.max(width, height))));
+}
+
 const utf8 = new TextEncoder();
 
 /**
@@ -95,8 +119,8 @@ function tried<T>(drawn: () => T | null): T | null {
  */
 export async function structurePicture(part: Drawn, aromatic: PictureState, style: DrawingStyle, dpi = pictureDpi()) {
   const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
-  // (the layout then draws them so too, for the PNG)
-  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  // (the layout then draws them so too, for the PNG; as sharp as a copy's, so that an object updated from Meno keeps its pixels)
+  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), pictureDensity(layout, opts, dpi)));
   return { record, layout, opts, ...withEmf(record, layout, opts, drawn) };
 }
 
@@ -130,12 +154,14 @@ export async function pictureItems(
   // (each step its own task, the page drawn between them: a large picture is made without holding the drawing up)
   await breath();
   const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
+  // (one resolution for the molecules and the PNG around them: higher than the setting for a small molecule in 3D)
+  const density = pictureDensity(layout, opts, dpi);
   await breath();
-  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), density));
   await breath();
   // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
   const pictured = wanted("gvml") || wanted("png") || wanted("dib");
-  const own = drawn && onlySolids(layout) && pictured ? await solidsPng(layout, opts, drawn, dpi).catch(() => null) : null;
+  const own = drawn && onlySolids(layout) && pictured ? await solidsPng(layout, opts, drawn, density).catch(() => null) : null;
   if (own) {
     const png = withText(withDpi(own.png, own.dpi), PNG_KEY, record);
     if (wanted("emf")) await breath();
@@ -159,7 +185,7 @@ export async function pictureItems(
   if (wanted("png") || wanted("dib")) {
     const svg = createSVG(layout, opts);
     await breath();
-    const raster = await rasterized(svg, dpi).catch(() => null);
+    const raster = await rasterized(svg, density).catch(() => null);
     if (raster) items.push({ flavor: "png", bytes: withText(withDpi(raster.png, raster.dpi), PNG_KEY, record) });
   }
   return items;

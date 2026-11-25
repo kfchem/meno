@@ -18,7 +18,8 @@ export default function PictureSettings() {
           <div className="text-sm text-gh-black">Resolution</div>
           <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
             Of a copied picture where it is made of pixels: molecules in 3D in it, and the whole of it in a program
-            that takes no drawing in lines. Higher is sharper, and takes more room.
+            that takes no drawing in lines. Higher is sharper, and takes more room. A molecule in 3D is never copied with
+            fewer than 2400 pixels across, so it stays sharp when enlarged.
           </p>
         </div>
         <div role="radiogroup" aria-label="Resolution of copied pictures" className="flex rounded-md border border-gh-line overflow-hidden shrink-0">

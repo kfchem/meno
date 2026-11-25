@@ -6,8 +6,8 @@ import { withText } from "../../../lib/binary/png";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, inPoints } from "../../../lib/chem/style";
 import { structureInDrop, structureOnClipboard } from "./chem/fromClipboard";
-import { onlySolids, pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
-import type { Layout } from "../../../lib/chem/layout2d";
+import { LEAST_SIDE, onlySolids, pictureDensity, pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
+import { svgSize, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { ballSegmentsFor, tilesOf } from "./render3d";
 import type { Model } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
@@ -201,6 +201,53 @@ describe("a picture of molecules in 3D alone", () => {
     for (const flat of ["lines", "polys", "texts", "circles", "fills", "curves", "under", "shapes", "inks"] as const) {
       expect(onlySolids({ ...bare, [flat]: some }), flat).toBe(false);
     }
+  });
+});
+
+describe("the density of a copied picture", () => {
+  const solid = { kind: "ball" } as unknown as NonNullable<Layout["solids"]>[number];
+  /** A picture `w` by `h` CSS pixels (no padding, at zoom 1), with molecules in 3D in it or not. */
+  const frame = (w: number, h: number, solids: boolean): Layout => ({
+    lines: [], polys: [], texts: [], circles: [], fills: [], solids: solids ? [solid] : [], bounds: { min: { x: 0, y: 0 }, max: { x: w, y: h } }, zoom: 1, reach: [],
+  });
+  const opts = { paddingPx: 0 } as LayoutOptions;
+  /** Its pixels and its size in points, made at the density worked out for it (the frame as createSVG sizes it: svgSize). */
+  const made = (layout: Layout, dpi: number) => {
+    const density = pictureDensity(layout, opts, dpi);
+    const { width: w, height: h } = svgSize(layout, opts);
+    const { width, height } = rasterFrame(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"></svg>`, density);
+    return { width, height, dpi: density, widthPt: (width * 72) / density, heightPt: (height * 72) / density };
+  };
+
+  it("holding molecules in 3D, is high enough for 2400 pixels on its long side; its size in points is the same", () => {
+    expect(LEAST_SIDE).toBe(2400);
+    // (1 by 0.75 inch at 600 dpi was 600 by 450 pixels; 2400 / 1 inch = 2400 dpi: 2400 by 1800, still 72 by 54 points)
+    expect(made(frame(96, 72, true), 600)).toEqual({ width: 2400, height: 1800, dpi: 2400, widthPt: 72, heightPt: 54 });
+    // (at 1200 dpi it would be 1200 by 900: the floor still acts, 2400 by 1800)
+    expect(made(frame(96, 72, true), 1200)).toEqual({ width: 2400, height: 1800, dpi: 2400, widthPt: 72, heightPt: 54 });
+  });
+
+  it("holding molecules in 3D already larger than that at the setting, is the setting's", () => {
+    // (5 by 3.75 inches at 600 dpi: 3000 by 2250 pixels, above the floor - 2400 / 5 inches = 480 dpi is less than 600)
+    expect(made(frame(480, 360, true), 600)).toEqual({ width: 3000, height: 2250, dpi: 600, widthPt: 360, heightPt: 270 });
+  });
+
+  it("holding no molecule in 3D, is the setting's", () => {
+    // (1 by 0.75 inch at 600 dpi: 600 by 450 pixels)
+    expect(made(frame(96, 72, false), 600)).toEqual({ width: 600, height: 450, dpi: 600, widthPt: 72, heightPt: 54 });
+  });
+
+  it("is still held to 48 million pixels and 32767 a side", () => {
+    // (a long, thin picture 4000 by 10 CSS pixels: the floor asks 2400 / (4000 / 96) = 57.6 dpi, less than 600; the side's cap, 32767 x 96 / 4000 = 786 dpi, more)
+    expect(pictureDensity(frame(4000, 10, true), opts, 600)).toBe(600);
+    // (a scheme twenty by ten inches at 1200 dpi: lowered as any picture is)
+    expect(pictureDensity(frame(1920, 960, true), opts, 1200)).toBe(pictureDpiFor(1920, 960, 1200));
+  });
+
+  it("is what createSVG's frame is sized by", () => {
+    // (bounds 10 by 5 units at zoom 4, padding 2 px: (10 + 2 x 2 / 4) x 4 = 44 by (5 + 1) x 4 = 24 CSS pixels)
+    const layout = { ...frame(10, 5, true), zoom: 4 };
+    expect(svgSize(layout, { paddingPx: 2 } as LayoutOptions)).toEqual({ width: 44, height: 24 });
   });
 });
 
