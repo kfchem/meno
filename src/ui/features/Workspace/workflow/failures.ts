@@ -6,6 +6,8 @@
  * never move an entry (the maintainer, 2026-10-22).
  */
 
+import { whyCounted } from "../../../../lib/whyCounted";
+
 /** Why an entry failed, by kind - each said in plain words (`FAILURE_WORDS`). */
 export const FAILURE_KINDS = ["not-started", "stopped", "program-error", "refused", "wrong-molecule", "no-geometry", "not-converged", "failed"] as const;
 export type FailureKind = (typeof FAILURE_KINDS)[number];
@@ -82,5 +84,5 @@ export function failuresSaid(failures: readonly Failure[], of: number): string {
   for (const f of failures) by.set(f.kind, [...(by.get(f.kind) ?? []), f]);
   const counts = [...by].sort((a, b) => b[1].length - a[1].length || FAILURE_KINDS.indexOf(a[0]) - FAILURE_KINDS.indexOf(b[0]));
   const said = (k: FailureKind, all: readonly Failure[]) => (new Set(all.map((f) => failureSaid(f))).size === 1 ? failureSaid(all[0]) : FAILURE_WORDS[k]);
-  return `${failures.length} of ${of} failed (${counts.map(([k, all]) => `${all.length}: ${said(k, all)}`).join("; ")})`;
+  return `${failures.length} of ${of} failed ${whyCounted(counts.map(([k, all]) => [said(k, all), all.length] as const))}`;
 }

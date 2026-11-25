@@ -19,6 +19,7 @@
  * atom that is no such metal, stays what it is.
  */
 import { coordinatedByDonors } from "./perception/elements";
+import { whyCounted } from "../whyCounted";
 
 /** What the state is called, where a structure says it of itself. */
 export const LIGANDS_NOT_STATED = "ligands not stated";
@@ -130,4 +131,4 @@ export const isNotStatedText = (text: string): boolean => text.startsWith(NOT_ST
  * What a step that judges duplicates says of the structures that hold a metal whose ligands are not stated: compared with none.
  * In the short form a step's line counts what it set aside by why - "4 set aside (4: ligands not stated)" - so that the line fits its card.
  */
-export const notComparedSaid = (n: number): string => `${n} not compared (${n}: ${LIGANDS_NOT_STATED})`;
+export const notComparedSaid = (n: number): string => `${n} not compared ${whyCounted([[LIGANDS_NOT_STATED, n]])}`;

@@ -17,6 +17,7 @@ import type { PageTipAt } from "./PagePlaced";
 import type { Shape } from "./shapes";
 import { baselineIn, fitted, textWidth, wrapText, type PageText } from "./texts";
 import { pagePx } from "./units";
+import { countsOnly } from "../../../../lib/whyCounted";
 
 /** Its lengths, in page px, as its HTML has them: its width and least height; its room inside (px-3 pt-2 pb-2.5), its icon column and the gap after it; its lines; the bar; the big icons, shut small. */
 export const CARD = {
@@ -161,11 +162,20 @@ export function clamped(text: string, sizePx: number, maxPx: number, most: numbe
   return kept;
 }
 
+/**
+ * A step's state on its card, in at most two lines: the whole line where it fits; else the same line with its whys in
+ * parentheses left out, its counts only (lib/whyCounted `countsOnly`) - never a count or a why cut off. Its tip says it whole.
+ */
+export function stateLines(text: string, maxPx: number): string[] {
+  const whole = wrapText(text, 11, maxPx);
+  return clamped(whole.length <= 2 ? text : countsOnly(text), 11, maxPx, 2);
+}
+
 /** How a card's words lie: each block's lines and the card's height, in page px (`cardFace`). */
 export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "progress" | "high">): { summary: string[]; state: string[]; height: number; words: number } {
   const col = CARD.w - 2 * CARD.hair - 2 * CARD.side - CARD.icon - CARD.gap;
   const summary = clamped(c.summary, 11, col, 2);
-  const state = clamped(c.state.text, 11, col, 2);
+  const state = stateLines(c.state.text, col);
   const words = CARD.top + CARD.whoLine + summary.length * CARD.line + CARD.stateTop + state.length * CARD.line + (c.said ? CARD.line : 0) + (c.progress != null ? CARD.barTop + CARD.bar : 0) + CARD.bottom;
   // (its words in a grid at least as tall as a card, inside its hair of padding: as its HTML, StepCard)
   return { summary, state, height: Math.max(c.high ?? CARD.h, words) + 2 * CARD.hair, words };
