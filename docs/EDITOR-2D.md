@@ -720,16 +720,24 @@ on a page), and the **Newman projection** (`newman`).
   0.30, so that the two stand visibly apart; in the five-ring a front
   atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
   inside the ring is read against the whole drawing as the page lays it out - every line but its own
-  bond, the bold and wedge-shaped bonds of the near edge, the other labels - a graze of less than a tenth
+  bond, the bold and wedge-shaped bonds of the near edge, the other labels and the ring O's - a graze of less than a tenth
   of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),
-  one that meets something steps along its vertical toward its atom by the least that clears every label:
+  each label of the ring that meets something is first read the other way where that meets less - HO for
+  OH, HOH2C for CH2OH, or back - its bond being upright, so that either way reads (the atom keeps the way,
+  `reads`: an OH up from the right-hand front atom reads HO, its H off the bond going up from it, and
+  keeps its full stem; in a five-ring, whose near edge's bonds rise steeply, a label up from a front atom
+  or down from a side atom reads away from its atom's rising bond). Then one that still meets something
+  steps along its vertical toward its atom by the least that clears every label:
   a back atom's down label first, to as little as 0.30, then a front atom's up label, to as little as
-  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 as
-  before, so that nothing is drawn worse than it was. A group that is no label - a carbon drawn out, with
-  what it carries - is never moved, so a bond drawn on from it has its room. Not yet clear, as before
-  these lengths: an OH up from the right-hand front atom (its H written across the bond going up from
-  it), a CH2OH up from a front atom beside a second label inside the ring, and in a five-ring an OH or a
-  CH2OH up from C-2. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 and
+  every label reads as before, so that nothing is drawn worse than it was. A label that meets nothing is
+  left as it reads. A group that is no label - a carbon drawn out, with
+  what it carries - is never moved, so a bond drawn on from it has its room. Clean-up and *Draw flat* let
+  the way a label reads go, so that its bonds decide again. Not yet clear, as before these lengths: a
+  CH2OH up from a front atom beside a second label up from the other, in either ring - wider than the
+  ring's near edge, read either way it meets that label or a bond rising from its own atom, and no row
+  above them stands clear of the ring O and the back bonds; and in the six-ring an OH up from the
+  right-hand front atom under a CH2OH down from C-5. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
