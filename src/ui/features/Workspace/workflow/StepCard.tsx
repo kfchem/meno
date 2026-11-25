@@ -1,4 +1,3 @@
-import TextBars from "./TextBars";
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import type { ComponentProps, CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -137,8 +136,6 @@ export type StepCardProps = {
   /** How it does it, in a line: its options' values. */
   how: string;
   state: StepState;
-  /** Its words too small to read at this zoom: its icon and its state's icon alone. */
-  compact: boolean;
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
@@ -212,15 +209,9 @@ export default function StepCard(p: StepCardProps) {
         className={clsx("rounded-xl bg-white shadow-sm", HAIR_LINE, p.selected ? "inset-ring-accel-base" : "inset-ring-gh-line")}
         style={{ padding: HAIR, cursor: "default" }}
       >
-        {/* (its words, and its icons alone large where they are too small to read: one over the other, switched past a threshold - utils/pageScale
-            `wordsReadAt` - the words fading out as the icons fade in, over a short time: never one put for the other at once, nor both half there at a zoom) */}
         <div className="grid">
-          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: high }} aria-hidden={!p.compact}>
-            <StepGlyph icon={p.info.icon} size={28} />
-            {line.Icon && <line.Icon className={clsx("h-6 w-6 transition-colors duration-200 ease-meno", line.tone, line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
-          </div>
           {/* (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports) */}
-          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: high }} aria-hidden={p.compact}>
+          <div className="grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: high }}>
             <span className="flex h-5 items-center text-gh-gray">
               <StepGlyph icon={p.info.icon} />
             </span>
@@ -270,8 +261,7 @@ export default function StepCard(p: StepCardProps) {
             transition={{ duration: DURATION.base, ease: EASE }}
             style={{ overflow: "hidden" }}
           >
-          {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
-          <TextBars on={p.compact} className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
             {/* (another kind its doer fills to switch to - none for a kind not among them, a Repeat's: no empty choice) */}
             {p.kinds.length > 1 && p.kinds.some((k) => k.kind === p.step.kind) && (
               <div className="mb-3">
@@ -328,7 +318,7 @@ export default function StepCard(p: StepCardProps) {
                 Close
               </button>
             </div>
-          </TextBars>
+          </div>
           </motion.div>
         )}
         </AnimatePresence>

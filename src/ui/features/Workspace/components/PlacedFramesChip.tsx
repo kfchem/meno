@@ -18,7 +18,7 @@ export default function PlacedFramesChip(props: Parameters<typeof useFramesChip>
   const chip = useFramesChip(props);
   usePlaced(
     chip.drawn && there && anchor.current
-      ? { key: props.chipKey, anchor: anchor.current, words: true, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
+      ? { key: props.chipKey, anchor: anchor.current, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
       : null,
   );
   return <group ref={anchor} />;

@@ -1772,7 +1772,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const chip = useFramesChip({ chipKey, id: m.id, facts, frame: frameOf(solid, frame), open: !!props.framesOpen, onFrame: props.onFrame, onOpened: chipOpened, raised: chipRaised });
   usePlaced(
     chipThere && chip.drawn && pillThere && pill.current
-      ? { key: chipKey, anchor: pill.current, words: true, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
+      ? { key: chipKey, anchor: pill.current, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
       : null,
   );
 

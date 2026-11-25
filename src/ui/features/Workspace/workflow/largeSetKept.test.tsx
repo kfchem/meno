@@ -215,7 +215,6 @@ describe("a wire a step does not take", () => {
         who="Meno"
         how=""
         state="no-input"
-        compact={false}
         open={false}
         inputs={[{ id: "in", name: "in", look: "plain" }]}
         optionList={[]}

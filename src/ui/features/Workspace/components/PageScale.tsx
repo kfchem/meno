@@ -9,11 +9,7 @@ import { pageLayerStep, type PageLayerState } from "../utils/pageScale";
  * is - which chips are laid out at (`.meno-page-chip`), written once the
  * zoom stands still - and while it moves, how far it has gone from there,
  * `--page-k` for chips and `--notes-k` for notes, which they are scaled by
- * (`pageTold`, `pageSized`) - `--words`,
- * 1 while their words are read and 0 once they are too small, and
- * `--stand-in` the other way (`wordsReadAt`: switched past a threshold,
- * faded over a short time by CSS), and `data-words-small` while their words
- * are too small.
+ * (`pageTold`, `pageSized`).
  */
 export default function PageScale() {
   const layer = useContext(PageHtmlLayer);
@@ -30,7 +26,6 @@ export default function PageScale() {
     before.current = zoom;
     const step = pageLayerStep(told.current.layer === layer ? told.current.state : null, zoom, still);
     for (const [name, value] of step.writes) layer.style.setProperty(name, value);
-    if (step.wordsSmall != null) layer.toggleAttribute("data-words-small", step.wordsSmall);
     told.current = { layer, state: step.now };
     // (a frame more asked for while they are scaled: the canvas draws only when asked, and standing still they are then laid out as it is)
     if (step.again) invalidate();

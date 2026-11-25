@@ -2,10 +2,9 @@
  * The page's scale, for what is drawn on it in HTML (docs/WORKSPACE.md,
  * *Chips on the page*): chips, sets and steps' cards are as large as the
  * page draws them - a page pixel at the zoom a canvas opens at is a pixel on
- * the screen - and their words go where they would be too small to read.
+ * the screen - at every zoom.
  */
 import type { CSSProperties } from "react";
-import { switchedAt } from "./zoomSwitch";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 /** The scales a molecule's notes are drawn at, as the page is between them (Molecule3DView): never smaller than three quarters, nor larger than half as large again. */
@@ -49,22 +48,9 @@ export const pagePx = (px: number) => `calc(${px}px * var(--page, 1) * var(--pag
 
 /** A page pixel, in world units: a bond is 48 of them, as a canvas opens in ACS 1996 style. */
 export const PAGE_PX = NOMINAL_BOND_LENGTH / 48;
-/** The least scale words on the page's chips and cards are read at - their smallest, 11 px, about 8 px on the screen: smaller, they are left out. */
-export const WORDS_LEAST = 0.75;
-
 /** How many screen pixels a page pixel is drawn as, at `zoom` (the canvas's orthographic camera's). */
 export const pageScale = (zoom: number) => zoom * PAGE_PX;
 
-
-/**
- * Whether the words of chips and cards on the page are read at `zoom`, they
- * having been (`was`) or not: from a little above `WORDS_LEAST`, and no
- * longer from a little below it (utils/zoomSwitch `switchedAt`). Not faded
- * with the zoom: switched there, and faded over a short time - the words
- * out as what stands for them, a step's card's large icons, comes in, or
- * back (App.css `.meno-words`, `--words`).
- */
-export const wordsReadAt = (zoom: number, was: boolean): boolean => switchedAt(was, pageScale(zoom), WORDS_LEAST);
 
 /** How far the zoom goes, as a share, before what the page's HTML is sized by is written again while it moves (`zoomWritten`). */
 export const ZOOM_WRITTEN_STEP = 0.005;
@@ -116,26 +102,22 @@ export function pageTold(laid: number, zoom: number, still: boolean): PageTold {
   return { laid, page: pageScale(laid), k: zoom / laid, notesK: notesAt(pageScale(zoom)) / notesAt(pageScale(laid)) };
 }
 
-/** What the page's HTML layer was last told (`pageLayerStep`): the zoom its chips are laid out at, how far they are scaled from it, and whether its words are read. */
-export type PageLayerState = { laid: number; k: number; notesK: number; read: boolean };
+/** What the page's HTML layer was last told (`pageLayerStep`): the zoom its chips are laid out at, and how far they are scaled from it. */
+export type PageLayerState = { laid: number; k: number; notesK: number };
 
 /**
  * What the page's HTML layer is told at a frame of zoom `zoom` (components/
  * PageScale), it having been told `was` (none: a layer not told yet): each
  * custom property that changes - `--page` only where it is laid out again,
- * `--page-k` and `--notes-k` as they are scaled (`pageTold`), `--words` and
- * `--stand-in` as its words switch (`wordsReadAt`) - and whether a frame more
+ * `--page-k` and `--notes-k` as they are scaled (`pageTold`) - and whether a frame more
  * is asked for: while it is scaled, so that the canvas, drawn only when asked,
  * draws the frame the zoom stands still at and lays it out there.
  */
-export function pageLayerStep(was: PageLayerState | null, zoom: number, still: boolean): { now: PageLayerState; writes: [string, string][]; wordsSmall?: boolean; again: boolean } {
+export function pageLayerStep(was: PageLayerState | null, zoom: number, still: boolean): { now: PageLayerState; writes: [string, string][]; again: boolean } {
   const told = pageTold(was ? was.laid : NaN, zoom, still);
-  const read = wordsReadAt(zoom, was ? was.read : pageScale(zoom) >= WORDS_LEAST);
   const writes: [string, string][] = [];
   if (!was || told.laid !== was.laid) writes.push(["--page", told.page.toFixed(4)]);
   if (!was || told.k !== was.k) writes.push(["--page-k", told.k.toFixed(4)]);
   if (!was || told.notesK !== was.notesK) writes.push(["--notes-k", told.notesK.toFixed(4)]);
-  const switched = !was || read !== was.read;
-  if (switched) writes.push(["--words", read ? "1" : "0"], ["--stand-in", read ? "0" : "1"]);
-  return { now: { laid: told.laid, k: told.k, notesK: told.notesK, read }, writes, ...(switched ? { wordsSmall: !read } : {}), again: told.k !== 1 };
+  return { now: { laid: told.laid, k: told.k, notesK: told.notesK }, writes, again: told.k !== 1 };
 }

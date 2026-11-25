@@ -115,13 +115,8 @@ const DRAG = 4;
  */
 const AXIS = { className: "stroke-gh-gray", style: { strokeWidth: "max(1px, var(--hair, 1px))" } } as const;
 
-/**
- * A chart's body, its words - each a span over its drawing, which is SVG -
- * gone where they are too small to read (`.meno-words`, utils/pageScale
- * `wordsReadAt`: switched past a threshold, faded over a short time): a chart at a fit zoom is still its points
- * and axes, never an empty frame.
- */
-const wordsOf = () => "meno-words-each relative text-[10px] leading-3 text-gh-gray tabular-nums";
+/** A chart's words, each a span over its drawing (which is SVG): drawn at every zoom, scaled with the page as the rest of it is. */
+const wordsOf = () => "relative text-[10px] leading-3 text-gh-gray tabular-nums";
 
 /**
  * A set holding a chart, inside its frame (docs/WORKFLOWS.md, *Charts*):

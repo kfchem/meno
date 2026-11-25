@@ -9,10 +9,12 @@
  * name lies, which names are clear of each other.
  */
 import { readingOrder } from "../workflow/entries";
-import { WORDS_LEAST } from "../utils/pageScale";
 import { switchedAt } from "../utils/zoomSwitch";
 
 export type Band = "read" | "named" | "marked";
+
+/** The page's scale a card's words are read at, and above: below it, its name and icon alone. */
+export const READ_LEAST = 0.75;
 
 /** The page's scale a card's name is left out below: it is only marked (a page pixel is a quarter of a screen's). */
 export const NAMED_LEAST = 0.25;
@@ -26,13 +28,13 @@ export const MARK_PX = 10;
 
 /**
  * The band at a page scale (screen px to a page px), it having been `was`:
- * read from `WORDS_LEAST` a little over, no longer a little under it - and
+ * read from `READ_LEAST` a little over, no longer a little under it - and
  * named from `NAMED_LEAST` a little over, marked a little under it
  * (utils/zoomSwitch `switchedAt`), so that a zoom stopped at an edge, or
  * turned a little back, does not switch back and forth.
  */
 export function bandAt(scale: number, was: Band): Band {
-  if (switchedAt(was === "read", scale, WORDS_LEAST)) return "read";
+  if (switchedAt(was === "read", scale, READ_LEAST)) return "read";
   return switchedAt(was !== "marked", scale, NAMED_LEAST) ? "named" : "marked";
 }
 

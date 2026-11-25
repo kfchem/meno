@@ -1549,8 +1549,7 @@ it, in `features/Workspace/pageGl/`:
   typed into a real field unseen: `PageAsk`) takes 44 page pixels at
   least, growing to four lines, and the history the rest. A line, a ground or a
   chip at an edge that more lies past fades over one line as it nears it,
-  never cut in two; its words fade with the page's, and too small to read
-  it says its turns and state alone. It is scrolled by a track, *Earlier*
+  never cut in two; its words scale with the page at every zoom. It is scrolled by a track, *Earlier*
   and *Latest* chips and keys (`conversationScroll`), never by the wheel:
   no region of the page hears one, so a wheel over the card zooms. The
   frame always holds the card (`framedForCard`: at least `FRAME_LEAST`, its
@@ -1579,13 +1578,8 @@ it, in `features/Workspace/pageGl/`:
   Where two names would overlap, the later in reading order fades out
   (the earlier staying) and the page's tip says it as its card is
   pointed at. The bands switch with a little hysteresis (5 % each way) and
-  fade over Meno's quick time. A set's tab follows the same rule: its name,
-  11 screen pixels high, stands in for its words (cut inside its frame's
-  width, a tab's inset from each side, and raised over its frame's top where
-  it, and a gap of three screen pixels under it, is higher than its tab's
-  band - wholly above it, far off - never down over, nor touching, what
-  the frame holds, and left out where it would lie over another
-  frame or a card) - laid out as their HTML was, and drawn on under a card
+  fade over Meno's quick time. A set's tab says its name and count in page
+  pixels at every zoom, scaled with the page as its frame is - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -
@@ -1597,8 +1591,7 @@ it, in `features/Workspace/pageGl/`:
   real field laid unseen at the caret, so that keys, the input method's
   candidates beside the words, pasting, undoing and a screen reader are
   the system's own - Enter or a press away keeps it, Escape leaves it as
-  it was; its name, 11 screen pixels high, stands in for its words where
-  they are too small to read (a conversation's tab: its icon); a tab's words start as far from the frame's left edge
+  it was; a tab's words start as far from the frame's left edge
   as its icon stands from its top, a conversation's and a set's alike
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings that grow with the

@@ -126,7 +126,6 @@ describe("a card of four inputs, drawn", () => {
   it("the same in its HTML and on the page's layer: its height its kind's, the frames wires go round its own", () => {
     const html = readFileSync(join(__dirname, "StepCard.tsx"), "utf8");
     expect(html).toMatch(/const high = cardHighOf\(p\.step\.kind\) \/ PX;/);
-    expect(html).toMatch(/height: high \}\}/);
     expect(html).toMatch(/minHeight: high \}\}/);
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/high: cardHighOf\(s\.kind\) \/ PX,/);

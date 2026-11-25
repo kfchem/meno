@@ -3,7 +3,6 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import * as THREE from "three";
 import { DURATION } from "../../../theme/motion";
 import { useEditor } from "../store";
-import { wordsReadAt } from "../utils/pageScale";
 import type { Region } from "./hits";
 import { usePageHits, type HitHandlers } from "./PageHits";
 import PageTip from "../components/PageTip";
@@ -45,8 +44,7 @@ const RAISED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
  * A thing placed on the page by something that moves - a molecule's frames
  * chip, hanging below the molecule as it turns - drawn by WebGL with every
  * other such thing at once (`PagePlaced`): where `anchor` is on the page, as
- * `draw` draws it there; its words gone where the page's words are too small
- * to read, as its HTML's were (`words`); gone while a talk is given, where
+ * `draw` draws it there; gone while a talk is given, where
  * it is something to work the page with (`control`: a frames chip - App.css
  * `.meno-control-chip`, docs/PRESENTING.md); told of the pointer by `on`.
  * `raised`, it is drawn over all the rest (`RAISED_ORDER`: an opened chip);
@@ -57,7 +55,6 @@ export type Placed = {
   key: string;
   anchor: THREE.Object3D;
   draw: (at: { x: number; y: number }, view: PageView) => Drawn;
-  words?: boolean;
   control?: boolean;
   raised?: boolean;
   zoomed?: boolean;
@@ -95,9 +92,7 @@ const at = new THREE.Vector3();
  * Every thing placed under it (`usePlaced`) drawn by WebGL at once - one set
  * of boxes, one of words, one layer of places taking the pointer - each
  * where its anchor is now: read every frame, drawn again only where one has
- * moved, or one has come or gone, or the page's words have switched; those
- * whose words are read faded in and out with them, over Meno's quick time;
- * those that work the page faded out while a talk is given, and back after.
+ * moved, or one has come or gone; those that work the page faded out while a talk is given, and back after.
  */
 export default function PagePlaced({ children }: { children?: ReactNode }) {
   const { camera, invalidate, gl } = useThree();
@@ -120,9 +115,6 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
     }),
     [invalidate],
   );
-  // (whether the page's words are read, and how far shown they are: switched past their threshold, faded over a short time)
-  const read = useRef(true);
-  const shown = useRef(1);
   // (whether a talk is given, and how far shown what works the page is: faded out over a short time as one begins, and back)
   const talking = useEditor((s) => s.presenting != null);
   const controls = useRef(talking ? 0 : 1);
@@ -138,13 +130,6 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
     if (zoom !== view.current.zoom || dpr !== view.current.dpr) {
       view.current = { zoom, dpr };
       for (const p of placed.current.values()) if (p.zoomed) dirty.current = true;
-    }
-    read.current = wordsReadAt(zoom, read.current);
-    const to = read.current ? 1 : 0;
-    if (shown.current !== to) {
-      shown.current = toward(shown.current, to, dt);
-      dirty.current = true;
-      invalidate();
     }
     const controlsTo = talking ? 0 : 1;
     if (controls.current !== controlsTo) {
@@ -175,7 +160,7 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
       const w = where.current.get(key);
       if (!w) continue;
       const d = p.draw(w, view.current);
-      const fade = (p.words ? shown.current : 1) * (p.control ? controls.current : 1);
+      const fade = p.control ? controls.current : 1;
       if (fade <= 0) continue;
       const faded = <T extends { opacity?: number }>(x: T): T => (fade < 1 ? { ...x, opacity: (x.opacity ?? 1) * fade } : x);
       const layer = layers[p.raised ? 1 : 0];
@@ -183,13 +168,13 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
       for (const q of d.polys ?? []) layer.polys.push(faded(q));
       for (const t of d.texts) layer.texts.push(faded(t));
       for (const i of d.icons ?? []) layer.icons.push(faded(i));
-      // (none taking the pointer while it is not read: as its HTML's took none, faded out)
+      // (none taking the pointer while it is faded out)
       if (fade === 1) for (const r of d.regions ?? []) regions.push(r);
       if (fade === 1 && d.tip) tip = d.tip;
       if (p.on) handlers.set(key, p.on);
     }
     return { layers, regions, handlers, tip };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- version: drawn again as anchors move, things come and go, words switch
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version: drawn again as anchors move, things come and go
   }, [version]);
   usePageHits(drawn.regions, {
     down: (key, part, e) => drawn.handlers.get(key)?.down?.(key, part, e),

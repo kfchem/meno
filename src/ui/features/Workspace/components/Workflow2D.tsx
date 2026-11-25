@@ -30,7 +30,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, pageScale, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, inputOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
@@ -51,7 +51,7 @@ import { dragSelection } from "../utils/dragSelection";
 import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
-import { cardBoxOf, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
 import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
@@ -496,7 +496,6 @@ function ExitNames({ items, chip }: { items: readonly PageText[]; chip: Drawn | 
       ? {
           key: "exit-names",
           anchor,
-          words: true,
           control: true,
           draw: (at) => ({
             // (and what a held exit's set holds, said beside its port as the pointer is on it: workflow/exitNames `exitChip`)
@@ -647,17 +646,16 @@ export default function Workflow2D() {
     return () => clearTimeout(t);
   }, [anyRunning, newest, store]);
 
-  // the zoom: where it crosses what a card's words need to be read; what
+  // the zoom: the band a card is drawn in; what
   // a hair on the screen is on the page's layer of HTML (`--hair`), and how
   // many of the screen's pixels its pixel is (`--scale`); and, by
   // steps of a few per cent, what the wires are made as wide on the screen for
-  const [compact, setCompact] = useState(false);
-  // (the cards' words, faded as the page's are past the zoom they are read at: their icons alone and large below it)
-  const words = useEasedTo(compact ? 0 : 1);
   // (zoomed out: named - the box, its kind's icon and its name - or only marked, below a quarter: switched with a little hysteresis - pageGl/cardBands - and eased)
   const [band, setBand] = useState<Band>("read");
   const bandNow = useRef<Band>("read");
   const named = useEasedTo(band === "marked" ? 0 : 1);
+  // (the cards' words, faded out as a card goes from its read band to its name alone)
+  const words = useEasedTo(band === "read" ? 1 : 0);
   const hoveredStep = useEditor((s) => s.hoveredStep);
   // (each Repeat's pass under way, where one runs: its tab says it - store `runRepeat`)
   const repeatPasses = useEditor((s) => s.repeatPasses);
@@ -669,7 +667,6 @@ export default function Workflow2D() {
   const [recordPointed, setRecordPointed] = useState<string | null>(null);
   // (the port under the pointer: lit a little, as its HTML was on hover)
   const [portPointed, setPortPointed] = useState<string | null>(null);
-  const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   // (what a hair was last written as, on which layers, and the zoom the frame before)
   const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number; hair: number }>({ layer: null, ports: null, zoom: NaN, before: NaN, hair: NaN });
@@ -710,12 +707,8 @@ export default function Workflow2D() {
   });
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
-    read.current = wordsReadAt(z, read.current);
     bandNow.current = bandAt(pageScale(z), bandNow.current);
     if (bandNow.current !== band) setBand(bandNow.current);
-    const small = !read.current;
-    if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     // (written again only as utils/pageScale `zoomWritten` says - each write lays out every card again - and to a layer not yet written to)
     const still = z === hair.current.before;
@@ -736,8 +729,6 @@ export default function Workflow2D() {
       if (hairPx != null) hair.current = { ...h, hair: hairPx };
       if (h.zoom !== z) invalidate();
     }
-    layer.current?.style.setProperty("--words", read.current ? "1" : "0");
-    layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
   });
 
   // (what is under a point on the screen among what the page's WebGL takes the pointer for - a port a wire is let go on, a set's tab)
@@ -1185,7 +1176,6 @@ export default function Workflow2D() {
             set={{ ...b, ...f }}
             name={info.name}
             {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
-            compact={compact}
             onContextMenu={menuOf("set", b.id)}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
@@ -1247,7 +1237,6 @@ export default function Workflow2D() {
             run={run?.view}
             missing={missing}
             {...(wireRefused?.step === s.id ? { refused: wireRefused.said } : {})}
-            compact={compact}
             selected={selFlow.steps.has(s.id)}
             open={openStep === s.id}
             onClose={() => store.getState().setWorkflowView({ openStep: null, choosingAtoms: null })}
@@ -1329,8 +1318,8 @@ export default function Workflow2D() {
     }
   }
   const onMarks: HitHandlers = { hover: (key, _part, on) => setRecordPointed((was) => (on ? key : was === key ? null : was)) };
-  // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top, its icon - what made it, or a set's
-  // own - standing in for them where they are too small to read; its line darker while its tab is pointed at, Meno's colour chosen
+  // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top; its line darker while its tab is
+  // pointed at, Meno's colour chosen
   const setTabs: FrameTab[] = onPage.map((b) => {
     const info = setInfo.get(b.id)!;
     const maker = b.made ? stepById.get(b.made.step) : undefined;
@@ -1340,7 +1329,7 @@ export default function Workflow2D() {
       tone: chosenSet === b.id || selFlow.sets.has(b.id) ? "chosen" : hoveredSet === b.id ? "hover" : "rest",
       // (its words left to the field over its tab while it is named anew)
       tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
-      iconWhenSmall: true,
+      nameOnly: true,
     };
   });
   // a Repeat's frame round the steps it runs pass by pass (workflow/repeat), by WebGL as a set's is: dashed and quiet, its tab "Repeat"
@@ -1356,7 +1345,7 @@ export default function Workflow2D() {
         tone: selFlow.steps.has(s.id) ? ("chosen" as const) : hoveredStep === s.id ? ("hover" as const) : ("rest" as const),
         loop: true as const,
         tab: { icon: "repeat", name: "Repeat", ...(status ? { status } : {}) },
-        iconWhenSmall: true as const,
+        nameOnly: true as const,
       },
     ];
   });
@@ -1610,7 +1599,7 @@ export default function Workflow2D() {
 
   return (
     <group>
-      {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
+      {/* the exits' names, as the page's words: gone while a talk is given */}
       <PagePlaced>
         <ExitNames items={names} chip={chip} />
       </PagePlaced>
@@ -1629,8 +1618,8 @@ export default function Workflow2D() {
       {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
-      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map(cardBoxOf)} />
-      {repeatTabs.length > 0 && <FrameTabs items={repeatTabs} on={onRepeatTabs} clear={faceList.map(cardBoxOf)} />}
+      <FrameTabs items={tabsShown} on={onSetTabs} />
+      {repeatTabs.length > 0 && <FrameTabs items={repeatTabs} on={onRepeatTabs} />}
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

@@ -169,8 +169,7 @@ export type AskOf = {
   running: boolean;
   /** No model plugin: the field says what it needs. */
   noModel?: boolean;
-  /** How present its words are (the page's words read, 1; too small, 0), and how present it is as a whole. */
-  words: number;
+  /** How present it is as a whole. */
   opacity?: number;
   z?: number;
 };
@@ -236,7 +235,7 @@ export function movedBy(key: string, value: string, lines: readonly AskLine[], e
 export function askParts(f: AskOf): AskDrawn {
   const P = pagePx;
   const z = f.z ?? 0;
-  const o = (f.opacity ?? 1) * f.words;
+  const o = f.opacity ?? 1;
   const { lines, heightPx, maxPx, stop } = askArea(f.value, f.widthPx, f.running);
   const shown = Math.min(lines.length, ASK.most);
   const { left, top, wide, boxH } = askBox(f.widthPx, heightPx, shown, stop);

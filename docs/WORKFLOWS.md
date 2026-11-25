@@ -4365,22 +4365,9 @@ for each structure).
   them, from below the least value to above the greatest.
 - A point pointed at says its row, what it is, and its two values; pressed, where it is
   of a molecule on the page, that molecule is chosen at its frame.
-- Zoomed out until words on the page are too small to read, a chart - and
-  an energy diagram - is still drawn, its points, levels, lines and axes;
-  only its words fade out, as a set's name and count do. A table and a
-  number, all words, fade out whole. All of these, and a step's card's
-  words, go where they are too small, never at once - and never faded with
-  the zoom (the maintainer, 2026-10-28: faded with the zoom, a zoom could
-  stop where words and icons were both half there; before that, 2026-10-25,
-  where both were all but gone). Past a threshold they switch: off below
-  the least scale words are read at, divided by 1.05, and on again only
-  above it times 1.05, so that a zoom stopped at it, or turned a little
-  back, does not switch them back and forth (utils/pageScale
-  `wordsReadAt`, utils/zoomSwitch `switchedAt`). Switched, they fade over
-  Meno's quick time, 120 ms, on its curve (`--words` on the page's layer,
-  a CSS transition), as a molecule's chips do; a step's card's name and
-  state mark, which stand for its words where they are gone, fade in as
-  they go (docs/WORKSPACE.md, *A workflow*: named, then marked). What is pressed on them switches with them.
+- A chart, an energy diagram, a table and a number are drawn whole at
+  every zoom, their words with them, scaled with the page as everything on
+  it is.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

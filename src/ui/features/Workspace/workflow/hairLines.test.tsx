@@ -19,7 +19,6 @@ function card(selected: boolean): string {
       who="Meno"
       how=""
       state="ready"
-      compact={false}
       open
       selected={selected}
       inputs={inputsOf(s.kind).map((p) => ({ id: p.id, name: p.name, look: "plain" as const }))}

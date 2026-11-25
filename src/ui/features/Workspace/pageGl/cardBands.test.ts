@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { bandAt, inReadingOrder, namesKept, NAME_PX, NAMED_LEAST, onPage, type Band } from "./cardBands";
-import { WORDS_LEAST } from "../utils/pageScale";
+import { bandAt, inReadingOrder, namesKept, NAME_PX, NAMED_LEAST, onPage, READ_LEAST, type Band } from "./cardBands";
 
 describe("the band a card is drawn in as the page is zoomed out", () => {
   const at = (scale: number, was: Band) => bandAt(scale, was);
   it("is read from three quarters of a page pixel to a screen pixel, named from a quarter, marked below", () => {
-    expect([WORDS_LEAST, NAMED_LEAST]).toEqual([0.75, 0.25]);
+    expect([READ_LEAST, NAMED_LEAST]).toEqual([0.75, 0.25]);
     expect([1, 2, 0.8].map((s) => at(s, "read"))).toEqual(["read", "read", "read"]);
     expect([0.5, 0.3].map((s) => at(s, "named"))).toEqual(["named", "named"]);
     expect([0.1, 0.01].map((s) => at(s, "marked"))).toEqual(["marked", "marked"]);
