@@ -5,7 +5,7 @@
  * nothing of which places are open or how many ways they go: that is Meno's.
  */
 import { automorphismGroup, identityKey, type IdentityInput } from "../../../../lib/chem/identity";
-import { isomersOf, type Stereoisomer } from "../../../../lib/chem/isomers";
+import { decidesAny, isomersOf, type Stereoisomer } from "../../../../lib/chem/isomers";
 import { tiesOf } from "../../../../lib/chem/perception/stereo/ties";
 import { parity } from "../../../../lib/chem/perception/stereo/geometry";
 import { symmetryOrbits } from "../../../../lib/chem/perception/symmetry";
@@ -53,9 +53,10 @@ function countedOf(read: BlocksRead): ReturnType<typeof isomersOf> {
 /**
  * What a structure read (`BlocksRead`) leaves open by Meno's candidates, in the blocks' places - only where the choice changes the
  * compound, alone or with others (`isomersOf`'s `deciding`: never methylcyclohexane's ring CH; both ring atoms of
- * 1,4-dimethylcyclohexane), every candidate where it is not counted - and every centre and double bond they give it.
+ * 1,4-dimethylcyclohexane), every candidate where it is not counted - and every centre and double bond they give it. With `every`,
+ * every candidate left open, the count not asked.
  */
-export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { left: StereoLeft; centres: number[]; doubles: number[]; handed: boolean } {
+export function leftByMeno(molblocks: readonly string[], read: BlocksRead, every = false): { left: StereoLeft; centres: number[]; doubles: number[]; handed: boolean } {
   const graph = stereoGraphOf(molblocks)!;
   const { folded: g, inputAt, bondAt } = read;
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -92,8 +93,8 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { le
     return out;
   };
   let handed = false;
-  const counted = countedOf(read);
-  const deciding = "deciding" in counted ? counted.deciding : null;
+  const counted = every ? null : countedOf(read);
+  const deciding = counted && "deciding" in counted ? counted.deciding : null;
   const decides = (c: ReturnType<typeof candidates>[number]): boolean => {
     if (!deciding) return true;
     if (c.kind === "centre") return deciding.atoms.includes(c.at);
@@ -130,6 +131,16 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { le
   };
   return { left, centres: centres.sort(byIndex), doubles: doubles.sort(byIndex), handed };
 }
+
+/**
+ * Whether a structure read leaves open some stereo whose choice changes the compound - `leftByMeno`'s centres and double bonds, not
+ * none - asked without the whole count where it is not already known (lib/chem/isomers `decidesAny`).
+ */
+export function leavesOpen(molblocks: readonly string[], read: BlocksRead): boolean {
+  if (counts.has(read)) return anyLeft(leftByMeno(molblocks, read).left);
+  return anyLeft(leftByMeno(molblocks, read, true).left) && decidesAny(read.input);
+}
+const anyLeft = (left: StereoLeft) => left.atoms.length + left.bonds.length > 0;
 
 /**
  * A stereoisomer (`isomersOf`, of `read.folded`) as the plugin is given it: each centre and double bond it configures, by the

@@ -234,6 +234,34 @@ export function isomersOf(
   return { isomers, complete, deciding };
 }
 
+/**
+ * Whether any place `isomersOf` leaves open decides the compound (its `deciding` not empty), worked out without the whole count:
+ * the first way, then each place turned alone from it - a place that decides alone mostly shows there - and only where none does,
+ * the ways one after another, stopping at the first two differing at one place alone that write two identities. Where `isomersOf`
+ * would not count (a cage left open, past `most` ways), every candidate stays open (chem/menoIsomers): yes. The longest case is a
+ * structure with open places none of which decides: every way written, as the count writes them.
+ */
+export function decidesAny(input: IdentityInput, most = ASSIGNMENTS_TRIED): boolean {
+  const g = hydrogensFolded(input);
+  const tied = tiedPlaces(g, openPlaces(g));
+  if ("notCounted" in tied) return true;
+  const { open, base } = tied;
+  if (!open.length) return false;
+  const ways = 2 ** open.length;
+  if (ways > most) return true;
+  const texts = new Map<number, string>();
+  const textOf = (way: number) => {
+    const known = texts.get(way);
+    if (known != null) return known;
+    const t = identity(open.reduce((h, o, k) => o.set(h, (way & (1 << k)) === 0), base)).text;
+    texts.set(way, t);
+    return t;
+  };
+  for (let k = 0; k < open.length; k++) if (textOf(0) !== textOf(1 << k)) return true;
+  for (let way = 1; way < ways; way++) for (let k = 0; k < open.length; k++) if (textOf(way) !== textOf(way ^ (1 << k))) return true;
+  return false;
+}
+
 /** The places the candidates leave open in `g` (a structure with its plain hydrogens folded in), each as how to give it one way or the other. */
 function openPlaces(g: IdentityInput): Open[] {
   const around: number[][] = g.atoms.map(() => []);
