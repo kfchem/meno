@@ -34,7 +34,7 @@ const reaching = (r: number | ((m: Omit<Molecule3D, "id">) => number)): RunWith[
 
 /** A step's result set of four molecules, laid out as each reaches `r`. */
 function resultSet(r: number): WorkspaceDocument {
-  let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+  let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
   d = placeResults(d, d.steps![0], { molecules: [bent(), bent("S"), bent(), bent("S")], rest: [], holds: "molecules" }, { extentOf: reaching(r) });
   return d;
 }
@@ -107,11 +107,11 @@ describe("a result set its molecules no longer fit", () => {
   it("keeps them in the order the run gave them, one grown bigger than the next", () => {
     // (laid out with the sulphur ones bigger - their middles lower than their neighbours', by more than a row's tolerance - then grown more)
     const sizes = (s: number) => reaching((m) => (m.atoms[0].el === "S" ? s : 1));
-    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     const results = { molecules: [bent(), bent("S"), bent(), bent("S")], rest: [], holds: "molecules" as const };
     d = placeResults(d, d.steps![0], results, { extentOf: sizes(2.5) });
     const big = fitResultSets(d, sizes(3.5));
-    let fresh = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    let fresh = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     fresh = placeResults(fresh, fresh.steps![0], results, { extentOf: sizes(3.5) });
     expect(big.molecules3d!.map((m) => [m.atoms[0].el, m.at])).toEqual(fresh.molecules3d!.map((m) => [m.atoms[0].el, m.at]));
   });
@@ -120,7 +120,7 @@ describe("a result set its molecules no longer fit", () => {
     let d = resultSet(1);
     const set = d.sets![0];
     // (the next step, just right of the set)
-    d = addStep(d, "energy", set.x1 + 2 * BETWEEN, set.y1, {}, "xtb");
+    d = addStep(d, "energy", set.x1 + 2 * BETWEEN, set.y1, {}, "tightbind");
     const card = d.steps![1];
     const big = fitResultSets(d, reaching(2.5));
     const grown = big.sets![0];
@@ -155,7 +155,7 @@ describe("a 3D look chosen on the canvas or in Settings", () => {
     const doc = createWorkspaceDocument();
     const look: RunWith["extentOf"] = (m, turn) => reachOverFrames({ ...m, id: 0 }, STYLE_3D, turn);
     doc.edit("run", (d) => {
-      d = addStep(d, "optimise", 0, 0, {}, "xtb");
+      d = addStep(d, "optimise", 0, 0, {}, "tightbind");
       return placeResults(d, d.steps![0], { molecules: [bent(), bent("S"), bent(), bent("S")], rest: [], holds: "molecules" }, { extentOf: look });
     });
     const store = createEditorStore(doc);
@@ -205,7 +205,7 @@ describe("a result set of molecules narrower than their frames chips", () => {
       const xyz = b.atoms.flatMap((a) => [a.x, a.y, a.z]);
       return { ...b, frames: Array.from({ length: n - 1 }, () => xyz), energies: Array.from({ length: n }, (_, i) => -5 - i / 1000), path: true };
     };
-    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     d = placeResults(d, d.steps![0], { molecules: [optimised("O", 4), optimised("S", 5), optimised("O", 12)], rest: [], holds: "molecules" }, { extentOf: reaching(0.4) });
     const set = d.sets![0];
     const chips = d.molecules3d!.map((m) => ({ x0: m.at.x - chipWide(m) / 2, x1: m.at.x + chipWide(m) / 2, y: m.at.y }));
@@ -235,7 +235,7 @@ describe("a result set of molecules narrower than their frames chips", () => {
   it("gives a conformer set's compound of one conformer its chip's room, as a compound of several", () => {
     const kept = { ...bent(), energies: [-1], shares: [1], conformerSet: true };
     expect(chipWide(kept)).toBeGreaterThan(0);
-    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     d = placeResults(d, d.steps![0], { molecules: [kept, { ...kept, atoms: bent("S").atoms }], rest: [], holds: "molecules" }, { extentOf: reaching(1) });
     const set = d.sets![0];
     const m = d.molecules3d![0];
@@ -253,7 +253,7 @@ describe("a result set of molecules narrower than their frames chips", () => {
     expect(chipWide(saddle)).toBeGreaterThan(chipWide(one) + 20 * CHIP_CHAR);
     // (one of a single frame that failed: no lowest to stand above, said in its energy's place - its chip as wide as that, and why)
     expect(chipWide(failed)).toBeGreaterThanOrEqual(("1 / 1 · none finished: no lowest to stand above · not converged".length) * CHIP_CHAR);
-    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     d = placeResults(d, d.steps![0], { molecules: [saddle, { ...saddle, imaginary: [[-1234.5]] }, failed], rest: [], holds: "molecules" }, { extentOf: reaching(0.4) });
     const set = d.sets![0];
     const chips = d.molecules3d!.map((m) => ({ x0: m.at.x - chipWide(m) / 2, x1: m.at.x + chipWide(m) / 2, y: m.at.y }));

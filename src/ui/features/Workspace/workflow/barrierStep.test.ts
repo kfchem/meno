@@ -5,7 +5,7 @@ import type { SetEntry } from "./entries";
 import { kindInfo, needsOf } from "./kinds";
 import { runMenoPair } from "./meno";
 
-// (the numbers, made up, in hartrees, as GFN2-xTB at 298.15 K and 1 atm with quasi-RRHO might give them - ammonia's
+// (the numbers, made up, in hartrees, as TB2 at 298.15 K and 1 atm with quasi-RRHO might give them - ammonia's
 //  inversion, and a Diels-Alder's saddle point above the complex of its two reactants)
 const AMMONIA = { saddle: { e: -4.416, g: -4.4005, group: "D3h", sigma: 6 }, minimum: { e: -4.425, g: -4.41, group: "Cs", sigma: 1 } };
 const DIELS_ALDER = { saddle: { e: -17.81, g: -17.705 }, complex: { e: -17.821, g: -17.725 } };
@@ -35,7 +35,7 @@ function made(m: Made, extra: Partial<SetEntry> = {}): SetEntry {
     // (its imaginary frequencies, as its calculation judged them - as a step's entry carries them: entries `setEntries`)
     imaginary: m.imaginary ?? [],
     ...(m.charge != null ? { charge: m.charge, multiplicity: 2 } : {}),
-    calc: { readers: ["cclib 1.9rc1"], program: "ORCA", method: m.method ?? "GFN2-xTB", solvation: "none", results, imaginary: m.imaginary ?? [] },
+    calc: { readers: ["manyread 1.9rc1"], program: "Quanta", method: m.method ?? "TB2", solvation: "none", results, imaginary: m.imaginary ?? [] },
     ...(m.how === null ? {} : { converged: convergedAt(m.how ?? "optimisation", xyz) }),
     ...extra,
   } as unknown as SetEntry;
@@ -65,12 +65,12 @@ describe("a Barrier step", () => {
     // (CODATA 2018's hartree: 627.509474 kcal/mol)
     expect(b.value as number).toBeCloseTo(5.96, 2);
     expect(b.value as number).toBeCloseTo((AMMONIA.saddle.g - AMMONIA.minimum.g) * 627.5094740630558, 9);
-    expect(b).toMatchObject({ unit: "kcal/mol", at: { geometry: geometryKey(saddle().xyz), kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "GFN2-xTB" } });
+    expect(b).toMatchObject({ unit: "kcal/mol", at: { geometry: geometryKey(saddle().xyz), kelvin: 298.15, atm: 1 }, by: { program: "Quanta", method: "TB2" } });
     // (the sigmas differ - D3h's 6, the minimum read as Cs, 1 - and are kept, both said)
     expect(b.by?.treatment).toBe(
       "free energy G (thermo.free-energy; quasi-RRHO (Grimme), 100 cm⁻¹): the saddle point's less its start a #1's; point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs, σ 1 (start)",
     );
-    expect(kept(o).said).toBe("ΔG‡ 5.96 kcal/mol (G at GFN2-xTB, 298.15 K)");
+    expect(kept(o).said).toBe("ΔG‡ 5.96 kcal/mol (G at TB2, 298.15 K)");
   });
 
   it("leaves the rotational symmetry out where asked - sigma 1 on both sides, each side's RT ln sigma taken off - so that the program's tolerance no longer moves it", () => {
@@ -78,7 +78,7 @@ describe("a Barrier step", () => {
     const o = run([saddle()], [minimum()], { symmetry: "left-out" });
     expect(barrier(o).value as number).toBeCloseTo(4.9, 3);
     expect(barrier(o).by?.treatment).toMatch(/; rotational symmetry left out - σ 1 on both sides, each side's RT ln σ taken off by Meno \(R = 8\.314462618 J\/\(mol K\)\)$/);
-    expect(kept(o).said).toBe("ΔG‡ 4.90 kcal/mol (G at GFN2-xTB, 298.15 K, σ left out)");
+    expect(kept(o).said).toBe("ΔG‡ 4.90 kcal/mol (G at TB2, 298.15 K, σ left out)");
     // (another run, the same two read otherwise - the point refined Cs, sigma 1; the minimum C3v, sigma 3: 4.25 as read, 4.90 left out, as the other)
     const other = { saddle: saddle({ g: -4.40222905, group: "Cs", sigma: 1 }), minimum: minimum({ g: -4.409, group: "C3v", sigma: 3 }) };
     expect(barrier(run([other.saddle], [other.minimum])).value as number).toBeCloseTo(4.25, 2);
@@ -91,7 +91,7 @@ describe("a Barrier step", () => {
     const o = run([saddle()], [minimum()], { energy: "E" });
     expect(barrier(o).value as number).toBeCloseTo(5.65, 2);
     expect(barrier(o).by?.treatment).toBe("electronic energy E: the saddle point's less its start a #1's");
-    expect(kept(o).said).toBe("ΔE‡ 5.65 kcal/mol (E at GFN2-xTB)");
+    expect(kept(o).said).toBe("ΔE‡ 5.65 kcal/mol (E at TB2)");
   });
 
   it("gives a Diels-Alder's from the complex of its reactants", () => {
@@ -120,7 +120,7 @@ describe("a Barrier step", () => {
   });
 
   it("refuses two not worked out alike: another level, another temperature, a sigma not read", () => {
-    expect(why(run([saddle({ method: "B3LYP" })], [minimum()]))).toBe("a #1: their thermo.free-energy were not worked out alike - method: B3LYP and GFN2-xTB");
+    expect(why(run([saddle({ method: "B3LYP" })], [minimum()]))).toBe("a #1: their thermo.free-energy were not worked out alike - method: B3LYP and TB2");
     expect(why(run([saddle()], [minimum({ kelvin: 310 })]))).toBe("a #1: their thermo.free-energy were not worked out alike - temperature: 298.15 K and 310 K");
     expect(why(run([saddle({ sigma: undefined, group: undefined })], [minimum()]))).toBe(
       "a #1: the rotational symmetry number thermo.free-energy was worked out with was not read of the saddle point: its rotational entropy cannot be told",
@@ -146,8 +146,8 @@ describe("a Barrier step", () => {
     const sum = (e: SetEntry, energy: number, correction: number, standard: boolean): SetEntry => {
       const at = { geometry: geometryKey(e.xyz) };
       const parts = [
-        { property: "energy", value: energy, unit: "Eh" as const, at, by: { program: "ORCA", method: "B3LYP", basis: "def2-TZVP" } },
-        { property: "thermo.g-correction", value: correction, unit: "Eh" as const, at: { ...at, kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "GFN2-xTB", treatment: "quasi-RRHO (Grimme), 100 cm⁻¹", pointGroup: "C1", symmetryNumber: 1 } },
+        { property: "energy", value: energy, unit: "Eh" as const, at, by: { program: "Quanta", method: "B3LYP", basis: "def2-TZVP" } },
+        { property: "thermo.g-correction", value: correction, unit: "Eh" as const, at: { ...at, kelvin: 298.15, atm: 1 }, by: { program: "Quanta", method: "TB2", treatment: "quasi-RRHO (Grimme), 100 cm⁻¹", pointGroup: "C1", symmetryNumber: 1 } },
         ...(standard ? [{ property: "standard state", value: 1.894, unit: "kcal/mol" as const, by: { treatment: "standard state 1 atm to 1 mol/L at 298.15 K" } }] : []),
       ];
       const value = energy + correction + (standard ? 1.894 / 627.5094740630558 : 0);
@@ -157,7 +157,7 @@ describe("a Barrier step", () => {
     const start = sum(minimum(), -56.52, 0.025, true);
     const o = run([ts], [start], { free: "G" });
     expect(barrier(o).value as number).toBeCloseTo((-56.5 + 0.02 - (-56.52 + 0.025)) * 627.5094740630558, 9);
-    expect(kept(o).said).toBe("ΔG‡ 9.41 kcal/mol (G = energy at B3LYP/def2-TZVP + thermo.g-correction at GFN2-xTB + standard state, 298.15 K)");
+    expect(kept(o).said).toBe("ΔG‡ 9.41 kcal/mol (G = energy at B3LYP/def2-TZVP + thermo.g-correction at TB2 + standard state, 298.15 K)");
     expect(why(run([ts], [sum(minimum(), -56.52, 0.025, false)], { free: "G" }))).toBe(
       "a #1: G of the saddle point is energy + thermo.g-correction + standard state, of its start a #1 energy + thermo.g-correction: not summed of the same parts",
     );
@@ -190,7 +190,7 @@ describe("a Barrier step", () => {
     expect(kept(run([saddle()], [minimum(), minimum({ g: AMMONIA.minimum.g + 0.001 })], { pairs: "each" })).kept).toHaveLength(2);
     const on = run([tag(saddle(), "p1"), tag(saddle(), "p2")], [tag(minimum(), "p2")], { pairs: "property", property: "path" });
     expect([kept(on).kept.length, why(on)]).toEqual([1, "a #1 is paired with no start: no entry of Starts has its path, p1"]);
-    expect(kept(on).said).toBe("ΔG‡ 5.96 kcal/mol (G at GFN2-xTB, 298.15 K) · failed 1");
+    expect(kept(on).said).toBe("ΔG‡ 5.96 kcal/mol (G at TB2, 298.15 K) · failed 1");
   });
 
   it("is a step of Meno's on two inputs, its saddle points and their starts, its options read", () => {
