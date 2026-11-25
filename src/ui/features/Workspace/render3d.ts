@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, LINE_LEAST_PX, lineWidth, type Style3D } from "../../../lib/chem/style3d";
-import { solidsBounds } from "../../../lib/chem/layout2d";
+import { solidsBounds, type SolidMark } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
 import { withCentres, bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { outlineMaterial } from "./utils/outlineMaterial";
@@ -15,6 +15,7 @@ import { atomGlyphsOf, glyphsWidth, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numbe
 import { JOINT_NUMBER_A, jointNumbersMesh, jointUniforms, setJointAttributes } from "./utils/jointNumbers";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
+import { breath } from "./utils/breath";
 import { watchShaderErrors } from "./utils/menoShader";
 import { bentStickGeometry, stickBends } from "./utils/stickBend";
 import { fitShadow, lightBoxOf } from "./utils/shadows3d";
@@ -48,6 +49,15 @@ export function ballSegmentsFor(radiusPx: number, atoms: number): number {
 }
 
 type Bounds = { min: { x: number; y: number }; max: { x: number; y: number } };
+
+/**
+ * How far a molecule in 3D reaches in a picture, seen straight from above:
+ * its balls and sticks (`marks`, its `pictureMarks`, where they are made
+ * already) and the surface it shows - none where it draws nothing.
+ */
+export function solidReach(m: Carried3D, style: Style3D, marks?: readonly SolidMark[]): Bounds | null {
+  return unionOf(solidsBounds(marks ?? pictureMarks(m, style)), pictureSurface(m, style)?.bounds ?? null);
+}
 
 /** Two boxes as one, either of which may be none. */
 function unionOf(a: Bounds | null, b: Bounds | null): Bounds | null {
@@ -107,14 +117,64 @@ export function rendered3d(
   // (a renderer to draw with, kept by whoever gives it - many small pictures one after another, say: each a context of
   // its own, the browser takes the oldest live ones away; else one made for this picture and let go after it)
   using?: THREE.WebGLRenderer,
-): { canvas: HTMLCanvasElement; bounds: Bounds; numbersLeftOut: number } | null {
+  // (how far each reaches, seen straight from above - `solidReach` - where the picture's layout has it already)
+  reach?: readonly (Bounds | null)[],
+): Rendered3D | null {
+  return ranThrough(renderSteps(ms, style, pxPerWorld, eyeHeight, tile, cssPx, using, reach));
+}
+
+/** Molecules in 3D drawn for a picture (`rendered3d`): the canvas, where on the page it goes, and the atom numbers it left out. */
+type Rendered3D = { canvas: HTMLCanvasElement; bounds: Bounds; numbersLeftOut: number };
+
+/** `steps` run through at once, with no pause between them. */
+function ranThrough<T>(steps: Generator<void, T, void>): T {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/**
+ * `steps` run a step at a time, the page given a turn between them - its
+ * drawing, a key pressed; none (null), what it made let go, once `stale`
+ * says the picture is no longer wanted.
+ */
+export async function steppedThrough<T>(steps: Generator<void, T, void>, stale?: () => boolean): Promise<T | null> {
+  try {
+    let step = steps.next();
+    while (!step.done) {
+      await breath();
+      if (stale?.()) {
+        steps.return(null as T);
+        return null;
+      }
+      step = steps.next();
+    }
+    return step.value;
+  } catch (e) {
+    steps.return(null as T);
+    throw e;
+  }
+}
+
+/** `rendered3d`, a step at a time (`steppedThrough`): what it gives the page between steps, and when it stops. */
+function* renderSteps(
+  ms: readonly Carried3D[],
+  style: Style3D,
+  pxPerWorld: number,
+  eyeHeight: number | undefined,
+  tile: number,
+  cssPx: number,
+  using: THREE.WebGLRenderer | undefined,
+  reach: readonly (Bounds | null)[] | undefined,
+): Generator<void, Rendered3D | null, void> {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
-  // (each as far as it reaches: its atoms, and the surface it shows)
+  // (each as far as it reaches: its atoms, and the surface it shows - as the layout found it, where it is given)
+  const given = eyeHeight == null && reach?.length === ms.length ? reach : null;
   const each = ms
-    .map((m) => {
+    .map((m, i) => {
       const surface = pictureSurface(m, style, eyeOver(m));
-      return { m, surface, bounds: unionOf(solidsBounds(pictureMarks(m, style, eyeOver(m))), surface?.bounds ?? null) };
+      return { m, surface, bounds: given ? given[i] : unionOf(solidsBounds(pictureMarks(m, style, eyeOver(m))), surface?.bounds ?? null) };
     })
     .filter((e): e is typeof e & { bounds: Bounds } => !!e.bounds);
   if (!each.length) return null;
@@ -172,6 +232,8 @@ export function rendered3d(
   // (the atom numbers shown that this picture leaves out, too small in it to read, or with no room on their balls: said, never dropped unsaid)
   let numbersLeftOut = 0;
   try {
+    // (a moment for the page, the renderer made)
+    yield;
     for (const { m, surface, bounds: b } of each) {
       const w = Math.max(1, Math.round((b.max.x - b.min.x) * pxPerWorld));
       const h = Math.max(1, Math.round((b.max.y - b.min.y) * pxPerWorld));
@@ -445,6 +507,10 @@ export function rendered3d(
       // (in perspective, the view as it is on the near plane)
       const near = eyeHeight == null ? 0.1 : 1;
       const k = eyeHeight == null ? 1 : near / D;
+      // (its scene made: a moment for the page; its programs made ready to draw with, and another)
+      yield;
+      renderer.compile(scene, camera);
+      yield;
       const view = { left: (b.min.x - m.at.x) * k, right: (b.max.x - m.at.x) * k, top: (b.max.y - m.at.y) * k, bottom: (b.min.y - m.at.y) * k };
       const x0 = Math.round((b.min.x - bounds.min.x) * pxPerWorld);
       const y0 = Math.round((bounds.max.y - b.max.y) * pxPerWorld);
@@ -467,6 +533,8 @@ export function rendered3d(
         shade?.update(renderer, camera, tw, th, true);
         renderer.render(scene, camera);
         ctx.drawImage(renderer.domElement, margin, margin, t.w, t.h, x0 + t.x, y0 + t.y, t.w, t.h);
+        // (a moment for the page after each tile: the last before what was made is let go)
+        yield;
       }
     }
   } finally {
@@ -495,29 +563,70 @@ export function rendered3d(
  */
 const PICTURE_MOST_PIXELS = 48_000_000;
 
+/** A picture's molecules in 3D drawn (`solidsDrawn`): the canvas, where on the page it goes, and its pixels to the page's unit. */
+export type SolidsDrawn = { canvas: HTMLCanvasElement; bounds: Bounds; pxPerWorld: number };
+
 /**
  * A picture's molecules in 3D (`ms`, laid out in `layout`) drawn as the
  * canvas draws them, at `dpi` (a copied picture's, as Settings says) -
- * lower only where that would come to more than `PICTURE_MOST_PIXELS`: set
- * on the layout, for its SVG and anything drawn from that, and given as a
- * bitmap, for an EMF. Null, the layout as it was, where there are none or
- * no WebGL.
+ * lower only where that would come to more than `PICTURE_MOST_PIXELS` - and
+ * where on the page the drawing goes. Null where there are none or no WebGL.
  */
-export function withSolidsImage(
+export function solidsDrawn(
   ms: readonly Carried3D[],
-  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0]; solidsImage?: { href: string; bounds: Bounds } },
+  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0] },
   style: Style3D,
   dpi = 300,
-) {
+  // (how far each reaches, as the layout found it: `solidReach`)
+  reach?: readonly (Bounds | null)[],
+): SolidsDrawn | null {
+  const at = solidsScale(ms, layout, dpi);
+  return at && solidsGiven(rendered3d(ms, style, at.pxPerWorld, undefined, TILE, at.scale, undefined, reach), at.pxPerWorld);
+}
+
+/**
+ * `solidsDrawn` a step at a time, the page drawn between steps: none, what
+ * was made let go, once `stale` says the picture is no longer wanted - a
+ * copy begun since.
+ */
+export async function solidsDrawnInSteps(
+  ms: readonly Carried3D[],
+  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0] },
+  style: Style3D,
+  dpi = 300,
+  reach?: readonly (Bounds | null)[],
+  stale?: () => boolean,
+): Promise<SolidsDrawn | null> {
+  const at = solidsScale(ms, layout, dpi);
+  return at && solidsGiven(await steppedThrough(renderSteps(ms, style, at.pxPerWorld, undefined, TILE, at.scale, undefined, reach), stale), at.pxPerWorld);
+}
+
+/** The pixels to the page's unit a picture's molecules in 3D are drawn at (`solidsDrawn`), and that to the screen's; none where there are none. */
+function solidsScale(ms: readonly Carried3D[], layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0] }, dpi: number) {
   const marks = solidsBounds(layout.solids ?? []);
   if (!marks || !ms.length) return null;
   const zoom = layout.zoom > 0 ? layout.zoom : 1;
   const area = Math.max((marks.max.x - marks.min.x) * zoom, 1) * Math.max((marks.max.y - marks.min.y) * zoom, 1);
   const scale = Math.min(dpi / 96, Math.sqrt(PICTURE_MOST_PIXELS / area));
-  const drawn = rendered3d(ms, style, zoom * scale, undefined, TILE, scale);
+  return { pxPerWorld: zoom * scale, scale };
+}
+
+/** What `solidsDrawn` gives of `drawn`, what is said of the numbers it left out said. */
+function solidsGiven(drawn: Rendered3D | null, pxPerWorld: number): SolidsDrawn | null {
   if (!drawn) return null;
   // (atom numbers too small in the picture to read, or with no room on their balls, are left out of it: how many, said in Meno's log)
   if (drawn.numbersLeftOut > 0) console.warn(`Meno: a picture of molecules in 3D left out ${drawn.numbersLeftOut} of their atom numbers, too small to read in it or with no room on their balls.`);
+  return { canvas: drawn.canvas, bounds: drawn.bounds, pxPerWorld };
+}
+
+/**
+ * The molecules of `drawn` (`solidsDrawn`) set on `layout` as an image, for
+ * its SVG and anything drawn from that, and given as a bitmap, for an EMF.
+ */
+export function solidsImageOn(
+  drawn: { canvas: HTMLCanvasElement; bounds: Bounds },
+  layout: { solidsImage?: { href: string; bounds: Bounds } },
+) {
   const { canvas, bounds } = drawn;
   const href = canvas.toDataURL("image/png");
   const binary = atob(href.slice(href.indexOf(",") + 1));
@@ -526,4 +635,19 @@ export function withSolidsImage(
   const rgba = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
   layout.solidsImage = { href, bounds };
   return { png, rgba, width: canvas.width, height: canvas.height, bounds };
+}
+
+/**
+ * `solidsDrawn` and `solidsImageOn` together: the molecules drawn, set on the
+ * layout and given as a bitmap. Null, the layout as it was, where there are
+ * none or no WebGL.
+ */
+export function withSolidsImage(
+  ms: readonly Carried3D[],
+  layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0]; solidsImage?: { href: string; bounds: Bounds } },
+  style: Style3D,
+  dpi = 300,
+) {
+  const drawn = solidsDrawn(ms, layout, style, dpi);
+  return drawn ? solidsImageOn(drawn, layout) : null;
 }

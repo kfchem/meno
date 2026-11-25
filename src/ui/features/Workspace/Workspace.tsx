@@ -127,7 +127,7 @@ const NO_IDS: number[] = [];
 function expandable(a: { el: string; abbrev?: unknown } | undefined): boolean {
   return !!a && (!!a.abbrev || (!isElementSymbol(a.el) && !!abbreviationOf(a.el)));
 }
-import { useClipboardActions } from "./clipboardActions";
+import { useClipboardActions, useCopyingShown } from "./clipboardActions";
 import {
   chargeStep,
   clipboardIntent,
@@ -516,6 +516,8 @@ function WorkspaceContent({
   }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
+  // (a large copy being made: said, as the other work in hand is)
+  const copyingShown = useCopyingShown();
   // (structures being made in 3D: since when, and how to stop it - the plugin's worker stopped, nothing added)
   const [making3d, setMaking3d] = useState<number | null>(null);
   const stop3d = useRef<(() => void) | null>(null);
@@ -1865,7 +1867,7 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {active && (chem.state === "setting-up" || chem.state === "starting" || working3d || checkingFiles) && (
+        {active && (chem.state === "setting-up" || chem.state === "starting" || working3d || copyingShown || checkingFiles) && (
           <motion.div
             key="working"
             {...RISE}
@@ -1874,11 +1876,11 @@ function WorkspaceContent({
             className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
-              <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
+              <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : copyingShown ? "copying" : "checking"} {...FADE} className="block">
                 {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
                 {chem.state === "setting-up" || chem.state === "starting"
                   ? `${chemistryStep(chem, chemShare)}…`
-                  : working3d || `Checking ${checkingFiles}'s files…`}
+                  : working3d || (copyingShown ? "Copying…" : `Checking ${checkingFiles}'s files…`)}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}

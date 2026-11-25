@@ -2979,6 +2979,25 @@ traced from reference drawings.
   the drawing, not when it is dropped: by then Office has taken it back
   from the drag pasteboard. A copy on a Mac makes only what the clipboard
   there takes (`clipboard_takes`): no bitmap or object for Windows.
+- A picture of molecules in 3D alone - nothing drawn flat beside them - goes
+  into Office's clip format as a PNG, not an EMF: the canvas the molecules
+  are drawn on, as it is, with what is written over them (R and S, a
+  measurement's value, a note on the file) laid on it at the same
+  resolution (`picture.ts` `solidsPng`). In an EMF the molecules were a
+  bitmap too, at that resolution: only the letters over them were vectors.
+  The molecules are drawn once, not drawn and then drawn again from an SVG.
+  On Windows the EMF is still made, for Windows' other programs and for
+  the object. A picture with anything drawn flat - a bond,
+  a label, an arrow - carries its EMF in the clip format as before, its
+  letters and lines sharp at any size. A copy reaches the app as its bytes
+  (`clipboard_write`, one body, the kinds listed in a header), and the
+  bitmap for Windows is made there from the PNG (`src-tauri/src/dib.rs`).
+  Its pictures are made a step at a time, the drawing drawn between the
+  steps - molecules in 3D among them, drawn a step at a time too, each
+  molecule's balls and sticks worked out once (`render3d.ts`); a copy begun
+  meanwhile ends the one before it, which lets go of what it made; a copy still being made after a quarter of a second says
+  "Copying…" in the corner, where other work in hand is said, until it is on
+  the clipboard. A paste waits for it, as before.
 - Drops are routed to the part of the page they land on (`src/lib/drop.ts`):
   a part that takes them - the drawing now; a tab strip, a workflow's node
   or a 3D view in time - registers as a drop zone, which says what it
