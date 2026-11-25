@@ -2126,7 +2126,14 @@ mention a number, and the card.
   line's first share of its box, as many of its characters - but not
   where another number of that shape follows the comma with a comma of
   its own: a list of atoms' locants ("6', 8a', 11'") or a table's
-  ("2, 4, 5"). It is the
+  ("2, 4, 5"). The figure's own drawn words are read so line by line
+  (`numbersIn`): a series of lines under one structure, each its number;
+  a run set bold within a line, its letters' typeface bold and the rest
+  plain ("R = Me, 14, 41%"), that number; each lying its line's share of
+  the words' box. A number whose line sets its yield after it - a comma,
+  then a percentage - may lie up to two bonds from its structure, as a
+  scope table sets them (2026-11-20); a bare number stays within one: an
+  NMR figure's atoms' locants, beside their shifts, lie further. It is the
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual

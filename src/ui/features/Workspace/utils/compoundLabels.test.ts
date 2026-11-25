@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn } from "../../../../lib/figure/drawn";
 import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
-import { compoundLabelsOf, labelText, leadingLabel, pageStructuresOf, wordsJoined, type PageMarks, type PageStructure } from "./pageStructures";
+import { compoundLabelsOf, labelText, leadingLabel, numbersIn, pageStructuresOf, wordsJoined, type PageMarks, type PageStructure } from "./pageStructures";
 
 type P = { x: number; y: number };
 /** cos 30°: a zigzag's step along its length, in bonds. */
@@ -112,6 +112,77 @@ describe("the compounds' numbers of a figure", () => {
   it("are each a structure's once, set by the drawing and by the page's words alike", () => {
     const w = word("12", mid(a) - 5, a.box[3] + 6);
     expect(compoundLabelsOf([a], [w, { ...w }], NONE)).toHaveLength(1);
+  });
+});
+
+describe("the compounds' numbers a figure's drawn words set, line by line", () => {
+  const box: B = [100, 300, 220, 324];
+  const labels = (w: Parameters<typeof numbersIn>[0]) => numbersIn(w).map((n) => [n.label, n.withYield]);
+
+  it("are each line's number heading it - a series under one structure - each in its own line's share of the box", () => {
+    const found = numbersIn({ text: "5, n = 1, 64%\n6, n = 3, 71%", box });
+    expect(found.map((n) => [n.label, n.withYield])).toEqual([
+      ["5", true],
+      ["6", true],
+    ]);
+    expect(found.map((n) => [n.box[1], n.box[3]])).toEqual([
+      [300, 312],
+      [312, 324],
+    ]);
+  });
+
+  it("are a number after words, on its own line, with its yield", () => {
+    expect(labels({ text: "From the alcohol\n12, 64%", box })).toEqual([["12", true]]);
+  });
+
+  it("are the run set bold mid-line, its yield plain after it", () => {
+    const text = "R = Me, 14, 41% 2:1 d.r.";
+    expect(labels({ text, box, marks: [{ from: 8, to: 10, bold: true }] })).toEqual([["14", true]]);
+    // (no bold: no number heads the line, none)
+    expect(labels({ text, box })).toEqual([]);
+  });
+
+  it("are a line's first bold number only, and none after a \"from\": a product's line names what it was made from too", () => {
+    expect(labels({ text: "3 (52% from 8)", box, marks: [{ from: 0, to: 1, bold: true }, { from: 12, to: 13, bold: true }] })).toEqual([["3", false]]);
+    expect(labels({ text: "(88% from 4b and 5)", box, marks: [{ from: 10, to: 12, bold: true }, { from: 17, to: 18, bold: true }] })).toEqual([]);
+    // (a caption's number - a table's, a scheme's - is none)
+    expect(labels({ text: "Table 2. Screening of bases", box, marks: [{ from: 6, to: 7, bold: true }] })).toEqual([]);
+    expect(labels({ text: "Scheme 4", box, marks: [{ from: 7, to: 8, bold: true }] })).toEqual([]);
+  });
+
+  it("are none in a line all bold, or a word that reads as no number: the line is read as one", () => {
+    expect(labels({ text: "Table 2", box, marks: [{ from: 0, to: 7, bold: true }] })).toEqual([]);
+    expect(labels({ text: "12", box, marks: [{ from: 0, to: 2, bold: true }] })).toEqual([["12", false]]);
+  });
+
+  it("are none in a line set much smaller than the figure's - a formula's subscript left over above a name - by that line's own height", () => {
+    const st = zigzag("0:0", 100);
+    const mid = (st.box[0] + st.box[2]) / 2;
+    const top = st.box[3] + 4;
+    const block = {
+      text: "2\nAmide (6)",
+      box: [mid - 20, top, mid + 20, top + 13] as B,
+      marks: [
+        { from: 0, to: 1, bold: true },
+        { from: 9, to: 10, bold: true },
+      ],
+      lines: [[mid - 1, top, mid + 1, top + 4] as B, [mid - 20, top + 5, mid + 20, top + 13] as B],
+    };
+    // (beside the figure's other words, of the usual height)
+    const others = [0, 1, 2].map((k) => word("text", 0, 20 * k));
+    expect(compoundLabelsOf([st], [block, ...others], NONE).map((l) => l.label)).toEqual(["6"]);
+  });
+
+  it("are a structure's two bonds below it where their line sets the yield, and only one bond where the number is bare", () => {
+    const st = zigzag("0:0", 100);
+    const mid = (st.box[0] + st.box[2]) / 2;
+    const at = (text: string, dy: number) => ({ text, box: [mid - 10, st.box[3] + dy, mid + 10, st.box[3] + dy + 8] as B });
+    // (a bond is 14.4: 25 below is past one bond, short of two)
+    expect(compoundLabelsOf([st], [at("7, 83%", 25)], NONE).map((l) => l.label)).toEqual(["7"]);
+    expect(compoundLabelsOf([st], [at("7", 25)], NONE)).toEqual([]);
+    expect(compoundLabelsOf([st], [at("7, 83%", 30)], NONE)).toEqual([]);
+    // (an NMR figure's locant by its shift: no yield, one bond)
+    expect(compoundLabelsOf([st], [at("5\n148.5, CH", 25)], NONE)).toEqual([]);
   });
 });
 
