@@ -1511,6 +1511,13 @@ All hover-based, as above.
   has it back, read as nothing else (*As typed: obz*, *As typed: HO*, one
   step); Settings › General, *Read labels as they are meant*, turned off
   keeps every label exactly as typed.
+- **A label is drawn in the units it is read in.** A label Meno reads as
+  an atom with its H and the groups on it is turned round at a left end
+  unit by unit as it is read, each group spelled as typed: PtBu3 (read as
+  tri-tert-butylphosphine) is drawn tBu3P there, NiPr2 iPr2N, NHtBu tBuHN
+  as NHBoc is BocHN - the atom always on the bond, never a Pt or an Ni
+  (`readUnits`, `lib/chem/abbreviations`). A metal with its ligands, a
+  formula and words are turned as before.
 - **Symbols for a kind of group** (the maintainer, 2026-10-13): PG (a
   protecting group), LG (a leaving group), EWG and EDG (an electron-
   withdrawing and an electron-donating group), Nu (a nucleophile), E (an
@@ -1524,13 +1531,6 @@ All hover-based, as above.
   be a label of the user's own. A word read as no element, group or such
   symbol - Alk, say - is kept whole too: a capital and the small letters
   after it.
-- **A label is drawn in the units it is read in.** A label Meno reads as
-  an atom with its H and the groups on it is turned round at a left end
-  unit by unit as it is read, each group spelled as typed: PtBu3 (read as
-  tri-tert-butylphosphine) is drawn tBu3P there, NiPr2 iPr2N, NHtBu tBuHN
-  as NHBoc is BocHN - the atom always on the bond, never a Pt or an Ni
-  (`readUnits`, `lib/chem/abbreviations`). A metal with its ligands, a
-  formula and words are turned as before.
 - Ring templates (3- to 8-membered, benzene), fused onto a bond or an atom;
   chains. (Chains and rings came back on 2026-10-03 as the honeycomb: three
   clicks on an atom, or Quick Add's *Chain* from empty space - two clicks
