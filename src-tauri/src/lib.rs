@@ -15,6 +15,7 @@ mod catalogue;
 mod ccd;
 mod clipboard;
 mod defaults;
+mod dib;
 mod folders;
 mod installed;
 mod fonts;

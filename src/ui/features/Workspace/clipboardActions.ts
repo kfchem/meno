@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef } from "react";
-import { clipboardFiles, copying, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clipboardFiles, copyBeingMade, copyMadeFor, copying, onCopyMade, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { quotedTables } from "../../../lib/io/kinds";
 import { isWorkspaceFile } from "./utils/workspace";
@@ -49,6 +49,36 @@ export const NOTHING_TO_CUT = "Nothing to cut: select something, or point at a s
  *   to be placed in 3D (`onCoordinates`; lib/io/coordinates).
  * - `copySmiles` puts the SMILES alone on the clipboard, as plain text.
  */
+/** How long a copy is made before "Copying…" is shown: a small one is done first, with nothing flashed. */
+export const COPYING_SHOWN_AFTER_MS = 250;
+
+/**
+ * Whether "Copying…" is shown: a copy being made (lib/clipboard
+ * `copyBeingMade`) for `COPYING_SHOWN_AFTER_MS` or longer - timed from the
+ * earliest still being made - until every one is done.
+ */
+export function useCopyingShown(): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // (from the start of the earliest copy still being made: a small one beside a large one neither shows it nor puts it off)
+    const now = () => {
+      clearTimeout(timer);
+      const made = copyMadeFor();
+      if (made == null) setShown(false);
+      else if (made >= COPYING_SHOWN_AFTER_MS) setShown(true);
+      else timer = setTimeout(() => setShown(copyBeingMade()), COPYING_SHOWN_AFTER_MS - made);
+    };
+    const stop = onCopyMade(now);
+    now();
+    return () => {
+      stop();
+      clearTimeout(timer);
+    };
+  }, []);
+  return shown;
+}
+
 export function useClipboardActions(
   store: EditorStore,
   onError: (message: string) => void,
@@ -129,6 +159,8 @@ export function useClipboardActions(
     };
   }, [store]);
 
+  // (which copy was begun last - a copy, a SMILES, a picture: one begun before it, done later, writes nothing over it)
+  const begun = useRef(0);
   const copyNow = useCallback(async (only?: number) => {
     if (busy()) return false;
     const taken = part(only);
@@ -137,6 +169,7 @@ export function useClipboardActions(
       onError(NOTHING_TO_COPY);
       return false;
     }
+    const mine = ++begun.current;
     const state0 = store.getState();
     // (its record says the bond's printed length of the style it is copied in: pasted into another, it is converted)
     const p = { ...taken.part, bondPt: styleOf(state0.docStyle).bondLengthPt, labelPt: labelPtOf(state0.docStyle) };
@@ -161,6 +194,8 @@ export function useClipboardActions(
       // (a text's sheet alone: its words too, for other programs)
       const lone = !p.atoms.length && !p.molecules3d?.length && !hasFlow(p) && !p.pictures?.length && !p.pdfs?.length && !p.captions?.length && p.sheets?.length === 1 ? p.sheets[0] : null;
       const words: ClipItem[] = lone ? [{ flavor: "text", text: lone.text }] : [];
+      // (a copy begun since: the clipboard is that one's)
+      if (mine !== begun.current) return true;
       await writeClipboard([...clipItems(p), ...words, ...pictures]).catch(async (e: unknown) => {
         // a picture the system would not take is left out, not the structure
         if (!pictures.length) throw e;
@@ -248,6 +283,7 @@ export function useClipboardActions(
       copying(async () => {
         const p = part()?.part;
         if (!p?.atoms.length) return;
+        const mine = ++begun.current;
         try {
           // (a reaction as a reaction SMILES - never its molecules as one mixture; one it cannot be, said why)
           const reaction = reactionForSmiles(p);
@@ -257,6 +293,7 @@ export function useClipboardActions(
           }
           const c = await chemWorker("smiles");
           const { smiles } = reaction ? await c.request("rxn_to_smiles", { rxnblock: reaction.rxn }) : await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
+          if (mine !== begun.current) return;
           await writeClipboard([{ flavor: "text", text: smiles }]);
         } catch (e) {
           onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -271,8 +308,10 @@ export function useClipboardActions(
       copying(async () => {
         const p = store.getState().pictures.find((x) => x.id === id);
         if (!p) return;
+        const mine = ++begun.current;
         try {
           const png = await picturePng(p);
+          if (mine !== begun.current) return;
           await writeClipboard([{ flavor: "meno", text: recordText({ atoms: [], bonds: [], pictures: [p], bondPt: styleOf(store.getState().docStyle).bondLengthPt, labelPt: labelPtOf(store.getState().docStyle) }) }, ...(png ? [{ flavor: "png" as const, bytes: png }] : [])]);
         } catch (e) {
           onError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
