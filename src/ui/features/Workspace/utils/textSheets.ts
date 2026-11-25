@@ -162,6 +162,25 @@ export function drawnSheetBox(t: { at?: { x: number; y: number }; text: string; 
   return sheetBoxAt(t.at, s, t.icon ? iconScaleOf(s, scaleOf(t)) : 1);
 }
 
+/**
+ * A sheet's name under it, full size (components/TextSheets2D): its type and
+ * its gap under the sheet in screen pixels - as large on the screen at any
+ * zoom - and as wide as the sheet, or this many pixels where that is less.
+ */
+export const SHEET_NAME_PX = 12;
+export const SHEET_NAME_GAP_PX = 14;
+export const SHEET_NAME_LEAST_PX = 120;
+
+/**
+ * Where a full-size sheet's name reaches under its drawn box `b`, seen at
+ * `px` page units to a screen pixel: from the sheet's foot, its gap and a
+ * line of its type down; from the sheet's left, as wide as its name may be.
+ * Its size on the page goes with the zoom, so it is measured at one.
+ */
+export function sheetNameRoom(b: { x0: number; x1: number; y0: number }, px: number): { x0: number; x1: number; y0: number; y1: number } {
+  return { x0: b.x0, x1: b.x0 + Math.max(SHEET_NAME_LEAST_PX * px, b.x1 - b.x0), y0: b.y0 - (SHEET_NAME_GAP_PX + 1.2 * SHEET_NAME_PX) * px, y1: b.y0 };
+}
+
 /** The room a sheet takes on the page: as it is drawn, and made an icon, its name's under it too - as a PDF's (lib/pdf/layout `pdfRoom`). */
 export function sheetRoom(t: { at?: { x: number; y: number }; text: string; markdown?: true; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
   const b = drawnSheetBox(t);

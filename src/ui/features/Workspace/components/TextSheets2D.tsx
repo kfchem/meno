@@ -23,7 +23,7 @@ import { COLORS } from "../../../theme/colors";
 import { ICON_NAME_WIDTH, pointOf, scaleOf } from "../../../../lib/pdf/layout";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { DOUBLE_CLICK_MS } from "../constants";
-import { iconScaleOf, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetOfText } from "../utils/textSheets";
+import { iconScaleOf, SHEET_LINE_PT, SHEET_NAME_GAP_PX, SHEET_NAME_LEAST_PX, SHEET_NAME_PX, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetOfText } from "../utils/textSheets";
 import { dragSelection } from "../utils/dragSelection";
 import { follow, TAU } from "../../../theme/motion";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
@@ -55,9 +55,6 @@ const LIT_PAD_PX = 5;
 const PAPER = "#ffffff";
 const EDGE = "rgb(209, 217, 224)";
 const INK = "rgb(31, 35, 40)";
-/** Its name: how large on the page, and how far under it, in page pixels - a sheet's; an icon's, the drawing's labels'. */
-const NAME_PX = 12;
-const NAME_GAP_PX = 14;
 /** How long it takes to be made an icon, or full size again, in ms - as a PDF. */
 const ICON_MS = 380;
 
@@ -271,9 +268,9 @@ function Sheet({
   // its name under it, in the drawing's type: at its left as a sheet, at a size on the page; under its middle as an icon, at the size of the drawing's labels, as a file's under its icon - and on
   // its way between them (as a PDF's)
   const nameX = b.x0 + (mid.x - b.x0) * iconness;
-  const nameSizeNow = NAME_PX * pg * (1 - iconness) + nameSize * iconness;
-  const nameGap = NAME_GAP_PX * pg * (1 - iconness) + 0.4 * nameSize * iconness;
-  const nameWidth = Math.max(120 * pg, s.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
+  const nameSizeNow = SHEET_NAME_PX * pg * (1 - iconness) + nameSize * iconness;
+  const nameGap = SHEET_NAME_GAP_PX * pg * (1 - iconness) + 0.4 * nameSize * iconness;
+  const nameWidth = Math.max(SHEET_NAME_LEAST_PX * pg, s.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(t) * iconness;
   return (
     <group position={[0, 0, z]}>
       {/* (round it, not under it, as a picture's) */}

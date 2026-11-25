@@ -24,7 +24,7 @@ import { style3dOf } from "../../src/ui/features/Workspace/style3dOf";
 import { captionBox, type Box } from "../../src/ui/features/Workspace/utils/extent";
 import { footOf, importedScheme } from "../../src/ui/features/Workspace/utils/freePlace";
 import { editorModelOf, processFileContent, type ProcessedFileResult } from "../../src/ui/features/Workspace/utils/io";
-import { sheetOf } from "../../src/ui/features/Workspace/utils/textSheets";
+import { sheetNameRoom, sheetOf } from "../../src/ui/features/Workspace/utils/textSheets";
 import { workspaceFile } from "../../src/ui/features/Workspace/utils/workspace";
 import { xyzFrames } from "../../src/utils/structureParsers";
 import { isMarkdown } from "../../src/lib/text/markdown";
@@ -62,6 +62,13 @@ const NAME_GAP = 0.8;
 export const WIDTH = 100;
 /** The title's size, in points. */
 const TITLE_PT = 18;
+/**
+ * The least canvas the app shows a page in, in screen pixels: its window's
+ * least size (src-tauri/tauri.conf.json). A sheet's name is set at one size
+ * on the screen, so the page room it takes grows as the view draws back;
+ * it is measured as the whole built page, fitted into this, draws it.
+ */
+const LEAST_CANVAS = { w: 640, h: 480 };
 
 const KEYS = {
   manifest: ["title", "out", "style", "width", "entries"],
@@ -119,10 +126,13 @@ export function checked(manifest: unknown): Manifest {
  * One entry ready to put down: the room it takes about its own point
  * (`foot`), and how it is put down there. A structure's `foot` is its own,
  * without its name; its name (`named`) is set with the row's other names, on
- * one line under the row's tallest structure (`nameY`, the line's point).
+ * one line under the row's tallest structure (`nameY`, the line's point). A
+ * sheet's (`sheet`) is its paper's; its name under it is added as the page
+ * draws it at the zoom the built page is seen whole at (`sheetNameRoom`).
  */
 type Ready = {
   foot: Box;
+  sheet?: true;
   /** Its name: half its height, and how far its box reaches below its point. */
   named?: { half: number; below: number };
   structure?: true;
@@ -175,7 +185,7 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
       const markdown = isMarkdown(raw.text);
       const sheet = sheetOf(text, markdown);
       // (a sheet lies from its top left corner: `at`)
-      ready.push({ foot: { x0: 0, x1: sheet.w, y0: -sheet.h, y1: 0 }, put: (p) => store.getState().addTexts([{ name, text, ...(markdown ? { markdown: true as const } : {}), at: p }]) });
+      ready.push({ foot: { x0: 0, x1: sheet.w, y0: -sheet.h, y1: 0 }, sheet: true, put: (p) => store.getState().addTexts([{ name, text, ...(markdown ? { markdown: true as const } : {}), at: p }]) });
     } else if ("structure" in raw) {
       let text = readFile(raw.structure, at);
       let name = raw.structure;
@@ -217,7 +227,11 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
           const dx = p.x - centroid.x;
           const dy = p.y - centroid.y;
           const shifted = { atoms: model.atoms.map((a) => ({ ...a, x: a.x + dx, y: a.y + dy })), bonds: model.bonds };
-          store.getState().appendModel(shifted, { ...about(dx, dy), captions: words ? [{ ...words, x: p.x, y: nameY }] : [] });
+          // (its name the words that belong to it, as "Add text" on it writes them - tied to its first atom, numbered as
+          //  `appendModel` numbers what it adds, from the page's next id; a reaction's names the scheme, of several
+          //  structures, and stays free)
+          const of = rxn ? undefined : { atom: held.getState().nextId };
+          store.getState().appendModel(shifted, { ...about(dx, dy), captions: words ? [{ ...words, x: p.x, y: nameY, ...(of ? { of } : {}) }] : [] });
         },
       });
     } else {
@@ -244,7 +258,9 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   // as `width` at most (an entry wider than that alone in its row), the next
   // row under the lowest foot of the one before - GAP between all. The
   // names of a row's structures stand on one line, under its tallest
-  // structure, each centred under its own (as a scheme's numbers are set).
+  // structure, each centred under its own (as a scheme's numbers are set),
+  // each the words that belong to its structure. A sheet's name under it
+  // takes room too, as large as the page draws it seen whole.
   const titleWords = { x: 0, y: 0, text: given.title, size: TITLE_PT, align: "left" as const };
   const tb = captionBox(titleWords, opts);
   // (its box's left edge at 0 and its top at 0, however its words are set about their point)
@@ -252,39 +268,66 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   held.edit("title", (d) => addCaption(d, title));
   const titleBox = captionBox(title, opts);
   const most = (given.width ?? WIDTH) * L;
-  const boxes: Box[] = [];
-  let top = titleBox.y0 - GAP;
-  let x = 0;
-  let row: { r: Ready; p: { x: number; y: number } }[] = [];
-  // (the row put down: its names' line under its tallest structure; the next row's top under the lowest of all)
-  const newRow = () => {
-    if (!row.length) return;
-    const structures = row.filter(({ r }) => r.structure);
-    const lowest = structures.length ? Math.min(...structures.map(({ r, p }) => p.y + r.foot.y0)) : 0;
-    const half = Math.max(0, ...row.map(({ r }) => r.named?.half ?? 0));
-    const nameY = lowest - NAME_GAP - half;
-    let foot = top;
-    for (const { r, p } of row) {
-      r.put(p, nameY);
-      const y0 = Math.min(p.y + r.foot.y0, r.named ? nameY + r.named.below : Infinity);
-      boxes.push({ x0: p.x + r.foot.x0, x1: p.x + r.foot.x1, y0, y1: p.y + r.foot.y1 });
-      foot = Math.min(foot, y0);
+  // (where each entry goes, a sheet's name measured at `px` page units to a screen pixel - and its box on the page, its name's with it)
+  const planned = (px: number) => {
+    const out: { r: Ready; p: { x: number; y: number }; nameY: number; box: Box }[] = [];
+    const roomOf = (r: Ready): Box => {
+      if (!r.sheet) return r.foot;
+      const name = sheetNameRoom(r.foot, px);
+      return { ...r.foot, x1: Math.max(r.foot.x1, name.x1), y0: name.y0 };
+    };
+    let top = titleBox.y0 - GAP;
+    let x = 0;
+    let row: { r: Ready; room: Box; p: { x: number; y: number } }[] = [];
+    // (the row: its names' line under its tallest structure; the next row's top under the lowest of all)
+    const newRow = () => {
+      if (!row.length) return;
+      const structures = row.filter(({ r }) => r.structure);
+      const lowest = structures.length ? Math.min(...structures.map(({ r, p }) => p.y + r.foot.y0)) : 0;
+      const half = Math.max(0, ...row.map(({ r }) => r.named?.half ?? 0));
+      const nameY = lowest - NAME_GAP - half;
+      let foot = top;
+      for (const { r, room, p } of row) {
+        const y0 = Math.min(p.y + room.y0, r.named ? nameY + r.named.below : Infinity);
+        out.push({ r, p, nameY, box: { x0: p.x + room.x0, x1: p.x + room.x1, y0, y1: p.y + room.y1 } });
+        foot = Math.min(foot, y0);
+      }
+      top = foot - GAP;
+      x = 0;
+      row = [];
+    };
+    for (const r of ready) {
+      if (r === "break") {
+        newRow();
+        continue;
+      }
+      const room = roomOf(r);
+      const w = room.x1 - room.x0;
+      if (x > 0 && x + w > most) newRow();
+      row.push({ r, room, p: { x: x - room.x0, y: top - room.y1 } });
+      x += w + GAP;
     }
-    top = foot - GAP;
-    x = 0;
-    row = [];
+    newRow();
+    return out;
   };
-  for (const r of ready) {
-    if (r === "break") {
-      newRow();
-      continue;
-    }
-    const w = r.foot.x1 - r.foot.x0;
-    if (x > 0 && x + w > most) newRow();
-    row.push({ r, p: { x: x - r.foot.x0, y: top - r.foot.y1 } });
-    x += w + GAP;
+  // (page units to a screen pixel where the whole page fits the least canvas: the names' room grows with it, so
+  //  measured again until what it takes fits - a step over each time, to come to an end)
+  const seenAt = (boxes: Box[]) => {
+    const all = [titleBox, ...boxes];
+    const w = Math.max(...all.map((b) => b.x1)) - Math.min(...all.map((b) => b.x0));
+    const h = Math.max(...all.map((b) => b.y1)) - Math.min(...all.map((b) => b.y0));
+    return Math.max(w / LEAST_CANVAS.w, h / LEAST_CANVAS.h);
+  };
+  let px = 0;
+  let plan = planned(px);
+  for (let i = 0; i < 12; i++) {
+    const need = seenAt(plan.map((q) => q.box));
+    if (need <= px) break;
+    px = need * 1.02;
+    plan = planned(px);
   }
-  newRow();
+  for (const { r, p, nameY } of plan) r.put(p, nameY);
+  const boxes = plan.map((q) => q.box);
   const { bytes } = await workspaceFile(store.getState());
   return { bytes, boxes, title: titleBox };
 }

@@ -75,10 +75,17 @@ refused, not passed over.
   make it wider than `width`, or at a `break`; an entry wider than that stands
   alone in its row. Each entry takes the room the app measures for a file opened
   onto a page (`footOf`: its atoms, labels, name, arrow and "+" signs; a molecule
-  in 3D as it is first seen, its chip with it) and a text the room of its sheet,
+  in 3D as it is first seen, its chip with it) and a text the room of its sheet
+  and of its name under it - set at one size on the screen, so measured as the
+  whole page draws it seen at once in the app's least window, 640 by 480 pixels -
   so that nothing lies over anything else. The names of a row's structures stand
   on one line under its tallest structure, each centred under its own, as the
   numbers of a scheme are set; the next row starts under that line.
+- **Names.** Each structure's name is the text that belongs to it, as "Add text"
+  on it makes one: in the app it moves, turns and is copied with its structure,
+  keeping the place the build gave it, and "Free from its structure" frees it.
+  A reaction's name (an .rxn file's `id`) names a scheme of several structures
+  and stays free text.
 - A mistake - a file missing, a key not known, a structure file that is not flat,
   frames of other atoms in a file marked `conformers` - stops the build with a
   sentence naming the entry. Nothing is skipped without saying so.
