@@ -225,7 +225,7 @@ export async function answerUpdateQuestion(yes: boolean): Promise<void> {
  * pointer held (`pressed`), a guide open, a text field or Quick Add or a menu open, a plugin being set up or started,
  * the first start's card or a question over the page showing.
  */
-function pageBusy(pressed: boolean): boolean {
+export function pageBusy(pressed: boolean): boolean {
   if (pressed || useGuide.getState().open != null) return true;
   const typing = document.activeElement instanceof HTMLElement && (document.activeElement.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName));
   if (typing || document.querySelector('[data-guide="quick-add"], [role="menu"]')) return true;

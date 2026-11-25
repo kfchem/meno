@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useNetwork } from "./net/network";
-import { answerUpdateQuestion, EVERY_MS, lookDue, looksDaily, mayLook, noticeShown, readySaid, UPDATE_CONSENT, UPDATE_PURPOSE, useUpdate, useUpdateDownloads, useUpdateQuestion, type UpdateState } from "./update";
+import { answerUpdateQuestion, EVERY_MS, pageBusy, lookDue, looksDaily, mayLook, noticeShown, readySaid, UPDATE_CONSENT, UPDATE_PURPOSE, useUpdate, useUpdateDownloads, useUpdateQuestion, type UpdateState } from "./update";
+import { useGuide } from "./guide/guide";
+import { useFirstSetUp } from "./plugins/firstSetUp";
 import { DEFAULT_APP_SETTINGS, useAppSettings } from "./settings/appSettings";
 
 describe("keeping Meno up to date", () => {
@@ -193,6 +195,27 @@ describe("looking once a day, by the wall clock", () => {
       await answerUpdateQuestion(yes);
       expect([useUpdateQuestion.getState().asking, useNetwork.getState().granted, !!asked()]).toEqual([false, granted, kept]);
     }
+  });
+
+  it("waits while something is under way: the pointer held is busy, a guide open is busy, another card showing is busy, an idle page is not", () => {
+    // (no page here: a document with nothing focused and no menu or Quick Add open)
+    vi.stubGlobal("HTMLElement", class {});
+    vi.stubGlobal("document", { activeElement: null, querySelector: () => null });
+    const idle = () => {
+      useGuide.setState({ open: null });
+      useFirstSetUp.setState({ phase: "none" }, true);
+      useNetwork.setState({ asking: null });
+    };
+    idle();
+    expect(pageBusy(false)).toBe(false);
+    expect(pageBusy(true)).toBe(true);
+    useGuide.setState({ open: 0 });
+    expect(pageBusy(false)).toBe(true);
+    idle();
+    useFirstSetUp.setState({ phase: "offered" }, true);
+    expect(pageBusy(false)).toBe(true);
+    idle();
+    vi.unstubAllGlobals();
   });
 });
 
