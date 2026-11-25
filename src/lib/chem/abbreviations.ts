@@ -16,6 +16,7 @@
  * or NH (OTBS, SPh, NHBoc), an ester (CO2Me), and a substituted aryl group
  * (2,6-diMeBz, 4-MeOC6H4: ./substitutedAryl).
  */
+import { metalNotStated } from "./ligandsNotStated";
 import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
 import { anionStructure, condensedStructure, metalSaltStructure } from "./condensed";
@@ -996,6 +997,8 @@ export function readsAsNothing(label: string): boolean {
     !/^R\d+$/.test(label) &&
     !GENERIC_SYMBOLS.has(label) &&
     !VARIABLE_NAMES.has(label) &&
+    // (a metal with its ligands not stated - LnPd, MgX - is the metal: ./ligandsNotStated)
+    !metalNotStated(label) &&
     // (a name the dictionary does not have reads as nothing at once; one it has is asked for its structure)
     (abbreviationOf(label) == null || abbreviationStructure(label) == null);
   NOTHING_SEEN.set(label, nothing);

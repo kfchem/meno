@@ -13,6 +13,7 @@
  * out as R groups are (`joined`): one join, one numbering, one identity,
  * for both ways.
  */
+import { isNotStatedText, notComparedSaid } from "../../../../lib/chem/ligandsNotStated";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { identity } from "../../../../lib/chem/identity";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -230,6 +231,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
   const aside: (Made & { why: string })[] = [];
   const seen = new Map<string, number>();
   let missed = 0;
+  let unstated = 0;
   const refused: string[] = [];
   combinations.forEach(({ choice, how }, i) => {
     const number = i + 1;
@@ -237,7 +239,8 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     // (a product that would say another configuration than its template's: never made - the step stops, naming it)
     if (changed.length) return void refused.push(`${how}: would change the configuration at ${changed.map((u) => unitName(template, u)).join(", ")}`);
     const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
-    if (!found.complete) missed++;
+    if (isNotStatedText(found.text)) unstated++;
+      else if (!found.complete) missed++;
     const first = seen.get(found.text);
     if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
     else {
@@ -271,6 +274,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
       `${made.length} made${aside.length ? ` · ${aside.length} aside` : ""}`,
       "Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form",
       ...(missed ? [`Duplicates may be missed among ${missed}: the canonical search ran out of steps`] : []),
+      ...(unstated ? [notComparedSaid(unstated)] : []),
     ],
   };
 }

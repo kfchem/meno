@@ -10,6 +10,7 @@
  * of, marked while the part is as it was read; and where the structure goes
  * on the page: beside what it was read from, clear of what lies there.
  */
+import { metalNotStated } from "../../../../lib/chem/ligandsNotStated";
 import { shapesOf, uprightOf, type FigureDrawn } from "../../../../lib/figure/drawn";
 import { figureBond, type FigureRead } from "../../../../lib/figure/read";
 import { readScheme, schemeBox, type SchemeRead } from "../../../../lib/figure/scheme";
@@ -58,6 +59,8 @@ export function wholeLabel(label: string): boolean {
 }
 
 export const figureLabels: LabelReader = (label) => {
+  // (a metal with its ligands not stated - LnPd, MgX - read as written: the metal, in that state - lib/chem/ligandsNotStated)
+  if (metalNotStated(label)) return { el: label };
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
   // (a group's label that is also an element's symbol - Pr, Ac, Ts, Fm, At - is the group, as it is typed: read on as its name, never

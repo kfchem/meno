@@ -1,4 +1,5 @@
 import type { JobState } from "../../../../../lib/jobs";
+import { LIGANDS_NOT_STATED, NOT_STATED_WHY } from "../../../../../lib/chem/ligandsNotStated";
 import type { StoreApi } from "zustand";
 import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -22,7 +23,7 @@ import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf, stereoRows } from "../../chem/make3d";
+import { bareAtomsOf, bareNames, blocksOf, isNotStated, notStatedIn, CONFORMERS_MS, drawnBlocksOf, moleculeOf, stereoRows } from "../../chem/make3d";
 import { sentOf } from "../../../../../lib/chem/perception/stereo/configuration";
 import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { blocksRead, leavesOpen } from "../../chem/menoIsomers";
@@ -167,10 +168,36 @@ export function openWhy(open: StereoOpen | undefined): string {
 /** Why a structure drawn was not made in 3D: one atom alone, or what could not be made. */
 export const BARE_WHY = "one atom alone has no 3D structure";
 export const NOT_MADE_WHY = "could not be made in 3D";
+/** Why a step on structures drawn sets aside one with a metal whose ligands are not stated: it has no formula, so no mass or other value from one (lib/chem/ligandsNotStated). */
+export const NOT_STATED_COMPOSITION_WHY = `no formula: ${NOT_STATED_WHY}`;
+/** Why *Check structures* sets aside one with a metal whose ligands are not stated: not sent to be checked (lib/chem/ligandsNotStated). */
+export const NOT_STATED_CHECK_WHY = `not checked: ${NOT_STATED_WHY}`;
+
+/**
+ * What a step on structures drawn answers for each of `drawn`: those with a metal whose ligands are not stated (lib/chem/ligandsNotStated)
+ * never asked about - each answered `aside` - and the rest asked of `ask` together, in their order (none asked where none is left).
+ * Where `ask` says why it could not answer, that.
+ */
+export async function notStatedAside<A>(drawn: readonly Model[], ask: (asked: Model[]) => Promise<A[] | string>, aside: A): Promise<A[] | string> {
+  const unstated = drawn.map((m) => notStatedIn(m).length > 0);
+  const asked = drawn.filter((_, i) => !unstated[i]);
+  const said = asked.length ? await ask(asked) : [];
+  if (typeof said === "string") return said;
+  let k = 0;
+  return drawn.map((_, i) => (unstated[i] ? aside : said[k++]));
+}
+
+/** Why a structure drawn with a metal whose ligands are not stated was not made in 3D (lib/chem/ligandsNotStated). */
+export const NOT_STATED_3D_WHY = `no 3D structure: ${NOT_STATED_WHY}`;
 
 /** The structures not made in 3D because each is a lone atom or ion alone, by their places among `of`: Na+, Cl-, a lone metal. */
 export function bareLeft(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} left out: one atom alone has no 3D structure`;
+}
+
+/** The structures not made in 3D because each holds a metal whose ligands are not stated (lib/chem/ligandsNotStated), by their places among `of`. */
+export function notStatedLeft(places: readonly number[], of: number): string {
+  return `${structuresAt(places)} of ${of} left out: ${places.length === 1 ? NOT_STATED_WHY : "their ligands are not stated"}`;
 }
 
 /** A structure made in 3D without some of its parts, by its place: its lone ions named, any other part counted - only its first is made. */
@@ -413,10 +440,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let answers: Checked[];
     try {
       const chem = await chemWorker("checks");
-      const blocks = entries.map((e) => drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock));
-      const { structures } = await chem.request("structure_facts", { structures: blocks.map((molblocks) => ({ molblocks })) }, drawnMs(blocks.length));
-      if (structures.length !== entries.length) return void fail(id, `${by.name} answered for ${structures.length} of ${entries.length}`, at, key);
-      answers = structures.map((facts, i) => checked(facts, blocks[i].length, keep, program));
+      // (a structure with a metal whose ligands are not stated is not sent: set aside, and said why - lib/chem/ligandsNotStated)
+      const said = await notStatedAside(
+        entries.map((e) => e.drawn),
+        async (asked) => {
+          const blocks = asked.map((drawn) => drawnBlocksOf(drawn, drawn.atoms.map((a) => a.id)).map((b) => b.molblock));
+          const { structures } = await chem.request("structure_facts", { structures: blocks.map((molblocks) => ({ molblocks })) }, drawnMs(blocks.length));
+          if (structures.length !== asked.length) return `${by.name} answered for ${structures.length} of ${asked.length}`;
+          return structures.map((facts, i) => checked(facts, blocks[i].length, keep, program));
+        },
+        { aside: NOT_STATED_CHECK_WHY, kind: LIGANDS_NOT_STATED },
+      );
+      if (typeof said === "string") return void fail(id, said, at, key);
+      answers = said;
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -945,6 +981,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const free: number[] = [];
     // (those that are a lone atom or ion alone, by their places: one atom alone has no 3D structure - left out, and said so)
     const bareOnly: number[] = [];
+    // (those with a metal whose ligands are not stated, by their places: no composition, so no 3D structure - left out, and said so)
+    const unstatedOnly: number[] = [];
     // (those made without some of their parts - a salt's counter-ion, which has no 3D structure; any part past the first: said, each by its place)
     const partly: string[] = [];
     // (each structure drawn not made, as it came, with why: in the step's Failed exit, to be followed and wired on - into Stereoisomers, one left open)
@@ -976,9 +1014,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           notMadeDrawn.push({ place, drawn: partOf(model, new Set(atoms)), record: { ...kept, status: { failed: earlier ? `${why} (earlier: ${earlier})` : why } } });
         };
         if (!block) {
-          if (bare.length) bareOnly.push(place + 1);
+          if (bare.some(isNotStated)) unstatedOnly.push(place + 1);
+          else if (bare.length) bareOnly.push(place + 1);
           else failed.push(place + 1);
-          asideAs(bare.length ? BARE_WHY : NOT_MADE_WHY);
+          asideAs(bare.some(isNotStated) ? NOT_STATED_3D_WHY : bare.length ? BARE_WHY : NOT_MADE_WHY);
           continue;
         }
         let made;
@@ -1078,7 +1117,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     const of = drawnIn(input);
     // (each not made said: those that could not be, and those whose stereo is left open)
-    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
+    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : []), ...(unstatedOnly.length ? [notStatedLeft(unstatedOnly, of)] : [])];
     // (made, but said: their stereo not held - only those that were made)
     const freed = free.filter((p) => !failed.includes(p));
     // (none made, and none to set aside: nothing came that could be - else those not made, in the Failed exit, each saying why)
@@ -1128,9 +1167,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       const client = await pluginClient(plugin);
       // (each as its entry draws it: on the page, then held - inputEntries)
-      const given = entries.map((e) => ({ molblocks: drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
-      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
-      if (typeof answers === "string") return void fail(id, answers, at, key);
+      // (a structure with a metal whose ligands are not stated has no composition to give the plugin: set aside, and said why -
+      //  lib/chem/ligandsNotStated; the plugin is asked about the rest)
+      const said = await notStatedAside(
+        entries.map((e) => e.drawn),
+        async (asked) => {
+          const given = asked.map((drawn) => ({ molblocks: drawnBlocksOf(drawn, drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
+          return readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), asked.length);
+        },
+        { aside: NOT_STATED_COMPOSITION_WHY, kind: LIGANDS_NOT_STATED },
+      );
+      if (typeof said === "string") return void fail(id, said, at, key);
+      answers = said;
     } catch (e) {
       return void fail(id, message(e), at, key);
     }

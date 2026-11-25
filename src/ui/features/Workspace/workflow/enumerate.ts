@@ -13,6 +13,7 @@
  * Meno's identity (lib/chem/identity `identity`), the first by number is
  * made and each later one set aside, saying which it is the same as.
  */
+import { isNotStatedText, notComparedSaid } from "../../../../lib/chem/ligandsNotStated";
 import { identity } from "../../../../lib/chem/identity";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { LineRead } from "../../../../lib/options";
@@ -239,6 +240,7 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
   const aside: (Made & { why: string })[] = [];
   const seen = new Map<string, number>();
   let missed = 0;
+  let unstated = 0;
   const choice = options.map(() => 0);
   const refused: string[] = [];
   for (let number = 1; number <= count; number++) {
@@ -252,7 +254,8 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
       // (a centre no longer one, two of its groups now alike: drawn plain)
       const drawnNow = plainWhereAlike(held, differences);
       const found = identity(withGroups(identityInputOf(drawnNow).input, drawnNow));
-      if (!found.complete) missed++;
+      if (isNotStatedText(found.text)) unstated++;
+      else if (!found.complete) missed++;
       const first = seen.get(found.text);
       if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
       else {
@@ -289,6 +292,7 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
       `${made.length} made${aside.length ? ` · ${aside.length} aside` : ""}`,
       "Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form",
       ...(missed ? [`Duplicates may be missed among ${missed}: the canonical search ran out of steps`] : []),
+      ...(unstated ? [notComparedSaid(unstated)] : []),
     ],
   };
 }
