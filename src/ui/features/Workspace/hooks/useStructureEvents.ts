@@ -33,6 +33,7 @@ import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
 import { importedScheme as importedSchemeOf, placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { heldEach } from "../utils/heldEach";
+import { isMarkdown } from "../../../../lib/text/markdown";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -462,7 +463,7 @@ export function useStructureEvents(
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
     if (!kind && opensAsText(f.name, head)) {
-      store.getState().addTexts([{ name: f.name, text: await textOfFile(f) }], at);
+      store.getState().addTexts([{ name: f.name, text: await textOfFile(f), ...(isMarkdown(f.name) ? { markdown: true as const } : {}) }], at);
       setImportError(null);
       // (nothing told it, and the plugins online not listed: said, with the button that lists them - and read again, where one tells it then)
       if (again) sayNoneTold([f.name], again, () => kindOfFile(f.name, head));

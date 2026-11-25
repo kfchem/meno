@@ -71,7 +71,7 @@ export type Workspace = {
 };
 
 /** A text as a workspace's file keeps it: its name, and the file kept with its words, by SHA-256 - and where its sheet lies on the page, whether it is made an icon, and whether it is read in the column; and what it is the text of - a step, by its id, or a molecule, by its place among `molecules3d`. */
-export type SavedText = { name: string; sha256: string; text?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
+export type SavedText = { name: string; sha256: string; text?: string; markdown?: true; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
 
 type Saved = Pick<
   EditorState,
@@ -189,7 +189,7 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       ...(Object.keys(aromatic).length ? { aromaticRings: aromatic } : {}),
       // (and those that could not be read, after them, as the file named them: by what they are known by, which it does not hold - so that, opened again, they are named again)
       ...(column.length
-        ? { texts: column.map((t, i) => ({ name: t.name, sha256: "sha256" in t ? t.sha256 : texts[i], ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false } : {}), ...(t.icon ? { icon: true } : {}), ...ofSaved(t.of) })) }
+        ? { texts: column.map((t, i) => ({ name: t.name, sha256: "sha256" in t ? t.sha256 : texts[i], ...(t.markdown ? { markdown: true } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false } : {}), ...(t.icon ? { icon: true } : {}), ...ofSaved(t.of) })) }
         : {}),
       ...(shown >= 0 ? { textShown: shown } : {}),
       ...(state.pdfs?.length ? { pdfs: state.pdfs.map(({ id: _id, ...p }) => p) } : {}),
@@ -512,7 +512,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     if (t.of != null && (!of || ofMolecule === -1)) leftOut("textOf");
     const ofRead = of && ofMolecule == null ? { of } : ofMolecule != null && ofMolecule >= 0 ? { of: { molecule: ofMolecule } } : {};
     textAt.set(i, texts.length);
-    texts.push({ name: t.name.slice(0, 260), sha256: t.sha256, ...at, ...(typeof t.point === "number" && t.point > 0 && Number.isFinite(t.point) ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon === true && at.at ? { icon: true as const } : {}), ...ofRead });
+    texts.push({ name: t.name.slice(0, 260), sha256: t.sha256, ...(t.markdown === true ? { markdown: true as const } : {}), ...at, ...(typeof t.point === "number" && t.point > 0 && Number.isFinite(t.point) ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon === true && at.at ? { icon: true as const } : {}), ...ofRead });
   }
   const textShown = Number.isInteger(r.textShown) ? textAt.get(r.textShown as number) : undefined;
   const pdfsAt = readPdfsAt(r.pdfs);

@@ -71,6 +71,7 @@ import { canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, order
 import { isSkeleton, partOf } from "./utils/completeness";
 import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
+import { isMarkdown } from "../../../lib/text/markdown";
 import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
 import { setPdfTaker } from "../../views/pdfs";
@@ -1238,7 +1239,7 @@ function WorkspaceContent({
     try {
       const out = (await outputOf(source)) ?? ((await findOutput(source)) ? await outputOf(source) : undefined);
       if (out) {
-        store.getState().addTexts([{ name: out.name, text: out.text, ...(source.path ? { path: source.path } : {}), of: { molecule } }]);
+        store.getState().addTexts([{ name: out.name, text: out.text, ...(source.path ? { path: source.path } : {}), ...(isMarkdown(out.name) ? { markdown: true as const } : {}), of: { molecule } }]);
         // (rising from its molecule into the column - docs/PDF.md, *A text*: this one, shown from another before)
         const shown = store.getState().textShown;
         if (shown != null) {

@@ -198,7 +198,7 @@ export function recordText(part: Drawn): string {
     ...(part.cycles?.length ? { cycles: part.cycles } : {}),
     // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
     ...(part.pdfs?.length ? { pdfs: part.pdfs.map(({ id: _, reading: _r, ...p }) => p) } : {}),
-    ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
+    ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, ...(t.markdown ? { markdown: true } : {}), at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
   });
 }
 
@@ -274,9 +274,9 @@ function readRecordNoting(text: string): Drawn | null {
   // (a copy's PDFs and texts' sheets: a workspace's file keeps its own, apart)
   const pdfs = readPdfs(r.pdfs).map((p, i) => ({ ...p, id: i + 1 }));
   const sheets = readEach(r.sheets, (v) => {
-    const t = v as { name?: unknown; text?: unknown; at?: { x?: unknown; y?: unknown }; icon?: unknown } | null;
+    const t = v as { name?: unknown; text?: unknown; at?: { x?: unknown; y?: unknown }; icon?: unknown; markdown?: unknown } | null;
     return typeof t?.name === "string" && typeof t.text === "string" && isNum(t.at?.x) && isNum(t.at?.y)
-      ? { name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }
+      ? { name: t.name.slice(0, 260), text: t.text, ...(t.markdown === true ? { markdown: true as const } : {}), at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }
       : null;
   }, "text").map((t, i) => ({ id: i + 1, ...t }));
   const labelPt = isNum(r.labelPt) && r.labelPt > 0 ? r.labelPt : undefined;

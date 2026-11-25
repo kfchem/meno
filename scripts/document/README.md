@@ -49,9 +49,8 @@ refused, not passed over.
 - `width`: how wide a row grows, in bond lengths (100 unless said).
 - `entries`, in reading order, each one of:
   - `text`: a Markdown file (.md), put on the page as its sheet and listed in the
-    text column; `name`, its name there (the file's name unless said). Meno
-    tells a Markdown text by its name's ending today, so a text given a `name`
-    without ".md" is shown as its source, not formatted.
+    text column; `name`, its name there (the file's name unless said). It is a
+    Markdown text, shown formatted, whatever `name` says.
   - `structure`: a .mol, .sdf or .rxn file, drawn; `id`, its name, under it;
     `record`, an .sdf file's record (from 1; the first unless said);
     `keepLayout`, the file's own coordinates kept (scaled to the style's bond

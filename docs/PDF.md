@@ -605,9 +605,15 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
 
 ### Markdown
 
-A text whose name ends `.md` or `.markdown` is read as what it says, not
-as its marks (the maintainer asked that Markdown files open formatted, to
-be read).
+A text is Markdown when the file it came from was - opened or dropped,
+its file's name ending `.md` or `.markdown` - and is read as what it says,
+not as its marks (the maintainer asked that Markdown files open formatted,
+to be read). The text keeps that as its own, saved with it, copied and
+pasted with it: its name does not decide, so a Markdown text named "Aim" is
+read formatted, and one named "x.md" that came from plain text is not. A
+new text (*New text*) is plain text. Exported, a Markdown text whose name
+has no `.md` is suggested a name ending `.md`, so that it opens formatted
+again.
 
 - **As CommonMark 0.31.2 reads it, with GitHub's tables, task lists,
   strikethrough and autolinks** (GitHub Flavored Markdown 0.29, its

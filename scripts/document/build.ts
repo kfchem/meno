@@ -27,6 +27,7 @@ import { editorModelOf, processFileContent, type ProcessedFileResult } from "../
 import { sheetOf } from "../../src/ui/features/Workspace/utils/textSheets";
 import { workspaceFile } from "../../src/ui/features/Workspace/utils/workspace";
 import { xyzFrames } from "../../src/utils/structureParsers";
+import { isMarkdown } from "../../src/lib/text/markdown";
 
 /** A Markdown text, put on the page as its sheet and listed in the text column. */
 export type TextEntry = { text: string; name?: string };
@@ -170,9 +171,11 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
     } else if ("text" in raw) {
       const text = readFile(raw.text, at);
       const name = raw.name ?? raw.text.split(/[\\/]/).pop()!;
-      const sheet = sheetOf(text, name);
+      // (Markdown as its file is, whatever it is named - as a file opened in the app)
+      const markdown = isMarkdown(raw.text);
+      const sheet = sheetOf(text, markdown);
       // (a sheet lies from its top left corner: `at`)
-      ready.push({ foot: { x0: 0, x1: sheet.w, y0: -sheet.h, y1: 0 }, put: (p) => store.getState().addTexts([{ name, text, at: p }]) });
+      ready.push({ foot: { x0: 0, x1: sheet.w, y0: -sheet.h, y1: 0 }, put: (p) => store.getState().addTexts([{ name, text, ...(markdown ? { markdown: true as const } : {}), at: p }]) });
     } else if ("structure" in raw) {
       let text = readFile(raw.structure, at);
       let name = raw.structure;

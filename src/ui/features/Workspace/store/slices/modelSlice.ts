@@ -644,7 +644,7 @@ export const createModelSlice = (
     // and those whose words could not be read after them, numbered on, kept as the file named them: store/types `LostText`)
     const read = ws.texts.filter((t) => t.text != null);
     const unread = ws.texts.filter((t) => t.text == null);
-    const placed = (t: SavedText) => ({ ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) });
+    const placed = (t: SavedText) => ({ ...(t.markdown ? { markdown: true as const } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) });
     const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...placed(t) }));
     const textsLost = unread.map((t, i) => ({ id: read.length + i + 1, name: t.name, sha256: t.sha256, ...placed(t) }));
     const shownSaved = ws.textShown != null ? ws.texts[ws.textShown] : undefined;

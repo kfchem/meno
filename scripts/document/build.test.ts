@@ -62,6 +62,11 @@ describe("a workspace built from a manifest", () => {
       ["notes.md", FILES["notes.md"]],
     ]);
     expect(st.texts.every((t) => t.at)).toBe(true);
+    // (both Markdown, as their files are: "Aim", from intro.md, too)
+    expect(st.texts.map((t) => [t.name, t.markdown])).toEqual([
+      ["Aim", true],
+      ["notes.md", true],
+    ]);
     // (3 + 5 + 4 carbons, drawn; 2 + 4 + 3 bonds)
     expect(st.model.atoms).toHaveLength(12);
     expect(st.model.bonds).toHaveLength(9);

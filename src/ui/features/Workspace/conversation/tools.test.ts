@@ -121,7 +121,7 @@ describe("what a conversation sees: what lies inside its frame", () => {
       { kind: "structure", id: 1, middle: { x: 0.75, y: 0 } },
       { kind: "molecule", id: 1, middle: { x: 4, y: 0 } },
       { kind: "picture", id: 1, middle: { x: 50, y: 0 } },
-      { kind: "text", id: 1, middle: sheetMiddle({ x: 6, y: 2 }, "Protect the alcohol first.", "notes.txt"), corner: { x: 6, y: 2 } },
+      { kind: "text", id: 1, middle: sheetMiddle({ x: 6, y: 2 }, "Protect the alcohol first.", false), corner: { x: 6, y: 2 } },
       { kind: "pdf", id: 1, middle: { x: (pdf.x0 + pdf.x1) / 2, y: (pdf.y0 + pdf.y1) / 2 }, corner: { x: pdf.x0, y: pdf.y1 } },
       { kind: "arrow", id: 1, middle: { x: 150, y: 0 } },
       { kind: "caption", id: 3, middle: { x: 170, y: 0 } },
