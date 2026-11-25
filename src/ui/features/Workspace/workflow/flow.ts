@@ -342,7 +342,7 @@ export function tablesJoined(tables: readonly Table[]): Table {
  * What comes into a step as a table (lib/table, docs/WORKFLOWS.md
  * *Tables*): the table a set holds; or molecules in 3D seen as one, an
  * entry a row (`moleculesAsTable`) - named for the molecule and frame it is
- * ("molecule:3#2"), its molecule's title where it has one, and its energy
+ * ("molecule:3#2"), its molecule's name where it has one, and its energy
  * with the program and level that worked it out, where the molecule's
  * calculation says them. None where nothing comes in, or what does is
  * structures drawn, pictures or a chart.
@@ -362,7 +362,6 @@ export function moleculesSeen(doc: Flow, step: number, port?: string, constituti
   if (tableWired(doc, step, port)) return null;
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
-  const titles = new Map(input.molecules.flatMap((m) => (m.title ? [[m.id, m.title] as const] : [])));
   const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
   // (each molecule as it is - a conformer set's frames its conformers, another's each an entry of its own - in a set that mixes them too)
   // (and each row says which: a conformer of its set, a frame of a molecule of several - a scan's, a path's - or a molecule)
@@ -377,9 +376,8 @@ export function moleculesSeen(doc: Flow, step: number, port?: string, constituti
   });
   const seen = moleculesAsTable(
     entries.map((e: SetEntry) => {
-      const made = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
-      const title = e.from != null ? titles.get(e.from) : undefined;
-      const entry = title ? { ...made, properties: { title: { value: title, unit: "none" as const, status: "computed" as const }, ...made.properties } } : made;
+      // (its name - its record's title, where its file gives one - a property of it, as every entry's: workflow/entries `nameOf`)
+      const entry = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
       const energy = entry.properties.energy;
       const how = e.from != null ? by.get(e.from) : undefined;
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
