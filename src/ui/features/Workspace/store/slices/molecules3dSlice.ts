@@ -179,12 +179,31 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const { [id]: _was, ...turns3d } = prev.turns3d;
         return { ...prev, turns3d };
       }),
-    // (a conformer chosen - by a step through them, or by a press on the chip's "Lower conformer found" - says that the chemist has seen it: the chip's notice goes)
+    // (a conformer picked - by a step through them, the keys, a workflow or a step - ends following the lowest, and says that the chemist
+    //  has seen what the chip's dot told: it goes; docs/WORKSPACE.md, *As its search goes on*)
     setFrame3d: (id: number, frame: number) =>
       set((prev) => {
         const lowerFound3d = without(prev.lowerFound3d, id);
-        if (prev.frames3d[id] === frame && lowerFound3d === prev.lowerFound3d) return prev;
-        return { ...prev, lowerFound3d, frames3d: prev.frames3d[id] === frame ? prev.frames3d : { ...prev.frames3d, [id]: frame } };
+        const following3d = without(prev.following3d, id);
+        if (prev.frames3d[id] === frame && lowerFound3d === prev.lowerFound3d && following3d === prev.following3d) return prev;
+        return { ...prev, lowerFound3d, following3d, frames3d: prev.frames3d[id] === frame ? prev.frames3d : { ...prev.frames3d, [id]: frame } };
+      }),
+    // (the chip's dot pressed: the lowest shown - eased, as a step to it is - the dot gone, and the lowest followed again)
+    followLowest3d: (id: number) =>
+      set((prev) => {
+        if (!prev.molecules3d.some((m) => m.id === id)) return prev;
+        const frames3d = (prev.frames3d[id] ?? 0) === 0 ? prev.frames3d : { ...prev.frames3d, [id]: 0 };
+        const following3d = prev.following3d[id] ? prev.following3d : { ...prev.following3d, [id]: true as const };
+        return { ...prev, frames3d, following3d, lowerFound3d: without(prev.lowerFound3d, id) };
+      }),
+    // (a molecule let go that follows the lowest, and a lower one came while it was in hand: shown now)
+    setInHand3d: (ids: readonly number[]) =>
+      set((prev) => {
+        if (ids.length === prev.inHand3d.length && ids.every((x, k) => prev.inHand3d[k] === x)) return prev;
+        let frames3d = prev.frames3d;
+        for (const id of prev.inHand3d)
+          if (!ids.includes(id) && prev.following3d[id] && (frames3d[id] ?? 0) !== 0) frames3d = { ...frames3d, [id]: 0 };
+        return { ...prev, inHand3d: [...ids], frames3d };
       }),
     showInStack: (stack: number, id: number) =>
       set((prev) => {
@@ -356,8 +375,10 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const there = kept.find((m) => m.id === id);
         if (!there) return prev;
         const growing: Record<number, Growing3D> = { ...prev.growing3d, [id]: { grown, key, base: { atoms: there.atoms, frames: there.frames } } };
-        // (a search begun afresh: what an earlier one found is not this one's news)
-        return { ...prev, growing3d: growing, lowerFound3d: without(prev.lowerFound3d, id), molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
+        // (a search begun afresh: what an earlier one found is not this one's news; it follows the lowest found - where the lowest it
+        //  has is the one shown, so that nothing moves till a lower one comes)
+        const following3d = (prev.frames3d[id] ?? 0) === 0 ? { ...prev.following3d, [id]: true as const } : without(prev.following3d, id);
+        return { ...prev, growing3d: growing, following3d, lowerFound3d: without(prev.lowerFound3d, id), molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
       }),
     grow3d: (id: number, grown: Grown3D | null) =>
       set((prev) => {
@@ -375,13 +396,19 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const was = prev.molecules3d.find((m) => m.id === id);
         const shown = prev.frames3d[id] ?? 0;
         const near = grown && was ? nearestFrame(grown, placesAt(was, shown)) : null;
-        const now = !near ? shown : near.same ? near.frame : 0;
-        const frames3d = now === shown ? prev.frames3d : { ...prev.frames3d, [id]: now };
-        // (its chip says so where a lower one than the lowest it had is found - the lowest it had no longer first - until a conformer is
-        //  chosen (`setFrame3d`); that the one shown left the window and the lowest is shown, where it did: docs/WORKSPACE.md, *As its search goes on*)
         const lowest = grown && was ? (shown === 0 ? near! : nearestFrame(grown, placesAt(was, 0))) : null;
-        const found = near && !near.same ? "window" : lowest && !(lowest.same && lowest.frame === 0) ? "lower" : prev.lowerFound3d[id];
-        const lowerFound3d = !found || prev.lowerFound3d[id] === found ? prev.lowerFound3d : { ...prev.lowerFound3d, [id]: found };
+        const lower = !!lowest && !(lowest.same && lowest.frame === 0);
+        // (following the lowest - no conformer picked - a lower one found is shown, by the view's eased step between conformers; while
+        //  the molecule is in the chemist's hand, at its release: `setInHand3d`)
+        const following = !!prev.following3d[id];
+        const step = following && lower && !prev.inHand3d.includes(id);
+        const now = !near ? shown : step || !near.same ? 0 : near.frame;
+        const frames3d = now === shown ? prev.frames3d : { ...prev.frames3d, [id]: now };
+        // (a conformer picked: its chip's dot says where a lower one than the lowest it had is found - the lowest it had no longer first -
+        //  or that the one shown left the window and the lowest is shown, till a conformer is picked or the dot pressed: docs/WORKSPACE.md,
+        //  *As its search goes on*; following, nothing is said - the chemist sees it)
+        const found = following ? undefined : near && !near.same ? "window" : lower ? "lower" : prev.lowerFound3d[id];
+        const lowerFound3d = !found ? without(prev.lowerFound3d, id) : prev.lowerFound3d[id] === found ? prev.lowerFound3d : { ...prev.lowerFound3d, [id]: found };
         return { ...prev, growing3d: growing, frames3d, lowerFound3d, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
       }),
     settleGrown3d: (id: number) => {
@@ -529,6 +556,7 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
   let turns3d = keep(prev.turns3d);
   let frames3d = keep(prev.frames3d);
   const lowerFound3d = keep(prev.lowerFound3d);
+  const following3d = keep(prev.following3d);
   // (a molecule shown overlaid, undone away, is not: another made next took
   // its id and came up overlaid, unasked - but it is again, redone)
   let overlay3d = keep(prev.overlay3d);
@@ -568,6 +596,7 @@ export function heldOf(prev: EditorState, molecules: Molecule3D[]): Partial<Edit
     turns3d,
     frames3d,
     lowerFound3d,
+    following3d,
     overlay3d,
     sel3d,
     chosen3d: chosenStays ? c : null,

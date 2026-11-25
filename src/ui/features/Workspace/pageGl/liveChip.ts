@@ -10,7 +10,7 @@
 import { colourHex, colourMix, COLORS } from "../../../theme/colors";
 import { barsAbove, NO_LOWEST, NOT_FINISHED } from "../utils/barsAbove";
 import { chipWidthOf } from "../utils/chipWidth";
-import { aboutLine, chipDetails, isSingle, setChipRuns, singleChipRuns, type ChipFacts, type SaidRun } from "../utils/chipSaid";
+import { aboutLine, chipDetails, isSingle, LOWER_FOUND, OUT_OF_WINDOW, setChipRuns, singleChipRuns, type ChipFacts, type SaidRun } from "../utils/chipSaid";
 import { failureSaid } from "../workflow/failures";
 import { greatest } from "../../../../lib/chem/lists";
 import type { CardGroups } from "../components/PointedCard3D";
@@ -31,7 +31,8 @@ import { pagePx } from "./units";
  * either side and their most, and how it was made's; a single geometry's
  * words' most; the rows' gap, line and size, a group's name's size, the bars'
  * name's line; the slider's track, its room above and below, and its thumb;
- * the fold's chevron and how wide a press on it is taken.
+ * the fold's chevron and how wide a press on it is taken; the dot a set's
+ * chip is marked with, and how wide a press on it is taken.
  */
 export const LIVE = {
   width: 196,
@@ -53,10 +54,26 @@ export const LIVE = {
   thumb: 16,
   chevron: 10,
   foldHit: 24,
+  mark: 6,
+  markHit: 14,
 } as const;
 
 /** The bars' colours: the frame shown, the one pointed at, the rest - its HTML's. */
 const BAR = { shown: COLORS.base, pointed: colourHex(140, 172, 184), rest: colourHex(207, 222, 229) } as const;
+
+/** Its dot's colours: a lower conformer found, Meno's own (LOOK.md `accel-base`); the one shown gone from the energy window, the lowest shown in its place - a change the chemist did not make - the accent (`accel-accent`). */
+export const MARK = { lower: COLORS.base, window: COLORS.attention } as const;
+
+/**
+ * Where a chip's dot is centred, on the page: on its outline at the upper
+ * right of its right cap - 45 degrees up from the cap's middle - a cap as
+ * round as its box draws it (its radius, no more than half its height).
+ */
+export function chipMarkAt(box: Rect, heightPx: number): { x: number; y: number } {
+  const r = pagePx(Math.min(CHIP.radius, heightPx / 2));
+  const off = r * (1 - Math.SQRT1_2);
+  return { x: box.x1 - off, y: box.y1 - off };
+}
 
 const TONE: Record<SaidRun["tone"], string> = { quiet: COLORS.quiet, ink: COLORS.ink, attention: COLORS.attention };
 
@@ -147,8 +164,6 @@ export type ChipMeasures = {
   runs: SaidRun[];
   lines: WrappedLine[] | null;
   said: number;
-  /** How much wider what its search has found makes its words, its room before it with it, in page px: none where it has found nothing (utils/chipSaid `found`). `said` is without it. */
-  found: number;
   details: DetailsLaid;
   /** What stands under a set's bars: what the calculation was and the frame's energy, or what its energies are, in lines no wider than the bars. */
   under: { text: string; width: number }[];
@@ -160,14 +175,11 @@ export function chipMeasures(c: ChipFacts, told: number): ChipMeasures {
   const runs = single ? singleChipRuns(c) : setChipRuns({ ...c, frame: told });
   const lines = single ? singleLines(runs) : null;
   // (a single geometry's as wide as its words would be on one line, but no wider than 20rem: CSS's fit-content - its lines centred in that)
-  const line = lines ? null : chipLine(runs);
-  const notice = line?.runs.find((r) => r.part === "found");
-  const found = line && notice ? line.width - notice.from + (runs.find((r) => r.part === "found")?.gapPx ?? 0) : 0;
-  const said = lines ? Math.min(LIVE.saidMost, singleLines(runs, Infinity)[0]?.width ?? 0) : line!.width - found;
+  const said = lines ? Math.min(LIVE.saidMost, singleLines(runs, Infinity)[0]?.width ?? 0) : chipLine(runs).width;
   const details = detailsLaid(chipDetails(c, told));
   const above = c.energies ? barsAbove(c.energies, c.failed, c.marksUnread).above : null;
   const under = single ? [] : c.about ? wrapText(aboutLine(c, told), CHIP.size, width) : above && c.made?.energies ? wrapText(`Energies from ${c.made.energies}`, CHIP.size, width) : [];
-  return { single, width, runs, lines, said, found, details, under };
+  return { single, width, runs, lines, said, details, under };
 }
 
 /** How far each part of a chip has come (theme/opening), and what is pointed at in it. */
@@ -185,8 +197,8 @@ export type ChipState = {
   made: { grown: number; shown: number; turn: number; pointed: boolean };
   /** Each bar's tone, eased as the frame shown and the one pointed at change: 0 as the rest, 1 pointed at, 2 shown (`barTone`); none, each as it stands. */
   tones?: readonly number[];
-  /** How far what its search has found has come in (theme/opening): grown, the rest of its words moved aside for it; shown, it faded in. Whole where not told. */
-  found?: { grown: number; shown: number };
+  /** Its dot, where its search found what the chemist has not seen (utils/chipSaid `found`): which it tells, how far it has eased in, and whether it is pointed at. */
+  mark?: { kind: "lower" | "window"; shown: number; pointed: boolean };
   /** Its widths, eased: shut, opened to its bars, its details - its sides with each. */
   widths: { shut: number; open: number; details: number };
   /** Its words can be clicked to shut it (a set's, opened); it can be clicked to open (a set's shut) or pin (a single geometry's with more to say). */
@@ -206,11 +218,11 @@ export type ChipPress = { expanded: boolean; pinned: boolean; fold: boolean };
  * of a set's chip, shut, it opens (the maintainer, 2026-10-13: on a click, not
  * as its molecule is pointed at); a single geometry's, with more to say than
  * its line, pinned open, or shut again. A press on its bars or slider, or on
- * what its search has found, is theirs, and leaves it as it is.
+ * its dot, is theirs, and leaves it as it is.
  */
 export function chipPressed(at: { single: boolean; expanded: boolean; pinned: boolean; hasMore: boolean }, part: string): ChipPress {
   const same = { expanded: at.expanded, pinned: at.pinned, fold: false };
-  if (part === "bars" || part === "slider" || part === "found") return same;
+  if (part === "bars" || part === "slider" || part === "mark") return same;
   if (part === "fold") return { ...same, fold: true };
   if (part === "said" && at.expanded) return { ...same, expanded: false };
   if (!at.single && !at.expanded) return { ...same, expanded: true };
@@ -337,15 +349,7 @@ export function liveChip(s: ChipState, at: { x: number; y: number }, view: PageV
     for (const [i, l] of m.lines.entries()) runsAt(`said:${i}`, -l.width / 2, y + i * CHIP.line, l.runs);
   } else {
     const line = chipLine(m.runs);
-    // (what its search has found, last: the rest of its words move aside for it as it comes, then it fades in - and the other way as
-    //  it goes; pressed, it shows the lowest - useFramesChip)
-    const found = s.found ?? { grown: 1, shown: 1 };
-    const left = -(line.width - (1 - found.grown) * m.found) / 2;
-    line.runs.forEach((r, i) => {
-      text(`${i}`, left + r.from, y, CHIP.line, r.text, CHIP.size, TONE[r.tone], r.part ? found.shown : 1);
-      if (r.part && found.shown > 0.5)
-        regions.push({ key: s.key, part: r.part, rect: { x0: cx + P(left + r.from), x1: cx + P(left + r.from + r.width), y0: top - P(y + CHIP.line), y1: top - P(y) }, z: zBase + 2, cursor: "pointer" });
-    });
+    line.runs.forEach((r, i) => text(`${i}`, -line.width / 2 + r.from, y, CHIP.line, r.text, CHIP.size, TONE[r.tone], 1));
   }
   y += saidH;
   if (s.shuts) regions.push({ key: s.key, part: "said", rect: { x0: box.x0, x1: box.x1, y0: top - P(y), y1: top - P(saidTop) }, z: zBase + 1, cursor: "pointer" });
@@ -380,6 +384,13 @@ export function liveChip(s: ChipState, at: { x: number; y: number }, view: PageV
       for (const [j, r] of g.rows.entries()) rowAt(`g${k}:r${j}`, left, y + r.top, g.labels, inner, r, shown);
     }
     y += s.read.grown * m.details.height;
+  }
+  // its dot: on its outline at the upper right of its right cap, over the rest - the page's tip saying what it tells, pointed at
+  if (s.mark && s.mark.shown > 0) {
+    const d = chipMarkAt(box, height);
+    shapes.push({ kind: "ring", key: `${s.key}:mark`, x: d.x, y: d.y, diameterPx: LIVE.mark, fill: MARK[s.mark.kind], opacity: o * s.mark.shown, z: zBase + 3 });
+    if (s.mark.shown > 0.5) regions.push({ key: s.key, part: "mark", rect: { x0: d.x - P(LIVE.markHit / 2), x1: d.x + P(LIVE.markHit / 2), y0: d.y - P(LIVE.markHit / 2), y1: d.y + P(LIVE.markHit / 2) }, z: zBase + 3, cursor: "pointer" });
+    if (s.mark.pointed && s.mark.shown >= 1 && !tip) tip = { key: `${s.key}:mark`, text: s.mark.kind === "window" ? OUT_OF_WINDOW : LOWER_FOUND, x: d.x, y: d.y, w: P(LIVE.mark), h: P(LIVE.mark) };
   }
   return { shapes, texts, icons, polys, regions: regionsSeen(), box, heightPx: height, bars: barsAt, slider: sliderAt, ...(tip ? { tip } : {}) };
 

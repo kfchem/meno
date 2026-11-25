@@ -583,21 +583,26 @@ Taken on 2026-10-13:
   they ran, not the time they waited). Everything a round brings is
   judged and made the page's off the page's thread (`chem/growing`):
   the page never waits on it.
-  - The conformer shown stays shown as more come: where a lower one is
-    found before it, the chip moves on with it.
-  - Where a later round makes another conformer the lowest, the conformer
-    shown still never changes by itself: its frames chip says so, last,
-    in the attention colour - *Lower conformer found* - eased in as the
-    chip's other parts are (the rest of its words move aside, then it
-    fades in). A press on those words shows the lowest, eased as a step
-    between conformers is, and they go. They stay until the chemist
-    chooses a conformer - by that press, or by stepping to any conformer
-    with the chip or the keys - however many lower ones come meanwhile,
-    and after the search ends. Only where the lowest found takes the
-    energy window past the conformer shown, so that it is no longer
-    among them, is the lowest shown instead, and the chip says *Out of
-    the energy window: showing the lowest*, by the same rule. This is
-    the view's: never saved, forgotten as the structure is made again.
+  - Until the chemist picks a conformer, the lowest found so far is
+    shown: where a round finds a lower one, the molecule goes to it by
+    the same eased step as a press on the chip's bars, and the chip reads
+    1 / N throughout. Nothing else says so. A step never starts while the
+    chemist turns or drags that molecule; it waits for the release. Where
+    nothing lower came, nothing moves.
+  - Once a conformer is picked - by the chip's bars, slider or a press on
+    it, the keys, a workflow or a step - the conformer shown never changes
+    by itself: where a lower one is found before it, its number goes up
+    with it. Where a later round finds one lower than the lowest at the
+    pick, a small dot in Meno's own colour rests on the chip's outline at
+    the upper right; the chip keeps its width and its words. Pointed at,
+    the page's tip says *Lower conformer found*. A press on the dot shows
+    the lowest, eased, and the molecule follows the lowest again; a pick
+    of any conformer makes the dot go too.
+  - Where the conformer shown leaves the energy window, so that it is no
+    longer among them, the lowest is shown instead, eased, and the same
+    dot tells it in the accent colour; its tip says *The conformer shown
+    left the energy window: the lowest is shown*. This is the view's:
+    never saved, so a molecule read from a file never changes by itself.
   - Nothing of a conformer shown changes as more come: each
     keeps the frame it was first shown as, its own energy with it, every
     atom where it was - its equivalent atoms in the places they had in
@@ -1557,8 +1562,9 @@ it, in `features/Workspace/pageGl/`:
   found; how it was made, folded under a chevron - laid out as its HTML
   was, in page pixels, and opened the same way (theme/opening). A press on
   its bars or its slider shows the frame under it, a drag goes through
-  them; one on what its search has found (*As its search goes on*)
-  shows the lowest. Its words are copied from its menu (Copy, Copy energies), as no
+  them; one on its dot (*As its search goes on*) shows the lowest, and
+  its tip opens over the dot as it is pointed at. Its words are copied
+  from its menu (Copy, Copy energies), as no
   words on the page are selected; opened, the workflow's ports under it
   are not drawn. What goes under it - Make again, a list of results - is
   HTML still, a control, as far down as the chip is tall.

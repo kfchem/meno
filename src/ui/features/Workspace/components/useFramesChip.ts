@@ -41,6 +41,7 @@ export function useFramesChip({
   frame,
   open,
   onFrame,
+  onLowest,
   onOpened,
   raised: raisedFrom,
 }: {
@@ -52,6 +53,8 @@ export function useFramesChip({
   /** Its molecule pointed at or selected: a single geometry's chip is seen then, and stays a moment after. */
   open: boolean;
   onFrame: (frame: number) => void;
+  /** Its dot pressed: the lowest conformer shown, and followed again. */
+  onLowest?: () => void;
   /** Told as it is opened by a click, and as it shuts: its molecule takes it clear of its set, and it goes above the rest. */
   onOpened?: (opened: boolean) => void;
   /** Its molecule is taking it back up after it shut: it stays over the rest till then. */
@@ -82,13 +85,12 @@ export function useFramesChip({
   const madeAt = useOpening(madeOpen);
   const turn = useEasedTo(madeOpen ? 1 : 0);
   const told = pointed ?? frame;
-  // (what its search has found: come in and gone eased - the rest of its words move aside for it, then it fades in; it fades out, then
-  //  they close up - its words kept while it goes)
-  const notice = useOpening(!!facts.found);
-  const lastFound = useRef(facts.found);
-  if (facts.found) lastFound.current = facts.found;
-  const goingFound = !facts.found && (notice.grown > 0 || notice.shown > 0) ? lastFound.current : undefined;
-  const said = useMemo(() => (goingFound ? { ...facts, found: goingFound } : facts), [facts, goingFound]);
+  // (its dot, where its search found what the chemist has not seen: eased in and out as the chip's own parts are - what it told kept
+  //  while it goes - and its width and words never changed by it)
+  const markShown = useEasedTo(facts.found ? 1 : 0);
+  const lastMark = useRef(facts.found);
+  if (facts.found) lastMark.current = facts.found;
+  const markKind = facts.found ?? lastMark.current;
   // (a press anywhere but on it shuts it: on the page, what is under the press - itself, or anything else over it - asked of the page's regions)
   const hitAt = useHitAt();
   const hitNow = useRef(hitAt);
@@ -149,16 +151,15 @@ export function useFramesChip({
   }, [ready]);
   const shown = (!single || !!facts.title || open || hovered || lingering || pinned) && ready;
   const active = hovered || opened || read.grown > 0 || (single && lingering);
-  const measures = useMemo(() => chipMeasures(said, told), [said, told]);
+  const measures = useMemo(() => chipMeasures(facts, told), [facts, told]);
   const tones = useBarTones(facts.count, frame, pointed, opened);
   // (where it has anything to say at all: a single geometry neither read from a calculation nor named says nothing - only what goes under it)
   const says = !single || !!facts.about || !!facts.title;
   const hasMore = single && (!!facts.about || measures.details.groups.length > 0);
   // its widths, eased as they change (theme/opening `useEasedTo`): shut, as wide as what it says - a single geometry's, pointed at, as
   // its slider's room; opened to a set's bars; its details
-  // its side - and as wide as what its search has found, as far as that has come
-  const shutW = useEasedTo((single && full ? Math.max(measures.width, measures.said) : measures.said) + 2 * CHIP.side) + notice.grown * measures.found;
-  const openW = useEasedTo(single ? 0 : Math.max(measures.width, measures.said + measures.found) + 2 * CHIP.side);
+  const shutW = useEasedTo((single && full ? Math.max(measures.width, measures.said) : measures.said) + 2 * CHIP.side);
+  const openW = useEasedTo(single ? 0 : Math.max(measures.width, measures.said) + 2 * CHIP.side);
   const detailsW = useEasedTo(measures.details.groups.length ? measures.details.width : 0);
   // (shut, it lets the page show through a little; in use, nothing shows through it)
   const opacity = useEasedTo(shown ? (full ? 1 : CHIP_SHUT.opacity) : 0);
@@ -169,12 +170,12 @@ export function useFramesChip({
     measures,
     frame,
     pointed,
-    found: { grown: notice.grown, shown: notice.shown },
     opacity,
     fill,
     read: { grown: read.grown, shown: read.shown },
     made: { grown: madeAt.grown, shown: madeAt.shown, turn, pointed: part === "fold" },
     tones,
+    ...(markKind && markShown > 0 ? { mark: { kind: markKind, shown: markShown, pointed: part === "mark" } } : {}),
     widths: { shut: shutW, open: openW, details: detailsW },
     shuts: !single && expanded,
     opens: (!single && !expanded) || hasMore,
@@ -225,8 +226,8 @@ export function useFramesChip({
       if (p === "bars") setPointed(barsFrame(e.page.x));
     },
     down: (_k, p, e) => {
-      // (what its search has found, pressed: the lowest shown, as a step to it would - and that says it is seen)
-      if (p === "found") onFrame(0);
+      // (its dot pressed: the lowest shown, as a step to it is, and followed again - the dot goes)
+      if (p === "mark") onLowest?.();
       if (p === "bars") dragFrom(e, barsFrame);
       else if (p === "slider") dragFrom(e, sliderFrame);
       const next = chipPressed(now.current, p);

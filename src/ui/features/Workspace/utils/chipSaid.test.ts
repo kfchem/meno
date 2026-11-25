@@ -19,16 +19,13 @@ describe("a set's chip, shut, as runs to draw", () => {
     );
   });
 
-  it("says last, after a little room and in the attention colour, that its search found a lower conformer - or that the one shown left the window - and nothing of it otherwise", () => {
+  it("never says what its search found in its words - its dot tells it, the page's tip saying these words over it", () => {
     const c: SetChip = { count: 3, frame: 1, energies: [0, kcal(0.5), kcal(1)], searching: true };
     expect(said(c)).toBe("2 / 3 · searching · 0.50 kcal/mol");
-    const runs = setChipRuns({ ...c, found: "lower" });
-    expect(runs.slice(0, -1)).toEqual(setChipRuns(c));
-    expect(runs[runs.length - 1]).toEqual({ text: "Lower conformer found", tone: "attention", gapPx: 8, part: "found" });
+    expect(setChipRuns({ ...c, found: "lower" })).toEqual(setChipRuns(c));
+    expect(setChipRuns({ ...c, frame: 0, found: "window" })).toEqual(setChipRuns({ ...c, frame: 0 }));
     expect(LOWER_FOUND).toBe("Lower conformer found");
-    expect(setChipRuns({ ...c, frame: 0, found: "window" }).slice(-1)[0]).toEqual({ text: "Out of the energy window: showing the lowest", tone: "attention", gapPx: 8, part: "found" });
-    expect(OUT_OF_WINDOW).toBe("Out of the energy window: showing the lowest");
-    expect(setChipRuns(c).some((r) => r.part)).toBe(false);
+    expect(OUT_OF_WINDOW).toBe("The conformer shown left the energy window: the lowest is shown");
   });
 
   it("tells which words are which tone, its title after a little room and cut at 14rem", () => {
