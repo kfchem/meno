@@ -441,15 +441,30 @@ Read by rule, besides, as whole molecules:
   by a single bond (Ti, Zr, Hf +4; V, Nb, Ta +5; Cr, Mo, W +6; Mn, Tc, Re
   +7; Ru, Os +8: MoO3Cl2 would be Mo +8), is not read either. CrO5 is a
   compound, CrO(O2)2 with two peroxo ligands, which the formula's O count
-  does not say. So is a metal oxoacid written HnMOm: H2CrO4, chromic acid,
-  is CrO2(OH)2, but its formula's H would be read as groups on the metal
-  and its O all as oxo, Cr +10. Typed as a label, each such formula is
+  does not say. Typed as a label, each such formula is
   kept as words, and a notice says that it is not read as written and
   that drawing it gives it its structure; what it would have been read
   as is no structure the chemist wrote, so the notice does not say it.
   A halide (CuCl2), a
   group bound by one bond (AgOTf, Cu(OAc)2) and an oxo (MoO2Cl2) are a
   complex's, as before;
+- a metal oxoacid of one of those metals, written HnMOm (H2CrO4, HMnO4,
+  HReO4, H2MoO4, H3VO4) or with its hydroxo written out (CrO2(OH)2,
+  MoO2(OH)2, ReO3(OH) or ReO3OH, VO(OH)3), is read as the molecule
+  (HO)n-M(=O)(m-n): each H on an O of its own, bound to the metal by a
+  single bond, the other O oxo by a double bond - before a complex's
+  formula would read its H as groups on the metal and every O as oxo.
+  H2CrO4 and CrO2(OH)2 are one molecule, Cr(=O)2(OH)2, chromium +6.
+  It is read only where the oxidation state the formula gives the metal,
+  two for each oxo and one for each hydroxo, is the one listed above for
+  it, and with one oxo or more: H2CrO3 (Cr +4) and H2MnO4 (manganic
+  acid, Mn +6) are kept as words, with the same notice, never read at a
+  state guessed. It is named additively, its ligands in alphabetical
+  order - dihydroxidodioxidochromium, hydroxidotrioxidomanganese (IUPAC,
+  Nomenclature of Inorganic Chemistry, Recommendations 2005, chapter
+  IR-8) (`metalOxoacid`, `src/lib/chem/abbreviations.ts`). A main-group
+  acid is no such reading: H2SO4 is the reagent table's sulfuric acid;
+  HNO3 and H3PO4 stay as they were;
 - an ion written alone, a counter-ion set beside a complex or a salt: an
   anion with its charge last, read as one is in a salt (PF6-, BF4-,
   SbF6-, AlCl4-, ClO4-); a group bound by an O or an S with the charge
