@@ -100,7 +100,7 @@ const dotOver = (dot: Box, stem: Box) => {
 };
 
 /** A letter read from its shape: the letter, how sure, the others it might be, likeliest first, and the shapes it was drawn with. */
-export type ShapeLetter = FigureLetter & { sure: number; alts: string[]; from: object[] };
+export type ShapeLetter = FigureLetter & { sure: number; alts: string[]; from: object[]; /** How much less like it its likeliest other reading is: a bar is an I and an l alike. */ apart?: number };
 
 /** How sure a reading must be to be taken as one; and how near a second reading must come to be offered besides. */
 const TAKEN = 0.55;
@@ -218,6 +218,7 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
         .filter((s) => s.score > best.score - NEAR)
         .map((s) => s.k.c)
         .filter((c, i, all) => c !== best.k.c && all.indexOf(c) === i),
+      apart: best.score - (scored.find((s) => s.k.c !== best.k.c)?.score ?? 0),
       from: g.from,
     });
   }

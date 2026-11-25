@@ -1691,7 +1691,8 @@ it where it lies out of view.
   bond it is set.
 - **A dative bond** (`dativeArrows`, lib/figure/read; 2026-11-20): an
   arrow from the donor to the acceptor, as Meno draws one - a line no
-  longer than a bond and a fifth, a small filled head at its end (no
+  longer than a bond and a fifth (the arrow as a whole no shorter than
+  0.15 of one), a small filled head at its end (no
   longer than half a bond, nor than three times as wide; its base at the
   line's end, its point on along the line) and, in some styles, a dot at
   the line's tail. It is one dative bond, from the atom at its tail to
@@ -1703,7 +1704,13 @@ it where it lies out of view.
   its three hydrogens, a BH3 by an amine its three. An arrow with an atom
   at one end only is no bond, and that atom says so: "A dative bond's
   arrow meets it, with no atom read at its other end: read as no bond."
-  A wedge bond is long for its width; a scheme's arrow is longer.
+  A wedge bond is long for its width; a scheme's arrow is longer. In a
+  picture, such an arrow between two labels is traced as one piece; it
+  is its line and its head (`arrowOf`, lib/figure/trace) where its ink,
+  free at both ends and no longer than a bond and a fifth, swells to
+  twice the figure's line and thins again at both ends - at once on its
+  line's side, steadily to its point on the other - and its line is as
+  thin as the figure's lines. A wedge never thins again at its wide end.
 - **What stands alone and is no structure** (`withoutStrays`): a point with
   no label and no bond, and a line alone - single, double or triple, both
   its ends bare, no other bond at either - more than a fifth off the
