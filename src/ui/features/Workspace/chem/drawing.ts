@@ -171,7 +171,7 @@ export function wedgesStating(model: Model): Map<number, { at: number; stereo: "
   let k = 0;
   for (const b of model.bonds) {
     if (!d.index.has(b.a) || !d.index.has(b.b)) continue;
-    const w = read[k++];
+    const w = read.get(k++);
     if (w) out.set(b.id, { at: model.atoms[w.narrow].id, stereo: w.stereo });
   }
   return out;

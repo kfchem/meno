@@ -1147,15 +1147,15 @@ export function hashedLinesOpen(atoms: readonly DrawnAtom[], bonds: readonly Dra
 }
 
 /**
- * The end each bond of a drawing states, and how, as it is read (`hashedLinesRead`): by the bond's index, a wedge or hashed wedge narrow at
- * the end it is read at - a hashed wedge the wrong way round, or hashes drawn as a line, read at the centre they state - or none, where the
- * bond is no wedge, or a line that states nothing. (Whether that end is a stereocentre is the reading's to tell.)
+ * The end each bond of a drawing states, and how, as it is read (`hashedLinesRead`): by the bond's index in the caller's list, a wedge or
+ * hashed wedge narrow at the end it is read at - a hashed wedge the wrong way round, or hashes drawn as a line, read at the centre they
+ * state. A bond that is no wedge, or a line that states nothing, is left out. (Whether that end is a stereocentre is the reading's to tell.)
  */
-export function wedgesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): (DrawnBond["wedge"] | undefined)[] {
+export function wedgesRead(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Map<number, NonNullable<DrawnBond["wedge"]>> {
   const kept = structureOf(bonds);
-  const out: (DrawnBond["wedge"] | undefined)[] = bonds.map(() => undefined);
+  const out = new Map<number, NonNullable<DrawnBond["wedge"]>>();
   hashedLinesRead(atoms, kept.bonds).bonds.forEach((b, i) => {
-    out[kept.at(i)] = b.wedge;
+    if (b.wedge) out.set(kept.at(i), b.wedge);
   });
   return out;
 }
