@@ -78,12 +78,34 @@ describe("lonePairCentres", () => {
     expect(centres("ClN1C(=C)C1")).toEqual([]);
   });
 
-  it("reads an aromatic bond as a pi system's, of order one and a half: as the rule stands, an N-aryl oxaziridine's and diaziridine's N, the aryl's bonds aromatic, are no centres", () => {
-    // (the rule takes an N bonded to a pi system for one that shares its lone pair, as with an N-aryl aziridine; read as single bonds,
-    //  the aryl would be no pi system and the N a centre, its ring's O or N next to it. This pins the rule's reading of an aromatic
-    //  bond, not a measured barrier: the ring's O or N raises an N's barrier and an aryl lowers it, and for these the net is not known)
-    expect(centres("c1ccccc1N1OC1")).toEqual([]);
+  it("keeps an N-aryl oxaziridine's N, its barrier measured as high as an N-chloro aziridine's; not an N-aryl diaziridine's, none measured", () => {
+    // (this answer was "no centre" while the net of the ring's O raising the barrier and the aryl lowering it was not known. It is
+    //  now: a free energy of activation of 23.4 kcal/mol for 3-methyl-2,3-diphenyloxaziridine, its invertomers seen going over to
+    //  each other at room temperature (docs/EDITOR-2D.md, *Centres by a lone pair*), with the N-chloro aziridine's the rule keeps,
+    //  well above an N-alkyl aziridine's it does not. So the N-aryl oxaziridine's N is a centre. A diaziridine's N with an aryl on
+    //  it has no measured barrier and stays none: the aryl's bonds, aromatic, read as a pi system's, of order one and a half)
+    expect(centres("c1ccccc1N1OC1")).toEqual(["N6"]);
     expect(centres("c1ccccc1N1NC1")).toEqual([]);
+  });
+
+  it("knows the answers of the N-aryl oxaziridine ruling (the maintainer, 2026-11-18)", () => {
+    // (3-methyl-2,3-diphenyloxaziridine, the measured one: its N kept, its ring C a carbon centre and no lone pair's)
+    expect(centres("CC1(c2ccccc2)ON1c1ccccc1")).toEqual(["N9"]);
+    // (the same drawn with its rings' Kekule bonds: the same, Meno's count of an aromatic ring reading either)
+    expect(centres("CC1(C2=CC=CC=C2)ON1C1=CC=CC=C1")).toEqual(["N9"]);
+    // (a 2-acyl, a 2-sulfonyl, a 2-alkoxycarbonyl oxaziridine's N: none, an acyl's or a sulfonyl's lowering it far below)
+    expect(centres("CC(=O)N1OC1(C)C")).toEqual([]);
+    expect(centres("CS(=O)(=O)N1OC1c1ccccc1")).toEqual([]);
+    expect(centres("COC(=O)N1OC1(C)C")).toEqual([]);
+    // (1-phenylaziridine's and 1-phenyl-2,2-dimethylaziridine's N: none, no O or N beside it to hold it)
+    expect(centres("c1ccccc1N1CC1")).toEqual([]);
+    expect(centres("CC1(C)CN1c1ccccc1")).toEqual([]);
+    // (2-tert-butyloxaziridine's N: kept, as before - no pi system on it)
+    expect(centres("CC(C)(C)N1OC1c1ccccc1")).toEqual(["N4"]);
+    // (an N-heteroaryl one, 2-(pyridin-2-yl): its aryl a C of an aromatic ring, read as an aryl - kept; no barrier measured for it)
+    expect(centres("C1ON1c1ccccn1")).toEqual(["N2"]);
+    // (an N-vinyl one: a pi system but no aryl, which the ruling does not cover - none, as before)
+    expect(centres("C=CN1OC1(C)C")).toEqual([]);
   });
 
   it("keeps a bridgehead N of a small bridged ring system, every bridge of three atoms or fewer: Tröger's base's two, a quinuclidine's, a manxine's", () => {

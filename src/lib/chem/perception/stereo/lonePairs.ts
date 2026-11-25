@@ -32,7 +32,14 @@
  *   4.4.1, p. 411). Not a plain N-alkyl aziridine's N, lower at 17.7-20.5
  *   kcal/mol (Sec. 4.3, p. 409), its invertomers a conformer search's to
  *   find; nor one bonded to a pi system, lower still (an N-aryl's, 8-13,
- *   Table 1; an N-acyl's, below 6, p. 408);
+ *   Table 1; an N-acyl's, below 6, p. 408) - but an oxaziridine's N with
+ *   an aryl on it is kept: its barrier measured at 23.4 kcal/mol (free
+ *   energy of activation, a 3-methyl-2,3-diphenyloxaziridine's; Ono,
+ *   Splitter and Calvin, Tetrahedron Lett. 14, 4107-4110, 1973), as high
+ *   as an N-chloro aziridine's the rule keeps; an N-acyl, N-sulfonyl or
+ *   N-alkoxycarbonyl oxaziridine's is not, nor an N-vinyl one's, and a
+ *   diaziridine's N with an aryl on it is not, no barrier measured for it
+ *   (the maintainer, 2026-11-18);
  * - N at a bridgehead of a small bridged ring system (Tröger's base, a
  *   quinuclidine): it cannot turn over without breaking a bond, its lone
  *   pair having no room to turn into its cage - every bridge of three atoms
@@ -133,7 +140,24 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
     // (in a three-membered ring with a halogen, an O or an N beside it, bonded to no pi system)
     const small = bonded(p, q) || bonded(q, r) || bonded(p, r);
     if (small && around[at].some((n) => HOLDS.has(atoms[n].el ?? "C")) && !around[at].some((n) => pi[n])) return true;
+    // (an oxaziridine's N with an aryl on it, the ring's O beside it: held still - above)
+    if (small && arylOxaziridine(at)) return true;
     return bridgehead(at);
+  }
+
+  /**
+   * Whether `at`, an N of three single bonds in a three-membered ring, is
+   * an oxaziridine's with an aryl on it: an O beside it in the ring, and
+   * its one group outside the ring a C on an aromatic ring by Meno's count
+   * (perception/flatRings `flatRingAtoms`), a heteroaryl's so read too.
+   * Not an acyl, a sulfonyl, an alkoxycarbonyl or a vinyl: none of those
+   * is an aromatic ring's C.
+   */
+  function arylOxaziridine(at: number): boolean {
+    const ring = around[at].filter((n) => around[at].some((m) => m !== n && around[n].includes(m)));
+    if (ring.length !== 2 || !ring.some((n) => atoms[n].el === "O")) return false;
+    const out = around[at].find((n) => !ring.includes(n));
+    return out != null && (atoms[out].el ?? "C") === "C" && onAromatic(out);
   }
 
   /**
