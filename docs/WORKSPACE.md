@@ -2313,7 +2313,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   are - the 2D marks' ring (`MarkBoxes2D`), drawn with the page and scaled
   with it, easing in as they come and out as they go - and their words,
   one line to each, show only while the pointer rests on the mark, in the
-  page's tip (`PageTip`), never as the molecule itself is pointed at; a
+  page's tip (`PageTip`) over the mark - under it only where there is
+  no room over it in the view - never as the molecule itself is pointed at; a
   screen reader reads them at rest (`components/NotesMark3D`; the
   maintainer, 2026-11-25). None where there is nothing to say. Every
   picture made of it (SVG, PNG, EMF) says them over it in words.

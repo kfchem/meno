@@ -62,7 +62,7 @@ export default function NotesMark3D({ notes }: { notes: readonly string[] }) {
         </div>
       </PageHtml>
       {pointed && words && (
-        <PageTip tipKey="notes" x={ax} y={at} w={NOTES_MARK_PX * PAGE_PX} h={NOTES_MARK_PX * PAGE_PX} zoom={camera.zoom || 1} text={words} zIndexRange={TIP_Z} />
+        <PageTip tipKey="notes" x={ax} y={at} w={NOTES_MARK_PX * PAGE_PX} h={NOTES_MARK_PX * PAGE_PX} zoom={camera.zoom || 1} text={words} zIndexRange={TIP_Z} aboveFirst />
       )}
     </group>
   );
