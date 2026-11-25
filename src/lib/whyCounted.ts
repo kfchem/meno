@@ -13,7 +13,7 @@ export function whyCounted(kinds: Iterable<readonly [why: string, count: number]
   return `(${[...kinds].map(([why, n]) => `${n}: ${why}`).join("; ")})`;
 }
 
-const COUNTED = / \(\d+: [^();]+(?:; \d+: [^();]+)*\)/g;
+const WHYS_IN_PARENTHESES = / \(\d+: [^();]+(?:; \d+: [^();]+)*\)/g;
 
 /** The line without its whys in parentheses: its counts only. */
-export const countsOnly = (line: string): string => line.replace(COUNTED, "");
+export const countsOnly = (line: string): string => line.replace(WHYS_IN_PARENTHESES, "");
