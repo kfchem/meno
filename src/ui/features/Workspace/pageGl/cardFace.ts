@@ -153,9 +153,9 @@ export type CardFaceOf = {
   z?: number;
 };
 
-/** `text` in at most `most` lines `maxPx` wide, the last cut with an ellipsis where more would follow (CSS's line-clamp). */
-export function clamped(text: string, sizePx: number, maxPx: number, most: number): string[] {
-  const lines = wrapText(text, sizePx, maxPx).map((l) => l.text);
+/** `text` in at most `most` lines `maxPx` wide, the last cut with an ellipsis where more would follow (CSS's line-clamp); laid by `wrap`, words by default. */
+export function clamped(text: string, sizePx: number, maxPx: number, most: number, wrap: (text: string, sizePx: number, maxPx: number) => string[] = wordLines): string[] {
+  const lines = wrap(text, sizePx, maxPx);
   if (lines.length <= most) return lines.length ? lines : [""];
   const kept = lines.slice(0, most);
   kept[most - 1] = fitted(`${kept[most - 1]} ${lines.slice(most).join(" ")}`, sizePx, 400, maxPx);
@@ -167,8 +167,40 @@ export function clamped(text: string, sizePx: number, maxPx: number, most: numbe
  * parentheses left out, its counts only (lib/whyCounted `countsOnly`) - never a count or a why cut off. Its tip says it whole.
  */
 export function stateLines(text: string, maxPx: number): string[] {
-  const whole = wrapText(text, 11, maxPx);
-  return clamped(whole.length <= 2 ? text : countsOnly(text), 11, maxPx, 2);
+  const whole = partLines(text, 11, maxPx);
+  return clamped(whole.length <= 2 ? text : countsOnly(text), 11, maxPx, 2, partLines);
+}
+
+/** Words in lines no wider than `maxPx`, broken after any space (texts `wrapText`). */
+const wordLines = (text: string, sizePx: number, maxPx: number): string[] => wrapText(text, sizePx, maxPx).map((l) => l.text);
+
+/**
+ * A step's line in lines no wider than `maxPx`, broken only between its parts (joined by " · "; the dot at the end of
+ * the line, or where it does not fit there, at the start of the next), so that a count stays with its words: "rest 1",
+ * "2 of 3 entries kept", a time. A part wider than a line by itself runs on and breaks among its own words, as
+ * `wordLines` lays it. The words are those of `text`, nothing put in.
+ */
+export function partLines(text: string, sizePx: number, maxPx: number): string[] {
+  const parts = text.split(" \u00b7 ");
+  const lines: string[] = [];
+  let line = "";
+  parts.forEach((p, i) => {
+    const part = i < parts.length - 1 ? `${p} \u00b7` : p;
+    const on = line ? `${line} ${part}` : part;
+    if (textWidth(on, sizePx) <= maxPx + 1e-6) return void (line = on);
+    // (the part fits, its dot not: the dot starts the next line, as CSS lays a space's break)
+    if (part !== p && textWidth(line ? `${line} ${p}` : p, sizePx) <= maxPx + 1e-6) {
+      lines.push(line ? `${line} ${p}` : p);
+      return void (line = "\u00b7");
+    }
+    // (a part that fits a line by itself starts the next; one wider than a line - or than a line with its dot - runs on where it is, broken among its words)
+    const alone = line !== "\u00b7" && textWidth(part, sizePx) <= maxPx + 1e-6;
+    const laid = alone ? [...(line ? [line] : []), part] : wordLines(on, sizePx, maxPx);
+    lines.push(...laid.slice(0, -1));
+    line = laid[laid.length - 1] ?? "";
+  });
+  if (line) lines.push(line);
+  return lines;
 }
 
 /** How a card's words lie: each block's lines and the card's height, in page px (`cardFace`). */
