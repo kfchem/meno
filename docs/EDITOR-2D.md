@@ -1686,12 +1686,12 @@ All hover-based, as above.
   (the words plain to a chemist, after the maintainer's report on
   0.1.27; for a double bond E and Z in the same patterns):
   - "C2: S, now R" where it inverted (an atom dragged across its centre's
-    other bond; a wedge made a hash), its descriptors before and after
+    other bond; part of a structure flipped), its descriptors before and after
     (Meno's own CIP, worked out off the drawing's thread); "C2: inverted"
     where the CIP does not give both;
-  - "C2: S, now unspecified" where a plain bond now states nothing (a
-    wedge made plain); "C2: S, now marked unknown" where the drawing now
-    says it is not known (a wavy bond, a double bond drawn "either");
+  - "C2: S, now unspecified" where a plain bond now states nothing; "C2:
+    S, now marked unknown" where the drawing now says it is not known (a
+    wavy bond, a double bond drawn "either");
     "C2: S, now unclear: " and the reader's reason where its marks are
     there but say nothing readable (two of its bonds dragged into line) -
     each without its "S, " where it had no descriptor;
@@ -1709,7 +1709,22 @@ All hover-based, as above.
   rest - so C2 of 2-methylbutan-1-ol is C2); else, a molecule over that
   numbering's budget, its place among its own molecule's atoms. The step's
   name in Edit's Undo carries the same words.
- Nothing is said where nothing changed, where a unit is simply
+  **No note for what the chemist did by hand** (the maintainer, after
+  0.1.27): where the edit was the chemist's own change of a stereo bond at
+  a unit - a bond at that centre, or a double bond's own bond or one at
+  either of its ends, made plain, a wedge, a hashed wedge, wavy or
+  "either", or narrow at its other end, by a click, the click's round, the
+  bond's menu or a key - that unit has no note: its R, S, E or Z changes
+  by itself, and that is all the chemist needs to see. Where the same edit
+  also did something else there - moved the unit's atoms or their
+  neighbours, changed one of them, made or took away a bond at it - the
+  note is said as before; so it is for any other unit whose configuration
+  the edit changed, and for every change one of Meno's own moves made
+  (`turnedByHand`). Where an edit's every note is left out so, its step in
+  Edit's Undo keeps the action's own name. (Until then a wedge made a
+  hash said "C2: S, now R" and a wedge made plain "C2: S, now
+  unspecified", though the chemist had just done it.)
+  Nothing is said where nothing changed, where a unit is simply
   new (a wedge just drawn), gone with its atom or with one of its groups,
   or no longer a unit because two of its groups are now alike; nor while
   a gesture is still going (a drag says it once, as it ends), nor for undo

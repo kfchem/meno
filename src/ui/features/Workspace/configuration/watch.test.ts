@@ -54,17 +54,68 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     stop();
   });
 
-  it("says the wedge clicked through its cycle: drawn, nothing; the other way, inverted; plain, now unspecified", async () => {
-    const { store, notes, stop } = page(butanol(null));
+  it("says nothing of the chemist's own turn of the wedge through its cycle - drawn, the other way, plain: its label shows it", async () => {
+    // (it used to say "C2: R, now S" for the hash and "C2: S, now unspecified" for the plain bond: both done by the chemist's own hand)
+    const { store, doc, notes, stop } = page(butanol(null));
     store.getState().setBondStereo(12, "up");
     await vi.runAllTimersAsync();
     expect(notes()).toEqual([]);
     store.getState().setBondStereo(12, "down");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C2: R, now S"]);
+    expect(notes()).toEqual([]);
+    // (the step's name in Edit > Undo: the action's own, no configuration words)
+    expect(doc.history().undoLabel).toBe("change stereo");
     store.getState().setBondStereo(12, "none");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C2: R, now S", "C2: S, now unspecified"]);
+    expect(notes()).toEqual([]);
+    expect(doc.history().undoLabel).toBe("change stereo");
+    stop();
+  });
+
+  it("says nothing of a wedge turned wavy, nor of a stated R set to a hashed wedge from the bond's menu", async () => {
+    const { store, doc, notes, stop } = page(butanol());
+    store.getState().setBondsKind([12], "hashed-wedge");
+    await vi.runAllTimersAsync();
+    expect(store.getState().model.bonds.find((b) => b.id === 12)).toMatchObject({ stereo: "down", narrow: 1 });
+    expect(notes()).toEqual([]);
+    expect(doc.history().undoLabel).toBe("change bonds' kind");
+    store.getState().setBondStereo(12, "wavy");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual([]);
+    stop();
+  });
+
+  it("says the change where the edit also moved the centre's own atoms, though it turned the wedge too", () => {
+    // (one edit: the wedge made plain and the methyl dragged across the C2-C3 bond - more than a turn of the bond: said, now unspecified)
+    const t = butanol();
+    t.bonds = t.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "none" as const } : b));
+    t.atoms = t.atoms.map((a) => (a.id === 2 ? { ...a, x: L * 0.9, y: L * 0.5 } : a));
+    expect(configurationChanges(butanol(), t, { byHand: true })).toEqual([{ unit: { kind: "centre", at: 1 }, how: "opened" }]);
+  });
+
+  it("says, of one edit that turned the wedge at one centre and dragged a group across at another, the other centre only", () => {
+    // (two (R)-butan-2-ol units joined by their ethyls' ends: centres 1 and 21, each R as drawn (the file's first test). The edit makes
+    //  centre 1's wedge a hash (R to S, by hand: nothing said) and drags centre 21's methyl, atom 22, across its C-C bond (R to S as in the
+    //  first test: said). Without the rule both inverted, every unit of the structure: its mirror image.)
+    const two = butanol();
+    const pair: Model = { atoms: [...two.atoms, ...two.atoms.map((a) => ({ ...a, id: a.id + 20, y: a.y - 6 * L }))], bonds: [...two.bonds, ...two.bonds.map((b) => ({ ...b, id: b.id + 20, a: b.a + 20, b: b.b + 20, ...(b.narrow ? { narrow: b.narrow + 20 } : {}) }))] };
+    const one: Model = { ...pair, bonds: [...pair.bonds, { id: 40, a: 5, b: 25, order: 1 }] };
+    const edited: Model = {
+      atoms: one.atoms.map((a) => (a.id === 22 ? { ...a, x: L * 0.9, y: L * 0.5 - 6 * L } : a)),
+      bonds: one.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "down" as const } : b)),
+    };
+    expect(configurationChanges(one, edited)).toEqual([{ unit: { kind: "centre", at: 1 }, how: "mirror" }]);
+    expect(configurationChanges(one, edited, { byHand: true })).toEqual([{ unit: { kind: "centre", at: 21 }, how: "inverted" }]);
+  });
+
+  it("says a wedge one of Meno's moves turned as that move's, though a turn of the chemist's would say nothing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { doc, notes, stop } = page(butanol());
+    // (a Clean-up that made the wedge a hash: what it must never do)
+    doc.edit("clean up", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "down" as const } : b)) } }));
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["changed by Clean-up: C2: R, now S"]);
+    warn.mockRestore();
     stop();
   });
 

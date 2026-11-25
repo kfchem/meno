@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
-import { changeWords, configurationChanges, partsTouched, touchedAtoms, unitName } from "./changes";
+import { changeWords, configurationChanges, partsTouched, stereoTurned, touchedAtoms, turnedByHand, unitName } from "./changes";
 import { notesOf, placeOf } from "./watch";
 
 /** (E)-but-2-ene drawn as a zigzag: C1 (id 1), C2 (2) = C3 (3), C4 (4); its C4 put on C1's side with `cis`. */
@@ -117,5 +117,25 @@ describe("what an edit did to a drawing's configurations (part 15, phase 2)", ()
     expect(changeWords(m, { unit, how: "mirror" })).toBe("Every stereocentre inverted: the mirror image");
     expect(changeWords(m, { unit, how: "inverted" }, { was: "R", now: "S" }, "Clean-up")).toBe("changed by Clean-up: C2: R, now S");
     expect(unitName(m, { kind: "axis", at: [1, 2] })).toBe("the axis C1-C2");
+  });
+  it("tells the chemist's own turn of a stereo bond at a unit from any other edit there", () => {
+    const w = { id: 12, a: 1, b: 4, order: 1 as const, stereo: "up" as const, narrow: 1 };
+    // (kind or narrow end turned, a plain bond's look with it: a turn; its order, its ends or nothing changed: none)
+    expect(stereoTurned(w, { ...w, stereo: "down" })).toBe(true);
+    expect(stereoTurned(w, { ...w, narrow: 4 })).toBe(true);
+    expect(stereoTurned({ ...w, stereo: undefined, display: "bold" }, { ...w, display: undefined })).toBe(true);
+    expect(stereoTurned(w, { ...w, stereo: "none", order: 2 })).toBe(false);
+    expect(stereoTurned(w, { ...w, b: 5, stereo: "down" })).toBe(false);
+    expect(stereoTurned(w, { ...w, color: "#f00" })).toBe(false);
+    // (the double bond of (E)-but-2-ene drawn "either": its own bond turned, nothing else - by hand; with C4 moved too - not only that)
+    const either: Model = { ...butene(), bonds: butene().bonds.map((b) => (b.id === 11 ? { ...b, stereo: "either" as const } : b)) };
+    const unit = { kind: "double" as const, at: [2, 3] as [number, number] };
+    expect(turnedByHand(butene(), either, unit)).toBe(true);
+    expect(configurationChanges(butene(), either, { byHand: true })).toEqual([]);
+    const moved: Model = { ...either, atoms: either.atoms.map((a) => (a.id === 4 ? { ...a, y: 0 } : a)) };
+    expect(turnedByHand(butene(), moved, unit)).toBe(false);
+    // (what is kept on an atom, rewritten in the same step, is no other edit)
+    const kept: Model = { ...either, atoms: either.atoms.map((a) => (a.id === 2 ? { ...a, config: "open" as const } : a)) };
+    expect(turnedByHand(butene(), kept, unit)).toBe(true);
   });
 });
