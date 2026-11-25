@@ -287,7 +287,7 @@ import { emptyPageLineShown, pageHoldsNothing, thingInHand } from "./utils/empty
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
-import { drawnStructureBox, tiedCaptionOf } from "./utils/tiedCaptions";
+import { drawnStructureBox, framesChipRoom, tiedCaptionOf } from "./utils/tiedCaptions";
 import type { CaptionOf } from "./store/types";
 
 function WorkspaceContent({
@@ -2517,8 +2517,9 @@ function WorkspaceContent({
                       cam ? eyeOf(cam)?.z : undefined,
                     );
               if (!b) return;
-              // (its middle across, a line's height under it)
-              now.setCaptionEdit({ id: null, at: { x: (b.x0 + b.x1) / 2, y: b.y0 - layoutOpts.fontPx }, of });
+              // (its middle across, a line's height under it - a molecule in 3D's under its frames chip, which is part of it as drawn)
+              const m3 = "molecule" in of ? now.molecules3d.find((x) => x.id === of.molecule) : undefined;
+              now.setCaptionEdit({ id: null, at: { x: (b.x0 + b.x1) / 2, y: b.y0 - (m3 ? framesChipRoom(m3) : 0) - layoutOpts.fontPx }, of });
             };
           })()}
           onFreeText={(() => {

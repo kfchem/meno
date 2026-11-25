@@ -7,7 +7,10 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { drawnOf, exportedDrawn, structureFileText } from "../fileActions";
 import { drawnOf as drawnRead } from "../utils/io";
 import { readStructures } from "../../../../lib/io/structures";
-import { drawnStructureBox, keptAgainstBox, tiedCaptionOf, tiedOpened, writtenPlace } from "../utils/tiedCaptions";
+import { drawnStructureBox, framesChipRoom, keptAgainstBox, tiedCaptionOf, tiedOpened, writtenPlace } from "../utils/tiedCaptions";
+import { CHIP } from "../pageGl/chips";
+import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
+import { PAGE_PX } from "../utils/pageScale";
 import { markGlideStep, type MarkGlides } from "../utils/markGlide";
 import { selectionScheme } from "../utils/selectionScheme";
 import { wordsSet } from "../../../../lib/chem/captions";
@@ -183,6 +186,52 @@ describe("text that belongs to a structure", () => {
     expect(structureFileText(exportedDrawn(state()), "w.sdf")).toContain("> <Caption>\nsolvent W\n\n");
     state().removeMolecule3d(m);
     expect(state().captions).toEqual([]);
+  });
+
+  it("of a molecule in 3D with a frames chip: below the chip; the chip coming and going moves the words below, not those beside; undo puts them back", () => {
+    const { doc, state } = editor();
+    const water: Omit<Molecule3D, "id"> = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.96, y: 0, z: 0 },
+        { el: "H", x: -0.24, y: 0.93, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      at: { x: 20, y: 20 },
+    };
+    doc.edit("add", (d) => ops.addMolecule3d(d, water));
+    const m = state().molecules3d[0].id;
+    // (the chip's room: its gap and its height shut, one line, in page units - as the page draws it)
+    const room = (FRAMES_CHIP_GAP + 2 * CHIP.border + 2 * CHIP.pad + CHIP.line) * PAGE_PX;
+    expect(framesChipRoom(state().molecules3d[0])).toBe(0);
+    const under = state().addCaption("solvent W", 20, 14, undefined, undefined, undefined, undefined, { of: { molecule: m } });
+    const beside = state().addCaption("aside", 26, 21, undefined, undefined, undefined, undefined, { of: { molecule: m } });
+    // (three conformers made: the chip there - the words under it as far below it as they were below the molecule)
+    const frame = water.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    doc.edit("conformers", (d) => ({ ...d, molecules3d: d.molecules3d!.map((x) => (x.id === m ? { ...x, frames: [frame, frame] } : x)) }));
+    expect(framesChipRoom(state().molecules3d[0])).toBeCloseTo(room, 12);
+    expect(room).toBeGreaterThan(0);
+    expect(words(state, under)!.y).toBeCloseTo(14 - room, 12);
+    expect(words(state, under)!.x).toBe(20);
+    expect(words(state, beside)).toMatchObject({ x: 26, y: 21 });
+    // (the gap from the chip's foot to the words' middle is what it was from the molecule's foot - here its middle - to the words)
+    expect(20 - room - words(state, under)!.y).toBeCloseTo(20 - 14, 12);
+    // (moved: by the move alone)
+    state().moveMolecule3d(m, { x: 30, y: 25 });
+    expect(words(state, under)!.y).toBeCloseTo(19 - room, 12);
+    // (the frames taken away: back up, as high as without a chip)
+    doc.edit("one frame", (d) => ({ ...d, molecules3d: d.molecules3d!.map((x) => (x.id === m ? { ...x, frames: undefined } : x)) }));
+    expect(words(state, under)!.y).toBeCloseTo(19, 12);
+    // (each undo puts them back where they were with it)
+    doc.undo();
+    expect(words(state, under)!.y).toBeCloseTo(19 - room, 12);
+    doc.undo();
+    doc.undo();
+    expect(words(state, under)!.y).toBeCloseTo(14, 12);
+    expect(words(state, beside)).toMatchObject({ x: 26, y: 21 });
   });
 
   it("of a set's member: carried as the set moves it", () => {

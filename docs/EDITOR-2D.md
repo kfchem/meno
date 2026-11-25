@@ -2156,7 +2156,11 @@ All hover-based, as above.
     Where the structure has its text already, the menu offers nothing
     new: the text is edited by a double-click as any. It is words only -
     no mark, chip or tip, at the page's scale. It keeps its place against
-    the structure's drawn box (its atoms and their labels): the side of
+    the structure's drawn box (its atoms and their labels; a molecule in
+    3D's frames chip, where it has more than one frame, is part of it, so
+    words under such a molecule stand under the chip, as far below it as
+    under a drawing, and go down or up, eased, as the chip comes or goes;
+    words at its other sides stay): the side of
     the box it stands outside of by the most - below, above, left or right;
     below as it is added - as far from that side, and as far along it from
     its middle; or, its middle inside the box, as far from the box's

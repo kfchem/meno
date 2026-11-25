@@ -5,6 +5,9 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../../lib/chem/style";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import type { Atom, Bond, Caption, CaptionOf, Molecule3D } from "../store/types";
+import { CHIP } from "../pageGl/chips";
+import { FRAMES_CHIP_GAP } from "./molecule3d";
+import { PAGE_PX } from "./pageScale";
 
 /**
  * Words that belong to a structure (docs/EDITOR-2D.md, *Text*): a caption
@@ -18,8 +21,25 @@ type Page = {
   /** The workspace's drawing style: how far its structures reach as drawn. */
   style?: StyleChoice;
   captions?: Caption[];
-  molecules3d?: readonly Pick<Molecule3D, "id" | "at">[];
+  molecules3d?: readonly Mol[];
 };
+
+type Mol = Pick<Molecule3D, "id" | "at"> & Partial<Pick<Molecule3D, "atoms" | "frames" | "conformerSet">>;
+
+/**
+ * How far below a molecule in 3D its frames chip reaches, on the page: the
+ * gap it hangs at and its height shut, one line (pageGl/liveChip
+ * `chipHeights`), in page px made page units - so as large as the page
+ * draws it at any zoom. None where it has no chip always there: a single
+ * geometry's is seen only while it is pointed at. Part of the molecule as
+ * drawn: its words stand below it.
+ */
+export function framesChipRoom(m: Mol): number {
+  const n = m.atoms?.length ?? 0;
+  const many = !!m.conformerSet || (m.frames ?? []).some((f) => f.length === 3 * n);
+  return many ? (FRAMES_CHIP_GAP + 2 * CHIP.border + 2 * CHIP.pad + CHIP.line) * PAGE_PX : 0;
+}
+
 
 type Pt = { x: number; y: number };
 
@@ -166,9 +186,11 @@ export function tiedCaptionsSettled<T extends Page>(next: T, before: Page | unde
         continue;
       }
       const w = still ? molsWere.get(c.of.molecule) : undefined;
-      if (w && (w.at.x !== m.at.x || w.at.y !== m.at.y)) {
+      // (its chip come or gone - conformers made or taken away: words below the molecule as much lower or higher, the other sides as they are)
+      const drop = w && c.y < w.at.y ? framesChipRoom(w) - framesChipRoom(m) : 0;
+      if (w && (w.at.x !== m.at.x || w.at.y !== m.at.y || drop !== 0)) {
         changed = true;
-        out.push({ ...c, x: c.x + m.at.x - w.at.x, y: c.y + m.at.y - w.at.y });
+        out.push({ ...c, x: c.x + m.at.x - w.at.x, y: c.y + m.at.y - w.at.y + drop });
       } else out.push(c);
       continue;
     }
