@@ -40,7 +40,21 @@ export function blocksRead(molblocks: readonly string[]): BlocksRead | null {
   return { input, bondAt, folded: hydrogensFolded(input), inputAt };
 }
 
-/** What a structure read (`BlocksRead`) leaves open by Meno's candidates, in the blocks' places, and every centre and double bond they give it. */
+/** A structure's stereoisomers as Meno counts them (`isomersOf`), worked out once for each structure read and kept with it. */
+const counts = new WeakMap<BlocksRead, ReturnType<typeof isomersOf>>();
+function countedOf(read: BlocksRead): ReturnType<typeof isomersOf> {
+  const known = counts.get(read);
+  if (known) return known;
+  const counted = isomersOf(read.input);
+  counts.set(read, counted);
+  return counted;
+}
+
+/**
+ * What a structure read (`BlocksRead`) leaves open by Meno's candidates, in the blocks' places - only where the choice changes the
+ * compound, alone or with others (`isomersOf`'s `deciding`: never methylcyclohexane's ring CH; both ring atoms of
+ * 1,4-dimethylcyclohexane), every candidate where it is not counted - and every centre and double bond they give it.
+ */
 export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { left: StereoLeft; centres: number[]; doubles: number[]; handed: boolean } {
   const graph = stereoGraphOf(molblocks)!;
   const { folded: g, inputAt, bondAt } = read;
@@ -78,18 +92,28 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead): { le
     return out;
   };
   let handed = false;
+  const counted = countedOf(read);
+  const deciding = "deciding" in counted ? counted.deciding : null;
+  const decides = (c: ReturnType<typeof candidates>[number]): boolean => {
+    if (!deciding) return true;
+    if (c.kind === "centre") return deciding.atoms.includes(c.at);
+    if (c.kind === "bond") return deciding.bonds.includes(c.at);
+    if (c.kind === "biaryl") return true;
+    const [p, q] = c.ends[0] < c.ends[1] ? [c.ends[0], c.ends[1]] : [c.ends[1], c.ends[0]];
+    return deciding.runs.some((r) => r[0] === p && r[1] === q);
+  };
   for (const c of candidates(g)) {
     if (c.kind === "centre") {
       centres.push(inputAt[c.at]);
-      if (!g.atoms[c.at].tetra) openAtoms.push(inputAt[c.at]);
+      if (!g.atoms[c.at].tetra && decides(c)) openAtoms.push(inputAt[c.at]);
     } else if (c.kind === "bond") {
       const k = bondOf(g.bonds[c.at].a, g.bonds[c.at].b);
       if (k == null) continue;
       doubles.push(k);
-      if (!g.bonds[c.at].stereo) openBonds.push(k);
+      if (!g.bonds[c.at].stereo && decides(c)) openBonds.push(k);
     } else {
       handed = true;
-      if (c.kind !== "biaryl" && !given.has(pair(c.ends[0], c.ends[1]))) runs.push(runOf(c.ends[0], c.ends[1]));
+      if (c.kind !== "biaryl" && !given.has(pair(c.ends[0], c.ends[1])) && decides(c)) runs.push(runOf(c.ends[0], c.ends[1]));
     }
   }
   // (a C=N whose E/Z is none of its own: never a candidate, said where it is drawn open)
@@ -237,7 +261,7 @@ export async function isomersByMeno(
   asked: { most: number; whole?: boolean; withinMs?: number; drawings?: boolean },
   ms?: number,
 ): Promise<{ made: IsomersMade; said: string[] } | { notCounted: string }> {
-  const counted = isomersOf(read.input);
+  const counted = countedOf(read);
   if ("notCounted" in counted) return counted;
   if ("tooMany" in counted) return { made: { tooMany: { counted: asked.most + 1, bound: counted.tooMany } }, said: [] };
   // (each whole: an axis's and a run's are Meno's to keep among what is made - chem/make3d - never the plugin's to give)

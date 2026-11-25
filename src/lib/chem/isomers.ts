@@ -25,8 +25,19 @@ export const ASSIGNMENTS_TRIED = 1024;
 /** One stereoisomer: its identity text and the structure, every open place given, that makes it. */
 export type Stereoisomer = { text: string; input: IdentityInput };
 
-/** A place `isomersOf` gives a configuration to - a centre by its atom - and how: up or down, cis or trans, one sense of an axis or the other. */
-type Open = { at?: number; neighbours?: readonly number[]; set: (g: IdentityInput, up: boolean) => IdentityInput };
+/** A place `isomersOf` gives a configuration to - a centre by its atom - and how: up or down, cis or trans, one sense of an axis or the other; `of`, what it is in the structure. */
+type Open = { at?: number; neighbours?: readonly number[]; set: (g: IdentityInput, up: boolean) => IdentityInput; of: Place };
+
+/** What an open place is in the structure: its centres (a set of tied ones, several), its double bond, or its run's two ends. */
+type Place = { atoms?: readonly number[]; bond?: number; ends?: readonly [number, number] };
+
+/**
+ * The open places whose choice changes the compound (`isomersOf`): those where giving the other sense alone writes another identity
+ * for at least one way of giving the rest - by atom, by bond, a run by its two ends (lowest first). A centre whose two senses are one
+ * compound whatever the rest (methylcyclohexane's ring CH) is none; one that matters only with others (pentane-2,3,4-triol's C3, both
+ * ring atoms of 1,4-dimethylcyclohexane) is one.
+ */
+export type Deciding = { atoms: number[]; bonds: number[]; runs: [number, number][] };
 
 /** What is said where a cage or a bridged system is left open (`isomersOf`): what the structure has, not how it is counted. */
 export const NOT_COUNTED_CAGE = "Its stereoisomers are not counted: a cage or a bridged ring system in it has a configuration not given";
@@ -168,7 +179,7 @@ function tiedPlaces(g: IdentityInput, open: Open[]): { open: Open[]; base: Ident
     const up = follow(x, 1);
     const down = follow(x, -1);
     if (!up || !down) return { notCounted: NOT_COUNTED_CAGE };
-    left.push({ at: x, set: (h, isUp) => setVolumes(h, isUp ? up : down) });
+    left.push({ at: x, set: (h, isUp) => setVolumes(h, isUp ? up : down), of: { atoms: [...all] } });
   }
   return { open: left, base };
 }
@@ -184,9 +195,13 @@ const BRIDGE_MOST = 3;
 
 /**
  * The stereoisomers of `input` (see the file's header), in the order of their identity texts, and whether every identity was
- * written in full (`identity`'s `complete`) - or, past `most` ways, how many there were.
+ * written in full (`identity`'s `complete`), and the open places whose choice changes the compound (`Deciding`) - or, past `most` ways,
+ * how many there were.
  */
-export function isomersOf(input: IdentityInput, most = ASSIGNMENTS_TRIED): { isomers: Stereoisomer[]; complete: boolean } | { tooMany: number } | { notCounted: string } {
+export function isomersOf(
+  input: IdentityInput,
+  most = ASSIGNMENTS_TRIED,
+): { isomers: Stereoisomer[]; complete: boolean; deciding: Deciding } | { tooMany: number } | { notCounted: string } {
   const g = hydrogensFolded(input);
   // (a cage's bridgeheads, and a small fused bicycle's junctions, stand only one way to each other (`tiesOf`): each set of them tied
   //  together is one place, given one way or the other, the rest following; one given in a way the ring system cannot take, said)
@@ -196,15 +211,27 @@ export function isomersOf(input: IdentityInput, most = ASSIGNMENTS_TRIED): { iso
   const ways = 2 ** open.length;
   if (ways > most) return { tooMany: ways };
   const found = new Map<string, IdentityInput>();
+  const texts: string[] = [];
   let complete = true;
   for (let way = 0; way < ways; way++) {
     const given = open.reduce((h, o, k) => o.set(h, (way & (1 << k)) === 0), base);
     const w = identity(given);
     complete &&= w.complete;
+    texts.push(w.text);
     if (!found.has(w.text)) found.set(w.text, given);
   }
   const isomers = [...found].map(([text, made]) => ({ text, input: made })).sort((p, q) => (p.text < q.text ? -1 : p.text > q.text ? 1 : 0));
-  return { isomers, complete };
+  // (a place decides where some two ways that differ there alone wrote two identities)
+  const deciding: Deciding = { atoms: [], bonds: [], runs: [] };
+  open.forEach((o, k) => {
+    if (!texts.some((t, way) => t !== texts[way ^ (1 << k)])) return;
+    deciding.atoms.push(...(o.of.atoms ?? []));
+    if (o.of.bond != null) deciding.bonds.push(o.of.bond);
+    if (o.of.ends) deciding.runs.push(o.of.ends[0] < o.of.ends[1] ? [o.of.ends[0], o.of.ends[1]] : [o.of.ends[1], o.of.ends[0]]);
+  });
+  deciding.atoms.sort((p, q) => p - q);
+  deciding.bonds.sort((p, q) => p - q);
+  return { isomers, complete, deciding };
 }
 
 /** The places the candidates leave open in `g` (a structure with its plain hydrogens folded in), each as how to give it one way or the other. */
@@ -228,19 +255,20 @@ function openPlaces(g: IdentityInput): Open[] {
       const at = c.at;
       if (g.atoms[at].tetra) continue;
       const neighbours = [...around[at], ...((g.atoms[at].hs ?? 0) ? [-1] : [])];
-      out.push({ at, neighbours, set: (h, up) => ({ ...h, atoms: h.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: up ? 1 : -1 } } : a)) }) });
+      out.push({ at, neighbours, set: (h, up) => ({ ...h, atoms: h.atoms.map((a, i) => (i === at ? { ...a, tetra: { neighbours, volume: up ? 1 : -1 } } : a)) }), of: { atoms: [at] } });
     } else if (c.kind === "bond") {
       const k = c.at;
       const b = g.bonds[k];
       if (b.stereo) continue;
       const refs = [around[b.a].find((n) => n !== b.b)!, around[b.b].find((n) => n !== b.a)!] as const;
-      out.push({ set: (h, up) => ({ ...h, bonds: h.bonds.map((x, i) => (i === k ? { ...x, stereo: { refs, cis: up } } : x)) }) });
+      out.push({ set: (h, up) => ({ ...h, bonds: h.bonds.map((x, i) => (i === k ? { ...x, stereo: { refs, cis: up } } : x)) }), of: { bond: k } });
     } else if (c.kind === "axis" || c.kind === "cumulated") {
       if (given.has(key(c.ends))) continue;
       const atoms = c.ends;
       const refs = [groupOf(atoms[0], -1)!, groupOf(atoms[1], -1)!] as const;
-      if (c.kind === "axis") out.push({ set: (h, up) => ({ ...h, axes: [...(h.axes ?? []), { atoms, refs, sense: up ? 1 : -1 }] }) });
-      else out.push({ set: (h, up) => ({ ...h, cumulated: [...(h.cumulated ?? []), { atoms, refs, cis: up }] }) });
+      const of = { ends: [atoms[0], atoms[1]] as const };
+      if (c.kind === "axis") out.push({ set: (h, up) => ({ ...h, axes: [...(h.axes ?? []), { atoms, refs, sense: up ? 1 : -1 }] }), of });
+      else out.push({ set: (h, up) => ({ ...h, cumulated: [...(h.cumulated ?? []), { atoms, refs, cis: up }] }), of });
     }
   }
   return out;
