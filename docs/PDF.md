@@ -540,6 +540,8 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
 - **A label shown one way and read another**: read from a picture, NC
   with its bond at the N (right of the bond, or upright) is read as a
   nitrile, as NC typed is, and the atom says it may be an isocyanide.
+  ONO2 left of its bond is read as O-O-N=O, and the atom says it may be
+  a nitrate, which is written O2NO on that side.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes

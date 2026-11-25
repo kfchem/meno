@@ -832,7 +832,9 @@ cyanate, O bonded: GR-2.1.6; NCSe there a selenocyanate, Se bonded,
 turned symbol by symbol where its units would split the Se). NC read off
 a picture is CN, as typed, on either side; right of its bond or upright,
 where its N is at the bond and it shows an isocyanide, the atom is unsure
-and says it may be one. A file's alias is a name, not its display,
+and says it may be one. ONO2 left of its bond is read outward from it,
+O-O-N=O, and the atom says it may be a nitrate (written on that side, a
+nitrate is O2NO). A file's alias is a name, not its display,
 and is read as written on either side. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring

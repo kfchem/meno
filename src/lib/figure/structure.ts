@@ -255,6 +255,8 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
     //  as NC is typed (the maintainer, 2026-10-11), so the reading is kept and the doubt said)
     const text = label && "as" in label && label.as ? label.as : a.label;
     if (!a.el && label?.read && text === "NC" && !fromRightAt[i]) unsure.push("Read as a nitrile (CN), but NC written here may be an isocyanide, bonded at its N.");
+    // (ONO2 left of its bond, read outward from it, is O-O-N=O; a nitrate ester is written so only on a bond's right - O2NO on its left)
+    if (!a.el && label?.read && text === "ONO2" && fromRightAt[i]) unsure.push("Read as O-O-N=O; a nitrate on this side of its bond is written O2NO, so this may be a nitrate.");
     const over = tooMany[i];
     if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;

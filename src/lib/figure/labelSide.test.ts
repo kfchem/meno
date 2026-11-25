@@ -98,3 +98,21 @@ describe("a picture's NC with its bond at the N: read as a nitrile, and said", (
     for (const x of [30, -30]) expect(structureOf(label("CN", x), reads).atoms[0].unsure ?? []).toEqual([]);
   });
 });
+
+describe("a picture's ONO2 left of its bond: read as written there, O-O-N=O, and said", () => {
+  // (a made figure: a label "ONO2" and one carbon. By hand: right of its bond, ONO2 is read as written, R-O-NO2, a nitrate ester;
+  //  left of it, read outward from the bond, it is turned to O2NO - its last O, then O2 and N: R-O-O-N=O, the reading kept. A nitrate
+  //  written on that side is O2NO (its O at the bond), so the atom says it may be one. O2NO left of its bond is the nitrate: nothing said)
+  const said = (f: FigureRead) => (structureOf(f, reads).atoms[0].unsure ?? []).filter((u) => /nitrate/.test(u));
+  it("left of its bond: read O2NO (O-O-N=O), and the atom says it may be a nitrate", () => {
+    expect(elOf(label("ONO2", 30))).toBe("O2NO");
+    expect(said(label("ONO2", 30))).toHaveLength(1);
+  });
+
+  it("right of its bond, ONO2 the nitrate, and O2NO left of its bond the nitrate: nothing said", () => {
+    expect(elOf(label("ONO2", -30))).toBe("ONO2");
+    expect(said(label("ONO2", -30))).toEqual([]);
+    expect(elOf(label("O2NO", 30))).toBe("ONO2");
+    expect(said(label("O2NO", 30))).toEqual([]);
+  });
+});
