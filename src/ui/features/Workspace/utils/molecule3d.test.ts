@@ -29,7 +29,9 @@ import {
   coveredLength,
   labelSpot,
   notesOf,
+  notesTip,
   plainNoteOf,
+  saidOf,
   populations,
   sharesOf,
   sharesWithheld,
@@ -65,6 +67,24 @@ describe("a molecule in 3D as it is drawn", () => {
     expect(notes(ethane())).toEqual([]);
     expect(notes({ ...ethane(), atomsLeftOut: 1 })).toEqual(["1 atom left out"]);
     expect(notes({ ...ethane(), atomsLeftOut: 3 })).toEqual(["3 atoms left out"]);
+  });
+
+  it("says on the page only what is about its data, not what the chemist chose and sees on it", () => {
+    // (ethane as a skeleton: no hydrogens in its file - about its data; its look hiding C-H, hydrogens added, or the CCD's - the chemist's own)
+    const m: Molecule3D = { ...ethane(), hydrogensAdded: [{ by: "chosen", atoms: [0] }, { by: "dictionary", atoms: [1] }] };
+    const solid = solidOf(m, STYLE_3D);
+    const hiding = { ...solid, hidesH: { primary: true, secondary: false } };
+    expect(saidOf(m, hiding, "primary")).toEqual(["C\u2013H hidden", "No H in file", "Hydrogens added", "Hydrogens from the CCD"]);
+    expect(notesOf(m, hiding, "primary")).toEqual(["No H in file"]);
+    // (with its bond orders unknown as well: both said, in the order they always were)
+    const unknown: Molecule3D = { ...m, bondOrders: "unknown" };
+    expect(notesOf(unknown, hiding, "primary")).toEqual(["No H in file", "Bond orders unknown"]);
+  });
+
+  it("rests as one mark only where it says anything, its words one line to a note", () => {
+    expect(notesTip([])).toBeNull();
+    expect(notesTip(["No H in file"])).toBe("No H in file");
+    expect(notesTip(["No H in file", "Bond orders unknown", "3 frames left out"])).toBe("No H in file\nBond orders unknown\n3 frames left out");
   });
 
   it("tells the note that only says how it is - its converged points the entries - from those that say what is wrong", () => {

@@ -1873,12 +1873,10 @@ space-filling side by side is better science than either alone.
   understands, before *Hide hydrogens anyway* can be pressed; *Keep
   hydrogens* is what Enter and Escape give. Only hydrogens on carbon go:
   those on a heteroatom take part in hydrogen bonds and in reactions.
-  Every molecule drawn so says *C–H hidden* over it, on the canvas and in
-  every picture made of it (SVG, PNG, EMF), for as long as it is. On the
-  canvas it is not one of the page's chips, which go when their words are
-  too small to read: it stays at any zoom, between three quarters and one
-  and a half times its size, and folds away as the molecule goes over to a
-  look that keeps the hydrogens.
+  Every picture made of a molecule drawn so (SVG, PNG, EMF) says *C–H
+  hidden* over it, for as long as it is. On the canvas it says nothing of
+  it (the maintainer, 2026-11-25): the chemist chose the look, and sees
+  it on the molecule.
 - **Not read from before.** A settings file from before keeps none of
   its 3D look (pre-alpha: no migration).
 
@@ -2308,9 +2306,18 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   it was read - a damaged file, or none of a molecule's - which are given
   no bond; *1 atom left out*, *3 atoms left out* where its file has atoms
   whose element does not read - a PDB entry's unknown atom (X, UNX) - and
-  the molecule leaves them out. Said as *C–H hidden* is:
-  over the molecule at any zoom, one over another, and in every picture
-  made of it (SVG, PNG, EMF).
+  the molecule leaves them out; and what an optimisation or a scan it was
+  opened from says of its entries and its convergence. On the canvas
+  these rest as one small mark beside the molecule's top right corner -
+  clear of a set's name over it and of its atoms - however many there
+  are - the 2D marks' ring (`MarkBoxes2D`), drawn with the page and scaled
+  with it, easing in as they come and out as they go - and their words,
+  one line to each, show only while the pointer rests on the mark, in the
+  page's tip (`PageTip`) over the mark - under it only where there is
+  no room over it in the view - never as the molecule itself is pointed at; a
+  screen reader reads them at rest (`components/NotesMark3D`; the
+  maintainer, 2026-11-25). None where there is nothing to say. Every
+  picture made of it (SVG, PNG, EMF) says them over it in words.
 - **Found from its shape.** As a molecule comes in, opened or pasted,
   with its orders unknown, they are sought once - with the request its
   formula is drawn by (`drawing_of`, `perceive`: RDKit's
@@ -2477,9 +2484,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
     as the CCD defines it, gives its O2A and O2D a
     charge and a hydrogen both: its hydrogens are not put on as they are,
     and the chemist chooses its carboxyls' forms on the card.
-  - **Said over it.** A molecule so completed says *Hydrogens added*, or
-    *Hydrogens from the CCD* (`hydrogensAdded`), as they were not in its
-    file. One undo step. Not for a molecule with other frames (an NMR
+  - **Said in its pictures.** A picture made of a molecule so completed
+    says *Hydrogens added*, or *Hydrogens from the CCD* (`hydrogensAdded`),
+    as they were not in its file; on the canvas it says nothing of them,
+    as the chemist chose them and sees them (the maintainer, 2026-11-25). One undo step. Not for a molecule with other frames (an NMR
     entry's models, a trajectory), which would be left without them; nor,
     yet, for a set of many in a workflow, which waits for the pH model.
 - **Not done: protonating a protein.** A chain's hydrogens depend on each

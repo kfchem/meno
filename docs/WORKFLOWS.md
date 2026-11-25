@@ -2487,7 +2487,7 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   they are seen at - not drawn at one size and scaled by a transform
   (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
-  molecule or a figure) - once the zoom stands still.
+  figure; a molecule's mark of its notes is drawn with the page) - once the zoom stands still.
 - **Chips scaled while the zoom moves, laid out once it stands**
   (2026-11-05): laying out every chip at every frame of a zoom held a page
   of 283 molecules in 3D - some 14 700 elements in its chips - to a frame

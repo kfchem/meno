@@ -23,14 +23,16 @@ export function tipUnder(mark: ScreenBox, width: number, height: number): Screen
  * middle under its middle - move to lie within `room`, `margin` in from its
  * edges: along by `dx`, and over the mark (`above`) where there is no room
  * under it and there is over it. Wider than the room, they keep their start
- * in it.
+ * in it. With `aboveFirst`, over the mark is where they go first, and under
+ * it only where there is no room over it.
  */
-export function tipPlace(tip: ScreenBox, mark: ScreenBox, room: ScreenBox, margin = TIP_MARGIN_PX): { dx: number; above: boolean } {
+export function tipPlace(tip: ScreenBox, mark: ScreenBox, room: ScreenBox, margin = TIP_MARGIN_PX, aboveFirst = false): { dx: number; above: boolean } {
   let dx = 0;
   if (tip.right > room.right - margin) dx = room.right - margin - tip.right;
   if (tip.left + dx < room.left + margin) dx = room.left + margin - tip.left;
   const height = tip.bottom - tip.top;
   const gap = tip.top - mark.bottom;
-  const above = tip.bottom > room.bottom - margin && mark.top - gap - height >= room.top + margin;
+  const roomOver = mark.top - gap - height >= room.top + margin;
+  const above = aboveFirst ? roomOver : tip.bottom > room.bottom - margin && roomOver;
   return { dx, above };
 }

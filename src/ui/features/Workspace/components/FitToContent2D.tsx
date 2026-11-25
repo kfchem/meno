@@ -177,7 +177,7 @@ export default function FitToContent2D({
     const doc = htmlLayer?.current ?? gl.domElement.parentElement ?? gl.domElement;
     const now = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
     const canvasBox = gl.domElement.getBoundingClientRect();
-    const chips = straight ? screenToPage([...doc.querySelectorAll(".meno-page-chip")].map((el) => el.getBoundingClientRect()), now, canvasBox) : null;
+    const chips = straight ? screenToPage([...doc.querySelectorAll(".meno-page-chip, [data-fit-page]")].map((el) => el.getBoundingClientRect()), now, canvasBox) : null;
     // (and the molecules' notes over them, drawn as large as the page only between two scales: how much they take, at the zoom a fit comes to)
     const notes = straight
       ? [...doc.querySelectorAll<HTMLElement>("[data-fit-notes]")].map((el) => ({ box: el.getBoundingClientRect(), gap: Number(el.dataset.fitNotes) || 0 }))
