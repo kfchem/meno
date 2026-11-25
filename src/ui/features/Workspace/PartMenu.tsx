@@ -283,6 +283,7 @@ export default function PartMenu({
   onOpenAsTable,
   setHoldsOwn,
   onUseAsInput,
+  onJoinConformers,
   onSaveAbbreviation,
   onExport,
   onPush,
@@ -451,6 +452,8 @@ export default function PartMenu({
   setHoldsOwn?: string;
   /** The selection made a set, a workflow's input; unset, where it holds no whole structure or molecule in 3D. */
   onUseAsInput?: () => void;
+  /** *Join as conformers*, on the page beside the molecules selected: they, one compound, made one set (utils/asConformers `joinOffered`). */
+  onJoinConformers?: () => void;
   /** The selection saved as an abbreviation of the user's own. */
   onSaveAbbreviation: () => void;
   /** The selection exported - written as a file of another kind - where the menu is the selection's. */
@@ -1177,6 +1180,7 @@ export default function PartMenu({
         ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
         ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
         ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs, divider: true }] : []),
+        ...(onJoinConformers && target.kind == null ? [{ name: "Join as conformers", keys: "", run: onJoinConformers, divider: true }] : []),
         ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
         ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
       ].filter((i) => !ownNames.has(i.name))

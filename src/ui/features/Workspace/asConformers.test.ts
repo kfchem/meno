@@ -4,7 +4,7 @@ import { connectStoreToDocument, createEditorStore } from "./store";
 import * as ops from "./document";
 import { createWorkspaceDocument } from "./document";
 import { readStructures } from "../../../lib/io/structures";
-import { conformersOffered, framesAlike, joinable, joined, lowestFrame, notOneCompound } from "./utils/asConformers";
+import { conformersOffered, framesAlike, joinable, joined, joinOffered, lowestFrame, notOneCompound } from "./utils/asConformers";
 import { sharesOf, sharesWithheld } from "./utils/molecule3d";
 import { processFileContent } from "./utils/io";
 import type { Molecule3D } from "./store/types";
@@ -57,6 +57,11 @@ describe("frames taken as conformers, on purpose", () => {
     expect(state().molecules3d[0].conformerSet).toBeUndefined();
     doc.redo();
     expect(state().molecules3d[0].conformerSet).toBe(true);
+    // (undone, the frame it showed before the mark - the first - is shown again; redone, the lowest)
+    doc.undo();
+    expect(state().frames3d[id] ?? 0).toBe(0);
+    doc.redo();
+    expect(state().frames3d[id]).toBe(2);
     // (chosen again: the mark taken off)
     state().setFramesConformers(id, false);
     expect(state().molecules3d[0].conformerSet).toBeUndefined();
@@ -137,5 +142,33 @@ describe("molecules joined as conformers", () => {
     expect(state().frames3d[a]).toBe(1);
     doc.undo();
     expect(state().molecules3d).toEqual(before);
+  });
+
+  it("undone, each molecule shows again the frame it showed; redone, the joined one its lowest", async () => {
+    const { doc, state, add } = editor();
+    const a = add({ ...(records[0] as unknown as Molecule3D), at: { x: 0, y: 0 } });
+    const b = add({ ...(records[1] as unknown as Molecule3D), at: { x: 7, y: 2 } });
+    expect(await state().joinAsConformers([a, b], teller())).toBeNull();
+    expect(state().frames3d[a]).toBe(1);
+    doc.undo();
+    expect(state().frames3d[a] ?? 0).toBe(0);
+    expect(state().frames3d[b] ?? 0).toBe(0);
+    doc.redo();
+    expect(state().frames3d[a]).toBe(1);
+  });
+
+  it("is offered with two such molecules selected: on either, or on the page beside them; not on a molecule outside the selection", () => {
+    const { state, add } = editor();
+    const a = add({ ...(records[0] as unknown as Molecule3D), at: { x: 0, y: 0 } });
+    const b = add({ ...(records[1] as unknown as Molecule3D), at: { x: 7, y: 2 } });
+    state().selectAll();
+    const sel = state().sel3d;
+    const ms = state().molecules3d;
+    expect(joinOffered(ms, sel, { kind: "molecule3d", id: b, selection: "here" })).toEqual([a, b]);
+    expect(joinOffered(ms, sel, { kind: "molecule3d", id: a, selection: "here" })).toEqual([a, b]);
+    expect(joinOffered(ms, sel, { kind: null, id: null, selection: "here" })).toEqual([a, b]);
+    expect(joinOffered(ms, new Set([a]), { kind: null, id: null, selection: "here" })).toEqual([]);
+    expect(joinOffered(ms, sel, { kind: "molecule3d", id: 99, selection: "here" })).toEqual([]);
+    expect(joinOffered(ms, sel, { kind: null, id: null, selection: "none" })).toEqual([]);
   });
 });

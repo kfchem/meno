@@ -10,6 +10,7 @@ import { kindOf } from "../../utils/measure3d";
 import { style3dOf } from "../../style3dOf";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { noteTurns } from "../turnJournal";
+import { noteFrames } from "../frameJournal";
 import { principalTurn } from "../../utils/align3d";
 import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
@@ -359,6 +360,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       doc.edit(label, (d) => ops.changeMolecule3d(d, id, change));
     },
     setFramesConformers: (id: number, on: boolean) => {
+      const before = doc.getState();
+      const shownBefore = get().frames3d[id];
       doc.edit(on ? "frames as conformers" : "frames not conformers", (d) =>
         ops.changeMolecule3d(d, id, (m) => {
           if (on) return { ...m, conformerSet: true };
@@ -370,6 +373,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const m = on ? get().molecules3d.find((x) => x.id === id) : undefined;
       const lowest = m ? lowestFrame(m) : null;
       if (lowest != null) get().setFrame3d(id, lowest);
+      // (the frame it showed goes with the mark: undone, it shows that frame again; redone, its lowest - ../frameJournal)
+      noteFrames(doc, before, doc.getState(), { [id]: shownBefore }, { [id]: get().frames3d[id] });
     },
     joinAsConformers: async (ids: readonly number[], asker?: Asker) => {
       const all = get().molecules3d.filter((m) => ids.includes(m.id));
@@ -380,11 +385,15 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       // (what was selected may have changed while it was asked: joined only as they still are)
       const ms = get().molecules3d.filter((m) => ids.includes(m.id));
       if (!joinable(ms)) return null;
+      const before = doc.getState();
+      const shownBefore = Object.fromEntries(ms.map((x) => [x.id, get().frames3d[x.id]]));
       doc.edit("join as conformers", (d) => ops.joinMolecules3d(d, ids, joined));
       const m = get().molecules3d.find((x) => x.id === ms[0].id);
       get().selectMolecules3d([ms[0].id]);
       const lowest = m ? lowestFrame(m) : null;
       get().setFrame3d(ms[0].id, lowest ?? 0);
+      // (undone, each molecule shows again the frame it showed; redone, the joined one its lowest - ../frameJournal)
+      noteFrames(doc, before, doc.getState(), shownBefore, { [ms[0].id]: get().frames3d[ms[0].id] });
       return null;
     },
     switchTalkLook3d: (id: number) =>

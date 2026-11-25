@@ -47,6 +47,23 @@ const constitution = (m: Molecule3D): string =>
     ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
   });
 
+/**
+ * The molecules *Join as conformers* is offered for, as a right-click opens
+ * its menu (`menu`, Workspace `MenuTarget`): with the selection, the molecules
+ * in 3D it holds, in page order - on one of them, or on the page beside them
+ * (where it is the selection's menu); none where they are not `joinable`.
+ */
+export function joinOffered(
+  molecules: readonly Molecule3D[],
+  sel3d: ReadonlySet<number>,
+  menu: { kind?: string | null; id?: number | null; selection?: string } | null | undefined,
+): number[] {
+  if (menu?.selection !== "here") return [];
+  if (menu.kind != null && !(menu.kind === "molecule3d" && menu.id != null && sel3d.has(menu.id))) return [];
+  const ms = molecules.filter((m) => sel3d.has(m.id));
+  return ms.length >= 2 && joinable(ms) ? ms.map((m) => m.id) : [];
+}
+
 /** Whether *Join as conformers* is offered for these molecules: two or more, each with its frames alike, all one compound. */
 export function joinable(ms: readonly Molecule3D[]): boolean {
   if (ms.length < 2 || !ms.every(framesAlike) || ms.some((m) => m.biopolymer)) return false;

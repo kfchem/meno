@@ -894,10 +894,12 @@ Taken on 2026-10-13:
     frame by frame, for a file that gives none. Not offered otherwise:
     a file of a reaction path, whose joins break and form, or whose
     frames' elements differ, is no conformer set. Chosen, the molecule
-    is a conformer set; chosen again, the mark is taken off. Undo and
-    redo take it back and give it again.
-  - *Join as conformers*, on the menu of molecules in 3D selected that
-    are of one constitution (the same atoms in the same order, bonded the
+    is a conformer set, showing its lowest where every frame has an
+    energy; chosen again, the mark is taken off. Undo takes the mark back
+    and shows again the frame shown before it; redo gives both again.
+  - *Join as conformers*, on the menu of molecules in 3D selected - on
+    any of them, or on the page beside them - that are of one
+    constitution (the same atoms in the same order, bonded the
     same way, of the same charge and spin; not offered where they
     differ). Chosen, they are judged as *As conformers* judges them -
     which stereoisomer each is asked first, as that step asks it, then
@@ -909,7 +911,7 @@ Taken on 2026-10-13:
     stereoisomers, or a stereoisomer not known - they are not joined, and
     what *As conformers* would say of them is said ("Not joined as
     conformers: 2 compounds · 2"). Undo gives a joined set back as the
-    molecules were, each at its place.
+    molecules were, each at its place and showing the frame it showed.
   - Either way the set is as any conformer set: its lowest shown, where
     every frame has an energy; shares where every frame has one; its
     conformers numbered. What was worked out of the molecules as wholes -
