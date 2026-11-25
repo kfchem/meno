@@ -10,7 +10,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ImportedScheme } from "../document";
 import { style3dOf } from "../style3dOf";
 import type { Style3D } from "../../../../lib/chem/style3d";
-import { lookOf, notesOf, poseOf, seenBounds, solidOf } from "./molecule3d";
+import { lookOf, NOTES_MARK_GAP_PX, NOTES_MARK_PX, notesOf, poseOf, seenBounds, solidOf } from "./molecule3d";
 import { principalTurn } from "./align3d";
 import { chipWide } from "../workflow/run";
 import { hasChip } from "../workflow/selectionSet";
@@ -65,14 +65,14 @@ const NONE = new Set<number>();
  * (workflow/entries), and one on a step's card would hide it - and the
  * frames of renders under way, where what they make will land.
  */
-/** How high one of a molecule's notes stands over it on the page, and the gap under the lowest (Molecule3DView `NoteMark`: 20 pixels and 4 between, 8 under them). */
-const NOTE_H = 24 * PX;
-const NOTES_GAP = 8 * PX;
+/** How wide a molecule's mark of what it says about its data stands beside its top right corner, the gap counted in, and how high (NotesMark3D). */
+const NOTES_ROOM = (NOTES_MARK_GAP_PX + NOTES_MARK_PX) * PX;
+const NOTES_HIGH = NOTES_MARK_PX * PX;
 
 /**
  * Boxes round what a molecule in 3D shows besides its atoms, as it is seen
  * (`seen`, its atoms' bounds on the page): its frames chip under it, as
- * wide as it is (pageGl/liveChip), and its notes over it (`notesOf`). A place
+ * wide as it is (pageGl/liveChip), and the mark of its notes beside its top right corner (`notesOf`). A place
  * found clear of its atoms alone was found over these: a TS's notes over
  * the chip of the molecule above it.
  */
@@ -82,8 +82,7 @@ export function shownBeside(m: Molecule3D, seen: Box, style: Style3D): Box[] {
     const half = Math.max(chipWide(m) / 2, (seen.x1 - seen.x0) / 2);
     out.push({ x0: m.at.x - half, x1: m.at.x + half, y0: seen.y0 - CHIP, y1: seen.y0 });
   }
-  const notes = notesOf(m, solidOf(m, style), lookOf(m)).length;
-  if (notes) out.push({ x0: seen.x0, x1: seen.x1, y0: seen.y1, y1: seen.y1 + NOTES_GAP + notes * NOTE_H });
+  if (notesOf(m, solidOf(m, style), lookOf(m)).length) out.push({ x0: seen.x1, x1: seen.x1 + NOTES_ROOM, y0: seen.y1 - NOTES_HIGH, y1: seen.y1 });
   return out;
 }
 

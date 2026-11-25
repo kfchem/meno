@@ -3,7 +3,8 @@
  * (docs/EDITOR-2D.md, *Menus*): what a bond is drawn as - its order, its
  * wedge or wave, how a single one is drawn (bold, hashed, dashed), a dative
  * one - each a patch to the bond that makes it that kind and nothing else
- * (its stereo orientation, its colour and the rest it has are kept).
+ * (its colour and the rest it has are kept; a wedge or a hashed wedge is
+ * narrow at the end a fresh one is, `bondKindPatchOn`).
  */
 import type { Bond } from "../store/types";
 import { degrees, narrowEnd } from "../chem/drawing";
@@ -167,12 +168,25 @@ export function bondKeyPatch(key: BondKey, b: Link & Pick<Bond, "order" | "doubl
 }
 
 /**
- * What a kind chosen from a bond's menu makes of a bond: that kind - or, where the bond already has it, one step on in the
- * kind's own round (the maintainer, 2026-11-14): a wedge or a hashed wedge narrow at its other end; a double bond's second
- * line on its next side, as a double-click puts it; a single, a triple or any other kind as it is (nothing).
+ * What a kind chosen from a bond's menu makes of a bond that is not that kind already (`bondKindPatch`): a wedge or a hashed wedge
+ * narrow at the end a wedge freshly given to that bond is narrow at - the end with more bonds, its first atom on a tie (chem/drawing
+ * `narrowEnd`, lib/chem/layout2d `wedgeNarrowAtom`) - whatever end the bond was narrow at before (a plain bond the click's round left
+ * narrow at its other end, a wedge turned about from its menu). Only the click's round, and the wedge's own icon pressed again
+ * (`bondKindStepPatch`), turn a wedge's narrow end.
+ */
+export function bondKindPatchOn(kind: BondKindName, b: Pick<Bond, "a" | "b">, bonds: readonly Link[]): Partial<Bond> {
+  const patch = bondKindPatch(kind);
+  if (kind !== "wedge" && kind !== "hashed-wedge") return patch;
+  return { ...patch, narrow: narrowEnd({ a: b.a, b: b.b }, degrees(bonds)) };
+}
+
+/**
+ * What a kind chosen from a bond's menu makes of a bond: that kind (`bondKindPatchOn`) - or, where the bond already has it, one
+ * step on in the kind's own round (the maintainer, 2026-11-14): a wedge or a hashed wedge narrow at its other end; a double
+ * bond's second line on its next side, as a double-click puts it; a single, a triple or any other kind as it is (nothing).
  */
 export function bondKindStepPatch(kind: BondKindName, b: Link & Pick<Bond, "order" | "doubleMode" | "stereo" | "narrow" | "display" | "dative">, atoms: readonly At[], bonds: readonly Link[]): Partial<Bond> {
-  if (bondKindOf(b) !== kind) return bondKindPatch(kind);
+  if (bondKindOf(b) !== kind) return bondKindPatchOn(kind, b, bonds);
   if (kind === "wedge" || kind === "hashed-wedge") {
     const now = narrowEnd(b, degrees(bonds));
     return { narrow: now === b.a ? b.b : b.a };

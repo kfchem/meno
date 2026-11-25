@@ -16,7 +16,9 @@
  * so that a branch's own groups are settled after the branch is. Local and
  * greedy: no automorphism of the whole molecule is searched for. Only atoms
  * of whole branches move, and only to places an equivalent branch had. The
- * first conformer is the reference and is not moved.
+ * first conformer is the reference and is not moved: of a search that goes
+ * on, what it first showed (`asThePageShows` `onto`), never a later round's
+ * lowest, so that a conformer shown keeps its atoms where they were.
  */
 import { huckelForm } from "../../../../lib/chem/huckel";
 import { symmetryClasses } from "../../../../lib/layout/canonical";

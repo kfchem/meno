@@ -156,6 +156,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const rising = useEditor((s) => s.rising3d);
   // (the 3D structures whose search goes on: their chips say so)
   const growing = useEditor((s) => s.growing3d);
+  const found = useEditor((s) => s.lowerFound3d);
   const overlay = useEditor((s) => s.overlay3d);
   const lists = useEditor((s) => s.lists3d);
   // promises asked for: what each came to, or is coming to - and those
@@ -218,6 +219,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // double-click puts back what its first click changed
   const chosenBefore = useRef<EditorState["chosen3d"][]>([null, null]);
   const [active, setActive] = useState<{ kind: "turn" | "move"; group: number[] } | null>(null);
+  // (the molecules turned or moved by a drag now: a step to a lower conformer found waits for the release - store `inHand3d`)
+  useEffect(() => store.getState().setInHand3d(active?.group ?? []), [active, store]);
   // a press being held on a molecule: the atom its selection spreads from, and since when
   const [hold, setHold] = useState<{ id: number; from: number; start: number } | null>(null);
   // molecules taken away, shrinking out of view: as they were, and how they were turned and shown
@@ -829,10 +832,12 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             inSet={inSets.has(m.id)}
             setFoot={setFeet.get(m.id)?.foot}
             onFrame={on.onFrame}
+            onLowest={on.onLowest}
             onMagnify={on.onMagnify}
             hoveredMeasure={hoveredMeasure?.id === m.id ? hoveredMeasure.measure : null}
             rising={rising[m.id]}
             searching={!!growing[m.id]}
+            found={found[m.id]}
             split={splits[m.id]}
             onRisen={on.onRisen}
             stereoShown={stereoShownOf(m)}

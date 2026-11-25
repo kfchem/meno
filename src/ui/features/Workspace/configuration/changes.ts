@@ -9,7 +9,8 @@
  *   readable (`unread`), else "now unspecified" (`opened`: a plain bond) - each after the descriptor it had, where it had one;
  * - stated again where its marks had been unclear (`read`): "C3: now R", or "C3: stated again" without one.
  * Nothing is said where nothing changed, where a unit is simply new (a wedge just drawn), gone with its atom or one of its groups, or no
- * longer a unit because two of its groups are now alike. A structure whose every unit inverted - two or more - is one note: its mirror
+ * longer a unit because two of its groups are now alike - nor, asked `byHand`, of a unit the chemist changed by turning a stereo bond of
+ * its own and nothing else there (`turnedByHand`): its label shows it. A structure whose every unit inverted - two or more - is one note: its mirror
  * image. Pure: no DOM, no store.
  */
 import type { ConfigurationUnit } from "../../../../lib/chem/perception/stereo/compare";
@@ -97,10 +98,60 @@ export function partsTouched(before: Model, after: Model): { was: Model; now: Mo
  * What the edit from `before` to `after` did to the configurations they state (see the file's header), unit by unit, in the comparison's
  * order: centres, double bonds, axes.
  */
-export function configurationChanges(before: Model, after: Model): ConfigurationChange[] {
+export function configurationChanges(before: Model, after: Model, { byHand = false }: { byHand?: boolean } = {}): ConfigurationChange[] {
   const parts = partsTouched(before, after);
   if (!parts) return [];
-  return changesBetween(readingOf(parts.was), readingOf(parts.now), parts.now);
+  return changesBetween(readingOf(parts.was), readingOf(parts.now), parts.now, byHand ? (unit) => turnedByHand(before, after, unit) : undefined);
+}
+
+/** What an atom or a bond carries that says how it is shown or what is kept of it, not what it is or where: set aside by `turnedByHand`. */
+const SHOWN_OR_KEPT = ["config", "stereoAt", "stereoShown", "color", "highlight"] as const;
+
+/** `x` without `keys` and what is shown or kept (`SHOWN_OR_KEPT`), as one string to compare - a field set to undefined as one not there. */
+function rest<T extends object>(x: T, keys: readonly string[] = []): string {
+  const aside = new Set<string>([...SHOWN_OR_KEPT, ...keys]);
+  const fields = Object.entries(x).filter(([k, v]) => v !== undefined && !aside.has(k));
+  return JSON.stringify(fields.sort(([p], [q]) => (p < q ? -1 : p > q ? 1 : 0)));
+}
+
+/**
+ * Whether bond `now` is bond `was` with only its stereo kind - plain, wedge, hashed wedge, wavy, either - or its narrow end changed (and,
+ * with its kind, how a plain one is drawn): what a click, the click's round, the bond's menu or a key does to a stereo bond.
+ */
+export function stereoTurned(was: Bond, now: Bond): boolean {
+  if ((was.stereo ?? "none") === (now.stereo ?? "none") && was.narrow === now.narrow) return false;
+  return rest(was, ["stereo", "narrow", "display"]) === rest(now, ["stereo", "narrow", "display"]);
+}
+
+/**
+ * Whether the edit from `before` to `after` was, at `unit`, the chemist's own change of a stereo bond there (docs/EDITOR-2D.md, *When an
+ * edit changes a configuration*): a bond at its atom - for a double bond or an axis, the bond itself or one at either end - turned in kind
+ * or narrow end (`stereoTurned`), and nothing else done there: every other bond at its atoms as it was, none made or taken away, and its
+ * atoms and their neighbours unmoved and unchanged. Such a change needs no note: the chemist made it, and the unit's own label shows it.
+ */
+export function turnedByHand(before: Model, after: Model, unit: ConfigurationUnit): boolean {
+  const ends = new Set(unitAtoms(unit));
+  const at = (m: Model) => new Map(m.bonds.filter((b) => ends.has(b.a) || ends.has(b.b)).map((b) => [b.id, b]));
+  const was = at(before);
+  const now = at(after);
+  if (was.size !== now.size) return false;
+  let turned = false;
+  const near = new Set(ends);
+  for (const [id, w] of was) {
+    const b = now.get(id);
+    if (!b) return false;
+    [w.a, w.b, b.a, b.b].forEach((x) => near.add(x));
+    if (stereoTurned(w, b)) turned = true;
+    else if (rest(w) !== rest(b)) return false;
+  }
+  if (!turned) return false;
+  const atomsWas = new Map(before.atoms.map((a) => [a.id, a]));
+  const atomsNow = new Map(after.atoms.map((a) => [a.id, a]));
+  for (const id of near) {
+    const [p, q] = [atomsWas.get(id), atomsNow.get(id)];
+    if (!p || !q || rest(p) !== rest(q)) return false;
+  }
+  return true;
 }
 
 /**
@@ -108,18 +159,26 @@ export function configurationChanges(before: Model, after: Model): Configuration
  * atoms and bonds kept - or, where they keep nothing yet (a drawing from before this, or new), against how they read before. With what
  * they are to keep now.
  */
-export function changesAgainstKept(before: Model, after: Model): { changes: ConfigurationChange[]; ids: Set<number>; kept: KeptOf } | null {
+export function changesAgainstKept(
+  before: Model,
+  after: Model,
+  { byHand = false }: { byHand?: boolean } = {},
+): { changes: ConfigurationChange[]; ids: Set<number>; kept: KeptOf } | null {
   const parts = partsTouched(before, after);
   if (!parts) return null;
   const now = readingOf(parts.now);
   // (against what was kept before the edit - the drawing's before, not its after, which the keep made at once may already have rewritten)
   const read = readingOf(parts.was);
   const was = keepsAny(parts.was) ? keptReading(parts.was, read.said) : read;
-  return { changes: changesBetween(was, now, parts.now), ids: new Set(parts.now.atoms.map((a) => a.id)), kept: keptFrom(parts.now, now) };
+  const answered = byHand ? (unit: ConfigurationUnit) => turnedByHand(before, after, unit) : undefined;
+  return { changes: changesBetween(was, now, parts.now, answered), ids: new Set(parts.now.atoms.map((a) => a.id)), kept: keptFrom(parts.now, now) };
 }
 
-/** How `now` differs from `was`, as the header says it, of the part `nowPart`. */
-function changesBetween(was: Reading, now: Reading, nowPart: Model): ConfigurationChange[] {
+/**
+ * How `now` differs from `was`, as the header says it, of the part `nowPart` - nothing said of a unit `answered` gives (`turnedByHand`: the
+ * chemist's own turn of a stereo bond there).
+ */
+function changesBetween(was: Reading, now: Reading, nowPart: Model, answered?: (unit: ConfigurationUnit) => boolean): ConfigurationChange[] {
   const parts = { now: nowPart };
   const atomsNow = new Map(parts.now.atoms.map((a) => [a.id, a]));
   const there = (id: number) => id === -1 || atomsNow.has(id);
@@ -133,6 +192,7 @@ function changesBetween(was: Reading, now: Reading, nowPart: Model): Configurati
   const out: ConfigurationChange[] = [];
   for (const d of compared(was.said, now.said)) {
     const { how: _how, ...unit } = d;
+    if (answered?.(unit)) continue;
     if (d.how === "inverted") out.push({ unit, how: "inverted" });
     else if (d.how === "opened" && kept(unit)) {
       const why = unitAtoms(unit)

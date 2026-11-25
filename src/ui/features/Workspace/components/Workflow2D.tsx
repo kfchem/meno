@@ -11,7 +11,7 @@ import { useStyle3D } from "../style3d";
 import SetFrame from "../workflow/SetFrame";
 import FrameTabs, { FRAMES_ORDER, type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
 import { dashAdvance, runningTick } from "../pageGl/runningTick";
-import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } from "../pageGl/workflowMarks";
+import { positionBadge, recordLabel } from "../pageGl/workflowMarks";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
@@ -28,8 +28,7 @@ import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
 import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
-import { useMemberMarks } from "./useMemberMarks";
-import { reachOverFrames } from "../utils/molecule3d";
+import { useSetSigns } from "./useSetSigns";
 import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
@@ -55,7 +54,7 @@ import { cardBoxOf, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from 
 import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
 import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
-import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
+import { useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
 import type { Region } from "../pageGl/hits";
 import type { PageIcon } from "../pageGl/icons";
@@ -607,8 +606,18 @@ export default function Workflow2D() {
   }, [store, style3d]);
   // (each set's frame as it is drawn: on its way to where the document has it)
   const shownSets = useShownFrames(onPage);
-  // (what has just joined a set or left it, marked a moment)
-  const memberMarks = useMemberMarks(onPage, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
+  // (while the pointer is held, the set that letting go would give something to, or take a member out of: its frame shows it - eased in and
+  //  out as a highlight is - and nothing after letting go: workflow/setSigns)
+  const signs = useSetSigns();
+  const signLevels = useEasedValues(
+    new Map(onPage.flatMap((b) => [[`takes:${b.id}`, signs.get(b.id) === "takes" ? 1 : 0] as [string, number], [`letsGo:${b.id}`, signs.get(b.id) === "letsGo" ? 1 : 0] as [string, number]])),
+    DURATION.quick * 1000,
+  );
+  const signOf = (id: number) => {
+    const takes = eased(EASE, signLevels.get(`takes:${id}`) ?? 0);
+    const letsGo = eased(EASE, signLevels.get(`letsGo:${id}`) ?? 0);
+    return takes > 0 || letsGo > 0 ? { takes, letsGo } : undefined;
+  };
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
   const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
@@ -1308,11 +1317,9 @@ export default function Workflow2D() {
   ];
   // (kept as long as a fold takes, the longest of what goes)
   const shownParts = usePresence(parts, (el) => String(el.key), DURATION.base * 1000);
-  // what has just joined a set or left it - a moment, fading in and out - each position an Enumerate step chose, numbered, and each
-  // structure a step numbered, its number under it - how it was made in the page's tip as it is pointed at (pageGl/workflowMarks)
-  const markAges = useAges(memberMarks.map((k) => k.key), MEMBER_MS);
+  // each position an Enumerate step chose, numbered, and each structure a step numbered, its number under it - how it was made in the
+  // page's tip as it is pointed at (pageGl/workflowMarks)
   const marks = { shapes: [] as Shape[], texts: [] as PageText[], regions: [] as Region[], tip: null as PageTipAt | null };
-  for (const k of memberMarks) marks.shapes.push(memberMarkBox(`member:${k.key}`, k.frame, k.joined, memberPulse(markAges.get(k.key) ?? 0)));
   for (const m of positions) {
     const b = positionBadge(`position:${m.key}`, m.x, m.y, m.n, 2);
     marks.shapes.push(b.shape);
@@ -1341,6 +1348,7 @@ export default function Workflow2D() {
       // (its words left to the field over its tab while it is named anew)
       tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
       iconWhenSmall: true,
+      sign: signOf(b.id),
     };
   });
   // a Repeat's frame round the steps it runs pass by pass (workflow/repeat), by WebGL as a set's is: dashed and quiet, its tab "Repeat"

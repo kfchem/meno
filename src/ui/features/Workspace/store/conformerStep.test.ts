@@ -19,7 +19,7 @@ const asked: { molblock: string; count?: number; options: Record<string, unknown
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
  * stereo open, by what they hold - methanol, or every one.
  */
-const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "allene" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; free?: boolean } };
+const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "allene" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; free?: boolean; counted?: number } };
 /** Whether a molblock is methanol's, C and O. */
 const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
 /** Whether a molblock is an allene's, three carbons and nothing else. */
@@ -53,6 +53,8 @@ vi.mock("../chem/menoIsomers", async (actual) => {
       const cumulenes = openCumulenes(stereoGraphOf(molblocks)!.bonds, bonds);
       return { left: { atoms, bonds, cumulenes, cumulated: cumulatedRuns(stereoGraphOf(molblocks)!.bonds, cumulenes), notEnumerated: [], said: null }, centres: atoms, doubles: bonds, handed: cumulenes.length > 0 };
     },
+    // (Meno's count, where `openAs` gives one: past the 32 made at once, say)
+    countOf: (read: Parameters<typeof real.countOf>[0]) => (worker.openAs.counted != null ? { count: worker.openAs.counted } : real.countOf(read)),
     isomersByMeno: async () => {
       const n = worker.openAs.free ? 0 : (worker.openAs.isomers ?? 2);
       return { made: { isomers: Array.from({ length: n }, (_, k) => ({ configured: { centres: [], doubles: [] }, smiles: `isomer ${k}` })), free: n === 0 }, said: [] };
@@ -405,6 +407,15 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     const { step } = await searched();
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2, 2]);
     expect(step.ran?.said).toMatch(/ · 2 conformers of 2 compounds · structure 2 of 3 could not be made in 3D$/);
+  });
+
+  it("sets aside one with more stereoisomers than are made at once, though one of them can be made: never one chosen unseen", async () => {
+    // (six unlike open centres, say: 2^6 = 64 by Meno's count, past the 32 tried - the first that can be made is made, and is one of many)
+    worker.open = "methanol";
+    worker.openAs = { isomers: 1, counted: 64 };
+    const { step } = await searched();
+    expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
+    expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: put Stereoisomers before Conformers$/);
   });
 
   it("makes one whose open stereo no stereoisomer holds in 3D, and says it was made with its stereo free", async () => {

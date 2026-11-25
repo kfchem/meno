@@ -7,6 +7,7 @@ import { configurationChanges } from "./changes";
 import { MENO_MOVES, watchConfiguration } from "./watch";
 import { cleanUp } from "../chem/cleanUp";
 import { cipMarksAsked } from "../chem/cipRun";
+import { cipMarksOf } from "../chem/cipMarks";
 
 // Foundation part 15, phase 2: a change of what the drawing states, said at its unit once the edit is done (the brief's known answers).
 
@@ -54,17 +55,68 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     stop();
   });
 
-  it("says the wedge clicked through its cycle: drawn, nothing; the other way, inverted; plain, now unspecified", async () => {
-    const { store, notes, stop } = page(butanol(null));
+  it("says nothing of the chemist's own turn of the wedge through its cycle - drawn, the other way, plain: its label shows it", async () => {
+    // (it used to say "C2: R, now S" for the hash and "C2: S, now unspecified" for the plain bond: both done by the chemist's own hand)
+    const { store, doc, notes, stop } = page(butanol(null));
     store.getState().setBondStereo(12, "up");
     await vi.runAllTimersAsync();
     expect(notes()).toEqual([]);
     store.getState().setBondStereo(12, "down");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C2: R, now S"]);
+    expect(notes()).toEqual([]);
+    // (the step's name in Edit > Undo: the action's own, no configuration words)
+    expect(doc.history().undoLabel).toBe("change stereo");
     store.getState().setBondStereo(12, "none");
     await vi.runAllTimersAsync();
-    expect(notes()).toEqual(["C2: R, now S", "C2: S, now unspecified"]);
+    expect(notes()).toEqual([]);
+    expect(doc.history().undoLabel).toBe("change stereo");
+    stop();
+  });
+
+  it("says nothing of a wedge turned wavy, nor of a stated R set to a hashed wedge from the bond's menu", async () => {
+    const { store, doc, notes, stop } = page(butanol());
+    store.getState().setBondsKind([12], "hashed-wedge");
+    await vi.runAllTimersAsync();
+    expect(store.getState().model.bonds.find((b) => b.id === 12)).toMatchObject({ stereo: "down", narrow: 1 });
+    expect(notes()).toEqual([]);
+    expect(doc.history().undoLabel).toBe("change bonds' kind");
+    store.getState().setBondStereo(12, "wavy");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual([]);
+    stop();
+  });
+
+  it("says the change where the edit also moved the centre's own atoms, though it turned the wedge too", () => {
+    // (one edit: the wedge made plain and the methyl dragged across the C2-C3 bond - more than a turn of the bond: said, now unspecified)
+    const t = butanol();
+    t.bonds = t.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "none" as const } : b));
+    t.atoms = t.atoms.map((a) => (a.id === 2 ? { ...a, x: L * 0.9, y: L * 0.5 } : a));
+    expect(configurationChanges(butanol(), t, { byHand: true })).toEqual([{ unit: { kind: "centre", at: 1 }, how: "opened" }]);
+  });
+
+  it("says, of one edit that turned the wedge at one centre and dragged a group across at another, the other centre only", () => {
+    // (two (R)-butan-2-ol units joined by their ethyls' ends: centres 1 and 21, each R as drawn (the file's first test). The edit makes
+    //  centre 1's wedge a hash (R to S, by hand: nothing said) and drags centre 21's methyl, atom 22, across its C-C bond (R to S as in the
+    //  first test: said). Without the rule both inverted, every unit of the structure: its mirror image.)
+    const two = butanol();
+    const pair: Model = { atoms: [...two.atoms, ...two.atoms.map((a) => ({ ...a, id: a.id + 20, y: a.y - 6 * L }))], bonds: [...two.bonds, ...two.bonds.map((b) => ({ ...b, id: b.id + 20, a: b.a + 20, b: b.b + 20, ...(b.narrow ? { narrow: b.narrow + 20 } : {}) }))] };
+    const one: Model = { ...pair, bonds: [...pair.bonds, { id: 40, a: 5, b: 25, order: 1 }] };
+    const edited: Model = {
+      atoms: one.atoms.map((a) => (a.id === 22 ? { ...a, x: L * 0.9, y: L * 0.5 - 6 * L } : a)),
+      bonds: one.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "down" as const } : b)),
+    };
+    expect(configurationChanges(one, edited)).toEqual([{ unit: { kind: "centre", at: 1 }, how: "mirror" }]);
+    expect(configurationChanges(one, edited, { byHand: true })).toEqual([{ unit: { kind: "centre", at: 21 }, how: "inverted" }]);
+  });
+
+  it("says a wedge one of Meno's moves turned as that move's, though a turn of the chemist's would say nothing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { doc, notes, stop } = page(butanol());
+    // (a Clean-up that made the wedge a hash: what it must never do)
+    doc.edit("clean up", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 12 ? { ...b, stereo: "down" as const } : b)) } }));
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["changed by Clean-up: C2: R, now S"]);
+    warn.mockRestore();
     stop();
   });
 
@@ -122,6 +174,22 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     store.getState().moveAtoms(butanol().atoms.filter((a) => [2, 3, 5].includes(a.id)).map(({ id, x, y }) => ({ id, x, y })), "drag-3");
     await vi.runAllTimersAsync();
     expect(notes()[1]).toBe("C2: now R");
+    stop();
+  });
+
+  it("says a centre no longer read also where its R or S is asked for: nothing rests there that says its marks cannot be read", async () => {
+    const m = butanol();
+    const { store, notes, stop } = page({ ...m, atoms: m.atoms.map((a) => (a.id === 1 ? { ...a, stereoShown: true } : a)) });
+    store.getState().moveAtoms([{ id: 2, x: -L, y: 0 }, { id: 3, x: L, y: 0 }, { id: 5, x: 2 * L, y: 0.5 * L }], "drag-2");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["C2: R, now unclear: two of its bonds in line or on top of each other"]);
+    // (what rests there asked for: no label, and the pointer's words say no configuration is drawn - not that the marks are unreadable)
+    const now = store.getState().model;
+    const said = cipMarksOf(now);
+    expect([...said.centres]).toEqual([]);
+    expect(said.said.get("centre-1")).toBe("No R or S: no configuration is drawn here.");
+    // (not asked for: nothing at all)
+    expect([...cipMarksOf({ ...now, atoms: now.atoms.map((a) => ({ ...a, stereoShown: undefined })) }).said]).toEqual([]);
     stop();
   });
 
@@ -227,5 +295,124 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     expect(MENO_MOVES["clean up"]).toBe("Clean-up");
     warn.mockRestore();
     stop();
+  });
+});
+
+// Turn over keeps every configuration (docs/EDITOR-2D.md, *The configuration kept*): the same compound, seen from its other side. The answers
+// are worked by hand from the places, y up, the compound viewed with its lowest group (an H, drawn or not) away: OH > C3 (ethyl) > C1 (methyl).
+// Butan-2-ol as above: C2 (id 1) at the origin, the O (4) at 90 degrees, the methyl C1 (2) at 210, the ethyl's C3 (3) at 330.
+// Before: the O behind (hashes stating C2): O (top) -> C3 (lower right) -> C1 (lower left) runs clockwise seen from the front, the H in
+// front, so counterclockwise from the side away from the H: S. The O in front (a solid wedge stating C2): R.
+describe("Turn over keeps every configuration", () => {
+  const shown = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a) => (a.id === 1 ? { ...a, stereoShown: true as const } : a)) });
+  async function turned(m: Model, atoms: number[], bonds: number[], axis: "vertical" | "horizontal") {
+    const pg = page(shown(m));
+    // (an edit first, so that what the drawing states is kept)
+    pg.doc.edit("move atoms", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, x: a.x + 0.001 })) } }));
+    await vi.runAllTimersAsync();
+    const label = (id = 1) => cipMarksOf(pg.doc.getState().model).centres.get(id) ?? null;
+    const before = label();
+    pg.store.setState({ configurationNotes: [], sel: { atoms: new Set(atoms), bonds: new Set(bonds) } });
+    pg.store.getState().turnSelectionOver(axis);
+    await vi.runAllTimersAsync();
+    const model = pg.doc.getState().model;
+    const out = { before, after: label(), notes: pg.notes(), model, bond: (id: number) => model.bonds.find((b) => b.id === id)!, label };
+    pg.stop();
+    return out;
+  }
+  const with12 = (w: Partial<Model["bonds"][number]>): Model => ({ ...butanol(null), bonds: butanol(null).bonds.map((b) => (b.id === 12 ? { ...b, ...w } : b)) });
+  const whole = [[1, 2, 3, 4, 5], [10, 11, 12, 13]] as const;
+
+  for (const axis of ["vertical", "horizontal"] as const) {
+    it(`keeps S where the hashes are narrow at C2, the whole structure turned over (${axis})`, async () => {
+      // (turned over, the O is in front and the order of the three is reversed in the page: O -> C3 -> C1 counterclockwise seen from the
+      //  front, the H behind: S)
+      const r = await turned(with12({ stereo: "down", narrow: 1 }), [...whole[0]], [...whole[1]], axis);
+      expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    });
+
+    it(`keeps S where the hashes are narrow at the O, stating C2 at their wide end (${axis})`, async () => {
+      // (a hashed wedge narrow at the O, an end group, states C2 with the O behind - S, as the hashes narrow at C2 do. Turned over, the O is
+      //  in front: a solid wedge narrow at C2, as in the case before - S. Today it became a solid wedge narrow at the O, which states
+      //  nothing: "C2: S, now unspecified")
+      const r = await turned(with12({ stereo: "down", narrow: 4 }), [...whole[0]], [...whole[1]], axis);
+      expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    });
+
+    it(`states nothing where a solid wedge narrow at the O stated nothing (${axis})`, async () => {
+      // (a solid wedge the wrong way round, narrow at the O, states nothing at C2; turned over it must not start to: today it became
+      //  hashes narrow at the O, read as stating C2 - R, a configuration that was never drawn)
+      const r = await turned(with12({ stereo: "up", narrow: 4 }), [...whole[0]], [...whole[1]], axis);
+      expect([r.before, r.after, r.notes]).toEqual([null, null, []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 4 });
+    });
+  }
+
+  it("keeps S where a line of hashes states C2, made a solid wedge narrow at C2", async () => {
+    // (a line of hashes from C2 to the O, an end group, is read as hashes narrow at C2: S. Turned over, the O is in front: a wedge narrow
+    //  at C2 - S, as above. Kept a line, it would state the O behind still, in the page's reversed order: R)
+    const r = await turned(with12({ display: "hashed" }), [...whole[0]], [...whole[1]], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    expect(r.bond(12).display).toBeUndefined();
+  });
+
+  // (the structure's middle: x from -0.866 L to 1.732 L, y from -0.5 L (C1, C3) to L (the O) - so 0.25 L; top to bottom, each y goes to
+  //  0.5 L - y: C2 to 0.5 L, C1 and C3 to L, the O to -0.5 L, C4 (5) to 0.5 L; each x as it was)
+  const placesTurned = (m: Model) => {
+    const y = Object.fromEntries(m.atoms.map((a) => [a.id, a.y / L]));
+    expect(y[1]).toBeCloseTo(0.5);
+    expect(y[2]).toBeCloseTo(1);
+    expect(y[3]).toBeCloseTo(1);
+    expect(y[4]).toBeCloseTo(-0.5);
+    expect(y[5]).toBeCloseTo(0.5);
+  };
+  for (const [what, atoms, bonds] of [["the wedge's bond alone, with its two atoms (its menu)", [1, 4], [12]], ["one atom alone", [5], []]] as const)
+    it(`turns the whole structure over where the selection is ${what}, and keeps S`, async () => {
+      // (today a bond alone swapped its two atoms, C2 and the O, and exchanged the hashes: "C2: S, now R"; an atom alone did not move)
+      const r = await turned(with12({ stereo: "down", narrow: 1 }), [...atoms], [...bonds], "horizontal");
+      placesTurned(r.model);
+      expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    });
+
+  // Part of a structure turned over: each centre it touches keeps its configuration (in units of L, the C-H aside; triple products from
+  // the centre, (a - d) . ((b - d) x (c - d)) over the groups a > b > c > d: positive is S, as for a, b, c counterclockwise at z = +0.3 in
+  // front of d = (0, 0, -1)).
+  it("keeps S where C2 is turned over with the O and the methyl but not the ethyl (left to right)", async () => {
+    // (the selection's middle x = -0.433: C2 goes to (-0.866, 0), the O to (-0.866, 1), the methyl to (0, -0.5); the ethyl's C3 stays at
+    //  (0.866, -0.5). Seen from C2, the O is straight up, C3 at -16 degrees and the methyl at -30: O -> C3 -> C1 still runs clockwise in
+    //  the page, as before the move - so the O stays behind, the hashes kept: O behind, the H in front, S. Exchanged, as today, the O
+    //  is in front: R)
+    const r = await turned(with12({ stereo: "down", narrow: 1 }), [1, 2, 4], [10, 12], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect(r.bond(12)).toMatchObject({ stereo: "down", narrow: 1 });
+  });
+
+  it("keeps S where C2 stays and its methyl is turned over across its bond to C3 (left to right)", async () => {
+    // (the methyl turned with a lone carbon (6) at (2.6, -0.5): their middle x = 0.867, the methyl to (2.6, -0.5). Seen from C2, the O
+    //  is up, C3 at -30 degrees and the methyl at -11: O -> C3 -> C1 now runs counterclockwise in the page, so the O must come in front
+    //  - the hashes made a wedge, though neither of their atoms moved: the H behind, counterclockwise, S. Kept as hashes, as today: R)
+    const m = with12({ stereo: "down", narrow: 1 });
+    const r = await turned({ ...m, atoms: [...m.atoms, { id: 6, x: 2.6 * L, y: -0.5 * L, r: 0.9, el: "C" }] }, [2, 6], [], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+  });
+
+  it("keeps S where a centre stated by a wedge and hashes stays and its methyl and ethyl are turned over (left to right)", async () => {
+    // (C2 (1) with Cl (4) at 60 degrees on a wedge, Br (6) at 120 on hashes, the methyl (2) at 210, the ethyl's C3 (3) at 330 and C4 (5)
+    //  at (1.732, 0); Br > Cl > C3 > C1. Before, h the depth: Br (-0.5, 0.866, -h), Cl (0.5, 0.866, h), C3 (0.866, -0.5, 0), C1
+    //  (-0.866, -0.5, 0): the triple product 4.73 h, S. The methyl, C3 and C4 turned about x = 0.433: C1 to (1.732, -0.5), C3 to
+    //  (0, -0.5). With both wedges exchanged - Br (-0.5, 0.866, h), Cl (0.5, 0.866, -h) - the triple product is 4.73 h again: S. Kept as
+    //  they were, as today: -4.73 h, R)
+    const m: Model = {
+      atoms: [...butanol(null).atoms.filter((a) => a.id !== 4), { id: 4, x: 0.5 * L, y: 0.866 * L, r: 0.9, el: "Cl" }, { id: 6, x: -0.5 * L, y: 0.866 * L, r: 0.9, el: "Br" }],
+      bonds: [...butanol(null).bonds.map((b) => (b.id === 12 ? { ...b, stereo: "up" as const, narrow: 1 } : b)), { id: 14, a: 1, b: 6, order: 1, stereo: "down", narrow: 1 }],
+    };
+    const r = await turned(m, [2, 3, 5], [13], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect([r.bond(12).stereo, r.bond(14).stereo]).toEqual(["down", "up"]);
   });
 });

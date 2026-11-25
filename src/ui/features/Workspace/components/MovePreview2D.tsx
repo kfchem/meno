@@ -6,6 +6,7 @@ import { COLORS, ALPHA } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "../utils/moveSnap";
+import { projectionDrop } from "../projections/extend";
 import { mergeTarget } from "../utils/dropMerge";
 import { bondLengthFrom } from "../utils/magnified";
 import { FREE_BLEND_S, MOVE_SPRING, SNAP_SPRING, easeOutCubic, springAngle } from "../utils/angleSpring";
@@ -130,7 +131,8 @@ export default function MovePreview2D() {
     let pxSnap = ptr.x,
       pySnap = ptr.y;
     // (free, but never on an atom: there it keeps to the snap, as the drop does)
-    const isFree = (moveDrag as any).mode === "free" && !onAnotherAtom(model as any, moving.id, ptr, bondL);
+    // (a projection's group is never free: it rests at one of its atom's positions, held still or not)
+    const isFree = (moveDrag as any).mode === "free" && !onAnotherAtom(model as any, moving.id, ptr, bondL) && !(deg === 1 && projectionDrop(model as any, moving.id, ptr));
     if (deg === 1) {
       // simple: center at neighbor, angle snap + angle spring, fixed radius L
       const nb = model.atoms.find((a) => a.id === nbrIds[0]);
@@ -139,16 +141,19 @@ export default function MovePreview2D() {
           curAngRef.current = Math.atan2(ptr.y - nb.y, ptr.x - nb.x);
           angVelRef.current = 0;
         }
-        const snapAng = snapAngleAbout(model as any, moving.id, nb, ptr, bondL);
+        // (a projection's group: toward the position it will rest at, at that position's length - projections/extend, as the drop)
+        const place = projectionDrop(model as any, moving.id, ptr);
+        const R = place ? Math.hypot(place.to.x - nb.x, place.to.y - nb.y) : L;
+        const snapAng = place ? Math.atan2(place.to.y - nb.y, place.to.x - nb.x) : snapAngleAbout(model as any, moving.id, nb, ptr, bondL);
         const dt = Math.min(Math.max(dtRaw || 0.016, 0.001), 0.05);
         const sprung = springAngle(curAngRef.current, angVelRef.current, snapAng, dt, SNAP_SPRING);
         curAngRef.current = sprung.angle;
         angVelRef.current = sprung.velocity;
-        pxSnap = nb.x + L * Math.cos(curAngRef.current);
-        pySnap = nb.y + L * Math.sin(curAngRef.current);
+        pxSnap = nb.x + R * Math.cos(curAngRef.current);
+        pySnap = nb.y + R * Math.sin(curAngRef.current);
         centerRef.current = { x: nb.x, y: nb.y };
-        radiusRef.current = L;
-        targetRRef.current = L;
+        radiusRef.current = R;
+        targetRRef.current = R;
         radVelRef.current = 0;
         targetAngRef.current = curAngRef.current;
       }
