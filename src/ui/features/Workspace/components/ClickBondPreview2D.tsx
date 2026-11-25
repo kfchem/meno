@@ -5,7 +5,7 @@ import { useEditorStore } from "../store";
 import { COLORS, ALPHA } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { pageAt } from "../utils/page";
-import { newBondFrom } from "../utils/geometry";
+import { bondOutEnd } from "../projections/extend";
 import { bondLengthFrom } from "../utils/magnified";
 import { useDrawnLayout } from "./drawnLayoutContext";
 
@@ -68,7 +68,7 @@ export default function ClickBondPreview2D() {
       const rect = gl.domElement.getBoundingClientRect();
       const toward = pageAt(((h.x - rect.left) / rect.width) * 2 - 1, -(((h.y - rect.top) / rect.height) * 2 - 1), camera);
       const from = st.model.atoms.find((a) => a.id === id);
-      const to = from ? newBondFrom(st.model.atoms, st.model.bonds, id, toward, bondLengthFrom(st.model.atoms, id)) : null;
+      const to = from ? bondOutEnd(st.model, id, toward, bondLengthFrom(st.model.atoms, id)) : null;
       if (from && to) shown = { from, to };
     }
     if (shown) last.current = shown;

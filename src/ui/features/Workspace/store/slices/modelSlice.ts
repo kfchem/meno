@@ -14,7 +14,7 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
-import { newBondFrom } from "../../utils/geometry";
+import { bondOutEnd } from "../../projections/extend";
 import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
@@ -205,7 +205,7 @@ export const createModelSlice = (
 
   bondOut: (id: number, toward: { x: number; y: number }, order: Bond["order"] = 1) => {
     const { model } = get();
-    const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
+    const end = bondOutEnd(model, id, toward, bondLengthFrom(model.atoms, id));
     if (!end) return null;
     // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
     const near = get().findAtomNear(end.x, end.y, NOMINAL_BOND_LENGTH * 0.3, id);

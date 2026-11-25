@@ -5,6 +5,7 @@
  */
 import type { Atom, Bond } from "../store/types";
 import { seenPlaces, snapTo, type SeenPlace } from "./chair";
+import { newBondFrom } from "../utils/geometry";
 import { newmanExtension } from "./newman";
 import { projectionsIn } from "./rings";
 
@@ -46,6 +47,18 @@ export function chairExtension(model: { atoms: readonly Atom[]; bonds: readonly 
     return { end: { x: here.x + place.place.x - d.atoms[k].x, y: here.y + place.place.y - d.atoms[k].y }, name: place.free.kind };
   }
   return null;
+}
+
+/**
+ * Where one bond out of atom `id` ends, drawn where there is room (a double-click on the atom, the click with Option or Alt held; `newBondFrom`) -
+ * except out of an atom of a projection of the tool's, where it ends at the atom's free position nearest where the plain rule would put it, as a
+ * bond led there does (`chairExtension`): never at a slant between two. Where no free position is left, or there is no projection, the plain
+ * rule's end. The store's `bondOut` and the preview of it both take their end from here, so they cannot differ. Null where there is no such atom.
+ */
+export function bondOutEnd(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, id: number, toward: { x: number; y: number }, length: number): { x: number; y: number } | null {
+  const plain = newBondFrom(model.atoms, model.bonds, id, toward, length);
+  if (!plain) return null;
+  return chairExtension(model, id, plain)?.end ?? plain;
 }
 
 /**

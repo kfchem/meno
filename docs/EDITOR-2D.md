@@ -53,8 +53,10 @@ and in particular:
     Fusing two drawn rings by dragging atom onto atom therefore stops after
     the first pair - the second shares a neighbour with it; fused and spiro
     rings come from the ring templates.
-  - A double-click on an atom draws one bond where there is room; a
-    double-click that drags draws one bond where it is led. Near 120
+  - A double-click on an atom draws one bond where there is room (on an
+    atom of a projection - a chair, a Haworth ring, a Newman pair - at a free
+    position of it, the one nearest where there is room, never between two);
+    a double-click that drags draws one bond where it is led. Near 120
     degrees from a bond already there it snaps to that, and an arc grows
     out of the atom to tell it from the 30-degree grid. (Agreed 2026-09-28,
     after trying it: a plain drag drawing a bond was hard to get used to.)
@@ -642,6 +644,8 @@ on a page), and the **Newman projection** (`newman`).
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+  A double-click on such an atom, which draws one bond where there is room, draws it at a free position too - the one nearest where there is room - so
+  that a second double-click takes the other, and a third, with none left, goes where there is room (`bondOutEnd`).
   Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
   group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
   atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
