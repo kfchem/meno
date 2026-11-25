@@ -299,11 +299,12 @@ describe("a wedge laid out with its structure, narrow where the drawing has it",
     expect(drawnNarrow(m)).toBe(ME);
   });
 
-  it("set to a wedge from the menu after clicks to plain is drawn narrow where the plain bond left it: at the methyl", () => {
+  it("set to a wedge from the menu after clicks to plain is drawn narrow at the end a fresh wedge is: at C2, not where the plain bond left it", () => {
     let m = clicked(clicked(drawing({ stereo: "up", narrow: C2 })));
+    expect(m.bonds[WEDGE]).toMatchObject({ stereo: "none", narrow: ME });
     const b = m.bonds[WEDGE];
     m = { ...m, bonds: m.bonds.map((x, k) => (k === WEDGE ? { ...b, ...bondKindStepPatch("wedge", b, m.atoms, m.bonds) } : x)) };
-    expect(m.bonds[WEDGE]).toMatchObject({ stereo: "up", narrow: ME });
-    expect(drawnNarrow(m)).toBe(ME);
+    expect(m.bonds[WEDGE]).toMatchObject({ stereo: "up", narrow: C2 });
+    expect(drawnNarrow(m)).toBe(C2);
   });
 });

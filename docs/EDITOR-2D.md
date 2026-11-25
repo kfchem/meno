@@ -1059,11 +1059,16 @@ Both go together, because both touch every layer.
   with more bonds unless the bond said otherwise, counted again after
   every edit: two bonds drawn out of a wedge's wide end could move it to
   the other atom, turning one configuration into another with nothing
-  said. A wedge given no narrow end - chosen from the menu, say - is
-  narrow at the end with more bonds as the edit leaves it, and from then
-  on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
-  plain again with the other end narrow next time round; the wedge's icon
-  in its menu, pressed again, turns its narrow end to the other atom.
+  said. A wedge given no narrow end is narrow at the end with more bonds
+  as the edit leaves it (its first atom on a tie), and from then on keeps
+  it. A wedge or hashed wedge chosen from a bond's menu is narrow there
+  too, whatever end the bond was narrow at before - a plain bond the
+  click's round left narrow at its other end, a wedge turned about (until
+  then it kept that end, so a wedge chosen after the round came out the
+  other way round). The key 1 on a single bond, and a click, run plain,
+  wedge, hashes, and plain again with the other end narrow next time
+  round; the wedge's icon in its menu, pressed again, turns its narrow end
+  to the other atom. Only these two turn a wedge about.
 - **A Fischer projection** (2026-11-18). A structure drawn as one - each
   stereocentre a cross of four plain bonds on the page's axes, the chain
   upright, its centres one above another - states no configuration of

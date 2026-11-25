@@ -21,7 +21,7 @@ describe("the kinds a bond's menu chooses among", () => {
     expect(bondKindOf({ order: 1 })).toBe("single");
   });
 
-  it("is chosen for every bond selected at once, as one undo step, keeping what else the bond has", () => {
+  it("is chosen for every bond selected at once, as one undo step, keeping what else the bond has but its narrow end", () => {
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
@@ -37,7 +37,8 @@ describe("the kinds a bond's menu chooses among", () => {
     const kinds = () => st().model.bonds.map((x) => bondKindOf(x));
     expect(kinds()).toEqual(["wedge", "wedge"]);
     expect(doc.history().undoDepth).toBe(before + 1);
-    expect(st().model.bonds[0]).toMatchObject({ color: "#ff0000", narrow: a });
+    // (its colour kept; the narrow end it carried, at C1, not: a wedge chosen is narrow at the end a fresh one is - C2, which has more bonds)
+    expect(st().model.bonds[0]).toMatchObject({ color: "#ff0000", narrow: b });
     doc.undo();
     expect(kinds()).toEqual(["single", "single"]);
     st().setBondsKind([ab], "dative");
@@ -260,6 +261,40 @@ describe("a slow double-click on a bond (the maintainer, 2026-11-17)", () => {
     st().updateBond(bc, { order: 2 });
     expect(st().takeBackTurn(after)).toBe(false);
     expect(bondKindOf(st().model.bonds.find((x) => x.id === ab)!)).toBe("wedge");
+  });
+});
+
+describe("a wedge chosen from a bond's menu", () => {
+  /** Propane drawn as a chain: C1 (a), C2 (b, two bonds), C3 (c); bond ab between C1 and C2. A fresh wedge on ab is narrow at C2, its end with more bonds. */
+  it("is narrow at the end a fresh wedge is - C2, the end with more bonds - though the click's round left the plain bond narrow at C1", () => {
+    for (const kind of ["wedge", "hashed-wedge"] as const) {
+      const { st, ab } = chain();
+      const bond = () => st().model.bonds.find((x) => x.id === ab)!;
+      const c2 = bond().b;
+      // (the round: wedge narrow at C2, hashed wedge, then plain with the other end, C1, narrow)
+      for (let k = 0; k < 3; k++) st().bondKey(ab, 1);
+      expect(bond()).toMatchObject({ stereo: "none", narrow: bond().a });
+      st().setBondsKind([ab], kind, true);
+      expect(bond(), kind).toMatchObject({ stereo: kind === "wedge" ? "up" : "down", narrow: c2 });
+    }
+  });
+
+  it("as a hashed wedge, on a wedge its own menu turned about, is narrow at the usual end again; the click's round still turns it", () => {
+    const { st, ab } = chain();
+    const bond = () => st().model.bonds.find((x) => x.id === ab)!;
+    const [c1, c2] = [bond().a, bond().b];
+    st().setBondsKind([ab], "wedge", true);
+    expect(bond()).toMatchObject({ stereo: "up", narrow: c2 });
+    // (the wedge's own icon pressed again: turned about, narrow at C1)
+    st().setBondsKind([ab], "wedge", true);
+    expect(bond()).toMatchObject({ stereo: "up", narrow: c1 });
+    st().setBondsKind([ab], "hashed-wedge", true);
+    expect(bond()).toMatchObject({ stereo: "down", narrow: c2 });
+    // (the round from the hashed wedge: plain, narrow at C1 - then a wedge narrow at C1, as the round goes)
+    st().bondKey(ab, 1);
+    expect(bond()).toMatchObject({ stereo: "none", narrow: c1 });
+    st().bondKey(ab, 1);
+    expect(bond()).toMatchObject({ stereo: "up", narrow: c1 });
   });
 });
 

@@ -11,7 +11,7 @@ import { CHAIR_CHANGED, withChair } from "../../projections/fromFlat";
 import { sameStereo } from "../../chem/engineLayout";
 import { HAWORTH_SCALE, haworthDrawing } from "../../projections/haworth";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatchOn, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { newBondFrom } from "../../utils/geometry";
@@ -522,7 +522,7 @@ export const createModelSlice = (
     const patches = ids.flatMap((id) => {
       const bond = model.bonds.find((b) => b.id === id);
       if (!bond) return [];
-      const patch = stepOn ? bondKindStepPatch(kind, bond, model.atoms, model.bonds) : bondKindPatch(kind);
+      const patch = stepOn ? bondKindStepPatch(kind, bond, model.atoms, model.bonds) : bondKindPatchOn(kind, bond, model.bonds);
       return patchChangesNothing(bond, patch) ? [] : [[id, patch] as const];
     });
     if (!patches.length) return false;
