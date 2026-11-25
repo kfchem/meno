@@ -77,10 +77,22 @@ describe("frame names and energies through Meno's own writers", () => {
 
   it("reads its own XYZ back: names, and each frame's energy where it had one", () => {
     const back = read(xyzFileText([water as never], "t", { frames: "all" }), "water.xyz");
-    expect(back.frameNames).toEqual(["conformer A", "water frame 2/3", "conformer C"]);
+    // (the unnamed frame, written in Meno's own form, comes back unnamed)
+    expect(back.frameNames).toEqual(["conformer A", "", "conformer C"]);
     expect(back.energies![0]).toBe(-76.4);
     expect(Number.isNaN(back.energies![1])).toBe(true);
     expect(back.energies![2]).toBe(-76.38);
+  });
+
+  it("reads its own file of unnamed frames back with no names; a line whose numbers are not the frame's own stays a name", () => {
+    const unnamed = { ...water, frameNames: undefined };
+    const back = read(xyzFileText([unnamed as never], "t", { frames: "all" }), "water.xyz");
+    expect(back.frameNames).toBeUndefined();
+    expect(back.energies![2]).toBe(-76.38);
+    expect(xyzFrameName("water frame 2/3", { i: 1, of: 3 })).toBe("");
+    expect(xyzFrameName("E = -1.0 Eh water frame 2/3", { i: 1, of: 3 })).toBe("");
+    expect(xyzFrameName("run 7 frame 9/3", { i: 2, of: 3 })).toBe("run 7 frame 9/3");
+    expect(read(three("run 7 frame 9/3", "b", "c")).frameNames).toEqual(["run 7 frame 9/3", "b", "c"]);
   });
 
   it("titles each SD record with its frame's name, and reads the titles back", () => {

@@ -21,13 +21,16 @@ export const MENO_XYZ_ENERGY = { id: "meno", pattern: "\\bE = (-?\\d+(?:\\.\\d+)
 /**
  * A frame's name, as its comment line gives it (docs/FILE-IO.md, *XYZ*): the line as written, less the energy Meno reads from it
  * in its own form (`MENO_XYZ_ENERGY`), trimmed - "" where nothing else is on it. A writer chooses what is shown by what it puts
- * on the line; Meno reads no other form into it.
+ * on the line; Meno reads no other form into it - but its own writer's for a frame with no name (`xyzComment`): a line that is,
+ * less the energy, `<text> frame i/n`, `i` the frame's place in its file (`at`, from 0) and `n` its file's frames, gives none,
+ * so that a file Meno wrote reads back as it was. A line whose numbers are not the frame's own stays its name.
  */
-export function xyzFrameName(comment: string): string {
+export function xyzFrameName(comment: string, at?: { i: number; of: number }): string {
   const re = new RegExp(MENO_XYZ_ENERGY.pattern, "i");
   const m = comment.match(re);
-  const line = m?.index == null ? comment : `${comment.slice(0, m.index).trimEnd()} ${comment.slice(m.index + m[0].length).trimStart()}`;
-  return line.trim();
+  const line = (m?.index == null ? comment : `${comment.slice(0, m.index).trimEnd()} ${comment.slice(m.index + m[0].length).trimStart()}`).trim();
+  const own = at && at.of > 1 ? /(?:^|\s)frame (\d+)\/(\d+)$/.exec(line) : null;
+  return own && Number(own[1]) === at!.i + 1 && Number(own[2]) === at!.of ? "" : line;
 }
 
 /**
