@@ -3658,7 +3658,10 @@ its `id` alone.
   (`of`: the structure's identity, as Duplicates and identity read one -
   chem/identity - hashed). Each label that stands for atoms is read as
   those atoms (`labelsDrawnOut`): those it holds, as Clean-up writes a
-  group by its label, else the dictionary's. So the key is the structure's
+  group by its label, else the dictionary's; a label of one element and
+  its H (OH, HO, SH, NH2, H2N) as that element, where its bonds leave it
+  that many H; a group's label read outward from a bond on its right
+  (MeO, AcO, HO2C) as the group. So the key is the structure's
   elements, charges, masses, unpaired electrons, bonds and each
   configuration the drawing shows - not how it is drawn: not where it
   lies, which bonds are wedged or which way, whether an H is drawn, nor
