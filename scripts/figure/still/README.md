@@ -49,6 +49,10 @@ is a path - both relative to the manifest. A figure is written as
 - `hydrogens`: `true` (the default) draws every atom. `false` leaves out the
   hydrogens on carbon, which makes the picture smaller and more open than
   the molecule.
+- `margin`: the margin round what is drawn, as a part of its longer side
+  (0.06 where left out); the picture is fitted to its atoms, sticks, dashed
+  lines and their numbers, and centred. `box`: instead, a frame of your own,
+  `[x, y, width, height]` in the SVG's units.
 - `view`: three atoms - their plane faces the eye, the first two lying left to
   right, the third above that line; or two atoms - that pair lies left to
   right, and the rest of the molecule is spread as wide as it can be up and
@@ -62,5 +66,5 @@ be read, stops the run with an error that names the figure and the number.
 
 It is the picture Meno draws where there is no WebGL: shaded discs and sticks,
 not the app's lit picture. A dashed line is drawn over every ball it passes
-behind. As in the app, a molecule read from XYZ has "Bond orders unknown"
-written over it, and one without hydrogens "No H in file".
+behind. The page's notes about a molecule are left out of the picture;
+sticks from an XYZ file show which atoms are joined, not bond orders.

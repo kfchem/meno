@@ -10,11 +10,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import * as THREE from "three";
+import { createSVG } from "../../../src/lib/chem/layout2d";
 import { STYLE_PRESETS, styleOf } from "../../../src/lib/chem/style";
 import { workspace3dOf } from "../../../src/lib/chem/workspaceStyle3d";
 import { DEFAULT_STYLE_3D_CHOICE } from "../../../src/lib/chem/style3d";
 import { emptyWorkspaceDocument } from "../../../src/ui/features/Workspace/document";
-import { drawingSvg, type PictureState } from "../../../src/ui/features/Workspace/fileActions";
+import { drawingLayout, type PictureState } from "../../../src/ui/features/Workspace/fileActions";
 import type { Carried3D, Turn3D } from "../../../src/ui/features/Workspace/store/types";
 import { readStructures } from "../../../src/lib/io/structures";
 import { bondsByDistance } from "../../../src/utils/structureParsers";
@@ -35,6 +36,10 @@ export type Figure = {
   hydrogens?: boolean;
   /** The view: three atoms (their plane faces the eye, the first two lying left to right), or two (that pair lies left to right, the rest spread as far as it goes up and down); none, as read. */
   view?: number[];
+  /** The margin round what is drawn, as a part of its longer side; 0.06 where not given. */
+  margin?: number;
+  /** The picture's own frame, in the drawing's units as the SVG's viewBox (x, y, width, height), instead of one fitted to what is drawn. */
+  box?: [number, number, number, number];
 };
 
 /** What the manifest holds. */
@@ -152,7 +157,43 @@ export function stillSvg(f: Figure, text: string): string {
       ? { docStyle3d: workspace3dOf({ ...DEFAULT_STYLE_3D_CHOICE, looks: { balls: { hydrogens: "carbonHidden" } } }) }
       : {}),
   };
-  return drawingSvg({ atoms: [], bonds: [], molecules3d: [molecule] }, picture, styleOf({ preset: STYLE_PRESETS[0].id, changes: {} }));
+  const { layout, opts } = drawingLayout({ atoms: [], bonds: [], molecules3d: [molecule] }, picture, styleOf({ preset: STYLE_PRESETS[0].id, changes: {} }));
+  // (what the page says over a molecule - how its file leaves it - is not the picture's: only the distances stay)
+  layout.measures = layout.measures?.filter((k) => k.lines.length > 0);
+  return fitted(createSVG(layout, opts), f);
+}
+
+/** The bounds of what an SVG of balls, sticks, dashes and their numbers draws: x0, y0, x1, y1. */
+export function drawnBounds(svg: string): [number, number, number, number] {
+  const n = (t: string, k: string) => Number(new RegExp(`${k}="([^"]+)"`).exec(t)![1]);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const take = (ax: number, ay: number, bx: number, by: number) => {
+    x0 = Math.min(x0, ax);
+    y0 = Math.min(y0, ay);
+    x1 = Math.max(x1, bx);
+    y1 = Math.max(y1, by);
+  };
+  for (const [t] of svg.matchAll(/<circle [^>]*>/g)) take(n(t, "cx") - n(t, "r"), n(t, "cy") - n(t, "r"), n(t, "cx") + n(t, "r"), n(t, "cy") + n(t, "r"));
+  for (const [t] of svg.matchAll(/<line [^>]*>/g)) {
+    const h = n(t, "stroke-width") / 2;
+    take(Math.min(n(t, "x1"), n(t, "x2")) - h, Math.min(n(t, "y1"), n(t, "y2")) - h, Math.max(n(t, "x1"), n(t, "x2")) + h, Math.max(n(t, "y1"), n(t, "y2")) + h);
+  }
+  // (a number's white ground holds the number)
+  for (const [t] of svg.matchAll(/<rect [^>]*>/g)) take(n(t, "x"), n(t, "y"), n(t, "x") + n(t, "width"), n(t, "y") + n(t, "height"));
+  return [x0, y0, x1, y1];
+}
+
+/** The SVG framed: as the figure's `box` says, or to what is drawn with an even margin, centred. The size on paper keeps the drawing's scale. */
+function fitted(svg: string, f: Figure): string {
+  const old = /viewBox="([^"]+)" width="([^"]+)"/.exec(svg)!;
+  const scale = Number(old[2]) / Number(old[1].split(" ")[2]);
+  let box = f.box;
+  if (!box) {
+    const [x0, y0, x1, y1] = drawnBounds(svg);
+    const m = (f.margin ?? 0.06) * Math.max(x1 - x0, y1 - y0);
+    box = [x0 - m, y0 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m];
+  }
+  return svg.replace(/viewBox="[^"]+" width="[^"]+" height="[^"]+"/, `viewBox="${box.join(" ")}" width="${box[2] * scale}" height="${box[3] * scale}"`);
 }
 
 /** The manifest at `path`, every figure drawn: each SVG with its name. A file that cannot be read is an error that names the figure. */

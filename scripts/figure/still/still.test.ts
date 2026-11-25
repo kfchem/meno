@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { drawManifest, stillSvg, turnByAtoms } from "./still";
+import { drawManifest, drawnBounds, stillSvg, turnByAtoms } from "./still";
 
 const turned = (places: number[], turn: ReturnType<typeof turnByAtoms>, i: number) =>
   new THREE.Vector3(places[3 * i], places[3 * i + 1], places[3 * i + 2]).applyQuaternion(new THREE.Quaternion(...turn));
@@ -111,6 +111,27 @@ describe("a dashed distance", () => {
     expect(lost.sticks).toHaveLength(0);
     expect(lost.dashes.length).toBeGreaterThan(2);
     expect(svg).toContain(">1.500 Å<");
+  });
+});
+
+describe("the frame", () => {
+  it("fitted to what is drawn: centred, equal margins, 6% of the longer side; no page note", () => {
+    // O (0,0,0), N (2,0,0), a dashed 2.000 Å between: content is wider than tall, so the margin is 0.06 of its width on all four sides.
+    const svg = stillSvg({ name: "c", xyz: "", distances: [[1, 2]] }, xyz(["O 0 0 0", "N 2 0 0"]));
+    const [x0, y0, x1, y1] = drawnBounds(svg);
+    const [vx, vy, vw, vh] = /viewBox="([^"]+)"/.exec(svg)![1].split(" ").map(Number);
+    const px = Number(/ width="([^"]+)"/.exec(svg)![1]) / vw;
+    expect((x0 - vx) * px).toBeCloseTo((vx + vw - x1) * px, 0);
+    expect((y0 - vy) * px).toBeCloseTo((vy + vh - y1) * px, 0);
+    expect(x0 - vx).toBeCloseTo(0.06 * (x1 - x0), 6);
+    expect(y0 - vy).toBeCloseTo(0.06 * (x1 - x0), 6);
+    expect(svg).not.toContain("Bond orders");
+    expect(svg).not.toContain("No H in file");
+  });
+
+  it("the manifest's own frame is used as given", () => {
+    const svg = stillSvg({ name: "c", xyz: "", box: [-5, -4, 10, 8] }, xyz(["O 0 0 0", "N 2 0 0"]));
+    expect(svg).toContain('viewBox="-5 -4 10 8"');
   });
 });
 
