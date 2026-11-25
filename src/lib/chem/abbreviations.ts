@@ -188,6 +188,8 @@ const CONTRACTED: Abbreviation[] = [
   // (read outward from the bond, as every label is: its first symbol bonded - N, the iso form; OCN, O bonded, is composed. No NC: typed,
   //  it is CN as drawn on a bond's left, a nitrile - the maintainer, 2026-10-11)
   { label: "NCO", smiles: "*N=C=O", name: "isocyanato" },
+  // (and NCSe, N=C=Se, as NCS bonded is read - SeCN, Se bonded, is composed, as SCN is; no reagent of its letters, so alone too)
+  { label: "NCSe", smiles: "*N=C=[Se]", name: "isoselenocyanato" },
   { label: "NO2", smiles: "*[N+](=O)[O-]", name: "nitro" },
   { label: "N3", smiles: "*N=[N+]=[N-]", name: "azido" },
   { label: "CF3", smiles: "*C(F)(F)F", name: "trifluoromethyl" },

@@ -23,6 +23,15 @@ describe("a pseudohalide's label, read outward from its bond: its first symbol b
     expect(read("SCN")).toEqual({ atoms: ["S", "C", "N"], bonded: ["S"] });
   });
 
+  it("NCSe bonded is the isoselenocyanate, N bonded; SeCN the selenocyanate, Se bonded - as NCS and SCN are read", () => {
+    // (by hand: NCSe read outward from its bond, its first symbol bonded - R-N=C=Se, N with two bonds out (R and C=), C with four
+    //  (=N, =Se), Se with two (=C); SeCN likewise R-Se-C#N, Se with two, C four, N three: neither leaves an H)
+    expect(read("NCSe")).toEqual({ atoms: ["N", "C", "Se"], bonded: ["N"] });
+    expect(read("SeCN")).toEqual({ atoms: ["Se", "C", "N"], bonded: ["Se"] });
+    const iso = placedAbbreviation("NCSe", { x: 1.5, y: 0 }, 1.5)!;
+    expect(iso.bonds.map((b) => b.order).sort()).toEqual([2, 2]);
+  });
+
   it("NCS alone is N-chlorosuccinimide, the reagent, as before", () => {
     const alone = read("NCS", false)!;
     expect(alone.bonded).toEqual([]);
@@ -52,6 +61,10 @@ describe("a pseudohalide's label read off a picture, as shown (IUPAC GR-2.1.6)",
     // (NCS, one unit of the table, turned element by element: SCN, S bonded - a thiocyanate)
     expect(readDrawnLabel("NCS", reads, true).el).toBe("SCN");
     expect(readDrawnLabel("SCN", reads, true).el).toBe("NCS");
+    // (the selenium pair as the sulfur pair: NCSe left of its bond has its Se at the bond - SeCN, a selenocyanate - and SeCN there
+    //  its N - NCSe, an isoselenocyanate)
+    expect(readDrawnLabel("NCSe", reads, true).el).toBe("SeCN");
+    expect(readDrawnLabel("SeCN", reads, true).el).toBe("NCSe");
   });
 
   it("right of its bond, or upright, as it is: NCO an isocyanate, CN a nitrile, SCN a thiocyanate", () => {
@@ -59,6 +72,8 @@ describe("a pseudohalide's label read off a picture, as shown (IUPAC GR-2.1.6)",
     expect(readDrawnLabel("NCO", reads).el).toBe("NCO");
     expect(readDrawnLabel("CN", reads).el).toBe("CN");
     expect(readDrawnLabel("SCN", reads).el).toBe("SCN");
+    expect(readDrawnLabel("NCSe", reads).el).toBe("NCSe");
+    expect(readDrawnLabel("SeCN", reads).el).toBe("SeCN");
   });
 
   it("left of its bond and read only as it is, as it is: HO still OH turned round, Ph still Ph", () => {

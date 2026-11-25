@@ -25,6 +25,14 @@ describe("a label read where a figure's structure is made, by the side its bond 
     expect(elOf(label("OCN", -30))).toBe("OCN");
   });
 
+  it("the selenium pair as the sulfur pair: NCSe left of its bond a selenocyanate (Se bonded), right of it an isoselenocyanate (N bonded)", () => {
+    // (by hand, GR-2.1.6: the symbol at the bond's end is the bonded atom - left of its bond NCSe ends in Se there, SeCN in N)
+    expect(elOf(label("NCSe", 30))).toBe("SeCN");
+    expect(elOf(label("SeCN", 30))).toBe("NCSe");
+    expect(elOf(label("NCSe", -30))).toBe("NCSe");
+    expect(elOf(label("SeCN", -30))).toBe("SeCN");
+  });
+
   it("whichever end of the bond the label is: the bond's first atom or its second", () => {
     expect(elOf(label("NCO", 30, false))).toBe("OCN");
     expect(elOf(label("OCN", 30, false))).toBe("NCO");

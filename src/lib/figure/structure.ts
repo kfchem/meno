@@ -33,9 +33,11 @@ export function readDrawnLabel(drawn: string, reads: LabelReader, fromRight = fa
   //  there is a cyanate, O bonded (IUPAC GR-2.1.6); elsewhere as it is first - NCO an isocyanate)
   // (a label of elements alone is turned element by element too, left of its bond: NCS, one unit of the table - the reagent's
   //  name - shown there is SCN, S bonded. Never a group's name - BrZ, DMPM - which names a group whichever way it is shown)
+  // (and a group's label whose units split it mid-symbol, NCSe as NCS and e: turned symbol by symbol too, after its units - SeCN)
   const named = abbreviationStructure(drawn);
+  const split = reversedLabel(drawn) !== drawn && !reads(reversedLabel(drawn));
   const symbols =
-    fromRight && !(named && named.attach.length) && /^(?:[A-Z][a-z]?\d*)+$/.test(drawn) ? drawn.match(/[A-Z][a-z]?\d*/g)!.reverse().join("") : null;
+    fromRight && (!(named && named.attach.length) || split) && /^(?:[A-Z][a-z]?\d*)+$/.test(drawn) ? drawn.match(/[A-Z][a-z]?\d*/g)!.reverse().join("") : null;
   const turned = [...new Set([reversedLabel(drawn), ...(symbols ? [symbols] : [])])].filter((t) => t !== drawn);
   const tries = fromRight ? [...turned, drawn] : [drawn, ...turned];
   // (a charge written last stays last, turned round or not: H3N+ as NH3+)
