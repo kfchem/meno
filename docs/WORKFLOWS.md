@@ -1036,7 +1036,12 @@ Conformers go through a workflow as any set does (decided):
     structures*, or a workflow's - is one compound's conformers wherever
     it is, as it says it is; a set the chemist draws round one is a
     conformer set, each molecule in it a compound, its frames its
-    conformers. A file's many geometries are still many compounds.
+    conformers. A file's many geometries are still many compounds -
+    until the chemist says they are one compound's: *Frames are
+    conformers* on a molecule's menu, or *Join as conformers* on the
+    records of one compound selected (docs/WORKSPACE.md, *Frames taken
+    as conformers*). Such a molecule is then one compound's conformers
+    as a search's are; nothing is asked as a file is read.
   - **but an optimisation's or a relaxed scan's steps are no entries**
     (2026-10-22). Of a calculation's output that optimised, only the
     geometries the run converged on are entries: an optimisation's last,

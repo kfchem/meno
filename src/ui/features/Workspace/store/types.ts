@@ -1557,6 +1557,10 @@ export type EditorState = {
   learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => void;
   /** A molecule in 3D changed by the chemist - its bond orders given, its hydrogens added - as one undo step. */
   changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => void;
+  /** Its frames marked a conformer set, or the mark taken off (utils/asConformers): one step to undo; marked, its lowest shown where every frame has an energy. */
+  setFramesConformers: (id: number, on: boolean) => void;
+  /** Molecules of one compound joined as one conformer set, in the page's order, at the first's place (utils/asConformers `joined`): one step to undo, which gives them back as they were. */
+  joinAsConformers: (ids: readonly number[]) => void;
   /** A molecule in 3D switched to its other look - the secondary, or back to the primary - and those selected with it to the same. */
   switchLook3d: (id: number) => void;
   /** A measurement of the atoms and bonds chosen, which are then let go. */

@@ -884,6 +884,30 @@ Taken on 2026-10-13:
 - **Conformer sets.** Each conformer's share at room temperature
   (Boltzmann) stands beside its energy; *Show all conformers* draws the
   others over the one shown, each as dark as it is likely.
+- **Frames taken as conformers** (`utils/asConformers.ts`). A molecule
+  read from a file with several frames stays a molecule with frames, and
+  a file's records stay compounds of their own; nothing is asked as the
+  file is read. On purpose, the chemist says otherwise:
+  - *Frames are conformers*, ticked, on the menu of a molecule whose
+    frames each have the same atoms in the same order and the same joins
+    as Meno perceives them - bonds where the atoms stand close enough,
+    frame by frame, for a file that gives none. Not offered otherwise:
+    a file of a reaction path, whose joins break and form, or whose
+    frames' elements differ, is no conformer set. Chosen, the molecule
+    is a conformer set; chosen again, the mark is taken off. Undo and
+    redo take it back and give it again.
+  - *Join as conformers*, on the menu of molecules in 3D selected that
+    are one compound by the workflow's same-constitution check (*As
+    conformers*: the same atoms in the same order, bonded the same way,
+    of the same charge and spin): one set of them, in the page's order,
+    where the first stands - each record's title its frame's name, each
+    energy kept. Not offered where they differ. Undo gives them back as
+    they were, each at its place.
+  - Either way the set is as any conformer set: its lowest shown, where
+    every frame has an energy; shares where every frame has one; its
+    conformers numbered. What was worked out of the molecules as wholes -
+    a calculation's results, numbers, shares - is not carried into a
+    joined set. No card, no setting, no notice.
 
 Taken on 2026-10-04, for stage 2:
 

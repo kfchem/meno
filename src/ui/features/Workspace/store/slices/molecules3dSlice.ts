@@ -17,6 +17,7 @@ import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks"
 import { fitResultSets } from "../../workflow/run";
 import { heldViewId, shownIn } from "../../workflow/heldView";
 import { whileMoving } from "../../chem/crossings";
+import { joinable, joined, lowestFrame } from "../../utils/asConformers";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -354,6 +355,28 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     },
     changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => {
       doc.edit(label, (d) => ops.changeMolecule3d(d, id, change));
+    },
+    setFramesConformers: (id: number, on: boolean) => {
+      doc.edit(on ? "frames as conformers" : "frames not conformers", (d) =>
+        ops.changeMolecule3d(d, id, (m) => {
+          if (on) return { ...m, conformerSet: true };
+          const { conformerSet: _set, ...rest } = m;
+          return rest;
+        }),
+      );
+      // (a conformer set shows its lowest - where every frame has an energy - until one is picked)
+      const m = on ? get().molecules3d.find((x) => x.id === id) : undefined;
+      const lowest = m ? lowestFrame(m) : null;
+      if (lowest != null) get().setFrame3d(id, lowest);
+    },
+    joinAsConformers: (ids: readonly number[]) => {
+      const ms = get().molecules3d.filter((m) => ids.includes(m.id));
+      if (!joinable(ms)) return;
+      doc.edit("join as conformers", (d) => ops.joinMolecules3d(d, ids, joined));
+      const m = get().molecules3d.find((x) => x.id === ms[0].id);
+      get().selectMolecules3d([ms[0].id]);
+      const lowest = m ? lowestFrame(m) : null;
+      get().setFrame3d(ms[0].id, lowest ?? 0);
     },
     switchTalkLook3d: (id: number) =>
       set((prev) => {

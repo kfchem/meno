@@ -1,4 +1,5 @@
 import RoleOffer from "./RoleOffer";
+import { conformersOffered, joinable } from "./utils/asConformers";
 import IconTips from "./components/IconTips";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
@@ -1281,6 +1282,7 @@ function WorkspaceContent({
   const magnifyAtoms = (menu?.kind === "atom" || menu?.kind === "bond") && menuAtom != null && menu.selection !== "here" ? [menuAtom] : menu?.selection === "here" ? [...menuSel.atoms] : [];
   const magnifyFirst = molecules3d.find((m) => m.id === magnifyIds[0]) ?? model.atoms.find((a) => a.id === magnifyAtoms[0]);
   const menuMagnify = magnifyFirst ? { now: magnifyFirst.magnified ?? 1, set: (k: number) => store.getState().setMagnified(magnifyAtoms, magnifyIds, k) } : undefined;
+  const joinIds = menuMolecule && menu?.selection === "here" && menuSel3d.has(menuMolecule.id) ? molecules3d.filter((m) => menuSel3d.has(m.id)).map((m) => m.id) : [];
   const menu3d: MenuMolecule3D | undefined = menuMolecule
     ? {
         otherLook: (() => {
@@ -1361,6 +1363,14 @@ function WorkspaceContent({
           : {}),
         ...(menuMolecule.calc?.source
           ? { output: { name: menuMolecule.calc.source.name, show: () => void showOutput(menuMolecule.id, menuMolecule.calc!.source!) } }
+          : {}),
+        // (its frames taken as conformers, on purpose - each alike - or the mark taken off: utils/asConformers)
+        ...(conformersOffered(menuMolecule)
+          ? { framesConformers: { on: !!menuMolecule.conformerSet, set: (on: boolean) => store.getState().setFramesConformers(menuMolecule.id, on) } }
+          : {}),
+        // (the molecules selected with it, one compound: joined as one set of conformers)
+        ...(joinIds.length >= 2 && joinable(molecules3d.filter((m) => joinIds.includes(m.id)))
+          ? { onJoinConformers: () => store.getState().joinAsConformers(joinIds) }
           : {}),
         ...((menuMolecule.frames?.length ?? 0) > 0
           ? {
