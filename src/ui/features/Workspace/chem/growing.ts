@@ -10,7 +10,7 @@
  * page shows - each conformer once - however many the rounds tried.
  */
 import type { Conformers } from "../../../../lib/roles/client";
-import { keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
+import { keptFrames, keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
 import { joined, roundsHow, RoundsSeen, type RoundsJudge } from "./conformerRounds";
 import { withChosen, withOwnCip, type OpenStereo } from "./openStereo";
 import { partsSideBySide } from "./partsApart";
@@ -29,23 +29,32 @@ type Row = { label: string; text: string };
  * its mirror image's, their R and S read from their own places
  * (`withOwnCip`), with the configurations chosen, those its checks let
  * stand, its parts side by side, each once (`asThePageShows`) - laid over
- * `onto`, where given.
+ * `onto`, where given; and, where `rounds` says which round each frame came
+ * in, each once in the order they came.
  */
-export function shownOf(raw: Conformers, w: ShownWith, onto?: readonly number[]): Conformers {
+export function shownOf(raw: Conformers, w: ShownWith, onto?: readonly number[], rounds?: readonly number[]): Conformers {
   const c = w.reflect ? reflectedConformers(raw) : raw;
-  return asThePageShows(partsSideBySide(keptMade(withChosen(withOwnCip(c), w.open), w.checks), w.parts), onto);
+  const made = keptMade(withChosen(withOwnCip(c), w.open), w.checks);
+  // (each frame's round, of those its checks let stand)
+  const came = rounds && made.frames.length !== c.frames.length ? keptFrames(c.frames, w.checks).map((i) => rounds[i]) : rounds;
+  return asThePageShows(partsSideBySide(made, w.parts), onto, came);
 }
 
 /**
  * A search's rounds as they come, judged and kept (`add`, as a judge's
  * `RoundsJudge.add` does), and what the page shows of them all so far
- * (`shown`): laid over what it showed first, so that a lower conformer a
- * later round finds does not turn it.
+ * (`shown`): laid over what it showed first, its equivalent atoms in the
+ * places they had there, and each conformer the frame it was first shown
+ * as - so that a lower conformer a later round finds, or the same one found
+ * again lower, changes nothing of those shown but where they stand in the
+ * list.
  */
 export class Growing {
   private readonly seen: RoundsSeen;
   private raw: Conformers | null = null;
   private readonly hows: (Row[] | undefined)[] = [];
+  /** Which round each frame of `raw` came in. */
+  private readonly rounds: number[] = [];
   private onto: number[] | null = null;
 
   constructor(atoms: Conformers["atoms"], bonds: Conformers["bonds"], window: number, private readonly w: ShownWith) {
@@ -55,6 +64,7 @@ export class Growing {
   /** A round's conformers kept, and how many of them are new (`RoundsSeen.add`), judged by `energies`. */
   add(got: Conformers, energies: readonly number[]): number {
     this.raw = this.raw ? joined(this.raw, got) : got;
+    for (let k = 0; k < got.frames.length; k++) this.rounds.push(this.hows.length);
     this.hows.push(got.how);
     return this.seen.add(got.frames, energies);
   }
@@ -63,7 +73,7 @@ export class Growing {
   shown(more: readonly Row[] = []): Conformers | null {
     if (!this.raw) return null;
     const how = this.hows.length > 1 && this.hows.some((h) => h?.length) ? roundsHow(this.hows) : (this.raw.how ?? []);
-    const shown = shownOf({ ...this.raw, how: [...how, ...more] }, this.w, this.onto ?? undefined);
+    const shown = shownOf({ ...this.raw, how: [...how, ...more] }, this.w, this.onto ?? undefined, this.rounds);
     this.onto ??= shown.frames[0] ? [...shown.frames[0]] : null;
     return shown;
   }

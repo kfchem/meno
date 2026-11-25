@@ -585,6 +585,15 @@ Taken on 2026-10-13:
   the page never waits on it.
   - The conformer shown stays shown as more come: where a lower one is
     found before it, the chip moves on with it.
+  - Nothing of a conformer shown changes as more come: each
+    keeps the frame it was first shown as, its own energy with it, every
+    atom where it was - its equivalent atoms in the places they had in
+    what it first showed, not in a later round's lowest. Each conformer
+    is kept once in the order the rounds came, lowest first within a
+    round, each against those kept before it, then put lowest first: a
+    later round's frame of a conformer already shown is set aside, the
+    same, even where its energy is a little lower. Of a search of one
+    round this is the rule above.
   - What the search brings is the view's until it ends, then written
     into the document once - as one step with the 3D structure's making,
     where nothing was done between; else as a step of its own. Undo takes

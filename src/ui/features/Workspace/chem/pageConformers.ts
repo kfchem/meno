@@ -6,7 +6,10 @@
  *   by those of the model they were optimised in (a lighter metal standing
  *   in, eta rings held: `modelEnergies`) - else in the order they came;
  * - each conformer once, by Meno's one definition (`workflow/sameConformer`),
- *   each against those kept before it;
+ *   each against those kept before it - lowest first; or, of a search that
+ *   goes on (`rounds`), in the order they came, round by round and lowest
+ *   first within each, so that one shown stays shown, as it came, however
+ *   low a later round finds it again;
  * - each laid over the first by its heavy atoms, turned and moved, never
  *   reflected - or over `onto`, what a search that goes on showed first;
  * - their equivalent branches in the first's places, or in `onto`'s
@@ -19,18 +22,21 @@ import type { Conformers } from "../../../../lib/roles/client";
 import { bestTurn, SAME_CONFORMER, Sameness } from "../workflow/sameConformer";
 import { settleEquivalents } from "./settle";
 
-export function asThePageShows(c: Conformers, onto?: readonly number[]): Conformers {
+export function asThePageShows(c: Conformers, onto?: readonly number[], rounds?: readonly number[]): Conformers {
   const { frames } = c;
   if (!frames.length) return c;
   const given = (e?: number[]) => (e?.length === frames.length ? e : undefined);
   const by = given(c.energies) ?? given(c.modelEnergies);
-  const order = frames.map((_, i) => i);
-  if (by) order.sort((x, y) => by[x] - by[y] || x - y);
-  // (the one conformer kept once: lowest first, each only against those kept before it)
+  const lowest = (x: number, y: number) => (by ? by[x] - by[y] : 0) || x - y;
+  const round = rounds?.length === frames.length ? rounds : undefined;
+  const order = frames.map((_, i) => i).sort((x, y) => (round ? round[x] - round[y] : 0) || lowest(x, y));
+  // (the one conformer kept once, each only against those kept before it: lowest first - or, as a search goes on, in the order
+  //  its rounds came, so that a later round's frame of one already kept is set aside, however low, and the one shown stays)
   const same = new Sameness(c.atoms, c.bonds, frames[0]);
   const marks = frames.map((f) => same.signature(f));
   const kept: number[] = [];
   for (const i of order) if (!kept.some((k) => same.bound(marks[i], marks[k]) <= SAME_CONFORMER && same.same(frames[i], frames[k]))) kept.push(i);
+  if (round) kept.sort(lowest);
   // (each laid over the lowest by its heavy atoms, for the overlay - or over `onto`, where the lowest was laid before: a search
   //  that goes on keeps them where they were shown, however low a later round's lowest)
   const heavy = c.atoms.flatMap((a, i) => (a.el !== "H" && a.el !== "*" ? [i] : []));
