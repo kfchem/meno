@@ -1084,66 +1084,90 @@ export function reversedLabel(text: string): string {
  * The units a label is drawn in: those it is read in. A label the reader
  * reads as one atom with its H and the groups on it - a group or a ligand
  * attached by that atom - is that atom, its H and each group with its
- * count, as typed: PtBu3 (read as tri-tert-butylphosphine) is P and tBu3,
- * NiPr2 N and iPr2, NHs-Bu N, H and s-Bu - so that turned round at a left
- * end it is tBu3P, iPr2N, s-BuHN, never Bu3Pt; `turned`, in that order,
- * what parentheses hold turned as `reversedLabel` turns it. Null for any
- * other label - a metal with its ligands, a formula, a reagent, words -
- * drawn in its `labelUnits`.
+ * count: PtBu3 (read as tri-tert-butylphosphine) is P and tBu3, NiPr2 N and
+ * iPr2, NHs-Bu N, H and s-Bu - so that turned round at a left end it is
+ * tBu3P, iPr2N, s-BuHN, never Bu3Pt. Typed with that atom last - Ph3P,
+ * tBu3P, as written on a bond's left - the typed order is the left end's,
+ * and turned round it is the right end's: PPh3, PtBu3. `turned` gives the
+ * units with the atom last, what parentheses hold turned as
+ * `reversedLabel` turns it; else with the atom first. Null for any other
+ * label - a metal with its ligands, a formula, a reagent, words - drawn in
+ * its `labelUnits`.
  */
 export function readUnits(text: string, turned = false): string[] | null {
   if (!READ_SEEN.has(text)) READ_SEEN.set(text, atomAndGroupUnits(text));
-  const units = READ_SEEN.get(text);
-  if (!units || !turned) return units ?? null;
-  return [...units].reverse().map((u) => {
+  const read = READ_SEEN.get(text);
+  if (!read) return null;
+  return turned === read.atomLast ? read.units : turnedUnits(read.units);
+}
+/** What `readUnits` has answered, by label (forgotten as the user's own change). */
+const READ_SEEN = new Map<string, { units: string[]; atomLast: boolean } | null>();
+
+/** Units in the other order, what parentheses hold turned as `reversedLabel` turns it. */
+const turnedUnits = (units: readonly string[]) =>
+  [...units].reverse().map((u) => {
     const m = /^\((.*)\)(\d*)$/.exec(u);
     return m ? `(${reversedLabel(m[1])})${m[2]}` : u;
   });
-}
-/** What `readUnits` has answered, by label (forgotten as the user's own change). */
-const READ_SEEN = new Map<string, string[] | null>();
 
 /** The heavy atoms of a structure. */
 const heavyAtoms = (s: GroupStructure) => s.atoms.filter((x) => x.el !== "H").length;
 
 /**
- * A label read as one atom with its H and groups, split as it is read: the
- * atom the reader attaches it by, first in the label as typed, then an H
- * and its count, then the groups, each one the reader reads, with its count
- * - their atoms with the atom's exactly the reader's. Null for any other.
+ * A label read as one atom with its H and groups, split as it is read, in
+ * the order typed: the atom the reader attaches it by, first in the label
+ * (`atomLast` false) or last (true, the H then before it), an H and its
+ * count, the groups, each one the reader reads, with its count - their
+ * atoms with the atom's exactly the reader's. Null for any other.
  */
-function atomAndGroupUnits(text: string): string[] | null {
+function atomAndGroupUnits(text: string): { units: string[]; atomLast: boolean } | null {
   const a = abbreviationOf(text);
   if (!a || (a.kind && a.kind !== "ligand")) return null;
   const s = abbreviationStructure(text);
   if (!s || s.attach.length !== 1 || s.haptic?.length) return null;
   const el = s.atoms[s.attach[0]]?.el;
-  if (!el || !text.startsWith(el)) return null;
+  if (!el) return null;
   const groupOf = (unit: string): GroupStructure | null => {
     const g = abbreviationOf(unit);
     const gs = g && !g.kind && !g.carrying ? abbreviationStructure(unit) : null;
     return gs && gs.attach.length === 1 ? gs : null;
   };
-  const after = text.slice(el.length);
-  const hs = /^H\d*/.exec(after)?.[0];
-  // (the H read with the atom, or no H at all: NHex is N and Hex)
-  for (const h of [undefined, hs]) {
-    if (h === undefined && hs !== undefined && hs.length === after.length) continue;
-    const rest = after.slice(h?.length ?? 0);
-    if (!rest) continue;
+  // the groups, each read with its count, their atoms and the atom's the reader's - or null (what parentheses hold written as on
+  // a bond's left where the atom is typed last: (MeO)3P, (PhO)3P)
+  const groupsOf = (rest: string, atomLast = false): string[] | null => {
     const groups = labelUnits(rest);
     let heavy = 1;
     for (const unit of groups) {
       // (a group with its count, or in parentheses with it: tBu3, (t-Bu)3 - a name's own digits kept, C6F5)
       const m = /^(?:\((.+)\)|(.*?\D))(\d*)$/.exec(unit);
-      const [g, n] = groupOf(unit) ? [groupOf(unit), 1] : m ? [groupOf(m[1] ?? m[2]), m[3] ? Number(m[3]) : 1] : [null, 0];
-      if (!g) {
-        heavy = -1;
-        break;
-      }
+      const named = (held: string) => groupOf(held) ?? (atomLast ? groupOf(reversedLabel(held)) : null);
+      const [g, n] = groupOf(unit) ? [groupOf(unit), 1] : m ? [m[1] !== undefined ? named(m[1]) : groupOf(m[2]), m[3] ? Number(m[3]) : 1] : [null, 0];
+      if (!g) return null;
       heavy += heavyAtoms(g) * n;
     }
-    if (heavy === heavyAtoms(s)) return [el, ...(h ? [h] : []), ...groups];
+    return heavy === heavyAtoms(s) ? groups : null;
+  };
+  if (text.startsWith(el)) {
+    const after = text.slice(el.length);
+    const hs = /^H\d*/.exec(after)?.[0];
+    // (the H read with the atom, or no H at all: NHex is N and Hex)
+    for (const h of [undefined, hs]) {
+      if (h === undefined && hs !== undefined && hs.length === after.length) continue;
+      const rest = after.slice(h?.length ?? 0);
+      const groups = rest ? groupsOf(rest) : null;
+      if (groups) return { units: [el, ...(h ? [h] : []), ...groups], atomLast: false };
+    }
+  }
+  // (typed with the atom last, as on a bond's left: Ph3P, tBu3P, and an H before it, tBuHN)
+  if (text.endsWith(el) && text.length > el.length) {
+    const before = text.slice(0, -el.length);
+    const hs = /H\d*$/.exec(before)?.[0];
+    for (const h of [undefined, hs]) {
+      if (h === undefined && hs !== undefined && hs.length === before.length) continue;
+      const rest = before.slice(0, before.length - (h?.length ?? 0));
+      const groups = rest ? groupsOf(rest, true) : null;
+      if (groups) return { units: [...groups, ...(h ? [h] : []), el], atomLast: true };
+    }
   }
   return null;
 }

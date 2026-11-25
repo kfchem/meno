@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 import { buildTextLabels, type Atom, type Bond } from "./layout2d";
 import { acsWorldOptions } from "./acs";
-import { abbreviationStructure, readUnits } from "./abbreviations";
+import { ABBREVIATIONS, GROUPS, abbreviationOf, abbreviationStructure, labelUnits, readUnits, reversedLabel } from "./abbreviations";
+import { LIGANDS } from "./ligands";
 
 const L = 1.5;
 /** A label on the end of a two-carbon chain, its bond at the label's right (a left end) or at its left: the text and the run on the atom. */
@@ -78,4 +79,78 @@ describe("a typed label is drawn in the units it is read in", () => {
     expect(readUnits("CO2Me")).toBeNull();
     expect(readUnits("xyz")).toBeNull();
   });
+
+  // A ligand typed with its atom last, as on a bond's left: drawn as typed there, turned round at a right end, the atom on the bond.
+  it.each([
+    ["Ph3P", "PPh3", "P"],
+    ["tBu3P", "PtBu3", "P"],
+    ["t-Bu3P", "Pt-Bu3", "P"],
+    ["Cy3P", "PCy3", "P"],
+    ["Me3P", "PMe3", "P"],
+    ["Ph3As", "AsPh3", "As"],
+    ["(MeO)3P", "P(OMe)3", "P"],
+    ["(PhO)3P", "P(OPh)3", "P"],
+  ])("%s, typed with its atom last, is drawn as typed at a left end and %s at a right end, %s on the bond", (typed, right, atom) => {
+    expect(drawn(typed, true)).toEqual({ text: typed, atom });
+    expect(drawn(typed, false)).toEqual({ text: right, atom });
+  });
+
+  it("typed with the atom first, as before: PPh3 is Ph3P at a left end, PtBu3 tBu3P", () => {
+    expect(drawn("PPh3", true)).toEqual({ text: "Ph3P", atom: "P" });
+    expect(drawn("PPh3", false)).toEqual({ text: "PPh3", atom: "P" });
+    expect(drawn("PtBu3", true)).toEqual({ text: "tBu3P", atom: "P" });
+    expect(drawn("PtBu3", false)).toEqual({ text: "PtBu3", atom: "P" });
+  });
+
+  it("what a label typed with its atom last is read as does not change: the same structure as typed atom first", () => {
+    for (const [last, first] of [["Ph3P", "PPh3"], ["tBu3P", "PtBu3"], ["Cy3P", "PCy3"], ["Me3P", "PMe3"]]) {
+      const a = abbreviationStructure(last)!;
+      const b = abbreviationStructure(first)!;
+      expect(a.atoms.map((x) => x.el).sort()).toEqual(b.atoms.map((x) => x.el).sort());
+      expect(a.atoms[a.attach[0]].el).toBe("P");
+      expect(abbreviationOf(last)?.name).toBe(abbreviationOf(first)?.name);
+    }
+  });
+
+  it("words Meno does not read are drawn as before at both ends", () => {
+    for (const [typed, leftAtom, rightAtom] of [
+      ["Me2N", "N", "Me"],
+      ["MeO", "O", "Me"],
+      ["Ph2P", "P", "Ph"],
+      ["BocHN", "N", "Boc"],
+    ]) {
+      expect(readUnits(typed)).toBeNull();
+      expect(drawn(typed, true)).toEqual({ text: typed, atom: leftAtom });
+      expect(drawn(typed, false)).toEqual({ text: typed, atom: rightAtom });
+    }
+  });
+
+  // Every label Meno knows - the groups', the contracted labels', the ligands', each with O, S, NH or N before a group, and each
+  // turned round as on a bond's left - read as attached by one atom whose element is its first or its last unit: at a left end and at
+  // a right end the run on the bond is that atom's. Left as they are drawn: a ligand whose parentheses hold a prefixed name the reader
+  // reads only within the ligand ((o-Tol)3P), and a nitrile written as a formula (MeCN, CH3CN), not an atom with its groups.
+  it("the whole table: a label attached by its first or its last atom has that atom on its bond at both ends", () => {
+    const names = new Set<string>();
+    const add = (n: string) => [n, reversedLabel(n)].forEach((x) => names.add(x));
+    for (const a of [...ABBREVIATIONS, ...LIGANDS]) [a.label, ...(a.also ?? [])].forEach(add);
+    for (const g of GROUPS) for (const p of ["O", "S", "NH", "N"]) add(p + g.label);
+    const wrong: string[] = [];
+    let looked = 0;
+    for (const n of names) {
+      const a = abbreviationOf(n);
+      if (!a || (a.kind && a.kind !== "ligand")) continue;
+      const s = abbreviationStructure(n);
+      if (!s || s.attach.length !== 1 || s.haptic?.length) continue;
+      const el = s.atoms[s.attach[0]].el;
+      const u = labelUnits(n);
+      // (its first unit, or the atom run into a prefixed group: PtBu3, NHs-Bu)
+      const first = u[0] === el || (el.length === 1 && n.startsWith(el) && /^(?:H\d*)?(?:sec|tert|[nistomp])-?[A-Z]/.test(n.slice(1)));
+      if (!first && u[u.length - 1] !== el) continue;
+      looked++;
+      if (drawn(n, true).atom !== el || drawn(n, false).atom !== el) wrong.push(n);
+    }
+    expect(looked).toBeGreaterThan(300);
+    expect(wrong.sort()).toEqual(["(o-Tol)3P", "CH3CN", "MeCN"]);
+  });
 });
+

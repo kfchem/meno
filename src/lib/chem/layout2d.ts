@@ -2311,7 +2311,8 @@ function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: n
   // (words Meno does not read - CH2CH2, xyz - are drawn in the order typed, never turned round: one piece, its last letter on the
   // atom where its bond comes in from the right, its counts as they were typed - asked only where a label would be turned round)
   const turned = fromRight && !ringFirst && !readsAsNothing(a.el);
-  // (a label read as an atom with its H and groups is drawn in the units it is read in: PtBu3, the phosphine, tBu3P at a left end)
+  // (a label read as an atom with its H and groups is drawn in the units it is read in, the atom on the bond however typed: PtBu3,
+  //  the phosphine, tBu3P at a left end; Ph3P as typed there, PPh3 at a right end)
   const units =
     fromRight && !ringFirst && !turned ? [a.el] : (readUnits(a.el, turned) ?? labelUnits(turned ? reversedLabel(a.el) : a.el));
   if (units.length < 2) {
