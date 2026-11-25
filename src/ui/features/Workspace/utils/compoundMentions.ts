@@ -4,12 +4,13 @@
  * number's shape (./pageStructures `labelText`) and is set as one - bold, as
  * most journals set a compound's number in their text, or after a word that
  * names a compound ("compound 12", "products 3 and 4"), or in parentheses
- * just after a name ("camphor (12)"). A plain "12" - hours,
+ * just after a name ("camphor (12)") - and not after a display item's word
+ * ("Scheme 4", "Figures 1-3"), however set. A plain "12" - hours,
  * a year, a reference - is none; with the lens's own key held (`any`), every
  * number of that shape is, for the chemist who asks.
  */
 import { setBold, wordAt, type PageText } from "../../../../lib/pdf/text";
-import { labelText } from "./pageStructures";
+import { DISPLAY_ITEMS, labelText } from "./pageStructures";
 
 /** The words that name what a number after them is: a compound, and what a scheme calls one. */
 const NAMING = /^(compounds?|products?|intermediates?|substrates?|adducts?|derivatives?)$/i;
@@ -19,7 +20,9 @@ const JOINING = /^(and|or|to)$/i;
 const NAMED_REACH = 6;
 
 /** The words before a number in parentheses that make it no compound's: "(Table 2)" is never so, but "Table (2)", "ref. (14)", "eq (3)" are kept out too. */
-const NOT_NAMES = /^(tables?|figures?|figs?|schemes?|refs?|references?|eqs?|equations?|entry|entries|steps?|days?|h|min|years?)$/i;
+const NOT_NAMES = new RegExp(`^(${DISPLAY_ITEMS}|refs?|references?|entry|entries|steps?|days?|h|min|years?)$`, "i");
+/** A display item's word (./pageStructures `DISPLAY_ITEMS`): the number after it - "Scheme 4", "Figures 1\u20133" - is that item's, however set. */
+const DISPLAY = new RegExp(`^(${DISPLAY_ITEMS})$`, "i");
 
 /** A number mentioned: what it says, as Meno writes a compound's number, and its letters' place on the page, from `start` to before `end`. */
 export type Mention = { label: string; start: number; end: number };
@@ -34,18 +37,36 @@ function wordBefore(t: PageText, a: number): [number, number] | null {
   return i < 0 ? null : wordAt(t, i);
 }
 
-/** Whether a number is named a compound by the words before it: a naming word, past other numbers and joining words. */
-function named(t: PageText, a: number): boolean {
+/**
+ * The word that names what a number is, before it past other numbers and joining words within its sentence: a naming word or a display
+ * item's ("compounds 3, 4 and 5", "Schemes 2 and 3"); and the number just after that word, where it is another (the 2 of "Schemes 2
+ * and 3"). None where there is no such word.
+ */
+function namer(t: PageText, a: number): { text: string; first: [number, number] | null } | null {
   let at = a;
+  let first: [number, number] | null = null;
   for (let k = 0; k < NAMED_REACH; k++) {
     const w = wordBefore(t, at);
-    if (!w) return false;
+    if (!w) return null;
     const text = textOf(t, w[0], w[1]);
-    if (NAMING.test(text)) return true;
-    if (!JOINING.test(text) && !labelText(text)) return false;
+    // (not past a sentence's end - "in Table 2. 4 was" - but past an abbreviation's point: "Fig. 3", "eqs. 2 and 3")
+    if (/[.;:!?]/.test(textOf(t, w[1], at)) && !DISPLAY.test(text)) return null;
+    if (NAMING.test(text) || DISPLAY.test(text)) return { text, first: at === a ? null : first };
+    if (!JOINING.test(text) && !labelText(text)) return null;
+    if (labelText(text)) first = w;
     at = w[0];
   }
-  return false;
+  return null;
+}
+
+/**
+ * Whether a number is a display item's (`DISPLAY`): just after its word ("Scheme 4"), or among the item's numbers after it - set as the
+ * first of them is ("Schemes 2 and 3", all bold in a caption or all plain in the text). A number set otherwise is none of the list:
+ * "Scheme 1, 4a was made", its 4a bold, is a compound's.
+ */
+function displayed(t: PageText, by: { text: string; first: [number, number] | null }, from: number, end: number): boolean {
+  if (!DISPLAY.test(by.text)) return false;
+  return !by.first || setBold(t, by.first[0], by.first[1]) === setBold(t, from, end);
 }
 
 /** Whether a number is set in parentheses just after a name: "(" before it, ")" after it, a word of letters before the "(". */
@@ -71,5 +92,8 @@ export function mentionAt(t: PageText, i: number, any = false): Mention | null {
   const label = labelText(textOf(t, start, end));
   if (!label) return null;
   const from = start === first ? first : first + (t.codes[first] === 0x2d ? 1 : 0);
-  return any || setBold(t, from, end) || named(t, start) || afterName(t, start, end) ? { label, start, end } : null;
+  // (a display item's number - "Scheme 4", "Figures 1\u20133", set bold in a caption or not - is none; with the lens's own key held, it is)
+  const by = namer(t, start);
+  if (by && !any && displayed(t, by, from, end)) return null;
+  return any || setBold(t, from, end) || (by != null && NAMING.test(by.text)) || afterName(t, start, end) ? { label, start, end } : null;
 }

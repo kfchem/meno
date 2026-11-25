@@ -91,4 +91,45 @@ describe("a compound's number mentioned in the text", () => {
     const text = "compound (12) was made";
     expect(mentionAt(line(text), at(text, "12"))?.label).toBe("12");
   });
+
+  it("is none after a display item's word, set bold or not, singular or plural, past other numbers, joining words and an abbreviation's point", () => {
+    const cases: [string, string][] = [
+      ["Scheme 4 shows it", "4"],
+      ["as in Schemes 2 and 3 here", "3"],
+      ["as in Figures 1\u20133 here", "3"],
+      ["see Fig. 3 here", "3"],
+      ["see Figs. 2 and 5 here", "5"],
+      ["as in Chart 2 here", "2"],
+      ["see Charts 1, 2 and 6", "6"],
+      ["see Table 2 here", "2"],
+      ["see Tables 1 or 4 here", "4"],
+      ["by Equation 7 here", "7"],
+      ["by Equations 7 to 9 here", "9"],
+      ["by eq 3 here", "3"],
+      ["by eqs. 2 and 3 here", "3"],
+    ];
+    for (const [text, n] of cases) {
+      // (the item's numbers all plain, as in the text, and all bold, as in a caption)
+      for (const t of [line(text), line(text, [text])]) {
+        expect(mentionAt(t, text.lastIndexOf(n)), text).toBeNull();
+        // (every number asked for with the lens's own key: it is one)
+        expect(mentionAt(t, text.lastIndexOf(n), true)?.label, text).toBe(n);
+      }
+    }
+    // (and the one number bold, just after its word)
+    for (const [text, n] of [cases[0], cases[3], cases[11]]) expect(mentionAt(line(text, [n]), text.lastIndexOf(n)), text).toBeNull();
+  });
+
+  it("is still a compound's number after a naming word, after a name, opening a sentence, or with its letter", () => {
+    const cases: [string, string, string[]][] = [
+      ["then compound 4 was made", "4", []],
+      ["the alcohol 5 was made", "5", ["5"]],
+      ["as in Table 2. 4 was then made", "4", ["4"]],
+      ["4 was made from it", "4", ["4"]],
+      ["as in Scheme 1, 4a was made", "4a", ["4a"]],
+      ["see Schemes 2 and 3, and 7 then", "7", ["7"]],
+      ["as in Scheme 1, compound 4 was made", "4", []],
+    ];
+    for (const [text, n, bold] of cases) expect(mentionAt(line(text, bold), text.lastIndexOf(n))?.label, text).toBe(n);
+  });
 });
