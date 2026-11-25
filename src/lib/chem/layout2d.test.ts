@@ -1003,9 +1003,25 @@ describe("a label must not change how a bond is drawn", () => {
       expect(g).toBeLessThan(o.hashSpacingPx);
       expect(g).toBeGreaterThanOrEqual(2 * o.lineWidthPx - 1e-9);
     }
-    // (with no room for three so, as many as there is room for)
+    // (with no room for three a line width clear: three still, the count winning (GR-1.3) - evenly, apart, the gaps as deep as the hashes)
     const tight = opts({ fewestHashes: FEWEST_HASHES, lineWidthPx: o.hashSpacingPx * 0.9 });
-    expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
+    const squeezed = hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys);
+    expect(squeezed).toHaveLength(3);
+    for (let k = 1; k < squeezed.length; k++) expect(squeezed[k].near).toBeGreaterThan(squeezed[k - 1].far + 1e-9);
+    for (const g of spacing(squeezed)) expect(g).toBeCloseTo(spacing(squeezed)[0], 9);
+    // (round ends - Meno's - each hash a line across: squeezed so, the lines thinner, as thick as the hash is deep, and a
+    // line's own width seen between two - three marks apart, not one block)
+    const roundTight = opts({ fewestHashes: FEWEST_HASHES, joinStyle: "round", lineWidthPx: o.hashSpacingPx * 0.9 });
+    const roundLong = buildBondPrimitives(pair("C"), { a1: 0, a2: 1, order: 1 }, roundTight, ZOOM, deg).lines;
+    const across = buildBondPrimitives(pair("O"), bond, roundTight, ZOOM, deg).lines.filter((l) => Math.abs(l.x1 - l.x2) < 1e-9);
+    expect(across).toHaveLength(3);
+    const share = across[0].widthPx / roundLong[0].widthPx;
+    expect(share).toBeLessThan(1);
+    const width = share * roundTight.lineWidthPx;
+    const xs = across.map((l) => l.x1).sort((p, q) => p - q);
+    for (let k = 1; k < xs.length; k++) expect(xs[k] - xs[k - 1] - width).toBeGreaterThanOrEqual(width - 1e-9);
+    // (a journal's style, which asks for none, as many as the spacing gives: two - the maintainer kept them so)
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ lineWidthPx: o.hashSpacingPx * 0.9 }), ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
   it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
@@ -1084,7 +1100,7 @@ describe("a label must not change how a bond is drawn", () => {
     }
   });
 
-  it("draws a short hashed wedge from a label as many hashes as before, flush with it, and from a bare atom never fewer, at any length", () => {
+  it("draws a short hashed wedge from a label as many hashes as before but never fewer than three, flush with it, and from a bare atom never fewer, at any length", () => {
     // every length from 0.30 to 1.00 of a bond: the hashes at the spacing tell where the first and the last stand
     const lw = opts().lineWidthPx;
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
@@ -1107,9 +1123,10 @@ describe("a label must not change how a bond is drawn", () => {
         const spaced = hashesOf(buildBondPrimitives(atoms, bond, opts(), ZOOM, deg).polys);
         const three = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: FEWEST_HASHES }), ZOOM, deg).polys);
         if (narrow === "N") {
-          // (from a label: as many as before, the first flush with it, the rest even after it)
+          // (from a label: as many as before - three where fewer fitted a line width clear, the count winning (GR-1.3) -
+          // the first flush with it, the rest even after it)
           const before = asBefore(atoms, spaced);
-          expect(three, `${k}%`).toHaveLength(before.count);
+          expect(three, `${k}%`).toHaveLength(Math.max(before.count, FEWEST_HASHES));
           if (three.length > 1) expect(three[0].near).toBeCloseTo(before.from, 9);
           for (const g of spacing(three)) expect(g).toBeCloseTo(spacing(three)[0], 9);
         } else {
@@ -1139,6 +1156,96 @@ describe("a label must not change how a bond is drawn", () => {
     expect(labelled.length).toBeLessThan(plain.length);
     for (const x of labelled) {
       expect(plain.some((p) => Math.abs(p - x) < 0.02)).toBe(true);
+    }
+  });
+
+  it("shows three half-waves at least on a wavy bond, however short or cut by a label (GR-1.3): a shorter period, the amplitude with it, and a long one as it was", () => {
+    const o = opts();
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "wavy" };
+    // (the half-waves seen: runs of the line on one side of the bond's own line, each swinging out at least a third of the most)
+    const halfWaves = (atoms: Atom[]) => {
+      const ys = buildBondPrimitives(atoms, bond, o, ZOOM, deg).lines.flatMap((l) => [l.y1, l.y2]);
+      const most = Math.max(...ys.map(Math.abs));
+      let runs = 0;
+      let side = 0;
+      let reached = false;
+      for (const y of ys) {
+        const s = Math.sign(y);
+        if (s !== 0 && s !== side) {
+          if (reached) runs++;
+          side = s;
+          reached = false;
+        }
+        if (Math.abs(y) >= most / 3) reached = true;
+      }
+      return runs + (reached ? 1 : 0);
+    };
+    const at = (share: number, el: string): Atom[] => [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 1.5 * share, y: 0, el },
+    ];
+    for (const share of [1, 0.6, 0.4, 0.25, 0.15]) {
+      for (const el of ["C", "O"]) expect(halfWaves(at(share, el)), `${share} ${el}`).toBeGreaterThanOrEqual(3);
+    }
+    // (a whole bond's wave as the style's period has it: the crossings half a wavelength apart)
+    const lines = buildBondPrimitives(at(1, "C"), bond, o, ZOOM, deg).lines;
+    const crossings = lines.filter((l) => l.y1 * l.y2 < 0).map((l) => l.x1 + ((l.x2 - l.x1) * l.y1) / (l.y1 - l.y2));
+    for (let k = 1; k < crossings.length; k++) expect(crossings[k] - crossings[k - 1]).toBeCloseTo(o.wavyPeriodPx / 2, 2);
+  });
+});
+
+describe("a squeezed mark's round ends", () => {
+  // (as drawn whole: a structure laid out, its fills - the round ends and joins - with the lines they finish)
+  const drawnAt = (share: number, el: string, bond: Bond) => {
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 1.5 * share, y: 0, el },
+      { id: 3, x: -1.3, y: 0.75, el: "C" },
+      { id: 4, x: -1.3, y: -0.75, el: "C" },
+    ];
+    const bonds: Bond[] = [bond, { a1: 0, a2: 2, order: 1 }, { a1: 0, a2: 3, order: 1 }];
+    const o = acsWorldOptions(atoms, bonds, { units: "world", joinStyle: "round", fewestHashes: FEWEST_HASHES });
+    return layoutMolecule(atoms, bonds, o, 40);
+  };
+
+  it("are as thin as their lines: no round end wider than the line it finishes, at a label too, so three marks stay three (GR-1.3)", () => {
+    for (const bond of [
+      { a1: 0, a2: 1, order: 1, stereo: "down" },
+      { a1: 0, a2: 1, order: 1, display: "dashed" },
+    ] as Bond[]) {
+      for (const share of [0.5, 0.35, 0.25]) {
+        const { lines, fills } = drawnAt(share, "O", bond);
+        // (a whole line's width as drawn, in pixels and across: a plain bond's, and its round end's radius)
+        const plain = lines.find((l) => l.x2 < -1)!;
+        const across = 2 * fills.find((f) => Math.hypot(f.c.x + 1.3, f.c.y - 0.75) < 1e-9)!.r;
+        // (the bond's marks: off the C at the origin, toward the O)
+        const marks = lines.filter((l) => Math.min(l.x1, l.x2) > -1e-9 && Math.abs(l.y1) < 0.3 && Math.abs(l.y2) < 0.3);
+        const what = `${share} ${bond.display ?? bond.stereo}`;
+        expect(marks.length, what).toBeGreaterThanOrEqual(3);
+        for (const f of fills) {
+          if (f.c.x < 1e-6) continue;
+          const own = marks.filter((l) => Math.hypot(f.c.x - l.x1, f.c.y - l.y1) < 1e-9 || Math.hypot(f.c.x - l.x2, f.c.y - l.y2) < 1e-9);
+          if (!own.length) continue;
+          // (its round end no wider than the thickest line it finishes)
+          const widest = Math.max(...own.map((l) => (l.widthPx / plain.widthPx) * across));
+          expect(2 * f.r, what).toBeLessThanOrEqual(widest + 1e-9);
+        }
+      }
+    }
+  });
+
+  it("spread a squeezed hashed wedge's three hashes from a bare atom to a label at even steps, the first a step off the atom as before", () => {
+    for (const share of [0.5, 0.45, 0.4]) {
+      const { lines } = drawnAt(share, "O", { a1: 0, a2: 1, order: 1, stereo: "down" });
+      // (the hashes: lines across the bond, off the C at the origin)
+      const xs = lines
+        .filter((l) => Math.abs(l.x1 - l.x2) < 1e-9 && l.x1 > 1e-6)
+        .map((l) => l.x1)
+        .sort((p, q) => p - q);
+      expect(xs, `${share}`).toHaveLength(3);
+      // (at one, two and three steps from the C: the gap before the first as wide as those between)
+      expect(xs[1] - xs[0], `${share}`).toBeCloseTo(xs[0], 9);
+      expect(xs[2] - xs[1], `${share}`).toBeCloseTo(xs[0], 9);
     }
   });
 });
@@ -1735,6 +1842,57 @@ describe("bold, hashed, dashed and dative bonds", () => {
       expect(g).toBeGreaterThanOrEqual(o.dashGapPx! - 1e-9);
     }
   });
+
+  it("leaves a dashed or hashed bond of ordinary length as it was: as many marks as the spacing gives, each a whole line thick", () => {
+    for (const joinStyle of ["sharp", "round"] as const) {
+      const o = opts({ joinStyle, fewestHashes: FEWEST_HASHES });
+      const whole = buildBondPrimitives(pair, one({}), o, ZOOM, deg).lines[0].widthPx;
+      const dashes = buildBondPrimitives(pair, one({ display: "dashed" }), o, ZOOM, deg).lines;
+      // (dashes of the style's length, as many as leave the style's gap: (L + gap) / (dash + gap), rounded down)
+      const spaced = Math.floor((L + o.dashGapPx!) / (o.dashLengthPx! + o.dashGapPx!) + 1e-9);
+      expect(spaced, joinStyle).toBeGreaterThan(FEWEST_HASHES);
+      expect(dashes, joinStyle).toHaveLength(spaced);
+      for (const l of dashes) expect(l.widthPx, joinStyle).toBeCloseTo(whole, 9);
+      // (a hashed bond's lines across, round-ended: each a whole line thick)
+      const hashed = buildBondPrimitives(pair, one({ display: "hashed" }), o, ZOOM, deg).lines;
+      for (const l of hashed) expect(l.widthPx, joinStyle).toBeCloseTo(whole, 9);
+    }
+  });
+
+  it("dashes a short dashed bond with three dashes at least, in every style, never one solid line nor none (GR-1.3): the gaps give way first, to a line's width seen between two past their ends, then the dashes, never shorter than wide where their ends are square, then the line thinner", () => {
+    for (const joinStyle of ["sharp", "round"] as const) {
+      const o = opts({ joinStyle });
+      const lw = o.lineWidthPx;
+      // (a whole line's width as drawn: a long dashed bond's)
+      const whole = buildBondPrimitives(pair, one({ display: "dashed" }), o, ZOOM, deg).lines[0].widthPx;
+      for (const share of [0.6, 0.4, 0.25, 0.15, 0.1, 0.05]) {
+        const short: Atom[] = [pair[0], { ...pair[1], x: share * L }];
+        const { lines } = buildBondPrimitives(short, one({ display: "dashed" }), o, ZOOM, deg);
+        const what = `${joinStyle} ${share}`;
+        expect(lines.length, what).toBeGreaterThanOrEqual(3);
+        expect(lines[0].x1).toBeCloseTo(0, 9);
+        expect(lines[lines.length - 1].x2).toBeCloseTo(share * L, 9);
+        // (each dash's line as wide as the rest; its own width, a line's or thinner)
+        const w = (lines[0].widthPx / whole) * lw;
+        expect(w, what).toBeLessThanOrEqual(lw + 1e-9);
+        const cap = joinStyle === "round" ? w / 2 : 0;
+        const sizes = lines.map((l) => l.x2 - l.x1);
+        for (const d of sizes) expect(d, what).toBeCloseTo(sizes[0], 9);
+        // (ink: a square-ended dash never shorter than it is wide)
+        if (joinStyle === "sharp") expect(sizes[0], what).toBeGreaterThanOrEqual(w - 1e-9);
+        const gaps = lines.slice(1).map((l, i) => l.x1 - lines[i].x2);
+        for (const g of gaps) expect(g, what).toBeCloseTo(gaps[0], 9);
+        // (three marks seen apart: between two, past their ends, at least the line's own width)
+        expect(gaps[0] - 2 * cap, what).toBeGreaterThanOrEqual(w - 1e-9);
+        // (the line thinned only where a whole one leaves no room)
+        if (share * L >= 3 * (joinStyle === "round" ? 0 : lw) + 2 * (lw + 2 * (joinStyle === "round" ? lw / 2 : 0)) + 1e-9) expect(w, what).toBeCloseTo(lw, 9);
+        // (and the dashes whole where that leaves them so)
+        if (share * L >= 3 * o.dashLengthPx! + 2 * (lw + 2 * (joinStyle === "round" ? lw / 2 : 0))) expect(sizes[0], what).toBeCloseTo(o.dashLengthPx!, 9);
+      }
+    }
+  });
+
+
 
   it("draws a dative bond as an arrow from the first atom to the second", () => {
     const o = opts();
