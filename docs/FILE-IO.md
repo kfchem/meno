@@ -320,8 +320,12 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   what it puts there. The name stands beside the frame's number on the
   molecule's chip, cut at 14rem, and whole in the chip's details as it
   opens; it names the frame's row in a set's table and its entry in a
-  workflow. A file Meno wrote before frames had names reads back with
-  each frame named as its line says: `water frame 2/3`.
+  workflow. A line in Meno's own form for a frame with no name - less
+  the energy, `<text> frame i/n`, where `i` is the frame's place in the
+  file, counted from 1, and `n` the file's frames - gives no name, so
+  that a file Meno wrote reads back as it was: unnamed frames unnamed,
+  named ones named. A line whose numbers are not the frame's own
+  (`run 7 frame 9/3` on a third frame) is a name like any other.
 - **Each frame keeps the energy its line gives.** Where some frames' lines
   give one and others' none, the frames that have one keep theirs and the
   others have none - the chip says "no energy" of such a frame, and its

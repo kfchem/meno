@@ -319,7 +319,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     const comments = xyzComments(content);
     const energies = whole.total > 1 ? energiesOf(comments, waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i)) : undefined;
     // (each frame's name, its comment line less the energy read from it - where several frames are kept, as for their energies)
-    const names = whole.kept.map((i) => xyzFrameName(comments[i] ?? ""));
+    // (Meno's own `<name> frame i/n` of an unnamed frame, numbered as the frame is in its file, gives none)
+    const names = whole.kept.map((i) => xyzFrameName(comments[i] ?? "", { i, of: whole.total }));
     const elements = (atoms: readonly { el: string }[]) => atoms.map((a) => a.el).join(" ");
     const differ = rest.some((atoms) => elements(atoms) !== elements(first));
     return {
