@@ -1622,11 +1622,13 @@ All hover-based, as above.
     (`utils/markGlide`, `ChemMarks2D`).
   - How far off its atom: a setting of the drawing style, *R and S:
     distance from the atom*, from the atom to the nearest of the letters,
-    as a share of the labels' size. IUPAC puts them about half a capital's
-    height off (35%), as ACS 1996 keeps them in parentheses; written bare
-    they look further off at that, and the maintainer asked for them
-    nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
-    molecule in 3D, the same share beyond its ball.
+    as a share of the labels' size. IUPAC puts them about half the height
+    of a C or an H off, rarely as much as the whole height (GR-11.1): 35%,
+    the default in every shipped style, bare or in parentheses, as the
+    maintainer ruled - IUPAC's form by default, a difference as a style
+    setting. 15% gives the nearer place Meno drew bare ones at before, at
+    the maintainer's asking (2026-10-05). On a molecule in 3D, the same
+    share beyond its ball.
   - **Meno's own** (docs/CIP.md): each worked out by Meno's reading of the
     CIP rules, off the drawing's thread, only for the atoms and bonds they
     are asked for on - no plugin needed. One asked for that has none says
