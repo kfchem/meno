@@ -20,7 +20,7 @@ import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
 import { anionStructure, condensedStructure, metalSaltStructure } from "./condensed";
 import { chainGroup } from "./chain";
-import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
+import { complexStructure, DONOR_TEXT_METAL, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "./kekulize";
 import { typedRingRefused } from "./smilesWhy";
@@ -274,6 +274,11 @@ function composedOf(label: string): Abbreviation | undefined {
   const made = madeStructure(label);
   if (made && refusedForOO(label, made)) return undefined;
   if (made) return { label, name: made.name, smiles: "", kind: "reagent" };
+  // (a main-group metal of groups 1, 2 and 13 with the groups written on it, where nothing above reads it - MgBr, AlCl2, BrMg on a
+  //  carbon: the metal, bonded where the label is, with its halides - as a transition metal's formula is read; MgBr2, n-BuLi, MeMgBr
+  //  read as before, above)
+  const donor = complexStructure(label, groupStructure, {}, DONOR_TEXT_METAL);
+  if (donor && !refusedForOO(label, donor) && !oxoPastHighest(label, donor)) return { label, name: donor.name, smiles: "", kind: "complex" };
   // (last of all, after every group and every formula read whole: an atom with its H and the groups it carries,
   // its other bonds the drawing's - SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
   return atomCarryingGroups(label);
@@ -820,7 +825,7 @@ export function abbreviationStructure(label: string): GroupStructure | null {
     return s;
   }
   if (a.kind === "complex") {
-    const c = complexStructure(label.trim(), groupStructure);
+    const c = complexStructure(label.trim(), groupStructure) ?? complexStructure(label.trim(), groupStructure, {}, DONOR_TEXT_METAL);
     if (!c) return null;
     const { name: _name, ...s } = c;
     return s;

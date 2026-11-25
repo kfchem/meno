@@ -323,7 +323,14 @@ OTf, Me), a part in brackets made as many times as its count, and the
 counter-anions after it, each leaving a positive charge on the part's
 metal: read by rule as a salt's anion is (BF4, PF6, SbF6, AsF6, BPh4,
 ClO4; see below), or BArF, which names its aryl groups by no formula, from
-a list. A ligand written as an anion (Cp⁻, Cp*⁻) leaves its charge on the
+a list. A label of a main-group metal of groups 1, 2 and 13 (Li to Cs, Be
+to Ba, Al to Tl) with the halides or groups written on it, which reads as
+nothing else, is read the same way: MgBr, BrMg and AlCl2 on a carbon are
+the metal bonded there, with its halides (a Grignard reagent's C-Mg-Br,
+an organoaluminium's C-AlCl2), as PdCl on a carbon is. MgBr2, MeMgBr and
+n-BuLi read as the formulas they are, as before. Not tin, lead nor bismuth;
+and a metal written with L, Ln or X (LnPd, L2Mg, MgX), ligands not
+stated, reads as nothing yet. A ligand written as an anion (Cp⁻, Cp*⁻) leaves its charge on the
 metal, so that the whole is as charged as the formula says. An O with
 its count, or before a halide, a bracket or the end of the formula, is an
 oxo, bound to its metal by a double bond: MoO2Cl2 and CrO2Cl2 are two M=O
