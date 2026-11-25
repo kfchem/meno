@@ -104,4 +104,71 @@ describe("the chemistry client", () => {
       vi.useRealTimers();
     }
   });
+
+  it("hears an answer's parts as they come, where asked to: the request still open, and waited for again from each", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWorker();
+      const c = new ChemClient(w.transport, 1000);
+      const parts: string[] = [];
+      const r = c.request("converse", { told: "", said: [], tools: [], options: {}, stream: true }, 1000, (t) => parts.push(t));
+      let settled = false;
+      void r.then(() => (settled = true), () => (settled = true));
+      // (each part heard; the answer then waited for 1000 ms from it: 900 + 900 ms passes, no time out)
+      vi.advanceTimersByTime(900);
+      w.say({ id: 1, partial: "Ethanol " });
+      vi.advanceTimersByTime(900);
+      w.say({ id: 1, partial: "boils at 78 C." });
+      vi.advanceTimersByTime(900);
+      // (an empty part: nothing said, the reply still coming - waited for again)
+      w.say({ id: 1, partial: "" });
+      vi.advanceTimersByTime(900);
+      await Promise.resolve();
+      expect([parts, settled]).toEqual([["Ethanol ", "boils at 78 C.", ""], false]);
+      w.say({ id: 1, ok: true, result: { text: "Ethanol boils at 78 C." } });
+      await expect(r).resolves.toEqual({ text: "Ethanol boils at 78 C." });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends nothing on a part of an answer it did not ask to hear, nor on one that is not words", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWorker();
+      const c = new ChemClient(w.transport, 1000);
+      const r = c.request("to_smiles", { molblock: "A" });
+      const caught = r.catch((e: Error) => e.message);
+      w.say({ id: 1, partial: "C" });
+      w.say({ id: 1, partial: 7 });
+      w.say({ id: 1, ok: true, result: { smiles: "CC" } });
+      await expect(r).resolves.toEqual({ smiles: "CC" });
+      // (and, asked to hear, a part that is no words is passed over, its wait not begun again)
+      const parts: string[] = [];
+      const late = c.request("converse", { told: "", said: [], tools: [], options: {} }, 1000, (t) => parts.push(t)).catch((e: Error) => e.message);
+      vi.advanceTimersByTime(900);
+      w.say({ id: 2, partial: { text: "x" } });
+      vi.advanceTimersByTime(101);
+      expect(await late).toMatch(/did not answer converse in time/);
+      expect(parts).toEqual([]);
+      void caught;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is not hurt by what hears a part failing: the parts after it are heard, and the answer settles it", async () => {
+    const w = fakeWorker();
+    const c = new ChemClient(w.transport, 1000);
+    const parts: string[] = [];
+    const r = c.request("converse", { told: "", said: [], tools: [], options: {}, stream: true }, 1000, (t) => {
+      parts.push(t);
+      if (t === "boom") throw new Error("the view failed");
+    });
+    expect(() => w.say({ id: 1, partial: "boom" })).not.toThrow();
+    w.say({ id: 1, partial: "after" });
+    w.say({ id: 1, ok: true, result: { text: "boomafter" } });
+    await expect(r).resolves.toEqual({ text: "boomafter" });
+    expect(parts).toEqual(["boom", "after"]);
+  });
 });

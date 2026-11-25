@@ -37,7 +37,14 @@ export type ModelReply = { text: string; calls?: ToolCall[]; keep?: unknown };
  * for a program outside Meno), by its id; who it sends to, for the send log;
  * and its sending. Core makes none: it is given one, or there is none.
  */
-export type Connection = { id: string; to: string; send(request: ModelRequest): Promise<ModelReply> };
+export type Connection = {
+  id: string;
+  to: string;
+  /** The request sent; its reply, whole - with `heard`, given each part of its words as it comes, where the connection can. */
+  send(request: ModelRequest, heard?: (text: string) => void): Promise<ModelReply>;
+  /** A reply under way ended where it is - its request failing at once, in `why` - where the connection can end one. */
+  stop?(why: string): void;
+};
 
 /** A connection's `to` where what it is sent stays here: Meno's scripted test model's alone - a model plugin's `to` is the hosts its manifest names (modelConnection). */
 export const THIS_COMPUTER = "this computer";
@@ -143,6 +150,8 @@ export async function runTurn(o: {
   limits?: Limits;
   now?: () => number;
   stop?: () => boolean;
+  /** The model's words so far, as its reply comes - "" once it has come whole, or not at all. */
+  heard?: (soFar: string) => void;
 }): Promise<Turn> {
   const { doc, id, connection } = o;
   const limits = o.limits ?? LIMITS;
@@ -185,11 +194,25 @@ export async function runTurn(o: {
       keep([], [{ at: now(), to: connection.to, things: gave, chars: chars(request.said) + request.told.length }]);
       gave = [];
       let reply: ModelReply;
+      // (its words as they come: shown till the reply is whole)
+      let soFar = "";
       try {
-        reply = await connection.send(request);
+        reply = await connection.send(request, (text) => {
+          soFar += text;
+          o.heard?.(soFar);
+        });
       } catch (e) {
-        keep([{ by: "meno", text: `The model could not be reached: ${e instanceof Error ? e.message : String(e)}`, at: now() }]);
+        // (ended by Stop as it came: what it had said so far kept as its words, and said to have stopped)
+        if (o.stop?.()) {
+          keep([...(soFar ? [{ by: "model" as const, text: soFar, at: now() }] : []), { by: "meno", text: "Stopped, as asked.", at: now() }]);
+          return { sent: true, stopped: "asked", ...(madeAny ? { changed: key } : {}) };
+        }
+        // (an error or a broken connection as it came: what it had said so far kept as its words, then that it broke off, and why)
+        const why = e instanceof Error ? e.message : String(e);
+        keep([...(soFar ? [{ by: "model" as const, text: soFar, at: now() }] : []), { by: "meno", text: soFar ? `The reply broke off: ${why}` : `The model could not be reached: ${why}`, at: now() }]);
         return { sent: true, ...(madeAny ? { changed: key } : {}) };
+      } finally {
+        o.heard?.("");
       }
       // (its words, as words: plain text - never drawn as a page, nothing fetched for them)
       const text = typeof reply?.text === "string" ? reply.text : "";
