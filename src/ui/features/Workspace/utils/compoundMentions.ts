@@ -62,9 +62,14 @@ function afterName(t: PageText, a: number, b: number): boolean {
 /** The compound's number mentioned at letter `i` of a page: set bold, named a compound by the words before it, or in parentheses after a name - or, `any`, every number of that shape; else none. */
 export function mentionAt(t: PageText, i: number, any = false): Mention | null {
   if (i < 0 || i >= t.codes.length) return null;
-  const [start, end] = wordAt(t, i);
-  if (end <= start) return null;
+  const [first, end] = wordAt(t, i);
+  if (end <= first) return null;
+  // (its rotation's mark before it, (+)-12, (\u2212)\u201312: the mark's parentheses and sign, and an en dash, are no word's letters - the
+  //  mark taken with it, the number alone asked whether it is set as one)
+  const mark = /\([+\-\u2212\u2013\u00b1]\)[\u2013\u2212]?$/.exec(textOf(t, Math.max(0, first - 4), first));
+  const start = mark && (mark[0].length === 4 || t.codes[first] === 0x2d) ? first - mark[0].length : first;
   const label = labelText(textOf(t, start, end));
   if (!label) return null;
-  return any || setBold(t, start, end) || named(t, start) || afterName(t, start, end) ? { label, start, end } : null;
+  const from = start === first ? first : first + (t.codes[first] === 0x2d ? 1 : 0);
+  return any || setBold(t, from, end) || named(t, start) || afterName(t, start, end) ? { label, start, end } : null;
 }

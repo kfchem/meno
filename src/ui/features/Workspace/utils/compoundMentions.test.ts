@@ -14,6 +14,24 @@ function line(text: string, bold: string[] = []) {
 }
 const at = (text: string, word: string) => text.indexOf(word);
 
+describe("a compound's number mentioned in the text, in the shapes beyond a number alone (found in review)", () => {
+  it("is a Roman numeral, or a number with its enantiomer's or rotation's mark, set bold", () => {
+    const text = "From IV, ent-21 gave (+)-12 and (\u2212)\u201312.";
+    const t = line(text, ["IV", "ent-21", "12 ", "12."]);
+    expect(["IV", "ent-21"].map((w) => mentionAt(t, at(text, w) + 1)?.label)).toEqual(["IV", "ent-21"]);
+    // (the pointer on the number: the number with its mark before it, its dash and sign written as typed)
+    expect(mentionAt(t, at(text, "(+)-12") + 4)).toEqual({ label: "(+)-12", start: at(text, "(+)-12"), end: at(text, "(+)-12") + 6 });
+    expect(mentionAt(t, at(text, "(\u2212)") + 5)?.label).toBe("(-)-12");
+  });
+
+  it("is a plain number where no mark stands before it, and none for a dash before a number alone", () => {
+    const text = "and 12 or -3";
+    const t = line(text, ["12", "-3"]);
+    expect(mentionAt(t, at(text, "12"))?.label).toBe("12");
+    expect(mentionAt(t, at(text, "-3") + 1)).toBeNull();
+  });
+});
+
 describe("a compound's number mentioned in the text", () => {
   it("is a number of that shape set bold", () => {
     const text = "Ketone 12 gave 13a in 2 h.";
