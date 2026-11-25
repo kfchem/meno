@@ -8,6 +8,8 @@ import { conformersOffered, framesAlike, joinable, joined, joinOffered, lowestFr
 import { sharesOf, sharesWithheld } from "./utils/molecule3d";
 import { processFileContent } from "./utils/io";
 import type { Molecule3D } from "./store/types";
+import { setChipRuns } from "./utils/chipSaid";
+import { readWorkspace, workspaceText } from "./utils/workspace";
 
 /** Invented water, three frames: each with both O-H joins, the third's energy the lowest. */
 const block = (comment: string, x: number) => `3\n${comment}\nO 0 0 0\nH ${x} 0 0\nH -0.24 0.93 0\n`;
@@ -113,8 +115,8 @@ describe("molecules joined as conformers", () => {
     expect(one.title).toBeUndefined();
   });
 
-  it("are not joined where they are two stereoisomers, saying what As conformers says of them", async () => {
-    expect(await notOneCompound(placed, teller(true))).toBe("2 compounds · 2");
+  it("are not joined where they are two stereoisomers, saying why in plain words", async () => {
+    expect(await notOneCompound(placed, teller(true))).toBe("Not joined as conformers: the selected molecules are not all the same stereoisomer.");
     // (what each geometry is, once told, is kept: told afresh)
     forgetStereo();
     expect(await notOneCompound(placed, teller())).toBeNull();
@@ -122,12 +124,37 @@ describe("molecules joined as conformers", () => {
     const { state, add } = editor();
     const a = add({ ...(records[0] as unknown as Molecule3D), at: { x: 0, y: 0 } });
     const b = add({ ...(records[1] as unknown as Molecule3D), at: { x: 7, y: 2 } });
-    expect(await state().joinAsConformers([a, b], teller(true))).toBe("2 compounds · 2");
+    expect(await state().joinAsConformers([a, b], teller(true))).toBe("Not joined as conformers: the selected molecules are not all the same stereoisomer.");
     expect(state().molecules3d).toHaveLength(2);
-    // (nothing to tell stereoisomers apart: the words As conformers says)
+    // (nothing to tell stereoisomers apart)
     forgetStereo();
-    expect(await state().joinAsConformers([a, b], { none: "Nothing added tells stereoisomers apart" })).toBe("Which stereoisomer entry 1 is is not known: Nothing added tells stereoisomers apart");
+    expect(await state().joinAsConformers([a, b], { none: "Nothing added tells stereoisomers apart" })).toBe("Not joined as conformers: nothing added tells which stereoisomer the selected molecules are.");
     expect(state().molecules3d).toHaveLength(2);
+  });
+
+  it("are not joined where a stereoisomer is not told, left unspecified, or they are made unlike: each said in its own plain sentence", async () => {
+    // (the plugin gives no answer, or an error, for a molecule)
+    const silent: Asker = { plugin: "invented", version: "1.0.0", ask: async (blocks) => blocks.map(() => ({ error: "made-up failure" }) as never) };
+    expect(await notOneCompound(placed, silent)).toBe("Not joined as conformers: which stereoisomer one of the selected molecules is could not be told.");
+    forgetStereo();
+    const failing: Asker = { plugin: "invented", version: "1.0.0", ask: async () => Promise.reject(new Error("made-up")) };
+    expect(await notOneCompound(placed, failing)).toBe("Not joined as conformers: which stereoisomer one of the selected molecules is could not be told.");
+    forgetStereo();
+    // (an element whose configuration the geometry leaves open)
+    const open: Asker = { plugin: "invented", version: "1.0.0", ask: async (blocks) => blocks.map(() => ({ elements: [{ kind: "centre", atoms: [0], specified: false }], key: "A" }) as never) };
+    expect(await notOneCompound(placed, open)).toBe("Not joined as conformers: one of the selected molecules has a stereocentre or double bond left unspecified.");
+    forgetStereo();
+    // (made unlike: two calculations; energies from two sources; stereo labels that differ)
+    const withCalc = (method: string) => placed.map((m) => ({ ...m, calc: { program: "invented", method } as never }));
+    expect(await notOneCompound([withCalc("one")[0], withCalc("two")[1]], teller())).toBe("Not joined as conformers: the selected molecules come from different calculations.");
+    const made = (energies: string) => ({ how: [], energies });
+    expect(await notOneCompound([{ ...placed[0], made: made("made-up field A") }, { ...placed[1], made: made("made-up field B") }], teller())).toBe(
+      "Not joined as conformers: the selected molecules' energies come from different sources.",
+    );
+    const labelled = (label: string) => ({ atoms: { 0: label } }) as never;
+    expect(await notOneCompound([{ ...placed[0], stereo: labelled("R") }, { ...placed[1], stereo: labelled("S") }], teller())).toBe(
+      "Not joined as conformers: the selected molecules' stereo labels differ, so they may be different stereoisomers.",
+    );
   });
 
   it("is one step: the lowest shown, and undone they are as they were, at their places", async () => {
@@ -170,5 +197,72 @@ describe("molecules joined as conformers", () => {
     expect(joinOffered(ms, new Set([a]), { kind: null, id: null, selection: "here" })).toEqual([]);
     expect(joinOffered(ms, sel, { kind: "molecule3d", id: 99, selection: "here" })).toEqual([]);
     expect(joinOffered(ms, sel, { kind: null, id: null, selection: "none" })).toEqual([]);
+  });
+});
+
+describe("a join keeps what each molecule held of its own geometry", () => {
+  /** An invented file of water in two shapes, each frame's comment line its energy and its name. */
+  const file = (lines: [string, string], hx: number) => block(lines[0], hx) + block(lines[1], hx + 0.005);
+  const opened = async (name: string, text: string): Promise<Omit<Molecule3D, "id">> => ({
+    ...((await processFileContent(name, text)).molecules3d![0] as unknown as Molecule3D),
+    at: { x: 0, y: 0 },
+  });
+
+  it("gives each frame its name and energy, shows the lowest with shares; undone each molecule is as it was; redone joined again", async () => {
+    const { doc, state, add } = editor();
+    const a = add(await opened("one.xyz", file(["E = -76.40 Eh one, made up", "E = -76.41 Eh two, made up"], 0.96)));
+    const b = add({ ...(await opened("two.xyz", file(["E = -76.43 Eh three, made up", "E = -76.42 Eh four, made up"], 0.95))), at: { x: 7, y: 2 } });
+    const before = state().molecules3d;
+    expect(await state().joinAsConformers([a, b], teller())).toBeNull();
+    const m = state().molecules3d[0];
+    expect(state().molecules3d).toHaveLength(1);
+    expect(m.frameNames).toEqual(["one, made up", "two, made up", "three, made up", "four, made up"]);
+    expect(m.energies).toEqual([-76.4, -76.41, -76.43, -76.42]);
+    expect(state().frames3d[a]).toBe(2);
+    expect(sharesOf(m)).toHaveLength(4);
+    const runs = setChipRuns({ count: 4, frame: 2, energies: m.energies, names: m.frameNames });
+    expect(runs.map((r) => r.text).join("")).toBe("3 / 4three, made up · 0.00 kcal/mol");
+    doc.undo();
+    expect(state().molecules3d).toEqual(before);
+    doc.redo();
+    expect(state().molecules3d[0].frameNames).toEqual(["one, made up", "two, made up", "three, made up", "four, made up"]);
+    expect(state().molecules3d[0].energies).toEqual([-76.4, -76.41, -76.43, -76.42]);
+  });
+
+  it("keeps a frame with no energy as none: no lowest, the first shown, no shares, saying which", async () => {
+    const { state, add } = editor();
+    const a = add(await opened("one.xyz", file(["E = -76.40 Eh one, made up", "E = -76.41 Eh two, made up"], 0.96)));
+    const b = add(await opened("two.xyz", file(["E = -76.43 Eh three, made up", "four, no energy"], 0.95)));
+    expect(await state().joinAsConformers([a, b], teller())).toBeNull();
+    const m = state().molecules3d[0];
+    expect(m.frameNames).toEqual(["one, made up", "two, made up", "three, made up", "four, no energy"]);
+    expect(m.energies!.slice(0, 3)).toEqual([-76.4, -76.41, -76.43]);
+    expect(m.energies![3]).toBeNaN();
+    expect(state().frames3d[a] ?? 0).toBe(0);
+    expect(sharesOf(m)).toBeUndefined();
+    expect(sharesWithheld(m)).toBe("#4 has no energy, so no shares are given");
+  });
+
+  it("has nothing to keep of a one-frame XYZ file's comment line: the reader reads none from it", async () => {
+    const one = await opened("w1.xyz", block("E = -76.40 Eh shape one", 0.96));
+    expect(one.title).toBeUndefined();
+    expect(one.energies).toBeUndefined();
+    expect(one.frameNames).toBeUndefined();
+  });
+
+  it("is saved to a workspace and read back: one molecule, its frames, their names and energies, marked as conformers", async () => {
+    const { state, add } = editor();
+    const a = add(await opened("one.xyz", file(["E = -76.40 Eh one, made up", "E = -76.41 Eh two, made up"], 0.96)));
+    const b = add(await opened("two.xyz", file(["E = -76.43 Eh three, made up", "four, no energy"], 0.95)));
+    expect(await state().joinAsConformers([a, b], teller())).toBeNull();
+    const m = state().molecules3d[0];
+    const text = workspaceText({ model: { atoms: [], bonds: [] } as never, arrows: [], pluses: [], captions: [], molecules3d: [m], turns3d: {}, frames3d: {}, lists3d: {}, aromaticEnabled: false, aromaticRings: {} });
+    const back = readWorkspace(text)!.drawn.molecules3d!;
+    expect(back).toHaveLength(1);
+    expect(back[0].frames).toHaveLength(3);
+    expect(back[0].frameNames).toEqual(["one, made up", "two, made up", "three, made up", "four, no energy"]);
+    expect(back[0].energies!.slice(0, 3)).toEqual([-76.4, -76.41, -76.43]);
+    expect(back[0].energies![3]).toBeNaN();
+    expect(back[0].conformerSet).toBe(true);
   });
 });

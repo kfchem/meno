@@ -1564,7 +1564,7 @@ export type EditorState = {
    * Molecules of one compound joined as one conformer set, in the page's order, at the first's place (utils/asConformers
    * `joined`): one step to undo, which gives them back as they were. Judged as *As conformers* judges - the same
    * constitution and the same stereoisomer, which is asked first, as that step asks it - and, where they are not one
-   * compound, not joined: what that step would say of them given back.
+   * compound, not joined: why not given back, in one plain sentence (utils/asConformers `JOIN_REFUSED`).
    */
   joinAsConformers: (ids: readonly number[], asker?: Asker) => Promise<string | null>;
   /** A molecule in 3D switched to its other look - the secondary, or back to the primary - and those selected with it to the same. */

@@ -1287,8 +1287,8 @@ function WorkspaceContent({
   const onJoinConformers = joinIds.length
     ? () => {
         setChemError(null);
-        // (where they are not one compound, what *As conformers* would say of them)
-        void store.getState().joinAsConformers(joinIds).then((why) => why && setChemError(`Not joined as conformers: ${why}`));
+        // (where they are not one compound, why not, in one plain sentence - utils/asConformers `JOIN_REFUSED`)
+        void store.getState().joinAsConformers(joinIds).then((why) => why && setChemError(why));
       }
     : undefined;
   const menu3d: MenuMolecule3D | undefined = menuMolecule

@@ -905,13 +905,23 @@ Taken on 2026-10-13:
     which stereoisomer each is asked first, as that step asks it, then
     the same constitution and the same stereoisomer, energies from one
     source - and, one compound, made one set of them, in the page's
-    order, where the first stands: each record's title its frame's name,
-    each energy kept, each frame at its file's coordinates (none is
-    turned onto another). Where they are not one compound - two
-    stereoisomers, or a stereoisomer not known - they are not joined, and
-    what *As conformers* would say of them is said ("Not joined as
-    conformers: 2 compounds · 2"). Undo gives a joined set back as the
-    molecules were, each at its place and showing the frame it showed.
+    order, where the first stands: each frame keeps the name it had (a
+    frame's own, else its record's title) and the energy it had - none
+    where it had none, so that, as for a file, shares are given only
+    where every frame has an energy - each frame at its file's
+    coordinates (none is turned onto another). A one-frame XYZ file
+    gives no name or energy to keep: its comment line is not read
+    (docs/FILE-IO.md). Where they are not one compound they are not
+    joined, and why is said in one plain sentence of the molecules
+    selected - not all the same stereoisomer; nothing added tells which
+    stereoisomer they are; one's stereoisomer could not be told; one has
+    a stereocentre or double bond left unspecified; from different
+    calculations; energies from different sources; stereo labels that
+    differ - never a count alone. Undo gives a joined set back as the
+    molecules were, each at its place, with its own names and energies,
+    and showing the frame it showed. Saved and opened again, a joined set
+    is one molecule with its frames, their names and energies, and the
+    mark.
   - Either way the set is as any conformer set: its lowest shown, where
     every frame has an energy; shares where every frame has one; its
     conformers numbered. What was worked out of the molecules as wholes -

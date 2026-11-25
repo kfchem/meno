@@ -966,10 +966,19 @@ function labelsOf(e: SetEntry): string {
  * stereo labels give it, a compound being one stereoisomer.
  */
 export function unlikeMade(g: readonly SetEntry[]): string | null {
+  const kind = howUnlike(g);
+  if (kind === "calculations") return `its entries come from different calculations (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (kind === "sources") return `its entries' energies come from different sources (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (kind === "labels") return "its entries' stereo labels differ: they may be different stereoisomers";
+  return null;
+}
+
+/** Which way entries are unlike (`unlikeMade`), the first found: their calculations, their energies' sources, their stereo labels - or none. */
+export function howUnlike(g: readonly SetEntry[]): "calculations" | "sources" | "labels" | null {
   const one = (f: (e: SetEntry) => string) => new Set(g.map(f)).size <= 1;
-  if (!one((e) => calcLevel(e.calc))) return `its entries come from different calculations (${[...new Set(g.map(madeWords))].join("; ")})`;
-  if (!one((e) => e.keep?.made?.energies ?? "")) return `its entries' energies come from different sources (${[...new Set(g.map(madeWords))].join("; ")})`;
-  if (!one(labelsOf)) return "its entries' stereo labels differ: they may be different stereoisomers";
+  if (!one((e) => calcLevel(e.calc))) return "calculations";
+  if (!one((e) => e.keep?.made?.energies ?? "")) return "sources";
+  if (!one(labelsOf)) return "labels";
   return null;
 }
 

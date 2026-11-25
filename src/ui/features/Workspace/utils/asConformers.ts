@@ -10,7 +10,8 @@ import type { Molecule3D } from "../store/types";
 import { frameBondsOf } from "./molecule3d";
 import { frameXyz } from "../workflow/entries";
 import { asConformers, constitutionOf } from "../workflow/meno";
-import { setEntries } from "../workflow/entries";
+import { howUnlike, setEntries } from "../workflow/entries";
+import { stereoIdentity } from "../../../../lib/entry";
 import { perceiveStereo, type Asker } from "../workflow/configurations";
 
 type Framed = Pick<Molecule3D, "atoms" | "bonds" | "frames"> & Partial<Pick<Molecule3D, "bondsFrom" | "atomsDiffer" | "path">>;
@@ -71,20 +72,34 @@ export function joinable(ms: readonly Molecule3D[]): boolean {
   return ms.every((m) => m.atoms.length === ms[0].atoms.length && constitution(m) === first);
 }
 
+/** The words a join refused says: why, of the molecules selected, in one plain sentence (docs/WORKSPACE.md, *Frames taken as conformers*). */
+export const JOIN_REFUSED = {
+  stereoisomers: "Not joined as conformers: the selected molecules are not all the same stereoisomer.",
+  nothingTells: "Not joined as conformers: nothing added tells which stereoisomer the selected molecules are.",
+  notTold: "Not joined as conformers: which stereoisomer one of the selected molecules is could not be told.",
+  unspecified: "Not joined as conformers: one of the selected molecules has a stereocentre or double bond left unspecified.",
+  calculations: "Not joined as conformers: the selected molecules come from different calculations.",
+  sources: "Not joined as conformers: the selected molecules' energies come from different sources.",
+  labels: "Not joined as conformers: the selected molecules' stereo labels differ, so they may be different stereoisomers.",
+} as const;
+
 /**
- * Why these molecules are not one compound's conformers, as *As conformers*
- * would say it of them (workflow/meno `asConformers`): which stereoisomer
+ * Why these molecules are not one compound's conformers, judged as *As
+ * conformers* judges them (workflow/meno `asConformers`): which stereoisomer
  * each geometry is asked first, as that step asks it (workflow/configurations
  * `perceiveStereo`), then the same judgement - the same constitution and the
- * same stereoisomer, energies from one source. Null where they are one
- * compound; where they are several, what the step says of them ("2
- * compounds · 2").
+ * same stereoisomer, made alike (workflow/entries `unlikeMade`). Null where
+ * they are one compound; else why not, in one plain sentence (`JOIN_REFUSED`).
  */
 export async function notOneCompound(ms: readonly Molecule3D[], asker: Asker): Promise<string | null> {
   await perceiveStereo(setEntries(ms, "molecules"), asker);
-  const out = asConformers(setEntries(ms, "molecules"));
-  if (!out.ok) return out.said;
-  return new Set(out.kept.map((e) => e.compound)).size > 1 ? out.said : null;
+  const entries = setEntries(ms, "molecules");
+  const out = asConformers(entries);
+  if (out.ok) return new Set(out.kept.map((e) => e.compound)).size > 1 ? JOIN_REFUSED.stereoisomers : null;
+  // (refused: a molecule whose stereoisomer is not known - nothing to ask, not told, or left unspecified - else made unlike)
+  const unknown = entries.find((e) => stereoIdentity(e.stereo) == null);
+  if (unknown) return "none" in asker ? JOIN_REFUSED.nothingTells : unknown.stereo?.perceived ? JOIN_REFUSED.unspecified : JOIN_REFUSED.notTold;
+  return JOIN_REFUSED[howUnlike(entries) ?? "stereoisomers"];
 }
 
 /**
