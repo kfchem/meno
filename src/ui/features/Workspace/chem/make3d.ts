@@ -209,16 +209,18 @@ export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
 }
 
 /**
- * What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, the AND and OR groups whose halves
- * are made (by name: "and1"), and how many stereoisomers they make.
+ * What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id - only where the choice changes
+ * the compound (chem/menoIsomers `leftByMeno`) - its runs of cumulated double bonds among those bonds (`runs`, each one place), the AND
+ * and OR groups whose halves are made (by name: "and1"), and how many stereoisomers they make.
  */
-export type Open = { atoms: number[]; bonds: number[]; groups: { kind: "and" | "or"; name: string }[]; isomers: number };
+export type Open = { atoms: number[]; bonds: number[]; runs?: number[][]; groups: { kind: "and" | "or"; name: string }[]; isomers: number };
 
 /** What a block leaves open (chem/openStereo `isomersToMake`), in the drawing's ids. */
 export function openIn(block: Block, made: { open: OpenStereo; count: number }): Open {
   return {
     atoms: made.open.left.atoms.map((i) => block.atoms[i]).filter((id) => id != null),
     bonds: made.open.left.bonds.map((i) => block.bonds[i]).filter((id) => id != null),
+    runs: made.open.left.cumulated.map((r) => r.map((i) => block.bonds[i]).filter((id) => id != null)).filter((r) => r.length > 0),
     groups: made.open.groups.groups.map((g) => ({ kind: g.kind, name: groupName(g) })),
     isomers: made.count,
   };
@@ -226,30 +228,45 @@ export function openIn(block: Block, made: { open: OpenStereo; count: number }):
 
 /**
  * What the card that asks before 3D is made says (Ask3D): its title, and why the structure can be more than one stereoisomer - its stereo
- * drawn without a configuration, and its AND and OR groups, each named as it is drawn - and how many it can be.
+ * drawn without a configuration (a run of two or four cumulated double bonds one chiral axis, of three one double bond), and its AND and
+ * OR groups, each named as it is drawn - and how many it can be: either of two, any of more.
  */
 export function askWords(open: readonly Open[]): { title: string; said: string; isomers: number } {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const centres = open.reduce((n, o) => n + o.atoms.length, 0);
-  const bonds = open.reduce((n, o) => n + o.bonds.length, 0);
+  const runs = open.flatMap((o) => o.runs ?? []);
+  const inRuns = runs.reduce((n, r) => n + r.length, 0);
+  const axes = runs.filter((r) => r.length % 2 === 0).length;
+  const bonds = open.reduce((n, o) => n + o.bonds.length, 0) - inRuns + runs.filter((r) => r.length % 2 === 1).length;
   const isomers = open.reduce((n, o) => n + o.isomers, 0);
-  const what = [centres ? plural(centres, "stereocentre", "stereocentres") : "", bonds ? plural(bonds, "double bond", "double bonds") : ""].filter(Boolean).join(" and ");
+  const kinds = [
+    centres ? plural(centres, "stereocentre", "stereocentres") : "",
+    bonds ? plural(bonds, "double bond", "double bonds") : "",
+    axes ? plural(axes, "chiral axis", "chiral axes") : "",
+  ].filter(Boolean);
+  const what = kinds.length > 2 ? `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}` : kinds.join(" and ");
   const groups = [...new Map(open.flatMap((o) => o.groups).map((g) => [g.name, g])).values()];
   const ands = groups.filter((g) => g.kind === "and").map((g) => g.name);
   const ors = groups.filter((g) => g.kind === "or").map((g) => g.name);
   const listed = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]);
   const said = [
-    what ? `${what} ${centres + bonds === 1 ? "is" : "are"} drawn without a configuration` : "",
+    what ? `${what} ${centres + bonds + axes === 1 ? "is" : "are"} drawn without a configuration` : "",
     ands.length ? `${listed(ands)} ${ands.length === 1 ? "stands" : "stand"} for both of ${ands.length === 1 ? "its" : "their"} forms` : "",
     ors.length ? `${listed(ors)} ${ors.length === 1 ? "is" : "are"} one of two forms, not known which` : "",
   ]
     .filter(Boolean)
     .join("; ");
-  return { title: what ? "Stereo not drawn" : "Stereo drawn as a group", said, isomers };
+  const these = open.length > 1 ? "these structures" : "this structure";
+  const howMany = isomers === 2 ? `either of 2 stereoisomers` : `any of ${isomers} stereoisomers`;
+  return { title: "Which stereoisomer?", said: isomers > 1 ? `${said}, so ${these} can be ${howMany}.` : `${said}.`, isomers };
 }
 
-/** Whether making a structure in 3D asks first which of its stereoisomers: some of its stereo drawn without a configuration, or a group with more than one half. */
-export const asksFirst = (o: Open) => o.atoms.length + o.bonds.length > 0 || (o.groups.length > 0 && o.isomers > 1);
+/**
+ * Whether making a structure in 3D asks first which of its stereoisomers: only where it can be more than one, its stereo drawn without a
+ * configuration where the choice changes the compound, or a group with more than one half. One that stands for one stereoisomer is made
+ * at once.
+ */
+export const asksFirst = (o: Open) => o.isomers > 1 && (o.atoms.length + o.bonds.length > 0 || o.groups.length > 0);
 
 /**
  * A stereoisomer's conformers as a molecule in 3D: the lowest's coordinates

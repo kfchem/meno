@@ -55,7 +55,7 @@ export default function Ask3D({
         {title}
       </h2>
       <p className="text-gh-gray mb-3">
-        {said}, so the structure can be any of {isomers} stereoisomers.
+        {said}
       </p>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
