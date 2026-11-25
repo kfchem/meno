@@ -24,6 +24,7 @@ function steps(over: Partial<LookupSteps> = {}, answer: unknown = { found: [reco
     ask: vi.fn(async () => true),
     allowed: () => true,
     offline: () => false,
+    ready: async () => true,
     worker: vi.fn(async () => ({ chem: { request } }) as unknown as PluginWorker),
     running: () => false,
     stop: vi.fn(async () => undefined),
@@ -33,6 +34,14 @@ function steps(over: Partial<LookupSteps> = {}, answer: unknown = { found: [reco
 }
 
 describe("a name looked up", () => {
+  it("asks nothing and sends nothing for a plugin that cannot run - taken away, or its set-up not done - and says so", async () => {
+    const { s, request } = steps({ ready: async () => false });
+    expect(await lookUpName(plugin, "aspirin", s)).toEqual({ error: "Names Service is not added: add it in Settings, Plugins." });
+    expect(s.ask).not.toHaveBeenCalled();
+    expect(s.worker).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("goes to the plugin's worker as find_name, the most asked for said, and comes back read strictly", async () => {
     const { s, request } = steps();
     expect(await lookUpName(plugin, "  aspirin ", s)).toEqual({ found: [record], more: 0 });

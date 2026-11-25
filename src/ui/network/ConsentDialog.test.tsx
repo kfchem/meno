@@ -1,9 +1,10 @@
 import { renderToString } from "react-dom/server";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askToConnect, askToConnectAll, useNetwork, type ConsentRequest } from "../../lib/net/network";
 import { UPDATE_CONSENT } from "../../lib/update";
 import { ConsentSmallPrint, ConsentWords } from "./ConsentDialog";
 import { questionKey } from "./questionKey";
+import { giveFocusBack, noteFocus } from "./focusBack";
 
 // Vitest runs in Node, with no page to click on: a click on the dialog as it
 // fades out reaches the question it was drawn for - its `answer`, as the
@@ -50,7 +51,13 @@ describe("what every question says, once", () => {
   it("says under each question that each connection is shown and recorded, that none is made offline, and that a yes can be withdrawn", () => {
     const said = renderToString(<ConsentSmallPrint purpose={UPDATE_CONSENT.purpose} />).replace(/<!-- -->/g, "").replace(/\s+/g, " ");
     expect(said).toContain("Every connection is shown as it happens and kept in the record in Settings › Network, and none is made while Meno works offline.");
-    expect(said).toContain("Meno remembers a yes for “Keeping Meno up to date” until you withdraw it there.");
+    expect(said).toContain("Meno remembers a yes for “Keeping Meno up to date” until you withdraw it in Settings › Network.");
+  });
+
+  it("names a plugin's look-up in words, as Settings, Network lists it - never Meno's key for it", () => {
+    const said = renderToString(<ConsentSmallPrint purpose="lookup:finder@names.example.org" />).replace(/<!-- -->/g, "").replace(/\s+/g, " ");
+    expect(said).toContain("Meno remembers a yes for “Looking names up at names.example.org, for finder” until you withdraw it in Settings › Network.");
+    expect(said).not.toContain("lookup:");
   });
 
   it("leaves those out of a question's own words: said twice, they were read as two things", () => {
@@ -95,5 +102,42 @@ describe("one question for a plugin and the plugins it uses", () => {
   it("asks nothing offline: no", async () => {
     useNetwork.setState({ offline: true });
     expect(await askToConnectAll("t", "d", [{ name: "Tool", request: request("python-env:plugin-tool") }, { name: "Uses", request: request("python-env:plugin-uses") }])).toBe(false);
+  });
+});
+
+describe("the caret, after a question is answered", () => {
+  // (stand-ins for what is on the page: Node has none - the dialog notes what had the caret as its question comes, and gives it back as it is answered)
+  const field = () => ({ focus: vi.fn(), isConnected: true }) as unknown as Element & { focus: ReturnType<typeof vi.fn> };
+  const outside = () => false;
+
+  it("is back in the field it was in, after Not now and after Allow alike - so Enter there looks up again", () => {
+    for (const _answer of ["Not now", "Allow"]) {
+      const quickAdd = field();
+      noteFocus(quickAdd, outside);
+      giveFocusBack();
+      expect(quickAdd.focus).toHaveBeenCalledTimes(1);
+      expect(quickAdd.focus).toHaveBeenCalledWith({ preventScroll: true });
+    }
+  });
+
+  it("is given back once: a second click as the dialog goes gives nothing more", () => {
+    const quickAdd = field();
+    noteFocus(quickAdd, outside);
+    giveFocusBack();
+    giveFocusBack();
+    expect(quickAdd.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not taken from a question's own button, nor given to what is no longer on the page", () => {
+    const quickAdd = field();
+    noteFocus(quickAdd, outside);
+    // (the next question comes as the caret is on the one before's button: the field still kept)
+    noteFocus(field(), () => true);
+    giveFocusBack();
+    expect(quickAdd.focus).toHaveBeenCalledTimes(1);
+    const gone = { focus: vi.fn(), isConnected: false } as unknown as Element & { focus: ReturnType<typeof vi.fn> };
+    noteFocus(gone, outside);
+    giveFocusBack();
+    expect(gone.focus).not.toHaveBeenCalled();
   });
 });

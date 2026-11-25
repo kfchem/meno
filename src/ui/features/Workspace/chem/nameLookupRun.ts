@@ -9,6 +9,7 @@
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import { askToConnect, useNetwork, type ConsentRequest } from "../../../../lib/net/network";
 import { stopWorker, workerOf, workerRunning, type PluginWorker } from "../../../../lib/plugins/process";
+import { pyEnvReady } from "../../../../lib/pyEnv";
 import { foundOf, lookupConsentOf, lookupHosts, lookupPurpose, MOST_NAMED, NAME_MOST, type NameFound } from "./nameLookup";
 
 /**
@@ -23,6 +24,8 @@ export type LookupSteps = {
   ask: (request: ConsentRequest) => Promise<boolean>;
   allowed: (purpose: string) => boolean;
   offline: () => boolean;
+  /** Whether the plugin can run now - added, its environment set up - with nothing asked or downloaded. */
+  ready: (p: PythonPlugin) => Promise<boolean>;
   worker: (p: PythonPlugin) => Promise<PluginWorker>;
   running: (plugin: string) => boolean;
   stop: (plugin: string, why: string) => Promise<void>;
@@ -30,6 +33,9 @@ export type LookupSteps = {
 
 /** Where Meno is offline: what the lookup row says, before anything is asked. */
 export const offlineSaid = (p: PythonPlugin) => `${p.name} needs the network; Meno is offline`;
+
+/** Where the plugin is not added (taken away, or its set-up not done): what the lookup row says, before anything is asked. */
+export const notAddedSaid = (p: PythonPlugin) => `${p.name} is not added: add it in Settings, Plugins`;
 
 /**
  * `name` looked up through `p`: what it found, none, or why not, in words -
@@ -40,6 +46,8 @@ export async function lookUpName(p: PythonPlugin, name: string, steps: LookupSte
   const asked = name.trim();
   if (!asked || asked.length > NAME_MOST) return { error: `A name of 1 to ${NAME_MOST} characters is looked up` };
   if (steps.offline()) return { error: offlineSaid(p) };
+  // (a plugin that cannot run is not asked about: the chemist is never asked to allow what then does not happen)
+  if (!(await steps.ready(p))) return { error: `${notAddedSaid(p)}.` };
   const hosts = lookupHosts(p);
   const before = steps.allowed(lookupPurpose(p.id, hosts));
   if (!(await steps.ask(lookupConsentOf(p)))) return { error: `Nothing was sent: looking names up at ${hosts.join(", ")} was not allowed.` };
@@ -53,6 +61,7 @@ const MENO_STEPS: LookupSteps = {
   ask: askToConnect,
   allowed: (purpose) => useNetwork.getState().granted.includes(purpose),
   offline: () => useNetwork.getState().offline,
+  ready: async (p) => workerRunning(p.id) || (await pyEnvReady(p.profile)),
   worker: workerOf,
   running: workerRunning,
   stop: stopWorker,

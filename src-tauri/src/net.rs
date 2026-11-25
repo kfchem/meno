@@ -125,9 +125,10 @@ impl Net {
         }
         if let Some(granted) = network["granted"].as_array() {
             let mut held = self.0.granted.lock().unwrap();
+            // (a plugin's role names its hosts in its purpose - `lookup:<id>@<hosts>`, `model:<id>@<hosts>` - so `@.,` too)
             let named = |p: &&str| {
-                (1..=64).contains(&p.len())
-                    && p.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b':' || b == b'-')
+                (1..=4096).contains(&p.len())
+                    && p.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b":-@.,".contains(&b))
             };
             held.extend(granted.iter().filter_map(|p| p.as_str()).filter(named).map(String::from));
         }
@@ -1309,13 +1310,17 @@ mod tests {
         let offline = Net::default();
         std::fs::write(
             &path,
-            r#"{"format":1,"network":{"offline":true,"granted":["app-update","python-env:chem","Not A Purpose!"]}}"#,
+            r#"{"format":1,"network":{"offline":true,"granted":["app-update","python-env:chem","Not A Purpose!","lookup:finder@a.example.org,names.example.org","model:talker@api.example.com","lookup:finder@x y.org"]}}"#,
         )
         .unwrap();
         offline.load_settings(&path);
         assert!(offline.offline());
         assert!(offline.allowed("app-update") && offline.allowed("python-env:chem"));
         assert!(!offline.allowed("Not A Purpose!"));
+        // a plugin's role's yes, its hosts in its purpose: kept as the window keeps it (appSettings `acceptNetwork`)
+        assert!(offline.allowed("lookup:finder@a.example.org,names.example.org"));
+        assert!(offline.allowed("model:talker@api.example.com"));
+        assert!(!offline.allowed("lookup:finder@x y.org"));
         // offline, not even what was allowed goes out
         assert!(offline.begin("app-update", "Updating", named(&["github.com"])).is_err());
 

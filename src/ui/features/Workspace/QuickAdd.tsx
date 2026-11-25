@@ -27,7 +27,8 @@ import { FormulaText } from "../../abbreviations/FormulaText";
 import { rolePlugin } from "../../../lib/roles/worker";
 import { useNetwork } from "../../../lib/net/network";
 import { foundNotes, type NameFound, type NamedStructure } from "./chem/nameLookup";
-import { lookUpName, offlineSaid } from "./chem/nameLookupRun";
+import { lookUpName, notAddedSaid, offlineSaid } from "./chem/nameLookupRun";
+import { useReaders } from "../../../lib/calc/workers";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair" | "haworth" | "newman";
@@ -521,6 +522,8 @@ function SmilesField({
   // (the plugin that looks names up, where one does; the network's state, for a lookup that cannot go out)
   const finder = onFound ? rolePlugin("names") : undefined;
   const offline = useNetwork((n) => n.offline);
+  // (one known not to be added - taken away, or its set-up not done - offered as such: nothing asked of the network for it)
+  const finderAway = useReaders((r) => (finder ? r.state[finder.id] === "absent" || r.state[finder.id] === "removing" : false));
   const lookable = !!finder && text.trim().length > 0;
   // (with a lookup offered, every reading is offered beside it - a SMILES alone too - and the lookup last: ./quickAddSmiles)
   const shown = fieldRows(readings, lookable);
@@ -582,7 +585,7 @@ function SmilesField({
   };
   /** The text looked up, as the chemist chose: one found drawn at once, several offered, none or an error said. */
   const lookUp = (name: string) => {
-    if (!finder || offline) return;
+    if (!finder || offline || finderAway) return;
     const mine = ++asked.current;
     setError(null);
     setNeeds(null);
@@ -660,9 +663,9 @@ function SmilesField({
           lookup={
             lookable && finder
               ? {
-                  text: going ? "Looking up…" : offline ? offlineSaid(finder) : `Look up “${text.trim()}” at ${finder.name}`,
+                  text: going ? "Looking up…" : offline ? offlineSaid(finder) : finderAway ? notAddedSaid(finder) : `Look up “${text.trim()}” at ${finder.name}`,
                   chosen: lookupChosen,
-                  dim: offline && !going,
+                  dim: (offline || finderAway) && !going,
                   onChoose: () => {
                     setChoice(offered.length);
                     if (!busy && !going && !reading.current) lookUp(text.trim());
