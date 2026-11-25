@@ -59,18 +59,34 @@ export const whiteInstances = (n: number): Float32Array => new Float32Array(3 * 
  * the main thread. A drawing laid out at another zoom than the view's - a
  * very large one waiting for a zoom to stop - keeps its lines as wide as a
  * layout at the view's would have them so (utils/largeZoom `lineWidening`).
+ * And none drawn thinner than `device.value` world units, a device pixel
+ * (0: no least): a thinner line is drawn that wide, made fainter by its
+ * material (components/drawnInk).
  */
 export function widenedMaterial(
   across: "y" | "xy",
   params: THREE.MeshBasicMaterialParameters,
-): { material: THREE.MeshBasicMaterial; width: { value: number } } {
+): { material: THREE.MeshBasicMaterial; width: { value: number }; device: { value: number } } {
   const width = { value: 1 };
+  const device = { value: 0 };
   const material = new THREE.MeshBasicMaterial(params);
+  // (an instance's own width: a line's plane is one across, a cap's disc two - each scaled by the instance)
+  const across1 = across === "y" ? "1.0" : "2.0";
   menoShader(material, `widened-${across}`, (shader) => {
     shader.uniforms.uWidth = width;
+    shader.uniforms.uDevice = device;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform float uWidth;")
-      .replace("#include <begin_vertex>", `#include <begin_vertex>\n  transformed.${across} *= uWidth;`);
+      .replace("#include <common>", "#include <common>\nuniform float uWidth;\nuniform float uDevice;")
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+  float widen = uWidth;
+  #ifdef USE_INSTANCING
+    float own = ${across1} * length(instanceMatrix[1].xyz);
+    if (own > 0.0) widen = max(widen, uDevice / own);
+  #endif
+  transformed.${across} *= widen;`,
+      );
   });
-  return { material, width };
+  return { material, width, device };
 }

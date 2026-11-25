@@ -12,6 +12,8 @@ import { dragSelection } from "../utils/dragSelection";
 import { carriedWithMore } from "../utils/selectionScheme";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
+import { inkOnce } from "./drawnInk";
+import { devicePx, thinLine } from "../pageGl/units";
 
 /**
  * The "+" signs of a reaction scheme, as the drawing style draws them, in
@@ -46,9 +48,14 @@ export default function Pluses2D() {
 
   // one shape for every "+", about its middle
   const measures = useMemo(() => plusMeasures(style, NOMINAL_BOND_LENGTH), [style]);
-  // no thinner on the screen than a bond is kept (ReactionArrow2D): a zoom
-  // changes it only once the view is out far enough for that
-  const thickness = useDrawnZoom((z) => Math.max(measures.thickness, Math.max(0.5, opts.minLinePx ?? 1) / Math.max(z, 1e-6)));
+  // thinner than a device pixel, a device pixel wide and as much fainter,
+  // painted once (pageGl/units `thinLine`, components/drawnInk): a zoom
+  // changes its shape only once the view is out far enough for that
+  const dpr = useThree((st) => st.viewport.dpr);
+  const thin = useDrawnZoom((z) => thinLine(measures.thickness, devicePx(z, dpr)).ink);
+  const thickness = measures.thickness / thin;
+  // (each material at its strength as it is drawn: every "+" has its own)
+  const ink = (m: THREE.MeshBasicMaterial | null) => void (m && inkOnce(m, thin));
   const geometry = useMemo(() => {
     const outline = plusOutline({ x: 0, y: 0 }, { ...measures, thickness });
     return new THREE.ShapeGeometry(new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, p.y))));
@@ -119,7 +126,7 @@ export default function Pluses2D() {
           }}
         >
           <mesh geometry={geometry}>
-            <meshBasicMaterial color={fill} toneMapped={false} depthTest={false} depthWrite={false} />
+            <meshBasicMaterial ref={ink} color={fill} toneMapped={false} depthTest={false} depthWrite={false} />
           </mesh>
           {/* (selected: lit round, as a shape is) */}
           {selPluses.has(p.id) && (

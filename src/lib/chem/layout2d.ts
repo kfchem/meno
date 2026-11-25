@@ -220,7 +220,14 @@ export type LayoutOptions = {
    */
   joinStyle?: "round" | "sharp";
   units?: "px" | "world";
+  /** The least a line is laid out at, in pixels at the zoom it is laid out for: never under half a pixel (`leastLinePx`). */
   minLinePx?: number;
+  /**
+   * The view draws a line thinner than one of its device pixels itself (a
+   * device pixel wide and as much fainter): no least width is laid out, and
+   * every line is as wide as the drawing makes it at any zoom.
+   */
+  thinDrawn?: boolean;
   // boolean: all rings ON, undefined/false: OFF
   // { enabled: Set<string> }: enable only rings with ringKey (ascending concat of 6 atom ids)
   aromaticCircle?: boolean | { enabled: Set<string> };
@@ -693,11 +700,16 @@ export type Crowded = { atoms: [number, number]; need: number };
  */
 export type BondReach = { left1: number; right1: number; left2: number; right2: number };
 
+/** The least width a line is laid out at, in pixels at the zoom: `minLinePx`, never under half a pixel - none where the view draws thin lines itself (`thinDrawn`). */
+export function leastLinePx(opts: LayoutOptions): number {
+  return opts.thinDrawn ? 0 : Math.max(0.5, opts.minLinePx ?? 1);
+}
+
 /** Half the width of a line as the drawing draws it, in its coordinates. */
 export function lineHalfOf(opts: LayoutOptions, zoom: number): number {
   const units = opts.units ?? "px";
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
-  const minPx = Math.max(0.5, opts.minLinePx ?? 1);
+  const minPx = leastLinePx(opts);
   if (!(lwPx >= minPx)) lwPx = minPx;
   return pxToWorld(lwPx * 0.5, zoom);
 }
@@ -753,7 +765,7 @@ export function bondReach(
  */
 export function sameAtZooms(opts: LayoutOptions, bonds: readonly Bond[], a: number, b: number): boolean {
   if ((opts.units ?? "px") !== "world") return false;
-  const least = Math.max(0.5, opts.minLinePx ?? 1);
+  const least = leastLinePx(opts);
   if (!(opts.lineWidthPx * a >= least && opts.lineWidthPx * b >= least)) return false;
   // (a bond next to a double bond whose stereo is not known is drawn wavy)
   if (!bonds.some((x) => x.stereo === "wavy" || x.stereo === "either")) return true;
@@ -2918,7 +2930,7 @@ export function buildBondPrimitives(
   const polys: Poly[] = [];
   const units = opts.units ?? "px";
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
-  const minPx = Math.max(0.5, opts.minLinePx ?? 1);
+  const minPx = leastLinePx(opts);
   if (!(lwPx >= minPx)) lwPx = minPx;
   // (a label being written over it takes the bond's end as a label does)
   const hasLabel = (at: Atom) => showsLabel(at, opts) || (!!at.writing && writtenAs);
@@ -4802,7 +4814,7 @@ function bondNotes(atoms: Atom[], bonds: Bond[], groupsAt: Set<number>, opts: La
 function centreStrokes(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: number): LineSeg[] {
   const out: LineSeg[] = [];
   const units = opts.units ?? "px";
-  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
+  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, leastLinePx(opts));
   for (const b of bonds) {
     const c = b.reactingCentre;
     if (!c) continue;
@@ -5120,7 +5132,7 @@ function sgroupDrawing(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
   });
   if (!groups.size) return { lines, texts };
   const units = opts.units ?? "px";
-  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
+  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, leastLinePx(opts));
   const fontPx = opts.fontPx * ANNOTATION_SIZE;
   const font = toWorld(opts.fontPx, zoom, opts.units);
   const lens = bonds.map((b) => Math.hypot(atoms[b.a1].x - atoms[b.a2].x, atoms[b.a1].y - atoms[b.a2].y)).filter((l) => l > 1e-9).sort((p, q) => p - q);
@@ -5221,7 +5233,7 @@ export function layoutMolecule(
   // the labels' marks - a charge's circle, a radical's dots - drawn as the
   // rest of the drawing is
   const units = opts.units ?? "px";
-  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
+  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, leastLinePx(opts));
   const marks = labelMarks(texts, toWorld(opts.fontPx, zoom, opts.units), labelSetOf(opts), pxToWorld(lwPx, zoom), lwPx);
   pushAll(prim.lines, marks.lines);
   pushAll(prim.polys, marks.polys);

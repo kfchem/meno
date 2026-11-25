@@ -66,22 +66,27 @@ describe("a drawing laid out for the canvas", () => {
     expect(all.fills).toHaveLength(one.fills.length * 1000);
   }, 60_000);
 
-  it("is the same drawing at any zoom where its lines are drawn wider than the least", () => {
+  it("is the same drawing at any zoom: its lines have no least width, the view draws a thin one itself", () => {
     for (const style of [ACS_1996, MENO]) {
       const opts = editorLayoutOptions(style);
       const z = startingZoom(style);
-      const least = Math.max(0.5, opts.minLinePx ?? 1) / opts.lineWidthPx;
-      for (const other of [z * 0.7, z * 3, least * 1.001]) {
+      // (a bond's line a device pixel of a screen of two at `z / 40`, and far under it at a thousandth)
+      for (const other of [z * 0.7, z * 3, z / 40, z / 1000]) {
         expect(sameAtZooms(opts, cholesterol.bonds, z, other)).toBe(true);
         sameDrawing(
           layoutMolecule(cholesterol.atoms, cholesterol.bonds, opts, z),
           layoutMolecule(cholesterol.atoms, cholesterol.bonds, opts, other),
         );
       }
-      // not where the lines would be drawn thinner than that: they are kept
-      // at the least, and so drawn wider than the layout made at `z` has them
-      expect(sameAtZooms(opts, cholesterol.bonds, z, least * 0.9)).toBe(false);
     }
+  });
+
+  it("keeps a least width where a caller asks for one (a picture's layout): laid out again under it", () => {
+    const opts = editorLayoutOptions(ACS_1996, { minLinePx: 1 });
+    const z = startingZoom(ACS_1996);
+    const least = 1 / opts.lineWidthPx;
+    expect(sameAtZooms(opts, cholesterol.bonds, z, least * 1.001)).toBe(true);
+    expect(sameAtZooms(opts, cholesterol.bonds, z, least * 0.9)).toBe(false);
   });
 
   it("is laid out again where a wavy bond's turns are drawn in more steps, or where it is in pixels", () => {

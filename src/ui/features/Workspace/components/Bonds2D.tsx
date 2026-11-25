@@ -5,16 +5,22 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { colorInstances, whiteInstances, widenedMaterial } from "./instances";
 import { lineWidening } from "../utils/largeZoom";
+import { drawnInk, inkOnce } from "./drawnInk";
 
 /** The drawing's lines, from the shared layout: bonds, hashes, waves. */
 export function Bonds2D() {
   const { layout, opts } = useDrawnLayout();
   const invalidate = useThree((s) => s.invalidate);
-  // (as wide as a layout at the view's zoom would have them, laid out at another: utils/largeZoom)
-  const drawn = useMemo(() => widenedMaterial("y", { color: "#ffffff", vertexColors: false, toneMapped: false }), []);
+  // (as wide as a layout at the view's zoom would have them, laid out at another: utils/largeZoom;
+  // none thinner than a device pixel, and the drawing's ink as much fainter, painted once: components/drawnInk)
+  const drawn = useMemo(() => widenedMaterial("y", { color: "#ffffff", vertexColors: false, toneMapped: false, transparent: true }), []);
   useEffect(() => () => drawn.material.dispose(), [drawn]);
-  useFrame(({ camera }) => {
-    drawn.width.value = lineWidening(opts, layout.zoom, (camera as THREE.OrthographicCamera).zoom || 1);
+  useFrame(({ camera, viewport }) => {
+    const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+    drawn.width.value = lineWidening(opts, layout.zoom, zoom);
+    const { device, ink } = drawnInk(opts, zoom, viewport.dpr);
+    drawn.device.value = device;
+    inkOnce(drawn.material, ink);
   });
   const inst = useRef<THREE.InstancedMesh>(null!);
   const tmpM = useMemo(() => new THREE.Matrix4(), []);

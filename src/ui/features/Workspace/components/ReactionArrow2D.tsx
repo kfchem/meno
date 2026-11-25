@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { useEffect, useMemo } from "react";
+import { useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { resolveStyle } from "../../../../lib/chem/style";
 import {
@@ -10,6 +11,8 @@ import {
 } from "../../../../lib/chem/reactionArrow";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
+import { inkOnce } from "./drawnInk";
+import { devicePx, thinLine } from "../pageGl/units";
 
 /**
  * An arrow from (x1, y1) to its point at (x2, y2): its lines, heads and
@@ -46,10 +49,14 @@ export default function ReactionArrow2D({
   // (its form by what it says, not by which object says it: drawn again only when it changes)
   const formKey = JSON.stringify(form ?? {});
   const measures = useMemo(() => arrowMeasures(resolveStyle(style, look), NOMINAL_BOND_LENGTH), [style, look]);
-  // no thinner on the screen than a bond is kept, however far out the
-  // view is (layout2d's lineHalfOf): a zoom changes it only once the view
-  // is out far enough for that
-  const thickness = useDrawnZoom((z) => Math.max(measures.thickness, Math.max(0.5, opts.minLinePx ?? 1) / Math.max(z, 1e-6)));
+  // thinner than a device pixel, a device pixel wide and as much fainter,
+  // painted once (pageGl/units `thinLine`, components/drawnInk): a zoom
+  // changes its shape only once the view is out far enough for that
+  const dpr = useThree((st) => st.viewport.dpr);
+  const thin = useDrawnZoom((z) => thinLine(measures.thickness, devicePx(z, dpr)).ink);
+  const thickness = measures.thickness / thin;
+  // (its material at its strength as it is drawn)
+  const ink = (m: THREE.MeshBasicMaterial | null) => void (m && inkOnce(m, thin));
   const geometry = useMemo(() => {
     const pieces = arrowPieces(
       { x: x1, y: y1 },
@@ -66,6 +73,7 @@ export default function ReactionArrow2D({
   return (
     <mesh geometry={geometry} position={[0, 0, z]}>
       <meshBasicMaterial
+        ref={ink}
         color={fill}
         toneMapped={false}
         depthTest={false}
