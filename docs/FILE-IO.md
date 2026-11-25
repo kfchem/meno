@@ -1812,6 +1812,9 @@ As step 4 was built:
     reader's answer: the drawing, laid out, a reaction's arrow and "+"
     signs, and the molecules in 3D with their frames and energies.
   - The page checks it (`checkedStructures`), as it would a plugin's.
+    A molecule's `energies`, where given, are one for each frame, some
+    frame having one; a frame given none is `NaN`, or `null` in an
+    answer sent as JSON, and is taken as a frame with no energy.
   - A structure's file goes to its reader through `whoReads`, as a
     calculation's output does: Meno's own, unless a plugin added is chosen
     for its kind. None is, yet.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStructures } from "../../../lib/io/structures";
+import { checkedStructures, readStructures } from "../../../lib/io/structures";
 import { xyzComment, xyzFrameName } from "../../../lib/chem/xyzWriter";
 import { structureFileText, xyzFileText } from "./fileActions";
 import { readCarried3D } from "./utils/copyPaste";
@@ -7,6 +7,8 @@ import { sharesOf, sharesWithheld } from "./utils/molecule3d";
 import { chipDetails, chipEnergies, setChipRuns } from "./utils/chipSaid";
 import { barsAbove, NO_ENERGY } from "./utils/barsAbove";
 import { tableRows } from "./workflow/setTable";
+import { processFileContent } from "./utils/io";
+import { readWorkspace, workspaceText } from "./utils/workspace";
 import type { Molecule3D } from "./store/types";
 
 /** An invented water file: three frames, each comment line written by hand. */
@@ -139,5 +141,74 @@ describe("a frame with no energy, where others have one", () => {
     const m = { ...set, atoms: [], bonds: [], at: { x: 0, y: 0 }, id: 1, name: "made-up.xyz", frameNames: ["a", "", "c"] } as unknown as Molecule3D;
     const rows = tableRows([m], "conformers");
     expect(rows.map((r) => [r.name, r.energy])).toEqual([["a", -76.4], ["made-up.xyz", undefined], ["c", -76.38]]);
+  });
+});
+
+describe("a file with a frame given no energy, opened as the page opens a file", () => {
+  // (three frames, the second's line with no energy: invented)
+  const file = three("E = -76.40 Eh chair-like, made up", "second geometry, no energy", "E = -76.42 Eh third, made up");
+  const opened = async (text: string, name = "three.xyz") => (await processFileContent(name, text)).molecules3d![0];
+
+  it("opens as one molecule of three frames, the second with no energy", async () => {
+    const m = await opened(file);
+    expect(m.frames).toHaveLength(2);
+    expect(m.energies![0]).toBe(-76.4);
+    expect(Number.isNaN(m.energies![1])).toBe(true);
+    expect(m.energies![2]).toBe(-76.42);
+    expect(m.frameNames).toEqual(["chair-like, made up", "second geometry, no energy", "third, made up"]);
+  });
+
+  it("says frame 2 has no energy on its chip and in its details; gives no shares, saying why", async () => {
+    const m = await opened(file);
+    const c = { count: 3, frame: 1, energies: m.energies, names: m.frameNames };
+    expect(setChipRuns(c).map((r) => r.text).join("")).toBe(`2 / 3second geometry, no energy · ${NO_ENERGY}`);
+    expect(chipDetails(c, 1)[0]).toEqual({ group: "Name", rows: [{ label: "Frame 2", text: "second geometry, no energy" }] });
+    expect(chipEnergies(c)!.split("\n")[2]).toBe("2\tsecond geometry, no energy\t\t");
+    const set = { ...m, conformerSet: true };
+    expect(sharesOf(set)).toBeUndefined();
+    expect(sharesWithheld(set)).toBe("#2 has no energy, so no shares are given");
+  });
+
+  it("is written by Meno's XYZ writer, every frame, and opens again the same", async () => {
+    const m = await opened(file);
+    const text = xyzFileText([{ ...m, at: { x: 0, y: 0 } } as never], "t", { frames: "all" });
+    expect(text.split("\n").filter((_, i) => i % 5 === 1)).toEqual(["E = -76.4000000000 Eh chair-like, made up", "second geometry, no energy", "E = -76.4200000000 Eh third, made up"]);
+    const back = await opened(text, "three-again.xyz");
+    expect(back.frameNames).toEqual(m.frameNames);
+    expect(back.energies![0]).toBe(-76.4);
+    expect(Number.isNaN(back.energies![1])).toBe(true);
+    expect(back.energies![2]).toBe(-76.42);
+    expect(back.frames).toEqual(m.frames);
+  });
+
+  it("is kept in the workspace's file and read back with frame 2 still without an energy", async () => {
+    const m = { ...(await opened(file)), id: 1, at: { x: 0, y: 0 } } as Molecule3D;
+    const text = workspaceText({ model: { atoms: [], bonds: [] } as never, arrows: [], pluses: [], captions: [], molecules3d: [m], turns3d: {}, frames3d: {}, lists3d: {}, aromaticEnabled: false, aromaticRings: {} });
+    const back = readWorkspace(text)!.drawn.molecules3d![0];
+    expect(back.frameNames).toEqual(m.frameNames);
+    expect(back.energies![0]).toBe(-76.4);
+    expect(Number.isNaN(back.energies![1])).toBe(true);
+    expect(back.energies![2]).toBe(-76.42);
+  });
+
+  it("takes a reader's answer given as JSON, a frame's missing energy null; refuses a list with none", async () => {
+    const answer = readStructures("xyz", "three.xyz", file);
+    const json = JSON.parse(JSON.stringify(answer));
+    expect(json.molecules3d[0].energies).toEqual([-76.4, null, -76.42]);
+    const taken = checkedStructures(json, "three.xyz").molecules3d![0];
+    expect(Number.isNaN(taken.energies![1])).toBe(true);
+    expect(taken.energies![2]).toBe(-76.42);
+    json.molecules3d[0].energies = [null, null, null];
+    expect(() => checkedStructures(json, "three.xyz")).toThrow("the energies of a molecule in 3D are not one for each of its frames");
+    json.molecules3d[0].energies = [-1, "x", -2];
+    expect(() => checkedStructures(json, "three.xyz")).toThrow("not one for each of its frames");
+  });
+
+  it("of frames none of which has an energy opens as before: no energies, nothing said of them", async () => {
+    const m = await opened(three("first", "second", "third"));
+    expect(m.energies).toBeUndefined();
+    expect(m.frameNames).toEqual(["first", "second", "third"]);
+    expect(sharesWithheld(m)).toBeNull();
+    expect(sharesOf({ ...m, conformerSet: true })).toBeUndefined();
   });
 });
