@@ -845,7 +845,14 @@ molecule in 3D or a picture.
     item is shown only where the item acts on what the key does. Turning over is seeing
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
-  each stereocentre keeps its configuration.
+  each stereocentre keeps its configuration. Each stays narrow at the
+  centre it states: hashes drawn narrow at their far end, which state the
+  centre at their wide end, become a wedge narrow at that centre, and a
+  line of hashes that states a centre a wedge narrow at it; a wedge that
+  states nothing - narrow at its far end - is left as it is. Turn over on
+  one atom, or on one bond (its menu), turns over the whole structure it
+  is in, about that structure's middle, the selection kept as it was: an
+  atom alone would not move, a bond alone would only swap its two atoms.
 - Turned over, a selection is mirrored about the middle of all it moves,
   which so stays where it was. Pictures, texts, PDFs, slides, shapes
   and molecules in 3D selected with it go to their mirrored places, each

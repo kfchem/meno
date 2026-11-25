@@ -282,4 +282,32 @@ describe("Turn over keeps every configuration", () => {
       expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 4 });
     });
   }
+
+  it("keeps S where a line of hashes states C2, made a solid wedge narrow at C2", async () => {
+    // (a line of hashes from C2 to the O, an end group, is read as hashes narrow at C2: S. Turned over, the O is in front: a wedge narrow
+    //  at C2 - S, as above. Kept a line, it would state the O behind still, in the page's reversed order: R)
+    const r = await turned(with12({ display: "hashed" }), [...whole[0]], [...whole[1]], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    expect(r.bond(12).display).toBeUndefined();
+  });
+
+  // (the structure's middle: x from -0.866 L to 1.732 L, y from -0.5 L (C1, C3) to L (the O) - so 0.25 L; top to bottom, each y goes to
+  //  0.5 L - y: C2 to 0.5 L, C1 and C3 to L, the O to -0.5 L, C4 (5) to 0.5 L; each x as it was)
+  const placesTurned = (m: Model) => {
+    const y = Object.fromEntries(m.atoms.map((a) => [a.id, a.y / L]));
+    expect(y[1]).toBeCloseTo(0.5);
+    expect(y[2]).toBeCloseTo(1);
+    expect(y[3]).toBeCloseTo(1);
+    expect(y[4]).toBeCloseTo(-0.5);
+    expect(y[5]).toBeCloseTo(0.5);
+  };
+  for (const [what, atoms, bonds] of [["the wedge's bond alone, with its two atoms (its menu)", [1, 4], [12]], ["one atom alone", [5], []]] as const)
+    it(`turns the whole structure over where the selection is ${what}, and keeps S`, async () => {
+      // (today a bond alone swapped its two atoms, C2 and the O, and exchanged the hashes: "C2: S, now R"; an atom alone did not move)
+      const r = await turned(with12({ stereo: "down", narrow: 1 }), [...atoms], [...bonds], "horizontal");
+      placesTurned(r.model);
+      expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    });
 });
