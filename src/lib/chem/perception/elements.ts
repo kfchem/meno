@@ -43,6 +43,21 @@ export const coordinatedByDonors: ReadonlySet<string> = new Set([
   ...[...mainGroupMetal].filter((el) => el !== "Nh" && GROUPS_1_2_13.has(ELEMENTS.find((e) => e.symbol === el)?.number ?? 0)),
 ]);
 
+/** The group 13 atoms that take a pair besides the metals: boron, and aluminium, gallium and indium (H3N->BH3, AlCl3 on an ether's O). */
+export const takesPairGroup13: ReadonlySet<string> = new Set(["B", "Al", "Ga", "In"]);
+
+/**
+ * Whether an atom of `el` takes the pair a ligand's label lends (PPh3, PtBu3 - a neutral donor of the dictionary): one the over-bond
+ * check already counts a lent bond at (lib/chem/molWriter `overBonded`) - a metal a donor's bond to is a coordination
+ * (`coordinatedByDonors`: the transition metals, the Lewis-acidic metals of groups 1, 2 and 13, thallium among them) or a
+ * `takesPairGroup13` atom (Ph3P->BH3 drawn without charges stays an adduct). Only to one of these is the label's bond a coordination
+ * bond; to any other atom - C, N, O, S, P, a halogen, H - it is the bond as drawn: Ph3P-CH2-CH3 a phosphine's carbon bonded by a single
+ * bond, Ph3P=O a double one, never a pair lent to an atom that holds no place for it.
+ */
+export function takesLentPair(el: string): boolean {
+  return coordinatedByDonors.has(el) || takesPairGroup13.has(el);
+}
+
 /**
  * The elements that are no metals: hydrogen, the noble gases, the nonmetals and the metalloids (B, Si, Ge, As, Sb, Te, At; Ts with At). A label's
  * smart reading reads every other symbol as a metal's (lib/chem/smartLabel), and only an atom of these carries groups written after it

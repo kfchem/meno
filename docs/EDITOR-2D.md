@@ -1594,6 +1594,13 @@ All hover-based, as above.
     that it is checked by its bonds to the rest, none or the one it has as
     usual. One with two bonds to carbons is marked still, metal or not
     (chem/marks `bridgesMetals`).
+  - **A ligand's label** (PPh3, PtBu3: a neutral donor) lends its pair
+    only to an atom that takes one - a metal a donor's bond to is a
+    coordination, or B, Al, Ga, In - and its bond to one is written as a
+    coordination bond; to any other atom it is the bond as drawn, Ph3P-CH2
+    a single bond and Ph3P=O a double one, as the same atoms drawn out
+    are, and drawn out from the label so (lib/chem/perception/elements
+    `takesLentPair`).
   - **An atom a dative bond is drawn into** - BH3 in H3N→BH3, AlCl3
     taking an ether's O - is not marked for it: the pair is the donor's,
     so the bond takes none of the acceptor's valence, as Meno counts its
