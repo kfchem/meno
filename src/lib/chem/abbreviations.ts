@@ -263,6 +263,11 @@ function composedOf(label: string): Abbreviation | undefined {
   const salt = metalSaltStructure(label, groupStructure);
   if (salt === "unread") return undefined;
   if (salt) return { label, name: salt.name, smiles: "", kind: "reagent" };
+  // (a metal oxoacid, as HnMOm or with its hydroxo written out - H2CrO4, CrO2(OH)2 - read as (HO)n-M(=O)(m-n), before a complex's formula
+  // would read its H as groups on the metal and every O as oxo)
+  const acid = metalOxoacid(label);
+  if (acid === "refused") return undefined;
+  if (acid) return { label, name: acid.name, smiles: "", kind: "reagent" };
   const complex = complexStructure(label, groupStructure);
   if (complex && (refusedForOO(label, complex) || oxoPastHighest(label, complex))) return undefined;
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
@@ -281,7 +286,10 @@ export function precatalystDrawn(generation: string): GroupStructure | null {
 
 /** A whole molecule a label stands for: one of the reagents, or one made by rule (`byRule`). */
 function madeStructure(label: string): (GroupStructure & { name: string }) | null {
-  return reagentStructure(label, groupStructure) ?? byRule(label);
+  const reagent = reagentStructure(label, groupStructure);
+  if (reagent) return reagent;
+  const acid = metalOxoacid(label);
+  return (acid !== "refused" ? acid : null) ?? byRule(label);
 }
 
 /**
@@ -341,10 +349,14 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
 
 /**
  * Why a label's formula is not read as written, where one of its readers refused it: it would bond two O the label does not write
- * together, or take its metal past its highest oxidation state (by so many oxo and other groups). The chemist is told only that it is
+ * together, take its metal past its highest oxidation state (by so many oxo and other groups), or - a metal oxoacid - give its metal a
+ * state other than the one `HIGHEST_STATE` holds for it (`metalOxoacid`). The chemist is told only that it is
  * not read as written (`labelRefused`, the label's notice): what the formula would have been read as is no structure they wrote.
  */
-export type LabelRefusal = { why: "two O bonded" } | { why: "past the highest state"; metal: string; oxo: number; others: number; state: number; highest: number };
+export type LabelRefusal =
+  | { why: "two O bonded" }
+  | { why: "past the highest state"; metal: string; oxo: number; others: number; state: number; highest: number }
+  | { why: "a state not held"; metal: string; oxo: number; hydroxo: number; state: number; held: number };
 
 /** Each label refused, by label. */
 const REFUSED = new Map<string, LabelRefusal>();
@@ -389,8 +401,8 @@ const HIGHEST_STATE: ReadonlyMap<string, number> = new Map([
 /**
  * Whether a complex's formula read takes one of `HIGHEST_STATE`'s metals past its highest oxidation state - two for each oxo (O on it by
  * a double bond and on nothing else), one for each other group bound to it by a single bond of its own, not lent: CrO5 read as five oxo
- * would be Cr +10, MoO3Cl2 Mo +8, H2CrO4 (chromic acid, CrO2(OH)2) Cr +10. Not read as written: CrO5 is a compound, CrO(O2)2 with
- * two peroxo ligands, which a formula's O count does not say.
+ * would be Cr +10, MoO3Cl2 Mo +8. Not read as written: CrO5 is a compound, CrO(O2)2 with two peroxo ligands, which a formula's O count
+ * does not say. (A metal oxoacid, H2CrO4, is read before a complex's formula is: `metalOxoacid`.)
  */
 function oxoPastHighest(label: string, s: GroupStructure): boolean {
   for (const [i, a] of s.atoms.entries()) {
@@ -410,6 +422,40 @@ function oxoPastHighest(label: string, s: GroupStructure): boolean {
     }
   }
   return false;
+}
+
+/** Greek multiplying prefixes, by count: an additive name's. */
+const MULTIPLIER = ["", "", "di", "tri", "tetra", "penta", "hexa"];
+
+/**
+ * A metal oxoacid typed as a label - as HnMOm (H2CrO4, HMnO4, HReO4) or with its hydroxo written out (CrO2(OH)2, MoO2(OH)2, ReO3(OH),
+ * ReO3OH, VO(OH)3) - as the molecule (HO)n-M(=O)(m-n): each H on an O of its own, that O bound to the metal by a single bond, and the
+ * rest of the O oxo, by a double bond. Only of `HIGHEST_STATE`'s metals, with one oxo or more, and only where the oxidation state the
+ * formula gives the metal - two for each oxo, one for each hydroxo - is the one that table holds for it: H2CrO4 Cr(VI), HMnO4 Mn(VII),
+ * VO(OH)3 V(V). A formula of this shape at any other state (H2CrO3, Cr(IV); H2MnO4, Mn(VI)) is refused, never read at a state guessed:
+ * "refused", and recorded so. Named additively, its ligands in alphabetical order: dihydroxidodioxidochromium (IUPAC, Nomenclature of
+ * Inorganic Chemistry, Recommendations 2005, chapter IR-8). Null for any other label: a main-group acid (H2SO4, HNO3) is no such reading.
+ */
+function metalOxoacid(label: string): (GroupStructure & { name: string }) | "refused" | null {
+  const acid = /^H(\d*)([A-Z][a-z]?)O(\d*)$/.exec(label);
+  const hydroxo = acid ? null : /^([A-Z][a-z]?)O(\d*)(?:\(OH\)(\d*)|OH)$/.exec(label);
+  const metal = acid?.[2] ?? hydroxo?.[1];
+  const held = metal == null ? undefined : HIGHEST_STATE.get(metal);
+  if (metal == null || held == null) return null;
+  const count = (n: string | undefined) => (n ? Number(n) : 1);
+  // (HnMOm: n of the O carry the n H, the rest are oxo; MOx(OH)y as written)
+  const oh = acid ? count(acid[1]) : count(hydroxo![3]);
+  const oxo = acid ? count(acid[3]) - oh : count(hydroxo![2]);
+  // (an O count of none, or no oxo left: a hydroxide - H4TiO4, Ti(OH)4 - is no metal oxo form, and not this reader's)
+  if (oh < 1 || oxo < 1 || oh >= MULTIPLIER.length || oxo >= MULTIPLIER.length) return null;
+  const state = 2 * oxo + oh;
+  if (state !== held) {
+    REFUSED.set(label, { why: "a state not held", metal, oxo, hydroxo: oh, state, held });
+    return "refused";
+  }
+  const smiles = `[${metal}]${"(O)".repeat(oh)}${"(=O)".repeat(oxo)}`;
+  const prefix = (n: number) => MULTIPLIER[n];
+  return { ...wholeOf(smiles), name: `${prefix(oh)}hydroxido${prefix(oxo)}oxido${TABLE.find((e) => e.symbol === metal)?.name ?? metal}` };
 }
 
 /** Why `label`, typed, is not read as written - where a reader refused it rather than finding nothing - or undefined. */
