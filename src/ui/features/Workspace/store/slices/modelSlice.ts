@@ -28,6 +28,9 @@ import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
 import { EditorState, Atom, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
+import { oneAtomOrBond } from "../../utils/menuScope";
+import { fragmentOf } from "../../chem/cleanUp";
+import { keepingCentres } from "../../configuration/turnedOver";
 import { endsRenamed } from "../../utils/cycles";
 import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
@@ -260,21 +263,28 @@ export const createModelSlice = (
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
     const { sel, model } = get();
     if (!sel.atoms.size) return;
+    // (one atom, or one bond with its two atoms: the whole structure it is in turned over, about that structure's middle - the selection
+    //  kept as it is. Turned alone, an atom would not move and a bond would only swap its two atoms)
+    const one = oneAtomOrBond(get());
+    const turning = one == null ? sel.atoms : fragmentOf(model, one);
+    const st = one == null ? get() : { ...get(), sel: { atoms: turning, bonds: new Set(model.bonds.filter((b) => turning.has(b.a)).map((b) => b.id)) } };
     // (marks put by hand turned over with them)
-    const markAts = marksAtOf(model, sel.atoms, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
+    const markAts = marksAtOf(model, turning, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
     // (the arrows, "+" signs and words among them, and those selected for themselves, too - the words' places, their letters upright - as a drag takes them)
-    const among = selectionScheme(get());
+    const among = selectionScheme(st);
     const words = among.captions;
     // (all of it - and the pictures, texts' sheets, PDFs, slides, shapes and molecules in 3D selected with it - about the middle of all it moves, which so stays where it was)
-    const mid = turnOverMiddle(get(), { arrows: among.arrows, pluses: among.pluses, captions: words })!;
+    const mid = turnOverMiddle(st, { arrows: among.arrows, pluses: among.pluses, captions: words })!;
     // (a ring in perspective with no depth: its worked-out depth stored first, so that it is turned over as one drawn with depth is - the
     //  same compound seen from its other side, not its mirror image: chem/depthHeld)
-    const held = recognisedDepthOf(model, sel.atoms);
-    const over = turnedOver(held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model, sel.atoms, axis, mid);
+    const held = recognisedDepthOf(model, turning);
+    const base = held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model;
+    // (and each centre it turns with only some of its neighbours, or whose neighbour it turns, kept too: configuration/turnedOver)
+    const over = keepingCentres(base, turning, turnedOver(base, turning, axis, mid));
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)
-    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(st, axis, mid) }), turning));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {

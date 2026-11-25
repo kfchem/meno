@@ -845,7 +845,21 @@ molecule in 3D or a picture.
     item is shown only where the item acts on what the key does. Turning over is seeing
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
-  each stereocentre keeps its configuration.
+  each stereocentre keeps its configuration. Each stays narrow at the
+  centre it states: hashes drawn narrow at their far end, which state the
+  centre at their wide end, become a wedge narrow at that centre, and a
+  line of hashes that states a centre a wedge narrow at it; a wedge that
+  states nothing - narrow at its far end - is left as it is. Part of a
+  structure turned over keeps every configuration too: a centre turned
+  with only some of its neighbours, or one that stays while a neighbour is
+  turned, has its wedges and hashes exchanged or kept, all together,
+  whichever keeps its configuration - even a wedge none of whose atoms
+  moved. Where neither can (the places it is left in state nothing
+  readable), and for a double bond or an axis turned in part, the move is
+  as it is and the note says what changed. Turn over on
+  one atom, or on one bond (its menu), turns over the whole structure it
+  is in, about that structure's middle, the selection kept as it was: an
+  atom alone would not move, a bond alone would only swap its two atoms.
 - Turned over, a selection is mirrored about the middle of all it moves,
   which so stays where it was. Pictures, texts, PDFs, slides, shapes
   and molecules in 3D selected with it go to their mirrored places, each
@@ -1721,7 +1735,8 @@ All hover-based, as above.
   and undo gives back what the edit changed. A note that would come after
   the drawing has changed again is dropped. Meno's own moves - Clean-up,
   Turn over (which exchanges solid and hashed wedges as it turns a drawing,
-  Brecher 2008, GR-3), Rotate, Expand, Contract, a stack gathered again - keep
+  Brecher 2008, GR-3, each narrow at the centre it states, and keeps each
+  centre it turns in part), Rotate, Expand, Contract, a stack gathered again - keep
   every configuration; where one did not, that is Meno's fault: the same
   note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
   Meno's log records which move. Only the structures a change touched are

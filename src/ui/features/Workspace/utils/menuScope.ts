@@ -62,6 +62,19 @@ function counts(st: Held): [ScopedKind, number][] {
   return all.filter(([, n]) => n > 0);
 }
 
+/**
+ * The atom a selection of one atom alone, or of one bond alone with its two atoms, is of (the bond's first): null for any other selection.
+ * Turn over takes such a selection's whole structure (docs/EDITOR-2D.md, *Turn over*).
+ */
+export function oneAtomOrBond(st: Held): number | null {
+  const kinds = counts(st).map(([k]) => k);
+  const { atoms, bonds } = st.sel;
+  if (kinds.join() === "atom" && atoms.size === 1) return [...atoms][0];
+  if (kinds.join() !== "atom,bond" || atoms.size !== 2 || bonds.size !== 1) return null;
+  const b = st.model.bonds.find((x) => bonds.has(x.id));
+  return b && atoms.has(b.a) && atoms.has(b.b) ? b.a : null;
+}
+
 /** Whether the atoms and bonds selected are each structure whole - every atom of it and every bond between them - and some are. */
 export function wholeStructures(st: Pick<Held, "sel" | "model">): boolean {
   const { atoms, bonds } = st.sel;
