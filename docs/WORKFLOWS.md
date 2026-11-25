@@ -266,7 +266,14 @@ pointer does; put back by an undo, they glide back.
   set - a structure with none of its atoms left inside, a molecule or a
   picture with its middle outside - it leaves; moved within the frame, or
   half out of it, it keeps its place, and the frame grows round it;
-- what joins or leaves is marked a moment as it does;
+- while something is held, the set's own frame shows what letting go
+  would do, eased in and out as a highlight is: a set that would take it
+  in has its edge in Meno's colour and a wash of it over its room; a set
+  a member would leave has its edge dashed grey. The same test that
+  settles membership decides it, so the frame never shows what letting go
+  would not do; a step's result set, which takes nothing in, shows
+  nothing; and nothing is shown after letting go - the set's count and its
+  frame growing round what came say it (`workflow/setSigns`);
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
   the two are one;

@@ -1603,9 +1603,11 @@ it, in `features/Workspace/pageGl/`:
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings that grow with the
   page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
-  go on one found by its shape. And its small marks (`workflowMarks`):
-  what just joined a set or left it, an Enumerate step's positions, a
-  structure's number with how it was made in the tip. Frames under cards
+  go on one found by its shape. A set's frame, while something is held,
+  showing what letting go would do (`frameSign`): its edge and a wash in
+  Meno's colour, or its edge dashed. And its small marks (`workflowMarks`):
+  an Enumerate step's positions, a structure's number with how it was made
+  in the tip. Frames under cards
   under chips under ports, all over the molecules, as their HTML lay.
 - **The hover tip** (components/PageTip): not placed on the page, it may be
   HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
