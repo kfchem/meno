@@ -102,8 +102,16 @@ describe("lonePairCentres", () => {
     expect(centres("CC1(C)CN1c1ccccc1")).toEqual([]);
     // (2-tert-butyloxaziridine's N: kept, as before - no pi system on it)
     expect(centres("CC(C)(C)N1OC1c1ccccc1")).toEqual(["N4"]);
-    // (an N-heteroaryl one, 2-(pyridin-2-yl): its aryl a C of an aromatic ring, read as an aryl - kept; no barrier measured for it)
-    expect(centres("C1ON1c1ccccn1")).toEqual(["N2"]);
+    // (2-(naphthalen-1-yl)oxaziridine's N: a carbocyclic aryl, fused rings of C only - kept, as a phenyl's)
+    expect(centres("C1ON1c1cccc2ccccc12")).toEqual(["N2"]);
+    // (an N-heteroaryl one - 2-(pyridin-2-yl), 2-(thiophen-2-yl), 2-(pyrrol-1-yl): none, as before. The measured barrier is a
+    //  carbocyclic aryl's, at the edge of what keeps at room temperature, and none is measured for a heteroaryl, which may well
+    //  lower it further; so the rule keeps to what was measured (the maintainer, 2026-11-25))
+    expect(centres("C1ON1c1ccccn1")).toEqual([]);
+    expect(centres("C1ON1c1cccs1")).toEqual([]);
+    expect(centres("C1ON1n1cccc1")).toEqual([]);
+    // (a quinolin-5-yl: joined by a C of its benzene ring, but its ring system holds an N - a heteroaryl, none)
+    expect(centres("C1ON1c1cccc2ncccc12")).toEqual([]);
     // (an N-vinyl one: a pi system but no aryl, which the ruling does not cover - none, as before)
     expect(centres("C=CN1OC1(C)C")).toEqual([]);
   });

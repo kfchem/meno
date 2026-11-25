@@ -2712,7 +2712,10 @@ lipids each have their own way of being drawn, which it should know.
        measured for 3-methyl-2,3-diphenyloxaziridine by its two invertomers
        going over to each other at room temperature (H. Ono, J. S. Splitter
        and M. Calvin, Tetrahedron Lett. 14, 4107-4110, 1973). The aryl is
-       a C of an aromatic ring by Meno's count, a heteroaryl's so read too.
+       a C of an aromatic ring of carbons only, fused ones too (a phenyl, a
+       naphthyl), whatever is on it. A heteroaryl (a pyridyl, a thienyl) is
+       not taken as an aryl here, because no barrier has been measured for
+       one (the maintainer, 2026-11-25).
        An N-acyl, N-sulfonyl, N-alkoxycarbonyl or N-vinyl oxaziridine's N
        keeps none, nor does an N-aryl diaziridine's, no barrier having been
        measured for it, nor an N-aryl aziridine's;

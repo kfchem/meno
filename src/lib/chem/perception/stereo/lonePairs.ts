@@ -36,8 +36,10 @@
  *   an aryl on it is kept: its barrier measured at 23.4 kcal/mol (free
  *   energy of activation, a 3-methyl-2,3-diphenyloxaziridine's; Ono,
  *   Splitter and Calvin, Tetrahedron Lett. 14, 4107-4110, 1973), as high
- *   as an N-chloro aziridine's the rule keeps; an N-acyl, N-sulfonyl or
- *   N-alkoxycarbonyl oxaziridine's is not, nor an N-vinyl one's, and a
+ *   as an N-chloro aziridine's the rule keeps, its aryl a carbocyclic
+ *   one; an N-heteroaryl oxaziridine's is not, no barrier measured for it
+ *   (the maintainer, 2026-11-25), nor an N-acyl, N-sulfonyl or
+ *   N-alkoxycarbonyl oxaziridine's, nor an N-vinyl one's, and a
  *   diaziridine's N with an aryl on it is not, no barrier measured for it
  *   (the maintainer, 2026-11-18);
  * - N at a bridgehead of a small bridged ring system (Tröger's base, a
@@ -111,12 +113,14 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
   const metal = (k: number) => drawnRoundMetal.has(atoms[k].el ?? "C");
   // (the atoms on a ring that is aromatic with a P's or an As's lone pair given it - an arsole counted as its phosphole,
   //  As giving its ring its pair as P does - worked out once, where a P or an As is asked of)
+  let rings: number[][] | null = null;
+  const ringsOf = () => (rings ??= smallestRings(atoms.length, bonds.map((b) => [b.a, b.b] as const)));
   let aromatic: Set<number> | null = null;
   const onAromatic = (at: number) =>
     (aromatic ??= flatRingAtoms(
       atoms.map((a) => ({ el: a.el === "As" ? "P" : (a.el ?? "C"), charge: a.charge ?? 0 })),
       bonds,
-      smallestRings(atoms.length, bonds.map((b) => [b.a, b.b] as const)),
+      ringsOf(),
     )).has(at);
   const known = new Map<number, boolean>();
   return (at) => {
@@ -149,15 +153,34 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
    * Whether `at`, an N of three single bonds in a three-membered ring, is
    * an oxaziridine's with an aryl on it: an O beside it in the ring, and
    * its one group outside the ring a C on an aromatic ring by Meno's count
-   * (perception/flatRings `flatRingAtoms`), a heteroaryl's so read too.
-   * Not an acyl, a sulfonyl, an alkoxycarbonyl or a vinyl: none of those
-   * is an aromatic ring's C.
+   * (perception/flatRings `flatRingAtoms`) whose ring system - its
+   * aromatic rings fused to one another, a naphthalene's two - is all C:
+   * a carbocyclic aryl, the kind the barrier was measured for. Not a
+   * heteroaryl, joined by a ring C or a ring N (a pyridyl, a thienyl): no
+   * barrier is measured for one (the maintainer, 2026-11-25). Nor an acyl,
+   * a sulfonyl, an alkoxycarbonyl or a vinyl: none of those is an aromatic
+   * ring's C.
    */
   function arylOxaziridine(at: number): boolean {
     const ring = around[at].filter((n) => around[at].some((m) => m !== n && around[n].includes(m)));
     if (ring.length !== 2 || !ring.some((n) => atoms[n].el === "O")) return false;
     const out = around[at].find((n) => !ring.includes(n));
-    return out != null && (atoms[out].el ?? "C") === "C" && onAromatic(out);
+    if (out == null || (atoms[out].el ?? "C") !== "C" || !onAromatic(out)) return false;
+    // (the aromatic rings it is on and those fused to them, each ring's every atom aromatic: all of their atoms C)
+    const flat = ringsOf().filter((r) => r.every(onAromatic));
+    const system = new Set<number>([out]);
+    const taken = new Set<number[]>();
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const r of flat)
+        if (!taken.has(r) && r.some((k) => system.has(k))) {
+          taken.add(r);
+          for (const k of r) system.add(k);
+          grew = true;
+        }
+    }
+    return taken.size > 0 && [...system].every((k) => (atoms[k].el ?? "C") === "C");
   }
 
   /**
