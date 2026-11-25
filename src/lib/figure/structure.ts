@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../chem/acs";
 import { abbreviationStructure, bondedAbbreviationStructure, reversedLabel } from "../chem/abbreviations";
 import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
-import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
+import { chargeText, implicitHydrogens, mostBonds, valenceOrder, type Radical } from "../chem/molecule";
 import { hydrogenCounts } from "../chem/perception/hydrogens";
 import { coordinatedByDonors } from "../chem/perception/elements";
 import { bondsFromRight } from "../layout/names";
@@ -68,7 +68,18 @@ export type StructureAtom = {
   of?: number;
   multiple?: { group: number; n: number; paradigm?: true };
 };
-export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; /** Hashes drawn even, a line: no narrow end. */ hashed?: true; unsure?: string[] };
+export type StructureBond = {
+  a: number;
+  b: number;
+  order: 1 | 2 | 3;
+  stereo?: "up" | "down" | "wavy";
+  bold?: boolean;
+  /** Hashes drawn even, a line: no narrow end. */
+  hashed?: true;
+  unsure?: string[];
+  /** A dative bond, from `a`, the donor, to `b`. */
+  dative?: true;
+};
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
 function drawnHydrogens(label: string): number | null {
@@ -182,7 +193,9 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const double = new Array(read.atoms.length).fill(false);
   read.bonds.forEach((b, i) => {
     for (const end of [b.a, b.b]) {
-      valence[end] += orders[i];
+      // (a dative bond, as the core counts one (perception/hydrogens `valenceOrder`): none of either end's valence, a lent pair - an
+      //  NH3 by a platinum keeps its three hydrogens, a BH3 by an amine its three - but two of a carbon's, CO's or a carbene's)
+      valence[end] += b.dative ? valenceOrder({ order: orders[i], dative: true }, els[end]) : orders[i];
       degree[end]++;
       if (orders[i] > 1) double[end] = true;
     }
@@ -210,7 +223,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   //  valence chosen by its bonds to non-metals; a label's own H are what it is checked against, never given to it)
   const counted = hydrogenCounts(
     read.atoms.map((_, i) => ({ el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(radicals[i] ? { radical: radicals[i] } : {}) })),
-    read.bonds.map((b, k) => ({ a: b.a, b: b.b, order: orders[k] })),
+    read.bonds.map((b, k) => ({ a: b.a, b: b.b, order: orders[k], ...(b.dative ? { dative: true } : {}) })),
   );
   const atoms = read.atoms.map((a, i): StructureAtom => {
     const unsure = [...(a.unsure ?? [])];
@@ -256,7 +269,15 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
   const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + counted[i] === 4;
   const bonds = read.bonds.map((b, i): StructureBond => {
-    const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
+    const out: StructureBond = {
+      a: b.a,
+      b: b.b,
+      order: orders[i],
+      ...(b.stereo ? { stereo: b.stereo } : {}),
+      ...(b.bold ? { bold: true } : {}),
+      ...(b.unsure ? { unsure: [...b.unsure] } : {}),
+      ...(b.dative ? { dative: true } : {}),
+    };
     if (b.either) {
       delete out.stereo;
       out.hashed = true;
