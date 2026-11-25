@@ -6,8 +6,9 @@ import { GlobeAltIcon } from "@heroicons/react/24/outline";
 import { useCallback, useRef } from "react";
 import QuestionLayer from "../layouts/QuestionLayer";
 import { useAskedKeys } from "../layouts/asking";
-import { purposeName, useNetwork, type ConsentRequest } from "../../lib/net/network";
+import { allowSaid, purposeName, useNetwork, type ConsentRequest } from "../../lib/net/network";
 import { questionKey } from "./questionKey";
+import { giveFocusBack, noteFocus } from "./focusBack";
 
 /**
  * Asks before something first uses the network: what will be fetched, from
@@ -20,9 +21,18 @@ export default function ConsentDialog() {
   const asking = useNetwork((s) => (talking ? null : s.asking));
   const boxRef = useRef<HTMLDivElement>(null);
   // (the keys its own while it asks: Escape fetches nothing, and nothing behind it acts on one)
-  useAskedKeys(boxRef, () => asking?.answer(false), !!asking);
-  // Not fetching is the safe answer, so it is the one a stray Enter gives: each question's own as it comes.
-  const focusNo = useCallback((el: HTMLButtonElement | null) => el?.focus(), []);
+  // (answered, yes or no: the caret back where it was as the question came - ./focusBack)
+  const answer = (yes: boolean) => {
+    asking?.answer(yes);
+    giveFocusBack();
+  };
+  useAskedKeys(boxRef, () => answer(false), !!asking);
+  // Not fetching is the safe answer, so it is the one a stray Enter gives: each question's own as it comes - what had the caret kept.
+  const focusNo = useCallback((el: HTMLButtonElement | null) => {
+    if (!el) return;
+    noteFocus(document.activeElement, (a) => a.closest('[role="alertdialog"]') != null);
+    el.focus();
+  }, []);
   // (in a layer of the window's own, over what is opened over a canvas: layouts/QuestionLayer)
   return (
     <QuestionLayer>
@@ -47,16 +57,16 @@ export default function ConsentDialog() {
         <div className="mt-4 flex justify-end gap-2">
           <button
             ref={focusNo}
-            onClick={() => asking.answer(false)}
+            onClick={() => answer(false)}
             className="rounded-md border border-gh-line px-3 py-1.5 outline-none hover:bg-gh-base focus-visible:border-accel-base focus-visible:ring-2 focus-visible:ring-accel-lightbase"
           >
             Not now
           </button>
           <button
-            onClick={() => asking.answer(true)}
+            onClick={() => answer(true)}
             className="rounded-md bg-accel-base px-3 py-1.5 text-white outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accel-base/40"
           >
-            Allow and download
+            {allowSaid(asking)}
           </button>
         </div>
       </motion.div>
@@ -115,7 +125,8 @@ export function ConsentSmallPrint({ purpose }: { purpose: string }) {
     <p className="mt-3 text-xs text-gh-gray">
       Every connection is shown as it happens and kept in the record in
       Settings › Network, and none is made while Meno works offline. Meno
-      remembers a yes for “{purposeName(purpose)}” until you withdraw it there.
+      remembers a yes for “{purposeName(purpose)}” until you withdraw it in
+      Settings › Network.
     </p>
   );
 }

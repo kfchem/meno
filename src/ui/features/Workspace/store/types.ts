@@ -2228,7 +2228,8 @@ export type EditorState = {
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
-  pasteModel: (next: Drawn) => void;
+  /** What was copied, or read, put down - one step to undo, named `step` where it is not a paste ("Add aspirin (CID 2244)"). */
+  pasteModel: (next: Drawn, step?: string) => void;
   /**
    * A chair put down from Quick Add, its ring's middle at `at`, seen from the right (form 1); or, where the chair this put down is still as it
    * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).

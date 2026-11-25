@@ -50,34 +50,7 @@ export default function NetworkSettings() {
 
       <UpdateSettings />
 
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">
-          Allowed
-        </h3>
-        <div className="mt-2 rounded-lg border border-gh-line bg-white divide-y divide-gh-line">
-          {granted.length === 0 && (
-            <p className="px-4 py-3 text-xs text-gh-gray">
-              Nothing yet. Meno asks before anything first uses the network.
-            </p>
-          )}
-          {granted.map((purpose) => (
-            <div
-              key={purpose}
-              className="px-4 py-2.5 flex items-center justify-between gap-3"
-            >
-              <span className="text-sm text-gh-black">
-                {purposeName(purpose)}
-              </span>
-              <button
-                onClick={() => void revoke(purpose)}
-                className="h-7 px-2.5 rounded-md border border-gh-line text-xs hover:bg-gh-base"
-              >
-                Withdraw
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      <Allowed granted={granted} />
 
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">
@@ -158,5 +131,39 @@ function Row({ c }: { c: NetConnection }) {
         {result}
       </td>
     </tr>
+  );
+}
+
+/** What has been allowed to use the network, each in words, each to be withdrawn: every yes kept in the settings, whatever the state of what asked for it. */
+export function Allowed({ granted }: { granted: readonly string[] }) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">
+        Allowed
+      </h3>
+      <div className="mt-2 rounded-lg border border-gh-line bg-white divide-y divide-gh-line">
+        {granted.length === 0 && (
+          <p className="px-4 py-3 text-xs text-gh-gray">
+            Nothing yet. Meno asks before anything first uses the network.
+          </p>
+        )}
+        {granted.map((purpose) => (
+          <div
+            key={purpose}
+            className="px-4 py-2.5 flex items-center justify-between gap-3"
+          >
+            <span className="text-sm text-gh-black">
+              {purposeName(purpose)}
+            </span>
+            <button
+              onClick={() => void revoke(purpose)}
+              className="h-7 px-2.5 rounded-md border border-gh-line text-xs hover:bg-gh-base"
+            >
+              Withdraw
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

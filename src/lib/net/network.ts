@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
-import { PLUGINS } from "../calc/catalog";
+import { anyPluginById, PLUGINS } from "../calc/catalog";
 
 /**
  * What Meno does on the network, as the window sees it. The app keeps the
@@ -104,8 +104,24 @@ export function purposeName(purpose: string): string {
   // (a model's plugin, by the hosts it was allowed for: conversation/modelConnection `modelPurpose`)
   const model = /^model:([^@]+)@(.+)$/.exec(purpose);
   if (model) return `Conversations through ${model[1]}, to ${model[2].split(",").join(", ")}`;
+  // (names looked up by a plugin, at the hosts it was allowed for: Workspace/chem/nameLookup `lookupPurpose` - said as its question asks it)
+  const lookup = /^lookup:([^@]+)@(.+)$/.exec(purpose);
+  if (lookup) return `Looking names up at ${lookup[2].split(",").join(", ")}, for ${anyPluginById(lookup[1])?.name ?? lookup[1]}`;
   return purpose;
 }
+
+/**
+ * Whether a purpose only sends out what the chemist chose - a conversation
+ * to a model, a name to be looked up (src-tauri/src/model.rs
+ * `goes_out_for_a_role`) - rather than downloading anything.
+ */
+export const sendsOnly = (purpose: string): boolean => purpose.startsWith("model:") || purpose.startsWith("lookup:");
+
+/** What a question's yes is called: what it does for the purposes it allows - "Allow" where they only send out, else "Allow and download". */
+export function allowSaid(request: Pick<ConsentRequest, "purpose" | "grants">): string {
+  return (request.grants ?? [request.purpose]).every(sendsOnly) ? "Allow" : "Allow and download";
+}
+
 
 const KEEP = 1000;
 

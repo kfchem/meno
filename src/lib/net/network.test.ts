@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { askToConnect, purposeName, useNetwork } from "./network";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { allowSaid, askToConnect, purposeName, useNetwork } from "./network";
+
+// (a plugin known by its name, as one here would be: lib/calc/catalog `anyPluginById`)
+vi.mock("../calc/catalog", async (original) => ({
+  ...(await original<typeof import("../calc/catalog")>()),
+  anyPluginById: (id: string) => (id === "finder" ? { id, name: "Names Service" } : undefined),
+}));
 
 const ask = (purpose: string) => askToConnect({ purpose, title: `Set up ${purpose}?`, detail: "", sources: [], hosts: [] });
 const settle = () => new Promise((go) => setTimeout(go, 0));
@@ -46,5 +52,25 @@ describe("a purpose, as Settings, Network names it", () => {
     expect(purposeName("model:talker")).toBe("model:talker");
     // (the list of plugins online, said as the other purposes are: never its key)
     expect(purposeName("plugin-catalogue")).toBe("Looking up plugins online");
+  });
+});
+
+describe("a plugin's look-up, as its question and Settings, Network say it", () => {
+  it("says what is allowed, at which host, for which plugin - never Meno's key for it", () => {
+    expect(purposeName("lookup:finder@names.example.org")).toBe("Looking names up at names.example.org, for Names Service");
+    expect(purposeName("lookup:finder@a.example.org,b.example.org")).toBe("Looking names up at a.example.org, b.example.org, for Names Service");
+    // (a plugin no longer here: its id, still in words)
+    expect(purposeName("lookup:gone@names.example.org")).toBe("Looking names up at names.example.org, for gone");
+  });
+});
+
+describe("what a question's yes is called", () => {
+  it("is \"Allow\" where the yes only sends out what the chemist chose, \"Allow and download\" where it downloads", () => {
+    expect(allowSaid({ purpose: "lookup:finder@names.example.org" })).toBe("Allow");
+    expect(allowSaid({ purpose: "model:talker@api.example.com" })).toBe("Allow");
+    for (const purpose of ["python-env:plugin-rdkit", "python-env:console", "app-update", "plugin-catalogue", "ccd"]) expect(allowSaid({ purpose })).toBe("Allow and download");
+    // (several asked in one: a download among them, and the yes downloads)
+    expect(allowSaid({ purpose: "lookup:finder@names.example.org", grants: ["python-env:plugin-finder", "lookup:finder@names.example.org"] })).toBe("Allow and download");
+    expect(allowSaid({ purpose: "lookup:finder@names.example.org", grants: ["lookup:finder@names.example.org", "model:talker@api.example.com"] })).toBe("Allow");
   });
 });
