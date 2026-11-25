@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, LINE_LEAST_PX, lineWidth, type Style3D } from "../../../lib/chem/style3d";
-import { solidsBounds } from "../../../lib/chem/layout2d";
+import { solidsBounds, type SolidMark } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
 import { withCentres, bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { outlineMaterial } from "./utils/outlineMaterial";
@@ -48,6 +48,15 @@ export function ballSegmentsFor(radiusPx: number, atoms: number): number {
 }
 
 type Bounds = { min: { x: number; y: number }; max: { x: number; y: number } };
+
+/**
+ * How far a molecule in 3D reaches in a picture, seen straight from above:
+ * its balls and sticks (`marks`, its `pictureMarks`, where they are made
+ * already) and the surface it shows - none where it draws nothing.
+ */
+export function solidReach(m: Carried3D, style: Style3D, marks?: readonly SolidMark[]): Bounds | null {
+  return unionOf(solidsBounds(marks ?? pictureMarks(m, style)), pictureSurface(m, style)?.bounds ?? null);
+}
 
 /** Two boxes as one, either of which may be none. */
 function unionOf(a: Bounds | null, b: Bounds | null): Bounds | null {
@@ -107,14 +116,17 @@ export function rendered3d(
   // (a renderer to draw with, kept by whoever gives it - many small pictures one after another, say: each a context of
   // its own, the browser takes the oldest live ones away; else one made for this picture and let go after it)
   using?: THREE.WebGLRenderer,
+  // (how far each reaches, seen straight from above - `solidReach` - where the picture's layout has it already)
+  reach?: readonly (Bounds | null)[],
 ): { canvas: HTMLCanvasElement; bounds: Bounds; numbersLeftOut: number } | null {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
-  // (each as far as it reaches: its atoms, and the surface it shows)
+  // (each as far as it reaches: its atoms, and the surface it shows - as the layout found it, where it is given)
+  const given = eyeHeight == null && reach?.length === ms.length ? reach : null;
   const each = ms
-    .map((m) => {
+    .map((m, i) => {
       const surface = pictureSurface(m, style, eyeOver(m));
-      return { m, surface, bounds: unionOf(solidsBounds(pictureMarks(m, style, eyeOver(m))), surface?.bounds ?? null) };
+      return { m, surface, bounds: given ? given[i] : unionOf(solidsBounds(pictureMarks(m, style, eyeOver(m))), surface?.bounds ?? null) };
     })
     .filter((e): e is typeof e & { bounds: Bounds } => !!e.bounds);
   if (!each.length) return null;
@@ -509,13 +521,15 @@ export function solidsDrawn(
   layout: { zoom: number; solids?: Parameters<typeof solidsBounds>[0] },
   style: Style3D,
   dpi = 300,
+  // (how far each reaches, as the layout found it: `solidReach`)
+  reach?: readonly (Bounds | null)[],
 ): SolidsDrawn | null {
   const marks = solidsBounds(layout.solids ?? []);
   if (!marks || !ms.length) return null;
   const zoom = layout.zoom > 0 ? layout.zoom : 1;
   const area = Math.max((marks.max.x - marks.min.x) * zoom, 1) * Math.max((marks.max.y - marks.min.y) * zoom, 1);
   const scale = Math.min(dpi / 96, Math.sqrt(PICTURE_MOST_PIXELS / area));
-  const drawn = rendered3d(ms, style, zoom * scale, undefined, TILE, scale);
+  const drawn = rendered3d(ms, style, zoom * scale, undefined, TILE, scale, undefined, reach);
   if (!drawn) return null;
   // (atom numbers too small in the picture to read, or with no room on their balls, are left out of it: how many, said in Meno's log)
   if (drawn.numbersLeftOut > 0) console.warn(`Meno: a picture of molecules in 3D left out ${drawn.numbersLeftOut} of their atom numbers, too small to read in it or with no room on their balls.`);

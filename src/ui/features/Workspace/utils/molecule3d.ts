@@ -1143,6 +1143,61 @@ export function asSeen(
 }
 
 /**
+ * The ball of `balls` whose centre is nearest a point, the first of them
+ * where two are as near: found among those about the point, on a grid of
+ * them, not by going through them all - a molecule of thousands of atoms has
+ * thousands of sticks, each end asking.
+ */
+export function nearestOf<B extends { c: { x: number; y: number } }>(balls: readonly B[]): (p: { x: number; y: number }) => B {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const { c } of balls) {
+    x0 = Math.min(x0, c.x);
+    y0 = Math.min(y0, c.y);
+    x1 = Math.max(x1, c.x);
+    y1 = Math.max(y1, c.y);
+  }
+  const n = Math.max(balls.length, 1);
+  // (about one ball a cell)
+  const cell = Math.max(Math.sqrt(((x1 - x0) * (y1 - y0)) / n), Math.max(x1 - x0, y1 - y0) / n) || 1;
+  const across = Math.floor((x1 - x0) / cell) + 1;
+  const down = Math.floor((y1 - y0) / cell) + 1;
+  const cells: number[][] = balls.length ? Array.from({ length: across * down }, () => []) : [];
+  balls.forEach(({ c }, i) => cells[Math.floor((c.y - y0) / cell) * across + Math.floor((c.x - x0) / cell)].push(i));
+  return (p) => {
+    const cx = Math.floor((p.x - x0) / cell);
+    const cy = Math.floor((p.y - y0) / cell);
+    const most = Math.max(Math.abs(cx), Math.abs(cx - across + 1), Math.abs(cy), Math.abs(cy - down + 1));
+    let best = -1;
+    let near = Infinity;
+    const look = (i: number) => {
+      const d = Math.hypot(balls[i].c.x - p.x, balls[i].c.y - p.y);
+      if (d < near || (d === near && i < best)) {
+        near = d;
+        best = i;
+      }
+    };
+    const visit = (x: number, y: number) => {
+      for (const i of cells[y * across + x]) look(i);
+    };
+    // (ring by ring out from the point's cell, until what is found is nearer
+    // than anything in a ring not yet looked in can be - with a ring to
+    // spare, for where a centre on a cell's edge was put in the next)
+    for (let r = 0; r <= most && !(near < (r - 2) * cell); r++) {
+      const xa = Math.max(cx - r, 0), xb = Math.min(cx + r, across - 1);
+      const ya = Math.max(cy - r, 0), yb = Math.min(cy + r, down - 1);
+      for (let y = ya; y <= yb; y++) {
+        if (y === cy - r || y === cy + r) for (let x = xa; x <= xb; x++) visit(x, y);
+        else {
+          if (cx - r >= 0 && cx - r < across) visit(cx - r, y);
+          if (cx + r >= 0 && cx + r < across) visit(cx + r, y);
+        }
+      }
+    }
+    return balls[best];
+  };
+}
+
+/**
  * A molecule in 3D as a picture shows it - turned, in the frame and the look
  * it is shown in, seen as the canvas sees it: straight from above
  * (orthographic), or from an `eye` in perspective - as balls and sticks
@@ -1176,12 +1231,12 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
     const turned = new Float32Array(places.length);
     for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
     const bonds = withCentres(m, bondsAt(m, frameOf(solid, m.frame))).filter((b) => !left[b.a1] && !left[b.a2]);
+    const nearest = nearestOf(shown);
     for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one").flatMap((l) => (l.r > 0 ? bentPieces(l) : []))) {
       const a = seen(line.a);
       const b = seen(line.b);
       // (which atoms the line runs between: the nearest at each end)
-      const end = (p: { x: number; y: number }) =>
-        shown.reduce((best, ball) => (Math.hypot(ball.c.x - p.x, ball.c.y - p.y) < Math.hypot(best.c.x - p.x, best.c.y - p.y) ? ball : best));
+      const end = nearest;
       const ra = end(a).r;
       // (a stick to a ring's centre ends there, at no atom: not cut back)
       const rb = line.centre ? 0 : end(b).r;
@@ -1440,13 +1495,14 @@ export function plainNoteOf(m: Molecule3D): string | null {
  * highest atom - or ribbon - on a white ground as a measurement's value is.
  * None for a molecule with nothing to say.
  */
-export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye): MeasureMark[] {
+export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye, marks?: readonly SolidMark[]): MeasureMark[] {
   const molecule = { ...m, id: 0 } as Molecule3D;
   const solid = solidOf(molecule, style);
   const notes = notesOf(molecule, solid, lookOf(m));
   if (!notes.length) return [];
   let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const k of pictureMarks(m, style, eye)) {
+  // (its marks as they are already made for the picture - `pictureMarks` - where they are)
+  for (const k of marks ?? pictureMarks(m, style, eye)) {
     if (k.kind === "ball") {
       x0 = Math.min(x0, k.c.x - k.r);
       x1 = Math.max(x1, k.c.x + k.r);

@@ -94,9 +94,9 @@ function tried<T>(drawn: () => T | null): T | null {
  * to draw one in.
  */
 export async function structurePicture(part: Drawn, aromatic: PictureState, style: DrawingStyle, dpi = pictureDpi()) {
-  const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
+  const { record, molecules3d, layout, opts, reach } = laidOut(part, aromatic, style);
   // (the layout then draws them so too, for the PNG)
-  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi, reach));
   return { record, layout, opts, ...withEmf(record, layout, opts, drawn) };
 }
 
@@ -129,9 +129,9 @@ export async function pictureItems(
   const wanted = (f: ClipItem["flavor"]) => !takes || takes.has(f);
   // (each step its own task, the page drawn between them: a large picture is made without holding the drawing up)
   await breath();
-  const { record, molecules3d, layout, opts } = laidOut(part, aromatic, style);
+  const { record, molecules3d, layout, opts, reach } = laidOut(part, aromatic, style);
   await breath();
-  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi));
+  const drawn = tried(() => solidsDrawn(molecules3d, layout, style3dOf(aromatic), dpi, reach));
   await breath();
   // (a bitmap, where the platform takes one, is made from the PNG by the app: clipboard.rs `bitmap`)
   const pictured = wanted("gvml") || wanted("png") || wanted("dib");
