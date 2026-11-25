@@ -2,11 +2,12 @@ import type { Model } from "../store/types";
 import { mergeTarget } from "./dropMerge";
 import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "./moveSnap";
 import { bondLengthFrom } from "./magnified";
+import { projectionDrop } from "../projections/extend";
 
 type Point = { x: number; y: number };
 
-/** What dropping a dragged atom does: it becomes another atom, goes to a place, or stays where it was. */
-export type DropOutcome = { merge: number } | { move: Point } | { stay: true };
+/** What dropping a dragged atom does: it becomes another atom, goes to a place, changes places with a projection's other group (`swap`: every atom that moves, and where), or stays where it was. */
+export type DropOutcome = { merge: number } | { move: Point } | { swap: { id: number; x: number; y: number }[] } | { stay: true };
 
 /**
  * What the button's release does to an atom dragged, the pointer at
@@ -20,6 +21,10 @@ export type DropOutcome = { merge: number } | { move: Point } | { stay: true };
 export function dropOutcome(model: Model, movingId: number, pointer: Point, grab: Point, free: boolean): DropOutcome {
   const moving = model.atoms.find((a) => a.id === movingId);
   if (!moving) return { stay: true };
+  // (a group of a chair, a Haworth ring or a Newman pair: to one of its atom's positions, paused or not, joined to nothing - projections/extend)
+  const place = projectionDrop(model, movingId, pointer);
+  if (place?.swap) return { swap: [...place.swap].map(([id, p]) => ({ id, x: p.x, y: p.y })) };
+  if (place) return onAnotherAtom(model, movingId, place.to, bondLengthFrom(model.atoms, movingId)) ? { stay: true } : { move: place.to };
   const onto = mergeTarget(model, movingId, pointer);
   if (onto != null) return { merge: onto };
   const nbrs: number[] = [];

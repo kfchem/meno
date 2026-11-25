@@ -48,7 +48,7 @@ const baseOf = (s: SpokeSet): number => (s === "A" ? 90 : 30);
 
 /** The angle, in degrees mod 360, a group at (dx, dy) from the centre lies at. */
 const angleOf = (dx: number, dy: number): number => (((Math.atan2(dy, dx) / DEG) % 360) + 360) % 360;
-const apart = (p: number, q: number): number => {
+export const apart = (p: number, q: number): number => {
   const d = Math.abs((((p - q) % 360) + 360) % 360);
   return d > 180 ? 360 - d : d;
 };

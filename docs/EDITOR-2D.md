@@ -645,6 +645,10 @@ on a page), and the **Newman projection** (`newman`).
   A **double-click** on a ring atom of a chair or a Haworth ring (or a click with Option or Alt held) adds one group at the atom's first free
   position - a chair's equatorial, then its axial; a Haworth ring's up, then its down - at the length the drawing gives it, a new atom always,
   never joined to one already near; with both positions held it adds nothing (`projectionBond`, the store's `bondOut`).
+  A group's atom (one bond, to a ring atom) **dragged** round its ring atom rests at one of that atom's two positions, eased, paused or not, and
+  nowhere between: the one whose seen direction is nearest the pointer's. Let go toward the other position while a group holds it, the two
+  groups change places, each carried whole, as one undo step; a group drawn off both positions goes to the nearer free one, and only with both
+  held by other groups does the drag go as any (`projectionDrop`, utils/dropOutcome, MovePreview2D). All of it in page units: the same at every zoom.
   Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
   group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
   atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
@@ -745,7 +749,8 @@ on a page), and the **Newman projection** (`newman`).
   out to the nearest that no group holds, the tip saying "front" or "back". A double-click on the centre adds a front group, one on the circle's line a
   back group, each at the next spoke of its atom's own set that no group holds - the front's from 90 round to 210 and 330, the back's from 270 round
   to 30 and 150, so the first front and the first back group stand anti - and nothing once three are held, or while a group of the pair stands off
-  every spoke (`nextSpoke`). The back atom under the centre is bonded to the front already, so the double-click's second press, let go there,
+  every spoke (`nextSpoke`). A group lying off every spoke of its atom's set (drawn by hand) dragged and let go rests at the
+  nearest free spoke of that set, eased, and the pair is a whole Newman projection again (`projectionDrop`); none free, the drag goes as any. The back atom under the centre is bonded to the front already, so the double-click's second press, let go there,
   joins nothing and the bond is added (`tapConnects`). A spoke dragged round the circle turns all three groups of its atom together,
   with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
   12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken

@@ -233,6 +233,8 @@ export function Atoms2D() {
         const out = dropOutcome(model as any, thisAtom.id, pEnd, { x: offset.dx, y: offset.dy }, moveFree);
         if ("merge" in out) replaceDraggedAtomWith(thisAtom.id, out.merge);
         else if ("move" in out) moveAtom(thisAtom.id, out.move.x, out.move.y);
+        // (a projection's two groups changing places: one step)
+        else if ("swap" in out) store.getState().placeSolid(out.swap, "swap groups");
       } catch {}
       endMoveDrag();
       endPanHold(ev.pointerId ?? pid);
