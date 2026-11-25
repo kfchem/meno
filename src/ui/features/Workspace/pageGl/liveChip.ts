@@ -175,7 +175,11 @@ export function chipMeasures(c: ChipFacts, told: number): ChipMeasures {
   const runs = single ? singleChipRuns(c) : setChipRuns({ ...c, frame: told });
   const lines = single ? singleLines(runs) : null;
   // (a single geometry's as wide as its words would be on one line, but no wider than 20rem: CSS's fit-content - its lines centred in that)
-  const said = lines ? Math.min(LIVE.saidMost, singleLines(runs, Infinity)[0]?.width ?? 0) : chipLine(runs).width;
+  const said0 = lines ? Math.min(LIVE.saidMost, singleLines(runs, Infinity)[0]?.width ?? 0) : chipLine(runs).width;
+  // (its frames' own names: as wide shut as with its longest - cut as it is - whichever frame is told, so that a step through
+  //  them never widens it for a name)
+  const longest = !single && c.names?.length ? c.names.reduce((a, b) => (b.length > a.length ? b : a), "") : "";
+  const said = longest ? Math.max(said0, chipLine(setChipRuns({ ...c, frame: told, names: c.names!.map(() => longest) })).width) : said0;
   const details = detailsLaid(chipDetails(c, told));
   const above = c.energies ? barsAbove(c.energies, c.failed, c.marksUnread).above : null;
   const under = single ? [] : c.about ? wrapText(aboutLine(c, told), CHIP.size, width) : above && c.made?.energies ? wrapText(`Energies from ${c.made.energies}`, CHIP.size, width) : [];

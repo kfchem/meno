@@ -760,7 +760,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
     }
     return v.filter((_, i) => keep[i]) as T[];
   };
-  const energies = perFrame<number>(m.energies, isNum);
+  // (a frame given no energy is saved as null: none, NaN, again)
+  const energies = perFrame<number | null>(m.energies, (x) => isNum(x) || x === null)?.map((e) => (e === null ? NaN : e));
+  const frameNames = perFrame<string>(m.frameNames, (x) => typeof x === "string");
   const measures = readEach(m.measures, (v) => {
     const x = v as Partial<Measure3D>;
     return isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index) ? (x as Measure3D) : null;
@@ -801,7 +803,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
     bonds: bonds as Carried3D["bonds"],
     at: { x: at.x, y: at.y, ...(isNum(at.z) ? { z: at.z } : {}) },
     ...(frames.length ? { frames } : {}),
-    ...(energies ? { energies } : {}),
+    ...(energies?.some(Number.isFinite) ? { energies } : {}),
+    ...(frameNames?.some(Boolean) ? { frameNames } : {}),
+    ...(m.atomsDiffer === true ? { atomsDiffer: true as const } : {}),
     ...(m.look === "secondary" ? { look: m.look } : {}),
     // (shown larger or smaller than it is: docs/WORKSPACE.md, *Magnified display*)
     ...(isNum(m.magnified) && magnificationWithin(m.magnified) !== 1 ? { magnified: magnificationWithin(m.magnified) } : {}),

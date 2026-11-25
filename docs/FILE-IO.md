@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`); a chair from the Projections tool (docs/EDITOR-2D.md) is written as a flat drawing, wedges for what its depth says, a z of 0 throughout, the .meno keeping it as drawn |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same; of a record in 3D, three data items are read - `Energy (Eh)`, `Charge`, `Multiplicity` (*An SD file*, below) - and its title line, where it is not empty, is its molecule's name, else the file's name |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line - Meno's own `E = <n> Eh`, with no plugin, and the patterns of the plugins added (`utils/xyzEnergies.ts`; *XYZ written*, below); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); a file a plugin knows as an optimisation's steps (`xyzSteps`: by its name - xtb's `xtbopt.log`, ORCA's `*_trj.xyz` - or, renamed, by its frames' comment lines) gives no entry, "No frame is an entry (convergence not stated in this file)" (docs/WORKFLOWS.md); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line, where it gives one - Meno's own `E = <n> Eh`, with no plugin, and the patterns of the plugins added (`utils/xyzEnergies.ts`; *XYZ written*, below); each frame's name, its comment line less Meno's own energy (`xyzFrameName`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); a file a plugin knows as an optimisation's steps (`xyzSteps`: by its name - xtb's `xtbopt.log`, ORCA's `*_trj.xyz` - or, renamed, by its frames' comment lines) gives no entry, "No frame is an entry (convergence not stated in this file)" (docs/WORKFLOWS.md); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -295,6 +295,13 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   200 cycles`, so that no reader takes its energy for a result. On one
   line, and plain text, which programs that read the layout take as a
   comment. No method is written: Meno does not hold one for an energy.
+- A frame with a name of its own - read from a file's comment line, or
+  a record's title where records were joined as conformers - is written
+  with its energy, where it is known, and then its name, in place of the
+  molecule's name and `frame i/n`: `E = -76.0261000000 Eh conformer A`,
+  or `conformer A` where it has no energy. Read back, it is that name
+  again. An SD file written with every frame titles each record with
+  its frame's name, where it has one, else `<name> <i>`.
 - The writer's option *Molecules in 3D* says the frame shown (one block a
   molecule) or every frame (a block each, in order). Several molecules
   selected are written as SDF export writes them: one after another, each as
@@ -305,6 +312,27 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   Meno's own, which needs no plugin (a program's patterns are its plugin's;
   `utils/xyzEnergies.ts`). A one-frame file's energy is written but, as for
   any one-frame XYZ, not read.
+- **A frame's name is its comment line** (`xyzFrameName`,
+  `lib/chem/xyzWriter.ts`): of a file of more than one frame, each frame's
+  comment line as written, less the energy Meno reads from it in its own
+  form (`E = <n> Eh`), trimmed - none where nothing else is on it. Meno
+  reads no other form into the line: a writer chooses what is shown by
+  what it puts there. The name stands beside the frame's number on the
+  molecule's chip, cut at 14rem, and whole in the chip's details as it
+  opens; it names the frame's row in a set's table and its entry in a
+  workflow. A file Meno wrote before frames had names reads back with
+  each frame named as its line says: `water frame 2/3`.
+- **Each frame keeps the energy its line gives.** Where some frames' lines
+  give one and others' none, the frames that have one keep theirs and the
+  others have none - the chip says "no energy" of such a frame, and its
+  height above the lowest is of the frames that have one. What needs every
+  frame's energy - shares - is not worked out ("#2 has no energy, so no
+  shares are given"). Saved in the workspace, a frame with no energy is
+  `null` in its molecule's `energies`; its frames' names are its
+  `frameNames`, "" for a frame with none.
+- A frame whose elements are not the first frame's, in the same order, is
+  kept, its atoms the first's - as before - and the molecule remembers it
+  (`atomsDiffer`): its frames are not offered as conformers.
 
 ### The settings file
 
@@ -1753,9 +1781,11 @@ As step 3 was built:
   unit of its number, taken from the program's documentation); xtb's,
   CREST's and ORCA's plugins declare theirs. Meno's own form, `E = <n> Eh`
   (*XYZ written*), is read with no plugin added. Meno reads an XYZ file's
-  geometry always; a frame's energy only where Meno's own pattern or an
-  added plugin's finds one on every frame of more than one - and where two
-  patterns find different numbers on a line, none, and nothing said. With
+  geometry always; a frame's energy, of a file of more than one frame,
+  where Meno's own pattern or an added plugin's finds one on its line -
+  each frame keeping its own, a frame whose line gives none having none -
+  and where two patterns find different numbers on a line, none for that
+  frame. With
   no such pattern matching, an XYZ file gives its geometry alone. A place
   is read only where it is a number (2026-10-13): "1.19D-01" is not taken
   for 1.19, nor "nan" for a place, and the file is refused, saying which

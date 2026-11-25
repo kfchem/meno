@@ -270,7 +270,8 @@ export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet
   const n = 1 + (m.frames?.length ?? 0);
   if (sharesWithheld(m)) return undefined;
   if (m.shares?.length === n) return m.shares;
-  return m.conformerSet && !m.partOf && m.energies?.length === n ? populations(m.energies, m.degeneracies) : undefined;
+  // (shares need every conformer's energy: a frame its file gave none leaves them out - each frame keeping its own)
+  return m.conformerSet && !m.partOf && m.energies?.length === n && m.energies.every(Number.isFinite) ? populations(m.energies, m.degeneracies) : undefined;
 }
 
 /**
@@ -279,9 +280,10 @@ export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet
  * imaginary frequency - whose energy weighed as a minimum's would share
  * out nothing real, named by its number, as *Populations* names one it
  * refuses (workflow/meno `notAllMinima`); or that its file's marks of that
- * did not read (`marksUnread`). None where each frame is one.
+ * did not read (`marksUnread`); or a frame its file gave no energy. None
+ * where each frame is one, with its energy.
  */
-export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers" | "marksUnread" | "partsAlone">): string | null {
+export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers" | "marksUnread" | "partsAlone"> & Partial<Pick<Molecule3D, "energies">>): string | null {
   // (a structure of several parts, each searched alone: one part varied at a time, the rest at their lowest - no compound's population)
   if (m.partsAlone) return PARTS_ALONE_WHY;
   // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
@@ -292,6 +294,8 @@ export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imagin
   if (unconverged >= 0) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum, so no shares are given`;
   const saddle = m.imaginary?.length === n ? m.imaginary.findIndex((f) => !!f?.length) : -1;
   if (saddle >= 0) return `${name(saddle)} has ${imaginaryWords(m.imaginary![saddle]!)}: it is no minimum, so no shares are given`;
+  const none = m.energies?.length === n ? m.energies.findIndex((e) => !Number.isFinite(e)) : -1;
+  if (none >= 0) return `${name(none)} has no energy, so no shares are given`;
   return null;
 }
 

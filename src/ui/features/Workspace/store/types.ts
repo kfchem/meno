@@ -518,8 +518,17 @@ export type Molecule3D = {
    * `readCarried3D`, workflow/meno `notAllMinima`).
    */
   marksUnread?: true;
-  /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
+  /** Each frame's energy, where its file gives one, in hartrees: the first frame's first - NaN, a frame given none (saved as null). */
   energies?: number[];
+  /**
+   * Each frame's name, the first frame's first - "", a frame with none: what
+   * an XYZ file's comment lines say of them (lib/chem/xyzWriter
+   * `xyzFrameName`), or the records joined as conformers (utils/asConformers).
+   * Shown beside the frame's number on its chip.
+   */
+  frameNames?: string[];
+  /** Its file's frames do not all have the same elements in the same order (lib/io/structures): not offered as conformers. */
+  atomsDiffer?: true;
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
   /**

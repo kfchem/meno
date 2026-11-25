@@ -32,7 +32,7 @@ export const named3d = (m: Partial<Pick<Molecule3D, "title" | "stack">>) => !!m.
  * geometry's shows only while it is pointed at, over what is beside it:
  * none.
  */
-export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies" | "failed" | "imaginary" | "calc" | "marksUnread">>): number {
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies" | "failed" | "imaginary" | "calc" | "marksUnread" | "frameNames">>): number {
   const n = framesOf(m);
   // (a single geometry called by its name: its name, and its energy where it has one)
   if (!setShown(m)) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
@@ -47,7 +47,10 @@ export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | 
     const marks = chipMarks({ imaginary: m.imaginary, calc: m.calc, failed: m.failed }, k, n);
     return (bars ? 3 + aboveSaid(bars, k, fromStart).length : 0) + (marks ? 3 + marks.length : 0);
   })));
-  return (`${numbered}${n} / ${n}${shares}`.length + said) * CHIP_CHAR + CHIP_SIDES;
+  // (its frames' own names: the longest, cut at 14rem as the chip cuts it, after a little room)
+  const longest = m.frameNames?.length === n ? Math.max(0, ...m.frameNames.map((s) => s.length)) : 0;
+  const named = longest ? Math.min(224, 8 + longest * CHIP_CHAR) : 0;
+  return (`${numbered}${n} / ${n}${shares}`.length + said) * CHIP_CHAR + named + CHIP_SIDES;
 }
 
 

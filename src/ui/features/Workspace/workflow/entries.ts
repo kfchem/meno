@@ -1085,7 +1085,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...whole,
         ...(m.mirrors?.length === n && m.mirrors[f] ? { mirror: m.mirrors[f]! } : {}),
-        ...(nameOf(m) ? { name: nameOf(m) } : {}),
+        // (its frame's own name, where it has one: an XYZ file's comment line's)
+        ...(m.frameNames?.[f] || nameOf(m) ? { name: m.frameNames?.[f] || nameOf(m) } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
         ...(m.partsAlone ? { partsAlone: true as const } : {}),

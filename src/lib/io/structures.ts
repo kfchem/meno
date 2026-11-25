@@ -7,7 +7,7 @@
  */
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf, waysOf } from "../../utils/xyzEnergies";
-import { MENO_XYZ_ENERGY } from "../chem/xyzWriter";
+import { MENO_XYZ_ENERGY, xyzFrameName } from "../chem/xyzWriter";
 import { SD_CHARGE, SD_ENERGY, SD_MULTIPLICITY, speciesProblem } from "./writers";
 import { xyzEnergies, xyzSteps } from "./kinds";
 import { xyzStepsFile } from "../plugins/manifest";
@@ -28,8 +28,12 @@ export type FileMolecule3D = {
   bonds: ParsedBond[];
   /** The rest of its frames: x, y, z of every atom, frame by frame. */
   frames?: number[][];
-  /** Each frame's energy, in hartrees, the first frame's first. */
+  /** Each frame's energy, in hartrees, the first frame's first: NaN, a frame its file gives none. */
   energies?: number[];
+  /** Each frame's name, the first frame's first - "", a frame with none: an XYZ file's comment lines (lib/chem/xyzWriter `xyzFrameName`). */
+  frameNames?: string[];
+  /** Its frames do not all have the same elements in the same order: an XYZ file's (each frame keeps the first's elements). */
+  atomsDiffer?: true;
   /** The file it came from. */
   name?: string;
   /** Its record's title, where its file gives one: an SD file's record's first line. */
@@ -312,7 +316,12 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     if (!kept.size) throw noMolecules(name);
     const [first, ...rest] = whole.frames;
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = whole.total > 1 ? energiesOf(xyzComments(content), waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i)) : undefined;
+    const comments = xyzComments(content);
+    const energies = whole.total > 1 ? energiesOf(comments, waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i)) : undefined;
+    // (each frame's name, its comment line less the energy read from it - where several frames are kept, as for their energies)
+    const names = whole.kept.map((i) => xyzFrameName(comments[i] ?? ""));
+    const elements = (atoms: readonly { el: string }[]) => atoms.map((a) => a.el).join(" ");
+    const differ = rest.some((atoms) => elements(atoms) !== elements(first));
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },
@@ -325,6 +334,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
           ...(rest.length && energies?.length === kept.size ? { energies } : {}),
+          ...(rest.length && names.some(Boolean) ? { frameNames: names } : {}),
+          ...(differ ? { atomsDiffer: true as const } : {}),
           ...(filename ? { name: filename } : {}),
           ...(kept.size < whole.total ? { framesLeftOut: whole.total - kept.size } : {}),
           // (a file a program writes of an optimisation's steps, as its plugin knows it - by its name, or what its
