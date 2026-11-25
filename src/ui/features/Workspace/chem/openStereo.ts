@@ -20,7 +20,7 @@ import { identityKey, type IdentityInput } from "../../../../lib/chem/identity";
 import { isMetal } from "../../../../lib/layout/perceive";
 import { hydrogenCounts } from "../../../../lib/chem/perception/hydrogens";
 import { halvesOf, onBondSaid, type Half } from "./groupHalves";
-import { blocksRead, isomersByMeno, leftByMeno, type BlocksRead } from "./menoIsomers";
+import { blocksRead, decidingAwaited, isomersByMeno, leftByMeno, type BlocksRead } from "./menoIsomers";
 import { withConfiguration } from "./pageMirror";
 
 /**
@@ -64,6 +64,8 @@ export async function openStereo(_chem: ChemClient, molblocks: readonly string[]
   const graph = stereoGraphOf(molblocks);
   const read = graph ? blocksRead(molblocks) : null;
   if (!graph || !read) throw new StereoNotRead("Meno could not read it");
+  // (which open places decide, the page given back meanwhile: a structure with many open places can write many identities)
+  await decidingAwaited(read, nextFrame);
   const byMeno = leftByMeno(molblocks, read);
   const drawn = byMeno.left;
   const groups = drawnGroupsOf(molblocks) ?? NO_GROUPS;
@@ -73,6 +75,13 @@ export async function openStereo(_chem: ChemClient, molblocks: readonly string[]
   const perceived = { centres: byMeno.centres, doubles: byMeno.doubles, handed: byMeno.handed };
   return { drawn, configured, left: like ? leftOver(drawn, configured, graph.bonds) : drawn, groups, perceived, read };
 }
+
+/** A wait for the page's next frame - or a moment, where frames are not drawn (no page, or a hidden one, whose frames wait). */
+const nextFrame = () =>
+  new Promise<void>((go) => {
+    const timer = setTimeout(go, 50);
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => (clearTimeout(timer), go()));
+  });
 
 /** Whether a structure leaves anything open. */
 export function anyOpen(left: Pick<StereoLeft, "atoms" | "bonds">): boolean {

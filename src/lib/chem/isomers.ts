@@ -235,31 +235,87 @@ export function isomersOf(
 }
 
 /**
- * Whether any place `isomersOf` leaves open decides the compound (its `deciding` not empty), worked out without the whole count:
- * the first way, then each place turned alone from it - a place that decides alone mostly shows there - and only where none does,
- * the ways one after another, stopping at the first two differing at one place alone that write two identities. Where `isomersOf`
- * would not count (a cage left open, past `most` ways), every candidate stays open (chem/menoIsomers): yes. The longest case is a
- * structure with open places none of which decides: every way written, as the count writes them.
+ * The open places whose choice changes the compound (`Deciding`, the same as `isomersOf`'s), found by witnesses without the whole
+ * count: a place decides where some way of giving the others has it turned alone write another identity. First the first way
+ * against each place turned alone from it (n + 1 identities: every place of an ordinary molecule settled); then, for the places
+ * still without a witness only, the ways one turn away from the first, then the rest in order, each against the same way with that
+ * place turned; a place with no witness after every way decides nothing - the longest case, every way written. With `first`, it
+ * stops at the first witness. Yields after every `PAUSE_EVERY` identities written, for `decidingWaited` to pause; returns null where
+ * `isomersOf` would not count (a cage left open, past `most` ways: every candidate open).
  */
-export function decidesAny(input: IdentityInput, most = ASSIGNMENTS_TRIED): boolean {
+function* witnesses(input: IdentityInput, most: number, first: boolean): Generator<void, Deciding | null> {
   const g = hydrogensFolded(input);
   const tied = tiedPlaces(g, openPlaces(g));
-  if ("notCounted" in tied) return true;
+  if ("notCounted" in tied) return null;
   const { open, base } = tied;
-  if (!open.length) return false;
   const ways = 2 ** open.length;
-  if (ways > most) return true;
+  if (ways > most) return null;
   const texts = new Map<number, string>();
+  let written = 0;
   const textOf = (way: number) => {
     const known = texts.get(way);
     if (known != null) return known;
     const t = identity(open.reduce((h, o, k) => o.set(h, (way & (1 << k)) === 0), base)).text;
     texts.set(way, t);
+    written++;
     return t;
   };
-  for (let k = 0; k < open.length; k++) if (textOf(0) !== textOf(1 << k)) return true;
-  for (let way = 1; way < ways; way++) for (let k = 0; k < open.length; k++) if (textOf(way) !== textOf(way ^ (1 << k))) return true;
-  return false;
+  const without = new Set(open.keys());
+  const tryAt = function* (way: number) {
+    for (const k of [...without]) {
+      const before = written;
+      if (textOf(way) !== textOf(way ^ (1 << k))) without.delete(k);
+      if (written !== before && written % PAUSE_EVERY < written - before) yield;
+      if (first && without.size < open.length) return;
+    }
+  };
+  const order = [0, ...open.map((_, k) => 1 << k)];
+  for (let way = 1; way < ways; way++) if (way & (way - 1)) order.push(way);
+  for (const way of order) {
+    if (!without.size || (first && without.size < open.length)) break;
+    yield* tryAt(way);
+  }
+  const deciding: Deciding = { atoms: [], bonds: [], runs: [] };
+  open.forEach((o, k) => {
+    if (without.has(k)) return;
+    deciding.atoms.push(...(o.of.atoms ?? []));
+    if (o.of.bond != null) deciding.bonds.push(o.of.bond);
+    if (o.of.ends) deciding.runs.push(o.of.ends[0] < o.of.ends[1] ? [o.of.ends[0], o.of.ends[1]] : [o.of.ends[1], o.of.ends[0]]);
+  });
+  deciding.atoms.sort((p, q) => p - q);
+  deciding.bonds.sort((p, q) => p - q);
+  return deciding;
+}
+
+/** How many identities `witnesses` writes between two pauses of `decidingWaited`. */
+const PAUSE_EVERY = 32;
+
+/** The open places of `input` whose choice changes the compound (`witnesses`), or null where every candidate stays open. */
+export function decidingOf(input: IdentityInput, most = ASSIGNMENTS_TRIED): Deciding | null {
+  const run = witnesses(input, most, false);
+  for (let step = run.next(); ; step = run.next()) if (step.done) return step.value;
+}
+
+/** `decidingOf`, awaiting `pause` after every `PAUSE_EVERY` identities written: the caller's thread is given back meanwhile. */
+export async function decidingWaited(input: IdentityInput, pause: () => Promise<void>, most = ASSIGNMENTS_TRIED): Promise<Deciding | null> {
+  const run = witnesses(input, most, false);
+  for (let step = run.next(); ; step = run.next()) {
+    if (step.done) return step.value;
+    await pause();
+  }
+}
+
+/**
+ * Whether any place `isomersOf` leaves open decides the compound (its `deciding` not empty): `witnesses` stopped at the first.
+ * Where `isomersOf` would not count, every candidate stays open (chem/menoIsomers): yes.
+ */
+export function decidesAny(input: IdentityInput, most = ASSIGNMENTS_TRIED): boolean {
+  const run = witnesses(input, most, true);
+  for (let step = run.next(); ; step = run.next()) {
+    if (!step.done) continue;
+    const d = step.value;
+    return !d || d.atoms.length + d.bonds.length + d.runs.length > 0;
+  }
 }
 
 /** The places the candidates leave open in `g` (a structure with its plain hydrogens folded in), each as how to give it one way or the other. */

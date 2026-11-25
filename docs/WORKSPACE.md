@@ -506,7 +506,11 @@ Taken on 2026-10-13:
   count being the different compounds, never two to the power of the
   places. A drawing that stands for one stereoisomer is made at once,
   nothing asked; the note a structure read from text shows of its open
-  stereo counts the same places. Each is
+  stereo counts the same places. Which places decide is found by trying
+  each place turned alone, from one way of the others and then from more
+  only for a place not yet shown to decide, so finding them does not
+  need every stereoisomer; the stereoisomers are counted only where their
+  number is asked for. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
   chosen - where MMFF has no parameters for the molecule, UFF in its place,
   said in how it was made, or the molecule refused, as Settings' *Where

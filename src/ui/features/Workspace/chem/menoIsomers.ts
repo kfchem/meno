@@ -5,7 +5,7 @@
  * nothing of which places are open or how many ways they go: that is Meno's.
  */
 import { automorphismGroup, identityKey, type IdentityInput } from "../../../../lib/chem/identity";
-import { decidesAny, isomersOf, type Stereoisomer } from "../../../../lib/chem/isomers";
+import { decidesAny, decidingOf, decidingWaited, isomersOf, type Deciding, type Stereoisomer } from "../../../../lib/chem/isomers";
 import { tiesOf } from "../../../../lib/chem/perception/stereo/ties";
 import { parity } from "../../../../lib/chem/perception/stereo/geometry";
 import { symmetryOrbits } from "../../../../lib/chem/perception/symmetry";
@@ -48,6 +48,18 @@ function countedOf(read: BlocksRead): ReturnType<typeof isomersOf> {
   const counted = isomersOf(read.input);
   counts.set(read, counted);
   return counted;
+}
+
+/** The open places of each structure read whose choice changes the compound (lib/chem/isomers `decidingOf`), found once and kept. */
+const decidingKept = new WeakMap<BlocksRead, Deciding | null>();
+function decidingFor(read: BlocksRead): Deciding | null {
+  if (!decidingKept.has(read)) decidingKept.set(read, decidingOf(read.input));
+  return decidingKept.get(read)!;
+}
+
+/** `decidingFor`, the page given back between every few identities written (`pause`): kept for `leftByMeno` to read. */
+export async function decidingAwaited(read: BlocksRead, pause: () => Promise<void>): Promise<void> {
+  if (!decidingKept.has(read)) decidingKept.set(read, await decidingWaited(read.input, pause));
 }
 
 /**
@@ -93,8 +105,8 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead, every
     return out;
   };
   let handed = false;
-  const counted = every ? null : countedOf(read);
-  const deciding = counted && "deciding" in counted ? counted.deciding : null;
+  // (which places decide, by witnesses - never the whole count, which only the number of stereoisomers needs)
+  const deciding = every ? null : decidingFor(read);
   const decides = (c: ReturnType<typeof candidates>[number]): boolean => {
     if (!deciding) return true;
     if (c.kind === "centre") return deciding.atoms.includes(c.at);
@@ -137,7 +149,7 @@ export function leftByMeno(molblocks: readonly string[], read: BlocksRead, every
  * none - asked without the whole count where it is not already known (lib/chem/isomers `decidesAny`).
  */
 export function leavesOpen(molblocks: readonly string[], read: BlocksRead): boolean {
-  if (counts.has(read)) return anyLeft(leftByMeno(molblocks, read).left);
+  if (decidingKept.has(read)) return anyLeft(leftByMeno(molblocks, read).left);
   return anyLeft(leftByMeno(molblocks, read, true).left) && decidesAny(read.input);
 }
 const anyLeft = (left: StereoLeft) => left.atoms.length + left.bonds.length > 0;
