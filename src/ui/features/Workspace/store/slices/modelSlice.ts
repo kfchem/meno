@@ -745,6 +745,7 @@ export const createModelSlice = (
       chipOver: null,
       turns3d: {},
       frames3d: {},
+      lowerFound3d: {},
       hovered3d: null,
       hoveredMeasure3d: null,
       measureEdit3d: null,

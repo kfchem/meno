@@ -147,6 +147,8 @@ export type ChipMeasures = {
   runs: SaidRun[];
   lines: WrappedLine[] | null;
   said: number;
+  /** How much wider what its search has found makes its words, its room before it with it, in page px: none where it has found nothing (utils/chipSaid `found`). `said` is without it. */
+  found: number;
   details: DetailsLaid;
   /** What stands under a set's bars: what the calculation was and the frame's energy, or what its energies are, in lines no wider than the bars. */
   under: { text: string; width: number }[];
@@ -158,11 +160,14 @@ export function chipMeasures(c: ChipFacts, told: number): ChipMeasures {
   const runs = single ? singleChipRuns(c) : setChipRuns({ ...c, frame: told });
   const lines = single ? singleLines(runs) : null;
   // (a single geometry's as wide as its words would be on one line, but no wider than 20rem: CSS's fit-content - its lines centred in that)
-  const said = lines ? Math.min(LIVE.saidMost, singleLines(runs, Infinity)[0]?.width ?? 0) : chipLine(runs).width;
+  const line = lines ? null : chipLine(runs);
+  const notice = line?.runs.find((r) => r.part === "found");
+  const found = line && notice ? line.width - notice.from + (runs.find((r) => r.part === "found")?.gapPx ?? 0) : 0;
+  const said = lines ? Math.min(LIVE.saidMost, singleLines(runs, Infinity)[0]?.width ?? 0) : line!.width - found;
   const details = detailsLaid(chipDetails(c, told));
   const above = c.energies ? barsAbove(c.energies, c.failed, c.marksUnread).above : null;
   const under = single ? [] : c.about ? wrapText(aboutLine(c, told), CHIP.size, width) : above && c.made?.energies ? wrapText(`Energies from ${c.made.energies}`, CHIP.size, width) : [];
-  return { single, width, runs, lines, said, details, under };
+  return { single, width, runs, lines, said, found, details, under };
 }
 
 /** How far each part of a chip has come (theme/opening), and what is pointed at in it. */
@@ -180,6 +185,8 @@ export type ChipState = {
   made: { grown: number; shown: number; turn: number; pointed: boolean };
   /** Each bar's tone, eased as the frame shown and the one pointed at change: 0 as the rest, 1 pointed at, 2 shown (`barTone`); none, each as it stands. */
   tones?: readonly number[];
+  /** How far what its search has found has come in (theme/opening): grown, the rest of its words moved aside for it; shown, it faded in. Whole where not told. */
+  found?: { grown: number; shown: number };
   /** Its widths, eased: shut, opened to its bars, its details - its sides with each. */
   widths: { shut: number; open: number; details: number };
   /** Its words can be clicked to shut it (a set's, opened); it can be clicked to open (a set's shut) or pin (a single geometry's with more to say). */
@@ -198,12 +205,12 @@ export type ChipPress = { expanded: boolean; pinned: boolean; fold: boolean };
  * how it was made opened or shut; on its words, opened, it shuts; on the rest
  * of a set's chip, shut, it opens (the maintainer, 2026-10-13: on a click, not
  * as its molecule is pointed at); a single geometry's, with more to say than
- * its line, pinned open, or shut again. A press on its bars or slider is
- * theirs, and leaves it as it is.
+ * its line, pinned open, or shut again. A press on its bars or slider, or on
+ * what its search has found, is theirs, and leaves it as it is.
  */
 export function chipPressed(at: { single: boolean; expanded: boolean; pinned: boolean; hasMore: boolean }, part: string): ChipPress {
   const same = { expanded: at.expanded, pinned: at.pinned, fold: false };
-  if (part === "bars" || part === "slider") return same;
+  if (part === "bars" || part === "slider" || part === "found") return same;
   if (part === "fold") return { ...same, fold: true };
   if (part === "said" && at.expanded) return { ...same, expanded: false };
   if (!at.single && !at.expanded) return { ...same, expanded: true };
@@ -330,7 +337,15 @@ export function liveChip(s: ChipState, at: { x: number; y: number }, view: PageV
     for (const [i, l] of m.lines.entries()) runsAt(`said:${i}`, -l.width / 2, y + i * CHIP.line, l.runs);
   } else {
     const line = chipLine(m.runs);
-    line.runs.forEach((r, i) => text(`${i}`, -line.width / 2 + r.from, y, CHIP.line, r.text, CHIP.size, TONE[r.tone], 1));
+    // (what its search has found, last: the rest of its words move aside for it as it comes, then it fades in - and the other way as
+    //  it goes; pressed, it shows the lowest - useFramesChip)
+    const found = s.found ?? { grown: 1, shown: 1 };
+    const left = -(line.width - (1 - found.grown) * m.found) / 2;
+    line.runs.forEach((r, i) => {
+      text(`${i}`, left + r.from, y, CHIP.line, r.text, CHIP.size, TONE[r.tone], r.part ? found.shown : 1);
+      if (r.part && found.shown > 0.5)
+        regions.push({ key: s.key, part: r.part, rect: { x0: cx + P(left + r.from), x1: cx + P(left + r.from + r.width), y0: top - P(y + CHIP.line), y1: top - P(y) }, z: zBase + 2, cursor: "pointer" });
+    });
   }
   y += saidH;
   if (s.shuts) regions.push({ key: s.key, part: "said", rect: { x0: box.x0, x1: box.x1, y0: top - P(y), y1: top - P(saidTop) }, z: zBase + 1, cursor: "pointer" });

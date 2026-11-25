@@ -242,7 +242,51 @@ describe("words laid in lines", () => {
   });
 });
 
+describe("a frames chip saying its search found a lower conformer", () => {
+  const c: ChipFacts = { count: 3, frame: 1, energies: [0, kcal(0.5), kcal(1)], conformers: true, found: "lower" };
+  const plain: ChipFacts = { ...c, found: undefined };
+  const at = { x: 10, y: 5 };
+  it("measures its words without it, and it apart: the room before it and its words", () => {
+    const m = chipMeasures(c, 1);
+    expect(m.said).toBeCloseTo(chipMeasures(plain, 1).said, 9);
+    expect(m.found).toBeCloseTo(8 + textWidth("Lower conformer found", CHIP.size), 9);
+    expect(chipMeasures(plain, 1).found).toBe(0);
+  });
+  it("draws it last in the attention colour, pressable over its words alone, once it has come", () => {
+    const s = state(c, { found: { grown: 1, shown: 1 } });
+    const d = liveChip({ ...s, widths: { ...s.widths, shut: s.widths.shut + s.measures.found } }, at, VIEW);
+    const t = d.texts.find((x) => x.text === "Lower conformer found")!;
+    expect(t.color).toBe(COLORS.attention);
+    expect(t.opacity).toBeCloseTo(CHIP_SHUT.opacity, 9);
+    const r = d.regions!.find((x) => x.part === "found")!;
+    expect(r).toMatchObject({ key: "chip:4", z: 2, cursor: "pointer" });
+    expect("rect" in r && r.rect.x0).toBeCloseTo(t.x, 9);
+    expect("rect" in r && r.rect.x1 - r.rect.x0).toBeCloseTo(pagePx(textWidth("Lower conformer found", CHIP.size)), 9);
+    // (the line, centred, with it in: its first words as far left as the whole line's half)
+    const first = d.texts.find((x) => x.text.startsWith("2 / 3"))!;
+    expect(first.x).toBeCloseTo(10 - pagePx((s.measures.said + s.measures.found) / 2), 9);
+  });
+  it("as it comes, the rest of its words stand as they did and it is not seen, nor pressed", () => {
+    const d = liveChip(state(c, { found: { grown: 0, shown: 0 } }), at, VIEW);
+    const bare = liveChip(state(plain), at, VIEW);
+    expect(d.texts.find((x) => x.text.startsWith("2 / 3"))!.x).toBeCloseTo(bare.texts.find((x) => x.text.startsWith("2 / 3"))!.x, 9);
+    expect(d.texts.some((x) => x.text === "Lower conformer found")).toBe(false);
+    expect(d.regions!.some((x) => x.part === "found")).toBe(false);
+  });
+  it("halfway grown, the rest of its words have moved half its width's half aside", () => {
+    const half = liveChip(state(c, { found: { grown: 0.5, shown: 0 } }), at, VIEW);
+    const bare = liveChip(state(plain), at, VIEW);
+    const m = chipMeasures(c, 1);
+    expect(half.texts.find((x) => x.text.startsWith("2 / 3"))!.x).toBeCloseTo(bare.texts.find((x) => x.text.startsWith("2 / 3"))!.x - pagePx(m.found / 4), 9);
+  });
+});
+
 describe("a press on a chip", () => {
+  it("on what its search found, leaves it as it is: open or shut (the lowest is shown - useFramesChip)", () => {
+    const at = { single: false, expanded: false, pinned: false, hasMore: false };
+    expect(chipPressed(at, "found")).toEqual({ expanded: false, pinned: false, fold: false });
+    expect(chipPressed({ ...at, expanded: true }, "found")).toEqual({ expanded: true, pinned: false, fold: false });
+  });
   const at = { single: false, expanded: false, pinned: false, hasMore: false };
   it("opens a set's on a click, shuts it on its words, and leaves it as it is on its bars and slider", () => {
     expect(chipPressed(at, "chip").expanded).toBe(true);

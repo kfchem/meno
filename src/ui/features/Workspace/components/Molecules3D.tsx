@@ -156,6 +156,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const rising = useEditor((s) => s.rising3d);
   // (the 3D structures whose search goes on: their chips say so)
   const growing = useEditor((s) => s.growing3d);
+  const found = useEditor((s) => s.lowerFound3d);
   const overlay = useEditor((s) => s.overlay3d);
   const lists = useEditor((s) => s.lists3d);
   // promises asked for: what each came to, or is coming to - and those
@@ -833,6 +834,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             hoveredMeasure={hoveredMeasure?.id === m.id ? hoveredMeasure.measure : null}
             rising={rising[m.id]}
             searching={!!growing[m.id]}
+            found={found[m.id]}
             split={splits[m.id]}
             onRisen={on.onRisen}
             stereoShown={stereoShownOf(m)}

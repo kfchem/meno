@@ -22,14 +22,15 @@ export const CHIP_HTML =
   "w-max whitespace-nowrap rounded-full border border-gh-line bg-white/85 px-[9px] py-[4px] text-[11px] leading-[18px] text-gh-gray opacity-75 meno-chip-shadow transition-opacity duration-150 ease-meno hover:opacity-100";
 
 /** Its runs as they are drawn - each cut to its most, after its room - and how wide they come to, in page px. */
-export function chipLine(runs: readonly SaidRun[]): { runs: { text: string; tone: SaidRun["tone"]; from: number }[]; width: number } {
+export function chipLine(runs: readonly SaidRun[]): { runs: { text: string; tone: SaidRun["tone"]; from: number; width: number; part?: SaidRun["part"] }[]; width: number } {
   let x = 0;
   const out = runs.map((r) => {
     x += r.gapPx ?? 0;
     const text = fitted(r.text, CHIP.size, 400, r.mostPx);
     const from = x;
-    x += textWidth(text, CHIP.size);
-    return { text, tone: r.tone, from };
+    const width = textWidth(text, CHIP.size);
+    x += width;
+    return { text, tone: r.tone, from, width, ...(r.part ? { part: r.part } : {}) };
   });
   return { runs: out, width: x };
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { unitsHeld } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "../workflow/failures";
 import { barsAbove, FAILURES_ASTRAY, NO_LOWEST, NOT_FINISHED } from "./barsAbove";
-import { chipCopy, chipDetails, chipEnergies, MADE_GROUP, setChipRuns, share, singleChipRuns, type ChipFacts, type SetChip } from "./chipSaid";
+import { chipCopy, chipDetails, chipEnergies, LOWER_FOUND, MADE_GROUP, OUT_OF_WINDOW, setChipRuns, share, singleChipRuns, type ChipFacts, type SetChip } from "./chipSaid";
 
 const kcal = (e: number) => e / 627.509474;
 const said = (c: SetChip) => setChipRuns(c).map((r) => r.text).join("");
@@ -17,6 +17,18 @@ describe("a set's chip, shut, as runs to draw", () => {
     expect(said({ count: 3, frame: 1, energies: [0, kcal(0.4), kcal(0.9)], failed: [null, { kind: "program-error", why: "it stopped" }, null] })).toBe(
       `2 / 3 · ${NOT_FINISHED} · ${FAILURE_WORDS["program-error"]}: it stopped`,
     );
+  });
+
+  it("says last, after a little room and in the attention colour, that its search found a lower conformer - or that the one shown left the window - and nothing of it otherwise", () => {
+    const c: SetChip = { count: 3, frame: 1, energies: [0, kcal(0.5), kcal(1)], searching: true };
+    expect(said(c)).toBe("2 / 3 · searching · 0.50 kcal/mol");
+    const runs = setChipRuns({ ...c, found: "lower" });
+    expect(runs.slice(0, -1)).toEqual(setChipRuns(c));
+    expect(runs[runs.length - 1]).toEqual({ text: "Lower conformer found", tone: "attention", gapPx: 8, part: "found" });
+    expect(LOWER_FOUND).toBe("Lower conformer found");
+    expect(setChipRuns({ ...c, frame: 0, found: "window" }).slice(-1)[0]).toEqual({ text: "Out of the energy window: showing the lowest", tone: "attention", gapPx: 8, part: "found" });
+    expect(OUT_OF_WINDOW).toBe("Out of the energy window: showing the lowest");
+    expect(setChipRuns(c).some((r) => r.part)).toBe(false);
   });
 
   it("tells which words are which tone, its title after a little room and cut at 14rem", () => {

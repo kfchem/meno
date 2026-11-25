@@ -16,7 +16,12 @@ export function share(p: number): string {
 }
 
 /** A run of what a chip says: its words, its tone - quiet (grey), ink (black) or attention - and, before it, room (`gapPx`), and the most it is drawn wide, cut past it (`mostPx`) and never broken across lines. */
-export type SaidRun = { text: string; tone: "quiet" | "ink" | "attention"; gapPx?: number; mostPx?: number };
+export type SaidRun = { text: string; tone: "quiet" | "ink" | "attention"; gapPx?: number; mostPx?: number; part?: "found" };
+
+/** What a set's chip says, last, where a later round of its search found a conformer lower than the lowest it had: pressed, it shows the lowest (docs/WORKSPACE.md, *As its search goes on*). */
+export const LOWER_FOUND = "Lower conformer found";
+/** What it says instead where that took the energy window past the conformer shown, and the lowest is shown. */
+export const OUT_OF_WINDOW = "Out of the energy window: showing the lowest";
 
 /** What a set's chip is told of: its frames and which it shows, and what its calculation says of each (components/useFramesChip). */
 export type SetChip = {
@@ -33,6 +38,8 @@ export type SetChip = {
   fromStart?: boolean;
   /** Its search goes on: more of its conformers may come (docs/WORKSPACE.md, *As its search goes on*). */
   searching?: boolean;
+  /** What its search has found since the chemist last chose a conformer (store `lowerFound3d`): said last, in the attention colour, pressed to show the lowest. */
+  found?: "lower" | "window";
 };
 
 /** The marks said on the frame told: why it failed, its imaginary frequencies, how many warnings - as the chip says them. */
@@ -48,7 +55,8 @@ export function chipMarks(c: Pick<SetChip, "failed" | "imaginary" | "warnings">,
  * What a set's chip says shut, the frame it shows told: its number in its
  * file where the frames are not 1, 2, 3...; which of how many; its title,
  * after a little room and cut at 14rem; its energy above the lowest - or from
- * its start, a path's - or why there is none; its share; its marks.
+ * its start, a path's - or why there is none; its share; its marks; what
+ * its search has found, after a little room.
  */
 export function setChipRuns(c: SetChip): SaidRun[] {
   const told = c.frame;
@@ -66,6 +74,7 @@ export function setChipRuns(c: SetChip): SaidRun[] {
   }
   if (c.populations?.[told] != null) runs.push({ text: ` · ${share(c.populations[told])}`, tone: "ink" });
   if (marks) runs.push({ text: ` · ${marks}`, tone: "attention" });
+  if (c.found) runs.push({ text: c.found === "window" ? OUT_OF_WINDOW : LOWER_FOUND, tone: "attention", gapPx: 8, part: "found" });
   return runs;
 }
 

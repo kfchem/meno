@@ -1333,6 +1333,15 @@ export type EditorState = {
   turns3d: Record<number, Turn3D>;
   /** Which frame each molecule in 3D shows, by id; the first if absent. */
   frames3d: Record<number, number>;
+  /**
+   * What each molecule's frames chip says its search has found, by id: a
+   * later round found a conformer lower than the lowest it had (`"lower"`),
+   * or one that took the energy window past the conformer shown, and the
+   * lowest is shown (`"window"`) - said until the chemist chooses a
+   * conformer (`setFrame3d`; docs/WORKSPACE.md, *As its search goes on*).
+   * The view's; never saved.
+   */
+  lowerFound3d: Readonly<Record<number, "lower" | "window">>;
   /** Which molecule each stack of molecules in 3D shows, by the stack's id: by the molecule's id; its first if absent (utils/stacks). */
   stacksShown: Record<number, number>;
   /** A stack shows another of its molecules - turned as the one it showed was. */
