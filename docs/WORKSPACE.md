@@ -492,9 +492,21 @@ Taken on 2026-10-13:
 
 - **A drawing to 3D.** A structure's right-click menu, or a selection's,
   has *3D structure*; *3D structures* on the selection's menu makes
-  everything selected (Select all first, for everything drawn). Stereo
-  drawn without a configuration is ringed on the drawing while Meno asks
-  what to make: every stereoisomer it gives, one, or none for now. Each is
+  everything selected (Select all first, for everything drawn). Where the
+  drawing stands for more than one stereoisomer, Meno asks *Which
+  stereoisomer?* - every one it gives, one, or none for now - and rings on
+  the drawing the places left without a configuration where the choice
+  changes the compound: a centre, a double bond, an allene's chiral axis.
+  A place whose two senses are one compound is not ringed (the ring CH of
+  methylcyclohexane, whose two paths round the ring are alike); places that
+  decide only together are (both ring CH of 1,4-dimethylcyclohexane, cis
+  or trans; C3 of pentane-2,3,4-triol). The card says how many places and
+  how many stereoisomers - "1 stereocentre is drawn without a
+  configuration, so this structure can be either of 2 stereoisomers" - the
+  count being the different compounds, never two to the power of the
+  places. A drawing that stands for one stereoisomer is made at once,
+  nothing asked; the note a structure read from text shows of its open
+  stereo counts the same places. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
   chosen - where MMFF has no parameters for the molecule, UFF in its place,
   said in how it was made, or the molecule refused, as Settings' *Where
