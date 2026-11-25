@@ -77,8 +77,11 @@ pub const NO_SAFE_PLACE: &str = "No safe place to keep a key on this system";
 /// The one role naming hosts a manifest fills - talking with a model, or
 /// looking names up - and the hosts it names, read as the page reads them
 /// (lib/plugins/manifest.ts `hostsOf`): each a host's name exactly, 1 to 8.
-/// None where it fills no such role, names one amiss, or fills both: the
-/// page takes such a plugin for none, and its worker is given no way out.
+/// None where it fills no such role, names one amiss, fills both, or does
+/// anything else - another role, a step, a file to read or write: one worker
+/// serves all of a plugin's roles, so the one that goes out is handed nothing
+/// else. The page takes such a plugin for none, and its worker is given no
+/// way out.
 pub fn hosted_of(manifest: &Value) -> Option<(Hosted, Vec<String>)> {
     let roles = manifest.get("roles")?.as_array()?;
     let fills = |k: Hosted| roles.iter().find(|r| r.get("role").and_then(Value::as_str) == Some(k.role()));
@@ -87,7 +90,17 @@ pub fn hosted_of(manifest: &Value) -> Option<(Hosted, Vec<String>)> {
         (None, Some(r)) => (Hosted::Names, r),
         _ => return None,
     };
+    let more = |k: &str| manifest.get(k).is_some_and(|v| v.as_array().is_none_or(|a| !a.is_empty()));
+    if roles.len() != 1 || ["steps", "reads", "writes"].into_iter().any(more) {
+        return None;
+    }
     Some((kind, hosts_in(role)?))
+}
+
+/// Whether a network task's purpose is a plugin's role that goes out
+/// (`Hosted::purpose`): the gate then reaches only addresses on the web.
+pub fn goes_out_for_a_role(purpose: &str) -> bool {
+    purpose.starts_with("model:") || purpose.starts_with("lookup:")
 }
 
 /// The hosts a role names, each a host's name exactly, 1 to 8, each once.
@@ -106,16 +119,20 @@ fn hosts_in(role: &Value) -> Option<Vec<String>> {
     Some(out)
 }
 
-/// A host's name: lowercase labels of letters, digits and hyphens, at least
-/// two of them - never a pattern, an address or a port.
+/// A public host's name: lowercase labels of letters, digits and hyphens, at
+/// least two of them, the last of letters alone (so never a number, as
+/// `0x7f.1` or `10.1` would be read), none of them `localhost` - never a
+/// pattern, an address in any spelling, or a port.
 fn host_ok(h: &str) -> bool {
     let label = |l: &str| {
         (1..=63).contains(&l.len())
             && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
             && !l.starts_with('-')
             && !l.ends_with('-')
+            && l != "localhost"
     };
-    h.len() <= 253 && h.split('.').count() >= 2 && h.split('.').all(label) && !h.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+    let last = h.rsplit('.').next().unwrap_or("");
+    h.len() <= 253 && h.split('.').count() >= 2 && h.split('.').all(label) && !last.is_empty() && last.bytes().all(|b| b.is_ascii_lowercase())
 }
 
 /// A key as a service gives one: 8 to 4096 characters, each one that JSON
@@ -531,7 +548,7 @@ mod tests {
     #[test]
     fn the_hosts_are_the_manifests_own_read_as_the_page_reads_them() {
         let hosts = |m: &Value| hosted_of(m).map(|(_, h)| h);
-        let m = |hosts: Value| json!({"roles": [{"role": "smiles"}, {"role": ROLE, "hosts": hosts}]});
+        let m = |hosts: Value| json!({"roles": [{"role": ROLE, "hosts": hosts}]});
         assert_eq!(hosts(&m(json!(["api.example.com", "api.example.com", "files.example.com"]))), Some(vec!["api.example.com".to_string(), "files.example.com".to_string()]));
         for bad in [json!([]), json!(["*.example.com"]), json!([".example.com"]), json!(["API.example.com"]), json!(["api.example.com:443"]), json!(["127.0.0.1"]), json!(["localhost"]), json!(["a.example.com", 3]), json!((0..9).map(|i| format!("h{i}.example.com")).collect::<Vec<_>>()), json!("api.example.com")] {
             assert_eq!(hosts(&m(bad.clone())), None, "{bad}");
@@ -546,6 +563,42 @@ mod tests {
         let both = json!({"roles": [{"role": ROLE, "hosts": ["api.example.com"]}, {"role": NAMES_ROLE, "hosts": ["pubchem.ncbi.nlm.nih.gov"]}]});
         assert_eq!(hosted_of(&both), None);
         assert_eq!(hosts(&both), None);
+    }
+
+    #[test]
+    fn a_role_that_goes_out_is_all_its_plugin_does() {
+        let names = json!({"role": NAMES_ROLE, "hosts": ["names.example.org"]});
+        let with = |more: Value| {
+            let mut m = json!({"roles": [names.clone()], "steps": [], "reads": [], "writes": []});
+            m.as_object_mut().unwrap().extend(more.as_object().unwrap().clone());
+            hosted_of(&m).map(|(k, _)| k)
+        };
+        // (alone, and with empty lists of nothing else: it fills that role)
+        assert_eq!(with(json!({})), Some(Hosted::Names));
+        // (beside another role, a step, a file it reads or writes: no way out at all)
+        for more in [
+            json!({"roles": [names.clone(), {"role": "smiles"}]}),
+            json!({"roles": [{"role": "checks"}, {"role": ROLE, "hosts": ["api.example.com"]}]}),
+            json!({"steps": [{"kind": "optimize"}]}),
+            json!({"reads": ["orbitron"]}),
+            json!({"writes": [{"kind": "orbitron"}]}),
+            json!({"steps": "optimize"}),
+        ] {
+            assert_eq!(with(more.clone()), None, "{more}");
+        }
+        assert!(goes_out_for_a_role(&Hosted::Names.purpose("finder", &["names.example.org".into()])));
+        assert!(goes_out_for_a_role(&Hosted::Model.purpose("talker", &["api.example.com".into()])));
+        assert!(!goes_out_for_a_role("python-env:plugin-x"));
+    }
+
+    #[test]
+    fn a_host_is_a_plain_public_name() {
+        for bad in ["0x7f.1", "0x7f.0.0.1", "0xa.1", "0251.0xfe.0xa9.0xfe", "0x0.0", "10.1", "a.localhost", "localhost.localdomain", "names.localhost.example", "example.", "127.0.0.1"] {
+            assert!(!host_ok(bad), "{bad}");
+        }
+        for good in ["pubchem.ncbi.nlm.nih.gov", "api.example.com", "x1.example.io", "data.example-host.net", "xn--bcher-kva.example"] {
+            assert!(host_ok(good), "{good}");
+        }
     }
 
     #[cfg(not(any(target_os = "macos", windows)))]

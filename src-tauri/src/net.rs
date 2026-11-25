@@ -510,6 +510,23 @@ fn decode_base64(text: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// An address on this computer or its own network, or none at all:
+/// loopback, private, shared, link-local, unspecified, broadcast or
+/// multicast (IPv4 written in IPv6 read as IPv4).
+fn inward(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(a) => {
+            let [o0, o1, ..] = a.octets();
+            a.is_loopback() || a.is_private() || a.is_link_local() || a.is_unspecified() || a.is_broadcast() || a.is_multicast() || o0 == 0 || (o0 == 100 && (64..128).contains(&o1))
+        }
+        IpAddr::V6(a) => match a.to_ipv4_mapped() {
+            Some(v4) => inward(IpAddr::V4(v4)),
+            None => a.is_loopback() || a.is_unspecified() || a.is_multicast() || (a.segments()[0] & 0xfe00) == 0xfc00 || (a.segments()[0] & 0xffc0) == 0xfe80,
+        },
+    }
+}
+
 impl Net {
     async fn serve(&self, mut client: TcpStream) {
         // the request's head, up to its blank line
@@ -547,7 +564,7 @@ impl Net {
             outcome: "open".into(),
             reason: None,
         };
-        let refusal = if request.method != "CONNECT" {
+        let mut refusal = if request.method != "CONNECT" {
             Some(("405 Method Not Allowed", "only encrypted connections go through Meno"))
         } else if self.offline() {
             Some(("403 Forbidden", "Meno is offline"))
@@ -559,6 +576,26 @@ impl Net {
             // (a host or a port its consent did not name)
             task.as_ref().and_then(|t| t.refuses(&request.host, request.port)).map(|why| ("403 Forbidden", why))
         };
+        // (a plugin's role that goes out reaches the web alone: its host's name
+        //  is looked up here, and an address on this computer or its own
+        //  network refused - the tunnel goes to the addresses checked, not to
+        //  the name looked up again)
+        let mut checked: Option<Vec<std::net::SocketAddr>> = None;
+        if refusal.is_none() && task.as_ref().is_some_and(|t| crate::model::goes_out_for_a_role(&t.purpose)) {
+            let found = tokio::time::timeout(Duration::from_secs(20), tokio::net::lookup_host((request.host.as_str(), request.port))).await;
+            let found: Vec<std::net::SocketAddr> = match found {
+                Ok(Ok(a)) => a.collect(),
+                Ok(Err(e)) => return self.fail(&mut client, c, &e.to_string()).await,
+                Err(_) => return self.fail(&mut client, c, "timed out").await,
+            };
+            if found.is_empty() {
+                return self.fail(&mut client, c, "no address").await;
+            }
+            if found.iter().any(|a| inward(a.ip())) {
+                refusal = Some(("403 Forbidden", "an address on this computer or its own network"));
+            }
+            checked = Some(found);
+        }
         if let Some((status, reason)) = refusal {
             let _ = client
                 .write_all(format!("HTTP/1.1 {status}\r\n\r\n").as_bytes())
@@ -570,11 +607,13 @@ impl Net {
             return;
         }
         self.record(&c);
-        let upstream = tokio::time::timeout(
-            Duration::from_secs(20),
-            TcpStream::connect((request.host.as_str(), request.port)),
-        )
-        .await;
+        let connecting = async {
+            match &checked {
+                Some(to) => TcpStream::connect(&to[..]).await,
+                None => TcpStream::connect((request.host.as_str(), request.port)).await,
+            }
+        };
+        let upstream = tokio::time::timeout(Duration::from_secs(20), connecting).await;
         let upstream = match upstream {
             Ok(Ok(s)) => s,
             Ok(Err(e)) => return self.fail(&mut client, c, &e.to_string()).await,
@@ -1156,6 +1195,41 @@ mod tests {
             assert_eq!(why[2..], [Some("not a port its consent named".to_string())]);
             task.finish(true);
         });
+    }
+
+    #[test]
+    fn takes_a_plugins_role_that_goes_out_to_the_web_alone() {
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            // (a lookup's task, its consent naming this computer by address and by name: neither reached)
+            let purpose = crate::model::Hosted::Names.purpose("finder", &["names.example.org".into()]);
+            net.0.granted.lock().unwrap().insert(purpose.clone());
+            let task = net.begin(&purpose, "finder: looking names up", Some(vec![format!("127.0.0.1:{to}"), format!("localhost:{to}")])).unwrap();
+            for host in ["127.0.0.1", "localhost"] {
+                let (_, status) = ask_for(port, host, to, Some(&task.token)).await;
+                assert_eq!(status, "HTTP/1.1 403 Forbidden", "{host}");
+            }
+            let why: Vec<Option<String>> = net.0.recent.lock().unwrap().iter().filter(|c| c.outcome == "blocked").map(|c| c.reason.clone()).collect();
+            assert_eq!(why, vec![Some("an address on this computer or its own network".to_string()); 2]);
+            task.finish(true);
+            // (the same address for a task of Meno's own that names it: through, as before)
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            hello(&mut c).await;
+            task.finish(true);
+        });
+    }
+
+    #[test]
+    fn knows_an_address_on_this_computer_or_its_own_network() {
+        for a in ["127.0.0.1", "127.8.0.1", "10.0.0.1", "172.16.0.1", "192.168.1.1", "169.254.169.254", "0.0.0.0", "0.1.2.3", "100.64.0.1", "255.255.255.255", "224.0.0.1", "::1", "::", "fe80::1", "fd00::1", "fc00::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1"] {
+            assert!(inward(a.parse().unwrap()), "{a}");
+        }
+        for a in ["198.51.100.7", "203.0.113.9", "100.128.0.1", "172.32.0.1", "2001:db8::1", "::ffff:198.51.100.7"] {
+            assert!(!inward(a.parse().unwrap()), "{a}");
+        }
     }
 
     #[test]

@@ -685,15 +685,21 @@ function fixedOf(v: unknown): FixedChoice[] {
 export const HOSTS_MOST = 8;
 
 /**
- * Hosts a role names (`RoleDecl.hosts`): each a host's name exactly, as the
- * network gate reads one (src-tauri/src/net.rs `pattern_ok`) - lowercase
- * labels of letters, digits and hyphens - never a pattern, an address or a
- * port; 1 to HOSTS_MOST, each once. One amiss, and there are none.
+ * Hosts a role names (`RoleDecl.hosts`): each a public host's name exactly,
+ * as the backend reads one (src-tauri/src/model.rs `host_ok`) - lowercase
+ * labels of letters, digits and hyphens, the last of letters alone, none of
+ * them `localhost` - never a pattern, an address in any spelling, or a port;
+ * 1 to HOSTS_MOST, each once. One amiss, and there are none.
  */
 export function hostsOf(v: unknown): string[] | null {
   if (!Array.isArray(v) || !v.length || v.length > HOSTS_MOST) return null;
   const label = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-  const named = (h: unknown): h is string => typeof h === "string" && h.length <= 253 && h.split(".").length >= 2 && h.split(".").every((l) => label.test(l)) && !/^[0-9.]+$/.test(h);
+  // (a name on the web ends in a name of letters - so never a number, as `0x7f.1` or `10.1` would be read - and never names this computer)
+  const named = (h: unknown): h is string => {
+    if (typeof h !== "string" || h.length > 253) return false;
+    const labels = h.split(".");
+    return labels.length >= 2 && labels.every((l) => label.test(l) && l !== "localhost") && /^[a-z]+$/.test(labels[labels.length - 1]);
+  };
   if (!v.every(named)) return null;
   return [...new Set(v)];
 }
@@ -1147,6 +1153,10 @@ export function acceptManifest(raw: unknown): Manifest | null {
   // (at most one role that names hosts: what its worker goes out for - talking with a model, or looking names up - never in doubt,
   //  the backend reading the same; two, and the plugin is none)
   if (roles.filter((r) => r.hosts).length > 1) return null;
+  // (a role that goes out is all the plugin does: one worker serves all of a plugin's roles, so it is handed nothing else -
+  //  no other role, no step, no file to read or write - and its consent's "nothing else goes there" holds; the backend reads the same)
+  const more = (k: string) => m[k] !== undefined && !(Array.isArray(m[k]) && m[k].length === 0);
+  if (roles.some((r) => r.hosts) && (list(m.roles).length !== 1 || ["steps", "reads", "writes"].some(more))) return null;
   // (each kind of step once)
   const steps = environment ? list(m.steps).flatMap((v) => stepsOf(v, roles)).filter((d, i, all) => all.findIndex((e) => e.kind === d.kind) === i) : [];
   // (a kind it reads is told: by its marks, or by asking it - and then by its files' names first)
