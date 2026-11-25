@@ -2166,7 +2166,10 @@ All hover-based, as above.
     and also when only part of the structure is turned, or the text is
     selected and turned with it: after a quarter turn it is still under
     the structure, centred, as far below; a branch drawn downward takes it
-    down; never onto the structure. Its words stay upright, as all words
+    down; never onto the structure. Written anew, longer or shorter, it
+    keeps its side and its gap to it as it is typed - the edge nearest the
+    structure stays where it was; under or above it, its middle across
+    too; inside the box, its middle. Its words stay upright, as all words
     do, and it eases with the structure as an undo or redo takes it back.
     It is copied, cut, pasted and deleted with it - in a selection, on a
     slide, in a set - however far from it; dragged by itself (held still

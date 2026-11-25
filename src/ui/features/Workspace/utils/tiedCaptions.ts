@@ -1,5 +1,5 @@
 import { wordsSet } from "../../../../lib/chem/captions";
-import { labelSetOf, type Atom as LAtom, type Bond as LBond } from "../../../../lib/chem/layout2d";
+import { labelSetOf, type Atom as LAtom, type Bond as LBond, type LayoutOptions } from "../../../../lib/chem/layout2d";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../../lib/chem/style";
@@ -76,16 +76,57 @@ export function drawnStructureBox(model: Page["model"], ids: ReadonlySet<number>
  */
 export function keptAgainstBox(was: Box, now: Box, at: Pt, half: { w: number; h: number }): Pt {
   const mid = { x: (now.x0 + now.x1) / 2 - (was.x0 + was.x1) / 2, y: (now.y0 + now.y1) / 2 - (was.y0 + was.y1) / 2 };
-  if (at.x >= was.x0 && at.x <= was.x1 && at.y >= was.y0 && at.y <= was.y1) return { x: at.x + mid.x, y: at.y + mid.y };
-  const out = [
-    { by: was.y0 - (at.y + half.h), d: { x: mid.x, y: now.y0 - was.y0 } },
-    { by: at.y - half.h - was.y1, d: { x: mid.x, y: now.y1 - was.y1 } },
-    { by: was.x0 - (at.x + half.w), d: { x: now.x0 - was.x0, y: mid.y } },
-    { by: at.x - half.w - was.x1, d: { x: now.x1 - was.x1, y: mid.y } },
+  const d = { inside: mid, below: { x: mid.x, y: now.y0 - was.y0 }, above: { x: mid.x, y: now.y1 - was.y1 }, left: { x: now.x0 - was.x0, y: mid.y }, right: { x: now.x1 - was.x1, y: mid.y } }[sideOf(was, at, half)];
+  return { x: at.x + d.x, y: at.y + d.y };
+}
+
+type Side = "inside" | "below" | "above" | "left" | "right";
+
+/** The side of `box` words whose middle is `at` and half-size `half` stand outside of by the most - below where as far as to any other - or inside, their middle in it. */
+function sideOf(box: Box, at: Pt, half: { w: number; h: number }): Side {
+  if (at.x >= box.x0 && at.x <= box.x1 && at.y >= box.y0 && at.y <= box.y1) return "inside";
+  const out: [Side, number][] = [
+    ["below", box.y0 - (at.y + half.h)],
+    ["above", at.y - half.h - box.y1],
+    ["left", box.x0 - (at.x + half.w)],
+    ["right", at.x - half.w - box.x1],
   ];
   // (the first of the most: below before above, left and right)
-  const side = out.reduce((best, o) => (o.by > best.by ? o : best));
-  return { x: at.x + side.d.x, y: at.y + side.d.y };
+  return out.reduce((best, o) => (o[1] > best[1] ? o : best))[0];
+}
+
+/** Words that belong to a drawing's structure as they are opened to be written anew: its drawn box, their middle and half-size then. */
+export type WordsOpened = { box: Box; at: Pt; half: { w: number; h: number } };
+
+/** `c` as it is opened to be written anew, where it belongs to a drawing's structure (none where it does not: free words keep their middle). */
+export function tiedOpened(page: Page, c: Caption, opts: LayoutOptions): WordsOpened | null {
+  if (!c.of || !("atom" in c.of) || !page.model.atoms.some((a) => a.id === (c.of as { atom: number }).atom)) return null;
+  const box = drawnStructureBox(page.model, structureOf(page.model.bonds, c.of.atom), page.style);
+  if (!box) return null;
+  const w = wordsSet(c, opts, labelSetOf(opts));
+  return { box, at: { x: c.x, y: c.y }, half: { w: w.halfW, h: w.halfH } };
+}
+
+/**
+ * Where words opened as `o` stand, written anew to half-size `half`: their
+ * side of the structure's box kept, and the gap to it - the edge nearest it
+ * staying where it was - and their place along it; inside the box, their
+ * middle.
+ */
+export function writtenPlace(o: WordsOpened, half: { w: number; h: number }): Pt {
+  const { at } = o;
+  switch (sideOf(o.box, at, o.half)) {
+    case "below":
+      return { x: at.x, y: at.y + o.half.h - half.h };
+    case "above":
+      return { x: at.x, y: at.y - o.half.h + half.h };
+    case "left":
+      return { x: at.x + o.half.w - half.w, y: at.y };
+    case "right":
+      return { x: at.x - o.half.w + half.w, y: at.y };
+    default:
+      return at;
+  }
 }
 
 /**

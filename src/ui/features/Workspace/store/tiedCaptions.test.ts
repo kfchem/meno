@@ -7,10 +7,11 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { drawnOf, exportedDrawn, structureFileText } from "../fileActions";
 import { drawnOf as drawnRead } from "../utils/io";
 import { readStructures } from "../../../../lib/io/structures";
-import { drawnStructureBox, keptAgainstBox, tiedCaptionOf } from "../utils/tiedCaptions";
+import { drawnStructureBox, keptAgainstBox, tiedCaptionOf, tiedOpened, writtenPlace } from "../utils/tiedCaptions";
 import { markGlideStep, type MarkGlides } from "../utils/markGlide";
 import { selectionScheme } from "../utils/selectionScheme";
 import { wordsSet } from "../../../../lib/chem/captions";
+import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { editorLayoutOptions } from "../layoutOptions";
 import { DURATION, easeOut } from "../../../theme/motion";
@@ -214,7 +215,8 @@ function ringWithText() {
 type State = () => ReturnType<ReturnType<typeof editor>["state"]>;
 const box = (state: State, atom: number) => drawnStructureBox(state().model, new Set(state().model.atoms.filter((a) => a.id !== atom).map((a) => a.id).concat(atom)));
 const half = (state: State, id: number) => {
-  const w = wordsSet(words(state, id)!, editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE)));
+  const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
+  const w = wordsSet(words(state, id)!, opts, labelSetOf(opts));
   return { w: w.halfW, h: w.halfH };
 };
 // (a quarter turn about `c`, a turn over left to right about the line x = `m`)
@@ -401,5 +403,77 @@ describe("text that belongs to a structure, through the turns a chemist makes", 
     }
     t.end();
     under(state, atoms[0], id, gap);
+  });
+});
+
+// (words written anew as the writing field keeps them (components/CaptionTyping2D `finish`): opened against their structure's box, their
+//  new half-size, the place `writtenPlace` gives - free words: none, their middle kept - committed by updateCaption, one step)
+function writeAnew(state: State, id: number, text: string) {
+  const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
+  const c = words(state, id)!;
+  const tied = tiedOpened({ model: state().model, style: state().docStyle }, c, opts);
+  const r = wordsSet({ ...c, text }, opts, labelSetOf(opts));
+  state().updateCaption(id, { text, ...(tied ? writtenPlace(tied, { w: r.halfW, h: r.halfH }) : {}) });
+}
+
+describe("text that belongs to a structure, written anew", () => {
+  const sides = (state: State, atom: number, id: number) => {
+    const b = box(state, atom)!;
+    const w = words(state, id)!;
+    const h = half(state, id);
+    return { right: w.x - h.w - b.x1, left: b.x0 - (w.x + h.w), below: b.y0 - (w.y + h.h), above: w.y - h.h - b.y1, x: w.x, y: w.y };
+  };
+
+  it("at the right: \"compound 1\" to \"1\" to \"1a\" - its left edge where it was, the gap the same, its middle across as high", () => {
+    const { state, atoms, id } = ringWithText();
+    const b = box(state, atoms[0])!;
+    state().updateCaption(id, { x: b.x1 + 0.8 + half(state, id).w, y: (b.y0 + b.y1) / 2 + 0.3 }, "drag");
+    for (const text of ["1", "1a"]) {
+      writeAnew(state, id, text);
+      expect(words(state, id)!.text).toBe(text);
+      expect(sides(state, atoms[0], id).right).toBeCloseTo(0.8, 9);
+      expect(sides(state, atoms[0], id).y).toBeCloseTo((b.y0 + b.y1) / 2 + 0.3, 9);
+    }
+  });
+
+  it("at the left: its right edge where it was", () => {
+    const { state, atoms, id } = ringWithText();
+    const b = box(state, atoms[0])!;
+    state().updateCaption(id, { x: b.x0 - 0.6 - half(state, id).w, y: (b.y0 + b.y1) / 2 }, "drag");
+    writeAnew(state, id, "1");
+    expect(sides(state, atoms[0], id).left).toBeCloseTo(0.6, 9);
+  });
+
+  it("under: its top where it was, centred as it was; above: its bottom where it was", () => {
+    const { state, atoms, id } = ringWithText();
+    const before = sides(state, atoms[0], id);
+    writeAnew(state, id, "compound 1\nas its salt");
+    expect(sides(state, atoms[0], id).below).toBeCloseTo(before.below, 9);
+    expect(sides(state, atoms[0], id).x).toBeCloseTo(before.x, 9);
+    const b = box(state, atoms[0])!;
+    state().updateCaption(id, { x: (b.x0 + b.x1) / 2, y: b.y1 + 0.5 + half(state, id).h }, "drag");
+    writeAnew(state, id, "1");
+    expect(sides(state, atoms[0], id).above).toBeCloseTo(0.5, 9);
+  });
+
+  it("inside the box: its middle where it was", () => {
+    const { state, atoms, id } = ringWithText();
+    const b = box(state, atoms[0])!;
+    state().updateCaption(id, { x: (b.x0 + b.x1) / 2 + 0.2, y: (b.y0 + b.y1) / 2 }, "drag");
+    writeAnew(state, id, "1");
+    expect(words(state, id)).toMatchObject({ x: (b.x0 + b.x1) / 2 + 0.2, y: (b.y0 + b.y1) / 2 });
+  });
+
+  it("free words keep their middle; the undo puts the words back as they were, where they were, in one step", () => {
+    const { doc, state, atoms, id } = ringWithText();
+    const free = state().addCaption("compound 2", 40, 40);
+    writeAnew(state, free, "2");
+    expect(words(state, free)).toMatchObject({ text: "2", x: 40, y: 40 });
+    const b = box(state, atoms[0])!;
+    state().updateCaption(id, { x: b.x1 + 0.8 + half(state, id).w, y: (b.y0 + b.y1) / 2 }, "drag");
+    const was = { ...words(state, id)! };
+    writeAnew(state, id, "1");
+    doc.undo();
+    expect(words(state, id)).toMatchObject({ text: was.text, x: was.x, y: was.y });
   });
 });
