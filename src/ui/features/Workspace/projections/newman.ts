@@ -212,7 +212,8 @@ export function nextSpoke(model: { atoms: readonly Atom[]; bonds: readonly Bond[
  * what hangs beyond it, rigidly - so that the one dragged comes to rest at the nearest of that atom's places (`turnedTo`); and, where the
  * pair's two sets come to be the same or stop being, the other atom's groups moved the eclipsed offset so that both still show. A turn about
  * the central bond changes no configuration: the cyclic order of an atom's groups and every distance are kept. Worked from `model` as the
- * gesture began, so that the moves of one frame do not add to those of the last. None where `group` is no group of a pair of the tool's, or a
+ * gesture began, so that the moves of one frame do not add to those of the last: every group of both atoms, with what hangs beyond it, is
+ * given its place - a group turned by nothing at where it began - so that one left offset by an earlier frame comes back. None where `group` is no group of a pair of the tool's, or a
  * group of the pair lies at none of its places (drawn by hand: nothing is guessed).
  */
 export function newmanTurn(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, group: number, pointer: { x: number; y: number }): { id: number; x: number; y: number }[] | null {
@@ -246,7 +247,6 @@ export function newmanTurn(model: { atoms: readonly Atom[]; bonds: readonly Bond
     };
     const moves = new Map<number, { id: number; x: number; y: number }>();
     const turnGroups = (groups: Group[], from: number, degrees: number) => {
-      if (Math.abs(degrees) < 1e-9) return;
       for (const g of groups) {
         for (const id of beyond(from, g.id)) {
           const a = byId.get(id)!;

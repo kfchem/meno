@@ -753,7 +753,8 @@ on a page), and the **Newman projection** (`newman`).
   nearest free spoke of that set, eased, and the pair is a whole Newman projection again (`projectionDrop`); none free, the drag goes as any. The back atom under the centre is bonded to the front already, so the double-click's second press, let go there,
   joins nothing and the bond is added (`tapConnects`). A spoke dragged round the circle turns all three groups of its atom together,
   with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
-  12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
+  12 degrees so that both show), as one undo step; the other atom's groups stay on their own set's places, offset only while the two sets are
+  the same, and where all of them rest hangs on where the group is let go, never on the way the pointer went; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
   back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the
   front atom, a press on the circle's line the back atom - a choice of handling only, by eye. A label typed on either atom is refused,
   in words that say why: they are drawn at one place and have no room for one; both are carbon. Clean-up leaves it as drawn and says so (a pair
