@@ -492,9 +492,33 @@ Taken on 2026-10-13:
 
 - **A drawing to 3D.** A structure's right-click menu, or a selection's,
   has *3D structure*; *3D structures* on the selection's menu makes
-  everything selected (Select all first, for everything drawn). Stereo
-  drawn without a configuration is ringed on the drawing while Meno asks
-  what to make: every stereoisomer it gives, one, or none for now. Each is
+  everything selected (Select all first, for everything drawn). Where the
+  drawing stands for more than one stereoisomer, Meno asks *Which
+  stereoisomer?* - every one it gives, one, or none for now - and rings on
+  the drawing the places left without a configuration where the choice
+  changes the compound: a centre, a double bond, an allene's chiral axis.
+  A place whose two senses are one compound is not ringed (the ring CH of
+  methylcyclohexane, whose two paths round the ring are alike); places that
+  decide only together are (both ring CH of 1,4-dimethylcyclohexane, cis
+  or trans; C3 of pentane-2,3,4-triol). The card says how many places and
+  how many stereoisomers - "1 stereocentre is drawn without a
+  configuration, so this structure can be either of 2 stereoisomers" - the
+  count being the different compounds, never two to the power of the
+  places. Up to 32 the card states how many can be made in 3D, each tried
+  (a bridgehead its rings hold one way is not counted twice:
+  2-methylbicyclo[2.2.1]heptane drawn without configurations is 4), and
+  *Make all* makes those. Past 32 it states the most there can be ("...
+  any of up to 528 stereoisomers": the chain HOCH2-(CHOH)10-CH2OH; past ten
+  open places, two to the power of the places) and offers *Make one*
+  alone, which makes the first of them that can be made in 3D. A
+  *Stereoisomers* step makes more, up to its own *At most*.
+  A drawing that stands for one stereoisomer is made at once,
+  nothing asked; the note a structure read from text shows of its open
+  stereo counts the same places. Which places decide is found by trying
+  each place turned alone, from one way of the others and then from more
+  only for a place not yet shown to decide, so finding them does not
+  need every stereoisomer; the stereoisomers are counted only where their
+  number is asked for. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
   chosen - where MMFF has no parameters for the molecule, UFF in its place,
   said in how it was made, or the molecule refused, as Settings' *Where
