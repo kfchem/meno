@@ -350,7 +350,10 @@ files from one render, both kept in the workspace:
   played as every film is, by the system, off the page's own work; the
   page joins the halves as it draws it (`components/matteMaterial.ts`,
   `lib/picture/matte.ts`), laying it over what lies under it - a white page,
-  a dark slide, a shape - with no dark or light fringe, at any zoom, moved,
+  a dark slide, a shape - in the colours a picture rendered with the same
+  values is drawn in (its colour turned linear once as it is read, and back
+  once as the page draws it, as a picture's is; its alpha's grey taken as
+  written) - with no dark or light fringe, at any zoom, moved,
   selected and undone as any picture is. The video is held within 4096 x
   2304 pixels, both halves together: a larger film on Transparent is
   refused with a sentence saying how large it can be.

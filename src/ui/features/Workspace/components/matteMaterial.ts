@@ -18,8 +18,10 @@ void main() {
 }
 `;
 
-// (the texture is read as sRGB, turned linear: the alpha's grey is turned back to the value it was written as; the colour is
-// turned back as it is drawn, by the page's output - so what is blended is what the film holds)
+// (a video's texture is uploaded as its frames' own values, not turned linear on the way in, as a picture's is: three.js
+// decodes a video's colour in its own materials' shaders, never in one of ours. So the colour is turned linear here, once,
+// and turned back once by the page's output; the alpha's grey is taken as it was written - so what is blended is what the
+// film holds, as a picture of the same colours is drawn)
 const FRAGMENT = /* glsl */ `
 uniform sampler2D map;
 uniform vec4 colourAt;
@@ -28,8 +30,8 @@ uniform vec2 inset;
 varying vec2 vUv;
 void main() {
   vec2 q = clamp(vUv, inset, vec2(1.0) - inset);
-  vec3 colour = texture2D(map, colourAt.xy + q * colourAt.zw).rgb;
-  float alpha = sRGBTransferOETF(vec4(texture2D(map, alphaAt.xy + q * alphaAt.zw).ggg, 1.0)).g;
+  vec3 colour = sRGBTransferEOTF(texture2D(map, colourAt.xy + q * colourAt.zw)).rgb;
+  float alpha = texture2D(map, alphaAt.xy + q * alphaAt.zw).g;
   gl_FragColor = vec4(colour, alpha);
   #include <colorspace_fragment>
 }
