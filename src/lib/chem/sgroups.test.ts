@@ -148,9 +148,10 @@ describe("a haptic bond", () => {
     // the line reaching the centre itself, not stopped short as at a label
     const star = model.atoms[3];
     expect(layout.lines.some((l) => Math.hypot(l.x2 - star.x, l.y2 - star.y) < 1e-6 || Math.hypot(l.x1 - star.x, l.y1 - star.y) < 1e-6)).toBe(true);
-    // a plain line, though a coordination bond is otherwise a dative arrow
+    // a plain line, as a coordination bond from a file is (GR-1.7.1)
+    expect(model.bonds[3].coordination).toBe(true);
     expect(bondKind(bonds[3])).toBe("lines");
-    expect(bondKind({ ...bonds[3], endpoints: undefined })).toBe("dative");
+    expect(bondKind({ ...bonds[3], endpoints: undefined })).toBe("lines");
   });
 
   it("is written with its endpoints, in V3000", () => {
