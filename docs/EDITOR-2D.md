@@ -1762,7 +1762,11 @@ All hover-based, as above.
   unspecified", though the chemist had just done it.)
   Nothing is said where nothing changed, where a unit is simply
   new (a wedge just drawn), gone with its atom or with one of its groups,
-  or no longer a unit because two of its groups are now alike; nor while
+  or no longer a unit because two of its groups are now alike, nor at a
+  place whose configuration sets nothing before the edit or after it (as
+  *R and S* asks it: chem/candidatesDrawn) - a Newman's or a Haworth's
+  atom with two like groups, such as a carbon given its third methyl,
+  whose drawn depth states no configuration; nor while
   a gesture is still going (a drag says it once, as it ends), nor for undo
   or redo, which give a drawing back with its configuration, nor for a
   file opened, a drawing put in anew. Another
