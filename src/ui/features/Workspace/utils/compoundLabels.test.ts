@@ -362,4 +362,26 @@ describe("the compounds' numbers on a page drawn as Meno draws one", () => {
     const read = pageStructuresOf({ objects, wordsIn: (b) => (b === number ? "9" : "") }, figures, () => drawn, "pdf", 0);
     expect(read.labels.map((l) => l.label)).toEqual(["9"]);
   });
+
+  it("are none of a table's rule: its line drawn cell by cell is no chain, and the bold headings over it no compound's numbers", () => {
+    // (a table's heading rule drawn as four lines end to end, a bond each, its bold headings "1a" and "1b" set over it within a bond - a
+    //  zigzag of the same four bonds beside it, its bold "5" under it, as before)
+    const rule = [0, 1, 2, 3].map((i) => stroke([300 + i * L, 300 + L], [300 + (i + 1) * L, 300 + L]));
+    const heads = ["1a", "1b"].flatMap((t, i) => letters(t, [300 + (2 * i + 1) * L - 3.4, 300 + 0.4 * L]));
+    const drawn: FigureDrawn = { paths: [zig(100), ...rule], letters: [...letters("5", [100 + 2 * L * ALONG, 300 + 1.4 * L]), ...heads], pictures: [] };
+    const boxOf = (p: FigureDrawn["paths"][number]): B => {
+      const xs = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[1]]));
+      const ys = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[2]]));
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    };
+    const objects: PageObject[] = [...drawn.paths.map((p) => ({ kind: "path" as const, box: boxOf(p) })), ...drawn.letters.map((l) => ({ kind: "text" as const, box: l.box }))];
+    const inside = (b: B, f: B) => (b[0] + b[2]) / 2 >= f[0] && (b[0] + b[2]) / 2 <= f[2] && (b[1] + b[3]) / 2 >= f[1] && (b[1] + b[3]) / 2 <= f[3];
+    const wordsIn = (bx: B) => drawn.letters.filter((l) => inside(l.box, bx)).map((l) => l.c).join("");
+    // (one figure round both, as a scheme with its table of conditions is one)
+    const figures: B[] = [[95, 290, 370, 330]];
+    const drawnOf = (k: number): FigureDrawn => ({ paths: drawn.paths.filter((p) => inside(boxOf(p), figures[k])), letters: drawn.letters.filter((l) => inside(l.box, figures[k])), pictures: [] });
+    const read = pageStructuresOf({ objects, wordsIn, boldIn: () => true }, figures, drawnOf, "pdf", 0);
+    expect(read.structures.map((s) => s.atoms.length)).toEqual([5]);
+    expect(read.labels.map((l) => l.label)).toEqual(["5"]);
+  });
 });

@@ -1689,8 +1689,17 @@ it where it lies out of view.
   "A triple line standing alone was not read as ethyne."): a bare line
   that long in a figure is a dash, a minus, a rule or a letter, a bare
   triple line a sign of equivalence or a separator, and an ethane or an
-  ethyne is all but never drawn so. A line bonded to anything is read as
-  before. What lies within one of the figure's pictures stays, for what is
+  ethyne is all but never drawn so. A long straight line alone is no chain
+  either, though it is drawn in pieces end to end: two or more single
+  lines in one straight line (no atom off it by more than a tenth of a
+  bond), joined to nothing else, with no label, wedge, hash or second line
+  on any - a table's rule drawn cell by cell, or broken where a column
+  starts - is left out, so the bold headings over it are no compound's
+  numbers. A chain of carbons is drawn bent at each atom; what is drawn
+  straight, an alkyne's or an allene's, has its second lines and is read
+  as before, as is a line with a label at an end (H3C-CH3, Cl-Cl). A line
+  bonded to anything is read as before. What lies within one of the
+  figure's pictures stays, for what is
   drawn over a picture, below; and a picture traced from its pixels keeps
   all of it, its reading saying each small piece (2026-11-20). (Ruled in
   review, 2026-11-18.)
