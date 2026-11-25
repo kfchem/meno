@@ -5,6 +5,8 @@ import { MENO } from "../../../../lib/chem/style";
 import { readStereo } from "../../../../lib/layout/drawn";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { drawingOf } from "./drawing";
+import { identity } from "../../../../lib/chem/identity";
+import { identityInputOf } from "./identityOf";
 
 /**
  * An N-aryl oxaziridine's N, pasted as a SMILES, through `structureFromSmiles` itself - what a paste and Quick Add call - with the plugin
@@ -20,10 +22,12 @@ const N = 8;
 const [C1, C9, O15] = [1, 9, 15];
 
 let configuration: unknown = undefined;
+/** The plugin's picture where a test gives its own (a block with the plugin's marks in it), else `pluginBlock`'s. */
+let picture: ((smi: string) => string) | null = null;
 vi.mock("../../../../lib/roles/worker", () => ({
   chemWorker: async () => ({
     request: async (op: string, args: { smiles?: string }) => {
-      if (op === "from_smiles") return { molblock: pluginBlock(args.smiles ?? ""), ...(configuration ? { configuration } : {}) };
+      if (op === "from_smiles") return { molblock: (picture ?? pluginBlock)(args.smiles ?? ""), ...(configuration ? { configuration } : {}) };
       return { read: true, elements: [] };
     },
   }),
@@ -86,6 +90,7 @@ describe("an N-aryl oxaziridine's N, pasted as a SMILES", () => {
   it("is drawn with a wedge or hashed bond at the N stating what the SMILES says, the twins opposite, and read back so", async () => {
     // (the plugin's configuration, as its toolkit gives it for this text: the ring carbon only)
     configuration = { centres: [{ atom: 1, neighbours: [0, 2, 8, 15], sense: -1 }], doubles: [] };
+    picture = null;
     const senses: number[] = [];
     const read: number[] = [];
     for (const n of ["@", "@@"] as const) {
@@ -125,8 +130,66 @@ describe("an N-aryl oxaziridine's N, pasted as a SMILES", () => {
   it("draws no wedge at an N-acyl oxaziridine's N, written with @: it keeps no configuration", async () => {
     // (CC(=O)[N@]1OC1(C)C: C0 C1 O2 N3 O4 C5 C6 C7 - the plugin's configuration holds nothing)
     configuration = { centres: [], doubles: [] };
+    picture = null;
     const drawn = await paste("CC(=O)[N@]1OC1(C)C");
     const n = drawn.atoms[3].id;
     expect(drawn.bonds.filter((b) => (b.a === n || b.b === n) && (b.stereo === "up" || b.stereo === "down"))).toEqual([]);
   });
+
+  /**
+   * The four stereoisomers - the ring carbon and the N each of either hand - and the N-methyl ones, through the paste, as the plugin answers in
+   * two forms: with its configuration beside its drawing, and with none (a plugin that sends none: its block's own marks are then the
+   * drawing's reading). Each must draw BOTH centres, each by a mark of its own narrow at it (handSense reads 0 where every bond at a centre is
+   * plain), stating the hand written, and read back as the molecule written: the same identity as a second writing of it, in another atom order
+   * and read by Meno's own reader with no plugin, whose marks are worked out by hand below. The four identities differ.
+   *
+   * By hand, for the second writings: `c1ccccc1[C@]1(C)[N@](...)O1` puts the ring carbon's neighbours in the order C-phenyl, O (the ring-closure
+   * digit), methyl, N; the first writing's order is methyl, O, C-phenyl, N - one swap (methyl with C-phenyl) - so `[C@@]` there is `[C@]` here.
+   * The N's neighbours keep their order (ring carbon, lone pair, its group, O), so its mark is unchanged.
+   */
+  const ISOMERS: { c: "@" | "@@"; n: "@" | "@@" }[] = [
+    { c: "@@", n: "@" },
+    { c: "@@", n: "@@" },
+    { c: "@", n: "@" },
+    { c: "@", n: "@@" },
+  ];
+  const other = (m: "@" | "@@") => (m === "@" ? "@@" : "@");
+  // (N-aryl: C0 C1 c2-c7 N8 c9-c14 O15; N-methyl: C0 C1 c2-c7 N8 C9 O10)
+  const CASES = [
+    { name: "N-phenyl", write: (c: string, n: string) => `C[C${c}]1(c2ccccc2)[N${n}](c2ccccc2)O1`, second: (c: string, n: string) => `c1ccccc1[C${c}]1(C)[N${n}](c2ccccc2)O1`, o: 15, nOf: 9, pluginHasN: false },
+    { name: "N-methyl", write: (c: string, n: string) => `C[C${c}]1(c2ccccc2)[N${n}](C)O1`, second: (c: string, n: string) => `c1ccccc1[C${c}]1(C)[N${n}](C)O1`, o: 10, nOf: 9, pluginHasN: true },
+  ];
+  // (the plugin's configuration, as measured for the [C@@] [N@] writings - the ring carbon [0, 2, 8, O] sense -1; the N-methyl's N [1, 9, O]
+  //  sense +1, an N-aryl's none - each sign turned with the hand written)
+  const pluginConfiguration = (k: (typeof CASES)[number], c: string, n: string) => ({
+    centres: [
+      { atom: 1, neighbours: [0, 2, 8, k.o], sense: c === "@@" ? -1 : 1 },
+      ...(k.pluginHasN ? [{ atom: 8, neighbours: [1, 9, k.o], sense: n === "@" ? 1 : -1 }] : []),
+    ],
+    doubles: [],
+  });
+  // (a plugin that sends no configuration: its block carries its own marks - the carbon's, and the N's where its toolkit keeps one)
+  const markedBlock = (k: (typeof CASES)[number]) => (smi: string) => {
+    const m = drawnFromSmiles(k.pluginHasN ? smi : smi.replace(/\[N@+\]/, "N"));
+    return writeMolfile({ atoms: m.atoms.map(({ id, x, y, el }) => ({ id, x, y, el })), bonds: m.bonds.map(({ id, a, b, order, stereo, narrow }) => ({ id, a, b, order, stereo, narrow })) });
+  };
+
+  for (const k of CASES)
+    for (const form of ["with its configuration", "with none"] as const)
+      it(`draws both centres of each ${k.name} stereoisomer, the plugin answering ${form}`, async () => {
+        const ids: string[] = [];
+        for (const { c, n } of ISOMERS) {
+          configuration = form === "with none" ? undefined : pluginConfiguration(k, c, n);
+          picture = form === "with none" ? markedBlock(k) : null;
+          const smi = k.write(c, n);
+          const drawn = await paste(smi);
+          // (by hand: [C@@] is clockwise seen from the methyl, so +1, [C@] -1; [N@] anticlockwise seen from the ring carbon, so -1, [N@@] +1)
+          expect(handSense(drawn, C1, [0, k.o, 2, N]), `${smi}: the ring carbon`).toBe(c === "@@" ? 1 : -1);
+          expect(handSense(drawn, N, [C1, "lp", k.nOf, k.o]), `${smi}: the N`).toBe(n === "@@" ? 1 : -1);
+          const id = identity(identityInputOf(drawn).input).text;
+          expect(id, `${smi}: read back as its second writing`).toBe(identity(identityInputOf(drawnFromSmiles(k.second(other(c), n))).input).text);
+          ids.push(id);
+        }
+        expect(new Set(ids).size).toBe(4);
+      });
 });

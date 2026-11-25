@@ -8,8 +8,16 @@
 import type { IsomerConfiguration, ConfiguredCentre, ConfiguredDouble } from "../../../../lib/chem/stereoOpen";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "../../../../lib/chem/perception/stereo/types";
 
-/** What a structure's source gives of its configuration: the plugin's centres and double bonds, where it sent them, and the text's axes and odd cumulenes. */
-export type Given = { axes: readonly Axial[]; cumulated: readonly Cumulated[]; configuration?: IsomerConfiguration };
+/**
+ * What a structure's source gives of its configuration: the plugin's centres and double bonds, where it sent them, and the text's axes and odd
+ * cumulenes - and `own`, the centres with a lone pair that Meno's own reading of the text gives and the plugin's reading leaves out (an N-aryl
+ * oxaziridine's N: fromSmiles `lonePairsGivenOf`). Those are laid over whatever else stands: the plugin's reading where it sent one, else the
+ * drawing's own reading of its marks, every other centre of which is kept - they never take the place of the whole.
+ */
+export type Given = { axes: readonly Axial[]; cumulated: readonly Cumulated[]; configuration?: IsomerConfiguration; own?: readonly ConfiguredCentre[] };
+
+/** The atoms whose configuration `given` states beside the drawing: the plugin's centres and Meno's own. */
+export const givenAtoms = (given: Given | undefined): Set<number> => new Set([...(given?.configuration?.centres ?? []), ...(given?.own ?? [])].map((c) => c.atom));
 
 /**
  * The handedness of the drawing's frame, against the field's: a given centre's `sense` is +1 where det(n1 - c, n2 - c, n3 - c) is positive in
@@ -53,9 +61,10 @@ export function cisTransOfGiven(d: ConfiguredDouble, a: number, b: number, neigh
 
 /**
  * What a structure's source gives of its configuration : the text's axes and odd cumulenes, where it has any, and
- * the plugin's reading, where it sent one. None where there is neither: the drawing is then read, as a file's is.
+ * the plugin's reading, where it sent one, and Meno's own centres (`own`). None where there is none of these: the drawing is then read, as a
+ * file's is.
  */
-export function givenOf(runs: Given | undefined, configuration: IsomerConfiguration | undefined): Given | undefined {
-  if (!runs && !configuration) return undefined;
-  return { axes: runs?.axes ?? [], cumulated: runs?.cumulated ?? [], ...(configuration ? { configuration } : {}) };
+export function givenOf(runs: Given | undefined, configuration: IsomerConfiguration | undefined, own: readonly ConfiguredCentre[] = []): Given | undefined {
+  if (!runs && !configuration && !own.length) return undefined;
+  return { axes: runs?.axes ?? [], cumulated: runs?.cumulated ?? [], ...(configuration ? { configuration } : {}), ...(own.length ? { own } : {}) };
 }

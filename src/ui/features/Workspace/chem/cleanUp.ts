@@ -17,7 +17,7 @@ import { layoutJob, nextFree, relayoutFrom, statedOf, stereoOf, type LayoutJob }
 import { openDoubleBonds, openRuns, readStereo } from "../../../../lib/layout/drawn";
 import { compared } from "../../../../lib/chem/perception/stereo/compare";
 import { layOut } from "./layOut";
-import { cisTransOfGiven, tetraOfGiven, type Given } from "./givenConfiguration";
+import { cisTransOfGiven, givenAtoms, tetraOfGiven, type Given } from "./givenConfiguration";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Cumulated } from "../../../../lib/layout/stereo";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
@@ -313,13 +313,15 @@ const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === m
  * `job` given what the structure's source says of its configuration (`Given`) in place of what its drawing says: the text's axes and odd
  * cumulenes, and - where the plugin sent its reading beside the drawing - its centres and double bonds, each as given and the drawing's own
  * reading of them set aside. A centre whose fourth place is a lone pair is given only where Meno's own rules hold one there
- * (lib/chem/lonePairCentres); one whose atoms are not the drawing's is not given. The drawing laid out is then held to the whole of it
- * (`LayoutJob.stated`).
+ * (lib/chem/lonePairCentres); one whose atoms are not the drawing's is not given. Meno's own centres (`Given.own`) are laid over the
+ * plugin's, or - where it sent none - over the drawing's own reading, whose other centres and double bonds stand. The drawing laid out is
+ * then held to the whole of it (`LayoutJob.stated`).
  */
 function withGiven(job: LayoutJob, model: Model, given: Given, ungivenDoubles: "kept" | "dropped" = "kept"): LayoutJob {
   const input = { ...job.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) };
   const c = given.configuration;
-  if (!c) return { ...job, given: true, stated: true, input };
+  const own = given.own ?? [];
+  if (!c && !own.length) return { ...job, given: true, stated: true, input };
   const n = job.ids.length;
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
   const bondsThere = new Set(input.bonds.map((b) => pair(b.a, b.b)));
@@ -328,13 +330,15 @@ function withGiven(job: LayoutJob, model: Model, given: Given, ungivenDoubles: "
   for (const b of input.bonds) for (const [x, y] of [[b.a, b.b], [b.b, b.a]]) around.set(x, [...(around.get(x) ?? []), y]);
   const drawing = drawingOf(model);
   const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
+  // (the plugin's centres, where it sent them, and Meno's own laid over them; where it sent none, Meno's own laid over the drawing's reading)
   const centres = new Map(
-    c.centres
+    [...(c?.centres ?? []), ...own]
       .filter((x) => x.atom < n && x.neighbours.every((k) => k < n && bonded(x.atom, k)) && (x.neighbours.length === 4 || (input.atoms[x.atom].hs ?? 0) > 0 || keepsPyramid(x.atom)))
       .map((x) => [x.atom, tetraOfGiven(x, x.neighbours.length === 3 && !((input.atoms[x.atom].hs ?? 0) > 0))] as const),
   );
   // (a double bond by its atoms: the block's bond numbers are the drawing's, as it was read)
   const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  if (!c) return { ...job, given: true, stated: true, input: { ...input, atoms: input.atoms.map((a, k) => (centres.has(k) ? { ...a, tetra: centres.get(k)! } : a)) } };
   const doubles = new Map(
     c.doubles.flatMap((d) => {
       const b = model.bonds[d.bond];
@@ -387,7 +391,7 @@ function withGiven(job: LayoutJob, model: Model, given: Given, ungivenDoubles: "
  * atoms. For a drawing kept as it came (fromSmiles `drawingOf`), so that what it leaves out is said.
  */
 export function notShownOf(model: Model, given: Given): { centres: [number, number]; doubles: [number, number]; axes: [number, number] } | null {
-  const read = layoutJob(model, new Set(given.configuration?.centres.map((c) => c.atom) ?? []));
+  const read = layoutJob(model, givenAtoms(given));
   if (!givenFits(read, model)) return null;
   const stated = statedOf(withGiven(read, model, given), model);
   // (each unit given and not shown as given: lost, turned or no longer one - lib/chem/perception/stereo/compare `compared`)
@@ -404,7 +408,7 @@ export function notShownOf(model: Model, given: Given): { centres: [number, numb
  */
 export function openOfField(model: Model, given: Given): OpenDoubles | null {
   if (!given.configuration) return null;
-  const read = layoutJob(model, new Set(given.configuration.centres.map((c) => c.atom)));
+  const read = layoutJob(model, givenAtoms(given));
   if (!givenFits(read, model)) return null;
   // (what was given held, the drawing's own cis or trans of every other double bond set aside: what is left that could have one is open)
   return openDoubleBonds(withGiven(read, model, given, "dropped").input);
@@ -464,7 +468,7 @@ export async function laidOut(
           }),
         }
       : model;
-  const job0 = layoutJob(m, new Set(given?.configuration?.centres.map((c) => c.atom) ?? []));
+  const job0 = layoutJob(m, givenAtoms(given));
   // (a drawing nobody made keeps no metal's form - but one whose arrangement its input gave keeps the form it carries, the X of a square-planar centre so arranged)
   const read = asNew
     ? { ...job0, asNew: true as const, ...(arranged.size ? { arranged } : {}), input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm, ...a }, i) => (fourForm && arranged.has(job0.ids[i]) ? { ...a, fourForm } : a)) } }

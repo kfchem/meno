@@ -33,9 +33,9 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   // (an allene's axis and an odd cumulene's cis or trans, which the SMILES says and a MOL block cannot: Meno's own reading of the text, where it is of the same atoms)
   const given = givenRunsOf(smiles, molblock);
   // (and a centre with a lone pair that Meno keeps and the plugin's reading leaves out - an N-aryl oxaziridine's N: Meno's own reading
-  //  of the text, by the same rule that keeps it in the drawing and in its reading back - `lonePairsGivenOf`)
+  //  of the text, by the same rule that keeps it in the drawing and in its reading back - `lonePairsGivenOf` -
+  //  laid over the plugin's reading, or over the drawing's own where the plugin sent none: never in place of the whole)
   const own = lonePairsGivenOf(smiles, molblock, configuration);
-  const configured = own.length ? { centres: [...(configuration?.centres ?? []), ...own], doubles: configuration?.doubles ?? [] } : configuration;
   // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal: the pairs the mark states, where Meno reads
   //  them (`metalPairsIn`), kept only where the drawing has them; where it does not read them, one with no chelate, whose drawing
   //  the plugin's picture carries)
@@ -45,7 +45,7 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   const opened = openDoublesOf(smiles, molblock);
   const [open, drawn] = await Promise.all([
     withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null),
-    drawingOf(molblock, style, givenOf(given?.runs, configured), opened ?? undefined, arranged, marks),
+    drawingOf(molblock, style, givenOf(given?.runs, configuration, own), opened ?? undefined, arranged, marks),
   ]);
   const stereoOpen = stereoOpenOf(open && (given || own.length) ? specified(open, given?.bonds ?? [], molblock, own) : open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
