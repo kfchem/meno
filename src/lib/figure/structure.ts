@@ -162,10 +162,14 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const cx = about?.x ?? (Math.min(...xs) + Math.max(...xs)) / 2;
   const cy = about?.y ?? (Math.min(...ys) + Math.max(...ys)) / 2;
   // (a label drawn as shapes that reads as nothing: the next likeliest of its readings that reads)
+  // (whether a label's bonds come in from its right: it is then read outward from them first)
+  const fromRightAt = read.atoms.map((a, i) =>
+    bondsFromRight(read.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : [])).map((j) => ({ x: read.atoms[j].x - a.x, y: read.atoms[j].y - a.y }))),
+  );
   const labels = read.atoms.map((a, i) => {
     if (a.el) return { el: a.el, ...(a.charge ? { charge: a.charge } : {}), read: true };
     if (!a.label) return null;
-    const fromRight = bondsFromRight(read.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : [])).map((j) => ({ x: read.atoms[j].x - a.x, y: read.atoms[j].y - a.y })));
+    const fromRight = fromRightAt[i];
     const first = readDrawnLabel(a.label, reads, fromRight);
     if (first.read || !a.alts) return first;
     for (const alt of a.alts) {
@@ -247,6 +251,10 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
     // (a Y with one bond and no charge is a variable, as X and Z are - Meno's rule, as the writer has it (docs/CTFILE.md): a label cannot tell it from
     // yttrium's symbol, so the atom says it was taken so. An Ar with a bond is an aryl group's by the same rule, its reading not in doubt)
     if (!a.el && a.label === "Y" && degree[i] === 1 && !charges[i]) unsure.push("Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group.");
+    // (NC with its bond at the N - right of the bond, or upright - shows an isocyanide, R-N#C, by GR-2.1.6; it is read as a nitrile,
+    //  as NC is typed (the maintainer, 2026-10-11), so the reading is kept and the doubt said)
+    const text = label && "as" in label && label.as ? label.as : a.label;
+    if (!a.el && label?.read && text === "NC" && !fromRightAt[i]) unsure.push("Read as a nitrile (CN), but NC written here may be an isocyanide, bonded at its N.");
     const over = tooMany[i];
     if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;

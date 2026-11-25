@@ -78,3 +78,23 @@ describe("NCS", () => {
     expect(readDrawnLabel("NCS", reads).el).toBe("NCS");
   });
 });
+
+describe("a picture's NC with its bond at the N: read as a nitrile, and said", () => {
+  // (a made figure: a label "NC" and one carbon, the bond's other end; by hand, IUPAC GR-2.1.6 puts the bonded atom at the bond's end
+  //  of the text - right of its bond, or under or over it, that is the N, an isocyanide R-N#C; left of it the C, a nitrile R-C#N. Meno
+  //  keeps NC read as CN, as typed - so the atom keeps "CN" and says, where its N is at the bond, that it may be an isocyanide)
+  const at = (x: number, y: number): FigureRead => ({ atoms: [{ x: 0, y: 0, label: "NC" }, { x, y }], bonds: [{ a: 0, b: 1, order: 1 }], bond: 30, left: { letters: [] } });
+  const said = (f: FigureRead) => (structureOf(f, reads).atoms[0].unsure ?? []).filter((u) => /isocyanide/.test(u));
+  it("right of its bond, or upright: read CN, and the atom says it may be an isocyanide", () => {
+    for (const f of [at(-30, 0), at(0, 30), at(0, -30)]) {
+      expect(structureOf(f, reads).atoms[0].el).toBe("CN");
+      expect(said(f)).toHaveLength(1);
+    }
+  });
+
+  it("left of its bond (its C at the bond, a nitrile), and CN written either side: nothing said", () => {
+    expect(structureOf(at(30, 0), reads).atoms[0].el).toBe("CN");
+    expect(said(at(30, 0))).toEqual([]);
+    for (const x of [30, -30]) expect(structureOf(label("CN", x), reads).atoms[0].unsure ?? []).toEqual([]);
+  });
+});

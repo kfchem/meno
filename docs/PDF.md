@@ -537,6 +537,9 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   bonds stop so short of a label, and of nothing else - two methyls'
   ends point apart. A heteroatom's letter faint in a picture, or not
   traced, would otherwise leave its ring open with nothing said.
+- **A label shown one way and read another**: read from a picture, NC
+  with its bond at the N (right of the bond, or upright) is read as a
+  nitrile, as NC typed is, and the atom says it may be an isocyanide.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes
