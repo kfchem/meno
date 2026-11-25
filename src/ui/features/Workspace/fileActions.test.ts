@@ -19,7 +19,8 @@ import { heldElsewhere } from "../../../lib/doc/savers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { HALO_EMS, labelBox, labelSetOf, measureLabelBox, runsWidth } from "../../../lib/chem/layout2d";
 import { MARK_HALF_HEIGHT, MARK_SCALE, MARKS_APART, STEREO_GAP, stereoPlaces, stereoTextEms } from "./chem/marks";
-import { ACS_1996, RSC } from "../../../lib/chem/style";
+import { ACS_1996, DEFAULT_STYLE_CHOICE, RSC, styleOf } from "../../../lib/chem/style";
+import { labelFont } from "../../../lib/chem/labelFonts";
 import type { Model } from "./store/types";
 import { readStructures } from "../../../lib/io/structures";
 import type { OptionValues } from "../../../lib/options";
@@ -760,6 +761,56 @@ describe("R, S, E and Z in a picture of the drawing (the maintainer, 2026-10-21)
     // (marks of atoms the picture does not hold: none of its)
     const elsewhere = { valence: new Map(), centres: new Map([[99, "R" as const]]), doubleBonds: new Map() };
     expect(drawingLayout(model, { ...aromatic, shownMarks: elsewhere }, ACS_1996).layout.texts.some((t) => t.text === "R")).toBe(false);
+  });
+
+  it("stands R or S half a capital's height off its atom by default (GR-11.1), and as near as a style sets it", () => {
+    // (an invented centre with its two bonds to the left: the widest gap, and so its S, to the right, level with it)
+    const centre: Model = {
+      atoms: [at(7, 0, 0), at(8, -0.87, -0.5), at(9, -0.87, 0.5)],
+      bonds: [
+        { id: 21, a: 7, b: 8, order: 1 },
+        { id: 22, a: 7, b: 9, order: 1 },
+      ],
+    };
+    const shown = { valence: new Map(), centres: new Map([[7, "S" as const]]), doubleBonds: new Map() };
+    const style = styleOf(DEFAULT_STYLE_CHOICE);
+    // (the known answer: a C's height in the labels' typeface is about 0.7 of their size, half of it 0.35 -
+    // the default, within a hundredth of the typeface's own capital)
+    expect(style.stereoDescriptorGap).toBe(0.35);
+    expect(Math.abs(style.stereoDescriptorGap - labelFont(style.fontFamily).capHeight / 2)).toBeLessThan(0.01);
+    const gapOf = (gap: number) => {
+      const { layout, opts } = drawingLayout(centre, { ...aromatic, shownMarks: shown }, { ...style, stereoDescriptorGap: gap });
+      const t = layout.texts.find((i) => i.text === "S")!;
+      const size = opts.fontPx * MARK_SCALE;
+      // (in the drawing's own units, 10 pt labels on a 14.4 pt bond)
+      expect(opts.fontPx).toBeCloseTo((L * 10) / 14.4, 9);
+      expect(t.y).toBeCloseTo(0, 9);
+      // (from the atom to the nearer side of the letter: its middle less half its width)
+      return { gap: t.x - (size * stereoTextEms("S", false)) / 2, fontPx: opts.fontPx };
+    };
+    const iupac = gapOf(style.stereoDescriptorGap);
+    expect(iupac.gap).toBeCloseTo(0.35 * iupac.fontPx, 9);
+    expect(iupac.gap / L).toBeCloseTo((0.35 * 10) / 14.4, 9);
+    // (the nearer distance Meno drew before, kept as a value of the style)
+    const nearer = gapOf(0.15);
+    expect(nearer.gap).toBeCloseTo(0.15 * nearer.fontPx, 9);
+    expect(nearer.gap / L).toBeCloseTo((0.15 * 10) / 14.4, 9);
+  });
+
+  it("moves only how far off its atom R or S stands: not its side, nor an E or Z", () => {
+    const style = styleOf(DEFAULT_STYLE_CHOICE);
+    const placed = (gap: number) => {
+      const { layout } = drawingLayout(model, { ...aromatic, shownMarks: marks }, { ...style, stereoDescriptorGap: gap });
+      return { s: layout.texts.find((t) => t.text === "S")!, e: layout.texts.find((t) => t.text === "E")! };
+    };
+    const [far, near] = [placed(0.35), placed(0.15)];
+    const c = model.atoms.find((a) => a.id === 4)!;
+    const way = (t: { x: number; y: number }) => Math.atan2(t.y - c.y, t.x - c.x);
+    // (the S on the same side of its atom at either distance, the further one further)
+    expect(way(far.s)).toBeCloseTo(way(near.s), 6);
+    expect(Math.hypot(far.s.x - c.x, far.s.y - c.y)).toBeGreaterThan(Math.hypot(near.s.x - c.x, near.s.y - c.y));
+    // (the E beside its bond's middle, where it was)
+    expect([far.e.x, far.e.y]).toEqual([near.e.x, near.e.y]);
   });
 
   it("keeps one put by hand where it was put, in ems of the labels from its atom", () => {
