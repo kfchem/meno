@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import { figureNotePlaces, figureNoteShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type FigureNote, type NotePlaces } from "../utils/figureNotes";
-import { notesSized, pageScale } from "../utils/pageScale";
+import { pageSized } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 
-/** A note as large as the page draws it, between `NOTES_SCALE`'s two scales, hung from its foot (utils/pageScale `notesSized`). */
-const NOTES_SIZED = notesSized("foot");
-
-/** Below this many screen pixels to a bond the note is a dot, its words too small to read: a page pixel's scale, a bond being 48 of them. */
-const DOT_BELOW = 12 / 48;
+/** A note as large as the page draws it at every zoom, hung from its foot (utils/pageScale `pageSized`). */
+const NOTES_SIZED = pageSized("foot");
 
 /** A note shown, or going: what it says, where it stands, and since when it has been going. */
 type Shown = { key: number; note: FigureNote; at: { x: number; y: number }; leaving: number | null; quiet: boolean };
@@ -69,13 +65,6 @@ export default function FigureNotes2D() {
 
 function FigureNote2D({ shown }: { shown: Shown }) {
   const store = useEditorStore();
-  const camera = useThree((s) => s.camera);
-  const [far, setFar] = useState(() => pageScale(camera.zoom || 1) < DOT_BELOW);
-  const farRef = useRef(far);
-  useFrame(() => {
-    const now = pageScale(camera.zoom || 1) < DOT_BELOW;
-    if (now !== farRef.current) setFar((farRef.current = now));
-  });
   const { note, at, leaving, quiet } = shown;
   const from = useEditor((s) => s.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? s.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure");
   const title = figureNoteTitle(from, note.page);
@@ -101,12 +90,10 @@ function FigureNote2D({ shown }: { shown: Shown }) {
           onPointerDown={(e) => e.button === 2 && e.stopPropagation()}
           title={title}
         >
-          {/* (as large as the page draws it, between three quarters and half as large again: laid out at that size, its words crisp - utils/pageScale `notesSized`) */}
+          {/* (as large as the page draws it: laid out at that size, its words crisp - utils/pageScale `pageSized`) */}
           <div style={NOTES_SIZED}>
           {quiet ? (
-            far ? null : <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteSource(from, note.page)}</div>
-          ) : far ? (
-            <div aria-label={figureNoteText(note.unsure)} className="h-1.5 w-1.5 rounded-full border border-gh-line bg-white" />
+            <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteSource(from, note.page)}</div>
           ) : (
             <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteText(note.unsure)}</div>
           )}

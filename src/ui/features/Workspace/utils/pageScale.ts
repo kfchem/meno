@@ -7,9 +7,6 @@
 import type { CSSProperties } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
-/** The scales a molecule's notes are drawn at, as the page is between them (Molecule3DView): never smaller than three quarters, nor larger than half as large again. */
-export const NOTES_SCALE = { least: 0.75, most: 1.5 } as const;
-
 /** Where a chip hangs from, which it grows and shrinks about while the zoom moves (`pageSized`): its top's middle, its middle, its foot's middle. */
 export type HungFrom = "top" | "middle" | "foot";
 
@@ -31,17 +28,6 @@ const ORIGIN: Record<HungFrom, string> = { top: "50% 0", middle: "50% 50%", foot
  * set crisp again where the zoom stops, at the size it was shown at.
  */
 export const pageSized = (from: HungFrom): CSSProperties => ({ zoom: "var(--page, 1)", transform: "scale(var(--page-k, 1))", transformOrigin: ORIGIN[from] });
-
-/**
- * A molecule's or a figure's notes, drawn as the page is between `NOTES_SCALE`'s
- * two scales: laid out at that size once the zoom stands still, and scaled
- * from where they hang while it moves (`--notes-k`), as chips are (`pageSized`).
- */
-export const notesSized = (from: HungFrom): CSSProperties => ({
-  zoom: `clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})`,
-  transform: "scale(var(--notes-k, 1))",
-  transformOrigin: ORIGIN[from],
-});
 
 /** A length on the page's HTML, `px` page pixels, at the page's scale as it is shown now: laid out, and while the zoom moves (`pageSized`). */
 export const pagePx = (px: number) => `calc(${px}px * var(--page, 1) * var(--page-k, 1))`;
@@ -86,10 +72,8 @@ export function hairWritten(written: number, zoom: number, dpr: number): number 
   return Math.abs(Math.log(want / written)) >= Math.log(HAIR_STEP) ? want : null;
 }
 
-/** What the page's HTML is told of the zoom at a frame (components/PageScale): the zoom it is laid out at (`laid`) and its scale there (`page`), and how far it is scaled from that - chips (`k`) and notes (`notesK`) - until it is laid out again. */
-export type PageTold = { laid: number; page: number; k: number; notesK: number };
-
-const notesAt = (page: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCALE.least, page));
+/** What the page's HTML is told of the zoom at a frame (components/PageScale): the zoom it is laid out at (`laid`) and its scale there (`page`), and how far it is scaled from that (`k`) until it is laid out again. */
+export type PageTold = { laid: number; page: number; k: number };
 
 /**
  * What the page's HTML is told at a frame, the zoom laid out at being
@@ -98,18 +82,18 @@ const notesAt = (page: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCAL
  * was, and scaled by how far it has gone from there (`pageSized`).
  */
 export function pageTold(laid: number, zoom: number, still: boolean): PageTold {
-  if (still || !(laid > 0)) return { laid: zoom, page: pageScale(zoom), k: 1, notesK: 1 };
-  return { laid, page: pageScale(laid), k: zoom / laid, notesK: notesAt(pageScale(zoom)) / notesAt(pageScale(laid)) };
+  if (still || !(laid > 0)) return { laid: zoom, page: pageScale(zoom), k: 1 };
+  return { laid, page: pageScale(laid), k: zoom / laid };
 }
 
 /** What the page's HTML layer was last told (`pageLayerStep`): the zoom its chips are laid out at, and how far they are scaled from it. */
-export type PageLayerState = { laid: number; k: number; notesK: number };
+export type PageLayerState = { laid: number; k: number };
 
 /**
  * What the page's HTML layer is told at a frame of zoom `zoom` (components/
  * PageScale), it having been told `was` (none: a layer not told yet): each
  * custom property that changes - `--page` only where it is laid out again,
- * `--page-k` and `--notes-k` as they are scaled (`pageTold`) - and whether a frame more
+ * `--page-k` as it is scaled (`pageTold`) - and whether a frame more
  * is asked for: while it is scaled, so that the canvas, drawn only when asked,
  * draws the frame the zoom stands still at and lays it out there.
  */
@@ -118,6 +102,5 @@ export function pageLayerStep(was: PageLayerState | null, zoom: number, still: b
   const writes: [string, string][] = [];
   if (!was || told.laid !== was.laid) writes.push(["--page", told.page.toFixed(4)]);
   if (!was || told.k !== was.k) writes.push(["--page-k", told.k.toFixed(4)]);
-  if (!was || told.notesK !== was.notesK) writes.push(["--notes-k", told.notesK.toFixed(4)]);
-  return { now: { laid: told.laid, k: told.k, notesK: told.notesK }, writes, again: told.k !== 1 };
+  return { now: { laid: told.laid, k: told.k }, writes, again: told.k !== 1 };
 }

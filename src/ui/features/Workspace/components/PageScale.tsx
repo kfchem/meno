@@ -8,8 +8,8 @@ import { pageLayerStep, type PageLayerState } from "../utils/pageScale";
  * `--page` on the layer it is drawn in, how many screen pixels a page pixel
  * is - which chips are laid out at (`.meno-page-chip`), written once the
  * zoom stands still - and while it moves, how far it has gone from there,
- * `--page-k` for chips and `--notes-k` for notes, which they are scaled by
- * (`pageTold`, `pageSized`).
+ * `--page-k`, which chips and notes alike are scaled by (`pageTold`,
+ * `pageSized`).
  */
 export default function PageScale() {
   const layer = useContext(PageHtmlLayer);

@@ -12,7 +12,7 @@ import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
-import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
+import { pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoMarks3d, stereoSpotsShown, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type StereoMark3D, type Stick, type ValueAt } from "../utils/molecule3d";
 import { LONG_PRESS_SHOW_MS } from "../constants";
@@ -110,10 +110,10 @@ const LINES_FINE_MOST = 2000;
 const LINES_COARSE = 16;
 /** Where what goes under an opened frames chip lies among the page's HTML: over the workflow's ports, as the chip is over them (Workflow2D hides those under it). */
 const CHIP_RAISED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
-/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it; and its notes, hung from their foot (utils/pageScale `pageSized`, `notesSized`). */
+/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it; and its notes, hung from their foot (utils/pageScale `pageSized`). */
 const SIZED_MIDDLE = pageSized("middle");
 const SIZED_TOP = pageSized("top");
-const NOTES_SIZED = notesSized("foot");
+const NOTES_SIZED = pageSized("foot");
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
 /** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
@@ -122,7 +122,7 @@ const STEREO_TAU = 0.07;
 const STEREO_FADE = DURATION.quick;
 /** How many frames labels shown together wait at the most for all of them to be there, before those there fade in. */
 const STEREO_WAIT_FRAMES = 30;
-/** How far above the molecule the mark of hydrogens left out stands, in pixels. */
+/** How far above the molecule the mark of hydrogens left out stands, in page pixels. */
 const MARK_GAP_PX = 8;
 /** A turn this small is followed at once - a drag's, or a turn on its own; a larger one is gone over to. */
 const TURN_FOLLOWED = 0.3;
@@ -2147,7 +2147,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
             <div
               className="flex flex-col items-center"
               data-fit-notes={MARK_GAP_PX}
-              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
+              style={{ transform: `translate(-50%, calc(-100% - ${pagePx(MARK_GAP_PX)}))` }}
             >
               <div className="flex flex-col items-center" style={NOTES_SIZED}>
               {notesEver.map((text) => (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HAIR_STEP, hairWritten, NOTES_SCALE, PAGE_PX, pageLayerStep, pagePx, pageScale, pageSized, pageTold, notesSized, ZOOM_WRITTEN_STEP, zoomWritten, type PageLayerState } from "./pageScale";
+import { HAIR_STEP, hairWritten, PAGE_PX, pageLayerStep, pagePx, pageScale, pageSized, pageTold, ZOOM_WRITTEN_STEP, zoomWritten, type PageLayerState } from "./pageScale";
 
 /** The zoom at which a page pixel is `scale` screen pixels. */
 const zoomAt = (scale: number) => scale / PAGE_PX;
@@ -55,7 +55,7 @@ describe("a card's and a set's lines, as the zoom goes", () => {
 
 describe("the page's chips as the zoom moves", () => {
   it("are laid out at the zoom first, and once it stands still - scaled from there, never laid out again, while it moves", () => {
-    expect(pageTold(Number.NaN, 4, false)).toEqual({ laid: 4, page: pageScale(4), k: 1, notesK: 1 });
+    expect(pageTold(Number.NaN, 4, false)).toEqual({ laid: 4, page: pageScale(4), k: 1 });
     // (moving: still laid out at 4, scaled by how far the zoom has gone - however far)
     const moving = pageTold(4, 6, false);
     expect(moving.laid).toBe(4);
@@ -63,10 +63,10 @@ describe("the page's chips as the zoom moves", () => {
     expect(moving.k).toBeCloseTo(1.5);
     expect(pageTold(4, 4 * 1.001, false).laid).toBe(4);
     // (standing: laid out where it stands, nothing scaled)
-    expect(pageTold(4, 6, true)).toEqual({ laid: 6, page: pageScale(6), k: 1, notesK: 1 });
+    expect(pageTold(4, 6, true)).toEqual({ laid: 6, page: pageScale(6), k: 1 });
   });
 
-  it("are as large, scaled, as laid out at the zoom they are scaled to - and so are notes, between their two scales", () => {
+  it("are as large, scaled, as laid out at the zoom they are scaled to - and so are notes", () => {
     for (const [laid, zoom] of [
       [zoomAt(1), zoomAt(1.3)],
       [zoomAt(1), zoomAt(0.5)],
@@ -75,8 +75,6 @@ describe("the page's chips as the zoom moves", () => {
     ]) {
       const t = pageTold(laid, zoom, false);
       expect(t.page * t.k).toBeCloseTo(pageScale(zoom));
-      const notes = (s: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCALE.least, s));
-      expect(notes(t.page) * t.notesK).toBeCloseTo(notes(pageScale(zoom)));
     }
   });
 
@@ -99,8 +97,8 @@ describe("the page's chips as the zoom moves", () => {
   it("each hang from their own point, scaled as the zoom moves and laid out at the page's scale", () => {
     expect(pageSized("top")).toEqual({ zoom: "var(--page, 1)", transform: "scale(var(--page-k, 1))", transformOrigin: "50% 0" });
     expect(pageSized("middle").transformOrigin).toBe("50% 50%");
-    expect(notesSized("foot")).toMatchObject({ transform: "scale(var(--notes-k, 1))", transformOrigin: "50% 100%" });
-    expect(notesSized("foot").zoom).toBe(`clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})`);
+    // (notes too: a molecule's or a figure's, hung from their foot, as large as the page draws them at every zoom)
+    expect(pageSized("foot")).toEqual({ zoom: "var(--page, 1)", transform: "scale(var(--page-k, 1))", transformOrigin: "50% 100%" });
   });
 });
 
@@ -109,20 +107,20 @@ describe("the page's HTML layer, told at each frame", () => {
 
   it("is told all first; while the zoom moves, only how far it is scaled, a frame more asked for each time; where it stops, laid out there, scaled no more, no frame more", () => {
     const first = pageLayerStep(null, zoomAt(1), false);
-    expect(names(first.writes)).toEqual(["--page", "--page-k", "--notes-k"]);
+    expect(names(first.writes)).toEqual(["--page", "--page-k"]);
     expect(first.again).toBe(false);
     // (moving: scaled, laid out where it was)
     const moving = pageLayerStep(first.now, zoomAt(1.2), false);
-    expect(names(moving.writes)).toEqual(["--page-k", "--notes-k"]);
+    expect(names(moving.writes)).toEqual(["--page-k"]);
     expect(moving.writes[0][1]).toBe("1.2000");
     expect(moving.again).toBe(true);
     // (still moving, a step further: scaled again, a frame more again)
     const further = pageLayerStep(moving.now, zoomAt(1.4), false);
-    expect(names(further.writes)).toEqual(["--page-k", "--notes-k"]);
+    expect(names(further.writes)).toEqual(["--page-k"]);
     expect(further.again).toBe(true);
     // (standing still where it stopped: laid out there, scaled no more, the canvas left to rest)
     const stood = pageLayerStep(further.now, zoomAt(1.4), true);
-    expect(names(stood.writes)).toEqual(["--page", "--page-k", "--notes-k"]);
+    expect(names(stood.writes)).toEqual(["--page", "--page-k"]);
     expect(stood.writes).toContainEqual(["--page", pageScale(zoomAt(1.4)).toFixed(4)]);
     expect(stood.writes).toContainEqual(["--page-k", "1.0000"]);
     expect(stood.again).toBe(false);
@@ -130,18 +128,20 @@ describe("the page's HTML layer, told at each frame", () => {
     expect(pageLayerStep(stood.now, zoomAt(1.4), true).writes).toEqual([]);
   });
 
-  it("tells the notes their own scale while it moves, held between their two scales", () => {
-    const at = pageLayerStep(null, zoomAt(1), true).now;
-    // (to three times: notes no larger than half as large again)
-    const step = pageLayerStep(at, zoomAt(3), false);
-    expect(step.writes).toContainEqual(["--notes-k", (NOTES_SCALE.most / 1).toFixed(4)]);
+  it("scales notes as it scales chips: at a third and at three times, in the zoom's ratio, with no least or most", () => {
+    for (const s of [1 / 3, 3]) {
+      const t = pageTold(zoomAt(1), zoomAt(s), false);
+      // (laid out at 1, scaled by the zoom's ratio: shown at s)
+      expect(t.page * t.k).toBeCloseTo(pageScale(zoomAt(s)), 9);
+      expect(t.k).toBeCloseTo(s, 9);
+    }
   });
 
   it("tells its words nothing as the zoom goes far out and back: only the page's scale, nothing shown or hidden by it", () => {
     let was: PageLayerState | null = null;
     for (const [s, still] of [[1, true], [0.3, false], [0.1, true], [0.02, true], [1, true]] as const) {
       const step = pageLayerStep(was, zoomAt(s), still);
-      for (const [name] of step.writes) expect(["--page", "--page-k", "--notes-k"]).toContain(name);
+      for (const [name] of step.writes) expect(["--page", "--page-k"]).toContain(name);
       was = step.now;
     }
   });

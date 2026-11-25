@@ -6,12 +6,11 @@
  * a molecule's frames chip wider than the set it is in. A chip grows and
  * shrinks with the page (utils/pageScale, `--page`), so the page holds it at
  * one size, whatever the zoom: measured once on the screen, its place on the
- * page stands for the fit that follows. A molecule's notes are drawn as the
- * page is only between two scales (`NOTES_SCALE`), so how much of the page
- * they take depends on the zoom the fit comes to (`notesOnPage`).
+ * page stands for the fit that follows. A molecule's notes, and the gap
+ * they stand above it by, grow and shrink with the page alike: measured on
+ * the screen, they take the same of the page at any zoom (`notesOnPage`).
  */
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
-import { NOTES_SCALE, pageScale } from "./pageScale";
 import { inputsOf } from "../workflow/kinds";
 import { setGives, stepTakes, wireCurve } from "../workflow/look";
 
@@ -67,21 +66,19 @@ export function screenToPage(boxes: readonly ScreenBox[], view: { x: number; y: 
   return box;
 }
 
-const notesScale = (zoom: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCALE.least, pageScale(zoom)));
-
-/** A molecule's notes as they stand on the screen now: their box, and the gap between its foot and the point they stand over (screen pixels, at any scale). */
+/** A molecule's notes as they stand on the screen now: their box, and the gap between its foot and the point they stand over (screen pixels, at the view's zoom). */
 export type NotesSeen = { box: ScreenBox; gap: number };
 
 /**
  * The box a molecule's notes, `notes` as they stand on the screen in the
  * view as it is (`screenToPage`), would take up on the page at `zoom`: each
- * over the same point of the page, its gap the same on the screen, and as
- * large as it is drawn there (`NOTES_SCALE`).
+ * over the same point of the page, it and its gap as large on the page at
+ * every zoom.
  */
 export function notesOnPage(notes: readonly NotesSeen[], view: { x: number; y: number; zoom: number }, canvas: { left: number; top: number; width: number; height: number }, zoom: number): PageBox | null {
   const mx = canvas.left + canvas.width / 2;
   const my = canvas.top + canvas.height / 2;
-  const grown = notesScale(zoom) / notesScale(view.zoom);
+  const grown = zoom / view.zoom;
   let box: PageBox | null = null;
   for (const { box: r, gap } of notes) {
     if (!(r.right > r.left && r.bottom > r.top)) continue;
@@ -89,7 +86,7 @@ export function notesOnPage(notes: readonly NotesSeen[], view: { x: number; y: n
     const ax = view.x + ((r.left + r.right) / 2 - mx) / view.zoom;
     const ay = view.y - (r.bottom + gap - my) / view.zoom;
     const half = ((r.right - r.left) * grown) / 2 / zoom;
-    box = joined(box, { x0: ax - half, x1: ax + half, y0: ay + gap / zoom, y1: ay + (gap + (r.bottom - r.top) * grown) / zoom });
+    box = joined(box, { x0: ax - half, x1: ax + half, y0: ay + (gap * grown) / zoom, y1: ay + ((gap + r.bottom - r.top) * grown) / zoom });
   }
   return box;
 }
