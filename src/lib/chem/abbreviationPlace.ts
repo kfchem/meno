@@ -1,6 +1,6 @@
 import { layout2D, type Layout2D } from "../layout/engine";
 import type { LayoutInput } from "../layout/perceive";
-import { abbreviationStructure } from "./abbreviations";
+import { abbreviationStructure, bondedAbbreviationStructure } from "./abbreviations";
 import { contractGraph, contractionTrials, hiddenIn, type Contraction } from "./contract";
 import type { GroupStructure, StructureBond } from "./ligands";
 import { kekuleOrders } from "./kekulize";
@@ -30,7 +30,9 @@ export function placedAbbreviation(
   neighbour: P | readonly P[] | null,
   bondLength: number,
 ): AbbreviationStructure | null {
-  const s = abbreviationStructure(label);
+  // (bonded, a label that reads otherwise alone - NCS, an isothiocyanate bonded, N-chlorosuccinimide alone)
+  const bonded = neighbour != null && (!Array.isArray(neighbour) || neighbour.length > 0);
+  const s = (bonded ? bondedAbbreviationStructure(label) : null) ?? abbreviationStructure(label);
   return s ? placedStructure(s, neighbour, bondLength) : null;
 }
 
