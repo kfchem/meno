@@ -7,6 +7,7 @@ import { configurationChanges } from "./changes";
 import { MENO_MOVES, watchConfiguration } from "./watch";
 import { cleanUp } from "../chem/cleanUp";
 import { cipMarksAsked } from "../chem/cipRun";
+import { cipMarksOf } from "../chem/cipMarks";
 
 // Foundation part 15, phase 2: a change of what the drawing states, said at its unit once the edit is done (the brief's known answers).
 
@@ -173,6 +174,22 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     store.getState().moveAtoms(butanol().atoms.filter((a) => [2, 3, 5].includes(a.id)).map(({ id, x, y }) => ({ id, x, y })), "drag-3");
     await vi.runAllTimersAsync();
     expect(notes()[1]).toBe("C2: now R");
+    stop();
+  });
+
+  it("says a centre no longer read also where its R or S is asked for: nothing rests there that says its marks cannot be read", async () => {
+    const m = butanol();
+    const { store, notes, stop } = page({ ...m, atoms: m.atoms.map((a) => (a.id === 1 ? { ...a, stereoShown: true } : a)) });
+    store.getState().moveAtoms([{ id: 2, x: -L, y: 0 }, { id: 3, x: L, y: 0 }, { id: 5, x: 2 * L, y: 0.5 * L }], "drag-2");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["C2: R, now unclear: two of its bonds in line or on top of each other"]);
+    // (what rests there asked for: no label, and the pointer's words say no configuration is drawn - not that the marks are unreadable)
+    const now = store.getState().model;
+    const said = cipMarksOf(now);
+    expect([...said.centres]).toEqual([]);
+    expect(said.said.get("centre-1")).toBe("No R or S: no configuration is drawn here.");
+    // (not asked for: nothing at all)
+    expect([...cipMarksOf({ ...now, atoms: now.atoms.map((a) => ({ ...a, stereoShown: undefined })) }).said]).toEqual([]);
     stop();
   });
 

@@ -1691,7 +1691,7 @@ All hover-based, as above.
   (the words plain to a chemist, after the maintainer's report on
   0.1.27; for a double bond E and Z in the same patterns):
   - "C2: S, now R" where it inverted (an atom dragged across its centre's
-    other bond; part of a structure flipped), its descriptors before and after
+    other bond), its descriptors before and after
     (Meno's own CIP, worked out off the drawing's thread); "C2: inverted"
     where the CIP does not give both;
   - "C2: S, now unspecified" where a plain bond now states nothing; "C2:
@@ -1699,7 +1699,11 @@ All hover-based, as above.
     wavy bond, a double bond drawn "either");
     "C2: S, now unclear: " and the reader's reason where its marks are
     there but say nothing readable (two of its bonds dragged into line) -
-    each without its "S, " where it had no descriptor;
+    each without its "S, " where it had no descriptor; the note is raised
+    whether or not the centre's R or S is asked for, as no mark rests at
+    such a centre that says its configuration cannot be read (an R or S
+    asked for shows nothing there, and pointing at it says only that no
+    configuration is drawn);
   - "C2: now R" where its marks, unclear before, state it again ("C2:
     stated again" without a descriptor);
   - "Every stereocentre inverted: the mirror image" where every unit of a
