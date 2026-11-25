@@ -94,7 +94,7 @@ export default function FitToContent2D({
     const index = new Map<number, number>();
     const la: LAtom[] = atoms.map((a, i) => {
       index.set(a.id, i);
-      return { id: a.id, x: a.x, y: a.y, el: a.el, ...chemistry(a), ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}) };
+      return { id: a.id, x: a.x, y: a.y, el: a.el, ...chemistry(a), ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}), ...(a.reads ? { reads: a.reads } : {}) };
     });
     const lb: LBond[] = layoutBonds(model.bonds, index);
     // The layout's sizes are in world units here, so they do not depend on

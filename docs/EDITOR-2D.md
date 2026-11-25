@@ -723,8 +723,9 @@ on a page), and the **Newman projection** (`newman`).
   bond, the bold and wedge-shaped bonds of the near edge, the other labels and the ring O's - a graze of less than a tenth
   of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),
   each label of the ring that meets something is first read the other way where that meets less - HO for
-  OH, HOH2C for CH2OH, or back - its bond being upright, so that either way reads (the atom keeps the way,
-  `reads`: an OH up from the right-hand front atom reads HO, its H off the bond going up from it, and
+  OH, HOH2C for CH2OH, or back - its bond being upright, so that either way reads, whether its bond was
+  led out by a double-click or a drag and its label typed over it or given by *Edit label* (the atom keeps
+  the way, `reads`, and the page and a picture made of it draw it so: an OH up from the right-hand front atom reads HO, its H off the bond going up from it, and
   keeps its full stem; in a five-ring, whose near edge's bonds rise steeply, a label up from a front atom
   or down from a side atom reads away from its atom's rising bond). Then one that still meets something
   steps along its vertical toward its atom by the least that clears every label:
