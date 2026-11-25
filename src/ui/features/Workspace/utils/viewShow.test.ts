@@ -104,7 +104,7 @@ describe("molecules made in 3D from a drawing, shown", () => {
     const made: Turned = { turn: [0, 0, 0, 1], start: { x: 0, y: 0 }, reach: { x0: -10, x1: 10, y0: -1, y1: 1 }, flat: [], height: 1 };
 
     it("a molecule seen whole with its chip cut off by the window's edge is not in view: the view takes in it, its chip and the drawing", () => {
-      const row = placeRow([made], drawing, seenBox, undefined, taken, { below: 1.425, above: 0 });
+      const row = placeRow([made], drawing, seenBox, undefined, taken, { below: 1.425, right: 0 });
       expect(row.inView).toBe(false);
       // (none in view: to the right, as ever - its body from y = 5 - 1 = 4 to 6, its chip down to 4 - 1.425 = 2.575)
       expect(row.box.x0).toBeCloseTo(42.7, 9);
@@ -122,22 +122,32 @@ describe("molecules made in 3D from a drawing, shown", () => {
     it("the view moves by what brings the chip in: body from y = -25 to -20 seen with its margin, its chip to -26.425; up by 26.425 + 4.8 - 30 = 1.225", () => {
       const body = { x0: -10, x1: 10, y0: -25, y1: -20 };
       expect(viewToShow(view, screen, body)).toBeNull();
-      expect(viewToShow(view, screen, { ...body, y0: body.y0 - madeRoom(0, 10).below })).toEqual({ x: 0, y: expect.closeTo(-1.225, 9), zoom: 10 });
+      expect(viewToShow(view, screen, { ...body, y0: body.y0 - madeRoom(0).below })).toEqual({ x: 0, y: expect.closeTo(-1.225, 9), zoom: 10 });
     });
 
     it("no move where it is seen whole with its chip: below, the view's foot at -7, its chip at -6.125", () => {
       const lower = { x0: -50, x1: 50, y0: -7, y1: 53 };
-      const row = placeRow([made], drawing, lower, undefined, taken, madeRoom(0, 10));
+      const row = placeRow([made], drawing, lower, undefined, taken, madeRoom(0));
       expect(row.inView).toBe(true);
       expect(row.box.y0).toBeCloseTo(-6.125, 9);
       expect(row.box.y1).toBeCloseTo(-2.7, 9);
       expect(viewToShow({ x: 0, y: 23, zoom: 10 }, { ...screen }, shownWith([drawing], row.box), 0)).toBeNull();
     });
 
-    it("its notes over it: 8 screen px and 24 a note, at the page's scale held between 0.75 and 1.5 - at zoom 10, 10 x 1.8 / 48 = 0.375, so 0.75", () => {
-      expect(madeRoom(2, 10).above).toBeCloseTo((8 + 2 * 24 * 0.75) / 10, 9);
-      expect(madeRoom(0, 10).above).toBe(0);
-      expect(madeRoom(0, 10).below).toBeCloseTo(1.425, 9);
+    it("the mark of its notes beside its top right corner: 6 page px out and 10 wide, 16 x 1.8 / 48 = 0.6 of the page, at any zoom; none where it says nothing", () => {
+      expect(madeRoom(2).right).toBeCloseTo(0.6, 9);
+      expect(madeRoom(1).right).toBeCloseTo(0.6, 9);
+      expect(madeRoom(0).right).toBe(0);
+      expect(madeRoom(0).below).toBeCloseTo(1.425, 9);
+    });
+
+    it("a molecule with notes is placed and seen with its mark: to the right, its body from 42.7 to 62.7, its mark out to 63.3", () => {
+      const row = placeRow([made], drawing, seenBox, undefined, taken, madeRoom(1));
+      expect(row.inView).toBe(false);
+      // (the row's box from the drawing's edge 40 and the gap 2.7 to the body's right 62.7 and the mark's 0.6: 63.3; the body's middle at 42.7 + 10 = 52.7)
+      expect(row.box.x0).toBeCloseTo(42.7, 9);
+      expect(row.box.x1).toBeCloseTo(63.3, 9);
+      expect(row.at[0].x).toBeCloseTo(52.7, 9);
     });
   });
 

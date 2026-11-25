@@ -3,6 +3,7 @@ import type { Conformers } from "../../../../lib/roles/client";
 import { factor } from "../../../../lib/units";
 import { Growing, packed, roundSent, roundTaken, unpacked, type ShownWith } from "./growing";
 import { asThePageShows } from "./pageConformers";
+import { CHLOROETHANE, chloroethane, CHLOROPROPANE, chloropropane, roundOf } from "./testdata/turnedConformers";
 
 /** A 3D structure's search going on (chem/growing): its rounds as they are sent to a worker, and what the page shows of them. */
 
@@ -74,6 +75,46 @@ describe("what the page shows of a search going on", () => {
     const third = ROUND([4], [-1], Math.PI / 3);
     g.add(third, third.energies!);
     g.shown()!.frames[2].forEach((v, i) => expect(v).toBeCloseTo(was[i], 3));
+  });
+
+  it("shows each conformer it showed after every round after the next, atom by atom as it was - only its place in the list moves", () => {
+    // (chloroethane: its methyl turned, each a conformer of its own; round 2 finds a lower one, B, and S again a little lower, its
+    //  H's named from another; round 3 one lower again and A again lower - by hand, A and S as first shown, the new ones after)
+    const [A, S, B, C] = [chloroethane([60, 180, 300]), chloroethane([30, 150, 270]), chloroethane([120, 240, 0]), chloroethane([45, 165, 285])];
+    const sAgain = chloroethane([150, 270, 30]);
+    const aAgain = chloroethane([300, 60, 180]);
+    const rounds = [roundOf(CHLOROETHANE, [A, S], [-100, -99.9999]), roundOf(CHLOROETHANE, [sAgain, B], [-99.99995, -100.0001]), roundOf(CHLOROETHANE, [C, aAgain], [-100.0002, -100.00001])];
+    const g = new Growing(CHLOROETHANE.atoms, CHLOROETHANE.bonds, 5, { ...PLAIN, parts: [[0, 1, 2, 3, 4, 5, 6, 7]] });
+    const counts: number[] = [];
+    let was: Conformers | null = null;
+    for (const r of rounds) {
+      g.add(r, r.energies!);
+      const now = g.shown()!;
+      counts.push(now.frames.length);
+      // (each shown before shown now, every atom within a thousandth of an angstrom of where it was, its energy its own)
+      if (was)
+        was.frames.forEach((f, k) => {
+          const at = now.frames.findIndex((h) => h.every((v, i) => Math.abs(v - f[i]) < 1e-3));
+          expect(at).toBeGreaterThanOrEqual(0);
+          expect(now.energies![at]).toBe(was!.energies![k]);
+        });
+      was = now;
+    }
+    expect(counts).toEqual([2, 3, 4]);
+    expect(was!.energies).toEqual([-100.0002, -100.0001, -100, -99.9999]);
+  });
+
+  it("keeps the one shown where a later round finds it again lower, its methyls named the other way round: 2-chloropropane", () => {
+    const g = new Growing(CHLOROPROPANE.atoms, CHLOROPROPANE.bonds, 5, { ...PLAIN, parts: [[0, 1, 2, 3, 4]] });
+    const one = roundOf(CHLOROPROPANE, [chloropropane(["C1", "C2"])], [-500]);
+    g.add(one, one.energies!);
+    const was = g.shown()!;
+    const two = roundOf(CHLOROPROPANE, [chloropropane(["C2", "C1"])], [-500.00001]);
+    g.add(two, two.energies!);
+    const now = g.shown()!;
+    expect(now.frames).toHaveLength(1);
+    now.frames[0].forEach((v, i) => expect(v).toBeCloseTo(was.frames[0][i], 3));
+    expect(now.energies).toEqual([-500]);
   });
 
   it("says how each round was made where they said it otherwise, round by round", () => {

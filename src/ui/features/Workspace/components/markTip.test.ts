@@ -36,3 +36,24 @@ describe("what a mark says", () => {
     expect(b.tip.left + tipPlace(b.tip, b.mark, narrow).dx).toBe(500 + TIP_MARGIN_PX);
   });
 });
+
+describe("what a mark says, over it first", () => {
+  it("goes over the mark where there is room over it, in the same gap and with the same middle", () => {
+    const { mark, tip } = under(600, 400);
+    expect(tipPlace(tip, mark, room, TIP_MARGIN_PX, true)).toEqual({ dx: 0, above: true });
+    expect(mark.top - TIP_GAP_PX - 20).toBeGreaterThanOrEqual(room.top + TIP_MARGIN_PX);
+  });
+
+  it("goes under the mark where there is no room over it and there is under it", () => {
+    const { mark, tip } = under(600, 50);
+    expect(tipPlace(tip, mark, room, TIP_MARGIN_PX, true).above).toBe(false);
+  });
+
+  it("is moved along as before, and without the preference nothing changes", () => {
+    const a = under(1250, 400);
+    expect(tipPlace(a.tip, a.mark, room, TIP_MARGIN_PX, true).dx).toBe(tipPlace(a.tip, a.mark, room).dx);
+    const b = under(600, 400);
+    expect(tipPlace(b.tip, b.mark, room, TIP_MARGIN_PX, false)).toEqual(tipPlace(b.tip, b.mark, room));
+    expect(tipPlace(b.tip, b.mark, room).above).toBe(false);
+  });
+});

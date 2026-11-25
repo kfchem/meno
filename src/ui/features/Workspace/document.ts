@@ -480,7 +480,7 @@ export function moveAtom(
 export function placeAtoms(
   doc: WorkspaceDocument,
   moves: readonly { id: number; x: number; y: number; z?: number }[],
-  stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>)[] = [],
+  stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "narrow" | "display" | "behind">>)[] = [],
 ): WorkspaceDocument {
   const to = new Map(moves.map((m) => [m.id, m]));
   let changed = false;
@@ -496,6 +496,16 @@ export function placeAtoms(
     if (!p) return b;
     let out = b;
     if (p.stereo !== undefined && p.stereo !== b.stereo) out = { ...out, stereo: p.stereo };
+    // (where it is narrow, and a line of hashes made a wedge, its look taken away: a turn over keeping what it states, chem/drawing
+    //  `wedgesExchanged`)
+    if ("narrow" in p && p.narrow !== b.narrow) {
+      const { narrow: _n, ...rest } = out;
+      out = p.narrow === undefined ? rest : { ...rest, narrow: p.narrow };
+    }
+    if ("display" in p && p.display !== b.display) {
+      const { display: _d, ...rest } = out;
+      out = p.display === undefined ? rest : { ...rest, display: p.display };
+    }
     // (which bonds it passes behind, where a turn over exchanged them: chem/crossings)
     if (p.behind !== undefined) {
       const { behind: _was, ...rest } = out;

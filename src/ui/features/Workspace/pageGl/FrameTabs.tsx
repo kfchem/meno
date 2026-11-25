@@ -60,7 +60,7 @@ export default function FrameTabs({ items, on, order = FRAMES_ORDER, clear }: { 
     down: (key, part, e) => (part === "tab" ? on.tabDown?.(key, e) : part.startsWith("edge:") ? on.edgeDown?.(key, part.slice(5) as Side, e) : undefined),
     hover: (key, part, isOn) => part === "tab" && on.hover?.(key, isOn),
     menu: (key, _part, e) => on.menu?.(key, e),
-  });
+  }, true);
   return (
     <>
       <PageShapes items={parts.shapes} order={order} />

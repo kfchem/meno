@@ -9,6 +9,8 @@
  *   reader of what is kept takes it from before the change; the notes are said in a moment the page is idle after the change has been
  *   drawn, their descriptors asked of the CIP off the drawing's thread.
  * - Dropped where the drawing has changed again by the time the descriptors come.
+ * - Nothing said of a unit the chemist changed by turning a stereo bond of its own, and nothing else there (./changes `turnedByHand`):
+ *   its label shows it; the step keeps the action's own name where nothing else is said.
  * - A change made by one of Meno's own moves (Clean-up, Turn over, Rotate...) is no change the move should make: it is said as that
  *   move's, and logged for a bug report.
  */
@@ -181,7 +183,10 @@ export function watchConfiguration(store: EditorStore, doc: DocumentStore<Worksp
     steps = [];
     if (!taken.length) return;
     // (each step on its own, against what is kept: what it did said as its own - a chemist's turn never taken for the Clean-up after it)
-    const found = taken.map((step) => (step.before === step.after ? null : changesAgainstKept(step.before, step.after)));
+    // (the chemist's own turn of a stereo bond at a unit says nothing of it - its label shows it; a move of Meno's says all it changed)
+    const found = taken.map((step) =>
+      step.before === step.after ? null : changesAgainstKept(step.before, step.after, { byHand: !(step.label && MENO_MOVES[step.label]) }),
+    );
     const last = taken[taken.length - 1];
     stable = last.after;
     const now = stable;

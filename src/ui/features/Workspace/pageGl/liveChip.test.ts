@@ -242,7 +242,78 @@ describe("words laid in lines", () => {
   });
 });
 
+describe("a frames chip marked with a dot where its search found a lower conformer", () => {
+  const c: ChipFacts = { count: 3, frame: 1, energies: [0, kcal(0.5), kcal(1)], conformers: true, found: "lower" };
+  const plain: ChipFacts = { ...c, found: undefined };
+  const at = { x: 10, y: 5 };
+  const lower = { kind: "lower" as const, shown: 1, pointed: false };
+  const dotOf = (d: ReturnType<typeof liveChip>) => d.shapes.find((x) => x.key === "chip:4:mark");
+  it("never changes its width or its words for it", () => {
+    expect(chipMeasures(c, 1)).toEqual(chipMeasures(plain, 1));
+    const d = liveChip(state(c, { mark: lower }), at, VIEW);
+    const bare = liveChip(state(plain), at, VIEW);
+    expect(d.box).toEqual(bare.box);
+    expect(d.texts).toEqual(bare.texts);
+  });
+  it("draws it 6 page px across in Meno's own colour, centred on its outline at the upper right of its right cap, over the rest", () => {
+    const d = liveChip(state(c, { mark: lower }), at, VIEW);
+    const dot = dotOf(d)!;
+    expect(dot).toMatchObject({ kind: "ring", diameterPx: 6, fill: COLORS.base, z: 3 });
+    expect(dot.opacity).toBeCloseTo(CHIP_SHUT.opacity, 9);
+    expect(dot.line).toBeUndefined();
+    // (shut: 28 page px tall - its cap's radius 14 - so 14 (1 - 1/sqrt 2) in from its right side and its top)
+    const off = pagePx(14 * (1 - Math.SQRT1_2));
+    expect(d.heightPx).toBe(28);
+    expect("x" in dot && dot.x).toBeCloseTo(d.box.x1 - off, 9);
+    expect("y" in dot && dot.y).toBeCloseTo(d.box.y1 - off, 9);
+    expect(LIVE.mark).toBe(6);
+  });
+  it("in the accent where the conformer shown left the energy window", () => {
+    const d = liveChip(state({ ...c, found: "window" }, { mark: { ...lower, kind: "window" } }), at, VIEW);
+    expect(dotOf(d)!.fill).toBe(COLORS.attention);
+  });
+  it("takes a press over it, above the chip, with the pointer's hand, and the page's tip over it says what it tells", () => {
+    const d = liveChip(state(c, { mark: lower }), at, VIEW);
+    const dot = dotOf(d)!;
+    const r = d.regions!.find((x) => x.part === "mark")!;
+    expect(r).toMatchObject({ key: "chip:4", z: 3, cursor: "pointer" });
+    expect("rect" in r && (r.rect.x0 + r.rect.x1) / 2).toBeCloseTo("x" in dot ? dot.x : NaN, 9);
+    expect("rect" in r && (r.rect.y0 + r.rect.y1) / 2).toBeCloseTo("y" in dot ? dot.y : NaN, 9);
+    expect("rect" in r && r.rect.x1 - r.rect.x0).toBeCloseTo(pagePx(LIVE.markHit), 9);
+    expect(d.tip).toBeUndefined();
+    const pointed = liveChip(state(c, { mark: { ...lower, pointed: true } }), at, VIEW);
+    expect(pointed.tip).toMatchObject({ key: "chip:4:mark", text: "Lower conformer found", x: "x" in dot ? dot.x : NaN, y: "y" in dot ? dot.y : NaN, w: pagePx(6), h: pagePx(6) });
+    const window = liveChip(state({ ...c, found: "window" }, { mark: { kind: "window", shown: 1, pointed: true } }), at, VIEW);
+    expect(window.tip!.text).toBe("The conformer shown left the energy window: the lowest is shown");
+  });
+  it("scales with the page: at twice the zoom its size and place in page px are the same", () => {
+    const d = liveChip(state(c, { mark: lower }), at, VIEW);
+    const z2 = liveChip(state(c, { mark: lower }), at, { zoom: 2 * VIEW.zoom, dpr: 1 });
+    expect(dotOf(z2)).toEqual(dotOf(d));
+  });
+  it("eases in at its opacity, takes no press until half in, and draws nothing without a mark", () => {
+    const half = liveChip(state(c, { mark: { ...lower, shown: 0.4 } }), at, VIEW);
+    expect(dotOf(half)!.opacity).toBeCloseTo(0.4 * CHIP_SHUT.opacity, 9);
+    expect(half.regions!.some((x) => x.part === "mark")).toBe(false);
+    const none = liveChip(state(plain), at, VIEW);
+    expect(dotOf(none)).toBeUndefined();
+    expect(none.regions!.some((x) => x.part === "mark")).toBe(false);
+  });
+  it("opened, it stands on the opened chip's outline the same way", () => {
+    const d = liveChip(opened(c, { mark: lower }), at, VIEW);
+    const dot = dotOf(d)!;
+    const off = pagePx(Math.min(CHIP.radius, d.heightPx / 2) * (1 - Math.SQRT1_2));
+    expect("x" in dot && dot.x).toBeCloseTo(d.box.x1 - off, 9);
+    expect("y" in dot && dot.y).toBeCloseTo(d.box.y1 - off, 9);
+  });
+});
+
 describe("a press on a chip", () => {
+  it("on its dot, leaves it as it is: open or shut (the lowest is shown - useFramesChip)", () => {
+    const at = { single: false, expanded: false, pinned: false, hasMore: false };
+    expect(chipPressed(at, "mark")).toEqual({ expanded: false, pinned: false, fold: false });
+    expect(chipPressed({ ...at, expanded: true }, "mark")).toEqual({ expanded: true, pinned: false, fold: false });
+  });
   const at = { single: false, expanded: false, pinned: false, hasMore: false };
   it("opens a set's on a click, shuts it on its words, and leaves it as it is on its bars and slider", () => {
     expect(chipPressed(at, "chip").expanded).toBe(true);

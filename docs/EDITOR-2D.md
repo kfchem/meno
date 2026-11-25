@@ -642,6 +642,13 @@ on a page), and the **Newman projection** (`newman`).
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+  A **double-click** on a ring atom of a chair or a Haworth ring (or a click with Option or Alt held) adds one group at the atom's first free
+  position - a chair's equatorial, then its axial; a Haworth ring's up, then its down - at the length the drawing gives it, a new atom always,
+  never joined to one already near; with both positions held it adds nothing (`projectionBond`, the store's `bondOut`).
+  A group's atom (one bond, to a ring atom) **dragged** round its ring atom rests at one of that atom's two positions, eased, paused or not, and
+  nowhere between: the one whose seen direction is nearest the pointer's. Let go toward the other position while a group holds it, the two
+  groups change places, each carried whole, as one undo step; a group drawn off both positions goes to the nearer free one, and only with both
+  held by other groups does the drag go as any (`projectionDrop`, utils/dropOutcome, MovePreview2D). All of it in page units: the same at every zoom.
   Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
   group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
   atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
@@ -739,9 +746,15 @@ on a page), and the **Newman projection** (`newman`).
   seen end-on: it has no drawn length and no direction, and the page draws none of it (`isEndOn`, `newmanPairs`, lib/chem/layout2d: no line for that bond, the
   back atom's bonds drawn from the rim, the circle one of the drawing's circles, so that SVG, EMF and print have it as the canvas does). Free positions: three
   spokes on each atom, staggered - the front's at 90, 210 and 330 degrees, the back's at 30, 150 and 270 - a bond length from the centre; a group is led
-  out to the nearest that no group holds, the tip saying "front" or "back". A spoke dragged round the circle turns all three groups of its atom together,
+  out to the nearest that no group holds, the tip saying "front" or "back". A double-click on the centre adds a front group, one on the circle's line a
+  back group, each at the next spoke of its atom's own set that no group holds - the front's from 90 round to 210 and 330, the back's from 270 round
+  to 30 and 150, so the first front and the first back group stand anti - and nothing once three are held, or while a group of the pair stands off
+  every spoke (`nextSpoke`). A group lying off every spoke of its atom's set (drawn by hand) dragged and let go rests at the
+  nearest free spoke of that set, eased, and the pair is a whole Newman projection again (`projectionDrop`); none free, the drag goes as any. The back atom under the centre is bonded to the front already, so the double-click's second press, let go there,
+  joins nothing and the bond is added (`tapConnects`). A spoke dragged round the circle turns all three groups of its atom together,
   with what hangs beyond them, to rest at the nearest of the atom's six places (the two sets the front's and the back's; eclipsed ones offset
-  12 degrees so that both show), as one undo step; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
+  12 degrees so that both show), as one undo step; the other atom's groups stay on their own set's places, offset only while the two sets are
+  the same, and where all of them rest hangs on where the group is let go, never on the way the pointer went; the turn changes no configuration - asserted when the button comes up, and a turn that did is taken
   back and said. An atom of the pair dragged is never moved alone: its structure goes (parted, they are no projection). A press at the centre takes the
   front atom, a press on the circle's line the back atom - a choice of handling only, by eye. A label typed on either atom is refused,
   in words that say why: they are drawn at one place and have no room for one; both are carbon. Clean-up leaves it as drawn and says so (a pair
@@ -845,7 +858,21 @@ molecule in 3D or a picture.
     item is shown only where the item acts on what the key does. Turning over is seeing
   the molecule from its other side, not its mirror image: the drawing is
   mirrored and every wedge on it becomes hashes and every hash a wedge, so
-  each stereocentre keeps its configuration.
+  each stereocentre keeps its configuration. Each stays narrow at the
+  centre it states: hashes drawn narrow at their far end, which state the
+  centre at their wide end, become a wedge narrow at that centre, and a
+  line of hashes that states a centre a wedge narrow at it; a wedge that
+  states nothing - narrow at its far end - is left as it is. Part of a
+  structure turned over keeps every configuration too: a centre turned
+  with only some of its neighbours, or one that stays while a neighbour is
+  turned, has its wedges and hashes exchanged or kept, all together,
+  whichever keeps its configuration - even a wedge none of whose atoms
+  moved. Where neither can (the places it is left in state nothing
+  readable), and for a double bond or an axis turned in part, the move is
+  as it is and the note says what changed. Turn over on
+  one atom, or on one bond (its menu), turns over the whole structure it
+  is in, about that structure's middle, the selection kept as it was: an
+  atom alone would not move, a bond alone would only swap its two atoms.
 - Turned over, a selection is mirrored about the middle of all it moves,
   which so stays where it was. Pictures, texts, PDFs, slides, shapes
   and molecules in 3D selected with it go to their mirrored places, each
@@ -1059,11 +1086,16 @@ Both go together, because both touch every layer.
   with more bonds unless the bond said otherwise, counted again after
   every edit: two bonds drawn out of a wedge's wide end could move it to
   the other atom, turning one configuration into another with nothing
-  said. A wedge given no narrow end - chosen from the menu, say - is
-  narrow at the end with more bonds as the edit leaves it, and from then
-  on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
-  plain again with the other end narrow next time round; the wedge's icon
-  in its menu, pressed again, turns its narrow end to the other atom.
+  said. A wedge given no narrow end is narrow at the end with more bonds
+  as the edit leaves it (its first atom on a tie), and from then on keeps
+  it. A wedge or hashed wedge chosen from a bond's menu is narrow there
+  too, whatever end the bond was narrow at before - a plain bond the
+  click's round left narrow at its other end, a wedge turned about (until
+  then it kept that end, so a wedge chosen after the round came out the
+  other way round). The key 1 on a single bond, and a click, run plain,
+  wedge, hashes, and plain again with the other end narrow next time
+  round; the wedge's icon in its menu, pressed again, turns its narrow end
+  to the other atom. Only these two turn a wedge about.
 - **A Fischer projection** (2026-11-18). A structure drawn as one - each
   stereocentre a cross of four plain bonds on the page's axes, the chain
   upright, its centres one above another - states no configuration of
@@ -1686,15 +1718,19 @@ All hover-based, as above.
   (the words plain to a chemist, after the maintainer's report on
   0.1.27; for a double bond E and Z in the same patterns):
   - "C2: S, now R" where it inverted (an atom dragged across its centre's
-    other bond; a wedge made a hash), its descriptors before and after
+    other bond), its descriptors before and after
     (Meno's own CIP, worked out off the drawing's thread); "C2: inverted"
     where the CIP does not give both;
-  - "C2: S, now unspecified" where a plain bond now states nothing (a
-    wedge made plain); "C2: S, now marked unknown" where the drawing now
-    says it is not known (a wavy bond, a double bond drawn "either");
+  - "C2: S, now unspecified" where a plain bond now states nothing; "C2:
+    S, now marked unknown" where the drawing now says it is not known (a
+    wavy bond, a double bond drawn "either");
     "C2: S, now unclear: " and the reader's reason where its marks are
     there but say nothing readable (two of its bonds dragged into line) -
-    each without its "S, " where it had no descriptor;
+    each without its "S, " where it had no descriptor; the note is raised
+    whether or not the centre's R or S is asked for, as no mark rests at
+    such a centre that says its configuration cannot be read (an R or S
+    asked for shows nothing there, and pointing at it says only that no
+    configuration is drawn);
   - "C2: now R" where its marks, unclear before, state it again ("C2:
     stated again" without a descriptor);
   - "Every stereocentre inverted: the mirror image" where every unit of a
@@ -1709,7 +1745,22 @@ All hover-based, as above.
   rest - so C2 of 2-methylbutan-1-ol is C2); else, a molecule over that
   numbering's budget, its place among its own molecule's atoms. The step's
   name in Edit's Undo carries the same words.
- Nothing is said where nothing changed, where a unit is simply
+  **No note for what the chemist did by hand** (the maintainer, after
+  0.1.27): where the edit was the chemist's own change of a stereo bond at
+  a unit - a bond at that centre, or a double bond's own bond or one at
+  either of its ends, made plain, a wedge, a hashed wedge, wavy or
+  "either", or narrow at its other end, by a click, the click's round, the
+  bond's menu or a key - that unit has no note: its R, S, E or Z changes
+  by itself, and that is all the chemist needs to see. Where the same edit
+  also did something else there - moved the unit's atoms or their
+  neighbours, changed one of them, made or took away a bond at it - the
+  note is said as before; so it is for any other unit whose configuration
+  the edit changed, and for every change one of Meno's own moves made
+  (`turnedByHand`). Where an edit's every note is left out so, its step in
+  Edit's Undo keeps the action's own name. (Until then a wedge made a
+  hash said "C2: S, now R" and a wedge made plain "C2: S, now
+  unspecified", though the chemist had just done it.)
+  Nothing is said where nothing changed, where a unit is simply
   new (a wedge just drawn), gone with its atom or with one of its groups,
   or no longer a unit because two of its groups are now alike; nor while
   a gesture is still going (a drag says it once, as it ends), nor for undo
@@ -1721,7 +1772,8 @@ All hover-based, as above.
   and undo gives back what the edit changed. A note that would come after
   the drawing has changed again is dropped. Meno's own moves - Clean-up,
   Turn over (which exchanges solid and hashed wedges as it turns a drawing,
-  Brecher 2008, GR-3), Rotate, Expand, Contract, a stack gathered again - keep
+  Brecher 2008, GR-3, each narrow at the centre it states, and keeps each
+  centre it turns in part), Rotate, Expand, Contract, a stack gathered again - keep
   every configuration; where one did not, that is Meno's fault: the same
   note says it, as the move's ("changed by Clean-up: C3: R, now S"), and
   Meno's log records which move. Only the structures a change touched are

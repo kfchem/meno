@@ -29,7 +29,7 @@ import { placeStereo, type Stereo, type Wedge } from "./stereo";
 import type { Point } from "./geometry";
 import { IN_LINE, sameConfiguration, unsureStereo } from "../chem/perception/stereo/from2d";
 
-export { IN_LINE, sameConfiguration, straightEnds, unreadWhy, unsureStereo } from "../chem/perception/stereo/from2d";
+export { IN_LINE, sameConfiguration, straightEnds, unreadWhy, unsureStereo, wedgesRead } from "../chem/perception/stereo/from2d";
 export type { DrawnAtom, DrawnBond, DrawnStereo };
 
 /**

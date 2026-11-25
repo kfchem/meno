@@ -7,11 +7,12 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { centredAt, restyledDrawn } from "../../utils/copyPaste";
 import { chairDrawing, FIRST_FORM } from "../../projections/chair";
+import { projectionBond } from "../../projections/extend";
 import { CHAIR_CHANGED, withChair } from "../../projections/fromFlat";
 import { sameStereo } from "../../chem/engineLayout";
 import { HAWORTH_SCALE, haworthDrawing } from "../../projections/haworth";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatchOn, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { newBondFrom } from "../../utils/geometry";
@@ -28,6 +29,9 @@ import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
 import { EditorState, Atom, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
+import { oneAtomOrBond } from "../../utils/menuScope";
+import { fragmentOf } from "../../chem/cleanUp";
+import { keepingCentres } from "../../configuration/turnedOver";
 import { endsRenamed } from "../../utils/cycles";
 import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
@@ -205,6 +209,10 @@ export const createModelSlice = (
 
   bondOut: (id: number, toward: { x: number; y: number }, order: Bond["order"] = 1) => {
     const { model } = get();
+    // (an atom of a chair, a Haworth ring or a Newman pair: its next free position, exact, and no other atom joined there; none free, nothing)
+    const placed = projectionBond(model, id);
+    if (placed === "full") return null;
+    if (placed) return get().addAtomBonded(id, placed.x, placed.y, "C", order);
     const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
     if (!end) return null;
     // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
@@ -260,21 +268,28 @@ export const createModelSlice = (
   turnSelectionOver: (axis: "vertical" | "horizontal") => {
     const { sel, model } = get();
     if (!sel.atoms.size) return;
+    // (one atom, or one bond with its two atoms: the whole structure it is in turned over, about that structure's middle - the selection
+    //  kept as it is. Turned alone, an atom would not move and a bond would only swap its two atoms)
+    const one = oneAtomOrBond(get());
+    const turning = one == null ? sel.atoms : fragmentOf(model, one);
+    const st = one == null ? get() : { ...get(), sel: { atoms: turning, bonds: new Set(model.bonds.filter((b) => turning.has(b.a)).map((b) => b.id)) } };
     // (marks put by hand turned over with them)
-    const markAts = marksAtOf(model, sel.atoms, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
+    const markAts = marksAtOf(model, turning, (p) => (axis === "vertical" ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y }));
     // (the arrows, "+" signs and words among them, and those selected for themselves, too - the words' places, their letters upright - as a drag takes them)
-    const among = selectionScheme(get());
+    const among = selectionScheme(st);
     const words = among.captions;
     // (all of it - and the pictures, texts' sheets, PDFs, slides, shapes and molecules in 3D selected with it - about the middle of all it moves, which so stays where it was)
-    const mid = turnOverMiddle(get(), { arrows: among.arrows, pluses: among.pluses, captions: words })!;
+    const mid = turnOverMiddle(st, { arrows: among.arrows, pluses: among.pluses, captions: words })!;
     // (a ring in perspective with no depth: its worked-out depth stored first, so that it is turned over as one drawn with depth is - the
     //  same compound seen from its other side, not its mirror image: chem/depthHeld)
-    const held = recognisedDepthOf(model, sel.atoms);
-    const over = turnedOver(held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model, sel.atoms, axis, mid);
+    const held = recognisedDepthOf(model, turning);
+    const base = held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model;
+    // (and each centre it turns with only some of its neighbours, or whose neighbour it turns, kept too: configuration/turnedOver)
+    const over = keepingCentres(base, turning, turnedOver(base, turning, axis, mid));
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)
-    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(get(), axis, mid) }), sel.atoms));
+    doc.edit("turn over", (d) => ops.turnPushesOver(ops.placeMarks(ops.placeAtoms(depthStored(d, held), over.atoms, over.bonds), { markAts, ...scheme, ...turnedOverRest(st, axis, mid) }), turning));
   },
 
   putMark: (of: ops.MarkOf, at: MarkAt | null, gesture?: string) => {
@@ -522,7 +537,7 @@ export const createModelSlice = (
     const patches = ids.flatMap((id) => {
       const bond = model.bonds.find((b) => b.id === id);
       if (!bond) return [];
-      const patch = stepOn ? bondKindStepPatch(kind, bond, model.atoms, model.bonds) : bondKindPatch(kind);
+      const patch = stepOn ? bondKindStepPatch(kind, bond, model.atoms, model.bonds) : bondKindPatchOn(kind, bond, model.bonds);
       return patchChangesNothing(bond, patch) ? [] : [[id, patch] as const];
     });
     if (!patches.length) return false;
@@ -745,6 +760,9 @@ export const createModelSlice = (
       chipOver: null,
       turns3d: {},
       frames3d: {},
+      lowerFound3d: {},
+      following3d: {},
+      inHand3d: [],
       hovered3d: null,
       hoveredMeasure3d: null,
       measureEdit3d: null,
