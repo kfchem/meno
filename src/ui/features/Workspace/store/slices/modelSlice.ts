@@ -30,6 +30,7 @@ import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
 import { oneAtomOrBond } from "../../utils/menuScope";
 import { fragmentOf } from "../../chem/cleanUp";
+import { keepingCentres } from "../../configuration/turnedOver";
 import { endsRenamed } from "../../utils/cycles";
 import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
@@ -277,7 +278,9 @@ export const createModelSlice = (
     // (a ring in perspective with no depth: its worked-out depth stored first, so that it is turned over as one drawn with depth is - the
     //  same compound seen from its other side, not its mirror image: chem/depthHeld)
     const held = recognisedDepthOf(model, turning);
-    const over = turnedOver(held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model, turning, axis, mid);
+    const base = held.size ? depthStored({ ...ops.emptyWorkspaceDocument(), model }, held).model : model;
+    // (and each centre it turns with only some of its neighbours, or whose neighbour it turns, kept too: configuration/turnedOver)
+    const over = keepingCentres(base, turning, turnedOver(base, turning, axis, mid));
     const mirrored = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: axis === "vertical" ? 2 * mid.x - p.x : p.x, y: axis === "horizontal" ? 2 * mid.y - p.y : p.y });
     const scheme = { arrows: turnedOverArrows(among.arrows, mid, axis), pluses: among.pluses.map(mirrored), captions: words.map(mirrored) };
     // (and the electron-pushing arrows on it, each bent to its other side)

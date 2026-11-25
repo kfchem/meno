@@ -310,4 +310,42 @@ describe("Turn over keeps every configuration", () => {
       expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
       expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
     });
+
+  // Part of a structure turned over: each centre it touches keeps its configuration (in units of L, the C-H aside; triple products from
+  // the centre, (a - d) . ((b - d) x (c - d)) over the groups a > b > c > d: positive is S, as for a, b, c counterclockwise at z = +0.3 in
+  // front of d = (0, 0, -1)).
+  it("keeps S where C2 is turned over with the O and the methyl but not the ethyl (left to right)", async () => {
+    // (the selection's middle x = -0.433: C2 goes to (-0.866, 0), the O to (-0.866, 1), the methyl to (0, -0.5); the ethyl's C3 stays at
+    //  (0.866, -0.5). Seen from C2, the O is straight up, C3 at -16 degrees and the methyl at -30: O -> C3 -> C1 still runs clockwise in
+    //  the page, as before the move - so the O stays behind, the hashes kept: O behind, the H in front, S. Exchanged, as today, the O
+    //  is in front: R)
+    const r = await turned(with12({ stereo: "down", narrow: 1 }), [1, 2, 4], [10, 12], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect(r.bond(12)).toMatchObject({ stereo: "down", narrow: 1 });
+  });
+
+  it("keeps S where C2 stays and its methyl is turned over across its bond to C3 (left to right)", async () => {
+    // (the methyl turned with a lone carbon (6) at (2.6, -0.5): their middle x = 0.867, the methyl to (2.6, -0.5). Seen from C2, the O
+    //  is up, C3 at -30 degrees and the methyl at -11: O -> C3 -> C1 now runs counterclockwise in the page, so the O must come in front
+    //  - the hashes made a wedge, though neither of their atoms moved: the H behind, counterclockwise, S. Kept as hashes, as today: R)
+    const m = with12({ stereo: "down", narrow: 1 });
+    const r = await turned({ ...m, atoms: [...m.atoms, { id: 6, x: 2.6 * L, y: -0.5 * L, r: 0.9, el: "C" }] }, [2, 6], [], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+  });
+
+  it("keeps S where a centre stated by a wedge and hashes stays and its methyl and ethyl are turned over (left to right)", async () => {
+    // (C2 (1) with Cl (4) at 60 degrees on a wedge, Br (6) at 120 on hashes, the methyl (2) at 210, the ethyl's C3 (3) at 330 and C4 (5)
+    //  at (1.732, 0); Br > Cl > C3 > C1. Before, h the depth: Br (-0.5, 0.866, -h), Cl (0.5, 0.866, h), C3 (0.866, -0.5, 0), C1
+    //  (-0.866, -0.5, 0): the triple product 4.73 h, S. The methyl, C3 and C4 turned about x = 0.433: C1 to (1.732, -0.5), C3 to
+    //  (0, -0.5). With both wedges exchanged - Br (-0.5, 0.866, h), Cl (0.5, 0.866, -h) - the triple product is 4.73 h again: S. Kept as
+    //  they were, as today: -4.73 h, R)
+    const m: Model = {
+      atoms: [...butanol(null).atoms.filter((a) => a.id !== 4), { id: 4, x: 0.5 * L, y: 0.866 * L, r: 0.9, el: "Cl" }, { id: 6, x: -0.5 * L, y: 0.866 * L, r: 0.9, el: "Br" }],
+      bonds: [...butanol(null).bonds.map((b) => (b.id === 12 ? { ...b, stereo: "up" as const, narrow: 1 } : b)), { id: 14, a: 1, b: 6, order: 1, stereo: "down", narrow: 1 }],
+    };
+    const r = await turned(m, [2, 3, 5], [13], "vertical");
+    expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+    expect([r.bond(12).stereo, r.bond(14).stereo]).toEqual(["down", "up"]);
+  });
 });
