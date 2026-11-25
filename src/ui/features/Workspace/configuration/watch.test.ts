@@ -7,6 +7,7 @@ import { configurationChanges } from "./changes";
 import { MENO_MOVES, watchConfiguration } from "./watch";
 import { cleanUp } from "../chem/cleanUp";
 import { cipMarksAsked } from "../chem/cipRun";
+import { cipMarksOf } from "../chem/cipMarks";
 
 // Foundation part 15, phase 2: a change of what the drawing states, said at its unit once the edit is done (the brief's known answers).
 
@@ -228,4 +229,57 @@ describe("a change of configuration said where an edit made it (part 15, phase 2
     warn.mockRestore();
     stop();
   });
+});
+
+// Turn over keeps every configuration (docs/EDITOR-2D.md, *The configuration kept*): the same compound, seen from its other side. The answers
+// are worked by hand from the places, y up, the compound viewed with its lowest group (an H, drawn or not) away: OH > C3 (ethyl) > C1 (methyl).
+// Butan-2-ol as above: C2 (id 1) at the origin, the O (4) at 90 degrees, the methyl C1 (2) at 210, the ethyl's C3 (3) at 330.
+// Before: the O behind (hashes stating C2): O (top) -> C3 (lower right) -> C1 (lower left) runs clockwise seen from the front, the H in
+// front, so counterclockwise from the side away from the H: S. The O in front (a solid wedge stating C2): R.
+describe("Turn over keeps every configuration", () => {
+  const shown = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a) => (a.id === 1 ? { ...a, stereoShown: true as const } : a)) });
+  async function turned(m: Model, atoms: number[], bonds: number[], axis: "vertical" | "horizontal") {
+    const pg = page(shown(m));
+    // (an edit first, so that what the drawing states is kept)
+    pg.doc.edit("move atoms", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, x: a.x + 0.001 })) } }));
+    await vi.runAllTimersAsync();
+    const label = (id = 1) => cipMarksOf(pg.doc.getState().model).centres.get(id) ?? null;
+    const before = label();
+    pg.store.setState({ configurationNotes: [], sel: { atoms: new Set(atoms), bonds: new Set(bonds) } });
+    pg.store.getState().turnSelectionOver(axis);
+    await vi.runAllTimersAsync();
+    const model = pg.doc.getState().model;
+    const out = { before, after: label(), notes: pg.notes(), model, bond: (id: number) => model.bonds.find((b) => b.id === id)!, label };
+    pg.stop();
+    return out;
+  }
+  const with12 = (w: Partial<Model["bonds"][number]>): Model => ({ ...butanol(null), bonds: butanol(null).bonds.map((b) => (b.id === 12 ? { ...b, ...w } : b)) });
+  const whole = [[1, 2, 3, 4, 5], [10, 11, 12, 13]] as const;
+
+  for (const axis of ["vertical", "horizontal"] as const) {
+    it(`keeps S where the hashes are narrow at C2, the whole structure turned over (${axis})`, async () => {
+      // (turned over, the O is in front and the order of the three is reversed in the page: O -> C3 -> C1 counterclockwise seen from the
+      //  front, the H behind: S)
+      const r = await turned(with12({ stereo: "down", narrow: 1 }), [...whole[0]], [...whole[1]], axis);
+      expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    });
+
+    it(`keeps S where the hashes are narrow at the O, stating C2 at their wide end (${axis})`, async () => {
+      // (a hashed wedge narrow at the O, an end group, states C2 with the O behind - S, as the hashes narrow at C2 do. Turned over, the O is
+      //  in front: a solid wedge narrow at C2, as in the case before - S. Today it became a solid wedge narrow at the O, which states
+      //  nothing: "C2: S, now unspecified")
+      const r = await turned(with12({ stereo: "down", narrow: 4 }), [...whole[0]], [...whole[1]], axis);
+      expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 1 });
+    });
+
+    it(`states nothing where a solid wedge narrow at the O stated nothing (${axis})`, async () => {
+      // (a solid wedge the wrong way round, narrow at the O, states nothing at C2; turned over it must not start to: today it became
+      //  hashes narrow at the O, read as stating C2 - R, a configuration that was never drawn)
+      const r = await turned(with12({ stereo: "up", narrow: 4 }), [...whole[0]], [...whole[1]], axis);
+      expect([r.before, r.after, r.notes]).toEqual([null, null, []]);
+      expect(r.bond(12)).toMatchObject({ stereo: "up", narrow: 4 });
+    });
+  }
 });

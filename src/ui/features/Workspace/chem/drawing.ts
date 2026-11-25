@@ -13,7 +13,7 @@ import { isEndOn, wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { setValenceOrder } from "../../../../lib/chem/molecule";
 import { hydrogenCounts } from "../../../../lib/chem/perception/hydrogens";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
-import { readStereo, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { readStereo, unsureStereo, wedgesForFlat, wedgesRead, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { saidOf } from "../../../../lib/chem/perception/stereo/compare";
 import { keepsAny, keptAsDrawn, keptReading } from "../configuration/kept";
 import { recognisedSaid } from "../../../../lib/chem/perception/projection/depth";
@@ -155,6 +155,81 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
     ];
   });
   return { atoms, bonds, index };
+}
+
+/** A bond's wedge changed: which way it points and where it is narrow - and, a line of hashes made a wedge, its look taken away. */
+export type WedgeChange = Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "narrow" | "display">>;
+
+/**
+ * Each wedge, hashed wedge and line of hashes of `model` that is read as stating an end, by bond id: the end it is read at, by atom id, and
+ * which way (lib/layout/drawn `wedgesRead`) - a hashed wedge the wrong way round, narrow at an end group, read at the centre at its wide end.
+ */
+export function wedgesStating(model: Model): Map<number, { at: number; stereo: "up" | "down" }> {
+  const d = drawingOf(model);
+  const read = wedgesRead(d.atoms, d.bonds);
+  const out = new Map<number, { at: number; stereo: "up" | "down" }>();
+  let k = 0;
+  for (const b of model.bonds) {
+    if (!d.index.has(b.a) || !d.index.has(b.b)) continue;
+    const w = read[k++];
+    if (w) out.set(b.id, { at: model.atoms[w.narrow].id, stereo: w.stereo });
+  }
+  return out;
+}
+
+/** `b` with `c` made: its narrow end and look set, or taken away, where `c` names them. */
+export function withWedgeChange(b: Bond, c: WedgeChange): Bond {
+  const out: Bond = { ...b, ...(c.stereo !== undefined ? { stereo: c.stereo } : {}) };
+  if ("narrow" in c) {
+    if (c.narrow === undefined) delete out.narrow;
+    else out.narrow = c.narrow;
+  }
+  if ("display" in c) {
+    if (c.display === undefined) delete out.display;
+    else out.display = c.display;
+  }
+  return out;
+}
+
+/**
+ * The wedges among the bonds `ids` holds exchanged, as a turn over sees the drawing from its other side (Brecher 2008, GR-3): each that is
+ * read as stating a centre states the same centre with its group on the other side - narrow at that centre, a wedge made hashes and hashes
+ * (a hashed wedge, or a line of hashes) a wedge; so a hashed wedge narrow at its far end, read as stating the centre at its wide end, becomes
+ * a wedge narrow at that centre. One read at no centre - a solid wedge the wrong way round, narrow at an end group - is left as it is: made
+ * hashes, it would be read as stating the centre at its wide end, a configuration never drawn.
+ */
+export function wedgesExchanged(model: Model, ids: ReadonlySet<number>): WedgeChange[] {
+  const stating = wedgesStating(model);
+  return wedgesTurned(model, model.bonds.flatMap((b) => {
+    const s = ids.has(b.id) ? stating.get(b.id) : undefined;
+    return s ? [{ bond: b, at: s.at, stereo: s.stereo }] : [];
+  }));
+}
+
+/**
+ * Each of `turned` - a bond, the end it states and which way - made to state that end the other way, narrow at it; those that, so made,
+ * would be read at another end (or at none), left out: they are left as they are.
+ */
+export function wedgesTurned(model: Model, turned: readonly { bond: Bond; at: number; stereo: "up" | "down" }[]): WedgeChange[] {
+  const degree = degrees(model.bonds);
+  const changes = new Map<number, WedgeChange>();
+  for (const { bond: b, at, stereo } of turned) {
+    const wedged = b.stereo === "up" || b.stereo === "down";
+    changes.set(b.id, {
+      id: b.id,
+      stereo: stereo === "up" ? "down" : "up",
+      ...(!wedged || narrowEnd(b, degree) !== at ? { narrow: at } : {}),
+      ...(b.display === "hashed" ? { display: undefined } : {}),
+    });
+  }
+  if (!changes.size) return [];
+  const after = { ...model, bonds: model.bonds.map((b) => (changes.has(b.id) ? withWedgeChange(b, changes.get(b.id)!) : b)) };
+  const read = wedgesStating(after);
+  for (const { bond: b, at } of turned) {
+    const r = read.get(b.id);
+    if (!r || r.at !== at || r.stereo !== changes.get(b.id)!.stereo) changes.delete(b.id);
+  }
+  return [...changes.values()];
 }
 
 /** Whether any bond of the drawing closes a ring (a union-find over its bonds: one pass, no ring perceived). */
