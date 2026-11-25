@@ -41,6 +41,7 @@ export function useFramesChip({
   frame,
   open,
   onFrame,
+  onLowest,
   onOpened,
   raised: raisedFrom,
 }: {
@@ -52,6 +53,8 @@ export function useFramesChip({
   /** Its molecule pointed at or selected: a single geometry's chip is seen then, and stays a moment after. */
   open: boolean;
   onFrame: (frame: number) => void;
+  /** Its dot pressed: the lowest conformer shown, and followed again. */
+  onLowest?: () => void;
   /** Told as it is opened by a click, and as it shuts: its molecule takes it clear of its set, and it goes above the rest. */
   onOpened?: (opened: boolean) => void;
   /** Its molecule is taking it back up after it shut: it stays over the rest till then. */
@@ -82,6 +85,12 @@ export function useFramesChip({
   const madeAt = useOpening(madeOpen);
   const turn = useEasedTo(madeOpen ? 1 : 0);
   const told = pointed ?? frame;
+  // (its dot, where its search found what the chemist has not seen: eased in and out as the chip's own parts are - what it told kept
+  //  while it goes - and its width and words never changed by it)
+  const markShown = useEasedTo(facts.found ? 1 : 0);
+  const lastMark = useRef(facts.found);
+  if (facts.found) lastMark.current = facts.found;
+  const markKind = facts.found ?? lastMark.current;
   // (a press anywhere but on it shuts it: on the page, what is under the press - itself, or anything else over it - asked of the page's regions)
   const hitAt = useHitAt();
   const hitNow = useRef(hitAt);
@@ -166,6 +175,7 @@ export function useFramesChip({
     read: { grown: read.grown, shown: read.shown },
     made: { grown: madeAt.grown, shown: madeAt.shown, turn, pointed: part === "fold" },
     tones,
+    ...(markKind && markShown > 0 ? { mark: { kind: markKind, shown: markShown, pointed: part === "mark" } } : {}),
     widths: { shut: shutW, open: openW, details: detailsW },
     shuts: !single && expanded,
     opens: (!single && !expanded) || hasMore,
@@ -216,6 +226,8 @@ export function useFramesChip({
       if (p === "bars") setPointed(barsFrame(e.page.x));
     },
     down: (_k, p, e) => {
+      // (its dot pressed: the lowest shown, as a step to it is, and followed again - the dot goes)
+      if (p === "mark") onLowest?.();
       if (p === "bars") dragFrom(e, barsFrame);
       else if (p === "slider") dragFrom(e, sliderFrame);
       const next = chipPressed(now.current, p);

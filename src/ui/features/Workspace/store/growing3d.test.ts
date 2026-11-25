@@ -3,6 +3,9 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { workspaceText } from "../utils/workspace";
 import type { Grown3D, Molecule3D } from "./types";
+import type { Conformers } from "../../../../lib/roles/client";
+import { Growing, type ShownWith } from "../chem/growing";
+import { CHLOROETHANE, chloroethane, roundOf } from "../chem/testdata/turnedConformers";
 
 /** A 3D structure whose search goes on (docs/WORKSPACE.md, *As its search goes on*): what it brings shown over the document, written into it once. */
 
@@ -148,5 +151,178 @@ describe("a 3D structure whose search goes on", () => {
     state().grow3d(id, null);
     expect(state().growing3d[id]).toBeUndefined();
     expect(state().molecules3d[0].frames).toHaveLength(1);
+  });
+
+  it("keeps the conformer shown shown, each atom where it was, as a later round finds a lower one: chloroethane, its methyl turned", () => {
+    // (what the page is given as it grows, made as the page makes it (chem/growing) - A at 60, 180 and 300 degrees, S at 30, 150, 270;
+    //  then B, lower, its H's named from another: by hand, S is third and nothing of it moves)
+    const plain = { open: { drawn: { atoms: [], bonds: [] } }, checks: null, parts: [[0, 1, 2, 3, 4, 5, 6, 7]], reflect: false } as unknown as ShownWith;
+    const g = new Growing(CHLOROETHANE.atoms, CHLOROETHANE.bonds, 5, plain);
+    const asGrown = (c: Conformers): Grown3D => ({
+      atoms: c.atoms.map((a, i) => ({ el: a.el, x: c.frames[0][3 * i], y: c.frames[0][3 * i + 1], z: c.frames[0][3 * i + 2] })),
+      frames: c.frames.slice(1),
+      energies: c.energies,
+      made: searching(1),
+    });
+    const one = roundOf(CHLOROETHANE, [chloroethane([60, 180, 300]), chloroethane([30, 150, 270])], [-500, -499.9999]);
+    g.add(one, one.energies!);
+    const before = asGrown(g.shown()!);
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const state = () => store.getState();
+    const m = { ...before, bonds: CHLOROETHANE.bonds, at: { x: 0, y: 0 }, conformerSet: true } as Omit<Molecule3D, "id">;
+    const [id] = state().riseMolecules3d([{ m, turn: [0, 0, 0, 1], from: { x: 0, y: 0 } }], [], "made3d:1");
+    state().startGrowing3d(id, before, "made3d:1");
+    state().setFrame3d(id, 1);
+    const two = roundOf(CHLOROETHANE, [chloroethane([120, 240, 0])], [-500.0001]);
+    g.add(two, two.energies!);
+    state().grow3d(id, asGrown(g.shown()!));
+    expect(state().frames3d[id]).toBe(2);
+    const shown = state().molecules3d[0].frames![1];
+    before.frames![0].forEach((v, i) => expect(Math.abs(shown[i] - v)).toBeLessThan(1e-3));
+  });
+});
+
+/** The frames chip's notice that a later round found a lower conformer (docs/WORKSPACE.md, *As its search goes on*): the view's, by molecule. */
+describe("a 3D structure whose search finds a lower conformer", () => {
+  // (the places shown: its own geometry's, or its frame's)
+  const shownPlaces = (st: ReturnType<ReturnType<typeof editor>["state"]>) => {
+    const m = st.molecules3d[0];
+    const f = st.frames3d[m.id] ?? 0;
+    return f === 0 ? m.atoms.flatMap((a) => [a.x, a.y, a.z]) : [...m.frames![f - 1]];
+  };
+
+  it("no conformer picked, shows the lowest found - round after round - and marks nothing", () => {
+    const { state, id } = editor();
+    expect(state().following3d[id]).toBe(true);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    expect(state().frames3d[id] ?? 0).toBe(0);
+    expect(shownPlaces(state())).toEqual(places(-1));
+    expect(state().lowerFound3d).toEqual({});
+    state().grow3d(id, grown([-2, -1, 0, 1], 3));
+    expect(state().frames3d[id] ?? 0).toBe(0);
+    expect(shownPlaces(state())).toEqual(places(-2));
+    expect(state().lowerFound3d).toEqual({});
+  });
+
+  it("while the chemist turns or moves it, keeps the one shown, and shows the lowest at the release", () => {
+    const { state, id } = editor();
+    state().setInHand3d([id]);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    expect(state().frames3d[id]).toBe(1);
+    expect(shownPlaces(state())).toEqual(places(0));
+    state().grow3d(id, grown([-1, 0, 1, 2], 3));
+    expect(state().frames3d[id]).toBe(1);
+    state().setInHand3d([]);
+    expect(state().frames3d[id]).toBe(0);
+    expect(shownPlaces(state())).toEqual(places(-1));
+    expect(state().lowerFound3d).toEqual({});
+  });
+
+  it("a conformer picked - even the lowest - stays shown as a lower one comes, its number up by one, and the chip is marked", () => {
+    const { state, id } = editor();
+    state().setFrame3d(id, 0);
+    expect(state().following3d[id]).toBeUndefined();
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    expect(state().frames3d[id]).toBe(1);
+    expect(shownPlaces(state())).toEqual(places(0));
+    expect(state().lowerFound3d[id]).toBe("lower");
+  });
+
+  it("marks it too where another was picked, which stays shown", () => {
+    const { state, id } = editor();
+    state().setFrame3d(id, 1);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    expect(state().frames3d[id]).toBe(2);
+    expect(state().lowerFound3d[id]).toBe("lower");
+  });
+
+  it("changes nothing and marks nothing where what comes is higher than the lowest, picked or not", () => {
+    const { state, id } = editor();
+    state().grow3d(id, grown([0, 1, 2], 2));
+    expect(state().frames3d[id]).toBeUndefined();
+    expect(state().lowerFound3d).toEqual({});
+    state().setFrame3d(id, 1);
+    state().grow3d(id, grown([0, 1, 2, 3], 3));
+    expect(state().frames3d[id]).toBe(1);
+    expect(state().lowerFound3d).toEqual({});
+  });
+
+  it("keeps the mark as yet another lower one comes and as the search ends, the one picked moving on with them", () => {
+    const { state, id } = editor();
+    state().setFrame3d(id, 0);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    state().grow3d(id, grown([-2, -1, 0, 1], 3));
+    expect(state().lowerFound3d[id]).toBe("lower");
+    expect(state().frames3d[id]).toBe(2);
+    state().grow3d(id, null);
+    state().settleGrown3d(id);
+    expect(state().lowerFound3d[id]).toBe("lower");
+  });
+
+  it("the dot pressed: shows the lowest, the mark goes, and the lowest is followed again", () => {
+    const { state, id } = editor();
+    state().setFrame3d(id, 1);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    state().followLowest3d(id);
+    expect(state().frames3d[id]).toBe(0);
+    expect(state().lowerFound3d).toEqual({});
+    expect(state().following3d[id]).toBe(true);
+    state().grow3d(id, grown([-2, -1, 0, 1], 3));
+    expect(state().frames3d[id]).toBe(0);
+    expect(shownPlaces(state())).toEqual(places(-2));
+    expect(state().lowerFound3d).toEqual({});
+  });
+
+  it("the mark goes as the chemist picks any conformer - the one shown too", () => {
+    const { state, id } = editor();
+    state().setFrame3d(id, 0);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    state().setFrame3d(id, state().frames3d[id]);
+    expect(state().lowerFound3d).toEqual({});
+    expect(state().following3d[id]).toBeUndefined();
+  });
+
+  it("a conformer picked that leaves the energy window: the lowest shown, the chip marked so; a lower one after it marks that", () => {
+    const { state, id } = editor();
+    state().setFrame3d(id, 1);
+    // (conformer 1, shown, left out: a lower one took the window past it)
+    state().grow3d(id, grown([-1, 0], 2));
+    expect(state().frames3d[id]).toBe(0);
+    expect(state().lowerFound3d[id]).toBe("window");
+    expect(state().following3d[id]).toBeUndefined();
+    // (the lowest it shows now no longer the lowest, kept shown: marked as a lower one found)
+    state().grow3d(id, grown([-2, -1, 0], 3));
+    expect(state().frames3d[id]).toBe(1);
+    expect(state().lowerFound3d[id]).toBe("lower");
+  });
+
+  it("the lowest picked that leaves the window: the lowest shown and marked; following, it is shown and nothing marked", () => {
+    const { state, id } = editor();
+    state().grow3d(id, grown([-9, -8], 2));
+    expect(state().frames3d[id] ?? 0).toBe(0);
+    expect(state().lowerFound3d).toEqual({});
+    const other = editor();
+    other.state().setFrame3d(other.id, 0);
+    other.state().grow3d(other.id, grown([-9, -8], 2));
+    expect(other.state().frames3d[other.id]).toBe(0);
+    expect(other.state().lowerFound3d[other.id]).toBe("window");
+  });
+
+  it("is forgotten as its structure's search begins afresh, as its molecule goes, and is never saved", () => {
+    const { doc, state, id } = editor();
+    state().setFrame3d(id, 0);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    expect(workspaceText(state())).not.toContain("lowerFound");
+    expect(workspaceText(state())).not.toContain("following");
+    state().followLowest3d(id);
+    state().startGrowing3d(id, grown([0, 1], 1), "made3d:2");
+    expect(state().lowerFound3d).toEqual({});
+    expect(state().following3d[id]).toBe(true);
+    state().grow3d(id, grown([-1, 0, 1], 2));
+    doc.undo();
+    expect(state().lowerFound3d).toEqual({});
+    expect(state().following3d).toEqual({});
   });
 });

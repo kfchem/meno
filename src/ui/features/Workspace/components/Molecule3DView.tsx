@@ -220,6 +220,8 @@ export type Molecule3DViewProps = {
   /** Its frames chip hangs this far lower (page units): a stack chip hangs where it would (workflow/heldView). */
   chipDrop?: number;
   onFrame: (frame: number) => void;
+  /** Its chip's dot pressed: the lowest conformer shown, and followed again (store `followLowest3d`). */
+  onLowest?: () => void;
   /** Its measurement under the pointer, by id; null, none. */
   hoveredMeasure: number | null;
   /** Taken away: it shrinks out of view, and says when it is gone. */
@@ -228,6 +230,8 @@ export type Molecule3DViewProps = {
   rising?: Rising3D;
   /** Its search goes on (store `growing3d`): its chip says so, its conformers growing as they come. */
   searching?: boolean;
+  /** What its search has found since a conformer was picked (store `lowerFound3d`): a dot on its chip, and a press on it shows the lowest. */
+  found?: "lower" | "window";
   /** Splitting off the molecule it is a copy of, a value set on it (`Split3D`): over it at first, as it is, gliding out to its own place as its value goes over to the new one; or, `back`, undone, the other way, and gone. */
   split?: Split3D;
   /** Its atom whose drawing's atom is under the pointer: lit as if it were. */
@@ -1752,8 +1756,9 @@ function Molecule3DView(props: Molecule3DViewProps) {
       ...(stereoSaidRows(m).length ? { stereoSaid: stereoSaidRows(m) } : {}),
       conformers: m.conformerSet,
       ...(props.searching ? { searching: true } : {}),
+      ...(props.found ? { found: props.found } : {}),
     }),
-    [m, count, shares, props.searching],
+    [m, count, shares, props.searching, props.found],
   );
   const chipOpened = useCallback(
     (o: boolean) => {
@@ -1766,7 +1771,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
     },
     [invalidate],
   );
-  const chip = useFramesChip({ chipKey, id: m.id, facts, frame: frameOf(solid, frame), open: !!props.framesOpen, onFrame: props.onFrame, onOpened: chipOpened, raised: chipRaised });
+  const chip = useFramesChip({ chipKey, id: m.id, facts, frame: frameOf(solid, frame), open: !!props.framesOpen, onFrame: props.onFrame, onLowest: props.onLowest, onOpened: chipOpened, raised: chipRaised });
   usePlaced(
     chipThere && chip.drawn && pillThere && pill.current
       ? { key: chipKey, anchor: pill.current, words: true, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }

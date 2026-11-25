@@ -18,6 +18,11 @@ export function share(p: number): string {
 /** A run of what a chip says: its words, its tone - quiet (grey), ink (black) or attention - and, before it, room (`gapPx`), and the most it is drawn wide, cut past it (`mostPx`) and never broken across lines. */
 export type SaidRun = { text: string; tone: "quiet" | "ink" | "attention"; gapPx?: number; mostPx?: number };
 
+/** What the page's tip says over a set's chip's dot, where, since a conformer was picked, a later round of its search found a conformer lower than the lowest it had: pressed, the dot shows the lowest (docs/WORKSPACE.md, *As its search goes on*). */
+export const LOWER_FOUND = "Lower conformer found";
+/** What it says where the conformer shown left the energy window, and the lowest is shown. */
+export const OUT_OF_WINDOW = "The conformer shown left the energy window: the lowest is shown";
+
 /** What a set's chip is told of: its frames and which it shows, and what its calculation says of each (components/useFramesChip). */
 export type SetChip = {
   count: number;
@@ -33,6 +38,8 @@ export type SetChip = {
   fromStart?: boolean;
   /** Its search goes on: more of its conformers may come (docs/WORKSPACE.md, *As its search goes on*). */
   searching?: boolean;
+  /** What its search has found since the chemist picked a conformer (store `lowerFound3d`): never in its words - a dot on its outline (pageGl/liveChip), pressed to show the lowest. */
+  found?: "lower" | "window";
 };
 
 /** The marks said on the frame told: why it failed, its imaginary frequencies, how many warnings - as the chip says them. */
