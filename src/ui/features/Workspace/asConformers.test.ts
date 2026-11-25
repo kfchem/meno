@@ -5,7 +5,8 @@ import * as ops from "./document";
 import { createWorkspaceDocument } from "./document";
 import { readStructures } from "../../../lib/io/structures";
 import { conformersOffered, framesAlike, joinable, joined, lowestFrame, notOneCompound } from "./utils/asConformers";
-import { sharesOf } from "./utils/molecule3d";
+import { sharesOf, sharesWithheld } from "./utils/molecule3d";
+import { processFileContent } from "./utils/io";
 import type { Molecule3D } from "./store/types";
 
 /** Invented water, three frames: each with both O-H joins, the third's energy the lowest. */
@@ -59,6 +60,20 @@ describe("frames taken as conformers, on purpose", () => {
     // (chosen again: the mark taken off)
     state().setFramesConformers(id, false);
     expect(state().molecules3d[0].conformerSet).toBeUndefined();
+  });
+
+  it("marks a file's frames, one with no energy, as opened: no lowest, the frame shown stays, no shares, saying why", async () => {
+    const text = block("E = -76.40 Eh a", 0.96) + block("b, no energy", 0.97) + block("E = -76.42 Eh c", 0.95);
+    const opened = (await processFileContent("three.xyz", text)).molecules3d![0];
+    const { state, add } = editor();
+    const id = add({ ...(opened as unknown as Molecule3D), at: { x: 0, y: 0 } });
+    expect(conformersOffered(state().molecules3d[0])).toBe(true);
+    state().setFramesConformers(id, true);
+    const m = state().molecules3d[0];
+    expect(m.conformerSet).toBe(true);
+    expect(state().frames3d[id] ?? 0).toBe(0);
+    expect(sharesOf(m)).toBeUndefined();
+    expect(sharesWithheld(m)).toBe("#2 has no energy, so no shares are given");
   });
 
   it("finds no lowest where a frame has no energy", () => {
