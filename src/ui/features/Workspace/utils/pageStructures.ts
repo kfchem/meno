@@ -463,7 +463,16 @@ function lineOfWords(f: FigureRead): string | null {
 }
 
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */
-export const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
+export const COMPOUND_NUMBER = { test: (text: string): boolean => labelText(text) != null };
+/**
+ * A number: 12, 3a, 7'. Not a supporting information's S1: as a figure sets one, it is as often a page's number (S14) or a second
+ * compound on another's line ("8, 72%  S3, 90%") as its structure's.
+ */
+const NUMBER = /^\d{1,3}[a-z]{0,2}['\u2032]*$/;
+/** A Roman numeral of two letters or more, II to XXXIX, with its letter: IV, XIIa - a lone I, V or X is an element's symbol or a variable's name. */
+const ROMAN = /^(?=[IVX]{2})X{0,3}(IX|IV|V?I{0,3})[a-z]?$/;
+/** The mark of an enantiomer, a racemate or a sign of rotation before a number, with its dash: ent-21, rac-3, (+)-12, (-)-12, (\u00b1)-5. */
+const MARK = /^(ent|rac|\([+\-\u2212\u2013\u00b1]\))[-\u2010\u2013]/;
 
 /** A word on a page: what it says, and where it lies, in the page's points from its top left - and, where its font says, whether it is set bold. */
 export type PageWord = { text: string; box: Box; bold?: boolean; marks?: readonly { from: number; to: number; bold?: boolean }[]; align?: "left"; lines?: readonly Box[] };
@@ -488,11 +497,20 @@ const WITH_YIELD = /^\s*,.*\d\s*%/;
 /** How much shorter than the figure's other words a word may be and still be a compound's number set on its line: below, a superscript. */
 const SUPERSCRIPT = 0.7;
 
-/** A compound's number as Meno writes it - its parentheses and spaces set aside, its primes as ' - where words are one; else none. */
+/**
+ * A compound's number as Meno writes it - its parentheses and spaces set aside, its primes as ', its mark's sign and dash as typed
+ * ((-)-12 for a (\u2212)-12 set with a minus or an en dash, as a page's text and its figure may set it differently) - where words are one;
+ * else none.
+ */
 export function labelText(text: string): string | null {
-  const t = text.trim().replace(/^\(\s+/, "(").replace(/\s+\)$/, ")");
-  if (!COMPOUND_NUMBER.test(t)) return null;
-  return t.replace(/^\(|\)$/g, "").replace(/\u2032/g, "'");
+  let t = text.trim().replace(/^\(\s+/, "(").replace(/\s+\)$/, ")");
+  // (its parentheses: not a sign of rotation's own, (+)-12)
+  if (t.startsWith("(") && !MARK.test(t)) t = t.slice(1);
+  if (t.endsWith(")")) t = t.slice(0, -1);
+  const mark = MARK.exec(t);
+  const rest = mark ? t.slice(mark[0].length) : t;
+  if (!NUMBER.test(rest) && !ROMAN.test(rest)) return null;
+  return `${mark ? `${mark[1].replace(/[\u2212\u2013]/g, "-")}-` : ""}${rest.replace(/\u2032/g, "'")}`;
 }
 
 /**

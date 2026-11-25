@@ -2108,8 +2108,14 @@ mention a number, and the card.
 
 - **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
   word of a figure - drawn in it, or the page's own words within it - of a
-  compound number's shape (12, 3a, 12b, 7', in parentheses or not:
-  `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
+  compound number's shape (12, 3a, 12b, 7', in parentheses or not; a
+  Roman numeral of two letters or more, IV,
+  XII - a lone I, V or X is an element's or a variable's; a number with its
+  enantiomer's, racemate's or rotation's mark, ent-21, rac-3, (+)-12, its
+  sign and dash written as typed, (-)-12 for one set with a minus or an en
+  dash (2026-11-20) - not a supporting information's S1, as often a page's
+  number, S14, or a second compound on another's line, as its structure's:
+  `labelText`), lying within a bond of a structure - of the box
   round all of it, as a number is set under a structure as a whole, however
   its lowest bonds lie - under or over it (its middle within the
   structure's breadth) or beside it (within its height); where two
@@ -2165,7 +2171,10 @@ mention a number, and the card.
   a compound ("compound 12", "products 3, 4 and 5": compound, product,
   intermediate, substrate, adduct, derivative, past other numbers and "and",
   "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
-  with ⌥ (Alt) held, every number of that shape is.
+  with ⌥ (Alt) held, every number of that shape is. A number with its
+  rotation's mark before it, (+)-12, is taken with its mark - its
+  parentheses, sign and en dash are no word's letters - and asked whether it
+  is set as one by the number alone (2026-11-20).
 - **The card** (`components/CompoundCard`): the pointer resting on a number
   mentioned (350 ms) whose structure the PDF's figures number, a calm card
   by its word - over its line, covering only what has been read, its left

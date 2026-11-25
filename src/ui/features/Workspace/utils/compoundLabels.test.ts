@@ -23,6 +23,19 @@ describe("a compound's number, as Meno writes it", () => {
     expect(["12", "3a", "(4b)", "12ab", "7'", "7′", "( 9 )"].map(labelText)).toEqual(["12", "3a", "4b", "12ab", "7'", "7'", "9"]);
     expect(["12 h", "Table", "1.5", "1234", "a", "12abc", "-3", "2+", ""].map(labelText)).toEqual(Array(9).fill(null));
   });
+
+  it("is a Roman numeral of two letters or more, or a number with its enantiomer's, racemate's or rotation's mark (found in review)", () => {
+    expect(["IV", "XII", "IIb", "(VI)", "ent-21", "rac-3", "(+)-12", "((+)-12)"].map(labelText)).toEqual(["IV", "XII", "IIb", "VI", "ent-21", "rac-3", "(+)-12", "(+)-12"]);
+    // (its mark's sign and dash written as typed, however set: a minus or an en dash, a hyphen)
+    expect(["(\u2212)-12", "(\u2013)\u201312", "(-)-12", "(\u00b1)-5", "ent\u201321"].map(labelText)).toEqual(["(-)-12", "(-)-12", "(-)-12", "(\u00b1)-5", "ent-21"]);
+    // (a lone I, V or X is an element's or a variable's; nor is a letter alone, a mark alone, a Roman numeral miswritten, or another mark;
+    //  nor a supporting information's S3 - as often a page's number, S14, as a compound's)
+    expect(["I", "V", "X", "S", "Sa", "ent-", "(+)-", "IIII", "VV", "(R)-12", "E1", "S3", "S14"].map(labelText)).toEqual(Array(13).fill(null));
+  });
+
+  it("is taken at the head of a line with its yield in those shapes too", () => {
+    expect(["ent-21, 80%", "(+)-12, 70%", "IV, 55%"].map(leadingLabel)).toEqual(["ent-21", "(+)-12", "IV"]);
+  });
 });
 
 describe("the compounds' numbers of a figure", () => {
