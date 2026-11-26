@@ -90,13 +90,16 @@ of their own, run by hand on a Mac with no app started:
 A question Meno asks before it uses the network - "Download RDKit?", "Keep
 Meno up to date?" (`src/ui/network/ConsentDialog.tsx`) - is answered by the
 person at the computer, never by a run, on either desktop. Every such
-question has one yes, *Allow and download*. A click or a drag whose press
+question has one yes, *Allow and download*; the card Meno shows as it
+first starts, "Set up chemistry?", has *Set up*, as has Settings' *Set up
+<plugin>*. A click or a drag whose press
 or release would land on it, or a key, a shortcut or typing sent while it
 has the focus, stops the run before anything is sent; Escape, which answers
 no, always goes. The platform module reads the part at the point, or the
 one with the focus, and what it sits in (`[MacGui]::ChainAt` and
 `FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
-on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`.
+on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`,
+`Set up` or `Set up ...`.
 On Windows a press is told by the buttons themselves: Tauri lays a pane
 for its resize borders over the whole page, which lets the mouse through
 but stops UI Automation, so what is at any point reads as that pane. Every
@@ -139,7 +142,9 @@ available:
 
 | | |
 |---|---|
-| `Start-Meno` | start the app under test, sized and in front |
+| `Start-Meno [-HomeFolder]` | start the app under test, sized and in front; on a Mac, `-HomeFolder` starts it as if that folder were the user's home, in a profile of its own there - settings, plugins and all - which is how a run sees Meno as someone opening it for the first time |
+| `Find-MenoPart -Role -Name [-Within] [-Row] [-Reveal] [-TimeoutSec]` | a part of the window found by what Accessibility calls it, as a reader of the window sees it - `Find-MenoPart Button "Not now"`, or `-Within` the part it sits in, or `-Row` the words of its row, to tell two apart - with its `Role` and `Name`, in shot pixels: `X`, `Y`, `Width`, `Height` and its middle, `CX`, `CY`. Waited for, since the web view builds what Accessibility sees of its page only once asked; not there, the run stops and says what is. On a Mac only |
+| `Get-MenoPartsLike -Role -Like` | every part of the window now of that role whose name is like a wildcard (`Button "Allow*"`), with its name, in shot pixels. On a Mac only |
 | `Open-MenoFile -Path` | open a structure with Ctrl/Cmd+O: in place of the first tab's blank canvas, or in a tab of its own |
 | `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons, clicked where Quick Add is seen to stand in a shot (where it stands depends on the plugins added and procedures saved): `Chain` begins a chain at the point, `SMILES` opens its field, `Shapes` and `Calculations` theirs |
 | `Add-MenoSmiles -Smiles [-X -Y] [-WaitSec]` | a structure from a SMILES, by Quick Add, centred at the point (the middle of the canvas unless told), and let go of |
@@ -185,6 +190,34 @@ Two things worth knowing:
   over, and so does everything that counts or closes Meno: the list is
   `MenoModes.psm1`'s, and `tests/modes.tests.ps1` checks it against the
   flags `src-tauri/src` defines. A new mode there wants its flag added.
+
+## Recording a how-to page
+
+`run.ps1 -Tutorial <page>` runs `tutorials/<page>.ps1` and records the
+manual's page of that name (docs/MANUAL.md, *How do I...?*): before each
+step, a shot of the window and where the step is done; after the last, the
+window as the page leaves it. They go into `site/manual/how-to/<page>/`:
+the shots as WebP (`cwebp`, from `brew install webp`) and `steps.json`,
+with the build's version, which the page shows under its pictures. A shot
+the same as the one there is written the same, byte for byte, so a run
+that changes nothing changes nothing in git. The window is 1200x780 points
+unless told otherwise. The verbs are MenoTutorial.psm1's:
+
+| | |
+|---|---|
+| `Set-Tutorial -Needs chemistry` | what the page says a reader needs, in its own words |
+| `New-TutorialHome` | an empty home for `Start-Meno -HomeFolder`: Meno as someone opening it the first time sees it, its first start's questions and all; thrown away with the run's folder |
+| `Part Button "Not now" [-Within] [-Row] [-Reveal]` | a part of the window by its name (`Find-MenoPart`) |
+| `Point 600 400` | a point of the window, for the drawing on the page |
+| `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`, `Shortcut -Text`. `-NotDone` records a step the run must not take - the yes of a question about the network, which is the reader's to answer - and leaves it undone. A step done goes through the verbs above, so the guard stops it before it would answer such a question yes |
+| `Suspend-Steps`, `Resume-Steps` | steps done unrecorded: answering what the page is not about |
+
+A part found `-Within` another (a dialog) or by its `-Row` keeps that one's
+place as well: the page shows the picture near the spot wide enough to take
+it in. A page's steps are its ids; its words, in `en.md` and `ja.md`, carry
+the same ids in the same order, or the website's build refuses them.
+`tests/tutorial.tests.ps1` checks what a step keeps and a drag's way, with
+no app: `pwsh -NoProfile -File scripts/gui/tests/tutorial.tests.ps1`.
 
 ## What a platform module provides
 

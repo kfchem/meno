@@ -36,6 +36,18 @@ Check "Not now" (Test-NetworkYes -Chain $macNo) $false
 Check "the page" (Test-NetworkYes -Chain $canvas) $false
 Check "words that begin Allow but are no button (Settings, Network)" (Test-NetworkYes -Chain $label) $false
 
+Write-Host "the first start's card (Set up chemistry?) and Settings' set-up"
+$cardYes = @("AXButton`tSet up", "AXGroup`t", "AXGroup`tSet up chemistry?", "AXWebArea`t")
+$cardNo = @("AXButton`tNot now", "AXGroup`t", "AXGroup`tSet up chemistry?")
+Check "the card's Set up" (Test-NetworkYes -Chain $cardYes) $true
+Check "the card's Not now" (Test-NetworkYes -Chain $cardNo) $false
+Check "Settings' Set up of a plugin" (Test-NetworkYes -Chain @("AXButton`tSet up Example Plugin", "AXGroup`tChemistry")) $true
+Check "the card's title, no button" (Test-NetworkYes -Chain @("AXStaticText`tSet up chemistry?", "AXGroup`t")) $false
+Check "a word that only begins so is no yes" (Test-YesName "Set upright") $false
+$said = try { Assert-NotNetworkYes -Look (Read $cardYes) -What "a click"; "" } catch { $_.Exception.Message }
+Check "a click on the card's Set up stops, saying which" ($said -like "a click would answer a question about the network yes ('Set up')*nothing was sent.") $true
+Check "a press within the card's Set up, among buttons read, stops" ((Find-YesUnder -Buttons @([pscustomobject]@{ Name = "Set up"; X = 10; Y = 10; Width = 40; Height = 20 }) -At @{ X = 20; Y = 15 }).Name) "Set up"
+
 Write-Host "the run stops before the yes"
 Check "a click on the yes stops" (Stops { Assert-NotNetworkYes -Look (Read $macYes) -What "a click" }) $true
 Check "a click on Not now goes on" (Stops { Assert-NotNetworkYes -Look (Read $macNo) -What "a click" }) $false

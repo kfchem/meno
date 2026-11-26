@@ -132,6 +132,46 @@ article b { font-weight: 600; }
 .sections b { font-size: 18px; }
 .sections span { color: var(--muted); font-size: 15px; line-height: 1.5; }
 
+/* How do I...?: a gallery of what Meno makes, and pages of steps - each its
+   words, then a picture of the window with its spot marked as Meno's own
+   guide marks a part (src/ui/guide/GuideCard.tsx): a teal line, a faint halo.
+   The pictures are Meno's light window in either theme, so the marks keep
+   Meno's own teal rather than the page's. */
+.sections .how a { background: var(--teal-soft); border-color: transparent; }
+.side .side-how { margin-top: 14px; font-weight: 500; color: var(--ink); }
+.gallery { list-style: none; padding: 0 !important; display: grid !important; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 28px 20px !important; margin-top: 32px; }
+.gallery a { display: grid; gap: 8px; color: var(--ink); text-decoration: none; }
+.gallery img, .shot { border: 1px solid var(--line); border-radius: 10px; background: #ffffff; box-shadow: 0 10px 28px -18px rgba(26, 31, 43, 0.5); }
+.gallery img { display: block; width: 100%; height: auto; margin-bottom: 4px; transition: transform 160ms var(--ease), box-shadow 160ms var(--ease); }
+.gallery a:hover img { transform: translateY(-2px); box-shadow: 0 16px 32px -18px rgba(26, 31, 43, 0.55); }
+.gallery b { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.gallery span { color: var(--muted); font: 400 13px/1.4 var(--font-mono); }
+article.how { max-width: 880px; }
+.needs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 24px; font-size: 15px; }
+.needs span { color: var(--muted); }
+.needs b { padding: 3px 10px; border-radius: 999px; background: var(--teal-soft); font-weight: 500; }
+.shot { position: relative; margin: 0; overflow: hidden; }
+.shot img { display: block; width: 100%; height: auto; }
+/* a step's picture: near its spot at first (the view's place set by the build), the whole window once clicked */
+.shot.near { cursor: zoom-in; }
+.shot.whole { cursor: zoom-out; }
+.shot[role="button"]:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.shot .view { position: absolute; transition: width 320ms var(--ease), left 320ms var(--ease), top 320ms var(--ease); }
+.shot.whole .view { width: 100% !important; left: 0 !important; top: 0 !important; }
+.shot.result { margin: 8px 0 48px; }
+.shot .mark { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mark * { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.mark .halo * { stroke: rgba(49, 118, 137, 0.28); stroke-width: 12px; }
+.mark .line * { stroke: #317689; stroke-width: 3px; }
+.mark .line .held { fill: rgba(49, 118, 137, 0.16); }
+.mark .line .dot, .mark .tip { fill: #317689; stroke: none; }
+.shot .key { position: absolute; right: 14px; bottom: 14px; padding: 7px 10px; border: 1px solid #d1d9e0; border-bottom-width: 3px; border-radius: 7px; background: #ffffff; color: #1a1f2b; font: 500 14px/1 var(--font-mono); }
+.steps { list-style: none; padding: 0 !important; counter-reset: step; display: grid !important; gap: 48px !important; }
+.steps li { counter-increment: step; display: grid; gap: 14px; }
+.steps p { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 12px; font-size: 18px; }
+.steps p::before { content: counter(step); display: inline-grid; place-items: center; min-width: 28px; height: 28px; border-radius: 999px; background: var(--teal); color: var(--on-teal); font: 500 13px/1 var(--font-mono); transform: translateY(-1px); }
+.pictures { margin-top: 44px; color: var(--muted); font-size: 14px; }
+
 /* The way on: the page before and the page after */
 .pager { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 70ch; margin-top: 72px; }
 .pager a {
@@ -172,5 +212,5 @@ footer a { color: inherit; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sections a, .pager a, .languages a, .side a { transition: none; }
+  .sections a, .pager a, .languages a, .side a, .gallery img, .shot .view { transition: none; }
 }
