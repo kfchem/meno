@@ -63,14 +63,15 @@ describe("the test at start", () => {
     expect(inBetweenAlphas([])).toBe(0);
   });
 
-  it("reads coarse only where the plain canvas has clearly fewer steps than the kept one", () => {
-    expect(pathsLookCoarse(3, 17)).toBe(true);
-    expect(pathsLookCoarse(6, 10)).toBe(true);
-    expect(pathsLookCoarse(6, 9)).toBe(false);
-    expect(pathsLookCoarse(7, 30)).toBe(false);
-    expect(pathsLookCoarse(17, 17)).toBe(false);
+  it("reads coarse only where the plain canvas grades in a few fixed steps and the kept one finely", () => {
+    expect(pathsLookCoarse(3, 26)).toBe(true);
+    expect(pathsLookCoarse(5, 12)).toBe(true);
+    expect(pathsLookCoarse(10, 12)).toBe(false);
+    expect(pathsLookCoarse(7, 10)).toBe(false);
+    expect(pathsLookCoarse(6, 30)).toBe(false);
+    expect(pathsLookCoarse(5, 11)).toBe(false);
     // (the kept canvas coarse as well: nothing says the plain one is the coarser)
-    expect(pathsLookCoarse(3, 3)).toBe(false);
+    expect(pathsLookCoarse(3, 4)).toBe(false);
   });
 });
 

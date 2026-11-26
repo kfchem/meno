@@ -6,7 +6,7 @@
  * is installed.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { startIconPictures } from "./iconPictures";
+import { drawsPathsCoarsely, startIconPictures } from "./iconPictures";
 
 const INK = "rgb(36, 41, 47)";
 
@@ -172,23 +172,30 @@ function computed(el: FakeEl) {
 }
 
 /** The canvases' answers: in-between steps on a plain one and on one kept for reading back. */
-let steps = { plain: 3, kept: 17 };
+let steps = { plain: 3, kept: 26 };
+/** A canvas that gives no 2d context, or one that throws. */
+let broken: "none" | "throws" | null = null;
 let pictureCount = 0;
 
 function fakeCanvas() {
   return {
     width: 0,
     height: 0,
-    getContext: (_: string, opts?: { willReadFrequently?: boolean }) => ({
-      stroke() {},
-      drawImage() {},
-      getImageData() {
-        const n = opts?.willReadFrequently ? steps.kept : steps.plain;
-        const data = new Uint8ClampedArray(400 * 4);
-        for (let i = 0; i < n; i++) data[i * 4 + 3] = i + 1;
-        return { data };
-      },
-    }),
+    getContext: (_: string, opts?: { willReadFrequently?: boolean }) => {
+      if (broken === "none") return null;
+      if (broken === "throws") throw new Error("no canvas here");
+      return {
+        scale() {},
+        stroke() {},
+        drawImage() {},
+        getImageData() {
+          const n = opts?.willReadFrequently ? steps.kept : steps.plain;
+          const data = new Uint8ClampedArray(1600 * 4);
+          for (let i = 0; i < n; i++) data[i * 4 + 3] = i + 1;
+          return { data };
+        },
+      };
+    },
     toDataURL: () => `data:image/png;base64,PICTURE${++pictureCount}`,
   };
 }
@@ -217,7 +224,8 @@ let stop: () => void = () => {};
 beforeEach(() => {
   for (const n of NAMES) saved[n] = g[n];
   observers = [];
-  steps = { plain: 3, kept: 17 };
+  steps = { plain: 3, kept: 26 };
+  broken = null;
   doc.body = new FakeEl("body");
   g.document = doc;
   g.window = { devicePixelRatio: 2, matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) };
@@ -298,6 +306,14 @@ describe("icons shown through their pictures", () => {
     await settle();
     expect(observers.length).toBe(0);
     expect(svg.style.props.size).toBe(0);
+  });
+
+  it("reads not coarse where a canvas gives no context or throws", () => {
+    expect(drawsPathsCoarsely()).toBe(true);
+    broken = "none";
+    expect(drawsPathsCoarsely()).toBe(false);
+    broken = "throws";
+    expect(drawsPathsCoarsely()).toBe(false);
   });
 
   it("gives every icon back as it was when stopped", async () => {

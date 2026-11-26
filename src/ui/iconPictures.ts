@@ -13,18 +13,19 @@
  */
 import { ZIGZAG, cleanCopy, inBetweenAlphas, pathsLookCoarse, picturePixels, whyLive, GEOMETRY, type IconLook, type InkNode, type InkPaint } from "./iconPictureRules";
 
-/** The zigzag's in-between alpha steps on a canvas never put into the page: a plain one, or one kept for reading back. */
+/** The zigzag's in-between alpha steps, drawn twice its size on a 40 px canvas never put into the page: a plain one, or one kept for reading back. */
 function zigzagSteps(kept: boolean): number {
   const canvas = document.createElement("canvas");
-  canvas.width = 20;
-  canvas.height = 20;
+  canvas.width = 40;
+  canvas.height = 40;
   const ctx = (kept ? canvas.getContext("2d", { willReadFrequently: true }) : canvas.getContext("2d")) as CanvasRenderingContext2D | null;
   if (!ctx) throw new Error("no 2d canvas");
+  ctx.scale(2, 2);
   ctx.lineWidth = 1.8;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.stroke(new Path2D(ZIGZAG));
-  return inBetweenAlphas(ctx.getImageData(0, 0, 20, 20).data);
+  return inBetweenAlphas(ctx.getImageData(0, 0, 40, 40).data);
 }
 
 /** The test at start: whether this window draws paths coarsely. Anything failing reads as not. */

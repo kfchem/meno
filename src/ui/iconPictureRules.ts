@@ -9,7 +9,7 @@
 /** Icons larger than this, on either side in CSS px, are left as they are. */
 export const LARGEST_ICON = 48;
 
-/** The zigzag the test at start strokes, on a 20 px square, as Quick Add's icons are drawn. */
+/** The zigzag the test at start strokes, on Quick Add's 20-unit square, drawn twice its size. */
 export const ZIGZAG = "M2 13.5 L6 7.5 L10 13.5 L14 7.5 L18 13.5";
 
 /** How many distinct alpha values lie strictly between none and full in `rgba` (every fourth byte). */
@@ -24,11 +24,13 @@ export function inBetweenAlphas(rgba: ArrayLike<number>): number {
 
 /**
  * The window draws paths coarsely when a plain canvas grades the zigzag's
- * edges with clearly fewer steps than a canvas kept for reading back does.
- * Where the second has few as well, nothing says the first is the coarser.
+ * edges in a few fixed steps while a canvas kept for reading back grades
+ * them finely. A web view that draws paths in a few fixed steps gives the
+ * first very few; where both give middling counts, or the second few as
+ * well, nothing says the first is the coarser.
  */
 export function pathsLookCoarse(plain: number, kept: number): boolean {
-  return plain <= 6 && kept >= plain + 4;
+  return plain <= 5 && kept >= 12;
 }
 
 /** What an element of an icon paints with, as computed. */
