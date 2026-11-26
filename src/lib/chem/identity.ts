@@ -32,6 +32,7 @@ import { hydrogensFolded, metalHydrogensDrawn, plainHydrogenAtoms } from "./perc
 import { endsShared, unchargedEnds } from "./perception/chalcogenEnds";
 import { blanksOf, filledIn, valuesOf } from "./perception/stereo/units";
 import { smallRingSidesDropped } from "./perception/stereo/candidates";
+import { notStatedAt, notStatedText } from "./ligandsNotStated";
 
 // (identity's fill of what sets nothing: the core's, perception/stereo/units)
 export { filledIn };
@@ -155,9 +156,18 @@ function compared(input: IdentityInput): LayoutInput {
  * another such centre, its diastereomers (docs/WORKFLOWS-FOUNDATION.md).
  */
 export function identity(input: IdentityInput): { text: string; complete: boolean } {
+  // (a metal whose ligands are not stated - LnPd, MgX: ./ligandsNotStated - is the same as nothing, another such one included)
+  if (notStated(input)) return { text: notStatedText(), complete: false };
   const g = compared(input);
   return input.groups?.length ? grouped(g, input) : written(g);
 }
+
+/** Whether a structure holds a metal whose ligands are not stated (./ligandsNotStated `notStatedAt`). */
+export const notStated = (input: Pick<IdentityInput, "atoms" | "bonds">): boolean =>
+  notStatedAt(
+    input.atoms.map((a) => a.el),
+    input.bonds.map((b) => [b.a, b.b] as const),
+  ).length > 0;
 
 /** A structure as identity compares it (`compared`), its configurations filled in (`filledIn`) and written in its own order. */
 function written(g: LayoutInput): { text: string; complete: boolean } {
@@ -298,6 +308,7 @@ export function identityKey(input: IdentityInput): string {
  * this.
  */
 export function constitutionKey(input: IdentityInput): string {
+  if (notStated(input)) return notStatedText();
   const bare = {
     atoms: input.atoms.map(({ tetra: _tetra, ...a }) => a),
     bonds: input.bonds.map(({ stereo: _stereo, ...b }) => b),

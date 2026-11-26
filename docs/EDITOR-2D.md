@@ -1567,6 +1567,42 @@ All hover-based, as above.
   be a label of the user's own. A word read as no element, group or such
   symbol - Alk, say - is kept whole too: a capital and the small letters
   after it.
+- **Ligands not stated**: LnPd, L2Mg, MgX, PdL4, [Pd]L2 - a metal with
+  ligands or a halide the drawing does not state (`lib/chem/ligandsNotStated`).
+  Such an atom is the metal, in one state, *ligands not stated*. The
+  grammar, exactly: a ligand token is L, Ln, Lm or L with a count (L2 to
+  L9), or X, Xn or X with a count (X2 to X9); a label is in the state
+  where it is one metal - an element of the list coordination is read by
+  (`coordinatedByDonors`: the transition metals and the metals of groups
+  1, 2 and 13), plain or in brackets - and one or more ligand tokens
+  before or after it, and nothing else. An atom labelled with ligand
+  tokens alone (L, X, L2) puts the metal it is bonded to in the state. An
+  element's symbol is read first: Li, La and Lu stay lithium, lanthanum
+  and lutetium, Xe xenon, and LiX is lithium with its halide not stated.
+  An X on carbon, or on any atom that is no such metal, stays what it is
+  (a point of variability). The label is kept as written, read so
+  however it comes in - typed, read by the lens from a figure, or from a
+  file's alias - and typing one says nothing: it is not words kept. It is
+  drawn with the metal next to its bond, whichever order it was typed in
+  (IUPAC GR-2.3.3, a label read outward from its bond): metal first on the
+  right of its bond and above or below it (PdLn, MgX), metal last on its
+  left (LnPd, XMg); words that name it name it as typed. What
+  the state goes through:
+  - no formula and no mass: a step on structures drawn sets one aside,
+    never sending it, *no formula: its ligands are not stated*, and
+    *Check structures* *not checked: its ligands are not stated*;
+  - no identity of its own: it is the same as no other structure -
+    another such one, drawn alike, included - so Enumerate and
+    Substituents compare it with none and say how many they did not
+    compare, in the short form a step's line counts by why (*4 not
+    compared (4: ligands not stated)*), a record's key holds the drawing itself, and *Copy as
+    SMILES* says *its ligands are not stated* and writes nothing;
+  - no 3D structure and so no calculation: left out as one atom alone
+    is, and said so (*LnPd has no 3D structure: its ligands are not
+    stated*; in a step, *no 3D structure: its ligands are not stated*).
+  A MOL or SDF file keeps the label as an atom alias (V2000 `A` line;
+  V3000 an abbreviation Sgroup), which is read back as the same label; an
+  X or an L on a metal is written as the format's own pseudo-atom symbol.
 - Ring templates (3- to 8-membered, benzene), fused onto a bond or an atom;
   chains. (Chains and rings came back on 2026-10-03 as the honeycomb: three
   clicks on an atom, or Quick Add's *Chain* from empty space - two clicks

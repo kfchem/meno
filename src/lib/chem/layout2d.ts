@@ -14,6 +14,7 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedUnits, unitRuns } from "./abbreviations";
+import { unitsAtBond } from "./ligandsNotStated";
 import { ELEMENTS } from "./elements";
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import { metal, notMetal } from "./perception/elements";
@@ -2386,6 +2387,13 @@ function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: n
   if (ELEMENT_SYMBOLS.has(a.el) && !a.abbrev) return null;
   // (a ring's substituents named before it - 2,6-diMeBz - are not read
   // outward: on the right of its bond, the label starts at the bond)
+  // (a metal whose ligands are not stated - LnPd, MgX - drawn with the metal at its bond, whichever order it was typed in)
+  const metalAt = unitsAtBond(a.el, fromRight);
+  if (metalAt) {
+    const { units, at } = metalAt;
+    const before = unitRuns(units.slice(0, at));
+    return { runs: [...before, ...unitRuns([units[at]]), ...unitRuns(units.slice(at + 1))], anchor: before.length };
+  }
   const ringFirst = namesRingFirst(a.el);
   // (words Meno does not read - CH2CH2, xyz - are drawn in the order typed, never turned round: one piece, its last letter on the
   // atom where its bond comes in from the right, its counts as they were typed - asked only where a label would be turned round)

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NOT_STATED_WHY } from "../../../lib/chem/ligandsNotStated";
+import { notStatedIn } from "./chem/make3d";
 import { clipboardFiles, copyBeingMade, copyMadeFor, copying, onCopyMade, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { quotedTables } from "../../../lib/io/kinds";
@@ -290,6 +292,12 @@ export function useClipboardActions(
         const mine = ++begun.current;
         try {
           // (a reaction as a reaction SMILES - never its molecules as one mixture; one it cannot be, said why)
+          // (a metal whose ligands are not stated has no composition a SMILES could write: said, nothing written for it - lib/chem/ligandsNotStated)
+          const unstated = notStatedIn(p);
+          if (unstated.length) {
+            onError(`Copy as SMILES: ${[...new Set(unstated.map((a) => a.el))].join(", ")}: ${NOT_STATED_WHY}.`);
+            return;
+          }
           const reaction = reactionForSmiles(p);
           if (reaction && "why" in reaction) {
             onError(`Copy as SMILES: ${reaction.why}.`);

@@ -4018,7 +4018,8 @@ in.
   is said first.
 - **Never set aside unsure**: one whose identity cannot be worked out in
   full, or whose wedges do not read, is kept, and counted on the line as
-  not compared, with why ("2 not compared (2: wedges that do not read)").
+  not compared, with why ("2 not compared (2: wedges that do not read)";
+  one whose metal's ligands are not stated, "ligands not stated").
   A duplicate may be missed so; nothing that is not one is set aside.
 - **Compared within**: *Each compound* compares every structure drawn with
   every other. *Each value of a property* compares those of one value only
@@ -4032,7 +4033,10 @@ in.
   words ("compare them in separate steps"): one comparison is not the
   other's, and the set is never split unsaid.
 - **Its line** is Duplicates' own: "45 of 52 entries kept · rest 7", with
-  those not compared and those without the property after it.
+  those not compared and those without the property after it. Where the
+  whole line does not fit its card, the card shows its counts without the
+  whys in parentheses, as every step's line does ("45 of 52 entries kept ·
+  rest 7 · 2 not compared"); the tip on its state says the whole line.
 - **Done in turns**, as on molecules in 3D: the page goes on meanwhile, its
   card says how far it is, and it is stopped as any step is.
 

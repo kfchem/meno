@@ -5,6 +5,7 @@
  * it - and comes to rest beside it, tied to it atom by atom
  * (docs/WORKSPACE.md, stage 2).
  */
+import { metalNotStated, notStatedAt, NOT_STATED_WHY } from "../../../../lib/chem/ligandsNotStated";
 import { placesOf } from "../utils/edit3d";
 import * as THREE from "three";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
@@ -103,6 +104,7 @@ export function blocksStill(blocks: readonly Block[], model: Model): boolean {
  * known - is no molecule to make.
  */
 export function standsForMolecule(part: Model): boolean {
+  if (notStatedIn(part).length) return false;
   if (part.bonds.length > 0) return true;
   if (part.atoms.length !== 1) return false;
   const [a] = part.atoms;
@@ -127,8 +129,34 @@ function structuresIn(model: Model, atoms: Iterable<number>): Model[] {
 export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
   return structuresIn(model, atoms)
     .filter((part) => !standsForMolecule(part))
-    .map((part) => part.atoms[0]);
+    .map((part) => {
+      const unstated = notStatedIn(part)[0];
+      if (unstated) leftNotStated.add(unstated);
+      return unstated ?? part.atoms[0];
+    });
 }
+
+/** The atoms `bareAtomsOf` gave for a structure left out because its ligands are not stated, not for one atom alone: what `bareWords` says of each. */
+const leftNotStated = new WeakSet<Model["atoms"][number]>();
+
+/**
+ * The atoms of a structure that are a metal whose ligands are not stated (lib/chem/ligandsNotStated): LnPd, MgX, or a metal an L
+ * or an X is bonded to. Such a structure has no composition to make in 3D, so none is made: it is left out as a bare atom is, by
+ * the same path, and the chemist told why. An atom list (its `list`) is no ligand token.
+ */
+export function notStatedIn(part: Model): Model["atoms"] {
+  const index = new Map(part.atoms.map((a, i) => [a.id, i]));
+  const labels = part.atoms.map((a) => (a.list ? "" : a.el));
+  const bonds = part.bonds.flatMap((b) => {
+    const p = index.get(b.a);
+    const q = index.get(b.b);
+    return p == null || q == null ? [] : [[p, q] as const];
+  });
+  return notStatedAt(labels, bonds).map((i) => part.atoms[i]);
+}
+
+/** Whether an atom left out of a 3D structure (`bareAtomsOf`) is a metal whose ligands are not stated, rather than one atom alone. */
+export const isNotStated = (a: Model["atoms"][number]): boolean => leftNotStated.has(a) || (!a.list && !!metalNotStated(a.el));
 
 /** A bare atom as the chemist is told of it: its label and its charge - Na+, Cl−, Ca2+. */
 function nameOf(a: Model["atoms"][number]): string {
@@ -142,9 +170,16 @@ function nameOf(a: Model["atoms"][number]): string {
  * else named, as counter-ions left out of a salt made in 3D.
  */
 export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
-  if (!madeAny) return "One atom alone has no 3D structure.";
-  return `${bareNames(bare)} ${bare.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
+  const unstated = bare.filter(isNotStated);
+  const lone = bare.filter((a) => !isNotStated(a));
+  const said: string[] = [];
+  if (lone.length) said.push(madeAny || unstated.length ? `${bareNames(lone)} ${lone.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.` : "One atom alone has no 3D structure.");
+  if (unstated.length) said.push(`${bareNames(unstated)} ${madeAny || lone.length ? (unstated.length > 1 ? "were left out" : "was left out") : unstated.length > 1 ? "have no 3D structure" : "has no 3D structure"}: ${NOT_STATED_THEIR(unstated.length)}.`);
+  return said.join(" ");
 }
+
+/** Why a structure with a metal whose ligands are not stated has no 3D structure, of one or of more. */
+const NOT_STATED_THEIR = (n: number) => (n === 1 ? NOT_STATED_WHY : "their ligands are not stated");
 
 /** Bare atoms named, in a list: "Na+", "Na+ and Cl−", "Na+, Cl− and Ca2+". */
 export function bareNames(bare: Model["atoms"]): string {
