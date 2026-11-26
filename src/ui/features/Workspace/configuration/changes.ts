@@ -9,9 +9,10 @@
  *   readable (`unread`), else "now unspecified" (`opened`: a plain bond) - each after the descriptor it had, where it had one;
  * - stated again where its marks had been unclear (`read`): "C3: now R", or "C3: stated again" without one.
  * Nothing is said where nothing changed, where a unit is simply new (a wedge just drawn), gone with its atom or one of its groups, or no
- * longer a unit because two of its groups are now alike - nor, asked `byHand`, of a unit the chemist changed by turning a stereo bond of
- * its own and nothing else there (`turnedByHand`): its label shows it. A structure whose every unit inverted - two or more - is one note: its mirror
- * image. Pure: no DOM, no store.
+ * longer a unit because two of its groups are now alike, nor at a place whose configuration sets nothing before the edit or after it
+ * (chem/candidatesDrawn: a Newman's or a Haworth's atom with two like groups) - nor, asked `byHand`, of a unit the chemist changed by
+ * turning a stereo bond of its own and nothing else there (`turnedByHand`): its label shows it. A structure whose every unit inverted -
+ * two or more - is one note: its mirror image. No DOM, no store: identity's answers it asks are kept by chem/identityOff.
  */
 import type { ConfigurationUnit } from "../../../../lib/chem/perception/stereo/compare";
 import { compared, type Said } from "../../../../lib/chem/perception/stereo/compare";
@@ -20,6 +21,7 @@ import { readStereo } from "../../../../lib/layout/drawn";
 import { drawingOf } from "../chem/drawing";
 import { stereoOf, unreadWedges } from "../chem/engineLayout";
 import { fragmentsHolding } from "../chem/cleanUp";
+import { candidatesDrawn } from "../chem/candidatesDrawn";
 import { keepsAny, keptFrom, keptReading, type KeptOf } from "./kept";
 import type { Bond, Model } from "../store/types";
 import { placeNames } from "./names";
@@ -101,7 +103,7 @@ export function partsTouched(before: Model, after: Model): { was: Model; now: Mo
 export function configurationChanges(before: Model, after: Model, { byHand = false }: { byHand?: boolean } = {}): ConfigurationChange[] {
   const parts = partsTouched(before, after);
   if (!parts) return [];
-  return changesBetween(readingOf(parts.was), readingOf(parts.now), parts.now, byHand ? (unit) => turnedByHand(before, after, unit) : undefined);
+  return changesBetween(readingOf(parts.was), readingOf(parts.now), parts, byHand ? (unit) => turnedByHand(before, after, unit) : undefined);
 }
 
 /** What an atom or a bond carries that says how it is shown or what is kept of it, not what it is or where: set aside by `turnedByHand`. */
@@ -171,15 +173,31 @@ export function changesAgainstKept(
   const read = readingOf(parts.was);
   const was = keepsAny(parts.was) ? keptReading(parts.was, read.said) : read;
   const answered = byHand ? (unit: ConfigurationUnit) => turnedByHand(before, after, unit) : undefined;
-  return { changes: changesBetween(was, now, parts.now, answered), ids: new Set(parts.now.atoms.map((a) => a.id)), kept: keptFrom(parts.now, now) };
+  return { changes: changesBetween(was, now, parts, answered), ids: new Set(parts.now.atoms.map((a) => a.id)), kept: keptFrom(parts.now, now) };
 }
 
 /**
- * How `now` differs from `was`, as the header says it, of the part `nowPart` - nothing said of a unit `answered` gives (`turnedByHand`: the
- * chemist's own turn of a stereo bond there).
+ * Whether `unit` is, in `part`, a place whose configuration sets something (chem/candidatesDrawn: the core's candidates, then
+ * identity's units) - a centre by its atom, a double bond by the bond between its ends; an axis or a run is taken to be one.
  */
-function changesBetween(was: Reading, now: Reading, nowPart: Model, answered?: (unit: ConfigurationUnit) => boolean): ConfigurationChange[] {
-  const parts = { now: nowPart };
+function setsSomethingIn(part: Model): (unit: ConfigurationUnit) => boolean {
+  let places: ReturnType<typeof candidatesDrawn> | null = null;
+  return (unit) => {
+    places ??= candidatesDrawn(part);
+    if (unit.kind === "centre") return places.atom(unit.at);
+    const [p, q] = unit.at;
+    const bond = part.bonds.find((b) => (b.a === p && b.b === q) || (b.a === q && b.b === p));
+    return unit.kind === "axis" || !bond || places.bond(bond.id);
+  };
+}
+
+/**
+ * How `now` differs from `was`, as the header says it, of the parts `parts` - nothing said of a unit `answered` gives (`turnedByHand`: the
+ * chemist's own turn of a stereo bond there), nor of one that sets nothing before the edit or after it (`setsSomethingIn`).
+ */
+function changesBetween(was: Reading, now: Reading, parts: { was: Model; now: Model }, answered?: (unit: ConfigurationUnit) => boolean): ConfigurationChange[] {
+  const before = setsSomethingIn(parts.was);
+  const after = setsSomethingIn(parts.now);
   const atomsNow = new Map(parts.now.atoms.map((a) => [a.id, a]));
   const there = (id: number) => id === -1 || atomsNow.has(id);
   // (a unit whose atoms and groups are all still there: one the edit could have turned or opened - not one gone with an atom)
@@ -193,6 +211,9 @@ function changesBetween(was: Reading, now: Reading, nowPart: Model, answered?: (
   for (const d of compared(was.said, now.said)) {
     const { how: _how, ...unit } = d;
     if (answered?.(unit)) continue;
+    // (a place that sets nothing before the edit or after it - a Newman's atom with two like groups, a ring's C with two methyls -
+    //  states nothing to change: its marks or its depth said what is no configuration)
+    if (!before(unit) || !after(unit)) continue;
     if (d.how === "inverted") out.push({ unit, how: "inverted" });
     else if (d.how === "opened" && kept(unit)) {
       const why = unitAtoms(unit)

@@ -8,6 +8,9 @@ import { MENO_MOVES, watchConfiguration } from "./watch";
 import { cleanUp } from "../chem/cleanUp";
 import { cipMarksAsked } from "../chem/cipRun";
 import { cipMarksOf } from "../chem/cipMarks";
+import { newmanDrawing, spokeAngles } from "../projections/newman";
+import { haworthDrawing } from "../projections/haworth";
+import { seenPlaces } from "../projections/chair";
 
 // Foundation part 15, phase 2: a change of what the drawing states, said at its unit once the edit is done (the brief's known answers).
 
@@ -414,5 +417,109 @@ describe("Turn over keeps every configuration", () => {
     const r = await turned(m, [2, 3, 5], [13], "vertical");
     expect([r.before, r.after, r.notes]).toEqual(["S", "S", []]);
     expect([r.bond(12).stereo, r.bond(14).stereo]).toEqual(["down", "up"]);
+  });
+});
+
+/** `m` with a group `el` (`id`, its bond `id + 1000`) on atom `on`, at (x, y). */
+const withGroup = (m: Model, on: number, id: number, at: { x: number; y: number }, el = "C"): Model => ({
+  atoms: [...m.atoms, { id, el, r: 0.9, x: at.x, y: at.y }],
+  bonds: [...m.bonds, { id: id + 1000, a: on, b: id, order: 1 }],
+});
+
+/** A spoke of a Newman drawn at the origin, `deg` degrees counter-clockwise from the right, a bond length out. */
+const spoke = (deg: number) => ({ x: L * Math.cos((deg * Math.PI) / 180), y: L * Math.sin((deg * Math.PI) / 180) });
+
+/** A Newman pair as the tool draws it: the front carbon 1 (nearer), the back carbon 2, nothing on either. */
+const newmanPair = (): Model => {
+  const d = newmanDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });
+  return { atoms: [...d.atoms], bonds: [...d.bonds] };
+};
+
+/** A six-membered Haworth ring as the tool draws it (ring O 1, then C 2 to 6), with a group `el` added at each (ring place, face) given. */
+function haworthWith(groups: readonly (readonly [number, 1 | -1, string])[]): { model: Model; steps: Model[] } {
+  const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 100 });
+  let model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
+  const steps = [model];
+  groups.forEach(([at, face, el], k) => {
+    const free = d.solid.free.find((f) => f.at === at && f.face === face)!;
+    const place = seenPlaces(d, at).find((p) => p.free === free)!;
+    model = withGroup(model, d.ring[at], 50 + k, place.place, el);
+    steps.push(model);
+  });
+  return { model, steps };
+}
+
+/** Each drawing of `steps` after the first made by one edit of the page, the notes after each. */
+async function notesThrough(steps: readonly Model[]): Promise<string[][]> {
+  const { doc, notes, stop } = page(steps[0]);
+  const out: string[][] = [];
+  for (const next of steps.slice(1)) {
+    doc.edit("add bond", (s) => ({ ...s, model: next }));
+    await vi.runAllTimersAsync();
+    out.push(notes());
+  }
+  stop();
+  return out;
+}
+
+describe("no note where the drawing stated no configuration: a projection's atom that is no stereocentre before or after", () => {
+  it("says nothing as a Newman's back and front carbons get their methyls one by one", async () => {
+    // (the back carbon's three methyls, then the front's: at every step each carbon holds two or more like groups - CH3 and CH3, or
+    //  H and H - so neither is a stereocentre before or after any edit; the depths of a Newman's two carbons state nothing there.
+    //  It said "C2: now unspecified" at the back's third methyl and "C3: now unspecified" at the front's)
+    let m = newmanPair();
+    const steps = [m];
+    let id = 10;
+    for (const deg of spokeAngles("B", true, false)) steps.push((m = withGroup(m, 2, id++, spoke(deg))));
+    for (const deg of spokeAngles("A", false, false)) steps.push((m = withGroup(m, 1, id++, spoke(deg))));
+    expect(await notesThrough(steps)).toEqual([[], [], [], [], [], []]);
+    expect(configurationChanges(steps[2], steps[3], { byHand: true })).toEqual([]);
+    expect(configurationChanges(steps[5], steps[6], { byHand: true })).toEqual([]);
+  });
+
+  it("says nothing as a Haworth ring carbon gets a methyl on each face", async () => {
+    // (ring C 4 - place 3 - a methyl up: a stereocentre, its two ring branches unlike; then a methyl down: two methyls, none. The same
+    //  at ring C 3 - place 2. Each second methyl is the chemist's own edit at that atom, which then sets nothing: no note. It said
+    //  "C4: now unspecified" and "C3: S, now unspecified")
+    const { steps } = haworthWith([
+      [3, 1, "C"],
+      [3, -1, "C"],
+      [2, 1, "C"],
+      [2, -1, "C"],
+    ]);
+    expect(await notesThrough(steps)).toEqual([[], [], [], []]);
+  });
+
+  it("still says a Newman's stated centre lost by an edit elsewhere: its back carbon dragged off the end-on view", async () => {
+    // (butan-2-ol as a Newman: the front carbon 1 with OH (10) at 90 degrees and CH3 (11) at 210, its H at 330; the back carbon 2 with
+    //  CH3 (12) at 30. Numbered in its own molecule: C1 the methyl 11, C2 the front carbon, C3 the back, C4 its methyl. y up, z toward
+    //  the viewer; the front's groups lean toward the viewer (z = t > 0), the back carbon behind it (0, 0, -1). OH > C3 > C1 > H:
+    //  OH (0, 1, t), C3 (0, 0, -1), C1 (-0.866, -0.5, t): OH . (C3 x C1) = (0, 1, t) . (-0.5, 0.866, 0) = 0.866 > 0, S (the sign is
+    //  < 0 for R: an R drawn flat, its H behind, gives < 0). The back carbon dragged half a bond aside: no longer seen end-on, the depths state
+    //  nothing at C2 - an edit at C3, not at C2: "C2: S, now unspecified")
+    let m = newmanPair();
+    m = withGroup(m, 1, 10, spoke(90), "O");
+    m = withGroup(m, 1, 11, spoke(210));
+    m = withGroup(m, 2, 12, spoke(30));
+    const { store, notes, stop } = page(m);
+    store.getState().moveAtoms([{ id: 2, x: 0.5 * L, y: 0 }], "drag-n");
+    await vi.runAllTimersAsync();
+    expect(notes()).toEqual(["C2: S, now unspecified"]);
+    stop();
+  });
+
+  it("still says a Haworth's stated centre lost by an edit elsewhere: the ring O no longer drawn at its depth", async () => {
+    // (oxane-2,3,4-triol as a Haworth: the ring O 1, C 2 (place 1) with OH up, C 3 (place 2) OH up, C 4 (place 3) OH down; numbered in
+    //  its own molecule O1, C2 to C6 as the ring runs. At C2: O1 (C) > OH (H) > C3 > H. As drawn - y up the page, z toward the viewer -
+    //  O1 at (-1, 2, -2.1) from C2, the OH (0, 2, 0), C3 (-1, -2, 2.1): O1 . (OH x C3) = (-1, 2, -2.1) . (4.2, 0, 2) = -8.4 < 0, R - as a
+    //  beta-D-glucopyranose's C1, OH up beside the ring O, is R. The ring O given no depth - an edit of atom 1, not of C2 - leaves C2's
+    //  groups no longer read as above and below the ring: "C2: R, now unspecified", named by the molecule's own numbering)
+    const { model } = haworthWith([
+      [1, 1, "O"],
+      [2, 1, "O"],
+      [3, -1, "O"],
+    ]);
+    const flat = { ...model, atoms: model.atoms.map((a) => (a.id === 1 ? { ...a, z: undefined } : a)) };
+    expect(await notesThrough([model, flat])).toEqual([["C2: R, now unspecified"]]);
   });
 });
