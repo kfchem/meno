@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
-import { haworthLabelsStepped } from "./haworthLabels";
+import { haworthLabelsStepped, haworthStemsClose, LABELS_APART } from "./haworthLabels";
 import { labelBox, labelSetOf, layoutMolecule } from "../../../../lib/chem/layout2d";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -342,9 +342,11 @@ describe("a labelled group inside a Haworth ring", () => {
     const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
     // (as the labels are typed: a label with no clear way where it stands steps along its vertical - projections/haworthLabels)
     const steps = new Map(haworthLabelsStepped(model, opts).map((s) => [s.id, s]));
+    // (and each label's bond inside the ring stops close to it)
+    const close = new Set(haworthStemsClose(model).filter((c) => c.close).map((c) => c.id));
     const atoms = model.atoms.map((a) => ({ x: steps.get(a.id)?.x ?? a.x, y: steps.get(a.id)?.y ?? a.y, el: a.el }));
     const index = new Map(model.atoms.map((a, i) => [a.id, i]));
-    const bonds = model.bonds.map((b) => ({ a1: index.get(b.a)!, a2: index.get(b.b)!, order: 1 as const }));
+    const bonds = model.bonds.map((b) => ({ a1: index.get(b.a)!, a2: index.get(b.b)!, order: 1 as const, ...(close.has(b.id) ? { close: true } : {}) }));
     return { d, atoms, opts, lay: layoutMolecule(atoms as never, bonds as never, opts, 40) };
   };
   /** The drawn stem of the vertical bond out of ring atom `k` toward `toward`, as a share of the level bond. */
@@ -365,13 +367,14 @@ describe("a labelled group inside a Haworth ring", () => {
     }
   });
 
-  it("keeps a front atom's up label clear of the label of the back atom's down group above it - the down one giving way: C-3's OH under C-5's H", () => {
+  it("keeps a front atom's up label clear of the label of the back atom's down group above it, each on the figures' stem: C-3's OH under C-5's H", () => {
     // (C-3, atom 3, front left; C-5, atom 5, back left, on the same vertical)
     const w = laidWith([[3, "up", "O"], [5, "down", "H"]]);
     const set = labelSetOf(w.opts);
     const [front, back] = [wholeLabel(w.lay, set, 6), wholeLabel(w.lay, set, 7)];
-    // (apart by more than a hair: 0.04 of the level bond, about a twentieth of a label's height, at the least)
-    expect((back.minY - front.maxY) / w.d.scale).toBeGreaterThan(0.04);
+    // (apart by `LABELS_APART`, 0.02 of the level bond, at the least: 0.027 MEASURED)
+    expect((back.minY - front.maxY) / w.d.scale).toBeGreaterThan(LABELS_APART);
     expect(stemOf(w, 3, w.atoms[6].y)).toBeGreaterThanOrEqual(0.29);
+    expect(stemOf(w, 5, w.atoms[7].y)).toBeGreaterThanOrEqual(0.25);
   });
 });

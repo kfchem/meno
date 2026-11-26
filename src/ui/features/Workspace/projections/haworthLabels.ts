@@ -14,8 +14,12 @@ export const HAWORTH_UP_BEFORE = 0.4;
  */
 export const HAWORTH_DOWN_LEAST = 0.3;
 const STEP = 0.01;
-/** The least gap between two labels inside a Haworth ring's picture, as a share of the level bond: about a seventh of a label's height. */
-export const LABELS_APART = 0.04;
+/**
+ * The least gap between two labels inside a Haworth ring's picture, as a share of the level bond: about a fourteenth of a label's height,
+ * what is left between an OH up from a six-ring's front atom and an H or OH down from the back atom above it with both on the figures'
+ * stems (lib/chem/layout2d `LABEL_MARGIN_CLOSE`).
+ */
+export const LABELS_APART = 0.02;
 
 type Box = { minX: number; maxX: number; minY: number; maxY: number };
 type Pt = { x: number; y: number };
@@ -234,4 +238,37 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
   return [...new Set([...moved, ...reads.keys()])]
     .map((id) => ({ id, ...place.get(id)!, reads: reads.get(id) ?? null }))
     .filter((m) => m.y !== byId.get(m.id)!.y || (m.reads ?? undefined) !== byId.get(m.id)!.reads);
+}
+
+/**
+ * The bonds of the groups inside a Haworth ring's picture - up from its front atoms, down from its back atoms, straight along their
+ * verticals - whose group is a label: each stops close to its label (`Bond.close`, lib/chem/layout2d `LABEL_MARGIN_CLOSE`), so that its stem
+ * shows as long as the figures under Brecher 2006's ST-1.9 draw it - 0.29 of the level bond up from a front atom of a six-ring, 0.33 of a
+ * five-ring, 0.25 down from a six-ring's back atom. Where a label is no longer there (a carbon drawn out, or the group gone from inside),
+ * its bond stops as any does. As bond ids and whether each is close; only those that change.
+ */
+export function haworthStemsClose(model: Pick<Model, "atoms" | "bonds">): { id: number; close: boolean }[] {
+  const found = projectionsIn(model as Model).filter((p) => p.kind === "haworth");
+  if (!found.length) return [];
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const out: { id: number; close: boolean }[] = [];
+  for (const { ring } of found) {
+    const h = haworthOf(model, ring);
+    if (!h) continue;
+    const inRing = new Set(ring);
+    const ys = ring.map((id) => byId.get(id)!.y);
+    const [lo, hi] = [Math.min(...ys), Math.max(...ys)];
+    for (const b of model.bonds) {
+      const [r, g] = inRing.has(b.a) && !inRing.has(b.b) ? [byId.get(b.a), byId.get(b.b)] : inRing.has(b.b) && !inRing.has(b.a) ? [byId.get(b.b), byId.get(b.a)] : [];
+      if (!r || !g) continue;
+      const near = (y: number) => Math.abs(r.y - y) < 1e-6 * h.scale;
+      const upright = Math.abs(g.x - r.x) < 1e-6 * h.scale;
+      // (inside: up from the front edge, down from the back; a label, carrying nothing)
+      const inside = upright && ((near(lo) && g.y > r.y) || (near(hi) && g.y < r.y));
+      const label = g.el !== "C" && !model.bonds.some((o) => o !== b && (o.a === g.id || o.b === g.id));
+      const close = inside && label;
+      if (close !== !!b.close) out.push({ id: b.id, close });
+    }
+  }
+  return out;
 }
