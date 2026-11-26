@@ -433,7 +433,7 @@ describe("Pass the side with fewer", () => {
     const products = [...side(1, 3), ...side(1, 4).map((e) => ({ ...e, compound: 1 }))];
     const out = run(reactant, products);
     expect([out.kept.length, out.aside.length]).toEqual([0, 7]);
-    expect(out.said).toBe("First 14.0, Second 3.5 per compound · Second only passed (the side with fewer)");
+    expect(out.said).toBe("First 14, Second 3.5 per compound: only Second passed");
     // (the other way round: First is the side with fewer)
     expect([run(products, reactant).kept.length, run(products, reactant).aside.length]).toEqual([7, 0]);
   });
@@ -441,7 +441,7 @@ describe("Pass the side with fewer", () => {
   it("passes both where their entries per compound are within a quarter of their sum", () => {
     // (10 and 7: 3 of 17 apart, under a quarter - both; 10 and 6: 4 of 16, a quarter - the side with fewer)
     const both = run(side(1, 10), side(1, 7));
-    expect([both.kept.length, both.aside.length, both.said]).toEqual([10, 7, "First 10.0, Second 7.0 per compound · both passed (within a quarter of their sum)"]);
+    expect([both.kept.length, both.aside.length, both.said]).toEqual([10, 7, "First 10, Second 7 per compound: both passed"]);
     const edge = run(side(1, 10), side(1, 6));
     expect([edge.kept.length, edge.aside.length]).toEqual([0, 6]);
   });
@@ -449,8 +449,19 @@ describe("Pass the side with fewer", () => {
   it("passes what it is set to whatever the counts: both, First only, Second only", () => {
     const [a, b] = [side(1, 14), side(2, 2)];
     expect([run(a, b, "both").kept.length, run(a, b, "both").aside.length]).toEqual([14, 4]);
-    expect([run(a, b, "first").kept.length, run(a, b, "first").aside.length, run(a, b, "first").said]).toEqual([14, 0, "First 14.0, Second 2.0 per compound · First only passed (as set)"]);
+    expect([run(a, b, "first").kept.length, run(a, b, "first").aside.length, run(a, b, "first").said]).toEqual([14, 0, "First 14, Second 2 per compound: only First passed"]);
     expect([run(a, b, "second").kept.length, run(a, b, "second").aside.length]).toEqual([0, 4]);
+  });
+
+  it("says the counts as integers where whole, and each outcome in a short sentence", () => {
+    const [a, b] = [side(1, 20), side(1, 3)];
+    expect(run(a, b).said).toBe("First 20, Second 3 per compound: only Second passed");
+    expect(run(b, a).said).toBe("First 3, Second 20 per compound: only First passed");
+    expect(run(side(1, 5), side(1, 5)).said).toBe("First 5, Second 5 per compound: both passed");
+    expect(run(a, b, "second").said).toBe("First 20, Second 3 per compound: only Second passed");
+    expect(run(a, b, "both").said).toBe("First 20, Second 3 per compound: both passed");
+    // (not whole: 7 entries over 2 compounds is 3.5; 10 over 3 is 3.3)
+    expect(run(side(3, 1).concat(side(1, 7).map((e) => ({ ...e, compound: 9 }))), side(1, 3)).said).toBe("First 2.5, Second 3 per compound: both passed");
   });
 
   it("says what came in where an input is empty, as any step of two inputs does", () => {

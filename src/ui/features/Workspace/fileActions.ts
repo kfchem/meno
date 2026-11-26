@@ -623,6 +623,7 @@ export function drawingLayout(
     ...chemistry(a),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    ...(a.reads ? { reads: a.reads } : {}),
     ...(a.color ? { color: a.color } : {}),
     ...(a.highlight ? { highlight: a.highlight } : {}),
   }));

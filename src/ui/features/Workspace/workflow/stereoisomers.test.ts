@@ -34,13 +34,13 @@ const byHand = (c: Configured) => (c.centres[0].sense > 0 ? { smiles: "C[C@H](O)
 describe("Stereoisomers, Meno's", () => {
   it("keeps one as drawn where nothing is left open - asking the plugin nothing", async () => {
     const { chem, asked } = plugin(() => null);
-    expect(await stereoisomersAnswer(chem, [v2000(["C", "C", "O"], [[0, 1, 1], [1, 2, 1]])], DEFAULTS, "RDKit")).toEqual({ as: "drawn" });
+    expect(await stereoisomersAnswer(chem, [v2000(["C", "C", "O"], [[0, 1, 1], [1, 2, 1]])], DEFAULTS, "Sketchkit")).toEqual({ as: "drawn" });
     expect(asked).toEqual([]);
   });
 
   it("counts them itself and gives each to the plugin whole, as many as its options allow, in their time - each as a drawing - in the order of their SMILES", async () => {
     const { chem, asked } = plugin(byHand);
-    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"] });
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"] });
     expect(asked).toHaveLength(2);
     expect(asked.map((a) => (a.args.configured as Configured).centres)).toEqual([
       [{ atom: 1, neighbours: [0, 2, 4], sense: 1 }],
@@ -52,35 +52,35 @@ describe("Stereoisomers, Meno's", () => {
   it("gives each one the configuration the plugin made it with, sorted by SMILES with its drawing", async () => {
     const conf = (sense: number) => ({ centres: [{ atom: 1, neighbours: [0, 2, 4], sense }], doubles: [] });
     const { chem } = plugin((c) => ({ ...byHand(c), configuration: conf(c.centres[0].sense) }));
-    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"], configurations: [conf(-1), conf(1)] });
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"], configurations: [conf(-1), conf(1)] });
   });
 
   it("keeps one as drawn where only one of what it leaves open can be made in 3D", async () => {
     const { chem } = plugin((c) => (c.centres[0].sense > 0 ? { smiles: "C1CC2CCC1C2", molblock: "one" } : null));
-    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ as: "drawn" });
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ as: "drawn" });
   });
 
   it("sets aside, saying why: too many, whole; too long, alone; left open, as its option says; one not drawn back, in the plugin's words", async () => {
     const many = plugin(byHand);
-    expect(await stereoisomersAnswer(many.chem, [BUTANOL], { ...DEFAULTS, most: 1 }, "RDKit")).toEqual({ aside: "more than the 1 stereoisomers made of one (up to 2)", kind: "too many" });
+    expect(await stereoisomersAnswer(many.chem, [BUTANOL], { ...DEFAULTS, most: 1 }, "Sketchkit")).toEqual({ aside: "more than the 1 stereoisomers made of one (up to 2)", kind: "too many" });
     expect(many.asked).toEqual([]);
     // (its time past between two of them: the second never asked)
     let now = 0;
     const clock = vi.spyOn(Date, "now").mockImplementation(() => (now += 4000));
-    expect(await stereoisomersAnswer(plugin(byHand).chem, [BUTANOL], { ...DEFAULTS, within: 5 }, "RDKit")).toEqual({ aside: "took more than 5 s to examine", kind: "too long" });
+    expect(await stereoisomersAnswer(plugin(byHand).chem, [BUTANOL], { ...DEFAULTS, within: 5 }, "Sketchkit")).toEqual({ aside: "took more than 5 s to examine", kind: "too long" });
     clock.mockRestore();
     const aside = plugin(byHand);
-    expect(await stereoisomersAnswer(aside.chem, [BUTANOL], { ...DEFAULTS, open: "aside" }, "RDKit")).toEqual({ aside: "stereo left open: 2 stereoisomers", kind: "stereo open" });
+    expect(await stereoisomersAnswer(aside.chem, [BUTANOL], { ...DEFAULTS, open: "aside" }, "Sketchkit")).toEqual({ aside: "stereo left open: 2 stereoisomers", kind: "stereo open" });
     // (set aside: no drawing asked for)
     expect(aside.asked[0].args.drawings).toBeUndefined();
     const adduct = plugin((c) => (c.centres[0].sense > 0 ? { smiles: "a", molblock: "x" } : { smiles: "b", error: "its coordination bond from N could not be written back as drawn" }));
-    expect(await stereoisomersAnswer(adduct.chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "its coordination bond from N could not be written back as drawn", kind: "drawing" });
+    expect(await stereoisomersAnswer(adduct.chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ aside: "its coordination bond from N could not be written back as drawn", kind: "drawing" });
   });
 
   it("sets aside an allene's axis left open, its stereoisomers never asked for", async () => {
     const allene = v2000(["C", "C", "C", "C", "C"], [[0, 1, 1], [1, 2, 2], [2, 3, 2], [3, 4, 1]]);
     const { chem, asked } = plugin(() => null);
-    expect(await stereoisomersAnswer(chem, [allene], DEFAULTS, "RDKit")).toEqual({ aside: "an allene's axis left open, which a drawing in 2D cannot give", kind: "axis" });
+    expect(await stereoisomersAnswer(chem, [allene], DEFAULTS, "Sketchkit")).toEqual({ aside: "an allene's axis left open, which a drawing in 2D cannot give", kind: "axis" });
     expect(asked).toEqual([]);
   });
 
@@ -95,15 +95,15 @@ describe("Stereoisomers, Meno's", () => {
         method: "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)",
       },
     };
-    expect(await stereoisomersAnswer(chem, [guanidine], DEFAULTS, "RDKit")).toEqual({ made: ["A", "B"], smiles: ["a", "b"], properties: note });
+    expect(await stereoisomersAnswer(chem, [guanidine], DEFAULTS, "Sketchkit")).toEqual({ made: ["A", "B"], smiles: ["a", "b"], properties: note });
     expect(asked[0].args).toMatchObject({ open: { atoms: [6], bonds: [] }, notEnumerated: [1] });
     // (nothing else open: kept as drawn, said so)
     const alone = v2000(["C", "N", "C", "N", "N"], [[0, 1, 1], [1, 2, 2], [2, 3, 1], [2, 4, 1]]);
-    expect(await stereoisomersAnswer(plugin(() => null).chem, [alone], DEFAULTS, "RDKit")).toEqual({ as: "drawn", properties: note });
+    expect(await stereoisomersAnswer(plugin(() => null).chem, [alone], DEFAULTS, "Sketchkit")).toEqual({ as: "drawn", properties: note });
   });
 
   it("sets aside one Meno cannot read", async () => {
-    expect(await stereoisomersAnswer(plugin(() => null).chem, ["no block"], DEFAULTS, "RDKit")).toEqual({ aside: "Meno could not read it", kind: "unreadable" });
+    expect(await stereoisomersAnswer(plugin(() => null).chem, ["no block"], DEFAULTS, "Sketchkit")).toEqual({ aside: "Meno could not read it", kind: "unreadable" });
   });
 });
 
@@ -123,18 +123,18 @@ describe("Stereoisomers of a structure with AND and OR groups (foundation part 7
 
   it("makes each half, the half as drawn first, each as a drawing - though nothing is left open - and says which they are", async () => {
     const { chem, asked } = plugin(() => null, { isomers: [half(true, "turned", "a"), half(false, "drawn", "b")], free: false });
-    const answer = await stereoisomersAnswer(chem, [RACEMATE], DEFAULTS, "RDKit");
+    const answer = await stereoisomersAnswer(chem, [RACEMATE], DEFAULTS, "Sketchkit");
     expect(answer).toMatchObject({ made: ["drawn", "turned"] });
     expect("made" in answer && answer.properties?.stereo_groups?.value).toBe("in order: and1 as drawn; and1 turned over");
     // (the groups' centres asked back; nothing open, so set aside never applies to them)
     expect((asked[0].args.open as { atoms: number[] }).atoms).toEqual([0, 1]);
-    const aside = await stereoisomersAnswer(plugin(() => null, { isomers: [half(true, "turned", "a"), half(false, "drawn", "b")], free: false }).chem, [RACEMATE], optionsOf(STEREO_OPTIONS, { open: "aside" }), "RDKit");
+    const aside = await stereoisomersAnswer(plugin(() => null, { isomers: [half(true, "turned", "a"), half(false, "drawn", "b")], free: false }).chem, [RACEMATE], optionsOf(STEREO_OPTIONS, { open: "aside" }), "Sketchkit");
     expect(aside).toMatchObject({ made: ["drawn", "turned"] });
   });
 
   it("keeps it as drawn where the turned half cannot be made, and says so", async () => {
     const { chem } = plugin(() => null, { isomers: [half(false, "drawn", "b")], free: false });
-    expect(await stereoisomersAnswer(chem, [RACEMATE], DEFAULTS, "RDKit")).toMatchObject({
+    expect(await stereoisomersAnswer(chem, [RACEMATE], DEFAULTS, "Sketchkit")).toMatchObject({
       as: "drawn",
       properties: { stereo_groups: { value: "and1 turned over cannot be made in 3D" } },
     });

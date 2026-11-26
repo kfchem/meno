@@ -41,6 +41,8 @@ export function layoutAtomOf(a: Atom, at?: { x: number; y: number }): LAtom {
     ...(a.z != null ? { z: a.z } : {}),
     // (its charge where a hand put it)
     ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    // (the way its label reads where it is put to - HO, HOH2C - inside a Haworth ring: projections/haworthLabels)
+    ...(a.reads ? { reads: a.reads } : {}),
     // (its colour, and its highlight)
     ...(a.color ? { color: a.color } : {}),
     ...(a.highlight ? { highlight: a.highlight } : {}),

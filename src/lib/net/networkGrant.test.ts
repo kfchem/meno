@@ -92,8 +92,8 @@ describe("a yes to a network question, the app slow to hear of it", () => {
     slow.fails = true;
     const yes = answeringYes();
     try {
-      expect(await ask("python-env:plugin-helix")).toBe(true);
-      expect(useNetwork.getState().granted).toContain("python-env:plugin-helix");
+      expect(await ask("python-env:plugin-tightbind")).toBe(true);
+      expect(useNetwork.getState().granted).toContain("python-env:plugin-tightbind");
     } finally {
       yes.stop();
     }

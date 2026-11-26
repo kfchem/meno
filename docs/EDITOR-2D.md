@@ -667,7 +667,7 @@ that it is a drawing like any other - nothing remembers that a tool made it - an
 again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
 was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
 "Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
-(`Workspace/projections/`: `chair`, `extend`, `flip`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
+(`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
 on a page), and the **Newman projection** (`newman`).
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
@@ -702,6 +702,16 @@ on a page), and the **Newman projection** (`newman`).
   keeps as drawn, *Draw flat* lays out flat, and 3D made from it says it takes the configuration only, as from the tool's chair. *Flip chair*
   stays the tool's chair's. A cage or a bridged system drawn by hand in perspective is not asked after for it: fitting one to the engine's
   views takes up to a second, too long for a menu.
+- **Fusing** (a ring bond of a chair that stands alone right-clicked; `projections/fuse`): three ways, never two - *Fuse a chair, trans*,
+  *Fuse a chair, cis on the upper face*, *Fuse a chair, cis on the lower face* - a second chair fused on the bond (`fused` of the solids), drawn on
+  the first ring's four lines, each bond one bond long, as one step. trans takes the two equatorial places of the bond's atoms, which point apart,
+  and leaves the ring-fusion hydrogens axial, on opposite faces; cis takes the asked face's place at each, one axial and one equatorial, both
+  hydrogens on the other face. On a bare chair the two cis are one compound; on a ring that carries a group they are different compounds
+  (cis-syn-cis against cis-anti-cis), so the tool does not choose between them. Refused, in words, where a group stands at a place the new ring
+  would take or another atom where one of its own would go. On the four seat bonds, cis on one face folds the new ring back over the first, as
+  the solid does seen from this side: its axial bond is drawn in front of the first ring's far bond, which is broken behind it. Known answers
+  (`fuse.test.ts`): trans- and cis-decalin read as the flat drawings with wedged hydrogens on every bond in every picture of the chair; R and S
+  of 1-methyldecalin worked by hand; a group at any free place of either ring read as the solid has it.
 - **Draw as chair** (a flat six-membered ring right-clicked, an atom or a bond of it; `projections/fromFlat`): the ring drawn as a chair of the
   tool's, each group moved onto the free position that states the configuration the flat drawing states (the reader's, asked of the solid's
   own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
@@ -730,7 +740,7 @@ on a page), and the **Newman projection** (`newman`).
   as another compound - a configuration changed, or one stated that the drawing leaves open - nothing is changed and Meno says it is its
   own fault. Offered on a single
   ring of single bonds at saturated atoms, nothing fused, spiro or bridged on it, not yet drawn with depth: no cyclohexanone or cyclohexene,
-  no fused rings yet (they wait for the depth reader, with Fuse). Groups that come to lie over each other are left for the chemist.
+  no fused rings yet. Groups that come to lie over each other are left for the chemist.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
   below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
@@ -758,16 +768,25 @@ on a page), and the **Newman projection** (`newman`).
   0.30, so that the two stand visibly apart; in the five-ring a front
   atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
   inside the ring is read against the whole drawing as the page lays it out - every line but its own
-  bond, the bold and wedge-shaped bonds of the near edge, the other labels - a graze of less than a tenth
+  bond, the bold and wedge-shaped bonds of the near edge, the other labels and the ring O's - a graze of less than a tenth
   of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),
-  one that meets something steps along its vertical toward its atom by the least that clears every label:
+  each label of the ring that meets something is first read the other way where that meets less - HO for
+  OH, HOH2C for CH2OH, or back - its bond being upright, so that either way reads, whether its bond was
+  led out by a double-click or a drag and its label typed over it or given by *Edit label* (the atom keeps
+  the way, `reads`, and the page and a picture made of it draw it so: an OH up from the right-hand front atom reads HO, its H off the bond going up from it, and
+  keeps its full stem; in a five-ring, whose near edge's bonds rise steeply, a label up from a front atom
+  or down from a side atom reads away from its atom's rising bond). Then one that still meets something
+  steps along its vertical toward its atom by the least that clears every label:
   a back atom's down label first, to as little as 0.30, then a front atom's up label, to as little as
-  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 as
-  before, so that nothing is drawn worse than it was. A group that is no label - a carbon drawn out, with
-  what it carries - is never moved, so a bond drawn on from it has its room. Not yet clear, as before
-  these lengths: an OH up from the right-hand front atom (its H written across the bond going up from
-  it), a CH2OH up from a front atom beside a second label inside the ring, and in a five-ring an OH or a
-  CH2OH up from C-2. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 and
+  every label reads as before, so that nothing is drawn worse than it was. A label that meets nothing is
+  left as it reads. A group that is no label - a carbon drawn out, with
+  what it carries - is never moved, so a bond drawn on from it has its room. Clean-up and *Draw flat* let
+  the way a label reads go, so that its bonds decide again. Not yet clear, as before these lengths: a
+  CH2OH up from a front atom beside a second label up from the other, in either ring - wider than the
+  ring's near edge, read either way it meets that label or a bond rising from its own atom, and no row
+  above them stands clear of the ring O and the back bonds; and in the six-ring an OH up from the
+  right-hand front atom under a CH2OH down from C-5. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
@@ -796,8 +815,8 @@ on a page), and the **Newman projection** (`newman`).
   answers (`newman.test.ts`): 1,2-dichloro-1,2-difluoroethane with its groups in one order front and back is the meso form, with the back's
   two swapped one of the chiral pair; a spoke turned round the circle leaves the compound the same.
   Not yet checked in the sweep of what reads a bond's length or direction: label places for a labelled or charged atom of the pair.
-- **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no ring fused on a chair by the tool yet (Fuse comes in its
-  own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
+- **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; a ring is fused only on a chair that stands
+  alone (no three-ring system from the tool yet); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
   offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
@@ -1061,7 +1080,20 @@ Both go together, because both touch every layer.
   a pair of lines (the maintainer, 2026-10-24). Meno's own style asks for
   it; a journal's keeps its spacing exactly, as its specification has it
   (2026-10-27), and a style saved before the setting is drawn at the
-  spacing.
+  spacing. Where a style asks for three and not even three fit a line width
+  clear - a bond to a label under about half a style bond - three are drawn
+  still, the gaps as deep as the hashes and both thinner where they must be
+  - a round-ended hash's line as thick as the hash is deep - three marks
+  seen apart (IUPAC GR-1.3: at least three).
+- **A dashed bond** has three dashes at least, in every style (GR-1.3): a
+  short one's gaps close up first, to a line width seen between two past
+  their ends, then the dashes shorten - never shorter than they are wide
+  where their ends are square, to round dots where they are round - and
+  where not even that fits, the line thins, dashes and gaps alike: never
+  one solid line, which would read as a single bond, nor two, nor none. **A wavy bond** shows three half-waves at
+  least: where the style's period gives fewer - a short bond, or one a label
+  cuts - the period shortens to a whole number of half-waves, the amplitude
+  with it.
 - **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
   atom at its wide end, the bonds on from the atom starting there on their
   own: in Meno's own style (the maintainer, 2026-10-29) and, since
@@ -1795,7 +1827,11 @@ All hover-based, as above.
   unspecified", though the chemist had just done it.)
   Nothing is said where nothing changed, where a unit is simply
   new (a wedge just drawn), gone with its atom or with one of its groups,
-  or no longer a unit because two of its groups are now alike; nor while
+  or no longer a unit because two of its groups are now alike, nor at a
+  place whose configuration sets nothing before the edit or after it (as
+  *R and S* asks it: chem/candidatesDrawn) - a Newman's or a Haworth's
+  atom with two like groups, such as a carbon given its third methyl,
+  whose drawn depth states no configuration; nor while
   a gesture is still going (a drag says it once, as it ends), nor for undo
   or redo, which give a drawing back with its configuration, nor for a
   file opened, a drawing put in anew. Another

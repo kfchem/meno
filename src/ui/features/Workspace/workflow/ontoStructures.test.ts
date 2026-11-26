@@ -42,14 +42,14 @@ function conformer(of: string, compound: number, number: number, els: string[], 
     xyz: els.flatMap((_, i) => [i, number, 0]),
     energy: -100 + kcal / KCAL,
     madeOf: [structureLineage(of)],
-    calc: { readers: [], program: "xtb", method: "GFN2-xTB" } as SetEntry["calc"],
+    calc: { readers: [], program: "tightbind", method: "TB2" } as SetEntry["calc"],
     ...extra,
     ...properties,
   };
 }
 /** A free energy, as a Frequencies step gives one. */
 const g = (kcal: number, kelvin = 298.15): { properties: Record<string, Property> } => ({
-  properties: { "thermo.free-energy": { value: -100 + kcal / KCAL, unit: "Eh", status: "computed", at: { geometry: "", kelvin }, by: { program: "xtb", method: "GFN2-xTB" } } },
+  properties: { "thermo.free-energy": { value: -100 + kcal / KCAL, unit: "Eh", status: "computed", at: { geometry: "", kelvin }, by: { program: "tightbind", method: "TB2" } } },
 });
 
 const C3H8O = ["C", "C", "C", "O", "H", "H", "H", "H", "H", "H", "H", "H"];
@@ -68,7 +68,7 @@ describe("3D results onto structures", () => {
     expect([valueOf(out, 0, IN_3D.conformers)?.value, valueOf(out, 1, IN_3D.conformers)?.value]).toEqual([2, 1]);
     expect(valueOf(out, 0, IN_3D.state)?.value).toBe("finished");
     // (its lowest, as that conformer's energy is: in hartrees, by what worked it out)
-    expect(valueOf(out, 0, IN_3D.eMin)).toMatchObject({ value: -100, unit: "Eh", status: "computed", by: { program: "xtb", method: "GFN2-xTB" } });
+    expect(valueOf(out, 0, IN_3D.eMin)).toMatchObject({ value: -100, unit: "Eh", status: "computed", by: { program: "tightbind", method: "TB2" } });
     // (what the record said before is kept)
     expect(out.kept[0].record).toMatchObject({ id: "a", of: "of-a" });
   });
@@ -84,18 +84,18 @@ describe("3D results onto structures", () => {
     // (ethanol, alone in its formula, all of its own: never weighed against the others, 30 kcal/mol up or not)
     expect(valueOf(out, 2, IN_3D.share)?.value).toBe(1);
     // (a value of its conformers together: at its lowest one's geometry and the temperature, by what worked out its energies, over its own two)
-    expect(valueOf(out, 0, IN_3D.share)).toMatchObject({ unit: "none", status: "computed", at: { geometry: geometryKey(entries[0].xyz), kelvin: 298.15 }, by: { program: "xtb", method: "GFN2-xTB" }, ensemble: { of: 2 } });
+    expect(valueOf(out, 0, IN_3D.share)).toMatchObject({ unit: "none", status: "computed", at: { geometry: geometryKey(entries[0].xyz), kelvin: 298.15 }, by: { program: "tightbind", method: "TB2" }, ensemble: { of: 2 } });
     expect(out.ok && out.said).toMatch(/shares at 298.15 K among the isomers of each formula \(2 formulas\), from electronic energies/);
   });
 
   it("shares only where the isomers' energies come from one calculation, and weighs their free energies only where all were worked out alike", () => {
     const rows = [row(0, "a"), row(1, "b")];
-    const orca = { calc: { readers: [], program: "orca", method: "r2SCAN-3c" } as SetEntry["calc"] };
+    const quanta = { calc: { readers: [], program: "quanta", method: "TB1" } as SetEntry["calc"] };
     // (each structure's conformers of one calculation, but not the two structures': no share, for either, saying why)
-    const mixed = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 0, orca)], 298.15);
+    const mixed = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 0, quanta)], 298.15);
     for (const k of [0, 1]) expect(valueOf(mixed, k, IN_3D.share)?.status).toMatchObject({ failed: expect.stringMatching(/^its isomers' energies come from different calculations/) });
     // (their free energies of two methods: weighed by their electronic energies, of one calculation, said so)
-    const otherG = { properties: { "thermo.free-energy": { ...g(0).properties["thermo.free-energy"], by: { program: "orca", method: "r2SCAN-3c" } } } };
+    const otherG = { properties: { "thermo.free-energy": { ...g(0).properties["thermo.free-energy"], by: { program: "quanta", method: "TB1" } } } };
     const byE = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0, g(5)), conformer("b", 1, 1, C3H8O, 1, otherG)], 298.15);
     const w = boltzmann([0, 1].map((k) => -100 + k / KCAL), 298.15);
     expect(valueOf(byE, 0, IN_3D.share)?.value).toBeCloseTo(w[0], 12);
@@ -117,9 +117,9 @@ describe("3D results onto structures", () => {
     expect(valueOf(free, 1, IN_3D.share)?.value).toBeGreaterThan(0.9);
     expect(free.ok && free.said).toMatch(/from free energies/);
     // (weighed by free energies of another program than the energies': its share by that one's)
-    const orcaG = (kcal: number) => ({ properties: { "thermo.free-energy": { ...g(kcal).properties["thermo.free-energy"], by: { program: "orca", method: "r2SCAN-3c" } } } });
-    const byG = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0, orcaG(2)), conformer("b", 1, 1, C3H8O, 2, orcaG(0))], 298.15);
-    expect(valueOf(byG, 0, IN_3D.share)).toMatchObject({ by: { program: "orca", method: "r2SCAN-3c" } });
+    const quantaG = (kcal: number) => ({ properties: { "thermo.free-energy": { ...g(kcal).properties["thermo.free-energy"], by: { program: "quanta", method: "TB1" } } } });
+    const byG = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0, quantaG(2)), conformer("b", 1, 1, C3H8O, 2, quantaG(0))], 298.15);
+    expect(valueOf(byG, 0, IN_3D.share)).toMatchObject({ by: { program: "quanta", method: "TB1" } });
   });
 
   it("gives G min where each finished conformer has a G worked out alike - else why not, never a number", () => {
@@ -150,7 +150,7 @@ describe("3D results onto structures", () => {
         conformer("a", 0, 2, C3H8O, 0),
         conformer("b", 1, 1, C3H8O, 0, { failed: { kind: "failed", why: "x" } }),
         conformer("c", 2, 1, C2H6O, 0),
-        conformer("c", 2, 2, C2H6O, 1, { calc: { readers: [], program: "orca", method: "r2SCAN-3c" } as SetEntry["calc"] }),
+        conformer("c", 2, 2, C2H6O, 1, { calc: { readers: [], program: "quanta", method: "TB1" } as SetEntry["calc"] }),
       ],
       298.15,
     );

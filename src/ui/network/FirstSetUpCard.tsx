@@ -9,6 +9,7 @@ import { CARD_DETAIL, CARD_SOURCES, CARD_TITLE, DEPS, filledOtherwise, FIRST_ROL
 import { useDownloads } from "../../lib/pyEnv";
 import RoleOffer from "../features/Workspace/RoleOffer";
 import { Sources } from "./ConsentDialog";
+import { answerUpdateQuestion, UPDATE_CONSENT, useUpdateQuestion } from "../../lib/update";
 
 const BUTTON = "shrink-0 h-7 px-2.5 rounded-md border border-gh-line transition-[color,background-color,opacity] duration-150 ease-meno hover:bg-gh-base";
 const MAIN = "shrink-0 h-7 px-2.5 rounded-md bg-accel-base text-white transition-opacity duration-150 ease-meno hover:opacity-90";
@@ -28,7 +29,9 @@ function CardButton({ main, onClick, children }: { main?: boolean; onClick: () =
  * taking no focus and no key; there until it is answered. Its question first,
  * then each step as it goes with *Stop*; a question beyond what it named, in
  * its place; the plugins to choose from, where the list offers no one; or why
- * it failed, with *Try again*.
+ * it failed, with *Try again*. Once that is done and the page has rested,
+ * Meno's question about keeping itself up to date comes on it too
+ * (lib/update `useUpdateQuestion`), never over the page.
  */
 export default function FirstSetUpCard() {
   const card = useFirstSetUp();
@@ -44,7 +47,9 @@ export default function FirstSetUpCard() {
   );
   // (the plugin's files, as they download: a share where the backend reports one)
   const share = useDownloads((s) => (card.phase === "going" && card.plugin ? s[card.plugin.id] : undefined));
-  const shown = card.phase !== "none" && !talking;
+  // (Meno's question about keeping itself up to date, on the same card once the first start's is done: never two)
+  const update = useUpdateQuestion((s) => s.asking);
+  const shown = (card.phase !== "none" || update) && !talking;
   return (
     <AnimatePresence>
       {shown && (
@@ -56,7 +61,7 @@ export default function FirstSetUpCard() {
               role="status"
               className="fixed bottom-3 left-3 z-50 w-80 max-w-[calc(100vw-1.5rem)] rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2.5 text-xs text-gh-black"
             >
-              <CardBody card={card} share={share} />
+              {card.phase !== "none" ? <CardBody card={card} share={share} /> : <UpdateBody />}
             </motion.div>
           )}
         </Leaving>
@@ -141,3 +146,23 @@ export function CardBody({ card, share }: { card: FirstSetUpCardState; share?: n
     </>
   );
 }
+
+/** Meno's question about keeping itself up to date, on the card: what it fetches and from where, *Not now* or yes. */
+export function UpdateBody() {
+  return (
+    <>
+      <p className="font-semibold">{UPDATE_CONSENT.title}</p>
+      <p className="mt-1 text-gh-gray">{UPDATE_CONSENT.detail}</p>
+      <div className="text-[11px]">
+        <Sources sources={UPDATE_CONSENT.sources} />
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <CardButton onClick={() => void answerUpdateQuestion(false)}>Not now</CardButton>
+        <CardButton main onClick={() => void answerUpdateQuestion(true)}>
+          Keep up to date
+        </CardButton>
+      </div>
+    </>
+  );
+}
+

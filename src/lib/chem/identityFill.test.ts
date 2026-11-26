@@ -273,3 +273,33 @@ describe("identity filled in: which groups are alike, and which atoms are places
     for (const smiles of ["CC(C)=CCO", "CC(C)O", "C/C=C/CC(C)=C", "C[C@H](O)/C=C/C"]) expect([smiles, identity(fromSmiles(smiles)).complete]).toEqual([smiles, true]);
   });
 });
+
+describe("a cis or trans written in a small ring states nothing", () => {
+  // Answers by hand: a double bond whose smallest ring has seven atoms or fewer has its ring's one arrangement, cis (IUPAC 2013
+  // P-93.5.1.4.1; Brecher 2006 ST-4.3), so a side written on it states nothing; in a ring of eight or more trans can be held
+  // (trans-cyclooctene is a known, isolable compound), so there cis and trans are two compounds.
+  it("a ring of seven or fewer (cycloheptene, cyclopentene, cyclohexene) is one structure whether its double bond is written cis, trans or not at all; a ring of eight keeps it", () => {
+    for (const [written, plain] of [
+      // cycloheptene (7 ring atoms) written cis, and written trans
+      ["C1CC/C=C\\CC1", "C1CCC=CCC1"],
+      ["C1CC/C=C/CC1", "C1CCC=CCC1"],
+      // cyclopentene (5)
+      ["C1C/C=C\\C1", "C1CC=CC1"],
+      // cyclohexene (6)
+      ["C1C/C=C\\CC1", "C1CC=CCC1"],
+      // bicyclo[4.2.0]oct-2-ene: its C=C is in the eight-atom outer ring and in a six-ring; the smallest ring through it counts
+      ["C1/C=C\\CC2CCC12", "C1C=CCC2CCC12"],
+      ["C1/C=C/CC2CCC12", "C1C=CCC2CCC12"],
+    ]) {
+      expect([written, identityText(fromSmiles(written))]).toEqual([written, identityText(fromSmiles(plain))]);
+      for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(fromSmiles(written), seed))).toBe(identityText(fromSmiles(plain)));
+    }
+    // (cyclooctene, 8: cis and trans two compounds, neither the one written with nothing)
+    const [cis, trans, plain] = ["C1CCC/C=C\\CCC1", "C1CCC/C=C/CCC1", "C1CCCC=CCCC1"].map((s) => identityText(fromSmiles(s)));
+    expect(new Set([cis, trans, plain]).size).toBe(3);
+    // (cyclododecene, 12, a macrocycle: cis and trans two compounds)
+    expect(identityText(fromSmiles("C1CCCC/C=C\\CCCCC1"))).not.toBe(identityText(fromSmiles("C1CCCC/C=C/CCCCC1")));
+    // (a double bond out of the ring, at a ring atom, keeps its own: (E)- and (Z)-prop-1-en-1-ylcyclopropane are two)
+    expect(identityText(fromSmiles("C/C=C/C1CC1"))).not.toBe(identityText(fromSmiles("C/C=C\\C1CC1")));
+  });
+});

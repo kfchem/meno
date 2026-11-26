@@ -29,7 +29,7 @@ const geometry = (k: number) => {
 function plugin(answer: (block: string, i: number) => Configured = () => ({ elements: [], key: "O" })) {
   const asked: string[][] = [];
   const asker: Asker = {
-    plugin: "rdkit",
+    plugin: "sketchkit",
     version: "0.1.7",
     ask: async (blocks) => {
       asked.push(blocks);
@@ -49,7 +49,7 @@ describe("which stereoisomer each entry is", () => {
     expect(asked.map((b) => b.length)).toEqual([2]);
     await perceiveStereo([geometry(0), geometry(1), geometry(2)], asker);
     expect(asked.map((b) => b.length)).toEqual([2, 1]);
-    expect(stereoKnown(geometry(1))).toEqual({ perceived: true, elements: [], key: "O", by: { plugin: "rdkit", version: "0.1.7" } });
+    expect(stereoKnown(geometry(1))).toEqual({ perceived: true, elements: [], key: "O", by: { plugin: "sketchkit", version: "0.1.7" } });
   });
 
   it("says why it is not perceived: a molecule the plugin could not read, or nothing added to ask - which is asked again once something is", async () => {
@@ -66,7 +66,7 @@ describe("which stereoisomer each entry is", () => {
 
   it("is asked again where the plugin failed altogether, not kept as an answer", async () => {
     let fail = true;
-    const asker: Asker = { plugin: "rdkit", version: "0.1.7", ask: async (b) => (fail ? Promise.reject(new Error("worker stopped")) : b.map(() => ({ elements: [], key: "O" }))) };
+    const asker: Asker = { plugin: "sketchkit", version: "0.1.7", ask: async (b) => (fail ? Promise.reject(new Error("worker stopped")) : b.map(() => ({ elements: [], key: "O" }))) };
     await perceiveStereo([geometry(0)], asker);
     expect(stereoKnown(geometry(0))).toEqual({ perceived: false, why: "It could not be asked: worker stopped" });
     fail = false;

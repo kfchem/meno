@@ -9,7 +9,10 @@ GUI harness (`scripts/gui`).
 
 CI runs the whole suite on Linux and again on Windows (`.github/workflows/ci.yml`,
 *Frontend tests on Windows*), since Windows is the primary target and some
-faults show only there. Two to keep in mind when writing a test:
+faults show only there. The Windows job gives each test 20 s (`--testTimeout=20000`)
+instead of the default 5 s, because the hosted runner is several times slower on
+the heaviest exact checks; the limit only guards against a test that hangs. Two
+to keep in mind when writing a test:
 
 - **Paths.** `node:path` writes Windows paths with backslashes. A path
   compared with one written in the test, or in a list, is put in one form

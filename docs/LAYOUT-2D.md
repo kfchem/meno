@@ -712,7 +712,18 @@ one C=O onto the lattice at the other's cost.
     a lipid with its carbonyl on the right and its tail to the left; an
     acid's C=O points up - at the end of a chain or on an aromatic ring,
     in its plane; one on a saturated ring goes where the ring's stereo
-    puts it (penicillin's points down);
+    puts it (penicillin's points down); and so does a chain's own C=O -
+    a ketone's, an ester's, an amide's, the chain running on through its
+    carbon - straight up wherever the zigzag lets it (GR-3.2.2, where
+    below is acceptable): butanone's, methyl butanoate's. Where two cannot
+    both be up (hexane-2,5-dione) one is down, the chain still a zigzag -
+    one laid level by bending the chain counts as no more up - and which
+    is the canonical order's; where an acid's and a ketone's cannot both
+    be (levulinic acid, 2-oxoglutaric acid), the acid's is up and the
+    ketone's down, the acid's never laid level for it. An acid with no
+    such C=O on its chain - a fatty acid, folded or not - is drawn as
+    before. Only a C=O is
+    counted so: a C=N, a C=C or an S=O branch goes where the rest puts it;
   - peptides from N-terminus to C-terminus, left to right, as their
     sequences are written, the backbone carrying straight on through each
     alpha carbon and the side chains branching off; an amino acid then
@@ -725,7 +736,8 @@ one C=O onto the lattice at the other's cost.
   prostaglandin's two chains from its ring, both running off to the right
   - has its carboxyl end above its tail: read from the carboxyl first, as
   arachidonic acid is drawn and as IUPAC sets prostane, the ring on the
-  left, the chain with the acid above the other.
+  left, the chain with the acid above the other; an ester's so too, as
+  its acid is (methyl arachidonate).
 
 ### Sugars and nucleosides
 
@@ -1147,7 +1159,11 @@ round, as elements either).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule). The structure is grown with its blades
+  P, is the rest of the molecule) - and only to a ring that carries nothing
+  but its bond to the atom: a tolyl's or a mesityl's ring, turned, would
+  state a configuration of hindered rotation, which it does not have (GR-4.3.6,
+  which rules it out on such a ring; ST-1.7), and lies flat, its crowding
+  cleared the other ways. The structure is grown with its blades
   so turned from the start, at each angle, as well as flat, and every
   start is set right and measured alike: grown flat, four PPh₃ round a
   metal lie phenyl on phenyl in pairs, every frame the same drawing

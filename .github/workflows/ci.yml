@@ -43,7 +43,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
+      # The time limit guards against a test that hangs; the hosted Windows
+      # runner takes several times longer than a desk machine on the heaviest
+      # exact checks, so each test here gets 20 s instead of the default 5 s.
+      - run: npm test -- --testTimeout=20000
 
   rust:
     name: Rust backend (check, clippy, test)

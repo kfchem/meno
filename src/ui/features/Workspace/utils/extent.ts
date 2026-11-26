@@ -56,7 +56,7 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     const index = new Map<number, number>();
     const la: LAtom[] = atoms.map((a, i) => {
       index.set(a.id, i);
-      return { id: a.id, x: a.x, y: a.y, el: a.el, ...chemistry(a), ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}) };
+      return { id: a.id, x: a.x, y: a.y, el: a.el, ...chemistry(a), ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}), ...(a.reads ? { reads: a.reads } : {}) };
     });
     const lb: LBond[] = layoutBonds(
       st.model.bonds.filter((x) => index.has(x.a) && index.has(x.b)),

@@ -18,7 +18,7 @@ const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: (
 const XYZ = [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
 
 /** A thermal correction to G at the lower level, at a geometry's key (this water's, unless another is given). */
-const gcorr = (value: number, geometry = geometryKey(XYZ)): Property => ({ value, unit: "Eh", at: { geometry, kelvin: 298.15, atm: 1 }, by: { program: "Gaussian", method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" }, status: "computed" });
+const gcorr = (value: number, geometry = geometryKey(XYZ)): Property => ({ value, unit: "Eh", at: { geometry, kelvin: 298.15, atm: 1 }, by: { program: "Orbitron", method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" }, status: "computed" });
 
 /** A water with an energy and the properties given. */
 function water(energy: number, properties: Record<string, Property>, at = { x: 0, y: 0 }): Omit<Molecule3D, "id"> {

@@ -7,8 +7,8 @@
 import { AROMATIC } from "../aromatic";
 import { elementOf, endsAsDrawn } from "../chalcogenEnds";
 import { drawnRoundMetal } from "../elements";
-import { SMALL_RING } from "../rings";
 import { canonicalSearched, canonicalWritten, settingCisTrans, symmetryClasses, type SymmetryInput } from "../symmetry";
+import { inSmallRing } from "./candidates";
 import { lonePairCentres } from "./lonePairs";
 
 /**
@@ -48,7 +48,7 @@ export type Blank = (
  * them a plain hydrogen, or three and a lone pair it keeps
  * (./lonePairCentres) - an H among the three for a P, As, Sb or Bi (a
  * secondary phosphine's P); a double bond, each end with a group but the other
- * end and no other double bond, in no ring of `SMALL_RING` or fewer; and a
+ * end and no other double bond, in no ring of seven or fewer (./candidates `inSmallRing`); and a
  * run of cumulated double bonds between two carbons, each with a group -
  * even, an axis; odd, a cis or trans. A biaryl's axis is none: only a
  * drawing states one (ST-1.7).
@@ -82,28 +82,11 @@ export function blanksOf(g: SymmetryInput): Blank[] {
     //  secondary phosphine's P, the maintainer's ruling of 2026-11-06, ./lonePairs; its H last, the lone pair understood)
     else if (around[i].length + hs(i) === 3 && pyramid(i)) out.push({ kind: "centre", at: i, neighbours: [...around[i], ...(hs(i) ? [-1] : [])], own: [i], sides: [around[i]] });
   }
-  // (whether a and b are joined but through their own bond within `most` bonds: a ring of `most` + 1 atoms or fewer)
-  const near = (a: number, b: number, most: number) => {
-    let at = [a];
-    const seen = new Set([a]);
-    for (let d = 1; d <= most && at.length; d++) {
-      const next: number[] = [];
-      for (const x of at)
-        for (const y of around[x]) {
-          if (seen.has(y) || (x === a && y === b)) continue;
-          if (y === b) return true;
-          seen.add(y);
-          next.push(y);
-        }
-      at = next;
-    }
-    return false;
-  };
   const others = (end: number, partner: number) => around[end].filter((m) => m !== partner);
   g.bonds.forEach((b, k) => {
     if (b.order !== 2 || b.stereo || doubles[b.a].length !== 1 || doubles[b.b].length !== 1) return;
     const [p, q] = [others(b.a, b.b), others(b.b, b.a)];
-    if (!p.length || !q.length || near(b.a, b.b, SMALL_RING - 1)) return;
+    if (!p.length || !q.length || inSmallRing(g, k)) return;
     out.push({ kind: "bond", at: k, refs: [p[0], q[0]], own: [b.a, b.b], sides: [p, q] });
   });
   // (a run: from an end of one double bond through atoms of two to the other end of one)
