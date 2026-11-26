@@ -611,7 +611,38 @@ C:O between two atoms that both have room - oxalate written
 are refused, though one form would close them; write their double
 bonds. Where such a bond is read and not refused - from a file - a lone
 one between two atoms that both have room is read as single for now.
-Text is
+**A name looked up** (where a plugin fills *A structure found by its name*,
+PLUGINS.md *Roles*; the icon is then named *SMILES or name*): one more row
+is offered under the field, last - `Look up "aspirin" at` the service, by
+its plugin's name - and first only where nothing else reads the text. Nothing
+goes out while typing: the name is sent only when that row is chosen, by
+Enter or a click, so that a name not yet published stays on the computer,
+and the requests come at a person's pace. The first time, the person is
+asked whether names may go to the service's hosts ("Each name you choose to
+look up goes there. Nothing else does."), remembered as any purpose and
+withdrawn in Settings, *Network*; a no sends nothing, and says so. While it
+is looked up the row says *Looking up…*; Escape or a press elsewhere lets it
+go, and an answer that comes after is dropped. One compound found is drawn
+at once, as a typed SMILES is, one step to undo named by its title and id
+("Add aspirin (CID 2244)"); several are offered in the service's order, none
+chosen for the chemist - each by its title, formula and id, and in words
+what is not plain about it (*1 of 3 stereocentres not defined*, *2 parts*,
+a charge) - with how many more the service has; none is said ("has no
+compound by this name"), and so is an error, in the plugin's words. Before
+anything is drawn the structure Meno reads from the SMILES given must have
+the formula and charge given, compared as element counts: unlike, it is
+not drawn ("Meno reads …'s structure for aspirin as C9H8O3; …'s formula is
+C9H8O4. Not drawn."), the service's formula quoted as it wrote it. The
+counts tell no isotope apart: D and T count as hydrogen on both sides. A
+formula is read as a database writes one, its charge at the end ("Fe+2");
+written as some write an ion ("Fe2+"), it reads as two irons and +1, and
+unlike the record's charge it is not drawn. Stereocentres or double bonds the service leaves
+undefined are drawn open, and said, never given a configuration. Offline,
+the row is dimmed and says the service needs the network. Where no plugin
+looks names up and nothing reads the text, a quiet *Look it up as a name…*
+under what went wrong offers the plugins that do; once one is added, what
+was typed is looked up only on the chemist's Enter. Nothing is kept on
+disk: the same name looked up twice goes out twice. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
@@ -1633,11 +1664,13 @@ All hover-based, as above.
     (`utils/markGlide`, `ChemMarks2D`).
   - How far off its atom: a setting of the drawing style, *R and S:
     distance from the atom*, from the atom to the nearest of the letters,
-    as a share of the labels' size. IUPAC puts them about half a capital's
-    height off (35%), as ACS 1996 keeps them in parentheses; written bare
-    they look further off at that, and the maintainer asked for them
-    nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
-    molecule in 3D, the same share beyond its ball.
+    as a share of the labels' size. IUPAC puts them about half the height
+    of a C or an H off, rarely as much as the whole height (GR-11.1): 35%,
+    the default in every shipped style, bare or in parentheses, as the
+    maintainer ruled - IUPAC's form by default, a difference as a style
+    setting. 15% gives the nearer place Meno drew bare ones at before, at
+    the maintainer's asking (2026-10-05). On a molecule in 3D, the same
+    share beyond its ball.
   - **Meno's own** (docs/CIP.md): each worked out by Meno's reading of the
     CIP rules, off the drawing's thread, only for the atoms and bonds they
     are asked for on - no plugin needed. One asked for that has none says
@@ -2769,6 +2802,19 @@ lipids each have their own way of being drawn, which it should know.
        aziridine's N is lower, 17.7-20.5 kcal/mol (Sec. 4.3), an N-aryl's
        or N-acyl's lower still: its invertomers are the conformer search's
        to find;
+     - an oxaziridine's N with an aryl on it (the maintainer, 2026-11-18):
+       the aryl lowers its barrier, but the ring's O keeps it as high as an
+       N-chloro aziridine's - a free energy of activation of 23.4 kcal/mol,
+       measured for 3-methyl-2,3-diphenyloxaziridine by its two invertomers
+       going over to each other at room temperature (H. Ono, J. S. Splitter
+       and M. Calvin, Tetrahedron Lett. 14, 4107-4110, 1973). The aryl is
+       a C of an aromatic ring of carbons only, fused ones too (a phenyl, a
+       naphthyl), whatever is on it. A heteroaryl (a pyridyl, a thienyl) is
+       not taken as an aryl here, because no barrier has been measured for
+       one (the maintainer, 2026-11-25).
+       An N-acyl, N-sulfonyl, N-alkoxycarbonyl or N-vinyl oxaziridine's N
+       keeps none, nor does an N-aryl diaziridine's, no barrier having been
+       measured for it, nor an N-aryl aziridine's;
      - an N at a bridgehead of a small bridged ring system, every bridge of
        three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
        at most): it cannot turn over without breaking a bond. A larger cage
@@ -2988,6 +3034,25 @@ traced from reference drawings.
   the drawing, not when it is dropped: by then Office has taken it back
   from the drag pasteboard. A copy on a Mac makes only what the clipboard
   there takes (`clipboard_takes`): no bitmap or object for Windows.
+- A picture of molecules in 3D alone - nothing drawn flat beside them - goes
+  into Office's clip format as a PNG, not an EMF: the canvas the molecules
+  are drawn on, as it is, with what is written over them (R and S, a
+  measurement's value, a note on the file) laid on it at the same
+  resolution (`picture.ts` `solidsPng`). In an EMF the molecules were a
+  bitmap too, at that resolution: only the letters over them were vectors.
+  The molecules are drawn once, not drawn and then drawn again from an SVG.
+  On Windows the EMF is still made, for Windows' other programs and for
+  the object. A picture with anything drawn flat - a bond,
+  a label, an arrow - carries its EMF in the clip format as before, its
+  letters and lines sharp at any size. A copy reaches the app as its bytes
+  (`clipboard_write`, one body, the kinds listed in a header), and the
+  bitmap for Windows is made there from the PNG (`src-tauri/src/dib.rs`).
+  Its pictures are made a step at a time, the drawing drawn between the
+  steps - molecules in 3D among them, drawn a step at a time too, each
+  molecule's balls and sticks worked out once (`render3d.ts`); a copy begun
+  meanwhile ends the one before it, which lets go of what it made; a copy still being made after a quarter of a second says
+  "Copying…" in the corner, where other work in hand is said, until it is on
+  the clipboard. A paste waits for it, as before.
 - Drops are routed to the part of the page they land on (`src/lib/drop.ts`):
   a part that takes them - the drawing now; a tab strip, a workflow's node
   or a 3D view in time - registers as a drop zone, which says what it

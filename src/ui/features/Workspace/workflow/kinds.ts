@@ -131,6 +131,8 @@ export type KindInfo = {
   perceives?: "configurations";
   /** Where it needs them known only with some options: whether these do (Duplicates' mirror images counted in). Unsaid, always. */
   perceivesWith?: (v: OptionValues) => boolean;
+  /** Its options that mean nothing for structures drawn, not shown while they are what comes in (`optionsTaking`; Duplicates' mirror images: identity keeps each configuration drawn). */
+  notOnDrawn?: readonly string[];
   /** Meno's own choices for a kind a plugin does, whoever does it, before the plugin's (Render's: a picture's size and shape, and what its molecules and surfaces are made of). */
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
@@ -306,7 +308,8 @@ export const KINDS: readonly KindInfo[] = [
     // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
     whole: true,
     icon: "copies", family: "structures",
-    takes: ["molecules", "conformers"],
+    // (structures drawn too: alike by Meno's identity, constitution and each configuration as drawn - workflow/meno `duplicatesDrawn`)
+    takes: ["molecules", "conformers", "structures"],
     gives: "same",
     runs: "entries",
     made: "Unlike",
@@ -342,6 +345,8 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => (v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined),
     perceives: "configurations",
     perceivesWith: (v) => v.mirrors === "counted",
+    // (on structures drawn identity decides: a configuration drawn is kept, so a mirror image drawn is another structure - nothing to choose)
+    notOnDrawn: ["mirrors"],
   },
   {
     kind: "populations",
@@ -1595,6 +1600,12 @@ export function madeName(kind: StepKind, options: readonly Option[], own: Record
   if ([...made.matchAll(/\{([a-z0-9-]+)\}/g)].some(([, id]) => typeof values[id] === "number" && !Number.isFinite(values[id]))) return name;
   if (madeOne && Number(values[madeOne.option]) === 1) return madeOne.name;
   return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
+}
+
+/** `options`, a step of `kind`'s, as its card shows them for what comes in (`holds`): without those that mean nothing for structures drawn (`notOnDrawn`). */
+export function optionsTaking(kind: StepKind, options: readonly Option[], holds: string | null): readonly Option[] {
+  const not = kindInfo(kind).notOnDrawn;
+  return not && holds === "structures" ? options.filter((o) => !not.includes(o.id)) : options;
 }
 
 /** What a step's line calls an option: its `brief`, else its label without what it says in brackets. */

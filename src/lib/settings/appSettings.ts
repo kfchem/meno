@@ -451,6 +451,15 @@ function acceptChemistry(raw: unknown): ChemistrySettings {
   };
 }
 
+/**
+ * A purpose allowed, as the settings keep it - and as the app reads them
+ * (src-tauri/src/net.rs `load_settings`, the same rule): lowercase letters,
+ * digits and `:-@.,`, since a plugin's role names its hosts in its purpose
+ * (`lookup:<id>@<hosts>`, `model:<id>@<hosts>`); not over 4096 characters.
+ * Every yes stored is read back, so that it is listed and can be withdrawn.
+ */
+const PURPOSE_KEPT = /^[a-z0-9:@.,-]{1,4096}$/;
+
 function acceptNetwork(raw: unknown): NetworkSettings {
   if (typeof raw !== "object" || raw === null)
     return DEFAULT_APP_SETTINGS.network;
@@ -462,7 +471,7 @@ function acceptNetwork(raw: unknown): NetworkSettings {
           ...new Set(
             granted.filter(
               (p): p is string =>
-                typeof p === "string" && /^[a-z0-9:-]{1,64}$/.test(p),
+                typeof p === "string" && PURPOSE_KEPT.test(p),
             ),
           ),
         ]

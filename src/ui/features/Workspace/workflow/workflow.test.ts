@@ -14,7 +14,7 @@ import type { Molecule3D } from "../store/types";
 import type { EntryStereo } from "../../../../lib/entry";
 import { setMembers, countOf, setEntries, holdsOf, MARKS_UNREAD } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { keptApart, notAllMinima, pushTo, runMeno, runMenoInTurns, STATE_FINISHED } from "./meno";
+import { DRAWN_AND_3D, keptApart, notAllMinima, pushTo, runMeno, runMenoInTurns, STATE_FINISHED } from "./meno";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
 
@@ -988,7 +988,7 @@ describe("Quick Add's calculations", () => {
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
     useReaders.setState({ state: { sketchkit: "added", confsweep: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["filter", "check-structures", "stereoisomers", "enumerate", "chart", "onto-structures"]]]);
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["duplicates", "filter", "check-structures", "stereoisomers", "enumerate", "chart", "onto-structures"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { quanta: "added" }, problem: {} });
     expect(offered(doc)[0]).toEqual(["Quanta", ["optimise", "energy", "frequencies", "path-search", "saddle-point", "reaction-path"]]);
@@ -1024,7 +1024,7 @@ describe("Quick Add, for structures that leave their stereo open", () => {
     expect((lines[0][1] as string[])[0]).toBe("stereoisomers");
     // (the rest as they were, after it: the plugin's line, and Meno's others in their order - 3D results onto structures among
     //  them, which takes structures drawn)
-    expect(lines).toEqual([["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart", "onto-structures"]], ["Sketchkit", ["conformers", "descriptors"]]]);
+    expect(lines).toEqual([["Meno", ["stereoisomers", "duplicates", "filter", "check-structures", "enumerate", "chart", "onto-structures"]], ["Sketchkit", ["conformers", "descriptors"]]]);
   });
 
   it("and from Conformers' Failed exit - not from its conformers, nor from a set the chemist made", () => {
@@ -1038,10 +1038,25 @@ describe("Quick Add, for structures that leave their stereo open", () => {
     const failed = exitSet(doc, conf, "failed").set;
     doc = { ...doc, sets: doc.sets!.map((b) => (b.id === failed ? { ...b, made: { ...b.made!, holds: "structures" as const } } : b)) };
     expect(offeredFirst(doc, exitSet(doc, conf, "failed"))).toBe("stereoisomers");
-    expect(offered(doc, exitSet(doc, conf, "failed"))[0]).toEqual(["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart", "onto-structures"]]);
+    expect(offered(doc, exitSet(doc, conf, "failed"))[0]).toEqual(["Meno", ["stereoisomers", "duplicates", "filter", "check-structures", "enumerate", "chart", "onto-structures"]]);
     expect(offeredFirst(doc, exitSet(doc, conf))).toBeNull();
     expect(offeredFirst(doc, { set: drawn })).toBeNull();
     expect(offeredFirst(doc)).toBeNull();
+  });
+});
+
+describe("Duplicates on a set of structures drawn and molecules in 3D together", () => {
+  it("refuses it in words - one comparison is not the other's - never splitting it unsaid", () => {
+    // (a molecule in 3D in the set's frame, and a structure drawn beside it in the same frame)
+    let doc = addMolecule3d(emptyWorkspaceDocument(), bent({ x: 0, y: 0 }));
+    doc = { ...doc, model: { atoms: [{ id: 101, x: 1, y: 1, r: 0.9, el: "C" }, { id: 102, x: 2.2, y: 1, r: 0.9, el: "O" }], bonds: [{ id: 103, a: 101, b: 102, order: 1 }] } };
+    doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
+    const set = doc.sets![doc.sets!.length - 1];
+    expect([setMembers(doc, set).structures.length, setMembers(doc, set).molecules.length]).toEqual([1, 1]);
+    doc = addStep(doc, "duplicates", 8, 0);
+    const id = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(doc, { set: set.id }, id);
+    expect(runStep(doc, id, W).steps!.find((s) => s.id === id)!.ran).toMatchObject({ ok: false, said: DRAWN_AND_3D });
   });
 });
 

@@ -63,6 +63,14 @@ describe("the settings file", () => {
         network: { offline: "yes", granted: ["python-env:console", "x y", 3, "python-env:console"] },
       }).network,
     ).toEqual({ offline: false, granted: ["python-env:console"] });
+    // a plugin's role's yes names its hosts in its purpose: read back, so that it is listed in Settings, Network and can be withdrawn
+    expect(
+      acceptAppSettings({
+        network: {
+          granted: ["lookup:finder@names.example.org", "model:talker@api.example.com,files.example.com", "lookup:finder@x y.org", "lookup:FINDER@names.example.org", "a".repeat(4097)],
+        },
+      }).network.granted,
+    ).toEqual(["lookup:finder@names.example.org", "model:talker@api.example.com,files.example.com"]);
     // a file from before there were chemistry settings, or a setting mangled
     expect(
       acceptAppSettings({ chemistry: { valenceWarnings: "on", stereoLabels: true } }).chemistry,

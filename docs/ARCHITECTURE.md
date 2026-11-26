@@ -1138,7 +1138,17 @@ WORKSPACE.md, *The page's conformers*). Both take
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
 keeps which drawing atom each of its atoms is and what the drawing was (`drawnFrom`, `drawnAs`;
-`utils/drawnLink`), so that hover is shared and a changed drawing is seen.
+`utils/drawnLink`), so that hover is shared and a changed drawing is seen:
+its atoms and bonds, and each configuration the drawing states as identity
+reads it (what it keeps, where it keeps any) - so that (Z) made (E) by moving a methyl, or a centre's two
+groups exchanged in place, is a changed drawing too, and a wedge moved to
+another bond that states the same, as Clean-up moves one, is not; nor is
+a plain hydrogen Clean-up draws on a centre to wedge it, which is the
+structure's as identity folds it in. A wedge whose configuration is not
+read (at no centre, leaving the structure) is kept as drawn. A configuration
+that sets nothing (a wedge at an isopropyl's CH) states nothing, so a
+structure that states none keys by its atoms and bonds alone, each bond's
+order and no mark.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
 coordinates gave none - where it has its hydrogens, which the method
@@ -1726,7 +1736,13 @@ to be able to work with nothing going out at all.
   the one before kept as `network-log.jsonl.1`, one only. A child that may
   not use the network - a plugin's worker, a job - is pointed at the proxy
   with no task, so whatever it reaches for is
-  refused and on the record. What Meno fetches itself is a task too, under
+  refused and on the record. A worker whose plugin fills a role that names
+  hosts - talking with a model, or a structure found by its name - is the
+  one other: begun as a task under its own purpose (`model:<id>@<hosts>`,
+  `lookup:<id>@<hosts>`) with the hosts its manifest in place names, read
+  by the backend (`model.rs` `hosted_of`), never taken from the page; till
+  that purpose is allowed it has no task, and goes nowhere. A plugin fills
+  at most one such role. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an
   environment needs one (`tools.rs`), a plugin's downloads as it is set up
   - a model's weights, Blender (`plugfiles.rs`, under the plugin's

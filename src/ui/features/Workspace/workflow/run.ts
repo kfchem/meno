@@ -30,7 +30,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor, roomMa
 
 export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
-import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
+import { DRAWN_AND_3D, notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
 import { ontoStructures } from "./ontoStructures";
 import { measuredSet, modeOnAtomsSet, torsionsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
@@ -156,6 +156,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const unread = wiresInto(doc, id, "atoms").length && typed.ok ? { ...typed, said: `${typed.said} \u00b7 the table wired into Atoms not read: atoms typed` } : typed;
     return ranAs(doc, id, unread, key, w);
   }
+  // (Duplicates on a set of structures drawn and molecules in 3D together: one comparison is not the other's - refused, never split unsaid)
+  if (step.kind === "duplicates" && input.holds === "structures" && input.molecules.length) return ranAs(doc, id, { ok: false, said: DRAWN_AND_3D }, key, w);
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), values, doc.style)

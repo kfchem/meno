@@ -6,7 +6,8 @@ import { withText } from "../../../lib/binary/png";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, inPoints } from "../../../lib/chem/style";
 import { structureInDrop, structureOnClipboard } from "./chem/fromClipboard";
-import { pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
+import { onlySolids, pictureDpiFor, pictureItems, rasterFrame, structureInPicture } from "./picture";
+import type { Layout } from "../../../lib/chem/layout2d";
 import { ballSegmentsFor, tilesOf } from "./render3d";
 import type { Model } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
@@ -60,6 +61,12 @@ describe("pictures of a structure", () => {
     const mac = new Set(["meno", "mol", "text", "gvml", "png"] as const);
     const items = await pictureItems(model, aromatic, ACS_1996, mac);
     expect(items.map((i) => i.flavor)).toEqual(["gvml"]);
+  });
+
+  it("never hold a bitmap: the app makes Windows' from the PNG (src-tauri/src/dib.rs)", async () => {
+    const windows = new Set(["meno", "mol", "text", "gvml", "emf", "png", "dib", "embed"] as const);
+    const items = await pictureItems(model, aromatic, ACS_1996, windows);
+    expect(items.map((i) => i.flavor)).not.toContain("dib");
   });
 
   it("give the structure back when pasted, as Office hands the clip format back", async () => {
@@ -175,5 +182,34 @@ describe("a ball in a picture", () => {
     expect(ballSegmentsFor(1e6, 1)).toBe(256);
     expect(ballSegmentsFor(240, 30_000)).toBe(48);
     expect(ballSegmentsFor(240, 2000) ** 2 * 2000).toBeLessThanOrEqual(20_000_000 + 2 * 2000 * 100);
+  });
+});
+
+describe("a picture of molecules in 3D alone", () => {
+  const solid = { kind: "ball" } as unknown as NonNullable<Layout["solids"]>[number];
+  const bare: Layout = { lines: [], polys: [], texts: [], circles: [], fills: [], solids: [solid], bounds: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } }, zoom: 1, reach: [] };
+
+  it("is one with molecules in 3D and nothing drawn flat; what is written over them does not count", () => {
+    expect(onlySolids(bare)).toBe(true);
+    expect(onlySolids({ ...bare, solidsTexts: [{} as Layout["texts"][number]], measures: [{} as NonNullable<Layout["measures"]>[number]] })).toBe(true);
+  });
+
+  it("is not one with no molecules in 3D, or with a bond, a label, a shape, an arrow or a pen's stroke beside them", () => {
+    expect(onlySolids({ ...bare, solids: [] })).toBe(false);
+    expect(onlySolids({ ...bare, solids: undefined })).toBe(false);
+    const some = [{}] as never[];
+    for (const flat of ["lines", "polys", "texts", "circles", "fills", "curves", "under", "shapes", "inks"] as const) {
+      expect(onlySolids({ ...bare, [flat]: some }), flat).toBe(false);
+    }
+  });
+});
+
+describe("a picture's frame", () => {
+  it("says its view and its pixels to the view's unit, where its SVG says them", () => {
+    const frame = rasterFrame('<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 10 5" width="100" height="50"></svg>', 192);
+    expect(frame.view).toEqual([-2, -3, 10, 5]);
+    // (10 px to the unit at 96 dpi, twice that at 192)
+    expect(frame.perUnit).toBe(20);
+    expect([frame.width, frame.height]).toEqual([200, 100]);
   });
 });

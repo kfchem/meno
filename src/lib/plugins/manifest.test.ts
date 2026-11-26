@@ -200,6 +200,23 @@ describe("a plugin's manifest", () => {
       expect(talks(h), JSON.stringify(h)).toBeUndefined();
     expect(talks(["api.example.com"], "smiles")).toBeUndefined();
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "smiles" }] })?.roles[0].hosts).toBeUndefined();
+    // (a structure found by its name: its hosts as a model's are; and a plugin fills at most one role that names hosts - two, and it is none)
+    expect(talks(["pubchem.ncbi.nlm.nih.gov"], "names")?.hosts).toEqual(["pubchem.ncbi.nlm.nih.gov"]);
+    expect(talks(undefined, "names")).toBeUndefined();
+    const both = { ...good, reads: [], kinds: [], roles: [{ role: "language-model", hosts: ["api.example.com"] }, { role: "names", hosts: ["pubchem.ncbi.nlm.nih.gov"] }] };
+    expect(acceptManifest(both)).toBeNull();
+    // (a role that goes out is all its plugin does: its one worker is handed nothing else - another role, a step, a file - or the plugin is none)
+    const alone = { ...good, reads: [], kinds: [], roles: [both.roles[1]] };
+    expect(acceptManifest(alone)?.roles.map((r) => r.role)).toEqual(["names"]);
+    expect(acceptManifest({ ...alone, roles: [both.roles[1], { role: "smiles" }] })).toBeNull();
+    expect(acceptManifest({ ...alone, roles: [{ role: "checks" }, both.roles[0]] })).toBeNull();
+    expect(acceptManifest({ ...alone, steps: [{ kind: "optimize" }] })).toBeNull();
+    expect(acceptManifest({ ...alone, reads: ["orbitron"], kinds: good.kinds })).toBeNull();
+    expect(acceptManifest({ ...alone, writes: [{ kind: "orbitron" }], kinds: good.kinds })).toBeNull();
+    // (a host is a public name: never an address in another spelling, never this computer - and ordinary names still are)
+    for (const h of ["0x7f.1", "0x7f.0.0.1", "0xa.1", "0251.0xfe.0xa9.0xfe", "0x0.0", "10.1", "a.localhost", "localhost.localdomain", "names.localhost.example"])
+      expect(talks([h], "names"), h).toBeUndefined();
+    for (const h of ["names.example.org", "data.lookup.example-host.net", "x1.example.io", "xn--bcher-kva.example"]) expect(talks([h], "names")?.hosts, h).toEqual([h]);
     // (Sketchkit's, as it carries them)
     const sketchkit = MANIFESTS.find((m) => m.id === "sketchkit")!;
     expect(sketchkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);

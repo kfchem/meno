@@ -1,7 +1,9 @@
 //! A plugin that talks with a model: the `language-model` role
 //! (docs/CONVERSATIONS.md, *Connections*). Its worker reaches the hosts its
 //! installed manifest names, and those alone, through the network gate,
-//! under the purpose `model:<id>@<hosts>`. The person's key for its service is kept
+//! under the purpose `model:<id>@<hosts>`. A plugin that looks names up -
+//! the `names` role (docs/PLUGINS.md, *Roles*) - goes out the same way, under
+//! `lookup:<id>@<hosts>`, and is given no key. The person's key for its service is kept
 //! in the system's keychain and read here, never handed to the page: it is
 //! added to a `converse` request on its way to the worker (`ext_converse`),
 //! the one way such a request reaches it, and taken out again of whatever
@@ -18,6 +20,52 @@ use crate::net::TaskHandle;
 /// The role a model's plugin fills (lib/plugins/roles.ts).
 pub const ROLE: &str = "language-model";
 
+/// The role a plugin that finds a structure by its name fills (lib/plugins/roles.ts).
+pub const NAMES_ROLE: &str = "names";
+
+/// What a plugin's worker goes out for: the one role naming hosts it fills
+/// (a plugin fills at most one: lib/plugins/manifest.ts `acceptManifest`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hosted {
+    /// Talking with a model: its key added to each converse request.
+    Model,
+    /// Looking names up: no key, and no converse request.
+    Names,
+}
+
+impl Hosted {
+    /// The role it is, as a manifest names it.
+    fn role(self) -> &'static str {
+        match self {
+            Hosted::Model => ROLE,
+            Hosted::Names => NAMES_ROLE,
+        }
+    }
+
+    /// The purpose its worker goes out under: allowed by the person once, as
+    /// any, and withdrawn in Settings, Network. The hosts are in it, in order:
+    /// a yes is for those hosts, and a plugin in place that names others -
+    /// updated - is asked of again (lib's `modelPurpose` and `lookupPurpose`,
+    /// the same).
+    pub fn purpose(self, plugin: &str, hosts: &[String]) -> String {
+        let mut hosts = hosts.to_vec();
+        hosts.sort();
+        let kind = match self {
+            Hosted::Model => "model",
+            Hosted::Names => "lookup",
+        };
+        format!("{kind}:{plugin}@{}", hosts.join(","))
+    }
+
+    /// Its network task, in words.
+    pub fn label(self, plugin: &str) -> String {
+        match self {
+            Hosted::Model => format!("{plugin}: talking with a model"),
+            Hosted::Names => format!("{plugin}: looking names up"),
+        }
+    }
+}
+
 /// The most hosts the role names (lib/plugins/manifest.ts `HOSTS_MOST`).
 const HOSTS_MOST: usize = 8;
 
@@ -26,21 +74,37 @@ const HOSTS_MOST: usize = 8;
 #[cfg(not(any(target_os = "macos", windows)))]
 pub const NO_SAFE_PLACE: &str = "No safe place to keep a key on this system";
 
-/// The purpose a model's plugin uses the network under: allowed by the
-/// person once, as any, and withdrawn in Settings, Network. The hosts are in
-/// it, in order: a yes is for those hosts, and a plugin in place that names
-/// others - updated - is asked of again (lib's `modelPurpose`, the same).
-pub fn purpose(plugin: &str, hosts: &[String]) -> String {
-    let mut hosts = hosts.to_vec();
-    hosts.sort();
-    format!("model:{plugin}@{}", hosts.join(","))
+/// The one role naming hosts a manifest fills - talking with a model, or
+/// looking names up - and the hosts it names, read as the page reads them
+/// (lib/plugins/manifest.ts `hostsOf`): each a host's name exactly, 1 to 8.
+/// None where it fills no such role, names one amiss, fills both, or does
+/// anything else - another role, a step, a file to read or write: one worker
+/// serves all of a plugin's roles, so the one that goes out is handed nothing
+/// else. The page takes such a plugin for none, and its worker is given no
+/// way out.
+pub fn hosted_of(manifest: &Value) -> Option<(Hosted, Vec<String>)> {
+    let roles = manifest.get("roles")?.as_array()?;
+    let fills = |k: Hosted| roles.iter().find(|r| r.get("role").and_then(Value::as_str) == Some(k.role()));
+    let (kind, role) = match (fills(Hosted::Model), fills(Hosted::Names)) {
+        (Some(r), None) => (Hosted::Model, r),
+        (None, Some(r)) => (Hosted::Names, r),
+        _ => return None,
+    };
+    let more = |k: &str| manifest.get(k).is_some_and(|v| v.as_array().is_none_or(|a| !a.is_empty()));
+    if roles.len() != 1 || ["steps", "reads", "writes"].into_iter().any(more) {
+        return None;
+    }
+    Some((kind, hosts_in(role)?))
 }
 
-/// The hosts a manifest's `language-model` role names, read as the page
-/// reads them (lib/plugins/manifest.ts `hostsOf`): each a host's name
-/// exactly, 1 to 8. None where it fills no such role, or names one amiss.
-pub fn hosts_of(manifest: &Value) -> Option<Vec<String>> {
-    let role = manifest.get("roles")?.as_array()?.iter().find(|r| r.get("role").and_then(Value::as_str) == Some(ROLE))?;
+/// Whether a network task's purpose is a plugin's role that goes out
+/// (`Hosted::purpose`): the gate then reaches only addresses on the web.
+pub fn goes_out_for_a_role(purpose: &str) -> bool {
+    purpose.starts_with("model:") || purpose.starts_with("lookup:")
+}
+
+/// The hosts a role names, each a host's name exactly, 1 to 8, each once.
+fn hosts_in(role: &Value) -> Option<Vec<String>> {
     let hosts = role.get("hosts")?.as_array()?;
     if hosts.is_empty() || hosts.len() > HOSTS_MOST {
         return None;
@@ -55,16 +119,20 @@ pub fn hosts_of(manifest: &Value) -> Option<Vec<String>> {
     Some(out)
 }
 
-/// A host's name: lowercase labels of letters, digits and hyphens, at least
-/// two of them - never a pattern, an address or a port.
+/// A public host's name: lowercase labels of letters, digits and hyphens, at
+/// least two of them, the last of letters alone (so never a number, as
+/// `0x7f.1` or `10.1` would be read), none of them `localhost` - never a
+/// pattern, an address in any spelling, or a port.
 fn host_ok(h: &str) -> bool {
     let label = |l: &str| {
         (1..=63).contains(&l.len())
             && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
             && !l.starts_with('-')
             && !l.ends_with('-')
+            && l != "localhost"
     };
-    h.len() <= 253 && h.split('.').count() >= 2 && h.split('.').all(label) && !h.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+    let last = h.rsplit('.').next().unwrap_or("");
+    h.len() <= 253 && h.split('.').count() >= 2 && h.split('.').all(label) && !last.is_empty() && last.bytes().all(|b| b.is_ascii_lowercase())
 }
 
 /// A key as a service gives one: 8 to 4096 characters, each one that JSON
@@ -164,6 +232,7 @@ impl Keys for SystemKeys {
 /// them is read to its end: what it said till then is all taken out.
 struct Worker {
     plugin: String,
+    kind: Hosted,
     task: Option<TaskHandle>,
     given: Vec<String>,
     reading: u8,
@@ -193,9 +262,11 @@ impl Models {
         self.keys.as_ref()
     }
 
-    /// A model plugin's worker started, as `sidecar`, before its streams are read.
-    pub fn started(&self, sidecar: &str, plugin: &str, task: Option<TaskHandle>) {
-        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), task, given: Vec::new(), reading: STREAMS, ended: false });
+    /// A worker of a plugin that names hosts started, as `sidecar`, before
+    /// its streams are read: a model's, or one that looks names up - which
+    /// is given no key, nor any converse request.
+    pub fn started(&self, sidecar: &str, plugin: &str, kind: Hosted, task: Option<TaskHandle>) {
+        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), kind, task, given: Vec::new(), reading: STREAMS, ended: false });
     }
 
     /// A worker gone, or stopped: its network task ended with it, and nothing
@@ -233,7 +304,7 @@ impl Models {
     /// plugin's, the request is not a converse, it brings a key of its own,
     /// or no key is kept.
     pub fn converse_line(&self, sidecar: &str, request: &str) -> Result<String, String> {
-        let plugin = self.workers().get(sidecar).filter(|w| !w.ended).map(|w| w.plugin.clone()).ok_or("Not a model plugin's worker")?;
+        let plugin = self.workers().get(sidecar).filter(|w| !w.ended && w.kind == Hosted::Model).map(|w| w.plugin.clone()).ok_or("Not a model plugin's worker")?;
         let key = self.keys.get(&plugin)?.ok_or_else(|| format!("No key is kept for {plugin}: add it in Settings, Conversations"))?;
         let line = with_key(request, &key)?;
         // (each key given kept, an earlier one too - Settings may give it another while a request is under way)
@@ -245,8 +316,9 @@ impl Models {
         Ok(line + "\n")
     }
 
-    /// Whether what the page writes to `sidecar` is refused: to a model
-    /// plugin's worker, only whole lines, each a JSON object - read as the
+    /// Whether what the page writes to `sidecar` is refused: to a worker of
+    /// a plugin that names hosts - a model's, or one that looks names up -
+    /// only whole lines, each a JSON object - read as the
     /// worker reads it, line by line - that is no converse request; only
     /// `converse_line` sends one. A line split over two writes, or one that
     /// is not read here as it would be there, never reaches it. (Each part of
@@ -321,7 +393,7 @@ mod tests {
         let keys = MemoryKeys(Mutex::new(HashMap::new()));
         keys.set("talker", KEY).unwrap();
         let m = Models::new(Box::new(keys));
-        m.started("w1", "talker", None);
+        m.started("w1", "talker", Hosted::Model, None);
         m
     }
 
@@ -361,7 +433,7 @@ mod tests {
     #[test]
     fn with_no_key_kept_it_says_where_to_add_one() {
         let m = Models::new(Box::new(MemoryKeys(Mutex::new(HashMap::new()))));
-        m.started("w1", "talker", None);
+        m.started("w1", "talker", Hosted::Model, None);
         assert_eq!(m.converse_line("w1", r#"{"op":"converse"}"#).unwrap_err(), "No key is kept for talker: add it in Settings, Conversations");
     }
 
@@ -403,10 +475,10 @@ mod tests {
     #[test]
     fn a_worker_ended_ends_its_network_task_and_is_given_no_other() {
         let net = crate::net::Net::default();
-        net.allow(&purpose("talker", &["api.example.com".to_string()]));
-        let task = net.begin(&purpose("talker", &["api.example.com".to_string()]), "talker: talking with a model", Some(vec!["api.example.com".into()])).unwrap();
+        net.allow(&Hosted::Model.purpose("talker", &["api.example.com".to_string()]));
+        let task = net.begin(&Hosted::Model.purpose("talker", &["api.example.com".to_string()]), "talker: talking with a model", Some(vec!["api.example.com".into()])).unwrap();
         let m = models();
-        m.started("w1", "talker", Some(task));
+        m.started("w1", "talker", Hosted::Model, Some(task));
         assert_eq!(net.running(), 1);
         m.ended("w1");
         assert_eq!(net.running(), 0);
@@ -422,7 +494,7 @@ mod tests {
         let keys = MemoryKeys(Mutex::new(HashMap::new()));
         keys.set("talker", KEY).unwrap();
         let m = Models::new(Box::new(keys));
-        m.started("w1", "talker", None);
+        m.started("w1", "talker", Hosted::Model, None);
         m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
         // (a new key set in Settings while the first request is under way: both taken out of what it says)
         m.keys().set("talker", "sk-test-new-0123456789").unwrap();
@@ -450,10 +522,18 @@ mod tests {
     #[test]
     fn a_yes_is_for_the_hosts_it_was_given_for() {
         let h = |hs: &[&str]| hs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(purpose("talker", &h(&["b.example.com", "a.example.com"])), "model:talker@a.example.com,b.example.com");
-        assert_eq!(purpose("talker", &h(&["a.example.com", "b.example.com"])), purpose("talker", &h(&["b.example.com", "a.example.com"])));
+        assert_eq!(Hosted::Model.purpose("talker", &h(&["b.example.com", "a.example.com"])), "model:talker@a.example.com,b.example.com");
+        assert_eq!(Hosted::Model.purpose("talker", &h(&["a.example.com", "b.example.com"])), Hosted::Model.purpose("talker", &h(&["b.example.com", "a.example.com"])));
         // (a plugin updated to name another host: another purpose, asked of again)
-        assert_ne!(purpose("talker", &h(&["api.example.com"])), purpose("talker", &h(&["api.example.com", "other.example.net"])));
+        assert_ne!(Hosted::Model.purpose("talker", &h(&["api.example.com"])), Hosted::Model.purpose("talker", &h(&["api.example.com", "other.example.net"])));
+    }
+
+    #[test]
+    fn a_names_plugin_goes_out_under_its_own_purpose() {
+        let h = |hs: &[&str]| hs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(Hosted::Names.purpose("finder", &h(&["b.example.org", "a.example.org"])), "lookup:finder@a.example.org,b.example.org");
+                assert_ne!(Hosted::Names.purpose("finder", &h(&["a.example.org"])), Hosted::Model.purpose("finder", &h(&["a.example.org"])));
+        assert_eq!(Hosted::Names.label("finder"), "finder: looking names up");
     }
 
     #[test]
@@ -467,13 +547,58 @@ mod tests {
 
     #[test]
     fn the_hosts_are_the_manifests_own_read_as_the_page_reads_them() {
-        let m = |hosts: Value| json!({"roles": [{"role": "smiles"}, {"role": ROLE, "hosts": hosts}]});
-        assert_eq!(hosts_of(&m(json!(["api.example.com", "api.example.com", "files.example.com"]))), Some(vec!["api.example.com".to_string(), "files.example.com".to_string()]));
+        let hosts = |m: &Value| hosted_of(m).map(|(_, h)| h);
+        let m = |hosts: Value| json!({"roles": [{"role": ROLE, "hosts": hosts}]});
+        assert_eq!(hosts(&m(json!(["api.example.com", "api.example.com", "files.example.com"]))), Some(vec!["api.example.com".to_string(), "files.example.com".to_string()]));
         for bad in [json!([]), json!(["*.example.com"]), json!([".example.com"]), json!(["API.example.com"]), json!(["api.example.com:443"]), json!(["127.0.0.1"]), json!(["localhost"]), json!(["a.example.com", 3]), json!((0..9).map(|i| format!("h{i}.example.com")).collect::<Vec<_>>()), json!("api.example.com")] {
-            assert_eq!(hosts_of(&m(bad.clone())), None, "{bad}");
+            assert_eq!(hosts(&m(bad.clone())), None, "{bad}");
         }
-        assert_eq!(hosts_of(&json!({"roles": [{"role": "smiles", "hosts": ["api.example.com"]}]})), None);
-        assert_eq!(hosts_of(&json!({})), None);
+        assert_eq!(hosts(&json!({"roles": [{"role": "smiles", "hosts": ["api.example.com"]}]})), None);
+        assert_eq!(hosts(&json!({})), None);
+        // (a structure found by its name: its hosts read the same, and what it goes out for said)
+        let names = json!({"roles": [{"role": NAMES_ROLE, "hosts": ["pubchem.ncbi.nlm.nih.gov"]}]});
+        assert_eq!(hosted_of(&names), Some((Hosted::Names, vec!["pubchem.ncbi.nlm.nih.gov".to_string()])));
+        assert_eq!(hosted_of(&m(json!(["api.example.com"]))).map(|(k, _)| k), Some(Hosted::Model));
+        // (both roles naming hosts: what it goes out for in doubt - none, as the page takes it for none)
+        let both = json!({"roles": [{"role": ROLE, "hosts": ["api.example.com"]}, {"role": NAMES_ROLE, "hosts": ["pubchem.ncbi.nlm.nih.gov"]}]});
+        assert_eq!(hosted_of(&both), None);
+        assert_eq!(hosts(&both), None);
+    }
+
+    #[test]
+    fn a_role_that_goes_out_is_all_its_plugin_does() {
+        let names = json!({"role": NAMES_ROLE, "hosts": ["names.example.org"]});
+        let with = |more: Value| {
+            let mut m = json!({"roles": [names.clone()], "steps": [], "reads": [], "writes": []});
+            m.as_object_mut().unwrap().extend(more.as_object().unwrap().clone());
+            hosted_of(&m).map(|(k, _)| k)
+        };
+        // (alone, and with empty lists of nothing else: it fills that role)
+        assert_eq!(with(json!({})), Some(Hosted::Names));
+        // (beside another role, a step, a file it reads or writes: no way out at all)
+        for more in [
+            json!({"roles": [names.clone(), {"role": "smiles"}]}),
+            json!({"roles": [{"role": "checks"}, {"role": ROLE, "hosts": ["api.example.com"]}]}),
+            json!({"steps": [{"kind": "optimize"}]}),
+            json!({"reads": ["orbitron"]}),
+            json!({"writes": [{"kind": "orbitron"}]}),
+            json!({"steps": "optimize"}),
+        ] {
+            assert_eq!(with(more.clone()), None, "{more}");
+        }
+        assert!(goes_out_for_a_role(&Hosted::Names.purpose("finder", &["names.example.org".into()])));
+        assert!(goes_out_for_a_role(&Hosted::Model.purpose("talker", &["api.example.com".into()])));
+        assert!(!goes_out_for_a_role("python-env:plugin-x"));
+    }
+
+    #[test]
+    fn a_host_is_a_plain_public_name() {
+        for bad in ["0x7f.1", "0x7f.0.0.1", "0xa.1", "0251.0xfe.0xa9.0xfe", "0x0.0", "10.1", "a.localhost", "localhost.localdomain", "names.localhost.example", "example.", "127.0.0.1"] {
+            assert!(!host_ok(bad), "{bad}");
+        }
+        for good in ["pubchem.ncbi.nlm.nih.gov", "api.example.com", "x1.example.io", "data.example-host.net", "xn--bcher-kva.example"] {
+            assert!(host_ok(good), "{good}");
+        }
     }
 
     #[cfg(not(any(target_os = "macos", windows)))]

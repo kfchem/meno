@@ -11,9 +11,10 @@ import { emptyWorkspaceDocument, expandAbbreviation } from "../document";
  * SMILES entered twice. Before, the structure came anyway, after Escape,
  * and a quick second Enter drew it twice, one on the other. Put down
  * near a catalytic cycle's line, it is put on the line, as one let go there
- * is (lib/chem/cycle). Whether it was put down.
+ * is (lib/chem/cycle). One step to undo, named `step` where it is not a
+ * paste. Whether it was put down.
  */
-export function putDownSmiles(store: { getState(): EditorState }, asked: EditorState["quickAdd"], drawn: Model): boolean {
+export function putDownSmiles(store: { getState(): EditorState }, asked: EditorState["quickAdd"], drawn: Model, step?: string): boolean {
   const st = store.getState();
   if (!asked || st.quickAdd !== asked) return false;
   st.setQuickAdd(null);
@@ -21,7 +22,7 @@ export function putDownSmiles(store: { getState(): EditorState }, asked: EditorS
   const [thing] = st.cycles.length ? cycleThings(placed, [], styleOf(st.docStyle)) : [];
   const by = thing ? snapToCycles(st.cycles, thing.box) : null;
   if (by) placed = centredAt(drawn, { x: asked.at.x + by.x, y: asked.at.y + by.y });
-  st.pasteModel(placed);
+  st.pasteModel(placed, step);
   return true;
 }
 
