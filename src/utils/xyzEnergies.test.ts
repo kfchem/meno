@@ -21,7 +21,8 @@ describe("an XYZ file's energies, read by the patterns of the plugins added", ()
 
   it("are found as Confsweep writes them, the number alone first on the line", () => {
     expect(energies(["  -40.1234567", "  -40.1200000"], "confsweep")).toEqual([-40.1234567, -40.12]);
-    expect(energies(["  -40.1234567", "a title"], "confsweep")).toBeUndefined();
+    // (a frame whose line gives none has none; the other keeps its own)
+    expect(energies(["  -40.1234567", "a title"], "confsweep")).toEqual([-40.1234567, NaN]);
   });
 
   it("are found as Quanta writes them after its step", () => {
@@ -51,8 +52,10 @@ describe("an XYZ file's energies, read by the patterns of the plugins added", ()
     expect(got[1]).toBeCloseTo(-2, 6);
   });
 
-  it("are none for one frame alone, or where a frame has none", () => {
-    expect(energies(["  -1.17"], "confsweep")).toBeUndefined();
-    expect(energies(["-1.17", "a title"], "confsweep")).toBeUndefined();
+  it("are read of one frame alone by the same rule; none where no frame has one; a frame alone with none has none", () => {
+    expect(energies(["  -1.17"], "confsweep")).toEqual([-1.17]);
+    expect(energies(["a title"], "confsweep")).toBeUndefined();
+    expect(energies(["a title", "another"], "confsweep")).toBeUndefined();
+    expect(energies(["-1.17", "a title"], "confsweep")).toEqual([-1.17, NaN]);
   });
 });

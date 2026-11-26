@@ -70,26 +70,27 @@ export type HaworthPlace = "front" | "side" | "back";
  * How long a Haworth ring's group is drawn, as a share of the ring's level bond, by the ring's size, its atom's place and whether it goes
  * up or down - NOT a true view. Out of the ring's picture, as the figures under Brecher 2006's ST-1.9 draw them (MEASURED there, atom to
  * label centre: the text sets its labels on rows, so up and down differ). Into it - a front atom's up, a back atom's down - by the stem
- * that is to SHOW once the bond is trimmed to its label: the figures' own visible stem (0.29 of the level bond in a six-ring, 0.33 in a
- * five-ring, MEASURED from the ink) plus what Meno's label takes off a vertical bond (`HAWORTH_LABEL_TRIM`), so that a front atom's OH or
- * CH2OH stands on a stem that can be seen. A six-ring's back atom's down group shares its vertical with the front atom's up group below
- * it: it stands at the figures' 0.39, which a bond drawn on from it needs, and where both are labels and meet, it gives way as the label
- * is typed, to as little as 0.30 (projections/haworthLabels) - Meno's label is about 0.28 tall, and two need 0.35 between their
- * centres to stand visibly apart. In the five-ring a front atom's up label at more than 0.51 meets the bond to the ring O, so it stands at 0.51 - a stem
- * of 0.29, short of the figures' 0.33; its back atom, which carries no group in the figures, has no front atom under it. No text states a length
- * (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6, McNaught 1996 2-Carb-5.4); the texts ask only that groups be vertical and not overlap.
+ * that is to SHOW once the bond is trimmed to its label: the figures' own visible stem (0.29 of the level bond up from a six-ring's front
+ * atom, 0.33 from a five-ring's, 0.25 down from a six-ring's back atom, MEASURED from the ink) plus what Meno's label takes off a vertical
+ * bond inside the ring, its bond stopping close to it (`HAWORTH_LABEL_TRIM`). A six-ring's back atom's down group shares its vertical
+ * with the front atom's up group below it: up 0.464, down 0.391, so that an OH up and an H or OH down each stand on the figures' stem
+ * and their labels 0.02 apart (lib/chem/layout2d `LABEL_MARGIN_CLOSE`); 0.391 is also room for a bond drawn on from a carbon there.
+ * In the five-ring a front atom's up label at more than 0.51 meets the bond to the ring O; at 0.51 its stem is 0.337, the figures'
+ * 0.33. Its back atom, which carries no group in the figures, has no front atom under it. No text states a length (Brecher 2006 ST-1.9,
+ * Brecher 2008 GR-4.2.6, McNaught 1996 2-Carb-5.4); the texts ask only that groups be vertical and not overlap.
  */
 export const HAWORTH_GROUP: Readonly<Record<5 | 6, Readonly<Record<HaworthPlace, { up: number; down: number }>>>> = {
-  6: { front: { up: 0.51, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.39 } },
+  6: { front: { up: 0.464, down: 0.68 }, side: { up: 0.65, down: 0.83 }, back: { up: 0.65, down: 0.391 } },
   5: { front: { up: 0.51, down: 0.68 }, side: { up: 0.66, down: 0.68 }, back: { up: 0.65, down: 0.46 } },
 };
 
 /**
- * What a one-line label takes off a vertical bond at Meno's default style, as a share of a Haworth ring's level bond (the ring drawn at
- * 1.8 times the style's bond): MEASURED in Meno's layout - the same for OH, H, CH2OH and HOH2C, since a vertical bond is trimmed by the
- * height of the letter at its end.
+ * What a one-line label takes off a vertical bond up into a Haworth ring at Meno's default style, its bond stopping close to it
+ * (lib/chem/layout2d `Bond.close`), as a share of the ring's level bond (the ring drawn at 1.8 times the style's bond): MEASURED in Meno's
+ * layout - 0.173 for OH and CH2OH, 0.174 for HOH2C, 0.169 for H, since a vertical bond is trimmed by the height of the letter at its end; down, 0.141
+ * for an OH, 0.137 for an H.
  */
-export const HAWORTH_LABEL_TRIM = 0.216;
+export const HAWORTH_LABEL_TRIM = 0.173;
 
 /**
  * How far a chair is turned about its axis in its form-0 view, in degrees: the eye is atan(sqrt(3)/5) = 19.107 degrees from the line through

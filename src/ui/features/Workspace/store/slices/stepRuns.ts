@@ -1098,7 +1098,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             atoms: m.atoms,
             bonds: m.bonds,
             xyz: frameXyz(m, f),
-            ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
+            ...(m.energies?.[f] != null && Number.isFinite(m.energies[f]) ? { energy: m.energies[f] } : {}),
             ...(properties ? { properties } : {}),
             ...(madeOf ? { madeOf: [...madeOf] } : {}),
             calc,

@@ -20,7 +20,7 @@ import { abbreviationOf, labelRefused, readsAsNothing } from "../../../../../lib
 import { implicitHydrogens } from "../../../../../lib/chem/molecule";
 import { restyledDocument } from "../../restyle";
 import { easeStyle } from "../../styleEase";
-import { haworthLabelsStepped } from "../../projections/haworthLabels";
+import { haworthLabelsStepped, haworthStemsClose } from "../../projections/haworthLabels";
 import { editorLayoutOptions } from "../../layoutOptions";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -161,7 +161,9 @@ export function createUiSlice(
           // (a labelled group up from a Haworth ring's front atom, its label with no clear way where it stands - beside another inside
           //  the ring - stepped down its vertical until it is clear, in the same step: projections/haworthLabels)
           const steps = haworthLabelsStepped(labelled.model, editorLayoutOptions(styleOf(labelled.style)));
-          return steps.length ? ops.placeAtoms(labelled, steps) : labelled;
+          // (and each label's bond inside the ring stops close to it, so that its stem shows as the figures draw it)
+          const close = haworthStemsClose(labelled.model);
+          return steps.length || close.length ? ops.placeAtoms(labelled, steps, close) : labelled;
         });
         // (the H typed are not what its bonds give - CH2 on a carbon of three bonds - said: it is drawn with its bonds' own, the
         // compound as drawn; a label never changes it)
@@ -346,6 +348,7 @@ export function createUiSlice(
     requestShow: (box: ShowBox) =>
       set((prev: EditorState) => ({ ...prev, showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } })),
     requestPan: (dx: number, dy: number) => set((prev: EditorState) => ({ ...prev, panRequest: { dx, dy, n: (prev.panRequest?.n ?? 0) + 1 } })),
+    requestPanBack: () => set((prev: EditorState) => ({ ...prev, panRequest: { dx: 0, dy: 0, back: true, n: (prev.panRequest?.n ?? 0) + 1 } })),
 
     beginAutoFitSuspend: () =>
       set((prev: EditorState) => ({ ...prev, autoFitSuspended: true })),

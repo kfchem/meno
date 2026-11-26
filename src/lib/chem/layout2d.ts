@@ -111,6 +111,12 @@ export type Bond = BondChem & {
    */
   behind?: number[];
   /**
+   * Its line stops closer to the label at its end than a bond does - `LABEL_MARGIN_CLOSE` of the style's label clearance, not all of
+   * it: a group's bond inside a Haworth ring's picture, so that its stem shows as long as the figures draw it (the editor's
+   * projections/haworthLabels). Unset, the style's clearance.
+   */
+  close?: boolean;
+  /**
    * How far open each of those gaps is, 0 to 1, by the front bond's `id`, where one is opening or closing (the page eases it, never at once);
    * fully open where not given.
    */
@@ -228,7 +234,14 @@ export type LayoutOptions = {
    */
   joinStyle?: "round" | "sharp";
   units?: "px" | "world";
+  /** The least a line is laid out at, in pixels at the zoom it is laid out for: never under half a pixel (`leastLinePx`). */
   minLinePx?: number;
+  /**
+   * The view draws a line thinner than one of its device pixels itself (a
+   * device pixel wide and as much fainter): no least width is laid out, and
+   * every line is as wide as the drawing makes it at any zoom.
+   */
+  thinDrawn?: boolean;
   // boolean: all rings ON, undefined/false: OFF
   // { enabled: Set<string> }: enable only rings with ringKey (ascending concat of 6 atom ids)
   aromaticCircle?: boolean | { enabled: Set<string> };
@@ -702,11 +715,16 @@ export type Crowded = { atoms: [number, number]; need: number };
  */
 export type BondReach = { left1: number; right1: number; left2: number; right2: number };
 
+/** The least width a line is laid out at, in pixels at the zoom: `minLinePx`, never under half a pixel - none where the view draws thin lines itself (`thinDrawn`). */
+export function leastLinePx(opts: LayoutOptions): number {
+  return opts.thinDrawn ? 0 : Math.max(0.5, opts.minLinePx ?? 1);
+}
+
 /** Half the width of a line as the drawing draws it, in its coordinates. */
 export function lineHalfOf(opts: LayoutOptions, zoom: number): number {
   const units = opts.units ?? "px";
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
-  const minPx = Math.max(0.5, opts.minLinePx ?? 1);
+  const minPx = leastLinePx(opts);
   if (!(lwPx >= minPx)) lwPx = minPx;
   return pxToWorld(lwPx * 0.5, zoom);
 }
@@ -762,7 +780,7 @@ export function bondReach(
  */
 export function sameAtZooms(opts: LayoutOptions, bonds: readonly Bond[], a: number, b: number): boolean {
   if ((opts.units ?? "px") !== "world") return false;
-  const least = Math.max(0.5, opts.minLinePx ?? 1);
+  const least = leastLinePx(opts);
   if (!(opts.lineWidthPx * a >= least && opts.lineWidthPx * b >= least)) return false;
   // (a bond next to a double bond whose stereo is not known is drawn wavy)
   if (!bonds.some((x) => x.stereo === "wavy" || x.stereo === "either")) return true;
@@ -2865,6 +2883,18 @@ function degreeMap(bonds: Bond[]): Map<number, number> {
 }
 
 /**
+ * How much of the style's label clearance a bond marked `close` keeps from its label: 0.3. Set for a Haworth ring's group inside the ring's
+ * picture by what the six-ring's one vertical holds, at Meno's default style (MEASURED in this layout, as shares of the ring's level bond:
+ * the ring 1.155 tall; an OH's ink up from a front atom from 0.154 below its place to 0.122 above, an H's down from the back atom from
+ * 0.119 above its place to 0.151 below, an OH's from 0.122 to 0.154; the style's clearance 0.062). The stems the figures under Brecher
+ * 2006's ST-1.9 show - 0.29 up from a front atom, 0.25 down from the back atom above it - and the two labels a gap of 0.02 apart leave
+ * 1.155 - (0.29 + 0.154 + 0.122) - (0.25 + 0.122 + 0.154) - 0.02 = 0.043 for the two bonds' clearances, 0.021 each at the most: 0.3 of
+ * the style's is 0.019, its line's rounded end (half the line's width, 0.012) still clear of the letter. In the five-ring it gives a
+ * front atom's OH at 0.51 a stem of 0.337, the figures' 0.33.
+ */
+export const LABEL_MARGIN_CLOSE = 0.3;
+
+/**
  * How far a bond stops short of the labels at its ends - `a` at its first
  * atom's, `b` at its second's - and the most of it two labels may take
  * (`room`, labelShareMax of it): what drawing it goes by, and what Clean-up
@@ -2886,7 +2916,7 @@ export function labelTrims(
 ): { a: number; b: number; room: number } {
   const units = opts.units ?? "px";
   const fontWorld = toWorld(opts.fontPx, zoom, units);
-  const margin = opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16;
+  const margin = (opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16) * (bond.close ? LABEL_MARGIN_CLOSE : 1);
   const p = atoms[bond.a1];
   const q = atoms[bond.a2];
   const L0 = Math.hypot(q.x - p.x, q.y - p.y);
@@ -2996,7 +3026,7 @@ export function buildBondPrimitives(
   const polys: Poly[] = [];
   const units = opts.units ?? "px";
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
-  const minPx = Math.max(0.5, opts.minLinePx ?? 1);
+  const minPx = leastLinePx(opts);
   if (!(lwPx >= minPx)) lwPx = minPx;
   // (a label being written over it takes the bond's end as a label does)
   const hasLabel = (at: Atom) => showsLabel(at, opts) || (!!at.writing && writtenAs);
@@ -4166,7 +4196,8 @@ function primitivesOf(
     drawn.set(b, r);
   }
   // (every bond is built before any is broken: a bond behind is cut by the width of what is drawn in front of it)
-  const breakWith = { zoom, round: roundJoins, raster: (opts.minLinePx ?? 1) > 0 };
+  // (a drawing whose lines thin out with the zoom, the page's, keeps no least clear space either: its gap scales with it - leastLinePx)
+  const breakWith = { zoom, round: roundJoins, raster: !opts.thinDrawn && (opts.minLinePx ?? 1) > 0 };
   for (const b of bonds) {
     const r = drawn.get(b)!;
     const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith, depthOf);
@@ -4341,7 +4372,10 @@ export const CROSSING_LEAST_BREAK = 2;
  * By eye, a matter of look: the clear space is constant, so a shallower crossing cuts the bond behind over a longer way.
  */
 export const CROSSING_LEAST_ANGLE_DEG = 10;
-/** The clear space is never under this many device pixels on a page or in a picture of pixels (a floor, as a line's one device pixel is); a vector writer has none. */
+/**
+ * The clear space is never under this many pixels in a drawing laid out for pixels with a least line width (a floor, as that least width
+ * is); a vector writer has none, and nor has the page's drawing (`thinDrawn`), whose gap scales with the page as its lines do.
+ */
 export const CROSSING_CLEAR_FLOOR_PX = 3;
 
 type Built = ReturnType<typeof buildBondPrimitives>;
@@ -4455,7 +4489,7 @@ export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | und
 /**
  * A bond's lines and shapes, broken where the bond passes behind another - both drawn in perspective, their atoms' `z` saying which is
  * nearer where they cross. The gap is a band along the bond in front, of one width at every angle: the front bond's own width there and
- * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` device pixels where pixels are drawn). What the front bond
+ * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` pixels where pixels are drawn with a least width). What the front bond
  * fills is what is drawn: a plain line, a bold bond, a wedge at the crossing, a double or triple bond from its outer edge to its outer edge - one
  * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
  * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
@@ -4888,7 +4922,7 @@ function bondNotes(atoms: Atom[], bonds: Bond[], groupsAt: Set<number>, opts: La
 function centreStrokes(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: number): LineSeg[] {
   const out: LineSeg[] = [];
   const units = opts.units ?? "px";
-  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
+  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, leastLinePx(opts));
   for (const b of bonds) {
     const c = b.reactingCentre;
     if (!c) continue;
@@ -5230,7 +5264,7 @@ function sgroupDrawing(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, zoom: 
   });
   if (!groups.size) return { lines, texts };
   const units = opts.units ?? "px";
-  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
+  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, leastLinePx(opts));
   const fontPx = opts.fontPx * ANNOTATION_SIZE;
   const font = toWorld(opts.fontPx, zoom, opts.units);
   const lens = bonds.map((b) => Math.hypot(atoms[b.a1].x - atoms[b.a2].x, atoms[b.a1].y - atoms[b.a2].y)).filter((l) => l > 1e-9).sort((p, q) => p - q);
@@ -5331,7 +5365,7 @@ export function layoutMolecule(
   // the labels' marks - a charge's circle, a radical's dots - drawn as the
   // rest of the drawing is
   const units = opts.units ?? "px";
-  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, Math.max(0.5, opts.minLinePx ?? 1));
+  const lwPx = Math.max(units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx, leastLinePx(opts));
   const marks = labelMarks(texts, toWorld(opts.fontPx, zoom, opts.units), labelSetOf(opts), pxToWorld(lwPx, zoom), lwPx);
   pushAll(prim.lines, marks.lines);
   pushAll(prim.polys, marks.polys);

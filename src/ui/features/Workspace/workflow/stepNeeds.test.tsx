@@ -25,7 +25,6 @@ function card(s: WorkflowStep): string {
       who="Meno"
       how={howOf(info.options ?? [], s.options, info.how)}
       state="ready"
-      compact={false}
       open={false}
       inputs={[]}
       missing={notReadyFor(s)}

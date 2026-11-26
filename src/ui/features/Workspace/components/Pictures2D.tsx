@@ -34,6 +34,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { setCursor } from "../../../theme/cursors";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pageAt } from "../utils/page";
+import { pageLength, reachAt } from "../utils/pageScale";
 import { cornersOf } from "../utils/selection";
 import { guideScale } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
@@ -48,13 +49,13 @@ import { greatest, least } from "../../../../lib/chem/lists";
 /** Where pictures lie: under the drawing and its selection's shade, over the PDFs (Pdfs2D's -0.4); each put there later a little over the one before - far enough apart for the depth buffer to tell them apart. */
 const Z = -0.3;
 const Z_STEP = 1e-3;
-/** How lit a picture under the pointer is, and how far round it, on the screen, in pixels. */
+/** How lit a picture under the pointer is, and how far round it, on the page, in page pixels. */
 const LIT = 0.16;
 const LIT_PAD_PX = 5;
 /** How far a press may move and still be a click; and before it moves the view (PanZoom2D's), when a hold begun is let go - in pixels. */
 const CLICK_PX = 4;
 const PAN_PX = 3;
-/** A corner's handle, on the screen: its radius, and how far off it a press still takes it, in its radii; how small a picture may be made, in pixels. */
+/** A corner's handle: its radius on the page, in page pixels, and how far off it a press still takes it, in its radii on the screen at the page's own scale; how small a picture may be made, in screen pixels. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
 const LEAST_PX = 12;
@@ -417,8 +418,9 @@ function LightRound({ p, on, out }: { p: PictureItem; on: boolean; out: () => vo
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => material.dispose(), [material]);
   const bars = useRef<(THREE.Mesh | null)[]>([]);
-  usePartFrame((px, dt) => {
-    const pad = LIT_PAD_PX * px;
+  usePartFrame((_px, dt) => {
+    // (as wide on the page at every zoom)
+    const pad = pageLength(LIT_PAD_PX);
     const at = [
       [0, (p.h + pad) / 2, p.w + 2 * pad, pad],
       [0, -(p.h + pad) / 2, p.w + 2 * pad, pad],
@@ -522,10 +524,15 @@ function Frames({ framed, toWorld }: { framed: { p: PictureItem; z: number }[]; 
     (px: number) => {
       const meshes = [hit.current, fill.current, ring.current];
       const m = new THREE.Matrix4();
+      // (each as large on the page at every zoom; a press taking it from as far on the screen at any zoom)
+      const drawn = pageLength(HANDLE_PX);
+      const reach = reachAt(HANDLE_PX, 1 / px, drawn);
       framed.forEach(({ p, z }, i) =>
         cornersOf(p).forEach((c, k) => {
-          m.makeScale(HANDLE_PX * px, HANDLE_PX * px, 1).setPosition(c.x, c.y, z + 0.001);
-          for (const mesh of meshes) mesh?.setMatrixAt(i * 4 + k, m);
+          m.makeScale(reach, reach, 1).setPosition(c.x, c.y, z + 0.001);
+          hit.current?.setMatrixAt(i * 4 + k, m);
+          m.makeScale(drawn, drawn, 1).setPosition(c.x, c.y, z + 0.001);
+          for (const mesh of [fill.current, ring.current]) mesh?.setMatrixAt(i * 4 + k, m);
         }),
       );
       for (const mesh of meshes) {

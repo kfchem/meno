@@ -340,9 +340,18 @@ any of it would lie past the canvas - the column's width counted - the view
 eases along by just what it lies past and 16 px more, never zooming: a menu is
 a screen's size, not the page's. A panel opened in Quick Add, or a row in a
 menu, that makes it larger asks again. A menu taller than the canvas has its
-top brought in and scrolls inside. Once it has shut, the view stays where it
-went. The pan needed is one pure rule (`panFor`, `menuAt.ts`; the hook that
-anchors a menu and asks for it, `useMenuAt.ts`).
+top brought in and scrolls inside. Once it has shut - by Escape, a click
+outside or a row chosen - the view eases back to where it was before it
+moved, so what the chemist was working on is where they had put it. A row
+that opens a panel, a card or another menu where the menu was holds the view
+on, and it goes back once the last of them has shut; a menu opened elsewhere
+while one is open asks for its own room, and the view still goes back to
+where it was before the first. Where the chemist has moved the view
+themselves meanwhile - a pan, a zoom, a fit - or a row has moved it on
+purpose, the view is theirs and stays; a press alone - a click outside, a
+right-click elsewhere - moves nothing, and the view still goes back. The pan needed is one pure rule
+(`panFor`, `menuAt.ts`), and what is given back another (`menuRoom.ts`; the
+hook that anchors a menu and asks for it, `useMenuAt.ts`).
 
 **Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
 again they go on round, 2026-11-04). With the pointer on a bond, 1, 2
@@ -762,11 +771,13 @@ on a page), and the **Newman projection** (`newman`).
   at each ring atom, straight up and down the page, each group's bond as long as its ring, place and way give (`HAWORTH_GROUP`;
   no text states a length, and the texts ask only that groups be vertical and not overlap): out of the ring's picture as the figures under
   Brecher 2006's ST-1.9 draw them (0.65 to 0.83 of the level bond, measured there); into it - a front atom's up group, a back atom's
-  down group - long enough that the stem still shows once trimmed to its label: up from a front atom 0.51, a stem of 0.29 like the
-  figures', whatever the label (OH, H, CH2OH; a CH2OH on the right reads HOH2C, into the ring). A six-ring's back atom's down group, on the vertical of the front atom's up group below
-  it, stands at the figures' 0.39; where both are labels and meet, the down one gives way as its label is typed, to as little as
-  0.30, so that the two stand visibly apart; in the five-ring a front
-  atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
+  down group - long enough that its stem shows as long as the figures' once trimmed to its label, its bond stopping closer to a label
+  there than a bond does (`Bond.close`, 0.3 of the style's label clearance, `LABEL_MARGIN_CLOSE`; put as the label is typed, and taken
+  away by Clean-up): up from a front atom of the six-ring 0.464, a stem of 0.29 like the figures', whatever the label (OH, H, CH2OH; a
+  CH2OH on the right reads HOH2C, into the ring); down from its back atom, on the vertical of the front atom's up group below it, 0.391, a
+  stem of 0.25 like the figures', the two labels apart; where a CH2OH down meets the label below it, the down one gives way as its label
+  is typed, to as little as 0.30, so that the two stand visibly apart; in the five-ring a front atom's up group stands at 0.51, a stem of
+  0.33 like the figures', clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
   inside the ring is read against the whole drawing as the page lays it out - every line but its own
   bond, the bold and wedge-shaped bonds of the near edge, the other labels and the ring O's - a graze of less than a tenth
   of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),
@@ -1837,16 +1848,11 @@ All hover-based, as above.
     in the molecule as drawn, not worked out again for the part on its own:
     an atom that is R in the molecule is R in the picture, though the part
     alone might make it another or none. A molecule in 3D's: docs/WORKSPACE.md.
-  - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
-    and floated round a structure a few pixels across). Their letters keep
-    to 9 px at the least; past that they go once 9 px would be a third
-    larger than they are (`MARKS_LEAST_PX`) - switched there, not faded with
-    the zoom (the maintainer, 2026-10-28: a fade with the zoom left them half
-    there at a zoom), a little either way so that a zoom stopped at it does
-    not switch them back and forth, and faded over Meno's quick time, 120 ms
-    (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
-    alike. Atom numbers on a molecule in 3D still fade below their own least
-    size with the zoom, atom by atom, in the 3D view's shaders.
+  - **At any zoom.** Their letters are as large on the page at every zoom
+    (`markFontPx`): they grow and shrink with the drawing and are drawn
+    however far out the view is. On a drawing and on a molecule in 3D
+    alike; atom numbers on a molecule in 3D too. A picture of a molecule
+    in 3D leaves out the atom numbers too small to read in that picture.
 - **When an edit changes a configuration** (foundation part 15, phase 2;
   the maintainer's direction of 2026-11-04: the configuration is read
   from the drawing, and a change of it is said). After each edit is done,

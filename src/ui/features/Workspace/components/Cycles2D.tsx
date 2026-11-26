@@ -7,6 +7,7 @@ import { styleOf } from "../../../../lib/chem/style";
 import { cycleArrows, endKey, GAP_MOST, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
+import { pageLength, reachAt } from "../utils/pageScale";
 import { dragSelection } from "../utils/dragSelection";
 import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, membersOn, thingKey } from "../utils/cycles";
 import { DOUBLE_CLICK_MS } from "../constants";
@@ -18,7 +19,7 @@ type Pt = { x: number; y: number };
 
 /** Where cycles lie: with the arrows (0), under the drawing's labels. */
 const Z = 0.004;
-/** On the screen, in pixels: how far off its line a press still takes a cycle; its handle's radius. */
+/** How far off its line a press still takes a cycle, in screen pixels, and its light along it reaches, in page pixels; its handle's radius, in page pixels (a press taking it from as far on the screen). */
 const EDGE_PX = 6;
 const HANDLE_PX = 5;
 /** How far a press may move and still be a click, in pixels. */
@@ -83,8 +84,11 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
     invalidate();
   });
   const arrows = cycleArrows(c, [], NOMINAL_BOND_LENGTH, ease.current.members(), change.current.motion());
+  // (a press taken as far off its line on the screen at any zoom; its light along it and its handles as large on the page at every zoom)
   const slack = EDGE_PX / Math.max(zoom, 1e-6);
-  const handle = HANDLE_PX / Math.max(zoom, 1e-6);
+  const litWide = pageLength(EDGE_PX);
+  const handle = pageLength(HANDLE_PX);
+  const reach = reachAt(HANDLE_PX, zoom, handle);
   const hp = { x: c.x + c.r * Math.cos(HANDLE_AT), y: c.y + c.r * Math.sin(HANDLE_AT) };
   // (what is drawn on the page over it is pressed, not it)
   const drawingHas = () => {
@@ -246,7 +250,7 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
       {/* (lit along its line under the pointer, and more while it is selected) */}
       {lit > 0 && (
         <mesh position={[c.x, c.y, -0.001]}>
-          <ringGeometry args={[Math.max(0, c.r - slack * 0.7), c.r + slack * 0.7, 128]} />
+          <ringGeometry args={[Math.max(0, c.r - litWide * 0.7), c.r + litWide * 0.7, 128]} />
           <meshBasicMaterial color={COLORS.highlight} transparent opacity={lit} depthTest={false} depthWrite={false} toneMapped={false} />
         </mesh>
       )}
@@ -256,20 +260,34 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
         <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
       </mesh>
       {ends.map((end) => (
-        <mesh key={end.key} position={[c.x + c.r * Math.cos(end.at), c.y + c.r * Math.sin(end.at), 0.002]} onPointerDown={(e) => onEnd(e, end)}>
-          <circleGeometry args={[handle * 0.8, 20]} />
-          <meshBasicMaterial color={COLORS.highlight} depthTest={false} depthWrite={false} toneMapped={false} />
-        </mesh>
+        <group key={end.key} position={[c.x + c.r * Math.cos(end.at), c.y + c.r * Math.sin(end.at), 0.002]} onPointerDown={(e) => onEnd(e, end)}>
+          {/* (what a press takes: the hand's reach on the screen, unseen) */}
+          <mesh>
+            <circleGeometry args={[reach * 0.8, 20]} />
+            <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+          </mesh>
+          <mesh>
+            <circleGeometry args={[handle * 0.8, 20]} />
+            <meshBasicMaterial color={COLORS.highlight} depthTest={false} depthWrite={false} toneMapped={false} />
+          </mesh>
+        </group>
       ))}
       {selected && (
-        <mesh position={[hp.x, hp.y, 0.002]} onPointerDown={onHandle}>
-          <circleGeometry args={[handle, 24]} />
-          <meshBasicMaterial color="#ffffff" depthTest={false} depthWrite={false} toneMapped={false} />
+        <group position={[hp.x, hp.y, 0.002]} onPointerDown={onHandle}>
+          {/* (what a press takes: the hand's reach on the screen, unseen) */}
+          <mesh>
+            <circleGeometry args={[reach, 24]} />
+            <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+          </mesh>
+          <mesh>
+            <circleGeometry args={[handle, 24]} />
+            <meshBasicMaterial color="#ffffff" depthTest={false} depthWrite={false} toneMapped={false} />
+          </mesh>
           <mesh position={[0, 0, 0.0005]}>
             <ringGeometry args={[handle * 0.75, handle, 24]} />
             <meshBasicMaterial color={COLORS.highlight} depthTest={false} depthWrite={false} toneMapped={false} />
           </mesh>
-        </mesh>
+        </group>
       )}
     </group>
   );

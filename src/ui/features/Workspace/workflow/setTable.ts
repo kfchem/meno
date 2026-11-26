@@ -77,17 +77,18 @@ export function tableRows(molecules: readonly Molecule3D[], holds: "molecules" |
     // (none of only a part of a compound's conformers: its lowest may not be among them)
     // (and of those that finished alone: one that failed, or whose marks did not read, is no compound's lowest, and has none above it)
     const unfinished = (f: number) => (m.marksUnread ? MARKS_NOT_READ : m.failed?.length === n && m.failed[f] ? FAILURE_WORDS[m.failed[f]!.kind] : undefined);
-    const done = energies?.filter((_, f) => !unfinished(f)) ?? [];
+    const done = energies?.filter((e, f) => !unfinished(f) && Number.isFinite(e)) ?? [];
     const lowest = holds === "conformers" && energies && !m.partOf && done.length ? Math.min(...done) : undefined;
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       const failed = unfinished(f);
       rows.push({
         at: rows.length,
         ...(holds === "conformers" ? { compound: compoundLetter(i), number: m.numbers?.[f] ?? f + 1 } : {}),
-        ...(nameOf(m) ? { name: nameOf(m) } : {}),
-        ...(energies ? { energy: energies[f] } : {}),
+        // (its frame's own name, where it has one; a frame its file gave no energy, none)
+        ...(m.frameNames?.[f] || nameOf(m) ? { name: m.frameNames?.[f] || nameOf(m) } : {}),
+        ...(energies && Number.isFinite(energies[f]) ? { energy: energies[f] } : {}),
         from,
-        ...(lowest != null && energies && !failed ? { above: (energies[f] - lowest) * KCAL_PER_HARTREE } : {}),
+        ...(lowest != null && energies && Number.isFinite(energies[f]) && !failed ? { above: (energies[f] - lowest) * KCAL_PER_HARTREE } : {}),
         ...(failed ? { failed } : {}),
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         molecule: m,
@@ -172,6 +173,7 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
   const each = <T>(values: readonly T[] | undefined) => (values?.length === n ? frames.map((f) => values[f]) : undefined);
   const xyz = frameXyz(m, frames[0]);
   const energies = each(m.energies);
+  const frameNames = each(m.frameNames);
   const numbers = each(m.numbers) ?? (m.conformerSet ? frames.map((f) => f + 1) : undefined);
   const degeneracies = each(m.degeneracies);
   const part = m.partOf || frames.length < n;
@@ -180,7 +182,8 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     bonds: m.bonds,
     ...(frames.length > 1 ? { frames: frames.slice(1).map((f) => [...frameXyz(m, f)]) } : {}),
     ...(m.bondsFrom ? { bondsFrom: m.bondsFrom } : {}),
-    ...(energies ? { energies } : {}),
+    ...(energies?.some(Number.isFinite) ? { energies } : {}),
+    ...(frameNames?.some(Boolean) ? { frameNames } : {}),
     ...(numbers ? { numbers } : {}),
     ...(degeneracies ? { degeneracies } : {}),
     ...(m.conformerSet ? { conformerSet: true } : {}),

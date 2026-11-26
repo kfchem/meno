@@ -11,6 +11,8 @@ export type MenuAnchor = {
   room: () => { width: number; height: number; cover: number } | null;
   /** The page slid on the screen by so many px, right and down where positive (the view eased along, never zoomed). */
   pan: (dx: number, dy: number) => void;
+  /** A menu open that the view may move for, held until the letting go it returns: the view goes back once the last is let go (menuRoom). */
+  hold: () => () => void;
 };
 
 /**
@@ -19,8 +21,11 @@ export type MenuAnchor = {
  * its size, and kept there as the view moves - it is anchored to the page.
  * Where any of it lies past the canvas - the column's cover counted - the
  * view eases along by just that and a margin (`panFor`), as it opens and
- * again as it grows (a panel opened in it); and stays where it went once it
- * is shut. Without `anchor` it stands at `from`, as it first renders.
+ * again as it grows (a panel opened in it). It is held open on the anchor as
+ * long as it stands (`hold`): once it has shut, and nothing else the view
+ * moved for is open, the view eases back where it was before the first menu
+ * moved it - unless the chemist, or a row, has moved it meanwhile (menuRoom).
+ * Without `anchor` it stands at `from`, as it first renders.
  */
 export function useMenuAt(ref: RefObject<HTMLElement | null>, from: { x: number; y: number }, anchor: MenuAnchor | undefined): void {
   useLayoutEffect(() => {
@@ -48,6 +53,7 @@ export function useMenuAt(ref: RefObject<HTMLElement | null>, from: { x: number;
       const { dx, dy } = panFor({ left: c.left, top: c.top, right: c.left + el.offsetWidth, bottom: c.top + el.offsetHeight }, { left: 0, top: 0, right: view.width, bottom: view.height }, view.cover);
       if (dx !== 0 || dy !== 0) anchor.pan(dx, dy);
     };
+    const letGo = anchor.hold();
     place();
     room();
     const ro = new ResizeObserver(room);
@@ -59,6 +65,7 @@ export function useMenuAt(ref: RefObject<HTMLElement | null>, from: { x: number;
     return () => {
       ro.disconnect();
       cancelAnimationFrame(frame);
+      letGo();
     };
     // (the point it was opened at is the one it keeps)
     // eslint-disable-next-line react-hooks/exhaustive-deps

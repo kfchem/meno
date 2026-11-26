@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import type { ChartPoint } from "../../../../lib/chart";
@@ -10,8 +9,6 @@ export type SetFrameProps = {
   set: WorkflowSet;
   /** Its tab's name: "Input". */
   name: string;
-  /** Its words too small to read at this zoom: what it holds, as such. */
-  compact: boolean;
   onContextMenu: (e: ReactMouseEvent) => void;
   /**
    * A large result set's (`WorkflowSet.collection`, `drawnCollection`): what it holds, said in its frame.
@@ -42,15 +39,15 @@ export default function SetFrame(p: SetFrameProps) {
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={p.onOpenTable}
-          className="meno-words absolute h-6 rounded-md px-2 text-xs leading-4 text-gh-black bg-white ring-1 ring-gh-line transition-colors duration-150 ease-meno hover:bg-gh-base"
-          style={{ right: SET_PAD / PX, top: NAME_DOWN / PX - 12, pointerEvents: p.compact ? "none" : "auto" }}
+          className="absolute h-6 rounded-md px-2 text-xs leading-4 text-gh-black bg-white ring-1 ring-gh-line transition-colors duration-150 ease-meno hover:bg-gh-base"
+          style={{ right: SET_PAD / PX, top: NAME_DOWN / PX - 12 }}
         >
           Open as a table
         </button>
       )}
       {/* (structures drawn held in the set: how many, and that they are on no page - none of them drawn yet) */}
       {p.summary && p.set.drawnCollection && (
-        <div className="meno-words absolute overflow-hidden" style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}>
+        <div className="absolute overflow-hidden" style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}>
           <div className="flex flex-col gap-2" data-set-summary="">
             <div className="flex items-center gap-1.5">
               <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
@@ -61,10 +58,10 @@ export default function SetFrame(p: SetFrameProps) {
         </div>
       )}
       {/* (a table, a number or a chart it holds: what it is, inside it - made smaller to fit a frame sized smaller; a chart's
-          points and axes drawn at any zoom, its words alone left out where they are too small to read) */}
+          points, axes and words drawn at every zoom, scaled with the page) */}
       {(p.set.table || p.set.number || p.set.chart) && (
         <div
-          className={clsx("absolute overflow-hidden", !p.set.chart && "meno-words")}
+          className="absolute overflow-hidden"
           style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
         >
           {p.set.chart ? (

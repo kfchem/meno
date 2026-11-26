@@ -481,7 +481,7 @@ export function moveAtom(
 export function placeAtoms(
   doc: WorkspaceDocument,
   moves: readonly { id: number; x: number; y: number; z?: number; reads?: "left" | "right" | null }[],
-  stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "narrow" | "display" | "behind">>)[] = [],
+  stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "narrow" | "display" | "behind">> & { close?: boolean })[] = [],
 ): WorkspaceDocument {
   const to = new Map(moves.map((m) => [m.id, m]));
   let changed = false;
@@ -509,6 +509,11 @@ export function placeAtoms(
     if ("display" in p && p.display !== b.display) {
       const { display: _d, ...rest } = out;
       out = p.display === undefined ? rest : { ...rest, display: p.display };
+    }
+    // (its line close to its label, or not: a group's bond inside a Haworth ring's picture - projections/haworthLabels)
+    if (p.close !== undefined && p.close !== !!b.close) {
+      const { close: _c, ...rest } = out;
+      out = p.close ? { ...rest, close: true } : rest;
     }
     // (which bonds it passes behind, where a turn over exchanged them: chem/crossings)
     if (p.behind !== undefined) {
@@ -686,14 +691,15 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     const p = patch.get(b.id);
     const display = p && "display" in p ? p.display : b.display;
     const laid = to.has(b.a) && to.has(b.b);
-    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display))) {
+    // (its mark put by hand, and its line kept close to a Haworth ring's label: put for the drawing as it was)
+    if (laid && (b.stereoAt || b.close) && (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display))) {
       changed = true;
-      const { stereoAt: _at, ...kept } = b;
+      const { stereoAt: _at, close: _c, ...kept } = b;
       return [kept];
     }
     if (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display)) return [b];
     changed = true;
-    const { display: _display, stereoAt: _at, narrow: _narrow, ...rest } = b;
+    const { display: _display, stereoAt: _at, narrow: _narrow, close: _close, ...rest } = b;
     // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
     const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
     const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
@@ -1389,6 +1395,15 @@ export function moveMolecules3d(
       return { ...m, at: { x: at.x, y: at.y, ...(z != null ? { z } : {}) } };
     }),
   };
+}
+
+/** Molecules joined as one, `made` of them: the first of them in the page's order made it, where it stands, and the rest gone - nothing where fewer than two are there. */
+export function joinMolecules3d(doc: WorkspaceDocument, ids: readonly number[], made: (ms: Molecule3D[]) => Molecule3D): WorkspaceDocument {
+  const want = new Set(ids);
+  const ms = (doc.molecules3d ?? []).filter((m) => want.has(m.id));
+  if (ms.length < 2) return doc;
+  const one = made(ms);
+  return removeMolecules3d(withMolecule3d(doc, ms[0].id, () => ({ ...one, id: ms[0].id })), ms.slice(1).map((m) => m.id));
 }
 
 export function removeMolecule3d(doc: WorkspaceDocument, id: number): WorkspaceDocument {

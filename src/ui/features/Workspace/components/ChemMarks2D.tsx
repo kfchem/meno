@@ -9,11 +9,9 @@ import {
 } from "../../../../lib/chem/layout2d";
 import {
   MARK_HALF_HEIGHT,
-  MARK_MIN_PX,
-  MARK_SCALE,
+  markFontPx,
   MARKS_APART,
   STEREO_GAP,
-  marksReadAt,
   notesBoxes,
   stereoPlaces,
   stereoTextEms,
@@ -22,7 +20,6 @@ import {
   type ChemMarks,
 } from "../chem/marks";
 import { useEditor } from "../store";
-import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
 import { pointedSaid } from "../configuration/pointedSaid";
 import { markGlideStep, type MarkGlides } from "../utils/markGlide";
@@ -126,21 +123,16 @@ export default function ChemMarks2D({
 
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
-  const fontPx = Math.max(MARK_MIN_PX, labelFont * MARK_SCALE * z);
-  // (and, the view far out, whether they are still seen: switched past their least size, not faded with the zoom - marksReadAt;
-  // kept as state, set again as it renders where it switched - not a ref written in render)
-  const [marksWere, setMarksWere] = useState(true);
-  const marksRead = marksReadAt(marksWere, labelFont * MARK_SCALE * z);
-  if (marksRead !== marksWere) setMarksWere(marksRead);
+  // (as large on the page at every zoom: the labels' size times MARK_SCALE, its pixels on the screen this zoom)
+  const fontPx = markFontPx(labelFont, z);
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
 
   // R, S, E and Z, each placed clear of the bonds, the labels and the
   // marks placed before it
-  // (the marks as big on the page as before - the letters grown with the
-  // view, as they are once past their least size - go where they went: a
-  // zoom does not place them all again)
+  // (the marks as big on the page at every zoom go where they went: a zoom
+  // does not place them all again)
   const markSize = (fontPx / z).toPrecision(12);
   // what each of R, S, E and Z is measured from - its atom, its bond's
   // middle - and those put by hand, where they were put
@@ -286,8 +278,8 @@ export default function ChemMarks2D({
   const stereoShown = usePresence(marks ? glided.marks : [], (m) => `${m.key}:${m.text}`);
 
   // R, S, E and Z as texts on the page, each its middle where it is placed,
-  // as large as the drawing's labels times MARK_SCALE (or MARK_MIN_PX on the
-  // screen): set as a label is, in the units the labels are set in
+  // as large as the drawing's labels times MARK_SCALE: set as a label is, in
+  // the units the labels are set in
   const stereoKeys = stereoShown.map((s) => s.key);
   const stereoTexts = useMemo(
     () => stereoShown.map(({ item: m }) => stereoTextItem(m, fontPx / z, opts, opts.units === "px" ? fontPx : fontPx / z)),
@@ -303,13 +295,8 @@ export default function ChemMarks2D({
     return now;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stereoKeys: as stereoShown
   }, [stereoShown, stereoLeaving]);
-  // (and, switched there, faded in or out over a short time: utils/zoomSwitch)
-  const seen = useRef<SwitchFade>(switchFade(marksRead));
-  const stereoSeen = useRef(seen.current.v);
-  useFrame((_, dt) => {
+  useFrame(() => {
     if (gliding.current) setGlideFrame((n) => n + 1);
-    if (switchStep(seen.current, marksRead, Math.min(dt, 1 / 20))) invalidate();
-    stereoSeen.current = seen.current.v;
   });
   const boxesLeaving = useMemo(() => new Set(valenceShown.filter((s) => s.leaving).map((s) => s.key)), [valenceShown]);
   const boxesNow = useMemo(() => valenceShown.map(({ item }) => item), [valenceShown]);
@@ -317,7 +304,7 @@ export default function ChemMarks2D({
   // (a stereocentre or double bond asked for, pointed at, with words of its own - why it has no R or S, E or Z, or that its Z or E
   //  turns in the mirror image: said under it as a box's words are, with no box)
   const saidPointed = (() => {
-    if (pointed || !marksRead) return null;
+    if (pointed) return null;
     // (each atom where it is drawn this frame - looked up here, not from `at`, which is empty while nothing is marked)
     const said = pointedSaid(model, marks, hoveredAtom, hoveredBond, (id) => at.get(id) ?? atoms.find((a) => a.id === id));
     return said && { ...said, size: 0.6 * labelFont };
@@ -330,8 +317,7 @@ export default function ChemMarks2D({
       {stereoShown.map(({ item: m, leaving }) => {
         const key = m.key;
         const base = from.get(key);
-        // (none to take hold of where they are switched off with the zoom)
-        if (leaving || !base || !marksRead) return null;
+        if (leaving || !base) return null;
         const id = Number(key.slice(key.indexOf("-") + 1));
         return (
           <MarkHold
@@ -345,7 +331,7 @@ export default function ChemMarks2D({
           />
         );
       })}
-      {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
+      {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} />}
       {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
       <PageTip
         at={
@@ -364,7 +350,6 @@ export default function ChemMarks2D({
           keyOf={(_, i) => stereoKeys[i]}
           leaving={stereoLeaving}
           arriving={stereoArriving}
-          opacity={stereoSeen}
         />
       )}
     </group>

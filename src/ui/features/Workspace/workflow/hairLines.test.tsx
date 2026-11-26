@@ -19,7 +19,6 @@ function card(selected: boolean): string {
       who="Meno"
       how=""
       state="ready"
-      compact={false}
       open
       selected={selected}
       inputs={inputsOf(s.kind).map((p) => ({ id: p.id, name: p.name, look: "plain" as const }))}
@@ -47,15 +46,15 @@ describe("the lines a hair thick of a step's card opened (a set's frame and a ca
       expect(html).toContain("inset-ring-[length:var(--hair,1px)]");
       expect(html).not.toMatch(/border(-top)?-width:var\(--hair/);
     }
-    expect(card(false)).toContain("inset-ring-gh-line");
-    expect(card(true)).toContain("inset-ring-accel-base");
+    expect(card(false)).toContain("--tw-inset-ring-color:color-mix(in srgb, var(--color-gh-line) calc(var(--hair-ink, 1) * 100%), transparent)");
+    expect(card(true)).toContain("--tw-inset-ring-color:color-mix(in srgb, var(--color-accel-base) calc(var(--hair-ink, 1) * 100%), transparent)");
   });
 
   it("keep the room the border took, so that nothing inside a card moves", () => {
     const html = card(false);
     // (the card: a hair all round)
     expect(html).toMatch(/role="group"[^>]*style="padding:var\(--hair, 1px\)/);
-    // (the line over its options: a hair over their padding)
-    expect(html).toContain("padding-top:calc(0.625rem + var(--hair, 1px));box-shadow:inset 0 var(--hair, 1px) var(--color-gh-line)");
+    // (the line over its options: a hair over their padding, as much fainter as the hair is thinner than a device pixel)
+    expect(html).toContain("padding-top:calc(0.625rem + var(--hair, 1px));box-shadow:inset 0 var(--hair, 1px) color-mix(in srgb, var(--color-gh-line) calc(var(--hair-ink, 1) * 100%), transparent)");
   });
 });

@@ -11,6 +11,30 @@ const goals = new WeakMap<THREE.Camera, ViewGoal>();
 
 export function setViewGoal(camera: THREE.Camera, goal: ViewGoal): void {
   goals.set(camera, goal);
+  stops.delete(camera);
+}
+
+/**
+ * A goal stopped by a press, and where the view stood as it stopped: a
+ * press alone gives way to the user without moving the view, so what sent
+ * it there may still count it as its own while it stands there (menuRoom).
+ */
+export type ViewStop = { goal: ViewGoal; at: ViewGoal };
+
+const stops = new WeakMap<THREE.Camera, ViewStop>();
+
+/** A press: the goal on its way, if any, let go - and where the view stood as it stopped, kept (`viewStopOf`). */
+export function stopViewGoal(camera: THREE.Camera): void {
+  const goal = goals.get(camera);
+  if (!goal) return;
+  goals.delete(camera);
+  const zoom = (camera as THREE.Camera & { zoom?: number }).zoom || 1;
+  stops.set(camera, { goal, at: { x: camera.position.x, y: camera.position.y, zoom } });
+}
+
+/** The goal the last press stopped, and where the view stood then - none once another goal has been set. */
+export function viewStopOf(camera: THREE.Camera): ViewStop | undefined {
+  return stops.get(camera);
 }
 
 export function viewGoalOf(camera: THREE.Camera): ViewGoal | undefined {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, STYLE_PRESETS, WILEY } from "../../../lib/chem/style";
-import { editorLayoutOptions, maxFitZoom, setDrawnRatio, startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, maxFitZoom, startingZoom } from "./layoutOptions";
+import { leastLinePx, lineHalfOf } from "../../../lib/chem/layout2d";
 
 describe("startingZoom", () => {
   it("shows a bond two and a half times as long as it prints", () => {
@@ -28,11 +29,16 @@ describe("the layout's options of the style alone", () => {
   });
 });
 
-describe("the thinnest a bond is drawn", () => {
-  it("is one of the canvas's device pixels, in CSS pixels", () => {
-    setDrawnRatio(2);
-    expect(editorLayoutOptions(ACS_1996).minLinePx).toBe(0.5);
-    setDrawnRatio(1);
-    expect(editorLayoutOptions(ACS_1996).minLinePx).toBe(1);
+describe("the thinnest a bond is laid out", () => {
+  it("has no least width on the page: the view draws a thin line itself", () => {
+    const opts = editorLayoutOptions(ACS_1996);
+    expect(opts.thinDrawn).toBe(true);
+    expect(leastLinePx(opts)).toBe(0);
+    // (as wide in the drawing's own units far out as close up: scaling with the zoom alone)
+    expect(lineHalfOf(opts, 0.01)).toBeCloseTo(opts.lineWidthPx / 2, 12);
+    expect(lineHalfOf(opts, 4)).toBeCloseTo(opts.lineWidthPx / 2, 12);
+  });
+  it("keeps half a pixel least where nothing draws thin lines (a picture's own layout)", () => {
+    expect(leastLinePx({ ...editorLayoutOptions(ACS_1996), thinDrawn: false, minLinePx: 0 })).toBe(0.5);
   });
 });

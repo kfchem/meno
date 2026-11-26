@@ -5,11 +5,14 @@ import { COLORS } from "../../../theme/colors";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { fadingOut } from "./labelFade";
 import { boxFill, outlineBand, type MarkBoxShape } from "./markBox";
+import { pageLength } from "../utils/pageScale";
+import { devicePx } from "../pageGl/units";
+import { thinStroke, widensAbout } from "./drawnInk";
 
 /** A mark's box where it stands on the page, in the page's units: its middle, and its shape. */
 export type MarkBox = Omit<MarkBoxShape, "radius"> & { key: string; x: number; y: number; dashed?: boolean };
 
-/** Its outline's width, its corners' radius and a dashed one's dashes, in screen pixels: a CSS border's. */
+/** Its outline's width, its corners' radius and a dashed one's dashes, in page pixels: a CSS border's at the page's own scale. */
 const BORDER_PX = 1.5;
 const RADIUS_PX = 3;
 const DASH_PX = { on: 4.5, off: 3 };
@@ -22,18 +25,23 @@ const ORDER = 40;
  * The marks' boxes on the page (ChemMarks2D) - a valence problem's round
  * its atom's label, a ring round an atom with none, dashed round what can
  * be read either way - drawn by WebGL with the page, so that they never
- * lag a pan or a zoom: their place and size in the page's units, their
- * outline as wide on the screen at any zoom. Each comes in and goes out as
+ * lag a pan or a zoom: their place and size, their outline and its
+ * dashes, in the page's units: as large on the page at every zoom. Each comes in and goes out as
  * an element's meno-fade-in and -out would (`leaving`: the keys going).
  */
-export default function MarkBoxes2D({ boxes, leaving, zoom }: { boxes: readonly MarkBox[]; leaving: ReadonlySet<string>; zoom: number }) {
+export default function MarkBoxes2D({ boxes, leaving }: { boxes: readonly MarkBox[]; leaving: ReadonlySet<string> }) {
   const invalidate = useThree((s) => s.invalidate);
+  const camera = useThree((s) => s.camera);
+  const dpr = useThree((s) => s.viewport.dpr);
   const level = useRef(new Map<string, number>());
   const materials = useRef(new Map<string, THREE.MeshBasicMaterial[]>());
   useEffect(() => invalidate(), [boxes, leaving, invalidate]);
   useFrame((_, dt) => {
     const d = Math.min(dt, 1 / 20);
     let going = false;
+    // (its outline thinner than a device pixel: a device pixel wide and as much fainter - components/drawnInk)
+    const device = devicePx((camera as THREE.OrthographicCamera).zoom || 1, dpr);
+    const border = pageLength(BORDER_PX);
     for (const b of boxes) {
       const was = level.current.get(b.key) ?? 0;
       const to = leaving.has(b.key) ? 0 : 1;
@@ -42,21 +50,23 @@ export default function MarkBoxes2D({ boxes, leaving, zoom }: { boxes: readonly 
       if (now !== to) going = true;
       // (on Meno's curve, in and back out along it: one going as it comes has no jump)
       const shown = eased(EASE, now);
-      for (const m of materials.current.get(b.key) ?? []) m.opacity = (m.userData.most as number) * shown;
+      for (const m of materials.current.get(b.key) ?? []) {
+        if (m.userData.widen) thinStroke(m, border, device, (m.userData.most as number) * shown);
+        else m.opacity = (m.userData.most as number) * shown;
+      }
     }
     for (const k of [...level.current.keys()]) if (!boxes.some((b) => b.key === k)) level.current.delete(k);
     if (going) invalidate();
   });
-  const z = Math.max(zoom, 1e-6);
   return (
     <group renderOrder={ORDER}>
       {boxes.map((b) => (
         <Box
           key={b.key}
           box={b}
-          width={BORDER_PX / z}
-          radius={b.round ? 0 : RADIUS_PX / z}
-          dash={b.dashed ? { on: DASH_PX.on / z, off: DASH_PX.off / z } : undefined}
+          width={pageLength(BORDER_PX)}
+          radius={b.round ? 0 : pageLength(RADIUS_PX)}
+          dash={b.dashed ? { on: pageLength(DASH_PX.on), off: pageLength(DASH_PX.off) } : undefined}
           onMaterials={(ms) => {
             if (ms) materials.current.set(b.key, ms);
             else materials.current.delete(b.key);
@@ -82,12 +92,17 @@ function Box({
 }) {
   const shape = { w: box.w, h: box.h, radius, round: box.round };
   const key = `${box.w},${box.h},${radius},${box.round},${width},${dash?.on ?? ""}`;
-  const band = useMemo(() => triangles(outlineBand(shape, width, dash)), [key]); // eslint-disable-line react-hooks/exhaustive-deps -- key: what shapes it
+  const band = useMemo(() => {
+    const middles: number[] = [];
+    return triangles(outlineBand(shape, width, dash, middles), middles);
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- key: what shapes it
   const fill = useMemo(() => (dash ? null : triangles(boxFill(shape))), [key]); // eslint-disable-line react-hooks/exhaustive-deps -- key: what shapes it
   useEffect(() => () => band.dispose(), [band]);
   useEffect(() => () => fill?.dispose(), [fill]);
   const mats = useRef<THREE.MeshBasicMaterial[]>([]);
   const take = (i: number) => (m: THREE.MeshBasicMaterial | null) => {
+    // (its outline widened about its middle where it is thinner than a device pixel)
+    if (m && i === 1) widensAbout(m);
     if (m) mats.current[i] = m;
     onMaterials(mats.current.filter(Boolean));
   };
@@ -105,7 +120,7 @@ function Box({
   );
 }
 
-function triangles(xy: number[]): THREE.BufferGeometry {
+function triangles(xy: number[], middles?: number[]): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   const p = new Float32Array((xy.length / 2) * 3);
   for (let i = 0; i < xy.length / 2; i++) {
@@ -113,5 +128,13 @@ function triangles(xy: number[]): THREE.BufferGeometry {
     p[3 * i + 1] = xy[2 * i + 1];
   }
   g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  if (middles) {
+    const m = new Float32Array((middles.length / 2) * 3);
+    for (let i = 0; i < middles.length / 2; i++) {
+      m[3 * i] = middles[2 * i];
+      m[3 * i + 1] = middles[2 * i + 1];
+    }
+    g.setAttribute("middle", new THREE.BufferAttribute(m, 3));
+  }
   return g;
 }

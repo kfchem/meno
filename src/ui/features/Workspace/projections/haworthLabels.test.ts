@@ -7,7 +7,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { seenPlaces } from "./chair";
 import { haworthDrawing } from "./haworth";
-import { HAWORTH_DOWN_LEAST, HAWORTH_UP_BEFORE, haworthLabelsStepped } from "./haworthLabels";
+import { HAWORTH_DOWN_LEAST, HAWORTH_UP_BEFORE, haworthLabelsStepped, meetsInk } from "./haworthLabels";
 import { layoutAtomOf, layoutBond, layoutBonds } from "../layoutOptions";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 import { drawingLayout } from "../fileActions";
@@ -149,7 +149,7 @@ describe("labels inside a Haworth ring", () => {
     const { d, model } = ringWith(6, "CH2OH", null);
     const after = stepped(model);
     expect(meetings(after).has(50)).toBe(false);
-    expect(Number(((after.atoms.find((a) => a.id === 50)!.y - d.atoms[2].y) / d.scale).toFixed(2))).toBe(0.51);
+    expect(Number(((after.atoms.find((a) => a.id === 50)!.y - d.atoms[2].y) / d.scale).toFixed(2))).toBe(0.46);
   });
 
   it("draws as main does where no step clears: a six-ring's CH2OH up from C-2 beside an OH up from C-3 - read either way it meets a bond or the OH", () => {
@@ -161,10 +161,10 @@ describe("labels inside a Haworth ring", () => {
     expect(meetings(after)).toEqual(meetings(asMain(d, model)));
   });
 
-  it("gives way first with a back atom's down label over a front atom's up label: C-5's H shortens, C-3's OH keeps its stem", () => {
+  it("gives way first with a back atom's down label over a front atom's up label where they meet: C-5's CH2OH shortens, C-3's OH keeps its stem", () => {
     const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
     const model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
-    ([[3, "up", "O", 50], [5, "down", "H", 51]] as const).forEach(([k, kind, el, id]) => {
+    ([[3, "up", "O", 50], [5, "down", "CH2OH", 51]] as const).forEach(([k, kind, el, id]) => {
       const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
       model.atoms.push({ id, x: p.place.x, y: p.place.y, r: 0.9, el } as Model["atoms"][number]);
       model.bonds.push({ id: 200 + id, a: d.atoms[k].id, b: id, order: 1 } as Model["bonds"][number]);
@@ -175,13 +175,15 @@ describe("labels inside a Haworth ring", () => {
     const length = Number(((d.atoms[5].y - h.y) / d.scale).toFixed(2));
     expect(length).toBeLessThan(0.39);
     expect(length).toBeGreaterThanOrEqual(HAWORTH_DOWN_LEAST);
+    // (an OH and an H, each on the figures' stem, meet nothing: neither moves)
+    expect(haworthLabelsStepped({ ...model, atoms: model.atoms.map((a) => (a.id === 51 ? { ...a, el: "H" } : a)) }, opts)).toEqual([]);
     expect(h.x).toBe(model.atoms.find((a) => a.id === 51)!.x);
     // (a drawn-out carbon there - a CH2OH's C of an L-sugar, with its OH beyond - is never moved, labelled or not beyond it)
     const drawnOut: Model = { atoms: model.atoms.map((a) => (a.id === 51 ? { ...a, el: "C" } : a)), bonds: model.bonds };
     expect(haworthLabelsStepped(drawnOut, opts)).toEqual([]);
   });
 
-  it("steps as the label is typed, in the same undo step: an OH up from C-3, then an H down from C-5 above it", () => {
+  it("steps as the label is typed, in the same undo step: an OH up from C-3, then a CH2OH down from C-5 above it", () => {
     // (the two groups led out as carbons, then named)
     const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
     const model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
@@ -204,7 +206,7 @@ describe("labels inside a Haworth ring", () => {
     type(50, "OH");
     expect(st().model.atoms.find((a) => a.id === 50)!.el).toBe("O");
     expect(downOf()).toBe(0.39);
-    type(51, "H");
+    type(51, "CH2OH");
     expect(downOf()).toBeLessThan(0.39);
     expect(downOf()).toBeGreaterThanOrEqual(0.3);
     // (one undo: the label and the step together)
@@ -233,7 +235,7 @@ describe("labels inside a Haworth ring", () => {
       expect(meetings(after).has(50), name).toBe(false);
       // (the stem as the ring's proportions set it: C-2's OH no longer drawn at main's short stub)
       expect(Math.abs(g.y - model.atoms.find((a) => a.id === 50)!.y), name).toBeLessThan(1e-9);
-      expect(Math.abs(g.y - d.atoms[k].y) / d.scale, name).toBeGreaterThan(0.5);
+      expect(Math.abs(g.y - d.atoms[k].y) / d.scale, name).toBeGreaterThan(0.46);
     }
   });
 
@@ -347,3 +349,114 @@ describe("labels inside a Haworth ring", () => {
   });
 });
 
+
+/**
+ * A sugar drawn as a chemist draws one: a ring from the tool, a group led out as a carbon to each free place given - [ring atom, up or down,
+ * what is typed] - and each named by typing over it, as the page does (ids 50 on, in order). The model as typing leaves it.
+ */
+function typedSugar(size: 5 | 6, groups: readonly (readonly [number, "up" | "down", string])[]) {
+  const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
+  const model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
+  groups.forEach(([k, kind], n) => {
+    const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
+    model.atoms.push({ id: 50 + n, x: p.place.x, y: p.place.y, r: 0.9, el: "C" } as Model["atoms"][number]);
+    model.bonds.push({ id: 250 + n, a: d.atoms[k].id, b: 50 + n, order: 1 } as Model["bonds"][number]);
+  });
+  const doc = createWorkspaceDocument();
+  doc.reset({ ...doc.getState(), model, nextId: 1000 });
+  const store = createEditorStore(doc);
+  connectStoreToDocument(store, doc);
+  groups.forEach(([, , text], n) => {
+    store.getState().beginLabelEdit(50 + n, "");
+    store.getState().setLabelEditValue(text);
+    store.getState().commitLabelEdit(text);
+  });
+  return { d, model: store.getState().model };
+}
+
+/** Each group's visible stem - the drawn line along its vertical between its ring atom and it - as a share of the level bond, by group id. */
+function stems(d: { scale: number; atoms: readonly { id: number }[] }, model: Model, groups: readonly (readonly [number, ...unknown[]])[]): number[] {
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const lay = layoutMolecule(model.atoms as never, layoutBonds(model.bonds, index) as never, opts, 40);
+  return groups.map(([k], n) => {
+    const r = model.atoms.find((a) => a.id === d.atoms[k].id)!;
+    const g = model.atoms.find((a) => a.id === 50 + n)!;
+    const [lo, hi] = [Math.min(r.y, g.y), Math.max(r.y, g.y)];
+    const along = lay.lines.filter((l) => Math.abs(l.x1 - r.x) < 1e-6 && Math.abs(l.x2 - r.x) < 1e-6 && Math.min(l.y1, l.y2) >= lo - 1e-6 && Math.max(l.y1, l.y2) <= hi + 1e-6);
+    return along.reduce((t, l) => t + Math.abs(l.y2 - l.y1), 0) / d.scale;
+  });
+}
+
+/** Labels whose ink touches anything - with no graze let pass: every line but its own bond (its width counted), every filled shape, every other label. */
+function touching(model: Model): number[] {
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const lay = layoutMolecule(model.atoms as never, layoutBonds(model.bonds, index) as never, opts, 40);
+  const boxOf = (id: number): Box =>
+    lay.texts
+      .filter((t) => (t as { atom?: number }).atom === index.get(id))
+      .map((t) => {
+        const b = labelBox(t, t.fontPx, set);
+        return { minX: t.x - b.left, maxX: t.x + b.right, minY: t.y - b.bottom, maxY: t.y + b.top };
+      })
+      .reduce((u, b) => ({ minX: Math.min(u.minX, b.minX), maxX: Math.max(u.maxX, b.maxX), minY: Math.min(u.minY, b.minY), maxY: Math.max(u.maxY, b.maxY) }));
+  const labelled = model.atoms.filter((a) => a.id >= 50);
+  return labelled
+    .filter((g) => {
+      const box = boxOf(g.id);
+      const bond = model.bonds.find((b) => b.a === g.id || b.b === g.id)!;
+      const r = model.atoms.find((a) => a.id === (bond.a === g.id ? bond.b : bond.a))!;
+      const own = (l: { x1: number; y1: number; x2: number; y2: number }) =>
+        Math.abs(l.x1 - r.x) < 1e-6 && Math.abs(l.x2 - r.x) < 1e-6 && Math.min(l.y1, l.y2) >= Math.min(r.y, g.y) - 1e-6 && Math.max(l.y1, l.y2) <= Math.max(r.y, g.y) + 1e-6;
+      const ink = { lines: lay.lines.filter((l) => !own(l)).map((l) => ({ p: { x: l.x1, y: l.y1 }, q: { x: l.x2, y: l.y2 }, half: l.widthPx / 40 / 2 })), polys: lay.polys.map((q) => q.points) };
+      const onLabel = labelled.some((o) => {
+        if (o.id === g.id) return false;
+        const q = boxOf(o.id);
+        return q.minX < box.maxX && box.minX < q.maxX && q.minY < box.maxY && box.minY < q.maxY;
+      });
+      return meetsInk(box, ink) || onLabel;
+    })
+    .map((g) => g.id);
+}
+
+describe("stems inside a Haworth ring as long as the figures under ST-1.9 draw them, every group written", () => {
+  it("a hexopyranose, beta-D-glucopyranose: OH up from C-3 and H up from C-2 on 0.29, H down from C-5 on 0.25; no label touches", () => {
+    // (ring atom C-k is atom k, the ring O atom 0; each free place written: its up and down)
+    const groups = [
+      [1, "up", "OH"], [1, "down", "H"],
+      [2, "up", "H"], [2, "down", "OH"],
+      [3, "up", "OH"], [3, "down", "H"],
+      [4, "up", "H"], [4, "down", "OH"],
+      [5, "up", "CH2OH"], [5, "down", "H"],
+    ] as const;
+    const { d, model } = typedSugar(6, groups);
+    const s = stems(d, model, groups);
+    // (the two former shortfalls met: C-5's H down, beside C-3's OH up below it, on the figures' 0.25 - MEASURED 0.254 - and C-3's OH on 0.29)
+    expect(s[9]).toBeGreaterThanOrEqual(0.25);
+    expect(s[4]).toBeGreaterThanOrEqual(0.29);
+    expect(s[2]).toBeGreaterThanOrEqual(0.29);
+    // (each inside label's bond stops close to it; none outside)
+    const close = new Set(model.bonds.filter((b) => b.close).map((b) => b.id));
+    expect([...close].sort()).toEqual([252, 254, 259]);
+    // (the groups out of the ring's picture keep the stems they had, their bonds stopping as any does: MEASURED 0.43 to 0.65)
+    for (const n of [0, 1, 3, 5, 6, 7, 8]) expect(s[n], `group ${n}`).toBeGreaterThan(0.4);
+    expect(touching(model)).toEqual([]);
+  });
+
+  it("a pentofuranose, beta-D-xylofuranose: OH up from C-3 and H up from C-2 on the figures' 0.33; no label touches", () => {
+    const groups = [
+      [1, "up", "OH"], [1, "down", "H"],
+      [2, "up", "H"], [2, "down", "OH"],
+      [3, "up", "OH"], [3, "down", "H"],
+      [4, "up", "CH2OH"], [4, "down", "H"],
+    ] as const;
+    const { d, model } = typedSugar(5, groups);
+    const s = stems(d, model, groups);
+    // (the former shortfall met: a front atom's up label on 0.33 - MEASURED 0.337 for the OH, 0.341 for the H)
+    expect(s[4]).toBeGreaterThanOrEqual(0.33);
+    expect(s[2]).toBeGreaterThanOrEqual(0.33);
+    expect(model.bonds.filter((b) => b.close).map((b) => b.id).sort()).toEqual([252, 254]);
+    // (out of the ring's picture, as any bond: MEASURED 0.44 to 0.50)
+    for (const n of [0, 1, 3, 5, 6, 7]) expect(s[n], `group ${n}`).toBeGreaterThan(0.4);
+    expect(touching(model)).toEqual([]);
+  });
+});

@@ -349,7 +349,7 @@ export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]>
  * perceived, or a centre left unspecified - is no conformer of a known
  * compound; constitution alone would sum diastereomers.
  */
-function asConformers(entries: readonly SetEntry[]): Outcome3D {
+export function asConformers(entries: readonly SetEntry[]): Outcome3D {
   const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
   if (unknown >= 0) {
     const st = entries[unknown].stereo;

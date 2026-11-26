@@ -2,6 +2,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { CONTROL_SIZE_GLSL, fillShapesGeometry, packShapes, type Packed, type Shape } from "./shapes";
+import { pagePx, THIN_LINE_GLSL } from "./units";
 
 /**
  * Where the page's WebGL is drawn among the rest: after the drawing, the
@@ -29,23 +30,27 @@ varying vec2 vP;
 varying vec2 vHalf;
 varying float vRadius;
 varying float vLine;
+varying float vInk;
 varying vec4 vFill;
 varying vec4 vStroke;
 varying vec2 vDash;
 varying float vOpacity;
 varying vec3 vShadow;
+${THIN_LINE_GLSL}
 void main() {
   vec2 hs = aHalf;
   float radius = aRadiusLine.x;
-  // (a line never under a device pixel; none where there is none)
-  float line = aRadiusLine.y > 0.0 ? max(aRadiusLine.y, uDevice) : 0.0;
+  // (a line as wide as it is on the page; none where there is none)
+  float line = max(aRadiusLine.y, 0.0);
   if (aControl.z > 0.5) {
-    // (a control, as a hand needs it: units controlSize, controlLine)
+    // (a control, as a hand needs it: units controlSize; its line a page pixel, a fifth of it where it is tiny - units controlLine)
     float d = ${CONTROL_SIZE_GLSL};
     hs = vec2(d * 0.5);
     radius = d * 0.5;
-    line = aStroke.a > 0.0 ? max(min(uScreen, d / 5.0), uDevice) : 0.0;
+    line = aStroke.a > 0.0 ? min(${pagePx(1).toFixed(6)}, d / 5.0) : 0.0;
   }
+  // (thinner than a device pixel, a device pixel wide and as much fainter: units thinLine)
+  vec2 thin = thinLine(line, uDevice);
   if (aKindOpacity.x > 0.5) radius = min(hs.x, hs.y);
   radius = min(radius, min(hs.x, hs.y));
   // (room for the edge's smoothing past the shape, and for its shadow)
@@ -54,7 +59,8 @@ void main() {
   vP = p;
   vHalf = hs;
   vRadius = radius;
-  vLine = line;
+  vLine = thin.x;
+  vInk = thin.y;
   vFill = aFill;
   vStroke = aStroke;
   vDash = aDash;
@@ -71,6 +77,7 @@ varying vec2 vP;
 varying vec2 vHalf;
 varying float vRadius;
 varying float vLine;
+varying float vInk;
 varying vec4 vFill;
 varying vec4 vStroke;
 varying vec2 vDash;
@@ -99,7 +106,7 @@ void main() {
   float d = roundBox(vP, vHalf, vRadius);
   float inside = cover(d);
   float within = vLine > 0.0 ? cover(d + vLine) : inside;
-  float ink = vStroke.a * (inside - within);
+  float ink = vStroke.a * vInk * (inside - within);
   if (vDash.x > 0.0) {
     float s = mod(along(vP, vHalf, vRadius), vDash.x + vDash.y);
     ink *= clamp((vDash.x - s) / uDevice + 0.5, 0.0, 1.0) * clamp(s / uDevice + 0.5, 0.0, 1.0);
@@ -124,7 +131,7 @@ void main() {
 /**
  * Boxes and rings on the page (`shapes`), drawn by WebGL as one instanced
  * mesh over the drawing: in the page's units, their lines in page pixels
- * never thinner than a device pixel, a control as large as a hand needs it -
+ * (one thinner than a device pixel a device pixel wide and fainter), a control as large as a hand needs it -
  * the zoom told to the shader each frame, nothing packed again for it.
  */
 export default function PageShapes({ items, order = PAGE_GL_ORDER }: { items: readonly Shape[]; order?: number }) {

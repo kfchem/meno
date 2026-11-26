@@ -6,7 +6,7 @@
  *
  * The page's units, y up; a slide by its middle and its size.
  */
-import { switchedAt } from "../utils/zoomSwitch";
+import { pageLength } from "../utils/pageScale";
 import type { Slide } from "../store/types";
 import type { View } from "./zoomPath";
 
@@ -152,31 +152,18 @@ export function joinOf(a: Pick<Slide, "x" | "y" | "w" | "h">, b: Pick<Slide, "x"
   return { from, to };
 }
 
-/** How much of a slide's height on the screen its number's disc may take at most (docs/PRESENTING.md): a sixth - a quarter still read as a large disc on a small frame's corner (LOOK). */
+/** How much of a slide's height its number's disc may take at most (docs/PRESENTING.md): a sixth - a quarter still read as a large disc on a small frame's corner (LOOK). */
 export const NUMBER_SHARE = 1 / 6;
 /**
- * The least size on the screen a slide's figures are read at, in pixels:
- * 8.25, as the page's words (utils/pageScale `WORDS_LEAST`, 0.75 of their
- * smallest, 11 px); they fade out from 1.15 times that to 1/1.15 of it,
- * about four notches of a mouse wheel, as those do.
+ * How large a slide's number - and the line from it to the next, and its
+ * arrowhead - is drawn on a slide `h` tall on the page, as a share of its
+ * own size (its disc `disc` page px across): all of it while the disc is no
+ * more than a sixth of the slide's height (`NUMBER_SHARE`), and on a smaller
+ * slide, a sixth of its height. A relation on the page: the same at every
+ * zoom, which scales it with everything else.
  */
-export const FIGURES_LEAST_PX = 0.75 * 11;
-
-/**
- * How a slide's number - and the line from it to the next, and its
- * arrowhead - is drawn for a slide `h` tall on the page, a screen pixel
- * being `px` on the page: at `k` of its own size, the same on the screen
- * (`k` 1) until its disc, `disc` px across, would be more than a sixth
- * of the slide's height on the screen (`NUMBER_SHARE`), and from there
- * shrinking with the slide - with the zoom, never at a jump; and whether it
- * is seen (`read`), it having been (`was`) or not: switched where its
- * figures, `figures` px at their own size, pass `FIGURES_LEAST_PX`, a little
- * either way, and faded over a short time by what draws it - never faded
- * with the zoom (utils/zoomSwitch).
- */
-export function markScale(h: number, px: number, disc: number, figures: number, was = true): { k: number; read: boolean } {
-  const k = Math.min(1, (NUMBER_SHARE * h) / px / disc);
-  return { k, read: switchedAt(was, figures * k, FIGURES_LEAST_PX) };
+export function markScale(h: number, disc: number): number {
+  return Math.min(1, (NUMBER_SHARE * h) / pageLength(disc));
 }
 
 /** The box round the slides, or null with none. */

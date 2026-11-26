@@ -2,14 +2,10 @@
  * The page's scale, for what is drawn on it in HTML (docs/WORKSPACE.md,
  * *Chips on the page*): chips, sets and steps' cards are as large as the
  * page draws them - a page pixel at the zoom a canvas opens at is a pixel on
- * the screen - and their words go where they would be too small to read.
+ * the screen - at every zoom.
  */
 import type { CSSProperties } from "react";
-import { switchedAt } from "./zoomSwitch";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-
-/** The scales a molecule's notes are drawn at, as the page is between them (Molecule3DView): never smaller than three quarters, nor larger than half as large again. */
-export const NOTES_SCALE = { least: 0.75, most: 1.5 } as const;
 
 /** Where a chip hangs from, which it grows and shrinks about while the zoom moves (`pageSized`): its top's middle, its middle, its foot's middle. */
 export type HungFrom = "top" | "middle" | "foot";
@@ -33,38 +29,26 @@ const ORIGIN: Record<HungFrom, string> = { top: "50% 0", middle: "50% 50%", foot
  */
 export const pageSized = (from: HungFrom): CSSProperties => ({ zoom: "var(--page, 1)", transform: "scale(var(--page-k, 1))", transformOrigin: ORIGIN[from] });
 
-/**
- * A molecule's or a figure's notes, drawn as the page is between `NOTES_SCALE`'s
- * two scales: laid out at that size once the zoom stands still, and scaled
- * from where they hang while it moves (`--notes-k`), as chips are (`pageSized`).
- */
-export const notesSized = (from: HungFrom): CSSProperties => ({
-  zoom: `clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})`,
-  transform: "scale(var(--notes-k, 1))",
-  transformOrigin: ORIGIN[from],
-});
-
 /** A length on the page's HTML, `px` page pixels, at the page's scale as it is shown now: laid out, and while the zoom moves (`pageSized`). */
 export const pagePx = (px: number) => `calc(${px}px * var(--page, 1) * var(--page-k, 1))`;
 
 /** A page pixel, in world units: a bond is 48 of them, as a canvas opens in ACS 1996 style. */
 export const PAGE_PX = NOMINAL_BOND_LENGTH / 48;
-/** The least scale words on the page's chips and cards are read at - their smallest, 11 px, about 8 px on the screen: smaller, they are left out. */
-export const WORDS_LEAST = 0.75;
-
 /** How many screen pixels a page pixel is drawn as, at `zoom` (the canvas's orthographic camera's). */
 export const pageScale = (zoom: number) => zoom * PAGE_PX;
 
+/** A length of `px` page pixels, in world units: as large on the page at every zoom - a handle's, an outline's, a name's - growing and shrinking with it on the screen. */
+export const pageLength = (px: number) => px * PAGE_PX;
 
 /**
- * Whether the words of chips and cards on the page are read at `zoom`, they
- * having been (`was`) or not: from a little above `WORDS_LEAST`, and no
- * longer from a little below it (utils/zoomSwitch `switchedAt`). Not faded
- * with the zoom: switched there, and faded over a short time - the words
- * out as what stands for them, a step's card's large icons, comes in, or
- * back (App.css `.meno-words`, `--words`).
+ * How far round a handle a press takes it, in world units at `zoom`: the
+ * hand's reach, `screenPx` on the screen at every zoom, and never less than
+ * the handle as it is drawn (`drawn`, world units) - so that one drawn small
+ * on a page far out is still taken from as far as ever, and one drawn large
+ * up close is taken all over.
  */
-export const wordsReadAt = (zoom: number, was: boolean): boolean => switchedAt(was, pageScale(zoom), WORDS_LEAST);
+export const reachAt = (screenPx: number, zoom: number, drawn: number) => Math.max(screenPx / Math.max(zoom, 1e-6), drawn);
+
 
 /** How far the zoom goes, as a share, before what the page's HTML is sized by is written again while it moves (`zoomWritten`). */
 export const ZOOM_WRITTEN_STEP = 0.005;
@@ -81,17 +65,18 @@ export const ZOOM_WRITTEN_STEP = 0.005;
 export const zoomWritten = (written: number, zoom: number, still: boolean): boolean =>
   zoom !== written && (still || !(Math.abs(Math.log(zoom / written)) < ZOOM_WRITTEN_STEP));
 
-/** How far the hair under its floor goes, as a share, before it is written again (`hairWritten`): a quarter - a line a quarter thicker is not told from it. */
+/** How far the hair under a device pixel goes, as a share, before it is written again (`hairWritten`): a quarter - a line a quarter thicker is not told from it. */
 export const HAIR_STEP = 1.25;
 
 /**
- * How wide a line of the page's cards and sets is, in the layer's own pixels
- * - a page pixel, the layer scaled with the page - at `zoom` on a screen of
- * `dpr` device pixels to its own: one, never thinner on the screen than a
- * device pixel (the maintainer, 2026-11-05: page units, floored). And whether
- * it is written again from `written`: zoomed in, it is one and stays one - the
- * cards never laid out again for it; under the floor, as the zoom goes a
- * quarter from it, and back to one as it comes out from under it.
+ * How wide a line of the page's cards and sets is drawn, in the layer's own
+ * pixels - a page pixel, the layer scaled with the page - at `zoom` on a
+ * screen of `dpr` device pixels to its own: one; thinner on the screen than a
+ * device pixel, a device pixel wide, and as much fainter (its ink, the
+ * inverse of what is returned: pageGl/units `thinLine`). And whether it is
+ * written again from `written`: zoomed in, it is one and stays one - the
+ * cards never laid out again for it; thinner, as the zoom goes a quarter
+ * from it, and back to one as it comes out from under a device pixel.
  */
 export function hairWritten(written: number, zoom: number, dpr: number): number | null {
   const want = Math.max(1, 1 / (Math.max(zoom, 1e-9) * PAGE_PX * Math.max(dpr, 1)));
@@ -100,10 +85,8 @@ export function hairWritten(written: number, zoom: number, dpr: number): number 
   return Math.abs(Math.log(want / written)) >= Math.log(HAIR_STEP) ? want : null;
 }
 
-/** What the page's HTML is told of the zoom at a frame (components/PageScale): the zoom it is laid out at (`laid`) and its scale there (`page`), and how far it is scaled from that - chips (`k`) and notes (`notesK`) - until it is laid out again. */
-export type PageTold = { laid: number; page: number; k: number; notesK: number };
-
-const notesAt = (page: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCALE.least, page));
+/** What the page's HTML is told of the zoom at a frame (components/PageScale): the zoom it is laid out at (`laid`) and its scale there (`page`), and how far it is scaled from that (`k`) until it is laid out again. */
+export type PageTold = { laid: number; page: number; k: number };
 
 /**
  * What the page's HTML is told at a frame, the zoom laid out at being
@@ -112,30 +95,25 @@ const notesAt = (page: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCAL
  * was, and scaled by how far it has gone from there (`pageSized`).
  */
 export function pageTold(laid: number, zoom: number, still: boolean): PageTold {
-  if (still || !(laid > 0)) return { laid: zoom, page: pageScale(zoom), k: 1, notesK: 1 };
-  return { laid, page: pageScale(laid), k: zoom / laid, notesK: notesAt(pageScale(zoom)) / notesAt(pageScale(laid)) };
+  if (still || !(laid > 0)) return { laid: zoom, page: pageScale(zoom), k: 1 };
+  return { laid, page: pageScale(laid), k: zoom / laid };
 }
 
-/** What the page's HTML layer was last told (`pageLayerStep`): the zoom its chips are laid out at, how far they are scaled from it, and whether its words are read. */
-export type PageLayerState = { laid: number; k: number; notesK: number; read: boolean };
+/** What the page's HTML layer was last told (`pageLayerStep`): the zoom its chips are laid out at, and how far they are scaled from it. */
+export type PageLayerState = { laid: number; k: number };
 
 /**
  * What the page's HTML layer is told at a frame of zoom `zoom` (components/
  * PageScale), it having been told `was` (none: a layer not told yet): each
  * custom property that changes - `--page` only where it is laid out again,
- * `--page-k` and `--notes-k` as they are scaled (`pageTold`), `--words` and
- * `--stand-in` as its words switch (`wordsReadAt`) - and whether a frame more
+ * `--page-k` as it is scaled (`pageTold`) - and whether a frame more
  * is asked for: while it is scaled, so that the canvas, drawn only when asked,
  * draws the frame the zoom stands still at and lays it out there.
  */
-export function pageLayerStep(was: PageLayerState | null, zoom: number, still: boolean): { now: PageLayerState; writes: [string, string][]; wordsSmall?: boolean; again: boolean } {
+export function pageLayerStep(was: PageLayerState | null, zoom: number, still: boolean): { now: PageLayerState; writes: [string, string][]; again: boolean } {
   const told = pageTold(was ? was.laid : NaN, zoom, still);
-  const read = wordsReadAt(zoom, was ? was.read : pageScale(zoom) >= WORDS_LEAST);
   const writes: [string, string][] = [];
   if (!was || told.laid !== was.laid) writes.push(["--page", told.page.toFixed(4)]);
   if (!was || told.k !== was.k) writes.push(["--page-k", told.k.toFixed(4)]);
-  if (!was || told.notesK !== was.notesK) writes.push(["--notes-k", told.notesK.toFixed(4)]);
-  const switched = !was || read !== was.read;
-  if (switched) writes.push(["--words", read ? "1" : "0"], ["--stand-in", read ? "0" : "1"]);
-  return { now: { laid: told.laid, k: told.k, notesK: told.notesK, read }, writes, ...(switched ? { wordsSmall: !read } : {}), again: told.k !== 1 };
+  return { now: { laid: told.laid, k: told.k }, writes, again: told.k !== 1 };
 }

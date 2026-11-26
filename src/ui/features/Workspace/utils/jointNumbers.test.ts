@@ -52,3 +52,12 @@ describe("atom numbers where the sticks meet", () => {
     expect(mesh.count).toBe(n);
   });
 });
+
+describe("atom numbers on the page, at any zoom", () => {
+  it("are drawn at any size where the sticks meet, scaled with the zoom: no least height on the page, a picture's only where one is given", () => {
+    const mesh = jointNumbersMesh(2);
+    expect(jointUniforms(mesh).least.value).toBe(0);
+    // (the shader fades by the least height only where one is given)
+    expect((mesh.material as THREE.ShaderMaterial).fragmentShader).toContain("least > 0.0 ? smoothstep( least * 0.75, least * 1.25, vPx * 0.7 ) : 1.0");
+  });
+});

@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import type { ConfigurationNote } from "../store/types";
-import { notesSized } from "../utils/pageScale";
+import { pageSized } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 
-/** A note as large as the page draws it, within the notes' bounds, hung from its foot (utils/pageScale `notesSized`). */
-const NOTES_SIZED = notesSized("foot");
+/** A note as large as the page draws it at every zoom, hung from its foot (utils/pageScale `pageSized`). */
+const NOTES_SIZED = pageSized("foot");
 
 /** How long a note stays once it has come, before it eases out, in milliseconds. */
 export const NOTE_STAYS_MS = 2600;

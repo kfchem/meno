@@ -59,11 +59,11 @@ describe("a conversation has no name", () => {
   it("is drawn on the page with its tab's icon and where its frame's contents may go - no word before them - the tab the width of what it says", async () => {
     const { frameTabParts, tabWidthPx, FRAME_PX } = await import("../pageGl/frameParts");
     const tab = conversationTabs([conversation(1)], { hovered: null, shown: null, talking: {} })[0];
-    const parts = frameTabParts([tab], true);
+    const parts = frameTabParts([tab]);
     expect(parts.texts.map((t) => [t.key, t.text])).toEqual([["conversation:1:status", "Sends nothing: no model plugin"]]);
     expect(parts.icons.map((i) => i.icon)).toEqual(["chat"]);
     // (an icon, a gap, its status: no name's gap between)
     const { textWidth } = await import("../pageGl/texts");
-    expect(tabWidthPx(tab.tab, true)).toBeCloseTo(FRAME_PX.icon + FRAME_PX.gap + textWidth("Sends nothing: no model plugin", FRAME_PX.words), 9);
+    expect(tabWidthPx(tab.tab)).toBeCloseTo(FRAME_PX.icon + FRAME_PX.gap + textWidth("Sends nothing: no model plugin", FRAME_PX.words), 9);
   });
 });

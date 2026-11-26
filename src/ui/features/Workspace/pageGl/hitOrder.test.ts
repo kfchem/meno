@@ -8,7 +8,7 @@ import { PageRegions, type Beneath } from "./PageHits";
 // tab's words, with the selection's turn handle on the frame's top edge, as a member's handle lies (0.75 of a bond over its top).
 const box = { x0: 0, y0: -8, x1: 12, y1: 0 };
 const band = 2 * NAME_DOWN;
-const set: FrameTab = { key: "set:1", box, tone: "rest", tab: { icon: "copies", name: "Input", status: "1 structure" }, iconWhenSmall: true, edges: true };
+const set: FrameTab = { key: "set:1", box, tone: "rest", tab: { icon: "copies", name: "Input", status: "1 structure" }, nameOnly: true, edges: true };
 const top = { id: 1, x: TAB_INSET + 0.4, y: -band + 0.2 };
 const atoms = [top, { id: 2, x: top.x + 1.56, y: top.y - 0.15 }];
 const bonds = [{ a: 1, b: 2 }];
@@ -18,7 +18,7 @@ const zoom = 20;
 /** The page's regions with the frame's laid as FrameTabs lays them - giving way to the drawing - and, where given, where the drawing takes a press. */
 function regions(beneath?: Beneath): PageRegions {
   const all = new PageRegions();
-  all.add({ regions: frameTabParts([set], true).regions, on: {}, yields: true });
+  all.add({ regions: frameTabParts([set]).regions, on: {}, yields: true });
   if (beneath) all.under({ current: beneath });
   return all;
 }

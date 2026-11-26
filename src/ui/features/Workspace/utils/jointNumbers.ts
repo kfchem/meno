@@ -6,11 +6,12 @@
  * and white on a dark one as on a ball, ringed in the other so that it reads
  * over the sticks and the page. All of a molecule's in one mesh, one draw
  * - a molecule of thousands of atoms is drawn as fast as one of ten.
- * Faded out, as on a ball, where its digits would be under `NUMBER_LEAST_PX`
- * high, and by how far each is shown.
+ * Faded by how far each is shown; on the page drawn at any size, scaled
+ * with the zoom, and in a picture left out, as on a ball, where its digits
+ * would be under `least` pixels of that picture high.
  */
 import * as THREE from "three";
-import { DIGIT_CELL, digitAtlas, glyphsGlsl, NUMBER_LEAST_PX } from "./atomNumbers";
+import { DIGIT_CELL, digitAtlas, glyphsGlsl } from "./atomNumbers";
 
 /** How high a number's digits stand where the sticks meet, in ångströms: as a carbon's on its ball, ball and stick. */
 export const JOINT_NUMBER_A = 0.27;
@@ -19,18 +20,19 @@ const RING = 0.12;
 /** Below this lightness of an atom's own colour (linear), its number is in white ink; above, dark - as on a ball. */
 const INK_TURN = 0.4;
 
-/** What draws them: the view's pixels to one of the camera's units, the digits' height and how far in front of the atom they stand, in the molecule's units, and how far all are shown. */
+/** What draws them: the view's pixels to one of the camera's units, the digits' height and how far in front of the atom they stand, in the molecule's units, how far all are shown, and the least height a digit is drawn at in a picture, in its pixels (none on the page: 0). */
 export type JointNumberUniforms = {
   pxPer: { value: number };
   height: { value: number };
   lift: { value: number };
   shown: { value: number };
+  least: { value: number };
   atlas: { value: THREE.Texture | null };
 };
 
 /** An instanced mesh of `n` numbers, none shown yet. */
 export function jointNumbersMesh(n: number): THREE.InstancedMesh {
-  const uniforms: JointNumberUniforms = { pxPer: { value: 1 }, height: { value: 1 }, lift: { value: 0 }, shown: { value: 0 }, atlas: { value: digitAtlas() } };
+  const uniforms: JointNumberUniforms = { pxPer: { value: 1 }, height: { value: 1 }, lift: { value: 0 }, shown: { value: 0 }, least: { value: 0 }, atlas: { value: digitAtlas() } };
   const material = new THREE.ShaderMaterial({
     uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
     transparent: true,
@@ -70,6 +72,7 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
     fragmentShader: `
       uniform sampler2D atlas;
       uniform float shown;
+      uniform float least;
       varying vec2 vUv;
       varying float vNumber;
       varying float vDigits;
@@ -95,7 +98,7 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
           float t = float( k ) * 0.5236;
           halo = max( halo, cover( q + vec2( cos( t ) * ring / ${DIGIT_CELL.toFixed(3)}, sin( t ) * ring ), dx, dy ) );
         }
-        float a = halo * vShown * shown * smoothstep( ${(NUMBER_LEAST_PX * 0.75).toFixed(2)}, ${(NUMBER_LEAST_PX * 1.25).toFixed(2)}, vPx * 0.7 );
+        float a = halo * vShown * shown * ( least > 0.0 ? smoothstep( least * 0.75, least * 1.25, vPx * 0.7 ) : 1.0 );
         // (under one step of an 8-bit alpha: nothing to draw)
         if ( a < 1.0 / 255.0 ) discard;
         bool white = dot( vInk, vec3( 0.2126, 0.7152, 1.0 - 0.2126 - 0.7152 ) ) < ${INK_TURN.toFixed(3)};

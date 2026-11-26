@@ -142,6 +142,10 @@ export type MenuMolecule3D = {
   onWholeWithoutH?: () => void;
   /** Its frames all shown at once, or one: unset, where it has one only; `conformers`, whether they are a conformer set's. */
   overlay?: { on: boolean; conformers: boolean; set: (on: boolean) => void };
+  /** *Frames are conformers*, ticked where they are marked so: unset, where its frames are not each alike (utils/asConformers `conformersOffered`). */
+  framesConformers?: { on: boolean; set: (on: boolean) => void };
+  /** *Join as conformers*: the molecules selected with it, one compound, made one set; unset, where they are not (utils/asConformers `joinable`). */
+  onJoinConformers?: () => void;
   /** Its calculation's lists - its vibrations, its orbitals - each opened under it by name: none, where it gave none. */
   lists?: { name: string; open: () => void }[];
   /** The output it was read from, shown in a tab of its own, by its name: unset, where it was read from none. */
@@ -279,6 +283,7 @@ export default function PartMenu({
   onOpenAsTable,
   setHoldsOwn,
   onUseAsInput,
+  onJoinConformers,
   onSaveAbbreviation,
   onExport,
   onPush,
@@ -447,6 +452,8 @@ export default function PartMenu({
   setHoldsOwn?: string;
   /** The selection made a set, a workflow's input; unset, where it holds no whole structure or molecule in 3D. */
   onUseAsInput?: () => void;
+  /** *Join as conformers*, on the page beside the molecules selected: they, one compound, made one set (utils/asConformers `joinOffered`). */
+  onJoinConformers?: () => void;
   /** The selection saved as an abbreviation of the user's own. */
   onSaveAbbreviation: () => void;
   /** The selection exported - written as a file of another kind - where the menu is the selection's. */
@@ -728,6 +735,10 @@ export default function PartMenu({
               },
             ]
           : []),
+        ...(molecule3d.framesConformers
+          ? [{ name: "Frames are conformers", keys: "", run: () => molecule3d.framesConformers!.set(!molecule3d.framesConformers!.on), checked: molecule3d.framesConformers.on }]
+          : []),
+        ...(molecule3d.onJoinConformers ? [{ name: "Join as conformers", keys: "", run: molecule3d.onJoinConformers }] : []),
         ...(molecule3d.stack ? [{ name: molecule3d.stack.spread ? "Stack again" : "Lay out as a grid", keys: "", run: molecule3d.stack.run }] : []),
         ...(molecule3d.lists ?? []).map((l) => ({ name: l.name, keys: "", run: l.open })),
         ...(molecule3d.output ? [{ name: `Show ${molecule3d.output.name}`, keys: "", run: molecule3d.output.show }] : []),
@@ -1171,6 +1182,7 @@ export default function PartMenu({
         ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
         ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
         ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs, divider: true }] : []),
+        ...(onJoinConformers && target.kind == null ? [{ name: "Join as conformers", keys: "", run: onJoinConformers, divider: true }] : []),
         ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
         ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
       ].filter((i) => !ownNames.has(i.name))

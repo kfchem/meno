@@ -1,4 +1,5 @@
 import type { Conversation } from "../conversation/types";
+import type { Asker } from "../workflow/configurations";
 import type { ConversationPatch } from "../conversation/ops";
 import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
@@ -160,6 +161,12 @@ export type Bond = BondChem & {
    * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
    */
   behind?: number[];
+  /**
+   * Its line stops close to the label at its end (lib/chem/layout2d `Bond.close`): a labelled group's bond inside a Haworth ring's
+   * picture, so that its stem shows as the figures draw it - put so as the label is typed (projections/haworthLabels). Clean-up takes it
+   * away.
+   */
+  close?: true;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
@@ -529,8 +536,17 @@ export type Molecule3D = {
    * `readCarried3D`, workflow/meno `notAllMinima`).
    */
   marksUnread?: true;
-  /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
+  /** Each frame's energy, where its file gives one, in hartrees: the first frame's first - NaN, a frame given none (saved as null). */
   energies?: number[];
+  /**
+   * Each frame's name, the first frame's first - "", a frame with none: what
+   * an XYZ file's comment lines say of them (lib/chem/xyzWriter
+   * `xyzFrameName`), or the records joined as conformers (utils/asConformers).
+   * Shown beside the frame's number on its chip.
+   */
+  frameNames?: string[];
+  /** Its file's frames do not all have the same elements in the same order (lib/io/structures): not offered as conformers. */
+  atomsDiffer?: true;
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
   /**
@@ -1561,6 +1577,15 @@ export type EditorState = {
   learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => void;
   /** A molecule in 3D changed by the chemist - its bond orders given, its hydrogens added - as one undo step. */
   changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => void;
+  /** Its frames marked a conformer set, or the mark taken off (utils/asConformers): one step to undo; marked, its lowest shown where every frame has an energy. */
+  setFramesConformers: (id: number, on: boolean) => void;
+  /**
+   * Molecules of one compound joined as one conformer set, in the page's order, at the first's place (utils/asConformers
+   * `joined`): one step to undo, which gives them back as they were. Judged as *As conformers* judges - the same
+   * constitution and the same stereoisomer, which is asked first, as that step asks it - and, where they are not one
+   * compound, not joined: why not given back, in one plain sentence (utils/asConformers `JOIN_REFUSED`).
+   */
+  joinAsConformers: (ids: readonly number[], asker?: Asker) => Promise<string | null>;
   /** A molecule in 3D switched to its other look - the secondary, or back to the primary - and those selected with it to the same. */
   switchLook3d: (id: number) => void;
   /** A measurement of the atoms and bonds chosen, which are then let go. */
@@ -2016,9 +2041,11 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
-  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
-  panRequest: { dx: number; dy: number; n: number } | null;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt) - or, `back`, the view gone back to where it was before menus moved it, every one of them shut (menuRoom). */
+  panRequest: { dx: number; dy: number; back?: boolean; n: number } | null;
   requestPan: (dx: number, dy: number) => void;
+  /** The view back where it stood before menus moved it, if it is still where they sent it (`panRequest`, menuRoom). */
+  requestPanBack: () => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey

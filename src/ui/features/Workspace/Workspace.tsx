@@ -1,4 +1,5 @@
 import RoleOffer from "./RoleOffer";
+import { conformersOffered, joinOffered } from "./utils/asConformers";
 import IconTips from "./components/IconTips";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
@@ -11,6 +12,8 @@ import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
 import { Vector3 } from "three";
 import type { MenuAnchor } from "./useMenuAt";
+import { menuHolds } from "./menuRoom";
+import { holdingCardOpen } from "./menuCards";
 import { documentOf, useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
@@ -78,6 +81,8 @@ import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
 import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
+import PageEdge from "./PageEdge";
+import { cornerRight } from "../../pageCorner";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
@@ -161,7 +166,7 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActio
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { useCanvasRatio } from "./canvasRatio";
-import { editorLayoutOptions, startingZoom, setDrawnRatio } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
@@ -337,6 +342,8 @@ function WorkspaceContent({
 
   // the column over the canvas's right side, and the layer the page's HTML goes in, cut off where it begins
   const cover = useEditor((s) => s.cover);
+  // (filling the workspace, it leaves no corner of the page beside it: what keeps to that corner keeps to the canvas's)
+  const columnFilled = useEditor((s) => s.columnFilled);
   const [htmlLayer, setHtmlLayer] = useState<HTMLDivElement | null>(null);
   const guideStructure = useRef<HTMLDivElement>(null);
   // (where PDFs opened go: the middle of what is in view, as a paste - set once the events are known)
@@ -393,8 +400,6 @@ function WorkspaceContent({
   const store = useEditorStore();
   // (how finely the canvas is drawn, as Settings has it: a change shows at once)
   const canvasRatio = useCanvasRatio();
-  // (bonds never thinner than one of the canvas's device pixels: layoutOptions `minLinePx`)
-  setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
   // (a page that holds nothing at all: its one quiet line - components/EmptyPageLine)
@@ -1228,6 +1233,8 @@ function WorkspaceContent({
         return r ? { width: r.width, height: r.height, cover: store.getState().cover } : null;
       },
       pan: (dx, dy) => store.getState().requestPan(dx, dy),
+      // (every menu, and every card a row opens where one was, counted: the view goes back once the last has shut - menuRoom)
+      hold: menuHolds(() => store.getState().requestPanBack()).hold,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store],
@@ -1291,6 +1298,15 @@ function WorkspaceContent({
   const magnifyAtoms = (menu?.kind === "atom" || menu?.kind === "bond") && menuAtom != null && menu.selection !== "here" ? [menuAtom] : menu?.selection === "here" ? [...menuSel.atoms] : [];
   const magnifyFirst = molecules3d.find((m) => m.id === magnifyIds[0]) ?? model.atoms.find((a) => a.id === magnifyAtoms[0]);
   const menuMagnify = magnifyFirst ? { now: magnifyFirst.magnified ?? 1, set: (k: number) => store.getState().setMagnified(magnifyAtoms, magnifyIds, k) } : undefined;
+  // (the molecules selected, one compound: *Join as conformers*, on any of them or on the page beside them - utils/asConformers)
+  const joinIds = joinOffered(molecules3d, menuSel3d, menu);
+  const onJoinConformers = joinIds.length
+    ? () => {
+        setChemError(null);
+        // (where they are not one compound, why not, in one plain sentence - utils/asConformers `JOIN_REFUSED`)
+        void store.getState().joinAsConformers(joinIds).then((why) => why && setChemError(why));
+      }
+    : undefined;
   const menu3d: MenuMolecule3D | undefined = menuMolecule
     ? {
         otherLook: (() => {
@@ -1372,6 +1388,12 @@ function WorkspaceContent({
         ...(menuMolecule.calc?.source
           ? { output: { name: menuMolecule.calc.source.name, show: () => void showOutput(menuMolecule.id, menuMolecule.calc!.source!) } }
           : {}),
+        // (its frames taken as conformers, on purpose - each alike - or the mark taken off: utils/asConformers)
+        ...(conformersOffered(menuMolecule)
+          ? { framesConformers: { on: !!menuMolecule.conformerSet, set: (on: boolean) => store.getState().setFramesConformers(menuMolecule.id, on) } }
+          : {}),
+        // (the molecules selected with it, one compound: joined as one set of conformers)
+        ...(onJoinConformers ? { onJoinConformers } : {}),
         ...((menuMolecule.frames?.length ?? 0) > 0
           ? {
               overlay: {
@@ -1715,6 +1737,9 @@ function WorkspaceContent({
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  // (a card a menu's row opens holds the view where the menu had it, as the menu did: it goes back once the last of them has shut - menuRoom)
+  const cardOpen = holdingCardOpen({ ask3d, colourCard, coords, cornersCard, exporting, givingOrders, naming, pdfCard, protonating, rendering, inkMode, menu });
+  useEffect(() => (cardOpen ? menuAnchor.hold() : undefined), [cardOpen, menuAnchor]);
   // (a talk begun shuts Export's card and Render's: nothing over a talk, its keys the talk's)
   useEffect(() => {
     if (!talking) return;
@@ -1883,8 +1908,11 @@ function WorkspaceContent({
             key="working"
             {...RISE}
             layout
+            // (eased as what it says changes; moved with the column, at once: ../../pageCorner)
+            layoutDependency={`${chem.state}:${working3d}:${copyingShown}:${checkingFiles}:${making3d != null}`}
             role="status"
-            className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
+            style={{ right: cornerRight(columnFilled ? 0 : cover) }}
+            className={`absolute bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : copyingShown ? "copying" : "checking"} {...FADE} className="block">
@@ -1915,8 +1943,10 @@ function WorkspaceContent({
             key="mapping"
             {...RISE}
             layout
+            layoutDependency={atomMaps.mapping.phase}
             role="status"
-            className="absolute right-3 bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
+            style={{ right: cornerRight(columnFilled ? 0 : cover) }}
+            className="absolute bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
@@ -2405,6 +2435,7 @@ function WorkspaceContent({
             const set = store.getState().sets.find((b) => b.id === menu.id);
             return set?.made ? { kept: set.keep !== false, set: (keep: boolean) => store.getState().keepSet(set.id, keep) } : undefined;
           })()}
+          onJoinConformers={menu.kind == null ? onJoinConformers : undefined}
           onUseAsInput={menu.selection === "here" && selectionAsSet() ? () => {
             const frame = selectionAsSet();
             if (!frame) return;
@@ -3369,6 +3400,8 @@ export default function Workspace({
         </TabFiles>
         {/* The texts the workspace holds, in their column */}
         <ColumnBoundary>{(reloaded) => <TextColumn slideIn={reloaded} />}</ColumnBoundary>
+        {/* (what is seen of the page, its right edge told to what keeps to its corner - the notices: ../../pageCorner) */}
+        <PageEdge tabId={tabId} active={active && document != null} />
         </div>
         {/* The panel beside the canvas slides open and shut, the canvas giving
             way as it does; one going as another comes takes as long, so the
