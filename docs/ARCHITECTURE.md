@@ -1138,7 +1138,17 @@ WORKSPACE.md, *The page's conformers*). Both take
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
 keeps which drawing atom each of its atoms is and what the drawing was (`drawnFrom`, `drawnAs`;
-`utils/drawnLink`), so that hover is shared and a changed drawing is seen.
+`utils/drawnLink`), so that hover is shared and a changed drawing is seen:
+its atoms and bonds, and each configuration the drawing states as identity
+reads it (what it keeps, where it keeps any) - so that (Z) made (E) by moving a methyl, or a centre's two
+groups exchanged in place, is a changed drawing too, and a wedge moved to
+another bond that states the same, as Clean-up moves one, is not; nor is
+a plain hydrogen Clean-up draws on a centre to wedge it, which is the
+structure's as identity folds it in. A wedge whose configuration is not
+read (at no centre, leaving the structure) is kept as drawn. A configuration
+that sets nothing (a wedge at an isopropyl's CH) states nothing, so a
+structure that states none keys by its atoms and bonds alone, each bond's
+order and no mark.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
 coordinates gave none - where it has its hydrogens, which the method
