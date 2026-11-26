@@ -27,6 +27,7 @@ import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { centredAt } from "../utils/copyPaste";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { ARROW_LENGTH_BONDS, arrowEnds } from "../../../../lib/chem/reactionScheme";
+import { isMarkdown } from "../../../../lib/text/markdown";
 
 /** What a change tool answers: done, with what it made, or why not. */
 export type Changed = { ok: true; value: unknown } | { ok: false; why: string };
@@ -256,7 +257,8 @@ export function changeTool(
       const before = page.nextTextId ?? 1;
       const spot = clearSpot(page, frame, 12, 8);
       if (!spot.clear) return { ok: false, why: NO_ROOM };
-      calls.addTexts([{ name, text }], spot.at);
+      // (Markdown where it is named as a Markdown file is: as such a text was read before its record said so)
+      calls.addTexts([{ name, text, ...(isMarkdown(name) ? { markdown: true as const } : {}) }], spot.at);
       return d().nextTextId === before ? { ok: false, why: "It could not be put down" } : { ok: true, value: { id: seenId("text", before) } };
     }
     case "add_step": {

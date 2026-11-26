@@ -15,6 +15,7 @@ import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
 import { addPlugin } from "../../lib/calc/workers";
 import { addOnline } from "../../lib/calc/addOnline";
 import type { OpenedText } from "./texts";
+import { isMarkdown } from "../../lib/text/markdown";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */
 export type Opened = { kind: TabKind; label: string; data: Record<string, unknown> };
@@ -188,7 +189,8 @@ export function openedAs(name: string, text: string, path?: string, kind: Kind |
   if (kind) return { kind: "workspace", label: name, data: { filename: name, payload: text, kind: kind.id, ...(path ? { path } : {}) } };
   // (not a text - bytes, or a kind Meno says it does not read yet: read as a drop reads it, and said so as it says it - utils/io `opensAsText`)
   if (!opensAsText(name, text.slice(0, MARK_REACH))) return { kind: "workspace", label: name, data: { filename: name, payload: text, ...(path ? { path } : {}) } };
-  return openedTexts([{ name, text, ...(path ? { path } : {}) }]);
+  // (Markdown where its file is: its record says so from here on, whatever it is named)
+  return openedTexts([{ name, text, ...(path ? { path } : {}), ...(isMarkdown(name) ? { markdown: true as const } : {}) }]);
 }
 
 /** Texts opened, on a canvas of their own where none takes them: named for the first, as for any file opened. */

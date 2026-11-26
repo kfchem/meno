@@ -798,11 +798,13 @@ export type WordsFlight = {
  * from - and, where it lies on the page as a sheet of its own (docs/PDF.md,
  * *A text*), its sheet's top left; and whether it is read in the column,
  * as a tab there (unless `reading` is false), and whether its sheet is
- * made an icon, as a PDF is. A calculation's output shown from a molecule,
+ * made an icon, as a PDF is; and whether it is Markdown (`markdown`), as
+ * the file it came from was - read formatted - its name aside: none, plain
+ * text. A calculation's output shown from a molecule,
  * or a step's log, has no sheet: that molecule, or its step, is its body
  * (`of`) - what it rises out of into the column, and goes back into.
  */
-export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
+export type WorkspaceText = { id: number; name: string; text: string; path?: string; markdown?: true; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
 /**
  * A text its workspace's file was to hold whose words could not be read -
  * damaged there, or not there (docs/FILE-IO.md, *The workspace file*): kept

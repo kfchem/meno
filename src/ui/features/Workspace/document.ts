@@ -216,7 +216,7 @@ export function createWorkspaceDocument(
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
-      ? [{ name: t.name, text: t.text, ...(typeof t.path === "string" ? { path: t.path } : {}) }]
+      ? [{ name: t.name, text: t.text, ...(typeof t.path === "string" ? { path: t.path } : {}), ...(t.markdown === true ? { markdown: true as const } : {}) }]
       : [],
   );
   // (PDFs opened on a canvas of their own: in a row from the middle of the page - and pictures likewise)
@@ -2886,7 +2886,7 @@ export function addTexts(
       last = same.id;
       continue;
     }
-    held.push({ id: next, name: t.name || newTextName(held), text, ...(t.path ? { path: t.path } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text, ...(t.path ? { path: t.path } : {}), ...(t.markdown ? { markdown: true as const } : {}), ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: t.of } : {}) });
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
@@ -2955,7 +2955,7 @@ export function addSheets(doc: WorkspaceDocument, sheets: readonly Omit<Workspac
   const ids: number[] = [];
   for (const t of sheets) {
     if (!t.at) continue;
-    held.push({ id: next, name: t.name || newTextName(held), text: heldText(t.text), at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
+    held.push({ id: next, name: t.name || newTextName(held), text: heldText(t.text), ...(t.markdown ? { markdown: true as const } : {}), at: t.at, reading: false, ...(t.icon ? { icon: true as const } : {}) });
     ids.push(next++);
   }
   return ids.length ? { doc: { ...doc, texts: held, nextTextId: next }, ids } : { doc, ids };
@@ -2987,7 +2987,7 @@ export function textsInRow<T extends Omit<WorkspaceText, "id">>(texts: readonly 
   const step = (ICON_NAME_WIDTH * point) / POINT + NOMINAL_BOND_LENGTH;
   // (each by its top left, its middle where it goes; laid at `point`, the workspace's)
   const row = texts.map((t, i) => {
-    const s = sheetOf(t.text, t.name, point);
+    const s = sheetOf(t.text, !!t.markdown, point);
     return { ...t, at: { x: at.x + i * step - s.w / 2, y: at.y + s.h / 2 }, icon: true as const, ...(point !== POINT ? { point } : {}) };
   });
   const taken = [

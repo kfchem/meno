@@ -11,7 +11,6 @@ import { writeDocument } from "../../../lib/io/writeDocument";
 import TextBody from "../TextEditor";
 import { columnText, markdownReaderOf, setShowsSource, useShowsSource } from "../TextEditor/columnText";
 import MarkdownBody from "../TextEditor/MarkdownBody";
-import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import { useLocked } from "../../../lib/doc/locked";
@@ -259,7 +258,7 @@ function Column({
   // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
   const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
-  const markdown = !!shown && isMarkdown(shown.name);
+  const markdown = !!shown?.markdown;
   const source = useShowsSource(store, shown?.id ?? null);
   const printing = usePrinting(pdf?.sha256);
   const printPdf = async (p: PdfItem) => {

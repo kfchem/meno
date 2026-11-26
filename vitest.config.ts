@@ -8,6 +8,6 @@ export default defineConfig({
     environment: "node",
     // (plugins as if put in place, from their manifests in src/test/plugins: src/test/pluginsInPlace)
     setupFiles: ["src/test/pluginsInPlace.ts"],
-    include: ["src/**/*.test.{ts,tsx}", "scripts/site/**/*.test.mjs", "scripts/licenses/**/*.test.mjs", "scripts/templates/**/*.test.ts", "scripts/figure/draw/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/site/**/*.test.mjs", "scripts/licenses/**/*.test.mjs", "scripts/templates/**/*.test.ts", "scripts/figure/draw/**/*.test.ts", "scripts/document/**/*.test.ts"],
   },
 });
