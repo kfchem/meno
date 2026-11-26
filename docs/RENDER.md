@@ -284,7 +284,7 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
   itself, puts it on the page, and takes the job's folder away. A film on a
   transparent background is two items of the same entry: its film for the
   page, `video/mp4`, saying where its alpha lies (`matte`: `"below"` or
-  `"right"`), and its film for slide programs, `video/quicktime`
+  `"right"`), and its film with transparency, `video/quicktime`
   (*A film on a transparent background*, below). An item of
   `video/quicktime` is taken only beside such a film.
 
@@ -350,18 +350,19 @@ files from one render, both kept in the workspace:
   played as every film is, by the system, off the page's own work; the
   page joins the halves as it draws it (`components/matteMaterial.ts`,
   `lib/picture/matte.ts`), laying it over what lies under it - a white page,
-  a dark slide, a shape - in the colours a picture rendered with the same
+  a dark page, a shape - in the colours a picture rendered with the same
   values is drawn in (its colour turned linear once as it is read, and back
   once as the page draws it, as a picture's is; its alpha's grey taken as
   written) - with no dark or light fringe, at any zoom, moved,
   selected and undone as any picture is. The video is held within 4096 x
   2304 pixels, both halves together: a larger film on Transparent is
   refused with a sentence saying how large it can be.
-- **Its film for slide programs**: **Save film…** writes it, and only it -
+- **Its film with transparency**: **Save film…** writes it, and only it -
   a QuickTime file, ProRes 4444 with an alpha channel, made from the same
   frames; the save dialog's list says so in words. Not every program reads
-  this file: where it is not accepted, render the film with a background
-  colour and save that.
+  this file. Slide programs differ in what they keep of a film's
+  transparency; where a film must lie on a slide, render it on the slide's
+  colour.
 
 A film on White, Black or Grey is one MP4, as before.
 

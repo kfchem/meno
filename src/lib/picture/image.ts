@@ -11,7 +11,7 @@ export type PictureMedia = "image/png" | "image/jpeg" | "video/mp4";
 /** The kinds of picture a workspace keeps. */
 export const PICTURE_MEDIA: readonly PictureMedia[] = ["image/png", "image/jpeg", "video/mp4"];
 
-/** A film on a transparent background's film for slide programs (docs/RENDER.md): QuickTime, its alpha kept - held and kept beside its film, never put on the page itself. */
+/** A film on a transparent background's film with transparency (docs/RENDER.md): QuickTime, its alpha kept - held and kept beside its film, never put on the page itself. */
 export const FILM_FOR_SLIDES = "video/quicktime";
 
 /** Whether a picture is a film. */

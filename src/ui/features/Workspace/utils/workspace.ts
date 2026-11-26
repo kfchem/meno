@@ -334,7 +334,7 @@ function picturesToKeep(pictures: readonly PictureItem[]): { kept: KeptData[]; n
     const data = pictureBytes(p.sha256);
     if (data) kept.push({ sha256: p.sha256, name: p.name, media: p.media, data });
     else notKept.push({ sha256: p.sha256, name: p.name, media: p.media });
-    // (a film on a transparent background: its film for slide programs beside it, once)
+    // (a film on a transparent background: its film with transparency beside it, once)
     if (!p.forSlides || seen.has(p.forSlides) || kept.some((k) => k.sha256 === p.forSlides)) continue;
     const slides = pictureBytes(p.forSlides);
     const name = p.name.replace(/\.mp4$/i, "") + ".mov";

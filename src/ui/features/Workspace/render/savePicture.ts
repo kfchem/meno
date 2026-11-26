@@ -10,13 +10,13 @@ const KINDS: Record<PictureItem["media"], { name: string; extensions: string[] }
   "video/mp4": { name: "MP4 film", extensions: ["mp4"] },
 };
 
-/** A film on a transparent background as a file: its film for slide programs, in the save dialog's own words. */
-const FOR_SLIDES = { name: "Film for slide programs, transparent (QuickTime)", extensions: ["mov"] };
+/** A film on a transparent background as a file: its film with transparency, in the save dialog's own words. */
+const FOR_SLIDES = { name: "Film with transparency (QuickTime)", extensions: ["mov"] };
 
 /**
  * What saving a picture writes, and its kind: a render's PNG, or its film,
  * an MP4 - or any picture, as it is - and, of a film on a transparent
- * background, its film for slide programs alone (QuickTime, ProRes 4444,
+ * background, its film with transparency alone (QuickTime, ProRes 4444,
  * its alpha kept): never its film for the page, which no other program
  * shows as Meno does.
  */

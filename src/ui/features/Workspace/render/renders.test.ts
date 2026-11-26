@@ -320,7 +320,7 @@ describe("where a render lands", () => {
     expect({ x: film.x, y: film.y, w: film.w, h: film.h }).toEqual(moved);
   });
 
-  it("on a transparent background: its film for the page, where its alpha lies, and its film for slide programs held beside it", async () => {
+  it("on a transparent background: its film for the page, where its alpha lies, and its film with transparency held beside it", async () => {
     const one = workspace();
     worker.collect.mockResolvedValueOnce({ made: [{ entry: 0, file: "film.mp4", media: "video/mp4", matte: "below" }, { entry: 0, file: "film.mov", media: "video/quicktime" }] } as never);
     const ran = startRender(one.store, [one.id], FILM, {});
@@ -328,7 +328,7 @@ describe("where a render lands", () => {
     const [r] = rendersOf(one.store).getState().list;
     Object.assign(jobs.get(r.job!)!, { state: "done", ended: Date.now() });
     madeFiles.set(`/jobs/${r.job}/film.mp4`, mp4(5));
-    // (a QuickTime file's first box, its file type, as the film for slide programs begins)
+    // (a QuickTime file's first box, its file type, as the film with transparency begins)
     const mov = new Uint8Array([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 2, 0, 0x71, 0x74, 0x20, 0x20]);
     madeFiles.set(`/jobs/${r.job}/film.mov`, mov);
     await vi.advanceTimersByTimeAsync(5 * LOOK_MS);
@@ -344,12 +344,12 @@ describe("where a render lands", () => {
 });
 
 describe("What a render's job made", () => {
-  it("is the file for the page, a film's alpha where it says where it lies, and a film for slide programs only beside such a film", () => {
+  it("is the file for the page, a film's alpha where it says where it lies, and a film with transparency only beside such a film", () => {
     expect(madeOf([{ entry: 0, file: "film.mp4", media: "video/mp4" }])).toEqual({ page: { file: "film.mp4", media: "video/mp4" }, forSlides: null });
     expect(madeOf([{ entry: 0, file: "film.mp4", media: "video/mp4", matte: "right" }, { entry: 0, file: "film.mov", media: "video/quicktime" }])).toEqual({ page: { file: "film.mp4", media: "video/mp4", matte: "right" }, forSlides: "film.mov" });
-    // (the slide film said first: the page's file is still the MP4)
+    // (the film with transparency said first: the page's file is still the MP4)
     expect(madeOf([{ entry: 0, file: "film.mov", media: "video/quicktime" }, { entry: 0, file: "film.mp4", media: "video/mp4", matte: "below" }]).page).toEqual({ file: "film.mp4", media: "video/mp4", matte: "below" });
-    // (no alpha said: no slide film taken; an alpha said some other way, none; a picture never has one)
+    // (no alpha said: no film with transparency taken; an alpha said some other way, none; a picture never has one)
     expect(madeOf([{ entry: 0, file: "film.mp4", media: "video/mp4" }, { entry: 0, file: "film.mov", media: "video/quicktime" }]).forSlides).toBeNull();
     expect(madeOf([{ entry: 0, file: "film.mp4", media: "video/mp4", matte: "left" }]).page).toEqual({ file: "film.mp4", media: "video/mp4" });
     expect(madeOf([{ entry: 0, file: "picture.png", media: "image/png", matte: "below" }]).page).toEqual({ file: "picture.png", media: "image/png" });

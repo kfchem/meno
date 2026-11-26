@@ -371,7 +371,7 @@ export type PictureItem = {
   from?: PictureFrom;
   /** A film on a transparent background (docs/RENDER.md): where its alpha lies in each frame of its video (lib/picture/matte). */
   matte?: Matte;
-  /** A film on a transparent background: its film for slide programs, by its SHA-256 - a QuickTime file, its alpha kept - held and kept beside it. */
+  /** A film on a transparent background: its film with transparency, by its SHA-256 - a QuickTime file, its alpha kept - held and kept beside it. */
   forSlides?: string;
 };
 

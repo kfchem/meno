@@ -1285,7 +1285,7 @@ The same for every plugin and for Meno's own parts:
     job's folder by Meno, and answered with the picture or film the job
     made (`{made: [{entry, file, media}]}`; a film on a transparent
     background, two items of its entry - its MP4 with `matte`, where its
-    alpha lies, and its QuickTime file for slide programs: RENDER.md);
+    alpha lies, and its QuickTime film with an alpha channel: RENDER.md);
   - a job may say how far it is, in lines of its log of their own -
     `progress <done>/<all>` - which Meno shows as it runs;
   - `collect` may answer, for each entry, surfaces in cube files the job

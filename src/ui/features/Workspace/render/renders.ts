@@ -318,9 +318,9 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
       if (held) picture = { name, sha256: held.sha256, media: held.media, px: [held.width, held.height], ...there };
     } else {
       const held = await holdFilm(bytes);
-      // (a film on a transparent background: where its alpha lies, and its film for slide programs, held beside it)
+      // (a film on a transparent background: where its alpha lies, and its film with transparency, held beside it)
       const slides = made.matte && forSlides ? await holdFilm(await readFile(await join(await jobFolder(job), forSlides))) : null;
-      if (made.matte && !slides) return fail("It made a film on a transparent background, but not its film for slide programs");
+      if (made.matte && !slides) return fail("It made a film on a transparent background, but not its film with transparency");
       if (held) picture = { name, sha256: held.sha256, media: "video/mp4", px: [rendered.width, rendered.height], ...there, ...(made.matte && slides ? { matte: made.matte, forSlides: slides.sha256 } : {}) };
     }
     if (!picture) return fail("What it made cannot be shown");
@@ -341,7 +341,7 @@ const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
  * What a render's job made, as its plugin says (docs/RENDER.md, *The role,
  * and its contract*): the file for the page - a PNG, or a film, an MP4, with
  * where its alpha lies where it is on a transparent background (`matte`) -
- * and, beside such a film, its film for slide programs (QuickTime). None
+ * and, beside such a film, its film with transparency (QuickTime). None
  * where it names nothing Meno can show.
  */
 export function madeOf(made: unknown): { page: { file: string; media: "image/png" | "video/mp4"; matte?: Matte } | null; forSlides: string | null } {

@@ -1400,7 +1400,7 @@ window decodes; nothing of it goes through Rust but the clipboard.
   transparent background (`PictureItem.matte`, `forSlides`) is played the
   same way; its material (`components/matteMaterial.ts`) takes its alpha
   from the video's other half (`lib/picture/matte.ts`) and blends it
-  premultiplied; its film for slide programs is held and kept beside it,
+  premultiplied; its film with transparency is held and kept beside it,
   media `video/quicktime`, and is what Save film writes.
 
 ### Renders
