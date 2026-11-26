@@ -611,6 +611,13 @@ export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
 }
 
 /**
+ * A molecule in 3D's name, wherever it is named - a set's rows, its entries,
+ * a step's lines: its record's title, where its file gives one (an SD
+ * file's record's first line), else the file it came from.
+ */
+export const nameOf = (m: Partial<Pick<Molecule3D, "title" | "name">>): string | undefined => m.title || m.name || undefined;
+
+/**
  * Why a step takes no set of `molecules` mixing conformer sets with other
  * molecules in 3D - neither the others' frames are conformers, nor a
  * conformer set's conformers compounds of their own - naming the others,
@@ -618,7 +625,7 @@ export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
  * them.
  */
 export function plainAmong(molecules: readonly Pick<Molecule3D, "conformerSet" | "title" | "name">[]): string | null {
-  const plain = molecules.flatMap((m, i) => (conformersOfOne(m) ? [] : [m.title || m.name || `molecule ${i + 1}`]));
+  const plain = molecules.flatMap((m, i) => (conformersOfOne(m) ? [] : [nameOf(m) || `molecule ${i + 1}`]));
   if (!plain.length || plain.length === molecules.length) return null;
   const named = plain.length > 3 ? `${plain.slice(0, 3).join(", ")} and ${plain.length - 3} more` : plain.join(", ");
   return `It mixes conformer sets with other molecules in 3D: ${named} ${plain.length === 1 ? "is no conformer set" : "are no conformer sets"}`;
@@ -1078,7 +1085,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...whole,
         ...(m.mirrors?.length === n && m.mirrors[f] ? { mirror: m.mirrors[f]! } : {}),
-        ...(m.name ? { name: m.name } : {}),
+        ...(nameOf(m) ? { name: nameOf(m) } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
         ...(m.partsAlone ? { partsAlone: true as const } : {}),

@@ -238,7 +238,8 @@ describe("the steps of two inputs, wired on the page", () => {
     expect([compared.ran?.ok, compared.ran?.said]).toEqual([true, "0 same · 1 different"]);
     const rb = page("rebond", true);
     const rebondedStep = runStep(rb.doc, rb.step, W).steps!.find((s) => s.id === rb.step)!;
-    expect([rebondedStep.ran?.ok, rebondedStep.ran?.said]).toEqual([true, "1 entry re-bonded, each with each"]);
+    // (its title its name, which is not known to be of the structure re-bonded: said so, as of any name)
+    expect([rebondedStep.ran?.ok, rebondedStep.ran?.said]).toEqual([true, "1 entry re-bonded, each with each. name is not known to be of the structure after Re-bond, so it is marked not applicable."]);
   });
 });
 
