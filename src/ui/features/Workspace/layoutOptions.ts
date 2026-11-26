@@ -70,23 +70,6 @@ export function layoutBonds(
 }
 
 /**
- * How many device pixels the canvas draws to each of the screen's (Settings,
- * General, *Drawing resolution*; Workspace sets it as the canvas takes it).
- */
-let drawnRatio = 1;
-export function setDrawnRatio(ratio: number): void {
-  drawnRatio = Math.max(1, ratio);
-}
-
-/**
- * The thinnest a bond is drawn on the screen, however far out the camera is,
- * in CSS pixels: one device pixel - thinner, a line shimmers away (the
- * maintainer, 2026-11-05: lines in page units, floored at a device pixel;
- * it was 1.25 CSS pixels, two and a half device pixels on a screen of two).
- */
-export const minLinePx = () => 1 / drawnRatio;
-
-/**
  * The options every part of the 2D editor draws with, in `style`, at the
  * editor's bond length in world units. Each component used to build its own,
  * which drifted: only the bonds kept a minimum on-screen width, so at low
@@ -100,7 +83,9 @@ export function editorLayoutOptions(
 ): LayoutOptions {
   return layoutOptionsFor(style, NOMINAL_BOND_LENGTH, {
     units: "world",
-    minLinePx: minLinePx(),
+    // (a bond thinner than a device pixel drawn so by the view, as every line on the page is: components/drawnInk -
+    // a caller with its own least, a picture's or a measure's, laid out with that)
+    thinDrawn: over?.minLinePx == null,
     ...over,
   });
 }

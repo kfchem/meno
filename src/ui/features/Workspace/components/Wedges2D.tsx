@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import type { Poly } from "../../../../lib/chem/layout2d";
 import { polyTriangles } from "./polyTriangles";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { drawnInk, inkOnce } from "./drawnInk";
 
 /**
  * The drawing's filled shapes, from the shared layout: wedges, bold bonds,
@@ -67,6 +69,12 @@ export default function Wedges2D() {
   }, [layout, opts.bondColor]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
+  // (as faint as the bonds, and painted once with them: components/drawnInk)
+  const material = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(({ camera, viewport }) => {
+    if (material.current) inkOnce(material.current, drawnInk(opts, (camera as THREE.OrthographicCamera).zoom || 1, viewport.dpr).ink);
+  });
+
   return (
     <mesh
       geometry={geometry}
@@ -76,6 +84,7 @@ export default function Wedges2D() {
       raycast={() => {}}
     >
       <meshBasicMaterial
+        ref={material}
         color="#ffffff"
         vertexColors
         toneMapped={false}

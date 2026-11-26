@@ -281,6 +281,27 @@ describe("the gap where a bond passes behind another", () => {
       const rHalf = front.widthPx / zoom / 2;
       for (const c of clears(raster.polys, rHalf)) closeTo(c * zoom, CROSSING_CLEAR_FLOOR_PX, 6);
     });
+
+    it("keeps no least clear space in the page's drawing, whose lines thin out with the zoom: two line widths at every zoom", () => {
+      // (8: two line widths are 1.2 pixels, the floor would take them to 3; 0.5: far out; 26.67: an ACS bond's start scale; 100: close up)
+      for (const zoom of [0.5, 8, 26.67, 100]) {
+        const page = scene(90, { zoom, over: { minLinePx: undefined, thinDrawn: true } });
+        const front = page.lines.find((l) => Math.abs(l.y2 - l.y1) < 1e-9)!;
+        expect(front.widthPx / zoom).toBeCloseTo(LINE, 12);
+        expect(clears(page.polys, HALF)).toHaveLength(2);
+        for (const c of clears(page.polys, HALF)) closeTo(c, CLEAR);
+      }
+    });
+
+    it("is the gap it was wherever two line widths are three pixels or more: from zoom 20 in, under the start scale", () => {
+      // (two line widths are 2 x 0.075 x zoom pixels: 3 at zoom 20; an ACS bond's start scale is 26.67)
+      for (const zoom of [20, 26.67, 40, 100]) {
+        const was = scene(90, { zoom, over: { minLinePx: 1 } });
+        const now = scene(90, { zoom, over: { minLinePx: undefined, thinDrawn: true } });
+        expect(JSON.stringify(now.polys)).toBe(JSON.stringify(was.polys));
+        expect(JSON.stringify(now.lines)).toBe(JSON.stringify(was.lines));
+      }
+    });
   });
 
   describe("in every writer the back bond is in pieces with nothing between", () => {

@@ -22,7 +22,7 @@
  */
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import type { Shape } from "../store/types";
@@ -58,6 +58,8 @@ import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
+import { pairMiddles, ThinStrokes, ThinStrokesContext } from "./drawnInk";
+import { devicePx } from "../pageGl/units";
 import { roundHandleAt, roundInOf, roundsOf } from "./shapeRounds";
 import { pageLength, reachAt } from "../utils/pageScale";
 import { boxRaycast, NO_RAYCAST, PartFramesProvider, pixelNow, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
@@ -98,8 +100,8 @@ const ROUND = new THREE.Color(COLORS.highlight);
 
 type Pt = { x: number; y: number };
 
-/** Triangles of what a shape draws, in page units: its fill, and its line. */
-function shapeGeometry(points: { positions: number[]; indices: number[] }): THREE.BufferGeometry {
+/** Triangles of what a shape draws, in page units: its fill, and its line - told its middle line, to be widened about (components/drawnInk `widensAbout`). */
+function shapeGeometry(points: { positions: number[]; indices: number[] }, line = false): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   const pos = new Float32Array((points.positions.length / 2) * 3);
   for (let i = 0; i < points.positions.length / 2; i++) {
@@ -107,6 +109,7 @@ function shapeGeometry(points: { positions: number[]; indices: number[] }): THRE
     pos[3 * i + 1] = points.positions[2 * i + 1];
   }
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  if (line) g.setAttribute("middle", new THREE.BufferAttribute(pairMiddles(points.positions), 3));
   g.setIndex(points.indices);
   return g;
 }
@@ -144,7 +147,7 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
     const lined = s.stroke !== "none";
     return {
       fill: area ? shapeGeometry(polygons([area])) : null,
-      line: lined ? shapeGeometry(lines(strokePieces(s, pointPx), lineWidthOf(s, pointPx))) : null,
+      line: lined ? shapeGeometry(lines(strokePieces(s, pointPx), lineWidthOf(s, pointPx)), true) : null,
     };
     // (made again when the shape changes, not when it is drawn again)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,6 +161,18 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
   );
   const lineColor = s.stroke && s.stroke !== "none" ? s.stroke : ink;
   const see = opacity < 1;
+  // its line thinner than a device pixel: a device pixel wide and as much fainter, as the drawing's (components/drawnInk)
+  const thin = useContext(ThinStrokesContext);
+  const width = lineWidthOf(s, pointPx);
+  const lineMaterial = useRef<THREE.Material | null>(null);
+  const strokeRef = useCallback(
+    (m: THREE.MeshBasicMaterial | null) => {
+      if (lineMaterial.current && lineMaterial.current !== m) thin?.delete(lineMaterial.current);
+      lineMaterial.current = m;
+      if (m) thin?.add(m, width);
+    },
+    [thin, width],
+  );
   return (
     <group>
       {fill && (
@@ -167,7 +182,7 @@ function ShapeLook({ s, pointPx, ink, opacity = 1 }: { s: ShapeGeometry & { stro
       )}
       {line && (
         <mesh geometry={line} position={[0, 0, Z_STEP / 4]} frustumCulled={false} raycast={NO_RAYCAST}>
-          <meshBasicMaterial color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
+          <meshBasicMaterial ref={strokeRef} color={lineColor} toneMapped={false} transparent={see} opacity={opacity} side={THREE.DoubleSide} />
         </mesh>
       )}
     </group>
@@ -195,7 +210,10 @@ export default function Shapes2D() {
   const camera = useThree((st) => st.camera);
   const gl = useThree((st) => st.gl);
   // (each shape's work at each frame done from this one callback: partFrames)
-  const parts = usePartFrames();
+  // (and the shapes' lines as wide and as faint as the zoom has them, set again only as a device pixel changes: drawnInk `ThinStrokes`)
+  const thin = useMemo(() => new ThinStrokes(), []);
+  const dpr = useThree((st) => st.viewport.dpr);
+  const parts = usePartFrames((px) => thin.at(devicePx(1 / px, dpr)));
   const toWorld = useCallback(
     (cx: number, cy: number): Pt => {
       const rect = gl.domElement.getBoundingClientRect();
@@ -209,6 +227,7 @@ export default function Shapes2D() {
   const drafted = draft ? asBonds({ kind: draft.kind, ...drawnShape(draft.kind, draft.from, draft.to, draft.even) }, bondLinePt) : null;
   return (
     <PartFramesProvider value={parts}>
+      <ThinStrokesContext.Provider value={thin}>
       <group>
         {shapes.map((s, i) => (
           <ShapeItem key={s.id} s={asDrawn(s)} z={Z + i * Z_STEP} pointPx={pointPx} ink={ink} selected={selShapes.has(s.id)} hovered={hovered === s.id} toWorld={toWorld} />
@@ -220,6 +239,7 @@ export default function Shapes2D() {
         )}
         {chosen.length > 0 && <Handles chosen={chosen} toWorld={toWorld} pointPx={pointPx} />}
       </group>
+      </ThinStrokesContext.Provider>
     </PartFramesProvider>
   );
 }

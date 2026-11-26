@@ -1540,7 +1540,29 @@ it, in `features/Workspace/pageGl/`:
   canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
   shrinks with the page, its lines too. A line thinner than one device
   pixel is drawn one device pixel wide and as much fainter (`thinLine`):
-  thinner and fainter far out, as a smaller picture of it would be. A control - a port - is its page pixels too, no more than its
+  thinner and fainter far out, as a smaller picture of it would be. The
+  drawing's lines - bonds, hashes, the caps where they meet, aromatic
+  rings, pluses and reaction arrows - take the same rule: none is laid out
+  wider than the drawing makes it at any zoom, and once a bond is thinner
+  than a device pixel the drawing is drawn as one ink, its lines a device
+  pixel wide at least and all of it - wedges and labels too - as much
+  fainter as a bond is (components/drawnInk); a plus or a reaction arrow
+  by its own line, painted once as well. Its parts overlap at atoms,
+  in double bonds, where a wedge meets its bond, so while it is fainter
+  each pixel of the drawing's ink is painted once (the first to reach it
+  leaves its depth there, turning the rest away): never darker where its
+  parts meet, nor where two structures cross. The gap where a bond passes
+  behind another scales with the page as well, two of its line widths
+  either side at every zoom. The page's other lines - a shape's (its
+  dashes along it, its fill as it is), a mark's box, a guide, the line
+  from a slide to the next - take the same rule: a device pixel wide at
+  least and as much fainter, each widened about its middle line in its
+  shader (components/drawnInk `thinStroke`); not painted once by depth
+  as the drawing is - a shape's line and a box's outline meet themselves
+  edge to edge, and where a guide's tick crosses its end that corner is
+  a little darker while it is faint. Pictures of the drawing -
+  SVG, PDF, EMF, PNG at a size - are not the zoom and keep their own line
+  widths. A control - a port - is its page pixels too, no more than its
   share of what it belongs to, and scaled with the page at every zoom
   (`Control`).
 - **Boxes and rings** (`PageShapes`): one instanced quad each, its shape

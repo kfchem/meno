@@ -21,7 +21,18 @@ export const devicePx = (zoom: number, dpr: number) => 1 / (Math.max(zoom, 1e-9)
  * share of the device pixel), as a picture of it made smaller looks.
  */
 export function thinLine(width: number, device: number): { width: number; ink: number } {
-  return width > 0 && width < device ? { width: device, ink: width / device } : { width, ink: 1 };
+  const ink = thinInk(width, device);
+  return ink < 1 ? { width: device, ink } : { width, ink };
+}
+
+/**
+ * `thinLine`'s ink alone - the width drawn is `width / ink` - with nothing
+ * made for it: for work done at each frame. (A line a device pixel wide but
+ * for the last bit of the arithmetic - a page pixel at the zoom a canvas
+ * opens at, on a screen of one device pixel to its own - is a device pixel.)
+ */
+export function thinInk(width: number, device: number): number {
+  return width > 0 && width < device * (1 - 1e-9) ? width / device : 1;
 }
 
 /** The GLSL of `thinLine`: the width drawn, and the ink, of a line `w` wide where a device pixel is `d`. */

@@ -10,6 +10,8 @@ import {
   type LayoutOptions,
 } from "../../../../lib/chem/layout2d";
 import CapJoinLine from "./CapJoinLine";
+import { drawnInk } from "./drawnInk";
+import { thinLine } from "../pageGl/units";
 import { editorLayoutOptions } from "../layoutOptions";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
@@ -108,6 +110,7 @@ export default function AromaticCircles2D() {
   };
 
   const { gl } = useThree();
+  const dpr = useThree((st) => st.viewport.dpr);
   const store = useEditorStore();
 
   // keep latest hover state in refs to avoid stale closures in DOM handlers
@@ -236,19 +239,21 @@ export default function AromaticCircles2D() {
           opts.units === "world"
             ? opts.lineWidthPx * Math.max(zoom, 1e-6)
             : opts.lineWidthPx;
+        // (thinner than a device pixel, a device pixel wide and as faint as the bonds: components/drawnInk)
+        const thin = thinLine(lw, 1 / Math.max(dpr, 1));
         return (
           <CapJoinLine
             key={k}
             points={pts}
             color={c.color ?? opts.bondColor ?? "black"}
-            lineWidth={lw}
+            lineWidth={thin.width}
             cap="butt"
             join="miter"
             miterLimit={2}
             depthTest={false}
             depthWrite={false}
             renderOrder={25}
-            opacity={level}
+            opacity={level * drawnInk(opts, zoom, dpr).ink}
           />
         );
       })}
