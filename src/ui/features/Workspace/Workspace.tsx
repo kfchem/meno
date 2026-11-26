@@ -114,7 +114,8 @@ import { useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { style3dOf } from "./style3dOf";
 import { LARGE_ATOMS } from "./utils/largeDrawing";
 import { askToOpen } from "../../layouts/commands";
-import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
+import { bondsAt, chosenPath, frameOf, lookOf, notesOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
+import { madeRoom } from "./utils/fitExtent";
 import { movingAtoms, movingFor } from "./utils/edit3d";
 import { abbreviationOf } from "../../../lib/chem/abbreviations";
 import { numbersItemsFor } from "./utils/atomNumbersShown";
@@ -287,6 +288,7 @@ import { emptyPageLineShown, pageHoldsNothing, thingInHand } from "./utils/empty
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
+import { shownWith } from "./utils/viewShow";
 
 function WorkspaceContent({
   active,
@@ -622,9 +624,14 @@ function WorkspaceContent({
           // clear of what is on the page - or, made again, where the one
           // made before stood
           const taken = takenOnPage(store.getState(), block.atoms, solids);
+          // (each with its chip under it and its notes' mark to its right: seen whole only with them - utils/fitExtent `madeRoom`)
+          const notes = Math.max(0, ...ms.map((m) => {
+            const placed = { ...m, id: 0, at: { x: 0, y: 0 } };
+            return notesOf(placed, solidOf(placed, look3d), lookOf(m)).length;
+          }));
           const row = replacing
             ? { at: rowFrom(turned, replacing.at), inView: true }
-            : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken);
+            : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken, madeRoom(notes));
           if ("box" in row) {
             solids.push(row.box);
             made3d = made3d ? { x0: Math.min(made3d.x0, row.box.x0), x1: Math.max(made3d.x1, row.box.x1), y0: Math.min(made3d.y0, row.box.y0), y1: Math.max(made3d.y1, row.box.y1) } : row.box;
@@ -650,8 +657,9 @@ function WorkspaceContent({
           replacing ? [replacing.id] : [],
           growths.length ? key : undefined,
         );
-        // (with no room for them in view, the view goes to them - along, or out as little as needed)
-        if (!allInView && made3d) store.getState().requestShow(made3d);
+        // (with no room for them in view, the view eases to take them in with the drawing they were made from - along, or
+        //  out as little as needed; where they are seen whole, it stays: utils/viewShow)
+        if (!allInView && made3d) store.getState().requestShow(shownWith(blocks.map((b) => boxOf(b.part)), made3d));
         if (!growths.length) return;
         // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
