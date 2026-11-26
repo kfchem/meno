@@ -479,16 +479,19 @@ export function moveAtom(
  */
 export function placeAtoms(
   doc: WorkspaceDocument,
-  moves: readonly { id: number; x: number; y: number; z?: number }[],
+  moves: readonly { id: number; x: number; y: number; z?: number; reads?: "left" | "right" | null }[],
   stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "narrow" | "display" | "behind">>)[] = [],
 ): WorkspaceDocument {
   const to = new Map(moves.map((m) => [m.id, m]));
   let changed = false;
   const atoms = doc.model.atoms.map((a) => {
     const m = to.get(a.id);
-    if (!m || (m.x === a.x && m.y === a.y && (m.z === undefined || m.z === a.z))) return a;
+    // (which way its label reads, where the move says - null: as its bonds decide (Atom `reads`))
+    if (!m || (m.x === a.x && m.y === a.y && (m.z === undefined || m.z === a.z) && (m.reads === undefined || (m.reads ?? undefined) === a.reads))) return a;
     changed = true;
-    return { ...a, x: m.x, y: m.y, ...(m.z !== undefined ? { z: m.z } : {}) };
+    const { reads: _r, ...rest } = a;
+    const reads = m.reads === undefined ? a.reads : (m.reads ?? undefined);
+    return { ...rest, x: m.x, y: m.y, ...(m.z !== undefined ? { z: m.z } : {}), ...(reads ? { reads } : {}) };
   });
   const flip = new Map(stereo.map((b) => [b.id, b]));
   const bonds = doc.model.bonds.map((b) => {
@@ -663,9 +666,9 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (gone.has(a.id)) return [];
     const p = to.get(a.id);
     if (!p) return [a];
-    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen && !p.configurationOpen) return [a];
+    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !a.reads && !p.arrangementOpen && !p.configurationOpen) return [a];
     changed = true;
-    const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, ...rest } = a;
+    const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, reads: _r, ...rest } = a;
     return [
       {
         ...rest,
