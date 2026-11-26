@@ -1711,8 +1711,17 @@ it where it lies out of view.
   "A triple line standing alone was not read as ethyne."): a bare line
   that long in a figure is a dash, a minus, a rule or a letter, a bare
   triple line a sign of equivalence or a separator, and an ethane or an
-  ethyne is all but never drawn so. A line bonded to anything is read as
-  before. What lies within one of the figure's pictures stays, for what is
+  ethyne is all but never drawn so. A long straight line alone is no chain
+  either, though it is drawn in pieces end to end: two or more single
+  lines in one straight line (no atom off it by more than a tenth of a
+  bond), joined to nothing else, with no label, wedge, hash or second line
+  on any - a table's rule drawn cell by cell, or broken where a column
+  starts - is left out, so the bold headings over it are no compound's
+  numbers. A chain of carbons is drawn bent at each atom; what is drawn
+  straight, an alkyne's or an allene's, has its second lines and is read
+  as before, as is a line with a label at an end (H3C-CH3, Cl-Cl). A line
+  bonded to anything is read as before. What lies within one of the
+  figure's pictures stays, for what is
   drawn over a picture, below; and a picture traced from its pixels keeps
   all of it, its reading saying each small piece (2026-11-20). (Ruled in
   review, 2026-11-18.)
@@ -2130,8 +2139,15 @@ mention a number, and the card.
 
 - **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
   word of a figure - drawn in it, or the page's own words within it - of a
-  compound number's shape (12, 3a, 12b, 7', in parentheses or not:
-  `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
+  compound number's shape (12, 3a, 12b, 7', in parentheses or not; a
+  Roman numeral of two letters or more, IV,
+  XII - a lone I, V or X is an element's or a variable's; a number with its
+  enantiomer's, racemate's or rotation's mark, ent-21, rac-3, (+)-12, its
+  sign and dash written as typed, (-)-12 for one set with a minus or an en
+  dash (2026-11-20); a supporting information's, S3, S14a, only where set
+  bold, as a page's number (S14) and an excited state's are set
+  plain (2026-11-20): `labelText`), lying within a bond of a structure -
+  of the box
   round all of it, as a number is set under a structure as a whole, however
   its lowest bonds lie - under or over it (its middle within the
   structure's breadth) or beside it (within its height); where two
@@ -2148,11 +2164,36 @@ mention a number, and the card.
   line's first share of its box, as many of its characters - but not
   where another number of that shape follows the comma with a comma of
   its own: a list of atoms' locants ("6', 8a', 11'") or a table's
-  ("2, 4, 5"). It is the
+  ("2, 4, 5"). The figure's own drawn words are read so line by line
+  (`numbersIn`): a series of lines under one structure, each its number;
+  a run set bold within a line, its letters' typeface bold and the rest
+  plain ("R = Me, 14, 41%"), that number; each lying its line's share of
+  the words' box. A number whose line sets its yield after it - a comma,
+  then a percentage - may lie up to two bonds from its structure, as a
+  scope table sets them (2026-11-20); a bare number stays within one: an
+  NMR figure's atoms' locants, beside their shifts, lie further. Such a
+  number lies under its own structure: one lying over the nearest
+  structure, and under another within its reach, is the one's it lies
+  under - a scope table's row of numbers, set under one row of structures
+  and a little nearer the next row's tops (2026-11-20). A
+  second number with its own yield on the line, after the structure's
+  ("8, 72%  S3, 90%"), is another compound's - one made beside it or
+  brought back - and none of the structure's, as a second number set bold
+  within one line is (2026-11-20). A
+  label's script - the 2 of an NH2, the 1 or 2 of an R1 or R2 - set
+  within the label's box past its first letter or against its right
+  side, smaller than the label and its foot no higher than the label's
+  middle, is none, as no compound's number is set so. A structure read
+  that reads the word as an atom's label - a number an arrow's tail ends
+  at, read as an atom bonded to the arrow - is passed over, and the word
+  is the nearest other structure's (2026-11-20). It is the
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
-  height: a superscript, a footnote's mark) is none, and a structure not
+  height: a superscript, a footnote's mark) is none - their usual height
+  measured of its words alone, not of a structure's atoms' labels set as
+  the page's own letters: an OH set larger than the one line of words under
+  its structure would make that line's number seem a superscript, and a structure not
   read takes none. Written as Meno writes it: its parentheses and spaces
   set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
 - **Each PDF's index** (`utils/compoundIndex`): each number, and every
@@ -2176,7 +2217,16 @@ mention a number, and the card.
   a compound ("compound 12", "products 3, 4 and 5": compound, product,
   intermediate, substrate, adduct, derivative, past other numbers and "and",
   "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
-  with ⌥ (Alt) held, every number of that shape is.
+  so is a display item's number, however set: after the word naming a
+  scheme, a figure (Fig.), a chart, a table or an equation (eq), singular
+  or plural, past other numbers and "and", "or", "to" within the sentence
+  ("Scheme 4" in a caption, set bold; "Schemes 2 and 3", "Figures 1-3"),
+  but not one set otherwise than the item's first number ("Scheme 1, 4a",
+  its 4a bold);
+  with ⌥ (Alt) held, every number of that shape is. A number with its
+  rotation's mark before it, (+)-12, is taken with its mark - its
+  parentheses, sign and en dash are no word's letters - and asked whether it
+  is set as one by the number alone (2026-11-20).
 - **The card** (`components/CompoundCard`): the pointer resting on a number
   mentioned (350 ms) whose structure the PDF's figures number, a calm card
   by its word - over its line, covering only what has been read, its left
@@ -2214,7 +2264,9 @@ mention a number, and the card.
   too small - its word's box taken through the view to the window. Not on a
   structure of a figure, which is the structure's own, as in the column. As
   the view moves, the card goes - its word is no longer where it stood -
-  and comes again by the word's new place once the pointer rests there. ⌥
+  and comes again by the word's new place once the pointer rests there; so
+  too in the column, scrolled or zoomed by a hand (`utils/compoundLens`
+  `lensGoesWhenMoved`), the card eased out as when the pointer leaves. ⌥
   pressed or let go over a number reads it again, in both.
 
 ### A picture read (part B, built 2026-10-11)

@@ -39,3 +39,19 @@ export function indexOnce(sha256: string, pages: number): void {
   indexed.add(sha256);
   void indexPdf(sha256, pages, pdfPageLabels(sha256));
 }
+
+/**
+ * A column's card let go whenever the column is moved by a hand - scrolled or zoomed - as the word it stood by is elsewhere now: eased
+ * out as when the pointer leaves (components/CompoundCard), and brought again by the pointer resting on a number. `reader` is the
+ * column's (components/pdfColumnReader `listen`); only a card of the column's own PDF, `id`, goes. What stops listening is given back.
+ */
+export function lensGoesWhenMoved(
+  reader: { listen(f: (what: "moved" | "page") => void): () => void },
+  state: () => { pdfLens: { id: number } | null; setPdfLens(lens: null): void },
+  id: number,
+): () => void {
+  return reader.listen((what) => {
+    const st = state();
+    if (what === "moved" && st.pdfLens?.id === id) st.setPdfLens(null);
+  });
+}

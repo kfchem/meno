@@ -19,7 +19,7 @@ import { writtenAsMeant } from "../text/smartWords";
 export type SchemeArrow = { tail: Point; point: Point; corners: Point[]; form: ArrowForm; color?: string };
 
 /** Words read: what they say, how some of their letters are set, where they stand, and the arrow they are over or under, by its place among the arrows. */
-export type SchemeWords = { text: string; marks: WordsMark[]; box: Box; arrow?: number; align?: "left" };
+export type SchemeWords = { text: string; marks: WordsMark[]; box: Box; arrow?: number; align?: "left"; /** Each line's own box, in order. */ lines?: Box[] };
 
 /** A scheme read: its structures (./read), its arrows, its "+" signs, its words, and how long its bonds are drawn - or would be, by its letters, where it has none. */
 export type SchemeRead = {
@@ -912,7 +912,14 @@ export function wordsOf(letters: readonly FigureLetter[], arrows: readonly Schem
     const lefts = block.map((r) => r.box[0]);
     const middles = block.map((r) => (r.box[0] + r.box[2]) / 2);
     const left = block.length > 1 && Math.max(...lefts) - Math.min(...lefts) < 0.2 * block[0].size && Math.max(...middles) - Math.min(...middles) > 0.5 * block[0].size;
-    words.push({ text: written.text, marks: marksOf(written.styles), box, ...(arrow != null ? { arrow } : {}), ...(left && arrow == null ? { align: "left" as const } : {}) });
+    words.push({
+      text: written.text,
+      marks: marksOf(written.styles),
+      box,
+      ...(arrow != null ? { arrow } : {}),
+      ...(left && arrow == null ? { align: "left" as const } : {}),
+      ...(block.length > 1 ? { lines: block.map((r) => r.box) } : {}),
+    });
   }
   return { words, pluses };
 }

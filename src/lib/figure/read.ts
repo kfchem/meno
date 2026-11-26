@@ -880,7 +880,9 @@ export const LONE_DOUBLE = "A double line alone: read as ethylene.";
  * so, beside a "+". A single or a triple line a bond long alone is left out
  * too, and counted (`lone`, `triples`): in a figure it is a dash, a minus,
  * a rule, a letter, or a sign of equivalence or a separator; an ethane or
- * an ethyne is all but never drawn so. What lies within one of the
+ * an ethyne is all but never drawn so. Lines end to end in one straight
+ * line alone, bare and single, are left out too (`straightRuns`): a table's
+ * rule drawn in pieces, no chain. What lies within one of the
  * figure's `pictures` stays: a mark drawn over a picture, said as one
  * (lib/figure/scheme `marksOver`).
  */
@@ -896,6 +898,7 @@ export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBo
   atoms.forEach((a, i) => {
     if (bare(a) && !count[i]) out.add(i);
   });
+  for (const run of straightRuns(atoms, bonds, bond, bare)) for (const i of run) out.add(i);
   let lone = 0;
   let triples = 0;
   const said = new Map<ReadBond, string>();
@@ -923,6 +926,50 @@ export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBo
     kept.push(a);
   });
   return { atoms: kept, bonds: bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...told(b), a: to.get(b.a)!, b: to.get(b.b)! })), lone, triples };
+}
+
+/** How far off the line through its ends an atom of a straight run lies at most, in bonds: a zigzag's bends lie half a bond off it. */
+const STRAIGHT_OFF = 0.1;
+
+/**
+ * The runs of lines that stand alone and are no chain (`withoutStrays`), each
+ * by its atoms: two or more single lines end to end in one straight line,
+ * nothing else joined to them, no label, wedge, hash or second line on any -
+ * a table's rule drawn cell by cell, or a rule broken where a column starts.
+ * A chain of carbons is drawn bent at each atom; only a triple bond or a
+ * cumulated double bond is drawn straight, and those have their second
+ * lines, so an alkyne drawn straight is no such run.
+ */
+function straightRuns(atoms: readonly ReadAtom[], bonds: readonly ReadBond[], bond: number, bare: (a: ReadAtom) => boolean): number[][] {
+  const at = atoms.map((): ReadBond[] => []);
+  for (const b of bonds) {
+    at[b.a].push(b);
+    at[b.b].push(b);
+  }
+  const seen = new Set<number>();
+  const runs: number[][] = [];
+  atoms.forEach((_, start) => {
+    if (seen.has(start) || !at[start].length) return;
+    const part = [start];
+    seen.add(start);
+    for (let k = 0; k < part.length; k++)
+      for (const b of at[part[k]]) {
+        const n = b.a === part[k] ? b.b : b.a;
+        if (!seen.has(n)) {
+          seen.add(n);
+          part.push(n);
+        }
+      }
+    const own = bonds.filter((b) => part.includes(b.a));
+    // (a path, not a ring nor a branch: two ends of one bond each, the rest of two)
+    if (own.length < 2 || own.length !== part.length - 1 || part.some((i) => at[i].length > 2)) return;
+    if (!part.every((i) => bare(atoms[i])) || !own.every((b) => b.order === 1 && !b.stereo && !b.aromatic && !b.repeat)) return;
+    const [p, q] = part.filter((i) => at[i].length === 1).map((i) => atoms[i]);
+    const span = Math.hypot(q.x - p.x, q.y - p.y);
+    const off = (a: ReadAtom) => Math.abs((q.x - p.x) * (a.y - p.y) - (q.y - p.y) * (a.x - p.x)) / span;
+    if (span > 0 && part.every((i) => off(atoms[i]) <= STRAIGHT_OFF * bond)) runs.push(part);
+  });
+  return runs;
 }
 
 /** Whether a line is set level: a hyphen, an ='s lines. */
