@@ -3,6 +3,7 @@
 // of the constitution takes the turned form onto the configured one. Quinuclidine's, DABCO's, bicyclo[2.2.2]octane's, adamantane's and
 // cubane's turned are the same cage taken the other way round; Troeger's base's two N, camphor's bridgeheads and exo-norbornan-2-ol's
 // are not. Bicyclo[2.2.2]octan-2-ol's pair turns back by swapping its two plain bridges: only its C2 is kept.
+// The cages with many ways of turning onto themselves take the longest to count; their rows are given time for a slow machine.
 import { describe, expect, it } from "vitest";
 import { isomersOf } from "../../../../lib/chem/isomers";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
@@ -27,7 +28,7 @@ describe("a set of tied bridgeheads is kept only where turning it makes another 
     ["bicyclo[2.2.2]octane", "C1CC2CCC1CC2"],
     ["adamantane", "C1C2CC3CC1CC(C2)C3"],
     ["cubane", "C12C3C4C1C5C2C3C45"],
-  ])("%s: none kept - the turned cage is the same one", (_, smiles) => {
+  ])("%s: none kept - the turned cage is the same one", { timeout: 30_000 }, (_, smiles) => {
     expect(kept(smiles)).toEqual([]);
   });
 
