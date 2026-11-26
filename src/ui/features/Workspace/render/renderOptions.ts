@@ -208,11 +208,12 @@ export function looksOffered(declared?: readonly LookDecl[]): readonly LookDecl[
   return out;
 }
 
-/** The choices of a look: each fills in its parts. */
+/** The choices of a look: each fills in its parts, and carries its description where it has one. */
 function lookChoices(looks: readonly LookDecl[]) {
   return looks.map((l) => ({
     value: l.id,
     label: l.label,
+    ...(l.description ? { description: l.description } : {}),
     sets: { ...partsOf(l) } as Record<string, string | number | boolean>,
   }));
 }
@@ -233,7 +234,7 @@ export function renderOptions(
 ): Option[] {
   const film = kind === "film";
   // (Meno's own motions the molecules can make, then those the renderer declares, in its order: Meno keeps no list of them)
-  const moving = [...motions.map((m) => ({ value: m, label: MOTIONS[m] ?? m })), ...(declaredMotions ?? []).filter((d) => !motions.includes(d.id)).map((d) => ({ value: d.id, label: d.label }))];
+  const moving = [...motions.map((m) => ({ value: m, label: MOTIONS[m] ?? m })), ...(declaredMotions ?? []).filter((d) => !motions.includes(d.id)).map((d) => ({ value: d.id, label: d.label, ...(d.description ? { description: d.description } : {}) }))];
   const offered = looksOffered(declared);
   const choices = lookChoices(offered);
   const seeThrough = offered.filter((l) => l.seeThrough).map((l) => l.id);

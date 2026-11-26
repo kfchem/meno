@@ -48,8 +48,11 @@ export type Known = "charge" | "multiplicity" | "name";
 /** One of several, each with what it is called. */
 export type ChoiceOption = OptionBase & {
   type: "choice";
-  /** `sets`: the values of other options that picking it fills in - a preset's parts - each still the chemist's to change. */
-  choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
+  /**
+   * `sets`: the values of other options that picking it fills in - a preset's parts - each still the chemist's to change.
+   * `description`: a short sentence saying what it is, as its declaration has it; the chosen one's is shown under the choice.
+   */
+  choices: readonly { value: string; label: string; description?: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
 /**
@@ -110,6 +113,13 @@ export function notedParts<O extends Option>(options: readonly O[]): O[][] {
     if (o.note) parts.push([]);
   }
   return parts.filter((p) => p.length);
+}
+
+/** What the chosen choice of a choice option is, in its declaration's own words: its description; none where it has none, or is no choice. */
+export function chosenDescription(o: Option, values: OptionValues): string | undefined {
+  if (o.type !== "choice") return undefined;
+  const v = values[o.id] ?? o.default;
+  return o.choices.find((c) => c.value === v)?.description || undefined;
 }
 
 /** How many choices are shown side by side, each to pick; more, and they are a list to pick from. */
