@@ -1,4 +1,5 @@
 import RoleOffer from "./RoleOffer";
+import { conformersOffered, joinOffered } from "./utils/asConformers";
 import IconTips from "./components/IconTips";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
@@ -1297,6 +1298,15 @@ function WorkspaceContent({
   const magnifyAtoms = (menu?.kind === "atom" || menu?.kind === "bond") && menuAtom != null && menu.selection !== "here" ? [menuAtom] : menu?.selection === "here" ? [...menuSel.atoms] : [];
   const magnifyFirst = molecules3d.find((m) => m.id === magnifyIds[0]) ?? model.atoms.find((a) => a.id === magnifyAtoms[0]);
   const menuMagnify = magnifyFirst ? { now: magnifyFirst.magnified ?? 1, set: (k: number) => store.getState().setMagnified(magnifyAtoms, magnifyIds, k) } : undefined;
+  // (the molecules selected, one compound: *Join as conformers*, on any of them or on the page beside them - utils/asConformers)
+  const joinIds = joinOffered(molecules3d, menuSel3d, menu);
+  const onJoinConformers = joinIds.length
+    ? () => {
+        setChemError(null);
+        // (where they are not one compound, why not, in one plain sentence - utils/asConformers `JOIN_REFUSED`)
+        void store.getState().joinAsConformers(joinIds).then((why) => why && setChemError(why));
+      }
+    : undefined;
   const menu3d: MenuMolecule3D | undefined = menuMolecule
     ? {
         otherLook: (() => {
@@ -1378,6 +1388,12 @@ function WorkspaceContent({
         ...(menuMolecule.calc?.source
           ? { output: { name: menuMolecule.calc.source.name, show: () => void showOutput(menuMolecule.id, menuMolecule.calc!.source!) } }
           : {}),
+        // (its frames taken as conformers, on purpose - each alike - or the mark taken off: utils/asConformers)
+        ...(conformersOffered(menuMolecule)
+          ? { framesConformers: { on: !!menuMolecule.conformerSet, set: (on: boolean) => store.getState().setFramesConformers(menuMolecule.id, on) } }
+          : {}),
+        // (the molecules selected with it, one compound: joined as one set of conformers)
+        ...(onJoinConformers ? { onJoinConformers } : {}),
         ...((menuMolecule.frames?.length ?? 0) > 0
           ? {
               overlay: {
@@ -2419,6 +2435,7 @@ function WorkspaceContent({
             const set = store.getState().sets.find((b) => b.id === menu.id);
             return set?.made ? { kept: set.keep !== false, set: (keep: boolean) => store.getState().keepSet(set.id, keep) } : undefined;
           })()}
+          onJoinConformers={menu.kind == null ? onJoinConformers : undefined}
           onUseAsInput={menu.selection === "here" && selectionAsSet() ? () => {
             const frame = selectionAsSet();
             if (!frame) return;

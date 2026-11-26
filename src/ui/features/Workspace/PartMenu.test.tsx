@@ -526,3 +526,17 @@ describe("the menu of whole structures selected", () => {
     expect(m.listed).toContain("Chain from here");
   });
 });
+
+describe("frames and molecules taken as conformers, on the menu", () => {
+  it("lists Join as conformers on the page beside a selection that offers it, and on a molecule of it; Frames are conformers on a molecule", () => {
+    const page = menu(target({ selection: "here", drawing: false }), { onJoinConformers: none });
+    expect(page.listed).toContain("Join as conformers");
+    expect(menu(target({ selection: "here", drawing: false })).listed).not.toContain("Join as conformers");
+    const base = { otherLook: { name: "Balls and sticks", atoms: "balls" as const, run: none }, onTurnOnce: none, chosen: 0, onMeasure: none, onResetTurn: none, onCut: none, onCopy: none };
+    const on = menu(target({ kind: "molecule3d", id: 1, selection: "here" }), { molecule3d: { ...base, onJoinConformers: none, framesConformers: { on: false, set: none } } as never });
+    expect(on.listed).toContain("Join as conformers");
+    expect(on.listed).toContain("Frames are conformers");
+    // (on a molecule, the page's own item is not listed a second time)
+    expect(menu(target({ kind: "molecule3d", id: 1, selection: "here" }), { onJoinConformers: none, molecule3d: base as never }).listed).not.toContain("Join as conformers");
+  });
+});

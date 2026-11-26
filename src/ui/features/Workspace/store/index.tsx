@@ -34,6 +34,7 @@ import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
 import { withGrowth, withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
+import { framesAcross } from "./frameJournal";
 import { COLUMN_WIDTH, columnOf, shownPdf, shownText } from "../utils/texts";
 import { readAsTable } from "../workflow/entries";
 
@@ -234,6 +235,8 @@ export function connectStoreToDocument(
       const mirrored = { ...mirrorOf(now, prev.recordsShown, prev.talkLooks, growing), growing3d: growing };
       // (a turn of several as one body undone or redone: their turns too)
       const turns = turnsAcross(doc, was, now);
+      // (a step that changed the frame shown with it - frames taken as conformers, molecules joined - undone or redone: the frames too)
+      const frames = framesAcross(doc, was, now);
       was = now;
       const held = {
         ...heldOf(prev, mirrored.molecules3d),
@@ -280,6 +283,14 @@ export function connectStoreToDocument(
           else delete turns3d[Number(id)];
         }
         held.turns3d = turns3d;
+      }
+      if (frames) {
+        const frames3d = { ...(held.frames3d ?? prev.frames3d) };
+        for (const [id, f] of Object.entries(frames)) {
+          if (f) frames3d[Number(id)] = f;
+          else delete frames3d[Number(id)];
+        }
+        held.frames3d = frames3d;
       }
       // (the text or the PDF its column shows, as they come and go: utils/texts)
       // (one that could not be read among them, shown as what it is: TextColumn)

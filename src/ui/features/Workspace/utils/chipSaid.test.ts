@@ -59,7 +59,7 @@ describe("a set's chip, shut, as runs to draw", () => {
     const energies = [-76, -76.0015936014, -77];
     expect(said({ count: 3, frame: 0, energies, marksUnread: true })).toContain(NO_LOWEST);
     const short = [null, { kind: "not-converged" as const, why: "x" }];
-    expect(barsAbove(energies, short)).toEqual({ above: [null, null, null], noBaseline: true, why: FAILURES_ASTRAY });
+    expect(barsAbove(energies, short)).toEqual({ above: [null, null, null], noBaseline: true, why: FAILURES_ASTRAY, given: [true, true, true] });
     expect(said({ count: 3, frame: 0, energies, failed: short })).toContain(FAILURES_ASTRAY);
   });
 

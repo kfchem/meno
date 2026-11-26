@@ -884,6 +884,48 @@ Taken on 2026-10-13:
 - **Conformer sets.** Each conformer's share at room temperature
   (Boltzmann) stands beside its energy; *Show all conformers* draws the
   others over the one shown, each as dark as it is likely.
+- **Frames taken as conformers** (`utils/asConformers.ts`). A molecule
+  read from a file with several frames stays a molecule with frames, and
+  a file's records stay compounds of their own; nothing is asked as the
+  file is read. On purpose, the chemist says otherwise:
+  - *Frames are conformers*, ticked, on the menu of a molecule whose
+    frames each have the same atoms in the same order and the same joins
+    as Meno perceives them - bonds where the atoms stand close enough,
+    frame by frame, for a file that gives none. Not offered otherwise:
+    a file of a reaction path, whose joins break and form, or whose
+    frames' elements differ, is no conformer set. Chosen, the molecule
+    is a conformer set, showing its lowest where every frame has an
+    energy; chosen again, the mark is taken off. Undo takes the mark back
+    and shows again the frame shown before it; redo gives both again.
+  - *Join as conformers*, on the menu of molecules in 3D selected - on
+    any of them, or on the page beside them - that are of one
+    constitution (the same atoms in the same order, bonded the
+    same way, of the same charge and spin; not offered where they
+    differ). Chosen, they are judged as *As conformers* judges them -
+    which stereoisomer each is asked first, as that step asks it, then
+    the same constitution and the same stereoisomer, energies from one
+    source - and, one compound, made one set of them, in the page's
+    order, where the first stands: each frame keeps the name it had (a
+    frame's own, else its record's title) and the energy it had - none
+    where it had none, so that, as for a file, shares are given only
+    where every frame has an energy - each frame at its file's
+    coordinates (none is turned onto another) - a one-frame XYZ file's
+    name and energy too, read from its comment line (docs/FILE-IO.md). Where they are not one compound they are not
+    joined, and why is said in one plain sentence of the molecules
+    selected - not all the same stereoisomer; nothing added tells which
+    stereoisomer they are; one's stereoisomer could not be told; one has
+    a stereocentre or double bond left unspecified; from different
+    calculations; energies from different sources; stereo labels that
+    differ - never a count alone. Undo gives a joined set back as the
+    molecules were, each at its place, with its own names and energies,
+    and showing the frame it showed. Saved and opened again, a joined set
+    is one molecule with its frames, their names and energies, and the
+    mark.
+  - Either way the set is as any conformer set: its lowest shown, where
+    every frame has an energy; shares where every frame has one; its
+    conformers numbered. What was worked out of the molecules as wholes -
+    a calculation's results, numbers, shares - is not carried into a
+    joined set. No card, no setting, no notice.
 
 Taken on 2026-10-04, for stage 2:
 

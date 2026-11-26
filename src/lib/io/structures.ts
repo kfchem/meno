@@ -7,7 +7,7 @@
  */
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf, waysOf } from "../../utils/xyzEnergies";
-import { MENO_XYZ_ENERGY } from "../chem/xyzWriter";
+import { MENO_XYZ_ENERGY, xyzFrameName } from "../chem/xyzWriter";
 import { SD_CHARGE, SD_ENERGY, SD_MULTIPLICITY, speciesProblem } from "./writers";
 import { xyzEnergies, xyzSteps } from "./kinds";
 import { xyzStepsFile } from "../plugins/manifest";
@@ -28,8 +28,12 @@ export type FileMolecule3D = {
   bonds: ParsedBond[];
   /** The rest of its frames: x, y, z of every atom, frame by frame. */
   frames?: number[][];
-  /** Each frame's energy, in hartrees, the first frame's first. */
+  /** Each frame's energy, in hartrees, the first frame's first: NaN, a frame its file gives none. */
   energies?: number[];
+  /** Each frame's name, the first frame's first - "", a frame with none: an XYZ file's comment lines (lib/chem/xyzWriter `xyzFrameName`). */
+  frameNames?: string[];
+  /** Its frames do not all have the same elements in the same order: an XYZ file's (each frame keeps the first's elements). */
+  atomsDiffer?: true;
   /** The file it came from. */
   name?: string;
   /** Its record's title, where its file gives one: an SD file's record's first line. */
@@ -312,7 +316,14 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     if (!kept.size) throw noMolecules(name);
     const [first, ...rest] = whole.frames;
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = whole.total > 1 ? energiesOf(xyzComments(content), waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i)) : undefined;
+    const comments = xyzComments(content);
+    const energies = energiesOf(comments, waysOf([MENO_XYZ_ENERGY, ...xyzEnergies()]))?.filter((_, i) => kept.has(i));
+    // (each frame's name, its comment line less the energy read from it - a one-frame file's too, by the same rule: kept with
+    // the molecule, as a longer file's frames' are, for a join and an export to keep; a molecule of one frame shows no chip for them)
+    // (Meno's own `<name> frame i/n` of an unnamed frame, numbered as the frame is in its file, gives none)
+    const names = whole.kept.map((i) => xyzFrameName(comments[i] ?? "", { i, of: whole.total }));
+    const elements = (atoms: readonly { el: string }[]) => atoms.map((a) => a.el).join(" ");
+    const differ = rest.some((atoms) => elements(atoms) !== elements(first));
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },
@@ -324,7 +335,10 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           bondsFrom: "distance",
           bondOrders: "unknown",
           ...(rest.length ? { frames: rest.map((atoms) => atoms.flatMap((a) => [a.x, a.y, a.z])) } : {}),
-          ...(rest.length && energies?.length === kept.size ? { energies } : {}),
+          // (none where no frame kept has one: those that had one may be among the frames left out)
+          ...(energies?.length === kept.size && energies.some(Number.isFinite) ? { energies } : {}),
+          ...(names.some(Boolean) ? { frameNames: names } : {}),
+          ...(differ ? { atomsDiffer: true as const } : {}),
           ...(filename ? { name: filename } : {}),
           ...(kept.size < whole.total ? { framesLeftOut: whole.total - kept.size } : {}),
           // (a file a program writes of an optimisation's steps, as its plugin knows it - by its name, or what its
@@ -541,10 +555,18 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
     if (entries != null && !(Array.isArray(entries) && entries.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= (m.frames?.length ?? 0) && (k === 0 || f > all[k - 1])))) {
       throw bad("which of a molecule in 3D's frames are entries does not read");
     }
-    // (an energy for each frame, the first among them, or none: each frame's is the one at its place)
-    if (m.energies != null && !(Array.isArray(m.energies) && m.energies.length === 1 + (m.frames?.length ?? 0) && m.energies.every(finite))) {
+    // (an energy for each frame, the first among them, or none: each frame's is the one at its place - a
+    // frame given none is NaN, or null where the answer came as JSON, which cannot carry NaN; some frame
+    // has one, or the list is not given at all)
+    const energies: unknown = m.energies;
+    if (
+      energies != null &&
+      !(Array.isArray(energies) && energies.length === 1 + (m.frames?.length ?? 0) && energies.every((e) => e === null || Number.isNaN(e) || finite(e)) && energies.some(finite))
+    ) {
       throw bad("the energies of a molecule in 3D are not one for each of its frames");
     }
+    // (a frame with none is NaN on the page, as Meno's own reader gives it)
+    if (Array.isArray(energies) && energies.includes(null)) m.energies = energies.map((e) => (e === null ? NaN : (e as number)));
     // (the charge and multiplicity it was given: whole numbers, a multiplicity one or more - or none)
     const c = m.calc as { readers?: unknown; charge?: unknown; multiplicity?: unknown } | undefined;
     if (c != null && !(Array.isArray(c.readers) && !c.readers.length && (c.charge == null || Number.isInteger(c.charge)) && (c.multiplicity == null || (Number.isInteger(c.multiplicity) && (c.multiplicity as number) >= 1)))) {
