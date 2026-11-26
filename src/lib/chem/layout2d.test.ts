@@ -306,6 +306,26 @@ describe("buildTextLabels", () => {
     }
   });
 
+  it("reads a label the way it is put to where its one bond is upright - HO or OH, HOH2C or CH2OH - and as its bond decides elsewhere", () => {
+    const at = (deg: number, el: string, reads?: "left" | "right"): Atom[] => {
+      const t = (deg * Math.PI) / 180;
+      return [
+        { id: 1, x: 0, y: 0, el, ...(reads ? { reads } : {}) },
+        { id: 2, x: 1.3 * Math.sin(t), y: -1.3 * Math.cos(t), el: "C" },
+      ];
+    };
+    const text = (atoms: Atom[]) => buildTextLabels(atoms, opts(), oneBond).map((t) => t.text).join("");
+    expect(text(at(0, "O", "left"))).toBe("HO");
+    expect(text(at(0, "O", "right"))).toBe("OH");
+    expect(text(at(9.9, "O", "left"))).toBe("HO");
+    expect(text(at(0, "CH2OH", "left"))).toBe("HOH2C");
+    expect(text(at(0, "CH2OH", "right"))).toBe("CH2OH");
+    // (its bond off the upright: as its bond decides, whatever it was put to)
+    expect(text(at(30, "O", "right"))).toBe("HO");
+    expect(text(at(-30, "O", "left"))).toBe("OH");
+    expect(text(at(-60, "CH2OH", "left"))).toBe("CH2OH");
+  });
+
   it("leaves carbons unlabelled and can be switched off", () => {
     expect(buildTextLabels(hydroxyl, opts(), oneBond)).toHaveLength(1);
     const plain = buildTextLabels(

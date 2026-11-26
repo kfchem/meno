@@ -28,9 +28,10 @@ import { type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } fro
 import type { Axial, Cumulated } from "../layout/stereo";
 import type { Radical } from "./molecule";
 import { aromaticForm } from "./perception/aromatic";
-import { hydrogensFolded, plainHydrogenAtoms } from "./perception/fold";
+import { hydrogensFolded, metalHydrogensDrawn, plainHydrogenAtoms } from "./perception/fold";
 import { endsShared, unchargedEnds } from "./perception/chalcogenEnds";
 import { blanksOf, filledIn, valuesOf } from "./perception/stereo/units";
+import { smallRingSidesDropped } from "./perception/stereo/candidates";
 import { notStatedAt, notStatedText } from "./ligandsNotStated";
 
 // (identity's fill of what sets nothing: the core's, perception/stereo/units)
@@ -137,9 +138,11 @@ const METALS_ASKED = 4;
 function compared(input: IdentityInput): LayoutInput {
   // (its groups are identity's to write: `grouped`)
   const { groups: _groups, ...drawn } = input;
-  const folded = hydrogensFolded(drawn);
+  // (a metal's hydrogens counted on it drawn as the atoms they are, as a hydride drawn is kept: [PdH]Cl2 is Cl2Pd-H)
+  const folded = hydrogensFolded(metalHydrogensDrawn(drawn));
   const atoms = folded.atoms.map(({ isotope, radical, mapped: _mapped, ...a }) => ({ ...a, el: `${a.el}${isotope ? `^${isotope}` : ""}${radical ? `.${radical}` : ""}` }));
-  return endsShared(aromaticForm(unchargedEnds({ ...folded, atoms })));
+  // (no cis or trans on a double bond in a ring of seven or fewer: written there, it states nothing - perception/stereo/candidates)
+  return smallRingSidesDropped(endsShared(aromaticForm(unchargedEnds({ ...folded, atoms }))));
 }
 
 /**

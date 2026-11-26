@@ -50,6 +50,12 @@ export type Atom = AtomChem & {
    * puts them: after the label, or beside it, or beside a bare vertex.
    */
   chargeAt?: Vec2;
+  /**
+   * Which way its label reads from it where its one bond is upright, so that it could be read either way: leftward (HO, HOH2C) or
+   * rightward (OH, CH2OH) - put so where the other way would run into the drawing (a Haworth ring's labels: the editor's
+   * projections/haworthLabels). Unset, or its bond not upright, its bonds decide.
+   */
+  reads?: "left" | "right";
   /** The colour its label is drawn in - its charge with it - where it is given one (as CSS: "#d55e00"). */
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is: drawn in it exactly. */
@@ -2592,6 +2598,7 @@ export function buildTextLabels(
       elements: atoms.map((a) => a.el),
       // (each label's H, counted as the label writes it below)
       hydrogens: atoms.map(hydrogensAt),
+      reads: atoms.map((a) => a.reads),
     },
     lengths.length ? lengths[lengths.length >> 1] : 1,
   );
@@ -2745,6 +2752,8 @@ export function buildTextLabels(
     // (on the row because it is clearer than the line above or below: on its
     // clearer side - NH, or HN - and, the two alike, after the symbol)
     if (onRow) neighboursRight = clearRowSide(dirs) === "before";
+    // (its one bond upright, where either way reads: the way it is put to read - HO, or OH)
+    if (a.reads && dirs.length === 1 && !leftward.has(i) && !rightward.has(i)) neighboursRight = a.reads === "left";
     // (the charge after all of it where the H follow the symbol: NH3+; after
     // the symbol where they come first: H3N+)
     const runs = neighboursRight
