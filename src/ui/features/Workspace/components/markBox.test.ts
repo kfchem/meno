@@ -48,9 +48,10 @@ describe("a mark's box as WebGL draws it", () => {
     expect(marks).toContain("<Texts2D");
     // (the HTML: the page's tip, over the box pointed at or the words a mark has of its own - components/PageTip)
     expect(marks).not.toContain("<PageHtml");
-    expect(marks.match(/<PageTip/g)).toHaveLength(2);
-    expect(marks).toMatch(/\{pointed && <PageTip/);
-    expect(marks).toMatch(/\{saidPointed && <PageTip/);
+    // (one tip, always there: told what it is about, or nothing - so that it fades out as the pointer leaves rather than going at once)
+    expect(marks.match(/<PageTip/g)).toHaveLength(1);
+    expect(marks).not.toMatch(/&& <PageTip/);
+    expect(marks).toMatch(/<PageTip\s+at=\{\s+pointed\s+\?/);
   });
 
   it("draws R, S, E and Z beside a molecule in 3D by WebGL too, placed frame by frame: no HTML for them", () => {

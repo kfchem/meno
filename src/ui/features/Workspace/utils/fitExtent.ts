@@ -11,8 +11,11 @@
  * the screen, they take the same of the page at any zoom (`notesOnPage`).
  */
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
+import { PAGE_PX } from "./pageScale";
 import { inputsOf } from "../workflow/kinds";
 import { setGives, stepTakes, wireCurve } from "../workflow/look";
+import { CHIP } from "../pageGl/chips";
+import { FRAMES_CHIP_GAP, NOTES_MARK_GAP_PX, NOTES_MARK_PX } from "./molecule3d";
 
 /** A box on the page, in world units: y up. */
 export type PageBox = { x0: number; y0: number; x1: number; y1: number };
@@ -89,4 +92,21 @@ export function notesOnPage(notes: readonly NotesSeen[], view: { x: number; y: n
     box = joined(box, { x0: ax - half, x1: ax + half, y0: ay + (gap * grown) / zoom, y1: ay + ((gap + r.bottom - r.top) * grown) / zoom });
   }
   return box;
+}
+
+/**
+ * What stands on the page with a molecule made in 3D, past its atoms, in
+ * world units: under it, its frames chip shut - hung `FRAMES_CHIP_GAP` page
+ * px below its lowest point, as tall as its one line of words with its room
+ * and line (pageGl/liveChip `chipHeights`) - and, where it says anything
+ * (`notes` notes), the mark of its notes beside its top right corner
+ * (components/NotesMark3D: `NOTES_MARK_GAP_PX` out, `NOTES_MARK_PX` wide,
+ * its top level with the molecule's, so within its height). Both in page
+ * px, scaled with the page as all of it is. Where it is put down, it is
+ * seen whole only with these (chem/make3d `placeRow`).
+ */
+export function madeRoom(notes: number): { below: number; right: number } {
+  const below = (FRAMES_CHIP_GAP + 2 * CHIP.border + 2 * CHIP.pad + CHIP.line) * PAGE_PX;
+  const right = notes > 0 ? (NOTES_MARK_GAP_PX + NOTES_MARK_PX) * PAGE_PX : 0;
+  return { below, right };
 }

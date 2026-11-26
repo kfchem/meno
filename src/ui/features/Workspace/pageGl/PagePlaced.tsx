@@ -6,6 +6,7 @@ import { useEditor } from "../store";
 import type { Region } from "./hits";
 import { usePageHits, type HitHandlers } from "./PageHits";
 import PageTip from "../components/PageTip";
+import type { TipAt } from "../components/markTip";
 import { PORTS_Z } from "../workflow/look";
 import type { PageIcon } from "./icons";
 import PageIcons from "./PageIcons";
@@ -16,7 +17,7 @@ import type { Shape } from "./shapes";
 import type { PageText } from "./texts";
 
 /** What the page's hover tip says (components/PageTip), and the middle and size of what it is about, in the page's units. */
-export type PageTipAt = { key: string; text: string; x: number; y: number; w: number; h: number };
+export type PageTipAt = TipAt;
 
 /**
  * What a placed thing draws where it stands (`at`, the page's units): its
@@ -185,7 +186,7 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
   return (
     <Placements.Provider value={registry}>
       {children}
-      {drawn.tip && <PageTip tipKey={drawn.tip.key} x={drawn.tip.x} y={drawn.tip.y} w={drawn.tip.w} h={drawn.tip.h} zoom={view.current.zoom} text={drawn.tip.text} zIndexRange={RAISED_Z} />}
+      <PageTip at={drawn.tip} zoom={view.current.zoom} zIndexRange={RAISED_Z} />
       {drawn.layers.map((l, k) => {
         const order = k ? RAISED_ORDER : PAGE_GL_ORDER;
         // (a layer's filled shapes over its boxes, its words and icons over both; what is raised over all the rest)

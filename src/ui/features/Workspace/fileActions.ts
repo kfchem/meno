@@ -44,7 +44,7 @@ import { MARK_SCALE, STEREO_GAP, stereoPictureItems, stereoTextItem } from "./ch
 import { stereoShownOf } from "./document";
 import { COLORS } from "../../theme/colors";
 import { style3dOf } from "./style3dOf";
-import { withSolidsImage } from "./render3d";
+import { solidReach, withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemePieces } from "../../../lib/chem/reactionScheme";
@@ -605,13 +605,15 @@ export type PictureState = Pick<EditorState, "aromaticEnabled" | "aromaticRings"
  * The drawing exactly as the canvas lays it out, at the style's own size,
  * for a picture made of it - its reaction arrows, "+" signs and words with it.
  * Lines keep their true width however thin - the canvas's on-screen minimum
- * is for the screen - and the margin round it is a few pixels.
+ * is for the screen - and the margin round it is a few pixels. With it, how
+ * far each molecule in 3D reaches in it (`reach`, in their order): what a
+ * picture draws them in (render3d `solidsDrawn`), not worked out again.
  */
 export function drawingLayout(
   model: Drawn,
   aromatic: PictureState,
   style: DrawingStyle,
-): { layout: Layout; opts: LayoutOptions } {
+): { layout: Layout; opts: LayoutOptions; reach: ReturnType<typeof solidReach>[] } {
   const atoms = model.atoms.map((a) => ({
     id: a.id,
     x: a.x,
@@ -620,6 +622,7 @@ export function drawingLayout(
     ...chemistry(a),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    ...(a.reads ? { reads: a.reads } : {}),
     ...(a.color ? { color: a.color } : {}),
     ...(a.highlight ? { highlight: a.highlight } : {}),
   }));
@@ -750,8 +753,12 @@ export function drawingLayout(
       boxes.flatMap(({ t, b }) => [t.y - b.bottom, t.y + b.top]),
     );
   }
-  // and molecules in 3D, as they are seen, over it
-  const solids = (model.molecules3d ?? []).flatMap((m) => pictureMarks(m, style3dOf(aromatic)));
+  // and molecules in 3D, as they are seen, over it - each's marks made once,
+  // for the picture, for where what it says goes, and for how far it reaches
+  const marksOf = (model.molecules3d ?? []).map((m) => pictureMarks(m, style3dOf(aromatic)));
+  const solids = marksOf.flat();
+  // (how far each reaches: what its picture in 3D is drawn in - render3d)
+  const reach = (model.molecules3d ?? []).map((m, i) => solidReach(m, style3dOf(aromatic), marksOf[i]));
   if (solids.length) {
     layout.solids = solids;
     const xs: number[] = [];
@@ -781,7 +788,7 @@ export function drawingLayout(
   const family = labelSetOf(opts).fontFamily;
   const measures = (model.molecules3d ?? []).flatMap((m) => measurePictureMarks(m, style3dOf(aromatic), markSize, undefined, family));
   // and over each, what it says of itself: its hydrogens hidden or not in its file, its bond orders not known
-  for (const m of model.molecules3d ?? []) measures.push(...notePictureMarks(m, style3dOf(aromatic), markSize));
+  (model.molecules3d ?? []).forEach((m, i) => measures.push(...notePictureMarks(m, style3dOf(aromatic), markSize, undefined, marksOf[i])));
   if (measures.length) {
     layout.measures = measures;
     const xs: number[] = [];
@@ -830,7 +837,7 @@ export function drawingLayout(
     }
     take(xs, ys);
   }
-  return { layout, opts };
+  return { layout, opts, reach };
 }
 
 /**

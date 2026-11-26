@@ -19,6 +19,7 @@ import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Bu
 import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { parity, Ranker, RULE_5, Unknown } from "./rank";
 import { runsThrough } from "../perception/stereo/runs";
+import { smallRingSidesDropped } from "../perception/stereo/candidates";
 import { cageAtoms } from "../perception/stereo/units";
 import { tiesOf, volumeOfThree } from "../perception/stereo/ties";
 
@@ -347,6 +348,9 @@ export function cipLabels(
   input: IdentityInput,
   ask?: { centres?: Iterable<number>; bonds?: Iterable<number>; axes?: Iterable<number>; cumulated?: Iterable<number> },
 ): { centres: Map<number, CipResult>; bonds: Map<number, CipResult>; axes: Map<number, CipResult>; cumulated: Map<number, CipResult> } {
+  // (a double bond in a ring of seven atoms or fewer has no E or Z, whoever wrote a side on it: dropped before anything is labelled
+  //  or ranked, as identity drops it - perception/stereo/candidates `smallRingSidesDropped`)
+  input = smallRingSidesDropped(input);
   const p = prepared(input);
   const made = new Map<string, Prepared>();
   // (the structure with each combination of usual structures of `systems` drawn, each made once)

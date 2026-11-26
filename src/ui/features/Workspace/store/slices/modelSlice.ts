@@ -247,6 +247,22 @@ export const createModelSlice = (
     doc.edit(name, (d) => ops.placeAtoms(d, moves));
   },
 
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => {
+    doc.edit(name, (d) => {
+      const ids = atoms.map((_, n) => d.nextId + n);
+      const end = (e: { id: number } | { new: number }) => ("id" in e ? e.id : ids[e.new]);
+      return {
+        ...d,
+        nextId: d.nextId + atoms.length + bonds.length,
+        model: {
+          ...d.model,
+          atoms: [...d.model.atoms, ...atoms.map((a, n) => ({ ...a, id: ids[n] }))],
+          bonds: [...d.model.bonds, ...bonds.map((b, n): Bond => ({ id: d.nextId + atoms.length + n, a: end(b.a), b: end(b.b), order: 1 }))],
+        },
+      };
+    });
+  },
+
   dropMoveAtoms: (gesture: string) => {
     doc.drop(`move-atoms:${gesture}`);
   },
@@ -835,7 +851,7 @@ export const createModelSlice = (
     haworthPuts.set(get().model, { ids, at: { x: middle.x + shift.x, y: middle.y + shift.y }, size });
   },
 
-  pasteModel: (given: Drawn) => {
+  pasteModel: (given: Drawn, step?: string) => {
     // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
     const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle), style3dOf(get())) : given;
     // (and its words as large in print: those given no size at the labels' size it was copied in)
@@ -883,7 +899,7 @@ export const createModelSlice = (
       ...(cycles.length ? { cycles: cycles.map((c) => endsRenamed(c, (id) => idOf.get(id), (id) => wordsOf.get(id))) } : {}),
     };
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
-    const pasted = doc.edit("paste", (d) => {
+    const pasted = doc.edit(step ?? "paste", (d) => {
       const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length || cycles.length ? ops.withImportedScheme(d, ops.schemeOf(tied)) : d;
       const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
       const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);

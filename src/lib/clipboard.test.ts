@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { copying, forTheClipboard, readClipboard, writeClipboard } from "./clipboard";
+import { describe, expect, it, vi } from "vitest";
+import { copyBeingMade, copyMadeFor, copying, forTheClipboard, framed, onCopyMade, readClipboard, writeClipboard } from "./clipboard";
 
 /**
  * A copy takes a moment - its pictures are drawn before anything goes on
@@ -33,5 +33,68 @@ describe("a text for the clipboard", () => {
     expect(forTheClipboard("CCO\nc1ccccc1\n", true)).toBe("CCO\r\nc1ccccc1\r\n");
     expect(forTheClipboard("a\r\nb\n", true)).toBe("a\r\nb\r\n");
     expect(forTheClipboard("a\nb", false)).toBe("a\nb");
+  });
+});
+
+describe("a copy sent to the app", () => {
+  it("goes as one body of its kinds' bytes, text as UTF-8, with each kind's length listed in order", () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 255]);
+    const { listed, body } = framed([
+      { flavor: "mol", text: "C1CC" },
+      { flavor: "png", bytes: png },
+      { flavor: "text", text: "hé" },
+      { flavor: "meno" },
+    ]);
+    expect(listed).toBe("mol:t:4,png:b:6,text:t:3,meno:t:0");
+    expect([...body]).toEqual([..."C1CC"].map((c) => c.charCodeAt(0)).concat([...png], [0x68, 0xc3, 0xa9]));
+  });
+
+  it("sends nothing for no kinds", () => {
+    expect(framed([])).toEqual({ listed: "", body: new Uint8Array(0) });
+  });
+});
+
+describe("a copy being made", () => {
+  it("is said from when it starts till it is done, or has failed, to whoever listens", async () => {
+    const told: boolean[] = [];
+    const stop = onCopyMade(() => told.push(copyBeingMade()));
+    let finish!: () => void;
+    const copied = copying(() => new Promise<void>((done) => (finish = done)));
+    expect(copyBeingMade()).toBe(true);
+    finish();
+    await copied;
+    await Promise.resolve();
+    expect(copyBeingMade()).toBe(false);
+    await copying(() => Promise.reject(new Error("no picture"))).catch(() => undefined);
+    await Promise.resolve();
+    expect(copyBeingMade()).toBe(false);
+    stop();
+    await copying(async () => undefined);
+    expect(told).toEqual([true, false, true, false]);
+  });
+});
+
+describe("how long a copy has been made", () => {
+  it("is timed from the earliest copy still being made: a small one begun and done beside a large one neither restarts it nor ends it", async () => {
+    vi.useFakeTimers({ toFake: ["performance", "setTimeout"] });
+    try {
+      expect(copyMadeFor()).toBeNull();
+      let finishLarge!: () => void;
+      const large = copying(() => new Promise<void>((done) => (finishLarge = done)));
+      vi.advanceTimersByTime(200);
+      let finishSmall!: () => void;
+      const small = copying(() => new Promise<void>((done) => (finishSmall = done)));
+      vi.advanceTimersByTime(100);
+      finishSmall();
+      await small;
+      await Promise.resolve();
+      expect(copyMadeFor()).toBe(300);
+      finishLarge();
+      await large;
+      await Promise.resolve();
+      expect(copyMadeFor()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

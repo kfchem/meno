@@ -15,7 +15,7 @@ export type Role = {
   options?: true;
   /** Whether a plugin that fills it declares, as data, below what confidence of its model's a reading is unsure (`RoleDecl.unsure`): models' confidences are not on one scale. */
   unsure?: true;
-  /** Whether a plugin that fills it names, as data, the hosts it talks to (`RoleDecl.hosts`): its only way out, through Meno's network gate, and what the consent names. */
+  /** Whether a plugin that fills it names, as data, the hosts it talks to (`RoleDecl.hosts`): its only way out, through Meno's network gate, and what the consent names. A plugin fills at most one such role (lib/plugins/manifest `acceptManifest`): what its worker goes out for is never in doubt. */
   hosts?: true;
 };
 
@@ -29,6 +29,7 @@ export const ROLES = {
   drawing: { name: "A molecule in 3D drawn as a formula", where: "molecules3d" },
   render: { name: "Pictures and films of molecules in 3D, rendered", where: "molecules3d", options: true },
   "language-model": { name: "Talking with a model, in a conversation", where: "conversations", options: true, hosts: true },
+  names: { name: "A structure found by its name, in a database outside Meno", where: "chemistry", hosts: true },
 } as const satisfies Record<string, Role>;
 
 export type RoleId = keyof typeof ROLES;

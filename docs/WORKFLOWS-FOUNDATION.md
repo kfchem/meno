@@ -1048,6 +1048,15 @@ drawn, aromatic rings as one form.* What that means, plainly:
   double bond) is not read yet: the bond is as drawn. Past 256
   stereoisomers to write (eight groups), the structure is written as
   drawn and said not complete;
+- **a cis or trans written on a double bond in a ring of seven atoms or
+  fewer states nothing** (P-93.5.1.4.1; Brecher 2006, ST-4.3), and is not
+  read, whoever wrote it - a SMILES's marks, a file's, a plugin's answer
+  (`smallRingSidesDropped`, `src/lib/chem/perception/stereo/candidates.ts`,
+  the one test a candidate double bond asks): cycloheptene written with its
+  ring bond cis, written trans and written with neither is one structure,
+  with no E or Z. A ring of eight or more keeps it: cis- and
+  trans-cyclooctene are two structures. In a fused or bridged system the
+  smallest ring through the bond counts, as for a candidate;
 - **a metal's isomers by which donors are across are two structures:**
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
@@ -1123,7 +1132,13 @@ drawn, aromatic rings as one form.* What that means, plainly:
     tritium);
   - bonded to another hydrogen (H2);
   - bridging, with more than one bond;
-  - on a metal (a hydride ligand).
+  - on a metal (a hydride ligand). An H counted on such a metal - a
+    SMILES's `[PdH]`, a file's hydrogen count - is read as that atom
+    (`perception/fold` `metalHydrogensDrawn`), so a hydride is one
+    structure however it is written: [PdH]Cl2 is Cl2Pd-H, its identity and
+    its constitution alike. The metals are those ligands are drawn round
+    (`drawnRoundMetal`); on any other, a tin's or a lithium's, the H is
+    folded in as before, either way.
 
   P3 adds this to the identity rule itself, so it changes `identityText`
   for every user of it. P3 lists every caller of `identityText` and

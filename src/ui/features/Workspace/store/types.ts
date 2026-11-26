@@ -41,6 +41,12 @@ export type Atom = EditorAtom & {
   /** The configuration it states as a centre, kept (configuration/kept): read after every change, said where an edit changed it. */
   config?: KeptCentre;
   /**
+   * Which way its label reads where its one bond is upright and either way reads - leftward (HO, HOH2C) or rightward (OH, CH2OH): put so
+   * by a Haworth ring's labels where the other way would run into the drawing (projections/haworthLabels; lib/chem/layout2d `Atom.reads`).
+   * Clean-up takes it away.
+   */
+  reads?: "left" | "right";
+  /**
    * How near the viewer the atom is, where its structure is drawn in
    * perspective - a cage, as Clean-up draws one: a bond passing behind
    * another is drawn broken there. World units.
@@ -2217,6 +2223,8 @@ export type EditorState = {
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
   /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
   placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
+  /** Atoms with their depth, and bonds to them or from them to atoms already there, added together - a ring fused on a chair (../projections/fuse) - as one undo step. */
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => void;
   /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
   settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
@@ -2228,7 +2236,8 @@ export type EditorState = {
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
-  pasteModel: (next: Drawn) => void;
+  /** What was copied, or read, put down - one step to undo, named `step` where it is not a paste ("Add aspirin (CID 2244)"). */
+  pasteModel: (next: Drawn, step?: string) => void;
   /**
    * A chair put down from Quick Add, its ring's middle at `at`, seen from the right (form 1); or, where the chair this put down is still as it
    * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).

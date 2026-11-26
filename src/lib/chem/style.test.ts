@@ -114,7 +114,7 @@ describe("style presets", () => {
     const { ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, reactionArrowHeadInset, ...rest } = style;
     const { ends: e, fontFamily: f, stereoDescriptors: d, stereoDescriptorGap: g, bondColor: b, labelColor: l, shortHashes: h, hashedWedgeEnd: w, reactionArrowHeadInset: i, ...acs } = ACS_1996;
     expect(rest).toEqual(acs);
-    expect([ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, reactionArrowHeadInset]).toEqual(["round", "IBM Plex Sans", "plain", 0.15, "#141414", "#141414", "three", "short", 0.2]);
+    expect([ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, reactionArrowHeadInset]).toEqual(["round", "IBM Plex Sans", "plain", 0.35, "#141414", "#141414", "three", "short", 0.2]);
     expect([e, f, d, g, b, l, h, w, i]).toEqual(["square", "Arial", "parentheses", 0.35, "#000000", "#000000", "spaced", "short", 0]);
     // the baseline follows the typeface
     expect(style.labelBaseline).toBeUndefined();
@@ -123,9 +123,9 @@ describe("style presets", () => {
   it("writes R and S bare, as IUPAC's recommendations for diagrams do, but for ACS 1996's parentheses", () => {
     const written = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, p.style.stereoDescriptors]));
     expect(written).toEqual({ meno: "plain", acs1996: "parentheses", rsc: "plain", wiley: "plain", nature: "plain" });
-    // (bare, they stand nearer their atoms; in parentheses, half a capital's height off, as IUPAC's do)
+    // (bare or in parentheses, about half a capital's height off their atom, as IUPAC's GR-11.1 has them, in every shipped style)
     const gaps = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, p.style.stereoDescriptorGap]));
-    expect(gaps).toEqual({ meno: 0.15, acs1996: 0.35, rsc: 0.15, wiley: 0.15, nature: 0.15 });
+    expect(gaps).toEqual({ meno: 0.35, acs1996: 0.35, rsc: 0.35, wiley: 0.35, nature: 0.35 });
   });
 
   it("sets a capital on its atom as ACS 1996 sets Arial's, whatever the typeface", () => {

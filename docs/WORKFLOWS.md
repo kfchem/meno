@@ -378,7 +378,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | levels, the lowest few within a bracket (drawn) | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound - or of its value of a property, across compounds - kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted as one; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
+| Duplicates | two squares, one over the other | molecules in 3D, or structures drawn (*Duplicates on structures drawn*, below) | on molecules in 3D: each unlike the others of its compound - or of its value of a property, across compounds - kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted as one; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike. On structures drawn: the first of each structure by Meno's identity kept, the rest out of *Alike*, each saying "Same as n" |
 | Populations | a pie, one slice drawn out (drawn) | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from - and, of what its molecule holds (on its entry frame), only what *Keep from its molecule* names, one name to a line, as it is: none, unless named, so that a value worked out for the molecule never reaches its frames unasked; a frame that holds one of them itself, of another value, keeps its own, the line saying so once; a name a molecule does not hold, said, with how many ("path not on 2 molecules", "pc not on any molecule") (2026-10-30); the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | a ring, the others behind it, kept together in a bracket (drawn) | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
@@ -394,7 +394,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Measure | a distance between two marks (drawn) | molecules in 3D, or a conformer set; and, where wanted, *Atoms*: a table | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them, or each row's of the table wired into *Atoms*, its columns saying how they count them (STRUCTURE-STEPS.md, *Measure*) |
 | Mode on atoms | two atoms moving, a third still (drawn) | molecules in 3D with vibrations, or a conformer set; and, where wanted, *Atoms*: a table | **the same kind of set**, every entry kept: where its lowest, imaginary vibration ranks the reacting atoms - a table's bonds formed or broken, or atoms typed - written on it (`mode.window`, `mode.ranks`, `mode.outside`) for a Filter to choose on (STRUCTURE-STEPS.md, *Mode on atoms*) |
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind: a wire of the other kind is refused as it is drawn | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
-| Pass the side with fewer | which of two sets go on (drawn) | *First* and *Second*: molecules in 3D, or conformer sets | **the same kind of set**: First's set out of its first exit and Second's out of *Second's*, each as it came or not at all. Left to choose (*Pass: The side with fewer, or both where alike*), it compares their entries per compound: within a quarter of their sum, both go on; else only the side with fewer - the rule ConfoTS's own code takes to choose which way its reaction paths run (`confots_step1.py`, its `path_flag` left `auto`). *Both*, *First only* and *Second only* pass those whatever the counts. Its line says both sides' entries per compound and what passed (`workflow/structureSteps` `fewerSideSet`) |
+| Pass the side with fewer | which of two sets go on (drawn) | *First* and *Second*: molecules in 3D, or conformer sets | **the same kind of set**: First's set out of its first exit and Second's out of *Second's*, each as it came or not at all. Left to choose (*Pass: The side with fewer, or both where alike*), it compares their entries per compound: within a quarter of their sum, both go on; else only the side with fewer - the rule ConfoTS's own code takes to choose which way its reaction paths run (`confots_step1.py`, its `path_flag` left `auto`). *Both*, *First only* and *Second only* pass those whatever the counts. Its line reads like *First 20, Second 3 per compound: only Second passed* (a whole count as an integer, any other with one decimal; *only First passed*, *only Second passed* or *both passed*) (`workflow/structureSteps` `fewerSideSet`) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Restraints | atoms held to a wall (drawn) | molecules in 3D, or conformer sets | **a table of restraints**, a row for each, made of each entry from itself - coordination bonds at a factor of their van der Waals radii together (Alvarez 2013), pairs kept at their distance, atoms fixed - each row for its entry by an ID a step wrote on it; the entries are not passed on. One it cannot make rows for out of *Failed*, saying why (STRUCTURE-STEPS.md, *Restraints*) |
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Reference*, where wanted | **a table of torsion restraints**: torsions typed, at the angle typed; or, from the reference, each unlike here at 180° where trans or at the reference's own angle - by a strength or exactly, each row for its entry by an ID; one it cannot make rows for out of *Failed* (STRUCTURE-STEPS.md, *Torsion restraints*) |
@@ -3973,6 +3973,66 @@ number** shows it with its unit, and what worked it out.
 columns or more, every row - offers *Put on the page as a table* on its
 menu: a set holding it, named for the text, beside it. Prose is not
 offered.
+
+### Duplicates on structures drawn
+
+*Duplicates* takes a set of structures drawn as it takes molecules in 3D:
+one step, its card, its two exits and its words the same. A generative
+model hands on every SMILES it samples, the same one among them more than
+once, for Meno's own steps to keep or set aside (PLUGINS.md, *Generate*);
+this is the step that sets the repeats aside (workflow/meno
+`duplicatesDrawn`). What differs is only what *alike* means for what came
+in.
+
+- **Alike is the same structure by Meno's identity**, the one comparison
+  that *Enumerate*'s *Same as n* and a record's key go by (chem/identityOf
+  `identityOfDrawn`, each label drawn out; WORKFLOWS-FOUNDATION.md, *Which
+  structures are the same is judged by Meno's identity*): the same atoms,
+  bonds and charges, and each configuration the drawing shows - not where
+  it lies, which bonds carry the wedges, whether an H is drawn, or a group
+  written by its label. So:
+  - two drawings of one compound are one, however each is drawn: its atoms
+    in another order, turned, a wedge at one neighbour or a hash at the
+    one beside it;
+  - its two enantiomers, drawn with their configurations, are two, and so
+    are E and Z;
+  - one that leaves a centre undrawn is neither of those that give it (a
+    place left open stands for two compounds); two that leave the same
+    centre open are one;
+  - a salt is one whichever ion is written first;
+  - tautomers and protonation states are the structures drawn: nothing is
+    made alike that is not drawn alike.
+- **The first of each is kept**, in the order they came; the rest go out
+  of the second exit, *Alike*, each saying which it is the same as ("Same
+  as 3"): by the number their records carry where every one carries one
+  (an *Enumerate*'s), else by its place in what came in, from 1; never a
+  place beside numbers. Where an earlier step left a why on its record, it
+  is said first.
+- **Never set aside unsure**: one whose identity cannot be worked out in
+  full, or whose wedges do not read, is kept, and counted on the line as
+  not compared, with why ("2 not compared (2: wedges that do not read)").
+  A duplicate may be missed so; nothing that is not one is set aside.
+- **Compared within**: *Each compound* compares every structure drawn with
+  every other. *Each value of a property* compares those of one value only
+  (by seed, say); those without it are compared among themselves, and
+  said ("2 without seed, compared among themselves").
+- **Mirror images is not shown** while structures drawn come in: identity
+  keeps each configuration drawn, so a mirror image drawn is another
+  structure and there is nothing to choose. A choice made for molecules in
+  3D is kept on the step, unread, for when they come in again.
+- **A set of structures drawn and molecules in 3D together** is refused, in
+  words ("compare them in separate steps"): one comparison is not the
+  other's, and the set is never split unsaid.
+- **Its line** is Duplicates' own: "45 of 52 entries kept · rest 7", with
+  those not compared and those without the property after it.
+- **Done in turns**, as on molecules in 3D: the page goes on meanwhile, its
+  card says how far it is, and it is stopped as any step is.
+
+How it is used: from a set of structures drawn - a frame round them, or a
+step's exit that gives them - the step list offers *Duplicates*; once run,
+its card says how many were kept and how many set aside. The kept ones are
+its first exit, *Unlike*; the repeats its second, *Alike*, each with "Same
+as n" on its record. Undo takes the run back as any step's.
 
 ### Filter (2026-10-22)
 

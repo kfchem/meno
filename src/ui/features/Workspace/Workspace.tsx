@@ -114,7 +114,8 @@ import { useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { style3dOf } from "./style3dOf";
 import { LARGE_ATOMS } from "./utils/largeDrawing";
 import { askToOpen } from "../../layouts/commands";
-import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
+import { bondsAt, chosenPath, frameOf, lookOf, notesOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
+import { madeRoom } from "./utils/fitExtent";
 import { movingAtoms, movingFor } from "./utils/edit3d";
 import { abbreviationOf } from "../../../lib/chem/abbreviations";
 import { numbersItemsFor } from "./utils/atomNumbersShown";
@@ -127,7 +128,7 @@ const NO_IDS: number[] = [];
 function expandable(a: { el: string; abbrev?: unknown } | undefined): boolean {
   return !!a && (!!a.abbrev || (!isElementSymbol(a.el) && !!abbreviationOf(a.el)));
 }
-import { useClipboardActions } from "./clipboardActions";
+import { useClipboardActions, useCopyingShown } from "./clipboardActions";
 import {
   chargeStep,
   clipboardIntent,
@@ -238,7 +239,9 @@ import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { newmanDrawing } from "./projections/newman";
 import { isProjection } from "./projections/projection";
 import { chairFromFlat } from "./projections/fromFlat";
+import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { flipOf } from "./projections/flip";
+import { addedName, notDrawnWhy } from "./chem/nameLookup";
 import { addedBox } from "./store/slices/modelSlice";
 import type { SelectableKind } from "./store/slices/selectionSlice";
 import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menuScope";
@@ -286,6 +289,7 @@ import { emptyPageLineShown, pageHoldsNothing, thingInHand } from "./utils/empty
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
+import { shownWith } from "./utils/viewShow";
 
 function WorkspaceContent({
   active,
@@ -516,6 +520,8 @@ function WorkspaceContent({
   }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
+  // (a large copy being made: said, as the other work in hand is)
+  const copyingShown = useCopyingShown();
   // (structures being made in 3D: since when, and how to stop it - the plugin's worker stopped, nothing added)
   const [making3d, setMaking3d] = useState<number | null>(null);
   const stop3d = useRef<(() => void) | null>(null);
@@ -619,9 +625,14 @@ function WorkspaceContent({
           // clear of what is on the page - or, made again, where the one
           // made before stood
           const taken = takenOnPage(store.getState(), block.atoms, solids);
+          // (each with its chip under it and its notes' mark to its right: seen whole only with them - utils/fitExtent `madeRoom`)
+          const notes = Math.max(0, ...ms.map((m) => {
+            const placed = { ...m, id: 0, at: { x: 0, y: 0 } };
+            return notesOf(placed, solidOf(placed, look3d), lookOf(m)).length;
+          }));
           const row = replacing
             ? { at: rowFrom(turned, replacing.at), inView: true }
-            : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken);
+            : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken, madeRoom(notes));
           if ("box" in row) {
             solids.push(row.box);
             made3d = made3d ? { x0: Math.min(made3d.x0, row.box.x0), x1: Math.max(made3d.x1, row.box.x1), y0: Math.min(made3d.y0, row.box.y0), y1: Math.max(made3d.y1, row.box.y1) } : row.box;
@@ -647,8 +658,9 @@ function WorkspaceContent({
           replacing ? [replacing.id] : [],
           growths.length ? key : undefined,
         );
-        // (with no room for them in view, the view goes to them - along, or out as little as needed)
-        if (!allInView && made3d) store.getState().requestShow(made3d);
+        // (with no room for them in view, the view eases to take them in with the drawing they were made from - along, or
+        //  out as little as needed; where they are seen whole, it stays: utils/viewShow)
+        if (!allInView && made3d) store.getState().requestShow(shownWith(blocks.map((b) => boxOf(b.part)), made3d));
         if (!growths.length) return;
         // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
@@ -1865,7 +1877,7 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {active && (chem.state === "setting-up" || chem.state === "starting" || working3d || checkingFiles) && (
+        {active && (chem.state === "setting-up" || chem.state === "starting" || working3d || copyingShown || checkingFiles) && (
           <motion.div
             key="working"
             {...RISE}
@@ -1874,11 +1886,11 @@ function WorkspaceContent({
             className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
-              <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
+              <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : copyingShown ? "copying" : "checking"} {...FADE} className="block">
                 {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
                 {chem.state === "setting-up" || chem.state === "starting"
                   ? `${chemistryStep(chem, chemShare)}…`
-                  : working3d || `Checking ${checkingFiles}'s files…`}
+                  : working3d || (copyingShown ? "Copying…" : `Checking ${checkingFiles}'s files…`)}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
@@ -2117,6 +2129,15 @@ function WorkspaceContent({
             onNamed={(label) => {
               // (a molecule the dictionary has, drawn from it - no plugin asked - and put down as a SMILES read is: chem/resolve)
               putDownSmiles(store, quickAdd, namedDrawn(label));
+            }}
+            onFound={async (found, service) => {
+              // (a compound found by its name: its SMILES drawn as a typed one is - but only where Meno reads it as the service's
+              //  formula and charge; its stereo left undefined there drawn open, and said, never given: chem/nameLookup)
+              const read = await structureFromSmiles(found.smiles, style);
+              const why = notDrawnWhy(read, found, service);
+              if (why) throw new Error(why);
+              const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
+              if (putDownSmiles(store, quickAdd, withoutStereoOpen(read), addedName(found)) && said) setChemError(said);
             }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;
@@ -2728,8 +2749,24 @@ function WorkspaceContent({
             const ids = fragmentOf(st.model, at);
             if (!isProjection(st.model, ids)) return undefined;
             const flip = flipOf(st.model, ids);
+            // (a ring bond of the chair right-clicked: a ring fused on it, the three ways)
+            const bondId = menu.kind === "bond" && menu.id != null && fusableBonds(st.model, ids).includes(menu.id) ? menu.id : null;
             return {
               flat: () => runCleanUp(at, true),
+              ...(bondId != null
+                ? {
+                    fuse: FUSE_WAYS.map(({ how, name }) => ({
+                      name,
+                      run: () => {
+                        const now = store.getState();
+                        const made = fusedOn(now.model, fragmentOf(now.model, at), bondId, how);
+                        if (!made) return;
+                        if ("refused" in made) setChemError(made.refused);
+                        else now.addSolid(made.atoms, made.bonds, "fuse chair");
+                      },
+                    })),
+                  }
+                : {}),
               ...(flip
                 ? {
                     flip: () => {

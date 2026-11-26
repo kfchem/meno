@@ -44,6 +44,7 @@ import {
   VALUE_SLACK_PX,
   type SpotAbout,
   framesChipAt,
+  nearestOf,
 } from "./molecule3d";
 import type { SolidMark } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
@@ -928,5 +929,38 @@ describe("where a frames chip hangs from", () => {
     // (a set whose foot is above the molecule's lowest atom - not drawn round it: never raised into it)
     expect(framesChipAt(-1.2, 0.5)).toBe(-1.2);
     expect(framesChipAt(-1.2, Number.NaN)).toBe(-1.2);
+  });
+});
+
+describe("the ball nearest a point, as a picture cuts a stick back to it", () => {
+  /** The first of `balls` as near `p` as any: each gone through, as it was found before. */
+  const throughAll = <B extends { c: { x: number; y: number } }>(balls: B[], p: { x: number; y: number }) =>
+    balls.reduce((best, ball) => (Math.hypot(ball.c.x - p.x, ball.c.y - p.y) < Math.hypot(best.c.x - p.x, best.c.y - p.y) ? ball : best));
+  /** Numbers that look random, the same every run. */
+  const seeded = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+  it("is the same ball as going through them all, for points among them, on them, and far outside them", () => {
+    const next = seeded(7);
+    const balls = Array.from({ length: 500 }, () => ({ c: { x: 40 * next() - 20, y: 10 * next() } }));
+    const nearest = nearestOf(balls);
+    const points = [...Array.from({ length: 2000 }, () => ({ x: 60 * next() - 30, y: 30 * next() - 10 })), ...balls.map((b) => b.c), { x: 1e4, y: -1e4 }];
+    for (const p of points) expect(nearest(p)).toBe(throughAll(balls, p));
+  });
+
+  it("is the first of them where two or more are as near - on a grid, a point midway between them", () => {
+    const balls = Array.from({ length: 36 }, (_, i) => ({ c: { x: 1.5 * (i % 6), y: 1.5 * Math.floor(i / 6) } }));
+    const nearest = nearestOf(balls);
+    for (let x = -0.75; x <= 9; x += 0.75) for (let y = -0.75; y <= 9; y += 0.75) expect(nearest({ x, y })).toBe(throughAll(balls, { x, y }));
+    // (all four of a square's corners as near its middle: the first)
+    expect(nearest({ x: 0.75, y: 0.75 })).toBe(balls[0]);
+  });
+
+  it("is the one ball there is, and the first of balls all in one place or in one line", () => {
+    expect(nearestOf([{ c: { x: 2, y: 3 } }])({ x: -5, y: 8 })).toEqual({ c: { x: 2, y: 3 } });
+    const same = [{ c: { x: 1, y: 1 } }, { c: { x: 1, y: 1 } }];
+    expect(nearestOf(same)({ x: 0, y: 0 })).toBe(same[0]);
+    const line = Array.from({ length: 50 }, (_, i) => ({ c: { x: 0, y: 0.37 * i } }));
+    const nearest = nearestOf(line);
+    for (let y = -3; y < 22; y += 0.185) expect(nearest({ x: 0.4, y })).toBe(throughAll(line, { x: 0.4, y }));
   });
 });

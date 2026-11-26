@@ -611,7 +611,38 @@ C:O between two atoms that both have room - oxalate written
 are refused, though one form would close them; write their double
 bonds. Where such a bond is read and not refused - from a file - a lone
 one between two atoms that both have room is read as single for now.
-Text is
+**A name looked up** (where a plugin fills *A structure found by its name*,
+PLUGINS.md *Roles*; the icon is then named *SMILES or name*): one more row
+is offered under the field, last - `Look up "aspirin" at` the service, by
+its plugin's name - and first only where nothing else reads the text. Nothing
+goes out while typing: the name is sent only when that row is chosen, by
+Enter or a click, so that a name not yet published stays on the computer,
+and the requests come at a person's pace. The first time, the person is
+asked whether names may go to the service's hosts ("Each name you choose to
+look up goes there. Nothing else does."), remembered as any purpose and
+withdrawn in Settings, *Network*; a no sends nothing, and says so. While it
+is looked up the row says *Looking up…*; Escape or a press elsewhere lets it
+go, and an answer that comes after is dropped. One compound found is drawn
+at once, as a typed SMILES is, one step to undo named by its title and id
+("Add aspirin (CID 2244)"); several are offered in the service's order, none
+chosen for the chemist - each by its title, formula and id, and in words
+what is not plain about it (*1 of 3 stereocentres not defined*, *2 parts*,
+a charge) - with how many more the service has; none is said ("has no
+compound by this name"), and so is an error, in the plugin's words. Before
+anything is drawn the structure Meno reads from the SMILES given must have
+the formula and charge given, compared as element counts: unlike, it is
+not drawn ("Meno reads …'s structure for aspirin as C9H8O3; …'s formula is
+C9H8O4. Not drawn."), the service's formula quoted as it wrote it. The
+counts tell no isotope apart: D and T count as hydrogen on both sides. A
+formula is read as a database writes one, its charge at the end ("Fe+2");
+written as some write an ion ("Fe2+"), it reads as two irons and +1, and
+unlike the record's charge it is not drawn. Stereocentres or double bonds the service leaves
+undefined are drawn open, and said, never given a configuration. Offline,
+the row is dimmed and says the service needs the network. Where no plugin
+looks names up and nothing reads the text, a quiet *Look it up as a name…*
+under what went wrong offers the plugins that do; once one is added, what
+was typed is looked up only on the chemist's Enter. Nothing is kept on
+disk: the same name looked up twice goes out twice. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
@@ -636,7 +667,7 @@ that it is a drawing like any other - nothing remembers that a tool made it - an
 again from Quick Add opened on the chair it put down - within two bonds of its ring's middle (`CHAIR_TURN_REACH`) - while that chair is as it
 was with nothing done since, turns it to form 0, the view from the other side, as one step, and again back (`putChair`; the icon's tip says so:
 "Chosen again on the chair just put down: the view from the other side"). Opened anywhere else, it puts down another chair there. Built so far: the **chair**
-(`Workspace/projections/`: `chair`, `extend`, `flip`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
+(`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
 on a page), and the **Newman projection** (`newman`).
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
@@ -671,6 +702,16 @@ on a page), and the **Newman projection** (`newman`).
   keeps as drawn, *Draw flat* lays out flat, and 3D made from it says it takes the configuration only, as from the tool's chair. *Flip chair*
   stays the tool's chair's. A cage or a bridged system drawn by hand in perspective is not asked after for it: fitting one to the engine's
   views takes up to a second, too long for a menu.
+- **Fusing** (a ring bond of a chair that stands alone right-clicked; `projections/fuse`): three ways, never two - *Fuse a chair, trans*,
+  *Fuse a chair, cis on the upper face*, *Fuse a chair, cis on the lower face* - a second chair fused on the bond (`fused` of the solids), drawn on
+  the first ring's four lines, each bond one bond long, as one step. trans takes the two equatorial places of the bond's atoms, which point apart,
+  and leaves the ring-fusion hydrogens axial, on opposite faces; cis takes the asked face's place at each, one axial and one equatorial, both
+  hydrogens on the other face. On a bare chair the two cis are one compound; on a ring that carries a group they are different compounds
+  (cis-syn-cis against cis-anti-cis), so the tool does not choose between them. Refused, in words, where a group stands at a place the new ring
+  would take or another atom where one of its own would go. On the four seat bonds, cis on one face folds the new ring back over the first, as
+  the solid does seen from this side: its axial bond is drawn in front of the first ring's far bond, which is broken behind it. Known answers
+  (`fuse.test.ts`): trans- and cis-decalin read as the flat drawings with wedged hydrogens on every bond in every picture of the chair; R and S
+  of 1-methyldecalin worked by hand; a group at any free place of either ring read as the solid has it.
 - **Draw as chair** (a flat six-membered ring right-clicked, an atom or a bond of it; `projections/fromFlat`): the ring drawn as a chair of the
   tool's, each group moved onto the free position that states the configuration the flat drawing states (the reader's, asked of the solid's
   own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
@@ -699,7 +740,7 @@ on a page), and the **Newman projection** (`newman`).
   as another compound - a configuration changed, or one stated that the drawing leaves open - nothing is changed and Meno says it is its
   own fault. Offered on a single
   ring of single bonds at saturated atoms, nothing fused, spiro or bridged on it, not yet drawn with depth: no cyclohexanone or cyclohexene,
-  no fused rings yet (they wait for the depth reader, with Fuse). Groups that come to lie over each other are left for the chemist.
+  no fused rings yet. Groups that come to lie over each other are left for the chemist.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,
   below); *Draw flat* is `cleanUp` asked to lay it out flat, ring and all (`relayoutFrom`'s `flat`: no ring kept). **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
@@ -727,16 +768,25 @@ on a page), and the **Newman projection** (`newman`).
   0.30, so that the two stand visibly apart; in the five-ring a front
   atom's up group stays at 0.51, clear of the bond to the ring O. Every place stands clear of the ring and of every other place. A label
   inside the ring is read against the whole drawing as the page lays it out - every line but its own
-  bond, the bold and wedge-shaped bonds of the near edge, the other labels - a graze of less than a tenth
+  bond, the bold and wedge-shaped bonds of the near edge, the other labels and the ring O's - a graze of less than a tenth
   of a label's height not counted. As a label is typed, in the same undo step (`projections/haworthLabels`),
-  one that meets something steps along its vertical toward its atom by the least that clears every label:
+  each label of the ring that meets something is first read the other way where that meets less - HO for
+  OH, HOH2C for CH2OH, or back - its bond being upright, so that either way reads, whether its bond was
+  led out by a double-click or a drag and its label typed over it or given by *Edit label* (the atom keeps
+  the way, `reads`, and the page and a picture made of it draw it so: an OH up from the right-hand front atom reads HO, its H off the bond going up from it, and
+  keeps its full stem; in a five-ring, whose near edge's bonds rise steeply, a label up from a front atom
+  or down from a side atom reads away from its atom's rising bond). Then one that still meets something
+  steps along its vertical toward its atom by the least that clears every label:
   a back atom's down label first, to as little as 0.30, then a front atom's up label, to as little as
-  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 as
-  before, so that nothing is drawn worse than it was. A group that is no label - a carbon drawn out, with
-  what it carries - is never moved, so a bond drawn on from it has its room. Not yet clear, as before
-  these lengths: an OH up from the right-hand front atom (its H written across the bond going up from
-  it), a CH2OH up from a front atom beside a second label inside the ring, and in a five-ring an OH or a
-  CH2OH up from C-2. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 and
+  every label reads as before, so that nothing is drawn worse than it was. A label that meets nothing is
+  left as it reads. A group that is no label - a carbon drawn out, with
+  what it carries - is never moved, so a bond drawn on from it has its room. Clean-up and *Draw flat* let
+  the way a label reads go, so that its bonds decide again. Not yet clear, as before these lengths: a
+  CH2OH up from a front atom beside a second label up from the other, in either ring - wider than the
+  ring's near edge, read either way it meets that label or a bond rising from its own atom, and no row
+  above them stands clear of the ring O and the back bonds; and in the six-ring an OH up from the
+  right-hand front atom under a CH2OH down from C-5. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
@@ -765,8 +815,8 @@ on a page), and the **Newman projection** (`newman`).
   answers (`newman.test.ts`): 1,2-dichloro-1,2-difluoroethane with its groups in one order front and back is the meso form, with the back's
   two swapped one of the chiral pair; a spoke turned round the circle leaves the compound the same.
   Not yet checked in the sweep of what reads a bond's length or direction: label places for a labelled or charged atom of the pair.
-- **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no ring fused on a chair by the tool yet (Fuse comes in its
-  own change); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
+- **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; a ring is fused only on a chair that stands
+  alone (no three-ring system from the tool yet); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
   offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
@@ -1030,7 +1080,20 @@ Both go together, because both touch every layer.
   a pair of lines (the maintainer, 2026-10-24). Meno's own style asks for
   it; a journal's keeps its spacing exactly, as its specification has it
   (2026-10-27), and a style saved before the setting is drawn at the
-  spacing.
+  spacing. Where a style asks for three and not even three fit a line width
+  clear - a bond to a label under about half a style bond - three are drawn
+  still, the gaps as deep as the hashes and both thinner where they must be
+  - a round-ended hash's line as thick as the hash is deep - three marks
+  seen apart (IUPAC GR-1.3: at least three).
+- **A dashed bond** has three dashes at least, in every style (GR-1.3): a
+  short one's gaps close up first, to a line width seen between two past
+  their ends, then the dashes shorten - never shorter than they are wide
+  where their ends are square, to round dots where they are round - and
+  where not even that fits, the line thins, dashes and gaps alike: never
+  one solid line, which would read as a single bond, nor two, nor none. **A wavy bond** shows three half-waves at
+  least: where the style's period gives fewer - a short bond, or one a label
+  cuts - the period shortens to a whole number of half-waves, the amplitude
+  with it.
 - **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
   atom at its wide end, the bonds on from the atom starting there on their
   own: in Meno's own style (the maintainer, 2026-10-29) and, since
@@ -1622,11 +1685,13 @@ All hover-based, as above.
     (`utils/markGlide`, `ChemMarks2D`).
   - How far off its atom: a setting of the drawing style, *R and S:
     distance from the atom*, from the atom to the nearest of the letters,
-    as a share of the labels' size. IUPAC puts them about half a capital's
-    height off (35%), as ACS 1996 keeps them in parentheses; written bare
-    they look further off at that, and the maintainer asked for them
-    nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
-    molecule in 3D, the same share beyond its ball.
+    as a share of the labels' size. IUPAC puts them about half the height
+    of a C or an H off, rarely as much as the whole height (GR-11.1): 35%,
+    the default in every shipped style, bare or in parentheses, as the
+    maintainer ruled - IUPAC's form by default, a difference as a style
+    setting. 15% gives the nearer place Meno drew bare ones at before, at
+    the maintainer's asking (2026-10-05). On a molecule in 3D, the same
+    share beyond its ball.
   - **Meno's own** (docs/CIP.md): each worked out by Meno's reading of the
     CIP rules, off the drawing's thread, only for the atoms and bonds they
     are asked for on - no plugin needed. One asked for that has none says
@@ -2753,6 +2818,19 @@ lipids each have their own way of being drawn, which it should know.
        aziridine's N is lower, 17.7-20.5 kcal/mol (Sec. 4.3), an N-aryl's
        or N-acyl's lower still: its invertomers are the conformer search's
        to find;
+     - an oxaziridine's N with an aryl on it (the maintainer, 2026-11-18):
+       the aryl lowers its barrier, but the ring's O keeps it as high as an
+       N-chloro aziridine's - a free energy of activation of 23.4 kcal/mol,
+       measured for 3-methyl-2,3-diphenyloxaziridine by its two invertomers
+       going over to each other at room temperature (H. Ono, J. S. Splitter
+       and M. Calvin, Tetrahedron Lett. 14, 4107-4110, 1973). The aryl is
+       a C of an aromatic ring of carbons only, fused ones too (a phenyl, a
+       naphthyl), whatever is on it. A heteroaryl (a pyridyl, a thienyl) is
+       not taken as an aryl here, because no barrier has been measured for
+       one (the maintainer, 2026-11-25).
+       An N-acyl, N-sulfonyl, N-alkoxycarbonyl or N-vinyl oxaziridine's N
+       keeps none, nor does an N-aryl diaziridine's, no barrier having been
+       measured for it, nor an N-aryl aziridine's;
      - an N at a bridgehead of a small bridged ring system, every bridge of
        three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
        at most): it cannot turn over without breaking a bond. A larger cage
@@ -2972,6 +3050,25 @@ traced from reference drawings.
   the drawing, not when it is dropped: by then Office has taken it back
   from the drag pasteboard. A copy on a Mac makes only what the clipboard
   there takes (`clipboard_takes`): no bitmap or object for Windows.
+- A picture of molecules in 3D alone - nothing drawn flat beside them - goes
+  into Office's clip format as a PNG, not an EMF: the canvas the molecules
+  are drawn on, as it is, with what is written over them (R and S, a
+  measurement's value, a note on the file) laid on it at the same
+  resolution (`picture.ts` `solidsPng`). In an EMF the molecules were a
+  bitmap too, at that resolution: only the letters over them were vectors.
+  The molecules are drawn once, not drawn and then drawn again from an SVG.
+  On Windows the EMF is still made, for Windows' other programs and for
+  the object. A picture with anything drawn flat - a bond,
+  a label, an arrow - carries its EMF in the clip format as before, its
+  letters and lines sharp at any size. A copy reaches the app as its bytes
+  (`clipboard_write`, one body, the kinds listed in a header), and the
+  bitmap for Windows is made there from the PNG (`src-tauri/src/dib.rs`).
+  Its pictures are made a step at a time, the drawing drawn between the
+  steps - molecules in 3D among them, drawn a step at a time too, each
+  molecule's balls and sticks worked out once (`render3d.ts`); a copy begun
+  meanwhile ends the one before it, which lets go of what it made; a copy still being made after a quarter of a second says
+  "Copying…" in the corner, where other work in hand is said, until it is on
+  the clipboard. A paste waits for it, as before.
 - Drops are routed to the part of the page they land on (`src/lib/drop.ts`):
   a part that takes them - the drawing now; a tab strip, a workflow's node
   or a 3D view in time - registers as a drop zone, which says what it

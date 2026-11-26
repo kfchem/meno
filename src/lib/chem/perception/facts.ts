@@ -6,7 +6,7 @@
  * sharing an atom) and fused sets (rings sharing a bond) - worked out on first use, from the graph's distinct bonds (`distinctEdges`).
  */
 import type { ChemGraph } from "./graph";
-import { distinctEdges, ringSystemsOf, fusedSetsOf, smallestRings, type Ring } from "./rings";
+import { distinctEdges, ringSystemsOf, fusedSetsOf, SMALL_RING, smallestRings, type Ring } from "./rings";
 
 export type Facts = {
   /** Each atom's neighbours, in the order of its bonds - a bond to itself, to an atom the graph does not have, or to an atom already bonded to it, counted once, by its first bond. */
@@ -48,7 +48,7 @@ const keyOf = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a
  * The smallest ring a double bond can be in and have a cis or trans to state: eight atoms - one in a ring of seven or fewer is held cis. What
  * the reader of a drawing, the layout's open double bonds and the CIP each ask of `inRingSmallerThan`.
  */
-export const OPEN_RING = 8;
+export const OPEN_RING = SMALL_RING + 1;
 
 const made = new WeakMap<ChemGraph, Facts>();
 

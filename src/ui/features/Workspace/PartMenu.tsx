@@ -584,8 +584,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
-  /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
-  projection?: { flat: () => void; flip?: () => void };
+  /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; a ring bond of a chair that stands alone, a ring fused on it, the three ways (../projections/fuse); unset where it is none. */
+  projection?: { flat: () => void; flip?: () => void; fuse?: { name: string; run: () => void }[] };
   /** A flat six-ring right-clicked that *Draw as chair* draws (projections/fromFlat): to do it, or why it is not offered (its configuration not drawn). */
   asChair?: { run: () => void } | { why: string };
   /** The structure right-clicked drawn as a Fischer projection - crosses of plain bonds on the page's axes, one above another (utils/fischer): read so, on the chemist's word. Unset, where it is not so drawn. */
@@ -1104,6 +1104,8 @@ export default function PartMenu({
           ...(projection
             ? [
                 ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
+                // (the three ways, never two: the two cis are different compounds on a ring that carries a group)
+                ...(projection.fuse ?? []).map((f) => ({ name: f.name, keys: "", run: f.run })),
                 { name: "Draw flat", keys: "", run: projection.flat },
               ]
             : []),

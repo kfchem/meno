@@ -48,6 +48,7 @@ export function forTheClipboard(text: string, windows = IS_WINDOWS): string {
 }
 
 
+/** A kind read from the clipboard, as the app's commands give it: text, or bytes as base64. */
 type Wire = { flavor: Flavor; text?: string; base64?: string };
 
 let own: ClipItem[] = [];
@@ -75,7 +76,37 @@ export function copying<T>(make: () => Promise<T>): Promise<T> {
   const made = make();
   const before = making;
   making = Promise.all([before, made.catch(() => undefined)]);
+  const started = { at: now() };
+  copiesMaking.add(started);
+  heard();
+  void made.catch(() => undefined).then(() => {
+    copiesMaking.delete(started);
+    heard();
+  });
   return made;
+}
+
+const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+const copiesMaking = new Set<{ at: number }>();
+const listeners = new Set<() => void>();
+const heard = () => listeners.forEach((l) => l());
+
+/** Whether a copy is being made (`copying`), its pictures not yet on the clipboard. */
+export function copyBeingMade(): boolean {
+  return copiesMaking.size > 0;
+}
+
+/** How long, in ms, the earliest copy still being made has been made; null where none is. */
+export function copyMadeFor(): number | null {
+  let first = Infinity;
+  for (const c of copiesMaking) first = Math.min(first, c.at);
+  return Number.isFinite(first) ? now() - first : null;
+}
+
+/** `listener` told each time a copy starts being made or is done; the function returned stops it. */
+export function onCopyMade(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /** Puts `items` on the clipboard, in place of whatever was there. */
@@ -84,10 +115,26 @@ export async function writeClipboard(items: ClipItem[]): Promise<void> {
     own = items.slice();
     return;
   }
-  const wire: Wire[] = items.map((i) =>
-    i.bytes ? { flavor: i.flavor, base64: toBase64(i.bytes) } : { flavor: i.flavor, text: i.text ?? "" },
-  );
-  await invoke("clipboard_write", { items: wire });
+  const { listed, body } = framed(items);
+  await invoke("clipboard_write", body, { headers: { items: listed } });
+}
+
+/**
+ * `items` as one body, as `clipboard_write` (clipboard.rs `framed`) reads
+ * them: their bytes one after another - text as UTF-8 - and a list of each
+ * kind in order, `flavor:t:length` for text and `flavor:b:length` for bytes.
+ * A picture travels as its bytes, not spelled out as text.
+ */
+export function framed(items: ClipItem[]): { listed: string; body: Uint8Array } {
+  const utf8 = new TextEncoder();
+  const parts = items.map((i) => ({ flavor: i.flavor, kind: i.bytes ? "b" : "t", bytes: i.bytes ?? utf8.encode(i.text ?? "") }));
+  const body = new Uint8Array(parts.reduce((n, p) => n + p.bytes.length, 0));
+  let at = 0;
+  for (const p of parts) {
+    body.set(p.bytes, at);
+    at += p.bytes.length;
+  }
+  return { listed: parts.map((p) => `${p.flavor}:${p.kind}:${p.bytes.length}`).join(","), body };
 }
 
 /** The first of `flavors` the clipboard holds, if any. */
