@@ -12,6 +12,7 @@ import { compoundLetter, entryOfSet, entryState, FINISHED, PARTS_ALONE_REFUSED, 
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 import { SET_ASIDE } from "./structureSteps";
+import { whyCounted } from "../../../../lib/whyCounted";
 
 type Values = Record<string, string | number | boolean>;
 
@@ -83,6 +84,6 @@ export function ensembleSet(entries: readonly SetEntry[], holds: Holds3D, v: Val
     whys.set(key, (whys.get(key) ?? 0) + 1);
   }
   // (what came of it alone: the temperature is each value's own, said on its record, not the step's to say)
-  const rest = aside.length ? ` · rest ${aside.length} (${[...whys].map(([w, n]) => `${n}: ${w}`).join("; ")})` : "";
+  const rest = aside.length ? ` · rest ${aside.length} ${whyCounted(whys)}` : "";
   return { ok: true, holds, kept, aside, said: `${kept.length} ${kept.length === 1 ? "ensemble" : "ensembles"} from ${entries.length} ${entries.length === 1 ? "entry" : "entries"}${rest}` };
 }

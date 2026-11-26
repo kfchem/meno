@@ -32,6 +32,7 @@ import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./fai
 import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
 import { keptFrames, keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "../chem/partsApart";
+import { whyCounted } from "../../../../lib/whyCounted";
 
 /**
  * An entry as a plugin is given it: Meno's plain data - its atoms, each its
@@ -1031,8 +1032,7 @@ export function drawnSaid(answers: readonly DrawnAnswer[]): string {
   for (const a of answers) if ("aside" in a) kinds.set(a.kind, (kinds.get(a.kind) ?? 0) + 1);
   const aside = n - answers.filter((a) => !("aside" in a)).length;
   const head = made.length ? `${n} in \u00b7 ${kept} out \u00b7 ${madeCount} made from ${made.length}` : `${kept} of ${n} kept`;
-  const why = [...kinds].sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c}: ${k}`).join("; ");
-  return aside ? `${head} \u00b7 ${aside} set aside (${why})` : head;
+  return aside ? `${head} \u00b7 ${aside} set aside ${whyCounted([...kinds].sort((a, b) => b[1] - a[1]))}` : head;
 }
 
 /** What a plugin did at once (`run`): the entries it kept, by their place among those it was given; why not, where it said nothing it can be taken at. */

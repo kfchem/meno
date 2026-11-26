@@ -9,7 +9,7 @@
  * the answer lands (`useIdentitiesAnswered`). A caller that may wait asks first (`identitiesAsked`) and then reads.
  */
 import { create } from "zustand";
-import { constitutionKey, identity, type IdentityInput } from "../../../../lib/chem/identity";
+import { constitutionKey, identity, notStated, type IdentityInput } from "../../../../lib/chem/identity";
 import { NOT_YET } from "../../../../lib/table";
 import { cageLabelled } from "./cageLabelled";
 
@@ -55,6 +55,12 @@ const keyOf = (input: IdentityInput, kind: Asked) => `${kind}|${JSON.stringify(i
 /** What is asked, worked out here. */
 const hereNow = (input: IdentityInput, kind: Asked): Found =>
   kind === "constitution" ? { text: constitutionKey(input), complete: true } : kind === "cage labels" ? { text: cageLabelled(input), complete: true } : identity(input);
+
+/**
+ * Whether what is asked is written afresh at each ask, never kept: the identity or the constitution of a structure with a metal
+ * whose ligands are not stated (lib/chem/ligandsNotStated), which is the same as no other - another drawn alike included.
+ */
+const fresh = (input: IdentityInput, kind: Asked): boolean => kind !== "cage labels" && notStated(input);
 
 function keep(key: string, found: Found): Found {
   if (known.size >= KEPT) known.clear();
@@ -109,6 +115,7 @@ function started(): Worker {
 
 /** `input`'s identity (or what else `kind` asks), from what is kept, or worked out in the worker - in place where there are no workers. */
 export function identityAsked(input: IdentityInput, kind: Asked = "identity"): Promise<Found> {
+  if (fresh(input, kind)) return Promise.resolve(hereNow(input, kind));
   const key = keyOf(input, kind);
   const had = known.get(key);
   if (had) return Promise.resolve(had);
@@ -159,6 +166,7 @@ export function identitiesAsked(inputs: readonly IdentityInput[]): Promise<Found
  * asked of the worker, so that it is known once its answer lands.
  */
 export function identityKnown(input: IdentityInput, kind: Asked = "identity"): Found | undefined {
+  if (fresh(input, kind)) return hereNow(input, kind);
   const key = keyOf(input, kind);
   const had = known.get(key);
   if (had) return had;

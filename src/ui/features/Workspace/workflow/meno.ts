@@ -17,6 +17,8 @@ import type { EnumerateAsked } from "./enumerateOff";
 import { combinedSet, comparedSet, displacedSet, measuredSet, fewerSideSet, mergedSet, atomMapSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, comparedTorsionsSet, withSaid } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
+import { whyCounted } from "../../../../lib/whyCounted";
+import { isNotStatedText, LIGANDS_NOT_STATED } from "../../../../lib/chem/ligandsNotStated";
 import { rankedSet, valueKeysOf } from "./valueSteps";
 import { joinedSet } from "./joinStep";
 import { barrierSet } from "./barrierStep";
@@ -443,7 +445,7 @@ function* duplicatesDrawn(entries: readonly DrawnEntry[], due: () => boolean, gr
     if (done > 0 && due()) yield done;
     done++;
     const found = identityOfDrawn(labelsDrawnOut(e.drawn));
-    const why = found.unread.length ? "wedges that do not read" : !found.complete ? "its identity not worked out in full" : null;
+    const why = found.unread.length ? "wedges that do not read" : isNotStatedText(found.text) ? LIGANDS_NOT_STATED : !found.complete ? "its identity not worked out in full" : null;
     if (by && valueOf(e) == null) without++;
     // (kept: its record without the status it came in with - an earlier step's "aside" is not what this one says of it)
     const { status: _status, ...rest } = e.record ?? {};
@@ -466,11 +468,10 @@ function* duplicatesDrawn(entries: readonly DrawnEntry[], due: () => boolean, gr
     const before = typeof e.record?.status === "object" ? ("aside" in e.record.status ? e.record.status.aside : e.record.status.failed) : "";
     aside.push({ ...e, record: { ...e.record, status: { aside: before ? `${before}; ${now}` : now } } });
   }
-  const not = [...notCompared].map(([w, n]) => `${n}: ${w}`).join("; ");
   const said =
     `${kept.length} of ${countEntries(entries.length)} kept` +
     (aside.length ? ` \u00b7 rest ${aside.length}` : "") +
-    (notCompared.size ? ` \u00b7 ${[...notCompared.values()].reduce((a, b) => a + b, 0)} not compared (${not})` : "") +
+    (notCompared.size ? ` \u00b7 ${[...notCompared.values()].reduce((a, b) => a + b, 0)} not compared ${whyCounted(notCompared)}` : "") +
     (without ? ` \u00b7 ${without} without ${by}, compared among themselves` : "");
   return { ok: true, holds: "structures", kept, aside, said };
 }
