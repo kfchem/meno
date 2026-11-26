@@ -1667,7 +1667,13 @@ it, in `features/Workspace/pageGl/`:
 - **The hover tip** (components/PageTip): not placed on the page, it may be
   HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
   says, why a chip's bar did not finish, under what it is about or over
-  it, kept where it can be seen.
+  it, kept where it can be seen. It eases in as the thing is pointed at
+  and, the pointer gone, fades out where it stood with its last words over
+  Meno's quick time (as `meno-fade-out`) before it goes - pointed at again
+  meanwhile, it is whole again from where it had faded to; pointed straight
+  at another thing, the new tip takes its place and eases in, never two at
+  once. It goes with what keeps it: a molecule deleted, its tip with it.
+  It never takes the pointer.
 
 ## Styles in 3D
 
