@@ -1605,7 +1605,23 @@ All hover-based, as above.
     `octahedraKept`); a trigonal prism (ST-2.12), and a chelate drawn in a
     wedge form, are refused. Where no move gives a picture that keeps the
     drawing - a chelate's two donors drawn opposite - Clean-up lays nothing
-    out and says so: never another isomer. Two metals joined by two bridges
+    out and says so: never another isomer. Donors so put side by side that
+    were not have their groups turned about the donor, its bond to the
+    metal as it is, up to 60 degrees either way, clear of the other
+    donors' atoms; a bond of those groups across another donor's bonds,
+    its bond to the metal among them, or through its label as drawn
+    counts as no room too, and the turns are weighed for that first.
+    Clean-up writes the groups it can name as their labels before it lays
+    out (the groups written by name, below), so a donor such as PPh3, PCy3
+    or PiPr3 is one label and has no groups left to turn: cis-PdCl2(PPh3)2,
+    cis-PtCl2(PCy3)2 and cis-PtCl2(PiPr3)2 are laid out, the two
+    phosphines side by side as drawn. Where the groups stay drawn and no
+    turn clears their ink - cis-PtCl2(P(1-naphthyl)3)2 - Clean-up moves
+    nothing and says so, in the words it uses where it would put one atom
+    on another. The same measure serves a structure put down from a SMILES,
+    one a workflow step makes, or a 3D structure's drawing only for a
+    metal whose arrangement the text gives: those are otherwise laid out
+    as new. Two metals joined by two bridges
     (cis- and trans-[Pt2Cl4(NH3)2], the three isomers of a dimer with a Cl
     and a Br bridge) keep, at each metal, which bridge each of its other
     donors stands across: the bridges, which carry the other metal, stay
