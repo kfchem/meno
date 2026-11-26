@@ -154,7 +154,7 @@ export type LayoutOptions = {
   wedgeWidthPx: number;
   /** Least distance between the hashes of a hashed wedge, centre to centre. */
   hashSpacingPx: number;
-  /** The fewest hashes a short hashed bond or wedge is drawn with, room allowing (`FEWEST_HASHES`, where the style asks); unset, as the spacing gives. */
+  /** The fewest hashes a short hashed bond or wedge is drawn with, where the style asks (`FEWEST_HASHES`); unset, as the spacing gives. */
   fewestHashes?: number;
   /** A hashed wedge's widest hash stops short of a bare atom at its wide end, by a hash's clear gap; unset, it reaches the atom. */
   hashedWedgeShort?: boolean;
@@ -2044,12 +2044,18 @@ function buildBoldBar(
   };
 }
 
+/** A free end of a line, rounded where ends are: `share` of a whole line's round end, where its line was thinned (a squeezed hash's or dash's). */
+type FreeEnd = Vec2 & { share?: number };
+
 /**
- * The fewest hashes a hashed bond or wedge is drawn with, room allowing,
- * where the style asks for it (`fewestHashes`; Meno's own styles, the
- * maintainer, 2026-10-24): two read as a pair of lines - an equals sign -
- * and three are the fewest that read as a row along the bond, a wedge's
- * widening from hash to hash. A journal's style keeps its spacing exactly.
+ * The fewest hashes a hashed bond or wedge is drawn with where the style asks
+ * for it (`fewestHashes`; Meno's own styles, the maintainer, 2026-10-24; a
+ * journal's style keeps its spacing exactly, the maintainer, 2026-10-27),
+ * and the fewest dashes of a dashed bond in every style (IUPAC GR-1.3): two
+ * read as a pair of lines - an equals sign - and three are the fewest that
+ * read as a row along the bond, a wedge's widening from hash to hash. Where
+ * the spacing gives fewer, they come closer; where not even a line width's
+ * gap is left, the gaps give way and the count stands.
  */
 export const FEWEST_HASHES = 3;
 
@@ -2062,9 +2068,9 @@ export const FEWEST_HASHES = 3;
  * `wideHalf` at `end`, and each hash the part of it one line width deep - a trapezoid, its ends following the
  * outline. The first hash sits flush with `start` and the last with `end`,
  * and as many lie between as fit at least the hash spacing apart, spread
- * evenly - but, where the style asks, never fewer than `fewest` where that
- * many fit a line width clear of each other: a short one, to a label, still
- * reads as hashed. Those it is given so, from a bare narrow atom (`root`),
+ * evenly - but, where the style asks, never fewer than `fewest`: as many a
+ * line width clear of each other, and where not even that fits, the gaps and
+ * the hashes narrower together: a short one, to a label, still reads as hashed. Those it is given so, from a bare narrow atom (`root`),
  * are set at even steps from it - each gap the same, the first from the
  * atom as well, the last flush with `end` (the maintainer, 2026-10-28): not
  * the first a hash spacing out and the rest crowded after it. From a label,
@@ -2089,9 +2095,9 @@ function buildHashes(
   // Too short for more than one: a single hash, flush with the wide end.
   const from = Math.max(0, Math.min(start, end - lineWidth));
   const n = vperp(dir);
-  const depth = Math.min(lineWidth, end - from);
-  const first = from + depth / 2;
-  const last = end - depth / 2;
+  let depth = Math.min(lineWidth, end - from);
+  let first = from + depth / 2;
+  let last = end - depth / 2;
   const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
   // (more than the spacing gives: as many as fit, each a line width deep and a line width clear - from the first on, or,
   // where the first would stand off the root - a bare atom's spacing - from the root on, never fewer that way)
@@ -2099,9 +2105,20 @@ function buildHashes(
   const offRoot = from > base + 1e-9;
   const fromFirst = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
   const fit = offRoot ? Math.max(fromFirst, Math.floor((last - base) / (2 * lineWidth) + 1e-9)) : fromFirst;
-  const count = Math.max(spaced, Math.min(fewest, fit));
+  let count = Math.max(spaced, Math.min(fewest, fit));
+  // (and where not even that many fit a line width clear, the count still wins (GR-1.3: three at least): the gaps give way,
+  // each as deep as a hash, the hashes thinner where they must be to stay apart - from the first on, or from the root where
+  // the first stands off it, the gap before the first as deep as the rest: (2 count + 1/2) depths from the root to the end)
+  let squeezed = false;
+  if (count < fewest && end - from > 0) {
+    count = fewest;
+    depth = Math.min(lineWidth, offRoot ? (end - base) / (2 * fewest + 0.5) : (end - from) / (2 * fewest - 1));
+    first = from + depth / 2;
+    last = end - depth / 2;
+    squeezed = true;
+  }
   // (set from the root where it stands off it: at a label the first is flush, and the rest even after it)
-  const even = count > spaced && offRoot;
+  const even = (squeezed || count > spaced) && offRoot;
   // half the outline's width, a distance `at` from the narrow atom: from where the hashes start
   const o = even ? base : from;
   const halfAt = (at: number) =>
@@ -2111,11 +2128,16 @@ function buildHashes(
   for (let k = 0; k < count; k++) {
     const at = even ? base + ((last - base) * (k + 1)) / count : count > 1 ? first + ((last - first) * k) / (count - 1) : last;
     if (round) {
-      const half = Math.max(0, halfAt(at) - lineWidth / 2);
+      // (a line across, a line width thick - as thick as the hash is deep, where three were squeezed in: `widthPx` its share of a line's)
+      const half = Math.max(0, halfAt(at) - depth / 2);
       const a = point(at, half);
       const b = point(at, -half);
-      out.lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, widthPx: 0 });
-      out.ends.push(a, b);
+      out.lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, widthPx: depth / lineWidth });
+      // (its round ends as thin as its line)
+      const share = depth / lineWidth;
+      const ea: FreeEnd = { ...a, share };
+      const eb: FreeEnd = { ...b, share };
+      out.ends.push(ea, eb);
     } else {
       const near = at - depth / 2;
       const far = at + depth / 2;
@@ -2135,9 +2157,12 @@ function buildHashes(
 /**
  * A dashed bond: dashes of `dash` along the line from `p1` to `p2`, one flush
  * with each end and as many between as leave gaps of at least `gap`, spread
- * evenly.
+ * evenly - three at least, however short (IUPAC GR-1.3). Where three do not
+ * fit so, the gaps close up first, to a line width `lineWidth` seen between
+ * two dashes - past the round caps (`cap`, each dash's end reaching that far
+ * beyond it) - then the dashes shorten, down to the caps alone, round dots.
  */
-function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number): LineSeg[] {
+function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number, lineWidth = 0, cap = 0): LineSeg[] {
   const d = vsub(p2, p1);
   const L = vlen(d);
   if (!(L > 0)) return [];
@@ -2147,13 +2172,28 @@ function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number): LineSeg[] {
     const e = vadd(p1, vscale(u, b));
     return { x1: s.x, y1: s.y, x2: e.x, y2: e.y, widthPx: 0 };
   };
-  if (!(dash > 0) || L <= dash + Math.max(gap, 0) + dash) return [seg(0, L)];
-  const count = Math.max(2, Math.floor((L + gap) / (dash + gap) + 1e-9));
-  const g = (L - count * dash) / (count - 1);
+  if (!(dash > 0)) return [seg(0, L)];
+  // (three dashes at least, GR-1.3: on a short bond the gaps give way first, to a line width seen between two, then the dashes)
+  const count = Math.max(FEWEST_HASHES, Math.floor((L + gap) / (dash + gap) + 1e-9));
+  const least = lineWidth + 2 * cap;
+  // (the dashes kept whole where they fit at the style's gap, or with a line width seen between them; else shortened to that -
+  // never shorter than they are wide where their ends are square, a round end's dot at the least - and where not even that
+  // fits, the line thinner, dashes and gaps alike: three marks seen apart, however short)
+  const shortest = cap > 0 ? 0 : lineWidth;
+  const whole = count * dash + (count - 1) * gap <= L + 1e-9 || (L - count * dash) / (count - 1) >= least;
+  let size = whole ? dash : Math.max(shortest, (L - (count - 1) * least) / count);
+  let thin = 1;
+  if (!whole && count * size + (count - 1) * least > L + 1e-9 && lineWidth > 0) {
+    // (round: dots a width w across, w seen between two - L = 4w past the ends' caps; square: dashes and gaps w - L = 5w)
+    const w = cap > 0 ? L / (2 * count - 2) : L / (2 * count - 1);
+    thin = Math.min(1, w / lineWidth);
+    size = cap > 0 ? 0 : w;
+  }
+  const g = (L - count * size) / (count - 1);
   const out: LineSeg[] = [];
   for (let k = 0; k < count; k++) {
-    const at = k * (dash + g);
-    out.push(seg(at, at + dash));
+    const at = k * (size + g);
+    out.push({ ...seg(at, at + size), widthPx: thin });
   }
   return out;
 }
@@ -2210,22 +2250,38 @@ function waveSteps(amp: number, half: number, zoom: number): number {
  * right going out. The wave is made of quarter turns, as many as fit between
  * the two atoms, so it ends either back on the line or at the top of a turn.
  * Only `start`..`end` of it is drawn, measured from `from`: a label cuts the
- * wave where it is rather than squeezing it into less room.
+ * wave where it is rather than squeezing it into less room - unless fewer
+ * than three half-waves would be seen, when the period shortens (GR-1.3).
  */
 function buildWavySegments(
   from: Vec2,
   to: Vec2,
   start: number,
   end: number,
-  amp: number,
+  styleAmp: number,
   period: number,
   zoom: number,
 ): LineSeg[] {
   const dir = vnorm(vsub(to, from));
   // to the right, going out
   const right = vscale(vperp(dir), -1);
-  const half = period / 2;
+  let amp = styleAmp;
+  let half = period / 2;
   if (!(half > 0)) return [];
+  // (three half-waves at least seen between `start` and `end`, IUPAC GR-1.3: where the style's period gives fewer - a short
+  // bond, or one a label cuts - a shorter period, a whole number of half-waves to the end, the amplitude in proportion)
+  const reach = Math.min(end, vlen(vsub(to, from)));
+  const seen = (h: number) => Math.floor(reach / h + 1e-9) - Math.ceil(start / h - 1e-9);
+  if (reach > start && seen(half) < FEWEST_HASHES) {
+    for (let n = FEWEST_HASHES; n <= 64; n++) {
+      const h = reach / n;
+      if (seen(h) >= FEWEST_HASHES) {
+        amp *= h / half;
+        half = h;
+        break;
+      }
+    }
+  }
   const quarters = Math.floor(vlen(vsub(to, from)) / (half / 2) + 1e-9);
   const last = Math.min(end, (quarters * half) / 2);
   if (!(last > start)) return [];
@@ -3072,7 +3128,7 @@ export function buildBondPrimitives(
       opts.fewestHashes,
       tStart > 0 ? tStart : 0,
     );
-    for (const l of hashes.lines) l.widthPx = lwPx;
+    for (const l of hashes.lines) l.widthPx = lwPx * (l.widthPx || 1);
     lines.push(...hashes.lines);
     polys.push(...hashes.polys);
     return { lines, polys, ends: hashes.ends };
@@ -3092,15 +3148,23 @@ export function buildBondPrimitives(
         : spacing * 0.6;
     const gap =
       opts.dashGapPx != null ? toWorld(opts.dashGapPx, zoom, units) : spacing * 0.4;
-    const dashes = buildDashes(p1, p2, dash, gap);
-    for (const l of dashes) l.widthPx = lwPx;
+    const lw = pxToWorld(lwPx, zoom);
+    const dashes = buildDashes(p1, p2, dash, gap, lw, round ? lw / 2 : 0);
+    for (const l of dashes) l.widthPx = lwPx * (l.widthPx || 1);
     lines.push(...dashes);
     // every dash's ends are free, bar the ones on an atom, whose join sees to
     // them
-    const ends: Vec2[] = [...labelEnds];
+    // (each as round as its line is thick: a squeezed dash's thinner - at a label too)
+    const ends: Vec2[] = labelEnds.map((e) => {
+      const at: FreeEnd = { ...e, share: dashes.length ? dashes[0].widthPx / lwPx : 1 };
+      return at;
+    });
     dashes.forEach((l, i) => {
-      if (i > 0) ends.push({ x: l.x1, y: l.y1 });
-      if (i < dashes.length - 1) ends.push({ x: l.x2, y: l.y2 });
+      const share = l.widthPx / lwPx;
+      const start: FreeEnd = { x: l.x1, y: l.y1, share };
+      const end: FreeEnd = { x: l.x2, y: l.y2, share };
+      if (i > 0) ends.push(start);
+      if (i < dashes.length - 1) ends.push(end);
     });
     return { lines, polys, ends };
   }
@@ -3196,7 +3260,7 @@ export function buildBondPrimitives(
       const count = (h: { lines: unknown[]; polys: unknown[] }) => h.lines.length + h.polys.length;
       const least = Math.max(1, Math.min(count(reaching), opts.fewestHashes ?? 1));
       const hashes = count(stopped) >= least ? stopped : reaching;
-      for (const l of hashes.lines) l.widthPx = lwPx;
+      for (const l of hashes.lines) l.widthPx = lwPx * (l.widthPx || 1);
       lines.push(...hashes.lines);
       polys.push(...hashes.polys);
       return { lines, polys, ends: hashes.ends };
@@ -4112,7 +4176,7 @@ function primitivesOf(
   const colored = (color?: string) => (color ? { color } : {});
   if (roundJoins) {
     for (const m of meets) fills.push({ c: m.at, r: rWorld, ...colored(m.color) });
-    for (const e of freeEnds) fills.push({ c: { x: e.x, y: e.y }, r: rWorld, ...colored(e.color) });
+    for (const e of freeEnds) fills.push({ c: { x: e.x, y: e.y }, r: rWorld * ((e as FreeEnd).share ?? 1), ...colored(e.color) });
     for (const b of bends) fills.push({ c: b.at, r: rWorld, ...colored(b.color) });
   } else {
     const byPoint = new Map<string, { at: Vec2; dirs: Vec2[]; color?: string }>();
