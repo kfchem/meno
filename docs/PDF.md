@@ -537,6 +537,24 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   bonds stop so short of a label, and of nothing else - two methyls'
   ends point apart. A heteroatom's letter faint in a picture, or not
   traced, would otherwise leave its ring open with nothing said.
+- **A small piece beside a structure** (2026-11-26): read from a picture,
+  a piece of two to four atoms, labels and all, none of them charged,
+  within a bond of the box of a larger piece, is unsure and says it may
+  be part of the structure, its bond not read - a joint traced open cuts
+  off a side chain's carbons, a C-N or a C-OH so. A counter-ion is
+  charged or a single atom and is not said; a piece further off is a
+  structure of its own. Nothing is joined or left out: Meno does not
+  claim which bond was lost.
+- **An alkali metal on a carbon** (2026-11-26): read from a picture, Li,
+  Na, K, Rb or Cs with no charge, bonded to a carbon, is unsure and says
+  such a metal is mostly drawn as an ion, and a charge's sign may have
+  been read as a bond (a sodium salt's O- so becomes a carbon). The bond
+  is kept as read - an organolithium is drawn so - and nothing else is
+  claimed.
+- **Two atoms at one place** (2026-11-26): read from a picture, two
+  atoms not bonded to each other and within 0.35 of a bond of each other
+  are both unsure and say they may be one atom, its bonds traced apart -
+  a ring so read gains a carbon, or opens. They are not merged.
 - **A label shown one way and read another**: read from a picture, NC
   with its bond at the N (right of the bond, or upright) is read as a
   nitrile, as NC typed is, and the atom says it may be an isocyanide.
@@ -1513,7 +1531,18 @@ it where it lies out of view.
     through its joints' dots, are two; and a hash's narrow end set off
     from its atom, its first line taken as a joint's or stopping short,
     is carried on to the bond end it points at, under half a bond on -
-    such a hash may be two lines;
+    such a hash may be two lines. Two hashes drawn end to end at an atom,
+    the one's wide end where the next one's narrow end starts, their lines
+    near enough one way to be taken together, are two as well: a hash longer
+    than 1.4 bonds is cut where its lines, growing toward one end, fall
+    under three fifths of the one before at once, and each piece is read as
+    a hash of its own (2026-11-26: such a pair in a cage was read as one
+    hash through its carbon, the ring at that carbon lost, with nothing
+    said); a long hash with no such fall is read as it is. In a picture, a
+    hash's widest line, where it meets the bonds at its atom, may be traced
+    cut short; an end line shorter than the line inside it by more than a
+    line's width, where the lines grow toward that end, is taken as cut, and
+    the line inside it tells that end's width, so the narrow end is still read;
   - a curve that goes to and fro along a line is a wavy bond;
   - a bond broken where another passes in front of it - a line, or a wedge
     (a perspective drawing's near edge is often one) - a bridge's, a
@@ -1521,7 +1550,13 @@ it where it lies out of view.
     short one of its pieces, and its pieces are never a hash's lines; its
     gap may be near half a bond (nine twentieths), as a figure with many
     labels, more of its lines cut short of them than drawn whole, has its
-    bonds read shorter than they are;
+    bonds read shorter than they are. Only a line that passes across the
+    gap breaks it: a line that only ends at one of its ends (within a tenth
+    of a bond, a joint's lines meeting there) meets a bond at an atom and
+    passes across nothing (2026-11-26: in a picture, a bond ending where a
+    double bond ends was carried on into a hash's bar lying on its line,
+    a carbon too many, with nothing said); a line that does pass across
+    still breaks it where a third line ends beside the gap;
   - a ring with a circle drawn in it is given its double bonds, as an
     aromatic ring is;
   - no line drawn wider than 1.2 times the figure's usual letter size -
@@ -1678,7 +1713,7 @@ it where it lies out of view.
   keep theirs), and the atom says so - a level number's place cannot tell a count
   from an atom's number - while one clearly high needs no mark. A level number
   that also reads as a count stays (N3, O3, Me2: a stated limit; CH3 and a
-  level 7 after it are one run, CH37). A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  level 7 after it are one run, CH37). An N2 or N2+ is read by its bonds, never by its letters (IUPAC, glossary of class names, 1995): N2 at the end of ONE double bond to a carbon is a diazo group, =N+=N-, and N2+ at the end of ONE single bond to a carbon a diazonium group, N+ triply bonded to an N - each written out as its atoms (`diazoRead`, lib/figure/structure), so that files and 3D have them; any other N2 - on two bonds or more, on one single bond uncharged - stays unread and marked, as a label is that is not read: a word N2 may land on the atom beneath it, and that atom is a carbon, left as drawn. O2 at a bond's end has no one meaning (a peroxyl radical, dioxygen on a metal, two oxo groups written short) and stays unread and marked; SO2, CO2 and NO2 are as they were, and an N2 with no bond is a word of the conditions, no atom. A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A charge's sign set

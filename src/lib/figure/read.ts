@@ -180,7 +180,18 @@ function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): {
     // at either end, its wide end's too, may be drawn as one)
     const thickest = Math.max(0, ...order.filter((o) => !dot_(o.g)).map((o) => o.g.w));
     const lines = order.filter((o) => !dot_(o.g) && o.g.w >= 0.5 * thickest);
-    const [r0, r1] = lines.length >= 2 ? [lines[0], lines[lines.length - 1]] : [first, last];
+    let [r0, r1] = lines.length >= 2 ? [lines[0], lines[lines.length - 1]] : [first, last];
+    // (a hash's wide-end line, where it meets the bonds at its atom in a picture traced, may come out cut short - its ink run into
+    // theirs - so that both end lines look alike: an end line shorter than the line inside it by more than a line's width (a line's
+    // length is told to within its round ends, a width), where the lines inside grow toward that end, is such a cut line - the one
+    // inside tells the end's width; a hash of even lines stays even, its other end as long as that one)
+    if (lines.length >= 4) {
+      const n = lines.length;
+      const ls = lines.map((o) => len(o.g));
+      const cut = (end: number, inner: number, far: number) => ls[end] < ls[inner] - Math.max(lines[end].g.w, lines[inner].g.w) && ls[inner] > ls[far];
+      if (cut(n - 1, n - 2, 1)) r1 = lines[n - 2];
+      else if (cut(0, 1, n - 2)) r0 = lines[1];
+    }
     const l0 = len(r0.g);
     const l1 = len(r1.g);
     let [a, b] = [at(first.t - step / 2), at(last.t + step / 2)];
@@ -191,6 +202,58 @@ function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): {
     groups.push(order.map((o) => o.g));
   }
   return { hashes, used, groups };
+}
+
+/** How long a hash may be, in bonds, before it is looked at as two drawn end to end: a hash is one bond, drawn no longer than the rest. */
+const HASH_LONGEST = 1.4;
+
+/**
+ * Two hashes drawn end to end at an atom - the one's wide end where the next one's narrow end starts, their bars near enough one way
+ * that `hashesOf` groups them as one - parted again: a hash longer than `HASH_LONGEST` bonds is cut where its bars, growing toward
+ * one end, fall short again at once (the next hash's narrow end), each piece read as a hash of its own. A long hash with no such
+ * fall is left as it is read.
+ */
+function hashesApart(found: { hashes: Drawn[]; used: Set<Stroke>; groups: Stroke[][] }, bond: number, filled: ReadonlySet<Stroke>): { hashes: Drawn[]; used: Set<Stroke>; groups: Stroke[][] } {
+  const hashes: Drawn[] = [];
+  const groups: Stroke[][] = [];
+  found.groups.forEach((g, i) => {
+    const h = found.hashes[i];
+    const lines = g.filter((s) => !dotOf(s, filled));
+    if (dist(h.a, h.b) <= HASH_LONGEST * bond || lines.length < 4) {
+      hashes.push(h);
+      groups.push(g);
+      return;
+    }
+    // (the strokes in order along the hash: the fall - a bar under three fifths of the one before it, both ways along - with two lines at least on each side)
+    const ls = g.map((s) => (dotOf(s, filled) ? 0 : len(s)));
+    const most = Math.max(...ls);
+    let cut = -1;
+    let fall = 0.4 * most;
+    for (let k = 2; k <= g.length - 2; k++) {
+      const [before, after] = [g.slice(0, k), g.slice(k)];
+      if (before.filter((s) => !dotOf(s, filled)).length < 2 || after.filter((s) => !dotOf(s, filled)).length < 2) continue;
+      // (growing toward the cut and falling after it, or the mirror: the next hash's narrow end beside this one's wide end)
+      const drop = Math.max(ls[k - 1] - ls[k], ls[k] - ls[k - 1]);
+      const up = ls[k - 1] >= ls[k] ? ls[k - 2] <= ls[k - 1] && ls[k] < 0.6 * ls[k - 1] : ls[k + 1] <= ls[k] && ls[k - 1] < 0.6 * ls[k];
+      if (up && drop > fall) [cut, fall] = [k, drop];
+    }
+    if (cut < 0) {
+      hashes.push(h);
+      groups.push(g);
+      return;
+    }
+    const parts = [g.slice(0, cut), g.slice(cut)].map((p) => hashesOf(p, bond, filled));
+    if (parts.some((p) => p.hashes.length !== 1 || p.used.size !== p.groups[0].length)) {
+      hashes.push(h);
+      groups.push(g);
+      return;
+    }
+    for (const p of parts) {
+      hashes.push(p.hashes[0]);
+      groups.push(p.groups[0]);
+    }
+  });
+  return { hashes, used: found.used, groups };
 }
 
 /**
@@ -554,6 +617,8 @@ export function labelParts(w: Word, reads: LabelReads = () => true): { text: str
   for (const r of runs) {
     if (r.high) continue;
     const without = new Set([...left, ...places(r)]);
+    // (an N2 or N2+ is read by its bonds, not by its letters or its place: a diazo or diazonium group where they say so, else an N and its number - `diazoRead`, ./structure)
+    if (/^N2\+?$/.test(typed(w, base, left))) continue;
     if (!reads(typed(w, base, left)) && reads(typed(w, base, without))) {
       for (const k of places(r)) left.add(k);
       taken = true;
@@ -1268,7 +1333,7 @@ function readOnce(drawn: FigureDrawn, reads: (label: string) => boolean, known: 
   const short = [...shapes.strokes.filter((s) => len(s) < 0.45 * bond && (len(s) > Math.min(0.04 * bond, 1.5 * s.w) || len(s) < s.w)), ...bits];
   // (a line's piece, broken where another passes in front of it - a double bond's by a bridge - is no hash's line)
   const brokenPiece = new Set(short.filter((s) => shapes.strokes.some((t) => t !== s && brokenAcross(s, t, shapes.strokes, bond))));
-  const { hashes: hashed, used: inHashes, groups: hashGroups } = hashesOf(short.filter((s) => !brokenPiece.has(s)), bond, new Set(bits));
+  const { hashes: hashed, used: inHashes, groups: hashGroups } = hashesApart(hashesOf(short.filter((s) => !brokenPiece.has(s)), bond, new Set(bits)), bond, new Set(bits));
   // letters drawn as shapes, where the figure has none written there: read from their shapes
   const inLetters = new Set<object>();
   const fromShapes = known.length
@@ -2049,8 +2114,12 @@ function brokenAcross(s: Stroke, t: Stroke, all: readonly Stroke[], bond: number
   if (gap < 0.05 * bond || gap > 0.45 * bond) return null;
   // (it must lie between them, not past one: the far ends further apart than the near ones)
   if (dist(far0, far1) < dist(near0, near1) + len(s) + len(t) - 0.01 * bond) return null;
+  // (a line passing in front crosses the gap; a line that only ENDS at one of its ends - a bond meeting another at an atom - does not
+  // pass across it, though it touches the gap there: it is no sign of a line cut short, and a line that does cross the gap still is.
+  // Within a tenth of a bond is at that end: a couple of lines' widths, as near as bonds drawn to one atom meet)
   const m = mid(near0, near1);
-  return [...all.filter((o) => o !== s && o !== t), ...front].some((o) => segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
+  const endsAt = (o: { a: Point; b: Point }) => [near0, near1].some((p) => dist(o.a, p) < 0.1 * bond || dist(o.b, p) < 0.1 * bond);
+  return [...all.filter((o) => o !== s && o !== t), ...front].some((o) => !endsAt(o) && segmentsCross(o.a, o.b, near0, near1, m)) ? { a: far0, b: far1 } : null;
 }
 
 /** Whether a line passes across the gap between two points, near its middle. */
