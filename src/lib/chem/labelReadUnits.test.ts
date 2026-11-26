@@ -178,3 +178,13 @@ describe("a typed label is drawn in the units it is read in", () => {
   });
 });
 
+
+// Both rules at a left end together: a label of element symbols alone that is one name read otherwise bonded is turned symbol by
+// symbol, its bonded symbol at the bond, and a prefix is never turned away from its group.
+describe("a pseudohalide and a prefixed phosphine at a left end, together", () => {
+  it("NCS is SCN and SCN is NCS, the bonded symbol on the bond; P(o-Tol)3 is (o-Tol)3P, P on the bond", () => {
+    expect(drawn("NCS", true)).toEqual({ text: "SCN", atom: "N" });
+    expect(drawn("SCN", true)).toEqual({ text: "NCS", atom: "S" });
+    expect(drawn("P(o-Tol)3", true)).toEqual({ text: "(o-Tol)3P", atom: "P" });
+  });
+});
