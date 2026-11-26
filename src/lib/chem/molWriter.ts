@@ -1,6 +1,6 @@
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
-import { abbreviationOf } from "./abbreviations";
+import { abbreviationOf, abbreviationStructure } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import { COORDINATION_BOND, type AbbreviationStructure, type AtomChem, type BondChem, type SgroupMark } from "./molecule";
 import { ladderElement, mostBonds, valenceCounts, valenceOrder, type Radical } from "./perception/hydrogens";
@@ -11,7 +11,7 @@ import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
 import { isMetal } from "../layout/perceive";
-import { coordinatedByDonors } from "./perception/elements";
+import { coordinatedByDonors, takesLentPair, takesPairGroup13 } from "./perception/elements";
 import { boundLigandStructure } from "./boundLigand";
 import { atomParities } from "./ctfileParity";
 
@@ -202,6 +202,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
     // the bonds out, to the atoms it is attached by, in order - haptic
     // where that is a pi system's star
     touching.forEach((b, k) => {
+      const other = byId.get(b.a === a.id ? b.b : b.a);
       const at = structure.attach[k] ?? head;
       const to = ids[at];
       if (b.a === a.id) b.a = to;
@@ -209,8 +210,8 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
       if (b.narrow === a.id) b.narrow = to;
       const pi = structure.haptic?.find((h) => h.star === at);
       if (pi) Object.assign(b, { endpoints: pi.atoms.map((e) => ids[e]), attach: "all", coordination: true });
-      // (a donor that lends its pair: a coordination bond)
-      else if (structure.lends?.[k] && !b.dative) Object.assign(b, { coordination: true });
+      // (a donor that lends its pair to an atom that takes one: a coordination bond; to any other, the bond as drawn)
+      else if (structure.lends?.[k] && !b.dative && takesLabelPair(other)) Object.assign(b, { coordination: true });
     });
     // (a ligand bound through more pi systems than it is drawn with bonds - cod, nbd: two C=C - bonded to a metal by one:
     // bound through each of them all the same, to that metal, a star left with no bond being no atom of anything)
@@ -262,7 +263,7 @@ export function overBonded(model: WriterModel): Set<number> {
     ]) {
       // (a bond lent between two non-metals counts at the end it is lent to - C->O gives the O a third - but a boron's, an
       // aluminium's, which take a pair: H3N->BH3)
-      const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "") && ELEMENT_SYMBOLS.has(byId.get(other)?.el ?? "");
+      const lent = (b.dative || b.coordination) && !metal && end === b.b && !takesPairGroup13.has(byId.get(end)?.el ?? "") && ELEMENT_SYMBOLS.has(byId.get(other)?.el ?? "");
       add(sums, end, lent ? b.order : valenceOrder(b, byId.get(end)?.el));
       if (metalCounted(byId.get(other)?.el ?? "")) byMetal.add(end);
       const el = byId.get(end)?.el ?? "";
@@ -285,8 +286,20 @@ export function overBonded(model: WriterModel): Set<number> {
   return over;
 }
 
+/**
+ * Whether the atom at the other end of a ligand label's bond takes the pair the label lends (./perception/elements `takesLentPair`): an
+ * element's atom by its element, a label by the atom it is attached by (PdCl2's Pd, Et's C). One that says no element - M, a star, any
+ * other text - is taken to, as a metal's place is.
+ */
+export function takesLabelPair(atom: { el: string; abbrev?: AbbreviationStructure } | undefined): boolean {
+  if (!atom) return true;
+  if (ELEMENT_SYMBOLS.has(atom.el) && !atom.abbrev) return takesLentPair(atom.el);
+  const s = atom.abbrev ?? abbreviationStructure(atom.el);
+  const head = s?.atoms[s.attach[0] ?? -1]?.el;
+  return head == null || takesLentPair(head);
+}
+
 const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
-const TAKE_A_PAIR = new Set(["B", "Al", "Ga", "In"]);
 const IODINE_TAKES = ["O", "F", "Cl", "Br", "I", "C"];
 
 /** An Sgroup to write: its type, its atoms by id, and what the file says of it. */

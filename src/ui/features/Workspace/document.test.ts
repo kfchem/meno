@@ -352,6 +352,20 @@ describe("an abbreviation", () => {
     return { d, c, o };
   };
 
+  it("that is a ligand is drawn out bonded as it was: by a coordination bond to a metal, by the bond drawn to a carbon", () => {
+    const outOf = (el: string) => {
+      let d = emptyWorkspaceDocument();
+      d = ops.addAtom(d, 0, 0, el);
+      d = ops.addAtom(d, L, 0, "PPh3");
+      const [m, p] = d.model.atoms.map((a) => a.id);
+      d = ops.addBond(d, m, p, 1);
+      return ops.expandAbbreviation(d, p).model.bonds.find((b) => b.a === m || b.b === m);
+    };
+    expect(outOf("Pd")).toMatchObject({ order: 1, coordination: true });
+    expect(outOf("C")).toMatchObject({ order: 1 });
+    expect(outOf("C")?.coordination).toBeUndefined();
+  });
+
   it("is drawn out as the dictionary has it, on from its bond", () => {
     const { d, c, o } = withOMe();
     const out = ops.expandAbbreviation(d, o);

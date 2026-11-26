@@ -13,6 +13,7 @@ import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
 import { placedAbbreviation, placedStructure } from "../../../lib/chem/abbreviationPlace";
 import type { GroupStructure } from "../../../lib/chem/ligands";
 import { isElementSymbol } from "../../../lib/roles/molblock";
+import { takesLabelPair } from "../../../lib/chem/molWriter";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
@@ -817,10 +818,12 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
     const to = ids[at];
     const moved = { ...(b.a === id ? { ...b, a: to } : { ...b, b: to }), ...(b.narrow === id ? { narrow: to } : {}) };
     // to a pi system's star: a haptic bond, to all its atoms; to a donor
-    // that lends its pair, a coordination bond (drawn as it was)
+    // that lends its pair to an atom that takes one, a coordination bond
+    // (drawn as it was); to any other atom, the bond as drawn
     const pi = s.haptic?.find((h) => h.star === at);
     if (pi) return { ...moved, endpoints: pi.atoms.map((e) => ids[e]), attach: "all" as const, coordination: true };
-    return s.lends?.[k] && !moved.dative ? { ...moved, coordination: true } : moved;
+    const other = atoms.find((x) => x.id === (b.a === id ? b.b : b.a));
+    return s.lends?.[k] && !moved.dative && takesLabelPair(other) ? { ...moved, coordination: true } : moved;
   });
   for (const b of s.bonds) {
     nextBonds.push({
