@@ -8,7 +8,7 @@
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf, waysOf } from "../../utils/xyzEnergies";
 import { MENO_XYZ_ENERGY, xyzFrameName } from "../chem/xyzWriter";
-import { SD_CHARGE, SD_ENERGY, SD_MULTIPLICITY, speciesProblem } from "./writers";
+import { SD_CAPTION, SD_CHARGE, SD_ENERGY, SD_MULTIPLICITY, speciesProblem } from "./writers";
 import { xyzEnergies, xyzSteps } from "./kinds";
 import { xyzStepsFile } from "../plugins/manifest";
 import type { Unmarked } from "../calc/output";
@@ -56,6 +56,8 @@ export type FileMolecule3D = {
   noEntryWhy?: Unmarked;
   /** The charge and spin multiplicity its record's data items give it (`SD_CHARGE`, `SD_MULTIPLICITY`), as what it was given: each step told them, not what its atoms alone say. */
   calc?: { readers: []; charge?: number; multiplicity?: number };
+  /** The text that belongs to it, its record's `Caption` item (`SD_CAPTION`): words put under it, belonging to it. */
+  caption?: string;
 };
 
 /**
@@ -73,6 +75,8 @@ export type StructureRead = {
   molecules3d?: FileMolecule3D[];
   /** A file's several records drawn flat - an SD file's: each one's atoms in the drawing, by id, and its title where it gives one. */
   records?: { atoms: number[]; title?: string }[];
+  /** The text that belongs to a structure drawn flat - an SD record's `Caption` item (`SD_CAPTION`) - with its atoms, by id; of a file of one structure a record, not of a stack's. */
+  captions?: { atoms: number[]; text: string }[];
   /**
    * The records of an SD file left out as it was read - cut short, damaged,
    * or saying what Meno cannot read - each by its number among them, from
@@ -122,6 +126,18 @@ function sdDataItems(text: string): Map<string, string[][]>[] {
       }
       return items;
     });
+}
+
+/**
+ * A record's `Caption` item (`SD_CAPTION`) as the text it holds: its
+ * lines as Meno writes them back - a line of one space a blank one, one
+ * held off ">" or "$$$$" by a space without it - none where it holds none.
+ */
+function captionItem(items: Map<string, string[][]> | undefined): string | null {
+  const given = items?.get(SD_CAPTION)?.[0];
+  if (!given) return null;
+  const text = given.map((l) => (l === " " ? "" : /^ (>|\${4})/.test(l) ? l.slice(1) : l)).join("\n").trim();
+  return text || null;
 }
 
 /** A charge as it is said: its sign always. */
@@ -382,7 +398,8 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     const notTaken = (item: string, why: string) => itemsNotTaken.push({ record: i + 1, item, why });
     const energy = energyItem(items[i], notTaken);
     const species = speciesItems(items[i], m.atoms, notTaken);
-    return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}), ...energy, ...species };
+    const caption = captionItem(items[i]);
+    return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}), ...energy, ...species, ...(caption ? { caption } : {}) };
   });
   if (itemsNotTaken.length) Object.assign(leftOut, { itemsNotTaken });
   const flat = good.filter((i) => !inDepth(i)).map((i) => molecules[i]);
@@ -395,7 +412,13 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   if (!model.atoms.length) throw noMolecules(name);
   // (several records with atoms: each one's atoms and title, for a stack of them)
   const held = records.filter((r) => r.atoms.length);
-  return { model, centroid, ...(held.length > 1 ? { records: held } : {}), ...(molecules3d.length ? { molecules3d } : {}), ...leftOut };
+  // (a record's text with its structure - each record a structure of its own on the page, not a stack's)
+  const flatAt = good.filter((i) => !inDepth(i));
+  const captions = held.length > 1 ? [] : records.flatMap((r, j) => {
+    const text = r.atoms.length ? captionItem(items[flatAt[j]]) : null;
+    return text ? [{ atoms: r.atoms, text }] : [];
+  });
+  return { model, centroid, ...(held.length > 1 ? { records: held } : {}), ...(captions.length ? { captions } : {}), ...(molecules3d.length ? { molecules3d } : {}), ...leftOut };
 }
 
 /**

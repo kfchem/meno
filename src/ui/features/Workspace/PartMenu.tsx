@@ -266,6 +266,8 @@ export default function PartMenu({
   onEditLabel,
   onArrowStyle,
   onEditText,
+  onAddText,
+  onFreeText,
   onShowSource,
   onFitWords,
   captionAlign,
@@ -358,6 +360,10 @@ export default function PartMenu({
   onArrowStyle: () => void;
   /** The words right-clicked, written anew. */
   onEditText: () => void;
+  /** Text put under the structure right-clicked - a drawing or a molecule in 3D - belonging to it, the caret in it (docs/EDITOR-2D.md, *Text*); none where it has its text already. */
+  onAddText?: () => void;
+  /** The words right-clicked, belonging to a structure, made free of it: free text where they are. */
+  onFreeText?: () => void;
   /** Words taken out of a PDF: where they came from shown, marked, in the column. */
   onShowSource?: () => void;
   /** Words made as wide as something: as wide as their words again, a line for each line typed. */
@@ -812,6 +818,7 @@ export default function PartMenu({
           { name: "Copy", keys: keys ? shortcut("C") : "", run: molecule3d.onCopy, icon: MENU_ICONS.copy },
           ...moleculeRow,
           del("Delete molecule", keys),
+          ...(onAddText ? [{ name: "Add text", keys: "", run: onAddText }] : []),
           ...stereoItem,
           ...moleculeList,
           // (rendered, by a plugin added that renders)
@@ -878,6 +885,7 @@ export default function PartMenu({
       : target.kind === "caption"
       ? [
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
+          ...(onFreeText ? [{ name: "Free from its structure", keys: "", run: onFreeText }] : []),
           ...(words
             ? [
                 { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
@@ -1131,6 +1139,7 @@ export default function PartMenu({
           ...partsItems,
           ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
+          ...(onAddText && !wholeSel ? [{ name: "Add text", keys: "", run: onAddText }] : []),
           ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
           ...stackItem,
           ...magnifyItems,

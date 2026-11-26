@@ -295,6 +295,8 @@ import { emptyPageLineShown, pageHoldsNothing, thingInHand } from "./utils/empty
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
+import { drawnStructureBox, framesChipRoom, tiedCaptionOf } from "./utils/tiedCaptions";
+import type { CaptionOf } from "./store/types";
 import { shownWith } from "./utils/viewShow";
 
 function WorkspaceContent({
@@ -2535,6 +2537,36 @@ function WorkspaceContent({
             const c = store.getState().captions.find((x) => x.id === menu.id);
             if (c) store.getState().setCaptionEdit({ id: c.id, at: { x: c.x, y: c.y } });
           }}
+          onAddText={(() => {
+            // (text under the structure right-clicked, belonging to it, the caret in it - none where it has its text already: utils/tiedCaptions)
+            const st = store.getState();
+            const at = menu.kind === "molecule3d" ? null : menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            const of: CaptionOf | null = menu.kind === "molecule3d" && menu.id != null ? { molecule: menu.id as number } : at != null ? { atom: at } : null;
+            if (!of || tiedCaptionOf(st, of)) return undefined;
+            return () => {
+              const now = store.getState();
+              const cam = camRef.current;
+              const none = new Set<number>();
+              // (a drawing's: the box its text keeps its place against as it changes - utils/tiedCaptions)
+              const b =
+                "atom" in of
+                  ? drawnStructureBox(now.model, fragmentOf(now.model, of.atom), now.docStyle)
+                  : selectedBox(
+                      { ...now, sel: { atoms: none, bonds: none }, sel3d: new Set([of.molecule]), selCaptions: none, selArrows: none, selPluses: none, selPictures: none, selPdfs: none, selTexts: none, selSlides: none, selShapes: none, selInks: none, captions: [], arrows: [], pluses: [] },
+                      style,
+                      (cam as { zoom?: number } | null)?.zoom ?? 1,
+                      cam ? eyeOf(cam)?.z : undefined,
+                    );
+              if (!b) return;
+              // (its middle across, a line's height under it - a molecule in 3D's under its frames chip, which is part of it as drawn)
+              const m3 = "molecule" in of ? now.molecules3d.find((x) => x.id === of.molecule) : undefined;
+              now.setCaptionEdit({ id: null, at: { x: (b.x0 + b.x1) / 2, y: b.y0 - (m3 ? framesChipRoom(m3) : 0) - layoutOpts.fontPx }, of });
+            };
+          })()}
+          onFreeText={(() => {
+            const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
+            return c?.of ? () => store.getState().freeCaption(c.id) : undefined;
+          })()}
           onCopyPicture={menu.kind === "picture" && menu.id != null && store.getState().pictures.find((x) => x.id === menu.id)?.media !== "video/mp4" ? () => void clip.copyPicture(menu.id!) : undefined}
           picture={(() => {
             const p = menu.kind === "picture" ? store.getState().pictures.find((x) => x.id === menu.id) : undefined;

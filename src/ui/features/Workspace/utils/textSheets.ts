@@ -14,6 +14,7 @@ import { readMarkdown } from "../../../../lib/text/markdown";
 import { layOut, PAD_FOOT, PAD_X, type Laid } from "../../TextEditor/markdownLayout";
 import { measureText, typeVersion } from "../../TextEditor/markdownType";
 import { FONT_PX } from "../../TextEditor/linePictures";
+import { pageLength } from "./pageScale";
 
 /** The type on a sheet: its size, and a line's, in points; how wide a letter is, as a share of the size (IBM Plex Mono's 600 units in 1000). */
 export const SHEET_TYPE_PT = 9;
@@ -160,6 +161,36 @@ export function drawnSheetBox(t: { at?: { x: number; y: number }; text: string; 
   if (!t.at) return null;
   const s = sheetOfText(t);
   return sheetBoxAt(t.at, s, t.icon ? iconScaleOf(s, scaleOf(t)) : 1);
+}
+
+/**
+ * A sheet's name under it, full size (components/TextSheets2D): its type and
+ * its gap under the sheet in page pixels - as large on the page at every
+ * zoom, as all on it - and as wide as the sheet, or this many page pixels
+ * where that is less.
+ */
+const SHEET_NAME_PX = 12;
+const SHEET_NAME_GAP_PX = 14;
+const SHEET_NAME_LEAST_PX = 120;
+
+/**
+ * A full-size sheet's name under its drawn box `b`, in world units, the same
+ * at every zoom: its type's size, its gap under the sheet and how wide it
+ * may be - as components/TextSheets2D draws it - and the room it takes
+ * there (`room`): from the sheet's foot, its gap and a line of its type
+ * down; from the sheet's left, as wide as it may be. The built document's
+ * layout counts that room (scripts/document/build).
+ */
+export function sheetNameRoom(b: { x0: number; x1: number; y0: number }): {
+  size: number;
+  gap: number;
+  width: number;
+  room: { x0: number; x1: number; y0: number; y1: number };
+} {
+  const size = pageLength(SHEET_NAME_PX);
+  const gap = pageLength(SHEET_NAME_GAP_PX);
+  const width = Math.max(pageLength(SHEET_NAME_LEAST_PX), b.x1 - b.x0);
+  return { size, gap, width, room: { x0: b.x0, x1: b.x0 + width, y0: b.y0 - gap - 1.2 * size, y1: b.y0 } };
 }
 
 /** The room a sheet takes on the page: as it is drawn, and made an icon, its name's under it too - as a PDF's (lib/pdf/layout `pdfRoom`). */

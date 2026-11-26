@@ -8,7 +8,7 @@ import { useTypefaces } from "../../../fonts/typefaces";
 import { selectedOf } from "../store/slices/selectionSlice";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { COLORS } from "../../../theme/colors";
-import { TAU, follow } from "../../../theme/motion";
+import { TAU, easeOut, follow } from "../../../theme/motion";
 import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { Caption } from "../store/types";
@@ -16,6 +16,9 @@ import { guideMove, guideWidth } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
+import { GLIDE_MS } from "./DrawnLayout";
+import { pressHeld } from "./pressHeld";
+import { markGlideStep, type MarkGlides } from "../utils/markGlide";
 import { arrowsBeside } from "./drawnArrows";
 import { type Held } from "./held";
 import { HeldGlow } from "./HeldLight";
@@ -73,15 +76,41 @@ export default function Captions2D() {
   const hovered = useEditor((s) => s.hoveredCaption);
   const { opts } = useDrawnLayout();
   const set = useMemo(() => labelSetOf(opts), [opts]);
-  // (each caption's work at each frame done from this one callback: partFrames)
+  // (words that belong to a structure travel as it eases to a new place - an undo, a redo, a clean-up - on its curve and in its time,
+  //  rather than arrive at once; with a button held - dragged, turned by the handle - at once, as it is: DrawnLayout, utils/markGlide)
+  const invalidate = useThree((st) => st.invalidate);
+  const glides = useRef<MarkGlides>(new Map());
+  const [glideFrame, setGlideFrame] = useState(0);
+  const tied = useMemo(() => captions.filter((c) => c.of).map((c) => ({ key: String(c.id), id: c.id, x: c.x, y: c.y })), [captions]);
+  const glided = useMemo(
+    () => markGlideStep(glides.current, tied, performance.now(), pressHeld, GLIDE_MS, easeOut),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- glideFrame: a frame of the way there, drawn again
+    [tied, glideFrame],
+  );
+  // (each caption's work at each frame done from this one callback: partFrames - and, while words are on their way, theirs)
   const parts = usePartFrames();
+  const onTheWay = useCallback(() => {
+    setGlideFrame((n) => n + 1);
+    invalidate();
+  }, [invalidate]);
+  useEffect(() => {
+    if (!glided.moving) return;
+    parts.add(onTheWay);
+    invalidate();
+    return () => void parts.delete(onTheWay);
+  }, [glided.moving, parts, onTheWay, invalidate]);
+  const drawnAt = useMemo(() => new Map(glided.marks.map((m) => [m.id, m])), [glided]);
+  const shownOf = (c: Caption): Caption => {
+    const m = drawnAt.get(c.id);
+    return m && (m.x !== c.x || m.y !== c.y) ? { ...c, x: m.x, y: m.y } : c;
+  };
   return (
     <PartFramesProvider value={parts}>
       <group>
         {captions
           .filter((c) => c.id !== hidden && c.id !== landing)
           .map((c) => (
-            <CaptionWords key={c.id} c={c} set={set} selected={selCaptions.has(c.id)} hovered={hovered === c.id} />
+            <CaptionWords key={c.id} c={shownOf(c)} set={set} selected={selCaptions.has(c.id)} hovered={hovered === c.id} />
           ))}
       </group>
     </PartFramesProvider>
@@ -264,7 +293,8 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
           const r = wordsSet(o, opts, labelSetOf(opts));
           return { ...o, halfW: r.halfW, halfH: r.halfH };
         });
-      const placed = captionPlace(q, { w: halfW, h: halfH }, arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
+      // (words that belong to a structure stay its, put down near an arrow or not)
+      const placed = captionPlace(q, { w: halfW, h: halfH }, c.of ? [] : arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
       s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null }, gesture);
     };
     window.addEventListener("pointermove", onMove);

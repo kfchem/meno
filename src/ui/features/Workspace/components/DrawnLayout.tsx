@@ -22,6 +22,7 @@ import { CHAIN_EASE } from "../constants";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut, frameClock } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
+import { pressHeld } from "./pressHeld";
 import { nearZoom, SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
 import { starsAtTheirAtoms } from "../chem/eta";
 import { nextWriteStep, writeMoving, writingAt, writtenLetters, type WriteStep } from "../utils/writtenLetters";
@@ -39,16 +40,7 @@ const FOLLOWED = 0.35 * NOMINAL_BOND_LENGTH;
 /** Close enough to where it is going to be drawn there. */
 const ARRIVED = 1e-3;
 /** How long the drawing takes to get where it is going, in ms. */
-const GLIDE_MS = DURATION.move * 1000;
-
-/** Whether a pointer button is held anywhere in the window, for what moves the drawing as it is. */
-const held = { buttons: 0 };
-if (typeof window !== "undefined") {
-  const note = (e: PointerEvent) => (held.buttons = e.buttons);
-  window.addEventListener("pointerdown", note, true);
-  window.addEventListener("pointerup", note, true);
-  window.addEventListener("pointercancel", () => (held.buttons = 0), true);
-}
+export const GLIDE_MS = DURATION.move * 1000;
 
 /** Whether `atoms` are those of `ids`, in that order. */
 function sameIds(ids: readonly number[], atoms: readonly { id: number }[]): boolean {
@@ -259,8 +251,8 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
         if (shift === undefined) shift = { dx, dy };
         else if (Math.hypot(dx - shift.dx, dy - shift.dy) > ARRIVED) shift = null;
       }
-      const carried = held.buttons !== 0 && shift != null;
-      const atOnce = carried || (!glide.current && (far <= ARRIVED || (held.buttons !== 0 && far <= FOLLOWED)));
+      const carried = pressHeld() && shift != null;
+      const atOnce = carried || (!glide.current && (far <= ARRIVED || (pressHeld() && far <= FOLLOWED)));
       if (atOnce) {
         glide.current = null;
       } else {

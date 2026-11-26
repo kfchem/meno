@@ -25,7 +25,7 @@ import { marksOf, stylesOf, WORDS_SIZE_RANGE, WORDS_SPACING_RANGE, type WordsMar
 import { isBox, moved as shapeMoved, roundedBeforePt, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
-import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Arrow, Atom, AtomStack, Bond, Caption, CaptionOf, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
@@ -42,6 +42,7 @@ import type { Style3D } from "../../../../lib/chem/style3d";
 import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
 import { convergedIn, type Converged } from "../workflow/converged";
 import { anyLeftOut, leftOut, noting, readEach } from "./readNotes";
+import { tiedAmong } from "./tiedCaptions";
 
 type Pt = { x: number; y: number };
 
@@ -66,7 +67,11 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
   const pushes = (drawn.pushes ?? []).filter((p) => pushAtoms({ model }, p).every((id) => atoms.has(id)) && [p.from, p.to].every((e) => !("bond" in e) || !!drawnBonds?.has(e.bond)));
   const fills = fillsAmong(drawn.ringFills, atoms);
   const part = { ...partOf(model, atoms), ...(pushes.length ? { pushes } : {}), ...(Object.keys(fills).length ? { ringFills: fills } : {}) };
-  if (!sel.atoms.size) return part;
+  // (words that belong to it go with it, however far from it: utils/tiedCaptions)
+  if (!sel.atoms.size) {
+    const tied = tiedAmong({ model: drawn, captions: drawn.captions }, atoms);
+    return tied.length ? { ...part, captions: tied } : part;
+  }
   const { arrows, pluses, captions } = schemeAmong(drawn, atoms);
   return {
     ...part,
@@ -74,6 +79,15 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
     ...(pluses.length ? { pluses } : {}),
     ...(captions.length ? { captions } : {}),
   };
+}
+
+/** The structure words belong to, as it reads: an atom drawn (`ids`), or a molecule in 3D by its place among those carried - checked once those are read. */
+function ofRead(v: unknown, ids: ReadonlySet<unknown>): { of?: CaptionOf } {
+  const o = v as { atom?: unknown; molecule?: unknown } | null | undefined;
+  if (!o || typeof o !== "object") return {};
+  if (isNum(o.atom) && ids.has(o.atom)) return { of: { atom: o.atom } };
+  if (isNum(o.molecule)) return { of: { molecule: o.molecule } };
+  return {};
 }
 
 /** Where words taken out of a PDF came from, as far as it reads: its SHA-256, and two places in it. */
@@ -91,7 +105,8 @@ function wordsFromOf(v: unknown): WordsFrom | null {
 /**
  * The arrows, "+" signs and words drawn among the atoms `ids`: within half
  * a bond of the box round them, an arrow from end to end, words by their
- * middle - or over an arrow that is. What goes with a selection that is
+ * middle - or over an arrow that is - and words that belong to a
+ * structure all of whose atoms are among them. What goes with a selection that is
  * copied, cut, deleted or moved.
  */
 export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; pluses: Plus[]; captions: Caption[] } {
@@ -110,10 +125,12 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
   // (its ends and the corners it turns at, all of them)
   const arrows = (drawn.arrows ?? []).filter((a) => arrowPoints(a).every(within));
   const taken = new Set(arrows.map((a) => a.id));
+  // (and words that belong to a structure taken whole, however far - free words only by where they are)
+  const tied = new Set(tiedAmong({ model: drawn, captions: drawn.captions }, ids).map((c) => c.id));
   return {
     arrows,
     pluses: (drawn.pluses ?? []).filter(within),
-    captions: (drawn.captions ?? []).filter((c) => within(c) || (c.arrow != null && taken.has(c.arrow))),
+    captions: (drawn.captions ?? []).filter((c) => tied.has(c.id) || (!c.of && within(c)) || (c.arrow != null && taken.has(c.arrow))),
   };
 }
 
@@ -356,7 +373,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
         x: c.x,
         y: c.y,
         text: c.text,
-        ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : {}),
+        ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : ofRead(c.of, ids)),
         ...(isNum(c.width) && c.width > 0 ? { width: c.width } : {}),
         ...(c.align === "left" || c.align === "right" || c.align === "justify" ? { align: c.align } : {}),
         ...(from ? { from } : {}),
@@ -373,6 +390,13 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     );
   }, "caption");
   const molecules3d = readEach(r.molecules3d, readCarried3D, "molecule3d");
+  // (words that belong to a molecule in 3D - by its place among those it carries - not there are free)
+  for (const [i, c] of captions.entries()) {
+    if (c.of && "molecule" in c.of && !(Number.isInteger(c.of.molecule) && c.of.molecule >= 0 && c.of.molecule < molecules3d.length)) {
+      const { of: _of, ...free } = c;
+      captions[i] = free;
+    }
+  }
   // (a workflow's parts, read as a workspace's are - what they did is a step's own, not a copy's)
   const read = r.flow ? readWorkflow(r.flow) : undefined;
   const flow = read ? { ...read, steps: read.steps.map(({ ran: _r, runs: _k, running: _g, ...s }) => s) } : undefined;

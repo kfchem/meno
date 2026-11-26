@@ -292,6 +292,12 @@ export type Caption = {
   y: number;
   text: string;
   arrow?: number;
+  /**
+   * The structure it belongs to (docs/EDITOR-2D.md, *Text*): a drawing's,
+   * by one of its atoms, or a molecule in 3D - moved, turned, copied and
+   * deleted with it. Never over an arrow as well.
+   */
+  of?: CaptionOf;
   width?: number;
   align?: "left" | "right" | "justify";
   from?: WordsFrom;
@@ -311,7 +317,11 @@ export type Caption = {
  * spacing of their own or the labels' (`size`, `font`, `lines` null),
  * their letters marked otherwise (`marks`, none for plain).
  */
+/** The structure words belong to: a drawing's, by one of its atoms; or a molecule in 3D. */
+export type CaptionOf = { atom: number } | { molecule: number };
 export type CaptionPatch = {
+  /** Belonging to a structure, or (null) to none: free. */
+  of?: CaptionOf | null;
   text?: string;
   x?: number;
   y?: number;
@@ -1817,7 +1827,7 @@ export type EditorState = {
    * words opened it: the caret put there - and a drag (`drag`) selecting on
    * from there - as if it had pressed there among them.
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
@@ -1839,7 +1849,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; of?: CaptionOf }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words
@@ -1853,6 +1863,8 @@ export type EditorState = {
   /** Words each given their own patch, one step named `label` (a menu's item reaching the words selected). */
   updateCaptions: (patches: readonly (readonly [number, CaptionPatch])[], label: string) => void;
   removeCaption: (id: number) => void;
+  /** The words `id` made free of the structure they belong to: free words, where they are - one step. */
+  freeCaption: (id: number) => void;
   /** All the letters of the words `ids` in a colour, or (null) in none of their own - a gesture's changes one step. */
   colourWords: (ids: number[], color: string | null, gesture?: string) => void;
   /** All the letters of the words `ids` set bold, in italics, raised or lowered - or, every one of them so already, not. */

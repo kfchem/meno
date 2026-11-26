@@ -88,7 +88,11 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
    - 3D structures and PDFs do not fit in a molfile, so the workspace is
      saved in a file of Meno's own (`.meno`). It holds what the clipboard's
      record holds, and the document's own style and how each 3D molecule
-     is turned and shown. MOL, SDF and RXN stay for exchange.
+     is turned and shown. MOL, SDF and RXN stay for exchange. Text that
+     belongs to a structure (EDITOR-2D.md, *Text*) keeps its tie there
+     and in a copy, `of`: one of its drawing's atoms by id, or a molecule
+     in 3D by its place among the molecules held; a file without it opens
+     with all its text free.
 4. **One canvas, drawn only when needed.**
    - A 3D molecule's turning, with its inertia, requests frames while it
      moves, as panning does.

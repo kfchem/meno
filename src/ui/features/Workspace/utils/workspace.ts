@@ -11,6 +11,7 @@
  * and its pictures.
  */
 import type { Conversation } from "../conversation/types";
+import { tieRenumbered } from "./tiedCaptions";
 import { readConversations } from "../conversation/saved";
 import { carriedDrawing, hiddenInStacks } from "./stacks";
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
@@ -180,7 +181,8 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       ...(Object.keys(fills).length ? { ringFills: fills } : {}),
       arrows: state.arrows,
       pluses: state.pluses,
-      ...(state.captions.length ? { captions: state.captions } : {}),
+      // (words that belong to a molecule in 3D, by its place among them - as a text is of one)
+      ...(state.captions.length ? { captions: state.captions.map((c) => tieRenumbered(c, (id) => id, (id) => { const at = state.molecules3d.findIndex((m) => m.id === id); return at < 0 ? undefined : at; })) } : {}),
       molecules3d,
       ...(state.sets?.length || state.steps?.length ? { sets: savedSets, steps: withKeptJobs(state.steps ?? [], jobs), wires: state.wires ?? [] } : {}),
       ...(state.docStyle ? { style: state.docStyle } : {}),

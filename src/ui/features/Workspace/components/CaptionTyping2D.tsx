@@ -40,6 +40,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
+import { tiedOpened, writtenPlace } from "../utils/tiedCaptions";
 import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
 import { stylesThrough, WordsEditor } from "../utils/wordsEditor";
@@ -118,7 +119,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const laid = captionSet(shownText, 0, 0, fs, ownSet, width, align, shownMarks, lineEms);
   const halfW = Math.max(laid.halfW, fs / 2);
   const halfH = Math.max(laid.halfH, fs / 2);
-  const at = left && caption ? { x: caption.x, y: caption.y } : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
+  // (words that belong to a structure keep their side of its box and the gap to it as they are written - the edge nearest it where it was: utils/tiedCaptions)
+  const [tied] = useState(() => (caption ? tiedOpened({ model: store.getState().model, style: store.getState().docStyle }, caption, opts) : null));
+  const at = left && caption ? { x: caption.x, y: caption.y } : tied ? writtenPlace(tied, { w: laid.halfW, h: laid.halfH }) : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
   const places = captionPlaces(text, at.x, at.y, fs, ownSet, width, align, marks, lineEms);
   const shown = c ? captionPlaces(shownText, at.x, at.y, fs, ownSet, width, align, shownMarks, lineEms) : places;
   // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
@@ -177,8 +180,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
       const sameMarks = JSON.stringify(kept) === JSON.stringify(caption?.marks ?? []);
       if (edit.id == null) {
         if (text.trim()) {
-          const placed = captionPlace(edit.at, half(text), arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
-          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept });
+          // (text that belongs to a structure is over no arrow: where it was opened)
+          const placed = captionPlace(edit.at, half(text), edit.of ? [] : arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
+          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : {}) });
         }
       } else if (!text.trim()) {
         s.removeCaption(edit.id);
@@ -187,7 +191,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
         // (over an arrow: kept clear of it as it grows or shrinks; a box, its top where it was)
         const arrow = caption.arrow != null ? arrowsBeside(s, opts, set, edit.id).find((a) => a.id === caption.arrow) : undefined;
         const placed = arrow ? captionPlace({ x: caption.x, y: caption.y }, half(text), [arrow], opts.fontPx, others) : null;
-        const y = top != null ? { y: top - half(text).h } : {};
+        const y = tied ? writtenPlace(tied, half(text)) : top != null ? { y: top - half(text).h } : {};
         s.updateCaption(edit.id, { text, marks: kept, size: own ?? null, ...(placed ? { x: placed.x, y: placed.y, arrow: placed.arrow ?? null } : y) });
       }
     }
