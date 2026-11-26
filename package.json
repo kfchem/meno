@@ -6,9 +6,9 @@
   "scripts": {
     "postinstall": "node scripts/patch-troika.mjs",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc && tsc -p scripts/depiction/tsconfig.json && tsc -p scripts/fonts/tsconfig.json && tsc -p scripts/layout/tsconfig.json && tsc -p scripts/figure/roundtrip/tsconfig.json && tsc -p scripts/figure/draw/tsconfig.json && tsc -p scripts/figure/still/tsconfig.json && tsc -p scripts/templates/tsconfig.json && tsc -p scripts/document/tsconfig.json",
+    "typecheck": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc && tsc -p scripts/depiction/tsconfig.json && tsc -p scripts/fonts/tsconfig.json && tsc -p scripts/layout/tsconfig.json && tsc -p scripts/figure/roundtrip/tsconfig.json && tsc -p scripts/figure/draw/tsconfig.json && tsc -p scripts/figure/still/tsconfig.json && tsc -p scripts/templates/tsconfig.json && tsc -p scripts/document/tsconfig.json",
     "font-metrics": "tsx scripts/fonts/labelMetrics.ts",
     "lint": "eslint .",
     "test": "vitest run",

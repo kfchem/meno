@@ -56,6 +56,11 @@ fetches it at the release pinned there, checks its SHA-256 and puts it in
 `src-tauri/pdfium/<system>/` - the CI and the release workflow run it
 before building, and a build on a computer of one's own needs it once.
 
+The type check of the whole app needs more memory than Node allows itself
+on a computer with little of it (about 2 GB where there are 8 or fewer):
+`npm run build` and `npm run typecheck` give it 4 GB
+(`--max-old-space-size`), so that a build does not stop there.
+
 1. On a branch: raise the version, the same in both `package.json` and
    `src-tauri/Cargo.toml` (the app takes its version from `package.json`),
    bring the third-party notices up to date (`npm run notices`, see
