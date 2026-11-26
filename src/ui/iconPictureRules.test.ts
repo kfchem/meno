@@ -120,6 +120,28 @@ describe("which icons are shown through their pictures", () => {
   });
 });
 
+describe("hairlines", () => {
+  // (an X as the outline icon set draws it: a 24-unit square, lines 1.5 wide)
+  const x = (size: number, ratio: number, scale?: number): IconLook =>
+    icon([{ ...node("path", { d: "M6 18 18 6M6 6l12 12" }, { strokeWidth: "1.5px" }), scale }], { width: size, height: size, ratio, viewBox: "0 0 24 24" });
+
+  it("leaves an icon whose stroke would be thinner than a little more than a pixel on the screen", () => {
+    expect(whyLive(x(12, 1))).toBe("a stroke thinner than a pixel");
+    expect(whyLive(x(16, 1))).toBe("a stroke thinner than a pixel");
+    expect(whyLive(x(18, 1))).toBeNull();
+    expect(whyLive(x(20, 1))).toBeNull();
+    expect(whyLive(x(12, 2))).toBeNull();
+    expect(whyLive(zigzag())).toBeNull();
+    expect(whyLive({ ...zigzag(), ratio: 1 })).toBeNull();
+  });
+
+  it("reads the element's own scale where it is given (its transforms), and never a shape with no stroke", () => {
+    expect(whyLive(x(20, 1, 0.5))).toBe("a stroke thinner than a pixel");
+    expect(whyLive(x(12, 1, 1))).toBeNull();
+    for (const size of [4, 12, 48]) expect(whyLive(icon([node("path", { d: "M4 16 L15 3.5 L16.5 5 Z" }, { fill: INK, stroke: "none", strokeWidth: "0.1px" })], { width: size, height: size, ratio: 1 }))).toBeNull();
+  });
+});
+
 describe("the clean copy", () => {
   it("is the zigzag at its device pixels, each element's computed paint written in, the ink black", () => {
     const paintAttrs = 'stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="4" stroke-dasharray="none" stroke-dashoffset="0" fill-opacity="1" stroke-opacity="1" fill-rule="nonzero"';

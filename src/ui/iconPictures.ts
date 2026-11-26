@@ -85,7 +85,14 @@ function nodeOf(el: Element): InkNode {
   }
   const t = el.getAttribute("transform");
   if (t !== null) attrs.transform = t;
-  return { tag, attrs, paint: paintOf(getComputedStyle(el)), children: Array.from(el.children, nodeOf) };
+  const node: InkNode = { tag, attrs, paint: paintOf(getComputedStyle(el)), children: Array.from(el.children, nodeOf) };
+  // (one of its units in the svg's CSS px: the viewBox's scale with its own and its groups' transforms, read once as it is looked at)
+  const m = (el as SVGGraphicsElement).getCTM?.();
+  if (m) {
+    const scale = Math.sqrt(Math.abs(m.a * m.d - m.b * m.c));
+    if (Number.isFinite(scale) && scale > 0) node.scale = scale;
+  }
+  return node;
 }
 
 const px = (v: string) => parseFloat(v) || 0;

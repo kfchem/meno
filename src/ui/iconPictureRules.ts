@@ -66,6 +66,8 @@ export interface InkNode {
   attrs: Record<string, string>;
   paint: InkPaint;
   children: InkNode[];
+  /** How many of the svg's CSS px one of the element's own units is (its viewBox's scale and its own and its groups' transforms); where not given, the viewBox's. */
+  scale?: number;
 }
 
 /** An svg as its picture needs it described. */
@@ -93,6 +95,20 @@ export interface IconLook {
   animating: boolean;
   /** The svg itself: its paint and its elements. */
   root: InkNode;
+}
+
+/**
+ * Strokes thinner than this, in device pixels, keep their icon as it is: a
+ * hairline drawn finely spreads its ink over two pixels and reads lighter
+ * than the same line drawn coarsely.
+ */
+export const THINNEST_STROKE = 1.1;
+
+/** The scale from a viewBox's units to the svg's box (as `xMidYMid meet` fits it), or 1. */
+export function viewBoxScale(look: IconLook): number {
+  const v = look.viewBox?.trim().split(/[\s,]+/).map(Number);
+  if (!v || v.length !== 4 || !(v[2] > 0) || !(v[3] > 0)) return 1;
+  return Math.min(look.width / v[2], look.height / v[3]);
 }
 
 /** The elements a picture can be drawn from; any other (text, image, use, foreignObject, defs, style, animate...) leaves the icon as it is. */
@@ -131,7 +147,7 @@ export function inkAlpha(color: string): number {
 }
 
 /** Why a node (not the svg itself) or what is in it keeps the icon as it is, or null. */
-function nodeWhyLive(n: InkNode, ink: string, isRoot: boolean): string | null {
+function nodeWhyLive(n: InkNode, ink: string, isRoot: boolean, fit: number, ratio: number): string | null {
   if (!isRoot && UNDRAWN.has(n.tag)) return null;
   if (!isRoot && !DRAWN.has(n.tag)) return `holds <${n.tag}>`;
   const p = n.paint;
@@ -139,13 +155,14 @@ function nodeWhyLive(n: InkNode, ink: string, isRoot: boolean): string | null {
   const shape = !isRoot && n.tag !== "g";
   if (shape && p.fill !== "none" && p.fill !== ink) return "a second ink";
   if (shape && p.stroke !== "none" && p.stroke !== ink) return "a second ink";
+  if (shape && p.stroke !== "none" && parseFloat(p.strokeWidth) * (n.scale ?? fit) * ratio < THINNEST_STROKE) return "a stroke thinner than a pixel";
   if (p.clipPath !== "none" || p.mask !== "none" || p.filter !== "none") return "a clip, mask or filter";
   if (p.markers !== "none") return "markers";
   if (p.vectorEffect !== "none") return "a vector effect";
   if (p.animationName !== "none") return "an animation";
   if (!isRoot && p.transform !== "none" && !n.attrs.transform) return "a CSS transform";
   for (const c of n.children) {
-    const why = nodeWhyLive(c, ink, false);
+    const why = nodeWhyLive(c, ink, false, fit, ratio);
     if (why) return why;
   }
   return null;
@@ -163,7 +180,7 @@ export function whyLive(look: IconLook): string | null {
   if (inkAlpha(look.color) < 1) return "a translucent ink";
   if (inkAlpha(look.background) > 0 || look.backgroundImage !== "none" || look.maskImage !== "none") return "a background or mask of its own";
   if (look.animating) return "an animation";
-  return nodeWhyLive(look.root, look.color, true);
+  return nodeWhyLive(look.root, look.color, true, viewBoxScale(look), look.ratio);
 }
 
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

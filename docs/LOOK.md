@@ -239,7 +239,9 @@ Each is reachable by keyboard and shows focus with an `accel-base` border.
   everything it does, its ink seen through the picture. An icon is shown
   so only where the picture can be exactly it: no larger than 48 px, on
   whole pixels of the screen, painted in one opaque colour (its own), with
-  no text, image, gradient, clip, filter or animation in it; any other is
+  no text, image, gradient, clip, filter or animation in it, and no line
+  thinner than a little more than a pixel of the screen (a hairline drawn
+  finely spreads over two pixels and reads lighter); any other is
   left as it is, and a place can keep one as it is with `data-live`. As an
   icon changes its picture comes off at once and the new one goes on when
   made; one seen before goes on at once. Where the window draws paths
