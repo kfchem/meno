@@ -85,7 +85,7 @@ describe("a SMILES typed in Quick Add that no plugin here reads", () => {
     expect(first).toEqual({ error: "Needs a plugin: Structures from SMILES, and SMILES from structures.", needs: "smiles" });
     // (the offer's Add: got and set up, then done - Quick Add reads what was typed again: QuickAdd's RoleOffer `done`)
     let again: Awaited<ReturnType<typeof readSmiles>> | undefined;
-    const entry = { id: "rdkit", name: "RDKit" } as CatalogueEntry;
+    const entry = { id: "sketchkit", name: "Sketchkit" } as CatalogueEntry;
     await addOffered(entry, async () => void (again = await readSmiles("CCO", onSmiles)), () => {}, async () => void (added = true));
     await vi.waitFor(() => expect(again).toBeNull());
     expect(onSmiles.mock.calls).toEqual([["CCO"], ["CCO"]]);

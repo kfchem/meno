@@ -4,7 +4,7 @@ import { ensemble } from "./ensemble";
 import { rank } from "./rank";
 import { entry, quantity } from "./testEntries";
 
-const by = { program: "Gaussian", method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" };
+const by = { program: "Orbitron", method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" };
 const g = (v: number, kelvin: number | null = 298.15) => quantity(v, "kcal/mol", by, kelvin == null ? {} : { kelvin, atm: 1 });
 const degeneracy = (n: number): Property => ({ value: n, unit: "none", status: "computed" });
 const aside = (es: { id: string; status: unknown }[]) => es.map((x) => [x.id, (x.status as { aside: string }).aside]);
@@ -31,7 +31,7 @@ describe("Ensemble energy", () => {
     const p = out.exits.done[0].properties.G;
     expect(p.ensemble).toEqual({ of: 2 });
     expect(p.at).toMatchObject({ kelvin: 298.15, atm: 1 });
-    expect(p.by).toEqual({ program: "Gaussian", method: "wB97X-D", basis: "6-31G(d)", treatment: "ensemble, -R T ln Σ g exp(-g/R T), of quasi-RRHO" });
+    expect(p.by).toEqual({ program: "Orbitron", method: "wB97X-D", basis: "6-31G(d)", treatment: "ensemble, -R T ln Σ g exp(-g/R T), of quasi-RRHO" });
     expect(p.parts).toEqual([
       { property: "g", value: 0, unit: "kcal/mol", at: g(0).at, by },
       { property: "g", value: 0.5, unit: "kcal/mol", at: g(0.5).at, by },
