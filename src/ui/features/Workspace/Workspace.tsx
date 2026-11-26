@@ -77,6 +77,8 @@ import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
 import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
+import PageEdge from "./PageEdge";
+import { cornerRight } from "../../pageCorner";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
@@ -333,6 +335,8 @@ function WorkspaceContent({
 
   // the column over the canvas's right side, and the layer the page's HTML goes in, cut off where it begins
   const cover = useEditor((s) => s.cover);
+  // (filling the workspace, it leaves no corner of the page beside it: what keeps to that corner keeps to the canvas's)
+  const columnFilled = useEditor((s) => s.columnFilled);
   const [htmlLayer, setHtmlLayer] = useState<HTMLDivElement | null>(null);
   const guideStructure = useRef<HTMLDivElement>(null);
   // (where PDFs opened go: the middle of what is in view, as a paste - set once the events are known)
@@ -1873,8 +1877,11 @@ function WorkspaceContent({
             key="working"
             {...RISE}
             layout
+            // (eased as what it says changes; moved with the column, at once: ../../pageCorner)
+            layoutDependency={`${chem.state}:${working3d}:${copyingShown}:${checkingFiles}:${making3d != null}`}
             role="status"
-            className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
+            style={{ right: cornerRight(columnFilled ? 0 : cover) }}
+            className={`absolute bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : copyingShown ? "copying" : "checking"} {...FADE} className="block">
@@ -1905,8 +1912,10 @@ function WorkspaceContent({
             key="mapping"
             {...RISE}
             layout
+            layoutDependency={atomMaps.mapping.phase}
             role="status"
-            className="absolute right-3 bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
+            style={{ right: cornerRight(columnFilled ? 0 : cover) }}
+            className="absolute bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
@@ -3343,6 +3352,8 @@ export default function Workspace({
         </TabFiles>
         {/* The texts the workspace holds, in their column */}
         <ColumnBoundary>{(reloaded) => <TextColumn slideIn={reloaded} />}</ColumnBoundary>
+        {/* (what is seen of the page, its right edge told to what keeps to its corner - the notices: ../../pageCorner) */}
+        <PageEdge tabId={tabId} active={active && document != null} />
         </div>
         {/* The panel beside the canvas slides open and shut, the canvas giving
             way as it does; one going as another comes takes as long, so the
