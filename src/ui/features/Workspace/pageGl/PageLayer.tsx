@@ -46,7 +46,7 @@ export default function PageLayer({
       <PagePolys items={polys ?? NO_POLYS} order={order + 0.5} />
       <PageTexts items={texts} order={order + 1} />
       <PageIcons items={icons ?? NO_ICONS} order={order + 1} />
-      {tip && <PageTip tipKey={tip.key} x={tip.x} y={tip.y} w={tip.w} h={tip.h} zoom={zoom} text={tip.text} />}
+      <PageTip at={tip ?? null} zoom={zoom} />
     </group>
   );
 }

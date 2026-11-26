@@ -29,29 +29,36 @@ export function watchFirstEdit<T>(doc: DocumentStore<T>): () => void {
   return stop;
 }
 
-/** How long after the first action ended what waits for it comes: a beat, so that it follows the action rather than lands on it. */
-export const AFTER_ACTION_MS = 600;
+/**
+ * How long the page must have rested - nothing done, nothing under way - after the first action for what waits for it to
+ * come: a proposal of the look check's, with no other basis (the brief's `REST_MS`), one constant to tune there.
+ */
+export const REST_MS = 4000;
 
 /**
- * Runs `run` once, after the first action: once it is done and nothing is
- * under way (`busy`: the pointer held, a guide being gone through), a beat
- * later - and not then if something got under way meanwhile, but at the
- * next change (`changes`) that leaves nothing under way. Never of itself
- * before the first action, however long none comes. Returns a stop.
+ * Runs `run` once, after the first action, once the page has rested: done,
+ * and then for `ms` nothing done and nothing under way (`busy`: the pointer
+ * held, a key, an edit, a text field or Quick Add open, a menu or a guide, a
+ * plugin being set up, another card or question showing). Each change
+ * (`changes`) starts the stretch again; where something is under way as it
+ * ends, the next change that leaves nothing under way starts it again.
+ * Never of itself before the first action, however long none comes.
+ * Returns a stop.
  */
-export function afterFirstAction(run: () => void, busy: () => boolean, changes: (changed: () => void) => () => void): () => void {
+export function afterFirstAction(run: () => void, busy: () => boolean, changes: (changed: () => void) => () => void, ms = REST_MS): () => void {
   let beat: ReturnType<typeof setTimeout> | null = null;
   let ran = false;
   const look = () => {
-    if (ran || beat || !useFirstAction.getState().done) return;
+    if (ran || !useFirstAction.getState().done) return;
+    // (the stretch started again by each change)
+    if (beat) clearTimeout(beat);
     beat = setTimeout(() => {
       beat = null;
-      if (ran) return;
-      if (busy()) return;
+      if (ran || busy()) return;
       ran = true;
       stop();
       run();
-    }, AFTER_ACTION_MS);
+    }, ms);
   };
   const unwatch = useFirstAction.subscribe(look);
   const unchanged = changes(look);

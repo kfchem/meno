@@ -75,7 +75,7 @@ describe("Atom map, as a step: a reaction's products onto its reactants", () => 
     const o = ok(runMenoPair("atom-map", { entries: [unfinished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
     expect(o.kept).toEqual([]);
     expect(o.aside.map((e) => [String(e.properties?.set_aside?.value), e.energy])).toEqual([["not finished: not converged", -5.5]]);
-    const calc = { program: "xtb", version: "6.7.1", method: "GFN2-xTB", readers: ["xtb 1"], charge: 0, multiplicity: 1, imaginary: [-412.3] };
+    const calc = { program: "tightbind", version: "6.7.1", method: "TB2", readers: ["tightbind 1"], charge: 0, multiplicity: 1, imaginary: [-412.3] };
     // (a value of the molecule, one of each atom - atom i's, i / 10 - and one of a pair of atoms, 0 and 15)
     const dipole = { id: "dipole", group: "Dipole", label: "Dipole", on: "molecule", value: 1.2, quantity: "dipole" } as const;
     const charges = { id: "q", group: "Partial charges", label: "Mulliken", on: "atoms", values: product.atoms.map((_, i) => i / 10), quantity: "charge" } as const;
@@ -294,8 +294,8 @@ describe("Atom map, as a step: conformers onto their species", () => {
       centres: [{ metal: 4, atoms: [0, 3] }],
     });
     // (the swap its own inverse: `now` is the order too)
-    expect(calcRenumbered({ readers: ["meno"], method: "GFN2-xTB", held: [3, 0], results: [], source: { name: "a.out", sha256: "ab" } } as never, now)).toEqual({
-      calc: { readers: ["meno"], method: "GFN2-xTB", held: [4, 0] },
+    expect(calcRenumbered({ readers: ["meno"], method: "TB2", held: [3, 0], results: [], source: { name: "a.out", sha256: "ab" } } as never, now)).toEqual({
+      calc: { readers: ["meno"], method: "TB2", held: [4, 0] },
       leftBehind: true,
     });
     expect(calcRenumbered({ readers: ["meno"], held: [3] }, now)).toEqual({ calc: { readers: ["meno"], held: [4] }, leftBehind: false });

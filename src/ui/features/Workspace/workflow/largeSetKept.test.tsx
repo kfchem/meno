@@ -36,7 +36,7 @@ function duplicated(): { doc: WorkspaceDocument; step: number; rest: number } {
   const step = doc.steps![0].id;
   doc = placeResults(doc, doc.steps![0], { molecules: [water(0), water(1)], rest: Array.from({ length: 118 }, (_, k) => water(k + 2)), holds: "molecules" }, { extentOf });
   const rest = resultOf(doc, step, "rest")!.id;
-  doc = addStep(doc, "optimise", 40, 0, {}, "xtb");
+  doc = addStep(doc, "optimise", 40, 0, {}, "tightbind");
   doc = connect(doc, { set: rest }, doc.steps![1].id);
   return { doc, step, rest };
 }
@@ -177,7 +177,7 @@ describe("a wire a step does not take", () => {
     const why = "It mixes conformer sets with other molecules in 3D: scan.log is no conformer set";
     expect([canWire(doc, { set: set.id }, step), wireRefusal(doc, { set: set.id }, step)]).toEqual([false, why]);
     // (nor one that takes molecules in 3D: neither way is it read rightly)
-    doc = addStep(doc, "optimise", 20, 10, {}, "xtb");
+    doc = addStep(doc, "optimise", 20, 10, {}, "tightbind");
     expect(wireRefusal(doc, { set: set.id }, doc.steps![1].id)).toBe(why);
     // (wired while it held conformer sets alone, the scan come in after: its run says so, and nothing runs)
     const later = withScan(connect(setOf(2).doc, { set: set.id }, step));

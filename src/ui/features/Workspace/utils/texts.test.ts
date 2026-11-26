@@ -46,6 +46,12 @@ describe("where Export suggests writing a text", () => {
     expect(textExportPath({ name: "notes.txt" })).toBe("notes.txt");
   });
 
+  it("ends a Markdown text's name in .md where it does not, so that it is read again as Markdown", () => {
+    expect(textExportPath({ name: "Aim", markdown: true })).toBe("Aim.md");
+    expect(textExportPath({ name: "aim.md", markdown: true })).toBe("aim.md");
+    expect(textExportPath({ name: "Aim" })).toBe("Aim");
+  });
+
   it("numbers a name with no extension, or a folder with a dot, at its end", () => {
     expect(textExportPath({ name: "README", path: "/runs/README" })).toBe("/runs/README-2");
     expect(textExportPath({ name: "input", path: "/runs.d/input" })).toBe("/runs.d/input-2");

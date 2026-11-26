@@ -33,9 +33,9 @@ describe("Render as a step", () => {
 
   it("puts its pictures in its result set, to its right, in the order they came - a set wired from it that no step takes", () => {
     let d = addSet(emptyWorkspaceDocument(), { x0: 0, y0: 0, x1: 4, y1: 4 });
-    d = addStep(d, "render", 10, 4, {}, "blender");
+    d = addStep(d, "render", 10, 4, {}, "lumen");
     d = connect(d, { set: 1 }, 2);
-    d = addStep(d, "energy", 40, 4, {}, "xtb");
+    d = addStep(d, "energy", 40, 4, {}, "tightbind");
     const energy = d.steps![d.steps!.length - 1].id;
     d = placePictures(d, d.steps!.find((s) => s.kind === "render")!, [rendered(4, 2, 1), rendered(6, 3, 2)]);
     const set = resultOf(d, 2)!;
@@ -57,7 +57,7 @@ describe("Render as a step", () => {
 
   it("run again, puts its new pictures in the same set in place of those it held - and leaves the page's other pictures be", () => {
     let d = addSet(emptyWorkspaceDocument(), { x0: 0, y0: 0, x1: 4, y1: 4 });
-    d = addStep(d, "render", 10, 4, {}, "blender");
+    d = addStep(d, "render", 10, 4, {}, "lumen");
     d = connect(d, { set: 1 }, 2);
     const step = d.steps!.find((s) => s.kind === "render")!;
     d = placePictures(d, step, [rendered(4, 2, 1), rendered(4, 2, 2)]);
@@ -81,7 +81,7 @@ describe("Render as a step", () => {
 describe("a set of pictures", () => {
   it("moves with its pictures, as a set moves with all it holds", async () => {
     const { moveSet } = await import("./model");
-    let d = addStep(emptyWorkspaceDocument(), "render", 10, 4, {}, "blender");
+    let d = addStep(emptyWorkspaceDocument(), "render", 10, 4, {}, "lumen");
     d = placePictures(d, d.steps![0], [rendered(4, 2, 1)]);
     const set = resultOf(d, d.steps![0].id)!;
     const before = d.pictures![0];

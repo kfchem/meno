@@ -1755,6 +1755,50 @@ describe("a frame, a graph's axes and a page's rules", () => {
     expect(r.atoms).toHaveLength(6);
     expect(r.bonds).toHaveLength(6);
   });
+
+  describe("a table's rule drawn in pieces end to end: one straight line alone, no chain", () => {
+    // (a ring of six beside it, so the drawing's bond is known; the table's bold headings over the rule, a bond's half above it)
+    const ring = hexagon([100, 60]);
+    const headings = [...word("entry", [40, 192]), ...word("1a", [120, 192]), ...word("1b", [160, 192])];
+    const counts = (f: FigureDrawn) => {
+      const r = readFigure(f, (l) => readDrawnLabel(l, reads).read);
+      return [r.atoms.length, r.bonds.length, r.bonds.map((b) => b.order).sort().join("")];
+    };
+
+    it("reads no chain in a rule drawn cell by cell, or as one path turning nowhere: four lines a bond each give no five carbons", () => {
+      // (by hand: the ring's 6 atoms and 6 bonds, nothing more; on the table's rule, of 2 to 8 pieces, a bond or three bonds long each)
+      for (const n of [2, 4, 8]) {
+        const pieces = Array.from({ length: n }, (_, k) => stroke([40 + k * L, 200], [40 + (k + 1) * L, 200]));
+        expect(counts(figure([...ring, ...pieces], headings)), `${n} pieces`).toEqual([6, 6, "111111"]);
+        const path = stroke(...Array.from({ length: n + 1 }, (_, k): P => [40 + k * L, 200]));
+        expect(counts(figure([...ring, path], headings)), `one path of ${n}`).toEqual([6, 6, "111111"]);
+      }
+      const wide = [0, 1, 2, 3].map((k) => stroke([40 + 40 * k, 200], [80 + 40 * k, 200]));
+      expect(counts(figure([...ring, ...wide], headings))).toEqual([6, 6, "111111"]);
+    });
+
+    it("still reads a zigzag chain of as many bonds, straight in all but its bends: five carbons, four bonds", () => {
+      const zigzag = stroke(...Array.from({ length: 5 }, (_, k): P => [40 + k * L * Math.cos(Math.PI / 6), 200 - ((k % 2) * L) / 2]));
+      expect(counts(figure([...ring, zigzag], headings))).toEqual([11, 10, "1111111111"]);
+      expect(counts(figure([zigzag]))).toEqual([5, 4, "1111"]);
+    });
+
+    it("still reads an alkyne drawn straight, its triple bond three lines: but-2-yne's four carbons in a line, with or without its labels", () => {
+      const triple = (x0: number, x1: number, y: number) => [stroke([x0, y], [x1, y]), stroke([x0 + 1, y - 2.5], [x1 - 1, y - 2.5]), stroke([x0 + 1, y + 2.5], [x1 - 1, y + 2.5])];
+      expect(counts(figure([stroke([60, 200], [60 + L, 200]), ...triple(60 + L, 60 + 2 * L, 200), stroke([60 + 2 * L, 200], [60 + 3 * L, 200])]))).toEqual([4, 3, "113"]);
+      const labelled = figure([stroke([66, 200], [60 + L, 200]), ...triple(60 + L, 60 + 2 * L, 200), stroke([60 + 2 * L, 200], [97, 200])], [...word("H_3C", [56, 200]), ...word("CH_3", [104, 200])]);
+      expect(counts(labelled)).toEqual([4, 3, "113"]);
+    });
+
+    it("still reads one bond with a label at each end, as before: ethane drawn H3C-CH3, and Cl-Cl", () => {
+      expect(counts(figure([stroke([68, 200], [82.4, 200])], [...word("H_3C", [56, 200]), ...word("CH_3", [90, 200])]))).toEqual([2, 1, "1"]);
+      expect(counts(figure([stroke([64, 200], [78.4, 200])], [...word("Cl", [56, 200]), ...word("Cl", [84, 200])]))).toEqual([2, 1, "1"]);
+    });
+
+    it("leaves a ring as it was, alone or by a rule", () => {
+      expect(counts(figure(ring))).toEqual([6, 6, "111111"]);
+    });
+  });
 });
 
 describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in brackets*)", () => {

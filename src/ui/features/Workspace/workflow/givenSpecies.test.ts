@@ -11,7 +11,7 @@ import { runStep, speciesKept, type RunWith } from "./run";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 
-/** Water's radical cation as an xTB optimisation gives it: charge +1 and a doublet, said by the calculation - its atoms say neither. */
+/** Water's radical cation as an Tightbind optimisation gives it: charge +1 and a doublet, said by the calculation - its atoms say neither. */
 function cation(): Omit<Molecule3D, "id"> {
   const atoms = [
     { el: "O", x: 0, y: 0, z: 0 },
@@ -26,7 +26,7 @@ function cation(): Omit<Molecule3D, "id"> {
       { a1: 0, a2: 2, order: 1 },
     ],
     energies: [-75.9],
-    calc: calcOf({ atoms: atoms.map((a) => a.el), frames: [atoms.flatMap((a) => [a.x, a.y, a.z])], program: "xtb", method: "GFN2-xTB", charge: 1, multiplicity: 2 }, ["xtb 6.7.1"]),
+    calc: calcOf({ atoms: atoms.map((a) => a.el), frames: [atoms.flatMap((a) => [a.x, a.y, a.z])], program: "tightbind", method: "TB2", charge: 1, multiplicity: 2 }, ["tightbind 6.7.1"]),
   };
 }
 
@@ -99,9 +99,9 @@ describe("the charge and spin a step was given, saved and opened again", () => {
   });
 
   it("keeps what made conformers searched from a drawing - the plugin and its force field - opened again, nothing left out", () => {
-    const made = { ...cation(), calc: { readers: [], program: "RDKit", method: "MMFF94" }, conformerSet: true as const };
+    const made = { ...cation(), calc: { readers: [], program: "Sketchkit", method: "KF1" }, conformerSet: true as const };
     const doc = reopened(addMolecule3d(emptyWorkspaceDocument(), made));
-    expect(doc.molecules3d?.[0].calc).toMatchObject({ readers: [], program: "RDKit", method: "MMFF94" });
+    expect(doc.molecules3d?.[0].calc).toMatchObject({ readers: [], program: "Sketchkit", method: "KF1" });
   });
 });
 

@@ -1406,7 +1406,12 @@ window decodes; nothing of it goes through Rust but the clipboard.
   as its bytes are (`lib/picture/held` `holdFilm`): drawn from a video
   element playing it, over and over and muted, its texture a
   `VideoTexture`, a frame of the canvas drawn for each of the film's
-  (`requestVideoFrameCallback`) - none while it is paused.
+  (`requestVideoFrameCallback`) - none while it is paused. A film on a
+  transparent background (`PictureItem.matte`, `forSlides`) is played the
+  same way; its material (`components/matteMaterial.ts`) takes its alpha
+  from the video's other half (`lib/picture/matte.ts`) and blends it
+  premultiplied; its film with transparency is held and kept beside it,
+  media `video/quicktime`, and is what Save film writes.
 
 ### Renders
 
@@ -1781,10 +1786,14 @@ to be able to work with nothing going out at all.
   token (`TaskHandle::proxy_url`). Its purpose, `app-update`, is asked for
   once of Meno's own accord (remembered as `updates.asked` in the settings)
   and after that only when the user turns it on in Settings › Network. That
-  once is after the user's first action - a workspace's first edit, a file
-  opened, Settings opened (`lib/firstAction.ts`) - once it has ended (the
-  pointer let go, no guide open), never on a timer: with no action, it is
-  not asked. Each look shows its notice in the corner as every task does,
+  once is asked on the card at the edge of the window, never over the
+  page, after the user's first action - a workspace's first edit, a file
+  opened, Settings opened (`lib/firstAction.ts`) - once the page has rested
+  for `REST_MS` (4 s, a look number): nothing done (no pointer held, no
+  key, no edit) and nothing under way (no text field, Quick Add, menu or
+  guide open, no plugin being set up or started, no other card or
+  question showing), each of these starting the stretch again. With no
+  action, it is not asked. Each look shows its notice in the corner as every task does,
   unless the user turned that off (`updates.notice`, Settings › Network) -
   the one notice of the network that can be; the record keeps it either
   way. The

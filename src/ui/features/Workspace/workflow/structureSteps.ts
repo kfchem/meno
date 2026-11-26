@@ -888,14 +888,14 @@ export function fewerSideSet(first: readonly SetEntry[], second: readonly SetEnt
   const perCompound = (es: readonly SetEntry[]) => es.length / new Set(es.map((e) => e.compound)).size;
   const [a, b] = [perCompound(first), perCompound(second)];
   const which: "both" | "first" | "second" = pass !== "auto" ? pass : Math.abs(a - b) / (a + b) < FEWER_SIDE_SHARE ? "both" : a < b ? "first" : "second";
-  const counts = `First ${a.toFixed(1)}, Second ${b.toFixed(1)} per compound`;
-  const passed = which === "both" ? "both passed" : which === "first" ? "First only passed" : "Second only passed";
-  const why = pass === "auto" ? (which === "both" ? " (within a quarter of their sum)" : " (the side with fewer)") : " (as set)";
+  // (a whole count shows as an integer; one that is not whole, as a conformer count over compounds of unlike numbers can be, keeps one decimal)
+  const shown = (n: number) => String(Math.round(n * 10) / 10);
+  const passed = which === "both" ? "both passed" : which === "first" ? "only First passed" : "only Second passed";
   return {
     ok: true,
     holds,
     kept: which === "second" ? [] : [...first],
     aside: which === "first" ? [] : [...second],
-    said: `${counts} · ${passed}${why}`,
+    said: `First ${shown(a)}, Second ${shown(b)} per compound: ${passed}`,
   };
 }

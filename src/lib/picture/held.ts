@@ -8,7 +8,7 @@
  */
 import type { MenoFile } from "../doc/menoFile";
 import { markHad, markNotHad } from "../doc/notHad";
-import { imageInfo, isMp4, PICTURE_MEDIA, type ImageInfo, type PictureMedia } from "./image";
+import { FILM_FOR_SLIDES, imageInfo, isMp4, PICTURE_MEDIA, type ImageInfo, type PictureMedia } from "./image";
 
 /** A picture held: what it is known by, and what it is. */
 export type HeldPicture = ImageInfo & { sha256: string };
@@ -31,7 +31,7 @@ export async function holdPicture(bytes: Uint8Array): Promise<HeldPicture | null
   return { ...info, sha256 };
 }
 
-/** A film's bytes held for the session - an MP4 a render made, its size in pixels as it said - and what they are known by; none, where they are no MP4. */
+/** A film's bytes held for the session - an MP4 a render made, its size in pixels as it said, or the QuickTime film with an alpha channel made beside one - and what they are known by; none, where they are neither. */
 export async function holdFilm(bytes: Uint8Array): Promise<{ sha256: string } | null> {
   if (!isMp4(bytes)) return null;
   const sha256 = await sha256OfBytes(bytes);
@@ -64,10 +64,10 @@ export function pictureBytes(sha256: string): Uint8Array | null {
   return h.bytes;
 }
 
-/** Each picture a workspace's file keeps, held - its bytes read from the file when first wanted. */
+/** Each picture a workspace's file keeps, held - and each film with transparency kept beside one - its bytes read from the file when first wanted. */
 export function holdPicturesOf(file: Pick<MenoFile, "files" | "data">): void {
   for (const f of file.files) {
-    if (!PICTURE_MEDIA.includes(f.media as PictureMedia) || held.has(f.sha256)) continue;
+    if ((!PICTURE_MEDIA.includes(f.media as PictureMedia) && f.media !== FILM_FOR_SLIDES) || held.has(f.sha256)) continue;
     held.set(f.sha256, { read: () => file.data(f.sha256) });
   }
 }

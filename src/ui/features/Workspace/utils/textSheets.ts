@@ -10,7 +10,7 @@
  * the sheet's monospaced type is.
  */
 import { ICON_HEIGHT, ICON_NAME_PT, ICON_NAME_WIDTH, POINT, pointOf, scaleOf } from "../../../../lib/pdf/layout";
-import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
+import { readMarkdown } from "../../../../lib/text/markdown";
 import { layOut, PAD_FOOT, PAD_X, type Laid } from "../../TextEditor/markdownLayout";
 import { measureText, typeVersion } from "../../TextEditor/markdownType";
 import { FONT_PX } from "../../TextEditor/linePictures";
@@ -69,23 +69,22 @@ const sheets = new Map<string, TextSheet>();
 const MOST_SHEETS = 64;
 
 /**
- * The sheet a text lies on, on the page: a Markdown text's, by its name,
+ * The sheet a text lies on, on the page: a Markdown text's (`markdown`),
  * formatted - laid at `point` (lib/pdf/layout `pointOf`), ACS 1996's
  * unless it was laid at the workspace's own.
  */
-export function sheetOf(text: string, name = "", point = POINT): TextSheet {
-  const s = sheetAtAcs(text, name);
+export function sheetOf(text: string, markdown = false, point = POINT): TextSheet {
+  const s = sheetAtAcs(text, markdown);
   if (point === POINT) return s;
   const f = point / POINT;
   return { ...s, w: s.w * f, h: s.h * f, ...(s.md ? { md: { ...s.md, scale: s.md.scale * f } } : {}) };
 }
 
 /** A text's own sheet, at the point it was laid at. */
-export const sheetOfText = (t: { text: string; name?: string; point?: number }): TextSheet => sheetOf(t.text, t.name, pointOf(t));
+export const sheetOfText = (t: { text: string; markdown?: true; point?: number }): TextSheet => sheetOf(t.text, !!t.markdown, pointOf(t));
 
 /** The sheet at ACS 1996's point, kept for the texts asked about last. */
-function sheetAtAcs(text: string, name: string): TextSheet {
-  const md = isMarkdown(name);
+function sheetAtAcs(text: string, md: boolean): TextSheet {
   // (laid out again once the type has come)
   const key = `${md ? typeVersion() + 1 : 0}\u0000${text}`;
   const had = sheets.get(key);
@@ -135,8 +134,8 @@ export function sheetBox(at: { x: number; y: number }, s: Pick<TextSheet, "w" | 
 }
 
 /** A sheet's middle, where it lies at `at`: what a box or a lasso takes it by. */
-export function sheetMiddle(at: { x: number; y: number }, text: string, name = "", point = POINT): { x: number; y: number } {
-  const s = sheetOf(text, name, point);
+export function sheetMiddle(at: { x: number; y: number }, text: string, markdown = false, point = POINT): { x: number; y: number } {
+  const s = sheetOf(text, markdown, point);
   return { x: at.x + s.w / 2, y: at.y - s.h / 2 };
 }
 
@@ -157,14 +156,14 @@ export function sheetBoxAt(at: { x: number; y: number }, s: Pick<TextSheet, "w" 
 }
 
 /** Where a text's sheet lies on the page as it is drawn: made an icon, or full size. */
-export function drawnSheetBox(t: { at?: { x: number; y: number }; text: string; name?: string; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
+export function drawnSheetBox(t: { at?: { x: number; y: number }; text: string; markdown?: true; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
   if (!t.at) return null;
   const s = sheetOfText(t);
   return sheetBoxAt(t.at, s, t.icon ? iconScaleOf(s, scaleOf(t)) : 1);
 }
 
 /** The room a sheet takes on the page: as it is drawn, and made an icon, its name's under it too - as a PDF's (lib/pdf/layout `pdfRoom`). */
-export function sheetRoom(t: { at?: { x: number; y: number }; text: string; name?: string; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
+export function sheetRoom(t: { at?: { x: number; y: number }; text: string; markdown?: true; icon?: true; point?: number }): { x0: number; x1: number; y0: number; y1: number } | null {
   const b = drawnSheetBox(t);
   if (!b || !t.icon) return b;
   const mx = (b.x0 + b.x1) / 2;

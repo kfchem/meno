@@ -19,8 +19,6 @@ import { isMenoFile } from "../../../../lib/doc/menoFile";
 import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
 import { style3dOf } from "../style3dOf";
-import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
-import { openedAsStack } from "../utils/stacks";
 import type { DropZone, Dropped } from "../../../../lib/drop";
 
 import { readRecord } from "../utils/copyPaste";
@@ -32,10 +30,10 @@ import { sayNoneTold } from "../../../views/openFile";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
-import { placeOpened } from "../utils/freePlace";
+import { importedScheme as importedSchemeOf, placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { heldEach } from "../utils/heldEach";
-import { greatest } from "../../../../lib/chem/lists";
+import { isMarkdown } from "../../../../lib/text/markdown";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -96,49 +94,13 @@ export function useStructureEvents(
 
   // A file's reaction arrow and pluses, moved by (dx, dy) along with its
   // atoms, and its molecules in 3D standing in a row about `at`: placed in
-  // the same edit as its atoms are.
+  // the same edit as its atoms are (utils/freePlace `importedScheme`).
   const importedScheme = (
     result: Pick<ProcessedFileResult, "arrow" | "pluses" | "molecules3d"> & { model?: ProcessedFileResult["model"] },
     dx: number,
     dy: number,
     at: { x: number; y: number } = { x: 0, y: 0 },
-  ): ImportedScheme => {
-    const a = result.arrow;
-    const solids = (result.molecules3d ?? []).map((m) => ({ ...m, id: 0, at }));
-    const style = style3dOf(store.getState());
-    // (several - an SD file's records - a stack, standing in one place, one
-    // shown at a time: utils/stacks; numbered as the document's own when added.
-    // An output's jobs stand side by side)
-    const stacked = openedAsStack(solids);
-    const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
-    const room = stacked ? [greatest(reaches)] : reaches;
-    // (beside a drawing the same file brings, to its right)
-    const drawn = result.model?.atoms ?? [];
-    const row = drawn.length
-      ? rowAfter(
-          greatest(drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
-          drawn.reduce((y, a) => y + a.y, 0) / drawn.length + dy,
-          room,
-        )
-      : rowAbout(at, room);
-    const places = stacked ? solids.map(() => row[0]) : row;
-    return {
-      ...(solids.length
-        ? { molecules3d: solids.map(({ id: _id, ...m }, i) => ({ ...m, at: places[i], ...(stacked ? { stack: { id: 1 } } : {}) })) }
-        : {}),
-      arrows: a
-        ? [
-            {
-              x: (a.x1 + a.x2) / 2 + dx,
-              y: (a.y1 + a.y2) / 2 + dy,
-              angle: Math.atan2(a.y2 - a.y1, a.x2 - a.x1),
-              length: Math.hypot(a.x2 - a.x1, a.y2 - a.y1),
-            },
-          ]
-        : [],
-      pluses: (result.pluses ?? []).map((p) => ({ x: p.x + dx, y: p.y + dy })),
-    };
-  };
+  ): ImportedScheme => importedSchemeOf(result, dx, dy, style3dOf(store.getState()), at);
 
   // Effect: Initial Payload
   useEffect(() => {
@@ -501,7 +463,7 @@ export function useStructureEvents(
     }
     // a text: held in the workspace, its sheet on the page where it was dropped, shown in its column
     if (!kind && opensAsText(f.name, head)) {
-      store.getState().addTexts([{ name: f.name, text: await textOfFile(f) }], at);
+      store.getState().addTexts([{ name: f.name, text: await textOfFile(f), ...(isMarkdown(f.name) ? { markdown: true as const } : {}) }], at);
       setImportError(null);
       // (nothing told it, and the plugins online not listed: said, with the button that lists them - and read again, where one tells it then)
       if (again) sayNoneTold([f.name], again, () => kindOfFile(f.name, head));

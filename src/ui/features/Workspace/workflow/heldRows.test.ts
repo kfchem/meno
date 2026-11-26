@@ -77,20 +77,20 @@ const rounds = (one: RestraintRow[], two: RestraintRow[]) =>
     ],
   );
 
-const RDKIT = heldBy("minimise", undefined);
+const SKETCHKIT = heldBy("minimise", undefined);
 
 describe("the restraints a step holds, wired in", () => {
   it("are none where nothing is wired into its Restraints input", () => {
-    expect(heldRows(page([[40, "minimise"]], [], []), 40, [molecule("p1")], RDKIT, "RDKit")).toBeNull();
+    expect(heldRows(page([[40, "minimise"]], [], []), 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toBeNull();
   });
 
   it("hold every round's rows: round 1's {t1 50, t2 50} and round 2's {t2 100} give {t1 50, t2 100} - the later step's taken, and said", () => {
     const d = rounds([row(torsion(T1, 50)), row(torsion(T2, 50))], [row(torsion(T2, 100))]);
-    const held = heldRows(d, 40, [molecule("p1")], RDKIT, "RDKit");
+    const held = heldRows(d, 40, [molecule("p1")], SKETCHKIT, "Sketchkit");
     expect(held).toEqual({ each: [{ rows: [torsion(T1, 50), torsion(T2, 100)] }], said: ["1 row taken over by a later step's"] });
     // (the same the other way round on the page: where a table lies decides nothing)
     const turned = { ...d, wires: [...d.wires!].reverse() };
-    expect(heldRows(turned, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual(held);
+    expect(heldRows(turned, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual(held);
   });
 
   it("refuses a molecule two steps' rows hold unlike, neither step after the other - never decided by where they lie", () => {
@@ -106,7 +106,7 @@ describe("the restraints a step holds, wired in", () => {
         [31, 40, RESTRAINTS_INPUT.id],
       ],
     );
-    expect(heldRows(d, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(d, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ why: "Rows hold torsion 2-3-4-5 for it unlike each other, from steps neither of which comes after the other" }],
       said: [],
     });
@@ -123,30 +123,30 @@ describe("the restraints a step holds, wired in", () => {
         [31, 40, RESTRAINTS_INPUT.id],
       ],
     );
-    expect(heldRows(alike, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T2, 50)] }], said: [] });
+    expect(heldRows(alike, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [torsion(T2, 50)] }], said: [] });
   });
 
   it("never takes a row held exactly and one held by a strength for the same: the later step's held and said, or refused in one table", () => {
     const exact: Restraint = { kind: "dihedral", atoms: T2, value: 180, exact: true };
-    const held = heldRows(rounds([row(torsion(T2, 50))], [row(exact)]), 40, [molecule("p1")], heldBy("minimise", ["dihedral", "dihedral-exact"]), "RDKit");
+    const held = heldRows(rounds([row(torsion(T2, 50))], [row(exact)]), 40, [molecule("p1")], heldBy("minimise", ["dihedral", "dihedral-exact"]), "Sketchkit");
     expect(held).toEqual({ each: [{ rows: [exact] }], said: ["1 row taken over by a later step's"] });
     const one = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row(torsion(T2, 50)), row(exact)] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(one, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: "Rows of one table hold torsion 2-3-4-5 for it unlike each other" }], said: [] });
+    expect(heldRows(one, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: "Rows of one table hold torsion 2-3-4-5 for it unlike each other" }], said: [] });
   });
 
   it("refuses a molecule one table's rows hold unlike", () => {
     const d = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row(torsion(T1, 50)), row(torsion(T1, 60))] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(d, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: "Rows of one table hold torsion 1-2-3-4 for it unlike each other" }], said: [] });
+    expect(heldRows(d, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: "Rows of one table hold torsion 1-2-3-4 for it unlike each other" }], said: [] });
   });
 
   it("refuses a molecule numbered anew by Atom map since its rows were made - never held on what are now other atoms", () => {
     // (a row for atoms 1-2 made on a product conformer in its own numbering; Atom map then numbered it onto the reactant)
     const d = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row({ kind: "distance", atoms: [0, 1], value: 1.5, strength: 500 })] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(d, 40, [molecule("p1", "as reactant #1 (k2)")], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    expect(heldRows(d, 40, [molecule("p1", "as reactant #1 (k2)")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
     expect(RENUMBERED_WHY).toBe("its restraints were made before Atom map numbered it anew");
     // (made after it, in that numbering: held)
     const after = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row({ kind: "distance", atoms: [0, 1], value: 1.5, strength: 500 }, "p1", "as reactant #1 (k2)")] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(after, 40, [molecule("p1", "as reactant #1 (k2)")], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "distance" }] }] });
+    expect(heldRows(after, 40, [molecule("p1", "as reactant #1 (k2)")], SKETCHKIT, "Sketchkit")).toMatchObject({ each: [{ rows: [{ kind: "distance" }] }] });
   });
 
   it("holds rows made on a reaction's reactant, in its own numbering, on a product Atom map numbered as that reactant - one numbering - and refuses one numbered as another", () => {
@@ -164,23 +164,23 @@ describe("the restraints a step holds, wired in", () => {
     if (!made.ok) throw new Error(made.said);
     expect(restraintRowsIn(made.tables![ONE_EXIT])).toMatchObject({ rows: [{ numbering: `${OWN_NUMBERING} (${numberingKey([reactant])})` }] });
     const d = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, table: made.tables![ONE_EXIT] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(d, 40, [product], RDKIT, "RDKit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
+    expect(heldRows(d, 40, [product], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
     // (numbered as the reactant after another map before it: in the reactant's numbering now, held too)
-    expect(heldRows(d, 40, [molecule("p1", `as a #1 (x), then as reactant (${numberingKey([reactant])})`)], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
+    expect(heldRows(d, 40, [molecule("p1", `as a #1 (x), then as reactant (${numberingKey([reactant])})`)], SKETCHKIT, "Sketchkit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
     // (numbered as another compound - or as the reactant first, then as another: refused, never held on what are now other atoms)
     const product2 = asEntry(da.product, "cyclohexene");
-    expect(heldRows(d, 40, [molecule("p1", `as cyclohexene (${numberingKey([product2])})`)], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
-    expect(heldRows(d, 40, [molecule("p1", `as reactant (${numberingKey([reactant])}), then as cyclohexene (${numberingKey([product2])})`)], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    expect(heldRows(d, 40, [molecule("p1", `as cyclohexene (${numberingKey([product2])})`)], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    expect(heldRows(d, 40, [molecule("p1", `as reactant (${numberingKey([reactant])}), then as cyclohexene (${numberingKey([product2])})`)], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
     // (a conformer of the product, its atoms in the product's own order, numbered as the product - itself in the reactant's numbering: in
     //  the reactant's numbering too, atom for atom, and held - the backward ends' case)
     const m = runMenoPair("atom-map", { entries: [asEntry(da.product, "conformer")], holds: "molecules" }, { entries: [product], holds: "molecules" }, { moleculesAre: "each", referenceIs: "each", bonds: "same" });
     if (!m.ok) throw new Error(m.said);
     expect(m.kept[0].properties?.[NUMBERING]?.value).toMatch(new RegExp(`^as [^,]+ \\(${numberingKey([reactant])}\\)$`));
-    expect(heldRows(d, 40, m.kept, RDKIT, "RDKit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
+    expect(heldRows(d, 40, m.kept, SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
     // (a row of a table read from a file that says its own, bare: held on a molecule never mapped, as ever, and refused on one mapped)
     const bare = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row({ kind: "fixed", atoms: [0] })] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(bare, 40, [molecule("p1")], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
-    expect(heldRows(bare, 40, [product], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    expect(heldRows(bare, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
+    expect(heldRows(bare, 40, [product], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
   });
 
   it("refuses a molecule no row is for, or one a row names an atom it has not; and counts rows for no molecule", () => {
@@ -189,7 +189,7 @@ describe("the restraints a step holds, wired in", () => {
       [{ id: 11, by: 10, rows: [row(torsion(T1, 50), "p1"), row({ kind: "fixed", atoms: [6] }, "p2"), row(torsion(T1, 50), "p9"), row(torsion(T2, 50), "p9")] }],
       [[11, 40, RESTRAINTS_INPUT.id]],
     );
-    expect(heldRows(d, 40, [molecule("p1"), molecule("p2"), molecule("p3"), molecule()], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(d, 40, [molecule("p1"), molecule("p2"), molecule("p3"), molecule()], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ rows: [torsion(T1, 50)] }, { why: "A row holds atoms fixed 7, and it has atoms 1 to 6" }, { why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }],
       said: ["2 restraint rows for no molecule here"],
     });
@@ -207,36 +207,36 @@ describe("the restraints a step holds, wired in", () => {
     // (a) coordination asked, two molecules tagged, no coordination bond: the step found none to hold - both go on, holding nothing
     const a = restrainedSet([molecule("p1"), molecule("p2")], "molecules", COORDINATION);
     expect(a.ok && a.said).toContain("2 entries with none to hold");
-    expect(heldRows(wiredWith(a), 40, [molecule("p1"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+    expect(heldRows(wiredWith(a), 40, [molecule("p1"), molecule("p2")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [] }, { rows: [] }], said: [NOTHING_TO_HOLD] });
     expect(NOTHING_TO_HOLD).toBe("nothing to hold");
     // (b1) the same, the molecules with no ID: the step refused both - its table empty - and they are refused here too
     const b1 = restrainedSet([molecule(), molecule()], "molecules", COORDINATION);
     expect(b1.ok && b1.said).toContain("2 failed");
-    expect(heldRows(wiredWith(b1), 40, [molecule(), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    expect(heldRows(wiredWith(b1), 40, [molecule(), molecule()], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
     // (b2) a torsion typed to hold, two molecules sharing an ID: the step refused both - a restraint asked, none made - refused here
     const b2 = torsionsSet([molecule("p1"), molecule("p1")], null, "molecules", { on: "start", torsions: "typed", atoms: "1-2-3-4", target: "180", hold: "strength", strength: "50" });
     expect(b2.ok && b2.said).toContain("2 failed");
-    expect(heldRows(wiredWith(b2), 40, [molecule("p1"), molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    expect(heldRows(wiredWith(b2), 40, [molecule("p1"), molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
     // (c) one refused by the step (no ID), one found to have none to hold: the one goes on, the refused one is refused
     const c = restrainedSet([molecule(), molecule("p2")], "molecules", COORDINATION);
-    expect(heldRows(wiredWith(c), 40, [molecule(), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+    expect(heldRows(wiredWith(c), 40, [molecule(), molecule("p2")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
     // (one the step never saw, among those it found none for: refused)
-    expect(heldRows(wiredWith(a), 40, [molecule("p3")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
+    expect(heldRows(wiredWith(a), 40, [molecule("p3")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
     // (a second table with rows for another molecule that says nothing of this one - its step never saw it: refused, that table named)
-    expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")])), 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ why: `${NONE_MADE_WHY} by Restraints (table 2 of 2 wired in)` }],
       said: ["1 restraint row for no molecule here"],
     });
     // (the same, the second table naming it as found to have nothing too: rows for another molecule - it goes on, holding nothing)
-    expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "none found to hold" }])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "none found to hold" }])), 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ rows: [] }],
       said: [NOTHING_TO_HOLD, "1 restraint row for no molecule here"],
     });
     // (numbered anew by Atom map since its step found nothing for it: refused, as a row would be)
-    expect(heldRows(wiredWith(a), 40, [molecule("p1", "as reactant #1 (k2)"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+    expect(heldRows(wiredWith(a), 40, [molecule("p1", "as reactant #1 (k2)"), molecule("p2")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: RENUMBERED_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
     // (numbered anew by Atom map before its step looked, and found to have nothing to hold: the step wrote that numbering - it goes on)
     const mapped = restrainedSet([molecule("p1", "as reactant #1 (k2)")], "molecules", COORDINATION);
-    expect(heldRows(wiredWith(mapped), 40, [molecule("p1", "as reactant #1 (k2)")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
+    expect(heldRows(wiredWith(mapped), 40, [molecule("p1", "as reactant #1 (k2)")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
   });
 
   it("lets a molecule found to have nothing to hold go on where its table holds rows for another - one its step refused or never saw refused (the maintainer, 2026-11-13)", () => {
@@ -244,17 +244,17 @@ describe("the restraints a step holds, wired in", () => {
     const one = (table: Table) => page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, table }], [[11, 40, RESTRAINTS_INPUT.id]]);
     // (molecule A with a row, molecule B looked at and found to have none: A holds its row, B goes on holding nothing, counted)
     const ab = one(restraintsTable([row(torsion(T1, 50), "pA")], [nothingFor("pB")]));
-    expect(heldRows(ab, 40, [molecule("pA"), molecule("pB")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }, { rows: [] }], said: ["1 entry with nothing to hold"] });
+    expect(heldRows(ab, 40, [molecule("pA"), molecule("pB")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }, { rows: [] }], said: ["1 entry with nothing to hold"] });
     // (one the table neither has a row for nor names - its step refused it, or never saw it - and one with no ID: refused, as ever)
-    expect(heldRows(ab, 40, [molecule("pA"), molecule("pC"), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }, { why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    expect(heldRows(ab, 40, [molecule("pA"), molecule("pC"), molecule()], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }, { why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
     // (two found to have nothing, beside A: counted as two)
     const abd = one(restraintsTable([row(torsion(T1, 50), "pA")], [nothingFor("pB"), nothingFor("pD")]));
-    expect(heldRows(abd, 40, [molecule("pB"), molecule("pA"), molecule("pD")], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(abd, 40, [molecule("pB"), molecule("pA"), molecule("pD")], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ rows: [] }, { rows: [torsion(T1, 50)] }, { rows: [] }],
       said: ["2 entries with nothing to hold"],
     });
     // (only B came in: none held any, said as such; A's row for no molecule here, counted)
-    expect(heldRows(ab, 40, [molecule("pB")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD, "1 restraint row for no molecule here"] });
+    expect(heldRows(ab, 40, [molecule("pB")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD, "1 restraint row for no molecule here"] });
   });
 
   it("takes a molecule on only where every table wired in speaks of it - a row, or nothing found to hold - saying which did not (the known answers)", () => {
@@ -270,25 +270,25 @@ describe("the restraints a step holds, wired in", () => {
     const none = tableOf(restrainedSet([molecule("p1"), molecule("p2")], "molecules", COORDINATION));
     const refused = tableOf(torsionsSet([molecule("p1"), molecule("p1"), molecule("p2"), molecule("p2")], null, "molecules", SHARED));
     const e = tables([[10, "restraints"], [20, "torsion-restraints"]], [none, refused]);
-    expect(heldRows(e, 40, [molecule("p1"), molecule("p2")], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(e, 40, [molecule("p1"), molecule("p2")], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ why: `${NONE_MADE_WHY} by Torsion restraints` }, { why: `${NONE_MADE_WHY} by Torsion restraints` }],
       said: [],
     });
     // (e2) a molecule one of the tables' steps never saw: refused, that table named
     const onlyP1 = tableOf(restrainedSet([molecule("p1")], "molecules", COORDINATION));
     const e2 = tables([[10, "restraints"], [20, "restraints"]], [none, onlyP1]);
-    expect(heldRows(e2, 40, [molecule("p1"), molecule("p2")], RDKIT, "RDKit")).toEqual({
+    expect(heldRows(e2, 40, [molecule("p1"), molecule("p2")], SKETCHKIT, "Sketchkit")).toEqual({
       each: [{ rows: [] }, { why: `${NONE_MADE_WHY} by Restraints (table 2 of 2 wired in)` }],
       said: [NOTHING_TO_HOLD],
     });
     // (a row for it in one table, the other table's step refusing it: never taken on holding the one table's row alone)
     const held = restraintsTable([row(torsion(T1, 50), "p1")]);
     const mixed = tables([[10, "restraints"], [20, "torsion-restraints"]], [held, refused]);
-    expect(heldRows(mixed, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: `${NONE_MADE_WHY} by Torsion restraints` }], said: [] });
+    expect(heldRows(mixed, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: `${NONE_MADE_WHY} by Torsion restraints` }], said: [] });
     // (round 2's step seeing every molecule round 1's minimisation gave: a row in one, nothing found in the other - held, round 1's row)
     const round2 = restraintsTable([], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "none found to hold" }]);
     const rounds2 = tables([[10, "restraints"], [30, "restraints"]], [held, round2]);
-    expect(heldRows(rounds2, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }], said: [] });
+    expect(heldRows(rounds2, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }], said: [] });
   });
 
   it("refuses a molecule whose double bond its reference has cis, held at 180° where trans: something to hold found, not nothing (case d)", () => {
@@ -311,23 +311,23 @@ describe("the restraints a step holds, wired in", () => {
     if (!d.ok || !d.tables?.[ONE_EXIT]) throw new Error("no table made");
     expect(d.said).not.toContain("with none to hold");
     const wired = page([[20, "torsion-restraints"], [40, "minimise"]], [{ id: 11, by: 20, table: d.tables[ONE_EXIT] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(wired, 40, [azo(180, "p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
+    expect(heldRows(wired, 40, [azo(180, "p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
     // (d0) the same, nothing unlike its reference: nothing to hold - it goes on
     const d0 = torsionsSet([azo(180, "p1")], [azo(180, "r")], "molecules", FROM);
     if (!d0.ok || !d0.tables?.[ONE_EXIT]) throw new Error("no table made");
     expect(d0.said).toContain("1 entry with none to hold");
     const wired0 = page([[20, "torsion-restraints"], [40, "minimise"]], [{ id: 11, by: 20, table: d0.tables[ONE_EXIT] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(wired0, 40, [azo(180, "p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
+    expect(heldRows(wired0, 40, [azo(180, "p1")], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
   });
 
   it("refuses every molecule where the tables wired in hold no row and name none as found to hold nothing - a table read from a file, say", () => {
     const empty = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(empty, 40, [molecule("p1"), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    expect(heldRows(empty, 40, [molecule("p1"), molecule()], SKETCHKIT, "Sketchkit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
   });
 
   it("is refused where what comes in is no restraints table", () => {
     const d = page([[40, "minimise"]], [{ id: 11 }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(d, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ why: "What comes into Restraints is no table of restraints yet" });
+    expect(heldRows(d, 40, [molecule("p1")], SKETCHKIT, "Sketchkit")).toEqual({ why: "What comes into Restraints is no table of restraints yet" });
   });
 });
 
@@ -344,15 +344,15 @@ describe("what each program holds, restrained or exact - never swapped", () => {
   };
 
   it("a force field's minimisation (its plugin naming none) holds distances and torsions by their strengths and atoms fixed, and refuses an exact torsion", () => {
-    expect(why(one(torsion(T1, 50)), RDKIT, "RDKit")).toBeNull();
-    expect(why(one({ kind: "fixed", atoms: [0] }), RDKIT, "RDKit")).toBeNull();
-    expect(why(one(exactTorsion), RDKIT, "RDKit")).toBe("The RDKit plugin holds a torsion only by a strength, not exactly: torsion 1-2-3-4 is to be held exactly");
+    expect(why(one(torsion(T1, 50)), SKETCHKIT, "Sketchkit")).toBeNull();
+    expect(why(one({ kind: "fixed", atoms: [0] }), SKETCHKIT, "Sketchkit")).toBeNull();
+    expect(why(one(exactTorsion), SKETCHKIT, "Sketchkit")).toBe("The Sketchkit plugin holds a torsion only by a strength, not exactly: torsion 1-2-3-4 is to be held exactly");
   });
 
   it("a program holding atoms fixed alone refuses an exact distance, and one with a strength", () => {
-    expect(why(one(exactDistance), ["fixed"], "xtb")).toBe("The xtb plugin holds no distances: distance 1-2");
-    expect(why(one(restrained), ["fixed"], "xtb")).toBe("The xtb plugin holds no distances: distance 1-2");
-    expect(why(one({ kind: "fixed", atoms: [0, 2] }), ["fixed"], "xtb")).toBeNull();
+    expect(why(one(exactDistance), ["fixed"], "tightbind")).toBe("The tightbind plugin holds no distances: distance 1-2");
+    expect(why(one(restrained), ["fixed"], "tightbind")).toBe("The tightbind plugin holds no distances: distance 1-2");
+    expect(why(one({ kind: "fixed", atoms: [0, 2] }), ["fixed"], "tightbind")).toBeNull();
   });
 
   it("a program that constrains holds a row exactly, and refuses one with a strength", () => {

@@ -43,7 +43,7 @@ import { columnSettingAt, sheetSetting } from "./textFlightSetting";
 import { iconScaleOf, sheetOfText } from "../utils/textSheets";
 import { bodyBoxOf } from "../utils/textBody";
 import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from "../../TextEditor/columnText";
-import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
+import { readMarkdown } from "../../../../lib/text/markdown";
 import { layOut } from "../../TextEditor/markdownLayout";
 import { measureText } from "../../TextEditor/markdownType";
 import { spotMoving } from "./figureTie";
@@ -180,7 +180,7 @@ function ColumnPass({
   const { gl, size, invalidate, camera } = useThree();
   // (a Markdown text read formatted, unless its source is being written)
   const source = useShowsSource(store, text?.id ?? null);
-  const formatted = !!text && isMarkdown(text.name) && !source;
+  const formatted = !!text?.markdown && !source;
   const cover = useEditor((s) => s.cover);
   const width = useEditor((s) => s.columnWidth);
   // (words selected, and places found, marked on the pages)

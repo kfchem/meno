@@ -216,3 +216,30 @@ describe("the card's parts: Look, Render, Scene, Motion", () => {
     expect(tooShort({ kind: "picture" }, DECLARED_MOTIONS, 3)).toBeUndefined();
   });
 });
+
+describe("the card says what the chosen look, studio and motion are, in their declarations' own words", () => {
+  type Choices = { choices: { value: string; description?: string }[] };
+  const of = (options: ReturnType<typeof renderOptions>, id: string) => Object.fromEntries((options.find((o) => o.id === id) as unknown as Choices).choices.map((c) => [c.value, c.description]));
+  const motions: MotionDecl[] = [
+    { id: "drift-apart", label: "Drifting apart", description: "The molecules drift slowly away from one another." },
+    { id: "plain-spin", label: "A plain spin" },
+  ];
+  const studios = [
+    { id: "paper-room", label: "Paper room", description: "A pale room of folded paper, lit from one side.", file: "paper.blend" },
+    { id: "bare-room", label: "Bare room", file: "bare.blend" },
+  ];
+  const film = renderOptions("film", ["turn"], false, DECLARED, motions, { shortest: 1 }, studios);
+
+  it("carries a built-in look's description and a look a plugin brings with one; a look without one carries none", () => {
+    const looks = of(film, "look");
+    expect(looks.glossy).toBe("The element colours under a clear, glossy coat, molecules and surfaces alike.");
+    expect(looks["shiny-thing"]).toBe("Only in a manifest.");
+    expect(looks.meno).toBeUndefined();
+    expect(looks.jelly).toBeUndefined();
+  });
+
+  it("carries a studio's and a motion's description where they declare one, and none where they do not - nor for As asked or Meno's own motions", () => {
+    expect(of(film, "studio")).toEqual({ asked: undefined, "paper-room": "A pale room of folded paper, lit from one side.", "bare-room": undefined });
+    expect(of(film, "motion")).toEqual({ turn: undefined, "drift-apart": "The molecules drift slowly away from one another.", "plain-spin": undefined });
+  });
+});

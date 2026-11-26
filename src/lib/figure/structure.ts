@@ -4,12 +4,13 @@
  * Meno draws a bond, the page's y turned up as the drawing's is.
  */
 import { NOMINAL_BOND_LENGTH } from "../chem/acs";
-import { abbreviationStructure, reversedLabel } from "../chem/abbreviations";
+import { abbreviationStructure, bondedAbbreviationStructure, reversedLabel } from "../chem/abbreviations";
 import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
-import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
+import { chargeText, implicitHydrogens, mostBonds, valenceOrder, type Radical } from "../chem/molecule";
 import { hydrogenCounts } from "../chem/perception/hydrogens";
 import { coordinatedByDonors } from "../chem/perception/elements";
+import { bondsFromRight } from "../layout/names";
 import { candidates } from "../chem/perception/stereo/candidates";
 import { IN_LINE } from "../chem/perception/stereo/from2d";
 import { bondLength, type FigureRead } from "./read";
@@ -24,9 +25,21 @@ export type LabelReader = (label: string) => { el: string; charge?: number; isot
  * A label as drawn, read: as it is, or - drawn on its bond's left, read
  * from the bond outward - turned round (HO as OH, TBSO as OTBS, MeO2C as
  * CO2Me, H2N as NH2), or an HN before a group as NH (BocHN as NHBoc).
+ * Where its bonds are known to come in from the right (`fromRight`), turned
+ * round first.
  */
-export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string; charge?: number; isotope?: number; read: boolean } {
-  const tries = [drawn, reversedLabel(drawn)];
+export function readDrawnLabel(drawn: string, reads: LabelReader, fromRight = false): { el: string; charge?: number; isotope?: number; read: boolean } {
+  // (text read off a picture is the label as shown: where its bond comes in from the right, read outward from it first - NCO
+  //  there is a cyanate, O bonded (IUPAC GR-2.1.6); elsewhere as it is first - NCO an isocyanate)
+  // (a label of elements alone is turned element by element too, left of its bond: NCS, one unit of the table - the reagent's
+  //  name - shown there is SCN, S bonded. Never a group's name - BrZ, DMPM - which names a group whichever way it is shown)
+  // (and a group's label whose units split it mid-symbol, NCSe as NCS and e: turned symbol by symbol too, after its units - SeCN)
+  const named = abbreviationStructure(drawn);
+  const split = reversedLabel(drawn) !== drawn && !reads(reversedLabel(drawn));
+  const symbols =
+    fromRight && (!(named && named.attach.length) || split) && /^(?:[A-Z][a-z]?\d*)+$/.test(drawn) ? drawn.match(/[A-Z][a-z]?\d*/g)!.reverse().join("") : null;
+  const turned = [...new Set([reversedLabel(drawn), ...(symbols ? [symbols] : [])])].filter((t) => t !== drawn);
+  const tries = fromRight ? [...turned, drawn] : [drawn, ...turned];
   // (a charge written last stays last, turned round or not: H3N+ as NH3+)
   const charged = /^(.+?)(\d*[+-]+\d*)$/.exec(drawn);
   if (charged) tries.push(`${reversedLabel(charged[1])}${charged[2]}`);
@@ -57,7 +70,18 @@ export type StructureAtom = {
   of?: number;
   multiple?: { group: number; n: number; paradigm?: true };
 };
-export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; /** Hashes drawn even, a line: no narrow end. */ hashed?: true; unsure?: string[] };
+export type StructureBond = {
+  a: number;
+  b: number;
+  order: 1 | 2 | 3;
+  stereo?: "up" | "down" | "wavy";
+  bold?: boolean;
+  /** Hashes drawn even, a line: no narrow end. */
+  hashed?: true;
+  unsure?: string[];
+  /** A dative bond, from `a`, the donor, to `b`. */
+  dative?: true;
+};
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
 function drawnHydrogens(label: string): number | null {
@@ -82,7 +106,8 @@ function mostTaken(el: string, charge: number): number | null {
   if (coordinatedByDonors.has(el)) return null;
   const element = mostBonds(el, charge);
   if (element != null || NAMES.has(el)) return element;
-  const g = abbreviationStructure(el);
+  // (bonded, as a label taking bonds is: NCS, isothiocyanato)
+  const g = bondedAbbreviationStructure(el) ?? abbreviationStructure(el);
   if (!g || g.attach.length !== 1 || g.haptic?.length || g.lends?.some(Boolean)) return null;
   const a = g.atoms[g.attach[0]];
   const most = mostBonds(a.el, (a.charge ?? 0) + charge);
@@ -137,13 +162,18 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const cx = about?.x ?? (Math.min(...xs) + Math.max(...xs)) / 2;
   const cy = about?.y ?? (Math.min(...ys) + Math.max(...ys)) / 2;
   // (a label drawn as shapes that reads as nothing: the next likeliest of its readings that reads)
-  const labels = read.atoms.map((a) => {
+  // (whether a label's bonds come in from its right: it is then read outward from them first)
+  const fromRightAt = read.atoms.map((a, i) =>
+    bondsFromRight(read.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : [])).map((j) => ({ x: read.atoms[j].x - a.x, y: read.atoms[j].y - a.y }))),
+  );
+  const labels = read.atoms.map((a, i) => {
     if (a.el) return { el: a.el, ...(a.charge ? { charge: a.charge } : {}), read: true };
     if (!a.label) return null;
-    const first = readDrawnLabel(a.label, reads);
+    const fromRight = fromRightAt[i];
+    const first = readDrawnLabel(a.label, reads, fromRight);
     if (first.read || !a.alts) return first;
     for (const alt of a.alts) {
-      const r = readDrawnLabel(alt, reads);
+      const r = readDrawnLabel(alt, reads, fromRight);
       if (r.read) return { ...r, as: alt };
     }
     return first;
@@ -169,7 +199,9 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const double = new Array(read.atoms.length).fill(false);
   read.bonds.forEach((b, i) => {
     for (const end of [b.a, b.b]) {
-      valence[end] += orders[i];
+      // (a dative bond, as the core counts one (perception/hydrogens `valenceOrder`): none of either end's valence, a lent pair - an
+      //  NH3 by a platinum keeps its three hydrogens, a BH3 by an amine its three - but two of a carbon's, CO's or a carbene's)
+      valence[end] += b.dative ? valenceOrder({ order: orders[i], dative: true }, els[end]) : orders[i];
       degree[end]++;
       if (orders[i] > 1) double[end] = true;
     }
@@ -197,7 +229,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   //  valence chosen by its bonds to non-metals; a label's own H are what it is checked against, never given to it)
   const counted = hydrogenCounts(
     read.atoms.map((_, i) => ({ el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(radicals[i] ? { radical: radicals[i] } : {}) })),
-    read.bonds.map((b, k) => ({ a: b.a, b: b.b, order: orders[k] })),
+    read.bonds.map((b, k) => ({ a: b.a, b: b.b, order: orders[k], ...(b.dative ? { dative: true } : {}) })),
   );
   const atoms = read.atoms.map((a, i): StructureAtom => {
     const unsure = [...(a.unsure ?? [])];
@@ -219,6 +251,12 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
     // (a Y with one bond and no charge is a variable, as X and Z are - Meno's rule, as the writer has it (docs/CTFILE.md): a label cannot tell it from
     // yttrium's symbol, so the atom says it was taken so. An Ar with a bond is an aryl group's by the same rule, its reading not in doubt)
     if (!a.el && a.label === "Y" && degree[i] === 1 && !charges[i]) unsure.push("Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group.");
+    // (NC with its bond at the N - right of the bond, or upright - shows an isocyanide, R-N#C, by GR-2.1.6; it is read as a nitrile,
+    //  as NC is typed (the maintainer, 2026-10-11), so the reading is kept and the doubt said)
+    const text = label && "as" in label && label.as ? label.as : a.label;
+    if (!a.el && label?.read && text === "NC" && !fromRightAt[i]) unsure.push("Read as a nitrile (CN), but NC written here may be an isocyanide, bonded at its N.");
+    // (ONO2 left of its bond, read outward from it, is O-O-N=O; a nitrate ester is written so only on a bond's right - O2NO on its left)
+    if (!a.el && label?.read && text === "ONO2" && fromRightAt[i]) unsure.push("Read as O-O-N=O; a nitrate on this side of its bond is written O2NO, so this may be a nitrate.");
     const over = tooMany[i];
     if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;
@@ -243,7 +281,15 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   // from2d `hashedLinesRead`): "below" at a stereocentre where the line runs to an end group, else nothing, the centre open and said
   const centre = (i: number) => !double[i] && degree[i] >= 3 && degree[i] + counted[i] === 4;
   const bonds = read.bonds.map((b, i): StructureBond => {
-    const out: StructureBond = { a: b.a, b: b.b, order: orders[i], ...(b.stereo ? { stereo: b.stereo } : {}), ...(b.bold ? { bold: true } : {}), ...(b.unsure ? { unsure: [...b.unsure] } : {}) };
+    const out: StructureBond = {
+      a: b.a,
+      b: b.b,
+      order: orders[i],
+      ...(b.stereo ? { stereo: b.stereo } : {}),
+      ...(b.bold ? { bold: true } : {}),
+      ...(b.unsure ? { unsure: [...b.unsure] } : {}),
+      ...(b.dative ? { dative: true } : {}),
+    };
     if (b.either) {
       delete out.stereo;
       out.hashed = true;
