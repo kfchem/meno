@@ -11,7 +11,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { useNotices } from "../notices";
 import clsx from "clsx";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePageCorner } from "../pageCorner";
 import {
   formatBytes,
   purposeName,
@@ -92,7 +93,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
   }, [cards.length]);
 
   return (
-    <div className="absolute right-3 bottom-3 z-[90] flex flex-col gap-2 w-80 pointer-events-none">
+    <AtPageCorner>
       {/* each card comes in, and goes, softly; the others make room as it does */}
       <AnimatePresence initial={false}>
       {/* what Meno did of itself, with the way to have it otherwise (../notices) */}
@@ -213,6 +214,26 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
         );
       })}
       </AnimatePresence>
+    </AtPageCorner>
+  );
+}
+
+/**
+ * The page's bottom-right corner: left of a panel at the window's right
+ * side, moving with it as it slides or is dragged (../pageCorner). Its own
+ * part, so the cards are not made again as it moves - each eases only as
+ * cards come and go.
+ */
+function AtPageCorner({ children }: { children: ReactNode }) {
+  const right = usePageCorner((s) => s.right);
+  return <CornerBox right={right}>{children}</CornerBox>;
+}
+
+/** The notices' container, its right edge `right` from the window's (../pageCorner `cornerRight`). */
+export function CornerBox({ right, children }: { right: number; children?: ReactNode }) {
+  return (
+    <div className="absolute bottom-3 z-[90] flex flex-col gap-2 w-80 pointer-events-none" style={{ right }}>
+      {children}
     </div>
   );
 }

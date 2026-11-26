@@ -1770,7 +1770,12 @@ to be able to work with nothing going out at all.
   has a card in the corner while it runs; the top bar switches offline mode;
   Settings › Network holds the allowed purposes and the record. While a
   talk is given in the window (docs/PRESENTING.md), the cards and the
-  question wait until it ends; the record is kept as ever.
+  question wait until it ends; the record is kept as ever. The corner is
+  the page's (`ui/pageCorner.ts`): while a panel stands at the window's
+  right side - a conversation, a text or a PDF in the column, a style
+  panel - the cards sit left of it, as far from its edge as from the
+  window's with none, and move with it as it slides or is dragged; the
+  workspace in front says where (`PageEdge`).
 - **Which question goes where.** A question that answers the user's own
   click comes over the page (`ConsentDialog`), one at a time. A question
   Meno asks of its own accord comes on a card at the edge of the window,
