@@ -10,25 +10,36 @@ export type ViewAt = { x: number; y: number; zoom: number };
  */
 export type MenuRoom = { from: ViewAt; ours: ViewAt } | null;
 
+/**
+ * The view as it is: where it stands, where it is going if it is on its way,
+ * and - where a press stopped it on its way - the goal it was going to and
+ * where it stood as it stopped.
+ */
+export type ViewNow = { at: ViewAt; goal?: ViewAt; stopped?: { goal: ViewAt; at: ViewAt } };
+
 const same = (a: ViewAt, b: ViewAt) => a.x === b.x && a.y === b.y && a.zoom === b.zoom;
 
 /**
  * Whether the view is still the menus': going where they last sent it, or
- * there. Anything else - the chemist's own pan or zoom, a fit, a row's own
- * move - has sent it elsewhere, and it is no longer theirs to give back.
+ * there, or stopped on its way there by a press that has not moved it since
+ * (a click outside, a right-click elsewhere: a press alone is not the
+ * chemist's move). Anything else - the chemist's own pan or zoom, a press
+ * that drags, a fit, a row's own move - has sent it elsewhere, and it is no
+ * longer theirs to give back.
  */
-function stillOurs(room: NonNullable<MenuRoom>, at: ViewAt, goal: ViewAt | undefined): boolean {
-  return goal ? same(goal, room.ours) : same(at, room.ours);
+function stillOurs(room: NonNullable<MenuRoom>, now: ViewNow): boolean {
+  if (now.goal) return same(now.goal, room.ours);
+  if (same(now.at, room.ours)) return true;
+  return !!now.stopped && same(now.stopped.goal, room.ours) && same(now.stopped.at, now.at);
 }
 
 /**
  * A menu has asked for room and the view is sent to `to`: what is remembered
- * then. The view `at` is where it is, `goal` where it is going if it is on
- * its way. While the view is still the menus', it is counted from where it
+ * then. While the view is still the menus', it is counted from where it
  * stood before the first of them; else from where it is going now, or is.
  */
-export function roomAsked(room: MenuRoom, at: ViewAt, goal: ViewAt | undefined, to: ViewAt): MenuRoom {
-  const from = room && stillOurs(room, at, goal) ? room.from : (goal ?? at);
+export function roomAsked(room: MenuRoom, now: ViewNow, to: ViewAt): MenuRoom {
+  const from = room && stillOurs(room, now) ? room.from : (now.goal ?? now.at);
   return { from, ours: to };
 }
 
@@ -39,8 +50,8 @@ export function roomAsked(room: MenuRoom, at: ViewAt, goal: ViewAt | undefined, 
  * there is nothing to give back (no menu moved it, or it is no longer
  * theirs). Either way what was remembered is forgotten.
  */
-export function roomFreed(room: MenuRoom, at: ViewAt, goal: ViewAt | undefined): ViewAt | null {
-  return room && stillOurs(room, at, goal) ? room.from : null;
+export function roomFreed(room: MenuRoom, now: ViewNow): ViewAt | null {
+  return room && stillOurs(room, now) ? room.from : null;
 }
 
 /**

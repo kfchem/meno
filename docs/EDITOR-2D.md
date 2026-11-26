@@ -348,7 +348,8 @@ on, and it goes back once the last of them has shut; a menu opened elsewhere
 while one is open asks for its own room, and the view still goes back to
 where it was before the first. Where the chemist has moved the view
 themselves meanwhile - a pan, a zoom, a fit - or a row has moved it on
-purpose, the view is theirs and stays. The pan needed is one pure rule
+purpose, the view is theirs and stays; a press alone - a click outside, a
+right-click elsewhere - moves nothing, and the view still goes back. The pan needed is one pure rule
 (`panFor`, `menuAt.ts`), and what is given back another (`menuRoom.ts`; the
 hook that anchors a menu and asks for it, `useMenuAt.ts`).
 

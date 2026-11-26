@@ -9,6 +9,7 @@ import { menuHolds, roomAsked, roomFreed, type MenuRoom, type ViewAt } from "./m
 class View {
   at: ViewAt;
   goal: ViewAt | undefined;
+  stopped: { goal: ViewAt; at: ViewAt } | undefined;
   room: MenuRoom = null;
   constructor(at: ViewAt) {
     this.at = { ...at };
@@ -16,14 +17,28 @@ class View {
   /** A menu asks for so much, in the page's units. */
   ask(dx: number, dy: number) {
     const to = { x: this.at.x + dx, y: this.at.y + dy, zoom: this.at.zoom };
-    this.room = roomAsked(this.room, this.at, this.goal, to);
-    this.goal = to;
+    this.room = roomAsked(this.room, this.now(), to);
+    this.set(to);
   }
   /** Every menu has shut. */
   free() {
-    const back = roomFreed(this.room, this.at, this.goal);
+    const back = roomFreed(this.room, this.now());
     this.room = null;
-    if (back) this.goal = back;
+    if (back) this.set(back);
+  }
+  now() {
+    return { at: this.at, goal: this.goal, stopped: this.stopped };
+  }
+  /** A goal set: a press's stop forgotten, as the canvas forgets it. */
+  set(goal: ViewAt) {
+    this.goal = goal;
+    this.stopped = undefined;
+  }
+  /** A press: the goal on its way let go, where the view stood kept. */
+  press() {
+    if (!this.goal) return;
+    this.stopped = { goal: this.goal, at: { ...this.at } };
+    this.goal = undefined;
   }
   /** The ease, a share of the way at a time. */
   ease(share = 0.37) {
@@ -119,7 +134,7 @@ describe("roomAsked and roomFreed", () => {
     const v = new View(start);
     v.ask(-3, 0);
     v.ease();
-    v.goal = { ...fit };
+    v.set({ ...fit });
     v.free();
     expect(v.goal).toEqual(fit);
     v.arrive();
@@ -133,7 +148,7 @@ describe("roomAsked and roomFreed", () => {
     v.free();
     expect(v.goal).toBeUndefined();
     expect(v.at).toEqual(start);
-    expect(roomFreed(null, start, undefined)).toBeNull();
+    expect(roomFreed(null, { at: start })).toBeNull();
   });
 
   it("gives back what had been asked when the menu shuts during the opening ease", () => {
@@ -159,6 +174,40 @@ describe("roomAsked and roomFreed", () => {
       v.arrive();
       expect(v.at).toStrictEqual(start);
     }
+  });
+
+  it("gives back the exact numbers where a press stopped the opening ease and the menu then shut (a click outside)", () => {
+    const v = new View(start);
+    v.ask(-5.5, 3.3);
+    v.ease();
+    v.press();
+    v.free();
+    v.arrive();
+    expect(v.at).toStrictEqual(start);
+  });
+
+  it("counts a press during the ease and a second menu as one chain, back to the place before the first (a right-click elsewhere)", () => {
+    const v = new View(start);
+    v.ask(-4, 0);
+    v.ease();
+    v.press();
+    v.ask(0, 2.2);
+    v.ease();
+    v.free();
+    v.arrive();
+    expect(v.at).toStrictEqual(start);
+  });
+
+  it("forgets where the press that stopped the ease turns into a drag that moves the view", () => {
+    const v = new View(start);
+    v.ask(-4, 0);
+    v.ease();
+    v.press();
+    const dragged = { ...v.at, x: v.at.x + 0.5 };
+    v.at = dragged;
+    v.free();
+    expect(v.goal).toBeUndefined();
+    expect(v.at).toEqual(dragged);
   });
 
   it("starts from where the view is going back to, where a menu opens again during the ease back", () => {

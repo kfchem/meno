@@ -13,7 +13,7 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import { style3dOf } from "../style3dOf";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf, middleAfterPan } from "../utils/page";
-import { setViewGoal, viewGoalOf } from "./viewGoal";
+import { setViewGoal, viewGoalOf, viewStopOf } from "./viewGoal";
 import { roomAsked, roomFreed, type MenuRoom } from "../menuRoom";
 import { viewToShow } from "../utils/viewShow";
 import { opensWith } from "./openingFit";
@@ -301,15 +301,15 @@ export default function FitToContent2D({
     panned.current = panRequest.n;
     const cam = camera as THREE.OrthographicCamera;
     const at = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
-    const goal = viewGoalOf(cam);
+    const now = { at, goal: viewGoalOf(cam), stopped: viewStopOf(cam) };
     if (panRequest.back) {
-      const back = roomFreed(menuRoom.current, at, goal);
+      const back = roomFreed(menuRoom.current, now);
       menuRoom.current = null;
       if (!back) return;
       setViewGoal(cam, back);
     } else {
       const to = { zoom: at.zoom, ...middleAfterPan(cam, size, panRequest.dx, panRequest.dy) };
-      menuRoom.current = roomAsked(menuRoom.current, at, goal, to);
+      menuRoom.current = roomAsked(menuRoom.current, now, to);
       setViewGoal(cam, to);
     }
     invalidate();

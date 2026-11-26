@@ -12,6 +12,7 @@ import { Canvas } from "@react-three/fiber";
 import { Vector3 } from "three";
 import type { MenuAnchor } from "./useMenuAt";
 import { menuHolds } from "./menuRoom";
+import { holdingCardOpen } from "./menuCards";
 import { documentOf, useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
@@ -1709,7 +1710,7 @@ function WorkspaceContent({
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
   // (a card a menu's row opens holds the view where the menu had it, as the menu did: it goes back once the last of them has shut - menuRoom)
-  const cardOpen = !!(colourCard || pdfCard || cornersCard || givingOrders || protonating || naming || exporting || ask3d);
+  const cardOpen = holdingCardOpen({ ask3d, colourCard, coords, cornersCard, exporting, givingOrders, naming, pdfCard, protonating, rendering, inkMode, menu });
   useEffect(() => (cardOpen ? menuAnchor.hold() : undefined), [cardOpen, menuAnchor]);
   // (a talk begun shuts Export's card and Render's: nothing over a talk, its keys the talk's)
   useEffect(() => {
