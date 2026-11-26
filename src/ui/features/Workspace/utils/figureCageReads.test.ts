@@ -33,7 +33,7 @@ const PICROTOXININ = "CC(=C)[C@@H]1[C@@H]2[C@@H]3[C@@]4([C@]([C@H]1C(=O)O2)(C[C@
 const GIBBERELLIC_ACID = "C[C@@]12[C@H](C=C[C@@]3([C@@H]1[C@@H]([C@]45[C@H]3CC[C@](C4)(C(=C)C5)O)C(=O)O)OC2=O)O";
 
 /** A grey PNG of the fixtures (8 bits, no filter on any row) as the RGBA pixels a picture is traced from. */
-function greyPng(path: string): { width: number; height: number; data: Uint8ClampedArray } {
+function greyPng(path: URL): { width: number; height: number; data: Uint8ClampedArray } {
   const png = readFileSync(path);
   const width = png.readUInt32BE(16);
   const height = png.readUInt32BE(20);
@@ -85,7 +85,7 @@ describe("a cage drawn by Meno, read back", () => {
   }, measured(1500));
 
   it("gibberellic acid as a 300 dpi picture: the bond to the double bond's end stops there, not in the hash beyond it", () => {
-    const pixels = greyPng(new URL("../../../../lib/figure/fixtures/pictures/gibberellic-acid-nature-300dpi.png", import.meta.url).pathname);
+    const pixels = greyPng(new URL("../../../../lib/figure/fixtures/pictures/gibberellic-acid-nature-300dpi.png", import.meta.url));
     const read = readTracedPicture(pixels, gibberellicAt.at, [], (l) => readDrawnLabel(l, figureLabels).read, gibberellicAt.letters as FigureLetter[]);
     if ("none" in read) throw new Error(read.none);
     const got = pictureResult(read, (x, y) => ({ sha256: SHA, page: 0, x, y, bond: read.bond }));

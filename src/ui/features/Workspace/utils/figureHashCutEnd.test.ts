@@ -22,7 +22,7 @@ const SHA = "a".repeat(64);
 const KAINIC_ACID = "CC(=C)[C@H]1CN[C@@H]([C@H]1CC(=O)O)C(=O)O";
 
 /** A grey PNG of the fixtures (8 bits, no filter on any row) as the RGBA pixels a picture is traced from. */
-function greyPng(path: string): { width: number; height: number; data: Uint8ClampedArray } {
+function greyPng(path: URL): { width: number; height: number; data: Uint8ClampedArray } {
   const png = readFileSync(path);
   const width = png.readUInt32BE(16);
   const height = png.readUInt32BE(20);
@@ -80,7 +80,7 @@ describe("a hash whose wide-end line is cut short where it meets its atom's bond
   });
 
   it("reads kainic acid drawn by Meno (RSC style) as a 300 dpi picture with both its hashes' narrow ends: every stereocentre", () => {
-    const pixels = greyPng(new URL("../../../../lib/figure/fixtures/pictures/kainic-acid-rsc-300dpi.png", import.meta.url).pathname);
+    const pixels = greyPng(new URL("../../../../lib/figure/fixtures/pictures/kainic-acid-rsc-300dpi.png", import.meta.url));
     const read = readTracedPicture(pixels, kainicAt.at, [], (l) => readDrawnLabel(l, figureLabels).read, kainicAt.letters as FigureLetter[]);
     if ("none" in read) throw new Error(read.none);
     expect(read.bonds.filter((b) => b.stereo === "down" && !b.either)).toHaveLength(2);
