@@ -137,6 +137,31 @@ export function hydrogensFolded<I extends FoldedInput>(input: I): I {
 }
 
 /**
+ * The structure with each hydrogen counted on a metal ligands are drawn round (`hs`: [PdH]Cl2's) drawn as an atom bonded to it by one
+ * single bond, as a hydride drawn there is - which `hydrogensFolded` keeps an atom: a hydride is then one structure however it is written.
+ * The atoms added come after all the others, the metal's first, so every atom keeps its place; a centre's implicit hydrogen
+ * (`tetra`'s -1) on such a metal becomes the first of them. Unchanged where no such metal counts one.
+ */
+export function metalHydrogensDrawn<I extends FoldedInput>(input: I): I {
+  if (!input.atoms.some((a) => isMetal(a.el) && (a.hs ?? 0) > 0)) return input;
+  const added: FoldedAtom[] = [];
+  const bonds: ChemBond[] = [...input.bonds];
+  const atoms = input.atoms.map((a, i) => {
+    const hs = isMetal(a.el) ? (a.hs ?? 0) : 0;
+    if (!hs) return a;
+    const first = input.atoms.length + added.length;
+    for (let k = 0; k < hs; k++) {
+      added.push({ el: "H", hs: 0 });
+      bonds.push({ a: i, b: first + k, order: 1 });
+    }
+    const { tetra, ...rest } = a;
+    // (none counted now: each is an atom, as a drawn hydride's metal has none)
+    return { ...rest, hs: 0, ...(tetra ? { tetra: { ...tetra, neighbours: tetra.neighbours.map((m) => (m < 0 ? first : m)) } } : {}) };
+  });
+  return { ...input, atoms: [...atoms, ...added], bonds } as I;
+}
+
+/**
  * Which atoms are plain hydrogens - those `hydrogensFolded` folds in, each as its words there say: the one test of a plain hydrogen. Its
  * variants elsewhere answer other questions, each named (a geometric end, a proton counted, a hydrogen a match ignores the map of).
  */
