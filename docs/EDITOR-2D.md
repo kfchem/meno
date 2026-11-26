@@ -340,9 +340,18 @@ any of it would lie past the canvas - the column's width counted - the view
 eases along by just what it lies past and 16 px more, never zooming: a menu is
 a screen's size, not the page's. A panel opened in Quick Add, or a row in a
 menu, that makes it larger asks again. A menu taller than the canvas has its
-top brought in and scrolls inside. Once it has shut, the view stays where it
-went. The pan needed is one pure rule (`panFor`, `menuAt.ts`; the hook that
-anchors a menu and asks for it, `useMenuAt.ts`).
+top brought in and scrolls inside. Once it has shut - by Escape, a click
+outside or a row chosen - the view eases back to where it was before it
+moved, so what the chemist was working on is where they had put it. A row
+that opens a panel, a card or another menu where the menu was holds the view
+on, and it goes back once the last of them has shut; a menu opened elsewhere
+while one is open asks for its own room, and the view still goes back to
+where it was before the first. Where the chemist has moved the view
+themselves meanwhile - a pan, a zoom, a fit - or a row has moved it on
+purpose, the view is theirs and stays; a press alone - a click outside, a
+right-click elsewhere - moves nothing, and the view still goes back. The pan needed is one pure rule
+(`panFor`, `menuAt.ts`), and what is given back another (`menuRoom.ts`; the
+hook that anchors a menu and asks for it, `useMenuAt.ts`).
 
 **Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
 again they go on round, 2026-11-04). With the pointer on a bond, 1, 2

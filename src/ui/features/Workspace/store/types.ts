@@ -2016,9 +2016,11 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
-  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
-  panRequest: { dx: number; dy: number; n: number } | null;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt) - or, `back`, the view gone back to where it was before menus moved it, every one of them shut (menuRoom). */
+  panRequest: { dx: number; dy: number; back?: boolean; n: number } | null;
   requestPan: (dx: number, dy: number) => void;
+  /** The view back where it stood before menus moved it, if it is still where they sent it (`panRequest`, menuRoom). */
+  requestPanBack: () => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
