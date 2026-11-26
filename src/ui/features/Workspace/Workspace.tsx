@@ -239,6 +239,7 @@ import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { newmanDrawing } from "./projections/newman";
 import { isProjection } from "./projections/projection";
 import { chairFromFlat } from "./projections/fromFlat";
+import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { flipOf } from "./projections/flip";
 import { addedName, notDrawnWhy } from "./chem/nameLookup";
 import { addedBox } from "./store/slices/modelSlice";
@@ -2748,8 +2749,24 @@ function WorkspaceContent({
             const ids = fragmentOf(st.model, at);
             if (!isProjection(st.model, ids)) return undefined;
             const flip = flipOf(st.model, ids);
+            // (a ring bond of the chair right-clicked: a ring fused on it, the three ways)
+            const bondId = menu.kind === "bond" && menu.id != null && fusableBonds(st.model, ids).includes(menu.id) ? menu.id : null;
             return {
               flat: () => runCleanUp(at, true),
+              ...(bondId != null
+                ? {
+                    fuse: FUSE_WAYS.map(({ how, name }) => ({
+                      name,
+                      run: () => {
+                        const now = store.getState();
+                        const made = fusedOn(now.model, fragmentOf(now.model, at), bondId, how);
+                        if (!made) return;
+                        if ("refused" in made) setChemError(made.refused);
+                        else now.addSolid(made.atoms, made.bonds, "fuse chair");
+                      },
+                    })),
+                  }
+                : {}),
               ...(flip
                 ? {
                     flip: () => {
