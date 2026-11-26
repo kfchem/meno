@@ -460,8 +460,10 @@ and takes the model's replies in turn (`conversation/turn`):
   changes of the turn are one change set: one step to undo, said to be the
   conversation's, gone on with reply by reply (lib/doc `goneOn`), never
   joined to the person's. *Discard* drops it by its key.
-- **It stops** when the model calls no tool, when the person asks, or at
-  its limit of replies or of tool calls after one message, saying which -
+- **It stops** when the model calls no tool, when the person asks - a
+  reply coming in then ended where it is, what it said so far kept as its
+  words, kept as a whole reply is - or at its limit of replies or of tool
+  calls after one message, saying which -
   or where it fails part way (a tool that throws, a reply not as one is),
   saying why: its changes so far kept to keep or discard, and it is never
   left talking.
@@ -485,8 +487,10 @@ which its card and its column are built:
 - **Sent to** (`sendToConversation`): a turn run with what it talks
   through (`conversation/connections`: none in Meno itself, so nothing is
   sent, and why is kept to say), the person's words and the replies kept
-  outside the page's history. While it talks it is marked so, and *Stop*
-  ends the turn at its next reply.
+  outside the page's history. While it talks it is marked so, the words of
+  a reply shown as they come, and *Stop* ends the turn: a reply under way
+  where it is (its plugin's worker stopped, and started afresh for the
+  next), else at its next reply.
 - **A turn's changes** are one step, marked: *Keep* lets the mark go;
   *Discard* undoes that step - refused, and why, where a step it added is
   running, or where the page has changed since: then undo is the
@@ -524,11 +528,20 @@ options - by the one way the backend takes it (`ext_converse`), which
 adds the person's key on the way. The page never holds the key: it can
 neither read it nor send a key of its own, nor send `converse` by the way
 other requests go: to a model plugin's worker, that way takes only whole
-lines, each a JSON object, none of them a `converse`. Meno waits for the
-reply whole, up to 10 minutes - as long as a model service's own SDK
-waits for one request by default - and nothing of it is shown till then; a
-plugin gives up within that, in words (`REPLY_MS`; replies shown as they
-come are for a later version). What the plugin answers is read strictly:
+lines, each a JSON object, none of them a `converse`. Meno asks for the
+reply's words as they come (`stream`), and a plugin that can sends them so,
+a part a line, before its answer (PLUGINS.md, *converse*); a plugin that
+does not gives its reply whole, and it is shown whole. Meno waits up to 10 minutes - as
+long as a model service's own SDK waits for one request by default - for
+the reply whole, or from the last part of it that came; a plugin gives up
+within that, in words (`REPLY_MS`). The words so far are shown as they
+come: in the column, gathered and shown once a frame at most; on the
+page's card, its latest lines, laid anew about once a second, the card
+gliding to its end as it grows - so that a long reply never holds up the
+drawing, and nothing jumps. Should the plugin fail, or its connection
+break, as the words come, what came is kept as its words and the
+conversation says plainly that the reply broke off, and why. Its tools and what the plugin keeps come with its answer, and
+nothing it says is kept till then. What the plugin answers is read strictly:
 its words, plain text, and the tools it calls, each by name with its
 arguments - or its error; anything else is refused, never guessed at
 (conversation/modelConnection `replyOf`). With them, what the plugin keeps
@@ -555,7 +568,13 @@ The key is never shown to the page or written to Meno's log. Should a
 worker say it back, the backend takes it out of what the worker says
 before the page or the log sees it - every key given to that worker, on
 its output and its errors alike, until both are read to their ends, after
-it was stopped too. A safeguard, not a promise for the plugin: it finds the
+it was stopped too. A reply's words sent as they come are taken out of
+across their parts: the end of a part that may begin a key is held back
+and given with the next part of that reply, so that a key said in two
+parts is found whole (src-tauri/src/model.rs `scrub`) - read as the words
+they are, so that a key a JSON writer gives escaped there is found too;
+the end held back of a reply stopped as it came is not given. A
+safeguard, not a promise for the plugin: elsewhere it finds the
 key as it was given, and not one the plugin writes otherwise (a `/` a JSON
 writer gives as `\/`, say); what a plugin does with the key is its
 review's to check.

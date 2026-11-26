@@ -44,6 +44,9 @@ const LEVEL = { rest: 0, hover: 1, chosen: 2 } as const;
 /** Where a card is drawn among the page's WebGL: over its frame's line and under the steps' cards - the frame's order, a little over it. */
 const CARD_ORDER = FRAMES_ORDER + 0.25;
 
+/** How often a card lays anew the words of a reply coming in, at most, in ms: the column shows them more often (store `HEARD_MS`). */
+const HEARD_LAID_MS = 1000;
+
 /** How small a frame may be sized, each way: what holds its card (pageGl/conversationCard `FRAME_LEAST`), in world units. */
 const LEAST = { w: pagePx(FRAME_LEAST.w), h: pagePx(FRAME_LEAST.h) };
 
@@ -73,6 +76,8 @@ export default function ConversationFrames() {
   // (what is typed in each card's ask field and not yet asked: kept as the card is looked away from)
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const laid = useRef(new Map<number, { said: readonly Said[]; key: string; layout: CardLayout }>());
+  // (each card's words of a reply coming in, as last laid, and when: laid anew at most each HEARD_LAID_MS - a long history never laid again for each word)
+  const heardLaid = useRef(new Map<number, { text: string; at: number }>());
   // (each card's scroll as it is shown, gliding to where it goes; the card the pointer is on, and a thumb being dragged - the offset it is at)
   const glides = useRef(new Map<number, Glide>());
   const [pointed, setPointed] = useState<number | null>(null);
@@ -129,15 +134,20 @@ export default function ConversationFrames() {
     return c && !c.wholePage ? [{ it, c }] : [];
   });
   for (const id of [...laid.current.keys()]) if (!conversations.some((c) => c.id === id && !c.wholePage)) laid.current.delete(id);
+  for (const id of [...heardLaid.current.keys()]) if (!laid.current.has(id) && !shownCards.some(({ c }) => c.id === id)) heardLaid.current.delete(id);
   for (const { c } of shownCards) {
     const running = !!talking[c.id]?.running;
     const changed = !!talking[c.id]?.changed;
     const notes = changed ? [runsAgainSaid(talking[c.id]?.runsAgain, steps), discarded[c.id] ?? null].flatMap((n) => n ?? []) : [];
     // (at the width the frame leaves it: its words wrap there, and are laid out again where that changes - a frame sized)
     const width = cardWidth(frameOf(c)) ?? CARD.w;
-    const key = `${running}|${changed}|${notes.join("\n")}|${width.toFixed(2)}`;
+    const coming = running ? (talking[c.id]?.heard ?? "") : "";
+    const was = heardLaid.current.get(c.id);
+    const heard = !coming || !was || now - was.at >= HEARD_LAID_MS ? coming : was.text;
+    if (heard !== was?.text) heardLaid.current.set(c.id, { text: heard, at: now });
+    const key = `${running}|${changed}|${notes.join("\n")}|${width.toFixed(2)}|${heard.length}`;
     const had = laid.current.get(c.id);
-    if (!had || had.said !== c.said || had.key !== key) laid.current.set(c.id, { said: c.said, key, layout: cardLayout(cardBlocks(c.said, { running, changed, notes }), width) });
+    if (!had || had.said !== c.said || had.key !== key) laid.current.set(c.id, { said: c.said, key, layout: cardLayout(cardBlocks(c.said, { running, heard, changed, notes }), width) });
   }
   const words = useEasedValues(new Map(shownCards.map(({ it }) => [it.key, read ? 1 : 0])), DURATION.quick * 1000);
   // (a card's scroll: where it goes - the end, unless it was left scrolled up - and where it is, gliding there; its track, Earlier and Latest as present as they are wanted, eased)
