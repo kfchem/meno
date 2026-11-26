@@ -9,8 +9,6 @@ import PageTip from "./PageTip";
 
 /** The round the mark takes the pointer in, in page pixels (a bond is 48): wider than the mark (utils/molecule3d `NOTES_MARK_PX`), scaled with the page as all of it is. */
 const HIT_PX = 13;
-/** The zoom at which a page pixel is a screen pixel: the marks' outline drawn at it, so that it scales with the page as the mark does. */
-const PAGE_ZOOM = 1 / PAGE_PX;
 /** Over the page, under the molecules' own HTML, as the chips it stands for were. */
 const TIP_Z: [number, number] = [30, 20];
 
@@ -43,7 +41,7 @@ export default function NotesMark3D({ notes }: { notes: readonly string[] }) {
   const said = words ?? (shown[0].item as string);
   return (
     <group>
-      <MarkBoxes2D boxes={[box]} leaving={leaving} zoom={PAGE_ZOOM} />
+      <MarkBoxes2D boxes={[box]} leaving={leaving} />
       {/* (its words for a screen reader, at rest; its room, for a fit to take in; and, while it says anything, a round wider
           than the mark, unseen, that takes the pointer - HTML, as the handle of a mark is (docs/LOOK.md, rule 7): a mesh of the
           molecule's there was never pointed at in a set, whose frame takes the pointer first) */}

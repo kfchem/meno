@@ -39,7 +39,6 @@ export default function PageAsk({
   onValue,
   running,
   noModel,
-  words,
   opacity,
   noHits,
   onAsk,
@@ -54,7 +53,6 @@ export default function PageAsk({
   onValue: (value: string) => void;
   running: boolean;
   noModel: boolean;
-  words: number;
   opacity: number;
   noHits?: boolean;
   /** Enter, with something typed: ask it. Told what was typed; the field is then emptied. */
@@ -184,7 +182,6 @@ export default function PageAsk({
     caret: active ? caret : 0,
     running,
     noModel,
-    words,
     opacity,
   });
   const spot = caretSpot(value, area.lines, end, first.current, widthPx, area.heightPx);

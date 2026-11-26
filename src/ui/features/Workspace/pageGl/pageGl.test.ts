@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PAGE_PX } from "../utils/pageScale";
-import { controlLine, controlOnPage, controlSize, lineWidth, pagePx, type Control } from "./units";
+import { controlLine, controlOnPage, controlSize, devicePx, pagePx, thinLine, THIN_LINE_GLSL, type Control } from "./units";
 import * as THREE from "three";
 import { CONTROL_SIZE_GLSL, fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
@@ -8,30 +8,43 @@ import { fitted, placed, textWidth, wrapText } from "./texts";
 import { cellOf } from "./icons";
 
 describe("the page's own lengths", () => {
-  it("draw a line in page pixels, growing and shrinking with the page, never under a device pixel", () => {
-    // (zoomed in: as the page has it)
-    expect(lineWidth(1, 10 / PAGE_PX, 2)).toBeCloseTo(pagePx(1), 12);
-    // (zoomed far out on a screen of two: a device pixel, half a screen pixel)
-    const zoom = 0.1 / PAGE_PX;
-    expect(lineWidth(1, zoom, 2)).toBeCloseTo(1 / (zoom * 2), 12);
-    expect(lineWidth(1, zoom, 2)).toBeGreaterThan(pagePx(1));
+  it("draw a line's width in the zoom's ratio; thinner than a device pixel, a device pixel wide and as much fainter", () => {
+    // (a line of 2 page px at 3 and at 1.5 times, on a screen of two: 6 and 3 screen px, both over a device pixel - in the zoom's ratio, full ink)
+    const at = (scale: number) => thinLine(pagePx(2), devicePx(scale / PAGE_PX, 2));
+    expect(at(3)).toEqual({ width: pagePx(2), ink: 1 });
+    expect(at(1.5)).toEqual({ width: pagePx(2), ink: 1 });
+    expect((at(3).width * 3) / PAGE_PX / ((at(1.5).width * 1.5) / PAGE_PX)).toBeCloseTo(2, 12);
+    // (at a tenth: 0.2 screen px, 0.4 of a device pixel - drawn a device pixel wide, at 0.4 of its ink; at a fortieth, 0.1 of it)
+    const tenth = 0.1 / PAGE_PX;
+    const far = thinLine(pagePx(2), devicePx(tenth, 2));
+    expect(far.width).toBeCloseTo(1 / (tenth * 2), 12);
+    expect(far.ink).toBeCloseTo(0.4, 12);
+    expect(thinLine(pagePx(2), devicePx(0.025 / PAGE_PX, 2)).ink).toBeCloseTo(0.1, 12);
+    // (what it gives the screen - its width times its ink - is its true width at every zoom: no least, no jump at a device pixel)
+    for (const scale of [0.01, 0.1, 0.24, 0.25, 0.26, 1, 4]) {
+      const d = devicePx(scale / PAGE_PX, 2);
+      const l = thinLine(pagePx(2), d);
+      expect(l.width * l.ink, `${scale}`).toBeCloseTo(pagePx(2), 12);
+      expect(l.width, `${scale}`).toBeGreaterThanOrEqual(Math.min(d, pagePx(2)) - 1e-12);
+    }
+    // (none at none)
+    expect(thinLine(0, 1)).toEqual({ width: 0, ink: 1 });
+    // (the shader's own, the same rule)
+    expect(THIN_LINE_GLSL).toContain("w > 0.0 && w < d ? vec2(d, w / d) : vec2(w, 1.0)");
   });
 
-  it("grow a control with the page: its page pixels, no more than its share of what it belongs to, never under its least on the screen", () => {
-    const port: Control = { leastScreenPx: 5, onPagePx: 11, leastOfPx: { of: 120, share: 1 / 6 } };
+  it("grow a control with the page: its page pixels, no more than its share of what it belongs to, in the zoom's ratio on the screen", () => {
+    const port: Control = { leastScreenPx: 0, onPagePx: 11, leastOfPx: { of: 120, share: 1 / 6 } };
     expect(controlOnPage(port)).toBeCloseTo(pagePx(11), 12);
     expect(controlOnPage({ ...port, leastOfPx: { of: 60, share: 1 / 6 } })).toBeCloseTo(pagePx(10), 12);
-    // (zoomed in: as the page has it, larger on the screen)
+    // (zoomed in and far out: as the page has it, the same on the page)
     const near = 4 / PAGE_PX;
-    expect(controlSize(port, near)).toBeCloseTo(pagePx(11), 12);
-    expect(controlSize(port, near) * near).toBeGreaterThan(5);
-    // (far: five screen pixels, no less)
     const far = 0.1 / PAGE_PX;
-    expect(controlSize(port, far)).toBeCloseTo(5 / far, 12);
-    // (its line: a screen pixel, a fifth of it where it is tiny, never under a device pixel)
-    expect(controlLine(controlSize(port, near), near, 2)).toBeCloseTo(1 / near, 12);
-    const tiny = 3 / far;
-    expect(controlLine(tiny, far, 1)).toBeCloseTo(Math.max(tiny / 5, 1 / far), 12);
+    expect(controlSize(port, near)).toBeCloseTo(pagePx(11), 12);
+    expect(controlSize(port, far)).toBeCloseTo(pagePx(11), 12);
+    // (its line: a page pixel, a fifth of it where it is tiny - a page length, the same at every zoom)
+    expect(controlLine(controlSize(port, near))).toBeCloseTo(pagePx(1), 12);
+    expect(controlLine(pagePx(3))).toBeCloseTo(pagePx(3) / 5, 12);
   });
 });
 

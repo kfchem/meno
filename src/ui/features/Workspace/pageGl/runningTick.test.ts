@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dashAdvance, RUNNING_FRAME_MS, runningTick } from "./runningTick";
+import { PAGE_PX } from "../utils/pageScale";
 
 describe("a running mark's frames", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -46,28 +47,27 @@ describe("a running mark's frames", () => {
 });
 
 describe("a wire's dashes", () => {
-  const along = (frames: number, dt: number, zoom = 1.5) => {
+  const P = PAGE_PX;
+  const along = (frames: number, dt: number) => {
     let offset = 0;
-    for (let i = 0; i < frames; i++) offset = dashAdvance(offset, dt, 12, zoom, 6, 4);
+    for (let i = 0; i < frames; i++) offset = dashAdvance(offset, dt, 12, 6, 4);
     return offset;
   };
   it("stand at the same place after the same time, in frames of 1/60 s or of 1/30 s", () => {
-    // (a second, the period 10 / zoom apart: the same place round it)
     expect(along(60, 1 / 60)).toBeCloseTo(along(30, 1 / 30), 9);
     expect(along(10, 1 / 60)).toBeCloseTo(along(5, 1 / 30), 9);
   });
-  it("go as far in a unit's time at half the zoom as at twice it, in the ratio of the zooms", () => {
-    expect(dashAdvance(0, 0.1, 12, 1, 600, 400)).toBeCloseTo(2 * dashAdvance(0, 0.1, 12, 2, 600, 400), 9);
-    expect(dashAdvance(0, 0.1, 12, 1, 600, 400)).toBeCloseTo(1.2, 9);
+  it("are page lengths, the same on the page at every zoom - so on the screen in the zoom's ratio - and go along in page px a second", () => {
+    // (nothing of them told the zoom: 12 page px a second, a tenth of a second 1.2 page px)
+    expect(dashAdvance(0, 0.1, 12, 600, 400)).toBeCloseTo(1.2 * P, 9);
   });
   it("go round the length of a dash and a gap, not of a dash: a place between the two is reached", () => {
-    // (a period of 10 at zoom 1: after 7.5 of travel they stand at 7.5, past a dash's 6; after 10, round to 0)
-    expect(dashAdvance(0, 0.1, 75, 1, 6, 4)).toBeCloseTo(7.5, 9);
-    expect(dashAdvance(7.5, 0.1, 25, 1, 6, 4)).toBeCloseTo(0, 9);
-    expect(dashAdvance(0, 0.1, 99, 2, 6, 4)).toBeCloseTo(4.95, 9);
+    // (a period of 10 page px: after 7.5 of travel they stand at 7.5, past a dash's 6; after 10, round to 0)
+    expect(dashAdvance(0, 0.1, 75, 6, 4)).toBeCloseTo(7.5 * P, 9);
+    expect(dashAdvance(7.5 * P, 0.1, 25, 6, 4)).toBeCloseTo(0, 9);
   });
   it("never go past one dash and gap, nor leap on a stalled page", () => {
-    expect(along(1000, 1 / 30, 2)).toBeLessThan(10 / 2);
-    expect(dashAdvance(0, 5, 12, 1, 6, 4)).toBeCloseTo((0.1 * 12) % 10);
+    expect(along(1000, 1 / 30)).toBeLessThan(10 * P);
+    expect(dashAdvance(0, 5, 12, 6, 4)).toBeCloseTo(((0.1 * 12) % 10) * P, 9);
   });
 });

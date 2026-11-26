@@ -11,6 +11,7 @@ import { cellOf, cellsWithin, type Honeycomb } from "../utils/honeycomb";
 import { setLinePoints } from "../utils/linePoints";
 import { trailShown } from "../utils/chain";
 import { follow } from "../../../theme/motion";
+import { pageLength } from "../utils/pageScale";
 
 /** How far about the chain's end the honeycomb is shown, in bonds, and how long it takes to open out and to fold away, in seconds. */
 const REACH = 3.4;
@@ -20,7 +21,7 @@ const FOLD_S = 0.2 * CHAIN_EASE;
 const HEAD_TAU = 0.05 * CHAIN_EASE;
 /** How strongly it is shown at its middle: the highlight, this much of it. */
 const STRENGTH = 0.32;
-/** A guide's width, in pixels on the screen. */
+/** A guide's width, in page pixels. */
 const LINE_PX = 1.2;
 const easeOut = (u: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);
 
@@ -169,8 +170,7 @@ export default function ChainGuide2D() {
     const centre = chain ? head : honeycomb.origin;
     const reach = REACH * L * easeOut(open);
     const { edges } = cellsWithin(honeycomb, centre, reach + L);
-    const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
-    const half = (LINE_PX / zoom) / 2;
+    const half = pageLength(LINE_PX) / 2;
     const positions: number[] = [];
     const colors: number[] = [];
     const tint = new THREE.Color(COLORS.highlight);

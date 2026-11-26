@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { devicePx, thinLine } from "../pageGl/units";
 import { useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
@@ -22,7 +23,7 @@ import { TAU, follow } from "../../../theme/motion";
 export default function MovePreview2D() {
   const { model, moveDrag } = useEditor();
   const setMoveDragPreview = useEditor((s) => s.setMoveDragPreview);
-  const { camera, invalidate } = useThree();
+  const { camera, gl, invalidate } = useThree();
   // The drawing's own line, in world units.
   const lineWidthWorld = useDrawnLayout().opts.lineWidthPx;
   const thinInst = useRef<THREE.InstancedMesh>(null!);
@@ -116,13 +117,15 @@ export default function MovePreview2D() {
     // (as the drop measures it - a magnified atom's bond is longer: utils/dropOutcome)
     const bondL = bondLengthFrom(model.atoms, moving.id);
     const zoom = (camera as any)?.zoom || 1;
-    const thinW = Math.max(lineWidthWorld, 1 / Math.max(zoom, 1e-6));
+    // (as wide as the drawing's lines - thinner than a device pixel, a device pixel wide and as much fainter: pageGl/units `thinLine`)
+    const thinLn = thinLine(lineWidthWorld, devicePx(zoom, gl.getPixelRatio()));
+    const thinW = thinLn.width;
 
     // opacity for thin highlights; reduce overlap darkening
     const baseOpacity = ALPHA.highlight;
     const op = baseOpacity / Math.sqrt(Math.max(1, deg));
     const matThin = mThin.material as THREE.MeshBasicMaterial | undefined;
-    thinOpacityRef.current = Math.max(0.18, Math.min(baseOpacity, op));
+    thinOpacityRef.current = Math.max(0.18, Math.min(baseOpacity, op)) * thinLn.ink;
     if (matThin) matThin.opacity = thinOpacityRef.current * seenRef.current;
 
     // determine snapping for deg cases

@@ -1795,16 +1795,11 @@ All hover-based, as above.
     in the molecule as drawn, not worked out again for the part on its own:
     an atom that is R in the molecule is R in the picture, though the part
     alone might make it another or none. A molecule in 3D's: docs/WORKSPACE.md.
-  - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
-    and floated round a structure a few pixels across). Their letters keep
-    to 9 px at the least; past that they go once 9 px would be a third
-    larger than they are (`MARKS_LEAST_PX`) - switched there, not faded with
-    the zoom (the maintainer, 2026-10-28: a fade with the zoom left them half
-    there at a zoom), a little either way so that a zoom stopped at it does
-    not switch them back and forth, and faded over Meno's quick time, 120 ms
-    (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
-    alike. Atom numbers on a molecule in 3D still fade below their own least
-    size with the zoom, atom by atom, in the 3D view's shaders.
+  - **At any zoom.** Their letters are as large on the page at every zoom
+    (`markFontPx`): they grow and shrink with the drawing and are drawn
+    however far out the view is. On a drawing and on a molecule in 3D
+    alike; atom numbers on a molecule in 3D too. A picture of a molecule
+    in 3D leaves out the atom numbers too small to read in that picture.
 - **When an edit changes a configuration** (foundation part 15, phase 2;
   the maintainer's direction of 2026-11-04: the configuration is read
   from the drawing, and a change of it is said). After each edit is done,

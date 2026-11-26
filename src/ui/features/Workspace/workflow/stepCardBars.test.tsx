@@ -9,8 +9,8 @@ import { inputsOf, kindInfo, optionsOf } from "./kinds";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer draws the card.
 
-/** A Filter step's card, open to its options, zoomed in or out (`compact`). */
-function card(compact: boolean): string {
+/** A Filter step's card, open to its options. */
+function card(): string {
   const s = { id: 1, kind: "filter", x: 0, y: 0, options: {} } as WorkflowStep;
   const info = kindInfo(s.kind);
   const noop = () => {};
@@ -21,7 +21,6 @@ function card(compact: boolean): string {
       who="Meno"
       how=""
       state="ready"
-      compact={compact}
       open
       inputs={inputsOf(s.kind).map((p) => ({ id: p.id, name: p.name, look: "plain" as const }))}
       optionList={info.options ?? []}
@@ -41,15 +40,11 @@ function card(compact: boolean): string {
 }
 
 describe("a step's card open to its options", () => {
-  it("stays open zoomed out, its options' words then grey bars - its Close there, as near", () => {
-    const near = card(false);
-    const far = card(true);
-    for (const html of [near, far]) expect(html).toMatch(/>Close</);
-    expect(near).not.toContain("meno-barred");
-    expect(far).toContain("meno-barred");
-    // (its options there either way: the same words, unseen zoomed out)
-    const words = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    expect(words(far)).toBe(words(near));
+  it("shows its words and its Close as they are, with no stand-in for them: nothing in it is chosen by the zoom", () => {
+    const html = card();
+    expect(html).toMatch(/>Close</);
+    expect(html).toMatch(/>Meno</);
+    for (const gone of ["meno-barred", "meno-words", "aria-hidden=\"false\""]) expect(html).not.toContain(gone);
   });
 });
 
@@ -66,7 +61,6 @@ describe("a step's card that still needs a value of its options", () => {
         who="Meno"
         how=""
         state="ready"
-        compact={false}
         open
         asks={asks}
         inputs={inputsOf(s.kind).map((p) => ({ id: p.id, name: p.name, look: "plain" as const }))}

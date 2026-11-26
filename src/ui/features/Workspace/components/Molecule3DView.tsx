@@ -8,14 +8,13 @@ import { COLORS } from "../../../theme/colors";
 import { DURATION, TAU } from "../../../theme/motion";
 import { usePresence } from "../../../theme/presence";
 import { buttonHeld } from "./buttonHeld";
-import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, linedBall, type Style3D } from "../../../../lib/chem/style3d";
+import { thinLine } from "../pageGl/units";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
 import { pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoMarks3d, stereoSpotsShown, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type StereoMark3D, type Stick, type ValueAt } from "../utils/molecule3d";
-import { MARK_MIN_PX, marksReadAt } from "../chem/marks";
-import { switchFade, switchStep } from "../utils/zoomSwitch";
 import { LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
@@ -579,9 +578,6 @@ function Molecule3DView(props: Molecule3DViewProps) {
   stereoNow.current = stereoPresent;
   // (how far each is in view, and its fade: fadeStep)
   const stereoFades = useRef(new Map<string, LabelFade>());
-  // (R and S all switched on or off as the view is far out or not, and faded over a short time: utils/zoomSwitch)
-  const stereoRead = useRef(true);
-  const stereoSeen = useRef(switchFade(true));
   // (frames waited for the labels shown together to be there)
   const stereoWaited = useRef(0);
   const stereoAnchors = useRef(new Map<string, { anchor: THREE.Group | null; ink: StereoInk | null }>());
@@ -1034,7 +1030,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
       bl.amount.value.set(...ll.circles);
       // (in the balls' own units - their radii their instances' scale - so that they grow and shrink with the molecule)
       bl.width.value = ll.circleWidth * WORLD_PER_ANGSTROM;
-      bl.least.value = LINE_LEAST_PX;
+      // (thinner than a device pixel, a device pixel wide and as much fainter: pageGl/units `thinLine`)
+      bl.least.value = 1;
       bl.colour.value.set(P.ballLinesColor).lerp(colour.set(S.ballLinesColor), ff).convertLinearToSRGB();
       // (the sticks coloured by their atoms: each line's two ends' colours, as the atoms are coloured now)
       const bm = bonds.current;
@@ -1084,10 +1081,11 @@ function Molecule3DView(props: Molecule3DViewProps) {
         // (the balls' or sticks' own instances: where they are, it is)
         if (lines.instanceMatrix !== of.instanceMatrix) lines.instanceMatrix = of.instanceMatrix;
         lines.count = of.count;
-        // (in the molecule's units, as large as it is drawn now - never under the least pixels)
-        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x * magShown.current, perPx);
+        // (in the molecule's units, as large as it is drawn now - thinner than a device pixel, a device pixel wide and as much fainter)
+        const drawn = thinLine(ll.width * WORLD_PER_ANGSTROM * placed.current.scale.x * magShown.current, perPx / gl.getPixelRatio());
+        o.width.value = drawn.width;
         o.material.color.set(P.outlineColor).lerp(colour.set(S.outlineColor), ff);
-        o.material.opacity = seenBy;
+        o.material.opacity = seenBy * drawn.ink;
       }
     }
     // the atom under the pointer, and the chosen atoms' rings
@@ -1488,7 +1486,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
             : { x: o.x - own.reduce((t, q) => t + q.x, 0) / own.length, y: o.y - own.reduce((t, q) => t + q.y, 0) / own.length };
         values.push({ o, half: { x: (box.w / 2) * chipScale, y: (box.h / 2) * chipScale }, way: Math.hypot(way.x, way.y) > 1e-9 ? way : { x: 0, y: -1 }, was: valuesAbout.current.get(id), id, el: l.el });
       }
-      const goals = valueSpots(values);
+      const goals = valueSpots(values, chipScale);
       values.forEach((v, k) => {
         const about = v.was ? spotFollowed(v.was, goals[k], step, STEREO_TAU) : goals[k];
         valuesAbout.current.set(v.id, about);
@@ -1508,11 +1506,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
     if (stereoNow.current.length) {
       const g = Math.max(grown.current.v, 1e-3);
       const natural = props.stereoFont.units === "px" ? props.stereoFont.size : props.stereoFont.size / px;
-      const font = Math.max(MARK_MIN_PX, natural);
-      // (the view far out: switched as the drawing's are, past their least size - marksReadAt - and faded over a short time)
-      stereoRead.current = marksReadAt(stereoRead.current, natural);
-      if (switchStep(stereoSeen.current, stereoRead.current, step)) moving = true;
-      const seenAtZoom = stereoSeen.current.v;
+      // (as large on the page at every zoom as the drawing's letters)
+      const font = natural;
       const v = new THREE.Vector3();
       const onScreen = (parent: THREE.Object3D, x: number, y: number, z: number) => {
         parent.localToWorld(v.set(x, y, z)).project(camera);
@@ -1530,7 +1525,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
       const goIn = allThere || stereoWaited.current > STEREO_WAIT_FRAMES;
       // where each is placed: as a picture of the molecule places it (utils/molecule3d `stereoSpotsAmong`, shared with
       // `stereoPictureSpots3d`) - the balls and bonds as at rest, no atom swelling under the pointer, in the order a picture takes
-      // them, at the drawing's own letters rather than the least size they are drawn at - so that a copy made now has each where the
+      // them, at the drawing's own letters - so that a copy made now has each where the
       // canvas has it; those going, placed after, clear of those shown, and no obstacle to them
       const entries: { mark: StereoMark3D; leaving: boolean; anchor: THREE.Object3D; ink: NonNullable<ReturnType<typeof stereoAnchors.current.get>>["ink"]; o: { x: number; y: number }; own: number }[] = [];
       let balls: { x: number; y: number; r: number }[] | null = null;
@@ -1567,7 +1562,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
         let fade = stereoFades.current.get(e.mark.key);
         if (!fade) stereoFades.current.set(e.mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
         if (fadeStep(fade, e.leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
-        const opacity = risen.current * fade.v * seenAtZoom;
+        const opacity = risen.current * fade.v;
         // (not there at once where its best way changes as the molecule turns: glided round the atom to it, as everything moves)
         const o = e.o;
         const goal = { a: Math.atan2(best.y - o.y, best.x - o.x), r: Math.hypot(best.x - o.x, best.y - o.y) };
@@ -1774,7 +1769,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const chip = useFramesChip({ chipKey, id: m.id, facts, frame: frameOf(solid, frame), open: !!props.framesOpen, onFrame: props.onFrame, onLowest: props.onLowest, onOpened: chipOpened, raised: chipRaised });
   usePlaced(
     chipThere && chip.drawn && pillThere && pill.current
-      ? { key: chipKey, anchor: pill.current, words: true, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
+      ? { key: chipKey, anchor: pill.current, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
       : null,
   );
 

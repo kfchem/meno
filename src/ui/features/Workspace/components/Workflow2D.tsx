@@ -29,7 +29,7 @@ import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useSetSigns } from "./useSetSigns";
-import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, PAGE_PX, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, inputOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
@@ -50,10 +50,10 @@ import { dragSelection } from "../utils/dragSelection";
 import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
-import { cardBoxOf, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
-import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
+import { cardFace, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
+import { devicePx, thinLine } from "../pageGl/units";
 import { useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
 import type { Region } from "../pageGl/hits";
@@ -61,7 +61,6 @@ import type { PageIcon } from "../pageGl/icons";
 import type { PageTipAt } from "../pageGl/PagePlaced";
 import type { Shape } from "../pageGl/shapes";
 import { cardState, refusedState } from "../workflow/cardState";
-import { useEasedTo } from "../../../theme/opening";
 
 type Pt = { x: number; y: number };
 
@@ -77,7 +76,7 @@ const ATTENTION = "rgb(205, 69, 96)";
 /** A wire's width in page pixels (`wireWidth`); how wide it takes the pointer, in screen pixels. */
 const WIRE_PX = 1.25;
 const WIRE_HIT_PX = 10;
-/** The wire into a running step, dashed - its dashes and gaps, in px on the screen - and how fast they move along it, in px a second: slowly. */
+/** The wire into a running step, dashed - its dashes and gaps, in page px - and how fast they move along it, in page px a second: slowly. */
 const DASH_PX = 6;
 const GAP_PX = 4;
 const DASH_SPEED = 12;
@@ -291,23 +290,27 @@ function ribbon(pts: readonly Pt[]): THREE.BufferGeometry {
   return g;
 }
 
-/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), set as it is drawn. */
-function widened(material: THREE.Material, half: { value: number }): void {
+/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), and its ink (`ink.value`, a share), set as it is drawn. */
+function widened(material: THREE.Material, half: { value: number }, ink: { value: number }): void {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.ribbonHalf = half;
+    shader.uniforms.ribbonInk = ink;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nattribute vec2 ribbonNormal;\nuniform float ribbonHalf;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.xy += ribbonNormal * ribbonHalf;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float ribbonInk;")
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.a *= ribbonInk;");
   };
   material.customProgramCacheKey = () => "ribbon";
 }
 
 /**
- * How wide a wire is, in world units, at `zoom` on a screen of `dpr`: a page
- * pixel and a quarter, as wide as the page draws it, never thinner than a
- * device pixel (the maintainer, 2026-11-05: page units, floored).
+ * How a wire is drawn at `zoom` on a screen of `dpr`: a page pixel and a
+ * quarter wide, in world units - and, thinner than a device pixel, a device
+ * pixel wide and as much fainter (`ink`: pageGl/units `thinLine`).
  */
-export const wireWidth = (zoom: number, dpr: number) => Math.max(WIRE_PX * PX, 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+export const wireWidth = (zoom: number, dpr: number) => thinLine(WIRE_PX * PX, devicePx(zoom, dpr));
 
 const DASH_VERTEX = `
 attribute float along;
@@ -325,10 +328,11 @@ uniform vec3 color;
 uniform float offset;
 uniform float dash;
 uniform float gap;
+uniform float ink;
 varying float vAlong;
 void main() {
   if (mod(vAlong - offset, dash + gap) > dash) discard;
-  gl_FragColor = vec4(color, 1.0);
+  gl_FragColor = vec4(color, ink);
 }`;
 
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn thirty times a second. */
@@ -339,9 +343,10 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 } },
+        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 }, ink: { value: 1 } },
         vertexShader: DASH_VERTEX,
         fragmentShader: DASH_FRAGMENT,
+        transparent: true,
         depthTest: false,
         depthWrite: false,
       }),
@@ -354,10 +359,12 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   useEffect(() => tick.stop, [tick]);
   useFrame((_, dt) => {
     const u = material.uniforms;
-    u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
-    u.dash.value = DASH_PX / zoom;
-    u.gap.value = GAP_PX / zoom;
-    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, zoom, DASH_PX, GAP_PX);
+    const wire = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio());
+    u.ribbonHalf.value = wire.width / 2;
+    u.ink.value = wire.ink;
+    u.dash.value = DASH_PX * PAGE_PX;
+    u.gap.value = GAP_PX * PAGE_PX;
+    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, DASH_PX, GAP_PX);
     tick.ask(invalidate);
   });
   return (
@@ -394,24 +401,26 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
 function WireLine({ target, color, zoom, onHover, leaving = false }: { target: Pt[]; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
-  // (as wide as the page draws it, never thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
+  // (as wide as the page draws it, fainter where thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts), [pts]);
   const hit = useMemo(() => (onHover && !leaving ? ribbon(pts) : null), [pts, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   useEffect(() => () => hit?.dispose(), [hit]);
   const half = useMemo(() => ({ value: 0 }), []);
+  const ink = useMemo(() => ({ value: 1 }), []);
   const hitHalf = useMemo(() => ({ value: 0 }), []);
+  const hitInk = useMemo(() => ({ value: 1 }), []);
   const drawn = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
-    widened(m, half);
+    widened(m, half, ink);
     return m;
-  }, [half]);
+  }, [half, ink]);
   const taken = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false });
-    widened(m, hitHalf);
+    widened(m, hitHalf, hitInk);
     return m;
-  }, [hitHalf]);
+  }, [hitHalf, hitInk]);
   useEffect(() => void drawn.color.set(color), [drawn, color]);
   useEffect(
     () => () => {
@@ -426,7 +435,9 @@ function WireLine({ target, color, zoom, onHover, leaving = false }: { target: P
   const { camera, gl } = useThree();
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    half.value = wireWidth(z, gl.getPixelRatio()) / 2;
+    const wire = wireWidth(z, gl.getPixelRatio());
+    half.value = wire.width / 2;
+    ink.value = wire.ink;
     hitHalf.value = WIRE_HIT_PX / z / 2;
   });
   return (
@@ -495,7 +506,6 @@ function ExitNames({ items, chip }: { items: readonly PageText[]; chip: Drawn | 
       ? {
           key: "exit-names",
           anchor,
-          words: true,
           control: true,
           draw: (at) => ({
             // (and what a held exit's set holds, said beside its port as the pointer is on it: workflow/exitNames `exitChip`)
@@ -656,17 +666,9 @@ export default function Workflow2D() {
     return () => clearTimeout(t);
   }, [anyRunning, newest, store]);
 
-  // the zoom: where it crosses what a card's words need to be read; what
-  // a hair on the screen is on the page's layer of HTML (`--hair`), and how
+  // the zoom: what a hair on the screen is on the page's layer of HTML (`--hair`), and how
   // many of the screen's pixels its pixel is (`--scale`); and, by
   // steps of a few per cent, what the wires are made as wide on the screen for
-  const [compact, setCompact] = useState(false);
-  // (the cards' words, faded as the page's are past the zoom they are read at: their icons alone and large below it)
-  const words = useEasedTo(compact ? 0 : 1);
-  // (zoomed out: named - the box, its kind's icon and its name - or only marked, below a quarter: switched with a little hysteresis - pageGl/cardBands - and eased)
-  const [band, setBand] = useState<Band>("read");
-  const bandNow = useRef<Band>("read");
-  const named = useEasedTo(band === "marked" ? 0 : 1);
   const hoveredStep = useEditor((s) => s.hoveredStep);
   // (each Repeat's pass under way, where one runs: its tab says it - store `runRepeat`)
   const repeatPasses = useEditor((s) => s.repeatPasses);
@@ -678,7 +680,6 @@ export default function Workflow2D() {
   const [recordPointed, setRecordPointed] = useState<string | null>(null);
   // (the port under the pointer: lit a little, as its HTML was on hover)
   const [portPointed, setPortPointed] = useState<string | null>(null);
-  const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   // (what a hair was last written as, on which layers, and the zoom the frame before)
   const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number; hair: number }>({ layer: null, ports: null, zoom: NaN, before: NaN, hair: NaN });
@@ -719,22 +720,20 @@ export default function Workflow2D() {
   });
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
-    read.current = wordsReadAt(z, read.current);
-    bandNow.current = bandAt(pageScale(z), bandNow.current);
-    if (bandNow.current !== band) setBand(bandNow.current);
-    const small = !read.current;
-    if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     // (written again only as utils/pageScale `zoomWritten` says - each write lays out every card again - and to a layer not yet written to)
     const still = z === hair.current.before;
     hair.current.before = z;
     const h = hair.current;
-    // (a card's and a set's lines a page pixel, never thinner than a device pixel: written only while that floor holds,
-    //  in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
+    // (a card's and a set's lines a page pixel - thinner than a device pixel, a device pixel wide and as much fainter (`--hair-ink`):
+    //  written only while they are that thin, in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
     const fresh = h.layer !== layer.current || h.ports !== portsLayer.current;
     const hairPx = hairWritten(fresh ? NaN : h.hair, z, gl.getPixelRatio());
-    if (hairPx != null) for (const el of [layer.current, portsLayer.current]) el?.style.setProperty("--hair", `${hairPx}px`);
+    if (hairPx != null)
+      for (const el of [layer.current, portsLayer.current]) {
+        el?.style.setProperty("--hair", `${hairPx}px`);
+        el?.style.setProperty("--hair-ink", `${1 / hairPx}`);
+      }
     // (the ports, laid out in the screen's pixels, their layer's scale undone on them: told it on their own layer only)
     if (fresh || zoomWritten(h.zoom, z, still)) {
       hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z, hair: hairPx ?? h.hair };
@@ -745,8 +744,6 @@ export default function Workflow2D() {
       if (hairPx != null) hair.current = { ...h, hair: hairPx };
       if (h.zoom !== z) invalidate();
     }
-    layer.current?.style.setProperty("--words", read.current ? "1" : "0");
-    layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
   });
 
   // (what is under a point on the screen among what the page's WebGL takes the pointer for - a port a wire is let go on, a set's tab)
@@ -1175,11 +1172,6 @@ export default function Workflow2D() {
   }, [saying, setInfo, steps]);
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out; the steps' cards shut drawn by WebGL
   const faceList: CardFaceOf[] = [];
-  // (how many entries of a step failed, where it counts them: those in its Failed exit's set)
-  const failedOf = (step: number): number => {
-    const b = exitSets.get(`${step}:failed`);
-    return b ? countOf(flow, b).entries : 0;
-  };
   const parts = [
     // (what a set holds - a summary, a table, a chart - in HTML: its frame and tab by WebGL, `setTabs`; its name written anew too, `PageField`;
     //  a step's result set's folding into its exit's port as it is held, and growing out of it as it is shown again)
@@ -1194,7 +1186,6 @@ export default function Workflow2D() {
             set={{ ...b, ...f }}
             name={info.name}
             {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
-            compact={compact}
             onContextMenu={menuOf("set", b.id)}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
@@ -1238,10 +1229,6 @@ export default function Workflow2D() {
           ...(state === "running" && run && (run.view.share != null || run.view.total > 1) ? { progress: run.view.share ?? run.view.ended / run.view.total } : {}),
           stateTip: [line.text, s.ran?.named].filter(Boolean).join("\n"),
           selected: selFlow.steps.has(s.id),
-          words,
-          scale: pageScale(zoom),
-          named,
-          ...(failedOf(s.id) ? { failed: failedOf(s.id) } : {}),
           inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
           high: cardHighOf(s.kind) / PX,
         });
@@ -1259,7 +1246,6 @@ export default function Workflow2D() {
             run={run?.view}
             missing={missing}
             {...(wireRefused?.step === s.id ? { refused: wireRefused.said } : {})}
-            compact={compact}
             selected={selFlow.steps.has(s.id)}
             open={openStep === s.id}
             onClose={() => store.getState().setWorkflowView({ openStep: null, choosingAtoms: null })}
@@ -1339,8 +1325,8 @@ export default function Workflow2D() {
     }
   }
   const onMarks: HitHandlers = { hover: (key, _part, on) => setRecordPointed((was) => (on ? key : was === key ? null : was)) };
-  // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top, its icon - what made it, or a set's
-  // own - standing in for them where they are too small to read; its line darker while its tab is pointed at, Meno's colour chosen
+  // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top; its line darker while its tab is
+  // pointed at, Meno's colour chosen
   const setTabs: FrameTab[] = onPage.map((b) => {
     const info = setInfo.get(b.id)!;
     const maker = b.made ? stepById.get(b.made.step) : undefined;
@@ -1350,7 +1336,7 @@ export default function Workflow2D() {
       tone: chosenSet === b.id || selFlow.sets.has(b.id) ? "chosen" : hoveredSet === b.id ? "hover" : "rest",
       // (its words left to the field over its tab while it is named anew)
       tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
-      iconWhenSmall: true,
+      nameOnly: true,
       sign: signOf(b.id),
     };
   });
@@ -1367,7 +1353,7 @@ export default function Workflow2D() {
         tone: selFlow.steps.has(s.id) ? ("chosen" as const) : hoveredStep === s.id ? ("hover" as const) : ("rest" as const),
         loop: true as const,
         tab: { icon: "repeat", name: "Repeat", ...(status ? { status } : {}) },
-        iconWhenSmall: true as const,
+        nameOnly: true as const,
       },
     ];
   });
@@ -1421,16 +1407,12 @@ export default function Workflow2D() {
   };
   // the shut cards, coming and going as their HTML did, drawn by WebGL in one layer over the wires (pageGl/cardFace)
   const faces = useFaded(faceList, (f) => f.key);
-  // (zoomed out, the names that stay where two cards' names would overlap: in the order the cards are read, the later left out)
-  const scaleNow = pageScale(zoom);
-  // (where it is only marked, one that would be cut short is left out, and does not keep another from showing)
-  const keptNames = band === "read" ? null : namesKept(inReadingOrder(faceList).filter((f) => band !== "marked" || nameFits(f.who, scaleNow)).map((f) => nameBoxOf(f, scaleNow, band !== "marked")));
   // (how far its jobs are, eased as its HTML bar's width was, and its state's colour eased from one tone to the next, as its words' were)
   const cardEased = useEasedValues(
     new Map(
       faceList.flatMap((f) => {
         const [r, g, b] = rgbOf(TONE[f.state.tone]);
-        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], [`${f.key}:label`, !keptNames || keptNames.has(f.key) ? 1 : 0], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
+        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
       }),
     ),
     200,
@@ -1441,7 +1423,7 @@ export default function Workflow2D() {
     const rgb = [eased("r"), eased("g"), eased("b")];
     const bar = eased("bar");
     const d = cardFace(
-      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}), ...(eased("label") != null ? { label: eased("label") } : {}) },
+      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}) },
       statePointed === stepOfKey(item.key),
     );
     cards.shapes.push(...d.shapes);
@@ -1450,11 +1432,6 @@ export default function Workflow2D() {
     // (going: drawn as it last was, taking nothing)
     if (!leaving) cards.regions.push(...d.regions);
     if (d.tip) cards.tip = d.tip;
-    // (a name left out where it lies over one before it: its card pointed at, the page's tip says it)
-    else if (!leaving && keptNames && !keptNames.has(item.key) && hoveredStep === stepOfKey(item.key) && !cards.tip) {
-      const n = nameBoxOf(item, scaleNow, band !== "marked");
-      cards.tip = { key: `${item.key}:name`, text: item.who, x: (n.x0 + n.x1) / 2, y: (n.y0 + n.y1) / 2, w: n.x1 - n.x0, h: n.y1 - n.y0 };
-    }
   }
   const onCard: HitHandlers = {
     down: (key, _part, e) => {
@@ -1621,7 +1598,7 @@ export default function Workflow2D() {
 
   return (
     <group>
-      {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
+      {/* the exits' names, as the page's words: gone while a talk is given */}
       <PagePlaced>
         <ExitNames items={names} chip={chip} />
       </PagePlaced>
@@ -1640,8 +1617,8 @@ export default function Workflow2D() {
       {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
-      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map(cardBoxOf)} />
-      {repeatTabs.length > 0 && <FrameTabs items={repeatTabs} on={onRepeatTabs} clear={faceList.map(cardBoxOf)} />}
+      <FrameTabs items={tabsShown} on={onSetTabs} />
+      {repeatTabs.length > 0 && <FrameTabs items={repeatTabs} on={onRepeatTabs} />}
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

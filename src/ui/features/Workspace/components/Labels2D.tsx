@@ -8,6 +8,7 @@ import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../li
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
+import { drawnInk } from "./drawnInk";
 import { useEditor, useEditorStore } from "../store";
 import { fadeLetters, fadedOpacity, fadingOut } from "./labelFade";
 import { BOLD, ITALIC_SLANT, TextBatch, type BatchRun } from "./textBatch";
@@ -30,7 +31,18 @@ function slanted(x: number, y: number): THREE.Matrix4 {
  * drawn (LabelTyping2D), drawn over until then by what was written.
  */
 export default function Labels2D() {
-  const { layout, atoms } = useDrawnLayout();
+  const { layout, atoms, opts } = useDrawnLayout();
+  // (as faint as the bonds far out, read at each frame: components/drawnInk)
+  const get = useThree((st) => st.get);
+  const ink = useMemo(
+    () => ({
+      get current() {
+        const st = get();
+        return drawnInk(opts, (st.camera as THREE.OrthographicCamera).zoom || 1, st.viewport.dpr).ink;
+      },
+    }),
+    [get, opts],
+  );
   const store = useEditorStore();
   const waited = useEditor((s) => s.labelLeft != null);
   // (a label written over and let go - or kept as it was - comes back as the writing goes: faded in, not there at once)
@@ -107,7 +119,7 @@ export default function Labels2D() {
   const keys = useMemo(() => shown.map((e) => e.key), [layout.texts, signature]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the same
   const leaving = useMemo(() => new Set(leavingKeys), [signature]);
-  return <Texts2D texts={texts} keyOf={(_, i) => keys[i]} leaving={leaving} arriving={arriving} onDrawn={waited ? () => store.getState().labelShown() : undefined} />;
+  return <Texts2D texts={texts} keyOf={(_, i) => keys[i]} leaving={leaving} arriving={arriving} opacity={ink} onDrawn={waited ? () => store.getState().labelShown() : undefined} />;
 }
 
 /** troika's text, as far as Meno looks into it: whether its letters are still to be set, or being set. */

@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { colorInstances, whiteInstances, widenedMaterial } from "./instances";
 import { lineWidening } from "../utils/largeZoom";
+import { drawnInk, inkOnce } from "./drawnInk";
 
 /**
  * The round caps where bonds meet and where they end, from the shared layout.
@@ -24,8 +25,13 @@ export default function JoinCaps2D() {
     [],
   );
   useEffect(() => () => drawn.material.dispose(), [drawn]);
-  useFrame(({ camera }) => {
-    drawn.width.value = lineWidening(opts, layout.zoom, (camera as THREE.OrthographicCamera).zoom || 1);
+  // (none narrower than a device pixel, and as faint as the bonds: components/drawnInk)
+  useFrame(({ camera, viewport }) => {
+    const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+    drawn.width.value = lineWidening(opts, layout.zoom, zoom);
+    const { device, ink } = drawnInk(opts, zoom, viewport.dpr);
+    drawn.device.value = device;
+    inkOnce(drawn.material, ink);
   });
   const tmpM = useMemo(() => new THREE.Matrix4(), []);
   // Room for as many caps as the drawing has, grown as it does - never

@@ -19,7 +19,6 @@ import { cardForKey, earlierOf, glideAt, gliding, newBelow, offsetByKey, offsetB
 import { PAGE_PX } from "../utils/pageScale";
 import type { PageIcon } from "../pageGl/icons";
 import { useEasedValues } from "../pageGl/faded";
-import { wordsReadAt } from "../utils/pageScale";
 import { discardedSaid, runsAgainSaid } from "./changesSaid";
 import { addPageIcon } from "../pageGl/icons";
 import type { FrameTab } from "../pageGl/frameParts";
@@ -68,9 +67,6 @@ export default function ConversationFrames() {
   const talking = useEditor((s) => s.talking);
   const steps = useEditor((s) => s.steps);
   const { gl, camera } = useThree();
-  // (its words read, or its turns alone: switched past their threshold as the zoom goes, as a frame's tab words are)
-  const readRef = useRef(wordsReadAt(camera.zoom, true));
-  const [read, setRead] = useState(readRef.current);
   // (why Discard left a conversation's changes as they were, said on its card)
   const [discarded, setDiscarded] = useState<Record<number, string | null>>({});
   // (what is typed in each card's ask field and not yet asked: kept as the card is looked away from)
@@ -113,11 +109,6 @@ export default function ConversationFrames() {
     levels.current.set(t.key, next);
   }
   useFrame(() => {
-    const now = wordsReadAt(camera.zoom, readRef.current);
-    if (now !== readRef.current) {
-      readRef.current = now;
-      setRead(now);
-    }
     const t = performance.now();
     if (easing || (present.current && fading(present.current, t)) || [...glides.current.values()].some((g) => gliding(g, t))) redraw((n) => n + 1);
   });
@@ -149,7 +140,6 @@ export default function ConversationFrames() {
     const had = laid.current.get(c.id);
     if (!had || had.said !== c.said || had.key !== key) laid.current.set(c.id, { said: c.said, key, layout: cardLayout(cardBlocks(c.said, { running, heard, changed, notes }), width) });
   }
-  const words = useEasedValues(new Map(shownCards.map(({ it }) => [it.key, read ? 1 : 0])), DURATION.quick * 1000);
   // (a card's scroll: where it goes - the end, unless it was left scrolled up - and where it is, gliding there; its track, Earlier and Latest as present as they are wanted, eased)
   const scrolled = shownCards.map(({ it, c }) => {
     const frame = frameOf(c);
@@ -182,17 +172,12 @@ export default function ConversationFrames() {
   for (const { it, c, view, ask, widthPx, height, shown } of scrolled) {
     const had = laid.current.get(c.id)!;
     const running = !!talking[c.id]?.running;
-    const changed = !!talking[c.id]?.changed;
     const drawn = cardParts({
       key: it.key,
       frame: frameOf(c),
       layout: had.layout,
       offset: shown,
-      words: words.get(it.key) ?? 1,
-      turns: c.said.filter((s) => s.by === "person").length,
       ask,
-      running,
-      changed,
       scroll: { track: scrollLevels.get(`${it.key}:track`) ?? 0, earlier: scrollLevels.get(`${it.key}:earlier`) ?? 0, latest: scrollLevels.get(`${it.key}:latest`) ?? 0, dot: newBelow(c.scroll, saw.current.get(c.id), height, view) },
       opacity: it.opacity,
     });
@@ -324,7 +309,6 @@ export default function ConversationFrames() {
           onValue={(v) => setDrafts((d) => (d[c.id] === v ? d : { ...d, [c.id]: v }))}
           running={running}
           noModel={!connectionFor(c)}
-          words={words.get(it.key) ?? 1}
           opacity={it.opacity}
           noHits={it.noHits}
           onAsk={(text) => void store.getState().sendToConversation(c.id, text)}

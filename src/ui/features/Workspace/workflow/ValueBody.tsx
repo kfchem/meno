@@ -110,18 +110,13 @@ const DRAG = 4;
 
 /**
  * A chart's axes and ticks: part of what it draws - in its numbers' grey,
- * not a frame's line - and a screen pixel wide at least, whatever the zoom
- * (`--hair`, the page's layer's), so that zoomed out they still read as axes.
+ * not a frame's line - a page pixel wide, and thinner than a device pixel a
+ * device pixel wide and as much fainter (`--hair`, `--hair-ink`, the page's layer's).
  */
-const AXIS = { className: "stroke-gh-gray", style: { strokeWidth: "max(1px, var(--hair, 1px))" } } as const;
+const AXIS = { className: "stroke-gh-gray", style: { strokeWidth: "var(--hair, 1px)", strokeOpacity: "var(--hair-ink, 1)" } } as const;
 
-/**
- * A chart's body, its words - each a span over its drawing, which is SVG -
- * gone where they are too small to read (`.meno-words`, utils/pageScale
- * `wordsReadAt`: switched past a threshold, faded over a short time): a chart at a fit zoom is still its points
- * and axes, never an empty frame.
- */
-const wordsOf = () => "meno-words-each relative text-[10px] leading-3 text-gh-gray tabular-nums";
+/** A chart's words, each a span over its drawing (which is SVG): drawn at every zoom, scaled with the page as the rest of it is. */
+const wordsOf = () => "relative text-[10px] leading-3 text-gh-gray tabular-nums";
 
 /**
  * A set holding a chart, inside its frame (docs/WORKFLOWS.md, *Charts*):

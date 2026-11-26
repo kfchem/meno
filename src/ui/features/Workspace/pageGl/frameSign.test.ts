@@ -3,8 +3,8 @@ import { COLORS } from "../../../theme/colors";
 import { frameTabParts, FRAME_PX, type FrameTab } from "./frameParts";
 import type { Box } from "./shapes";
 
-const set = (sign?: FrameTab["sign"]): FrameTab => ({ key: "set:1", box: { x0: 0, y0: -4, x1: 6, y1: 0 }, tone: "rest", tab: { icon: "copies", name: "Input", status: "1 structure" }, iconWhenSmall: true, ...(sign ? { sign } : {}) });
-const boxes = (it: FrameTab) => frameTabParts([it], true).shapes.filter((s): s is Box => s.kind === "box");
+const set = (sign?: FrameTab["sign"]): FrameTab => ({ key: "set:1", box: { x0: 0, y0: -4, x1: 6, y1: 0 }, tone: "rest", tab: { icon: "copies", name: "Input", status: "1 structure" }, nameOnly: true, ...(sign ? { sign } : {}) });
+const boxes = (it: FrameTab) => frameTabParts([it]).shapes.filter((s): s is Box => s.kind === "box");
 
 describe("a set's frame while the pointer is held", () => {
   it("that would take what is held: its own frame's edge in Meno's colour and a wash of it over its room, as far as it has come", () => {
