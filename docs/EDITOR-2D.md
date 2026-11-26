@@ -1554,6 +1554,23 @@ All hover-based, as above.
   has it back, read as nothing else (*As typed: obz*, *As typed: HO*, one
   step); Settings › General, *Read labels as they are meant*, turned off
   keeps every label exactly as typed.
+- **A label is drawn in the units it is read in.** A label Meno reads as
+  an atom with its H and the groups on it is turned round at a left end
+  unit by unit as it is read, each group spelled as typed: PtBu3 (read as
+  tri-tert-butylphosphine) is drawn tBu3P there, NiPr2 iPr2N, NHtBu tBuHN
+  as NHBoc is BocHN - the atom always on the bond, never a Pt or an Ni
+  (`readUnits`, `lib/chem/abbreviations`). Typed with the atom last, as a
+  chemist writes it on a bond's left - Ph3P, tBu3P, Cy3P, (MeO)3P - it is
+  drawn as typed at a left end and turned round at a right end, PPh3,
+  PtBu3, PCy3, P(OMe)3: the atom on the bond whichever way it was typed,
+  and read the same either way. So is a formula attached by its last
+  atom: MeCN and CH3CN are drawn as typed at a left end, NCMe and NCCH3
+  at a right end, turned unit by unit, an atom with its H and count one
+  unit. A prefix stays before its group, never turned: P(o-Tol)3 is
+  (o-Tol)3P at a left end (`turnedLabel`). A metal with its ligands,
+  another formula and words are turned as before; so is a label whose atom is neither its
+  first unit nor its last, and one Meno does not read (Me2N, Ph2P, MeO),
+  drawn as typed with its last letter on the bond at a left end.
 - **Symbols for a kind of group** (the maintainer, 2026-10-13): PG (a
   protecting group), LG (a leaving group), EWG and EDG (an electron-
   withdrawing and an electron-donating group), Nu (a nucleophile), E (an
@@ -3036,7 +3053,16 @@ lipids each have their own way of being drawn, which it should know.
        on a bond - the largest groups left, alike ones together, are
        written by name too, for as long as each time hides less;
      - a heteroatom hanging by one bond, everything else on it written by
-       name, goes into the label with them: OTBS, NHBoc, PPh3, PPh2;
+       name, goes into the label with them: OTBS, NHBoc, PPh3, PPh2,
+       PiPr3. Where the atom's symbol run together with the group's name
+       would read as another element or another group - P and t-Bu as
+       Pt, N and iPr as Ni, O and s-Bu as Os, Se and s-Bu as the Ses
+       group - the group is set in parentheses with its count outside:
+       P(t-Bu)3, N(iPr)2, O(s-Bu), drawn at a left end as (t-Bu)3P
+       (IUPAC, Brecher 2008, GR-2.2, GR-2.3.5, GR-2.3.7). Which it is, is
+       decided by Meno's own label reader: the label must split into the
+       atom, its H and the groups, and be read back as exactly the atoms
+       it stands for, or it is not written;
      - what the last edit drew out of a label stays drawn out for the
        Clean-up straight after it, and for that one only, so that nothing
        is left drawn out for good;
