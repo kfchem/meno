@@ -25,6 +25,8 @@ export function layoutBond(b: Bond, a1: number, a2: number): LBond {
     // (its id - what another bond's `behind` names it by - and the bonds it is said to pass behind: drawn with a gap there, chem/crossings)
     id: b.id,
     ...(b.behind?.length ? { behind: b.behind } : {}),
+    // (its line close to its label: a group's bond inside a Haworth ring's picture - projections/haworthLabels)
+    ...(b.close ? { close: true } : {}),
     ...bondChem(b),
   };
 }

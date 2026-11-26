@@ -109,6 +109,12 @@ export type Bond = BondChem & {
    */
   behind?: number[];
   /**
+   * Its line stops closer to the label at its end than a bond does - `LABEL_MARGIN_CLOSE` of the style's label clearance, not all of
+   * it: a group's bond inside a Haworth ring's picture, so that its stem shows as long as the figures draw it (the editor's
+   * projections/haworthLabels). Unset, the style's clearance.
+   */
+  close?: boolean;
+  /**
    * How far open each of those gaps is, 0 to 1, by the front bond's `id`, where one is opening or closing (the page eases it, never at once);
    * fully open where not given.
    */
@@ -2865,6 +2871,18 @@ function degreeMap(bonds: Bond[]): Map<number, number> {
 }
 
 /**
+ * How much of the style's label clearance a bond marked `close` keeps from its label: 0.3. Set for a Haworth ring's group inside the ring's
+ * picture by what the six-ring's one vertical holds, at Meno's default style (MEASURED in this layout, as shares of the ring's level bond:
+ * the ring 1.155 tall; an OH's ink up from a front atom from 0.154 below its place to 0.122 above, an H's down from the back atom from
+ * 0.119 above its place to 0.151 below, an OH's from 0.122 to 0.154; the style's clearance 0.062). The stems the figures under Brecher
+ * 2006's ST-1.9 show - 0.29 up from a front atom, 0.25 down from the back atom above it - and the two labels a gap of 0.02 apart leave
+ * 1.155 - (0.29 + 0.154 + 0.122) - (0.25 + 0.122 + 0.154) - 0.02 = 0.043 for the two bonds' clearances, 0.021 each at the most: 0.3 of
+ * the style's is 0.019, its line's rounded end (half the line's width, 0.012) still clear of the letter. In the five-ring it gives a
+ * front atom's OH at 0.51 a stem of 0.337, the figures' 0.33.
+ */
+export const LABEL_MARGIN_CLOSE = 0.3;
+
+/**
  * How far a bond stops short of the labels at its ends - `a` at its first
  * atom's, `b` at its second's - and the most of it two labels may take
  * (`room`, labelShareMax of it): what drawing it goes by, and what Clean-up
@@ -2886,7 +2904,7 @@ export function labelTrims(
 ): { a: number; b: number; room: number } {
   const units = opts.units ?? "px";
   const fontWorld = toWorld(opts.fontPx, zoom, units);
-  const margin = opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16;
+  const margin = (opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16) * (bond.close ? LABEL_MARGIN_CLOSE : 1);
   const p = atoms[bond.a1];
   const q = atoms[bond.a2];
   const L0 = Math.hypot(q.x - p.x, q.y - p.y);
