@@ -1,4 +1,4 @@
-import { firstUnset, MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+import { chosenDescription, firstUnset, MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
 import { LinkIcon } from "@heroicons/react/24/outline";
 import Checkbox from "../controls/Checkbox";
 import NumberField from "../controls/NumberField";
@@ -185,6 +185,8 @@ export default function OptionsForm({
               </span>
             </label>
           )}
+          {/* (the chosen choice's own words, where it has them - a look's, a studio's, a motion's - under its control) */}
+          {chosenDescription(o, values) && <span className="mt-1 block text-xs text-gh-gray">{chosenDescription(o, values)}</span>}
           {o.note && <span className="mt-1 block text-xs text-gh-gray">{o.note}</span>}
         </div>
   );

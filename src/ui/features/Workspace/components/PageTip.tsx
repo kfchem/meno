@@ -1,22 +1,32 @@
 import { useThree } from "@react-three/fiber";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
+import { DURATION } from "../../../theme/motion";
 import { useEditor } from "../store";
 import { usePageHtmlLayer } from "./coverLayer";
-import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
+import { TIP_GAP_PX, TipFade, tipPlace, tipUnder, type ScreenBox, type TipAt } from "./markTip";
 import PageHtml from "./PageHtml";
+
+/** How long the tip takes to go, and how: as all that goes out of view (CSS's `meno-fade-out`; docs/LOOK.md, *Motion*). */
+const LEAVE_MS = DURATION.quick * 1000;
+const LEAVING = `opacity ${LEAVE_MS}ms var(--ease-meno-leave)`;
+const BACK = `opacity ${LEAVE_MS}ms var(--ease-meno)`;
 
 /**
  * The page's hover tip (docs/LOOK.md, rule 7: what is not placed on the
  * page - a menu, this tip - may be HTML): what something the page draws
  * says while it is pointed at - a mark's message, why a chip's bar did not
  * finish - under it, or over it where there is no room under it, moved
- * along to lie where it can be seen (markTip); fading in, and gone with
- * the pointer. `x`, `y` is the middle of what it is about and `w`, `h` its
- * size, in the page's units, at `zoom` (`aboveFirst`: over it first, under it
- * only where there is no room over it); `tipKey`, what it is about - a tip
- * of another thing comes in afresh.
+ * along to lie where it can be seen (markTip). `at` is what it is about -
+ * its words, and the middle and size of the thing, in the page's units, at
+ * `zoom` - or null where nothing is pointed at (`aboveFirst`: over it
+ * first, under it only where there is no room over it). It fades in; with
+ * nothing pointed at it fades out where it stood, its last words kept,
+ * and is gone (markTip `TipFade`) - pointed at again meanwhile, it is
+ * whole again from where it had faded to. A tip of another thing (another
+ * `key`) comes in afresh, in place of the one before. Kept by its owner:
+ * where its owner goes, it goes with it. It never takes the pointer.
  */
-export default function PageTip({ tipKey, x, y, w, h, zoom, text, zIndexRange = [20, 10], aboveFirst = false }: { tipKey: string; x: number; y: number; w: number; h: number; zoom: number; text: string; zIndexRange?: [number, number]; aboveFirst?: boolean }) {
+export default function PageTip({ at, zoom, zIndexRange = [20, 10], aboveFirst = false }: { at: TipAt | null; zoom: number; zIndexRange?: [number, number]; aboveFirst?: boolean }) {
   // (what can be seen of the canvas, the column over its right side left out: where it is kept)
   const gl = useThree((s) => s.gl);
   const layer = usePageHtmlLayer();
@@ -25,10 +35,20 @@ export default function PageTip({ tipKey, x, y, w, h, zoom, text, zIndexRange = 
     const r = (layer?.current ?? gl.domElement).getBoundingClientRect();
     return { left: r.left, top: r.top, right: r.right - cover, bottom: r.bottom };
   }, [layer, gl, cover]);
+  const [, wake] = useReducer((n: number) => n + 1, 0);
+  const fade = useRef<TipFade | null>(null);
+  fade.current ??= new TipFade(LEAVE_MS, wake);
+  const shown = fade.current.shown(at);
+  const on = at !== null;
+  useEffect(() => fade.current?.follow(on), [on]);
+  useEffect(() => () => fade.current?.stop(), []);
+  if (!shown) return null;
+  const { at: tip, leaving } = shown;
   return (
-    <PageHtml key={`tip-${tipKey}`} position={[x, y, 0]} center zIndexRange={zIndexRange} style={{ pointerEvents: "none" }}>
-      <div role="img" aria-label={text} className="relative" style={{ width: w * zoom, height: h * zoom }}>
-        <Words text={text} room={room} aboveFirst={aboveFirst} />
+    <PageHtml key={`tip-${tip.key}`} position={[tip.x, tip.y, 0]} center zIndexRange={zIndexRange} style={{ pointerEvents: "none" }}>
+      {/* (its fade out on this box, by CSS, the fade in on the words' own: turned back from where it is, never from nothing) */}
+      <div role="img" aria-label={tip.text} aria-hidden={leaving || undefined} className="relative" style={{ width: tip.w * zoom, height: tip.h * zoom, opacity: leaving ? 0 : 1, transition: leaving ? LEAVING : BACK }}>
+        <Words text={tip.text} room={room} aboveFirst={aboveFirst} />
       </div>
     </PageHtml>
   );

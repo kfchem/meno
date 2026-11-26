@@ -491,8 +491,14 @@ const LABEL_REACH = 1;
  * shifts, lie as far.
  */
 const YIELD_REACH = 2;
-/** What names the number after it a table's, a figure's or an entry's, not a compound's: "Table 1.", "Scheme 2", "Fig. 3", "entry 4". */
-const CAPTION_NUMBER = /\b(table|scheme|figure|fig\.?|chart|entry|entries|step)\s*$/i;
+/**
+ * The display items a chemistry paper numbers, by the words that name them, singular and plural: a scheme, a figure (fig.), a chart, a
+ * table, an equation (eq). A number after one is that item's, never a compound's - in a figure ("Scheme 4") and in the text
+ * ("Schemes 2 and 3", "Figures 1-3": ./compoundMentions).
+ */
+export const DISPLAY_ITEMS = "schemes?|figures?|figs?|charts?|tables?|equations?|eqs?";
+/** What names the number after it a display item's or an entry's, not a compound's: "Table 1.", "Scheme 2", "Fig. 3", "entry 4". */
+const CAPTION_NUMBER = new RegExp(`\\b(${DISPLAY_ITEMS}|entry|entries|steps?)\\.?\\s*$`, "i");
 /** A line that sets a compound's number with its yield: after the number a comma, and a percentage later in the line ("21, 83%", "5, n = 1, 64%"). */
 const WITH_YIELD = /^\s*,.*\d\s*%/;
 
@@ -585,9 +591,13 @@ export function wordsJoined(own: readonly PageWord[], drawn: readonly PageWord[]
  */
 export function compoundLabelsOf(structures: readonly PageStructure[], words: readonly PageWord[], marks: PageMarks): CompoundLabel[] {
   const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : 0);
-  // (the figure's usual word, and its usual line - a word's lines' own boxes, a word of one line its box: each measured by its kind)
-  const usual = median(words.map((w) => w.box[3] - w.box[1]));
-  const usualLine = median(words.flatMap((w) => (w.lines ?? [w.box]).map((b) => b[3] - b[1])));
+  // (the figure's usual word, and its usual line - a word's lines' own boxes, a word of one line its box: each measured by its kind -
+  //  of its words that are words: not a structure's atom's label set as the page's own letters, the OH of a structure, larger than
+  //  the words under it - with one line of words under it the label would set the usual height, and its number seem a superscript)
+  const said = words.filter((w) => !structures.some((st) => st.labels.some((l) => centreWithin(w.box, l))));
+  const measured = said.length ? said : words;
+  const usual = median(measured.map((w) => w.box[3] - w.box[1]));
+  const usualLine = median(measured.flatMap((w) => (w.lines ?? [w.box]).map((b) => b[3] - b[1])));
   const out: (CompoundLabel & { withYield: boolean })[] = [];
   // (a number set much smaller than the figure's words - a superscript, a subscript, a footnote's mark - is none: by its own line's height)
   for (const found of words.flatMap((w) => numbersIn(w).filter((n) => n.box[3] - n.box[1] >= SUPERSCRIPT * (w.lines ? usualLine : usual)))) {

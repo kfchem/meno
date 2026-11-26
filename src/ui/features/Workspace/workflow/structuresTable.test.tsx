@@ -14,7 +14,7 @@ import StructuresTableBody from "./StructuresTableBody";
 // Vitest runs in Node, with no page to mount on: the server's renderer draws
 // the table, and what it shows is read off that.
 
-const by = { plugin: "rdkit", version: "1", program: "RDKit 2026.03.6" };
+const by = { plugin: "sketchkit", version: "1", program: "Sketchkit 2026.03.6" };
 const value = (v: number | string, unit: Property["unit"] = "none"): Property => ({ value: v, unit, status: "computed", by });
 /** Ethanol drawn, its atoms from `base`, `x` along. */
 const ethanol = (base: number, x: number): Model => ({

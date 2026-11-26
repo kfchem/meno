@@ -673,7 +673,11 @@ function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label
   const shaped = w.letters.filter((l): l is ShapeLetter => "sure" in l);
   if (!shaped.length) return { label, ...(cut.length ? { unsure: cut } : {}) };
   const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) }, reads);
-  const open = w.letters.map((l, i) => ({ i, alts: "alts" in l ? (l as ShapeLetter).alts : [] })).filter((o) => o.alts.length);
+  // (the letter told least surely from its next reading first - a bar, an I as much as an l - then in order)
+  const open = w.letters
+    .map((l, i) => ({ i, alts: "alts" in l ? (l as ShapeLetter).alts : [], apart: "apart" in l ? ((l as ShapeLetter).apart ?? 1) : 1 }))
+    .filter((o) => o.alts.length)
+    .sort((x, y) => x.apart - y.apart || x.i - y.i);
   const alts: string[] = [];
   for (const o of open) for (const c of o.alts) alts.push(as(new Map([[o.i, c]])));
   for (let a = 0; a < open.length; a++) for (let b = a + 1; b < open.length; b++) alts.push(as(new Map([[open[a].i, open[a].alts[0]], [open[b].i, open[b].alts[0]]])));
@@ -1985,7 +1989,8 @@ export const DATIVE_UNREAD = "A dative bond's arrow meets it, with no atom read 
 const DATIVE_REACH = 0.5;
 
 /**
- * A dative bond drawn as an arrow (docs/PDF.md, *A dative bond*): a line no longer than a bond and a fifth, and at one end of it a small
+ * A dative bond drawn as an arrow (docs/PDF.md, *A dative bond*): a line no longer than a bond and a fifth - the arrow, line and head,
+ * no shorter than 0.15 of one - and at one end of it a small
  * filled head - no longer than half a bond, nor than three times its own width, its base at the line's end and its point on along the
  * line - and in some styles a dot at the line's other end. `from` is its tail, at the donor; `to` its point, at the acceptor. A wedge
  * bond is long for its width; a scheme's arrow is longer, and is taken out before.
@@ -1995,12 +2000,13 @@ export function dativeArrows(shapes: Shapes, bond: number): DativeArrow[] {
   const out: DativeArrow[] = [];
   const heads = new Set<Wedge>();
   for (const s of shapes.strokes) {
-    if (len(s) > 1.2 * bond || len(s) < 0.15 * bond) continue;
+    if (len(s) > 1.2 * bond) continue;
     for (const w of shapes.wedges) {
       const head = dist(w.tip, w.base);
       if (heads.has(w) || head > 0.5 * bond || head > 3 * w.w || w.w < 2 * s.w) continue;
       const [tail, end] = dist(w.base, s.b) <= dist(w.base, s.a) ? [s.a, s.b] : [s.b, s.a];
-      if (dist(w.base, end) > Math.max(w.w, 0.1 * bond) || dot(unit(tail, end), unit(w.base, w.tip)) < 0.95) continue;
+      // (no shorter than 0.15 of a bond as a whole, line and head: a picture traced keeps only a short line before a head drawn long)
+      if (dist(w.base, end) > Math.max(w.w, 0.1 * bond) || dot(unit(tail, end), unit(w.base, w.tip)) < 0.95 || dist(tail, w.tip) < 0.15 * bond) continue;
       const tailDot = shapes.blobs.find((b) => b.curved && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 0.15 * bond && dist(centre(b.box), tail) < 0.1 * bond);
       heads.add(w);
       out.push({ from: tail, to: w.tip, stroke: s, head: w, ...(tailDot ? { dot: tailDot } : {}) });

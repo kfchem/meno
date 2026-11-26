@@ -27,7 +27,7 @@ const water = (xyz = [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], extra: Partial<SetEn
 const MIN = [0, 0, 0, 0.97, 0, 0, -0.25, 0.94, 0];
 /** What a reader gave back of a job on water: its geometries, the last its own, and whether it says it optimised them to their end. */
 const output = (frames: readonly (readonly number[])[], more: Partial<ReaderOutput> = {}): ReaderOutput =>
-  ({ schema: 1, program: "ORCA", method: "GFN2-xTB", atoms: ["O", "H", "H"], frames, energies: frames.map((_, k) => -5.07 - k * 0.001), ...more }) as unknown as ReaderOutput;
+  ({ schema: 1, program: "Quanta", method: "TB2", atoms: ["O", "H", "H"], frames, energies: frames.map((_, k) => -5.07 - k * 0.001), ...more }) as unknown as ReaderOutput;
 
 const worked = (w: Worked | ReturnType<typeof workedOf>): Worked => {
   if (isFailure(w)) throw new Error(w.why);
@@ -38,29 +38,29 @@ const said = (e: SetEntry) => entryOfSet(e, "x").properties.converged?.value;
 
 describe("where a run ended converged", () => {
   it("is set by the run that converged, of the geometry it ended at: an optimisation, a saddle point's", () => {
-    const opt = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["cclib 1.9rc1"]));
+    const opt = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["manyread 1.9rc1"]));
     expect(opt.converged).toEqual({ how: "optimisation", geometry: geometryKey(MIN) });
     expect(said(opt)).toBe("optimisation");
-    const ts = worked(workedOf("saddle-point", water(), output([water().xyz, MIN], { optimised: true }), ["cclib 1.9rc1"]));
+    const ts = worked(workedOf("saddle-point", water(), output([water().xyz, MIN], { optimised: true }), ["manyread 1.9rc1"]));
     expect(said(ts)).toBe("saddle point optimisation");
     // (one the reader says did not converge, or cannot say: none)
-    const not = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: false }), ["cclib 1.9rc1"]));
+    const not = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: false }), ["manyread 1.9rc1"]));
     expect([not.converged, said(not)]).toEqual([undefined, undefined]);
-    expect(worked(workedOf("optimise", water(), output([water().xyz, MIN]), ["cclib 1.9rc1"])).converged).toBeUndefined();
-    expect(worked(workedOf("saddle-point", water(), output([water().xyz, MIN]), ["cclib 1.9rc1"])).converged).toBeUndefined();
+    expect(worked(workedOf("optimise", water(), output([water().xyz, MIN]), ["manyread 1.9rc1"])).converged).toBeUndefined();
+    expect(worked(workedOf("saddle-point", water(), output([water().xyz, MIN]), ["manyread 1.9rc1"])).converged).toBeUndefined();
     // (a single point, frequencies of a geometry none converged at: none)
-    expect(worked(workedOf("frequencies", water(), output([water().xyz]), ["cclib 1.9rc1"])).converged).toBeUndefined();
+    expect(worked(workedOf("frequencies", water(), output([water().xyz]), ["manyread 1.9rc1"])).converged).toBeUndefined();
   });
 
   it("is carried by Frequencies and a single point at that geometry still, and kept with the molecule they make", () => {
     // (the optimisation's entry as the next step takes it: its own geometry, its way there kept with its molecule)
-    const { path: _path, pathEnergies: _energies, ...opt } = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["cclib 1.9rc1"]));
+    const { path: _path, pathEnergies: _energies, ...opt } = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["manyread 1.9rc1"]));
     // (frequencies given back the geometry as the program printed it - turned and moved, its shape the same)
     const turned = [1, 2, 3, 1, 2.97, 3, 1.94, 1.75, 3];
-    const freq = worked(workedOf("frequencies", opt, output([turned]), ["cclib 1.9rc1"]));
+    const freq = worked(workedOf("frequencies", opt, output([turned]), ["manyread 1.9rc1"]));
     expect(freq.converged).toEqual({ how: "optimisation", geometry: geometryKey(turned) });
     expect(said(freq)).toBe("optimisation");
-    const sp = worked(workedOf("energy", freq, output([turned]), ["cclib 1.9rc1"]));
+    const sp = worked(workedOf("energy", freq, output([turned]), ["manyread 1.9rc1"]));
     expect(said(sp)).toBe("optimisation");
     // (the molecule it makes, and the next step's entry of it)
     const [m] = resultsOf({ ok: true, holds: "molecules", kept: [sp], aside: [], said: "" }, "energy").molecules;
@@ -70,17 +70,17 @@ describe("where a run ended converged", () => {
   });
 
   it("is dropped by what moves the geometry, and by a failed run: one started from its geometry stands on no converged run", () => {
-    const opt = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["cclib 1.9rc1"]));
+    const opt = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["manyread 1.9rc1"]));
     // (frequencies given back another shape: not of that geometry)
     const moved = [0, 0, 0, 1.05, 0, 0, -0.25, 0.94, 0];
-    expect(worked(workedOf("frequencies", opt, output([moved]), ["cclib 1.9rc1"])).converged).toBeUndefined();
+    expect(worked(workedOf("frequencies", opt, output([moved]), ["manyread 1.9rc1"])).converged).toBeUndefined();
     // (a step of Meno's that moves the atoms, its entry as it came but at another geometry: the record of another counts for none)
     const displaced = { ...opt, xyz: moved };
     expect([convergedOf(displaced), said(displaced)]).toEqual([undefined, undefined]);
     // (a run that stopped, out of Failed - and Frequencies on it: none)
-    const stopped = water(MIN, { failed: { kind: "program-error", why: "ORCA finished by error termination in SCF" } });
+    const stopped = water(MIN, { failed: { kind: "program-error", why: "Quanta finished by error termination in SCF" } });
     expect(said(stopped)).toBeUndefined();
-    expect(worked(workedOf("frequencies", stopped, output([MIN]), ["cclib 1.9rc1"])).converged).toBeUndefined();
+    expect(worked(workedOf("frequencies", stopped, output([MIN]), ["manyread 1.9rc1"])).converged).toBeUndefined();
     // (and a failed entry with a record still: none either)
     expect(convergedOf({ ...opt, failed: { kind: "failed", why: "x" } })).toBeUndefined();
   });
@@ -91,7 +91,7 @@ describe("where a run ended converged", () => {
       converged: [false, false, true, false],
       results: [{ id: "path.frame", on: "frames", group: "Path", label: "What it is", values: ["NEB image 1 of 3", "NEB image 2 of 3", REFINED_SAID, "NEB image 3 of 3"] }],
     } as never);
-    const w = worked(workedOf("path-search", { ...water(frames[0], { calc: { readers: [], method: "GFN2-xTB", optimised: true } }), end: water(frames[3], { calc: { readers: [], method: "GFN2-xTB", optimised: true } }) }, out, ["orca"]));
+    const w = worked(workedOf("path-search", { ...water(frames[0], { calc: { readers: [], method: "TB2", optimised: true } }), end: water(frames[3], { calc: { readers: [], method: "TB2", optimised: true } }) }, out, ["quanta"]));
     expect(w.converged).toEqual({ how: REFINED_SAID, geometry: geometryKey(frames[2]) });
     const [m] = resultsOf({ ok: true, holds: "molecules", kept: [w], aside: [], said: "" }, "path-search").molecules;
     expect(m.converged).toEqual([null, null, { how: REFINED_SAID, geometry: geometryKey(frames[2]) }, null]);
@@ -103,7 +103,7 @@ describe("where a run ended converged", () => {
     const claimed = water(MIN, { properties: own });
     expect(said(claimed)).toBeUndefined();
     expect(shadowedIn(claimed)).toEqual(["converged"]);
-    const opt = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["cclib 1.9rc1"]));
+    const opt = worked(workedOf("optimise", water(), output([water().xyz, MIN], { optimised: true }), ["manyread 1.9rc1"]));
     const o = runMeno("filter", [opt, water(MIN)], "molecules", { conditions: "converged = optimisation" });
     expect(o.ok && o.kept).toEqual([opt]);
     // (with an entry claiming it among them: which is meant is not guessed - Filter's rule for any name Meno gives)

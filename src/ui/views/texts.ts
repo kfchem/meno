@@ -5,8 +5,8 @@
  * the one in front. Where none is in front, a canvas opens for it.
  */
 
-/** A text opened: its name - none, a new one - its words, and where it is, where Open said. */
-export type OpenedText = { name: string; text: string; path?: string };
+/** A text opened: its name - none, a new one - its words, where it is, where Open said, and whether it is Markdown, as its file was. */
+export type OpenedText = { name: string; text: string; path?: string; markdown?: true };
 
 const takers = new Map<string, (texts: OpenedText[]) => void>();
 

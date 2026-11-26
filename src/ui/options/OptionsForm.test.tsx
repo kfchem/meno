@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import type { Option } from "../../lib/options";
+import { chosenDescription, type Option } from "../../lib/options";
 import OptionsForm from "./OptionsForm";
 
 // Vitest runs in Node, with no page to mount on: the form as the server's renderer writes it.
@@ -33,6 +33,43 @@ describe("a role's options in a card", () => {
     expect(html).toContain("This motion is made with light traced");
     expect(html).not.toContain('role="radiogroup"');
     expect(html).not.toContain('type="radio"');
+  });
+});
+
+describe("a choice that carries descriptions: the chosen one's, under its control", () => {
+  const options: Option[] = [
+    {
+      id: "look",
+      label: "Look",
+      type: "choice",
+      default: "plain",
+      choices: [
+        { value: "plain", label: "Plain" },
+        { value: "fizzy", label: "Fizzy", description: "Small bubbles rise through every ball." },
+        { value: "woolly", label: "Woolly", description: "Soft yarn wound round each atom." },
+      ],
+    },
+  ];
+
+  it("is the chosen choice's description, and none for a choice without one", () => {
+    expect(chosenDescription(options[0], { look: "woolly" })).toBe("Soft yarn wound round each atom.");
+    expect(chosenDescription(options[0], { look: "plain" })).toBeUndefined();
+    expect(chosenDescription(options[0], {})).toBeUndefined();
+  });
+
+  it("shows the chosen one's words alone as a quiet line, and no line where the chosen one has none", () => {
+    const fizzy = renderToString(<OptionsForm options={options} values={{ look: "fizzy" }} onChange={() => {}} />);
+    expect(fizzy).toContain('<span class="mt-1 block text-xs text-gh-gray">Small bubbles rise through every ball.</span>');
+    expect(fizzy).not.toContain("Soft yarn wound round each atom.");
+    const plain = renderToString(<OptionsForm options={options} values={{ look: "plain" }} onChange={() => {}} />);
+    expect(plain).not.toContain("mt-1 block text-xs text-gh-gray");
+  });
+
+  it("shows it under a list to pick from as well, the list's rows saying only the labels", () => {
+    const many: Option[] = [{ ...(options[0] as Extract<Option, { type: "choice" }>), choices: [...(options[0] as Extract<Option, { type: "choice" }>).choices, ...["d", "e", "f"].map((v) => ({ value: v, label: v }))] }];
+    const html = renderToString(<OptionsForm options={many} values={{ look: "woolly" }} onChange={() => {}} />);
+    expect(html.split("Soft yarn wound round each atom.").length - 1).toBe(1);
+    expect(html).not.toContain("Small bubbles rise through every ball.");
   });
 });
 

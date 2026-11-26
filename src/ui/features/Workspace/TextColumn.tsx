@@ -11,7 +11,6 @@ import { writeDocument } from "../../../lib/io/writeDocument";
 import TextBody from "../TextEditor";
 import { columnText, markdownReaderOf, setShowsSource, useShowsSource } from "../TextEditor/columnText";
 import MarkdownBody from "../TextEditor/MarkdownBody";
-import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import { useLocked } from "../../../lib/doc/locked";
@@ -33,7 +32,7 @@ import { printed } from "../../../lib/pdf/print";
 import PrintButton from "./components/PrintButton";
 import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
-import { indexOnce, mentionUnder } from "./utils/compoundLens";
+import { indexOnce, lensGoesWhenMoved, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
 import { dragStructure, picksAfter, sayWhy, togglesPick } from "./components/structureDrag";
 import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
@@ -259,7 +258,7 @@ function Column({
   // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
   const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
-  const markdown = !!shown && isMarkdown(shown.name);
+  const markdown = !!shown?.markdown;
   const source = useShowsSource(store, shown?.id ?? null);
   const printing = usePrinting(pdf?.sha256);
   const printPdf = async (p: PdfItem) => {
@@ -1064,6 +1063,9 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       e.stopPropagation();
       move();
     };
+    // (the column moved by a hand - scrolled, zoomed: its card stood by a word that is elsewhere now - let go, eased as when the pointer
+    //  leaves; the pointer resting on a number again brings that number's - docs/PDF.md, *A compound's number*)
+    const offMoved = lensGoesWhenMoved(reader, () => store.getState(), id);
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("gesturestart", onGestureStart);
     el.addEventListener("gesturechange", onGestureChange);
@@ -1078,6 +1080,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     window.addEventListener("keydown", onModifier, true);
     window.addEventListener("keyup", onModifier, true);
     return () => {
+      offMoved();
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("gesturestart", onGestureStart);
       el.removeEventListener("gesturechange", onGestureChange);

@@ -1283,7 +1283,9 @@ The same for every plugin and for Meno's own parts:
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job
-    made (`{made: [{entry, file, media}]}`);
+    made (`{made: [{entry, file, media}]}`; a film on a transparent
+    background, two items of its entry - its MP4 with `matte`, where its
+    alpha lies, and its QuickTime film with an alpha channel: RENDER.md);
   - a job may say how far it is, in lines of its log of their own -
     `progress <done>/<all>` - which Meno shows as it runs;
   - `collect` may answer, for each entry, surfaces in cube files the job

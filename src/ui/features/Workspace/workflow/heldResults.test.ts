@@ -63,7 +63,7 @@ const drawn = (ms: readonly DrawnModel[]): RunResults => ({ molecules: [], rest:
  */
 function page(): WorkspaceDocument {
   let doc = addStep(emptyWorkspaceDocument(), "filter", 0, 0);
-  doc = addStep(doc, "energy", 300, 0, {}, "xtb");
+  doc = addStep(doc, "energy", 300, 0, {}, "tightbind");
   expect([doc.steps!.map((s) => s.id), resultOf(doc, 1)!.id, resultOf(doc, 4)!.id]).toEqual([[1, 4], 2, 5]);
   return placeResults(doc, doc.steps![0], molecules([water(0), water(3, -76.3)]), W);
 }
@@ -116,13 +116,13 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
   it("gives a step after it the same as on the page - its key too: no step changed by wiring it, nor by laying it out", () => {
     const wired = connect(page(), { set: KEPT }, ENERGY);
     const step = () => wired.steps!.find((s) => s.id === ENERGY)!;
-    const shown = inputKey(wired, step(), "xtb");
+    const shown = inputKey(wired, step(), "tightbind");
     const held = heldSettled(wired, undefined, extentOf);
     expect(setOf(held, KEPT).collection).toHaveLength(2);
-    expect(inputKey(held, step(), "xtb")).toBe(shown);
+    expect(inputKey(held, step(), "tightbind")).toBe(shown);
     const opened = heldSettled({ ...held, sets: held.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) }, held, extentOf);
     expect(setMembers(opened, setOf(opened, KEPT)).molecules).toHaveLength(2);
-    expect(inputKey(opened, step(), "xtb")).toBe(shown);
+    expect(inputKey(opened, step(), "tightbind")).toBe(shown);
   });
 
   it("keeps structures drawn on their own atoms' ids, with their records - the key of what a step after it takes the same - and lays them out on them again", () => {
@@ -133,14 +133,14 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     const atoms = setMembers(doc, setOf(doc, out)).structures;
     const step = doc.steps![1];
     doc = connect(doc, { set: out }, step.id);
-    const shown = inputKey(doc, step, "rdkit");
+    const shown = inputKey(doc, step, "sketchkit");
     const held = heldSettled(doc, undefined, extentOf);
     expect(setOf(held, out).drawnCollection!.map((m) => [m.atoms.map((a) => a.id), m.record?.from])).toEqual([
       [atoms[0], ["seed-1"]],
       [atoms[1], undefined],
     ]);
     expect(held.model.atoms.filter((a) => atoms.flat().includes(a.id))).toEqual([]);
-    expect(inputKey(held, step, "rdkit")).toBe(shown);
+    expect(inputKey(held, step, "sketchkit")).toBe(shown);
     const back = heldSettled(removeWire(held, held.wires![0].id), held, extentOf);
     expect(setMembers(back, setOf(back, out)).structures).toEqual(atoms);
     expect(setOf(back, out).put).toEqual(atoms.flat());
@@ -258,7 +258,7 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
 
   it("laid out again, keeps its step's other exits' sets under it, as a run does: one moved onto where its frame was, moved down", () => {
     let doc = addStep(emptyWorkspaceDocument(), "filter", 0, 0);
-    doc = addStep(doc, "energy", 300, 0, {}, "xtb");
+    doc = addStep(doc, "energy", 300, 0, {}, "tightbind");
     doc = placeResults(doc, doc.steps![0], { molecules: [water(0), water(3, -76.3)], rest: [water(6, -76.2)], holds: "molecules" } as unknown as RunResults, W);
     const held = heldSettled(connect(doc, { set: KEPT }, ENERGY), doc, extentOf);
     const [kept, rest] = [setOf(held, KEPT), setOf(held, 3)];

@@ -69,9 +69,12 @@ export const INK_DEPTH = 0.1;
  * group gives way first, to as little as `HAWORTH_DOWN_LEAST`; then a front atom's up group, to as little as `HAWORTH_UP_BEFORE`, main's
  * length. Where no step within reach sets them all clear, every front atom's up group goes to `HAWORTH_UP_BEFORE` and every back atom's
  * down group back to where it was - as main draws them, so that nothing is drawn worse than there. A group that is no label - a carbon
- * drawn out - is never moved; what each moved group carries goes with it. The moves, as atoms' new places.
+ * drawn out - is never moved; what each moved group carries goes with it. First, each label of the ring on its upright bond that meets
+ * something is read the other way - HO for OH, HOH2C for CH2OH, or back - where that takes a meeting away and adds none (`Atom.reads`);
+ * where no step clears them, every label reads as it did. The moves and the ways read, as atoms' new places and `reads` (null: as its
+ * bonds decide).
  */
-export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts: LayoutOptions): { id: number; x: number; y: number }[] {
+export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts: LayoutOptions): { id: number; x: number; y: number; reads: "left" | "right" | null }[] {
   const found = projectionsIn(model as Model).filter((p) => p.kind === "haworth");
   if (!found.length) return [];
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
@@ -82,6 +85,8 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
   }
   const place = new Map(model.atoms.map((a) => [a.id, { x: a.x, y: a.y }]));
   const moved = new Set<number>();
+  // (which way each label reads where it is put to - leftward, HO, HOH2C; rightward, OH, CH2OH - as it was, until a turn takes a meeting away)
+  const reads = new Map<number, "left" | "right" | undefined>(model.atoms.flatMap((a) => (a.reads ? [[a.id, a.reads] as const] : [])));
   for (const { ring } of found) {
     const h = haworthOf(model, ring);
     if (!h) continue;
@@ -97,7 +102,15 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
         return g && g.el !== "C" ? [{ ring: a, group: g, way, least: least * h.scale }] : [];
       });
     const movers = [...inside(edge(Math.max(...ys)), -1, HAWORTH_DOWN_LEAST), ...inside(edge(Math.min(...ys)), 1, HAWORTH_UP_BEFORE)];
-    if (!movers.length) continue;
+    // (every labelled group of the ring straight up or down its vertical - each may be read either way - and what it is read against)
+    const upright = ring.flatMap((id) => {
+      const a = byId.get(id)!;
+      return (around.get(id) ?? [])
+        .map((n) => byId.get(n)!)
+        .filter((n) => !inRing.has(n.id) && n.el !== "C" && Math.abs(n.x - a.x) < 1e-6 * h.scale && (around.get(n.id) ?? []).length === 1)
+        .map((g) => ({ ring: a, group: g }));
+    });
+    if (!movers.length && !upright.length) continue;
     // (what each group carries: reached from it without passing its ring atom)
     const carried = (g: number, from: number) => {
       const seen = new Set([g]);
@@ -117,8 +130,25 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
     const part = [...new Set([...ring, ...[...groupsOfRing].flatMap((g) => [...carried(g, ringAtomOf(g))])])];
     const index = new Map(part.map((id, i) => [id, i]));
     const set = labelSetOf(opts);
-    const faults = () => {
-      const atoms = part.map((id) => ({ ...byId.get(id)!, ...place.get(id)! }));
+    // (every label read: the groups that may move and those that may turn, each once - and what met, by the places and readings
+    //  that decide it, so that no layout is made twice)
+    const checked = [...new Map([...movers, ...upright].map((u) => [u.group.id, u])).values()];
+    const met = new Map<string, Set<number>>();
+    const faults = <U extends { group: Model["atoms"][number] }>(among: readonly U[]): U[] => {
+      const key = movers.map((u) => place.get(u.group.id)!.y).join() + "|" + upright.map((u) => reads.get(u.group.id) ?? "").join();
+      let meeting = met.get(key);
+      if (!meeting) {
+        meeting = new Set(meetingNow().map((u) => u.group.id));
+        met.set(key, meeting);
+      }
+      return among.filter((u) => meeting.has(u.group.id));
+    };
+    const meetingNow = () => {
+      const atoms = part.map((id) => {
+        const { reads: _r, ...a } = byId.get(id)!;
+        const way = reads.get(id);
+        return { ...a, ...place.get(id)!, ...(way ? { reads: way } : {}) };
+      });
       const lay = layoutMolecule(atoms as never, layoutBonds(model.bonds.filter((b) => index.has(b.a) && index.has(b.b)), index) as never, opts, INK_ZOOM);
       const boxOf = (id: number): Box | null => {
         const i = index.get(id)!;
@@ -130,8 +160,9 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
           });
         return boxes.length ? boxes.reduce((u, b) => ({ minX: Math.min(u.minX, b.minX), maxX: Math.max(u.maxX, b.maxX), minY: Math.min(u.minY, b.minY), maxY: Math.max(u.maxY, b.maxY) })) : null;
       };
-      const others = [...groupsOfRing].map((id) => ({ id, box: boxOf(id) })).filter((o): o is { id: number; box: Box } => o.box != null);
-      return movers.filter((u) => {
+      // (the other labels: the ring's groups' and the ring's own - its O)
+      const others = [...groupsOfRing, ...ring].map((id) => ({ id, box: boxOf(id) })).filter((o): o is { id: number; box: Box } => o.box != null);
+      return checked.filter((u) => {
         const box = boxOf(u.group.id);
         if (!box) return false;
         // (every line but the label's own bond - the one along its vertical, between its ring atom and itself - and every filled shape)
@@ -147,6 +178,29 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
         return others.some((o) => o.id !== u.group.id && o.box.minX < box.maxX + gap && box.minX < o.box.maxX + gap && o.box.minY < box.maxY + gap && box.minY < o.box.maxY + gap);
       });
     };
+    // (each label that meets something read the other way where that takes a meeting away and adds none - the labels that meet after
+    //  a turn are fewer, and among those before - one at a time; read at the stems as they stand; a label that meets nothing is left
+    //  as it reads)
+    const readBest = () => {
+      for (let pass = 0; pass < upright.length; pass++) {
+        let better = false;
+        for (const u of faults(upright)) {
+          const now = reads.get(u.group.id);
+          const before = new Set(faults(upright).map((v) => v.group.id));
+          let best = { way: now, count: before.size };
+          for (const way of ["left", "right"] as const) {
+            if (way === now) continue;
+            reads.set(u.group.id, way);
+            const after = faults(upright).map((v) => v.group.id);
+            if (after.length < best.count && after.every((id) => before.has(id))) best = { way, count: after.length };
+          }
+          reads.set(u.group.id, best.way);
+          if (best.way !== now) better = true;
+        }
+        if (!better) break;
+      }
+    };
+    readBest();
     const lengthOf = (u: (typeof movers)[number]) => u.way * (place.get(u.group.id)!.y - u.ring.y);
     const moveTo = (u: (typeof movers)[number], length: number) => {
       const dy = u.way * (length - lengthOf(u));
@@ -161,8 +215,8 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
     const longest = Math.max(HAWORTH_GROUP[h.size].front.up, HAWORTH_GROUP[h.size].back.down) * h.scale;
     let clear = false;
     for (let k = 0; k <= 2 * Math.ceil(longest / (STEP * h.scale)) + 2; k++) {
-      const faulty = faults().filter((u) => lengthOf(u) > u.least + 1e-9);
-      if (!faults().length) {
+      const faulty = faults(movers).filter((u) => lengthOf(u) > u.least + 1e-9);
+      if (!faults(movers).length) {
         clear = true;
         break;
       }
@@ -171,8 +225,13 @@ export function haworthLabelsStepped(model: Pick<Model, "atoms" | "bonds">, opts
       const giving = faulty.some((u) => u.way === -1) ? faulty.filter((u) => u.way === -1) : faulty;
       for (const u of giving) moveTo(u, Math.max(u.least, lengthOf(u) - STEP * h.scale));
     }
-    // (none within reach clears them: as main draws them)
-    if (!clear) for (const u of movers) moveTo(u, u.way === 1 ? HAWORTH_UP_BEFORE * h.scale : began.get(u)!);
+    // (none within reach clears them: as main draws them - each label read as it was)
+    if (!clear) {
+      for (const u of movers) moveTo(u, u.way === 1 ? HAWORTH_UP_BEFORE * h.scale : began.get(u)!);
+      for (const u of upright) reads.set(u.group.id, byId.get(u.group.id)!.reads);
+    }
   }
-  return [...moved].map((id) => ({ id, ...place.get(id)! })).filter((m) => m.y !== byId.get(m.id)!.y);
+  return [...new Set([...moved, ...reads.keys()])]
+    .map((id) => ({ id, ...place.get(id)!, reads: reads.get(id) ?? null }))
+    .filter((m) => m.y !== byId.get(m.id)!.y || (m.reads ?? undefined) !== byId.get(m.id)!.reads);
 }

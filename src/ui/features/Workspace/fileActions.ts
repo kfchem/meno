@@ -49,7 +49,7 @@ import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemePieces } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
-import { extensionOf, SD_CHARGE, SD_IMAGINARY, SD_MULTIPLICITY, speciesOf, type Writer, type WriterId } from "../../../lib/io/writers";
+import { extensionOf, SD_CHARGE, SD_ENERGY, SD_IMAGINARY, SD_MULTIPLICITY, speciesOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
 import { writtenAtoms, writtenOf } from "./utils/written";
@@ -216,11 +216,11 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   if (!/\.sdf$/i.test(path)) return writeMolfile(forFlatReaders(seenDrawing(drawn)), { title, version });
   // an SD file: the drawing, each record of a stack of drawings a record of
   // its own, titled as its file titled it, and each molecule in 3D a record of its own,
-  // in 3D - the frame it shows, where its file had it, or each of its
+  // titled with its name - in 3D - the frame it shows, where its file had it, or each of its
   // frames, numbered, with its energy where it is known and what else was
   // found of it - each frame with the bonds it has
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
-    const name = m.name ? stem(m.name) : title;
+    const name = m.title || (m.name ? stem(m.name) : title);
     // (each frame's energy, where it is known: the frame shown's too)
     // (and, beside it, where the frame did not finish - it failed, or its marks did not read - why, so that no reader takes the value for a result)
     const n = 1 + (m.frames?.length ?? 0);
@@ -230,7 +230,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
       const energy = m.energies?.[i];
       const failed = failedSaid(m, i);
       return (
-        (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") +
+        (energy != null && Number.isFinite(energy) ? `> <${SD_ENERGY}>\n${energy}\n\n` : "") +
         (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "") +
         speciesData(m, i, skeleton) +
         imaginaryData(m, i, n) +
@@ -428,7 +428,7 @@ const dataItem = (name: string, text: string) => `> <${itemName(name)}>\n${itemL
  * record's and a molecule in 3D's frame's - which no property is written
  * under: read back, a second `Charge` would be taken for the species.
  */
-export const MENO_ITEMS: ReadonlySet<string> = new Set(["State", "Failed", "Set aside", "Stale", "From", "Energy (Eh)", SD_CHARGE, SD_MULTIPLICITY, SD_IMAGINARY]);
+export const MENO_ITEMS: ReadonlySet<string> = new Set(["State", "Failed", "Set aside", "Stale", "From", SD_ENERGY, SD_CHARGE, SD_MULTIPLICITY, SD_IMAGINARY]);
 
 /** The name a property would be written under: its name, a number worked out with its unit beside it. */
 function labelOf(name: string, p: Property): string {
@@ -622,6 +622,7 @@ export function drawingLayout(
     ...chemistry(a),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.chargeAt ? { chargeAt: a.chargeAt } : {}),
+    ...(a.reads ? { reads: a.reads } : {}),
     ...(a.color ? { color: a.color } : {}),
     ...(a.highlight ? { highlight: a.highlight } : {}),
   }));

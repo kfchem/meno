@@ -186,7 +186,7 @@ export default function Selection2D() {
         s.selectMolecules3d(molecules3dIn(s.molecules3d.filter((m) => !outOfSight.has(m.id)), kind, points), add);
         s.selectPictures(molecules3dIn(s.pictures.map((p) => ({ id: p.id, at: p })), kind, points), add);
         // (and texts' sheets, by their middles - and PDFs, by the middle of what they cover)
-        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name, pointOf(t)) }] : [])), kind, points), add);
+        s.selectTexts(molecules3dIn(s.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, !!t.markdown, pointOf(t)) }] : [])), kind, points), add);
         s.selectPdfs(
           molecules3dIn(
             s.pdfs.map((p) => {

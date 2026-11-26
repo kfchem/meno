@@ -29,7 +29,7 @@ const extentOf: RunWith["extentOf"] = () => ({ x0: -1, x1: 2, y0: -3, y1: 1 });
 const waters = (n: number) => Array.from({ length: n }, (_, k) => water(k));
 
 function ran(molecules: Omit<Molecule3D, "id" | "at">[], holds: "molecules" | "conformers" = "molecules"): WorkspaceDocument {
-  const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+  const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
   return placeResults(doc, doc.steps![0], { molecules, rest: [], holds }, { extentOf });
 }
 
@@ -39,7 +39,7 @@ function held(molecules: Omit<Molecule3D, "id" | "at">[], holds: "molecules" | "
   const store = createEditorStore(doc);
   connectStoreToDocument(store, doc);
   doc.edit("run", (d) => {
-    const s = addStep(d, "optimise", 0, 0, {}, "xtb");
+    const s = addStep(d, "optimise", 0, 0, {}, "tightbind");
     return placeResults(s, s.steps![0], { molecules, rest: [], holds }, { extentOf });
   });
   return { doc, store, st: () => store.getState() };
@@ -138,7 +138,7 @@ describe("a placed large set's frame, as it is measured", () => {
   const reaching = (reach: number) => ({ ...water(0), atoms: water(0).atoms.map((a, i) => (i === 0 ? { ...a, z: reach } : a)) });
   const byReach: RunWith["extentOf"] = (m) => ({ x0: -m.atoms[0].z, x1: m.atoms[0].z, y0: -m.atoms[0].z, y1: m.atoms[0].z });
   const frameOf = (reaches: number[]) => {
-    const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     const set = placeResults(doc, doc.steps![0], { molecules: reaches.map(reaching), rest: [], holds: "molecules" }, { extentOf: byReach }).sets![0];
     return { width: set.x1 - set.x0, height: set.y1 - set.y0 };
   };
@@ -177,7 +177,7 @@ describe("the views of a page", () => {
     const few = ran(waters(LARGE_SET));
     expect(heldViews(few, {})).toEqual([]);
     const d = ran(waters(LARGE_SET + 1));
-    const wired = addStep(d, "energy", 20, 0, {}, "xtb");
+    const wired = addStep(d, "energy", 20, 0, {}, "tightbind");
     const on = { ...wired, wires: [{ id: 99, from: { set: d.sets![0].id }, to: { step: wired.steps![1].id, port: "in" } }] };
     expect(on.sets![0].collection).toHaveLength(51);
     expect(heldViews(on, {})).toEqual([]);

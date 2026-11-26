@@ -628,9 +628,15 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
 
 ### Markdown
 
-A text whose name ends `.md` or `.markdown` is read as what it says, not
-as its marks (the maintainer asked that Markdown files open formatted, to
-be read).
+A text is Markdown when the file it came from was - opened or dropped,
+its file's name ending `.md` or `.markdown` - and is read as what it says,
+not as its marks (the maintainer asked that Markdown files open formatted,
+to be read). The text keeps that as its own, saved with it, copied and
+pasted with it: its name does not decide, so a Markdown text named "Aim" is
+read formatted, and one named "x.md" that came from plain text is not. A
+new text (*New text*) is plain text. Exported, a Markdown text whose name
+has no `.md` is suggested a name ending `.md`, so that it opens formatted
+again.
 
 - **As CommonMark 0.31.2 reads it, with GitHub's tables, task lists,
   strikethrough and autolinks** (GitHub Flavored Markdown 0.29, its
@@ -1742,7 +1748,8 @@ it where it lies out of view.
   bond it is set.
 - **A dative bond** (`dativeArrows`, lib/figure/read; 2026-11-20): an
   arrow from the donor to the acceptor, as Meno draws one - a line no
-  longer than a bond and a fifth, a small filled head at its end (no
+  longer than a bond and a fifth (the arrow as a whole no shorter than
+  0.15 of one), a small filled head at its end (no
   longer than half a bond, nor than three times as wide; its base at the
   line's end, its point on along the line) and, in some styles, a dot at
   the line's tail. It is one dative bond, from the atom at its tail to
@@ -1754,7 +1761,13 @@ it where it lies out of view.
   its three hydrogens, a BH3 by an amine its three. An arrow with an atom
   at one end only is no bond, and that atom says so: "A dative bond's
   arrow meets it, with no atom read at its other end: read as no bond."
-  A wedge bond is long for its width; a scheme's arrow is longer.
+  A wedge bond is long for its width; a scheme's arrow is longer. In a
+  picture, such an arrow between two labels is traced as one piece; it
+  is its line and its head (`arrowOf`, lib/figure/trace) where its ink,
+  free at both ends and no longer than a bond and a fifth, swells to
+  twice the figure's line and thins again at both ends - at once on its
+  line's side, steadily to its point on the other - and its line is as
+  thin as the figure's lines. A wedge never thins again at its wide end.
 - **What stands alone and is no structure** (`withoutStrays`): a point with
   no label and no bond, and a line alone - single, double or triple, both
   its ends bare, no other bond at either - more than a fifth off the
@@ -2248,7 +2261,10 @@ mention a number, and the card.
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
-  height: a superscript, a footnote's mark) is none, and a structure not
+  height: a superscript, a footnote's mark) is none - their usual height
+  measured of its words alone, not of a structure's atoms' labels set as
+  the page's own letters: an OH set larger than the one line of words under
+  its structure would make that line's number seem a superscript, and a structure not
   read takes none. Written as Meno writes it: its parentheses and spaces
   set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
 - **Each PDF's index** (`utils/compoundIndex`): each number, and every
@@ -2272,6 +2288,12 @@ mention a number, and the card.
   a compound ("compound 12", "products 3, 4 and 5": compound, product,
   intermediate, substrate, adduct, derivative, past other numbers and "and",
   "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
+  so is a display item's number, however set: after the word naming a
+  scheme, a figure (Fig.), a chart, a table or an equation (eq), singular
+  or plural, past other numbers and "and", "or", "to" within the sentence
+  ("Scheme 4" in a caption, set bold; "Schemes 2 and 3", "Figures 1-3"),
+  but not one set otherwise than the item's first number ("Scheme 1, 4a",
+  its 4a bold);
   with ⌥ (Alt) held, every number of that shape is. A number with its
   rotation's mark before it, (+)-12, is taken with its mark - its
   parentheses, sign and en dash are no word's letters - and asked whether it
@@ -2313,7 +2335,9 @@ mention a number, and the card.
   too small - its word's box taken through the view to the window. Not on a
   structure of a figure, which is the structure's own, as in the column. As
   the view moves, the card goes - its word is no longer where it stood -
-  and comes again by the word's new place once the pointer rests there. ⌥
+  and comes again by the word's new place once the pointer rests there; so
+  too in the column, scrolled or zoomed by a hand (`utils/compoundLens`
+  `lensGoesWhenMoved`), the card eased out as when the pointer leaves. ⌥
   pressed or let go over a number reads it again, in both.
 
 ### A picture read (part B, built 2026-10-11)

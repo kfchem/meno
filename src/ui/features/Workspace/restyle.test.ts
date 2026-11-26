@@ -44,7 +44,7 @@ function page(): WorkspaceDocument {
     slides: [{ id: 1, x: 0, y: 0, w: 160, h: 90 }],
     shapes: [{ id: 1, kind: "rect", x0: -5, y0: -5, x1: 5, y1: 5, radius: 4, width: 2 }],
     inks: [{ id: 1, pen: "pen", width: 1, strokes: [{ points: [1, 2, 0.4, 3, 4, 0.6] }] }],
-    steps: [{ id: 1, kind: "xtb-opt", x: 100, y: 0 } as unknown as NonNullable<WorkspaceDocument["steps"]>[number]],
+    steps: [{ id: 1, kind: "tightbind-opt", x: 100, y: 0 } as unknown as NonNullable<WorkspaceDocument["steps"]>[number]],
     // (a set round the ethane, with room about it)
     sets: [{ id: 2, x0: 5, y0: -4, x1: 15, y1: 4 }],
   } as WorkspaceDocument;

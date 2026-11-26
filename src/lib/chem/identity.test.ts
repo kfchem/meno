@@ -355,17 +355,19 @@ describe("a hydrogen atom kept an atom in a structure's identity", () => {
     expect(hydrogensFolded(g).atoms).toHaveLength(4);
   });
 
-  it("on a metal: a hydride is not a metal with an H of its own", () => {
+  it("on a metal: a hydride is kept, and is the one structure however its H is written - drawn, or counted on the metal", () => {
     const g = fromSmiles("[Pd][H]");
     expect(hydrogensFolded(g).atoms).toHaveLength(2);
-    expect(identityText(g)).not.toBe(identityText({ atoms: [{ el: "Pd", hs: 1 }], bonds: [] }));
+    expect(identityText(g)).toBe(identityText({ atoms: [{ el: "Pd", hs: 1 }], bonds: [] }));
+    expect(identityText(g)).not.toBe(identityText({ atoms: [{ el: "Pd", hs: 0 }], bonds: [] }));
   });
 
   it("on an actinide: a hydride on U or Th is kept, as on Pd (foundation part 3, B1)", () => {
     for (const el of ["U", "Th"]) {
       const g = fromSmiles(`[${el}][H]`);
       expect(hydrogensFolded(g).atoms, el).toHaveLength(2);
-      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 0 }], bonds: [] }));
     }
   });
 
@@ -373,7 +375,8 @@ describe("a hydrogen atom kept an atom in a structure's identity", () => {
     for (const el of ["Pr", "Ac", "Fm"]) {
       const g = fromSmiles(`[${el}][H]`);
       expect(hydrogensFolded(g).atoms, el).toHaveLength(2);
-      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).toBe(identityText({ atoms: [{ el, hs: 1 }], bonds: [] }));
+      expect(identityText(g), el).not.toBe(identityText({ atoms: [{ el, hs: 0 }], bonds: [] }));
     }
   });
 });
@@ -834,12 +837,16 @@ describe("an H on a metal", () => {
     }
   });
 
-  it("stays an atom on a d- or f-block metal: a hydride on Pd or U is not one of the metal's own H", () => {
-    for (const [drawn, counted] of [
-      ["[H][Pd][H]", "[PdH2]"],
-      ["[H][U]([H])([H])[H]", "[UH4]"],
+  it("is read as an atom on a d- or f-block metal: a hydride on Pd or U is one structure drawn or counted, and is not the bare metal", () => {
+    // A hydride on a d- or f-block metal is a ligand: one M-H bond among the metal's others. Writing that H as a
+    // count on the metal ([PdH2]) states the same bonds as drawing it ([H][Pd][H]), so the two are one compound and
+    // read as one; the count is unfolded into the H atom it states. The metal without its H is another compound.
+    for (const [drawn, counted, bare] of [
+      ["[H][Pd][H]", "[PdH2]", "[Pd]"],
+      ["[H][U]([H])([H])[H]", "[UH4]", "[U]"],
     ]) {
-      expect(text(drawn), drawn).not.toBe(text(counted));
+      expect(text(drawn), drawn).toBe(text(counted));
+      expect(text(drawn), drawn).not.toBe(text(bare));
     }
   });
 });

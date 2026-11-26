@@ -430,3 +430,46 @@ function prismsCentre(n: number) {
   }
   return cipLabels({ atoms, bonds }).centres.get(0);
 }
+
+describe("no E or Z on a double bond in a ring of seven or fewer, whoever wrote a side on it", () => {
+  it("labels none of the ring bonds of six or seven written with marks; a ring of eight, a macrocycle and an open chain as ever; centres as before", () => {
+    // Answers by hand. A double bond whose smallest ring has seven atoms or fewer is held cis by its ring: one arrangement, no E or Z
+    // (IUPAC 2013 P-93.5.1.4.1; Brecher 2006 ST-4.3). Ring sizes counted from the SMILES's atoms between the ring-closure digits.
+    const cases: [string, string[]][] = [
+      // cycloheptene (7 ring atoms), written cis and written trans: none
+      ["C1CC/C=C\\CC1", []],
+      ["C1CC/C=C/CC1", []],
+      // cyclohexene (6): none
+      ["C1C/C=C\\CC1", []],
+      // 1-methylcycloheptene (7; ring C1, =C, C, C, C, C, C1): none
+      ["C/C1=C/CCCCC1", []],
+      // a cyclic imine of seven (C, C, C, N, C, C, C): none
+      ["C1CC/N=C\\CC1", []],
+      // bicyclo[4.2.0]oct-2-ene: its C=C is in the eight-atom outer ring and in a six-ring, the smallest through it - none
+      ["C1/C=C\\CC2CCC12", []],
+      ["C1/C=C/CC2CCC12", []],
+      // two cyclohept-1-enyl groups on C1, their marks dropped: the two groups are one, so C1 has two alike groups
+      ["O[C@H](/C1=C\\CCCCC1)/C1=C/CCCCC1", ["C1:alike"]],
+      // the same with two cyclohex-1-enyl groups
+      ["O[C@H](/C1=C\\CCCC1)/C1=C/CCCC1", ["C1:alike"]],
+      // 3-methylcycloheptene's C1: ranks C2 (=C: C,C,H) > C7 (C,H,H) > CH3 > H. [C@H] lists CH3, H, C7 (closure 1), C2 anticlockwise
+      // from CH3; with H away CH3 -> C7 -> C2 runs anticlockwise, so C2 -> C7 -> CH3 runs clockwise: R, the ring bond's marks or none
+      ["C[C@H]1/C=C\\CCCC1", ["C1:R"]],
+      ["C[C@H]1C=CCCCC1", ["C1:R"]],
+      // cyclooctene (8): C2/C3=C4\C5 is cis, the ring's carbons the higher on each end: Z; C2/C3=C4/C5 trans: E
+      ["C1CC/C=C\\CCC1", ["C3=C4:Z"]],
+      ["C1CC/C=C/CCC1", ["C3=C4:E"]],
+      // two cyclooct-1-enyl groups: C1/C2=C3\C4 cis, C1 (O,C,H) over C9 (C,H,H) on C2, C4 over H on C3: Z; C1/C10=C11/C12 trans: E.
+      // C1 ranks O > C2 (its Z group: Rule 3, Z before E) > C10 > H; [C@H] lists O, H, C2, C10 anticlockwise from O, so with H away
+      // O -> C2 -> C10 runs anticlockwise: S (the groups are not mirror images of each other, so upper case)
+      ["O[C@H](/C1=C\\CCCCCC1)/C1=C/CCCCCC1", ["C1:S", "C2=C3:Z", "C10=C11:E"]],
+      // cyclododecene (12), a macrocycle: cis Z, trans E
+      ["C1CCCC/C=C\\CCCCC1", ["C5=C6:Z"]],
+      ["C1CCCC/C=C/CCCCC1", ["C5=C6:E"]],
+      // but-2-ene written trans: E; a double bond out of a cyclopropane at its ring atom keeps its own: C0/C1=C2/C3 trans, E
+      ["C/C=C/C", ["C1=C2:E"]],
+      ["C/C=C/C1CC1", ["C1=C2:E"]],
+    ];
+    for (const [smiles, labels] of cases) expect([smiles, cipOf(smiles)]).toEqual([smiles, labels]);
+  });
+});
