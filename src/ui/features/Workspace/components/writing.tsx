@@ -18,12 +18,13 @@ import type { TypingField } from "../../TextEditor/typingField";
 import { fieldTarget, useTextMenu } from "../../TextEditor/textMenu";
 import type { WordsEditor } from "../utils/wordsEditor";
 import type { CaptionPress } from "../store/types";
+import { pageLength } from "../utils/pageScale";
 
 type Pt = { x: number; y: number };
 
 /** What is selected, lit as in the column. */
 const SELECTED = 0.3;
-/** The caret: how wide on the screen, in pixels, and how long it shows and hides - steadily, a moment after a key. */
+/** The caret: how wide on the page, in page pixels, and how long it shows and hides - steadily, a moment after a key. */
 const CARET_PX = 1.5;
 export const BLINK_MS = 530;
 /** Two presses this near in time and place are two clicks: in ms, and in pixels. */
@@ -46,10 +47,12 @@ export function measured(font: string, text: string): number {
  * The caret, what is selected - line by line - and what the IME has so far,
  * underlined clause by clause where the system says, the one converted
  * thick: as `d`, the words drawn, have them. `fs` is the type's size,
- * `lineH` a line's height, `px` a pixel of the screen on the page.
+ * `lineH` a line's height; its caret, underlines and least widths in page
+ * pixels, as large on the page at every zoom.
  */
-export function writingMarks(d: WritingDrawn, o: { fs: number; lineH: number; px: number; ink: string; caretRef: RefObject<THREE.Mesh | null>; z?: number; text?: number }): ReactNode[] {
-  const { fs, lineH, px, ink, caretRef } = o;
+export function writingMarks(d: WritingDrawn, o: { fs: number; lineH: number; ink: string; caretRef: RefObject<THREE.Mesh | null>; z?: number; text?: number }): ReactNode[] {
+  const { fs, lineH, ink, caretRef } = o;
+  const px = pageLength(1);
   const z = o.z ?? 0.05;
   // (drawn in order with the letters: what is selected under them, the rest over them)
   const text = o.text ?? 30;

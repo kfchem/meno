@@ -239,7 +239,7 @@ export function digitAtlas(): THREE.Texture {
 /**
  * What draws the numbers on a molecule's balls (utils/occlusionMaterial):
  * whether any is shown, the digits, the screen's pixels to one of the camera's units, the least
- * height a digit is drawn at, in pixels, and the most, in the balls' own
+ * height a digit is drawn at in a picture, in its pixels (none on the page: 0), and the most, in the balls' own
  * units.
  */
 export type BallNumberUniforms = {
@@ -250,12 +250,12 @@ export type BallNumberUniforms = {
   most: { value: number };
 };
 
-/** Under this height a digit would be on the screen, in pixels, a number is not drawn: so that, zoomed out, the hydrogens' go first. */
+/** Under this height a digit would be in a picture, in its pixels, a number is left out of that picture (on the page none is: it is drawn at any size, scaled with the zoom). */
 export const NUMBER_LEAST_PX = 6;
 
 /** Shown on no ball yet. */
 export function ballNumberUniforms(): BallNumberUniforms {
-  return { shown: { value: 0 }, atlas: { value: null }, pxPer: { value: 1 }, least: { value: NUMBER_LEAST_PX }, most: { value: 1 } };
+  return { shown: { value: 0 }, atlas: { value: null }, pxPer: { value: 1 }, least: { value: 0 }, most: { value: 1 } };
 }
 
 /** An atoms' instanced mesh given where each atom's number goes on its ball, how large, and how far it is shown: x, y and the share (`numberPlaces`), and 0 to 1, for each. */

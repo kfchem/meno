@@ -9,7 +9,6 @@
  * maintainer's ruling of 2026-10-21, reversing that of 2026-10-10, which
  * kept them out of every picture.
  */
-import { switchedAt } from "../utils/zoomSwitch";
 import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
@@ -21,9 +20,14 @@ import { labelBox, labelSetOf, runsWidth, type LayoutOptions, type TextItem, typ
 
 /** A stereodescriptor's letters, against the labels': on the drawing and on a molecule in 3D alike. */
 export const MARK_SCALE = 0.6;
-/** The smallest a mark's letters get, however far out the view is: on both alike. */
-export const MARK_MIN_PX = 9;
 
+/**
+ * A mark's letters on the screen, in pixels, at a zoom (`zoom` screen pixels
+ * a unit of the page): the labels' size on the page (`labelFont`) times
+ * `MARK_SCALE`, as large on the page at every zoom - scaled with it and
+ * nothing else, however far out or in.
+ */
+export const markFontPx = (labelFont: number, zoom: number): number => labelFont * MARK_SCALE * zoom;
 /** Half a capital letter's height, as a share of the labels' size: how far R or S stands off its atom where the style does not say. */
 export const STEREO_GAP = 0.35;
 
@@ -32,26 +36,6 @@ export const MARK_HALF_HEIGHT = 0.42;
 
 /** How far apart two of R, S, E and Z keep at the least, in ems of their size. */
 export const MARKS_APART = 0.6;
-
-/**
- * The size R, S, E and Z go at, in pixels their letters would have at a
- * zoom (`naturalPx`, the labels' size times `MARK_SCALE`, before
- * `MARK_MIN_PX`): held at that least size as the view goes further out, they
- * go once they would be three quarters of it (the maintainer, 2026-10-21:
- * at a far zoom they stayed as large and floated round a structure a few
- * pixels across).
- */
-export const MARKS_LEAST_PX = 0.75 * MARK_MIN_PX;
-
-/**
- * Whether R, S, E and Z are in view at a zoom, they having been (`was`) or
- * not: switched past `MARKS_LEAST_PX`, a little either way, and faded over a
- * short time - never faded with the zoom, which left them half there at a
- * zoom (the maintainer, 2026-10-28; utils/zoomSwitch). Atom numbers on a
- * molecule in 3D go below their own least size (utils/atomNumbers
- * `NUMBER_LEAST_PX`).
- */
-export const marksReadAt = (was: boolean, naturalPx: number): boolean => switchedAt(was, naturalPx, MARKS_LEAST_PX);
 
 export type ValenceProblem = { valence: number; most?: number };
 
@@ -638,9 +622,7 @@ export function stereoTextEms(cip: string, parentheses: boolean): number {
  * R, S, E and Z as a picture of the drawing shows them (2026-10-21): where
  * the canvas puts them - `stereoPlaces`, kept off the same bonds and labels,
  * those put by hand where they were put - at the size the canvas draws them
- * at, the labels' size times `MARK_SCALE`, but without `MARK_MIN_PX`, which
- * keeps them readable on a screen zoomed out and has no meaning at a
- * picture's size in print. Written as the canvas writes them: the letter in
+ * at, the labels' size times `MARK_SCALE`. Written as the canvas writes them: the letter in
  * italics, an axis's a smaller and lower, in parentheses where the style says
  * so, in the labels' colour. `atoms` as the layout laid them, in its order
  * (`texts[].atom` indexes them); `model` the drawing they are of; `marks`

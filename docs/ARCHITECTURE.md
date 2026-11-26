@@ -682,9 +682,9 @@ not taken from either.
   `Html` in transform mode, `workflow/look.ts` `PX`). One layer, not one
   per part: WebKit finds what is under the pointer among layers in their
   order, and a part's layer covered the parts on the layers below it.
-  Lines are a hair on the screen at any zoom: the layer's `--hair` is set
-  each frame from the zoom, and wires are made as wide on the screen for
-  it. The layer is laid out in its own pixels, which Chromium rounds to
+  Lines are a page pixel wide; thinner than a device pixel, they are drawn
+  a device pixel wide and as much fainter: the layer's `--hair` and
+  `--hair-ink` are set from the zoom, and wires are drawn the same way. The layer is laid out in its own pixels, which Chromium rounds to
   before it scales them: ports are laid out in the screen's, the layer's
   `--scale` undone on them, and the cards' and sets' hairlines are inset
   shadows, not borders (WORKFLOWS.md, *Laid out in the screen's pixels*).

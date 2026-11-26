@@ -6,8 +6,7 @@ import type { WorkflowSet } from "../store/types";
 import SetFrame from "./SetFrame";
 
 const none = () => {};
-const frame = (set: WorkflowSet, compact: boolean) =>
-  renderToString(<SetFrame set={set} name="Chart" compact={compact} onContextMenu={none} />);
+const frame = (set: WorkflowSet) => renderToString(<SetFrame set={set} name="Chart" onContextMenu={none} />);
 
 const chart: ChartValue = {
   kind: "points",
@@ -37,37 +36,31 @@ const diagram: DiagramValue = {
 };
 const set = (c: ChartValue | DiagramValue): WorkflowSet => ({ id: 1, x0: 0, x1: 12, y0: 0, y1: 9, chart: c });
 
-describe("a set holding a chart, at a zoom too small to read its words", () => {
-  it("still draws its points and axes - never an empty frame - and leaves out its words alone", () => {
+describe("a set holding a chart", () => {
+  it("draws its points, axes and words, with nothing about them set by the zoom", () => {
     for (const [c, mark] of [
       [chart, /<circle/g],
       [diagram, /stroke-gh-black/g],
     ] as const) {
-      const near = frame(set(c), false);
-      const far = frame(set(c), true);
-      // (what it draws, the same at both: three points, or three levels' bars)
-      expect([near.match(mark)?.length, far.match(mark)?.length]).toEqual([3, 3]);
-      // (its body shown, faded with the zoom at neither; its words, each, faded with the zoom - utils/pageScale `wordsShown` - by the page,
-      //  not left out at once)
-      const body = (html: string) => html.match(/class="absolute overflow-hidden[^"]*"/)![0];
-      expect([body(near).includes("meno-words"), body(far).includes("meno-words")]).toEqual([false, false]);
-      expect([near.includes("meno-words-each"), far.includes("meno-words-each")]).toEqual([true, true]);
-      expect(far).not.toContain("opacity-0");
+      const html = frame(set(c));
+      // (what it draws: three points, or three levels' bars)
+      expect(html.match(mark)?.length).toBe(3);
+      expect(html).not.toContain("meno-words");
+      expect(html).not.toContain("opacity-0");
     }
   });
 
-  it("draws its axes and ticks in its numbers' grey, a screen pixel wide at least - never a frame's faint line", () => {
+  it("draws its axes and ticks in its numbers' grey, a page pixel wide (fainter where thinner than a device pixel) - never a frame's faint line", () => {
     for (const c of [chart, diagram]) {
-      const svg = frame(set(c), true).match(/<svg[\s\S]*<\/svg>/)![0];
+      const svg = frame(set(c)).match(/<svg[\s\S]*<\/svg>/)![0];
       expect(svg).not.toContain("stroke-gh-line");
       // (the plot's box or the axis, and each tick: three ticks at least, all as wide)
-      expect(svg.match(/stroke-width:max\(1px, var\(--hair, 1px\)\)/g)!.length).toBeGreaterThanOrEqual(4);
+      expect(svg.match(/stroke-width:var\(--hair, 1px\);stroke-opacity:var\(--hair-ink, 1\)/g)!.length).toBeGreaterThanOrEqual(4);
     }
   });
 
-  it("leaves a table out whole, as before: its words are all it is", () => {
+  it("draws a table's words as they are", () => {
     const table = { columns: [{ name: "x", kind: "number" as const, unit: "none" as const }], rows: [[1]], unread: [], left: [] };
-    const far = frame({ id: 1, x0: 0, x1: 12, y0: 0, y1: 9, table }, true);
-    expect(far.match(/class="[^"]*absolute overflow-hidden[^"]*"/)![0]).toContain("meno-words");
+    expect(frame({ id: 1, x0: 0, x1: 12, y0: 0, y1: 9, table })).not.toContain("meno-words");
   });
 });

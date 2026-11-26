@@ -37,7 +37,7 @@ describe("what Fit to content takes in past the frames and cards", () => {
     expect(joined({ x0: 0, y0: 0, x1: 1, y1: 1 }, null)).toEqual({ x0: 0, y0: 0, x1: 1, y1: 1 });
   });
 
-  it("puts a molecule's notes over the same point at the zoom a fit comes to, as large as they are drawn there - between three quarters and half as large again", () => {
+  it("puts a molecule's notes over the same point at the zoom a fit comes to, they and their gap as large on the page at every zoom", () => {
     const canvas = { left: 0, top: 0, width: 200, height: 100 };
     // (the page at its own scale: a page pixel a screen pixel; notes 40 wide, 20 high, standing 8 over the page's point 0, 0)
     const zoom = 1 / PAGE_PX;
@@ -45,10 +45,11 @@ describe("what Fit to content takes in past the frames and cards", () => {
     const notes = [{ box: { left: 80, right: 120, top: 22, bottom: 42 }, gap: 8 }];
     const at = notesOnPage(notes, view, canvas, zoom)!;
     expect([at.x0, at.x1, at.y0, at.y1].map((v) => Number((v / PAGE_PX).toFixed(6)))).toEqual([-20, 20, 8, 28]);
-    // (zoomed out to a tenth: the notes drawn at three quarters - on the page, 7.5 times as large as at its own scale)
-    const far = notesOnPage(notes, view, canvas, zoom / 10)!;
-    expect(Number(((far.x1 - far.x0) / PAGE_PX).toFixed(6))).toBe(40 * 0.75 * 10);
-    expect(Number((far.y0 / PAGE_PX).toFixed(6))).toBe(80);
+    // (zoomed out to a tenth, or in to three times: the notes and their gap scaled with the page - 40 by 20 page px, 8 over the point, the same box)
+    for (const k of [0.1, 3]) {
+      const b = notesOnPage(notes, view, canvas, zoom * k)!;
+      expect([b.x0, b.x1, b.y0, b.y1].map((v) => Number((v / PAGE_PX).toFixed(6)))).toEqual([-20, 20, 8, 28]);
+    }
   });
 });
 

@@ -312,8 +312,10 @@ they hang from.
   least twice a single bond's width). Every line, hash and shape of the
   bond behind is cut by the same band, the pieces left have nothing
   between them in the page, the SVG and the EMF alike, and a piece left
-  shorter than the clear space is not drawn; on a page of pixels the clear
-  space is never under three device pixels, and bonds crossing at under ten
+  shorter than the clear space is not drawn; in a picture of pixels laid
+  out with a least line width the clear space is never under three pixels
+  (the page's drawing has none: its gap scales with the page, as its lines
+  do), and bonds crossing at under ten
   degrees are not cut - a group's bond too: the first atom of a group off
   the solid is as near as the atom of the solid it leaves (the mean of
   theirs, where it leaves more than one), so a bond out of the front of

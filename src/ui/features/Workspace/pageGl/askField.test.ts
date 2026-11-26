@@ -239,7 +239,7 @@ describe("the keys that go by the lines drawn", () => {
 
 describe("the ask field as drawn", () => {
   const rect = { x0: 0, y0: 0, x1: 16.2, y1: 24.3 };
-  const field = (over: Partial<AskOf> = {}): AskOf => ({ key: "conversation:1", rect, widthPx: 432, value: "", start: 0, end: 0, focused: false, first: 0, caret: 1, running: false, words: 1, ...over });
+  const field = (over: Partial<AskOf> = {}): AskOf => ({ key: "conversation:1", rect, widthPx: 432, value: "", start: 0, end: 0, focused: false, first: 0, caret: 1, running: false, ...over });
 
   it("says what it is for, quiet, in a hairline box 27 tall at the foot of the card, 8 in; where it takes the pointer, a text cursor", () => {
     const d = askParts(field());
@@ -271,10 +271,5 @@ describe("the ask field as drawn", () => {
     expect(caret).toBeDefined();
     // (a caret above the lines shown is not drawn)
     expect(askParts(field({ value, focused: true, first: 2, start: 0, end: 0 })).shapes.some((s) => s.key.endsWith(":caret"))).toBe(false);
-  });
-
-  it("draws nothing where the page's words are too small to read", () => {
-    const d = askParts(field({ words: 0 }));
-    expect([d.shapes, d.texts, d.regions]).toEqual([[], [], []]);
   });
 });

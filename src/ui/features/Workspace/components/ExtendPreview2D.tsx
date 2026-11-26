@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { devicePx, thinLine } from "../pageGl/units";
 import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
@@ -22,7 +23,7 @@ export default function ExtendPreview2D() {
   const model = useEditor((s) => s.model);
   const extend = useEditor((s) => s.extend);
   const setExtendPreview = useEditor((s) => s.setExtendPreview);
-  const { camera, invalidate } = useThree();
+  const { camera, gl, invalidate } = useThree();
   // The drawing's own line, in world units.
   const lineWidthWorld = useDrawnLayout().opts.lineWidthPx;
   const thin = useRef<THREE.Mesh>(null!);
@@ -114,7 +115,10 @@ export default function ExtendPreview2D() {
 
     // the thin line from the atom it leaves to the pointer, behind the bonds
     const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
-    const thickWorld = Math.max(lineWidthWorld, 1 / Math.max(zoom, 1e-6));
+    // (as wide as the drawing's lines - thinner than a device pixel, a device pixel wide and as much fainter: pageGl/units `thinLine`)
+    const drawn = thinLine(lineWidthWorld, devicePx(zoom, gl.getPixelRatio()));
+    const thickWorld = drawn.width;
+    (thin.current.material as THREE.MeshBasicMaterial).opacity = ALPHA.highlight * seen.current * drawn.ink;
     q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), toPtr);
     thin.current.position.set(
       tip.x + (ptr.x - tip.x) * 0.5,

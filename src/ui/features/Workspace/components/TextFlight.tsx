@@ -225,10 +225,10 @@ export function MarkdownFlight({
         </mesh>
       ))}
       <group position={[r.x, -r.y, 0]}>
-        <MarkdownRows laid={a} rows={onSheet.rows} scale={sa} words={1} opacity={seen * (1 - smooth(0.28, 0.5, k))} order={5} reach={r.h / sa} onReady={one} />
+        <MarkdownRows laid={a} rows={onSheet.rows} scale={sa} opacity={seen * (1 - smooth(0.28, 0.5, k))} order={5} reach={r.h / sa} onReady={one} />
       </group>
       <group position={[r.x, -r.y, 0]}>
-        <MarkdownRows laid={b} first={firstB} rows={lastB} scale={sb} words={1} opacity={seen * smooth(0.5, 0.72, k)} order={6} reach={r.h / sb} onReady={one} />
+        <MarkdownRows laid={b} first={firstB} rows={lastB} scale={sb} opacity={seen * smooth(0.5, 0.72, k)} order={6} reach={r.h / sb} onReady={one} />
       </group>
     </group>
   );

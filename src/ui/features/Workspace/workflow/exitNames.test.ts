@@ -38,7 +38,7 @@ describe("an exit's name beside its port (docs/WORKFLOWS.md, *Exit names*)", () 
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/exitNames\([\s\S]*?\(step, exit\) => \{\s*const b = exitSets\.get\(`\$\{step\}:\$\{exit\}`\);\s*return b && !shown\.has\(b\.id\) \? setName\(b, steps\) : null;/);
     expect(layer).toMatch(/<PagePlaced>\s*<ExitNames items=\{names\} chip=\{chip\} \/>\s*<\/PagePlaced>/);
-    expect(layer).toMatch(/usePlaced\(\s*anchor\s*\? \{\s*key: "exit-names",\s*anchor,\s*words: true,\s*control: true,/);
+    expect(layer).toMatch(/usePlaced\(\s*anchor\s*\? \{\s*key: "exit-names",\s*anchor,\s*control: true,/);
   });
 });
 

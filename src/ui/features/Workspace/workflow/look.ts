@@ -100,8 +100,6 @@ export const cardHigh = (ports: number) => CARD_H + Math.max(0, ports - CARD_POR
 export const inputLead = (name: string) => (8 + 6 * name.length + 4) * PX;
 /** How large a port is on the page, in page pixels. */
 export const PORT_PAGE_PX = 9;
-/** The least a port is drawn at, in the screen's pixels, where the page is far. */
-export const PORT_LEAST_SCREEN_PX = 5;
 /** The most a port may be, as a share of its set's or its card's height, on the page. */
 export const PORT_SHARE = 1 / 6;
 
@@ -110,15 +108,14 @@ export const PORT_SHARE = 1 / 6;
  * the page's layer's scale (`--scale`, Workflow2D) undone on it (Port): its
  * size on the page (`PORT_PAGE_PX`), so it grows and shrinks with the page,
  * but no more than `PORT_SHARE` of its set's or card's height (`of`, page
- * px) - and never under `PORT_LEAST_SCREEN_PX` where the page is far. The
- * same at every zoom otherwise: round, a ring a pixel thick - or a fifth of
+ * px) - at every zoom, scaled with the page as everything on it is: round, a ring a pixel thick - or a fifth of
  * it across, where it is that small - or filled, as its state says (the
  * maintainer, 2026-10-28: zoomed out, ports were far too big for their
  * sets; 2026-11-11: zoomed in, far too small).
  */
 export function portSize(of?: number): string {
   const onPage = Math.min(PORT_PAGE_PX, of != null && of > 0 ? of * PORT_SHARE : Infinity);
-  return `max(${PORT_LEAST_SCREEN_PX}px, calc(var(--scale, 1) * ${onPage.toFixed(2)}px))`;
+  return `calc(var(--scale, 1) * ${onPage.toFixed(2)}px)`;
 }
 
 /**

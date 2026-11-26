@@ -43,9 +43,11 @@ export function outlineAround(box: MarkBoxShape, inset: number, step: number): {
 /**
  * The outline's band as triangles (x, y pairs, three to a triangle): `width`
  * wide, its outer edge on the box's; dashed - `dash` on, `gap` off, along
- * its middle, from its right side's middle - where both are given.
+ * its middle, from its right side's middle - where both are given. Each
+ * corner's point of the band's middle line is put in `middles`, where it is
+ * given (x, y pairs as the corners'): what the band widens about.
  */
-export function outlineBand(box: MarkBoxShape, width: number, dash?: { on: number; off: number }): number[] {
+export function outlineBand(box: MarkBoxShape, width: number, dash?: { on: number; off: number }, middles?: number[]): number[] {
   const step = Math.max(width, Math.min(box.w, box.h) / 24, 1e-9);
   const mid = outlineAround(box, width / 2, dash ? Math.min(step, dash.on / 3) : step);
   const n = mid.length;
@@ -75,6 +77,7 @@ export function outlineBand(box: MarkBoxShape, width: number, dash?: { on: numbe
     const qo = { x: q.x + nq.x * h, y: q.y + nq.y * h };
     const qi = { x: q.x - nq.x * h, y: q.y - nq.y * h };
     out.push(po.x, po.y, qo.x, qo.y, qi.x, qi.y, po.x, po.y, qi.x, qi.y, pi.x, pi.y);
+    middles?.push(p.x, p.y, q.x, q.y, q.x, q.y, p.x, p.y, q.x, q.y, p.x, p.y);
   }
   return out;
 }

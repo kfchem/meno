@@ -104,7 +104,6 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const cam = camera as THREE.OrthographicCamera;
   // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
   const zoom = useDrawnZoom();
-  const px = 1 / zoom;
   const margin = MARGIN * fs;
 
   // the words as they are drawn: what the IME has so far in place of what it replaces - kept or let go, as their caption now has them
@@ -305,7 +304,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
 
   // the caret, what is selected and what the IME has so far, as the words drawn have them
   const d = drawnNow.current;
-  const out = d && !left ? writingMarks(d, { fs, lineH: fs * CAPTION_LINE, px, ink: opts.labelColor ?? "#000000", caretRef }) : [];
+  const out = d && !left ? writingMarks(d, { fs, lineH: fs * CAPTION_LINE, ink: opts.labelColor ?? "#000000", caretRef }) : [];
   const lit = d ?? now;
   return (
     <group>

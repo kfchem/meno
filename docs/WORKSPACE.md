@@ -1542,11 +1542,33 @@ each frame of a zoom held it to a frame every 0.6 s (2026-11-05). What draws
 it, in `features/Workspace/pageGl/`:
 - **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
   canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
-  shrinks with the page, its lines too, never thinner than one device
-  pixel. A control - a port - is its page pixels too, no more than its
-  share of what it belongs to, and never under its least on the screen
-  where the page is far (`Control`; 2026-11-11, the maintainer: a port's
-  dots were far too small zoomed in).
+  shrinks with the page, its lines too. A line thinner than one device
+  pixel is drawn one device pixel wide and as much fainter (`thinLine`):
+  thinner and fainter far out, as a smaller picture of it would be. The
+  drawing's lines - bonds, hashes, the caps where they meet, aromatic
+  rings, pluses and reaction arrows - take the same rule: none is laid out
+  wider than the drawing makes it at any zoom, and once a bond is thinner
+  than a device pixel the drawing is drawn as one ink, its lines a device
+  pixel wide at least and all of it - wedges and labels too - as much
+  fainter as a bond is (components/drawnInk); a plus or a reaction arrow
+  by its own line, painted once as well. Its parts overlap at atoms,
+  in double bonds, where a wedge meets its bond, so while it is fainter
+  each pixel of the drawing's ink is painted once (the first to reach it
+  leaves its depth there, turning the rest away): never darker where its
+  parts meet, nor where two structures cross. The gap where a bond passes
+  behind another scales with the page as well, two of its line widths
+  either side at every zoom. The page's other lines - a shape's (its
+  dashes along it, its fill as it is), a mark's box, a guide, the line
+  from a slide to the next - take the same rule: a device pixel wide at
+  least and as much fainter, each widened about its middle line in its
+  shader (components/drawnInk `thinStroke`); not painted once by depth
+  as the drawing is - a shape's line and a box's outline meet themselves
+  edge to edge, and where a guide's tick crosses its end that corner is
+  a little darker while it is faint. Pictures of the drawing -
+  SVG, PDF, EMF, PNG at a size - are not the zoom and keep their own line
+  widths. A control - a port - is its page pixels too, no more than its
+  share of what it belongs to, and scaled with the page at every zoom
+  (`Control`).
 - **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
   worked out from its distance to its edge in the fragment shader -
   rounded corners, a line inside the edge as a CSS inset ring is, solid or
@@ -1608,8 +1630,7 @@ it, in `features/Workspace/pageGl/`:
   typed into a real field unseen: `PageAsk`) takes 44 page pixels at
   least, growing to four lines, and the history the rest. A line, a ground or a
   chip at an edge that more lies past fades over one line as it nears it,
-  never cut in two; its words fade with the page's, and too small to read
-  it says its turns and state alone. It is scrolled by a track, *Earlier*
+  never cut in two; its words scale with the page at every zoom. It is scrolled by a track, *Earlier*
   and *Latest* chips and keys (`conversationScroll`), never by the wheel:
   no region of the page hears one, so a wheel over the card zooms. The
   frame always holds the card (`framedForCard`: at least `FRAME_LEAST`, its
@@ -1622,29 +1643,8 @@ it, in `features/Workspace/pageGl/`:
 - **A workflow** (components/Workflow2D): its steps' cards shut
   (`cardFace`) - who does it, what and how, its state in words and an icon
   turning while it runs, a log's last line in Plex Mono and a bar of how
-  far its jobs are; zoomed out where its words are too small to read, in
-  two more bands (`pageGl/cardBands`: by the page's scale, a screen pixel
-  to a page pixel): from three quarters down to a quarter it is *named* -
-  its box at the page's size, its kind's icon and its name on one line
-  (the name 11 screen pixels high at any zoom, cut inside its box, clear
-  of its mark), a mark of its state at its top right (running
-  turns, in Meno's colour; done is filled, in the quiet ink; waiting is
-  hollow; failed is in the alert tone with how many of its entries failed,
-  where it counts them) - and none of its summary, state words, log line,
-  bar or port names; under a quarter it is *marked*: its box tinted by
-  its state, the mark, and its name only where it fits whole inside its
-  box and clear of the mark at both sides - never cut short, never over its
-  box's edge or its mark.
-  Where two names would overlap, the later in reading order fades out
-  (the earlier staying) and the page's tip says it as its card is
-  pointed at. The bands switch with a little hysteresis (5 % each way) and
-  fade over Meno's quick time. A set's tab follows the same rule: its name,
-  11 screen pixels high, stands in for its words (cut inside its frame's
-  width, a tab's inset from each side, and raised over its frame's top where
-  it, and a gap of three screen pixels under it, is higher than its tab's
-  band - wholly above it, far off - never down over, nor touching, what
-  the frame holds, and left out where it would lie over another
-  frame or a card) - laid out as their HTML was, and drawn on under a card
+  far its jobs are - at every zoom, scaled with the page. A set's tab says its name and count in page
+  pixels at every zoom, scaled with the page as its frame is - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -
@@ -1656,17 +1656,16 @@ it, in `features/Workspace/pageGl/`:
   real field laid unseen at the caret, so that keys, the input method's
   candidates beside the words, pasting, undoing and a screen reader are
   the system's own - Enter or a press away keeps it, Escape leaves it as
-  it was; its name, 11 screen pixels high, stands in for its words where
-  they are too small to read (a conversation's tab: its icon); a tab's words start as far from the frame's left edge
+  it was; a tab's words start as far from the frame's left edge
   as its icon stands from its top, a conversation's and a set's alike
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings that grow with the
-  page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
+  page at every zoom, lit where a wire being drawn may join them, a wire let
   go on one found by its shape. A set's frame, while something is held,
   showing what letting go would do (`frameSign`): its edge and a wash in
-  Meno's colour, or its edge dashed. And its small marks (`workflowMarks`):
-  an Enumerate step's positions, a structure's number with how it was made
-  in the tip. Frames under cards
+  Meno's colour, or its edge dashed, in page lengths. And its small marks
+  (`workflowMarks`): an Enumerate step's positions, a structure's number
+  with how it was made in the tip. Frames under cards
   under chips under ports, all over the molecules, as their HTML lay.
 - **The hover tip** (components/PageTip): not placed on the page, it may be
   HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
@@ -1700,8 +1699,9 @@ space-filling side by side is better science than either alone.
   molecule's own units (the maintainer, 2026-10-15: "the outline's
   thickness to change with zoom"), set in ångströms and shown in Settings
   in picometres, so that it grows and shrinks with the molecule as the
-  balls and sticks do, never thinner on the screen than half a pixel, so
-  that far out it does not shimmer away (`lineWidth`, `LINE_LEAST_PX`) -
+  balls and sticks do; thinner than a device pixel, it is drawn a device
+  pixel wide and as much fainter, so that far out it fades rather than
+  shimmers (pageGl/units `thinLine`) -
   and in a colour of its own - and fade
   what lies further back in a molecule toward the page, from none to
   strong, so that its front reads first: nothing at the front, growing

@@ -2,22 +2,44 @@
  * The page's own lengths, for what WebGL draws on it in place of HTML
  * (docs/WORKSPACE.md, *Drawn by WebGL*): a page pixel is a screen pixel at
  * the zoom a canvas opens at (utils/pageScale `PAGE_PX`), so what is drawn in
- * page pixels grows and shrinks with the page - its lines too - never thinner
- * than a pixel of the screen's own, where it would shimmer away.
+ * page pixels grows and shrinks with the page - its lines too: one thinner
+ * than a device pixel is drawn a device pixel wide and as much fainter
+ * (`thinLine`).
  */
 import { PAGE_PX } from "../utils/pageScale";
 
 /** A length of `px` page pixels, in world units. */
 export const pagePx = (px: number) => px * PAGE_PX;
 
+/** One device pixel at `zoom` (world units a screen pixel is 1 / zoom of) on a screen of `dpr` device pixels to its own, in world units. */
+export const devicePx = (zoom: number, dpr: number) => 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1));
+
 /**
- * A line `widthPx` page pixels wide as it is drawn at `zoom` (world units a
- * screen pixel is 1 / zoom of) on a screen of `dpr` device pixels to its own:
- * in world units, never under one device pixel.
+ * A line `width` world units wide as it is drawn where a device pixel is
+ * `device` of them: as wide as it is - and, thinner than a device pixel,
+ * one device pixel wide and as much fainter as it is thinner (`ink`, its
+ * share of the device pixel), as a picture of it made smaller looks.
  */
-export function lineWidth(widthPx: number, zoom: number, dpr: number): number {
-  return Math.max(pagePx(widthPx), 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+export function thinLine(width: number, device: number): { width: number; ink: number } {
+  const ink = thinInk(width, device);
+  return ink < 1 ? { width: device, ink } : { width, ink };
 }
+
+/**
+ * `thinLine`'s ink alone - the width drawn is `width / ink` - with nothing
+ * made for it: for work done at each frame. (A line a device pixel wide but
+ * for the last bit of the arithmetic - a page pixel at the zoom a canvas
+ * opens at, on a screen of one device pixel to its own - is a device pixel.)
+ */
+export function thinInk(width: number, device: number): number {
+  return width > 0 && width < device * (1 - 1e-9) ? width / device : 1;
+}
+
+/** The GLSL of `thinLine`: the width drawn, and the ink, of a line `w` wide where a device pixel is `d`. */
+export const THIN_LINE_GLSL = /* glsl */ `
+vec2 thinLine(float w, float d) {
+  return w > 0.0 && w < d ? vec2(d, w / d) : vec2(w, 1.0);
+}`;
 
 /**
  * A control's size - a port, a handle to grab: `onPagePx` page pixels, no
@@ -38,11 +60,7 @@ export function controlSize(c: Control, zoom: number): number {
   return Math.max(c.leastScreenPx / Math.max(zoom, 1e-9), controlOnPage(c));
 }
 
-/**
- * The line round a control `size` world units across, at `zoom`: a screen
- * pixel, a fifth of it where it is tiny, never under a device pixel - as a
- * port's ring was drawn in HTML (workflow/StepCard `Port`).
- */
-export function controlLine(size: number, zoom: number, dpr: number): number {
-  return Math.max(Math.min(1 / Math.max(zoom, 1e-9), size / 5), 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+/** The line round a control `size` world units across: a page pixel, a fifth of the control where it is tiny (`thinLine` draws it). */
+export function controlLine(size: number): number {
+  return Math.min(pagePx(1), size / 5);
 }

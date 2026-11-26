@@ -178,12 +178,8 @@ closed; each wire as far as it bends out past them - one going back to a
 step on the left loops out either side; and what is drawn over the page
 in HTML - each molecule's frames chip, which may be wider than its set,
 and its notes over it (2026-10-24; components/FitToContent2D, utils/
-fitExtent). A chip is as large as the page draws it at any zoom, so where
-it lies now is where it lies after; the notes are drawn as large as the
-page only between three quarters and half as large again, so how much of
-it they take is worked out at the zoom the fit comes to. Their words, and the chips on the page, go below 75 % (*How it
-looks*): a card then shows its icon and its state's icon alone, a set
-its frame and what it holds.
+fitExtent). A chip and the notes are as large as the page draws them at
+any zoom, so where they lie now is where they lie after.
 
 ### How it looks
 
@@ -860,7 +856,7 @@ are read as Export reads them (`pluginEntry`), and given with it. *Show
 log* and *Show files* are on the step's menu (right-click), once it has
 run.
 
-A double-click on its card closes it, as do its *Close* and Escape; it never closes by itself (the maintainer, 2026-10-28): a single click on it again leaves it open, and a press elsewhere, a zoom, the selection changing, or a run starting or ending do not close it - the page is worked on (panned, zoomed, other cards opened) while its options stay open (2026-10-14). A double-click on a closed card opens it and leaves it open (workflow/cardOpen). Zoomed out where its words are too small to read, its options stay open, each line of their words a grey bar where it lies, as a text's words are (workflow/TextBars), and nothing in them can be pressed until they are read again. The
+A double-click on its card closes it, as do its *Close* and Escape; it never closes by itself (the maintainer, 2026-10-28): a single click on it again leaves it open, and a press elsewhere, a zoom, the selection changing, or a run starting or ending do not close it - the page is worked on (panned, zoomed, other cards opened) while its options stay open (2026-10-14). A double-click on a closed card opens it and leaves it open (workflow/cardOpen). Zoomed out, its options stay open and keep their words, scaled with the page. The
 step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere
@@ -1916,8 +1912,9 @@ Decided while building it, for the maintainer to confirm:
   molecules with their outputs: the step that could make them again is
   gone, and a chemist's set is always kept.
 - **The look, after review** (2026-10-08): frames, tabs, cards and ports
-  in Meno's palette and its cards' hairline borders, a hair on the screen
-  at any zoom; wires a hair and a quarter; Heroicons' outline icons for
+  in Meno's palette and its cards' hairline borders, a page pixel wide
+  (thinner than a device pixel, a device pixel wide and as much fainter);
+  wires a page pixel and a quarter; Heroicons' outline icons for
   the kinds and the states; no tint or fading for a state. The canvas's
   hover blue only for a wire under the pointer, as for an atom.
 - **A step's card is 208 px wide** at 100 %, its ports 28 px below its
@@ -1925,10 +1922,9 @@ Decided while building it, for the maintainer to confirm:
 - **A port** is round at every zoom - a ring a hair thick, or filled in
   the accent while a wire may join it - and stands exactly at its wire's
   end. It is 9 page px across, so it grows and shrinks with the page, never
-  more than a sixth of its set's or card's height - and never under 5 screen
-  px, where the page is far - its ring at most a fifth of it across (the
-  maintainer, 2026-10-28: zoomed out, ports were far too big for their sets;
-  2026-11-11: zoomed in, far too small; look `portSize`).
+  more than a sixth of its set's or card's height, at every zoom - its ring
+  a page pixel, or a fifth of it across where it is smaller (look
+  `portSize`). A running step's wire's dashes are page lengths too.
 - **Laid out in the screen's pixels, lines drawn as shadows** (2026-10-31,
   seen on Windows): the page's layer of HTML is laid out in its own
   pixels and scaled to the zoom after. Chromium, Windows' WebView2, rounds
@@ -2504,8 +2500,7 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   of 283 molecules in 3D - some 14 700 elements in its chips - to a frame
   every 0.6 s. While the zoom moves, `--page` stays as it was last
   written and each chip is scaled from where it hangs by how far the zoom
-  has gone from there (`--page-k`; a molecule's or a figure's notes by
-  `--notes-k`, between their two scales: `pageTold`); a frame after the
+  has gone from there (`--page-k`, notes alike: `pageTold`); a frame after the
   zoom stops, `--page` is written and each is laid out at it, its words
   crisp, at the size it was shown at.
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
@@ -4447,22 +4442,9 @@ for each structure).
   them, from below the least value to above the greatest.
 - A point pointed at says its row, what it is, and its two values; pressed, where it is
   of a molecule on the page, that molecule is chosen at its frame.
-- Zoomed out until words on the page are too small to read, a chart - and
-  an energy diagram - is still drawn, its points, levels, lines and axes;
-  only its words fade out, as a set's name and count do. A table and a
-  number, all words, fade out whole. All of these, and a step's card's
-  words, go where they are too small, never at once - and never faded with
-  the zoom (the maintainer, 2026-10-28: faded with the zoom, a zoom could
-  stop where words and icons were both half there; before that, 2026-10-25,
-  where both were all but gone). Past a threshold they switch: off below
-  the least scale words are read at, divided by 1.05, and on again only
-  above it times 1.05, so that a zoom stopped at it, or turned a little
-  back, does not switch them back and forth (utils/pageScale
-  `wordsReadAt`, utils/zoomSwitch `switchedAt`). Switched, they fade over
-  Meno's quick time, 120 ms, on its curve (`--words` on the page's layer,
-  a CSS transition), as a molecule's chips do; a step's card's name and
-  state mark, which stand for its words where they are gone, fade in as
-  they go (docs/WORKSPACE.md, *A workflow*: named, then marked). What is pressed on them switches with them.
+- A chart, an energy diagram, a table and a number are drawn whole at
+  every zoom, their words with them, scaled with the page as everything on
+  it is.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

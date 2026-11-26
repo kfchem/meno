@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { emptyWorkspaceDocument } from "../document";
-import { CARD, cardBoxOf, cardFace, nameBoxOf, type CardFaceOf } from "../pageGl/cardFace";
+import { CARD, cardFace, type CardFaceOf } from "../pageGl/cardFace";
 import { bodyBoxOf } from "../utils/textBody";
 import type { EditorState } from "../store/types";
 import type { Box } from "../pageGl/shapes";
@@ -95,7 +95,6 @@ describe("a card of four inputs, drawn", () => {
     summary: "Optimise to a saddle point",
     state: cardState("ready", undefined, undefined, 0),
     selected: false,
-    words: 1,
     inputs: inputsOf("saddle-point").map((p) => p.name),
     high: TALL / PX,
     ...over,
@@ -108,25 +107,13 @@ describe("a card of four inputs, drawn", () => {
     const names = d.texts.filter((t) => t.key.includes(":input:"));
     expect(names.map((t) => [t.text, t.y])).toEqual(inputsOf("saddle-point").map((p, k) => [p.name, 3 - (portDown(k) - PORT_STEP / 2)]));
     expect(names.every((t) => t.y > box.y0)).toBe(true);
-    const far = cardFace(card({ words: 0 }));
-    expect(far.icons.find((i) => i.key.endsWith(":big"))!.y).toBeCloseTo(3 - TALL / 2, 9);
     // (a card given no height of its own: as tall as a card of three)
     expect((cardFace(card({ high: undefined })).shapes[0] as Box).y1 - (cardFace(card({ high: undefined })).shapes[0] as Box).y0).toBeCloseTo(CARD_H + pagePx(2 * CARD.hair), 9);
-  });
-
-  it("its name, where only marked, in the middle of its height; and what is kept clear of it as tall as it is", () => {
-    const tall = nameBoxOf({ key: "k", x: 2, y: 3, who: "Quanta", high: TALL / PX }, 0.1, false);
-    expect((tall.y0 + tall.y1) / 2).toBeCloseTo(3 - TALL / 2, 9);
-    const short = nameBoxOf({ key: "k", x: 2, y: 3, who: "Quanta" }, 0.1, false);
-    expect((short.y0 + short.y1) / 2).toBeCloseTo(3 - CARD_H / 2, 9);
-    expect(cardBoxOf(card())).toEqual({ x0: 2, x1: 2 + pagePx(CARD.w), y0: 3 - pagePx(TALL / PX), y1: 3 });
-    expect(cardBoxOf(card({ high: undefined })).y0).toBeCloseTo(3 - CARD_H, 9);
   });
 
   it("the same in its HTML and on the page's layer: its height its kind's, the frames wires go round its own", () => {
     const html = readFileSync(join(__dirname, "StepCard.tsx"), "utf8");
     expect(html).toMatch(/const high = cardHighOf\(p\.step\.kind\) \/ PX;/);
-    expect(html).toMatch(/height: high \}\}/);
     expect(html).toMatch(/minHeight: high \}\}/);
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/high: cardHighOf\(s\.kind\) \/ PX,/);

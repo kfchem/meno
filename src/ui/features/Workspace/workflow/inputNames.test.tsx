@@ -20,7 +20,6 @@ function card(s: WorkflowStep): string {
       who="Meno"
       how=""
       state="ready"
-      compact={false}
       open={false}
       inputs={inputsOf(s.kind).map((p) => ({ id: p.id, name: p.name, look: "plain" as const }))}
       optionList={info.options ?? []}

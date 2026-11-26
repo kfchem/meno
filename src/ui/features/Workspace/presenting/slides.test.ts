@@ -1,6 +1,6 @@
-import { SWITCH_BAND } from "../utils/zoomSwitch";
+import { pageLength } from "../utils/pageScale";
 import { describe, expect, it } from "vitest";
-import { boxOf, FIGURES_LEAST_PX, holds, isStandard, joinOf, markScale, OF_VIEW, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, talkEnd, viewOf, WIDE, zoomOf } from "./slides";
+import { boxOf, holds, isStandard, joinOf, markScale, OF_VIEW, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, talkEnd, viewOf, WIDE, zoomOf } from "./slides";
 import { bandsAbout, frameOnScreen, rectBetween } from "./stage";
 import { presentIntent } from "../../../../lib/doc/shortcuts";
 
@@ -155,38 +155,19 @@ describe("a slide laid for a talk below a Mac's notch", () => {
   });
 });
 
-describe("a slide's number, and the line to the next, as the page is zoomed out", () => {
-  // (Slides2D's: a disc 22 px across, its figures 12 px; a slide 9 units tall on the page)
-  const mark = (screenH: number, was = true) => markScale(9, 9 / screenH, 22, 12, was);
-  it("keeps its size on the screen while its disc is no more than a sixth of its slide's height there", () => {
-    expect(mark(600)).toEqual({ k: 1, read: true });
-    expect(mark(132).k).toBeCloseTo(1, 9);
+describe("a slide's number, and the line to the next, at any zoom", () => {
+  // (Slides2D's: a disc 22 page px across; a page px is PAGE_PX of the page's units)
+  const disc = 22;
+  const own = pageLength(disc);
+  it("is as large on the page at every zoom - the zoom is not asked - while its disc is no more than a sixth of its slide's height", () => {
+    // (a slide 6 x 22 page px tall or more: the disc at its own size)
+    expect(markScale(6 * own, disc)).toBeCloseTo(1, 9);
+    expect(markScale(60 * own, disc)).toBe(1);
   });
 
-  it("from there shrinks with its slide - a sixth of its height - and is switched off where its figures are too small to read, a little past the least size either way", () => {
-    expect(mark(66).k).toBeCloseTo(0.5, 9);
-    expect(mark(66).read).toBe(false);
-    const at = (figures: number, was: boolean) => mark((figures / 12) * 132, was).read;
-    // (between the switch's two edges, as it was: a zoom stopped there does not switch it back and forth)
-    expect([at(FIGURES_LEAST_PX, true), at(FIGURES_LEAST_PX, false)]).toEqual([true, false]);
-    expect(at(FIGURES_LEAST_PX * SWITCH_BAND, false)).toBe(true);
-    expect(at(FIGURES_LEAST_PX / SWITCH_BAND / 1.001, true)).toBe(false);
-  });
-
-  it("never at a jump in size: zoomed out notch by notch of a mouse wheel, only ever smaller, by little at a time, and switched off once", () => {
-    const notch = Math.exp(40 * 0.0016);
-    let was = mark(2000);
-    let most = 0;
-    let switches = 0;
-    for (let screenH = 2000 / notch; screenH > 20; screenH /= notch) {
-      const now = mark(screenH, was.read);
-      expect(now.k).toBeLessThanOrEqual(was.k);
-      most = Math.max(most, was.k - now.k);
-      if (now.read !== was.read) switches++;
-      was = now;
-    }
-    expect(most).toBeLessThan(0.07);
-    expect(switches).toBe(1);
-    expect(was.read).toBe(false);
+  it("on a smaller slide, a sixth of its height: a page relation, the same at every zoom", () => {
+    // (a slide 3 x 22 page px tall: a sixth of it is 11 page px, half the disc)
+    expect(markScale(3 * own, disc)).toBeCloseTo(0.5, 9);
+    expect(markScale(0.6 * own, disc)).toBeCloseTo(0.1, 9);
   });
 });

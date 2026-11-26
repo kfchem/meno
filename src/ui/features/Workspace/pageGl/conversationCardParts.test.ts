@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { CARD, cardLayout, type CardBlock } from "./conversationCard";
-import { cardParts, cardView, CODE, edgeFade, EDGE_FADE, SCROLL_ICONS, turnsSaid, type CardOf } from "./conversationCardParts";
+import { cardParts, cardView, CODE, edgeFade, EDGE_FADE, SCROLL_ICONS, type CardOf } from "./conversationCardParts";
 import { SCROLL_CHIP, TRACK } from "./conversationScroll";
 
 /** A frame put down: 24 by 14 bonds of 1.8 world units; its card 432 by 648 page px, its history 604 (the ask field's 44 less). */
 const FRAME = { x0: 0, y0: 0, x1: 43.2, y1: 25.2 };
 const near = (v: number) => Number(v.toFixed(6));
 const reply = (text: string): CardBlock => ({ kind: "reply", spans: [{ text }] });
-const card = (blocks: CardBlock[], over: Partial<CardOf> = {}): CardOf => ({ key: "conversation:1", frame: FRAME, layout: cardLayout(blocks), offset: 0, words: 1, turns: 1, running: false, changed: false, ...over });
+const card = (blocks: CardBlock[], over: Partial<CardOf> = {}): CardOf => ({ key: "conversation:1", frame: FRAME, layout: cardLayout(blocks), offset: 0, ...over });
 
 describe("how present what is scrolled to a card's edge is", () => {
   it("is none touching an edge there is more beyond, all one line (19 px) in from it, between them as far in as it is", () => {
@@ -104,12 +104,10 @@ describe("a conversation's card as drawn", () => {
     expect(parts(0.5 * 19)).toContain("discard");
   });
 
-  it("sets its ask area off with a hairline as present as its words and its card", () => {
+  it("sets its ask area off with a hairline as present as its card", () => {
     const hair = (over: Partial<CardOf>) => cardParts(card([reply("hello")], over)).shapes.find((s) => s.key === "conversation:1:ask")!.opacity;
     expect(hair({})).toBe(1);
-    expect(hair({ words: 0.5 })).toBe(0.5);
     expect(hair({ opacity: 0.5 })).toBe(0.5);
-    expect(hair({ words: 0.5, opacity: 0.5 })).toBe(0.25);
   });
 
   it("makes a line of a question of each line it was written on, whichever way the new line was written - none lost, none doubled", () => {
@@ -150,21 +148,14 @@ describe("a conversation's card as drawn", () => {
     expect(end.texts.find((t) => t.text === "line 0")).toBeUndefined();
   });
 
-  it("is faded as the page's words are: its words as present as they are read, its turns the rest - and its box as it is present", () => {
-    const blocks = [{ kind: "question", text: "Hi" } as CardBlock, reply("hello")];
-    const half = cardParts(card(blocks, { words: 0.5, turns: 3, opacity: 0.8 }));
-    expect(half.texts.map((t) => [t.text, near(t.opacity!)])).toEqual([["3 turns", 0.4], ["Hi", 0.4], ["hello", 0.4]]);
-    expect(half.shapes.find((s) => s.key === "conversation:1:card")).toMatchObject({ opacity: 0.8 });
-    // (read no more: its turns alone, in the middle of its history - 24 px words - no lines, no chips, no ground)
-    const small = cardParts(card([...blocks, { kind: "changes" }], { words: 0, turns: 3, changed: true }));
-    expect(small.texts.map((t) => [t.text, t.sizePx, t.anchor, t.baseline, t.opacity])).toEqual([["3 turns · changes waiting", 24, "start", "middle", 1]]);
-    expect(small.shapes.map((s) => s.key)).toEqual(["conversation:1:card", "conversation:1:ask"]);
-    expect(small.regions.map((r) => r.part)).toEqual(["card"]);
-  });
-
-  it("says what a card too small to read holds: nothing, one turn or its count - and that it works, or has changes waiting", () => {
-    expect([turnsSaid(0, false, false), turnsSaid(1, false, false), turnsSaid(12, false, false)]).toEqual(["Nothing said", "One turn", "12 turns"]);
-    expect([turnsSaid(2, true, true), turnsSaid(2, false, true)]).toEqual(["2 turns · working", "2 turns · changes waiting"]);
+  it("draws its words as they are, with no summary of its turns in their place - its zoom is not an input - and its box as present as it is", () => {
+    const blocks = [{ kind: "question", text: "Hi" } as CardBlock, reply("hello"), { kind: "changes" } as CardBlock];
+    const d = cardParts(card(blocks, { opacity: 0.8 }));
+    expect(d.texts.map((t) => t.text)).toEqual(expect.arrayContaining(["Hi", "hello"]));
+    expect(d.texts.some((t) => /turn|Nothing said/.test(t.text))).toBe(false);
+    expect(d.texts.filter((t) => t.text === "Hi" || t.text === "hello").map((t) => near(t.opacity!))).toEqual([0.8, 0.8]);
+    expect(d.shapes.find((s) => s.key === "conversation:1:card")).toMatchObject({ opacity: 0.8 });
+    expect(cardParts(card(blocks, { opacity: 0.8 })).texts.map((t) => t.text)).toEqual(d.texts.map((t) => t.text));
   });
 
   it("is nothing where its frame leaves no room", () => {
@@ -247,13 +238,5 @@ describe("a conversation's card scrolled without the wheel", () => {
     expect(dot.y1).toBeCloseTo(latest.y1 - 0.0375, 9);
     expect([near(dot.x1 - dot.x0), dot.radiusPx]).toEqual([near(6 * 0.0375), 3]);
     expect(box(cardParts({ ...many, offset: 100, scroll: { track: 0, earlier: 0, latest: 1 } }), "latest:dot")).toBeUndefined();
-  });
-
-  it("draws none of it where its words are too small to read", () => {
-    const d = cardParts({ ...many, words: 0, offset: 100, scroll: { track: 1, earlier: 1, latest: 1, dot: true } });
-    expect(d.shapes.map((s) => s.key)).toEqual(["conversation:1:card", "conversation:1:ask"]);
-    expect(d.icons).toEqual([]);
-    expect(d.regions.map((r) => r.part)).toEqual(["card"]);
-    expect(SCROLL_CHIP.h).toBe(22);
   });
 });

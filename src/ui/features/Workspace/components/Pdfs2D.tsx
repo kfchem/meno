@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import { pageAt } from "../utils/page";
+import { pageLength, reachAt } from "../utils/pageScale";
 import { setViewGoal } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
 import type { PdfItem, PdfLens } from "../store/types";
@@ -103,7 +104,7 @@ const ICON_MS = 380;
 /** How long its pages spread take to glide to where they now lie - put back in their rows, an undo - in ms. */
 const GLIDE_MS = 320;
 
-/** The corner that folds, on the screen, in pixels. */
+/** The corner that folds, on the page, in page pixels (a press taking it from as far on the screen at any zoom). */
 const FOLD_PX = 30;
 
 const NOTHING_FOUND: never[] = [];
@@ -835,7 +836,9 @@ function PdfStack(props: {
   const b = showSpread
     ? full
     : { x0: p.x + (full.x0 - p.x) * k, x1: p.x + (full.x1 - p.x) * k, y0: p.y + (full.y0 - p.y) * k, y1: p.y + (full.y1 - p.y) * k };
-  const pad = LIT_PAD_PX * px;
+  // (the light round it, its name and its frame chosen: as large on the page at every zoom)
+  const pg = pageLength(1);
+  const pad = LIT_PAD_PX * pg;
   const light = lit > 0.001 && (
     <mesh position={[(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, -0.02]} scale={[b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad, 1]}>
       <planeGeometry args={[1, 1]} />
@@ -853,9 +856,9 @@ function PdfStack(props: {
   const rowsLeft = rowSheets(p)[0];
   const nameX = showSpread ? (inRows.length ? rowsLeft.x - rowsLeft.w / 2 : drawn[0].x - drawn[0].w / 2) : p.x - (top.w * k) / 2 + ((top.w * k) / 2) * iconness;
   const nameY = showSpread ? Math.min(...(inRows.length ? inRows : [0]).map((i) => drawn[i].y - drawn[i].h / 2)) : b.y0;
-  const nameSize = 12 * px * (1 - iconness) + props.type.size * iconness;
-  const nameGap = 14 * px * (1 - iconness) + 0.4 * props.type.size * iconness;
-  const nameWidth = Math.max(120 * px, top.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(p) * iconness;
+  const nameSize = 12 * pg * (1 - iconness) + props.type.size * iconness;
+  const nameGap = 14 * pg * (1 - iconness) + 0.4 * props.type.size * iconness;
+  const nameWidth = Math.max(120 * pg, top.w) * (1 - iconness) + ICON_NAME_WIDTH * scaleOf(p) * iconness;
   const name = (
     <group position={[nameX, nameY - nameGap, 0.01]}>
       {/* (troika takes a share of the text's width as its anchor; drei's types do not say so) */}
@@ -895,7 +898,7 @@ function PdfStack(props: {
       <group position={[shift.dx, shift.dy, 0]} onPointerOver={props.onOver} onPointerOut={props.onOut} onPointerDown={props.onDown} onPointerMove={(e) => props.onHover(e.point)}>
         {/* (selected: the selection's frame round each page) */}
         {props.selected &&
-          sheets.map(({ s }, i) => <SelectedFrame key={`f${i}`} b={{ x0: s.x - s.w / 2 - pad, x1: s.x + s.w / 2 + pad, y0: s.y - s.h / 2 - pad, y1: s.y + s.h / 2 + pad }} w={2 * px} z={0.02 * p.pages.length + 0.22} />)}
+          sheets.map(({ s }, i) => <SelectedFrame key={`f${i}`} b={{ x0: s.x - s.w / 2 - pad, x1: s.x + s.w / 2 + pad, y0: s.y - s.h / 2 - pad, y1: s.y + s.h / 2 + pad }} w={2 * pg} z={0.02 * p.pages.length + 0.22} />)}
         {/* (those in their rows lowest, then those put in places of their own, the last put there on top) */}
         {(g ? g.order : spreadOrder(p)).map((i, n) => {
           const { k, s } = sheets[i];
@@ -922,8 +925,8 @@ function PdfStack(props: {
         {/* (a page in a place of its own: its number under it, as the name lies under the rest - over every page, as they may lie over it) */}
         {p.pages.map((_, i) =>
           numberSeen(i) > 0.001 ? (
-            <group key={`n${i}`} position={[sheets[i].s.x - sheets[i].s.w / 2, sheets[i].s.y - sheets[i].s.h / 2 - 14 * px, 0.02 * p.pages.length + 0.21]}>
-              <Text font={props.type.font ?? undefined} fontSize={12 * px} anchorX="left" anchorY="top" color={GRAY} fillOpacity={sheets[i].k * numberSeen(i)}>
+            <group key={`n${i}`} position={[sheets[i].s.x - sheets[i].s.w / 2, sheets[i].s.y - sheets[i].s.h / 2 - 14 * pg, 0.02 * p.pages.length + 0.21]}>
+              <Text font={props.type.font ?? undefined} fontSize={12 * pg} anchorX="left" anchorY="top" color={GRAY} fillOpacity={sheets[i].k * numberSeen(i)}>
                 {`${i + 1} / ${p.pages.length}`}
               </Text>
             </group>
@@ -941,12 +944,13 @@ function PdfStack(props: {
   // (its corners turn its pages full size only)
   const hasNext = p.page < p.pages.length - 1 && k === 1;
   const hasPrev = p.page > 0 && k === 1;
-  const fold = FOLD_PX * px;
+  const fold = FOLD_PX * pg;
+  const foldReach = reachAt(FOLD_PX, 1 / px, fold);
   // (what is drawn made smaller is drawn with a screen's pixel the larger)
   const inPx = px / k;
   return (
     <group position={[shift.dx, shift.dy, 0]} onPointerOver={props.onOver} onPointerOut={props.onOut} onPointerDown={props.onDown} onPointerMove={(e) => props.onHover(e.point)}>
-      {props.selected && <SelectedFrame b={{ x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad }} w={2 * px} z={0.45} />}
+      {props.selected && <SelectedFrame b={{ x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad }} w={2 * pg} z={0.45} />}
       {atSize(
         <>
           {under.map((s, i) => (
@@ -972,8 +976,8 @@ function PdfStack(props: {
       )}
         </>,
       )}
-      {props.hovered && hasNext && <Fold s={top} size={fold} corner="right" onTurn={() => props.onTurn(p.page + 1)} />}
-      {props.hovered && hasPrev && <Fold s={top} size={fold} corner="left" onTurn={() => props.onTurn(p.page - 1)} />}
+      {props.hovered && hasNext && <Fold s={top} size={fold} reach={foldReach} corner="right" onTurn={() => props.onTurn(p.page + 1)} />}
+      {props.hovered && hasPrev && <Fold s={top} size={fold} reach={foldReach} corner="left" onTurn={() => props.onTurn(p.page - 1)} />}
       {light}
       {held}
       {name}
@@ -1067,7 +1071,7 @@ function BlankSheet({ s, z }: { s: Sheet; z: number }) {
 }
 
 /** The corner of the page on top that folds as the stack is hovered: pressed, the next page - or, on the left, the one before - comes on top. */
-function Fold({ s, size, corner, onTurn }: { s: Sheet; size: number; corner: "left" | "right"; onTurn: () => void }) {
+function Fold({ s, size, reach, corner, onTurn }: { s: Sheet; size: number; reach: number; corner: "left" | "right"; onTurn: () => void }) {
   const shape = useMemo(() => {
     const g = new THREE.Shape();
     g.moveTo(0, 0);
@@ -1082,20 +1086,26 @@ function Fold({ s, size, corner, onTurn }: { s: Sheet; size: number; corner: "le
   return (
     <group
       position={[x, y, 0.4]}
-      scale={[sign * size, size, 1]}
       onPointerDown={(e) => {
         e.stopPropagation();
         onTurn();
       }}
     >
-      <mesh>
+      {/* (what a press takes: the hand's reach on the screen, unseen) */}
+      <mesh scale={[sign * reach, reach, 1]}>
         <shapeGeometry args={[shape]} />
-        <meshBasicMaterial color={BASE} toneMapped={false} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      <lineSegments>
-        <edgesGeometry args={[new THREE.ShapeGeometry(shape)]} />
-        <lineBasicMaterial color={LINE} toneMapped={false} />
-      </lineSegments>
+      <group scale={[sign * size, size, 1]}>
+        <mesh>
+          <shapeGeometry args={[shape]} />
+          <meshBasicMaterial color={BASE} toneMapped={false} />
+        </mesh>
+        <lineSegments>
+          <edgesGeometry args={[new THREE.ShapeGeometry(shape)]} />
+          <lineBasicMaterial color={LINE} toneMapped={false} />
+        </lineSegments>
+      </group>
     </group>
   );
 }

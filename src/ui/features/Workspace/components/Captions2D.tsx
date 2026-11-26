@@ -27,6 +27,7 @@ import { SELECTION_SHADE } from "./selectionShade";
 import { holdCursor, setCursor, type CursorName } from "../../../theme/cursors";
 import { captionPointer } from "./captionPointer";
 import { NO_RAYCAST, PartFramesProvider, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
+import { pageLength, reachAt } from "../utils/pageScale";
 
 type Pt = { x: number; y: number };
 
@@ -34,7 +35,7 @@ type Pt = { x: number; y: number };
 const MARGIN = 0.3;
 /** How strongly the light behind a caption under the pointer shows. */
 const LIT = 0.16;
-/** A caption's edges, taken hold of to make it wider or narrower: how wide each is seen and held, on the screen, in pixels, and how narrow it may be made, in ems. */
+/** A caption's edges, taken hold of to make it wider or narrower: how wide each is seen, on the page in page pixels, and held, on the screen in pixels; and how narrow it may be made, in ems. */
 const EDGE_PX = 3;
 const EDGE_HOLD_PX = 10;
 const NARROWEST_EMS = 2;
@@ -531,9 +532,9 @@ function CaptionEdge({
         window.addEventListener("pointerup", onUp, true);
       }}
     >
-      {/* (held a little wider than it is seen) */}
-      <mesh args={[SQUARE, EDGE_HELD]} renderOrder={6} scale={[EDGE_HOLD_PX * px, tall, 1]} />
-      <mesh args={[SQUARE, EDGE_SEEN]} renderOrder={6} scale={[EDGE_PX * px, tall * 0.6, 1]} />
+      {/* (held as far on the screen at any zoom, and never narrower than it is seen; seen as wide on the page at every zoom) */}
+      <mesh args={[SQUARE, EDGE_HELD]} renderOrder={6} scale={[reachAt(EDGE_HOLD_PX, 1 / px, pageLength(EDGE_PX)), tall, 1]} />
+      <mesh args={[SQUARE, EDGE_SEEN]} renderOrder={6} scale={[pageLength(EDGE_PX), tall * 0.6, 1]} />
     </group>
   );
 }

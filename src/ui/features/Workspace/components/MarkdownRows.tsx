@@ -5,8 +5,7 @@
  * signed-distance text (troika), sharp at every zoom, in IBM Plex Sans or
  * Mono; strong words thickened by an outline of their own colour,
  * emphasised ones slanted, as the page's type has no heavier or italic
- * face; what is drawn under and round them in flat colour. Seen too small
- * to read, its words are grey strokes. From one layout with the column's
+ * face; what is drawn under and round them in flat colour. From one layout with the column's
  * (TextEditor/markdownLayout), in its units made `scale` as large, from
  * the group's origin, down negative.
  */
@@ -24,15 +23,12 @@ import plexMono from "../../../../assets/fonts/IBMPlexMono-Regular.ttf?url";
 const LEAN = 0.2;
 /** How thick a strong word's outline is, as a share of its size. */
 const STRONG = "3.5%";
-/** A stroke's colour, standing for words too small to read. */
-const STROKE = "rgb(200, 206, 213)";
 
 const noRaycast = () => null;
 
 /**
  * Rows `first` to `rows` of a text laid out, `scale` world units a pixel of
- * it, the first's top at the origin: its words seen as much as `words` (0
- * strokes, 1 words), all of it as much as `opacity` - those rows within
+ * it, the first's top at the origin: all of it as much as `opacity` - those rows within
  * `reach` of the first's top, in its pixels, where it says. `onReady` once
  * troika has set every part's letters.
  */
@@ -41,7 +37,6 @@ export function MarkdownRows({
   first = 0,
   rows,
   scale,
-  words,
   opacity = 1,
   order,
   reach = Infinity,
@@ -51,7 +46,6 @@ export function MarkdownRows({
   first?: number;
   rows: number;
   scale: number;
-  words: number;
   opacity?: number;
   order?: number;
   reach?: number;
@@ -127,18 +121,9 @@ export function MarkdownRows({
   return (
     <group position={[0, shift * scale, 0]}>
       {shown.flatMap((r, i) => r.decos.flatMap((d, k) => decoOf(d, r.y, `d${i}:${k}`)))}
-      {/* (far off, or small, its words as strokes) */}
-      {words < 1 &&
-        pieces.map(({ p, top }, i) => {
-          const w = measureText(p.text.trimEnd(), p.font);
-          const h = p.font.px * 0.42;
-          return (
-            <mesh key={`s${i}`} visible={within(top)} geometry={plane} position={[(p.x + w / 2) * scale, -(top + p.y - p.font.px * 0.32) * scale, 1e-5]} scale={[w * scale, h * scale, 1]} renderOrder={order} raycast={noRaycast}>
-              <meshBasicMaterial color={STROKE} transparent opacity={(1 - words) * opacity} depthWrite={false} depthTest={order == null} toneMapped={false} />
-            </mesh>
-          );
-        })}
-      {words > 0 && pieces.map(({ p, top }, i) => <Words key={`w${i}`} p={p} top={top} scale={scale} opacity={words * opacity} order={order} visible={within(top)} onSync={() => sync(i)} at={at} />)}
+      {pieces.map(({ p, top }, i) => (
+        <Words key={`w${i}`} p={p} top={top} scale={scale} opacity={opacity} order={order} visible={within(top)} onSync={() => sync(i)} at={at} />
+      ))}
     </group>
   );
 }
