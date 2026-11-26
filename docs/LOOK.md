@@ -230,6 +230,21 @@ Each is reachable by keyboard and shows focus with an `accel-base` border.
   sparkles for Clean-up (a broom), no cube for 3D, no refresh arrows for an
   orientation, no Wi-Fi bars for frequencies (a spring), no bolt for an
   energy, no cloud for NCI's surfaces in place of the thing itself.
+- **Fine edges wherever the window draws them.** Some windows draw the
+  paths of small vector icons with only a few steps of grey along their
+  edges, though they draw text finely; Meno tries this once as it starts
+  (a zigzag drawn on two canvases kept out of the page) and, where it is
+  so, shows each small icon of its own controls through a picture of
+  itself drawn finely: the icon keeps its place, its box, its colour and
+  everything it does, its ink seen through the picture. An icon is shown
+  so only where the picture can be exactly it: no larger than 48 px, on
+  whole pixels of the screen, painted in one opaque colour (its own), with
+  no text, image, gradient, clip, filter or animation in it; any other is
+  left as it is, and a place can keep one as it is with `data-live`. As an
+  icon changes its picture comes off at once and the new one goes on when
+  made; one seen before goes on at once. Where the window draws paths
+  finely, nothing of this runs. The pages' own drawings are not concerned.
+  `src/ui/iconPictures.ts`.
 - **A file Meno opens** shows Meno's sheet, its folded corner and mark,
   with the format's short name on a dark band (`src-tauri/icons/formats`).
 
