@@ -3029,7 +3029,12 @@ traced from reference drawings.
   twice: in EMF+ records, and in the EMF records as before, for any reader
   that reads the EMF records alone. Both keep it byte
   for byte, as before (Windows, 2026-09-29; on a Mac, 2026-09-30, drawn
-  smooth there too).
+  smooth there too). A picture in the copy - a molecule in 3D, or a
+  bitmap placed on the page - asks to be smoothed as it is shrunk or
+  grown to its place: straight before each picture's EMF+ record, an
+  interpolation-mode record asks for high-quality bicubic ([MS-EMFPLUS]
+  2.3.6.4, 2.1.1.16); a copy with no picture has no such record and is
+  written as before.
 - On Windows, a structure copied from Meno goes into Word and PowerPoint as
   an object - a Meno structure, which a double-click opens in Meno - by a
   plain paste. Meno is the object's server (`src-tauri/src/ole.rs`): it

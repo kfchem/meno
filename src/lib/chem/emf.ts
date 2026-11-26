@@ -82,6 +82,7 @@ const PLUS = {
   DRAW_IMAGE: 0x401a,
   SET_ANTI_ALIAS_MODE: 0x401e,
   SET_TEXT_RENDERING_HINT: 0x401f,
+  SET_INTERPOLATION_MODE: 0x4021,
   SET_PAGE_TRANSFORM: 0x4030,
   DRAW_DRIVER_STRING: 0x4036,
 } as const;
@@ -97,6 +98,8 @@ const OBJECT_PART = 0xfff0;
 const SOLID = 0x8000;
 /** EMF+ has only 64 object slots; the drawing needs a pen per width and a font per size. */
 const PLUS_SLOTS = 64;
+/** InterpolationModeHighQualityBicubic ([MS-EMFPLUS] 2.1.1.16). */
+const HIGH_QUALITY_BICUBIC = 7;
 
 /** A record: its type, and a body written by `fill` into a view of `size` bytes. */
 class Writer {
@@ -114,8 +117,15 @@ class Writer {
   handle(): number {
     return ++this.handles;
   }
-  /** An EMF+ record, in a comment of its own. */
+  /**
+   * An EMF+ record, in a comment of its own. A picture (a molecule in 3D, or any bitmap placed on the page) is drawn
+   * smoothed as it is shrunk or grown to its place: straight before each DrawImage, an EmfPlusSetInterpolationMode record
+   * ([MS-EMFPLUS] 2.3.6.4: no data, the mode in the Flags' low byte as the record's diagram shows it) asking for
+   * InterpolationModeHighQualityBicubic (2.1.1.16). Without it a pasted molecule in 3D looked soft at the size it was
+   * pasted. Before each one, so that it holds whatever drawing state lies between; an EMF with no picture has none.
+   */
   plus(type: number, flags: number, size: number, fill: (v: DataView) => void): void {
+    if (type === PLUS.DRAW_IMAGE) this.plus(PLUS.SET_INTERPOLATION_MODE, HIGH_QUALITY_BICUBIC, 0, () => {});
     const padded = size + ((4 - (size % 4)) % 4);
     this.add(EMR.COMMENT, 4 + 4 + 12 + padded, (v) => {
       v.setUint32(0, 4 + 12 + padded, true);

@@ -226,6 +226,29 @@ describe("molecules in 3D in an EMF", () => {
     }
   });
 
+  it("draws a picture smoothed: an EmfPlusSetInterpolationMode record straight before each DrawImage, and none in an EMF with no picture", () => {
+    // [MS-EMFPLUS] 2.3.6.4 EmfPlusSetInterpolationMode: Type 0x4021; Flags, its low byte the mode: HighQualityBicubic,
+    // 7 (2.1.1.16); Size 12; DataSize 0 - in a comment of its own after "EMF+"
+    const smooth = [0x45, 0x4d, 0x46, 0x2b, 0x21, 0x40, 0x07, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    const plusComments = (e: Uint8Array) =>
+      (emfRecords(e) ?? [])
+        .filter((r) => r.type === 70)
+        .map((r) => Array.from(r.body.subarray(4, 4 + new DataView(r.body.buffer, r.body.byteOffset, 4).getUint32(0, true))))
+        .filter((c) => c[0] === 0x45 && c[1] === 0x4d && c[2] === 0x46 && c[3] === 0x2b);
+    const same = (a: number[], b: number[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+    // no picture: no such record
+    expect(plusComments(emf).some((c) => c[4] === 0x21 && c[5] === 0x40)).toBe(false);
+    const bounds = { min: { x: 4, y: -2 }, max: { x: 8, y: 2 } };
+    for (const size of [200, 200000]) {
+      const png = new Uint8Array(size).map((_, i) => i % 251);
+      const c = plusComments(layoutEmf(layout, opts, undefined, { png, width: 300, height: 300, bounds }).emf);
+      const draws = c.map((x, i) => (x[4] === 0x1a && x[5] === 0x40 ? i : -1)).filter((i) => i >= 0);
+      expect(draws).toHaveLength(1);
+      for (const i of draws) expect(c[i - 1]).toEqual(smooth);
+      expect(c.filter((x) => same(x, smooth))).toHaveLength(draws.length);
+    }
+  });
+
   it("counts in a picture in parts the padding its parts carry, so that they add up to the total each says ([MS-EMFPLUS] 2.3.5.1)", () => {
     const bounds = { min: { x: 4, y: -2 }, max: { x: 8, y: 2 } };
     // PNGs of every length modulo 4, either side of where one record is too small (the image's 28-byte header with them)
