@@ -828,7 +828,28 @@ the right (TBSO, IUPAC GR-2.3.3, GR-2.1.6), rightward otherwise - and from its b
 where it has several, as a ring's atom has: leftward where they come in
 from the right all together, none leaving to the left (an NFmoc at a
 ring's lower left reads FmocN, away from the ring); a name of one unit
-(TMS, Ph) so is set before such a bond, its last letter on the atom. On a bond within 35
+(TMS, Ph) so is set before such a bond, its last letter on the atom.
+Whether its bonds come in from the right is one test for every reader
+of a label by its side (`names.ts` `bondsFromRight`): past 10 degrees
+from upright, none leaving to the left. A label is kept as read outward
+from its bond, its first symbol bonded, whichever way it is shown: a
+pseudohalide's NCO, NCS and NCSe are the iso forms, N bonded (an isocyanate,
+an isothiocyanate, an isoselenocyanate - NCS alone is N-chlorosuccinimide,
+the reagent), and CN, OCN, SCN and SeCN a nitrile, a cyanate, a thiocyanate
+and a selenocyanate, so that NCO left
+of its bond is shown OCN, its N at the bond - and NCS SCN, its N at the
+bond, SCN NCS, its S there, each turned symbol by symbol (Se one symbol:
+NCSe is shown SeCN, SeCN NCSe; `abbreviations.ts` `reversedUnits`). NC typed is CN as drawn on a
+bond's left, a nitrile (the maintainer, 2026-10-11). Text read off a picture is a label as shown, and is read
+by its side: left of its bond, outward from it first (NCO there a
+cyanate, O bonded: GR-2.1.6; NCSe there a selenocyanate, Se bonded,
+turned symbol by symbol where its units would split the Se). NC read off
+a picture is CN, as typed, on either side; right of its bond or upright,
+where its N is at the bond and it shows an isocyanide, the atom is unsure
+and says it may be one. ONO2 left of its bond is read outward from it,
+O-O-N=O, and the atom says it may be a nitrate (written on that side, a
+nitrate is O2NO). A file's alias is a name, not its display,
+and is read as written on either side. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
 as there is space - the usual way where both have as much; the drawing

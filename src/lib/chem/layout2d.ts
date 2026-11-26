@@ -13,7 +13,7 @@ import {
   type SgroupMark,
   type StereoGroup,
 } from "./molecule";
-import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
+import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedUnits, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import { metal, notMetal } from "./perception/elements";
@@ -2372,7 +2372,7 @@ function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: n
   // (words Meno does not read - CH2CH2, xyz - are drawn in the order typed, never turned round: one piece, its last letter on the
   // atom where its bond comes in from the right, its counts as they were typed - asked only where a label would be turned round)
   const turned = fromRight && !ringFirst && !readsAsNothing(a.el);
-  const units = fromRight && !ringFirst && !turned ? [a.el] : labelUnits(turned ? reversedLabel(a.el) : a.el);
+  const units = fromRight && !ringFirst && !turned ? [a.el] : (turned ? reversedUnits(a.el) : labelUnits(a.el));
   if (units.length < 2) {
     const runs = labelRuns(a.el);
     // one unit read outward from a bond coming in from the right - TMS on

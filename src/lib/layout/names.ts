@@ -132,6 +132,24 @@ function clearOf(ways: readonly { x: number; y: number }[], vx: number, vy: numb
 }
 
 /**
+ * Whether a label's bonds come in from the right, so that it is read
+ * outward from them, leftward (IUPAC GR-2.1.6: TBSO): `ways`, from the
+ * label to each atom it is bonded to, all of them together past the label
+ * band's 10 degrees from upright, and none leaving to the left. One bond:
+ * that bond more than 10 degrees right of upright. The one test of a
+ * label's side - the page's names here, and every reader of a label as it
+ * is drawn.
+ */
+export function bondsFromRight(ways: readonly { x: number; y: number }[]): boolean {
+  const unit = ways.map((w) => {
+    const l = Math.hypot(w.x, w.y) || 1;
+    return { x: w.x / l, y: w.y / l };
+  });
+  const sum = unit.reduce((t, w) => ({ x: t.x + w.x, y: t.y + w.y }), { x: 0, y: 0 });
+  return unit.length > 0 && !unit.some((w) => w.x < -BAND) && sum.x > Math.hypot(sum.x, sum.y) * BAND;
+}
+
+/**
  * How much clearer of an atom's bonds the row beside its symbol must be than
  * the line above or below it before its H leaves that line for the row: as
  * the label band elsewhere (10 degrees). Nearer even, the H stays stacked,
@@ -200,8 +218,7 @@ export function namesLaid(g: NameGeometry, L: number): Map<number, { left: boole
       const l = Math.hypot(w.x, w.y) || 1;
       return { x: w.x / l, y: w.y / l };
     });
-    const sum = ways.reduce((t, w) => ({ x: t.x + w.x, y: t.y + w.y }), { x: 0, y: 0 });
-    const fromRight = ways.length > 0 && !ways.some((w) => w.x < -BAND) && sum.x > Math.hypot(sum.x, sum.y) * BAND;
+    const fromRight = bondsFromRight(ways);
     out.set(a, place(a, fromRight));
     // (its one bond upright: either way reads - the way it is put to read, else the way that runs into less, below)
     if (d && Math.abs(d.x) <= len * UPRIGHT) {

@@ -246,6 +246,23 @@ describe("the conventions, whichever way the flat drawing lies", () => {
     }
   }, measured(1000));
 
+  it("reads an OH typed as a label as its O: cis-2-methoxycyclohexanol with its OH a label puts the OH axial and the OMe equatorial, as drawn out", () => {
+    const flat = drawnFromSmiles("O[C@H]1CCCC[C@H]1OC");
+    // (the hydroxyl's O, bonded to a ring carbon and nothing else, written as the label "OH")
+    const ringOf = (id: number) => flat.bonds.find((b) => b.a === id || b.b === id)!;
+    const hydroxyl = flat.atoms.find((a) => a.el === "O" && flat.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 1)!;
+    const labelled: Model = { ...flat, atoms: flat.atoms.map((a) => (a.id === hydroxyl.id ? { ...a, el: "OH" } : a)) };
+    const bond = ringOf(hydroxyl.id);
+    const r = bond.a === hydroxyl.id ? bond.b : bond.a;
+    for (const m of [flat, labelled]) {
+      const chair = asChair(m, r);
+      const at = new Map(chair.atoms.map((a) => [a.id, a]));
+      // (the OH straight up or down from its ring atom: axial; the OMe equatorial)
+      expect(Math.abs(at.get(hydroxyl.id)!.x - at.get(r)!.x), m === flat ? "drawn out" : "label").toBeLessThan(1e-6);
+      expect(axialOf(chair), m === flat ? "drawn out" : "label").toMatchObject({ axial: 1, equatorial: 1 });
+    }
+  }, measured(1000));
+
   it("puts, of a chair either way with as many groups axial and alike in size, the group whose first atom ranks lowest equatorial - the same, however the drawing lies", () => {
     // (cis-2-methylcyclohexanol: one group axial in either chair, the methyl and the OH each of one non-hydrogen atom)
     const flat = drawnFromSmiles("C[C@H]1CCCC[C@H]1O");

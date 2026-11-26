@@ -537,6 +537,11 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   bonds stop so short of a label, and of nothing else - two methyls'
   ends point apart. A heteroatom's letter faint in a picture, or not
   traced, would otherwise leave its ring open with nothing said.
+- **A label shown one way and read another**: read from a picture, NC
+  with its bond at the N (right of the bond, or upright) is read as a
+  nitrile, as NC typed is, and the atom says it may be an isocyanide.
+  ONO2 left of its bond is read as O-O-N=O, and the atom says it may be
+  a nitrate, which is written O2NO on that side.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes
@@ -1600,7 +1605,14 @@ it where it lies out of view.
   Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
-  word (one so short both its ends lie in the word's box, its other end
+  word within a third of a bond - for a word that reads as an element's
+  label, its hydrogens with it, a bond as long as its letters say one is
+  drawn, 1.4 times their size, where the drawing's lines measure its
+  bonds under 0.7 of that: a drawing whose every bond runs
+  between labels, each cut back at both ends, measures its bonds short.
+  An agent written large by a scheme's arrow, a chart's number by
+  its tick, a legend's word, a group's name keep the drawing's own
+  (2026-11-20) - (one so short both its ends lie in the word's box, its other end
   coming to another label - a metal's - at the end nearer its element;
   of two it comes by, the nearer, unless it points away from that one and
   into the other - an H set under the NH it goes to)
@@ -1699,6 +1711,28 @@ it where it lies out of view.
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
+- **A dative bond** (`dativeArrows`, lib/figure/read; 2026-11-20): an
+  arrow from the donor to the acceptor, as Meno draws one - a line no
+  longer than a bond and a fifth (the arrow as a whole no shorter than
+  0.15 of one), a small filled head at its end (no
+  longer than half a bond, nor than three times as wide; its base at the
+  line's end, its point on along the line) and, in some styles, a dot at
+  the line's tail. It is one dative bond, from the atom at its tail to
+  the atom at its point (each within half a bond, a label measured from
+  its box): never a bond and a wedge, nor a scheme's arrow. A word at
+  either end is an atom alone, as an ion is - an NH3 lending its pair to
+  a platinum - for the arrow to bond. It takes none of either atom's
+  valence, as the core counts one, but two of a carbon's: an NH3 keeps
+  its three hydrogens, a BH3 by an amine its three. An arrow with an atom
+  at one end only is no bond, and that atom says so: "A dative bond's
+  arrow meets it, with no atom read at its other end: read as no bond."
+  A wedge bond is long for its width; a scheme's arrow is longer. In a
+  picture, such an arrow between two labels is traced as one piece; it
+  is its line and its head (`arrowOf`, lib/figure/trace) where its ink,
+  free at both ends and no longer than a bond and a fifth, swells to
+  twice the figure's line and thins again at both ends - at once on its
+  line's side, steadily to its point on the other - and its line is as
+  thin as the figure's lines. A wedge never thins again at its wide end.
 - **What stands alone and is no structure** (`withoutStrays`): a point with
   no label and no bond, and a line alone - single, double or triple, both
   its ends bare, no other bond at either - more than a fifth off the
@@ -1939,7 +1973,9 @@ being arrows.
   its point it is under 0.6 as wide as at its widest (a triangle is a
   quarter). A filled disk a bond runs into - an atom marked, as a scope
   table marks where its compounds differ - is as wide there as 0.87 of
-  it, and no head; nor is a letter drawn as its outline, round as a C or
+  it, and no head; nor is a dative bond's arrow, an atom at each end (a
+  letter, or another line's end) - the structure's bond, *A dative bond*
+  (2026-11-20); nor is a letter drawn as its outline, round as a C or
   an O is, by a bond's end (2026-11-20).
   An arrow drawn as one filled outline, its line and its head in one
   shape, is read by how wide it is along its length, measured from its
