@@ -13,6 +13,7 @@ import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
+import { isMatte } from "../../../../lib/picture/matte";
 import { withRingStars, writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { ARROW_KINDS, ARROW_SETTINGS, WEIGHT_SHARE, type ArrowLook } from "../../../../lib/chem/reactionArrow";
@@ -610,6 +611,9 @@ function readPicture(v: unknown): PictureItem | null {
     h: p.h,
     ...(isNum(p.turn) && p.turn ? { turn: p.turn } : {}),
     ...(from ? { from } : {}),
+    // (a film on a transparent background: where its alpha lies, and its film with transparency)
+    ...(p.media === "video/mp4" && isMatte(p.matte) ? { matte: p.matte } : {}),
+    ...(p.media === "video/mp4" && typeof p.forSlides === "string" && /^[0-9a-f]{64}$/.test(p.forSlides) ? { forSlides: p.forSlides } : {}),
   };
 }
 

@@ -1406,7 +1406,12 @@ window decodes; nothing of it goes through Rust but the clipboard.
   as its bytes are (`lib/picture/held` `holdFilm`): drawn from a video
   element playing it, over and over and muted, its texture a
   `VideoTexture`, a frame of the canvas drawn for each of the film's
-  (`requestVideoFrameCallback`) - none while it is paused.
+  (`requestVideoFrameCallback`) - none while it is paused. A film on a
+  transparent background (`PictureItem.matte`, `forSlides`) is played the
+  same way; its material (`components/matteMaterial.ts`) takes its alpha
+  from the video's other half (`lib/picture/matte.ts`) and blends it
+  premultiplied; its film with transparency is held and kept beside it,
+  media `video/quicktime`, and is what Save film writes.
 
 ### Renders
 
