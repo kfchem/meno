@@ -31,6 +31,7 @@ import { aromaticForm } from "./perception/aromatic";
 import { hydrogensFolded, plainHydrogenAtoms } from "./perception/fold";
 import { endsShared, unchargedEnds } from "./perception/chalcogenEnds";
 import { blanksOf, filledIn, valuesOf } from "./perception/stereo/units";
+import { smallRingSidesDropped } from "./perception/stereo/candidates";
 
 // (identity's fill of what sets nothing: the core's, perception/stereo/units)
 export { filledIn };
@@ -138,7 +139,8 @@ function compared(input: IdentityInput): LayoutInput {
   const { groups: _groups, ...drawn } = input;
   const folded = hydrogensFolded(drawn);
   const atoms = folded.atoms.map(({ isotope, radical, mapped: _mapped, ...a }) => ({ ...a, el: `${a.el}${isotope ? `^${isotope}` : ""}${radical ? `.${radical}` : ""}` }));
-  return endsShared(aromaticForm(unchargedEnds({ ...folded, atoms })));
+  // (no cis or trans on a double bond in a ring of seven or fewer: written there, it states nothing - perception/stereo/candidates)
+  return smallRingSidesDropped(endsShared(aromaticForm(unchargedEnds({ ...folded, atoms }))));
 }
 
 /**
