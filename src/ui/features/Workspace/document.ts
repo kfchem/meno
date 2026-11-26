@@ -1399,6 +1399,15 @@ export function moveMolecules3d(
   };
 }
 
+/** Molecules joined as one, `made` of them: the first of them in the page's order made it, where it stands, and the rest gone - nothing where fewer than two are there. */
+export function joinMolecules3d(doc: WorkspaceDocument, ids: readonly number[], made: (ms: Molecule3D[]) => Molecule3D): WorkspaceDocument {
+  const want = new Set(ids);
+  const ms = (doc.molecules3d ?? []).filter((m) => want.has(m.id));
+  if (ms.length < 2) return doc;
+  const one = made(ms);
+  return removeMolecules3d(withMolecule3d(doc, ms[0].id, () => ({ ...one, id: ms[0].id })), ms.slice(1).map((m) => m.id));
+}
+
 export function removeMolecule3d(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   return removeMolecules3d(doc, [id]);
 }

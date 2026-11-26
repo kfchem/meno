@@ -6,7 +6,7 @@
 import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
 import { imaginaryWords } from "../../../../lib/calc/output";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
-import { barsAbove, NO_LOWEST, NOT_FINISHED } from "./barsAbove";
+import { barsAbove, noneSaid } from "./barsAbove";
 import { FAILURE_WORDS, failureSaid, WARNING_WORDS, WHY_SHUT, type Failure, type Warning } from "../workflow/failures";
 import type { CardGroups } from "../components/PointedCard3D";
 
@@ -30,6 +30,8 @@ export type SetChip = {
   energies?: readonly number[];
   numbers?: readonly number[];
   title?: string;
+  /** Each frame's own name (Molecule3D `frameNames`): said in place of its title, for the frame told that has one. */
+  names?: readonly string[];
   populations?: readonly number[];
   failed?: readonly (Failure | null)[];
   marksUnread?: boolean;
@@ -65,10 +67,12 @@ export function setChipRuns(c: SetChip): SaidRun[] {
   const runs: SaidRun[] = [];
   if (c.numbers?.[told] != null && c.numbers.some((k, i) => k !== i + 1)) runs.push({ text: `#${c.numbers[told]} · `, tone: "ink" });
   runs.push({ text: `${told + 1} / ${c.count}${c.searching ? " · searching" : ""}`, tone: "quiet" });
-  if (c.title) runs.push({ text: c.title, tone: "ink", gapPx: 8, mostPx: 224 });
-  if (above) {
+  // (its frame's own name, where it has one - else its title - cut at 14rem: whole in its details, opened)
+  const title = c.names?.[told] || c.title;
+  if (title) runs.push({ text: title, tone: "ink", gapPx: 8, mostPx: 224 });
+  if (above && bars) {
     const at = above[told];
-    const said = at != null ? (c.fromStart && above[0] != null ? `ΔE ${aboveText(at - above[0])} from its start` : aboveText(at)) : bars?.why ? bars.why : bars?.noBaseline ? NO_LOWEST : NOT_FINISHED;
+    const said = at != null ? (c.fromStart && above[0] != null ? `ΔE ${aboveText(at - above[0])} from its start` : aboveText(at)) : noneSaid(bars, told);
     runs.push({ text: ` · ${said}`, tone: "ink" });
   }
   if (c.populations?.[told] != null) runs.push({ text: ` · ${share(c.populations[told])}`, tone: "ink" });
@@ -108,7 +112,7 @@ const absolute = (e: number) => valueText(e, { quantity: "energy" });
 /** What the calculation was and the energy of the frame told, with its ranked results, as many as the line holds (lib/calc/results `chipLine`). */
 export function aboutLine(c: ChipFacts, told: number): string {
   const e = c.energies?.[told];
-  return unitsHeld(chipLine([c.about ?? "", e != null ? absolute(e) : ""], c.results));
+  return unitsHeld(chipLine([c.about ?? "", e != null && Number.isFinite(e) ? absolute(e) : ""], c.results));
 }
 
 /** What a single geometry's chip says: its title, cut at 14rem; what it was and its energy; its marks. */
@@ -146,6 +150,9 @@ export function chipDetails(c: ChipFacts, told: number): CardGroups {
   if (c.said?.length) details.push({ group: "In the text", rows: c.said.map((r) => ({ label: r.label, text: r.text })) });
   if (c.noShares) details.push({ group: "Shares", rows: [{ label: "None", text: c.noShares }] });
   if (c.stereoSaid?.length) details.push({ group: "Stereo", rows: c.stereoSaid.map((r) => ({ label: r.label, text: r.text })) });
+  // (the frame's own name, whole - cut on its line shut)
+  const name = c.names?.[told];
+  if (name) details.unshift({ group: "Name", rows: [{ label: `Frame ${c.numbers?.[told] ?? told + 1}`, text: name }] });
   const failure = c.failed?.[told] ?? undefined;
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (c.warnings?.length) details.push({ group: "Warnings", rows: c.warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
@@ -182,12 +189,14 @@ export function chipEnergies(c: ChipFacts): string | null {
   if (!c.energies || c.energies.length !== c.count) return null;
   const bars = barsAbove(c.energies, c.failed, c.marksUnread);
   const shares = c.populations?.length === c.count;
-  const head = ["Frame", "Energy (Eh)", c.fromStart ? "From its start (kcal/mol)" : "Above the lowest (kcal/mol)", ...(shares ? ["Share (%)"] : [])];
+  const named = c.names?.length === c.count && c.names.some(Boolean);
+  const head = ["Frame", ...(named ? ["Name"] : []), "Energy (Eh)", c.fromStart ? "From its start (kcal/mol)" : "Above the lowest (kcal/mol)", ...(shares ? ["Share (%)"] : [])];
   const rows = c.energies.map((e, i) => {
     const at = bars.above[i];
     const above = at == null ? "" : c.fromStart ? (bars.above[0] != null ? (at - bars.above[0]).toFixed(2) : "") : at.toFixed(2);
     const p = c.populations?.[i];
-    return [String(c.numbers?.[i] ?? i + 1), e.toFixed(6), above, ...(shares ? [p != null ? (p * 100).toFixed(1) : ""] : [])].join("\t");
+    // (blank where its file gave the frame no energy)
+    return [String(c.numbers?.[i] ?? i + 1), ...(named ? [c.names![i]] : []), Number.isFinite(e) ? e.toFixed(6) : "", above, ...(shares ? [p != null ? (p * 100).toFixed(1) : ""] : [])].join("\t");
   });
   return [head.join("\t"), ...rows].join("\n");
 }

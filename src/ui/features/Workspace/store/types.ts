@@ -1,4 +1,5 @@
 import type { Conversation } from "../conversation/types";
+import type { Asker } from "../workflow/configurations";
 import type { ConversationPatch } from "../conversation/ops";
 import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
@@ -539,8 +540,17 @@ export type Molecule3D = {
    * `readCarried3D`, workflow/meno `notAllMinima`).
    */
   marksUnread?: true;
-  /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
+  /** Each frame's energy, where its file gives one, in hartrees: the first frame's first - NaN, a frame given none (saved as null). */
   energies?: number[];
+  /**
+   * Each frame's name, the first frame's first - "", a frame with none: what
+   * an XYZ file's comment lines say of them (lib/chem/xyzWriter
+   * `xyzFrameName`), or the records joined as conformers (utils/asConformers).
+   * Shown beside the frame's number on its chip.
+   */
+  frameNames?: string[];
+  /** Its file's frames do not all have the same elements in the same order (lib/io/structures): not offered as conformers. */
+  atomsDiffer?: true;
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
   /**
@@ -1571,6 +1581,15 @@ export type EditorState = {
   learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => void;
   /** A molecule in 3D changed by the chemist - its bond orders given, its hydrogens added - as one undo step. */
   changeMolecule3d: (label: string, id: number, change: (m: Molecule3D) => Molecule3D) => void;
+  /** Its frames marked a conformer set, or the mark taken off (utils/asConformers): one step to undo; marked, its lowest shown where every frame has an energy. */
+  setFramesConformers: (id: number, on: boolean) => void;
+  /**
+   * Molecules of one compound joined as one conformer set, in the page's order, at the first's place (utils/asConformers
+   * `joined`): one step to undo, which gives them back as they were. Judged as *As conformers* judges - the same
+   * constitution and the same stereoisomer, which is asked first, as that step asks it - and, where they are not one
+   * compound, not joined: why not given back, in one plain sentence (utils/asConformers `JOIN_REFUSED`).
+   */
+  joinAsConformers: (ids: readonly number[], asker?: Asker) => Promise<string | null>;
   /** A molecule in 3D switched to its other look - the secondary, or back to the primary - and those selected with it to the same. */
   switchLook3d: (id: number) => void;
   /** A measurement of the atoms and bonds chosen, which are then let go. */

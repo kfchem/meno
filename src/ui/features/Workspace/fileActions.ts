@@ -250,13 +250,14 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     const written = (i: number | undefined) => withRingStars(atomsOf(i), bondsAt(m, i), m.centres ?? []);
     if (options.frames !== "all") {
       const w = written(m.frame);
-      return [writeMolfile3d(w.atoms, w.bonds, { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
+      return [writeMolfile3d(w.atoms, w.bonds, { title: m.frameNames?.[m.frame ?? 0] || name, version }) + data(m.frame ?? 0) + "$$$$\n"];
     }
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
       // (each frame with the bonds it has, where they go frame by frame)
       const w = written(i);
-      return writeMolfile3d(w.atoms, w.bonds, { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
+      // (titled with its own name, where it has one: an XYZ file's comment line's, a record's joined - read back as that record's title)
+      return writeMolfile3d(w.atoms, w.bonds, { title: m.frameNames?.[i] || `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
@@ -572,7 +573,7 @@ export function xyzFileText(molecules: readonly Carried3D[], title: string, opti
     const which = shown ? [Math.min(Math.max(0, m.frame ?? 0), have - 1)] : Array.from({ length: have }, (_, i) => i);
     return which.map((i) => ({
       atoms: frameAtoms(m, i),
-      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i], failedSaid(m, i)),
+      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i], failedSaid(m, i), m.frameNames?.[i]),
     }));
   });
   return writeXyz(frames);

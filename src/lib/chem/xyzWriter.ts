@@ -18,11 +18,32 @@ export type XyzFrame = { atoms: readonly { el: string; x: number; y: number; z: 
  */
 export const MENO_XYZ_ENERGY = { id: "meno", pattern: "\\bE = (-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?) Eh\\b", unit: "hartree" as const };
 
-/** The comment a frame gets: its name, then - where there are several frames - which it is of how many, then its energy in hartrees, where it is known, then why it did not finish, where it did not; on one line. */
-export function xyzComment(name: string, frame?: { i: number; of: number }, energy?: number, failed?: string | null): string {
-  const parts = [name.replace(/[\r\n]+/g, " ").trim()];
-  if (frame && frame.of > 1) parts.push(`frame ${frame.i + 1}/${frame.of}`);
+/**
+ * A frame's name, as its comment line gives it (docs/FILE-IO.md, *XYZ*): the line as written, less the energy Meno reads from it
+ * in its own form (`MENO_XYZ_ENERGY`), trimmed - "" where nothing else is on it. A writer chooses what is shown by what it puts
+ * on the line; Meno reads no other form into it - but its own writer's for a frame with no name (`xyzComment`): a line that is,
+ * less the energy, `<text> frame i/n`, `i` the frame's place in its file (`at`, from 0) and `n` its file's frames, gives none,
+ * so that a file Meno wrote reads back as it was. A line whose numbers are not the frame's own stays its name.
+ */
+export function xyzFrameName(comment: string, at?: { i: number; of: number }): string {
+  const re = new RegExp(MENO_XYZ_ENERGY.pattern, "i");
+  const m = comment.match(re);
+  const line = (m?.index == null ? comment : `${comment.slice(0, m.index).trimEnd()} ${comment.slice(m.index + m[0].length).trimStart()}`).trim();
+  const own = at && at.of > 1 ? /(?:^|\s)frame (\d+)\/(\d+)$/.exec(line) : null;
+  return own && Number(own[1]) === at!.i + 1 && Number(own[2]) === at!.of ? "" : line;
+}
+
+/**
+ * The comment a frame gets, on one line. A frame with a name of its own (Molecule3D `frameNames`): its energy in hartrees, where
+ * it is known, then its name - read back as that name (`xyzFrameName`). Else its molecule's name, then - where there are several
+ * frames - which it is of how many, then its energy. Then why it did not finish, where it did not.
+ */
+export function xyzComment(name: string, frame?: { i: number; of: number }, energy?: number, failed?: string | null, frameName?: string): string {
+  const own = frameName?.replace(/[\r\n]+/g, " ").trim();
+  const parts = own ? [] : [name.replace(/[\r\n]+/g, " ").trim()];
+  if (!own && frame && frame.of > 1) parts.push(`frame ${frame.i + 1}/${frame.of}`);
   if (energy != null && Number.isFinite(energy)) parts.push(`E = ${energy.toFixed(10)} Eh`);
+  if (own) parts.push(own);
   // (where the frame did not finish, why - on its one line, so that no reader takes its energy for a result)
   if (failed) parts.push(`failed: ${failed.replace(/\s+/g, " ").trim().slice(0, 200)}`);
   return parts.filter(Boolean).join(" ");

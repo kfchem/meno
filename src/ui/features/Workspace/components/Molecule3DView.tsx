@@ -1735,6 +1735,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
       energies: m.energies?.length === count ? m.energies : undefined,
       numbers: m.numbers?.length === count ? m.numbers : undefined,
       title: named3d(m) ? m.title : undefined,
+      names: m.frameNames?.length === count && m.frameNames.some(Boolean) ? m.frameNames : undefined,
       populations: shares,
       failed: m.failed?.length === count ? m.failed : undefined,
       marksUnread: m.marksUnread,
