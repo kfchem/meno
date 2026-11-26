@@ -52,7 +52,7 @@ export function studioOption(studios: readonly PresetStudio[]): Option[] {
       id: "studio",
       label: "Studio",
       type: "choice",
-      choices: [{ value: PLAIN_STUDIO, label: "As asked" }, ...studios.map((s) => ({ value: s.id, label: s.label }))],
+      choices: [{ value: PLAIN_STUDIO, label: "As asked" }, ...studios.map((s) => ({ value: s.id, label: s.label, ...(s.description ? { description: s.description } : {}) }))],
       default: PLAIN_STUDIO,
       section: "scene",
     },

@@ -31,6 +31,8 @@ export const ASSETS = ["manual.css", "manual.js"];
  * half-width katakana.
  */
 const UNSTABLE = /[\u2160-\u217f\u2460-\u24ff\u2776-\u2793\u3200-\u33ff\uff61-\uff9f]/u;
+/** The id of every page's own content - the skip link leads there - which no section or item takes. */
+const FRAME_ID = "page";
 /** Japanese and Chinese characters and their punctuation: a line broken between two of them joins up with no space. */
 const WIDE = /[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff01-\uff60]/u;
 
@@ -93,8 +95,8 @@ function blocks(source, where) {
   return out;
 }
 
-/** A list, `- ` or `1. ` at each item, a line carried on indented by two spaces or more. */
-function list(block, where, link) {
+/** A list, `- ` or `1. ` at each item, a line carried on indented by two spaces or more; an item may begin with its `{#id}`. */
+function list(block, where, link, steps) {
   const ordered = /^\d+\. /.test(block.lines[0]);
   const marker = ordered ? /^(\d+)\. / : /^- /;
   const items = [];
@@ -111,7 +113,16 @@ function list(block, where, link) {
     }
   });
   const tag = ordered ? "ol" : "ul";
-  return `<${tag}>\n${items.map((it) => `<li>${inline(joinLines(it.lines), it.at, link)}</li>`).join("\n")}\n</${tag}>`;
+  const li = items.map((it) => {
+    const m = /^\{#([a-z0-9-]+)\} /.exec(it.lines[0]);
+    const html = inline(joinLines(m ? [it.lines[0].slice(m[0].length), ...it.lines.slice(1)] : it.lines), it.at, link);
+    if (!m) return `<li>${html}</li>`;
+    if (steps.some((s) => s.id === m[1])) fail(it.at, `a second item {#${m[1]}}`);
+    if (m[1] === FRAME_ID) fail(it.at, `{#${FRAME_ID}} is the page's own`);
+    steps.push({ id: m[1], html, at: it.at });
+    return `<li id="${m[1]}">${html}</li>`;
+  });
+  return `<${tag}>\n${li.join("\n")}\n</${tag}>`;
 }
 
 /**
@@ -124,6 +135,8 @@ function list(block, where, link) {
  * - paragraphs, lists (`- ` or `1. ` at each item, a line carried on
  *   indented by two spaces or more) and notes (`> ` at each line), each
  *   block between blank lines;
+ * - an item of a list may begin with its `{#id}`: a how-to page's steps,
+ *   each the step of its recording with that id;
  * - within them, `code`, *italic* for the names of things on screen,
  *   **bold**, and links: `[words](https://...)`, to another page of the
  *   manual by its name and a section if wanted (`installing#mac`), to a
@@ -142,6 +155,7 @@ export function parsePage(source, where, link = (target) => target) {
   let title;
   let description = "";
   const headings = [];
+  const steps = [];
   const html = [];
   for (const block of blocks(source, where)) {
     const first = block.lines[0];
@@ -159,12 +173,13 @@ export function parsePage(source, where, link = (target) => target) {
       const level = m[1].length;
       const text = inline(m[2], at, link);
       if (headings.some((h) => h.id === m[3])) fail(at, `a second section #${m[3]}`);
+      if (m[3] === FRAME_ID) fail(at, `#${FRAME_ID} is the page's own`);
       headings.push({ level, id: m[3], text });
       html.push(`<h${level} id="${m[3]}">${text}</h${level}>`);
     } else if (first.startsWith("#")) {
       fail(at, "a heading is ## or ###, with its {#id} after it");
     } else if (/^(- |\d+\. )/.test(first)) {
-      html.push(list(block, where, link));
+      html.push(list(block, where, link, steps));
     } else if (first.startsWith(">")) {
       block.lines.forEach((text, i) => {
         if (!text.startsWith("> ")) fail(`${where}:${block.line + i}`, "each line of a note begins > ");
@@ -184,7 +199,9 @@ export function parsePage(source, where, link = (target) => target) {
     }
   }
   if (title === undefined) fail(`${where}:1`, "a page begins with its title: # ...");
-  return { title, description, headings, html: html.join("\n") };
+  // (an id once on the page: an item's is not a section's)
+  for (const st of steps) if (headings.some((h) => h.id === st.id)) fail(st.at, `{#${st.id}} is a section's id on this page too`);
+  return { title, description, headings, steps, html: html.join("\n") };
 }
 
 /** Which language to open the manual in: the one chosen before, else the first of the browser's the manual has, else the first the manual has. */
@@ -205,7 +222,9 @@ function idsOf(html) {
 /**
  * The manual's sources as they are on disk: contents.json - its languages,
  * its pages in order, and the words of the pages' frame in each language -
- * and pages/<language>/<page>.md, with index.md for the contents. The
+ * and pages/<language>/<page>.md, with index.md for the contents; and each
+ * how-to page's folder, how-to/<page>/: its words in each language
+ * (<language>.md), and what its recording wrote (steps.json, shots/). The
  * website's own page beside them, if there, for the links into it.
  */
 export function readManual(dir) {
@@ -216,8 +235,19 @@ export function readManual(dir) {
     const there = readdirSync(folder).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3));
     sources[language] = Object.fromEntries(there.map((page) => [page, readFileSync(join(folder, `${page}.md`), "utf8")]));
   }
+  const howTo = {};
+  for (const page of contents.howTo ?? []) {
+    const folder = join(dir, "how-to", page);
+    const read = (file) => (existsSync(join(folder, file)) ? readFileSync(join(folder, file), "utf8") : undefined);
+    const recorded = read("steps.json");
+    howTo[page] = {
+      words: Object.fromEntries(contents.languages.map((l) => [l, read(`${l}.md`)])),
+      recorded: recorded === undefined ? undefined : JSON.parse(recorded),
+      shots: existsSync(join(folder, "shots")) ? readdirSync(join(folder, "shots")).filter((f) => f.endsWith(".webp")) : [],
+    };
+  }
   const landing = join(dir, "..", "index.html");
-  return { contents, sources, landing: existsSync(landing) ? idsOf(readFileSync(landing, "utf8")) : null };
+  return { contents, sources, howTo, landing: existsSync(landing) ? idsOf(readFileSync(landing, "utf8")) : null };
 }
 
 /**
@@ -225,8 +255,9 @@ export function readManual(dir) {
  * `contents` and `sources` as `readManual` gives them; `landing`, the ids of
  * the website's own page (null not to check links into it).
  */
-export function buildManual({ contents, sources, landing = null }) {
+export function buildManual({ contents, sources, howTo = {}, landing = null }) {
   const { languages, pages, words } = contents;
+  const tutorials = contents.howTo ?? [];
   if (!languages?.length || !Array.isArray(pages) || !words) fail("contents.json", "it names the languages, the pages in order, and the words in each language");
   if (new Set(pages).size !== pages.length || pages.includes("index")) fail("contents.json", "each page named once, and none index");
   const all = ["index", ...pages];
@@ -253,11 +284,35 @@ export function buildManual({ contents, sources, landing = null }) {
   }
   const sections = (language, page) => new Set(read[language][page].headings.map((h) => h.id));
 
+  // the how-to pages: each one's recording, and its words in each language, step by step the same
+  for (const page of tutorials) {
+    const t = howTo[page];
+    const where = `how-to/${page}`;
+    if (!/^[a-z0-9-]+$/.test(page) || all.includes(page) || page === "how-to") fail("contents.json", `how-to page ${page}: a name of its own, in a-z, 0-9 and -`);
+    if (!t?.recorded) fail(`${where}/steps.json`, "missing: the page's recording (scripts/gui/run.ps1 -Tutorial)");
+    checkRecording(t.recorded, `${where}/steps.json`);
+    const { steps, result } = t.recorded;
+    for (const shot of [...steps.map((st) => st.shot), result]) if (!t.shots.includes(shot)) fail(`${where}/shots/${shot}`, "missing: steps.json names it");
+    for (const shot of t.shots) if (![...steps.map((st) => st.shot), result].includes(shot)) fail(`${where}/shots/${shot}`, "not in steps.json");
+    for (const language of languages) {
+      if (t.words[language] === undefined) fail(`${where}/${language}.md`, `missing: ${page} is in the manual`);
+      const parsed = parsePage(t.words[language], `${where}/${language}.md`);
+      const ids = steps.map((st) => st.id);
+      if (parsed.headings.length || !/^<p class="lead">.*<\/p>\n<ol>[\s\S]*<\/ol>$/.test(parsed.html)) {
+        fail(`${where}/${language}.md`, "a how-to page is its title, a paragraph on what it makes, and its steps, numbered, each with its {#id}");
+      }
+      if (parsed.steps.map((st) => st.id).join() !== ids.join()) {
+        fail(`${where}/${language}.md`, `its steps are not those recorded (steps.json), in the same order:\n${ids.join(" ")}\n- against -\n${parsed.steps.map((st) => st.id).join(" ")}`);
+      }
+    }
+  }
+
   const files = new Map();
   for (const language of languages) {
-    for (const page of all) {
+    const pagesHere = [...all, ...(tutorials.length ? ["how-to", ...tutorials.map((t) => `how-to/${t}`)] : [])];
+    for (const page of pagesHere) {
       // how far up the site, the manual and its language are from the page
-      const toSite = page === "index" ? 2 : 3;
+      const toSite = page === "index" ? 2 : page.split("/").length + 2;
       const up = (n) => "../".repeat(n) || "./";
       const link = (target, at) => {
         let m;
@@ -277,19 +332,193 @@ export function buildManual({ contents, sources, landing = null }) {
         }
         fail(at, `a link to ${target}: the manual links to https://..., to its own pages by name (installing#mac), to sections of the page (#mac) and to the website (/, /#download)`);
       };
-      const where = `pages/${language}/${page}.md`;
-      const parsed = parsePage(sources[language][page], where, link);
       const footer = inline(words[language].footer, `contents.json (${language} footer)`, link);
-      const html = pageHtml({ contents, language, page, parsed, titles: read, footer, toSite });
+      let parsed;
+      if (page === "how-to") parsed = gallery({ contents, language, howTo, link });
+      else if (page.startsWith("how-to/")) parsed = tutorial({ contents, language, page: page.slice(7), t: howTo[page.slice(7)], link, toSite });
+      else parsed = parsePage(sources[language][page], `pages/${language}/${page}.md`, link);
+      const html = pageHtml({ contents, language, page, parsed, titles: read, howToTitles: tutorialTitles(howTo, language), footer, toSite });
       files.set(page === "index" ? `${language}/index.html` : `${language}/${page}/index.html`, html);
     }
   }
+  // the pictures, the same for every language
+  for (const page of tutorials) for (const shot of howTo[page].shots) files.set(`pictures/${page}/${shot}`, { copy: `how-to/${page}/shots/${shot}` });
   files.set("index.html", frontDoor(contents));
   return files;
 }
 
+/** What a mark of each kind holds: a part (x, y, w, h), a point (w and h 0), a path, or a key. */
+const MARK_KINDS = { click: "part", doubleclick: "part", rightclick: "part", longpress: "part", type: "part or none", drag: "path", trace: "path", key: "text", shortcut: "text" };
+
+/**
+ * A recording as run.ps1 -Tutorial writes it, checked before anything of it
+ * goes into a page: its size, its result, and each step's id, picture and
+ * mark - every number a number, every path two points or more.
+ */
+function checkRecording(recorded, where) {
+  const finite = (...vs) => vs.every((v) => typeof v === "number" && Number.isFinite(v));
+  const { steps, size, result } = recorded;
+  if (!Array.isArray(steps) || !steps.length) fail(where, "its steps, one or more");
+  if (!finite(size?.width, size?.height) || size.width <= 0 || size.height <= 0) fail(where, "the size of its shots, in pixels: { width, height }");
+  if (typeof result !== "string" || !/^[\w.-]+\.webp$/.test(result)) fail(where, "its result, a picture in shots/");
+  const ids = new Set();
+  steps.forEach((st, i) => {
+    const at = `step ${i + 1}${typeof st?.id === "string" ? ` (${st.id})` : ""}`;
+    if (typeof st?.id !== "string" || !/^[a-z0-9-]+$/.test(st.id)) fail(where, `${at}: its id, in a-z, 0-9 and -`);
+    if (ids.has(st.id)) fail(where, `${at}: a second step ${st.id}`);
+    ids.add(st.id);
+    if (typeof st.shot !== "string" || !/^[\w.-]+\.webp$/.test(st.shot)) fail(where, `${at}: its picture, in shots/`);
+    const mark = st.mark;
+    const holds = MARK_KINDS[mark?.kind];
+    if (!holds) fail(where, `${at}: its mark, of a kind there is (${Object.keys(MARK_KINDS).join(", ")})`);
+    const placed = ["x", "y", "w", "h"].filter((k) => mark[k] !== undefined);
+    if (holds === "part" || (holds === "part or none" && placed.length)) {
+      if (!finite(mark.x, mark.y, mark.w, mark.h) || mark.w < 0 || mark.h < 0) fail(where, `${at}: a ${mark.kind}'s mark is where it is done, x, y, w and h, in numbers`);
+      if (mark.near !== undefined && (!Array.isArray(mark.near) || mark.near.length !== 4 || !finite(...mark.near) || mark.near[2] < 0 || mark.near[3] < 0)) {
+        fail(where, `${at}: what is near it, x, y, width and height, in numbers`);
+      }
+    }
+    if (holds === "path" && (!Array.isArray(mark.path) || mark.path.length < 2 || !mark.path.every((p) => Array.isArray(p) && p.length === 2 && finite(...p)))) {
+      fail(where, `${at}: a ${mark.kind}'s mark is its way, two points or more, each [x, y] in numbers`);
+    }
+    if ((holds === "text" || mark.kind === "type") && (typeof mark.text !== "string" || !mark.text)) fail(where, `${at}: a ${mark.kind}'s mark says what is ${mark.kind === "type" ? "typed" : "pressed"}`);
+  });
+}
+
+/** Each how-to page's title in a language. */
+function tutorialTitles(howTo, language) {
+  return Object.fromEntries(Object.entries(howTo).map(([page, t]) => [page, parsePage(t.words[language] ?? "# ?", page).title]));
+}
+
+/** "{n} steps", the number put in (and "1 step", for one). */
+const fill = (words, values) => escape(words).replace(/\{(\w+)\}/g, (_, k) => escape(values[k] ?? ""));
+
+/** The how-to pages' gallery: what each makes, as its result shows it. */
+function gallery({ contents, language, howTo }) {
+  const w = contents.words[language];
+  const cards = (contents.howTo ?? []).map((page) => {
+    const t = howTo[page];
+    const { size } = t.recorded;
+    const h = Math.round((1760 * size.height) / size.width);
+    const title = parsePage(t.words[language], page).title;
+    return `  <li><a href="./${page}/"><img src="../../pictures/${page}/${t.recorded.result}" width="1760" height="${h}" alt="" loading="lazy"><b>${title}</b><span>${fill(t.recorded.steps.length === 1 ? w.oneStep : w.stepCount, { n: t.recorded.steps.length })}</span></a></li>`;
+  });
+  return {
+    title: escape(w.howTo),
+    description: escape(w.howToLead),
+    headings: [],
+    html: `<p class="lead">${escape(w.howToLead)}</p>\n<ol class="gallery">\n${cards.join("\n")}\n</ol>`,
+  };
+}
+
+/**
+ * The mark over a step's picture, in the picture's own pixels: Meno's guide
+ * ring round the part a step is done at (two for a double click, filled for
+ * a long press, a dot at its corner for a right click), a ring round a point
+ * of the page, a path for a drag or a chain led; a key, under the picture,
+ * and words typed where nothing was marked, none. `id`, the step's: the
+ * path's head is its own on a page of several.
+ */
+export function markSvg(mark, size, id = "step") {
+  const pad = 8;
+  const part = mark.w > 0 || mark.h > 0;
+  const ring = (grow = 0) =>
+    part
+      ? `<rect x="${mark.x - pad - grow}" y="${mark.y - pad - grow}" width="${mark.w + 2 * (pad + grow)}" height="${mark.h + 2 * (pad + grow)}" rx="${16 + grow}"/>`
+      : `<circle cx="${mark.x}" cy="${mark.y}" r="${30 + grow}"/>`;
+  let shape;
+  switch (mark.kind) {
+    case "type":
+      if (mark.x === undefined) return "";
+      shape = ring();
+      break;
+    case "click":
+      shape = ring();
+      break;
+    case "doubleclick":
+      shape = ring() + ring(16);
+      break;
+    case "longpress":
+      shape = ring().replace("/>", ' class="held"/>');
+      break;
+    case "rightclick": {
+      const [cx, cy] = part ? [mark.x + mark.w + pad, mark.y - pad] : [mark.x + 21, mark.y - 21];
+      shape = `${ring()}<circle cx="${cx}" cy="${cy}" r="9" class="dot"/>`;
+      break;
+    }
+    case "drag":
+    case "trace": {
+      const points = corners(mark.path).map(([x, y]) => `${x},${y}`).join(" ");
+      // (a head at each corner as well as at the end: a ring led back to where it began shows its way round)
+      shape = `<circle cx="${mark.path[0][0]}" cy="${mark.path[0][1]}" r="10" class="dot"/><polyline points="${points}" marker-mid="url(#head_${id})" marker-end="url(#head_${id})"/>`;
+      break;
+    }
+    default:
+      return "";
+  }
+  // (head_: no section's or step's id has a _)
+  const head = `<defs><marker id="head_${id}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="34" markerHeight="34" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" class="tip"/></marker></defs>`;
+  return `<svg class="mark" viewBox="0 0 ${size.width} ${size.height}" aria-hidden="true">${mark.kind === "drag" || mark.kind === "trace" ? head : ""}<g class="halo">${shape}</g><g class="line">${shape}</g></svg>`;
+}
+
+/**
+ * The part of a step's picture shown at first: the spot and what is round
+ * it, larger than the whole window could be shown - its words readable - in
+ * the window's own proportions, so that a click on it opens out to the whole
+ * window without the page moving. Grown, where what is marked would not fit.
+ */
+export function cropAround(mark, size, share = 0.55) {
+  // (the spot, and what tells where it is - the dialog it is in, its row's words - where the recording kept it)
+  const near = mark.near ? [[mark.near[0], mark.near[1]], [mark.near[0] + mark.near[2], mark.near[1] + mark.near[3]]] : [];
+  const xs = mark.path ? mark.path.map((p) => p[0]) : mark.w !== undefined ? [mark.x, mark.x + mark.w, ...near.map((p) => p[0])] : null;
+  const ys = mark.path ? mark.path.map((p) => p[1]) : mark.h !== undefined ? [mark.y, mark.y + mark.h, ...near.map((p) => p[1])] : null;
+  if (!xs || !ys) return { x: 0, y: 0, width: size.width, height: size.height };
+  const pad = 60;
+  const [x0, x1, y0, y1] = [Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad];
+  const k = Math.min(1, Math.max(share, (x1 - x0) / size.width, (y1 - y0) / size.height));
+  const width = Math.round(size.width * k);
+  const height = Math.round(size.height * k);
+  const clamp = (v, most) => Math.max(0, Math.min(most, Math.round(v)));
+  return { x: clamp((x0 + x1) / 2 - width / 2, size.width - width), y: clamp((y0 + y1) / 2 - height / 2, size.height - height), width, height };
+}
+
+/** A path's corners: the points along it where it turns, the points between them, on its way, left out. */
+export function corners(path) {
+  return path.filter((p, i) => {
+    if (i === 0 || i === path.length - 1) return true;
+    const [a, b] = [path[i - 1], path[i + 1]];
+    const turn = Math.abs(Math.atan2(b[1] - p[1], b[0] - p[0]) - Math.atan2(p[1] - a[1], p[0] - a[0]));
+    return Math.min(turn, 2 * Math.PI - turn) > 0.09;
+  });
+}
+
+/** A how-to page: what it makes, what it needs, and its steps - each a picture with its spot marked, and its words. */
+function tutorial({ contents, language, page, t, link }) {
+  const w = contents.words[language];
+  const parsed = parsePage(t.words[language], `how-to/${page}/${language}.md`, link);
+  const { size, steps, result, needs, meno } = t.recorded;
+  const pics = `../../../pictures/${page}/`;
+  const h = Math.round((1760 * size.height) / size.width);
+  const words = Object.fromEntries(parsed.steps.map((st) => [st.id, st.html]));
+  const items = steps.map((st) => {
+    // (a shortcut, as a Mac writes it: the page's words give Windows' Ctrl beside it)
+    const key = st.mark.kind === "key" ? `<kbd class="key">${escape(st.mark.text)}</kbd>` : st.mark.kind === "shortcut" ? `<kbd class="key">\u2318${escape(st.mark.text)}</kbd>` : "";
+    const c = cropAround(st.mark, size);
+    const pct = (v) => `${+v.toFixed(3)}%`;
+    const place = `width:${pct((100 * size.width) / c.width)};left:${pct((-100 * c.x) / c.width)};top:${pct((-100 * c.y) / c.height)}`;
+    return `<li id="${st.id}">\n  <p><span>${words[st.id]}</span></p>\n  <figure class="shot near" style="aspect-ratio:${size.width} / ${size.height}" tabindex="0" role="button" aria-expanded="false" aria-label="${escape(w.wholeWindow)}"><div class="view" style="${place}"><img src="${pics}${st.shot}" width="1760" height="${h}" alt="" loading="lazy">${markSvg(st.mark, size, st.id)}</div>${key}</figure>\n</li>`;
+  });
+  const need = needs?.length ? `\n<p class="needs"><span>${escape(w.needs)}</span> ${needs.map((n) => `<b>${escape(n)}</b>`).join(" ")}</p>` : "";
+  return {
+    title: parsed.title,
+    description: parsed.description,
+    headings: [],
+    html: `<p class="lead">${parsed.html.match(/^<p class="lead">(.*)<\/p>/)[1]}</p>${need}\n<figure class="shot result"><img src="${pics}${result}" width="1760" height="${h}" alt="${escape(w.resultAlt)}"></figure>\n<ol class="steps">\n${items.join("\n")}\n</ol>${meno ? `\n<p class="pictures">${fill(w.pictures, { version: meno })}</p>` : ""}`,
+  };
+}
+
 /** The manual's front door: on to the reader's language, at once; both, without script. */
-function frontDoor({ languages, pages, words }) {
+function frontDoor({ languages, pages, words, howTo }) {
   const alternates = languages.map((l) => `<link rel="alternate" hreflang="${l}" href="${SITE_URL}manual/${l}/">`);
   return `<!doctype html>
 <html lang="${languages[0]}">
@@ -309,7 +538,7 @@ ${alternates.join("\n")}
   try { chosen = localStorage.getItem(${JSON.stringify(LANGUAGE_KEY)}); } catch { /* none kept */ }
   const language = pick(chosen, navigator.languages || [navigator.language || ""], ${JSON.stringify(languages)});
   const page = location.hash.slice(1);
-  location.replace(language + "/" + (${JSON.stringify(pages)}.includes(page) ? page + "/" : ""));
+  location.replace(language + "/" + (${JSON.stringify([...pages, ...(howTo?.length ? ["how-to"] : [])])}.includes(page) ? page + "/" : ""));
 })();
 </script>
 </head>
@@ -324,8 +553,10 @@ ${languages.map((l) => `  <a class="btn" href="${l}/" hreflang="${l}" lang="${l}
 }
 
 /** A page of the manual in its frame: the bar, the column of pages, the page, the way on, the footer. */
-function pageHtml({ contents, language, page, parsed, titles, footer, toSite }) {
+function pageHtml({ contents, language, page, parsed, titles, howToTitles, footer, toSite }) {
   const { languages, pages, words } = contents;
+  const tutorials = contents.howTo ?? [];
+  const isHowTo = page === "how-to" || page.startsWith("how-to/");
   const w = words[language];
   const site = "../".repeat(toSite);
   const manual = "../".repeat(toSite - 1);
@@ -345,7 +576,7 @@ ${pages
     return `    <li><a href="${home}${p}/"${current(p === page)}>${titleOf(p)}</a>${inner}</li>`;
   })
   .join("\n")}
-  </ol>
+  </ol>${tutorials.length ? `\n  <a class="side-how" href="${home}how-to/"${current(isHowTo)}>${escape(w.howTo)}</a>` : ""}
 </nav>`;
 
   const switcher = `<nav class="languages" aria-label="${escape(w.languages)}">
@@ -355,16 +586,25 @@ ${languages
     </nav>`;
 
   // the contents: every page, with what it is about
+  const howToCard = tutorials.length ? `\n  <li class="how"><a href="${home}how-to/"><b>${escape(w.howTo)}</b><span>${escape(w.howToLead)}</span></a></li>` : "";
   const list =
     page === "index"
-      ? `\n<ol class="sections">\n${pages.map((p) => `  <li><a href="${home}${p}/"><b>${titleOf(p)}</b><span>${titles[language][p].description}</span></a></li>`).join("\n")}\n</ol>`
+      ? `\n<ol class="sections">${howToCard}\n${pages.map((p) => `  <li><a href="${home}${p}/"><b>${titleOf(p)}</b><span>${titles[language][p].description}</span></a></li>`).join("\n")}\n</ol>`
       : "";
 
   // the way on, from a page: the one before it (the contents before the first) and the one after; the contents lead on by themselves
   const order = ["index", ...pages];
   const at = order.indexOf(page);
   const step = (p, cls, label) => `  <a class="${cls}" href="${p === "index" ? home : `${home}${p}/`}"><small>${escape(label)}</small>${p === "index" ? escape(w.contents) : titleOf(p)}</a>`;
-  const way = page === "index" ? [] : [step(order[at - 1], "prev", w.previous), at < order.length - 1 && step(order[at + 1], "next", w.next)].filter(Boolean);
+  // (a how-to page: back to them all, and on to the next)
+  const howStep = (p, cls, label) => `  <a class="${cls}" href="${home}how-to/${p ? `${p}/` : ""}"><small>${escape(label)}</small>${p ? howToTitles[p] : escape(w.howTo)}</a>`;
+  const next = tutorials[tutorials.indexOf(page.slice(7)) + 1];
+  const way =
+    page === "index" || page === "how-to"
+      ? []
+      : isHowTo
+        ? [howStep(null, "prev", w.previous), next && howStep(next, "next", w.next)].filter(Boolean)
+        : [step(order[at - 1], "prev", w.previous), at < order.length - 1 && step(order[at + 1], "next", w.next)].filter(Boolean);
   const pager = way.length ? `\n<nav class="pager" aria-label="${escape(w.pager)}">\n${way.join("\n")}\n</nav>` : "";
 
   const alternates = languages.map((l) => `<link rel="alternate" hreflang="${l}" href="${SITE_URL}manual/${l}/${here}">`);
@@ -386,7 +626,7 @@ ${alternates.join("\n")}
 <link rel="stylesheet" href="${manual}manual.css">
 </head>
 <body>
-<a class="skip" href="#page">${escape(w.skip)}</a>
+<a class="skip" href="#${FRAME_ID}">${escape(w.skip)}</a>
 <div class="honeycomb" aria-hidden="true"></div>
 
 <header class="top">
@@ -403,8 +643,8 @@ ${alternates.join("\n")}
 
 <div class="wrap layout">
 ${side}
-<main id="page">
-<article>
+<main id="${FRAME_ID}">
+<article${isHowTo ? ' class="how"' : ""}>
 <h1>${parsed.title}</h1>
 ${parsed.html}${list}
 </article>${pager}
@@ -432,12 +672,13 @@ function main([sourceDir, outDir]) {
   const files = buildManual(readManual(sourceDir));
   // (the folder as release.mjs copied it holds the sources: the manual replaces them)
   rmSync(outDir, { recursive: true, force: true });
-  for (const [path, html] of files) {
+  for (const [path, what] of files) {
     mkdirSync(dirname(join(outDir, path)), { recursive: true });
-    writeFileSync(join(outDir, path), html);
+    if (typeof what === "string") writeFileSync(join(outDir, path), what);
+    else cpSync(join(sourceDir, what.copy), join(outDir, path));
   }
   for (const asset of ASSETS) cpSync(join(sourceDir, asset), join(outDir, asset));
-  console.log(`${outDir}: ${files.size} pages`);
+  console.log(`${outDir}: ${[...files.values()].filter((f) => typeof f === "string").length} pages`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main(process.argv.slice(2));

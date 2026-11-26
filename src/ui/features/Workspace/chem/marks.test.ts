@@ -42,7 +42,7 @@ const butene: Model = {
 };
 
 describe("marksOf", () => {
-  it("puts RDKit's valence warnings on the atoms they are about, by id - its R, S, E and Z and an axis's M or P never: Meno's own are", () => {
+  it("puts Sketchkit's valence warnings on the atoms they are about, by id - its R, S, E and Z and an axis's M or P never: Meno's own are", () => {
     const marks = marksOf(butene, {
       atoms: [
         { index: 0, hydrogens: 3 },

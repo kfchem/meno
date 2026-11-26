@@ -19,15 +19,15 @@
  * - An axis of hindered rotation only where the drawing states one (Brecher 2006 ST-1.7: hindrance is a matter of degree).
  * Not candidates in this build: planar and helical chirality, and a metal's own geometry.
  */
+import { factsOf, OPEN_RING } from "../facts";
+import type { ChemGraph } from "../graph";
+import { SMALL_RING } from "../rings";
 import type { SymmetryInput } from "../symmetry";
 import { lonePairCentres } from "./lonePairs";
 import { MOVING_CN, movingCN } from "./movingCN";
 
 /** The elements a centre of four groups may be. */
 export const CENTRE_ELEMENTS: ReadonlySet<string> = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb", "Bi", "S", "Se", "Te"]);
-
-/** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
-export const SMALL_RING = 7;
 
 /** A place that can carry a configuration, with why: by its atom, its bond (by index), or a run's two ends. */
 export type Candidate =
@@ -100,25 +100,8 @@ function readOf(g: SymmetryInput) {
     g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0, ...(a.hs != null ? { hs: a.hs } : {}) })),
     g.bonds,
   );
-  // (whether a and b are joined but through their own bond within `most` bonds: a ring of `most` + 1 atoms or fewer)
-  const near = (a: number, b: number, most: number) => {
-    let at = [a];
-    const seen = new Set([a]);
-    for (let d = 1; d <= most && at.length; d++) {
-      const next: number[] = [];
-      for (const x of at)
-        for (const y of around[x]) {
-          if (seen.has(y) || (x === a && y === b)) continue;
-          if (y === b) return true;
-          seen.add(y);
-          next.push(y);
-        }
-      at = next;
-    }
-    return false;
-  };
   const others = (end: number, partner: number) => around[end].filter((m) => m !== partner);
-  return { n, around, doubles, element, hs, pyramid, moving, near, others };
+  return { n, around, doubles, element, hs, pyramid, moving, others };
 }
 type Read = ReturnType<typeof readOf>;
 
@@ -145,8 +128,30 @@ function bondWhyNot(g: SymmetryInput, r: Read, k: number): string | null {
   if (!r.others(b.a, b.b).length || !r.others(b.b, b.a).length) return NOT_CANDIDATE.bare;
   const moving = r.moving.get(k);
   if (moving) return NOT_CANDIDATE.moving(MOVING_CN[moving]);
-  if (r.near(b.a, b.b, SMALL_RING - 1)) return NOT_CANDIDATE.ring;
+  if (inSmallRing(g, k)) return NOT_CANDIDATE.ring;
   return null;
+}
+
+/**
+ * Whether bond `k` of `g` is in a ring of `SMALL_RING` atoms or fewer - the smallest ring through it, for a fused or bridged system
+ * too (../facts `inRingSmallerThan`, `OPEN_RING`): a double bond there has its ring's one arrangement, cis, and a cis or trans
+ * written on it states nothing (P-93.5.1.4.1; Brecher 2006, ST-4.3). The one test a candidate double bond, identity's blanks and
+ * the sides a structure was given (`smallRingSidesDropped`) ask.
+ */
+export function inSmallRing(g: ChemGraph, k: number): boolean {
+  return factsOf(g).inRingSmallerThan(k, OPEN_RING);
+}
+
+/**
+ * `g` with no cis or trans on a double bond in a ring of `SMALL_RING` atoms or fewer (`inSmallRing`), whoever wrote it - a SMILES's
+ * marks, a file's, a plugin's answer: there it states nothing, so cyclohexene written C1C/C=C\CC1 is cyclohexene, one structure
+ * with C1CC=CCC1, and has no E or Z. A ring of eight or more keeps it: cis- and trans-cyclooctene are two. Identity compares
+ * a structure so (lib/chem/identity `compared`) and the CIP labels one so (lib/chem/cip `cipLabels`); a drawing's reader reads
+ * no side there in the first place (./from2d). `g` itself where nothing is dropped.
+ */
+export function smallRingSidesDropped<T extends ChemGraph>(g: T): T {
+  if (!g.bonds.some((b, k) => b.stereo && inSmallRing(g, k))) return g;
+  return { ...g, bonds: g.bonds.map((b, k) => (b.stereo && inSmallRing(g, k) ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) };
 }
 
 /**

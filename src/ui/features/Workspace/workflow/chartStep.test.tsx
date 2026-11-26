@@ -84,7 +84,7 @@ describe("a Chart step", () => {
       ...(energies.length > 1 ? { frames: energies.slice(1).map(() => [0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0]) } : {}),
       energies,
       conformerSet: true,
-      calc: { readers: ["meno"], program: "prog", method: "GFN2-xTB", solvation: "none" },
+      calc: { readers: ["meno"], program: "prog", method: "TB2", solvation: "none" },
     });
     let doc = addMolecule3d(emptyWorkspaceDocument(), water(0, [-5.07, -5.06, -5.08]));
     doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
@@ -93,7 +93,7 @@ describe("a Chart step", () => {
     expect(canWire(doc, { set: 1 }, 2)).toBe(true);
     const t = tableInto(doc, 2)!;
     const energy = t.columns.find((c) => c.name === "energy")!;
-    expect(energy).toMatchObject({ kind: "number", unit: "Eh", by: { program: "prog", method: expect.stringContaining("GFN2-xTB") } });
+    expect(energy).toMatchObject({ kind: "number", unit: "Eh", by: { program: "prog", method: expect.stringContaining("TB2") } });
     doc = runStep(doc, 2, W);
     const c = chartOf(doc)!;
     // (its first two columns of numbers: each conformer's number, and its energy - at its own geometry, one column)
@@ -267,7 +267,7 @@ describe("a chart, in its set's frame", () => {
     const c: ChartValue = {
       kind: "points",
       x: { name: "number", unit: "none" },
-      y: { name: "energy", unit: "Eh", by: { program: "prog", method: "GFN2-xTB" }, at: { geometry: "own", kelvin: 298.15, atm: 1, solvent: "water" } },
+      y: { name: "energy", unit: "Eh", by: { program: "prog", method: "TB2" }, at: { geometry: "own", kelvin: 298.15, atm: 1, solvent: "water" } },
       points: [
         { x: 1, y: -5.07, row: 0 },
         { x: 2, y: -5.06, row: 1 },
@@ -276,7 +276,7 @@ describe("a chart, in its set's frame", () => {
     };
     const html = renderToString(<ChartBody chart={c} />).split("<!-- -->").join("");
     // (and the conditions it was worked out at: temperature, pressure, solvent)
-    expect(html).toContain("energy (Eh) \u00b7 prog \u00b7 GFN2-xTB \u00b7 298.15 K \u00b7 1 atm \u00b7 water");
+    expect(html).toContain("energy (Eh) \u00b7 prog \u00b7 TB2 \u00b7 298.15 K \u00b7 1 atm \u00b7 water");
     expect(html).toContain(">number<");
     expect(html).toContain("2 points \u00b7 1 row left (1 with no energy)");
     expect(html.match(/<circle/g)?.length).toBe(2);

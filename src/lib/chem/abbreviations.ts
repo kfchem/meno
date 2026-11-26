@@ -20,7 +20,7 @@ import { readSmiles, type Smiles } from "./smiles";
 import { substitutedAryl } from "./substitutedAryl";
 import { anionStructure, condensedStructure, metalSaltStructure } from "./condensed";
 import { chainGroup } from "./chain";
-import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
+import { complexStructure, DONOR_TEXT_METAL, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "./kekulize";
 import { typedRingRefused } from "./smilesWhy";
@@ -185,6 +185,11 @@ const CONTRACTED: Abbreviation[] = [
   { label: "CO2H", also: ["COOH"], smiles: "*C(=O)O", name: "carboxy" },
   { label: "CHO", smiles: "*C=O", name: "formyl" },
   { label: "CN", smiles: "*C#N", name: "cyano" },
+  // (read outward from the bond, as every label is: its first symbol bonded - N, the iso form; OCN, O bonded, is composed. No NC: typed,
+  //  it is CN as drawn on a bond's left, a nitrile - the maintainer, 2026-10-11)
+  { label: "NCO", smiles: "*N=C=O", name: "isocyanato" },
+  // (and NCSe, N=C=Se, as NCS bonded is read - SeCN, Se bonded, is composed, as SCN is; no reagent of its letters, so alone too)
+  { label: "NCSe", smiles: "*N=C=[Se]", name: "isoselenocyanato" },
   { label: "NO2", smiles: "*[N+](=O)[O-]", name: "nitro" },
   { label: "N3", smiles: "*N=[N+]=[N-]", name: "azido" },
   { label: "CF3", smiles: "*C(F)(F)F", name: "trifluoromethyl" },
@@ -274,6 +279,11 @@ function composedOf(label: string): Abbreviation | undefined {
   const made = madeStructure(label);
   if (made && refusedForOO(label, made)) return undefined;
   if (made) return { label, name: made.name, smiles: "", kind: "reagent" };
+  // (a main-group metal of groups 1, 2 and 13 with the groups written on it, where nothing above reads it - MgBr, AlCl2, BrMg on a
+  //  carbon: the metal, bonded where the label is, with its halides - as a transition metal's formula is read; MgBr2, n-BuLi, MeMgBr
+  //  read as before, above)
+  const donor = complexStructure(label, groupStructure, {}, DONOR_TEXT_METAL);
+  if (donor && !refusedForOO(label, donor) && !oxoPastHighest(label, donor)) return { label, name: donor.name, smiles: "", kind: "complex" };
   // (last of all, after every group and every formula read whole: an atom with its H and the groups it carries,
   // its other bonds the drawing's - SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
   return atomCarryingGroups(label);
@@ -862,7 +872,7 @@ export function abbreviationStructure(label: string): GroupStructure | null {
     return s;
   }
   if (a.kind === "complex") {
-    const c = complexStructure(label.trim(), groupStructure);
+    const c = complexStructure(label.trim(), groupStructure) ?? complexStructure(label.trim(), groupStructure, {}, DONOR_TEXT_METAL);
     if (!c) return null;
     const { name: _name, ...s } = c;
     return s;
@@ -882,6 +892,18 @@ function groupStructure(label: string): GroupStructure | null {
   const a = BY_LABEL.get(label) ?? custom.get(label) ?? composedGroupOf(label);
   // (an atom carrying groups, its other bonds the drawing's, is no part of a formula: BPh4 is an anion, no BPh four times)
   return a && !a.carrying ? smilesGroup(a.smiles) : null;
+}
+
+/**
+ * Labels read otherwise where they are bonded than alone: NCS, bonded by one bond, the isothiocyanato group - read outward from its
+ * bond, its N bonded, as NCO and NC are - and alone, N-chlorosuccinimide, the reagent.
+ */
+const BONDED: ReadonlyMap<string, Abbreviation> = new Map([["NCS", { label: "NCS", smiles: "*N=C=S", name: "isothiocyanato" }]]);
+
+/** The structure a label stands for where it is bonded (`BONDED`), or null where it reads the same bonded or alone. */
+export function bondedAbbreviationStructure(label: string): GroupStructure | null {
+  const a = BONDED.get(label.trim());
+  return a ? smilesGroup(a.smiles) : null;
 }
 
 /** A group's SMILES, "*" first, as its structure. */
@@ -1078,6 +1100,29 @@ export function reversedLabel(text: string): string {
       return m ? `(${reversedLabel(m[1])})${m[2]}` : u;
     })
     .join("");
+}
+
+/**
+ * A label's units as written when its bond comes in from the right: its
+ * own units turned round (`reversedLabel`'s, not read again from the
+ * turned text, where SCN's N, C, S would be NCS, one name) - and a label
+ * of element symbols alone that is one name read otherwise bonded
+ * (`BONDED`: NCS, the isothiocyanato group) or whose units split a symbol
+ * (NCSe as NCS and e) turned symbol by symbol: NCS as S, C, N, NCSe as
+ * Se, C, N, so that the symbol bonded stands at the bond (IUPAC GR-2.1.6).
+ */
+export function reversedUnits(text: string): string[] {
+  const units = labelUnits(text);
+  const symbols = text.match(/[A-Z][a-z]?\d*/g);
+  const bySymbol =
+    symbols != null &&
+    symbols.join("") === text &&
+    symbols.length > 1 &&
+    symbols.every((u) => ELEMENTS.has(u.replace(/\d+$/, ""))) &&
+    (BONDED.has(text) || units.some((u) => /^[a-z]/.test(u)));
+  if (bySymbol) return symbols.reverse();
+  // (a prefix never turned away from its group: P(o-Tol)3 is (o-Tol)3P)
+  return turnedUnits(units);
 }
 
 /**

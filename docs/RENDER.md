@@ -214,6 +214,11 @@ options are shown only while one of its looks, studios or motions is
 chosen, each in the part it says, each `when` it says. A preset motion's
 shortest length counts as a renderer's does.
 
+Under the *Look*, the *Studio* and *Moving* the card says what the chosen
+one is, in its declaration's own words (its `description`) - Meno's own
+looks' as any other's - in one quiet line; one without a description has
+no line. The lists to pick from show the labels alone.
+
 Chosen, the render's entry hands the renderer, for each plugin whose
 presets are chosen, its interface, its id, each chosen one's id and file,
 and its options' values (`presets`); a preset look or motion is said there
@@ -281,7 +286,12 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
 - `collect {step: "render", entries, options, files: {}, log, ended}` -
   answered `{made: [{entry, file, media}]}`, the file it made in the job's
   folder, `image/png` or `video/mp4`; or `{why}`. Meno reads the file
-  itself, puts it on the page, and takes the job's folder away.
+  itself, puts it on the page, and takes the job's folder away. A film on a
+  transparent background is two items of the same entry: its film for the
+  page, `video/mp4`, saying where its alpha lies (`matte`: `"below"` or
+  `"right"`), and its film with transparency, `video/quicktime`
+  (*A film on a transparent background*, below). An item of
+  `video/quicktime` is taken only beside such a film.
 
 ## On the page
 
@@ -333,6 +343,34 @@ workspace as any picture is. Its menu offers **Pause** or **Play** and
 **Save film…**; a picture's, **Save picture…**. A film is not copied as a
 picture for other programs.
 
+### A film on a transparent background
+
+Rendered on Transparent, a film is one object on the page, made of two
+files from one render, both kept in the workspace:
+
+- **Its film for the page**: an ordinary MP4 (H.264) each frame of which
+  holds its picture and its alpha side by side - its colours multiplied by
+  their alpha, on black, in one half, and its alpha as grey in the other,
+  below the picture or to its right (the plugin says which: `matte`). It is
+  played as every film is, by the system, off the page's own work; the
+  page joins the halves as it draws it (`components/matteMaterial.ts`,
+  `lib/picture/matte.ts`), laying it over what lies under it - a white page,
+  a dark page, a shape - in the colours a picture rendered with the same
+  values is drawn in (its colour turned linear once as it is read, and back
+  once as the page draws it, as a picture's is; its alpha's grey taken as
+  written) - with no dark or light fringe, at any zoom, moved,
+  selected and undone as any picture is. The video is held within 4096 x
+  2304 pixels, both halves together: a larger film on Transparent is
+  refused with a sentence saying how large it can be.
+- **Its film with transparency**: **Save film…** writes it, and only it -
+  a QuickTime file, ProRes 4444 with an alpha channel, made from the same
+  frames; the save dialog's list says so in words. Not every program reads
+  this file. Slide programs differ in what they keep of a film's
+  transparency; where a film must lie on a slide, render it on the slide's
+  colour.
+
+A film on White, Black or Grey is one MP4, as before.
+
 ## The Blender plugin
 
 `meno-plugins/plugins/blender/`: a worker in Python alone (made by
@@ -364,18 +402,18 @@ uv, no package), and the script Blender runs, `render.py`.
   each frame with its transparency, and then puts what it rendered over
   the background asked for - after the colours are transformed, so that
   white is white - writing a PNG, or an MP4 (H.264) through Blender's own
-  video writer. H.264, as it is written here (4:2:0), keeps colour for
+  video writer (for a film on Transparent, its frames joined with their
+  alpha in the MP4, and a QuickTime file, ProRes 4444, beside it). H.264, as it is written here (4:2:0), keeps colour for
   each 2x2 pixels and takes no odd side: where a side Meno asked for is
   odd, the video is a pixel wider or taller, the frames at their own size
   in its corner and that pixel the background asked for.
 - **Its options**: the renderer (Cycles, light traced, or EEVEE, drawn in real time),
   samples for each pixel, noise removal, where it renders (the faster of
   the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender
-  can use one - and the processor, or either), the background (a
-  picture's transparent, white, black or grey; a film's white, black or
-  grey, a video keeping no transparency - Transparent is offered for a
-  picture alone, and a film asked for on it by a job written by hand
-  fails, said so, never put on a colour not asked for), the colours
+  can use one - and the processor, or either), the background
+  (transparent, white, black or grey, for a picture and a film alike - a
+  picture's transparent unless changed, a film's white; a film on
+  Transparent is two files, *A film on a transparent background*), the colours
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
   the shadows' softness, and a film's quality. The renderer and noise
@@ -565,9 +603,6 @@ one starts from its first choice.
 - The words the canvas puts on molecules in 3D - atom numbers, R and S,
   E and Z, a measurement's value - are not in the scene yet: they are
   words, which would be written in the scene as shapes.
-- Films with a transparent background (a video kind that keeps it, which
-  every system's web view plays, is wanted first): until then a film's
-  Background offers white, black and grey alone.
 - A render is not picked up again as a workflow's job is: its workspace's
   tab closing stops it (*On the page*), and Meno's window closed as a
   whole leaves it running, what it makes kept only in its job's folder.

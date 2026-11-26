@@ -235,7 +235,7 @@ describe("the positions chosen, marked on the drawing", () => {
   });
 });
 
-describe("configurations kept through a substituent swap (the review desk's differential against RDKit)", () => {
+describe("configurations kept through a substituent swap (the review desk's differential against Sketchkit)", () => {
   it("a stereocentre's own undrawn H taken: the group where the H was, the centre as drawn - valine's alpha carbon", () => {
     const r = ok(substituted(drawnFromSmiles("CC(C)[C@H](N)C(=O)O"), [4], "Me\nOMe\nCl", "one"));
     expect(same(r.made[0].drawn, "CC(C)[C@](C)(N)C(=O)O")).toBe(true);

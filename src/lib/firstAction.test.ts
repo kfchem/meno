@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDocument } from "./doc/document";
-import { AFTER_ACTION_MS, afterFirstAction, firstActionDone, useFirstAction, watchFirstEdit } from "./firstAction";
+import { REST_MS, afterFirstAction, firstActionDone, useFirstAction, watchFirstEdit } from "./firstAction";
 
 /** What `afterFirstAction` is handed: whether something is under way, and the changes that may end it - here set by hand. */
 function world() {
@@ -41,14 +41,29 @@ describe("what waits for the user's first action (Meno's question about keeping 
     const w = world();
     afterFirstAction(run, w.busy, w.changes);
     firstActionDone();
-    vi.advanceTimersByTime(AFTER_ACTION_MS - 1);
+    vi.advanceTimersByTime(REST_MS - 1);
     expect(run).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(run).toHaveBeenCalledTimes(1);
     w.set(true);
     w.set(false);
     firstActionDone();
-    vi.advanceTimersByTime(AFTER_ACTION_MS * 10);
+    vi.advanceTimersByTime(REST_MS * 10);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("only once the page has rested: each change - a key, a click - starts the stretch again", () => {
+    const run = vi.fn();
+    const w = world();
+    afterFirstAction(run, w.busy, w.changes);
+    firstActionDone();
+    for (let k = 0; k < 5; k++) {
+      vi.advanceTimersByTime(REST_MS - 100);
+      // (a key typed, nothing left under way: the stretch starts again)
+      w.set(false);
+    }
+    expect(run).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(REST_MS);
     expect(run).toHaveBeenCalledTimes(1);
   });
 
@@ -58,10 +73,10 @@ describe("what waits for the user's first action (Meno's question about keeping 
     w.set(true);
     afterFirstAction(run, w.busy, w.changes);
     firstActionDone();
-    vi.advanceTimersByTime(AFTER_ACTION_MS * 10);
+    vi.advanceTimersByTime(REST_MS * 10);
     expect(run).not.toHaveBeenCalled();
     w.set(false);
-    vi.advanceTimersByTime(AFTER_ACTION_MS);
+    vi.advanceTimersByTime(REST_MS);
     expect(run).toHaveBeenCalledTimes(1);
   });
 
@@ -70,12 +85,12 @@ describe("what waits for the user's first action (Meno's question about keeping 
     const w = world();
     afterFirstAction(run, w.busy, w.changes);
     firstActionDone();
-    vi.advanceTimersByTime(AFTER_ACTION_MS / 2);
+    vi.advanceTimersByTime(REST_MS / 2);
     w.set(true);
-    vi.advanceTimersByTime(AFTER_ACTION_MS * 10);
+    vi.advanceTimersByTime(REST_MS * 10);
     expect(run).not.toHaveBeenCalled();
     w.set(false);
-    vi.advanceTimersByTime(AFTER_ACTION_MS);
+    vi.advanceTimersByTime(REST_MS);
     expect(run).toHaveBeenCalledTimes(1);
   });
 
@@ -85,7 +100,7 @@ describe("what waits for the user's first action (Meno's question about keeping 
     const stop = afterFirstAction(run, w.busy, w.changes);
     firstActionDone();
     stop();
-    vi.advanceTimersByTime(AFTER_ACTION_MS * 10);
+    vi.advanceTimersByTime(REST_MS * 10);
     expect(run).not.toHaveBeenCalled();
   });
 });

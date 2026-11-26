@@ -537,6 +537,11 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   bonds stop so short of a label, and of nothing else - two methyls'
   ends point apart. A heteroatom's letter faint in a picture, or not
   traced, would otherwise leave its ring open with nothing said.
+- **A label shown one way and read another**: read from a picture, NC
+  with its bond at the N (right of the bond, or upright) is read as a
+  nitrile, as NC typed is, and the atom says it may be an isocyanide.
+  ONO2 left of its bond is read as O-O-N=O, and the atom says it may be
+  a nitrate, which is written O2NO on that side.
 - **Its letters traced** (2026-11-18): a picture holds no text, so its
   letters are traced too and read by the matcher, as a PDF's letters
   drawn as outlines are (*Letters drawn as outlines*). Where a PDF writes
@@ -605,9 +610,15 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
 
 ### Markdown
 
-A text whose name ends `.md` or `.markdown` is read as what it says, not
-as its marks (the maintainer asked that Markdown files open formatted, to
-be read).
+A text is Markdown when the file it came from was - opened or dropped,
+its file's name ending `.md` or `.markdown` - and is read as what it says,
+not as its marks (the maintainer asked that Markdown files open formatted,
+to be read). The text keeps that as its own, saved with it, copied and
+pasted with it: its name does not decide, so a Markdown text named "Aim" is
+read formatted, and one named "x.md" that came from plain text is not. A
+new text (*New text*) is plain text. Exported, a Markdown text whose name
+has no `.md` is suggested a name ending `.md`, so that it opens formatted
+again.
 
 - **As CommonMark 0.31.2 reads it, with GitHub's tables, task lists,
   strikethrough and autolinks** (GitHub Flavored Markdown 0.29, its
@@ -1594,7 +1605,14 @@ it where it lies out of view.
   Me: a carbon, the Me left to the line that runs into it; and an end by both ends of a bond shorter than ends lie
   apart where they meet - a hash to an H set close - meets the nearer);
   where a bond points into a
-  word (one so short both its ends lie in the word's box, its other end
+  word within a third of a bond - for a word that reads as an element's
+  label, its hydrogens with it, a bond as long as its letters say one is
+  drawn, 1.4 times their size, where the drawing's lines measure its
+  bonds under 0.7 of that: a drawing whose every bond runs
+  between labels, each cut back at both ends, measures its bonds short.
+  An agent written large by a scheme's arrow, a chart's number by
+  its tick, a legend's word, a group's name keep the drawing's own
+  (2026-11-20) - (one so short both its ends lie in the word's box, its other end
   coming to another label - a metal's - at the end nearer its element;
   of two it comes by, the nearer, unless it points away from that one and
   into the other - an H set under the NH it goes to)
@@ -1626,7 +1644,23 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A number set smaller than the
+  H3N left outside the box - is no one's. Two labels set close - a group's
+  name by an atom's, Me by an O - are two only where the bonds say so, and one
+  word where they do not: a word is cut at a capital where both pieces read,
+  one a group's name and the other an atom's label (neither a lone H), and two
+  different FREE bond ends come to it - the end of a bond as drawn, at which no
+  other bond ends: where two bonds meet at an angle is a corner, a carbon, never
+  a label's bond, while the two lines of a double bond, side by side, are one
+  bond's end and a hash's marks are no bonds, the hash one - each counted
+  for the piece it is nearer, one for each; and a cut is kept only where each
+  piece is an atom with a bond of its own in what is read, else the word is read
+  whole again - so that each is an atom with a bond of its own: an ether or an
+  ester has its one bond at the O, OMe, OAc and OPMB are one label, however
+  near another bond passes. Cut where the size - a part at nine tenths of the
+  other's or less - or the line - a part set off the other's by a twelfth of
+  its size or more - show it too, the atoms say nothing; cut by the bonds alone,
+  both say so; no bond at both is one word, as MeOH is. The
+  cut comes before the number rule: Me7OH is Me7 and OH. A number set smaller than the
   label's letters, after the first of them, is an atom's number - the small
   atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
   the label (2026-11-13), by these rules: an atom's number stands at the END of its label - a small digit with a letter of the label after it is never one (inside a label it is a count, or the mass number of the letter after it: CO2Me, NH4Cl, O13CH3), each run judged on its own, primes after it no letters. (1) After the name of a point of
@@ -1677,6 +1711,28 @@ it where it lies out of view.
   row each by the one before (three K+). A word written as a compound's
   number - 1, 12b, 3', (4) - is no atom's label, however close under a
   bond it is set.
+- **A dative bond** (`dativeArrows`, lib/figure/read; 2026-11-20): an
+  arrow from the donor to the acceptor, as Meno draws one - a line no
+  longer than a bond and a fifth (the arrow as a whole no shorter than
+  0.15 of one), a small filled head at its end (no
+  longer than half a bond, nor than three times as wide; its base at the
+  line's end, its point on along the line) and, in some styles, a dot at
+  the line's tail. It is one dative bond, from the atom at its tail to
+  the atom at its point (each within half a bond, a label measured from
+  its box): never a bond and a wedge, nor a scheme's arrow. A word at
+  either end is an atom alone, as an ion is - an NH3 lending its pair to
+  a platinum - for the arrow to bond. It takes none of either atom's
+  valence, as the core counts one, but two of a carbon's: an NH3 keeps
+  its three hydrogens, a BH3 by an amine its three. An arrow with an atom
+  at one end only is no bond, and that atom says so: "A dative bond's
+  arrow meets it, with no atom read at its other end: read as no bond."
+  A wedge bond is long for its width; a scheme's arrow is longer. In a
+  picture, such an arrow between two labels is traced as one piece; it
+  is its line and its head (`arrowOf`, lib/figure/trace) where its ink,
+  free at both ends and no longer than a bond and a fifth, swells to
+  twice the figure's line and thins again at both ends - at once on its
+  line's side, steadily to its point on the other - and its line is as
+  thin as the figure's lines. A wedge never thins again at its wide end.
 - **What stands alone and is no structure** (`withoutStrays`): a point with
   no label and no bond, and a line alone - single, double or triple, both
   its ends bare, no other bond at either - more than a fifth off the
@@ -1689,8 +1745,17 @@ it where it lies out of view.
   "A triple line standing alone was not read as ethyne."): a bare line
   that long in a figure is a dash, a minus, a rule or a letter, a bare
   triple line a sign of equivalence or a separator, and an ethane or an
-  ethyne is all but never drawn so. A line bonded to anything is read as
-  before. What lies within one of the figure's pictures stays, for what is
+  ethyne is all but never drawn so. A long straight line alone is no chain
+  either, though it is drawn in pieces end to end: two or more single
+  lines in one straight line (no atom off it by more than a tenth of a
+  bond), joined to nothing else, with no label, wedge, hash or second line
+  on any - a table's rule drawn cell by cell, or broken where a column
+  starts - is left out, so the bold headings over it are no compound's
+  numbers. A chain of carbons is drawn bent at each atom; what is drawn
+  straight, an alkyne's or an allene's, has its second lines and is read
+  as before, as is a line with a label at an end (H3C-CH3, Cl-Cl). A line
+  bonded to anything is read as before. What lies within one of the
+  figure's pictures stays, for what is
   drawn over a picture, below; and a picture traced from its pixels keeps
   all of it, its reading saying each small piece (2026-11-20). (Ruled in
   review, 2026-11-18.)
@@ -1908,7 +1973,9 @@ being arrows.
   its point it is under 0.6 as wide as at its widest (a triangle is a
   quarter). A filled disk a bond runs into - an atom marked, as a scope
   table marks where its compounds differ - is as wide there as 0.87 of
-  it, and no head; nor is a letter drawn as its outline, round as a C or
+  it, and no head; nor is a dative bond's arrow, an atom at each end (a
+  letter, or another line's end) - the structure's bond, *A dative bond*
+  (2026-11-20); nor is a letter drawn as its outline, round as a C or
   an O is, by a bond's end (2026-11-20).
   An arrow drawn as one filled outline, its line and its head in one
   shape, is read by how wide it is along its length, measured from its
@@ -2108,8 +2175,15 @@ mention a number, and the card.
 
 - **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
   word of a figure - drawn in it, or the page's own words within it - of a
-  compound number's shape (12, 3a, 12b, 7', in parentheses or not:
-  `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
+  compound number's shape (12, 3a, 12b, 7', in parentheses or not; a
+  Roman numeral of two letters or more, IV,
+  XII - a lone I, V or X is an element's or a variable's; a number with its
+  enantiomer's, racemate's or rotation's mark, ent-21, rac-3, (+)-12, its
+  sign and dash written as typed, (-)-12 for one set with a minus or an en
+  dash (2026-11-20); a supporting information's, S3, S14a, only where set
+  bold, as a page's number (S14) and an excited state's are set
+  plain (2026-11-20): `labelText`), lying within a bond of a structure -
+  of the box
   round all of it, as a number is set under a structure as a whole, however
   its lowest bonds lie - under or over it (its middle within the
   structure's breadth) or beside it (within its height); where two
@@ -2126,11 +2200,36 @@ mention a number, and the card.
   line's first share of its box, as many of its characters - but not
   where another number of that shape follows the comma with a comma of
   its own: a list of atoms' locants ("6', 8a', 11'") or a table's
-  ("2, 4, 5"). It is the
+  ("2, 4, 5"). The figure's own drawn words are read so line by line
+  (`numbersIn`): a series of lines under one structure, each its number;
+  a run set bold within a line, its letters' typeface bold and the rest
+  plain ("R = Me, 14, 41%"), that number; each lying its line's share of
+  the words' box. A number whose line sets its yield after it - a comma,
+  then a percentage - may lie up to two bonds from its structure, as a
+  scope table sets them (2026-11-20); a bare number stays within one: an
+  NMR figure's atoms' locants, beside their shifts, lie further. Such a
+  number lies under its own structure: one lying over the nearest
+  structure, and under another within its reach, is the one's it lies
+  under - a scope table's row of numbers, set under one row of structures
+  and a little nearer the next row's tops (2026-11-20). A
+  second number with its own yield on the line, after the structure's
+  ("8, 72%  S3, 90%"), is another compound's - one made beside it or
+  brought back - and none of the structure's, as a second number set bold
+  within one line is (2026-11-20). A
+  label's script - the 2 of an NH2, the 1 or 2 of an R1 or R2 - set
+  within the label's box past its first letter or against its right
+  side, smaller than the label and its foot no higher than the label's
+  middle, is none, as no compound's number is set so. A structure read
+  that reads the word as an atom's label - a number an arrow's tail ends
+  at, read as an atom bonded to the arrow - is passed over, and the word
+  is the nearest other structure's (2026-11-20). It is the
   nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
-  height: a superscript, a footnote's mark) is none, and a structure not
+  height: a superscript, a footnote's mark) is none - their usual height
+  measured of its words alone, not of a structure's atoms' labels set as
+  the page's own letters: an OH set larger than the one line of words under
+  its structure would make that line's number seem a superscript, and a structure not
   read takes none. Written as Meno writes it: its parentheses and spaces
   set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
 - **Each PDF's index** (`utils/compoundIndex`): each number, and every
@@ -2154,7 +2253,16 @@ mention a number, and the card.
   a compound ("compound 12", "products 3, 4 and 5": compound, product,
   intermediate, substrate, adduct, derivative, past other numbers and "and",
   "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
-  with ⌥ (Alt) held, every number of that shape is.
+  so is a display item's number, however set: after the word naming a
+  scheme, a figure (Fig.), a chart, a table or an equation (eq), singular
+  or plural, past other numbers and "and", "or", "to" within the sentence
+  ("Scheme 4" in a caption, set bold; "Schemes 2 and 3", "Figures 1-3"),
+  but not one set otherwise than the item's first number ("Scheme 1, 4a",
+  its 4a bold);
+  with ⌥ (Alt) held, every number of that shape is. A number with its
+  rotation's mark before it, (+)-12, is taken with its mark - its
+  parentheses, sign and en dash are no word's letters - and asked whether it
+  is set as one by the number alone (2026-11-20).
 - **The card** (`components/CompoundCard`): the pointer resting on a number
   mentioned (350 ms) whose structure the PDF's figures number, a calm card
   by its word - over its line, covering only what has been read, its left
@@ -2192,7 +2300,9 @@ mention a number, and the card.
   too small - its word's box taken through the view to the window. Not on a
   structure of a figure, which is the structure's own, as in the column. As
   the view moves, the card goes - its word is no longer where it stood -
-  and comes again by the word's new place once the pointer rests there. ⌥
+  and comes again by the word's new place once the pointer rests there; so
+  too in the column, scrolled or zoomed by a hand (`utils/compoundLens`
+  `lensGoesWhenMoved`), the card eased out as when the pointer leaves. ⌥
   pressed or let go over a number reads it again, in both.
 
 ### A picture read (part B, built 2026-10-11)

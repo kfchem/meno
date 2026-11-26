@@ -712,7 +712,18 @@ one C=O onto the lattice at the other's cost.
     a lipid with its carbonyl on the right and its tail to the left; an
     acid's C=O points up - at the end of a chain or on an aromatic ring,
     in its plane; one on a saturated ring goes where the ring's stereo
-    puts it (penicillin's points down);
+    puts it (penicillin's points down); and so does a chain's own C=O -
+    a ketone's, an ester's, an amide's, the chain running on through its
+    carbon - straight up wherever the zigzag lets it (GR-3.2.2, where
+    below is acceptable): butanone's, methyl butanoate's. Where two cannot
+    both be up (hexane-2,5-dione) one is down, the chain still a zigzag -
+    one laid level by bending the chain counts as no more up - and which
+    is the canonical order's; where an acid's and a ketone's cannot both
+    be (levulinic acid, 2-oxoglutaric acid), the acid's is up and the
+    ketone's down, the acid's never laid level for it. An acid with no
+    such C=O on its chain - a fatty acid, folded or not - is drawn as
+    before. Only a C=O is
+    counted so: a C=N, a C=C or an S=O branch goes where the rest puts it;
   - peptides from N-terminus to C-terminus, left to right, as their
     sequences are written, the backbone carrying straight on through each
     alpha carbon and the side chains branching off; an amino acid then
@@ -725,7 +736,8 @@ one C=O onto the lattice at the other's cost.
   prostaglandin's two chains from its ring, both running off to the right
   - has its carboxyl end above its tail: read from the carboxyl first, as
   arachidonic acid is drawn and as IUPAC sets prostane, the ring on the
-  left, the chain with the acid above the other.
+  left, the chain with the acid above the other; an ester's so too, as
+  its acid is (methyl arachidonate).
 
 ### Sugars and nucleosides
 
@@ -816,7 +828,28 @@ the right (TBSO, IUPAC GR-2.3.3, GR-2.1.6), rightward otherwise - and from its b
 where it has several, as a ring's atom has: leftward where they come in
 from the right all together, none leaving to the left (an NFmoc at a
 ring's lower left reads FmocN, away from the ring); a name of one unit
-(TMS, Ph) so is set before such a bond, its last letter on the atom. On a bond within 35
+(TMS, Ph) so is set before such a bond, its last letter on the atom.
+Whether its bonds come in from the right is one test for every reader
+of a label by its side (`names.ts` `bondsFromRight`): past 10 degrees
+from upright, none leaving to the left. A label is kept as read outward
+from its bond, its first symbol bonded, whichever way it is shown: a
+pseudohalide's NCO, NCS and NCSe are the iso forms, N bonded (an isocyanate,
+an isothiocyanate, an isoselenocyanate - NCS alone is N-chlorosuccinimide,
+the reagent), and CN, OCN, SCN and SeCN a nitrile, a cyanate, a thiocyanate
+and a selenocyanate, so that NCO left
+of its bond is shown OCN, its N at the bond - and NCS SCN, its N at the
+bond, SCN NCS, its S there, each turned symbol by symbol (Se one symbol:
+NCSe is shown SeCN, SeCN NCSe; `abbreviations.ts` `reversedUnits`). NC typed is CN as drawn on a
+bond's left, a nitrile (the maintainer, 2026-10-11). Text read off a picture is a label as shown, and is read
+by its side: left of its bond, outward from it first (NCO there a
+cyanate, O bonded: GR-2.1.6; NCSe there a selenocyanate, Se bonded,
+turned symbol by symbol where its units would split the Se). NC read off
+a picture is CN, as typed, on either side; right of its bond or upright,
+where its N is at the bond and it shows an isocyanide, the atom is unsure
+and says it may be one. ONO2 left of its bond is read outward from it,
+O-O-N=O, and the atom says it may be a nitrate (written on that side, a
+nitrate is O2NO). A file's alias is a name, not its display,
+and is read as written on either side. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
 as there is space - the usual way where both have as much; the drawing
@@ -1147,7 +1180,11 @@ round, as elements either).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule). The structure is grown with its blades
+  P, is the rest of the molecule) - and only to a ring that carries nothing
+  but its bond to the atom: a tolyl's or a mesityl's ring, turned, would
+  state a configuration of hindered rotation, which it does not have (GR-4.3.6,
+  which rules it out on such a ring; ST-1.7), and lies flat, its crowding
+  cleared the other ways. The structure is grown with its blades
   so turned from the start, at each angle, as well as flat, and every
   start is set right and measured alike: grown flat, four PPh₃ round a
   metal lie phenyl on phenyl in pairs, every frame the same drawing

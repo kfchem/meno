@@ -18,7 +18,7 @@ const water = (dx: number): Omit<Molecule3D, "id" | "at"> =>
 /** A Filter (step 1; its sets 2 and 3) that gave two waters, wired on into an Energy step (4): its kept set held off the page. */
 function page(): WorkspaceDocument {
   let doc = addStep(emptyWorkspaceDocument(), "filter", 0, 0);
-  doc = addStep(doc, "energy", 300, 0, {}, "xtb");
+  doc = addStep(doc, "energy", 300, 0, {}, "tightbind");
   doc = placeResults(doc, doc.steps![0], { molecules: [water(0), water(3)], rest: [], holds: "molecules" } as unknown as RunResults, W);
   return connect(doc, { set: 2 }, 4);
 }

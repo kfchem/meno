@@ -61,7 +61,7 @@ export function inScope(d: WorkspaceDocument, scope: Scope): InScope {
     structureAtoms,
     molecule: lying.molecules,
     picture: lying.pictures,
-    text: (d.texts ?? []).flatMap((t) => (t.at && !t.of && within(sheetMiddle(t.at, t.text, t.name, pointOf(t))) ? [t.id] : [])),
+    text: (d.texts ?? []).flatMap((t) => (t.at && !t.of && within(sheetMiddle(t.at, t.text, !!t.markdown, pointOf(t))) ? [t.id] : [])),
     pdf: (d.pdfs ?? []).flatMap((p) => (within(setMiddle(pdfBounds(p))) ? [p.id] : [])),
     arrow: d.arrows.flatMap((a) => (within(a) ? [a.id] : [])),
     plus: d.pluses.flatMap((p) => (within(p) ? [p.id] : [])),

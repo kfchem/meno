@@ -36,7 +36,7 @@ import { canWire, entryOnPage, givesOf, inputOf, newestWire, sourcesInto, stateO
 import { bindable } from "../../../../lib/boundOptions";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { cardHighOf, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { cardHighOf, exitsOf, howOf, inputsOf, kindInfo, optionsOf, optionsTaking } from "../workflow/kinds";
 import { cardFrameOf, exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
@@ -1207,7 +1207,10 @@ export default function Workflow2D() {
       const doer = doerOf(s);
       // (an Energy diagram's: lists of what comes into its Levels)
       const diagram = s.kind === "energy-diagram";
-      const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
+      // (Duplicates' on structures drawn: without its mirror images, which identity decides - kept for when molecules in 3D come in again)
+      const into = info.notOnDrawn ? wiresInto(flow, s.id)[0] : undefined;
+      const onDrawn = into ? givesOf(flow, into.from) === "structures" : false;
+      const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : onDrawn ? optionsTaking(s.kind, stepOptions(s), "structures") : stepOptions(s);
       const own = diagram ? diagramValues(takes, s.options) : s.options;
       // (Add's: its formula, the number wired into its Number with it, where one is)
       const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined, s.bound);
@@ -1266,7 +1269,7 @@ export default function Workflow2D() {
             kinds={kindsOf(byOf(s)).map((k) => ({ kind: k, name: kindInfo(k).name }))}
             runs={runRows(s)}
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
-            onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
+            onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : onDrawn ? { ...s.options, ...values } : values })}
             binds={openStep === s.id ? bindsOf(s, flow, (bound) => store.getState().updateStep(s.id, { bound })) : undefined}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
             asks={!!optionsNeed(s)}

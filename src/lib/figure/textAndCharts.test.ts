@@ -175,7 +175,8 @@ describe("withoutStrays", () => {
   const at = (x: number, y: number, more: Partial<ReadAtom> = {}): ReadAtom => ({ x, y, ...more });
 
   it("leaves out a point with no label and no bond, and a bare line alone not a bond long; keeps the rest, its bonds renumbered", () => {
-    const atoms = [at(0, 0), at(10, 0), at(20, 0), at(100, 100), at(200, 0), at(230, 0), at(300, 0, { label: "O" }), at(300, 50), at(330, 50)];
+    // (the chain kept bent at its middle atom, as a chain is drawn: a straight one alone is a rule's pieces, left out - below)
+    const atoms = [at(0, 0), at(10, 5), at(20, 0), at(100, 100), at(200, 0), at(230, 0), at(300, 0, { label: "O" }), at(300, 50), at(330, 50)];
     const bonds = [
       { a: 0, b: 1, order: 1 as const },
       { a: 1, b: 2, order: 1 as const },
@@ -185,7 +186,7 @@ describe("withoutStrays", () => {
     const kept = withoutStrays(atoms, bonds, 10);
     expect(kept.atoms.map((a) => [a.x, a.y])).toEqual([
       [0, 0],
-      [10, 0],
+      [10, 5],
       [20, 0],
       [300, 0],
     ]);
@@ -196,7 +197,7 @@ describe("withoutStrays", () => {
   });
 
   it("counts a bare single or triple line alone a bond long, left out; keeps a double one, said; a line bonded on is as it was", () => {
-    const atoms = [at(0, 0), at(10, 0), at(100, 0), at(109, 0), at(200, 0), at(211, 0), at(300, 0), at(310, 0), at(320, 0), at(400, 0), at(410, 0, { label: "O" })];
+    const atoms = [at(0, 0), at(10, 0), at(100, 0), at(109, 0), at(200, 0), at(211, 0), at(300, 0), at(310, 5), at(320, 0), at(400, 0), at(410, 0, { label: "O" })];
     const bonds = [
       { a: 0, b: 1, order: 1 as const },
       { a: 2, b: 3, order: 2 as const },
@@ -217,6 +218,27 @@ describe("withoutStrays", () => {
     expect(withoutStrays(kept.atoms, kept.bonds, 10).bonds[0].unsure).toEqual([LONE_DOUBLE]);
     // (none left out: the lines said all the same, none counted)
     expect(withoutStrays(atoms.slice(2, 4), [{ a: 0, b: 1, order: 2 }], 10)).toEqual({ atoms: atoms.slice(2, 4), bonds: [{ a: 0, b: 1, order: 2, unsure: [LONE_DOUBLE] }], lone: 0, triples: 0 });
+  });
+
+  it("leaves out bare single lines end to end in one straight line alone - a rule's pieces - not one bent, labelled, doubled or bonded on", () => {
+    // (by hand, bond 10: 0-10-20-30 straight, its third atom 0.5 off - under a tenth of a bond - left out, uncounted; 100-110-120 bent at 110 by
+    //  5, half a bond, kept; 200-210-220 straight with an O at its end, kept; 300-310-320 straight with its second bond a triple, kept)
+    const atoms = [at(0, 0), at(10, 0), at(20, 0.5), at(30, 0), at(100, 0), at(110, 5), at(120, 0), at(200, 0), at(210, 0), at(220, 0, { label: "O" }), at(300, 0), at(310, 0), at(320, 0)];
+    const bonds = [
+      { a: 0, b: 1, order: 1 as const },
+      { a: 1, b: 2, order: 1 as const },
+      { a: 2, b: 3, order: 1 as const },
+      { a: 4, b: 5, order: 1 as const },
+      { a: 5, b: 6, order: 1 as const },
+      { a: 7, b: 8, order: 1 as const },
+      { a: 8, b: 9, order: 1 as const },
+      { a: 10, b: 11, order: 1 as const },
+      { a: 11, b: 12, order: 3 as const },
+    ];
+    const kept = withoutStrays(atoms, bonds, 10);
+    expect(kept.atoms.map((a) => a.x)).toEqual([100, 110, 120, 200, 210, 220, 300, 310, 320]);
+    expect(kept.bonds).toHaveLength(6);
+    expect([kept.lone, kept.triples]).toEqual([0, 0]);
   });
 
   it("keeps a point alone that has a label, a charge drawn by it, or a radical's dot", () => {

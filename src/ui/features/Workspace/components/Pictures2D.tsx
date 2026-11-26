@@ -25,6 +25,8 @@ import type { PictureFrom, PictureItem } from "../store/types";
 import { pictureBytes } from "../../../../lib/picture/held";
 import { isFilm } from "../../../../lib/picture/image";
 import { filmTexture, textures, type Shared } from "./pictureTextures";
+import { matteMaterial, matteUniforms } from "./matteMaterial";
+import type { Matte } from "../../../../lib/picture/matte";
 import { NOT_HAD_COLOR, NOT_HAD_CROSS } from "./notHadCross";
 import { useNotHad } from "../../../../lib/doc/notHad";
 import { ALPHA, COLORS } from "../../../theme/colors";
@@ -378,7 +380,8 @@ const Picture = memo(function Picture({
       >
         {/* (a material of its own once decoded: one made without a picture is drawn without one) */}
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
-        {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
+        {/* (a film on a transparent background: its alpha from its video's other half, the page seen through it) */}
+        {texture && p.matte ? <MatteMaterial texture={texture} matte={p.matte} /> : texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
       {notHad && !texture && (
         <lineSegments geometry={NOT_HAD_CROSS} scale={[p.w, p.h, 1]} position={[0, 0, Z_STEP / 4]}>
@@ -390,6 +393,23 @@ const Picture = memo(function Picture({
     </group>
   );
 });
+
+/** A film on a transparent background's material (./matteMaterial): made once for its texture, its halves set as its video's size comes to be known. */
+function MatteMaterial({ texture, matte }: { texture: THREE.Texture; matte: Matte }) {
+  const material = useMemo(() => matteMaterial(texture, matte), [texture, matte]);
+  useEffect(() => () => material.dispose(), [material]);
+  const video = texture.image as HTMLVideoElement | undefined;
+  const w = video?.videoWidth ?? 0;
+  const h = video?.videoHeight ?? 0;
+  useEffect(() => {
+    if (!(w > 0 && h > 0)) return;
+    const at = matteUniforms(matte, w, h);
+    material.uniforms.colourAt.value = at.colourAt;
+    material.uniforms.alphaAt.value = at.alphaAt;
+    material.uniforms.inset.value = at.inset;
+  }, [material, matte, w, h]);
+  return <primitive key="matte" object={material} attach="material" />;
+}
 
 /** The light round a picture (Picture's), coming as it is `on` and going as it is not - `out` called once gone - its band the same width on the screen at any zoom. */
 function LightRound({ p, on, out }: { p: PictureItem; on: boolean; out: () => void }) {

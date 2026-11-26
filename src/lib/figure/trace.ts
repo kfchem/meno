@@ -62,6 +62,14 @@ const WEDGE_NARROW = 0.5;
  * straight line's fit: at 300 dpi a wedge's widths are measured in bins a line wide, the pixels' grid making them uneven by a fifth or more.
  */
 const WEDGE_EVEN = 0.3;
+/**
+ * A short line, free at both ends, whose ink swells to at least `WEDGE_WIDE` of the figure's line inside it and thins again to
+ * `ARROW_THIN` of that at both of its ends - steadily on one side, a head's point; at once on the other, its line - is a line with a
+ * filled head: a dative bond's arrow drawn between two labels, traced as one piece. No wedge narrows again at its wide end, nor a line
+ * swells inside. It is at most `ARROW_LONG` of a bond, as such an arrow is (lib/figure/read `dativeArrows`).
+ */
+const ARROW_THIN = 0.6;
+const ARROW_LONG = 1.2;
 /** A patch smaller across than this share of a bond is a bar, a dot or a small letter, not lines. */
 const SMALL = 0.3;
 /** A patch smaller than this share of a bond, all of its pieces shorter than this other share, and joined, bent or closed as a letter's strokes are, is a letter. */
@@ -732,6 +740,37 @@ function widthsAlong(ink: Ink, patch: Int32Array, own: number, a: Point, b: Poin
   return out;
 }
 
+/**
+ * How wide a line is drawn along it, a pixel at a time: in each step along it the ink within `reach` of it, by the paper it covers there -
+ * no step's width counting a row of pixels twice, as steps a pixel and a bit long do.
+ */
+function widthsFine(ink: Ink, patch: Int32Array, own: number, a: Point, b: Point, reach: number): { t: number; w: number }[] {
+  const { width, height, cover } = ink;
+  const l = dist(a, b);
+  const bins = Math.floor(l);
+  if (bins < 1) return [];
+  const size = l / bins;
+  const u = { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+  const [sum, area] = [new Float64Array(bins), new Float64Array(bins)];
+  const x0 = Math.max(0, Math.floor(Math.min(a.x, b.x) - reach - 1));
+  const x1 = Math.min(width - 1, Math.ceil(Math.max(a.x, b.x) + reach + 1));
+  const y0 = Math.max(0, Math.floor(Math.min(a.y, b.y) - reach - 1));
+  const y1 = Math.min(height - 1, Math.ceil(Math.max(a.y, b.y) + reach + 1));
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const [dx, dy] = [x + 0.5 - a.x, y + 0.5 - a.y];
+      const t = dx * u.x + dy * u.y;
+      if (t < 0 || t >= l || Math.abs(dx * u.y - dy * u.x) > reach) continue;
+      const k = Math.min(bins - 1, Math.floor(t / size));
+      area[k]++;
+      const i = y * width + x;
+      if ((patch[i] === own || patch[i] < 0) && cover[i]) sum[k] += cover[i];
+    }
+  const out: { t: number; w: number }[] = [];
+  for (let k = 0; k < bins; k++) if (area[k]) out.push({ t: (k + 0.5) * size, w: (sum[k] / area[k]) * 2 * reach });
+  return out;
+}
+
 const median = (v: readonly number[]) => {
   const s = [...v].sort((p, q) => p - q);
   return s.length ? s[Math.floor(s.length / 2)] : 0;
@@ -872,6 +911,13 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: r
     const clear = (v: Vertex) => (v.free ? line0 : reach + line0);
     return widthsAlong(ink, patch, piece.patch, a, b, reach, clear(piece.a), clear(piece.b), line0);
   });
+  // (a short line free at both ends, measured finely - a pixel's bins - for a head on it: its line and its head, where it has one)
+  const headed = (i: number): { stroke: Stroke; head: Wedge } | null => {
+    const { piece, a, b, length } = laid[i];
+    if (!piece.a.free || !piece.b.free || piece.a === piece.b || length > ARROW_LONG * bond) return null;
+    const deepest = Math.max(...piece.inner!.map((q) => deep[Math.min(height - 1, Math.floor(q.y)) * width + Math.min(width - 1, Math.floor(q.x))] ?? 0));
+    return arrowOf(widthsFine(ink, patch, piece.patch, a, b, 2 * deepest + 2), a, b, line);
+  };
   const line = median(laid.flatMap((_, k) => (profiles[k].length ? [median(profiles[k].map((s) => s.w))] : []))) || line0;
   // (a line closed on itself, meeting nothing, cut at many points and round: a circle - told first, its many short pieces no bonds)
   const byPatch = new Map<number, number[]>();
@@ -973,6 +1019,13 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: r
       if (all.length) shapes.blobs.push({ pts: all, parts, box: boxOf(all), curved: true } satisfies Blob);
       continue;
     }
+    // (one line alone with a filled head on it: a dative bond's arrow - its line and its head, as a drawing's own are)
+    const arrow = own.length === 1 && !gone.has(own[0]) ? headed(own[0]) : null;
+    if (arrow) {
+      shapes.strokes.push(arrow.stroke);
+      shapes.wedges.push(arrow.head);
+      continue;
+    }
     // (one upright line alone, as tall as a letter, its ends free: an l, an I or a 1 - or a bond; told after the letters are known)
     if (own.length === 1 && !gone.has(own[0])) {
       const { a, b, piece } = laid[own[0]];
@@ -993,6 +1046,12 @@ export function tracePicture(pixels: Pixels, drop: readonly Box[] = [], known: r
       const { a, b } = laid[i];
       const s = profiles[i];
       const w = s.length ? median(s.map((q) => q.w)) : line;
+      const headed1 = headed(i);
+      if (headed1) {
+        shapes.strokes.push(headed1.stroke);
+        shapes.wedges.push(headed1.head);
+        continue;
+      }
       const wedge = s.length >= 3 ? widening(s, dist(a, b)) : null;
       if (wedge && Math.max(wedge.wa, wedge.wb) >= WEDGE_WIDE * line && Math.min(wedge.wa, wedge.wb) <= WEDGE_NARROW * Math.max(wedge.wa, wedge.wb)) {
         const [tip, base, wide] = wedge.wa < wedge.wb ? [a, b, wedge.wb] : [b, a, wedge.wa];
@@ -1177,6 +1236,37 @@ export function widening(s: readonly { t: number; w: number }[], l: number): { w
   const slope = median(slopes);
   const at0 = median(s.map((q) => q.w - slope * q.t));
   return { wa: Math.max(0, at0), wb: Math.max(0, at0 + slope * l) };
+}
+
+/**
+ * A line with a filled head, from its widths along it from `a` to `b` (`ARROW_THIN`): its line, from its tail to the head's base, as
+ * wide as it is drawn, and its head, its point at the far end; or null where the widths are not so - a wedge's, a line's.
+ */
+export function arrowOf(s: readonly { t: number; w: number }[], a: Point, b: Point, line: number): { stroke: Stroke; head: Wedge } | null {
+  if (s.length < 5) return null;
+  const peak = Math.max(...s.map((q) => q.w));
+  if (peak < WEDGE_WIDE * line || s[0].w > ARROW_THIN * peak || s[s.length - 1].w > ARROW_THIN * peak) return null;
+  // (how far it takes from its widest on each side to thin to `ARROW_THIN`: at once on its line's side, the head's base drawn square
+  //  across it; steadily on the head's, to its point. Near as far both ways - a swelling, a blot, a letter - no arrow)
+  let p = 0;
+  for (let k = 1; k < s.length; k++) if (s[k].w > s[p].w) p = k;
+  let [up, down] = [p, p];
+  while (up > 0 && s[up].w > ARROW_THIN * peak) up--;
+  while (down < s.length - 1 && s[down].w > ARROW_THIN * peak) down++;
+  const [rise, fall] = [s[p].t - s[up].t, s[down].t - s[p].t];
+  if (Math.max(rise, fall) < 1.5 * Math.min(rise, fall) + 1) return null;
+  const toB = fall > rise;
+  // (the head thinning on to its point, never widening again; the line, at least three steps of it, as thin as the figure's lines)
+  const head = toB ? s.slice(p, down + 1) : s.slice(up, p + 1).reverse();
+  if (head.some((q, k) => k && q.w > head[k - 1].w + 0.15 * peak)) return null;
+  // (the step where the line meets the head's base, partly of each, left out)
+  const shaft = toB ? s.slice(0, up) : s.slice(down + 1);
+  if (shaft.length < 3 || shaft.some((q) => q.w > 1.5 * line)) return null;
+  const l = dist(a, b);
+  const at = (t: number): Point => ({ x: a.x + ((b.x - a.x) * t) / l, y: a.y + ((b.y - a.y) * t) / l });
+  const base = at(s[p].t);
+  const [tail, point] = toB ? [a, b] : [b, a];
+  return { stroke: { a: tail, b: base, w: median(shaft.map((q) => q.w)) }, head: { tip: point, base, w: peak } };
 }
 
 /** Shapes traced in a picture's pixels laid on a page: each point `k` times as far from naught, then moved by `dx`, `dy` - as a picture's pixels are made a PDF page's points. */

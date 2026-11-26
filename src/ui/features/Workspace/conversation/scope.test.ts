@@ -78,7 +78,7 @@ describe("the card's room is never scope", () => {
   it("leaves out a text sheet and a set by their middles on the card too", () => {
     // (a sheet put where its middle is the point given)
     const sheet = (m: { x: number; y: number }) => {
-      const off = sheetMiddle({ x: 0, y: 0 }, "x", "notes.txt");
+      const off = sheetMiddle({ x: 0, y: 0 }, "x", false);
       return { id: 1, name: "notes.txt", text: "x", at: { x: m.x - off.x, y: m.y - off.y } };
     };
     const d = { ...pageAt(5), texts: [sheet({ x: 5, y: 7 })], nextTextId: 2 } as WorkspaceDocument;

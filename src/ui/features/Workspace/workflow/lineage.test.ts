@@ -95,7 +95,7 @@ describe("what an entry was made from", () => {
       connectStoreToDocument(store, doc);
       const molecules = Array.from({ length: n }, (_, k) => water(k, { madeOf: [`drawn#${k}`] }));
       doc.edit("run", (d) => {
-        const ran = addStep(d, "optimise", 0, 0, {}, "xtb");
+        const ran = addStep(d, "optimise", 0, 0, {}, "tightbind");
         return placeResults(ran, ran.steps![0], { molecules, rest: [], holds: "molecules" }, { extentOf });
       });
       const ws = readWorkspace(workspaceText(store.getState()))!;
