@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerLine, callJson, callSaid, exchangeRows, foundRows } from "./said";
+import { answerLine, callJson, callSaid, exchangeRows, foundRows, heardParagraphs } from "./said";
 import { NO_ROOM } from "./change";
 
 describe("what a tool call did, as the exchange says it", () => {
@@ -54,5 +54,15 @@ describe("what a call found, unfolded", () => {
   it("copies the call and what came of it as JSON, on asking", () => {
     expect(JSON.parse(callJson({ tool: "read", args: { id: "structure:1" } }, tool("read", { smiles: "CCO" })))).toEqual({ call: { tool: "read", args: { id: "structure:1" } }, answer: { ok: true, answer: { smiles: "CCO" } } });
     expect(JSON.parse(callJson({ tool: "list" }))).toEqual({ call: { tool: "list" } });
+  });
+});
+
+describe("a reply's words so far, by paragraph", () => {
+  it("parts them after each blank line, the blank line kept with the paragraph it ends: together, the words as they came", () => {
+    const text = "Methanol lies inside.\n\n- one\n- two\n\nThat is all";
+    expect(heardParagraphs(text)).toEqual(["Methanol lies inside.\n\n", "- one\n- two\n\n", "That is all"]);
+    expect(heardParagraphs(text).join("")).toBe(text);
+    // (as more comes, the paragraphs before the last are as they were)
+    expect(heardParagraphs(`${text} of it.`).slice(0, 2)).toEqual(heardParagraphs(text).slice(0, 2));
   });
 });

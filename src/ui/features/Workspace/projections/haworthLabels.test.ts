@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox } from "../../../../lib/chem/layout2d";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { createWorkspaceDocument } from "../document";
+import { createWorkspaceDocument, relayout } from "../document";
 import { editorLayoutOptions } from "../layoutOptions";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { seenPlaces } from "./chair";
 import { haworthDrawing } from "./haworth";
 import { HAWORTH_DOWN_LEAST, HAWORTH_UP_BEFORE, haworthLabelsStepped } from "./haworthLabels";
-import { layoutBonds } from "../layoutOptions";
+import { layoutAtomOf, layoutBond, layoutBonds } from "../layoutOptions";
+import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
+import { drawingLayout } from "../fileActions";
 
 // Labels inside a Haworth ring (docs/EDITOR-2D.md, the Haworth ring): every pair of labels up from the two front atoms, read against the
-// ring's bonds as drawn and each other, never worse than at main's 0.40; and a back atom's down label over a front atom's up label giving
-// way as it is typed.
+// ring's bonds as drawn and each other, never worse than at main's 0.40; a back atom's down label over a front atom's up label giving
+// way as it is typed; and a label read the way that clears it - HO, HOH2C, or OH, CH2OH - where the other way meets the drawing.
 
 const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE));
 const set = labelSetOf(opts);
@@ -91,7 +93,38 @@ function asMain(d: ReturnType<typeof ringWith>["d"], model: Model): Model {
 /** As the editor leaves it once the labels are typed: the step taken. */
 function stepped(model: Model): Model {
   const steps = new Map(haworthLabelsStepped(model, opts).map((s) => [s.id, s]));
-  return { ...model, atoms: model.atoms.map((a) => ({ ...a, ...(steps.get(a.id) ?? {}) })) };
+  return {
+    ...model,
+    atoms: model.atoms.map((a) => {
+      const st = steps.get(a.id);
+      if (!st) return a;
+      const { reads: _r, ...rest } = a;
+      return { ...rest, x: st.x, y: st.y, ...(st.reads ? { reads: st.reads } : {}) };
+    }),
+  };
+}
+
+/** A ring from the tool with labels at any of its atoms' free places, up or down, the group ids 50 on, in order. */
+function ringAt(size: 5 | 6, put: readonly (readonly [number, "up" | "down", Label])[]) {
+  const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
+  const atoms = [...d.atoms];
+  const bonds = [...d.bonds];
+  put.forEach(([k, kind, el], n) => {
+    const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
+    atoms.push({ id: 50 + n, x: p.place.x, y: p.place.y, r: 0.9, el } as Model["atoms"][number]);
+    bonds.push({ id: 250 + n, a: d.atoms[k].id, b: 50 + n, order: 1 } as Model["bonds"][number]);
+  });
+  return { d, model: { atoms, bonds } as Model };
+}
+
+/** The label's text as the page draws it. */
+function textOf(model: Model, id: number): string {
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const lay = layoutMolecule(model.atoms as never, layoutBonds(model.bonds, index) as never, opts, 40);
+  return lay.texts
+    .filter((t) => (t as { atom?: number }).atom === index.get(id))
+    .map((t) => t.text)
+    .join("");
 }
 
 describe("labels inside a Haworth ring", () => {
@@ -179,4 +212,138 @@ describe("labels inside a Haworth ring", () => {
     expect(st().model.atoms.find((a) => a.id === 51)!.el).toBe("C");
     expect(downOf()).toBe(0.39);
   });
+
+  it("are read the way that clears them, each on its full stem, where the other way meets a bond", () => {
+    // (ring, atom, up or down, label; the way it reads after; its text as drawn)
+    const cases = [
+      [6, 2, "up", "O", "left", "HO"],
+      [5, 2, "up", "O", "left", "HO"],
+      [5, 2, "up", "CH2OH", "left", "HOH2C"],
+      [5, 3, "up", "CH2OH", "right", "CH2OH"],
+      [5, 4, "down", "O", "left", "HO"],
+    ] as const;
+    for (const [size, k, kind, el, way, text] of cases) {
+      const { d, model } = ringAt(size, [[k, kind, el]]);
+      const name = `${size}: C-${k} ${kind} ${el}`;
+      expect(meetings(model).has(50), name).toBe(true);
+      const after = stepped(model);
+      const g = after.atoms.find((a) => a.id === 50)!;
+      expect(g.reads, name).toBe(way);
+      expect(textOf(after, 50), name).toBe(text);
+      expect(meetings(after).has(50), name).toBe(false);
+      // (the stem as the ring's proportions set it: C-2's OH no longer drawn at main's short stub)
+      expect(Math.abs(g.y - model.atoms.find((a) => a.id === 50)!.y), name).toBeLessThan(1e-9);
+      expect(Math.abs(g.y - d.atoms[k].y) / d.scale, name).toBeGreaterThan(0.5);
+    }
+  });
+
+  it("leaves a label that meets nothing as it reads: an OH up from C-3, a CH2OH down from C-5", () => {
+    expect(haworthLabelsStepped(ringAt(6, [[3, "up", "O"]]).model, opts)).toEqual([]);
+    expect(haworthLabelsStepped(ringAt(6, [[5, "down", "CH2OH"]]).model, opts)).toEqual([]);
+  });
+
+  it("meet nothing they do not meet where main draws them - any one or two labels at any free place of either ring, read as they read there", { timeout: 60000 }, () => {
+    for (const size of [6, 5] as const) {
+      const places = Array.from({ length: size - 1 }, (_, i) => i + 1).flatMap((k) => (["up", "down"] as const).map((kind) => [k, kind] as const));
+      const labels = ["O", "H", "CH2OH"] as const;
+      const sets = [
+        ...places.flatMap(([k, kind]) => labels.map((l) => [[k, kind, l] as const])),
+        ...places.flatMap((p, i) => places.slice(i + 1).flatMap((q) => labels.flatMap((a) => labels.map((b) => [[...p, a] as const, [...q, b] as const])))),
+      ];
+      for (const put of sets) {
+        const { d, model } = ringAt(size, put);
+        const name = `${size}: ${put.map(([k, kind, l]) => `${k}${kind}${l}`).join(" ")}`;
+        const now = meetings(stepped(model));
+        const was = meetings(asMain(d, model));
+        for (const id of now) expect(was.has(id), `${name}: ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("keeps the way a label reads in the same undo step as it is typed, and Clean-up's layout lets it go", () => {
+    const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1 });
+    const model: Model = { atoms: [...d.atoms], bonds: [...d.bonds] };
+    const p = seenPlaces(d, 2).find((q) => q.free.kind === "up")!;
+    model.atoms.push({ id: 50, x: p.place.x, y: p.place.y, r: 0.9, el: "C" } as Model["atoms"][number]);
+    model.bonds.push({ id: 250, a: d.atoms[2].id, b: 50, order: 1 } as Model["bonds"][number]);
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model, nextId: 1000 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    st().beginLabelEdit(50, "");
+    st().setLabelEditValue("OH");
+    st().commitLabelEdit("OH");
+    const g = () => st().model.atoms.find((a) => a.id === 50)!;
+    expect([g().el, g().reads]).toEqual(["O", "left"]);
+    expect(textOf(st().model, 50)).toBe("HO");
+    // (one undo: the label and the way it reads together)
+    doc.undo();
+    expect([g().el, g().reads]).toEqual(["C", undefined]);
+    doc.redo();
+    expect(g().reads).toBe("left");
+    // (laid out anew, it reads as its bonds decide)
+    const laid = relayout(doc.getState(), { atoms: [{ id: 50, x: g().x + 0.5, y: g().y }], bonds: [] });
+    expect(laid.model.atoms.find((a) => a.id === 50)!.reads).toBeUndefined();
+  });
+
+  it("are drawn on the page and in a picture the way they read, on a stem led out of a ring the tool put down, however it was led out", () => {
+    // (the ring put down by the tool at a page point - a ring of five by choosing it again there - and the stem led out of ring atom `k`
+    //  at its free place as the ring's drawing gives it: the ring atom's place plus the place's offset from that atom in the drawing,
+    //  which is where a double-click's bond (the next free place) and a drag's bond (the place nearest the pointer) both end; then the
+    //  label typed on the stem's end, as typing over it and the atom's Edit label both keep it)
+    const drawn = (size: 5 | 6, put: readonly (readonly [number, "up" | "down", string])[]) => {
+      const doc = createWorkspaceDocument();
+      const store = createEditorStore(doc);
+      connectStoreToDocument(store, doc);
+      const st = () => store.getState();
+      const at = { x: 12.3, y: -4.7 };
+      st().putHaworth(at);
+      if (size === 5) st().putHaworth(at);
+      const ring = st().model.atoms.filter((a) => a.z != null);
+      const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
+      const mid = (ps: readonly { x: number; y: number }[]) => ({ x: ps.reduce((t, q) => t + q.x, 0) / size, y: ps.reduce((t, q) => t + q.y, 0) / size });
+      const [dm, mm] = [mid(d.atoms), mid(ring)];
+      const ringAtom = (k: number) => ring.find((a) => Math.hypot(a.x - mm.x - (d.atoms[k].x - dm.x), a.y - mm.y - (d.atoms[k].y - dm.y)) < 1e-6)!;
+      const ids = put.map(([k, kind, text]) => {
+        const r = ringAtom(k);
+        const p = seenPlaces(d, k).find((q) => q.free.kind === kind)!;
+        const id = st().addAtomBonded(r.id, r.x + p.place.x - d.atoms[k].x, r.y + p.place.y - d.atoms[k].y, "C", 1)!;
+        st().beginLabelEdit(id, "");
+        st().setLabelEditValue(text);
+        st().commitLabelEdit(text);
+        return id;
+      });
+      const model = st().model;
+      const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+      // (the page: each structure laid out from the atoms as the canvas takes them)
+      const page = layoutByStructure(model.atoms.map((a) => layoutAtomOf(a)), model.bonds.map((b) => layoutBond(b, index.get(b.a)!, index.get(b.b)!)), opts, 40, structureLayouts());
+      // (a picture of it: Copy as picture, Export)
+      const picture = drawingLayout(model, { aromaticEnabled: false, aromaticRings: {} }, styleOf(DEFAULT_STYLE_CHOICE)).layout;
+      const textIn = (lay: { texts: readonly { text: string }[] }, id: number) =>
+        lay.texts
+          .filter((t) => (t as { atom?: number }).atom === index.get(id))
+          .map((t) => t.text)
+          .join("");
+      return ids.map((id) => [textIn(page, id), textIn(picture, id)].join(" | "));
+    };
+    // (ring, the labels typed in order - atom, up or down, text - and each label as the page and a picture draw it)
+    const cases = [
+      // (the OH up from the six-ring's right-hand front atom C-2: its H would lie on the bold edge to C-1 - HO, toward the ring's middle)
+      [6, [[2, "up", "OH"]], ["HO | HO"]],
+      // (the five-ring's, as the ring reads them alone: away from the steeply rising bond beside each)
+      [5, [[2, "up", "CH2OH"]], ["HOH2C | HOH2C"]],
+      [5, [[3, "up", "CH2OH"]], ["CH2OH | CH2OH"]],
+      [5, [[4, "down", "OH"]], ["HO | HO"]],
+      // (an OH up from C-3 meets nothing as it reads: left as it is)
+      [6, [[3, "up", "OH"]], ["OH | OH"]],
+      // (a CH2OH up from C-3 beside C-2's HO: read CH2OH it would run into the HO on the one row; HOH2C is the way that meets less,
+      //  and the HO stays HO)
+      [6, [[2, "up", "OH"], [3, "up", "CH2OH"]], ["HO | HO", "HOH2C | HOH2C"]],
+      // (the swap - C-2's CH2OH, then C-3's OH: no reading takes a meeting away, so each reads as its bonds decide)
+      [6, [[2, "up", "CH2OH"], [3, "up", "OH"]], ["CH2OH | CH2OH", "OH | OH"]],
+    ] as const;
+    for (const [size, put, want] of cases) expect(drawn(size, put), `${size}: ${JSON.stringify(put)}`).toEqual(want);
+  });
 });
+

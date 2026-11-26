@@ -100,6 +100,8 @@ export type NameGeometry = {
   elements: readonly string[];
   /** Each atom's H not drawn as atoms: a label's, written beside or under its symbol (OH), in a name's way as much as the symbol is. */
   hydrogens?: readonly number[];
+  /** Which way each atom's label reads where its one bond is upright, where it is put to (lib/chem/layout2d `Atom.reads`): HO or OH. */
+  reads?: readonly ("left" | "right" | undefined)[];
 };
 
 /**
@@ -127,6 +129,24 @@ export function hydrogenSpot(ways: readonly { x: number; y: number }[]): { x: nu
 /** How far, in radians, an atom's bonds leave the way `v` (a unit vector) clear: the angle to the nearest. */
 function clearOf(ways: readonly { x: number; y: number }[], vx: number, vy: number): number {
   return Math.min(...ways.map((w) => Math.acos(Math.max(-1, Math.min(1, w.x * vx + w.y * vy)))));
+}
+
+/**
+ * Whether a label's bonds come in from the right, so that it is read
+ * outward from them, leftward (IUPAC GR-2.1.6: TBSO): `ways`, from the
+ * label to each atom it is bonded to, all of them together past the label
+ * band's 10 degrees from upright, and none leaving to the left. One bond:
+ * that bond more than 10 degrees right of upright. The one test of a
+ * label's side - the page's names here, and every reader of a label as it
+ * is drawn.
+ */
+export function bondsFromRight(ways: readonly { x: number; y: number }[]): boolean {
+  const unit = ways.map((w) => {
+    const l = Math.hypot(w.x, w.y) || 1;
+    return { x: w.x / l, y: w.y / l };
+  });
+  const sum = unit.reduce((t, w) => ({ x: t.x + w.x, y: t.y + w.y }), { x: 0, y: 0 });
+  return unit.length > 0 && !unit.some((w) => w.x < -BAND) && sum.x > Math.hypot(sum.x, sum.y) * BAND;
 }
 
 /**
@@ -198,21 +218,27 @@ export function namesLaid(g: NameGeometry, L: number): Map<number, { left: boole
       const l = Math.hypot(w.x, w.y) || 1;
       return { x: w.x / l, y: w.y / l };
     });
-    const sum = ways.reduce((t, w) => ({ x: t.x + w.x, y: t.y + w.y }), { x: 0, y: 0 });
-    const fromRight = ways.length > 0 && !ways.some((w) => w.x < -BAND) && sum.x > Math.hypot(sum.x, sum.y) * BAND;
+    const fromRight = bondsFromRight(ways);
     out.set(a, place(a, fromRight));
-    if (d && Math.abs(d.x) <= len * UPRIGHT) either.push(a);
+    // (its one bond upright: either way reads - the way it is put to read, else the way that runs into less, below)
+    if (d && Math.abs(d.x) <= len * UPRIGHT) {
+      const put = g.reads?.[a];
+      if (put) out.set(a, place(a, put === "left"));
+      else either.push(a);
+    }
   }
   // (each label's H, where the drawing sets it)
   const spots: { x: number; y: number }[] = [];
   for (let b = 0; b < n; b++) {
     if (!labelled(b) || isName(g.elements[b]) || !((g.hydrogens?.[b] ?? 0) > 0) || !next[b].length) continue;
-    const h = hydrogenSpot(
-      next[b].map((c) => {
-        const d = Math.hypot(g.x[c] - g.x[b], g.y[c] - g.y[b]) || 1;
-        return { x: (g.x[c] - g.x[b]) / d, y: (g.y[c] - g.y[b]) / d };
-      }),
-    );
+    const ways = next[b].map((c) => {
+      const d = Math.hypot(g.x[c] - g.x[b], g.y[c] - g.y[b]) || 1;
+      return { x: (g.x[c] - g.x[b]) / d, y: (g.y[c] - g.y[b]) / d };
+    });
+    const spot = hydrogenSpot(ways);
+    // (a label put to read one way where its one bond is upright: HO, or OH)
+    const put = g.reads?.[b];
+    const h = put && ways.length === 1 && Math.abs(ways[0].x) <= Math.sin((10 * Math.PI) / 180) ? { x: put === "left" ? -0.5 : 0.5, y: 0 } : spot;
     spots.push({ x: g.x[b] + h.x * L, y: g.y[b] + h.y * L });
   }
   const runsInto = (a: number, box: Box) => {

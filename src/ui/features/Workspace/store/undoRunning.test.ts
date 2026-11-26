@@ -6,7 +6,7 @@ const asked = { stopped: [] as string[], removed: [] as string[] };
 vi.mock("../../../../lib/jobs", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/jobs")>()),
   stopJob: async (id: string) => void asked.stopped.push(id),
-  jobOf: async (id: string) => ({ id, plugin: "crest", program: "crest", state: "stopped", created: 0 }),
+  jobOf: async (id: string) => ({ id, plugin: "confsweep", program: "confsweep", state: "stopped", created: 0 }),
   removeJob: async (id: string) => void asked.removed.push(id),
   listJobs: async () => [],
 }));
@@ -22,7 +22,7 @@ function running() {
   connectStoreToDocument(store, doc);
   const st = () => store.getState();
   const set = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
-  const step = st().addStep("conformers", "crest", 10, 0);
+  const step = st().addStep("conformers", "confsweep", 10, 0);
   st().connect({ set }, step);
   const run = { at: 1, input: "k", options: {}, jobs: [{ id: "job-1", entries: [0], reads: [] }], kind: "conformers" as const };
   doc.amend((d) => setRunning(d, step, run), { unsaved: true });

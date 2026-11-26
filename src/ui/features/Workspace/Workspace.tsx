@@ -11,6 +11,8 @@ import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
 import { Vector3 } from "three";
 import type { MenuAnchor } from "./useMenuAt";
+import { menuHolds } from "./menuRoom";
+import { holdingCardOpen } from "./menuCards";
 import { documentOf, useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
@@ -71,12 +73,15 @@ import { canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, order
 import { isSkeleton, partOf } from "./utils/completeness";
 import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
+import { isMarkdown } from "../../../lib/text/markdown";
 import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
 import { setPdfTaker } from "../../views/pdfs";
 import { setPictureTaker } from "../../views/pictures";
 import { setFileTaker, type OpenedFile } from "../../views/files";
 import TextColumn from "./TextColumn";
+import PageEdge from "./PageEdge";
+import { cornerRight } from "../../pageCorner";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
@@ -114,7 +119,8 @@ import { useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
 import { style3dOf } from "./style3dOf";
 import { LARGE_ATOMS } from "./utils/largeDrawing";
 import { askToOpen } from "../../layouts/commands";
-import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
+import { bondsAt, chosenPath, frameOf, lookOf, notesOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
+import { madeRoom } from "./utils/fitExtent";
 import { movingAtoms, movingFor } from "./utils/edit3d";
 import { abbreviationOf } from "../../../lib/chem/abbreviations";
 import { numbersItemsFor } from "./utils/atomNumbersShown";
@@ -238,6 +244,7 @@ import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { newmanDrawing } from "./projections/newman";
 import { isProjection } from "./projections/projection";
 import { chairFromFlat } from "./projections/fromFlat";
+import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { flipOf } from "./projections/flip";
 import { addedName, notDrawnWhy } from "./chem/nameLookup";
 import { addedBox } from "./store/slices/modelSlice";
@@ -289,6 +296,7 @@ import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, 
 import { selectedBox } from "./utils/extent";
 import { drawnStructureBox, framesChipRoom, tiedCaptionOf } from "./utils/tiedCaptions";
 import type { CaptionOf } from "./store/types";
+import { shownWith } from "./utils/viewShow";
 
 function WorkspaceContent({
   active,
@@ -335,6 +343,8 @@ function WorkspaceContent({
 
   // the column over the canvas's right side, and the layer the page's HTML goes in, cut off where it begins
   const cover = useEditor((s) => s.cover);
+  // (filling the workspace, it leaves no corner of the page beside it: what keeps to that corner keeps to the canvas's)
+  const columnFilled = useEditor((s) => s.columnFilled);
   const [htmlLayer, setHtmlLayer] = useState<HTMLDivElement | null>(null);
   const guideStructure = useRef<HTMLDivElement>(null);
   // (where PDFs opened go: the middle of what is in view, as a paste - set once the events are known)
@@ -624,9 +634,14 @@ function WorkspaceContent({
           // clear of what is on the page - or, made again, where the one
           // made before stood
           const taken = takenOnPage(store.getState(), block.atoms, solids);
+          // (each with its chip under it and its notes' mark to its right: seen whole only with them - utils/fitExtent `madeRoom`)
+          const notes = Math.max(0, ...ms.map((m) => {
+            const placed = { ...m, id: 0, at: { x: 0, y: 0 } };
+            return notesOf(placed, solidOf(placed, look3d), lookOf(m)).length;
+          }));
           const row = replacing
             ? { at: rowFrom(turned, replacing.at), inView: true }
-            : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken);
+            : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken, madeRoom(notes));
           if ("box" in row) {
             solids.push(row.box);
             made3d = made3d ? { x0: Math.min(made3d.x0, row.box.x0), x1: Math.max(made3d.x1, row.box.x1), y0: Math.min(made3d.y0, row.box.y0), y1: Math.max(made3d.y1, row.box.y1) } : row.box;
@@ -652,8 +667,9 @@ function WorkspaceContent({
           replacing ? [replacing.id] : [],
           growths.length ? key : undefined,
         );
-        // (with no room for them in view, the view goes to them - along, or out as little as needed)
-        if (!allInView && made3d) store.getState().requestShow(made3d);
+        // (with no room for them in view, the view eases to take them in with the drawing they were made from - along, or
+        //  out as little as needed; where they are seen whole, it stays: utils/viewShow)
+        if (!allInView && made3d) store.getState().requestShow(shownWith(blocks.map((b) => boxOf(b.part)), made3d));
         if (!growths.length) return;
         // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
@@ -1220,6 +1236,8 @@ function WorkspaceContent({
         return r ? { width: r.width, height: r.height, cover: store.getState().cover } : null;
       },
       pan: (dx, dy) => store.getState().requestPan(dx, dy),
+      // (every menu, and every card a row opens where one was, counted: the view goes back once the last has shut - menuRoom)
+      hold: menuHolds(() => store.getState().requestPanBack()).hold,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store],
@@ -1240,7 +1258,7 @@ function WorkspaceContent({
     try {
       const out = (await outputOf(source)) ?? ((await findOutput(source)) ? await outputOf(source) : undefined);
       if (out) {
-        store.getState().addTexts([{ name: out.name, text: out.text, ...(source.path ? { path: source.path } : {}), of: { molecule } }]);
+        store.getState().addTexts([{ name: out.name, text: out.text, ...(source.path ? { path: source.path } : {}), ...(isMarkdown(out.name) ? { markdown: true as const } : {}), of: { molecule } }]);
         // (rising from its molecule into the column - docs/PDF.md, *A text*: this one, shown from another before)
         const shown = store.getState().textShown;
         if (shown != null) {
@@ -1707,6 +1725,9 @@ function WorkspaceContent({
   };
   // Export: the kind and its options asked in a card over the canvas, then the file's name
   const [exporting, setExporting] = useState<{ writers: Writer[]; from?: string; what: Holds; selected: number[]; part: { part: Drawn; ids3d: number[] } } | null>(null);
+  // (a card a menu's row opens holds the view where the menu had it, as the menu did: it goes back once the last of them has shut - menuRoom)
+  const cardOpen = holdingCardOpen({ ask3d, colourCard, coords, cornersCard, exporting, givingOrders, naming, pdfCard, protonating, rendering, inkMode, menu });
+  useEffect(() => (cardOpen ? menuAnchor.hold() : undefined), [cardOpen, menuAnchor]);
   // (a talk begun shuts Export's card and Render's: nothing over a talk, its keys the talk's)
   useEffect(() => {
     if (!talking) return;
@@ -1875,8 +1896,11 @@ function WorkspaceContent({
             key="working"
             {...RISE}
             layout
+            // (eased as what it says changes; moved with the column, at once: ../../pageCorner)
+            layoutDependency={`${chem.state}:${working3d}:${copyingShown}:${checkingFiles}:${making3d != null}`}
             role="status"
-            className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
+            style={{ right: cornerRight(columnFilled ? 0 : cover) }}
+            className={`absolute bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : copyingShown ? "copying" : "checking"} {...FADE} className="block">
@@ -1907,8 +1931,10 @@ function WorkspaceContent({
             key="mapping"
             {...RISE}
             layout
+            layoutDependency={atomMaps.mapping.phase}
             role="status"
-            className="absolute right-3 bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
+            style={{ right: cornerRight(columnFilled ? 0 : cover) }}
+            className="absolute bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
@@ -2772,8 +2798,24 @@ function WorkspaceContent({
             const ids = fragmentOf(st.model, at);
             if (!isProjection(st.model, ids)) return undefined;
             const flip = flipOf(st.model, ids);
+            // (a ring bond of the chair right-clicked: a ring fused on it, the three ways)
+            const bondId = menu.kind === "bond" && menu.id != null && fusableBonds(st.model, ids).includes(menu.id) ? menu.id : null;
             return {
               flat: () => runCleanUp(at, true),
+              ...(bondId != null
+                ? {
+                    fuse: FUSE_WAYS.map(({ how, name }) => ({
+                      name,
+                      run: () => {
+                        const now = store.getState();
+                        const made = fusedOn(now.model, fragmentOf(now.model, at), bondId, how);
+                        if (!made) return;
+                        if ("refused" in made) setChemError(made.refused);
+                        else now.addSolid(made.atoms, made.bonds, "fuse chair");
+                      },
+                    })),
+                  }
+                : {}),
               ...(flip
                 ? {
                     flip: () => {
@@ -3375,6 +3417,8 @@ export default function Workspace({
         </TabFiles>
         {/* The texts the workspace holds, in their column */}
         <ColumnBoundary>{(reloaded) => <TextColumn slideIn={reloaded} />}</ColumnBoundary>
+        {/* (what is seen of the page, its right edge told to what keeps to its corner - the notices: ../../pageCorner) */}
+        <PageEdge tabId={tabId} active={active && document != null} />
         </div>
         {/* The panel beside the canvas slides open and shut, the canvas giving
             way as it does; one going as another comes takes as long, so the

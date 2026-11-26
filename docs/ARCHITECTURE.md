@@ -1138,7 +1138,17 @@ WORKSPACE.md, *The page's conformers*). Both take
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
 keeps which drawing atom each of its atoms is and what the drawing was (`drawnFrom`, `drawnAs`;
-`utils/drawnLink`), so that hover is shared and a changed drawing is seen.
+`utils/drawnLink`), so that hover is shared and a changed drawing is seen:
+its atoms and bonds, and each configuration the drawing states as identity
+reads it (what it keeps, where it keeps any) - so that (Z) made (E) by moving a methyl, or a centre's two
+groups exchanged in place, is a changed drawing too, and a wedge moved to
+another bond that states the same, as Clean-up moves one, is not; nor is
+a plain hydrogen Clean-up draws on a centre to wedge it, which is the
+structure's as identity folds it in. A wedge whose configuration is not
+read (at no centre, leaving the structure) is kept as drawn. A configuration
+that sets nothing (a wedge at an isopropyl's CH) states nothing, so a
+structure that states none keys by its atoms and bonds alone, each bond's
+order and no mark.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
 coordinates gave none - where it has its hydrogens, which the method
@@ -1396,7 +1406,12 @@ window decodes; nothing of it goes through Rust but the clipboard.
   as its bytes are (`lib/picture/held` `holdFilm`): drawn from a video
   element playing it, over and over and muted, its texture a
   `VideoTexture`, a frame of the canvas drawn for each of the film's
-  (`requestVideoFrameCallback`) - none while it is paused.
+  (`requestVideoFrameCallback`) - none while it is paused. A film on a
+  transparent background (`PictureItem.matte`, `forSlides`) is played the
+  same way; its material (`components/matteMaterial.ts`) takes its alpha
+  from the video's other half (`lib/picture/matte.ts`) and blends it
+  premultiplied; its film with transparency is held and kept beside it,
+  media `video/quicktime`, and is what Save film writes.
 
 ### Renders
 
@@ -1755,7 +1770,12 @@ to be able to work with nothing going out at all.
   has a card in the corner while it runs; the top bar switches offline mode;
   Settings › Network holds the allowed purposes and the record. While a
   talk is given in the window (docs/PRESENTING.md), the cards and the
-  question wait until it ends; the record is kept as ever.
+  question wait until it ends; the record is kept as ever. The corner is
+  the page's (`ui/pageCorner.ts`): while a panel stands at the window's
+  right side - a conversation, a text or a PDF in the column, a style
+  panel - the cards sit left of it, as far from its edge as from the
+  window's with none, and move with it as it slides or is dragged; the
+  workspace in front says where (`PageEdge`).
 - **Which question goes where.** A question that answers the user's own
   click comes over the page (`ConsentDialog`), one at a time. A question
   Meno asks of its own accord comes on a card at the edge of the window,
@@ -1771,10 +1791,14 @@ to be able to work with nothing going out at all.
   token (`TaskHandle::proxy_url`). Its purpose, `app-update`, is asked for
   once of Meno's own accord (remembered as `updates.asked` in the settings)
   and after that only when the user turns it on in Settings › Network. That
-  once is after the user's first action - a workspace's first edit, a file
-  opened, Settings opened (`lib/firstAction.ts`) - once it has ended (the
-  pointer let go, no guide open), never on a timer: with no action, it is
-  not asked. Each look shows its notice in the corner as every task does,
+  once is asked on the card at the edge of the window, never over the
+  page, after the user's first action - a workspace's first edit, a file
+  opened, Settings opened (`lib/firstAction.ts`) - once the page has rested
+  for `REST_MS` (4 s, a look number): nothing done (no pointer held, no
+  key, no edit) and nothing under way (no text field, Quick Add, menu or
+  guide open, no plugin being set up or started, no other card or
+  question showing), each of these starting the stretch again. With no
+  action, it is not asked. Each look shows its notice in the corner as every task does,
   unless the user turned that off (`updates.notice`, Settings › Network) -
   the one notice of the network that can be; the record keeps it either
   way. The

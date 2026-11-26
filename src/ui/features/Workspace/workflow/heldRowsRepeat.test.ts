@@ -16,7 +16,7 @@ const T1 = [0, 1, 2, 3];
 const T2 = [1, 2, 3, 4];
 const torsion = (atoms: number[], strength: number): Restraint => ({ kind: "dihedral", atoms, value: 180, strength });
 const row = (restraint: Restraint, numbering = OWN_NUMBERING): RestraintRow => ({ restraint, why: "typed", for: "p1", on: "start", numbering });
-const RDKIT = heldBy("minimise", undefined);
+const SKETCHKIT = heldBy("minimise", undefined);
 
 /** An entry with its ID p1, and the rows it was held with in earlier passes where given, in `numbering` (its own as it now is, unless said). */
 function entry(carried?: Restraint[], carriedIn?: string, nowIn?: string): SetEntry {
@@ -47,13 +47,13 @@ describe("rows held over a Repeat's passes", () => {
   it("holds an entry's pass-1 rows at From and its pass-2 rows at From + Step; a torsion held in both at its pass-2 value", () => {
     // (pass 1 held T1 at 50; pass 2's table holds T2 at 100, and T1 again at 100)
     const carried = [torsion(T1, 50)];
-    expect(rowsOf(heldRows(page([row(torsion(T2, 100))]), 20, [entry(carried)], RDKIT, "RDKit"))).toEqual([
+    expect(rowsOf(heldRows(page([row(torsion(T2, 100))]), 20, [entry(carried)], SKETCHKIT, "Sketchkit"))).toEqual([
       [
         ["0-1-2-3", 50],
         ["1-2-3-4", 100],
       ],
     ]);
-    expect(rowsOf(heldRows(page([row(torsion(T1, 100)), row(torsion(T2, 100))]), 20, [entry(carried)], RDKIT, "RDKit"))).toEqual([
+    expect(rowsOf(heldRows(page([row(torsion(T1, 100)), row(torsion(T2, 100))]), 20, [entry(carried)], SKETCHKIT, "Sketchkit"))).toEqual([
       [
         ["0-1-2-3", 100],
         ["1-2-3-4", 100],
@@ -62,13 +62,13 @@ describe("rows held over a Repeat's passes", () => {
   });
 
   it("holds a torsion held in pass 1 and found like the reference in pass 2 again at its pass-1 value - it is never released", () => {
-    expect(rowsOf(heldRows(page([row(torsion(T2, 100))]), 20, [entry([torsion(T1, 50)])], RDKIT, "RDKit"))[0]).toContainEqual(["0-1-2-3", 50]);
+    expect(rowsOf(heldRows(page([row(torsion(T2, 100))]), 20, [entry([torsion(T1, 50)])], SKETCHKIT, "Sketchkit"))[0]).toContainEqual(["0-1-2-3", 50]);
   });
 
   it("holds an entry's carried rows where this pass's table has none for it", () => {
     const table = page([]);
     // (the table speaks of no molecule: one with carried rows holds those)
-    const r = heldRows({ ...table, sets: table.sets!.map((s) => ({ ...s, table: restraintsTable([], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "nothing" } as never]) })) }, 20, [entry([torsion(T1, 50)])], RDKIT, "RDKit");
+    const r = heldRows({ ...table, sets: table.sets!.map((s) => ({ ...s, table: restraintsTable([], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "nothing" } as never]) })) }, 20, [entry([torsion(T1, 50)])], SKETCHKIT, "Sketchkit");
     expect(rowsOf(r)).toEqual([[["0-1-2-3", 50]]]);
   });
 
@@ -76,7 +76,7 @@ describe("rows held over a Repeat's passes", () => {
     // (two entries both p1 - one gone round twice, held at T1 50 then 100; one once, at T1 50 - this pass's table holds T2 at 150 for p1)
     const twice = entry([torsion(T1, 100)]);
     const once = entry([torsion(T1, 50)]);
-    expect(rowsOf(heldRows(page([row(torsion(T2, 150))]), 20, [twice, once], RDKIT, "RDKit"))).toEqual([
+    expect(rowsOf(heldRows(page([row(torsion(T2, 150))]), 20, [twice, once], SKETCHKIT, "Sketchkit"))).toEqual([
       [
         ["0-1-2-3", 100],
         ["1-2-3-4", 150],
@@ -89,10 +89,10 @@ describe("rows held over a Repeat's passes", () => {
   });
 
   it("refuses rows carried in another numbering: an Atom map inside the frame numbered it anew - never held on other atoms", () => {
-    expect(rowsOf(heldRows(page([row(torsion(T2, 100), "map-2")]), 20, [entry([torsion(T1, 50)], OWN_NUMBERING, "map-2")], RDKIT, "RDKit"))).toEqual([RENUMBERED_WHY]);
+    expect(rowsOf(heldRows(page([row(torsion(T2, 100), "map-2")]), 20, [entry([torsion(T1, 50)], OWN_NUMBERING, "map-2")], SKETCHKIT, "Sketchkit"))).toEqual([RENUMBERED_WHY]);
   });
 
   it("outside a Repeat holds what is wired in alone, as ever: rows an entry carries are not held again", () => {
-    expect(rowsOf(heldRows(page([row(torsion(T2, 100))], false), 20, [entry([torsion(T1, 50)])], RDKIT, "RDKit"))).toEqual([[["1-2-3-4", 100]]]);
+    expect(rowsOf(heldRows(page([row(torsion(T2, 100))], false), 20, [entry([torsion(T1, 50)])], SKETCHKIT, "Sketchkit"))).toEqual([[["1-2-3-4", 100]]]);
   });
 });

@@ -59,7 +59,7 @@ export function createSlidesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
       const outOfSight = hiddenInStacks(st.molecules3d, st.stacksShown);
       st.selectMolecules3d(molecules3dIn(st.molecules3d.filter((m) => !outOfSight.has(m.id)), "box", box));
       st.selectPictures(molecules3dIn(st.pictures.map((p) => ({ id: p.id, at: p })), "box", box));
-      st.selectTexts(molecules3dIn(st.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, t.name, pointOf(t)) }] : [])), "box", box));
+      st.selectTexts(molecules3dIn(st.texts.flatMap((t) => (t.at ? [{ id: t.id, at: sheetMiddle(t.at, t.text, !!t.markdown, pointOf(t)) }] : [])), "box", box));
       // (and writing by hand on it, each piece by its middle, as a box takes it)
       st.selectInks(st.inks.filter((k) => {
         const m = strokesBounds(k.strokes, 0);

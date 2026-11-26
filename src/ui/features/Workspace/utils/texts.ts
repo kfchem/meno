@@ -22,6 +22,7 @@ export function columnWidthFor(room: number, pdf: boolean | "table", dragged: nu
   return Math.min(Math.max(COLUMN_NARROWEST, room * COLUMN_WIDEST), Math.max(COLUMN_NARROWEST, want));
 }
 import { firstFreeBeside } from "../../../../lib/io/beside";
+import { isMarkdown } from "../../../../lib/text/markdown";
 
 /** What a text that could not be read is said to be, by its name: in the column, and as its workspace opens. */
 export const lostSaid = (name: string) => `${name} could not be read from the workspace.`;
@@ -103,13 +104,15 @@ export function newTextName(texts: readonly Pick<WorkspaceText, "name">[]): stri
 /**
  * Where Export suggests writing a text: never the file it was opened from
  * (docs/FILE-IO.md) - beside it, numbered from 2, the first name `taken`
- * does not say is there; one opened from nowhere Open said, by its name.
+ * does not say is there; one opened from nowhere Open said, by its name -
+ * a Markdown text's ending in ".md", so that it is read again as Markdown.
  */
 export function textExportPath(
-  text: Pick<WorkspaceText, "name" | "path">,
+  text: Pick<WorkspaceText, "name" | "path" | "markdown">,
   taken: (path: string) => boolean = () => false,
 ): string {
-  return text.path ? firstFreeBeside(text.path, taken) : text.name;
+  if (text.path) return firstFreeBeside(text.path, taken);
+  return text.markdown && !isMarkdown(text.name) ? `${text.name}.md` : text.name;
 }
 
 /**

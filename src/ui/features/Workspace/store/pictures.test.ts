@@ -134,6 +134,29 @@ describe("pictures on the page", () => {
     expect(record?.pictures?.[0].media).toBe("video/mp4");
   });
 
+  it("may be films on a transparent background: where their alpha lies and their film with transparency saved, read back and copied with them", async () => {
+    const mp4 = new Uint8Array([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d, 7]);
+    const mov = new Uint8Array([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 2, 0, 0x71, 0x74, 0x20, 0x20, 7]);
+    const film = (await holdFilm(mp4))!;
+    const slides = (await holdFilm(mov))!;
+    const { store, state } = editor();
+    state().putPicture({ name: "turning.mp4", sha256: film.sha256, media: "video/mp4", px: [1280, 720], x: 0, y: 0, w: 16, h: 9, matte: "below", forSlides: slides.sha256 });
+    const file = readMenoFile((await workspaceFile(store.getState())).bytes);
+    // (both files kept, the film with transparency as what it is, by its own name)
+    expect(file.files.find((f) => f.sha256 === slides.sha256)).toMatchObject({ media: "video/quicktime", name: "turning.mov" });
+    expect(file.data(slides.sha256)).toEqual(mov);
+    holdPicturesOf(file);
+    const again = editor();
+    again.state().openWorkspace(readWorkspace(file.workspace)!, true);
+    expect(again.state().pictures[0]).toMatchObject({ media: "video/mp4", matte: "below", forSlides: slides.sha256 });
+    expect(pictureBytes(slides.sha256)).toEqual(mov);
+    const record = readRecord(recordText({ atoms: [], bonds: [], pictures: [state().pictures[0]] }));
+    expect(record?.pictures?.[0]).toMatchObject({ matte: "below", forSlides: slides.sha256 });
+    // (an alpha said some other way, or on a picture, is not read)
+    const odd = readRecord(recordText({ atoms: [], bonds: [], pictures: [{ ...state().pictures[0], matte: "left" as never }] }));
+    expect(odd?.pictures?.[0].matte).toBeUndefined();
+  });
+
   it("are copied and pasted with the rest, moved as far, and those not held left out", async () => {
     const { state } = editor();
     state().addPictures([await held("figure.png", 96, 96, 8)], { x: 0, y: 0 });

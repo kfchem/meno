@@ -10,7 +10,9 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ImportedScheme } from "../document";
 import { style3dOf } from "../style3dOf";
 import type { Style3D } from "../../../../lib/chem/style3d";
-import { lookOf, NOTES_MARK_GAP_PX, NOTES_MARK_PX, notesOf, poseOf, seenBounds, solidOf } from "./molecule3d";
+import { lookOf, NOTES_MARK_GAP_PX, NOTES_MARK_PX, notesOf, poseOf, rowAbout, rowAfter, seenBounds, solidOf } from "./molecule3d";
+import { openedAsStack } from "./stacks";
+import { greatest } from "../../../../lib/chem/lists";
 import { principalTurn } from "./align3d";
 import { chipWide } from "../workflow/run";
 import { hasChip } from "../workflow/selectionSet";
@@ -208,4 +210,54 @@ export function placeOpened(st: EditorState, result: ProcessedFileResult, scheme
   // (put past the edge of all there is, out of the view, perhaps: the view is to go to it)
   const beyond = Math.max(Math.abs(place.x - at.x), Math.abs(place.y - at.y)) > reach * NOMINAL_BOND_LENGTH;
   return { ...place, beyond };
+}
+
+/**
+ * A file's reaction arrow and pluses, moved by (dx, dy) along with its
+ * atoms, and its molecules in 3D standing in a row about `at` - beside a
+ * drawing the same file brings, to its right - in the workspace's styles in
+ * 3D (`style`): what is placed in the same edit as its atoms are, as a file
+ * is opened or dropped (hooks/useStructureEvents).
+ */
+export function importedScheme(
+  result: Pick<ProcessedFileResult, "arrow" | "pluses" | "molecules3d"> & { model?: ProcessedFileResult["model"] },
+  dx: number,
+  dy: number,
+  style: Style3D,
+  at: { x: number; y: number } = { x: 0, y: 0 },
+): ImportedScheme {
+  const a = result.arrow;
+  const solids = (result.molecules3d ?? []).map((m) => ({ ...m, id: 0, at }));
+  // (several - an SD file's records - a stack, standing in one place, one
+  // shown at a time: utils/stacks; numbered as the document's own when added.
+  // An output's jobs stand side by side)
+  const stacked = openedAsStack(solids);
+  const reaches = solids.map((m) => solidOf(m, style).reach[lookOf(m)]);
+  const room = stacked ? [greatest(reaches)] : reaches;
+  // (beside a drawing the same file brings, to its right)
+  const drawn = result.model?.atoms ?? [];
+  const row = drawn.length
+    ? rowAfter(
+        greatest(drawn.map((a) => a.x)) + dx + 2 * NOMINAL_BOND_LENGTH,
+        drawn.reduce((y, a) => y + a.y, 0) / drawn.length + dy,
+        room,
+      )
+    : rowAbout(at, room);
+  const places = stacked ? solids.map(() => row[0]) : row;
+  return {
+    ...(solids.length
+      ? { molecules3d: solids.map(({ id: _id, ...m }, i) => ({ ...m, at: places[i], ...(stacked ? { stack: { id: 1 } } : {}) })) }
+      : {}),
+    arrows: a
+      ? [
+          {
+            x: (a.x1 + a.x2) / 2 + dx,
+            y: (a.y1 + a.y2) / 2 + dy,
+            angle: Math.atan2(a.y2 - a.y1, a.x2 - a.x1),
+            length: Math.hypot(a.x2 - a.x1, a.y2 - a.y1),
+          },
+        ]
+      : [],
+    pluses: (result.pluses ?? []).map((p) => ({ x: p.x + dx, y: p.y + dy })),
+  };
 }

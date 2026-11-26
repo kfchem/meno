@@ -10,7 +10,7 @@
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
 import { ELEMENTS } from "../chem/elements";
-import { VARIABLE_NAMES } from "../chem/abbreviations";
+import { abbreviationStructure, VARIABLE_NAMES } from "../chem/abbreviations";
 import { narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
@@ -52,6 +52,8 @@ export type ReadBond = {
   unsure?: string[];
   /** A bond one of a repeat unit's brackets crosses, by the number of its pair of brackets (`ReadAtom.repeat`). */
   repeat?: { group: number };
+  /** A dative bond, drawn as an arrow from `a`, the donor, to `b` (`dativeArrows`). */
+  dative?: true;
 };
 
 /** A figure read: its atoms and bonds, how long its bonds are drawn, in points, and the letters in it not read as labels. */
@@ -432,7 +434,7 @@ const isElementSymbolLike = (text: string) => {
 export const COMPOUND_NUMBER = /^[([]?\d+[a-z]{0,2}['\u2032\u2033]*[)\]]?$/;
 
 /** A word: letters on a line side by side - its subscripts and superscripts with it - as drawn. */
-type Word = { letters: FigureLetter[]; box: Box; size: number };
+type Word = { letters: FigureLetter[]; box: Box; size: number; /** Said of the atom it becomes: how it was cut from its neighbour. */ cut?: string };
 
 /** Letters joined into words: each to the one before it on its line where they nearly touch. */
 export function wordsOf(letters: readonly FigureLetter[]): Word[] {
@@ -600,12 +602,17 @@ function boxOfBoxes(bs: readonly Box[]): Box {
  */
 function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label" | "alts" | "unsure"> {
   const { text: label, taken } = labelParts(w, reads);
+  const said = w.cut ? [w.cut] : [];
   // (a level number cut from the end of the label: its place cannot tell a count from an atom's number, so the atom says so)
-  const cut = taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [];
+  const cut = [...said, ...(taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [])];
   const shaped = w.letters.filter((l): l is ShapeLetter => "sure" in l);
   if (!shaped.length) return { label, ...(cut.length ? { unsure: cut } : {}) };
   const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) }, reads);
-  const open = w.letters.map((l, i) => ({ i, alts: "alts" in l ? (l as ShapeLetter).alts : [] })).filter((o) => o.alts.length);
+  // (the letter told least surely from its next reading first - a bar, an I as much as an l - then in order)
+  const open = w.letters
+    .map((l, i) => ({ i, alts: "alts" in l ? (l as ShapeLetter).alts : [], apart: "apart" in l ? ((l as ShapeLetter).apart ?? 1) : 1 }))
+    .filter((o) => o.alts.length)
+    .sort((x, y) => x.apart - y.apart || x.i - y.i);
   const alts: string[] = [];
   for (const o of open) for (const c of o.alts) alts.push(as(new Map([[o.i, c]])));
   for (let a = 0; a < open.length; a++) for (let b = a + 1; b < open.length; b++) alts.push(as(new Map([[open[a].i, open[a].alts[0]], [open[b].i, open[b].alts[0]]])));
@@ -879,7 +886,9 @@ export const LONE_DOUBLE = "A double line alone: read as ethylene.";
  * so, beside a "+". A single or a triple line a bond long alone is left out
  * too, and counted (`lone`, `triples`): in a figure it is a dash, a minus,
  * a rule, a letter, or a sign of equivalence or a separator; an ethane or
- * an ethyne is all but never drawn so. What lies within one of the
+ * an ethyne is all but never drawn so. Lines end to end in one straight
+ * line alone, bare and single, are left out too (`straightRuns`): a table's
+ * rule drawn in pieces, no chain. What lies within one of the
  * figure's `pictures` stays: a mark drawn over a picture, said as one
  * (lib/figure/scheme `marksOver`).
  */
@@ -895,6 +904,7 @@ export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBo
   atoms.forEach((a, i) => {
     if (bare(a) && !count[i]) out.add(i);
   });
+  for (const run of straightRuns(atoms, bonds, bond, bare)) for (const i of run) out.add(i);
   let lone = 0;
   let triples = 0;
   const said = new Map<ReadBond, string>();
@@ -924,6 +934,50 @@ export function withoutStrays(atoms: readonly ReadAtom[], bonds: readonly ReadBo
   return { atoms: kept, bonds: bonds.filter((b) => !out.has(b.a)).map((b) => ({ ...told(b), a: to.get(b.a)!, b: to.get(b.b)! })), lone, triples };
 }
 
+/** How far off the line through its ends an atom of a straight run lies at most, in bonds: a zigzag's bends lie half a bond off it. */
+const STRAIGHT_OFF = 0.1;
+
+/**
+ * The runs of lines that stand alone and are no chain (`withoutStrays`), each
+ * by its atoms: two or more single lines end to end in one straight line,
+ * nothing else joined to them, no label, wedge, hash or second line on any -
+ * a table's rule drawn cell by cell, or a rule broken where a column starts.
+ * A chain of carbons is drawn bent at each atom; only a triple bond or a
+ * cumulated double bond is drawn straight, and those have their second
+ * lines, so an alkyne drawn straight is no such run.
+ */
+function straightRuns(atoms: readonly ReadAtom[], bonds: readonly ReadBond[], bond: number, bare: (a: ReadAtom) => boolean): number[][] {
+  const at = atoms.map((): ReadBond[] => []);
+  for (const b of bonds) {
+    at[b.a].push(b);
+    at[b.b].push(b);
+  }
+  const seen = new Set<number>();
+  const runs: number[][] = [];
+  atoms.forEach((_, start) => {
+    if (seen.has(start) || !at[start].length) return;
+    const part = [start];
+    seen.add(start);
+    for (let k = 0; k < part.length; k++)
+      for (const b of at[part[k]]) {
+        const n = b.a === part[k] ? b.b : b.a;
+        if (!seen.has(n)) {
+          seen.add(n);
+          part.push(n);
+        }
+      }
+    const own = bonds.filter((b) => part.includes(b.a));
+    // (a path, not a ring nor a branch: two ends of one bond each, the rest of two)
+    if (own.length < 2 || own.length !== part.length - 1 || part.some((i) => at[i].length > 2)) return;
+    if (!part.every((i) => bare(atoms[i])) || !own.every((b) => b.order === 1 && !b.stereo && !b.aromatic && !b.repeat)) return;
+    const [p, q] = part.filter((i) => at[i].length === 1).map((i) => atoms[i]);
+    const span = Math.hypot(q.x - p.x, q.y - p.y);
+    const off = (a: ReadAtom) => Math.abs((q.x - p.x) * (a.y - p.y) - (q.y - p.y) * (a.x - p.x)) / span;
+    if (span > 0 && part.every((i) => off(atoms[i]) <= STRAIGHT_OFF * bond)) runs.push(part);
+  });
+  return runs;
+}
+
 /** Whether a line is set level: a hyphen, an ='s lines. */
 const level = (s: Stroke) => Math.abs(s.a.y - s.b.y) <= 0.15 * len(s);
 
@@ -939,6 +993,8 @@ const DOT = 0.16;
 
 /** How far an ion is set from the structure at most - or from the ion before it, in a row of them - in bonds, the gap between them. */
 const ION_BY = 2.5;
+/** How short of the bond its labels' letters say the drawing's lines may measure, at the most, for a label's reach to be taken from the letters. */
+const CUT_SHORT = 0.7;
 const BOND_PER_SIZE = 1.4;
 
 /**
@@ -1155,6 +1211,9 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
   }
 }
 
+/** The words cut in two by `readFigure`, and the pieces' boxes: to see, once the atoms and bonds are read, that each piece is an atom with a bond of its own. */
+const CUTS = new WeakMap<FigureRead, { key: string; boxes: [Box, Box] }[]>();
+
 /**
  * A figure read: the shapes its paths make (or `given`: those a scheme's
  * arrows and signs were taken out of) read as bonds, their ends where they
@@ -1166,13 +1225,30 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
 export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes, traced = false): FigureRead {
   // (a chain of bars the polygon of one filled outline made - ./drawn `barsOfOutline` - is the drawing's bonds, or not: told by the drawing's own bond;
   // shapes given - a scheme's - have been told already)
-  const all = given ?? sizedOutlines(shapesOf(drawn), drawn.letters);
+  // (a cut is kept only where each of its pieces is an atom with a bond of its own in what is read: else the word is not cut, and is read again whole)
+  const shapes = given ?? sizedOutlines(shapesOf(drawn), drawn.letters);
+  const first = readOnce(drawn, reads, known, shapes, traced, new Set());
+  const undone = (CUTS.get(first) ?? []).filter(({ boxes }) =>
+    boxes.some((b) => {
+      const i = first.atoms.findIndex((a) => a.box === b);
+      return i < 0 || !first.bonds.some((x) => x.a === i || x.b === i);
+    }),
+  );
+  return undone.length ? readOnce(drawn, reads, known, shapes, traced, new Set(undone.map((u) => u.key))) : first;
+}
+
+function readOnce(drawn: FigureDrawn, reads: (label: string) => boolean, known: readonly GlyphShape[], given: Shapes, traced: boolean, uncut: ReadonlySet<string>): FigureRead {
+  const cuts: { key: string; boxes: [Box, Box] }[] = [];
+  const all = given;
   const bond = bondOf(all, drawn.letters);
   const empty: FigureRead = { atoms: [], bonds: [], bond, left: { letters: [...drawn.letters] } };
   if (!bond) return empty;
   // (a charge drawn in a ring by an atom - its ring and the strokes in it - is that atom's, and nothing else: lib/figure/charges)
   const marks = chargeMarks(all, bond);
-  const shapes = withoutMarks(all, marks);
+  const unmarked = withoutMarks(all, marks);
+  // (a dative bond's arrow - its line, its head, its tail's dot - is read as one bond at the end, not as bonds and a wedge)
+  const datives = dativeArrows(unmarked, bond);
+  const shapes = withoutArrows(unmarked, datives);
 
   // short strokes may be hashes; long ones bonds, side by side multiple -
   // and a short one between two labels a bond too, trimmed at both
@@ -1205,6 +1281,47 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a repeat unit in brackets with its count: its brackets no bonds, its count no word - what is read of it, below)
   const repeats = repeatBrackets(shapes, written, bond, hashed);
   const words = written.filter((_, k) => !repeats.counts.has(k));
+  // (two labels set close - a group's name by an atom's, Me by an O - are two only where the bonds say so, and one word where they do not: cut at a capital
+  // where both pieces read, one a group's name and the other an atom's label, and two different bond ends come to the word - each counted for the piece it is
+  // nearer, one for each, so that each piece is an atom with a bond of its own; an ether or an ester has its one bond at the O: OMe, OAc, OPMB. The cut is
+  // said on both atoms where neither the size - a part at nine tenths of the other's or less - nor the line - a part set off the other's by a twelfth of its
+  // size or more - shows it too)
+  // (the ends of bonds as drawn: a hashed bond's marks are no bonds - the hash is one, with one end at each of its ends - and the two lines of a double bond, side by side and
+  // running the one way, are one bond's end)
+  const bondEnds: { p: Point; out: Point }[] = [...shapes.strokes.filter((t) => !inHashes.has(t)).flatMap((t) => [{ p: t.a, out: unit(t.b, t.a) }, { p: t.b, out: unit(t.a, t.b) }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, out: unit(w.base, w.tip) }, { p: w.base, out: unit(w.tip, w.base) }]), ...hashed.flatMap((h) => [{ p: h.a, out: unit(h.b, h.a) }, { p: h.b, out: unit(h.a, h.b) }])];
+  // (only a free end - one at which no other bond ends, the lines of one double bond not being two bonds meeting - is a label's bond: a corner, where two bonds meet at an angle, is a carbon)
+  const freeEnds = bondEnds.filter((e, k) => !bondEnds.some((o, m) => m !== k && Math.hypot(o.p.x - e.p.x, o.p.y - e.p.y) < 0.2 * bond && Math.abs(o.out.x * e.out.y - o.out.y * e.out.x) > 0.25));
+  const pieceOf = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
+  const baseline = (w: Word) => {
+    const ys = w.letters.filter((l) => l.size >= 0.85 * w.size).map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b);
+    return ys.length ? ys[ys.length >> 1] : 0;
+  };
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const key = w.box.join(",");
+    if (w.letters.length < 3 || uncut.has(key)) continue;
+    for (let j = 1; j < w.letters.length; j++) {
+      if (!/[A-Z]/.test(w.letters[j].c)) continue;
+      const [p, q] = [pieceOf(w.letters.slice(0, j)), pieceOf(w.letters.slice(j))];
+      const [tp, tq] = [labelText(p, reads), labelText(q, reads)];
+      // (a group's name and an atom's label, each read on its own: neither a lone H, a charge, nor a number)
+      const group = (t: string) => abbreviationStructure(t) != null;
+      if (!reads(tp) || !reads(tq) || tp === "H" || tq === "H" || group(tp) === group(tq)) continue;
+      // (each bond end that comes to the word is counted for the one piece it is nearer, and the cut needs one end for each: a single end reaching both is
+      // no cut - OPMB, OAc, OMe on their one bond - and a piece left with no bond of its own would be no atom)
+      const mine = freeEnds.filter((e) => reaches(e.p, e.out, p.box, bond) || reaches(e.p, e.out, q.box, bond));
+      const forP = mine.filter((e) => fromBox(e.p, p.box) <= fromBox(e.p, q.box));
+      const byBonds = forP.length > 0 && mine.length - forP.length > 0;
+      if (!byBonds) continue;
+      const bySize = Math.min(p.size, q.size) <= 0.9 * Math.max(p.size, q.size);
+      const byLine = Math.abs(baseline(p) - baseline(q)) >= (1 / 12) * Math.max(p.size, q.size);
+      const said = byBonds && !bySize && !byLine ? `Two labels, "${tp}" and "${tq}", set close: cut where the bonds come to both, nothing else says so.` : undefined;
+      const [cp, cq] = [{ ...p, ...(said ? { cut: said } : {}) }, { ...q, ...(said ? { cut: said } : {}) }];
+      words.splice(i, 1, cp, cq);
+      cuts.push({ key, boxes: [cp.box, cq.box] });
+      break;
+    }
+  }
   // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
   // charge written before a capital, where both pieces read)
   const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }, reads));
@@ -1413,6 +1530,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
   const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w, reads)));
+  const elementLabel = words.map((w) => isElementSymbolLike(labelText(w, reads)) && reads(labelText(w, reads)));
   for (const e of ends) {
     const d = drawnBonds[e.bond];
     const out = unit(e.side === 0 ? d.b : d.a, e.p);
@@ -1449,7 +1567,15 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       const onCapital = w.letters.some((l) => /[A-Z]/.test(l.c) && dist(centre(l.box), e.p) < 0.35 * w.size);
       // (a bond drawn short - under half a bond, cut back at a label stacked tall, an NH with its H over it - may stop farther off)
       const within = len({ a: d.a, b: d.b }) < 0.5 * bond ? 0.6 : 0.35;
-      if ((meeting.get(e)! === 0 || onCapital) && reaches(e.p, out, w.box, bond, within)) {
+      // (measured by a bond as long as the label's letters say one is drawn, where that is longer and the word reads as an element's
+      //  label, its hydrogens with it: a drawing whose every bond runs between labels, each cut back at both ends, measures its bonds
+      //  half as long as they are drawn - a metal's chlorides, by a label set in a typeface whose ink sits a little lower, would be
+      //  lost. Only where the drawing's lines measure under 0.7 of that bond - cut back so, as such a drawing's are; an agent written
+      //  large by a scheme's arrow, its letters large for the bonds, is no label of theirs. Any other word - a chart's number by its
+      //  tick, a legend's word, a group's name - keeps the drawing's own)
+      const floor = BOND_PER_SIZE * w.size;
+      const reach = elementLabel[k] && bond < CUT_SHORT * floor ? floor : bond;
+      if ((meeting.get(e)! === 0 || onCapital) && reaches(e.p, out, w.box, reach, within)) {
         const q = { x: Math.min(Math.max(e.p.x, w.box[0]), w.box[2]), y: Math.min(Math.max(e.p.y, w.box[1]), w.box[3]) };
         if (dd > 0 && dot(out, unit(e.p, q)) < 0) {
           if (dd < awayD) [away, awayD] = [k, dd];
@@ -1649,6 +1775,11 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       }
     });
   }
+  // (a word at a dative bond's arrow's end - an NH3 lending its pair to a platinum - is an atom alone too, as an ion is: the arrow bonds it)
+  words.forEach((w, k) => {
+    if (atomOfWord.has(k) || ions.has(k) || !reads(labelText(w, reads))) return;
+    if (datives.some((d) => fromBox(d.from, w.box) < DATIVE_REACH * bond || fromBox(d.to, w.box) < DATIVE_REACH * bond)) ions.add(k);
+  });
   // (a group's name set right over or under a heteroatom's label, no bond drawn to it - a MOM written over its imidazole's N - is
   // bonded to that atom, where it has a bond to spare; standing alone on its line: one of a line's words - the Me of an R = Me - is the line's)
   const SPARE: Record<string, number> = { N: 3, P: 3, O: 2, S: 2 };
@@ -1760,12 +1891,71 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       if (best >= 0 && !atoms[best].unsure?.includes(DASHED_ROW)) atoms[best] = { ...atoms[best], unsure: [...(atoms[best].unsure ?? []), DASHED_ROW] };
     }
   }
+  // (each dative bond's arrow: a bond from the atom at its tail, the donor, to the atom at its head; an arrow with an atom at one
+  //  end only is no bond, and that atom says so - never a part of the structure left out unsaid)
+  for (const arrow of datives) {
+    const nearest = (p: Point) => {
+      let best = -1;
+      for (let i = 0; i < atoms.length; i++) if (from(atoms[i], p) < DATIVE_REACH * bond && (best < 0 || from(atoms[i], p) < from(atoms[best], p))) best = i;
+      return best;
+    };
+    const [donor, acceptor] = [nearest(arrow.from), nearest(arrow.to)];
+    if (donor >= 0 && acceptor >= 0 && donor !== acceptor && !bonds.some((b) => (b.a === donor && b.b === acceptor) || (b.a === acceptor && b.b === donor))) {
+      bonds.push({ a: donor, b: acceptor, order: 1, dative: true });
+      continue;
+    }
+    // (an atom at each end - one atom at both, or two already bonded - is no end without one: nothing to say of that)
+    if (donor >= 0 && acceptor >= 0) continue;
+    for (const i of [donor, acceptor]) if (i >= 0 && !atoms[i].unsure?.includes(DATIVE_UNREAD)) atoms[i] = { ...atoms[i], unsure: [...(atoms[i].unsure ?? []), DATIVE_UNREAD] };
+  }
   // (each repeat unit in brackets: a whole count's unit marked to be read so many times, else the atoms its brackets cross saying why not)
   repeatsRead(repeats.pairs, atoms, bonds, bond, from);
   // (a picture traced from its pixels keeps what stands alone: its reading says each small piece - ink it may have read as bonds - rather
   //  than leave it out unsaid, lib/figure/tracedRead)
   const { lone, triples, ...kept } = traced ? { lone: 0, triples: 0, atoms, bonds } : withoutStrays(atoms, bonds, bond, drawn.pictures);
-  return { ...kept, bond, left: { letters: left, ...(lone ? { lines: lone } : {}), ...(triples ? { triples } : {}) }, ...(tableCells.length ? { table: tableCells } : {}) };
+  const result: FigureRead = { ...kept, bond, left: { letters: left, ...(lone ? { lines: lone } : {}), ...(triples ? { triples } : {}) }, ...(tableCells.length ? { table: tableCells } : {}) };
+  CUTS.set(result, cuts);
+  return result;
+}
+
+/** What an atom at one end of a dative bond's arrow says, where the other end has no atom. */
+export const DATIVE_UNREAD = "A dative bond's arrow meets it, with no atom read at its other end: read as no bond.";
+/** How near an arrow's end an atom is, in bonds - a labelled one measured from its label - to be the arrow's. */
+const DATIVE_REACH = 0.5;
+
+/**
+ * A dative bond drawn as an arrow (docs/PDF.md, *A dative bond*): a line no longer than a bond and a fifth - the arrow, line and head,
+ * no shorter than 0.15 of one - and at one end of it a small
+ * filled head - no longer than half a bond, nor than three times its own width, its base at the line's end and its point on along the
+ * line - and in some styles a dot at the line's other end. `from` is its tail, at the donor; `to` its point, at the acceptor. A wedge
+ * bond is long for its width; a scheme's arrow is longer, and is taken out before.
+ */
+export type DativeArrow = { from: Point; to: Point; stroke: Stroke; head: Wedge; dot?: Blob };
+export function dativeArrows(shapes: Shapes, bond: number): DativeArrow[] {
+  const out: DativeArrow[] = [];
+  const heads = new Set<Wedge>();
+  for (const s of shapes.strokes) {
+    if (len(s) > 1.2 * bond) continue;
+    for (const w of shapes.wedges) {
+      const head = dist(w.tip, w.base);
+      if (heads.has(w) || head > 0.5 * bond || head > 3 * w.w || w.w < 2 * s.w) continue;
+      const [tail, end] = dist(w.base, s.b) <= dist(w.base, s.a) ? [s.a, s.b] : [s.b, s.a];
+      // (no shorter than 0.15 of a bond as a whole, line and head: a picture traced keeps only a short line before a head drawn long)
+      if (dist(w.base, end) > Math.max(w.w, 0.1 * bond) || dot(unit(tail, end), unit(w.base, w.tip)) < 0.95 || dist(tail, w.tip) < 0.15 * bond) continue;
+      const tailDot = shapes.blobs.find((b) => b.curved && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 0.15 * bond && dist(centre(b.box), tail) < 0.1 * bond);
+      heads.add(w);
+      out.push({ from: tail, to: w.tip, stroke: s, head: w, ...(tailDot ? { dot: tailDot } : {}) });
+      break;
+    }
+  }
+  return out;
+}
+
+/** The shapes, a dative bond's arrows' taken out. */
+function withoutArrows(shapes: Shapes, arrows: readonly DativeArrow[]): Shapes {
+  if (!arrows.length) return shapes;
+  const gone = new Set<object>(arrows.flatMap((a) => [a.stroke, a.head, ...(a.dot ? [a.dot] : [])]));
+  return { ...shapes, strokes: shapes.strokes.filter((s) => !gone.has(s)), wedges: shapes.wedges.filter((w) => !gone.has(w)), blobs: shapes.blobs.filter((b) => !gone.has(b)) };
 }
 
 /** What an atom at the end of a row of dashes says. */

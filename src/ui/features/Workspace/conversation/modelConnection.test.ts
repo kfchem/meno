@@ -8,14 +8,16 @@ const plugin = { id: "talker", name: "Talker", roleHosts: { "language-model": ["
 const request = { told: "Meno's words", said: [{ by: "person" as const, text: "What is this?", at: 1 }], tools: [{ name: "look", does: "looks at the page" }] };
 
 /** Meno's steps as the test has them: whether the person says yes, whether it was allowed before, the worker's answer - and what was done. */
-function steps(o: { yes?: boolean; before?: boolean; running?: boolean; answer?: unknown } = {}) {
+function steps(o: { yes?: boolean; before?: boolean; running?: boolean; answer?: unknown; parts?: string[]; held?: Promise<void> } = {}) {
   const done: string[] = [];
   const conversed: unknown[] = [];
   const worker = {
     chem: {
-      request: vi.fn(async (op: string, args: unknown, ms: number) => {
+      request: vi.fn(async (op: string, args: unknown, ms: number, heard?: (t: string) => void) => {
         done.push(`ask ${op} ${ms}`);
         conversed.push(args);
+        for (const part of o.parts ?? []) heard?.(part);
+        if (o.held) await o.held;
         return o.answer ?? { text: "It is ethanol." };
       }),
     },
@@ -54,9 +56,9 @@ describe("a conversation's connection through a model's plugin", () => {
     const t = steps({ before: true });
     expect(await modelConnection(plugin, t.s).send(request)).toEqual({ text: "It is ethanol." });
     expect(t.done).toEqual(["consent model:talker@api.example.com,files.example.com", "worker", `ask converse ${REPLY_MS}`]);
-    // (a reply, whole, waited for 10 minutes)
+    // (a reply waited for 10 minutes - whole, or from the last of its words as they come, which it may send: `stream`)
     expect(REPLY_MS).toBe(600_000);
-    expect(t.conversed).toEqual([{ ...request, options: { model: "small" } }]);
+    expect(t.conversed).toEqual([{ ...request, options: { model: "small" }, stream: true }]);
     expect(JSON.stringify(t.conversed)).not.toContain("key");
   });
 
@@ -133,5 +135,29 @@ describe("a model's plugin's answer, read strictly", () => {
   it("refuses anything else, never guessing at it", () => {
     for (const bad of [null, "text", [], {}, { text: 3 }, { text: "x".repeat(1_000_001) }, { text: "", calls: {} }, { text: "", calls: [{}] }, { text: "", calls: [{ tool: "" }] }, { text: "", calls: [{ tool: "a", args: [] }] }, { text: "", calls: [{ tool: "a", args: "x" }] }, { text: "", calls: Array.from({ length: 65 }, () => ({ tool: "a" })) }])
       expect(() => replyOf(bad), JSON.stringify(bad)?.slice(0, 60)).toThrow(NOT_READ);
+  });
+
+  it("gives each part of the reply's words to what hears them, as the worker sends them", async () => {
+    const parts: string[] = [];
+    const t = steps({ before: true, parts: ["It is ", "ethanol."] });
+    expect(await modelConnection(plugin, t.s).send(request, (p) => parts.push(p))).toEqual({ text: "It is ethanol." });
+    expect(parts).toEqual(["It is ", "ethanol."]);
+  });
+
+  it("ends a reply under way on Stop - its worker stopped - and stops nothing where none is under way", async () => {
+    let go!: () => void;
+    const t = steps({ before: true, held: new Promise<void>((r) => (go = r)) });
+    const c = modelConnection(plugin, t.s);
+    c.stop!("Stopped, as asked");
+    expect(t.done).toEqual([]);
+    const sent = c.send(request);
+    await vi.waitFor(() => expect(t.done).toContain(`ask converse ${REPLY_MS}`));
+    c.stop!("Stopped, as asked");
+    expect(t.done).toContain("stop talker");
+    go();
+    await sent;
+    // (its reply come: nothing under way to stop)
+    c.stop!("Stopped, as asked");
+    expect(t.done.filter((d) => d === "stop talker")).toHaveLength(1);
   });
 });

@@ -14,7 +14,7 @@
  * the stereochemistry the old one said.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
+import { buildTextLabels, labelHulls, labelSetOf, labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
@@ -394,7 +394,10 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
   const opposite = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
-  const laid = octahedraKept(job, opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite));
+  // (with the drawing's style, its labels as they would be drawn where the layout puts them: what a crowded donor's groups must
+  // keep clear of)
+  const labels = style ? labelsDrawn(model, ids, style) : undefined;
+  const laid = octahedraKept(job, opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite, labels));
   // (a six-bond metal with a tridentate - three of its donors in one ligand - laid out other than as three lines through it: the
   // layout cannot yet put a fused tridentate's metal on its spokes, and a picture off the lines can show two donors
   // side by side that are across - refused, saying so, rather than drawn so)
@@ -627,7 +630,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // where the drawing had none: a picture that misstates the structure - a
   // bond hidden under another, its wedge with it - is worse than the old one)
   if (overlapsMade(part, change).length) {
-    throw new Error("the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved");
+    throw new Error(OVERLAPS_REFUSED);
   }
   const differs = stereoDiffers(part, change, job);
   if (differs === "gained") {
@@ -1160,7 +1163,82 @@ export function tridentatesDrawn(input: LayoutInput, at: readonly { x: number; y
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
 
-export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D, only?: ReadonlySet<number>): Layout2D {
+/** What Clean-up says where it would put one atom on another or on a bond - or a crowded donor's groups over another's ink - and so moves nothing. */
+const OVERLAPS_REFUSED = "the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved";
+
+/** A label's box, in the engine's units (a bond is 1), as `labelsDrawn` gives it. */
+export type InkBox = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * Each atom's label as it would be drawn in `style` with the drawing's atoms (`ids`, by input index) where a layout puts them (`x`,
+ * `y`, the engine's units): the box its letters take (lib/chem/layout2d `labelHulls`, as ./utils/freePlace `labelBoxes` measures a
+ * label on the page), by input index, in the engine's units. A carbon drawn bare has none.
+ */
+export function labelsDrawn(model: Model, ids: readonly number[], style: DrawingStyle): (x: readonly number[], y: readonly number[]) => Map<number, InkBox> {
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const index = new Map(ids.map((id, i) => [id, i]));
+  const bonds = layoutBonds(
+    model.bonds.filter((b) => index.has(b.a) && index.has(b.b)),
+    index,
+  );
+  const opts = editorLayoutOptions(style);
+  const set = labelSetOf(opts);
+  const k = NOMINAL_BOND_LENGTH;
+  return (x, y) => {
+    const atoms = ids.map((id, i) => ({ id, x: x[i] * k, y: y[i] * k, el: byId.get(id)!.el, ...chemistry(byId.get(id)!) }));
+    const out = new Map<number, InkBox>();
+    for (const t of buildTextLabels(atoms, opts, bonds)) {
+      if (t.atom == null || t.beside) continue;
+      let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const hull of labelHulls(t, opts.fontPx, set, false)) {
+        for (const q of hull) {
+          x0 = Math.min(x0, (t.x + q.x) / k);
+          y0 = Math.min(y0, (t.y + q.y) / k);
+          x1 = Math.max(x1, (t.x + q.x) / k);
+          y1 = Math.max(y1, (t.y + q.y) / k);
+        }
+      }
+      if (x0 <= x1) out.set(t.atom, { x0, y0, x1, y1 });
+    }
+    return out;
+  };
+}
+
+type Pt = { x: number; y: number };
+
+/** Whether segments pq and rs cross, each passing strictly through the other (a shared end, or a touch, is no crossing). */
+export function segmentsCross(p: Pt, q: Pt, r: Pt, s: Pt): boolean {
+  const side = (a: Pt, b: Pt, c: Pt) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  return side(p, q, r) * side(p, q, s) < 0 && side(r, s, p) * side(r, s, q) < 0;
+}
+
+/** Whether segment pq passes through the box - an end inside it, or crossing it (clipped to its four sides). */
+export function segmentInBox(p: Pt, q: Pt, b: InkBox): boolean {
+  let [t0, t1] = [0, 1];
+  const [dx, dy] = [q.x - p.x, q.y - p.y];
+  for (const [d, lo, hi, v] of [
+    [dx, b.x0, b.x1, p.x],
+    [dy, b.y0, b.y1, p.y],
+  ] as const) {
+    if (Math.abs(d) < 1e-12) {
+      if (v < lo || v > hi) return false;
+      continue;
+    }
+    const [a, c] = [(lo - v) / d, (hi - v) / d];
+    t0 = Math.max(t0, Math.min(a, c));
+    t1 = Math.min(t1, Math.max(a, c));
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+export function oppositesKept(
+  was: readonly { x: number; y: number }[],
+  input: LayoutInput,
+  laid: Layout2D,
+  only?: ReadonlySet<number>,
+  labels?: (x: readonly number[], y: readonly number[]) => Map<number, InkBox>,
+): Layout2D {
   const near = input.atoms.map(() => [] as number[]);
   for (const { a, b } of input.bonds) {
     near[a].push(b);
@@ -1356,7 +1434,12 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   }
   if (!changed) return laid;
   // (donors put side by side that were not - two phosphines' rings, cis-PtCl2(PCy3)2 - can lie on each other: each single donor's
-  // groups turned about it, its bond to the metal as it is, up to 60 degrees either way, to where they are clearest of the others)
+  // groups turned about it, its bond to the metal as it is, up to 60 degrees either way, to where they are clearest of the others.
+  // Then their ink: a bond of one donor's groups through another donor's label as drawn (`labels`), or across another donor's
+  // groups' bonds or its bond to the metal, is no room, as two atoms near each other are. Where the turns that clear the atoms
+  // leave such ink, the turns are tried again, those that leave none first; where none does, nothing is laid out, saying so - as
+  // where two atoms would lie on each other: three phenyls on each of two phosphines side by side have no room in the square's
+  // quarter beside each other, flat, their bonds at their length)
   for (const { m, donors, units } of moved) {
     const room = (u: number) => {
       let r = Infinity;
@@ -1364,38 +1447,121 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
       for (const a of units[u]) if (a !== donors[u]) r = Math.min(r, Math.hypot(x[a] - x[m], y[a] - y[m]));
       return r;
     };
-    for (let pass = 0; pass < 2; pass++) {
-      for (let u = 0; u < donors.length; u++) {
-        const d = donors[u];
-        if (units[u].size < 2 || donors.some((e, v) => v !== u && units[u].has(e)) || room(u) >= CROWDED) continue;
-        const group = [...units[u]].filter((a) => a !== d);
-        const home = group.map((a) => ({ x: x[a], y: y[a] }));
-        const turn = (t: number) =>
-          group.forEach((a, k) => {
-            const [vx, vy] = [home[k].x - x[d], home[k].y - y[d]];
-            x[a] = x[d] + vx * Math.cos(t) - vy * Math.sin(t);
-            y[a] = y[d] + vx * Math.sin(t) + vy * Math.cos(t);
-          });
-        let best = { t: 0, r: room(u) };
-        for (let deg = 10; deg <= 60; deg += 10) {
-          for (const t of [(deg * Math.PI) / 180, (-deg * Math.PI) / 180]) {
-            turn(t);
-            const r = room(u);
-            if (r > best.r + 1e-9) best = { t, r };
+    // (the units a turn may clear: a single donor carrying groups, no chelate)
+    const turnable = (u: number) => units[u].size > 1 && !donors.some((e, v) => v !== u && units[u].has(e));
+    const bondsOf = units.map((s) => input.bonds.filter((b) => s.has(b.a) && s.has(b.b)));
+    // (the donors' labels where the turns of the units put them: a donor stays where it is while its groups turn about it)
+    const boxes = labels?.(x, y) ?? new Map<number, InkBox>();
+    const pt = (a: number) => ({ x: x[a], y: y[a] });
+    const inked = (u: number) =>
+      bondsOf[u].some(({ a, b }) =>
+        donors.some((e, v) => {
+          if (v === u) return false;
+          const box = boxes.get(e);
+          if (box && segmentInBox(pt(a), pt(b), box)) return true;
+          if (segmentsCross(pt(a), pt(b), pt(m), pt(e))) return true;
+          return bondsOf[v].some((o) => segmentsCross(pt(a), pt(b), pt(o.a), pt(o.b)));
+        }),
+      );
+    const clearOf = () => {
+      for (let pass = 0; pass < 2; pass++) {
+        for (let u = 0; u < donors.length; u++) {
+          const d = donors[u];
+          if (!turnable(u) || room(u) >= CROWDED) continue;
+          const group = [...units[u]].filter((a) => a !== d);
+          const home = group.map((a) => ({ x: x[a], y: y[a] }));
+          const turn = (t: number) =>
+            group.forEach((a, k) => {
+              const [vx, vy] = [home[k].x - x[d], home[k].y - y[d]];
+              x[a] = x[d] + vx * Math.cos(t) - vy * Math.sin(t);
+              y[a] = y[d] + vx * Math.sin(t) + vy * Math.cos(t);
+            });
+          let best = { t: 0, r: room(u) };
+          for (let deg = 10; deg <= 60; deg += 10) {
+            for (const t of [(deg * Math.PI) / 180, (-deg * Math.PI) / 180]) {
+              turn(t);
+              const r = room(u);
+              if (r > best.r + 1e-9) best = { t, r };
+            }
+          }
+          turn(best.t);
+          if (best.t) {
+            const inGroup = new Set(group);
+            // (an H turned with its atom, the same turn about the donor)
+            hydrogens = hydrogens.map((h) => {
+              if (!inGroup.has(h.on)) return h;
+              const [vx, vy] = [h.at.x - x[d], h.at.y - y[d]];
+              return { ...h, at: { x: x[d] + vx * Math.cos(best.t) - vy * Math.sin(best.t), y: y[d] + vx * Math.sin(best.t) + vy * Math.cos(best.t) } };
+            });
           }
         }
-        turn(best.t);
-        if (best.t) {
-          const inGroup = new Set(group);
-          // (an H turned with its atom, the same turn about the donor)
-          hydrogens = hydrogens.map((h) => {
-            if (!inGroup.has(h.on)) return h;
-            const [vx, vy] = [h.at.x - x[d], h.at.y - y[d]];
-            return { ...h, at: { x: x[d] + vx * Math.cos(best.t) - vy * Math.sin(best.t), y: y[d] + vx * Math.sin(best.t) + vy * Math.cos(best.t) } };
-          });
+      }
+    };
+    const home = { x: [...x], y: [...y], hydrogens };
+    clearOf();
+    // (the atoms' turns left no ink over another donor's: that layout, as it was. Else the same turns from where the layout put them,
+    // ink weighed first - and where they leave some still, nothing laid out)
+    if (!donors.some((_, u) => turnable(u) && inked(u))) continue;
+    for (const a of units.flatMap((s) => [...s])) [x[a], y[a]] = [home.x[a], home.y[a]];
+    hydrogens = home.hydrogens;
+    // (each unit's groups at one of the same turns, from where the layout put them, chosen together: first a choice that leaves
+    // no ink over another donor's, then the one whose nearest atoms of two donors lie furthest apart; with more than three such
+    // units, one unit at a time, twice over)
+    const movers = donors.map((_, u) => u).filter(turnable);
+    const turns = [0, ...[10, 20, 30, 40, 50, 60].flatMap((deg) => [(deg * Math.PI) / 180, (-deg * Math.PI) / 180])];
+    const place = (u: number, t: number) => {
+      for (const a of units[u]) {
+        if (a === donors[u]) continue;
+        const [vx, vy] = [home.x[a] - x[donors[u]], home.y[a] - y[donors[u]]];
+        x[a] = x[donors[u]] + vx * Math.cos(t) - vy * Math.sin(t);
+        y[a] = y[donors[u]] + vx * Math.sin(t) + vy * Math.cos(t);
+      }
+    };
+    const score = () => ({ clear: !movers.some(inked), r: Math.min(...movers.map(room)) });
+    const better = (p: { clear: boolean; r: number }, q: { clear: boolean; r: number }) => (p.clear && !q.clear) || (p.clear === q.clear && p.r > q.r + 1e-9);
+    const chosen = movers.map(() => 0);
+    movers.forEach((u) => place(u, 0));
+    let best = score();
+    if (movers.length <= 3) {
+      const at = movers.map(() => 0);
+      const walk = (k: number) => {
+        if (k === movers.length) {
+          const s = score();
+          if (better(s, best)) {
+            best = s;
+            chosen.splice(0, chosen.length, ...at);
+          }
+          return;
         }
+        for (const t of turns) {
+          at[k] = t;
+          place(movers[k], t);
+          walk(k + 1);
+        }
+      };
+      walk(0);
+    } else {
+      for (let pass = 0; pass < 2; pass++) {
+        movers.forEach((u, k) => {
+          for (const t of turns) {
+            place(u, t);
+            const s = score();
+            if (better(s, best)) [best, chosen[k]] = [s, t];
+          }
+          place(u, chosen[k]);
+        });
       }
     }
+    movers.forEach((u, k) => place(u, chosen[k]));
+    // (an H turned with its atom, the same turn about the donor)
+    hydrogens = home.hydrogens.map((h) => {
+      const k = movers.findIndex((u) => units[u].has(h.on) && h.on !== donors[u]);
+      if (k < 0 || !chosen[k]) return h;
+      const [d, t] = [donors[movers[k]], chosen[k]];
+      const [vx, vy] = [h.at.x - x[d], h.at.y - y[d]];
+      return { ...h, at: { x: x[d] + vx * Math.cos(t) - vy * Math.sin(t), y: y[d] + vx * Math.sin(t) + vy * Math.cos(t) } };
+    });
+    if (donors.some((_, u) => turnable(u) && inked(u))) throw new Error(OVERLAPS_REFUSED);
   }
   return { ...laid, x, y, hydrogens, wedges };
 }

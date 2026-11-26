@@ -8,7 +8,7 @@
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf, waysOf } from "../../utils/xyzEnergies";
 import { MENO_XYZ_ENERGY } from "../chem/xyzWriter";
-import { SD_CAPTION, SD_CHARGE, SD_MULTIPLICITY, speciesProblem } from "./writers";
+import { SD_CAPTION, SD_CHARGE, SD_ENERGY, SD_MULTIPLICITY, speciesProblem } from "./writers";
 import { xyzEnergies, xyzSteps } from "./kinds";
 import { xyzStepsFile } from "../plugins/manifest";
 import type { Unmarked } from "../calc/output";
@@ -178,6 +178,25 @@ function speciesItems(items: Map<string, string[][]> | undefined, atoms: readonl
     charge = multiplicity = undefined;
   }
   return charge != null || multiplicity != null ? { calc: { readers: [], ...(charge != null ? { charge } : {}), ...(multiplicity != null ? { multiplicity } : {}) } } : {};
+}
+
+/**
+ * The energy a record's data item `SD_ENERGY` gives a molecule in 3D, in
+ * hartrees - the item Meno writes it under - taken only where it is one
+ * number, given once; else named with why (`notTaken`), never guessed at.
+ * No other item is read for an energy, nor any other unit.
+ */
+function energyItem(items: Map<string, string[][]> | undefined, notTaken: (item: string, why: string) => void): Pick<FileMolecule3D, "energies"> {
+  const given = items?.get(SD_ENERGY);
+  if (!given) return {};
+  if (given.length > 1) {
+    notTaken(SD_ENERGY, `it is given ${given.length} times`);
+    return {};
+  }
+  const text = given[0].map((l) => l.trim()).filter(Boolean);
+  if (text.length === 1 && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text[0]) && Number.isFinite(Number(text[0]))) return { energies: [Number(text[0])] };
+  notTaken(SD_ENERGY, text.length ? `"${text.join(" ").slice(0, 40)}" is not a number` : "it is empty");
+  return {};
 }
 
 /** An XYZ file's comment lines, one for each frame: what is left of it once its geometry is read. */
@@ -355,16 +374,18 @@ export function readStructures(kind: StructureKind, filename: string, content: s
   const leftOut: Pick<StructureRead, "recordsLeftOut" | "itemsNotTaken"> = recordsLeftOut.length ? { recordsLeftOut } : {};
   const said = kind === "sdf" || kind === "mol" ? saysThreeD(content) : [];
   const inDepth = (i: number) => molecules[i].atoms.length > 0 && !noPlaces[i] && (said[i] || depthOf(molecules[i]) > 0.1);
-  // (an SD record's data items: the charge and multiplicity Meno wrote it with - its atom block as it is - those that do not read named)
+  // (an SD record's data items: the energy, charge and multiplicity Meno wrote it with - its atom block as it is - those that do not read named)
   const items = kind === "sdf" ? sdDataItems(content) : [];
   const itemsNotTaken: { record: number; item: string; why: string }[] = [];
   const molecules3d = good.filter(inDepth).map((i) => {
     const m = molecules[i];
-    // (and its record's title, its first line, where it gives one)
+    // (and its record's title, its first line, where it gives one: its name)
     const title = m.ct?.name.trim();
-    const species = speciesItems(items[i], m.atoms, (item, why) => itemsNotTaken.push({ record: i + 1, item, why }));
+    const notTaken = (item: string, why: string) => itemsNotTaken.push({ record: i + 1, item, why });
+    const energy = energyItem(items[i], notTaken);
+    const species = speciesItems(items[i], m.atoms, notTaken);
     const caption = captionItem(items[i]);
-    return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}), ...species, ...(caption ? { caption } : {}) };
+    return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}), ...energy, ...species, ...(caption ? { caption } : {}) };
   });
   if (itemsNotTaken.length) Object.assign(leftOut, { itemsNotTaken });
   const flat = good.filter((i) => !inDepth(i)).map((i) => molecules[i]);

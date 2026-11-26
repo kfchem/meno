@@ -6,7 +6,7 @@
  * edit changed is said against what is kept. No reader of configuration takes it yet: identity, Clean-up, R and S, 3D and the files
  * still read the marks (phase 3). Pure: no DOM, no store.
  */
-import { lowestOthers, type Said } from "../../../../lib/chem/perception/stereo/compare";
+import { lowestOthers, saidOf, type Said } from "../../../../lib/chem/perception/stereo/compare";
 import type { DrawnStereo } from "../../../../lib/chem/perception/stereo/from2d";
 import type { CisTrans } from "../../../../lib/chem/perception/stereo/types";
 import { drawingOf } from "../chem/drawing";
@@ -278,6 +278,15 @@ export function keptAsDrawn(part: Model, drawing: ReturnType<typeof drawingOf>, 
     if (r != null && t != null) axes.push({ atoms, refs: [r, t], sense });
   }
   return { tetra, cisTrans, axes, cumulated };
+}
+
+/**
+ * The configuration `part` states, as identity takes it (chem/identityOf `identityInputOf`, which composes the same three readers in
+ * the same way) and the 3D link's key with it (utils/drawnLink): what it keeps, where it keeps any (`keptAsDrawn`), else what its
+ * marks say (`read`: lib/layout/drawn `readStereo` of `drawing`, made of `part`).
+ */
+export function statedOf(part: Model, drawing: ReturnType<typeof drawingOf>, read: DrawnStereo): DrawnStereo {
+  return keepsAny(part) ? keptAsDrawn(part, drawing, keptReading(part, saidOf(drawing.atoms, drawing.bonds, part.atoms.map((a) => a.id), () => false, read)).said) : read;
 }
 
 /** `model` with what it keeps set aside: its configuration read from its marks alone (a change note's descriptors; part 15 phase 3's

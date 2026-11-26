@@ -1,6 +1,9 @@
 # A question Meno asks before it uses the network (src/ui/network/ConsentDialog.tsx)
 # is answered by the person at the computer, never by a GUI run. Every such
-# question has one yes, "Allow and download"; a click or a drag that would
+# question has one yes, "Allow and download" - and the card Meno shows as it
+# first starts (src/ui/network/FirstSetUpCard.tsx), "Set up chemistry?", has
+# its own, "Set up", as has Settings' set-up of a plugin, "Set up <plugin>";
+# a click or a drag that would
 # press it, or a key that would - one sent while it has the focus, Escape
 # (a no) aside - stops the run before anything is sent, on either desktop.
 #
@@ -20,10 +23,18 @@
 # MENO_GUI_ANSWER_NETWORK_YES=1, set by hand for one run, lets such input
 # through, saying so. Nothing in the repository sets it.
 
-$script:YesName = "Allow*"
+# (the yes of each: "Allow and download", "Allow ..."; the first start's card's "Set up", Settings' "Set up <plugin>")
+$script:YesNames = @("Allow*", "Set up", "Set up *")
 $script:ButtonRoles = @("AXButton", "Button")
 # (what a Mac's hit test lands on before the web view has built its page's parts: the page itself, or what holds it)
 $script:PageHolders = @("AXWebArea", "AXScrollArea", "AXWindow", "AXApplication", "")
+
+function Test-YesName {
+    # Whether a button's name is a yes to a question about the network: $script:YesNames.
+    param([AllowEmptyString()] [string] $Name)
+    foreach ($y in $script:YesNames) { if ($Name -like $y) { return $true } }
+    return $false
+}
 
 function Read-Part {
     <#
@@ -55,7 +66,7 @@ function Read-Buttons {
     if ($null -eq $r -or -not $r.PSObject.Properties["Buttons"]) { return [pscustomobject]@{ Buttons = @(); Unread = "nothing was read" } }
     $buttons = @($r.Buttons | Where-Object { $null -ne $_ })
     # (a yes read with no bounds: where it is, unknown)
-    $blind = @($buttons | Where-Object { "$($_.Name)" -like $script:YesName -and -not ($_.Width -gt 0 -and $_.Height -gt 0) })
+    $blind = @($buttons | Where-Object { (Test-YesName "$($_.Name)") -and -not ($_.Width -gt 0 -and $_.Height -gt 0) })
     if ($blind.Count) { return [pscustomobject]@{ Buttons = @(); Unread = "'$($blind[0].Name)' was read with no bounds" } }
     # (Page: whether the reader saw the page itself, with something in it - a talk hides the top bar, and may show no button at all)
     $page = [bool]($r.PSObject.Properties["Page"] -and $r.Page)
@@ -106,7 +117,7 @@ function Find-YesUnder {
     # The yes of a question about the network that a press at -At (X, Y) lands on, among -Buttons as Read-Buttons gives them - a pixel or two round each taken in - or nothing.
     param([AllowEmptyCollection()] [object[]] $Buttons = @(), [Parameter(Mandatory)] $At)
     foreach ($b in @($Buttons)) {
-        if ("$($b.Name)" -notlike $script:YesName) { continue }
+        if (-not (Test-YesName "$($b.Name)")) { continue }
         if ($At.X -ge $b.X - 2 -and $At.X -le $b.X + $b.Width + 2 -and $At.Y -ge $b.Y - 2 -and $At.Y -le $b.Y + $b.Height + 2) { return $b }
     }
     return $null
@@ -138,12 +149,12 @@ function Test-NetworkYes {
       .SYNOPSIS
       Whether a part of the window - its chain of "role<TAB>name", itself
       first, then what it sits in - is the yes of a question about the
-      network, or in it: a button named Allow... .
+      network, or in it: a button named Allow..., or Set up.
     #>
     param([AllowEmptyCollection()] [string[]] $Chain = @())
     foreach ($link in $Chain) {
         $role, $name = "$link" -split "`t", 2
-        if ($role -in $script:ButtonRoles -and "$name" -like $script:YesName) { return $true }
+        if ($role -in $script:ButtonRoles -and (Test-YesName "$name")) { return $true }
     }
     return $false
 }
@@ -171,7 +182,7 @@ function Assert-NotNetworkYes {
             "Stopping; nothing was sent.")
     }
     if (-not (Test-NetworkYes -Chain $Look.Chain)) { return }
-    $yes = @($Look.Chain | Where-Object { $role, $name = "$_" -split "`t", 2; $role -in $script:ButtonRoles -and "$name" -like $script:YesName })[0]
+    $yes = @($Look.Chain | Where-Object { $role, $name = "$_" -split "`t", 2; $role -in $script:ButtonRoles -and (Test-YesName "$name") })[0]
     $name = ("$yes" -split "`t", 2)[1]
     if ($override) {
         Write-Warning "$What answers a question about the network yes ('$name'): MENO_GUI_ANSWER_NETWORK_YES=1 lets it through."
@@ -181,4 +192,4 @@ function Assert-NotNetworkYes {
         "never a run's: answer it no (Escape) or leave it. Stopping; nothing was sent.")
 }
 
-Export-ModuleMember -Function Read-Part, Read-Buttons, Test-PageButtonsRead, Read-PageButtons, Assert-OnMeno, Find-YesUnder, Test-NetworkYes, Test-PageReached, Assert-NotNetworkYes, Assert-NotPressingYes
+Export-ModuleMember -Function Test-YesName, Read-Part, Read-Buttons, Test-PageButtonsRead, Read-PageButtons, Assert-OnMeno, Find-YesUnder, Test-NetworkYes, Test-PageReached, Assert-NotNetworkYes, Assert-NotPressingYes

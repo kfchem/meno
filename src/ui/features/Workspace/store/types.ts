@@ -32,6 +32,7 @@ import type { ChartValue } from "../../../../lib/chart";
 import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
+import type { Matte } from "../../../../lib/picture/matte";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
 import type { KeptBond, KeptCentre } from "../configuration/kept";
@@ -40,6 +41,12 @@ import type { KeptBond, KeptCentre } from "../configuration/kept";
 export type Atom = EditorAtom & {
   /** The configuration it states as a centre, kept (configuration/kept): read after every change, said where an edit changed it. */
   config?: KeptCentre;
+  /**
+   * Which way its label reads where its one bond is upright and either way reads - leftward (HO, HOH2C) or rightward (OH, CH2OH): put so
+   * by a Haworth ring's labels where the other way would run into the drawing (projections/haworthLabels; lib/chem/layout2d `Atom.reads`).
+   * Clean-up takes it away.
+   */
+  reads?: "left" | "right";
   /**
    * How near the viewer the atom is, where its structure is drawn in
    * perspective - a cage, as Clean-up draws one: a bond passing behind
@@ -378,6 +385,10 @@ export type PictureItem = {
   turn?: number;
   /** Where it was cut out of a PDF, if it was (docs/PDF.md, *Taking things out*). */
   from?: PictureFrom;
+  /** A film on a transparent background (docs/RENDER.md): where its alpha lies in each frame of its video (lib/picture/matte). */
+  matte?: Matte;
+  /** A film on a transparent background: its film with transparency, by its SHA-256 - a QuickTime file, its alpha kept - held and kept beside it. */
+  forSlides?: string;
 };
 
 /** Where a picture was cut out of a PDF: the PDF, by its SHA-256, the page, and the box, in points from the page's top left. */
@@ -802,11 +813,13 @@ export type WordsFlight = {
  * from - and, where it lies on the page as a sheet of its own (docs/PDF.md,
  * *A text*), its sheet's top left; and whether it is read in the column,
  * as a tab there (unless `reading` is false), and whether its sheet is
- * made an icon, as a PDF is. A calculation's output shown from a molecule,
+ * made an icon, as a PDF is; and whether it is Markdown (`markdown`), as
+ * the file it came from was - read formatted - its name aside: none, plain
+ * text. A calculation's output shown from a molecule,
  * or a step's log, has no sheet: that molecule, or its step, is its body
  * (`of`) - what it rises out of into the column, and goes back into.
  */
-export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
+export type WorkspaceText = { id: number; name: string; text: string; path?: string; markdown?: true; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
 /**
  * A text its workspace's file was to hold whose words could not be read -
  * damaged there, or not there (docs/FILE-IO.md, *The workspace file*): kept
@@ -2015,9 +2028,11 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
-  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
-  panRequest: { dx: number; dy: number; n: number } | null;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt) - or, `back`, the view gone back to where it was before menus moved it, every one of them shut (menuRoom). */
+  panRequest: { dx: number; dy: number; back?: boolean; n: number } | null;
   requestPan: (dx: number, dy: number) => void;
+  /** The view back where it stood before menus moved it, if it is still where they sent it (`panRequest`, menuRoom). */
+  requestPanBack: () => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
@@ -2229,6 +2244,8 @@ export type EditorState = {
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
   /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
   placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
+  /** Atoms with their depth, and bonds to them or from them to atoms already there, added together - a ring fused on a chair (../projections/fuse) - as one undo step. */
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => void;
   /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
   settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */

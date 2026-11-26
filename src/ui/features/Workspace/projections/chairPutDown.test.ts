@@ -112,6 +112,30 @@ describe("a chair flipped on a page", () => {
   });
 });
 
+describe("a ring fused on a chair on a page", () => {
+  it("is one undo step, undone and done again whole; the configuration the drawing kept is not said to change", async () => {
+    const { fusedOn } = await import("./fuse");
+    const { configurationChanges } = await import("../configuration/changes");
+    const { doc, st } = page();
+    st().putChair({ x: 0, y: 0 });
+    const was = doc.getState().model;
+    const ids = new Set(was.atoms.map((a) => a.id));
+    const made = fusedOn(was, ids, was.bonds[0].id, "trans");
+    if (!made || "refused" in made) throw new Error("not fused");
+    const before = doc.history().undoDepth;
+    st().addSolid(made.atoms, made.bonds, "fuse chair");
+    expect(doc.history().undoDepth).toBe(before + 1);
+    const now = doc.getState().model;
+    expect([now.atoms.length, now.bonds.length]).toEqual([10, 11]);
+    // (new centres made by the chemist's own fusion: no unit's configuration said to have changed)
+    expect(configurationChanges(was, now)).toEqual([]);
+    doc.undo();
+    expect(doc.getState().model).toEqual(was);
+    doc.redo();
+    expect(doc.getState().model).toEqual(now);
+  });
+});
+
 describe("a Newman pair put down from Quick Add", () => {
   it("is two carbons at one place, the front nearer, where Quick Add was opened, and is read back as a pair", async () => {
     const { newmanDrawing, newmansIn } = await import("./newman");

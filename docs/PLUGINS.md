@@ -1096,12 +1096,21 @@ The same for every plugin and for Meno's own parts:
     {kind, name, molecules, options}` (answered `{text}`) - the file
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
-  - for *Talking with a model*, `converse {told, said, tools, options, key}`
-    (answered `{text, calls?, keep?}`: its words, plain text; the tools it
-    calls, `{tool, args?}`; and what it keeps of the reply - its service's
-    own record of it, opaque to Meno, given back with what was said and
-    never saved), `key` added by the backend alone
-    (CONVERSATIONS.md, *Talking through a plugin*);
+  - for *Talking with a model*, `converse {told, said, tools, options,
+    stream, key}` (answered `{text, calls?, keep?}`: its words, plain text;
+    the tools it calls, `{tool, args?}`; and what it keeps of the reply -
+    its service's own record of it, opaque to Meno, given back with what
+    was said and never saved), `key` added by the backend alone
+    (CONVERSATIONS.md, *Talking through a plugin*). With `stream: true`,
+    its words may be sent as they come, before its answer, each part a
+    line of its own - `{id, partial: "..."}`, the words that part says on
+    from the last, plain text - and its answer then still holds them all.
+    Meno waits for the answer from each part again: a part may be empty,
+    to say the reply is still coming while the model says nothing. A part
+    is no answer: a line with `ok` is - an error too, after which Meno
+    keeps the words that came and says the reply broke off. Sending parts
+    is the plugin's to do or not: a request without `stream`, or a plugin
+    that sends none, is answered whole, and the reply shown whole;
   - for *A structure found by its name*, `find_name {name, most}` (answered
     `{found, more}` - at most `most` compounds the database holds under
     exactly that name, in its own order, each `{id, page, title, smiles,
@@ -1283,7 +1292,9 @@ The same for every plugin and for Meno's own parts:
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job
-    made (`{made: [{entry, file, media}]}`);
+    made (`{made: [{entry, file, media}]}`; a film on a transparent
+    background, two items of its entry - its MP4 with `matte`, where its
+    alpha lies, and its QuickTime film with an alpha channel: RENDER.md);
   - a job may say how far it is, in lines of its log of their own -
     `progress <done>/<all>` - which Meno shows as it runs;
   - `collect` may answer, for each entry, surfaces in cube files the job

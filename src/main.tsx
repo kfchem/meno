@@ -11,9 +11,13 @@ import { beforeFirstDraw } from "./startUp";
 import { installCursors } from "./ui/theme/cursors";
 import { watchInput } from "./lib/core/calm";
 import { enumerateWorkerMade } from "./ui/features/Workspace/workflow/enumerateOff";
+import { startIconPictures } from "./ui/iconPictures";
 
 // Meno's own pointers, for whatever asks for one (ui/theme/cursors)
 installCursors();
+
+// Small icons keep fine edges where the window draws their paths coarsely (ui/iconPictures)
+startIconPictures();
 
 // What the window does for itself in the background waits for the hands to rest (lib/core/calm)
 watchInput();

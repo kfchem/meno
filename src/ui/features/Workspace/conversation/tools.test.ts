@@ -59,7 +59,7 @@ function page() {
       ...WATER,
       at: { x: 4, y: 0 },
       energies: [-76.4],
-      calc: { readers: ["meno"], program: "PySCF", method: "B3LYP", basis: "def2-SVP", solvation: "none", charge: 0, multiplicity: 1 },
+      calc: { readers: ["meno"], program: "Wavecalc", method: "B3LYP", basis: "def2-SVP", solvation: "none", charge: 0, multiplicity: 1 },
     } as Parameters<typeof addMolecule3d>[1]),
   );
   doc.edit(
@@ -121,7 +121,7 @@ describe("what a conversation sees: what lies inside its frame", () => {
       { kind: "structure", id: 1, middle: { x: 0.75, y: 0 } },
       { kind: "molecule", id: 1, middle: { x: 4, y: 0 } },
       { kind: "picture", id: 1, middle: { x: 50, y: 0 } },
-      { kind: "text", id: 1, middle: sheetMiddle({ x: 6, y: 2 }, "Protect the alcohol first.", "notes.txt"), corner: { x: 6, y: 2 } },
+      { kind: "text", id: 1, middle: sheetMiddle({ x: 6, y: 2 }, "Protect the alcohol first.", false), corner: { x: 6, y: 2 } },
       { kind: "pdf", id: 1, middle: { x: (pdf.x0 + pdf.x1) / 2, y: (pdf.y0 + pdf.y1) / 2 }, corner: { x: pdf.x0, y: pdf.y1 } },
       { kind: "arrow", id: 1, middle: { x: 150, y: 0 } },
       { kind: "caption", id: 3, middle: { x: 170, y: 0 } },
@@ -160,7 +160,7 @@ describe("what a conversation sees: what lies inside its frame", () => {
   it("reads a thing in full - and answers one outside, or one with no sheet, as one that is not there, in the same words", () => {
     const { call, step } = page();
     const water = call({ tool: "read", args: { id: "molecule:1" } });
-    expect(water).toMatchObject({ ok: true, value: { formula: "H2O", frames: 1, energies: { values: [-76.4], unit: "hartree" }, calculation: { program: "PySCF", level: "B3LYP/def2-SVP · gas phase", charge: 0, multiplicity: 1 } } });
+    expect(water).toMatchObject({ ok: true, value: { formula: "H2O", frames: 1, energies: { values: [-76.4], unit: "hartree" }, calculation: { program: "Wavecalc", level: "B3LYP/def2-SVP · gas phase", charge: 0, multiplicity: 1 } } });
     expect(call({ tool: "read", args: { id: "structure:1" } })).toMatchObject({ ok: true, value: { smiles: "CO", bonds: [{ a: 1, b: 2, order: 1 }] } });
     expect(call({ tool: "read", args: { id: "text:1" } })).toMatchObject({ ok: true, value: { name: "notes.txt", text: "Protect the alcohol first." } });
     // (the benzene and the step, outside; the logs, nowhere; a molecule that is not there at all - all alike)
@@ -175,7 +175,7 @@ describe("what a conversation sees: what lies inside its frame", () => {
     const { doc, call, card } = page();
     expect(call({ tool: "read", args: { id: "arrow:1" } }, { frame: about({ x: 150, y: 0 }) })).toEqual({ ok: true, value: { words: ["NaH, THF"] } });
     // (a step whose run's line holds a folder's path and a program's words: neither given)
-    doc.edit("ran", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === card.id ? { ...s, options: { window: 3 }, ran: { at: 1, ok: false, said: "Could not start /Users/someone/Library/Application Support/meno/jobs/x1/pyscf", input: "" } } : s)) }));
+    doc.edit("ran", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === card.id ? { ...s, options: { window: 3 }, ran: { at: 1, ok: false, said: "Could not start /Users/someone/Library/Application Support/meno/jobs/x1/wavecalc", input: "" } } : s)) }));
     const read = call({ tool: "read", args: { id: `step:${card.id}` } }, { page: true });
     expect(read).toEqual({ ok: true, value: { kind: "Energy window", by: "meno", options: { window: 3 }, ran: "failed" } });
     expect(JSON.stringify(read)).not.toContain("/Users");

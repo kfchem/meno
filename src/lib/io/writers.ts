@@ -190,7 +190,8 @@ export function speciesProblem(m: Pick<WrittenMolecule, "atoms">, charge: number
   return null;
 }
 
-/** The names of an SD file's data items Meno writes a molecule in 3D's species and imaginary frequencies under, and reads its species back from (lib/io/structures). */
+/** The names of an SD file's data items Meno writes a molecule in 3D's energy, species and imaginary frequencies under, and reads its energy and species back from (lib/io/structures). */
+export const SD_ENERGY = "Energy (Eh)";
 export const SD_CHARGE = "Charge";
 export const SD_MULTIPLICITY = "Multiplicity";
 export const SD_IMAGINARY = "Imaginary frequencies (cm-1)";

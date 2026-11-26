@@ -2,7 +2,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 const drawn = (card: FirstSetUpCard) => renderToString(<CardBody card={card} />);
-import { CardBody } from "./FirstSetUpCard";
+import { CardBody, UpdateBody } from "./FirstSetUpCard";
 import { CARD_TITLE, type FirstSetUpCard } from "../../lib/plugins/firstSetUp";
 
 describe("the card that sets chemistry up as Meno first starts", () => {
@@ -24,5 +24,12 @@ describe("the card that sets chemistry up as Meno first starts", () => {
     const failed = drawn({ phase: "failed", why: "The plugins online could not be listed." });
     expect(failed).toContain("The plugins online could not be listed.");
     expect(failed).toContain(">Try again<");
+  });
+
+  it("asks Meno's own question about keeping itself up to date on the card, its buttons taking no focus", () => {
+    const html = renderToString(<UpdateBody />);
+    expect(html).toContain("Keep Meno up to date?");
+    expect(html).toContain("github.com");
+    expect(html.match(/<button/g)?.length).toBe(html.match(/tabindex="-1"/g)?.length);
   });
 });
