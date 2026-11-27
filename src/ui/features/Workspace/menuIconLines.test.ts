@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MENU_ICON, MENU_ICON_GAP, MENU_ICON_SPLIT, iconLines, iconsWidth } from "./menuIconLines";
+import { ICONS_WIDEST, MENU_ICON, MENU_ICON_GAP, MENU_ICON_SPLIT, MENU_ICONS_MOST, iconLines, iconsWidth, oneLineWidth } from "./menuIconLines";
 
 // Icons named by letters; "Del" is Delete.
 const isDel = (i: string) => i === "Del";
@@ -12,6 +12,15 @@ describe("a menu's icons on as few lines as its width holds", () => {
     expect(iconsWidth(0)).toBe(0);
     expect(iconsWidth(1)).toBe(MENU_ICON);
     expect(iconsWidth(3, 1)).toBe(3 * MENU_ICON + 2 * MENU_ICON_GAP + MENU_ICON_SPLIT);
+  });
+
+  it("says how wide one line of them is, the gap between kinds counted only where both are there, and the widest", () => {
+    expect(oneLineWidth(6, 2)).toBe(iconsWidth(8, 1));
+    expect(oneLineWidth(4, 0)).toBe(iconsWidth(4));
+    expect(oneLineWidth(0, 3)).toBe(iconsWidth(3));
+    expect(ICONS_WIDEST).toBe(iconsWidth(MENU_ICONS_MOST, 1));
+    // (past the widest, a second line)
+    expect(names(iconLines(["A", "B", "C", "D", "E", "F", "G", "H", "Del"], ["Cut", "Copy"], isDel, ICONS_WIDEST))).toEqual([["A", "B", "C", "D", "E", "F", "G", "H", "Del"], ["Cut", "Copy"]]);
   });
 
   it("puts the thing's own and the selection's on one line where they fit, Delete at its right end", () => {

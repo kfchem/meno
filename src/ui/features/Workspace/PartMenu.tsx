@@ -8,7 +8,7 @@ import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, bondIconAsLying, MENU_ICONS } from "./menuIcons";
 import type { MenuScope } from "./utils/menuScope";
 import { withRules } from "./menuRules";
-import { MENU_ICON, iconLines, iconsWidth } from "./menuIconLines";
+import { ICONS_WIDEST, MENU_ICON, iconLines, iconsWidth, oneLineWidth } from "./menuIconLines";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
@@ -601,7 +601,7 @@ export default function PartMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // (the width the icons have: the menu's, less the icons' margins - read before it is painted, so that no line is seen to move)
-  const [room, setRoom] = useState(WIDTH - 2 - 2 * ICONS_PAD);
+  const [room, setRoom] = useState<number | null>(null);
   useLayoutEffect(() => {
     const w = ref.current?.clientWidth;
     if (w && w - 2 * ICONS_PAD !== room) setRoom(w - 2 * ICONS_PAD);
@@ -1188,7 +1188,9 @@ export default function PartMenu({
   const row2 = more ? compact : [];
   // (the thing's own icons and the selection's, on as few lines as the menu's width holds: one, where they fit)
   const selSet = new Set(selIcons);
-  const lines = iconLines(row, selIcons, (i) => !!i.del, room);
+  // (the menu as wide as one line of its icons needs - up to the widest, ten - and never narrower than it was)
+  const least = Math.max(WIDTH, Math.min(ICONS_WIDEST, oneLineWidth(row.length, selIcons.length)) + 2 * ICONS_PAD + 2);
+  const lines = iconLines(row, selIcons, (i) => !!i.del, room ?? least - 2 - 2 * ICONS_PAD);
   const list = withRules(own.filter((i) => !i.icon));
   const selRules = withRules(selList);
   // (the first line: what the menu acts on - the thing alone, or the selection counted)
@@ -1260,7 +1262,7 @@ export default function PartMenu({
         // (taller than the canvas: it scrolls inside)
         maxHeight: target.within.height - 2 * MENU_MARGIN,
         overflowY: "auto",
-        minWidth: WIDTH,
+        minWidth: least,
       }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}

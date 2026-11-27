@@ -393,11 +393,14 @@ its key, if it has one), and Delete at the row's right end, always; the
 rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 The selection's icons - *Cut* and *Copy*, and on empty space the rest of
 its own - follow the thing's on the same line, a small gap between the
-two, wherever the menu's width holds them all; only where it does not do
-they stand on a line of their own under the thing's, Delete staying at the
-right end of the line of the icons it came with (the maintainer: the icons
-had stood on two lines where one would hold them; `menuIconLines`). The menu
-is never narrower than the thing's own icons and Delete.
+two, Delete at the right end: the menu is made as wide as that one line
+needs - never narrower than its least, 240 px - up to the line of the
+fullest menu, ten icons (an atom's eight with its arrows, and cut and copy:
+392 px). Only past that do the selection's stand on a line of their own
+under the thing's, Delete staying at the right end of the line of the icons
+it came with (the maintainer: the icons had stood on two lines where one
+would hold them; `menuIconLines`). A menu so widened still opens inside the
+canvas: the view eases along for it as for any menu (*Menus on the page*).
 An icon's name - of a menu's rows, the menu on empty space and Quick
 Add's - is shown in Meno's own look, as the page's tip is: under the icon,
 or over it where there is no room under it, once the pointer has rested on

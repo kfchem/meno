@@ -14,6 +14,14 @@ export const MENU_ICON_GAP = 2;
 /** The gap added where the thing's own icons meet the selection's, in px. */
 export const MENU_ICON_SPLIT = 4;
 
+/**
+ * The most icons a menu holds on one line, the selection's among them: an
+ * atom's eight with Delete (charges, clean up, 3D, the two arrows from it,
+ * colour), and cut and copy. Past them a menu grows no wider, and its icons
+ * take a second line.
+ */
+export const MENU_ICONS_MOST = 10;
+
 /** An icon placed on a line: `starts` where it is the first of the selection's after the thing's own on that line. */
 export type PlacedIcon<T> = { item: T; starts: boolean };
 
@@ -21,6 +29,14 @@ export type PlacedIcon<T> = { item: T; starts: boolean };
 export function iconsWidth(n: number, splits = 0): number {
   return n <= 0 ? 0 : n * MENU_ICON + (n - 1) * MENU_ICON_GAP + splits * MENU_ICON_SPLIT;
 }
+
+/** How wide the thing's own icons and the selection's stand on one line, the gap between the two counted, in px. */
+export function oneLineWidth(own: number, selection: number): number {
+  return iconsWidth(own + selection, own > 0 && selection > 0 ? 1 : 0);
+}
+
+/** The widest a menu's icons make it, on one line: `MENU_ICONS_MOST` of them, a gap between kinds, in px. */
+export const ICONS_WIDEST = iconsWidth(MENU_ICONS_MOST, 1);
 
 /**
  * The lines the menu's icons make: `own`, the thing's; `selection`, the

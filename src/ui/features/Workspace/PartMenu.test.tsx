@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import PartMenu, { type MenuTarget } from "./PartMenu";
 import { BOND_ICONS, bondIconAsLying } from "./menuIcons";
+import { ICONS_WIDEST, MENU_ICONS_MOST, iconsWidth } from "./menuIconLines";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws the menu, and what it lists is read off that.
@@ -458,13 +459,15 @@ describe("an arrow's menu and its atom map", () => {
 describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
   const atomHere = (scope: { thing: string; count: string; more: boolean; ofKind: string; whole: boolean }) => ({ ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope });
 
-  it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy after its icons - on a line of their own, as eight do not fit the menu's width", () => {
+  it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy after its icons on one line, the menu as wide as the eight need", () => {
     const t = atomHere({ thing: "This atom", count: "This atom", more: false, ofKind: "1 atom", whole: false });
     const m = menu(t, { scope: t.scope, onColour: none });
     expect(m.lines).toEqual(["This atom"]);
     expect(m.icons).toEqual(["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Delete atom"]);
     expect(m.selIcons).toEqual(["Cut", "Copy"]);
-    expect(m.rows).toEqual([["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Delete atom"], ["Cut", "Copy"]]);
+    expect(m.rows).toEqual([["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Cut", "Copy", "Delete atom"]]);
+    // (eight icons, a gap between kinds, the icons' margins and the border: wider than the 240 px it least was)
+    expect(m.html).toContain(`min-width:${iconsWidth(8, 1) + 10}px`);
     expect(m.listed).toContain("Copy as SMILES");
   });
 
@@ -496,6 +499,22 @@ describe("a structure drawn as a Fischer projection", () => {
   it("is offered Read as Fischer projection where it is so drawn, and not where it is not", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { fischer: { run: none } }).listed).toContain("Read as Fischer projection");
     expect(menu(target({ kind: "atom", id: 1 })).listed).not.toContain("Read as Fischer projection");
+  });
+});
+
+describe("a menu's icons on one line", () => {
+  it("holds the fullest menu found - an atom selected, with its arrows - on one line, the menu as wide as they need", () => {
+    const t = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope: { thing: "This atom", count: "This atom", more: false, ofKind: "1 atom", whole: false } };
+    const m = menu(t, { scope: t.scope, onColour: none, onPush: none });
+    expect(m.rows).toHaveLength(1);
+    expect(m.rows[0]).toHaveLength(MENU_ICONS_MOST);
+    expect(m.rows[0][MENU_ICONS_MOST - 1]).toBe("Delete atom");
+    expect(m.html).toContain(`min-width:${ICONS_WIDEST + 10}px`);
+  });
+
+  it("keeps a menu of few icons at its least width, 240 px", () => {
+    const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope: { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape", whole: false }, onColour: none, shape: { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none } });
+    expect(m.html).toContain("min-width:240px");
   });
 });
 
