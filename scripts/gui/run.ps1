@@ -29,7 +29,7 @@ param(
     [string] $Scenario,
     [string] $Tutorial,
     # The prepared home a tutorial copies (New-TutorialHome -Ready); else MENO_TUTORIAL_HOME.
-    [string] $ReadyHome = $env:MENO_TUTORIAL_HOME,
+    [string] $ReadyHome,
     [string] $Out,
     # What `npm run tauri build` last produced by default; point this at
     # another build to test that one instead.
@@ -76,7 +76,7 @@ $Out = (Resolve-Path $Out).Path
 if ($Tutorial) {
     Import-Module (Join-Path $PSScriptRoot "MenoTutorial.psm1") -Force
     $repository = (Resolve-Path "$PSScriptRoot/../..").Path
-    Start-Tutorial -Raw $Out -Dest (Join-Path $repository "site/manual/how-to/$Tutorial") -Ready "$ReadyHome" -Repository $repository -Version (Get-MenoVersion -Path $(if ($Exe -match "^(.*\.app)/Contents/MacOS/") { $Matches[1] } else { $Exe }))
+    Start-Tutorial -Raw $Out -Dest (Join-Path $repository "site/manual/how-to/$Tutorial") -Ready (Resolve-ReadyHome -Given $ReadyHome) -Repository $repository -Version (Get-MenoVersion -Path $(if ($Exe -match "^(.*\.app)/Contents/MacOS/") { $Matches[1] } else { $Exe }))
 }
 
 $script:StepNo = 0
@@ -463,5 +463,7 @@ try {
         Get-MenoApp | ForEach-Object {
             Close-MenoProcess -Process $_
         }
+        # (each copy of a prepared home the tutorial made, taken away with Meno closed)
+        if ($Tutorial) { Remove-TutorialHomes }
     }
 }
