@@ -14,6 +14,7 @@ import { hasEditContext, typingField, type TypingField } from "./typingField";
 import { fieldTarget, useTextMenu } from "./textMenu";
 import { selFrom, selTo } from "../../../lib/text/editing";
 import { BAR_HIT_PX, scrollOfThumb } from "./editor";
+import { fingerScroll } from "../Workspace/components/fingerScroll";
 
 /** `write`: a text just made to be written in, given the keys as it shows - `onWrite` told once it has them. */
 type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void; write?: boolean; onWrite?: () => void; name?: string };
@@ -92,7 +93,10 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
       ed.scrollTo(ed.scrollTop + dy * k, ed.scrollLeft + dx * k);
     };
     box.addEventListener("wheel", onWheel, { passive: false });
+    // (a finger dragged: the text moved under it, gliding on as it is let go; a tap is a click, as ever)
+    const offFinger = fingerScroll(box, { scrollBy: (dx, dy) => ed.scrollTo(ed.scrollTop + dy, ed.scrollLeft + dx) });
     return () => {
+      offFinger();
       barDrag.current?.();
       seen.disconnect();
       box.removeEventListener("wheel", onWheel);

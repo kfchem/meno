@@ -16,6 +16,7 @@ import { isWebAddress } from "../../../lib/pdf/reader";
 import type { ColumnTextEntry } from "./columnText";
 import type { MarkdownReader } from "./markdownReader";
 import { LINE } from "./markdownLayout";
+import { fingerScroll } from "../Workspace/components/fingerScroll";
 
 /** How far a press may move and still be a click on a link, in pixels. */
 const CLICK_PX = 4;
@@ -51,7 +52,10 @@ export default function MarkdownBody({ entry, reader, value, name = "Text" }: Pr
       reader.scrollTo(reader.scrollTop + (e.shiftKey && !e.deltaX ? 0 : e.deltaY) * k);
     };
     box.addEventListener("wheel", onWheel, { passive: false });
+    // (a finger dragged: the text moved under it, gliding on as it is let go; a tap is a click, as ever)
+    const offFinger = fingerScroll(box, { scrollBy: (_dx, dy) => reader.scrollTo(reader.scrollTop + dy) });
     return () => {
+      offFinger();
       seen.disconnect();
       box.removeEventListener("wheel", onWheel);
     };

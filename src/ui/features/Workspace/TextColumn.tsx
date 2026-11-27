@@ -37,6 +37,7 @@ import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStru
 import { dragStructure, picksAfter, sayWhy, togglesPick } from "./components/structureDrag";
 import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
 import { pressOn } from "../../../lib/pdf/press";
+import { fingerScroll } from "./components/fingerScroll";
 import { goToFound, runFind, stepFound } from "./components/pdfFind";
 import { FOUND_COLOR } from "./components/pdfMarks";
 import { placeBefore, selects } from "./utils/pdfSelection";
@@ -769,6 +770,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       };
     };
     const onMove = (e: PointerEvent) => {
+      // (a finger: the column moved under it - fingerScroll)
+      if (e.pointerType === "touch") return;
       over = true;
       setOver(true);
       // (the pointer in the column has left the canvas: no PDF there is hovered any more, whatever the canvas last saw)
@@ -882,6 +885,11 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     };
     let press: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
+      // (a finger: pressed once it is taken up where it was put down - fingerScroll)
+      if (e.pointerType === "touch") return;
+      pressed(e);
+    };
+    const pressed = (e: PointerEvent) => {
       // (on the page number: its own)
       press = e.button === 0 && e.target === el ? { x: e.clientX, y: e.clientY } : null;
       if (!press) return;
@@ -955,6 +963,10 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       store.getState().setPdfSel({ id, anchor: drawing.first[0], focus: drawing.first[1] });
     };
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      letGo(e);
+    };
+    const letGo = (e: PointerEvent) => {
       // (the mouse's back button)
       if (e.button === 3) {
         e.preventDefault();
@@ -1066,6 +1078,14 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     // (the column moved by a hand - scrolled, zoomed: its card stood by a word that is elsewhere now - let go, eased as when the pointer
     //  leaves; the pointer resting on a number again brings that number's - docs/PDF.md, *A compound's number*)
     const offMoved = lensGoesWhenMoved(reader, () => store.getState(), id);
+    // (a finger dragged moves the column, gliding on as it is let go; put down and taken up where it was, a press, as a click)
+    const offFinger = fingerScroll(el, {
+      scrollBy: (dx, dy) => reader.scrollBy(dx, dy, true),
+      press: (down, up) => {
+        pressed(down);
+        letGo(up);
+      },
+    });
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("gesturestart", onGestureStart);
     el.addEventListener("gesturechange", onGestureChange);
@@ -1081,6 +1101,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     window.addEventListener("keyup", onModifier, true);
     return () => {
       offMoved();
+      offFinger();
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("gesturestart", onGestureStart);
       el.removeEventListener("gesturechange", onGestureChange);
