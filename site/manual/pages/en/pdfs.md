@@ -22,7 +22,10 @@ Double-click a PDF, or choose *Read* on its right-click menu. It opens in a colu
 - Turn the wheel to scroll; pinch, or hold ⌘ (Ctrl on Windows) and turn the wheel, to zoom. ← and → go a page at a time.
 - Click the page number to go to a page; double-click it to fit the pages to the column's width.
 - *Fill the workspace* (⇧⌘F, or Ctrl+Shift+F) gives the column the whole window; *Back beside the canvas* puts it back.
+- On a touch screen, a finger drags the pages up and down.
 - *Hide texts* closes the column, and the PDF stays on the page. *Show texts*, on the right-click menu of empty space, opens it again.
+
+A text file or a Markdown text (.txt, .md) dropped on the window is read the same way, under a tab of its own beside the PDFs. Click a tab to show what it holds, and the × on it to stop reading it. A Markdown text is shown formatted; the button at the top of the column, *Show source*, shows what it is written in, and *Show formatted* goes back.
 
 ## Finding words {#find}
 
@@ -38,11 +41,23 @@ Structures drawn in a PDF with lines and letters, as journals draw them, are rea
 
 A structure read from a figure says where it came from as the pointer rests on it. While Meno is unsure of some of it, a note stands beside it, "Read from a figure: check it", with how many parts are unsure. Compare it with the figure; when it is right, right-click one of its atoms or bonds, or the note, and choose *Checked against the figure*.
 
+## Compounds by their numbers {#compounds}
+
+A paper names its compounds by numbers. Rest the pointer on one in the text - a **12** set in bold, or the 12 of "compound 12" - and a card opens beside it: a picture of where the PDF draws that compound, its number, its page, and the other pages it is drawn on, as "p. 2 · also on p. 5".
+
+- Drag the picture onto the page: where Meno read the structure whole, it is put down there, as when it is dragged out of its figure.
+- Click its page to go to the figure in the reading column; the structure is marked there for a moment.
+- Hold ⌥ (Alt on Windows) to have a number taken that is set plainly, not in bold and not after a word like "compound".
+- While Meno is still going through the figures, the card says "Reading this PDF’s figures…". When the number is drawn nowhere in the PDF, it says "No drawing of this compound was found in this PDF."
+
+The card comes in the reading column, and on a PDF shown full size on the page once its words are large enough to read.
+
 ## Figures as pictures {#figures}
 
 - In the reading column, drag across a figure, or where there are no words, to draw a box; a click in a figure takes the whole figure. On a PDF shown full size on the page, zoom in, then press and hold and drag.
 - Drag the box onto the page for a picture of it, or right-click it for *Put on the page*, *Copy picture* and *Read as structure*.
-- *Read as structure* reads a box drawn with lines itself. A figure that is a picture - a scan, or a figure saved as an image - is read by a plugin that reads structures from pictures, MolScribe or MolNexTR; the first time, Meno asks before it downloads one ([Installing](installing#plugins)).
+- *Read as structure* puts the structure in the box beside the PDF. Meno reads it itself, whether the figure is drawn with lines or is a picture - a scan, or a figure saved as an image. A picture on the page has *Read as structure* on its right-click menu too.
+- Where Meno reads nothing, it says why. If a plugin that reads structures from pictures has been added ([Plugins](plugins#roles)), *Read with* and the plugin's name is offered then, and the plugin reads the picture only when that is chosen.
 
 ## Writing on a PDF {#writing}
 

@@ -4,7 +4,7 @@
 
 ## スライド {#slides}
 
-スライドはページの上の枠です。その下にあるものが、聞き手に見えるものになります。スライドに入れたいものを選んで右クリックし、「Slide around these」を選びます。または、何もないところをダブルクリックして出てくるものから、いま見えている範囲のスライドを作れます。新しいスライドは、発表の最後に加わります。
+スライドはページの上の枠です。その下にあるものが、聞き手に見えるものになります。スライドに入れたいものを選んで右クリックし、「Slide around these」を選びます。または、何もないところをダブルクリックし、「Scheme」、続けて「Slide」を選ぶと、いま見えている範囲のスライドを作れます。新しいスライドは、発表の最後に加わります。
 
 - 左上に番号が付き、次のスライドへ破線の矢印が伸びます。どちらも発表中には出ず、ページのどの画像にも入りません。
 - 番号をほかのスライドへドラッグすると、その位置に移ります。右クリックメニューの「Earlier in the talk」「Later in the talk」で、一つ前後に移ります。
@@ -25,6 +25,8 @@
 
 スライドを Word や PowerPoint に渡すには、「Select what is on it」で選んでコピーします（⌘C、または Ctrl+C）。そこにあるものの画像として貼り付けられます。スライド上の PDF と画像は、その画像に入りません。
 
+「Background」を「Transparent」にしてレンダリングした動画は、下にあるものが透けて見える形でスライドに載ります。右クリックメニューの「Save film…」で、透明なまま保存できます。ただし、そうした動画を読めないプログラムもあります。ほかのプログラムのスライドに載せる動画は、そのスライドの色を背景にしてレンダリングしてください。
+
 ## 言葉 {#words}
 
 何もないところをダブルクリックして出てくるものの「Text」で、そこに言葉を置きます。打ち込んだら、Enter で確定、Shift+Enter で改行、Escape で取りやめます。
@@ -34,19 +36,23 @@
 - 矢印のそばに置いた言葉は、矢印の上か下に並び、矢印が言葉に合わせて伸びます。
 - 言葉を右クリックすると、「Edit text」、「Bold」、「Italic」、「Bullets」、「Colour…」、「Align left」「Align centre」「Align right」「Justify」、「Superscript」「Subscript」があります。メニューのアイコンの下では、大きさ（ポイントで 8、10、12、14、18、24。ほかの大きさは 4〜288 を入力して Enter）、行間（1、1.15、1.5、2。ほかは 0.5〜4）、書体を選べます。選ぶとすぐに反映され、メニューは開いたままなので、続けてほかのものも試せます。
 
+構造の名前や番号は、その原子か結合、または 3D 分子の右クリックメニューにある「Add text」で、構造の下に書けます。この言葉は構造に属し、構造と一緒に動き、回り、コピーされ、削除されます。言葉の右クリックメニューの「Free from its structure」で、構造から離れます。
+
 ## 矢印とサイクル {#arrows}
 
 「Arrow」は、クリックで一本置き、ドラッグで引いて描きます。矢印を右クリックすると、種類（「Reaction arrow」「Equilibrium」「Retrosynthetic」「No reaction」）、矢じり、「Dashed line」、太さ（「Thin line」「Regular line」「Thick line」）、そしてすべての矢印の見た目を決める「Arrow style…」を選べます。
 
-触媒サイクルも、何もないところをダブルクリックして出てくるものから作れます。言葉を載せる矢印の輪です。その線を右クリックすると、「Arrow coming in」と「Arrow going out」（その場で言葉を打ちます）、「Turn clockwise」か「Turn anticlockwise」、矢印が載せた言葉の手前でどれだけ切れるか（「Arrows close」から「Arrows well apart」まで）を選べます。
+何もないところをダブルクリックして出てくるものの「Scheme」を選ぶと、「Plus」「Electron-pushing arrow」「Catalytic cycle」「Slide」が並びます。「Plus」は、ダブルクリックしたところに「+」を置きます。「Electron-pushing arrow」では、矢印が出ていく原子か結合を押し、行き先の原子か結合まで導いてクリックします。Escape で取りやめます。原子や結合の右クリックメニューの「Electron-pushing arrow」か「Fishhook arrow」でも、そこから始められます。
+
+触媒サイクルは「Scheme」の「Catalytic cycle」で作ります。言葉を載せる矢印の輪です。その線を右クリックすると、「Arrow coming in」と「Arrow going out」（その場で言葉を打ちます）、「Turn clockwise」か「Turn anticlockwise」、矢印が載せた言葉の手前でどれだけ切れるか（「Arrows close」から「Arrows well apart」まで）を選べます。
 
 ## 図形と手書き {#shapes}
 
-「Shapes」を選ぶと、「Rectangle」「Ellipse」「Line」が並びます。一つを押してドラッグするか、クリックしてからボタンを押さずに動かし、クリックで終えます。Shift を押すと、正方形や円になり、線は 15° ごとに向きが揃います。
+何もないところをダブルクリックして出てくるものの「Marks on the page」を選ぶと、「Rectangle」「Ellipse」「Line」「Pen」が並びます。図形を一つ押してドラッグするか、クリックしてからボタンを押さずに動かし、クリックで終えます。Shift を押すと、正方形や円になり、線は 15° ごとに向きが揃います。
 
 - 図形を右クリックすると、「Corners…」（長方形のみ）、線（「Line as bonds」「1 pt line」「2 pt line」「Dashed line」）、「Bring to front」「Send to back」があります。
 - 選んだものの右クリックメニューの「Box around these」で、そのまわりに長方形を描きます。
-- 「Pen」でペンのカードが開き、「Pen」「Marker」「Eraser」と、それぞれの色と太さが並びます。「Done」か Escape で終わります。手書きの右クリックメニューの「Delete writing」で消せます。
+- その列の最後の「Pen」でペンのカードが開き、「Pen」「Marker」「Eraser」と、それぞれの色と太さが並びます。「Done」か Escape で終わります。手書きの右クリックメニューの「Delete writing」で消せます。
 
 ## 色 {#colour}
 
