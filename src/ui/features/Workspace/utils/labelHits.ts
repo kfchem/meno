@@ -8,6 +8,9 @@
  * own hit areas (hooks/useStructureEvents).
  */
 
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { ATOM_HOVER_RING_RADIUS_RATIO } from "../constants";
+
 type Pt = { x: number; y: number };
 type Frame = { x0: number; x1: number; y0: number; y1: number };
 
@@ -28,4 +31,15 @@ export function atomOfLabelAt(reach: ReadonlyMap<number, Frame> | undefined, p: 
   if (!reach) return null;
   for (const [id, f] of reach) if (p.x >= f.x0 && p.x <= f.x1 && p.y >= f.y0 && p.y <= f.y1) return id;
   return null;
+}
+
+/**
+ * The atom the pointer at `p` (on the page) lights on `store`'s canvas: the nearest within its hover ring, or the one whose label's letters
+ * `p` is on - for the hover and for whatever must act on what the hover shows (components/BondsPick2D).
+ */
+export function atomLitAt(
+  store: { getState: () => { findAtomNear: (x: number, y: number, tol?: number, excludeId?: number | null) => number | null } },
+  p: Pt,
+): number | null {
+  return store.getState().findAtomNear(p.x, p.y, ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH, null) ?? atomOfLabelAt(labelReachOf(store), p);
 }

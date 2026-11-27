@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOV_PX } from "../constants";
-import { chordedPress, endsDrag, joinedBy, movePress, onChord, releaseClicksBond, startPress, swallowPress, togglesOn, traceEndedBy, flushesClick, turnTakenBack } from "./press";
+import { chordedPress, endsDrag, joinedBy, movePress, onChord, releaseClicksBond, startPress, swallowPress, togglesOn, traceEndedBy, flushesClick, turnTakenBack, bondTakesPress } from "./press";
 
 describe("press", () => {
   it("is a click when the button comes up where it went down", () => {
@@ -196,5 +196,20 @@ describe("a click on a bond, never lost and never in a double-click's way (the m
     expect(flushesClick(7, null)).toBe(true);
     expect(flushesClick(7, 7)).toBe(false);
     expect(flushesClick(null, 8)).toBe(false);
+  });
+});
+
+describe("a press on a bond's hit area", () => {
+  const L = 1;
+  const [a1, a2] = [{ x: 0, y: 0 }, { x: L, y: 0 }];
+  it("is the bond's away from its ends where no atom is lit", () => {
+    expect(bondTakesPress(a1, a2, L, { x: 0.5, y: 0.05 }, null)).toBe(true);
+  });
+  it("is not the bond's near either of its own ends", () => {
+    expect(bondTakesPress(a1, a2, L, { x: 0.2, y: 0 }, null)).toBe(false);
+    expect(bondTakesPress(a1, a2, L, { x: 0.85, y: 0.05 }, null)).toBe(false);
+  });
+  it("is not the bond's where an atom of another bond is lit over it, an atom standing a tenth of a bond off its middle", () => {
+    expect(bondTakesPress(a1, a2, L, { x: 0.5, y: 0.1 }, 7)).toBe(false);
   });
 });

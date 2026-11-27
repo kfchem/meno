@@ -161,3 +161,14 @@ export function turnTakenBack(turned: TurnedBond | null, id: number, now: number
 export function flushesClick(pending: number | null, pressed: number | null): boolean {
   return pending != null && pressed !== pending;
 }
+
+/**
+ * Whether a press at `p` on a bond whose ends are `a1` and `a2` (`length`, its drawing's bond length) is the bond's: never where an atom is
+ * lit under the pointer (`lit`, the atom the pointer's hover lights there - `atomLitAt`), so that what is lit is what a click, a
+ * double-click or a drag acts on, whatever bond's hit area lies under it too; nor within 0.3 of a bond of either of its own ends.
+ */
+export function bondTakesPress(a1: { x: number; y: number }, a2: { x: number; y: number }, length: number, p: { x: number; y: number }, lit: number | null): boolean {
+  if (lit != null) return false;
+  const near = 0.3 * length;
+  return Math.hypot(p.x - a1.x, p.y - a1.y) > near && Math.hypot(p.x - a2.x, p.y - a2.y) > near;
+}

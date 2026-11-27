@@ -689,7 +689,7 @@ was with nothing done since, turns it to form 0, the view from the other side, a
 (`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`), and the **Haworth ring** (`haworth`, seen in its view, `drawSolid`; `rings` finds either
 on a page), and the **Newman projection** (`newman`).
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
-  seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
+  seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread (on either ring of a fused pair, see *Fusing*); a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
   A **double-click** on a ring atom of a chair or a Haworth ring (or a click with Option or Alt held) adds one group at the atom's first free
@@ -731,6 +731,16 @@ on a page), and the **Newman projection** (`newman`).
   the solid does seen from this side: its axial bond is drawn in front of the first ring's far bond, which is broken behind it. Known answers
   (`fuse.test.ts`): trans- and cis-decalin read as the flat drawings with wedged hydrogens on every bond in every picture of the chair; R and S
   of 1-methyldecalin worked by hand; a group at any free place of either ring read as the solid has it.
+  The new ring's groups are drawn by extension as the first ring's are (`fusedRingsOn`, found by `projectionsIn` where its atoms stand
+  where one of the three ways puts them): each atom's two free places on the two of the pair's four lines its ring bonds leave free, a
+  double-click the equatorial first, the tip's word the new ring's own. On those four lines some places of the two rings would end on an
+  atom of the other ring or on another's place, a twentieth of a bond apart; such a place is drawn two thirds of a bond long along its own
+  line (`SHORT_PLACE`; of two places, the new ring's), and one third long where at two thirds it would cross a bond of the pair
+  (`SHORTER_PLACE`: no stub of it beyond the break behind a bond, no tick beyond one in front) - Meno's own drawing choice, no text's: what a place states is its line and its
+  depth, which stay, so it is read as at full length. A shortened place is held, offered, dragged to and swapped like any. Known answers
+  as above for every picture of the chair, the places as drawn (1152 drawings), and R and S of two 2-methyl-cis-decalins worked by hand,
+  one with its methyl at a shortened place. Groups led out of the new ring before this (by the plain rule) stay where they are and are read
+  as they were.
 - **Draw as chair** (a flat six-membered ring right-clicked, an atom or a bond of it; `projections/fromFlat`): the ring drawn as a chair of the
   tool's, each group moved onto the free position that states the configuration the flat drawing states (the reader's, asked of the solid's
   own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
