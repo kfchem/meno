@@ -1250,6 +1250,12 @@ Both go together, because both touch every layer.
   efavirenz's alkyne stood 0.2 of a bond into the C≡C, a spike between its
   outer lines) - and its two corners are rounded like any free corner (they
   were left sharp).
+- **Two thick bonds at a bare atom** - a wedge's wide end and a bold bond,
+  or two bold bonds - are joined to each other alone, one thick line round
+  the corner, whatever thin bonds meet the atom too (a group up or down at a
+  Haworth ring's front corner, a substituent drawn by hand): a thin bond
+  starts at the atom, inside the corner. At a labelled atom the bonds stop
+  short of the label, as ever.
 - **Units.** Every length can be given in points or as a fraction of the bond
   length, whichever the user prefers.
 - **Scope.** An application default; a document's own style over it; and
