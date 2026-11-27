@@ -66,6 +66,14 @@ The same holds for the exchange as it is saved and opened again.
 - **A conversation has no name.** Neither its frame nor its tab says one,
   and the column's tab for it is its icon alone. One an older file gave is
   not read.
+- **A new conversation's frame is put down empty.** Made from Quick Add,
+  its frame (24 bonds by 14, or as large as its card needs) goes in free
+  room nearest where Quick Add was opened - clear, by a bond's length, of
+  every thing on the page and of other conversations' frames, as a file
+  opened goes (`utils/freePlace`) - so that it sees nothing the person did
+  not put in it. Where it is not seen whole, the view eases to it
+  (`utils/viewShow`). What is selected is not taken in: things go in by
+  being moved inside. One undo takes it away.
 - **The frame is its scope.** What lies inside the frame is what the
   conversation may see and change. The rule is the one sets use: a thing
   lies inside where its middle does (`lyingIn`), extended to the kinds a

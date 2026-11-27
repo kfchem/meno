@@ -6,6 +6,10 @@ import { addConversation, clearSaid, removeConversations, scrolledConversation, 
 import { connectionFor } from "../../conversation/connections";
 import { runTurn, type Connection } from "../../conversation/turn";
 import type { EditorState } from "../types";
+import { framedForCard } from "../../pageGl/conversationCard";
+import { freePlace, pageBoxes } from "../../utils/freePlace";
+import { styleOf } from "../../../../../lib/chem/style";
+import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -15,6 +19,23 @@ export type Talking = { running: boolean; stop?: true; heard?: string; changed?:
 
 /** How long a frame is where there is none to wait for (no window: tests, a worker), in ms - one at 60 a second. */
 export const HEARD_MS = 16;
+
+/**
+ * Where a conversation asked for in `frame` is put down: as large as its card
+ * needs (`framedForCard`), moved to the nearest free room about the middle of
+ * `frame` (utils/freePlace) - clear, by a bond's length, of every thing on
+ * `st`'s page (`pageBoxes`) and of every other conversation's frame - so that
+ * nothing lies inside it but what the chemist puts there.
+ */
+export function freeFrame(st: EditorState, frame: { x0: number; y0: number; x1: number; y1: number }): { x0: number; y0: number; x1: number; y1: number } {
+  const f = framedForCard(frame);
+  if (![f.x0, f.y0, f.x1, f.y1].every(Number.isFinite)) return frame;
+  const at = { x: (f.x0 + f.x1) / 2, y: (f.y0 + f.y1) / 2 };
+  const foot = { x0: f.x0 - at.x, y0: f.y0 - at.y, x1: f.x1 - at.x, y1: f.y1 - at.y };
+  const frames = (st.conversations ?? []).filter((c) => !c.wholePage).map((c) => ({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }));
+  const p = freePlace([...pageBoxes(st, styleOf(st.docStyle)), ...frames], foot, at, NOMINAL_BOND_LENGTH);
+  return { x0: p.x + foot.x0, y0: p.y + foot.y0, x1: p.x + foot.x1, y1: p.y + foot.y1 };
+}
 
 /** `show` run with the next frame drawn - the words of a reply coming in gathered till then, shown once a frame, never for each word; its cancelling. */
 function nextFrame(show: () => void): () => void {
@@ -43,9 +64,15 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
     });
   return {
     setHoveredConversation: (id: number | null) => set((prev: EditorState) => (prev.hoveredConversation === id ? prev : { ...prev, hoveredConversation: id })),
+    // (put down empty: in free room nearest where it was asked for - clear of all there is on the page and of the other
+    //  conversations' frames, as a file opened goes, utils/freePlace - so that it sees nothing the chemist did not put in it;
+    //  where it is not seen whole, the view eases to it: utils/viewShow)
     addConversation: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextConversationId ?? 1;
-      return doc.edit("add conversation", (d) => addConversation(d, frame)) ? id : null;
+      const placed = freeFrame(get(), frame);
+      if (!doc.edit("add conversation", (d) => addConversation(d, placed))) return null;
+      get().requestShow(placed);
+      return id;
     },
     moveConversation: (id: number, dx: number, dy: number, gesture?: string) => {
       const c = doc.getState().conversations?.find((x) => x.id === id);

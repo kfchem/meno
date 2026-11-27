@@ -2210,7 +2210,8 @@ function WorkspaceContent({
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
               }
-              // (a conversation's frame about where Quick Add was opened, read in the column: what lies inside it is what it sees)
+              // (a conversation's frame, empty, in free room nearest where Quick Add was opened, read in the column: what lies inside it is
+              //  what it sees, and the chemist puts things in: store/slices/conversationsSlice `freeFrame`)
               else if (what === "conversation") {
                 const w = CONVERSATION_FRAME.w * NOMINAL_BOND_LENGTH;
                 const h = CONVERSATION_FRAME.h * NOMINAL_BOND_LENGTH;
