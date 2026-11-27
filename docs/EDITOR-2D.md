@@ -847,8 +847,10 @@ on a page), and the **Newman projection** (`newman`).
   two swapped one of the chiral pair; a spoke turned round the circle leaves the compound the same.
   Not yet checked in the sweep of what reads a bond's length or direction: label places for a labelled or charged atom of the pair.
 - **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; a ring is fused only on a chair that stands
-  alone (no three-ring system from the tool yet); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not
-  offered; a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
+  alone (no three-ring system from the tool yet); no boat or twist from a tool (one can be drawn bond by bond); a flat ring is drawn as
+  a chair only where it is a six-ring of single bonds standing alone (*Draw as chair*, above); a fused system is not flipped by the tool;
+  the icon puts form 0 down only on its second click, not on a chair already edited - *Flip chair* draws the form whose end atoms lie
+  nearest where they were (`chair`, `flipChairMoves`), and *Draw as chair* either form, as above.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,
