@@ -35,14 +35,14 @@ describe("a page that holds nothing at all", () => {
 });
 
 describe("the empty page's line", () => {
-  const all = { active: true, empty: true, opening: false, card: false, quickAdd: false, menu: false, draggedOver: false, dropping: false, talking: false, inHand: false };
+  const all = { active: true, empty: true, waiting: false, card: false, quickAdd: false, menu: false, draggedOver: false, talking: false, inHand: false };
   it("shows on the workspace in front where its page is empty, and says each half truly", () => {
     expect(emptyPageLineShown(all)).toBe(true);
     expect(EMPTY_PAGE_LINES).toEqual(["Double-click to add", "or drop a file"]);
     expect(EMPTY_PAGE_LINE).toBe("Double-click to add, or drop a file.");
   });
-  it("steps aside while the tab's own file is read or a card says what could not be, Quick Add or a menu is open, something is dragged over or dropped, a talk is given - and where the page holds something or is behind", () => {
-    for (const key of ["opening", "card", "quickAdd", "menu", "draggedOver", "dropping", "talking", "inHand"] as const) expect(emptyPageLineShown({ ...all, [key]: true }), key).toBe(false);
+  it("steps aside while anything is on its way to the page (a file opened, given, dropped or pasted, still being read) or a card says what could not be, Quick Add or a menu is open, something is dragged over or dropped, a talk is given - and where the page holds something or is behind", () => {
+    for (const key of ["waiting", "card", "quickAdd", "menu", "draggedOver", "talking", "inHand"] as const) expect(emptyPageLineShown({ ...all, [key]: true }), key).toBe(false);
     for (const key of ["active", "empty"] as const) expect(emptyPageLineShown({ ...all, [key]: false }), key).toBe(false);
   });
 });

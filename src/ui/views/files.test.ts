@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fileTakerOf, forgetFiles, giveFiles, setFileTaker, type OpenedFile } from "./files";
+import { waitedFor } from "./onItsWay";
 
 const file = (name: string): OpenedFile => ({ name, bytes: new TextEncoder().encode(name) });
 
@@ -31,5 +32,17 @@ describe("files opened, given to a workspace", () => {
     const taken: string[] = [];
     setFileTaker("c", (files) => taken.push(...files.map((f) => f.name)))();
     expect(taken).toEqual([]);
+  });
+
+  it("keep the page of the canvas just opened for them waiting, not empty, until it takes them - or they are let go of", () => {
+    giveFiles("d", [file("coming.mol")]);
+    giveFiles("d", [file("coming too.out")]);
+    expect(waitedFor("d")).toBe(true);
+    expect(waitedFor("e")).toBe(false);
+    setFileTaker("d", () => {})();
+    expect(waitedFor("d")).toBe(false);
+    giveFiles("e", [file("never.mol")]);
+    forgetFiles("e");
+    expect(waitedFor("e")).toBe(false);
   });
 });

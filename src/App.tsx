@@ -72,6 +72,10 @@ import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
 import { watchOpenedFiles } from "./lib/openedFiles";
+import { onItsWay } from "./ui/views/onItsWay";
+
+/** Meno started by the system: every page waits, not empty, until it is known whether a file was opened with it (ui/views/onItsWay). */
+const startKnown = isTauri() ? onItsWay(null) : () => {};
 
 /** How long a Meno started for Office waits for Office to ask it for something. */
 const OFFICE_GRACE_MS = 1500;
@@ -445,10 +449,13 @@ export default function App() {
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
   // - by what each is.
   // (a file opened is the user's first action, where nothing came before it - once it is open: lib/firstAction)
+  // (what they bring on its way to a page not yet known, until it is there: ui/views/onItsWay)
   const openPaths = async (paths: readonly string[], outside = false) => {
+    const arrived = onItsWay(null);
     try {
       await openPathsAlone(paths, outside);
     } finally {
+      arrived();
       if (paths.length) firstActionDone();
     }
   };
@@ -587,9 +594,11 @@ export default function App() {
     else void getCurrentWindow().destroy();
   };
   const openFiles = async (files: File[]) => {
+    const arrived = onItsWay(null);
     try {
       await openFilesAlone(files);
     } finally {
+      arrived();
       if (files.length) firstActionDone();
     }
   };
@@ -759,7 +768,7 @@ export default function App() {
   openPathsNow.current = openPaths;
   useEffect(() => {
     if (!isTauri()) return;
-    return watchOpenedFiles((paths) => void openPathsNow.current(paths, true));
+    return watchOpenedFiles((paths) => void openPathsNow.current(paths, true), undefined, undefined, startKnown);
   }, []);
 
   const ctl: TabsController = {

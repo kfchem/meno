@@ -7,6 +7,19 @@ import { watchOpenedFiles } from "./openedFiles";
 const settle = () => new Promise((go) => setTimeout(go, 0));
 
 describe("workspace files opened from outside Meno", () => {
+  it("tells when the first lot is known - after it is handed on to be opened, or found to be none or not to be had", async () => {
+    const said: string[] = [];
+    const hear = (async () => () => {}) as never;
+    watchOpenedFiles((paths) => said.push(`open ${paths.join(" ")}`), async () => ["/a.pdf"], hear, () => said.push("known"));
+    watchOpenedFiles(() => said.push("never"), async () => [], hear, () => said.push("none known"));
+    watchOpenedFiles(() => said.push("never"), () => Promise.reject(new Error("no app")), hear, () => said.push("failed known"));
+    await settle();
+    expect(said.indexOf("open /a.pdf")).toBeLessThan(said.indexOf("known"));
+    expect(said).toContain("none known");
+    expect(said).toContain("failed known");
+    expect(said).not.toContain("never");
+  });
+
   it("opens those opened before the page was up, then each lot the app says there is - each once", async () => {
     const kept = [["/a.meno"]];
     let told: (() => void) | undefined;
