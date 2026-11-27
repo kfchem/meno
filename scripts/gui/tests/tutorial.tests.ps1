@@ -67,15 +67,15 @@ function Listing([string] $root) {
         else { "$rel $((Get-FileHash -LiteralPath $_).Hash) $($i.LastWriteTimeUtc.Ticks)" }
     }) -join "`n"
 }
-function Copy-Of([string] $from, [string] $to, [switch] $Network, [string] $repo = "") {
-    try { & $tutorial { param($f, $t, $r, $n) Copy-ReadyHome -From $f -To $t -Repository $r -Network:$n } $from $to $repo $Network.IsPresent | Out-Null; "" } catch { "$_" }
+function Copy-Of([string] $from, [string] $to, [switch] $Network, [switch] $PluginEnvironments, [string] $repo = "") {
+    try { & $tutorial { param($f, $t, $r, $n, $e) Copy-ReadyHome -From $f -To $t -Repository $r -Network:$n -PluginEnvironments:$e } $from $to $repo $Network.IsPresent $PluginEnvironments.IsPresent | Out-Null; "" } catch { "$_" }
 }
 function Prepared([string] $name) {
     # (a prepared home: its settings, a plugin, uv's and pixi's folders, and what a run leaves out)
     $m = "$name/Library/Application Support/Meno"
     $settings = [ordered]@{
         format = 1
-        network = [ordered]@{ offline = $false; granted = @("plugin-catalogue", "app-update") }
+        network = [ordered]@{ offline = $false; granted = @("plugin-catalogue", "python-env:plugin-sketchkit", "python-env:plugin-gone", "app-update") }
         updates = [ordered]@{ asked = $false; notice = $true }
         plugins = [ordered]@{ removed = @("oldkit"); roles = @{ smiles = "sketchkit" }; programs = @{ "sketchkit:tool" = "/Users/someone/bin/tool" }; firstSetUp = "done"; usedBeforeAsked = $true }
         files = [ordered]@{ read = @{ xyz = "sketchkit" }; also = @{}; before = @{ xyz = @{ name = "Viewer"; path = "/Applications/Viewer.app" } } }
@@ -140,42 +140,61 @@ try {
         $copyN = Join-Path $scratch "run/home-ready-net"
         Copy-Of $home1 $copyN -Network | Out-Null
         $s = Get-Content -LiteralPath (Join-Path $copyN "$menoIn/settings.json") -Raw | ConvertFrom-Json -AsHashtable
-        Check "-Network: the purposes allowed there, less keeping Meno up to date" ($s.network.granted -join ",") "plugin-catalogue"
+        Check "-Network: the purposes allowed there, less keeping Meno up to date" ($s.network.granted -join ",") "plugin-catalogue,python-env:plugin-sketchkit,python-env:plugin-gone"
+        $copyE = Join-Path $scratch "run/home-ready-envs"
+        Copy-Of $home1 $copyE -PluginEnvironments | Out-Null
+        $s = Get-Content -LiteralPath (Join-Path $copyE "$menoIn/settings.json") -Raw | ConvertFrom-Json -AsHashtable
+        Check "-PluginEnvironments: the yes to set up the environment of each plugin in the copy, and nothing else" ($s.network.granted -join ",") "python-env:plugin-sketchkit"
 
         Write-Host "links in a prepared home"
         $home2 = Prepared "linked"
         $m2 = "linked/$menoIn"
-        # (uv a link to a folder beside it; an environment a link; a loop; a link to nothing; a relative link)
-        Move-Item -LiteralPath (Join-Path $scratch "$m2/uv") (Join-Path $scratch "linked/real-uv")
-        Link "$m2/uv" (Join-Path $scratch "linked/real-uv")
-        Put "linked/envs/plugin-other/venv/pyvenv.cfg" "home = there"
-        Put "linked/envs/plugin-other/files/f.txt" "f"
-        Link "linked/real-uv/plugin-other" (Join-Path $scratch "linked/envs/plugin-other")
-        Link "linked/real-uv/round" (Join-Path $scratch "linked/real-uv")
-        Link "linked/real-uv/a" (Join-Path $scratch "linked/real-uv/b")
-        Link "linked/real-uv/b" (Join-Path $scratch "linked/real-uv/a")
-        Link "linked/real-uv/nothing" (Join-Path $scratch "linked/gone")
+        # (within Meno's own folders: an environment a link, a folder of plugins a relative link, a link to nothing, a relative link)
+        Put "$m2/uv/store/plugin-other/venv/pyvenv.cfg" "home = there"
+        Put "$m2/uv/store/plugin-other/files/f.txt" "f"
+        Link "$m2/uv/plugin-other" (Join-Path $scratch "$m2/uv/store/plugin-other")
+        Link "$m2/uv/nothing" (Join-Path $scratch "linked/gone")
         Link "$m2/tools/near" "uv"
-        Move-Item -LiteralPath (Join-Path $scratch "$m2/plugins") (Join-Path $scratch "linked/real-plugins")
-        Link "$m2/plugins" "../../../real-plugins"
+        Move-Item -LiteralPath (Join-Path $scratch "$m2/plugins") (Join-Path $scratch "$m2/pixi/plugins-here")
+        Link "$m2/plugins" "pixi/plugins-here"
         $before = Listing $home2
         $copy2 = Join-Path $scratch "run2/home-ready-1"
         Check "a prepared home of links: copied" (Copy-Of $home2 $copy2) ""
         $to2 = Join-Path $copy2 $menoIn
         Check "its links and what they lead to untouched: venvs, a set-up cut short" ((Listing $home2) -ceq $before) $true
         Check "the copy holds no link" (NoLinks $copy2) 0
-        Check "what the links lead to copied, the venvs taken from the copy alone" "$(Test-Path -LiteralPath "$to2/uv/cache/wheel.txt") $(Test-Path -LiteralPath "$to2/uv/plugin-other/files/f.txt") $(Test-Path -LiteralPath "$to2/uv/plugin-other/venv") $(Test-Path -LiteralPath "$to2/plugins/sketchkit/current") $(Test-Path -LiteralPath "$to2/plugins/.staging")" "True True False True False"
-        Check "a loop, a link round to its own folder and one to nothing left out" "$(Test-Path -LiteralPath "$to2/uv/round") $(Test-Path -LiteralPath "$to2/uv/a") $(Test-Path -LiteralPath "$to2/uv/nothing")" "False False False"
-        Check "a relative link: what it leads to in the prepared home" (Test-Path -LiteralPath "$to2/tools/near/0.0.1/uv") $true
+        Check "what the links lead to copied, the venvs taken from the copy alone" "$(Test-Path -LiteralPath "$to2/uv/plugin-other/files/f.txt") $(Test-Path -LiteralPath "$to2/uv/plugin-other/venv") $(Test-Path -LiteralPath "$to2/plugins/sketchkit/current") $(Test-Path -LiteralPath "$to2/plugins/.staging")" "True False True False"
+        Check "a link to nothing left out" (Test-Path -LiteralPath "$to2/uv/nothing") $false
+        Check "a relative link: what it leads to in Meno's folder" (Test-Path -LiteralPath "$to2/tools/near/0.0.1/uv") $true
 
-        $home3 = Prepared "outward"
-        Put "elsewhere/disk/uv/0.0.1/uv" "uv"
-        Remove-Item -LiteralPath (Join-Path $scratch "outward/$menoIn/tools") -Recurse
-        Link "outward/$menoIn/tools" (Join-Path $scratch "elsewhere/disk")
-        $before = (Listing $home3) + (Listing (Join-Path $scratch "elsewhere"))
-        $err = Copy-Of $home3 (Join-Path $scratch "run3/home-ready-1")
-        Check "a link out of the prepared home: no copy, saying which" ($err -like "*is a link out of the prepared home*") $true
-        Check "and nothing there or in the prepared home touched" (((Listing $home3) + (Listing (Join-Path $scratch "elsewhere"))) -ceq $before) $true
+        # (each a prepared home with one link that stops the copy, and the copy then taken away)
+        $refusals = [ordered]@{
+            "a link out of the prepared home" = @{ link = "tools"; to = "elsewhere/disk"; says = "*is a link out of the prepared home*" }
+            "a link elsewhere in the prepared home" = @{ link = "tools"; to = "{home}/Documents"; says = "*is a link elsewhere in the prepared home*" }
+            "a link into Meno's folder, to what is not copied" = @{ link = "tools/logs"; to = "{meno}/logs"; says = "*is a link elsewhere in the prepared home*" }
+            "a link back into a folder it is in" = @{ link = "uv/round"; to = "{meno}/uv"; says = "*leads back into a folder it is in*" }
+            "two folders' links leading into each other" = @{ link = "uv/x/l"; to = "{meno}/uv/y"; also = @("uv/y/m", "{meno}/uv/x"); says = "*leads back into a folder it is in*" }
+            "two links leading to each other" = @{ link = "uv/a"; to = "{meno}/uv/b"; also = @("uv/b", "{meno}/uv/a"); says = "*links that lead to each other*" }
+        }
+        $i = 0
+        foreach ($case in $refusals.GetEnumerator()) {
+            $i++
+            $name = "refused$i"
+            $h = Prepared $name
+            Put "$name/Documents/letter.txt" "private"
+            Put "elsewhere/disk/uv/0.0.1/uv" "uv"
+            Put "$name/$menoIn/uv/x/f.txt" "x"
+            Put "$name/$menoIn/uv/y/f.txt" "y"
+            $fill = { param($t) $t.Replace("{home}", (Join-Path $scratch $name)).Replace("{meno}", (Join-Path $scratch "$name/$menoIn")).Replace("elsewhere/", (Join-Path $scratch "elsewhere") + "/") }
+            if ($case.Value.link -eq "tools") { Remove-Item -LiteralPath (Join-Path $scratch "$name/$menoIn/tools") -Recurse }
+            Link "$name/$menoIn/$($case.Value.link)" (& $fill $case.Value.to)
+            if ($case.Value.ContainsKey("also")) { Link "$name/$menoIn/$($case.Value.also[0])" (& $fill $case.Value.also[1]) }
+            $before = (Listing $h) + (Listing (Join-Path $scratch "elsewhere"))
+            $at = Join-Path $scratch "run3-$i/home-ready-1"
+            $err = Copy-Of $h $at
+            Check "$($case.Key): no copy, saying which" ($err -like $case.Value.says) $true
+            Check "  nothing there or in the prepared home touched, and the copy begun taken away" "$(((Listing $h) + (Listing (Join-Path $scratch 'elsewhere'))) -ceq $before) $(Test-Path -LiteralPath $at) $(Test-Path -LiteralPath (Join-Path $scratch "run3-$i"))" "True False True"
+        }
 
         Write-Host "where a prepared home and a copy may be"
         $home4 = Prepared "inner"
@@ -214,9 +233,14 @@ try {
         & $tutorial { param($r, $h) Start-Tutorial -Raw $r -Dest $r -Ready $h } $raw $home1
         $made = & $tutorial { New-TutorialHome -Ready }
         Check "-Ready: a copy in the run's folder" (Test-Path -LiteralPath (Join-Path $made "$menoIn/settings.json")) $true
+        $s = Get-Content -LiteralPath (Join-Path $made "$menoIn/settings.json") -Raw | ConvertFrom-Json -AsHashtable
+        Check "-Ready alone: the network allowed nothing" $s.Contains("network") $false
+        $madeE = & $tutorial { New-TutorialHome -Ready -PluginEnvironments }
+        $s = Get-Content -LiteralPath (Join-Path $madeE "$menoIn/settings.json") -Raw | ConvertFrom-Json -AsHashtable
+        Check "-Ready -PluginEnvironments: the plugin's environment alone" ($s.network.granted -join ",") "python-env:plugin-sketchkit"
         $before = Listing $home1
         & $tutorial { Remove-TutorialHomes }
-        Check "taken away as the run ends; the run's shots and the prepared home kept" "$(Test-Path -LiteralPath $made) $(Test-Path -LiteralPath (Join-Path $raw '01-shot.png')) $((Listing $home1) -ceq $before)" "False True True"
+        Check "taken away as the run ends; the run's shots and the prepared home kept" "$((Test-Path -LiteralPath $made) -or (Test-Path -LiteralPath $madeE)) $(Test-Path -LiteralPath (Join-Path $raw '01-shot.png')) $((Listing $home1) -ceq $before)" "False True True"
     }
 
     $fail = { param($f) Copy-Of $f (Join-Path $scratch ("x-" + [guid]::NewGuid().ToString("n") + "/h")) }

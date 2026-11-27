@@ -70,15 +70,23 @@ function New-TutorialHome {
       (Remove-TutorialHomes), unless run.ps1 was told -KeepOpen.
 
       .DESCRIPTION
-      -Network carries the purposes the person allowed to use the network
-      over into the copy - only where the person who prepared the home
-      agreed that recordings use those hosts. Without it the copy allows
-      none, and a run from it uses the network only as a fresh home would:
-      by asking, which a run never answers yes. Keeping Meno up to date is
-      never carried over.
+      A copy allows no purpose to use the network, so a run from it asks
+      as a fresh home would, and a run never answers yes. Each plugin's
+      environment is not in a copy (Copy-ReadyHome), and Meno sets it up
+      again at its first use, under the plugin's own purpose: a recording
+      that uses a plugin needs -PluginEnvironments, which carries over the
+      prepared home's yes to that purpose (`python-env:plugin-<id>`) for
+      each plugin in the copy, and nothing else - only where the person who
+      prepared the home agreed that recordings set the plugins'
+      environments up again over the network. -Network carries every
+      purpose allowed there - only where they agreed that recordings use
+      all those hosts. Keeping Meno up to date is never carried over.
     #>
-    param([switch] $Ready, [switch] $Network)
+    param([switch] $Ready, [switch] $PluginEnvironments, [switch] $Network)
+    # (named by the step it comes before; a second before the same step, the next number free)
+    $kind = if ($Ready) { "ready" } else { "fresh" }
     $n = $script:Tut.Steps.Count + 1
+    while (Get-Item -LiteralPath (Join-Path $script:Tut.Raw ("home-{0}-{1}" -f $kind, $n)) -Force -ErrorAction SilentlyContinue) { $n++ }
     if (-not $Ready) {
         $dir = Join-Path $script:Tut.Raw ("home-fresh-{0}" -f $n)
         [System.IO.Directory]::CreateDirectory($dir) | Out-Null
@@ -88,7 +96,7 @@ function New-TutorialHome {
         throw "this tutorial starts Meno in a prepared home: give run.ps1 -ReadyHome <folder>, or set MENO_TUTORIAL_HOME (scripts/gui/README.md, The prepared home)"
     }
     $dir = Join-Path $script:Tut.Raw ("home-ready-{0}" -f $n)
-    Copy-ReadyHome -From $script:Tut.Ready -To $dir -Run $script:Tut.Raw -Repository $script:Tut.Repository -Network:$Network | Out-Null
+    Copy-ReadyHome -From $script:Tut.Ready -To $dir -Run $script:Tut.Raw -Repository $script:Tut.Repository -PluginEnvironments:$PluginEnvironments -Network:$Network | Out-Null
     $script:Tut.Homes += $dir
     return $dir
 }
@@ -182,7 +190,9 @@ function Get-ReadyProblem {
     $meno = Join-Path $real "Library/Application Support/Meno"
     $settings = Join-Path $meno "settings.json"
     if (-not (Test-Path -LiteralPath $settings -PathType Leaf)) { return "'$From' holds no Meno started there (no Library/Application Support/Meno/settings.json): start Meno in it first" }
-    if (-not (Test-Within (Get-RealPath $meno) $real)) { return "its Meno folder is a link out of '$From'" }
+    $menoReal = Get-RealPath $meno
+    if (-not ($menoReal -and $menoReal.Equals($meno, [System.StringComparison]::OrdinalIgnoreCase))) { return "its Meno folder, or a folder on the way to it, is a link: only the Meno folder itself, '$meno', is read" }
+    if ((Get-Item -LiteralPath $settings -Force).LinkType) { return "its settings.json is a link: only Meno's own folder is read" }
     try { $s = Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json -AsHashtable } catch { return "its settings.json is not JSON: '$settings'" }
     if ($s -isnot [System.Collections.IDictionary]) { return "its settings.json is not Meno's: '$settings'" }
     $plugins = $s["plugins"]
@@ -200,10 +210,12 @@ function New-CopySettings {
       they came online were asked about (`usedBeforeAsked`), which plugin
       fills each role (`roles`) and those taken away (`removed`), all ids -
       and `updates.asked` set, so that Meno does not ask to keep itself up
-      to date. With -Network, also the purposes allowed to use the
-      network, less keeping Meno up to date.
+      to date. With -PluginEnvironments, also the prepared home's yes to
+      setting up the environment of each plugin of -PluginIds (its purpose,
+      `python-env:plugin-<id>`); with -Network, every purpose allowed to
+      use the network; never keeping Meno up to date.
     #>
-    param([Parameter(Mandatory)] [string] $Text, [switch] $Network)
+    param([Parameter(Mandatory)] [string] $Text, [string[]] $PluginIds = @(), [switch] $PluginEnvironments, [switch] $Network)
     $s = $Text | ConvertFrom-Json -AsHashtable
     $out = [ordered]@{ format = $(if ($s["format"] -is [long] -or $s["format"] -is [int]) { $s["format"] } else { 1 }) }
     $plugins = [ordered]@{}
@@ -220,9 +232,10 @@ function New-CopySettings {
     }
     $out.plugins = $plugins
     $out.updates = [ordered]@{ asked = $true }
-    if ($Network -and $s["network"] -is [System.Collections.IDictionary] -and $s["network"]["granted"] -is [array]) {
-        $out.network = [ordered]@{ granted = @($s["network"]["granted"] | Where-Object { $_ -is [string] -and $script:NeverCarried -notcontains $_ }) }
-    }
+    $granted = @(if ($s["network"] -is [System.Collections.IDictionary] -and $s["network"]["granted"] -is [array]) { $s["network"]["granted"] | Where-Object { $_ -is [string] } })
+    $envs = @($PluginIds | ForEach-Object { "python-env:plugin-$_" })
+    $carried = @($granted | Where-Object { $script:NeverCarried -notcontains $_ -and ($Network -or ($PluginEnvironments -and $envs -contains $_)) })
+    if ($carried.Count) { $out.network = [ordered]@{ granted = $carried } }
     return (ConvertTo-Json -InputObject $out -Depth 8)
 }
 
@@ -255,33 +268,54 @@ function Copy-Entry {
     if ($LASTEXITCODE -ne 0) { throw "'$From' could not be copied" }
 }
 
+function Test-LinkLoop {
+    # Whether a link that cannot be followed goes round (links leading to each other) rather than to nothing: followed a link at a time.
+    param([Parameter(Mandatory)] [string] $Path)
+    $seen = @{}
+    $at = $Path
+    while ($true) {
+        $item = Get-Item -LiteralPath $at -Force -ErrorAction SilentlyContinue
+        if (-not $item -or -not $item.LinkType) { break }
+        if ($seen.ContainsKey($at)) { return $true }
+        $seen[$at] = $true
+        $said = "$(& /usr/bin/readlink "$at")"
+        $next = if ($said.StartsWith("/")) { $said } else { "$([System.IO.Path]::GetDirectoryName($at))/$said" }
+        $at = [System.IO.Path]::GetFullPath($next)
+    }
+    return $false
+}
+
 function Copy-ReadyHome {
     <#
       .SYNOPSIS
       A fresh copy of a prepared home at -To, the prepared home only read:
       its Meno folder's entries that a run needs ($ReadyKeeps), cloned where
       the disk can (APFS), and settings made afresh (New-CopySettings).
+      Nothing of the prepared home outside those entries is read.
 
       .DESCRIPTION
       The rule for links: a copy holds none. Each link in what is copied is
-      followed in the prepared home; one that leads to a place inside the
-      prepared home is replaced in the copy by a copy of what is there,
-      one that leads to nothing (or round in a loop) is left out, and one
-      that leads out of the prepared home stops the copy, saying which. So
-      nothing a run's Meno does through the copy reaches the prepared home
-      or anything outside the copy.
+      followed in the prepared home: one that leads into those entries is
+      replaced in the copy by a copy of what is there; one that leads to
+      nothing is left out; one that leads anywhere else - elsewhere in the
+      prepared home, or out of it - or back into a folder it is in, or
+      round with another link, stops the copy, saying which. A copy that
+      stops is taken away. So nothing a run's Meno does through the copy
+      reaches the prepared home or anything outside the copy.
 
       Then, from the copy alone, what names the folder it was made in is
       taken away, as Meno itself leaves it out when its folder moves
       (folders.rs, unbind): uv's venv and pixi's .pixi and activation.json
-      of each plugin's, and a plugin's set-up cut short. Meno makes each
-      environment again at its first use, from the caches.
+      of each plugin's, and a plugin's set-up cut short. Meno sets each
+      environment up again at its first use (-PluginEnvironments: see
+      New-TutorialHome).
     #>
     param(
         [Parameter(Mandatory)] [string] $From,
         [Parameter(Mandatory)] [string] $To,
         [string] $Run,
         [string] $Repository,
+        [switch] $PluginEnvironments,
         [switch] $Network
     )
     if ($IsWindows) { throw "a prepared home is for a Mac, where Meno's folders follow HOME" }
@@ -290,61 +324,82 @@ function Copy-ReadyHome {
     if ($problem) { throw "no prepared home to copy: $problem" }
     if (Get-Item -LiteralPath $To -Force -ErrorAction SilentlyContinue) { throw "'$To' is there already: a prepared home is copied into a new folder" }
     $fromReal = Get-RealPath $From
-    $fromMeno = Get-RealPath (Join-Path $fromReal "Library/Application Support/Meno")
+    $fromMeno = "$fromReal/Library/Application Support/Meno"
+    # (what may be read: those entries, as they stand in Meno's folder)
+    $readable = @($script:ReadyKeeps | ForEach-Object { "$fromMeno/$_" })
     [System.IO.Directory]::CreateDirectory((Join-Path $To "Library/Application Support/Meno")) | Out-Null
     $toReal = Get-RealPath $To
     $toMeno = "$toReal/Library/Application Support/Meno"
-
-    $left = @()
-    foreach ($entry in Get-ChildItem -LiteralPath $fromMeno -Force) {
-        if ($entry.Name -eq "settings.json") { continue }
-        if ($script:ReadyKeeps -notcontains $entry.Name) { $left += $entry.Name; continue }
-        Copy-Entry -From "$fromMeno/$($entry.Name)" -To "$toMeno/$($entry.Name)" -Copy $toReal
-    }
-    $settings = Get-Content -LiteralPath "$fromMeno/settings.json" -Raw
-    [System.IO.File]::WriteAllText("$toMeno/settings.json", (New-CopySettings -Text $settings -Network:$Network) + "`n")
-
-    # (each link in the copy: what it stands for in the prepared home, followed there)
-    $sources = [System.Collections.Generic.List[object]]::new()
-    $sources.Add(@($toMeno, $fromMeno))
-    for ($pass = 1; ; $pass++) {
-        $links = @(& /usr/bin/find "$toReal" -type l 2>$null)
-        if (-not $links.Count) { break }
-        if ($pass -gt 32) { throw "the prepared home's links lead into each other more than 32 deep: no copy" }
-        foreach ($link in $links) {
-            $source = $sources | Where-Object { Test-Within $link $_[0] } | Sort-Object { $_[0].Length } -Descending | Select-Object -First 1
-            $original = $source[1] + $link.Substring($source[0].Length)
-            $target = Get-RealPath $original
-            if ($target -and -not (Test-Path -LiteralPath $target)) { $target = $null }
-            if (-not $target) { Remove-InCopy -Path $link -Copy $toReal; $left += "a link to nothing ($($link.Substring($toMeno.Length + 1)))"; continue }
-            if (-not (Test-Within $target $fromReal)) {
-                throw "no copy: '$original' is a link out of the prepared home, to '$target'. A prepared home holds what Meno needs itself: put it there, or take the link away"
-            }
-            $holder = Get-RealPath ([System.IO.Path]::GetDirectoryName($original))
-            if (Test-Within $holder $target) { Remove-InCopy -Path $link -Copy $toReal; $left += "a link round to a folder it is in ($($link.Substring($toMeno.Length + 1)))"; continue }
-            Remove-InCopy -Path $link -Copy $toReal
-            Copy-Entry -From $target -To $link -Copy $toReal
-            $sources.Add(@($link, $target))
+    try {
+        $left = @()
+        foreach ($entry in Get-ChildItem -LiteralPath $fromMeno -Force) {
+            if ($entry.Name -eq "settings.json") { continue }
+            if ($script:ReadyKeeps -notcontains $entry.Name) { $left += $entry.Name; continue }
+            Copy-Entry -From "$fromMeno/$($entry.Name)" -To "$toMeno/$($entry.Name)" -Copy $toReal
         }
-    }
 
-    # (what names the folder it was made in, as Meno leaves it when its folder moves; a plugin's set-up cut short)
-    $made = @()
-    foreach ($maker in @{ uv = @("venv"); pixi = @(".pixi", "activation.json") }.GetEnumerator()) {
-        $root = "$toMeno/$($maker.Key)"
-        if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
-        foreach ($env in Get-ChildItem -LiteralPath $root -Force -Directory | Where-Object { $_.Name -like "plugin-*" }) {
-            foreach ($name in $maker.Value) {
-                $path = "$root/$($env.Name)/$name"
-                if (Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue) { Remove-InCopy -Path $path -Copy $toReal; $made += "$($maker.Key)/$($env.Name)/$name" }
+        # (each link in the copy: what it stands for in the prepared home, followed there; each part copied for a link, with where it came from)
+        $sources = [System.Collections.Generic.List[object]]::new()
+        $sources.Add(@($toMeno, $fromMeno))
+        while ($true) {
+            $links = @(& /usr/bin/find "$toReal" -type l 2>$null)
+            if (-not $links.Count) { break }
+            foreach ($link in $links) {
+                $within = @($sources | Where-Object { Test-Within $link $_[0] } | Sort-Object { $_[0].Length } -Descending)
+                $original = $within[0][1] + $link.Substring($within[0][0].Length)
+                $short = $link.Substring($toMeno.Length + 1)
+                $target = Get-RealPath $original
+                if ($target -and -not (Test-Path -LiteralPath $target)) { $target = $null }
+                if (-not $target) {
+                    # (round with another link, or to nothing)
+                    if (Test-LinkLoop $original) { throw "no copy: '$original' leads round through links that lead to each other. Take the loop away in the prepared home" }
+                    Remove-InCopy -Path $link -Copy $toReal; $left += "a link to nothing ($short)"; continue
+                }
+                if (-not @($readable | Where-Object { Test-Within $target $_ }).Count) {
+                    $where = if (Test-Within $target $fromReal) { "elsewhere in the prepared home" } else { "out of the prepared home" }
+                    throw "no copy: '$original' is a link $where, to '$target'. Only Meno's own folders ($($script:ReadyKeeps -join ', ')) are read: put what it needs there, or take the link away"
+                }
+                # (back into a folder it is in, or into one a link on the way to it was copied from: the copy would never end)
+                $holder = [System.IO.Path]::GetDirectoryName($original)
+                $came = @($within | Select-Object -SkipLast 1 | ForEach-Object { $_[1] })
+                if ((Test-Within $holder $target) -or @($came | Where-Object { Test-Within $_ $target }).Count) {
+                    throw "no copy: '$original' leads back into a folder it is in, itself or through other links. Take the loop away in the prepared home"
+                }
+                Remove-InCopy -Path $link -Copy $toReal
+                Copy-Entry -From $target -To $link -Copy $toReal
+                $sources.Add(@($link, $target))
             }
         }
-    }
-    if (Get-Item -LiteralPath "$toMeno/plugins/.staging" -Force -ErrorAction SilentlyContinue) { Remove-InCopy -Path "$toMeno/plugins/.staging" -Copy $toReal; $made += "plugins/.staging" }
 
-    Write-Host "  a copy of the prepared home: settings.json made afresh$(if ($Network) { ' (the network as allowed there)' }), $(@($script:ReadyKeeps | Where-Object { Test-Path -LiteralPath "$toMeno/$_" }) -join ', ')"
+        # (what names the folder it was made in, as Meno leaves it when its folder moves; a plugin's set-up cut short)
+        $made = @()
+        foreach ($maker in @{ uv = @("venv"); pixi = @(".pixi", "activation.json") }.GetEnumerator()) {
+            $root = "$toMeno/$($maker.Key)"
+            if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+            foreach ($env in Get-ChildItem -LiteralPath $root -Force -Directory | Where-Object { $_.Name -like "plugin-*" }) {
+                foreach ($name in $maker.Value) {
+                    $path = "$root/$($env.Name)/$name"
+                    if (Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue) { Remove-InCopy -Path $path -Copy $toReal; $made += "$($maker.Key)/$($env.Name)/$name" }
+                }
+            }
+        }
+        if (Get-Item -LiteralPath "$toMeno/plugins/.staging" -Force -ErrorAction SilentlyContinue) { Remove-InCopy -Path "$toMeno/plugins/.staging" -Copy $toReal; $made += "plugins/.staging" }
+
+        # (the settings, last: the plugins in the copy are known)
+        $plugins = @(if (Test-Path -LiteralPath "$toMeno/plugins" -PathType Container) { Get-ChildItem -LiteralPath "$toMeno/plugins" -Directory -Force | Where-Object { -not $_.Name.StartsWith(".") } | ForEach-Object { $_.Name } })
+        $settings = Get-Content -LiteralPath "$fromMeno/settings.json" -Raw
+        [System.IO.File]::WriteAllText("$toMeno/settings.json", (New-CopySettings -Text $settings -PluginIds $plugins -PluginEnvironments:$PluginEnvironments -Network:$Network) + "`n")
+    } catch {
+        # (a copy that stops: taken away, the copy alone)
+        $why = $_
+        Remove-InCopy -Path $toReal -Copy $toReal -Whole
+        throw $why
+    }
+
+    $net = if ($Network) { " (every purpose allowed there)" } elseif ($PluginEnvironments) { " (the plugins' environments allowed to be set up again)" } else { "" }
+    Write-Host "  a copy of the prepared home: settings.json made afresh$net, $(@($script:ReadyKeeps | Where-Object { Test-Path -LiteralPath "$toMeno/$_" }) -join ', ')"
     if ($left) { Write-Host "    left out: $($left -join ', '), and everything outside Meno's folder" }
-    if ($made) { Write-Host "    left out as Meno leaves them when its folder moves (made again at their first use): $($made -join ', ')" }
+    if ($made) { Write-Host "    left out as Meno leaves them when its folder moves (set up again at their first use): $($made -join ', ')" }
     return $To
 }
 

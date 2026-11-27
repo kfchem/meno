@@ -207,7 +207,7 @@ unless told otherwise. The verbs are MenoTutorial.psm1's:
 |---|---|
 | `Set-Tutorial -Needs chemistry` | what the page says a reader needs, in its own words |
 | `New-TutorialHome` | an empty home for `Start-Meno -HomeFolder`, in the run's folder: Meno as someone opening it the first time sees it, its first start's questions and all; left in the run's folder with the shots |
-| `New-TutorialHome -Ready [-Network]` | a fresh copy of the prepared home (below) in the run's folder, for `Start-Meno -HomeFolder`: its plugins there and its first start's questions answered; taken away as the run ends, unless `-KeepOpen` |
+| `New-TutorialHome -Ready [-PluginEnvironments] [-Network]` | a fresh copy of the prepared home (below) in the run's folder, for `Start-Meno -HomeFolder`: its plugins there and its first start's questions answered; taken away as the run ends, unless `-KeepOpen` |
 | `Part Button "Not now" [-Within] [-Row] [-Reveal]` | a part of the window by its name (`Find-MenoPart`) |
 | `Point 600 400` | a point of the window, for the drawing on the page |
 | `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`, `Shortcut -Text`. `-NotDone` records a step the run must not take - the yes of a question about the network, which is the reader's to answer - and leaves it undone. A step done goes through the verbs above, so the guard stops it before it would answer such a question yes |
@@ -247,7 +247,8 @@ copies it into the run's folder and Meno is started on the copy.
   this account's own home, one in the repository or holding it, and one in
   the run's folder or holding it.
 - **Copied** (`Copy-ReadyHome`) from its Meno folder
-  (`Library/Application Support/Meno`) alone, cloned where the disk can: the
+  (`Library/Application Support/Meno`) alone - nothing of the prepared home
+  outside the entries named here is read or copied - cloned where the disk can: the
   plugins added (`plugins`); uv's and pixi's folders - their caches, the
   Pythons, the plugins' downloaded files and the records of each set up
   (`uv`, `pixi`); the tools Meno fetched (`tools`); the list of plugins
@@ -257,10 +258,12 @@ copies it into the run's folder and Meno is started on the copy.
   rest of the home - the caches, the web view's folders, the fonts Meno puts
   in the home's own.
 - **Links**: a copy holds none. Each link in what is copied is followed in
-  the prepared home: one leading to a place in the prepared home is
-  replaced in the copy by a copy of what is there; one leading to nothing,
-  or round in a loop, is left out; one leading out of the prepared home
-  stops the copy, saying which. Only then is anything taken out - of the
+  the prepared home: one leading into those entries is replaced in the copy
+  by a copy of what is there; one leading to nothing is left out; one
+  leading anywhere else - elsewhere in the prepared home or out of it - back
+  into a folder it is in, or round with other links, stops the copy at
+  once, saying which, and what was copied is taken away. Only then is
+  anything taken out - of the
   copy alone, by its literal name, after checking that it lies inside the
   copy as the disk has it: what names the folder it was made in (each
   plugin's `venv`, `.pixi`, `activation.json`), which Meno leaves out itself
@@ -274,12 +277,25 @@ copies it into the run's folder and Meno is started on the copy.
   up to date. Nothing else is carried: no style, colour set, program
   located, procedure, option or key Meno adds later.
 - **The network**: a copy allows no purpose to use it, so a run from it
-  asks as a fresh home would - and a run never answers yes. `New-TutorialHome
-  -Ready -Network` carries the purposes allowed in the prepared home over -
-  only where the person who prepared the home agreed that recordings use
-  those hosts. Keeping Meno up to date is never carried: with it not
-  allowed, Meno does not look for a newer Meno, download one or show its
-  notice.
+  asks as a fresh home would - and a run never answers yes. Keeping Meno up
+  to date is never carried: with it not allowed, Meno does not look for a
+  newer Meno, download one or show its notice.
+- **The plugins' environments**: a copy holds each plugin but not its
+  environment, which Meno sets up again the first time the plugin is
+  asked, under the plugin's own purpose (`python-env:plugin-<id>`). So a
+  recording that uses a plugin needs `New-TutorialHome -Ready
+  -PluginEnvironments`, which carries over the prepared home's yes to that
+  purpose for each plugin in the copy and nothing else - and may be used
+  only where the person who prepared the home agreed that recordings set
+  the plugins' environments up again over the network. Each such set-up
+  goes out through Meno's own network, only to the hosts the plugin's
+  set-up names - uv and Python from releases.astral.sh where the copy lacks
+  them, and the plugin's pinned packages from pypi.org and
+  files.pythonhosted.org (a pixi plugin's: pixi's own release, then
+  conda.anaconda.org and PyPI) - and it is not told to stay offline, so it
+  may ask those hosts even where the copied caches hold all it needs.
+  `-Network` carries every purpose allowed there over - only where that
+  person agreed that recordings use all those hosts.
 - **Taken away** as the run ends, with Meno closed (`Remove-TutorialHomes`),
   unless `-KeepOpen`: the shots stay in the run's folder.
 - **Out of a copy's reach**: what macOS keeps for the account rather than in
