@@ -289,15 +289,35 @@ copies it into the run's folder and Meno is started on the copy.
   asked, under the plugin's own purpose (`python-env:plugin-<id>`). So a
   recording that uses a plugin needs `New-TutorialHome -Ready
   -PluginEnvironments`, which carries over the prepared home's yes to that
-  purpose for each plugin in the copy and nothing else - and may be used
+  purpose for each plugin in the copy and nothing else (the purpose matched
+  exactly, letter case included, as Meno matches it) - and may be used
   only where the person who prepared the home agreed that recordings set
-  the plugins' environments up again over the network. Each such set-up
-  goes out through Meno's own network, only to the hosts the plugin's
-  set-up names - uv and Python from releases.astral.sh where the copy lacks
-  them, and the plugin's pinned packages from pypi.org and
-  files.pythonhosted.org (a pixi plugin's: pixi's own release, then
-  conda.anaconda.org and PyPI) - and it is not told to stay offline, so it
-  may ask those hosts even where the copied caches hold all it needs.
+  the plugins' environments up again, and fetch the plugins' own files,
+  over the network. That one yes covers both: setting the environment up
+  (`py_env_setup_uv`, `py_env_setup_pixi` in `src-tauri/src/lib.rs`) and
+  downloading the files a plugin needs besides its packages
+  (`plugin_files` in `src-tauri/src/plugfiles.rs`). Each goes out through
+  Meno's own network, only to the hosts that set-up names
+  (`src/lib/plugins/setUpSources.ts`):
+  - uv, the first time, and Python itself: releases.astral.sh;
+  - the packages a uv plugin takes from the Python Package Index: pypi.org
+    and files.pythonhosted.org;
+  - a pixi plugin's: pixi itself, the first time, from github.com and
+    release-assets.githubusercontent.com; its packages from
+    conda.anaconda.org; and pypi.org and files.pythonhosted.org where it
+    takes some from the Python Package Index;
+  - a package the plugin's lock fixes to a web address of its own, and the
+    plugin's own files: the hosts in those addresses, which the plugin
+    names (its lock and its manifest), so they are known only from that
+    plugin - and, where such an address is on github.com, also
+    codeload.github.com (a repository's archive) or
+    release-assets.githubusercontent.com (a release's file), and, where it
+    is on huggingface.co, any host under hf.co.
+
+  It is not told to stay offline, so it may ask those hosts even where the
+  copied caches hold all it needs. It reaches no other host, and the yes
+  lets nothing else in Meno use the network: not the plugin catalogue, not
+  keeping Meno up to date, and not another plugin's set-up.
   `-Network` carries every purpose allowed there over - only where that
   person agreed that recordings use all those hosts.
 - **Taken away** as the run ends, with Meno closed (`Remove-TutorialHomes`),

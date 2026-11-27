@@ -145,6 +145,15 @@ try {
         Copy-Of $home1 $copyE -PluginEnvironments | Out-Null
         $s = Get-Content -LiteralPath (Join-Path $copyE "$menoIn/settings.json") -Raw | ConvertFrom-Json -AsHashtable
         Check "-PluginEnvironments: the yes to set up the environment of each plugin in the copy, and nothing else" ($s.network.granted -join ",") "python-env:plugin-sketchkit"
+        $homeC = Prepared "cased"
+        $cased = Join-Path $homeC "$menoIn/settings.json"
+        $c = Get-Content -LiteralPath $cased -Raw | ConvertFrom-Json -AsHashtable
+        $c.network.granted = @($c.network.granted) + @("PYTHON-ENV:PLUGIN-SKETCHKIT", "Python-Env:plugin-sketchkit")
+        [System.IO.File]::WriteAllText($cased, (ConvertTo-Json $c -Depth 8))
+        $copyC = Join-Path $scratch "run/home-cased-envs"
+        Copy-Of $homeC $copyC -PluginEnvironments | Out-Null
+        $s = Get-Content -LiteralPath (Join-Path $copyC "$menoIn/settings.json") -Raw | ConvertFrom-Json -AsHashtable
+        Check "-PluginEnvironments: a purpose in other letters is not the plugin's environment (Meno compares exactly)" ($s.network.granted -join ",") "python-env:plugin-sketchkit"
 
         Write-Host "links in a prepared home"
         $home2 = Prepared "linked"

@@ -234,7 +234,7 @@ function New-CopySettings {
     $out.updates = [ordered]@{ asked = $true }
     $granted = @(if ($s["network"] -is [System.Collections.IDictionary] -and $s["network"]["granted"] -is [array]) { $s["network"]["granted"] | Where-Object { $_ -is [string] } })
     $envs = @($PluginIds | ForEach-Object { "python-env:plugin-$_" })
-    $carried = @($granted | Where-Object { $script:NeverCarried -notcontains $_ -and ($Network -or ($PluginEnvironments -and $envs -contains $_)) })
+    $carried = @($granted | Where-Object { $script:NeverCarried -notcontains $_ -and ($Network -or ($PluginEnvironments -and $envs -ccontains $_)) })
     if ($carried.Count) { $out.network = [ordered]@{ granted = $carried } }
     return (ConvertTo-Json -InputObject $out -Depth 8)
 }

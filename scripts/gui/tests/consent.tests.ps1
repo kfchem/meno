@@ -41,6 +41,11 @@ $cardYes = @("AXButton`tSet up", "AXGroup`t", "AXGroup`tSet up chemistry?", "AXW
 $cardNo = @("AXButton`tNot now", "AXGroup`t", "AXGroup`tSet up chemistry?")
 Check "the card's Set up" (Test-NetworkYes -Chain $cardYes) $true
 Check "the card's Not now" (Test-NetworkYes -Chain $cardNo) $false
+foreach ($no in @("Not now", "Cancel", "Stop")) {
+    # (the buttons a recording presses to decline: never taken for a yes)
+    Check "$no, a recording's no, is no yes" (Test-NetworkYes -Chain @("AXButton`t$no", "AXGroup`t", "AXGroup`tDownload RDKit?")) $false
+    Check "$no goes on, pressed among buttons read" ($null -eq (Find-YesUnder -Buttons @([pscustomobject]@{ Name = $no; X = 10; Y = 10; Width = 40; Height = 20 }) -At @{ X = 20; Y = 15 })) $true
+}
 Check "Settings' Set up of a plugin" (Test-NetworkYes -Chain @("AXButton`tSet up Example Plugin", "AXGroup`tChemistry")) $true
 Check "the card's title, no button" (Test-NetworkYes -Chain @("AXStaticText`tSet up chemistry?", "AXGroup`t")) $false
 Check "a word that only begins so is no yes" (Test-YesName "Set upright") $false
