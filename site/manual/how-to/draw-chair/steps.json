@@ -1,0 +1,141 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [],
+  "steps": [
+    {
+      "id": "open-quick-add",
+      "shot": "01-open-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 700,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "projections",
+      "shot": "02-projections.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1770,
+        "y": 682,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1228,
+          672,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "chair",
+      "shot": "03-chair.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1238,
+        "y": 772,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1238,
+          762,
+          778,
+          82
+        ]
+      }
+    },
+    {
+      "id": "equatorial",
+      "shot": "04-equatorial.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1316,
+        "y": 740,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "axial",
+      "shot": "05-axial.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1316,
+        "y": 740,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "flip-menu",
+      "shot": "06-flip-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1174,
+        "y": 682,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "flip",
+      "shot": "07-flip.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1204,
+        "y": 660,
+        "w": 628,
+        "h": 64
+      }
+    },
+    {
+      "id": "flat-menu",
+      "shot": "08-flat-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1224,
+        "y": 683,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "flat",
+      "shot": "09-flat.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1254,
+        "y": 724,
+        "w": 628,
+        "h": 64
+      }
+    },
+    {
+      "id": "undo",
+      "shot": "10-undo.webp",
+      "mark": {
+        "kind": "shortcut",
+        "text": "Z"
+      }
+    },
+    {
+      "id": "let-go",
+      "shot": "11-let-go.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1900,
+        "y": 1200,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "result": "result.webp"
+}

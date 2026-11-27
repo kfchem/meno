@@ -1,0 +1,235 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [],
+  "steps": [
+    {
+      "id": "open-quick-add",
+      "shot": "01-open-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 760,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "scheme",
+      "shot": "02-scheme.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1618,
+        "y": 742,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1228,
+          732,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "cycle",
+      "shot": "03-cycle.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1390,
+        "y": 832,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1238,
+          822,
+          778,
+          82
+        ]
+      }
+    },
+    {
+      "id": "catalyst-open",
+      "shot": "04-catalyst-open.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 328,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "catalyst-text",
+      "shot": "05-catalyst-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1466,
+        "y": 310,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1228,
+          300,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "catalyst",
+      "shot": "06-catalyst.webp",
+      "mark": {
+        "kind": "type",
+        "text": "L2Pd(0)"
+      }
+    },
+    {
+      "id": "second-open",
+      "shot": "07-second-open.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1574,
+        "y": 976,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "second-text",
+      "shot": "08-second-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1808,
+        "y": 958,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1570,
+          948,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "second",
+      "shot": "09-second.webp",
+      "mark": {
+        "kind": "type",
+        "text": "L2Pd(Ar)X"
+      }
+    },
+    {
+      "id": "third-open",
+      "shot": "10-third-open.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 826,
+        "y": 976,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "third-text",
+      "shot": "11-third-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1092,
+        "y": 958,
+        "w": 72,
+        "h": 72,
+        "near": [
+          854,
+          948,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "third",
+      "shot": "12-third.webp",
+      "mark": {
+        "kind": "type",
+        "text": "L2Pd(Ar)Ar'"
+      }
+    },
+    {
+      "id": "arrow-in-menu",
+      "shot": "13-arrow-in-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1574,
+        "y": 544,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "arrow-in",
+      "shot": "14-arrow-in.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1604,
+        "y": 660,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "arrow-in-words",
+      "shot": "15-arrow-in-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "Ar-X"
+      }
+    },
+    {
+      "id": "arrow-out-menu",
+      "shot": "16-arrow-out-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 826,
+        "y": 544,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "arrow-out",
+      "shot": "17-arrow-out.webp",
+      "mark": {
+        "kind": "click",
+        "x": 856,
+        "y": 724,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "arrow-out-words",
+      "shot": "18-arrow-out-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "Ar-Ar'"
+      }
+    },
+    {
+      "id": "let-go",
+      "shot": "19-let-go.webp",
+      "mark": {
+        "kind": "click",
+        "x": 2100,
+        "y": 1300,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "result": "result.webp"
+}
