@@ -100,7 +100,7 @@ import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
-import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
+import { aboutDrawing, menuTargetGone, pushFromMenu } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { readAs, unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
@@ -2924,11 +2924,13 @@ function WorkspaceContent({
             const taken = clip.part();
             if (taken) startExport(taken);
           } : undefined}
-          onPush={(menu.kind === "atom" || menu.kind === "bond") && menu.id != null && menu.selection !== "here" ? (half, press) => {
-            const st = store.getState();
-            const from = menu.kind === "atom" ? { atom: menu.id! } : { bond: menu.id! };
-            st.setPushDraw({ from, half, pointer: press ? clientToWorld(press.clientX, press.clientY) ?? menu.at : menu.at, to: null });
-          } : undefined}
+          // (an electron-pushing arrow, or a fishhook, from the atom or the bond right-clicked - utils/menuTarget#pushFromMenu)
+          onPush={(() => {
+            const from = pushFromMenu(menu);
+            if (!from) return undefined;
+            return (half: boolean, press?: React.PointerEvent) =>
+              store.getState().setPushDraw({ from, half, pointer: press ? clientToWorld(press.clientX, press.clientY) ?? menu.at : menu.at, to: null });
+          })()}
           arrow={(() => {
             // (an arrow right-clicked: what it is, each choice one step)
             const st = store.getState();
