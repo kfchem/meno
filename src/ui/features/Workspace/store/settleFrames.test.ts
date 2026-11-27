@@ -171,7 +171,7 @@ describe("frames settled as the pointer is let go (the store's watchFrames)", ()
 describe("a workspace opened with a frame sized by hand", () => {
   it("has the frame its members' room, as it would after an edit - and is not unsaved for it", async () => {
     const doc = createWorkspaceDocument();
-    doc.edit("draw", (d) => addSet({ ...d, model: page() as never, nextId: 5 }, { x0: -2, y0: -2, x1: 4, y1: 3 }));
+    doc.edit("draw", (d) => addSet({ ...d, model: page() as never, nextId: 5 }, { x0: -2, y0: -2, x1: 30, y1: 3 }));
     // (a frame far larger than what it holds, as saved)
     doc.edit("size", (d) => ({ ...d, sets: d.sets!.map((b) => ({ ...b, x0: -40, y0: -30, x1: 60, y1: 50 })) }));
     const store = createEditorStore(doc);
@@ -189,6 +189,47 @@ describe("a workspace opened with a frame sized by hand", () => {
     const byId = new Map(m.atoms.map((a) => [a.id, a]));
     const want = frameAround([structureBox(m, byId, [1, 2]), structureBox(m, byId, [3, 4])]);
     expect(fresh.getState().sets![0]).toMatchObject({ x0: want.x0, x1: want.x1, y0: want.y0, y1: want.y1 });
+    expect(fresh.history().dirty).toBe(false);
+  });
+});
+
+describe("a set's frame sized by hand, in the store (the maintainer, 2026-11-27)", () => {
+  /** The two chains in set 1, its frame their room. */
+  function sized() {
+    const doc = createWorkspaceDocument();
+    doc.edit("draw", (d) => addSet({ ...d, model: page() as never, nextId: 5 }, { x0: -2, y0: -2, x1: 30, y1: 3 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const m = doc.getState().model;
+    const byId = new Map(m.atoms.map((a) => [a.id, a]));
+    const room = frameAround([structureBox(m, byId, [1, 2]), structureBox(m, byId, [3, 4])]);
+    doc.edit("fit", (d) => ({ ...d, sets: d.sets!.map((b) => ({ ...b, ...room })) }));
+    return { doc, store, room };
+  }
+
+  it("is one step to undo for a drag: every move of it one step, undone at once, done again with a redo", () => {
+    const { doc, store, room } = sized();
+    const depth = doc.history().undoDepth;
+    for (const k of [1, 2, 3, 4]) store.getState().sizeSet(1, "e", { ...room, x1: room.x1 + k }, "drag");
+    expect(doc.getState().sets![0]).toMatchObject({ x1: room.x1 + 4 });
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(doc.getState().sets![0]).toMatchObject({ x1: room.x1 });
+    expect(doc.getState().sets![0].sized).toBeUndefined();
+    doc.redo();
+    expect(doc.getState().sets![0]).toMatchObject({ x1: room.x1 + 4, sized: { x1: 0 } });
+  });
+
+  it("opens with the size it was saved with: its members' room, and no side nearer than one dragged out", async () => {
+    const { store, room } = sized();
+    store.getState().sizeSet(1, "n", { ...room, y1: room.y1 + 6 }, "drag");
+    const saved = readWorkspace(workspaceOfFile((await workspaceFile(store.getState())).bytes)!)!;
+    const { ws } = await readKept(saved);
+    const fresh = createWorkspaceDocument();
+    const opened = createEditorStore(fresh);
+    connectStoreToDocument(opened, fresh);
+    opened.getState().openWorkspace(ws, true);
+    expect(fresh.getState().sets![0]).toMatchObject({ x0: room.x0, x1: room.x1, y0: room.y0, y1: room.y1 + 6, sized: { y1: 0 } });
     expect(fresh.history().dirty).toBe(false);
   });
 });

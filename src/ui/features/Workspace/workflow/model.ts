@@ -168,6 +168,17 @@ export function resizeSet(doc: WorkspaceDocument, id: number, frame: Frame): Wor
   return withSet(doc, id, (b) => (b.x0 === f.x0 && b.y0 === f.y0 && b.x1 === f.x1 && b.y1 === f.y1 ? b : { ...b, ...f }));
 }
 
+/** A set's frame fitted to `frame`, its sides sized out by hand as `sized` says (none: none). */
+export function fitSet(doc: WorkspaceDocument, id: number, frame: Frame, sized: WorkflowSet["sized"]): WorkspaceDocument {
+  const out = resizeSet(doc, id, frame);
+  return withSet(out, id, (b) => {
+    if (!sized && !b.sized) return b;
+    if (sized && b.sized && (["x0", "x1", "y0", "y1"] as const).every((k) => b.sized![k] === sized[k])) return b;
+    const { sized: _was, ...rest } = b;
+    return sized ? { ...rest, sized } : rest;
+  });
+}
+
 /** A set moved by (dx, dy), with all it holds: the structures drawn, the molecules in 3D and the pictures inside it. */
 export function moveSet(doc: WorkspaceDocument, id: number, dx: number, dy: number): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
@@ -475,8 +486,9 @@ export function repeatsSettled(doc: WorkspaceDocument): WorkspaceDocument {
  *   and outside it now, moved or the frame resized - leaves the set.
  * - What the edit brought into a chemist's set - outside before (or not
  *   there at all) and inside now - joins it, at its place in reading order
- *   among the members. A step's result set takes in nothing: what it holds
- *   is its step's.
+ *   among the members - but not what the edit left where it was and only
+ *   sized the frame over. A step's result set takes in nothing: what it
+ *   holds is its step's.
  * - What stays inside or outside keeps its place, or its absence: moved
  *   within the frame, a member keeps its place in the order.
  * A set with no members yet (one read from a file saved before sets kept
@@ -541,8 +553,15 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     if (!set.made && !set.collection && !set.table && !set.number && prior) {
       const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));
       const heldAtoms = new Set(held.structures.flat());
+      // (a frame sized by hand over a thing takes it not in: only what the edit moved, drew or put down joins - what it was sized over is
+      //  eased out of it as the pointer is let go, as out of any frame that grows: workflow/fitFrames `pushedOut`)
+      const sized = prior.x1 - prior.x0 !== set.x1 - set.x0 || prior.y1 - prior.y0 !== set.y1 - set.y0;
+      const wasMolecule = sized ? new Map((before.molecules3d ?? []).map((m) => [m.id, m])) : null;
+      const wasPicture = sized ? new Map((before.pictures ?? []).map((p) => [p.id, p])) : null;
+      const untouched = (member: Member) =>
+        "structure" in member ? member.structure.every((id) => wasAtom.get(id) === atomAt.get(id)) : "molecule" in member ? wasMolecule!.get(member.molecule) === doc.molecules3d?.find((m) => m.id === member.molecule) : wasPicture!.get(member.picture) === doc.pictures?.find((q) => q.id === member.picture);
       const add = (member: Member, at: { x: number; y: number }, w: { x: number; y: number } | null | undefined) => {
-        if (!inside(set, at) || (w && inside(prior, w))) return;
+        if (!inside(set, at) || (w && inside(prior, w)) || (sized && untouched(member))) return;
         const k = kept.findIndex((p) => readingOrder(at, p.at) < 0);
         const entry = { member, at, wasIn: false };
         kept = k < 0 ? [...kept, entry] : [...kept.slice(0, k), entry, ...kept.slice(k)];

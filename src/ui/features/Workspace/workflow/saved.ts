@@ -5,7 +5,7 @@
  * not there with it.
  */
 import type { JobState } from "../../../../lib/jobs";
-import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, SeriesCore, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, SeriesCore, SetSized, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import { numberIn, tableIn } from "../../../../lib/table";
 import { chartIn } from "../../../../lib/chart";
@@ -77,6 +77,12 @@ function readSet(v: unknown): WorkflowSet | null {
     ...(madeRead ? { made: madeRead } : {}),
     // (the name the chemist gave it, where they gave one)
     ...(typeof b.name === "string" && b.name.trim() ? { name: b.name } : {}),
+    // (its sides sized out by hand, each by how far inside the frame's side it lies: those that read, none below 0)
+    ...(() => {
+      const given = b.sized as Partial<Record<keyof SetSized, unknown>> | null | undefined;
+      const sized = Object.fromEntries((["x0", "x1", "y0", "y1"] as const).flatMap((k) => (given && isNum(given[k]) && (given[k] as number) >= 0 ? [[k, given[k] as number]] : []))) as SetSized;
+      return Object.keys(sized).length ? { sized } : {};
+    })(),
     ...(() => {
       const members = membersIn(b.members);
       return members ? { members } : {};

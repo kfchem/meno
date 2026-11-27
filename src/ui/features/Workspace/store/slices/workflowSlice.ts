@@ -20,7 +20,8 @@ import { appendParts, partsBounds } from "../../workflow/parts";
 import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
 import { fitResultSets, placeAsSet, type RunWith } from "../../workflow/run";
-import { framesSettled } from "../../workflow/fitFrames";
+import { framesSettled, setSized } from "../../workflow/fitFrames";
+import type { Side } from "../../pageGl/hits";
 import { holdsOwn, type Frame } from "../../workflow/entries";
 import type { EditorState, Molecule3D, WireEnd, WorkflowView } from "../types";
 import { createStepRuns } from "./stepRuns";
@@ -109,6 +110,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("fit frames", (d) => framesSettled(d, down, extentIn(d)), { joinTop: true });
     },
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
+    sizeSet: (id: number, side: Side, asked: Frame, gesture?: string) => doc.edit("size set", (d) => setSized(d, id, side, asked, extentIn(d)), coalesce("set-size", id, gesture)),
     // (the one asked for shown in the column - a PDF read there before giving way, as a text asked for does)
     readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null })),
     showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null }),
