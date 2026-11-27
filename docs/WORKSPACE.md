@@ -2704,7 +2704,9 @@ dropped onto a page with something on it, molecules in 3D, a formula drawn
 from one - is selected, and shown (utils/viewShow, `requestShow`): where it
 is not seen whole, the view eases to it, as Fit eases. What can be seen is
 the canvas the column beside it leaves: what lies under the column is not
-in view. The view goes along first, as little as takes it in with a
+in view - and a column that opens with what was put down, as a new chat's
+does, counts as open: the view goes once, as the column opens, to where it
+comes to rest beside it. The view goes along first, as little as takes it in with a
 margin; only where that is not enough, out as little as needed, it in the
 middle of what can be seen - never in. What is seen whole already leaves
 the view as it is. Molecules made in 3D from a drawing that come out of
