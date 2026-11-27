@@ -1,9 +1,9 @@
 # How do I draw a structure and see it in 3D? The card Meno shows as it
 # first starts, "Set up chemistry?" - the reader's to answer, so it is shot
 # in an empty home and answered "Not now" there - then a ring led round with
-# the pointer, and its 3D structure from its right-click menu, recorded in
-# the computer's own Meno, where chemistry is set up: the 3D structure
-# rising out of the drawing.
+# the pointer, and its 3D structure from its right-click menu, recorded in a
+# copy of the prepared home, where chemistry was set up by a person's own
+# hand: the 3D structure rising out of the drawing.
 
 Set-Tutorial -Needs "RDKit"
 
@@ -46,8 +46,8 @@ function Wait-NoNotice {
     throw "a notice about keeping Meno up to date stayed for a minute: no picture taken with it"
 }
 
-# the rest where chemistry is set up: the computer's own Meno
-Start-Meno
+# the rest where chemistry is set up: a copy of the prepared home
+Start-Meno -HomeFolder (New-TutorialHome -Ready)
 Wait-NoNotice -FirstSec 8
 Step open-quick-add DoubleClick -At (Point $start[0] $start[1])
 Wait-NoNotice

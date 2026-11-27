@@ -12,6 +12,9 @@
 #   New-TutorialHome                       an empty home for Start-Meno
 #                                          -HomeFolder: Meno as someone
 #                                          opening it the first time sees it
+#   New-TutorialHome -Ready                a copy of the prepared home:
+#                                          its questions answered and its
+#                                          plugins added by a person's hand
 #   Part Button "Add" -Row "Some plugin"   a part of the window, by name
 #   Point 1200 800                         a point of the window, in shot pixels
 #   Step <id> Click -At <part or point>    a step: shot, mark, and done
@@ -33,10 +36,13 @@ function Start-Tutorial {
     param(
         [Parameter(Mandatory)] [string] $Raw,
         [Parameter(Mandatory)] [string] $Dest,
-        [string] $Version = ""
+        [string] $Version = "",
+        # (the prepared home New-TutorialHome -Ready copies, and the repository it must lie outside)
+        [string] $Ready = "",
+        [string] $Repository = ""
     )
     $script:Tut = @{
-        Raw = $Raw; Dest = $Dest; Version = $Version; Needs = @()
+        Raw = $Raw; Dest = $Dest; Version = $Version; Needs = @(); Ready = $Ready; Repository = $Repository
         Steps = [System.Collections.Generic.List[object]]::new(); Recording = $true
     }
 }
@@ -54,14 +60,153 @@ function Set-Tutorial {
 function New-TutorialHome {
     <#
       .SYNOPSIS
-      An empty home for Start-Meno -HomeFolder, in the run's folder: Meno as
-      someone opening it the first time sees it, its first start's questions
-      and all. Nothing of the computer's own Meno is in it, and it is thrown
-      away with the run's folder.
+      A home for Start-Meno -HomeFolder, in the run's folder, thrown away
+      with it: empty - Meno as someone opening it the first time sees it,
+      its first start's questions and all - or, with -Ready, a copy of the
+      prepared home run.ps1 was given (-ReadyHome, or MENO_TUTORIAL_HOME):
+      Meno with its questions answered and its plugins added there by a
+      person's own hand (Copy-ReadyHome). Nothing of the computer's own
+      Meno is in either.
     #>
-    $dir = Join-Path $script:Tut.Raw ("home-fresh-{0}" -f ($script:Tut.Steps.Count + 1))
-    New-Item -ItemType Directory -Force $dir | Out-Null
+    param([switch] $Ready)
+    $n = $script:Tut.Steps.Count + 1
+    if (-not $Ready) {
+        $dir = Join-Path $script:Tut.Raw ("home-fresh-{0}" -f $n)
+        New-Item -ItemType Directory -Force $dir | Out-Null
+        return $dir
+    }
+    if (-not $script:Tut.Ready) {
+        throw "this tutorial starts Meno in a prepared home: give run.ps1 -ReadyHome <folder>, or set MENO_TUTORIAL_HOME (scripts/gui/README.md, Recording a how-to page)"
+    }
+    $dir = Join-Path $script:Tut.Raw ("home-ready-{0}" -f $n)
+    Copy-ReadyHome -From $script:Tut.Ready -To $dir -Repository $script:Tut.Repository | Out-Null
     return $dir
+}
+
+# What a prepared home's Meno folder (Library/Application Support/Meno: on a
+# Mac its data and local data are one, src-tauri/src/folders.rs) gives a copy:
+# the settings, the plugins added, their environments' makers' folders with
+# what they downloaded and the records of each plugin set up (uv, pixi), the
+# tools Meno fetched, and the list of plugins online. Anything else there -
+# the log, the network log, the window's place, jobs and the jobs kept, the
+# working folder chosen for jobs, presets saved, what a later Meno adds - is
+# left out, and so is all of the home outside that folder: the caches (PDFs'
+# pages, ligand data, made again), the web view's own folders.
+$script:ReadyKeeps = @("settings.json", "plugins", "uv", "pixi", "tools", "catalogue.json", "catalogue.json.minisig", "catalogue-state.json")
+
+function Get-ReadyProblem {
+    # Why a folder is no prepared home a copy can be made of, in words - or nothing, where it is one.
+    param([string] $From, [string] $Repository)
+    if (-not $From -or -not (Test-Path -PathType Container $From)) { return "there is no folder '$From'" }
+    $full = [System.IO.Path]::GetFullPath($From).TrimEnd("/", "\")
+    $own = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath("UserProfile")).TrimEnd("/", "\")
+    if ($full -eq $own) { return "'$full' is this account's own home: a prepared home is a folder of its own, made for recordings" }
+    if ($Repository) {
+        $repo = [System.IO.Path]::GetFullPath($Repository).TrimEnd("/", "\")
+        if ($full -eq $repo -or $full.StartsWith($repo + [System.IO.Path]::DirectorySeparatorChar)) { return "'$full' is in the repository: a prepared home is kept outside it" }
+    }
+    $settings = Join-Path $full "Library/Application Support/Meno/settings.json"
+    if (-not (Test-Path -PathType Leaf $settings)) { return "'$full' holds no Meno started there (no Library/Application Support/Meno/settings.json): start Meno in it first" }
+    try { $s = Get-Content -Raw $settings | ConvertFrom-Json -AsHashtable } catch { return "its settings.json is not JSON: '$settings'" }
+    if ($s -isnot [System.Collections.IDictionary]) { return "its settings.json is not Meno's: '$settings'" }
+    $plugins = $s["plugins"]
+    if (-not ($plugins -is [System.Collections.IDictionary] -and $plugins["firstSetUp"])) { return "the card Meno shows as it first starts was never answered in '$full': answer it there, by hand" }
+    return $null
+}
+
+function Get-ScrubbedSettings {
+    <#
+      .SYNOPSIS
+      A prepared home's settings as a copy has them: what was allowed and
+      set up kept; what is of the person or of the computer emptied - where
+      each separately installed program was located (a path with the home's
+      name), the apps formats opened with before Meno, procedures saved,
+      abbreviations and options remembered, and the cores and memory
+      chosen for calculations.
+    #>
+    param([Parameter(Mandatory)] [string] $Text)
+    $s = $Text | ConvertFrom-Json -AsHashtable
+    if ($s["plugins"] -is [System.Collections.IDictionary] -and $s["plugins"].Contains("programs")) { $s["plugins"]["programs"] = @{} }
+    if ($s["files"] -is [System.Collections.IDictionary]) { $s["files"].Remove("before") }
+    foreach ($key in "procedures", "abbreviations") { if ($s.ContainsKey($key)) { $s[$key] = @() } }
+    foreach ($key in "options", "calculations") { if ($s.ContainsKey($key)) { $s[$key] = @{} } }
+    return (ConvertTo-Json -InputObject $s -Depth 32)
+}
+
+function Copy-ReadyHome {
+    <#
+      .SYNOPSIS
+      A fresh copy of a prepared home at -To, the prepared one only read:
+      its Meno folder's entries that a run needs ($ReadyKeeps), cloned where
+      the disk can (APFS), the settings scrubbed (Get-ScrubbedSettings).
+
+      .DESCRIPTION
+      Of the environments, what names the folder it was made in is left
+      out, as Meno itself leaves it when its folder moves (folders.rs,
+      unbind): uv's venv and pixi's .pixi and activation.json of each
+      plugin's; Meno makes each again at its first use, from the caches
+      and with no question, what was allowed being in the settings. A link
+      into the prepared home is pointed at the same place in the copy, so
+      that nothing a run does reaches the prepared home.
+    #>
+    param([Parameter(Mandatory)] [string] $From, [Parameter(Mandatory)] [string] $To, [string] $Repository)
+    $problem = Get-ReadyProblem -From $From -Repository $Repository
+    if ($problem) { throw "no prepared home to copy: $problem" }
+    if (Test-Path $To) { throw "'$To' is there already: a prepared home is copied into a new folder" }
+    if ($IsWindows) { throw "a prepared home is for a Mac, where Meno's folders follow HOME" }
+    $fromFull = [System.IO.Path]::GetFullPath($From).TrimEnd("/")
+    $fromMeno = Join-Path $fromFull "Library/Application Support/Meno"
+    $toMeno = Join-Path $To "Library/Application Support/Meno"
+    New-Item -ItemType Directory -Force $toMeno | Out-Null
+    $toFull = [System.IO.Path]::GetFullPath($To).TrimEnd("/")
+
+    $left = @()
+    foreach ($entry in Get-ChildItem -Force $fromMeno) {
+        if ($script:ReadyKeeps -notcontains $entry.Name) { $left += $entry.Name; continue }
+        if ($entry.Name -eq "settings.json") { continue }
+        # (cloned, -c, where the disk can - nothing written twice; links copied as links, -P)
+        & /bin/cp -cRP $entry.FullName $toMeno 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item -Recurse -Force (Join-Path $toMeno $entry.Name) -ErrorAction SilentlyContinue
+            & /bin/cp -RP $entry.FullName $toMeno
+            if ($LASTEXITCODE -ne 0) { throw "'$($entry.FullName)' could not be copied" }
+        }
+    }
+    $settings = Get-Content -Raw (Join-Path $fromMeno "settings.json")
+    [System.IO.File]::WriteAllText((Join-Path $toMeno "settings.json"), (Get-ScrubbedSettings -Text $settings) + "`n")
+
+    # (what names the folder it was made in, as Meno leaves it when its folder moves; and a plugin's set-up cut short)
+    $made = @()
+    foreach ($maker in @{ uv = @("venv"); pixi = @(".pixi", "activation.json") }.GetEnumerator()) {
+        $root = Join-Path $toMeno $maker.Key
+        if (-not (Test-Path $root)) { continue }
+        foreach ($env in Get-ChildItem -Force -Directory $root | Where-Object { $_.Name -like "plugin-*" }) {
+            foreach ($name in $maker.Value) {
+                $path = Join-Path $env.FullName $name
+                if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force; $made += "$($maker.Key)/$($env.Name)/$name" }
+            }
+        }
+    }
+    $staging = Join-Path $toMeno "plugins/.staging"
+    if (Test-Path $staging) { Remove-Item -Recurse -Force $staging; $made += "plugins/.staging" }
+
+    # (a link into the prepared home: to the same place in the copy)
+    # (the prepared home as given and as the disk has it, /var for /private/var: a link may name either)
+    $fromNames = @($fromFull, "$(& /bin/realpath $fromFull 2>$null)".TrimEnd("/")) | Where-Object { $_ } | Select-Object -Unique
+    $links = @(& /usr/bin/find $toFull -type l 2>$null)
+    foreach ($link in $links) {
+        $target = & /usr/bin/readlink $link
+        $under = $fromNames | Where-Object { $target -and ($target -eq $_ -or $target.StartsWith("$_/")) } | Select-Object -First 1
+        if ($under) {
+            & /bin/ln -sfn ($toFull + $target.Substring($under.Length)) $link
+            if ($LASTEXITCODE -ne 0) { throw "the link '$link' could not be pointed into the copy" }
+        }
+    }
+
+    Write-Host "  a copy of the prepared home: $(@($script:ReadyKeeps | Where-Object { Test-Path (Join-Path $toMeno $_) }) -join ', ')"
+    if ($left) { Write-Host "    left out: $($left -join ', '), and everything outside Meno's folder" }
+    if ($made) { Write-Host "    left out as Meno leaves them when its folder moves (made again at their first use): $($made -join ', ')" }
+    return $To
 }
 
 function Part {

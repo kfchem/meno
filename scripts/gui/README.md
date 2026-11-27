@@ -207,6 +207,7 @@ unless told otherwise. The verbs are MenoTutorial.psm1's:
 |---|---|
 | `Set-Tutorial -Needs chemistry` | what the page says a reader needs, in its own words |
 | `New-TutorialHome` | an empty home for `Start-Meno -HomeFolder`: Meno as someone opening it the first time sees it, its first start's questions and all; thrown away with the run's folder |
+| `New-TutorialHome -Ready` | a fresh copy of the prepared home (below), for `Start-Meno -HomeFolder`: Meno with its questions answered and its plugins added; thrown away with the run's folder |
 | `Part Button "Not now" [-Within] [-Row] [-Reveal]` | a part of the window by its name (`Find-MenoPart`) |
 | `Point 600 400` | a point of the window, for the drawing on the page |
 | `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`, `Shortcut -Text`. `-NotDone` records a step the run must not take - the yes of a question about the network, which is the reader's to answer - and leaves it undone. A step done goes through the verbs above, so the guard stops it before it would answer such a question yes |
@@ -216,8 +217,58 @@ A part found `-Within` another (a dialog) or by its `-Row` keeps that one's
 place as well: the page shows the picture near the spot wide enough to take
 it in. A page's steps are its ids; its words, in `en.md` and `ja.md`, carry
 the same ids in the same order, or the website's build refuses them.
-`tests/tutorial.tests.ps1` checks what a step keeps and a drag's way, with
-no app: `pwsh -NoProfile -File scripts/gui/tests/tutorial.tests.ps1`.
+`tests/tutorial.tests.ps1` checks what a step keeps, a drag's way and the
+copy of a prepared home, with no app:
+`pwsh -NoProfile -File scripts/gui/tests/tutorial.tests.ps1`.
+
+### The prepared home
+
+Most pages need a plugin, and Meno adds one only after the person's own
+yes to a question about the network - which a run never gives, in any
+home. So the steps a page records after such a question are recorded in a
+**prepared home**: a folder a person made once, by hand, never a run, in
+which Meno was started as if it were the home, its questions answered and
+the plugins the pages need added, and Meno quit. A run never starts Meno
+in that folder itself and never writes to it: each `New-TutorialHome
+-Ready` makes a fresh copy of it in the run's folder and starts Meno there.
+
+- **Made** on a Mac, with the app that records:
+  `env HOME=<folder> <Meno.app>/Contents/MacOS/Meno` (or
+  `open -n --env HOME=<folder> <Meno.app>`), in a new empty folder. In
+  it: the card Meno shows as it first starts answered, the network's
+  questions the pages need allowed, the plugins they need added in
+  Settings, *Plugins*, and each used once, so that it is set up; nothing
+  else - no drawing saved, no program located, no procedure, style or
+  abbreviation of one's own. Then Meno quit (Cmd-Q).
+- **Kept** outside the repository: nothing of the computer it was made on
+  goes into git. A run is given it by `run.ps1 -ReadyHome <folder>` or
+  `MENO_TUTORIAL_HOME=<folder>`; a tutorial asks for it with one line,
+  `Start-Meno -HomeFolder (New-TutorialHome -Ready)`, and without it the
+  run stops, saying where to give it. A folder that is not there, holds no
+  Meno started in it, or whose first card was never answered, one in the
+  repository and the account's own home are refused, saying which.
+- **Copied** (`Copy-ReadyHome`), from its Meno folder
+  (`Library/Application Support/Meno`) alone, cloned where the disk can:
+  `settings.json`; the plugins added; uv's and pixi's folders - their
+  caches, the Pythons, the plugins' downloaded files and the records of
+  each set up - less what names the folder it was made in (each plugin's
+  `venv`, `.pixi`, `activation.json`), which Meno leaves out itself when
+  its folder moves and makes again at the first use, with no question;
+  the tools Meno fetched; the list of plugins online. A link into the
+  prepared home is pointed at the same place in the copy. The settings
+  are copied with where each separately installed program was located,
+  the apps formats opened with before Meno, procedures, abbreviations,
+  options remembered and the cores chosen for calculations emptied.
+  Left out: the log and the network log, the window's place, jobs, the
+  jobs kept and the working folder chosen for them, a plugin's set-up cut
+  short, and the rest of the home - the caches, the web view's folders,
+  the fonts Meno puts in the home's own.
+- **Not in the copy's reach**: what macOS keeps for the account rather
+  than in the home - a key kept in the keychain, the open and save panels'
+  last folders, the apps chosen to open a kind of file - and what a
+  plugin fetches from the network as it runs. A page that would show any
+  of them is not recorded from a prepared home, and its pictures are each
+  looked at before they are committed.
 
 ## What a platform module provides
 
