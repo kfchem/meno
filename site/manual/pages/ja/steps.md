@@ -4,12 +4,12 @@
 
 ## どこにあるか {#finding}
 
-何もないところをダブルクリックして「Calculations」を選びます。ステップを持つプラグインを加えていれば、そのプラグインごとの行が並び、その後に Meno の行があります。どの行にも、いくつのステップがあるかが出ます。行を開くと、そのステップが並びます。最初は Meno の行が開いています。ステップは細い線で四つのグループに分かれ、順に、構造を作る・選ぶ・突き合わせるステップ、エネルギーとそこから求めるもの、経路と測定、チャートと画像です。このページも同じ順に並べています。
+何もないところをダブルクリックして「Calculations」を選びます。まず Meno の行があり、ステップを持つプラグインを加えていれば、その後にプラグインごとの行が並びます。どの行にも、いくつのステップがあるかが出ます。行を開くと、そのステップが並びます。最初は Meno の行が開いています。ステップは細い線で四つのグループに分かれ、順に、構造を作る・選ぶ・突き合わせるステップ、エネルギーとそこから求めるもの、経路と測定、チャートと画像です。このページも同じ順に並べています。
 
 - Meno の行は、はじめからあります。プログラムを走らせるステップは、それを走らせるプラグインの行にあります（[プラグイン](plugins#adding)）。
 - ワイヤーを何もないところで離すと、そのワイヤーが運ぶものを受け取れるステップだけが並びます（[ワークフロー](workflows#adding)）。
-- カードをクリックすると、オプションが開きます。いちばん上の「Calculation」で、同じ行にある別のステップに変えられます。設定するもののないステップには「No options」と出ます。
-- 走らせる前にまだ何かが要るときは、「Ready」の代わりに、何が要るかがカードに出ます。たとえば「Give the window, in kcal/mol」や「Name the property to rank by」です。
+- オプションにまだ値が要るステップは、置いたときにカードが開きます。それ以外のステップは、カードをクリックするとオプションが開きます。いちばん上の「Calculation」で、同じ行にある別のステップに変えられます。設定するもののないステップには「No options」と出ます。
+- カードには、何もつながっていない間は「No input」、つながると「Ready」と出ます。走らせる前にまだ何かが要るときは、「Ready」の代わりに、何が要るかがカードに出ます。たとえば「Give the window, in kcal/mol」や「Name the property to rank by」です。
 - たいていのステップには、外したものを渡す二つ目の出口があります（「The rest」「Alike」「Failed」など）。そこに出るものには一つずつ理由が書かれ、黙って捨てられるものはありません（[ワークフロー](workflows#results)）。
 
 二つの入力のエントリーを突き合わせたり、エントリーをグループに分けたりするステップがいくつかあり、エントリーが持つプロパティで行います。そのためのプロパティは「Tag」ステップで付けられ、そのエントリーから作られるすべてのエントリーに引き継がれます。
@@ -68,13 +68,13 @@
 
 ## エネルギー {#energies}
 
-- 「Energy window」は、エネルギーを持つ配座のセットか、分子を受け取り、いちばん低いものから「Within」kcal/mol 以内のものを残します。残らなかったものは「Outside it」から出ます。欄には「Meno sets none: give your own.」と出ます。「From the lowest in」は「Each compound」か、「Each value of a property」（「The property」、たとえば経路や生成物）です。
+- 「Energy window」は、エネルギーを持つ配座のセットか、分子を受け取り、いちばん低いものから「Within」kcal/mol 以内のものを残します。残らなかったものは「Outside it」から出ます。欄は値を入れるまで空で、その下に目安が出ます。「From the lowest in」は「Each compound」か、「Each value of a property」（「The property」、たとえば経路や生成物）です。
 - 「Populations」は、配座のセットの各配座に、化合物の中でのボルツマン分布の割合を、「At」の温度（K）で付けます。
-- 「Ensemble energy」は、グループの自由エネルギーを、メンバーそれぞれをボルツマン因子で重み付けし、縮重度の分だけ数えて、メンバーの値が示す温度で求め、グループでいちばん低いエントリーに書きます。「Of」は使う自由エネルギーの名前、「As」は書くときの名前です。「Within」は「Each group」「Each value of a property」「All together」のどれかです。ほかのメンバーは「The rest」から出ます。求め方や温度の違う値を持つメンバーがあると、そのグループは外されます。
+- 「3D results onto structures」は、3D で求めたものを、元になった描いた構造に戻します。描いた構造を「Structures」に、配座のセットを「3D results」につなぎます。各構造には、セットの中の配座の数、いちばん低いエネルギー、「Shares at」の温度での同じ分子式の構造の中での割合が付きます。外される構造はありません。
 - 「Barrier」は、各鞍点に、出発点からの高さを kcal/mol で書きます。「Saddle points」と「Starts」をつなぎます。「Of」は「Free energy G」か「Electronic energy E」で、「G is」には G を持つプロパティの名前を書きます。「Rotational symmetry」は「As each program read it」か「Left out (σ = 1 on both sides)」です。「Pairs」は「In order」「Each with each」、または「Property」で突き合わせる「Matched on」です。鞍点は虚振動を一つだけ持つ収束したもの、出発点は収束した最適化の結果でなければならず、そうでなければ鞍点は理由を書いて「Failed」から出ます。
 - 「Number」は何も受け取らず、数を一つ渡します。「Number」は「Standard state, 1 atm to 1 mol/L」（「At」の温度での、その変化の自由エネルギーの項）か、「Typed」（「Value」と「Unit」）です。
 - 「Add」は、「Add」に書いた値（一行に一つずつか、セミコロンで区切る）と、「Number」入力につないだ数があればそれを足し、「As」の名前で書きます。たとえば、エネルギー、別のレベルで求めた G への補正、標準状態の項の和です。どの値も、そのエントリー自身の構造で求めたものでなければなりません。失敗したエントリーや収束しなかったエントリーは足さず、「Not added」から出します。
-- 「3D results onto structures」は、3D で求めたものを、元になった描いた構造に戻します。描いた構造を「Structures」に、配座のセットを「3D results」につなぎます。各構造には、セットの中の配座の数、いちばん低いエネルギー、「Shares at」の温度での同じ分子式の構造の中での割合が付きます。外される構造はありません。
+- 「Ensemble energy」は、グループの自由エネルギーを、メンバーそれぞれをボルツマン因子で重み付けし、縮重度の分だけ数えて、メンバーの値が示す温度で求め、グループでいちばん低いエントリーに書きます。「Of」は使う自由エネルギーの名前、「As」は書くときの名前です。「Within」は「Each group」「Each value of a property」「All together」のどれかです。ほかのメンバーは「The rest」から出ます。求め方や温度の違う値を持つメンバーがあると、そのグループは外されます。
 
 ## 経路と測定 {#paths}
 
@@ -92,7 +92,7 @@
 ここのステップはプログラムを走らせるもので、それを走らせるプラグインの行に、この名前で並びます。オプションはプラグインのもので、カードに出ます。たいていは、プログラムができなかったものを渡す「Failed」の出口を持ちます。ジョブの走り方や、見守り方、止め方は、ページ [計算とそのプログラム](calculations) にあります。
 
 - 「Generate」は何も受け取らず、モデルが出したものから描いた構造を渡します。
-- 「Conformers」は、描いた構造か 3D 分子を「Structures」で受け取り、配座のセットを渡します。プログラムが出す配座をすべて渡し、エネルギーの幅で外すことはしません。それは「Energy window」の仕事です。いくつ試すかを指定できる探索では、「Conformers sought」が「As many as the molecule needs」か「This many」（「How many」）になります。「As many as the molecule needs」では、新しい配座が「New conformers within」の範囲に出なくなるまで、何回かに分けて探します。この欄には「Meno sets none: give your own.」と出ます。
+- 「Conformers」は、描いた構造か 3D 分子を「Structures」で受け取り、配座のセットを渡します。プログラムが出す配座をすべて渡し、エネルギーの幅で外すことはしません。それは「Energy window」の仕事です。いくつ試すかを指定できる探索では、「Conformers sought」が「As many as the molecule needs」か「This many」（「How many」）になります。「As many as the molecule needs」では、新しい配座が「New conformers within」の範囲に出なくなるまで、何回かに分けて探します。この欄は値を入れるまで空で、その下に目安が出ます。
 - 「Descriptors」は、描いた構造ごとに、分子量など構造から求めた数を付けます。
 - 「Optimise」は各分子を最適化し、たどった道すじをフレームとして渡します。「Minimise with restraints」は、つないだ拘束を保ちながら、各分子を力場で最小化します。「Energy」は、各分子のその構造でのエネルギーを付けます。「Frequencies」は、振動と熱補正を付けます。
 - 「Path search」は、同じ原子を同じ番号付けで持つ「Start」と「End」を受け取り、組ごとに分子を一つ渡します。そのフレームが経路で、エントリーは精密化した最も高い点です。「Pairs」は「In order」、「Each with each」（「At most, pairs」まで）、または「Property」で突き合わせる「Matched on」です。

@@ -9,14 +9,14 @@ A calculation step is done by Meno or by a plugin ([Workflows](workflows#steps))
 - Some bring their program with them: Meno downloads it when the plugin is set up, as with the xTB and CREST plugins.
 - Others are interfaces to a program you install yourself, such as the ORCA interface for ORCA and the Gaussian interface for Gaussian 16. Meno never downloads such a program: setting up the interface fetches only what the interface needs.
 
-Each plugin's card in Settings, *Plugins*, says which it is ([Plugins](plugins#offered)).
+Settings, *Plugins*, lists them ([Plugins](plugins#offered)).
 
 ## A program you installed {#locate}
 
 Meno looks for a program you installed where the system finds programs. Its plugin's card in Settings, *Plugins*, has a line for it, as *ORCA, installed separately:*, then where it was found and its version, or *Not found*.
 
 - Press *Locate…* and choose the program itself to point Meno to it. If the copy will not do, the line says why.
-- A step whose program is not found says so on its card in place of *Ready*, as *ORCA not found*. Its *Run* then opens Settings, *Plugins*, where you can locate it.
+- A step's card says *No input* until something is wired into it, and *Ready* once it can run. Where its program is not found, the card says so in place of *Ready*, as *ORCA not found*, and the play button on its right-click menu (*Run*) opens Settings, *Plugins*, where you can locate it.
 
 ## Before a run {#asking}
 
@@ -29,7 +29,7 @@ Meno looks for a program you installed where the system finds programs. Its plug
 A step that runs a program runs it as jobs on this computer, one for each molecule unless its plugin runs them together. Settings, *Calculations*, *Jobs* sets how they run ([Settings](settings#calculations)).
 
 - *Cores for each job*, *Cores jobs may use* and *Memory jobs may use*: jobs run as many at once as fit in these, and the others wait their turn in the order they were asked for. While *Cores for each job* is empty, a step's jobs share the cores jobs may use.
-- *Where jobs run*: *Choose…* a folder for the jobs' files, or *Meno's own* to go back to Meno's own folder. It can be changed only while no job waits or runs. A folder on this computer's own disk is best: a network or synced folder may lose a job's files as it runs.
+- *Where jobs run*: the row says *Meno's own folder*, or the folder chosen. *Choose…* a folder for the jobs' files; once one is chosen, *Meno's own* beside it goes back to Meno's own folder. It can be changed only while no job waits or runs. A folder on this computer's own disk is best: a network or synced folder may lose a job's files as it runs.
 - *Finished jobs' files*: how many finished jobs are kept, and how much they hold; *Clear* deletes them. With *Keep job folders once saved* off, a finished job's folder goes to the Trash (the Recycle Bin on Windows) once the workspace's saved file holds all of it.
 - *Keep the computer awake while calculations run*.
 - *Say a job is quiet after*: how many minutes a running job may write nothing before its step says so. Meno never ends a job for it.
@@ -38,7 +38,7 @@ Jobs go on when Meno closes, and those waiting start in turn. When the workspace
 
 ## Watching a run {#watching}
 
-Start a run from a step's right-click menu with *Run* or *Run from here*, or from empty space with *Run all* ([Workflows](workflows#running)). The step's card says how it is going:
+Right-click a step: the first row of its menu is icons, among them a play button whose tip says *Run*, and *Run from here* beside it. Or right-click empty space for *Run all* ([Workflows](workflows#running)). Before a run, the frames of the sets a step will give say *Not run yet*. The step's card says how it is going:
 
 - *Waiting*, with its place in the queue, as *Waiting · 2nd*.
 - *Running*, with the time since it started, or how many of its jobs have ended, as *Running · 3 of 12*; and *no output for*, with the minutes, where a job has been quiet past *Say a job is quiet after*.
@@ -48,15 +48,15 @@ Start a run from a step's right-click menu with *Run* or *Run from here*, or fro
 
 ## Stopping {#stopping}
 
-- *Stop*, on a running step's right-click menu, stops the whole step, and nothing of that run comes in.
+- On a running step's right-click menu, a stop button in place of the play button, its tip *Stop*, stops the whole step, and nothing of that run comes in.
 - *Stop all*, on the right-click menu of empty space, stops every step that is running.
-- *Stop this job*, the button beside that list in a step's log, stops the job shown alone. The step goes on and brings in what its other jobs gave; that job's molecules leave by its *Failed* exit.
+- *Stop this job*, the button beside that list in a step's log, stops the job shown alone. The step goes on and brings in what its other jobs gave; that job's molecules go out of the step's *Failed* exit, where a step puts what it could not do ([Where results go](workflows#results)).
 
 A run's results come in as one step to undo. An undo takes them away; the jobs' files stay until you *Clear* them.
 
 ## What a molecule shows {#molecule}
 
-A molecule in 3D from a calculation - a step's result, or an output opened from a file - has a chip under it. Shut, the chip says what the calculation was - its program and version, its method, its charge and multiplicity - and its energy, and, in the attention colour, any imaginary frequencies and how many warnings.
+A molecule in 3D from a calculation - a step's result, or an output opened from a file - has a chip under it. Shut, the chip says what the calculation was - its program and version, its method, its charge and multiplicity - and its energy, and, picked out in colour, any imaginary frequencies and how many warnings.
 
 - Click the chip to open it: what the calculation found of the molecule, group by group; *How it was made*, folded until you open it; and *Warnings*, or *Could not read it* where a reader could not.
 - Where a molecule has several frames, such as its conformers, the chip says which is shown and its energy above the lowest ([3D structures](3d#conformers)).

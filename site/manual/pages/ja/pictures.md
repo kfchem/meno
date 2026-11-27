@@ -7,7 +7,7 @@
 画像に入れたいものを選びます。⌘A（Windows では Ctrl+A）ですべてを選べます。そのあと、次のどちらかをします。
 
 - コピーして（⌘C、または Ctrl+C）、Word や PowerPoint などに貼り付けます（[Word と PowerPoint へ](drawing#office)）。
-- 右クリックして「Export…」を選び、「Export」カードで「SVG picture」を選びます。保存先は Meno がそのあと尋ねます（[ほかの形式で書き出す](files#export)）。
+- 右クリックして「Export…」を選び、「Export」カードで「SVG picture」を選んで「Export…」を押します。保存先は Meno がそのあと尋ねます（[ほかの形式で書き出す](files#export)）。
 
 構造式は線の図として入ります。3D 分子は、ページに見えているとおりのピクセルの画像として入り、線の図にはなりません。その細かさは、設定の「Files」、「Copied pictures」の「Resolution」で決めます。「300 dpi」「600 dpi」「1200 dpi」から選びます。
 
@@ -19,7 +19,7 @@
 
 3D 分子を右クリックするか、3D 分子を含む選択を右クリックして、「Render…」を選びます。この項目は、レンダリングするプラグインを加えている間だけメニューに出ます。
 
-ページの上に「Render」カードが開きます。いちばん上で「Picture」か「Film」を選びます。その下に、選ぶものが「Look」「Render」「Scene」、動画ならさらに「Motion」に分かれて並びます。「Render」で始まり、「Cancel」か Escape でカードが閉じます。選んだものは、画像と動画で別々に覚えられます。
+ページの上に「Render」カードが開きます。いちばん上で「Picture」か「Film」を選びます。その下に、選ぶものが「Look」「Render」「Scene」、動画ならさらに「Motion」に分かれて並びます。「Render」を押すとレンダリングが始まります。閉じるには「Cancel」を押すか、Escape を押します。カードは、画像のときと動画のときで、それぞれ前に選んだものを覚えています。
 
 ## 見た目 {#look}
 
@@ -46,17 +46,17 @@
 動画では、「Motion」に次のものがあります。
 
 - 「Moving」：「Turning once round」、分子が複数のフレーム（たとえば配座）を持つときは「Through its frames」、計算の振動を分子に見せているときは「In the vibration shown」です。
-- 「Once or Loop」：始めの形に戻れる動きで選べます。「Once: eases in and comes to rest」か「Loop: seamless, over and over」です。
-- 「Length」：秒で表す長さです。動画は、その動きが見て取れる長さより短くはなりません。いちばん短い長さが、「At least 3 s」のように下に出ます。
+- 「Once or Loop」：動きが最後に始めと同じ姿に戻るときに選べます。「Once: eases in and comes to rest」か「Loop: seamless, over and over」です。
+- 「Length」：秒で表す長さです。動画は、その動きが見て取れる長さより短くはなりません。いちばん短い長さが、「At least 3 s」のように下に出ます。それより短くすると、その長さまで延ばされ、「Raised to 3 s, the shortest」のように出ます。
 - 「Frames a second」：「24」「30」「60」から選びます。
 
 「Render」にある「A film's quality」で、ファイルの大きさが変わります。設定の「Plugins」で「Film looks and motions」プラグインを加えると、加えている間、見た目と動きが増え、「Studio」も選べるようになります。
 
 ## レンダリングしている間 {#rendering}
 
-結果が置かれる場所に、その大きさの破線の枠が出ます。場所は分子の右か、いちばん近い空いたところです。枠には進み具合（「Getting ready…」「Waiting for other jobs to finish…」「Rendering 37%…」など）が出て、止めるボタンがあります。枠をドラッグすると、結果を置く場所を変えられます。
+結果が置かれる場所に、その大きさの破線の枠が出ます。場所は分子の右か、いちばん近い空いたところです。枠には進み具合（「Getting ready…」「Waiting for other jobs to finish…」「Rendering 37%…」など）が出て、止めるボタン（指すと「Stop rendering」と出ます）があります。枠をドラッグすると、結果を置く場所を変えられます。
 
-うまくいかなかったときは、枠にその理由が出ます。枠のボタンで枠を片付けます。ワークスペースのタブを閉じると、そのレンダリングは止まります。
+うまくいかなかったときは、枠にその理由が出ます。ボタンは「Put away」に変わり、押すと枠が片付きます。ワークスペースのタブを閉じると、そのレンダリングは止まります。
 
 ## ページに置かれた結果 {#result}
 

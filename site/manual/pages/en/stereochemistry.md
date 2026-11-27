@@ -4,10 +4,10 @@ How a drawing states a configuration with wedges, how Meno shows R and S, E and 
 
 ## Wedges and hashed wedges {#wedges}
 
-A wedge says that the bond comes towards you from the atom at its narrow end; a hashed wedge, that it goes away from you. Each states the configuration of the atom at its narrow end, and only where that atom can be a stereocentre. A plain bond lies in the page and states nothing.
+A wedge says that the bond comes towards you from the atom at its narrow end; a hashed wedge, that it goes away from you. Each states the configuration of the atom at its narrow end, and only where that atom can be a stereocentre. A plain bond lies in the page and states nothing. A hashed wedge drawn the other way round - narrow at an end group such as a methyl or an OH, wide at the stereocentre - is read at the stereocentre, as going away; a wedge drawn so states nothing.
 
 - Point at a single bond and press 1 again and again: wedge, hashed wedge, plain, and the next wedge narrow at the other atom. A click on the bond goes round the same way ([Drawing](drawing#bonds)).
-- On a bond's right-click menu, *Wedge* and *Hashed wedge* make it one; pressed again, the icon turns the narrow end to the other atom ([Drawing](drawing#menus)).
+- A bond's right-click menu has, among the icons at its top, a wedge and a hashed wedge (their tips: *Wedge*, *Hashed wedge*); pressed again, the icon turns the narrow end to the other atom ([Drawing](drawing#menus)).
 - A wedge keeps its narrow end at its atom while you draw on: bonds added at either end do not move it.
 - *Wavy bond*, under *More kinds of bond*, says the configuration at that atom is not known.
 - A structure drawn as a Fischer projection - each stereocentre a cross of plain bonds, one above another - states nothing as drawn. Its right-click menu offers *Read as Fischer projection*: the level bonds at each cross become wedges, and the configuration is then the drawing's. One undo takes it back.
@@ -37,6 +37,8 @@ An atom or a double bond whose R, S, E or Z you asked for, and which has none, s
 - "No R or S: drawn the way round its rings cannot take (in,out, or joined trans)."
 - "No R or S: the structure is too large to work it out."
 
+A structure read from a SMILES, typed or pasted, that leaves a configuration open says so in a notice as it comes onto the page, as "1 stereocentre not specified".
+
 Where an E or Z turns into the other in the mirror image, resting the pointer on it says so: "This Z becomes E in the mirror image: the two groups at one of its ends are mirror images of each other."
 
 ## When an edit changes a configuration {#changes}
@@ -65,7 +67,7 @@ The drawing is mirrored, and every wedge becomes hashed and every hashed wedge a
 
 ## Making 3D from an open drawing {#which-stereoisomer}
 
-*3D structure* makes the drawing in 3D ([3D structures](3d#making)). A drawing that stands for one stereoisomer is made at once. Where it leaves a stereocentre, a double bond or a chiral axis open, and the choice changes the compound, Meno asks first, in a card above the page: *Which stereoisomer?* It rings those places on the drawing, and says how many there are and how many stereoisomers the structure can be - "1 stereocentre is drawn without a configuration, so this structure can be either of 2 stereoisomers."
+The icon marked 3D on an atom's or a bond's right-click menu, its tip *3D structure*, makes the drawing in 3D ([3D structures](3d#making)). A drawing that stands for one stereoisomer is made at once. Where it leaves a stereocentre, a double bond or a chiral axis open, and the choice changes the compound, Meno asks first, in a card above the page: *Which stereoisomer?* It rings those places on the drawing, and says how many there are and how many stereoisomers the structure can be - "1 stereocentre is drawn without a configuration, so this structure can be either of 2 stereoisomers."
 
 - *Make all 4* - the button says how many - makes each of them, each as a molecule in 3D of its own. Each shows R and S at the places the drawing left open, to tell them apart. Of two enantiomers, one is made as the other's mirror image, with the same conformers and energies. Where there are more than 32, only *Make one* is offered.
 - *Make one* makes one of them.

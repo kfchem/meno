@@ -5,9 +5,9 @@ How to ask a language model about what you put in a frame on the page: it reads 
 ## Putting one down {#putting-down}
 
 1. Double-click empty space, and choose *Conversation* in the row of icons ([Starting on empty space](drawing#quick-add)).
-2. An empty frame is put down in free room near where you double-clicked, with a card against its right edge. The conversation opens in the column on the right as well.
+2. An empty frame is put down in free room near where you double-clicked, with a card against its right edge: the card is where you ask, and where what was said is shown. The conversation opens in the column on the right as well.
 
-Nothing on the page is in it yet, even what you had selected. One undo takes it away.
+Nothing on the page is in it yet, even what you had selected. One undo takes it away; moving it, sizing it and each switch turned are steps to undo of their own, taken back first.
 
 ## What it sees {#frame}
 
@@ -17,16 +17,16 @@ The frame is what the conversation sees. Drag a structure, a molecule in 3D, a t
 - Drag an edge or a corner to size the frame.
 - Click the tab to read the conversation in the column on the right.
 
-In the column, three switches say what it may do: *May read what lies inside its frame*, on for a new one; *May propose changes there*, off until you turn it on; and *Sees the whole page*, off unless you turn it on, when the tab says *Sees the whole page* too.
+In the column, three switches say what it may do: *May read what lies inside its frame*, on for a new one; *May propose changes there*, off until you turn it on; and *Sees the whole page*, off unless you turn it on. Turned on, the conversation sees everything on the page: the frame and its card go, and only the tab stays, saying *Sees the whole page*.
 
 ## Asking {#asking}
 
 Click the field at the foot of the card and type your question.
 
-- Enter asks. Shift+Enter starts another line. Escape leaves the field.
+- Enter asks. Shift+Enter starts another line. Escape leaves the field. Without a model plugin, Enter sends nothing and *Send* is greyed; the column says *Nothing is sent: no plugin for talking to a model is added. Add one in Settings, Plugins.*
 - The column has a field of its own at its foot, with *Send*.
 - While the model works, the field says *Working…*, the card says *Talking…*, and *Stop* is beside the field. *Stop* ends the turn; what it said so far is kept.
-- The card shows what was said in turn: your questions on the right, the replies under them, and each thing it looked at or did as a quiet line. Scroll the card with *Earlier* and *Latest* at its top and foot.
+- The card shows what was said in turn: your questions on the right, the replies under them, and each thing it looked at or did as a quiet line. Where it holds more than it shows, *Earlier* and *Latest* at its top and foot scroll it.
 - Each question has its limit, said in the column: *At most 8 replies and 24 tool calls for each message*.
 
 ## What an answer may change {#changes}

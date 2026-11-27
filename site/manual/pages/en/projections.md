@@ -8,7 +8,7 @@ Double-click empty space and choose *Projections* in the row of icons ([Starting
 
 - *Chair* puts down a cyclohexane chair seen from above and from the right. For the view from the other side, double-click on the chair you just put down, before doing anything else to it, open *Projections* and choose *Chair* again. Again, and it comes back.
 - *Haworth ring* puts down a ring of six, as a pyranose is drawn: seen from slightly above, the ring oxygen behind, the front bond bold and the two bonds beside it wedge-shaped. Choose it again on the ring you just put down, in the same way, for a ring of five, as a furanose is drawn.
-- *Newman projection* puts down two carbons seen end-on, drawn at one place with a circle round them. The front carbon's bonds meet at the centre of the circle; the back carbon's start at its rim.
+- *Newman projection* puts down two carbons seen end-on, drawn at one place with a circle round them; until groups are added, only the circle shows. The front carbon's bonds meet at the centre of the circle; the back carbon's start at its rim.
 
 Chosen anywhere else, each icon puts down another one there. The ring oxygen of a Haworth ring is an atom like any other and can be changed.
 
@@ -50,12 +50,12 @@ Right-click a bond of a chair's ring for a second chair fused on it, with three 
 
 ## R and S {#r-and-s}
 
-A chair, a Haworth ring and a Newman projection state the configuration of every centre in them, whether you meant one or not. As each group makes a centre, its R or S is shown on the drawing, so you can check what the drawing says. To leave a centre open, make its bond wavy. *Hide R/S*, on the right-click menu, takes the labels away. More on R and S is on the page [Stereochemistry](stereochemistry).
+A chair, a Haworth ring and a Newman projection state the configuration of every centre in them, whether you meant one or not. As each group makes a centre, its R or S is shown on the drawing, so you can check what the drawing says. A lowercase r or s marks a pseudo-asymmetric centre, such as each ring CH of 1,4-dimethylcyclohexane. To leave a centre open, make its bond wavy. *Hide R/S*, on the right-click menu, takes the labels away. More on R and S is on the page [Stereochemistry](stereochemistry).
 
 ## Flat and back {#flat}
 
 - *Draw flat*, on the right-click menu of a chair, a Haworth ring or a Newman projection, lays the structure out flat, with wedges for what the drawing showed in depth. The configuration stays the same.
-- *Draw as chair*, on the right-click menu of a cyclohexane ring drawn flat with its wedges, draws it as a chair: each group goes to the place that keeps its configuration, as a rule in the chair with fewer groups axial. *Flip chair* gives the other chair. A centre left open stays open, on a wavy bond. Which chair is drawn is a way of drawing, not a statement of which conformer is favoured.
+- *Draw as chair*, on the right-click menu of a six-membered ring of single bonds drawn flat with its wedges - a cyclohexane, or a ring holding an oxygen, as a pyranose's - draws it as a chair: each group goes to the place that keeps its configuration, as a rule in the chair with fewer groups axial. *Flip chair* gives the other chair. A centre left open stays open, on a wavy bond. Which chair is drawn is a way of drawing, not a statement of which conformer is favoured.
 - Where the flat ring gives no configuration at all, the menu shows *Draw as chair* greyed with the reason: "Its configuration is not drawn: a chair would state one."
 - *Draw as chair* is offered on a ring of single bonds with nothing fused, spiro or bridged on it.
 - *Clean up this structure* keeps a chair or a Haworth ring as it is drawn and tidies what hangs from it. It leaves a Newman projection as it is and says so.

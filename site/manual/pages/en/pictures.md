@@ -7,7 +7,7 @@ How to make a picture of what is on the page, and how to render molecules in 3D 
 Choose what the picture should hold - ⌘A (Ctrl+A on Windows) chooses everything - and then:
 
 - Copy it (⌘C, or Ctrl+C) and paste it into Word, PowerPoint or another program ([Into Word and PowerPoint](drawing#office)).
-- Or right-click it, choose *Export…*, and choose *SVG picture* on the *Export* card; Meno then asks where to save it ([Writing other formats](files#export)).
+- Or right-click it, choose *Export…*, and choose *SVG picture* on the *Export* card and press *Export…*; Meno then asks where to save it ([Writing other formats](files#export)).
 
 A drawing goes into these as lines. Molecules in 3D go in as a picture made of pixels, as the page shows them, never as lines: Settings, *Files*, *Copied pictures*, *Resolution* sets how sharp - *300 dpi*, *600 dpi* or *1200 dpi*.
 
@@ -47,16 +47,16 @@ For a film, *Motion* holds:
 
 - *Moving*: *Turning once round*; *Through its frames*, where a molecule has several - its conformers, say; or *In the vibration shown*, where a vibration from its calculation is shown on it.
 - *Once or Loop*, for a motion that can come back to where it began: *Once: eases in and comes to rest*, or *Loop: seamless, over and over*.
-- *Length*, in seconds. A film is never shorter than its motion can be followed in: the card says the shortest under it, as *At least 3 s*.
+- *Length*, in seconds. A film is never shorter than its motion can be followed in: the card says the shortest under it, as *At least 3 s*. A length shorter than that is raised to it, and the card says so, as *Raised to 3 s, the shortest*.
 - *Frames a second*: *24*, *30* or *60*.
 
 *A film's quality*, under *Render*, sets how large the file is. The *Film looks and motions* plugin, added in Settings, *Plugins*, brings more looks, motions and a *Studio* to the card while it is added.
 
 ## While it renders {#rendering}
 
-A dashed frame stands where the result will lie, as large as it will be: on the right of the molecules, or in the nearest free space. It says how far the render has got - *Getting ready…*, *Waiting for other jobs to finish…*, *Rendering 37%…* - with a button that stops it. Drag the frame to put the result somewhere else.
+A dashed frame stands where the result will lie, as large as it will be: on the right of the molecules, or in the nearest free space. It says how far the render has got - *Getting ready…*, *Waiting for other jobs to finish…*, *Rendering 37%…* - with a button that stops it, its tip *Stop rendering*. Drag the frame to put the result somewhere else.
 
-If a render fails, the frame says why, and its button puts the frame away. Closing the workspace's tab stops its renders.
+If a render fails, the frame says why, and its button, now *Put away*, puts the frame away. Closing the workspace's tab stops its renders.
 
 ## The result on the page {#result}
 
