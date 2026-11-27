@@ -4,7 +4,7 @@ What Meno does beyond itself comes from plugins: reading SMILES and making struc
 
 ## The list {#list}
 
-Settings, *Plugins*, has a card for each plugin Meno offers: its name and version, what it does, what it reads and writes, its licence and where it comes from. On the right, *Added* or *Not added*, with *Add* or *Remove*. Some plugins run on some systems only; each card says which, in place of its button.
+Settings, *Plugins*, has a card for each plugin Meno offers, once it has the list of plugins online: until then the tab shows *List them*, and Meno asks before it fetches the list. Each card gives its name and version, what it does, what it reads and writes, its licence and where it comes from. On the right, *Added* or *Not added*, with *Add* or *Remove*. Some plugins run on some systems only; each card says which, in place of its button.
 
 ## Adding one {#adding}
 
@@ -49,5 +49,5 @@ The list is Meno's list of plugins online, fetched once Meno is allowed to ask f
 - **Multiwfn interface**, **NCIPLOT interface**: show non-covalent interactions as surfaces coloured by their strength, with Multiwfn or NCIPLOT installed separately.
 - **CReM**: makes new structures from seeds, by replacing their fragments.
 - **REINVENT 4**: makes new molecules with a generative model of SMILES.
-- A plugin that finds a structure by its name in a database outside Meno, for Quick Add's *Look it up as a name…*. It sends the name and nothing else.
+- A plugin that finds a structure by its name in a database outside Meno. In Quick Add, where chemistry is set up and the text typed does not read, *Look it up as a name…* offers it; once it is added, a row under the field offers to look the name up with it. It sends the name and nothing else.
 - A plugin that talks with a model for a conversation on the page; it is chosen, with its key, in Settings, *Conversations*.

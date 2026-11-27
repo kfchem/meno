@@ -35,7 +35,7 @@ As Meno first starts, a card at the bottom left asks *Set up chemistry?*. Meno r
 
 - *Set up* fetches the list and the plugin, and sets it up. The card says each step as it goes, names the plugin with its licence and size, and has *Stop*. The plugin, RDKit, also makes structures in 3D.
 - If setting it up needs anything the card did not name, the card asks about that in its place before it goes on.
-- *Not now* fetches nothing, and Meno does not ask again. To set chemistry up later, type a SMILES in Quick Add and add the plugin offered under it, or add it in Settings, *Plugins*.
+- *Not now* fetches nothing, and Meno does not ask again. To set chemistry up later, type a SMILES in Quick Add and press Enter: under it Meno says *Needs a plugin*, with *List the plugins online* (Meno asks first), then *Add RDKit*; where the list was fetched before, *Add RDKit* comes at once. Or add it in Settings, *Plugins*.
 - If it fails, the card says why, with *Try again*.
 
 Once that card is done with, and after the first thing you do in Meno - put a structure down, open a file, open Settings - and a pause of a few seconds, a card in the same place asks *Keep Meno up to date?*. With *Keep up to date*, Meno looks on GitHub for a newer version shortly after it starts and once a day while it runs, downloads it in the background (about 20 MB) and installs it when you quit. With *Not now*, it does none of this. You can change your mind at any time in Settings, *Network*, under *Keep Meno up to date*.
