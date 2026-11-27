@@ -5,9 +5,8 @@ import { pictureToAdd } from "../utils/pictures";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
 import { useEffect, useRef, useState } from "react";
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { holdOpening, openingOf, takeOpening, useEditorStore } from "../store";
-import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
 import { editorModelOf, openedPlace, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
 import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument } from "../document";
@@ -29,7 +28,7 @@ import { kindOfFile } from "../../../../lib/calc/probe";
 import { sayNoneTold } from "../../../views/openFile";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
+import { atomLitAt } from "../utils/labelHits";
 import { importedScheme as importedSchemeOf, placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { heldEach } from "../utils/heldEach";
@@ -293,9 +292,8 @@ export function useStructureEvents(
     }
     const p = clientToWorld(e.clientX, e.clientY);
     if (!p) return;
-    const tol = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
     // (or on a label's other letters: the H of HO is the O - utils/labelHits)
-    const id = st.findAtomNear(p.x, p.y, tol, null) ?? atomOfLabelAt(labelReachOf(store), p);
+    const id = atomLitAt(store, p);
     if (id != null) st.setHoveredFromId(id);
     else st.clearAtomHover();
   };

@@ -8,6 +8,8 @@ import { chairDrawing, chairOf, FIRST_FORM, seenPlaces } from "./chair";
 import { fusableBonds, fusedOn, SHORT_PLACE, SHORTER_PLACE, type Fuse, type FuseHow } from "./fuse";
 import { chairExtension, projectionBond, projectionDrop } from "./extend";
 import { projectionsIn } from "./rings";
+import { ATOM_HOVER_RING_RADIUS_RATIO, BOND_PICK_THICKNESS_RATIO } from "../constants";
+import { bondTakesPress } from "../utils/press";
 
 const draw = () => chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });
 
@@ -378,6 +380,41 @@ describe("groups led out of a fused pair", () => {
   const all = PICTURES.flatMap((p) => [0, 1, 2, 3, 4, 5].flatMap((k) => WAYS.map((how) => ({ said: `form ${p.form}${p.flip ? " flipped" : ""}, bond ${k}, ${named(how)}`, d: pictured(p), m: fuse({ atoms: pictured(p).atoms, bonds: pictured(p).bonds }, 100 + k, how) }))));
   const angle = (x: number, y: number) => (((Math.atan2(y, x) * 180) / Math.PI) % 180 + 180) % 180;
   const gap = (a: number, b: number) => Math.min(Math.abs(a - b), 180 - Math.abs(a - b));
+
+  it("gives a press on a group's atom at a one-third place to that atom, as its hover lights it, never to the bond of the pair whose hit area it stands in", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    // (the atom the hover lights at `p`, as `atomLitAt` finds it: the nearest within its ring)
+    const lit = (m: Model, p: { x: number; y: number }) => {
+      const near = m.atoms.map((a) => ({ id: a.id, d: Math.hypot(a.x - p.x, a.y - p.y) })).filter((a) => a.d <= ATOM_HOVER_RING_RADIUS_RATIO * L).sort((a, b) => a.d - b.d);
+      return near[0]?.id ?? null;
+    };
+    let inStrip = 0;
+    for (const { said, m } of all) {
+      for (const id of m.atoms.filter((a) => a.z != null).map((a) => a.id)) {
+        const a = m.atoms.find((x) => x.id === id)!;
+        for (const place of placesOf(m, id)) {
+          if (Math.abs(Math.hypot(place.at.x - a.x, place.at.y - a.y) / L - SHORTER_PLACE) > 1e-9) continue;
+          // (the group led out there: its atom at the place's end)
+          const g = { id: 9000, el: "C", r: 0.9, x: place.at.x, y: place.at.y };
+          const withGroup: Model = { atoms: [...m.atoms, g], bonds: [...m.bonds, { id: 9001, a: id, b: g.id, order: 1 }] };
+          expect(lit(withGroup, g), `${said}, a place of ${id}`).toBe(g.id);
+          for (const b of withGroup.bonds) {
+            if (b.a === g.id || b.b === g.id) continue;
+            const [q, r] = [withGroup.atoms.find((x) => x.id === b.a)!, withGroup.atoms.find((x) => x.id === b.b)!];
+            const len = Math.hypot(r.x - q.x, r.y - q.y);
+            const along = ((g.x - q.x) * (r.x - q.x) + (g.y - q.y) * (r.y - q.y)) / len;
+            const off = Math.abs((r.x - q.x) * (g.y - q.y) - (r.y - q.y) * (g.x - q.x)) / len;
+            // (the bond's hit area: its length, BOND_PICK_THICKNESS_RATIO of a bond wide - components/BondsPick2D)
+            if (along < 0 || along > len || off > (BOND_PICK_THICKNESS_RATIO / 2) * L) continue;
+            inStrip++;
+            expect(bondTakesPress(q, r, L, g, lit(withGroup, g)), `${said}: a place of ${id} in bond ${b.id}'s hit area`).toBe(false);
+          }
+        }
+      }
+    }
+    // (some one-third places' ends do stand in a bond's hit area: the press there met the bond too)
+    expect(inStrip).toBeGreaterThan(0);
+  });
 
   it("leads a bond out of every atom of the new ring to its own free places, each on one of the four lines its ring bonds leave free; a double-click takes the equatorial first", () => {
     expect(all).toHaveLength(72);

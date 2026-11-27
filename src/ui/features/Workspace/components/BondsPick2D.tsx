@@ -13,7 +13,8 @@ import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { flushesClick, releaseClicksBond, turnTakenBack, type TurnedBond } from "../utils/press";
+import { bondTakesPress, flushesClick, releaseClicksBond, turnTakenBack, type TurnedBond } from "../utils/press";
+import { atomLitAt } from "../utils/labelHits";
 import { bondLengthFrom } from "../utils/magnified";
 
 export default function BondsPick2D() {
@@ -183,6 +184,13 @@ export default function BondsPick2D() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fireSingle reads the click state through its ref
   }, []);
 
+  // (whether a press at `p` on bond `b` is the bond's: not where an atom is lit, as the hover lights it, nor near its own ends)
+  const takesPress = (b: (typeof model.bonds)[number], p: { x: number; y: number }) => {
+    const a1 = model.atoms.find((a) => a.id === b.a);
+    const a2 = model.atoms.find((a) => a.id === b.b);
+    return !a1 || !a2 || bondTakesPress(a1, a2, bondLengthFrom(model.atoms, a1.id), p, atomLitAt(store, p));
+  };
+
   const { atoms, bonds } = model;
   // (what each hit area was placed from: a bond whose bond and atoms are the
   // objects they were is where it was - at every frame of a drag, all but
@@ -237,19 +245,8 @@ export default function BondsPick2D() {
         if (!b) return;
         try {
           const p = (e as any).point as { x: number; y: number } | undefined;
-          if (p) {
-            const a1 = model.atoms.find((a) => a.id === b.a);
-            const a2 = model.atoms.find((a) => a.id === b.b);
-            if (a1 && a2) {
-              const L = bondLengthFrom(model.atoms, a1.id);
-              const th = L * 0.3;
-              const d1 = Math.hypot(p.x - a1.x, p.y - a1.y);
-              const d2 = Math.hypot(p.x - a2.x, p.y - a2.y);
-              if (Math.min(d1, d2) <= th) {
-                return;
-              }
-            }
-          }
+          // (an atom lit there, or near the bond's own ends: the atom's double-click - utils/press `bondTakesPress`)
+          if (p && !takesPress(b, p)) return;
         } catch {}
         (e as any).stopPropagation?.();
         try {
@@ -274,20 +271,12 @@ export default function BondsPick2D() {
         }
         try {
           const p = (e as any).point as { x: number; y: number } | undefined;
-          if (p) {
-            const a1 = model.atoms.find((a) => a.id === b.a);
-            const a2 = model.atoms.find((a) => a.id === b.b);
-            if (a1 && a2) {
-              const L = bondLengthFrom(model.atoms, a1.id);
-              const th = L * 0.3;
-              const d1 = Math.hypot(p.x - a1.x, p.y - a1.y);
-              const d2 = Math.hypot(p.x - a2.x, p.y - a2.y);
-              if (Math.min(d1, d2) <= th) {
-                clickState.current.armed = false;
-                clickState.current.downBondId = null;
-                return;
-              }
-            }
+          // (an atom lit there - one of another bond's standing over this one's hit area, say - or near the bond's own ends: the
+          //  press is the atom's, as the hover shows, and none of the bond's - utils/press `bondTakesPress`)
+          if (p && !takesPress(b, p)) {
+            clickState.current.armed = false;
+            clickState.current.downBondId = null;
+            return;
           }
         } catch {}
         try {
