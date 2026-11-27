@@ -31,7 +31,8 @@ export function blocksRead(molblocks: readonly string[]): BlocksRead | null {
   const parsed = molblocks.flatMap((b) => readMoleculesFromText(b, "mol"));
   const graph = stereoGraphOf(molblocks);
   if (!graph || !parsed.length) return null;
-  const model = editorModelOf(moleculesToEditorModel(parsed).model);
+  // (a label written out into its block as its atoms is read as those atoms, each in its own place - not contracted to one again)
+  const model = editorModelOf(moleculesToEditorModel(parsed, { asWritten: true }).model);
   if (model.atoms.length !== graph.atoms.length || model.bonds.length !== graph.bonds.length) return null;
   const { input, bondAt } = identityInputOf(model);
   const plain = plainHydrogenAtoms(input);

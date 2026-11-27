@@ -623,7 +623,12 @@ export function convertMolToEditorModel(m: ParsedMol, scale: number) {
   return { model: { atoms, bonds }, centroid: { x: cx, y: cy } };
 }
 
-export function moleculesToEditorModel(mols: ParsedMol[]): {
+/**
+ * `mols` as one editor model. A contracted abbreviation of a file opens as one atom labelled with it (`contractAbbreviations`);
+ * `asWritten` keeps every atom a block writes out as an atom of its own instead, in the block's order - for a reader that holds
+ * the model to the block atom by atom (Workspace/chem/menoIsomers `blocksRead`).
+ */
+export function moleculesToEditorModel(mols: ParsedMol[], { asWritten = false }: { asWritten?: boolean } = {}): {
   model: EditorModel;
   centroid: { x: number; y: number };
   /** Each molecule's atoms, by id, in the order given, and its title where its record gives one (an SD file's records). */
@@ -683,7 +688,7 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
     const from = atoms.length - m.atoms.length;
     const mine = atoms.splice(from);
     const theirBonds = bonds.splice(bonds.length - m.bonds.length);
-    contractAbbreviations(mine, theirBonds, m, (i) => base + i);
+    if (!asWritten) contractAbbreviations(mine, theirBonds, m, (i) => base + i);
     idCounter = markSgroups(mine, theirBonds, m, (i) => base + i, (i) => base + m.atoms.length + i, idCounter);
     // (not spread into one call: a record of 50 000 atoms is more than a worker's stack takes - lib/chem/lists)
     pushAll(atoms, mine);
