@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import PartMenu, { type MenuTarget } from "./PartMenu";
 import { BOND_ICONS, bondIconAsLying } from "./menuIcons";
+import { ICONS_WIDEST, MENU_ICONS_MOST, iconsWidth } from "./menuIconLines";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws the menu, and what it lists is read off that.
@@ -41,16 +42,21 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
       {...extra}
     />,
   );
-  const row = html.match(/<div role="group" aria-label="Frequent"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
-  const icons = [...row.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-  // (the selection's own row of icons, under the thing's: cut and copy, and more where the thing's items do not reach it)
-  const selRow = html.match(/<div role="group" aria-label="Selection"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
-  const selIcons = [...selRow.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-  const rest = html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "").replace(/<div role="group" aria-label="Selection".*?<\/div>/, "");
+  // (the icons along its top, on one line or more: the thing's own, and the selection's - cut and copy, and more where the thing's
+  //  items do not reach it - after them)
+  const block = html.match(/<div role="group" aria-label="Frequent"[^>]*>((?:<div[^>]*>.*?<\/div>)*)<\/div>/);
+  const iconLines = [...(block?.[1] ?? "").matchAll(/<div[^>]*>(.*?)<\/div>/g)].map((l) =>
+    [...l[1].matchAll(/<button[^>]*?aria-label="([^"]+)"[^>]*>/g)].map((b) => ({ name: b[1], sel: b[0].includes('data-of="selection"') })),
+  );
+  const all = iconLines.flat();
+  const icons = all.filter((i) => !i.sel).map((i) => i.name);
+  const selIcons = all.filter((i) => i.sel).map((i) => i.name);
+  const rows = iconLines.map((l) => l.map((i) => i.name));
+  const rest = block ? html.replace(block[0], "") : html;
   const listed = [...rest.matchAll(/<button[^>]*><span>([^<]+)<\/span>/g)].map((m) => m[1]);
   // (what it acts on: its lines saying so, in order)
   const lines = [...html.matchAll(/<div role="note"[^>]*>([^<]+)<\/div>/g)].map((m) => m[1]);
-  return { icons, selIcons, listed, lines, html };
+  return { icons, selIcons, rows, listed, lines, html };
 }
 
 describe("a bond's menu", () => {
@@ -453,12 +459,15 @@ describe("an arrow's menu and its atom map", () => {
 describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
   const atomHere = (scope: { thing: string; count: string; more: boolean; ofKind: string; whole: boolean }) => ({ ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope });
 
-  it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy in a second row", () => {
+  it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy after its icons on one line, the menu as wide as the eight need", () => {
     const t = atomHere({ thing: "This atom", count: "This atom", more: false, ofKind: "1 atom", whole: false });
     const m = menu(t, { scope: t.scope, onColour: none });
     expect(m.lines).toEqual(["This atom"]);
     expect(m.icons).toEqual(["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Delete atom"]);
     expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.rows).toEqual([["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Cut", "Copy", "Delete atom"]]);
+    // (eight icons, a gap between kinds, the icons' margins and the border: wider than the 240 px it least was)
+    expect(m.html).toContain(`min-width:${iconsWidth(8, 1) + 10}px`);
     expect(m.listed).toContain("Copy as SMILES");
   });
 
@@ -480,6 +489,8 @@ describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
     expect(m.lines).toEqual(["2 atoms, 1 shape"]);
     expect(m.icons).toEqual(["Colour…", "Delete selection"]);
     expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    // (one line: the shape's colour, then cut and copy, Delete at the right end)
+    expect(m.rows).toEqual([["Colour…", "Cut", "Copy", "Delete selection"]]);
     expect(m.listed).toEqual(["Corners…", "Line as bonds", "1 pt line", "2 pt line", "Dashed line", "Bring to front", "Send to back", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
   });
 });
@@ -488,6 +499,22 @@ describe("a structure drawn as a Fischer projection", () => {
   it("is offered Read as Fischer projection where it is so drawn, and not where it is not", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { fischer: { run: none } }).listed).toContain("Read as Fischer projection");
     expect(menu(target({ kind: "atom", id: 1 })).listed).not.toContain("Read as Fischer projection");
+  });
+});
+
+describe("a menu's icons on one line", () => {
+  it("holds the fullest menu found - an atom selected, with its arrows - on one line, the menu as wide as they need", () => {
+    const t = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope: { thing: "This atom", count: "This atom", more: false, ofKind: "1 atom", whole: false } };
+    const m = menu(t, { scope: t.scope, onColour: none, onPush: none });
+    expect(m.rows).toHaveLength(1);
+    expect(m.rows[0]).toHaveLength(MENU_ICONS_MOST);
+    expect(m.rows[0][MENU_ICONS_MOST - 1]).toBe("Delete atom");
+    expect(m.html).toContain(`min-width:${ICONS_WIDEST + 10}px`);
+  });
+
+  it("keeps a menu of few icons at its least width, 240 px", () => {
+    const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope: { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape", whole: false }, onColour: none, shape: { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none } });
+    expect(m.html).toContain("min-width:240px");
   });
 });
 
@@ -505,6 +532,9 @@ describe("the menu of whole structures selected", () => {
     }
     expect(m.icons).toEqual(["Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
     expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    // (six icons fit the menu's least width: one line, cut and copy a small gap after the structures' own, Delete at its right end)
+    expect(m.rows).toEqual([["Clean up these structures", "3D structures", "Colour…", "Cut", "Copy", "Delete selection"]]);
+    expect(m.html).toMatch(/class="ml-1 meno-press[^"]*"[^>]*>/);
     expect(m.listed).toContain("Select this structure");
     expect(m.listed).toContain("Copy as SMILES");
     expect(m.listed).toContain("Turn over left to right");

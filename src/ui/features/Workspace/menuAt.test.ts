@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MENU_MARGIN, MENU_OFF, panFor, type PxBox } from "./menuAt";
+import { ICONS_WIDEST } from "./menuIconLines";
 
 const view: PxBox = { left: 0, top: 0, right: 1000, bottom: 700 };
 const at = (left: number, top: number, w = 200, h = 100): PxBox => ({ left, top, right: left + w, bottom: top + h });
@@ -52,5 +53,28 @@ describe("the menu's numbers", () => {
   it("stands 14 px up and to the right of its point, and keeps 16 px clear of the canvas's edges", () => {
     expect(MENU_OFF).toBe(14);
     expect(MENU_MARGIN).toBe(16);
+  });
+});
+
+describe("a menu as wide as its fullest line of icons", () => {
+  // (ten icons on one line, the icons' margins and the border: the widest a line of icons makes a menu)
+  const widest = ICONS_WIDEST + 2 * 4 + 2;
+
+  it("opened by the right edge, is brought in by what it lies past it and the margin", () => {
+    const m = at(view.right - 100, 300, widest, 200);
+    expect(panFor(m, view, 0)).toEqual({ dx: -(widest - 100 + MENU_MARGIN), dy: 0 });
+  });
+
+  it("opened by the bottom right corner, is brought in both ways, the column's cover counted", () => {
+    const m = at(view.right - 50, view.bottom - 40, widest, 300);
+    const { dx, dy } = panFor(m, view, 120);
+    expect(m.right + dx).toBe(view.right - 120 - MENU_MARGIN);
+    expect(m.bottom + dy).toBe(view.bottom - MENU_MARGIN);
+  });
+
+  it("on a canvas narrower than it, keeps its left edge in", () => {
+    const narrow: PxBox = { left: 0, top: 0, right: widest - 40, bottom: 700 };
+    const { dx } = panFor(at(200, 300, widest, 100), narrow, 0);
+    expect(200 + dx).toBe(MENU_MARGIN);
   });
 });
