@@ -132,6 +132,18 @@ stops being part of the work.
 - **Its pages one under another**, as wide as the column, scrolled
   there. A page number shows as it scrolls (*3 / 12*); a click on it asks
   for a page to go to.
+- **A finger on a touch screen moves them** as the wheel does: dragged
+  up or down, or across, the pages go with it, and let go while still
+  moving, they go on and slow, as the page does under a finger. A finger
+  put down and taken up where it was is a click: on a link, a structure
+  of a figure, words selected or empty space, it does what a click does
+  there, and two in quick succession select a word. A finger's drag never
+  selects words - a mouse or a pen does. (Until 2026-11-27 a finger there
+  moved nothing: the pages are drawn on the canvas under the column, with
+  no box of the web view's own to scroll, and only the wheel moved them.
+  A text and a Markdown text read in the column were the same, and move
+  under a finger now as well; a conversation and a table there scroll in
+  a box of their own, and always did.)
 - **Larger or smaller** by a pinch over the column, or Ctrl/⌘ with the
   wheel there - the column's own, never the canvas's. *Fit width* comes
   back with a double-click on the number. The column is as wide as its
@@ -1029,6 +1041,7 @@ Built:
   - Several can be read there, each kept where it was read; closing the one shown shows the next.
 - **Its pages** lie one under another, as wide as the column.
   - The wheel and two fingers move them. A notch is eased, fingers are followed as they go.
+  - A finger on a touch screen moves them too, followed as it goes and gliding on once let go; still, it is a click (`fingerScroll`: the column's body takes no pan of the system's own, `touch-action: none`, and follows the finger itself, as the canvas does).
   - A pinch, or Ctrl or ⌘ with the wheel, makes them larger or smaller about the pointer, from a quarter of the column's width to eight times it.
   - With the pointer over them, the arrow keys, Page Up and Page Down, Home and End move them, and ← and → go a page.
 - **Joined to its stack.**
