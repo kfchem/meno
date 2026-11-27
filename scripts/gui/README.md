@@ -92,14 +92,18 @@ Meno up to date?" (`src/ui/network/ConsentDialog.tsx`) - is answered by the
 person at the computer, never by a run, on either desktop. Every such
 question has one yes, *Allow and download*; the card Meno shows as it
 first starts, "Set up chemistry?", has *Set up*, as has Settings' *Set up
-<plugin>*. A click or a drag whose press
+<plugin>*, and its question about keeping Meno up to date *Keep up to date*.
+What fetches or applies again something allowed before is taken for a yes
+too: the card's *Try again*, Settings' *Update all (n)* and *Update to
+<version>* of a plugin, and *Restart now* into a newer Meno. A click or a drag whose press
 or release would land on it, or a key, a shortcut or typing sent while it
 has the focus, stops the run before anything is sent; Escape, which answers
 no, always goes. The platform module reads the part at the point, or the
 one with the focus, and what it sits in (`[MacGui]::ChainAt` and
 `FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
 on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`,
-`Set up` or `Set up ...`.
+`Set up`, `Set up ...`, `Keep up to date`, `Try again`, `Update all...`,
+`Update to ...` or `Restart now`.
 On Windows a press is told by the buttons themselves: Tauri lays a pane
 for its resize borders over the whole page, which lets the mouse through
 but stops UI Automation, so what is at any point reads as that pane. Every
