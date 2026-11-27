@@ -48,8 +48,11 @@ Put-Words catalyst -90 "L2Pd(0)"
 Put-Words second 30 "L2Pd(Ar)X"
 Put-Words third 150 "L2Pd(Ar)Ar'"
 
-# what comes in between the catalyst and the second, what goes out between the third and the catalyst
+# what comes in between the catalyst and the second, what comes in and goes out between the second and the third, what goes out between the third and the catalyst
 Put-Arrow arrow-in -30 "Arrow coming in" "Ar-X"
+# between the second and the third: what comes in, then what goes out, on the same part of the line
+Put-Arrow metal-in 65 "Arrow coming in" "Ar'-M"
+Put-Arrow metal-out 115 "Arrow going out" "M-X"
 Put-Arrow arrow-out 210 "Arrow going out" "Ar-Ar'"
 
 # the cycle let go: as it will be copied into a document or slides

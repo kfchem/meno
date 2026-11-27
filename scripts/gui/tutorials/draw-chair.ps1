@@ -1,7 +1,7 @@
 # How do I draw a chair and put groups axial or equatorial? A chair from
 # Quick Add's Projections group, two groups added on one of its atoms by
-# double-clicks - the first equatorial, the second axial - the chair
-# flipped, and laid out flat and back. Needs nothing but Meno: recorded in
+# double-clicks - the first equatorial, the second axial - and one on the
+# atom beside it, its R shown; the chair flipped, and laid out flat and back. Needs nothing but Meno: recorded in
 # an empty home, the card Meno shows as it first starts answered "Not now"
 # unrecorded, as the page is not about it.
 
@@ -22,6 +22,8 @@ Step projections Click -At (Part Button "Projections" -Within "Add")
 Step chair Click -At (Part Button "Chair" -Within "Projections")
 Step equatorial DoubleClick -At $rightEnd
 Step axial DoubleClick -At $rightEnd
+# the atom beside it along the chair's lower edge: one group, at its equatorial place
+Step neighbour DoubleClick -At (Point ($chairX + 22) ($chairY + 24))
 Step flip-menu RightClick -At (Point ($chairX - 26) ($chairY - 18))
 Step flip Click -At (Part MenuItem "Flip chair")
 Start-Sleep -Seconds 1

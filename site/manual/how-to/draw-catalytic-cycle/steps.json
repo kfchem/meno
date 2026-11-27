@@ -190,8 +190,68 @@
       }
     },
     {
+      "id": "metal-in-menu",
+      "shot": "16-metal-in-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1383,
+        "y": 1152,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "metal-in",
+      "shot": "17-metal-in.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1412,
+        "y": 806,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "metal-in-words",
+      "shot": "18-metal-in-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "Ar'-M"
+      }
+    },
+    {
+      "id": "metal-out-menu",
+      "shot": "19-metal-out-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1017,
+        "y": 1152,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "metal-out",
+      "shot": "20-metal-out.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1046,
+        "y": 870,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "metal-out-words",
+      "shot": "21-metal-out-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "M-X"
+      }
+    },
+    {
       "id": "arrow-out-menu",
-      "shot": "16-arrow-out-menu.webp",
+      "shot": "22-arrow-out-menu.webp",
       "mark": {
         "kind": "rightclick",
         "x": 826,
@@ -202,7 +262,7 @@
     },
     {
       "id": "arrow-out",
-      "shot": "17-arrow-out.webp",
+      "shot": "23-arrow-out.webp",
       "mark": {
         "kind": "click",
         "x": 856,
@@ -213,7 +273,7 @@
     },
     {
       "id": "arrow-out-words",
-      "shot": "18-arrow-out-words.webp",
+      "shot": "24-arrow-out-words.webp",
       "mark": {
         "kind": "type",
         "text": "Ar-Ar'"
@@ -221,7 +281,7 @@
     },
     {
       "id": "let-go",
-      "shot": "19-let-go.webp",
+      "shot": "25-let-go.webp",
       "mark": {
         "kind": "click",
         "x": 2100,

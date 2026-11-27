@@ -74,8 +74,19 @@
       }
     },
     {
+      "id": "neighbour",
+      "shot": "06-neighbour.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1222,
+        "y": 724,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
       "id": "flip-menu",
-      "shot": "06-flip-menu.webp",
+      "shot": "07-flip-menu.webp",
       "mark": {
         "kind": "rightclick",
         "x": 1174,
@@ -86,7 +97,7 @@
     },
     {
       "id": "flip",
-      "shot": "07-flip.webp",
+      "shot": "08-flip.webp",
       "mark": {
         "kind": "click",
         "x": 1204,
@@ -97,7 +108,7 @@
     },
     {
       "id": "flat-menu",
-      "shot": "08-flat-menu.webp",
+      "shot": "09-flat-menu.webp",
       "mark": {
         "kind": "rightclick",
         "x": 1224,
@@ -108,7 +119,7 @@
     },
     {
       "id": "flat",
-      "shot": "09-flat.webp",
+      "shot": "10-flat.webp",
       "mark": {
         "kind": "click",
         "x": 1254,
@@ -119,7 +130,7 @@
     },
     {
       "id": "undo",
-      "shot": "10-undo.webp",
+      "shot": "11-undo.webp",
       "mark": {
         "kind": "shortcut",
         "text": "Z"
@@ -127,7 +138,7 @@
     },
     {
       "id": "let-go",
-      "shot": "11-let-go.webp",
+      "shot": "12-let-go.webp",
       "mark": {
         "kind": "click",
         "x": 1900,
