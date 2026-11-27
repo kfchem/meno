@@ -9,6 +9,25 @@ Set-Tutorial -Needs @()
 Start-Meno -HomeFolder (New-TutorialHome)
 Suspend-Steps
 Step not-now Click -At (Part Button "Not now" -TimeoutSec 20)
+# a fresh home also asks, a while after the start, "Keep Meno up to date?": waited for (up to two minutes) and answered
+# "Not now", unrecorded, so that no picture catches it; its yes is never pressed
+# (the first card's going takes a moment; then the question is taken for there when its two buttons are)
+Start-Sleep -Seconds 2
+$asked = (Get-Date)
+$until = $asked.AddSeconds(120)
+$card = $false
+while ((Get-Date) -lt $until) {
+    if ((Get-MenoPartsLike -Role Button -Like "Keep up to date").Count -and (Get-MenoPartsLike -Role Button -Like "Not now").Count) { $card = $true; break }
+    Start-Sleep -Milliseconds 500
+}
+if ($card) {
+    Write-Host ("  the card 'Keep Meno up to date?' came {0:n0} s after the first was answered" -f (((Get-Date) - $asked).TotalSeconds + 2))
+    Step not-now-update Click -At (Part Button "Not now")
+    Start-Sleep -Seconds 1
+    if ((Get-MenoPartsLike -Role Button -Like "Not now").Count) { throw "the card 'Keep Meno up to date?' is still there after Not now" }
+} else {
+    Write-Host "  no card 'Keep Meno up to date?' within two minutes"
+}
 Resume-Steps
 Start-Sleep -Seconds 2
 

@@ -4,7 +4,7 @@ Put a catalytic cycle on the page, write the catalyst and two intermediates on i
 
 1. {#open-quick-add} Double-click an empty spot on the page. A row of icons opens.
 2. {#scheme} Choose *Scheme*, the icon with a plus and a curved arrow. A second row opens below it.
-3. {#cycle} Choose *Catalytic cycle*, the circle of arrows. A circle is put down where you double-clicked.
+3. {#cycle} Choose *Catalytic cycle*, the circle of arrows. A circle is put down where you double-clicked. It stays chosen, shown in blue, while you work on it.
 4. {#catalyst-open} Double-click the bottom of the circle's line. The row of icons opens there.
 5. {#catalyst-text} Choose *Text*, the T.
 6. {#catalyst} Type `L2Pd(0)` and press Enter. The 2 is set lower by itself, and the circle opens round the words.
@@ -23,7 +23,7 @@ Put a catalytic cycle on the page, write the catalyst and two intermediates on i
 19. {#metal-out-menu} Right-click the same part of the line, a little right of the middle.
 20. {#metal-out} Choose *Arrow going out*. On this part of the line, one arrow now comes in and one goes out.
 21. {#metal-out-words} Type `M-X` at once, and press Enter.
-22. {#arrow-out-menu} Right-click the line at the right, a little below the third words, between them and the first.
+22. {#arrow-out-menu} Right-click the line at its right-most point, well below the third words, between them and the first.
 23. {#arrow-out} Choose *Arrow going out*. An arrow leaves the line there and curves out.
 24. {#arrow-out-words} Type `Ar-Ar'` at once, and press Enter.
 25. {#let-go} Click an empty spot on the page. The cycle is let go, and you see it as it is drawn: what comes in and what goes out at each stage, all running clockwise.

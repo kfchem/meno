@@ -12,5 +12,5 @@ Put a cyclohexane chair on the page, add one group equatorial and one axial on t
 8. {#flip} Choose *Flip chair*. The ring flips: each group that was axial is now equatorial, and each that was equatorial is now axial, each on its own face. The compound is the same, and the *R* is the same.
 9. {#flat-menu} Right-click an atom of the ring again.
 10. {#flat} Choose *Draw flat*. The ring is laid out flat, its groups drawn with wedges and hashed wedges, the *R* still beside its atom.
-11. {#undo} Press ⌘Z (Ctrl+Z on Windows). The chair comes back as it was.
+11. {#undo} Press ⌘Z (Ctrl+Z on Windows). The chair comes back as it was before *Draw flat*, flipped.
 12. {#let-go} Click an empty spot on the page. The chair is let go, and you see it as it is drawn.
