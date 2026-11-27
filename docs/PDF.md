@@ -149,7 +149,10 @@ stops being part of the work.
   back with a double-click on the number. The column is as wide as its
   edge is dragged.
 - **Its name among the texts' names** along the column's top. Closing it
-  there closes the column's view of it; the PDF stays on the page.
+  there closes the column's view of it; the PDF stays on the page. A
+  text's name chosen there shows that text at once, the PDF kept where it
+  was read for when its name is chosen again (until 2026-11-27 the PDF's
+  pages went on showing under a text chosen after it).
 - **Links in the PDF** work:
   - one to a figure, a reference or a section goes there, in the column
     or on the stack, and back with the system's Back keys (⌘[ on a Mac,
