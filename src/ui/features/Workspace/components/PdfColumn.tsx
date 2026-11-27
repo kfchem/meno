@@ -37,6 +37,7 @@ import { ease, SETTLE_MS } from "./Pdfs2D";
 import WordsFlight from "./WordsFlight";
 import PictureFlight from "./PictureFlight";
 import ColumnText from "./ColumnText";
+import { columnDrawn, type ColumnLast } from "./columnDrawn";
 import MarkdownText from "./MarkdownText";
 import TextFlight, { MarkdownFlight } from "./TextFlight";
 import { columnSettingAt, sheetSetting } from "./textFlightSetting";
@@ -71,23 +72,18 @@ export default function PdfColumn() {
   const flight = useEditor((s) => s.pdfFlight);
   const words = useEditor((s) => s.pdfWords);
   const picture = useEditor((s) => s.pdfPicture);
-  // (shutting, it goes on showing what it showed as it slides away - and
-  // under a text it has gone on to, as that fades in over it)
-  const last = useRef<number | null>(null);
-  if (open && shown != null) last.current = shown;
-  const drawn = open && shown != null ? shown : cover > 0.5 ? last.current : null;
-  const pdf = pdfs.find((p) => p.id === drawn) ?? null;
+  const texts = useEditor((s) => s.texts);
+  const textShown = useEditor((s) => s.textShown);
+  // (what the column's chosen tab names; shutting, what it showed, as it slides away - columnDrawn)
+  const last = useRef<ColumnLast>({ pdf: null, text: null });
+  const reading = pdfs.some((p) => p.id === shown && p.reading);
+  const drawn = columnDrawn({ open, cover, pdf: shown, pdfRead: reading, text: textShown }, last.current);
+  last.current = drawn.last;
+  const pdf = pdfs.find((p) => p.id === drawn.pdf) ?? null;
   // (a PDF gone from the column - shut, or another read there: its pages read again, should it come back)
   const drawnSha = pdf?.sha256;
   useEffect(() => (drawnSha ? () => readForgotten(drawnSha) : undefined), [drawnSha]);
-  // (a text read, where no PDF is: likewise, as the column shuts on it)
-  const texts = useEditor((s) => s.texts);
-  const textShown = useEditor((s) => s.textShown);
-  const lastText = useRef<number | null>(null);
-  const reading = pdfs.some((p) => p.id === shown && p.reading);
-  if (open && textShown != null && !reading) lastText.current = textShown;
-  const textDrawn = open && textShown != null && !reading ? textShown : !pdf && cover > 0.5 ? lastText.current : null;
-  const text = pdf ? null : (texts.find((t) => t.id === textDrawn) ?? null);
+  const text = pdf ? null : (texts.find((t) => t.id === drawn.text) ?? null);
   // (a text on its way between its sheet and the column)
   const textFlight = useEditor((s) => s.textFlight);
   const flownText = textFlight ? (texts.find((t) => t.id === textFlight.id) ?? null) : null;
