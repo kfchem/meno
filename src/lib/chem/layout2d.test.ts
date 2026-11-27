@@ -2049,6 +2049,50 @@ describe("a ring's bonds in perspective", () => {
   });
 });
 
+describe("two thick bonds meeting at a bare atom", () => {
+  // A bold bond 0-1 and a wedge 2-0 broad at 0 - a ring in perspective's, or
+  // one drawn as a wedge by hand - and whatever thin bonds atom 0 also has:
+  // `extra`, a group up into the corner, one down out of it, both, or a
+  // double bond up.
+  const corner = (wedge: "perspective" | "stereo", extra: "none" | "up" | "down" | "both" | "double", joinStyle: "round" | "sharp" = "round") => {
+    const L = NOMINAL_BOND_LENGTH;
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: -L, y: 0, el: "C" },
+      { id: 3, x: 0.5 * L, y: 0.8 * L, el: "C" },
+      { id: 4, x: 0, y: 0.7 * L, el: "C" },
+      { id: 5, x: 0, y: -0.7 * L, el: "C" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1, display: "bold" },
+      wedge === "perspective" ? { a1: 2, a2: 0, order: 1, display: "wedge", narrow: 2 } : { a1: 2, a2: 0, order: 1, stereo: "up", narrow: 2 },
+    ];
+    if (extra === "up" || extra === "both") bonds.push({ a1: 0, a2: 3, order: 1 });
+    if (extra === "down" || extra === "both") bonds.push({ a1: 0, a2: 4, order: 1 });
+    if (extra === "double") bonds.push({ a1: 0, a2: 3, order: 2 });
+    return buildAllPrimitives(atoms, bonds, opts({ joinStyle }), 40).polys;
+  };
+
+  it("join flush round the corner whatever thin bonds meet there too: their shapes as with none", () => {
+    for (const wedge of ["perspective", "stereo"] as const) {
+      for (const joinStyle of ["round", "sharp"] as const) {
+        const alone = corner(wedge, "none", joinStyle);
+        for (const extra of ["up", "down", "both", "double"] as const) {
+          // (a double bond's own lines may add the fills at their join)
+          expect(corner(wedge, extra, joinStyle), `${wedge} ${joinStyle} ${extra}`).toEqual(expect.arrayContaining(alone));
+        }
+      }
+    }
+  });
+
+  it("keep the bold bond's end square at the atom of a ring in perspective, a group led up from it", () => {
+    // the bar's corners at the atom: on it, across the bond, not pulled back past it
+    const bar = corner("perspective", "up").find((p) => p.points.some((q) => q.x < -0.9 * NOMINAL_BOND_LENGTH))!;
+    const atAtom = bar.points.filter((q) => q.x > -0.5 * NOMINAL_BOND_LENGTH);
+    expect(atAtom.every((q) => Math.abs(q.x) < 1e-9)).toBe(true);
+  });
+});
+
 describe("a carbon between two double bonds", () => {
   it("has its symbol drawn, and both double bonds their lines either side of the line they make", () => {
     const L = NOMINAL_BOND_LENGTH;

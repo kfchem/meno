@@ -3068,10 +3068,19 @@ export function buildBondPrimitives(
   if (hasLabel(a) && trimA > 0) labelEnds.push(p1);
   if (hasLabel(c) && trimB > 0) labelEnds.push(p2);
   const round = (opts.joinStyle ?? "round") === "round";
+  /** Whether `b` is broad at `at`: a bold bond at either end, a solid wedge at its wide end. */
+  const broadAt = (b: Bond, at: number): boolean => {
+    const k = bondKind(b);
+    if (k === "bold" || (b.order === 2 && b.display === "bold")) return true;
+    return (k === "wedge" || (b.order === 2 && b.display === "wedge")) && wedgeBaseAtom(b, deg) === at;
+  };
   /**
    * The bonds carrying on from `at`, other than to `other`, to cut a broad
    * end along. A labelled atom has none: the bond stops short of the label,
-   * so there is no join to make.
+   * so there is no join to make. Where another bond is broad at `at` too,
+   * the two broad ends are joined to each other alone - one thick line round
+   * the corner - and a thin bond there is left out of the cut: it starts at
+   * the atom, inside the thick corner, as it would from a thick line's middle.
    */
   const neighboursAt = (at: number, other: number): Neighbour[] => {
     const atom = atoms[at];
@@ -3079,9 +3088,12 @@ export function buildBondPrimitives(
     if (!atom || hasLabel(atom)) return out;
     const doubleOff = toWorld(opts.doubleOffsetPx, zoom, units);
     const tripleOff = toWorld(opts.tripleOffsetPx, zoom, units);
-    for (const b of adjBonds?.get(at) ?? []) {
+    const here = adjBonds?.get(at) ?? [];
+    const thickCorner = broadAt(bond, at) && here.some((b) => b !== bond && broadAt(b, at));
+    for (const b of here) {
       const far = b.a1 === at ? b.a2 : b.a1;
       if (far === other || far === at) continue;
+      if (thickCorner && !broadAt(b, at)) continue;
       // (a ring in perspective's bold edge and wedge meet square, their
       // outer corner filled to a point after (perspectiveCorners))
       if (inPerspective(bond) && inPerspective(b)) continue;
