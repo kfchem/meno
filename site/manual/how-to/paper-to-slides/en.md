@@ -15,5 +15,5 @@ Read a paper beside your work, take two of its structures out onto the page as s
 11. {#slide-second} Choose *Slide around these*. A dashed arrow leads from the first slide on to the second. Neither the numbers nor the arrow show in the talk.
 12. {#clear} Click empty space on the page, so that nothing is chosen.
 13. {#present-menu} Right-click the same empty space.
-14. {#present} Choose *Present*. The window fills the screen with the first slide. Press Escape to end the talk.
+14. {#present} Choose *Present*. The window fills the screen with the first slide. Press Escape to end the talk: the page comes back with that slide in view.
 15. {#fit} Press ⌘1 (Ctrl+1 on Windows) to bring everything on the page into view.
