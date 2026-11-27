@@ -391,6 +391,13 @@ was asked for). What is done most to the thing right-clicked comes first,
 each an icon at Quick Add's size, named as the pointer rests on it (with
 its key, if it has one), and Delete at the row's right end, always; the
 rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
+The selection's icons - *Cut* and *Copy*, and on empty space the rest of
+its own - follow the thing's on the same line, a small gap between the
+two, wherever the menu's width holds them all; only where it does not do
+they stand on a line of their own under the thing's, Delete staying at the
+right end of the line of the icons it came with (the maintainer: the icons
+had stood on two lines where one would hold them; `menuIconLines`). The menu
+is never narrower than the thing's own icons and Delete.
 An icon's name - of a menu's rows, the menu on empty space and Quick
 Add's - is shown in Meno's own look, as the page's tip is: under the icon,
 or over it where there is no room under it, once the pointer has rested on
@@ -405,7 +412,7 @@ which looks like no other part of Meno and was not shown in every view).
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, add text (where its structure has none of its own), lay out as a grid or stack again (a record of a stack) |
 | A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in, its icons as large as the first row's: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, add text (where its structure has none of its own), lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
-| The selection - added to the menu of any thing in it, and of empty space (*Selecting*, below) | cut, copy, a second row; where the thing's own items do not reach the selection, and on empty space: clean up, 3D, colour; Delete selection | copy as SMILES, export, render, turn over left to right and top to bottom, slide around these, box around these, combine into one PDF, use as input, save as abbreviation - each where it applies |
+| The selection - added to the menu of any thing in it, and of empty space (*Selecting*, below) | cut, copy, after the thing's own icons; where the thing's own items do not reach the selection, and on empty space: clean up, 3D, colour; Delete selection | copy as SMILES, export, render, turn over left to right and top to bottom, slide around these, box around these, combine into one PDF, use as input, save as abbreviation - each where it applies |
 | Inside a ring, nothing selected | colour | select its structure |
 | Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | add text (where it has none of its own), measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
@@ -905,8 +912,8 @@ molecule in 3D or a picture.
     its turn, a PDF's pages turned, read or printed, a picture's copy and
     save. Clean up, 3D, colour and Delete reach the whole selection
     (*Clean up these structures*, *Delete selection*).
-  - The selection's own are added to every such menu: *Cut* and *Copy* as
-    a second row of icons, and under a line its listed items, each where
+  - The selection's own are added to every such menu: *Cut* and *Copy*
+    after the thing's own icons, and under a line its listed items, each where
     it applies: *Copy as SMILES*, *Export…* (what is selected written),
     *Render…*, *Turn over left to right*, *Turn over top to bottom*, *Slide
     around these*, *Box around these*, *Use as input*, *Save as

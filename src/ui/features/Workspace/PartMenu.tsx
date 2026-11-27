@@ -3,11 +3,12 @@ import { SHAPE_WIDTHS_PT } from "../../../lib/chem/shapes";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, bondIconAsLying, MENU_ICONS } from "./menuIcons";
 import type { MenuScope } from "./utils/menuScope";
 import { withRules } from "./menuRules";
+import { MENU_ICON, iconLines, iconsWidth } from "./menuIconLines";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
@@ -72,7 +73,9 @@ const MAC =
  */
 const WIDTH = 240;
 /** Each icon's square along the top, as Quick Add's are, in px. */
-const ROW = 36;
+const ROW = MENU_ICON;
+/** The margin either side of the icons, in px (`px-1`). */
+const ICONS_PAD = 4;
 /** A compact row under the icons: a molecule in 3D's magnifications. (The other kinds of bond, under the first row, are as large as it.) */
 const ROW2 = 28;
 
@@ -214,28 +217,6 @@ function ScopeLine({ text }: { text: string }) {
   return (
     <div role="note" className="px-3 pt-0.5 pb-1 text-[11px] leading-4 text-gh-gray whitespace-nowrap">
       {text}
-    </div>
-  );
-}
-
-/** A row of a menu's icons: the selection's, cut and copy, under the thing's own. */
-function IconRow({ label, items, run, below }: { label: string; items: Item[]; run: (item: Item) => () => void; below: boolean }) {
-  return (
-    <div role="group" aria-label={label} className={`flex items-center gap-0.5 px-1 ${below ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
-      {items.map((item) => (
-        <button
-          key={item.name}
-          role="menuitem"
-          aria-label={item.name}
-          title={item.keys ? `${item.name} (${item.keys})` : item.name}
-          disabled={item.disabled}
-          onClick={run(item)}
-          className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent text-gh-black hover:bg-gh-base focus:bg-gh-base`}
-          style={{ width: ROW, height: ROW }}
-        >
-          {item.icon}
-        </button>
-      ))}
     </div>
   );
 }
@@ -619,6 +600,12 @@ export default function PartMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // (the width the icons have: the menu's, less the icons' margins - read before it is painted, so that no line is seen to move)
+  const [room, setRoom] = useState(WIDTH - 2 - 2 * ICONS_PAD);
+  useLayoutEffect(() => {
+    const w = ref.current?.clientWidth;
+    if (w && w - 2 * ICONS_PAD !== room) setRoom(w - 2 * ICONS_PAD);
+  });
   // a bond's second row of kinds: shown at once where the bond is one of them, else as "more" is pressed
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the magnifications offered, as "Magnification" is pressed
@@ -1155,7 +1142,7 @@ export default function PartMenu({
     if (target.kind === "atom" && (i.name === "Charge one up" || i.name === "Charge one down" || i.name === "Unpaired electron" || i.name === "No unpaired electron")) return { ...i, name: `${i.name} on ${scope.ofKind}` };
     return i;
   });
-  // (the selection's own: cut and copy, a second row of icons - on empty space, its clean up, 3D, colour and Delete beside them -
+  // (the selection's own: cut and copy, after the thing's icons - on empty space, its clean up, 3D, colour and Delete beside them -
   //  and its listed items under a line; none twice)
   const here = target.selection === "here";
   const ownNames = new Set(own.map((i) => i.name));
@@ -1199,6 +1186,9 @@ export default function PartMenu({
   const row = own.filter((i) => i.icon && !i.compact);
   const compact = own.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
+  // (the thing's own icons and the selection's, on as few lines as the menu's width holds: one, where they fit)
+  const selSet = new Set(selIcons);
+  const lines = iconLines(row, selIcons, (i) => !!i.del, room);
   const list = withRules(own.filter((i) => !i.icon));
   const selRules = withRules(selList);
   // (the first line: what the menu acts on - the thing alone, or the selection counted)
@@ -1282,49 +1272,62 @@ export default function PartMenu({
     >
       {/* what it acts on, said first */}
       {firstLine && <ScopeLine text={firstLine} />}
-      {/* the frequent, as icons - named as the pointer rests on one - and Delete at the right end */}
-      {row.length > 0 && (
-        <div role="group" aria-label="Frequent" className={`flex items-center gap-0.5 px-1 ${list.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
-          {row.map((item) => {
-            const tip = item.keys ? `${item.name} (${item.keys})` : item.name;
-            const button = (
-            <button
-              key={item.name}
-              role="menuitem"
-              aria-label={item.name}
-              aria-pressed={item.checked}
-              data-tip={item.disabled ? undefined : tip}
-              // (its keys said to a screen reader too, as the system's tooltip said them)
-              aria-description={item.keys ? `${item.name} (${item.keys})` : undefined}
-              disabled={item.disabled}
-              // (one begun by its press is not begun again by its click - but by a key, it is)
-              onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
-              onPointerDown={
-                item.press
-                  ? (e) => {
-                      if (e.button !== 0) return;
-                      // (a drag from it, let go where it is put down: begun at once, the menu gone)
-                      e.preventDefault();
-                      onClose();
-                      item.press!(e);
-                    }
-                  : undefined
-              }
-              className={`${item.del && !item.disabled ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:pointer-events-none disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
-              style={{ width: ROW, height: ROW }}
-            >
-              {item.icon}
-            </button>
-            );
-            // (one not to be pressed is named from round it: a disabled button is not sent the pointer in every engine)
-            return item.disabled ? (
-              <span key={item.name} data-tip={tip} className={`${item.del ? "ml-auto " : ""}shrink-0 flex`}>
-                {button}
-              </span>
-            ) : (
-              button
-            );
-          })}
+      {/* the frequent, as icons - named as the pointer rests on one - the selection's after the thing's, a small gap between,
+          on one line where they fit and Delete at its right end (menuIconLines) */}
+      {lines.length > 0 && (
+        <div
+          role="group"
+          aria-label="Frequent"
+          className={`px-1 ${list.length + selRules.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}
+          // (as wide as the menu, never widening it past the thing's own icons)
+          style={{ width: 0, minWidth: `max(100%, ${iconsWidth(Math.max(row.length, selIcons.length)) + 2 * ICONS_PAD}px)` }}
+        >
+          {lines.map((line, k) => (
+            <div key={k} className={`flex items-center gap-0.5 ${k > 0 ? "mt-0.5" : ""}`}>
+              {line.map(({ item, starts }) => {
+              const fromSelection = selSet.has(item);
+              const tip = item.keys ? `${item.name} (${item.keys})` : item.name;
+              const button = (
+              <button
+                key={item.name}
+                role="menuitem"
+                aria-label={item.name}
+                aria-pressed={item.checked}
+                data-tip={item.disabled ? undefined : tip}
+                // (its keys said to a screen reader too, as the system's tooltip said them)
+                aria-description={item.keys ? `${item.name} (${item.keys})` : undefined}
+                disabled={item.disabled}
+                // (one begun by its press is not begun again by its click - but by a key, it is)
+                onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
+                onPointerDown={
+                  item.press
+                    ? (e) => {
+                        if (e.button !== 0) return;
+                        // (a drag from it, let go where it is put down: begun at once, the menu gone)
+                        e.preventDefault();
+                        onClose();
+                        item.press!(e);
+                      }
+                    : undefined
+                }
+                data-of={fromSelection ? "selection" : undefined}
+                className={`${item.del && !item.disabled ? "ml-auto " : starts ? "ml-1 " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:pointer-events-none disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+                style={{ width: ROW, height: ROW }}
+              >
+                {item.icon}
+              </button>
+              );
+              // (one not to be pressed is named from round it: a disabled button is not sent the pointer in every engine)
+              return item.disabled ? (
+                <span key={item.name} data-tip={tip} className={`${item.del ? "ml-auto " : starts ? "ml-1 " : ""}shrink-0 flex`}>
+                  {button}
+                </span>
+              ) : (
+                button
+              );
+              })}
+            </div>
+          ))}
         </div>
       )}
       {font && (
@@ -1368,8 +1371,6 @@ export default function PartMenu({
         </motion.div>
       )}
       </AnimatePresence>
-      {/* the selection's cut and copy, a row of their own under the thing's - where its items reach it */}
-      {selIcons.length > 0 && <IconRow label="Selection" items={selIcons} run={run} below={list.length + selRules.length > 0} />}
       {list.map((item) => [
         item.divider && <div key={`${item.name}-divider`} role="separator" className="my-1 border-t border-gh-line" />,
         <button
