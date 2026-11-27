@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import EmptyPageLine, { EMPTY_PAGE_LINE, EMPTY_PAGE_LINES } from "./EmptyPageLine";
-import { EMPTY_PAGE_MARK, emptyPageMarkMotion, markUnderPointer, pointerInsideMark, pointerRippleMotion } from "../utils/emptyPage";
+import { comeInFor, EMPTY_PAGE_MARK, emptyPageMarkMotion, markUnderPointer, pointerInsideMark, pointerRippleMotion } from "../utils/emptyPage";
 
 // The empty page's mark and its two lines (docs/WORKSPACE.md, *First steps*). Vitest runs in Node, with no page to mount on: the mark is
 // drawn by the server's renderer, and what it is told to do is read from the elements it is made of.
@@ -17,9 +17,26 @@ function seen(html: string, part: string): number {
 }
 
 describe("the empty page's mark", () => {
+  it("comes in only once the page has been empty, with nothing on its way, for a still while - and then fades in", () => {
+    system.lessMotion = false;
+    expect(renderToString(<EmptyPageLine show />)).not.toContain("data-empty-page-line");
+    expect(EMPTY_PAGE_MARK.still).toBeGreaterThan(0);
+    const html = renderToString(<EmptyPageLine show still={0} />);
+    expect(html).toMatch(/data-empty-page-line[^>]*style="[^"]*opacity:0/);
+    expect(comeInFor(false)).toBe(EMPTY_PAGE_MARK.comeIn);
+    // (where the system asks for less motion: no fade - the same still while)
+    expect(comeInFor(true)).toBe(0);
+  });
+
+  it("counts its rounds from when it has come in, so that the first round is seen", () => {
+    const { ripples, dip } = emptyPageMarkMotion();
+    expect(ripples[0].transition.scale.delay).toBeCloseTo(EMPTY_PAGE_MARK.comeIn + EMPTY_PAGE_MARK.first);
+    expect(dip.transition.delay).toBeCloseTo(EMPTY_PAGE_MARK.comeIn + EMPTY_PAGE_MARK.first);
+  });
+
   it("at rest is a small dot with one faint thin ring round it, in Meno's colour; the ripples are not seen", () => {
     system.lessMotion = false;
-    const html = renderToString(<EmptyPageLine show />);
+    const html = renderToString(<EmptyPageLine show still={0} />);
     expect(html).toContain('width="40"');
     expect(html).toContain("text-accel-base");
     expect(html).toMatch(/<circle data-mark="ring" cx="20" cy="20" r="9"/);
@@ -70,7 +87,7 @@ describe("the empty page's mark", () => {
   it("where the system asks for less motion, only rests: no ripples, the dot still", () => {
     system.lessMotion = true;
     try {
-      const html = renderToString(<EmptyPageLine show />);
+      const html = renderToString(<EmptyPageLine show still={0} />);
       expect(html).not.toContain('data-mark="ripple"');
       expect(html.match(/<circle data-mark="dot"[^>]*>/)?.[0]).not.toContain("scale(");
       expect(seen(html, "ring")).toBeCloseTo(0.25);
@@ -80,7 +97,7 @@ describe("the empty page's mark", () => {
   });
 
   it("says the same two lines under it, and the whole sentence to a screen reader", () => {
-    const html = renderToString(<EmptyPageLine show />);
+    const html = renderToString(<EmptyPageLine show still={0} />);
     expect(EMPTY_PAGE_LINES).toEqual(["Double-click to add", "or drop a file"]);
     expect(html).toContain(`>${EMPTY_PAGE_LINES[0]}</span>`);
     expect(html).toContain(`>${EMPTY_PAGE_LINES[1]}</span>`);

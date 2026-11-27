@@ -14,19 +14,20 @@ export const takeOpenedFiles = () => invoke<string[]>("opened_files");
 /**
  * `open` given each lot of files opened from outside: those opened before
  * the page was up at once, then each lot as the app says there is one.
- * What stops it.
+ * `known`: told once the first lot is known - handed to `open`, or found to
+ * be none, or not to be had. What stops it.
  */
-export function watchOpenedFiles(open: (paths: string[]) => void, take: () => Promise<string[]> = takeOpenedFiles, hear: typeof listen = listen): () => void {
+export function watchOpenedFiles(open: (paths: string[]) => void, take: () => Promise<string[]> = takeOpenedFiles, hear: typeof listen = listen, known: () => void = () => {}): () => void {
   const now = () =>
-    void take()
+    take()
       .then((paths) => {
         if (paths.length) open(paths);
       })
       .catch(() => {});
-  now();
+  void now().finally(known);
   let gone = false;
   let stop: (() => void) | undefined;
-  void hear("opened-files", now)
+  void hear("opened-files", () => void now())
     .then((unlisten) => (gone ? unlisten() : (stop = unlisten)))
     .catch(() => {});
   return () => {

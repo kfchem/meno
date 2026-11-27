@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { EASE, EASE_LEAVE, FADE } from "../../../theme/motion";
-import { EMPTY_PAGE_MARK, emptyPageMarkMotion, markUnderPointer, pointerInsideMark, pointerRippleMotion } from "../utils/emptyPage";
+import { EASE, EASE_LEAVE, LEAVE } from "../../../theme/motion";
+import { comeInFor, EMPTY_PAGE_MARK, emptyPageMarkMotion, markUnderPointer, pointerInsideMark, pointerRippleMotion } from "../utils/emptyPage";
 
 /** What the empty page says, in its two short lines (docs/WORKSPACE.md, *First steps*). */
 export const EMPTY_PAGE_LINES = ["Double-click to add", "or drop a file"] as const;
@@ -87,19 +87,37 @@ function Mark() {
   );
 }
 
+/** Whether `show` has held for `still` seconds: false at once as it stops holding. */
+function useHeldFor(show: boolean, still: number): boolean {
+  const [held, setHeld] = useState(show && still <= 0);
+  useEffect(() => {
+    if (!show) return setHeld(false);
+    if (still <= 0) return setHeld(true);
+    const after = setTimeout(() => setHeld(true), still * 1000);
+    return () => clearTimeout(after);
+  }, [show, still]);
+  return show && held;
+}
+
 /**
- * One quiet mark (`Mark`) and two short lines in the middle of the page in view, where it holds nothing at all and nothing is in hand:
- * eased in and out (`show`). Not an object of the page - never saved, exported, printed, selected or filmed: HTML over it, taking no
- * pointer, still as the page is zoomed or moved.
+ * One quiet mark (`Mark`) and two short lines in the middle of the page in view, where it holds nothing at all and nothing is in hand or
+ * on its way (`show`): come in once that has held for a still while (`still`, `EMPTY_PAGE_MARK.still`), faded in over
+ * `EMPTY_PAGE_MARK.comeIn` (at once where the system asks for less motion), and eased out as it stops holding. Not an object of the
+ * page - never saved, exported, printed, selected or filmed: HTML over it, taking no pointer, still as the page is zoomed or moved.
  * `right`: how much of the page's right side is covered (the column over it), so the line stands in the middle of what is seen.
  */
-export default function EmptyPageLine({ show, right = 0 }: { show: boolean; right?: number }) {
+export default function EmptyPageLine({ show, right = 0, still = EMPTY_PAGE_MARK.still }: { show: boolean; right?: number; still?: number }) {
+  const shown = useHeldFor(show, still);
+  const lessMotion = !!useReducedMotion();
   return (
     <AnimatePresence>
-      {show && (
+      {shown && (
         <motion.div
           key="empty-page-line"
-          {...FADE}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: LEAVE }}
+          transition={{ duration: comeInFor(lessMotion), ease: EASE }}
           role="img"
           aria-label={EMPTY_PAGE_LINE}
           data-empty-page-line

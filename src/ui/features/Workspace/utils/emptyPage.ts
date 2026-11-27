@@ -20,12 +20,14 @@ export function thingInHand(st: Pick<EditorState, "extend" | "captionEdit" | "ar
 }
 
 /**
- * Whether the empty page's line shows: on the workspace in front, where its page holds nothing - and not while the file the tab was
- * opened with is still being read (its page is only waiting for it), a card says what could not be read, Quick Add or a menu is open,
- * something is dragged over the page or a drop is being read, a talk is given, or something is in hand (`inHand`) or being made.
+ * Whether the empty page's line shows: on the workspace in front, where its page holds nothing - and not while anything is on its way to
+ * it (`waiting`: the file the tab was opened with, a file opened into Meno, given to it, dropped or pasted, still being read - the page
+ * is only waiting for it, not empty: ui/views/onItsWay), a card says what could not be read, Quick Add or a menu is open, something is
+ * dragged over the page, a talk is given, or something is in hand (`inHand`) or being made. It comes in only once this has held for a
+ * still while (`EMPTY_PAGE_MARK.still`).
  */
-export function emptyPageLineShown(s: { active: boolean; empty: boolean; opening: boolean; card: boolean; quickAdd: boolean; menu: boolean; draggedOver: boolean; dropping: boolean; talking: boolean; inHand: boolean }): boolean {
-  return s.active && s.empty && !s.opening && !s.card && !s.quickAdd && !s.menu && !s.draggedOver && !s.dropping && !s.talking && !s.inHand;
+export function emptyPageLineShown(s: { active: boolean; empty: boolean; waiting: boolean; card: boolean; quickAdd: boolean; menu: boolean; draggedOver: boolean; talking: boolean; inHand: boolean }): boolean {
+  return s.active && s.empty && !s.waiting && !s.card && !s.quickAdd && !s.menu && !s.draggedOver && !s.talking && !s.inHand;
 }
 
 /**
@@ -34,6 +36,13 @@ export function emptyPageLineShown(s: { active: boolean; empty: boolean; opening
  * slows. Sizes in px of a square mark `size` across; times in seconds.
  */
 export const EMPTY_PAGE_MARK = {
+  /**
+   * The page empty, with nothing on its way, for `still` before the mark and its lines show - a moment calm enough that a page about
+   * to hold something, or a window still coming up, shows none - and then they come in over `comeIn` (where the system asks for less
+   * motion: at once, after the same still while).
+   */
+  still: 0.4,
+  comeIn: 0.35,
   size: 40,
   /** The dot at rest, and how far it dips at a click, and for how long (down and back). */
   dot: { r: 2, opacity: 0.5, dip: 0.75, dipFor: 0.18 },
@@ -43,7 +52,7 @@ export const EMPTY_PAGE_MARK = {
   ripple: { from: 3, to: 15, opacity: 0.85, bornIn: 0.06, spreadFor: 0.9 },
   /** The second click after the first: a double-click's pace. */
   second: 0.25,
-  /** From the mark's appearance: the first round after `first`, `rounds` in all, `every` apart (start to start); then it rests. */
+  /** From the mark having come in (`comeIn`): the first round after `first`, `rounds` in all, `every` apart (start to start); then it rests. */
   first: 0.3,
   every: 5,
   rounds: 3,
@@ -54,6 +63,11 @@ export const EMPTY_PAGE_MARK = {
   awake: { reach: 18, dot: 0.9, ring: 0.55, wakeIn: 0.15, sleepIn: 0.25 },
 } as const;
 
+/** How long the mark and its lines take to come in: `EMPTY_PAGE_MARK.comeIn`, or at once where the system asks for less motion. */
+export function comeInFor(lessMotion: boolean): number {
+  return lessMotion ? 0 : EMPTY_PAGE_MARK.comeIn;
+}
+
 /** The ripple's spread: quick out of the dot, slowing as it reaches the edge, as water does. */
 export const RIPPLE_SPREAD_EASE: [number, number, number, number] = [0.2, 0.5, 0.35, 1];
 
@@ -62,7 +76,7 @@ type Repeated = { duration: number; delay: number; repeat: number; repeatDelay: 
 /** One animation of `duration` played in every round of the mark, `at` seconds into the round. */
 function inEveryRound(duration: number, at: number): Repeated {
   const m = EMPTY_PAGE_MARK;
-  return { duration, delay: m.first + at, repeat: m.rounds - 1, repeatDelay: m.every - duration };
+  return { duration, delay: m.comeIn + m.first + at, repeat: m.rounds - 1, repeatDelay: m.every - duration };
 }
 
 /**

@@ -292,6 +292,7 @@ import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
 import EmptyPageLine from "./components/EmptyPageLine";
 import { emptyPageLineShown, pageHoldsNothing, thingInHand } from "./utils/emptyPage";
+import { useWaitedFor, whileOnItsWay } from "../../views/onItsWay";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
@@ -408,6 +409,8 @@ function WorkspaceContent({
   const pageEmpty = useEditor(pageHoldsNothing);
   // (and nothing chosen from Quick Add or begun on it is in hand: the page's line waits for it)
   const inHand = useEditor(thingInHand);
+  // (nor anything on its way to it - a file opened, given or pasted being read: ui/views/onItsWay)
+  const onItsWayHere = useWaitedFor(tabId);
   // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
   useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -438,9 +441,9 @@ function WorkspaceContent({
         : undefined,
     [ownTab, officeId, tabId, store],
   );
-  // (and structures' files and calculations' outputs opened, as a drop on it puts them: ui/views/files)
+  // (and structures' files and calculations' outputs opened, as a drop on it puts them - on their way to it until they are there: ui/views/files)
   useEffect(
-    () => (ownTab && officeId == null ? setFileTaker(tabId, (files) => void openedFiles.current(files)) : undefined),
+    () => (ownTab && officeId == null ? setFileTaker(tabId, (files) => void whileOnItsWay(tabId, () => openedFiles.current(files))) : undefined),
     [ownTab, officeId, tabId],
   );
   // What readers reading an output as well find, joined to each molecule
@@ -1117,7 +1120,7 @@ function WorkspaceContent({
         if (what === "copy" && !selected && selects(st.pdfSel)) void copyWords();
         else if (what === "copy") void clip.copy();
         else if (what === "cut") void clip.cut();
-        else void clip.paste(pasteTarget());
+        else void whileOnItsWay(tabId, () => clip.paste(pasteTarget()));
       } else if (isFillKey(e) && st.textsOpen && (st.pdfShown != null || st.textShown != null)) {
         // the PDF or text in the column filling the workspace, or back beside the canvas
         e.preventDefault();
@@ -1884,10 +1887,10 @@ function WorkspaceContent({
       ))}
       </AnimatePresence>
       </div>
-      {/* an empty page: one quiet line in the middle of what is seen - not while the file the tab was opened with is read, a card
+      {/* an empty page: one quiet line in the middle of what is seen - not while anything is on its way to it, a card
           says what could not be read, Quick Add or a menu is open, something is dragged over, a talk is given, or something is in hand
           (docs/WORKSPACE.md, *First steps*) */}
-      <EmptyPageLine show={emptyPageLineShown({ active, empty: pageEmpty, opening: !opened, card: !!importError, quickAdd: !!quickAdd, menu: !!menu, draggedOver, dropping: !!dropping, talking, inHand })} right={cover} />
+      <EmptyPageLine show={emptyPageLineShown({ active, empty: pageEmpty, waiting: !opened || !!dropping || onItsWayHere, card: !!importError, quickAdd: !!quickAdd, menu: !!menu, draggedOver, talking, inHand })} right={cover} />
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
@@ -3064,7 +3067,7 @@ function WorkspaceContent({
             onCut: () => void clip.cut(),
             onCopy: () => void clip.copy(),
             onCopySmiles: () => void clip.copySmiles(),
-            onPaste: () => void clip.paste(menu.at),
+            onPaste: () => void whileOnItsWay(tabId, () => clip.paste(menu.at)),
             onSelectAll: () => store.getState().selectAll(),
           }}
         />

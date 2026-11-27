@@ -6,8 +6,9 @@
  * says how it takes them, while it is there, and the app asks the one in
  * front. Where none is in front, they go to the workspace last in front;
  * where there is none, to a canvas opened for them - given to it as it
- * comes to take them (`giveFiles`).
+ * comes to take them (`giveFiles`) - its page waiting for them, not empty, until it takes them (./onItsWay).
  */
+import { onItsWay } from "./onItsWay";
 
 /** A file opened: its name, what it holds, and where it is, where Open said. */
 export type OpenedFile = { name: string; bytes: Uint8Array; path?: string };
@@ -15,6 +16,8 @@ export type OpenedFile = { name: string; bytes: Uint8Array; path?: string };
 const takers = new Map<string, (files: OpenedFile[]) => void>();
 /** Files given to a tab before it takes files: a canvas just opened for them. */
 const waiting = new Map<string, OpenedFile[]>();
+/** And each such tab's files on their way to it, said arrived as it takes them or they are forgotten. */
+const arriving = new Map<string, () => void>();
 
 /** Sets how tab `id` takes files opened - those given it already taken at once; the function returned takes it away again. */
 export function setFileTaker(id: string, take: (files: OpenedFile[]) => void): () => void {
@@ -24,6 +27,8 @@ export function setFileTaker(id: string, take: (files: OpenedFile[]) => void): (
     waiting.delete(id);
     take(given);
   }
+  arriving.get(id)?.();
+  arriving.delete(id);
   return () => {
     if (takers.get(id) === take) takers.delete(id);
   };
@@ -38,10 +43,15 @@ export function fileTakerOf(id: string): ((files: OpenedFile[]) => void) | undef
 export function giveFiles(id: string, files: OpenedFile[]): void {
   const take = takers.get(id);
   if (take) take(files);
-  else waiting.set(id, [...(waiting.get(id) ?? []), ...files]);
+  else {
+    waiting.set(id, [...(waiting.get(id) ?? []), ...files]);
+    if (!arriving.has(id)) arriving.set(id, onItsWay(id));
+  }
 }
 
 /** Forgets files given to tab `id` that it never took: the tab closed, or another took its place. */
 export function forgetFiles(id: string): void {
   waiting.delete(id);
+  arriving.get(id)?.();
+  arriving.delete(id);
 }
