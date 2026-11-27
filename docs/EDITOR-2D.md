@@ -735,7 +735,8 @@ on a page), and the **Newman projection** (`newman`).
   where one of the three ways puts them): each atom's two free places on the two of the pair's four lines its ring bonds leave free, a
   double-click the equatorial first, the tip's word the new ring's own. On those four lines some places of the two rings would end on an
   atom of the other ring or on another's place, a twentieth of a bond apart; such a place is drawn two thirds of a bond long along its own
-  line (`SHORT_PLACE`; of two places, the new ring's) - Meno's own drawing choice, no text's: what a place states is its line and its
+  line (`SHORT_PLACE`; of two places, the new ring's), and one third long where at two thirds it would cross a bond of the pair
+  (`SHORTER_PLACE`: no stub of it beyond the break behind a bond, no tick beyond one in front) - Meno's own drawing choice, no text's: what a place states is its line and its
   depth, which stay, so it is read as at full length. A shortened place is held, offered, dragged to and swapped like any. Known answers
   as above for every picture of the chair, the places as drawn (1152 drawings), and R and S of two 2-methyl-cis-decalins worked by hand,
   one with its methyl at a shortened place. Groups led out of the new ring before this (by the plain rule) stay where they are and are read

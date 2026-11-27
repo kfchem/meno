@@ -85,15 +85,22 @@ export function fusedOn(model: Model, ids: ReadonlySet<number>, bondId: number, 
 /** How long a free place of a fused pair is drawn where at full length it would land on an atom or on another place: Meno's own choice. */
 export const SHORT_PLACE = 2 / 3;
 
+/**
+ * How long such a place is drawn where at `SHORT_PLACE` it would cross a bond of the pair: short of the crossing, so that no stub of it is
+ * left beyond the break where it passes behind the bond, nor a tick beyond the bond where it passes in front - Meno's own choice too.
+ */
+export const SHORTER_PLACE = 1 / 3;
+
 /** How near, in bonds, an end comes to an atom or to another place's end for its place to be drawn `SHORT_PLACE` long. */
 const LANDS_ON = 0.3;
 
 /**
  * A fused pair's free places as drawn: each along its own line, one bond long, but a place that would land on an atom or on another
- * place's end - on the four lines the two rings meet so, a twentieth of a bond apart - `SHORT_PLACE` long; of two places, the new ring's.
+ * place's end - on the four lines the two rings meet so, a twentieth of a bond apart - `SHORT_PLACE` long, or `SHORTER_PLACE` where at that
+ * length it would cross a bond of the pair; of two places, the new ring's.
  * Never off its line and never refused: what the place states is its direction and its depth, which stay.
  */
-function shortened(d: Drawn): Drawn["free"] {
+function shortened(d: Drawn, bonds: readonly [number, number][]): Drawn["free"] {
   const end = (f: Drawn["free"][number]) => ({ x: d.atoms[f.free.at].x + f.x, y: d.atoms[f.free.at].y + f.y });
   const near = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y) < LANDS_ON;
   const short = new Set<Drawn["free"][number]>();
@@ -105,7 +112,18 @@ function shortened(d: Drawn): Drawn["free"] {
       short.add(f.free.at > g.free.at ? f : g);
     }
   }
-  return d.free.map((f) => (short.has(f) ? { ...f, x: f.x * SHORT_PLACE, y: f.y * SHORT_PLACE } : f));
+  // (whether a place drawn `length` long crosses a bond of the pair that is not at its own atom)
+  const crosses = (f: Drawn["free"][number], length: number) => {
+    const o = d.atoms[f.free.at];
+    const e = { x: o.x + f.x * length, y: o.y + f.y * length };
+    const side = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    return bonds.some(([i, j]) => i !== f.free.at && j !== f.free.at && side(o, e, d.atoms[i]) * side(o, e, d.atoms[j]) < 0 && side(d.atoms[i], d.atoms[j], o) * side(d.atoms[i], d.atoms[j], e) < 0);
+  };
+  return d.free.map((f) => {
+    if (!short.has(f)) return f;
+    const length = crosses(f, SHORT_PLACE) ? SHORTER_PLACE : SHORT_PLACE;
+    return { ...f, x: f.x * length, y: f.y * length };
+  });
 }
 
 /**
@@ -117,7 +135,7 @@ export function pairDrawing(found: FoundChair, bond: number, how: FuseHow): Chai
   const solid = fused(found.flip ? flipped(chair()) : chair(), bond, "chair", how);
   const full = drawn(solid, found.form);
   if (!full) return null;
-  const drawing = { ...full, free: shortened(full) };
+  const drawing = { ...full, free: shortened(full, solid.bonds) };
   const atoms: Atom[] = drawing.atoms.map((p, k) => ({ id: 1 + k, el: "C", r: 0.9, x: found.at.x + p.x * found.scale, y: found.at.y + p.y * found.scale, z: p.z * found.scale }));
   const bonds: Bond[] = solid.bonds.map(([a, b], k) => ({ id: 1 + k, a: 1 + a, b: 1 + b, order: 1 }));
   return { atoms, bonds, ring: atoms.map((a) => a.id), solid, drawing, scale: found.scale };

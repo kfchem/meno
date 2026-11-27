@@ -5,7 +5,7 @@ import { cipMarksOf } from "../chem/cipMarks";
 import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairDrawing, chairOf, FIRST_FORM, seenPlaces } from "./chair";
-import { fusableBonds, fusedOn, SHORT_PLACE, type Fuse, type FuseHow } from "./fuse";
+import { fusableBonds, fusedOn, SHORT_PLACE, SHORTER_PLACE, type Fuse, type FuseHow } from "./fuse";
 import { chairExtension, projectionBond, projectionDrop } from "./extend";
 import { projectionsIn } from "./rings";
 
@@ -408,10 +408,29 @@ describe("groups led out of a fused pair", () => {
     }
   });
 
-  it("draws no place's end within 0.29 of a bond of an atom or of another place's end, and no group's bond along a ring bond", () => {
+  it("draws no place's end within 0.29 of a bond of an atom or of another place's end, no group's bond along a ring bond, and no short place across a bond", () => {
     const L = NOMINAL_BOND_LENGTH;
+    let third = 0;
     for (const { said, m } of all) {
       const at = new Map(m.atoms.map((a) => [a.id, a]));
+      for (const id of m.atoms.filter((a) => a.z != null).map((a) => a.id)) {
+        const a = at.get(id)!;
+        for (const p of placesOf(m, id)) {
+          const long = Math.hypot(p.at.x - a.x, p.at.y - a.y) / L;
+          if (Math.abs(long - SHORTER_PLACE) < 1e-9) third++;
+          for (const b of m.bonds) {
+            if (b.a === id || b.b === id) continue;
+            const [q, r] = [at.get(b.a)!, at.get(b.b)!];
+            const side = (u: { x: number; y: number }, v: { x: number; y: number }, w: { x: number; y: number }) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
+            if (!(side(a, p.at, q) * side(a, p.at, r) < 0 && side(q, r, a) * side(q, r, p.at) < 0)) continue;
+            // (a place drawn short never crosses a bond: no stub beyond the break behind it, no tick beyond it in front; a full one crosses
+            //  at most 0.6 of the way out, so that 0.4 of a bond of it or more shows past the crossing - past the break, never a stub)
+            expect(long, `${said}: a place of ${id} across bond ${b.id}`).toBeCloseTo(1, 9);
+            const t = side(q, r, a) / (side(q, r, a) - side(q, r, p.at));
+            expect(t, `${said}: a place of ${id} across bond ${b.id}`).toBeLessThanOrEqual(0.6);
+          }
+        }
+      }
       const ring = m.atoms.filter((a) => a.z != null).map((a) => a.id);
       const ends = ring.flatMap((id) => placesOf(m, id).map((p) => ({ id, ...p.at })));
       for (const e of ends) {
@@ -430,9 +449,11 @@ describe("groups led out of a fused pair", () => {
         }
       }
     }
+    // (one third long where two thirds would cross a bond: 32 places over the 72 drawings)
+    expect(third).toBe(32);
   });
 
-  it("draws a lone chair's places exactly as before, and the first ring's unshortened ones; a short place lies along its own line, two thirds long", () => {
+  it("draws a lone chair's places exactly as before, and the first ring's unshortened ones; a short place lies along its own line, two thirds or one third long", () => {
     for (const p of PICTURES) {
       const d = pictured(p);
       const lone = { atoms: d.atoms, bonds: d.bonds };
@@ -457,8 +478,9 @@ describe("groups led out of a fused pair", () => {
           const [nx, ny] = [now.at.x - d.atoms[k].x, now.at.y - d.atoms[k].y];
           if (Math.hypot(nx - dx, ny - dy) < 1e-9) continue;
           short++;
-          expect(nx, `${said}, atom ${k}`).toBeCloseTo(dx * SHORT_PLACE, 9);
-          expect(ny, `${said}, atom ${k}`).toBeCloseTo(dy * SHORT_PLACE, 9);
+          const f = Math.hypot(nx, ny) / Math.hypot(dx, dy);
+          expect([SHORT_PLACE, SHORTER_PLACE].some((l) => Math.abs(f - l) < 1e-9), `${said}, atom ${k}: ${f}`).toBe(true);
+          expect(Math.abs(nx * dy - ny * dx) / (NOMINAL_BOND_LENGTH * NOMINAL_BOND_LENGTH), `${said}, atom ${k}`).toBeLessThan(1e-9);
         }
       }
     }
@@ -491,5 +513,32 @@ describe("groups led out of a fused pair", () => {
     expect(drop.swap!.get(60)!.y).toBeCloseTo(ax.y, 9);
     // (dragged a little off and let go toward its own place, it rests there, short)
     expect(projectionDrop(m, 61, { x: ax.x + 0.2, y: ax.y })!.to).toEqual(ax);
+  });
+
+  it("holds a place drawn one third long as any: double-clicks fill both places, then none; a swap gives each group the length of the place it goes to", () => {
+    // (every atom of either ring with a place drawn one third long, in every one of the 72 drawings)
+    let seen = 0;
+    for (const { said, m: m0 } of all) {
+      for (const id of m0.atoms.filter((a) => a.z != null).map((a) => a.id)) {
+        const here = m0.atoms.find((a) => a.id === id)!;
+        const places = placesOf(m0, id);
+        const long = (p: { x: number; y: number }) => Math.hypot(p.x - here.x, p.y - here.y) / NOMINAL_BOND_LENGTH;
+        if (places.length !== 2 || !places.some((p) => Math.abs(long(p.at) - SHORTER_PLACE) < 1e-9)) continue;
+        seen++;
+        let m = m0;
+        const add = (gid: number, p: { x: number; y: number }) => (m = { atoms: [...m.atoms, { id: gid, el: "C", r: 0.9, ...p }], bonds: [...m.bonds, { id: gid + 100, a: id, b: gid, order: 1 }] });
+        const first = projectionBond(m, id) as { x: number; y: number };
+        const [one, other] = Math.hypot(first.x - places[0].at.x, first.y - places[0].at.y) < 1e-9 ? [places[0], places[1]] : [places[1], places[0]];
+        expect(one.free.kind, `${said}, atom ${id}`).toBe("equatorial");
+        add(60, one.at);
+        expect(projectionBond(m, id), `${said}, atom ${id}`).toEqual(other.at);
+        add(61, other.at);
+        expect(projectionBond(m, id), `${said}, atom ${id}`).toBe("full");
+        const drop = projectionDrop(m, 61, one.at)!;
+        expect(drop.to, `${said}, atom ${id}`).toEqual(one.at);
+        expect(Math.hypot(drop.swap!.get(60)!.x - other.at.x, drop.swap!.get(60)!.y - other.at.y), `${said}, atom ${id}`).toBeLessThan(1e-9);
+      }
+    }
+    expect(seen).toBe(32);
   });
 });
