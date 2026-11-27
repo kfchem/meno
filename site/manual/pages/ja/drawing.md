@@ -19,11 +19,11 @@
 - 「Conversation」は、アシスタントとの会話をページに置きます。
 - 細い線のあとの「Calculations」は、[ワークフロー](workflows#steps)のステップを開きます。
 
-そのまま SMILES を打てば SMILES の欄に入り、Enter で描かれます。最初の SMILES は少し時間がかかります。Meno の辞書にあるラベル（DMF、THF、Et3N など）は辞書のとおりに描かれ、打っているあいだ、欄の下に名前と組成式が出ます。打った文字が二通りに読めるときは、欄の下に両方が出ます。クリックするか、上下の矢印キーで選んでから Enter を押します。
+そのまま SMILES を打つと、最初のキーで SMILES の欄が開いてその文字が入り、続きもそこに入ります。Enter で描かれます。最初の SMILES は少し時間がかかります。Meno の辞書にあるラベル（DMF、THF、Et3N など）は辞書のとおりに描かれ、打っているあいだ、欄の下に名前と組成式が出ます。打った文字が二通りに読めるときは、欄の下に両方が出ます。文字を SMILES として読んだものは「SMILES」と組成式、辞書のものはその名前と組成式で示されます。クリックするか、上下の矢印キーで選んでから Enter を押します。
 
 ## 名前から構造を置く {#by-name}
 
-名前は、それを調べるプラグインを通して、オンラインのデータベースで調べます。そのプラグインを追加すると、「SMILES」のアイコンは「SMILES or name」という名前になります。
+名前は、それを調べるプラグインを通して、オンラインのデータベースで調べます。プラグインは、設定の「Plugins」か、下に述べる「Look it up as a name…」から追加します。追加すると、「SMILES」のアイコンは「SMILES or name」という名前になります。
 
 1. 何もないところをダブルクリックして、名前を打ちます。たとえば aspirin です。
 2. 欄の下のいちばん最後に「Look up “aspirin” at」とプラグインの名前が出ます。打っているあいだは、何もコンピューターの外へ出ません。名前が送られるのは、その行をクリックするか Enter で選んだときだけです。
@@ -34,7 +34,7 @@
 
 描く前に Meno は、読み取った構造を、データベースが示す組成式と電荷と照らし合わせます。合わなければ何も描かず、両方の組成式を欄に示します。データベースが決めていない立体中心や二重結合は未定のまま描かれ、Meno がそのことを伝えます。
 
-- オフラインのときは、その行が薄くなり、プラグインにネットワークが要ることが出ます。
+- オフラインのときは、その行が薄くなり、そのプラグインにはネットワークが必要だと表示されます。
 - そうしたプラグインがないときは、構造として読めない文字を Enter すると、欄の下にうまくいかなかった理由と「Look it up as a name…」が出ます。これを選ぶと、名前を調べるオンラインのプラグインが「Add」とその名前で並びます（まだ一覧がなければ、先に「List the plugins online」）。追加したら、もう一度 Enter を押すと名前が調べられます。
 - 何も保存されません。同じ名前を二回調べれば、二回送られます。
 
@@ -84,25 +84,26 @@
 
 ラベルは、化学者が意図したとおりに読まれます。小文字で tbscl と打てば TBSCl になり、試薬や配位子の名前は金属の元素記号より先に読まれます。打ったものと違う形で残ったときは、原子の右クリックメニューに「As typed:」と打った文字が出るので、選べば打ったとおりに戻ります。
 
-- OTBS のようなラベルのメニューにある「Expand abbreviation」で、その基が描き出されます。
+- OTBS のようなラベルのメニューにある「Expand abbreviation」で、略号がほどかれ、構造式で描かれます。
 - 自分の基をラベルとして残すには、その原子を選んで右クリックメニューの「Save as abbreviation…」を選びます。設定の[「Dictionary」](settings#dictionary)に保存されます。
 
 ## 右クリック：原子や結合でできること {#menus}
 
 原子や結合を右クリックすると、できることが出ます。上にアイコンの列、その下に一覧が並びます。アイコンは、ポインターを載せると名前が出ます。右クリックしたものは選ばれ、メニューの最初の行に、何に効くかが出ます。「This atom」、またはいくつか選んだうちの一つなら「3 atoms, 2 bonds」のようにです。そのとき原子の電荷や結合の種類は、選んだ原子や結合すべてに一度に効き、「Cut」と「Copy」は選んだものすべてに効きます。
 
-- 原子：アイコンは「Charge one up」「Charge one down」「Clean up this structure」「3D structure」「Electron-pushing arrow」「Fishhook arrow」「Colour…」「Delete atom」です。一覧には「Edit label」「Chain from here」「Unpaired electron」「Select this structure」「Magnification」があります。
-- 結合：アイコンは結合の種類の「Single bond」「Double bond」「Triple bond」「Wedge」「Hashed wedge」、次に「More kinds of bond」、そして「Delete bond」です。結合のいまの種類のアイコンは、結合の向きどおりに描かれます。もう一度押すと、くさびの細い端が反対側の原子に移り、二重結合は 2 本目の線が移ります。結合をいくつか選んでいるときは、選んだ結合すべてがその種類になります。「More kinds of bond」を押すと 2 段目が開き、「Wavy bond」「Bold bond」「Bold dashed bond」「Dashed bond」「Dative bond」が並びます。一覧には「Clean up this structure」「3D structure」、そこから出す矢印、「Colour…」「Select this structure」などがあります。
+- 原子：アイコンは「Charge one up」「Charge one down」「Clean up this structure」「3D structure」「Colour…」「Delete atom」です。一覧には「Edit label」「Chain from here」（その原子にまだ結合を足せるとき）「Unpaired electron」「Select this structure」「Magnification」があります。
+- 結合：アイコンは結合の種類の「Single bond」「Double bond」「Triple bond」「Wedge」「Hashed wedge」、次に「More kinds of bond」、そして「Delete bond」です。結合のいまの種類のアイコンは、結合の向きどおりに描かれます。もう一度押すと、くさびの細い端が反対側の原子に移り、二重結合は 2 本目の線が移ります。結合をいくつか選んでいるときは、選んだ結合すべてがその種類になります。「More kinds of bond」を押すと 2 段目が開き、「Wavy bond」「Bold bond」「Bold dashed bond」「Dashed bond」「Dative bond」が並びます。一覧には「Clean up this structure」「3D structure」「Colour…」「Select this structure」などがあります。
 
 ## 電子の動きを示す矢印 {#electron-arrows}
 
-曲がった矢印で、電子の行き先を示します。電子対には矢じりが全部ある「Electron-pushing arrow」、電子一つには半分の「Fishhook arrow」を使います。
+曲がった矢印で、電子の行き先を示します。電子対の移動は普通の矢じり、電子一つの移動は片側だけの矢じり（フィッシュフック）で描きます。矢印は普通の矢じりで置かれ、右クリックメニューの「Fishhook (half head)」でフィッシュフックになります。
 
-1. 電子が出ていく原子か結合を右クリックして、二つのアイコンのどちらかを選びます。または、何もないところをダブルクリックして「Scheme」を開き、「Electron-pushing arrow」を選んでから、電子が出ていく原子か結合を押します。
-2. ボタンを押さずにポインターを動かすと、矢印がついてきて、ポインターの下の原子や結合、または結合ができる二つの原子のあいだに向かいます。
-3. そこでクリックすると置かれます。何もないところのクリックか Escape でやめます。
+1. 何もないところをダブルクリックして「Scheme」を開き、「Electron-pushing arrow」を選びます。
+2. 電子が出ていく原子か結合をクリックします。
+3. ボタンを押さずにポインターを動かすと、矢印がついてきて、ポインターの下の原子や結合、または結合ができる二つの原子のあいだに向かいます。
+4. そこでクリックすると置かれます。手順 2 で原子か結合を押したまま行き先までドラッグし、そこで離しても置けます。
 
-矢印は原子についていき、原子を動かしても、整えても一緒に動きます。線をドラッグすると曲げられます。右クリックすると「Full head」「Fishhook (half head)」「Colour…」「Delete arrow」があり、手で曲げた矢印には「Bend as Meno does」もあります。負電荷から出る矢印には「From the charge」と「From a lone pair」があります。反応の矢印は、[スライド](slides#arrows)のページにあります。
+何もないところのクリックか Escape でやめます。矢印は原子についていき、原子を動かしても、整えても一緒に動きます。線をドラッグすると曲げられます。右クリックすると「Full head」「Fishhook (half head)」「Colour…」「Delete arrow」があり、手で曲げた矢印には「Bend as Meno does」もあります。負電荷から出る矢印には「From the charge」と「From a lone pair」があります。反応の矢印は、[スライド](slides#arrows)のページにあります。
 
 ## 作業するものを選ぶ {#selecting}
 

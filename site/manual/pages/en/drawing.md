@@ -19,11 +19,11 @@ Double-click empty space. A row of icons opens there, one for each thing that ca
 - *Conversation* puts down a conversation with an assistant.
 - *Calculations*, after a thin line, opens the steps of a [workflow](workflows#steps).
 
-Or just type a SMILES: it goes into the SMILES field, and Enter draws it. The first SMILES takes a moment. A label Meno's dictionary knows - DMF, THF, Et3N - is drawn from the dictionary, its name and formula shown under the field as you type. Where the text could be read two ways, each is offered there: click one, or choose it with the up and down arrows, then press Enter.
+Or just type a SMILES: the first key opens the SMILES field with it, the rest goes in after it, and Enter draws it. The first SMILES takes a moment. A label Meno's dictionary knows - DMF, THF, Et3N - is drawn from the dictionary, its name and formula shown under the field as you type. Where the text could be read two ways, each is offered there - *SMILES* and a formula for the letters read as a SMILES, or the dictionary's name and its formula: click one, or choose it with the up and down arrows, then press Enter.
 
 ## A structure by its name {#by-name}
 
-A name is looked up in an online database, through a plugin that does it. Once one is added, the *SMILES* icon is called *SMILES or name*.
+A name is looked up in an online database, through a plugin that does it: add one in Settings, *Plugins*, or from *Look it up as a name…*, as told below. Once one is added, the *SMILES* icon is called *SMILES or name*.
 
 1. Double-click empty space and type the name - aspirin, say.
 2. Under the field, the last row reads *Look up “aspirin” at*, then the plugin's name. Nothing leaves the computer while you type: the name goes out only when you choose that row, with a click or with Enter.
@@ -91,18 +91,19 @@ A label is read as a chemist means it: typed small, tbscl becomes TBSCl, and the
 
 Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list. A right-click chooses what it is on; the menu's first line says what it acts on - *This atom*, or *3 atoms, 2 bonds* when you right-click one of several chosen. Then an atom's charge, or a bond's kind, is set on every chosen atom or bond at once, and *Cut* and *Copy* take everything chosen.
 
-- An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Electron-pushing arrow*, *Fishhook arrow*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here*, *Unpaired electron*, *Select this structure* and *Magnification*.
-- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* opens a second row: *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*. *Delete bond* is last. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
+- An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here* (where the atom has room for another bond), *Unpaired electron*, *Select this structure* and *Magnification*.
+- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* opens a second row: *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*. *Delete bond* is last. The list holds *Clean up this structure*, *3D structure*, *Colour…*, *Select this structure* and the rest.
 
 ## Arrows for electrons {#electron-arrows}
 
-A curved arrow shows where electrons go: *Electron-pushing arrow*, with a full head, for a pair; *Fishhook arrow*, with a half head, for one.
+A curved arrow shows where electrons go: with a full head for a pair, with a half head - a fishhook - for one. Each is put down with a full head; *Fishhook (half head)*, on its right-click menu, makes it a fishhook.
 
-1. Right-click the atom or the bond the electrons leave, and choose one of the two icons. Or double-click empty space, open *Scheme*, choose *Electron-pushing arrow*, and press the atom or bond it leaves.
-2. Move the pointer without pressing the button: the arrow follows it to the atom or the bond under it, or to the gap between two atoms where a bond forms.
-3. Click there to put it down. A click on nothing, or Escape, lets it go.
+1. Double-click empty space, open *Scheme*, and choose *Electron-pushing arrow*.
+2. Click the atom or the bond the electrons leave.
+3. Move the pointer with the button up: the arrow follows it to the atom or the bond under it, or to the gap between two atoms where a bond forms.
+4. Click there to put it down. Or, at step 2, press on the atom or bond and drag to where the arrow goes, and let go there.
 
-The arrow stays with its atoms as they are moved or cleaned up. Drag its line to bend it; right-click it for *Full head* or *Fishhook (half head)*, *Colour…* and *Delete arrow*, and, where it was bent by hand, *Bend as Meno does*. An arrow from a negative charge has *From the charge* and *From a lone pair*. Reaction arrows are on the page on [slides](slides#arrows).
+A click on nothing, or Escape, lets it go. The arrow stays with its atoms as they are moved or cleaned up. Drag its line to bend it; right-click it for *Full head*, *Fishhook (half head)*, *Colour…* and *Delete arrow*, and, where it was bent by hand, *Bend as Meno does*. An arrow from a negative charge has *From the charge* and *From a lone pair*. Reaction arrows are on the page on [slides](slides#arrows).
 
 ## Choosing what to work on {#selecting}
 
