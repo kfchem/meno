@@ -4,7 +4,7 @@ Put a cyclohexane chair on the page, add one group equatorial and one axial on t
 
 1. {#open-quick-add} Double-click an empty spot on the page. A row of icons opens.
 2. {#projections} Choose *Projections*, the icon of a chair. A second row opens below it.
-3. {#chair} Choose *Chair*. A chair is put down where you double-clicked.
+3. {#chair} Choose *Chair*. A chair is put down where you double-clicked. It stays chosen, shown in blue, while you work on it.
 4. {#equatorial} Double-click the chair's lower right end. A group is added at the atom's equatorial place, out to the side.
 5. {#axial} Double-click the same atom again. A second group is added at its axial place, straight down.
 6. {#neighbour} Double-click the atom beside it, at the middle of the chair's lower edge. A group is added at that atom's equatorial place, and an *R* shows beside the atom.
