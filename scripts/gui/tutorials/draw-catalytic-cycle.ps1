@@ -12,8 +12,18 @@ Step not-now Click -At (Part Button "Not now" -TimeoutSec 20)
 Resume-Steps
 Start-Sleep -Seconds 2
 
-# the cycle in the middle of the window: its line four and a half bonds from its middle (432 pixels of the shot at this size)
-$cycleX = 1200; $cycleY = 760; $cycleR = 432
+# the cycle a little left of the middle and high in the window: its line four and a half bonds from its middle (432 pixels of the
+# shot at this size). Every right-click on its line is high enough for the menu to open below it whole, so the page stays where it is
+$cycleX = 1100; $cycleY = 680; $cycleR = 432
+
+function Rest-Pointer {
+    # the pointer moved over empty page, then off the page to the bar at the top, nothing pressed: no tip or hover mark left on the
+    # drawing in the next picture
+    Move-MenoPointer -X 300 -Y 1450
+    Start-Sleep -Milliseconds 200
+    Move-MenoPointer -X 1600 -Y 40
+    Start-Sleep -Milliseconds 600
+}
 function OnLine([double] $deg) {
     $a = $deg * [math]::PI / 180
     Point ([int][math]::Round($cycleX + $cycleR * [math]::Cos($a))) ([int][math]::Round($cycleY + $cycleR * [math]::Sin($a)))
@@ -21,6 +31,7 @@ function OnLine([double] $deg) {
 
 function Put-Words([string] $Id, [double] $Deg, [string] $Words) {
     # words on the line: Quick Add opened on it, its Text, the words typed and kept with Enter
+    Rest-Pointer
     Step "$Id-open" DoubleClick -At (OnLine $Deg)
     Step "$Id-text" Click -At (Part Button "Text" -Within "Add")
     Step "$Id" Type -Text $Words
@@ -31,6 +42,7 @@ function Put-Words([string] $Id, [double] $Deg, [string] $Words) {
 
 function Put-Arrow([string] $Id, [double] $Deg, [string] $Item, [string] $Words) {
     # an arrow from the line's right-click menu, its words typed at once and kept with Enter
+    Rest-Pointer
     Step "$Id-menu" RightClick -At (OnLine $Deg)
     Step "$Id" Click -At (Part MenuItem $Item)
     Step "$Id-words" Type -Text $Words
@@ -43,17 +55,19 @@ Step open-quick-add DoubleClick -At (Point $cycleX $cycleY)
 Step scheme Click -At (Part Button "Scheme" -Within "Add")
 Step cycle Click -At (Part Button "Catalytic cycle" -Within "Scheme")
 
-# clockwise, as the cycle's arrows run: the catalyst at the top, then the two intermediates
-Put-Words catalyst -90 "L2Pd(0)"
-Put-Words second 30 "L2Pd(Ar)X"
-Put-Words third 150 "L2Pd(Ar)Ar'"
+# clockwise, as the cycle's arrows run: the catalyst at the bottom, then the two intermediates at the upper left and upper right
+# (in this order, so that the row of icons, which opens to the right of where it is asked for, never lies over words already there)
+Put-Words catalyst 90 "L2Pd(0)"
+Put-Words second 210 "L2Pd(Ar)X"
+Put-Words third 330 "L2Pd(Ar)Ar'"
 
 # what comes in between the catalyst and the second, what comes in and goes out between the second and the third, what goes out between the third and the catalyst
-Put-Arrow arrow-in -30 "Arrow coming in" "Ar-X"
-# between the second and the third: what comes in, then what goes out, on the same part of the line
-Put-Arrow metal-in 65 "Arrow coming in" "Ar'-M"
-Put-Arrow metal-out 115 "Arrow going out" "M-X"
-Put-Arrow arrow-out 210 "Arrow going out" "Ar-Ar'"
+Put-Arrow arrow-in 190 "Arrow coming in" "Ar-X"
+# between the second and the third, along the top: what comes in, then what goes out, on the same part of the line
+Put-Arrow metal-in 250 "Arrow coming in" "Ar'-M"
+Put-Arrow metal-out 290 "Arrow going out" "M-X"
+Put-Arrow arrow-out 0 "Arrow going out" "Ar-Ar'"
 
 # the cycle let go: as it will be copied into a document or slides
+Rest-Pointer
 Step let-go Click -At (Point 2100 1300)
