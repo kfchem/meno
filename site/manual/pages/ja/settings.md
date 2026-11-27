@@ -26,12 +26,12 @@ Meno の設定がどこにあり、それぞれの部分に何があるかを説
 
 ## 3D {#3d}
 
-「Molecules in 3D」：新しいワークスペースで分子を見せるスタイル（「Primary」と「Secondary」）、それぞれのスタイルが分子をどう描くか（「Atoms」「Hydrogens on carbon」、鎖、面、線など）、「Atom colours」、そして「Every style」の下に、光、軌道と密度、リボン、回転があります。
+「Molecules in 3D」：新しいワークスペースで分子を見せるスタイル（「Primary」と「Secondary」）、それぞれのスタイルが分子をどう描くか（「Atoms」「Hydrogens on carbon」、鎖、面、線など）、「Atom colours」、そして「Every style」の下に、光、軌道と密度、リボン、回転があります。「Preview」には、いま設定しているスタイルで分子が描かれます。ダブルクリックすると、「Primary」と「Secondary」のもう一方の設定に移ります。
 
 ## Chemistry {#chemistry}
 
 - 「Point out atoms with too many bonds」：結合が多すぎる原子に、ページの上だけの印を付けます。
-- Meno のためにどのプラグインが何をするか（「SMILES to a structure, and back」から「Pictures and films of molecules in 3D, rendered」まで）と、二つのプラグインができるときはそのどちらにするか。その指定は下に並びます。
+- Meno のためにどのプラグインが何をするか（「Structures from SMILES, and SMILES from structures」から「Pictures and films of molecules in 3D, rendered」まで）と、二つのプラグインができるときはそのどちらにするか。その指定は下に並びます。
 - 「Keep conformers within」：最も低いものよりずっと高い配座は、作るときに外されます。
 
 ## Files {#files}

@@ -29,9 +29,18 @@ The other files in a release are what Meno downloads when it updates itself; you
 
 > macOS asks because Meno is not notarised by Apple. Open Meno from Applications, not from the disk image: a Meno opened from the disk image cannot update itself.
 
-## The first question {#first-question}
+## The first start {#first-start}
 
-After the first thing you do in Meno - put a structure down, open a file, open Settings - and once you have paused for a few seconds, a card at the bottom left asks *Keep Meno up to date?* It never covers the page and waits while you are typing or something is under way. With *Allow and download*, it looks on GitHub for a newer version shortly after it starts and once a day while it runs, downloads it in the background and installs it when you quit. With *Not now*, it does none of this. You can change your mind at any time in Settings, *Network*, under *Keep Meno up to date*.
+As Meno first starts, a card at the bottom left asks *Set up chemistry?*. Meno reads and writes SMILES with a plugin, and the card offers to fetch it from Meno's list of plugins online and set it up once; it names where each part comes from. The card covers nothing and takes no keys: you can draw while it waits.
+
+- *Set up* fetches the list and the plugin, and sets it up. The card says each step as it goes, names the plugin with its licence and size, and has *Stop*. The plugin, RDKit, also makes structures in 3D.
+- If setting it up needs anything the card did not name, the card asks about that in its place before it goes on.
+- *Not now* fetches nothing, and Meno does not ask again. To set chemistry up later, type a SMILES in Quick Add and add the plugin offered under it, or add it in Settings, *Plugins*.
+- If it fails, the card says why, with *Try again*.
+
+Once that card is done with, and after the first thing you do in Meno - put a structure down, open a file, open Settings - and a pause of a few seconds, a card in the same place asks *Keep Meno up to date?*. With *Keep up to date*, Meno looks on GitHub for a newer version shortly after it starts and once a day while it runs, downloads it in the background (about 20 MB) and installs it when you quit. With *Not now*, it does none of this. You can change your mind at any time in Settings, *Network*, under *Keep Meno up to date*.
+
+While Meno works offline, neither card comes.
 
 ## Updates {#updates}
 
@@ -45,7 +54,7 @@ Meno connects to nothing without asking first, and shows every connection as it 
 
 ## Plugins {#plugins}
 
-Some of Meno's work is done by plugins: the chemistry of SMILES and 3D structures, conformer searches, optimisations and energies, reading the outputs of calculation programs. A plugin sets itself up the first time it is needed, after Meno asks, by downloading what it needs into Meno's own folder. Settings, *Plugins* lists them, and adds or removes them. Calculation programs you have installed yourself are used where they are; Meno never downloads them.
+Some of Meno's work is done by plugins: the chemistry of SMILES and 3D structures, conformer searches, optimisations and energies, reading the outputs of calculation programs. The plugin for SMILES and 3D comes from the card [above](#first-start). Any other is added in Settings, *Plugins*, or where Meno offers it as it is needed; Meno asks first, then downloads what it needs into Meno's own folder. Settings, *Plugins* lists them, and adds or removes them. Calculation programs you have installed yourself are used where they are; Meno never downloads them.
 
 ## Where Meno keeps its files {#files}
 

@@ -12,7 +12,8 @@ Meno 自身を超える仕事はプラグインが受け持ちます。SMILES �
 
 - 用意している間は、カードに進み具合が出て、ウィンドウの隅のカードに何をどこからダウンロードしているかが出ます。
 - プラグインは一つずつ用意されます。順番を待っているものは「Skip」で外せます。
-- 必要なところでも Meno がプラグインを勧めます。たとえば RDKit が初めて必要になったときや、どの加えたプラグインも読まないファイルをドロップしたときです。
+- Meno を初めて起動したときに出るカード「Set up chemistry?」で、SMILES と 3D のプラグインが加わります（[インストール](installing#first-start)）。
+- 必要なところでも Meno がプラグインを勧めます。たとえば「Needs a plugin」と出たとき（化学の準備の前に SMILES を入力したときなど）や、どの加えたプラグインも読まないファイルをドロップしたときです。
 - 用意に失敗すると、カードに理由が出ます。「Add」をもう一度押すとやり直せます。途中で止まったダウンロードは、止まったところから続きます。
 
 ## 自分で入れるプログラム {#installed}
@@ -21,7 +22,7 @@ Meno 自身を超える仕事はプラグインが受け持ちます。SMILES �
 
 ## 誰が何をするかを選ぶ {#roles}
 
-設定の「Chemistry」に、プラグインが Meno のために受け持つ仕事（「SMILES to a structure, and back」「Structures in 3D, and their conformers」など）と、それぞれをどのプラグインがするかが並びます。同じ仕事をできるプラグインが二つあるときは、ここでどちらにするかを選びます。「Structures read from pictures」は MolScribe か MolNexTR のどちらでもできます。プラグインへの指定は、その下に並びます。たとえば RDKit の「Conformers sought」です。
+設定の「Chemistry」に、プラグインが Meno のために受け持つ仕事（「Structures from SMILES, and SMILES from structures」「Structures in 3D, and their conformers」など）と、それぞれをどのプラグインがするかが並びます。同じ仕事をできるプラグインが二つあるときは、ここでどちらにするかを選びます。「Structures read from pictures」は MolScribe か MolNexTR のどちらでもできます。プラグインへの指定は、その下に並びます。たとえば RDKit の「Conformers sought」です。
 
 ## 取り除く {#removing}
 
@@ -48,3 +49,5 @@ Meno 自身を超える仕事はプラグインが受け持ちます。SMILES �
 - **Multiwfn interface**、**NCIPLOT interface**：別に入れた Multiwfn か NCIPLOT で、非共有結合性相互作用を、強さで色分けした面として見せます。
 - **CReM**：種となる構造の断片を置き換えて、新しい構造を作ります。
 - **REINVENT 4**：SMILES の生成モデルで、新しい分子を作ります。
+- 名前から構造を Meno の外のデータベースで探すプラグイン。Quick Add の「Look it up as a name…」で使います。送るのは名前だけです。
+- ページ上の会話でモデルと話すプラグイン。どれを使うかとそのキーは、設定の「Conversations」で決めます。

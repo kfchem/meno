@@ -21,7 +21,7 @@ To leave raw outputs out ahead of that, choose *Don't keep raw outputs* on a ste
 
 Choose *Open…*, or drop files on the window: each goes where it belongs.
 
-- Structures in MOL, SD, RXN, XYZ and PDB files, and cube files, are read by Meno itself and put on the page - where they are dropped, or near the middle of the view with *Open…*.
+- Structures in MOL, SD, RXN, XYZ and PDB files, and cube files, are read by Meno itself and put on the page - where they are dropped, or near the middle of the view with *Open…*. From an SD file, each record's title becomes its molecule's name, and an energy given as Meno writes it, `Energy (Eh)`, is read back. In an XYZ file, each frame is named by its comment line, and an energy there is read with it. A file with several frames opens as one molecule with frames, which can be taken as conformers ([3D structures](3d#conformers)).
 - PDFs, and pictures in PNG or JPEG, are put on the page too.
 - Texts - .txt, .csv, .tsv, .json, .log and the like - open in the column of texts on the right. A CSV or TSV table can go on the page with *Put on the page as a table*, on its right-click menu.
 - A calculation's output - ORCA's, Gaussian's, xTB's and others' - is read by a plugin, cclib among them, added in Settings, *Plugins*. Where none added reads it, Meno says so in the corner, with *List the plugins online*; once the list is here, the same notice names the plugin that would read it, with a button to add it.

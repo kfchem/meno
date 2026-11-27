@@ -12,7 +12,8 @@ Press *Add*. Meno asks before it downloads anything, as it does before anything 
 
 - While it is set up, its card says how far it has got, and a card in the corner of the window says what is being downloaded and from where.
 - Plugins are set up one at a time; one waiting its turn can be left out with *Skip*.
-- Meno offers a plugin where one is needed, too: the first time something needs RDKit, say, or when a file is dropped that no added plugin reads.
+- As Meno first starts, its card *Set up chemistry?* adds the plugin for SMILES and 3D ([Installing](installing#first-start)).
+- Meno offers a plugin where one is needed, too: where something says *Needs a plugin* - a SMILES typed before chemistry is set up, say - or when a file is dropped that no added plugin reads.
 - If setting one up fails, its card says why. Press *Add* again to try again; a download that stopped goes on from where it stopped.
 
 ## Programs you install yourself {#installed}
@@ -21,7 +22,7 @@ A few plugins work with a program installed on the computer separately: ORCA, Ga
 
 ## Choosing who does what {#roles}
 
-Settings, *Chemistry*, lists what plugins do for Meno's own work - *SMILES to a structure, and back*, *Structures in 3D, and their conformers* and the rest - and which plugin does each. Where two plugins can do the same, choose there which one does it: *Structures read from pictures* can be done by MolScribe or by MolNexTR. What a plugin can be asked to do differently stands under it, such as RDKit's *Conformers sought*.
+Settings, *Chemistry*, lists what plugins do for Meno's own work - *Structures from SMILES, and SMILES from structures*, *Structures in 3D, and their conformers* and the rest - and which plugin does each. Where two plugins can do the same, choose there which one does it: *Structures read from pictures* can be done by MolScribe or by MolNexTR. What a plugin can be asked to do differently stands under it, such as RDKit's *Conformers sought*.
 
 ## Taking one away {#removing}
 
@@ -48,3 +49,5 @@ The list is Meno's list of plugins online, fetched once Meno is allowed to ask f
 - **Multiwfn interface**, **NCIPLOT interface**: show non-covalent interactions as surfaces coloured by their strength, with Multiwfn or NCIPLOT installed separately.
 - **CReM**: makes new structures from seeds, by replacing their fragments.
 - **REINVENT 4**: makes new molecules with a generative model of SMILES.
+- A plugin that finds a structure by its name in a database outside Meno, for Quick Add's *Look it up as a name…*. It sends the name and nothing else.
+- A plugin that talks with a model for a conversation on the page; it is chosen, with its key, in Settings, *Conversations*.
