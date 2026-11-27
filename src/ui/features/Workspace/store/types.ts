@@ -857,6 +857,9 @@ export type TextOf = { step: number; jobs?: string[]; job?: number } | { molecul
  * a name (`name`: where its structures came from, or the chemist's own),
  * *Input* where not.
  */
+/** A set's sides sized out by hand, each by how far inside the frame's own side it lies (`WorkflowSet.sized`). */
+export type SetSized = { x0?: number; x1?: number; y0?: number; y1?: number };
+
 export type WorkflowSet = {
   id: number;
   x0: number;
@@ -871,12 +874,20 @@ export type WorkflowSet = {
   made?: { step: number; exit: string; holds?: SetHolds };
   name?: string;
   /**
+   * Its sides sized out by hand (docs/WORKFLOWS.md, *A set holds its
+   * members*): each held where it was put, as how far inside the frame's own
+   * side it lies - 0 where the frame lies there, more where a member needs
+   * more room than that - so that it goes wherever the frame is moved. A side
+   * not here is its members' room's (workflow/fitFrames `heldSides`).
+   */
+  sized?: SetSized;
+  /**
    * What it holds, in order (docs/WORKFLOWS-FOUNDATION.md, *Members are
    * explicit*): each a structure drawn (by its atoms' ids), a molecule in
    * 3D or a picture (by id). Dropping something into the frame adds it at
-   * its place, dragging it out takes it out, a frame resized takes in and
-   * lets go of what then lies inside it or not (workflow/model
-   * `membersSettled`); a step's result set holds what the step made, in its
+   * its place, dragging it out takes it out, a frame resized lets go of
+   * what then lies outside it and takes in nothing it is sized over
+   * (workflow/model `membersSettled`); a step's result set holds what the step made, in its
    * order. None yet: what lies inside it, as a set was before.
    */
   members?: Member[];
@@ -1947,6 +1958,8 @@ export type EditorState = {
   putDownProcedure: (id: string, x: number, y: number) => void;
   /** A set moved with all it holds: a run of it in one gesture one step. */
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
+  /** A set's frame sized by a side or a corner to `asked` (workflow/fitFrames `setSized`): never inside its members' room; a run of it in one gesture one step. */
+  sizeSet: (id: number, side: "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw", asked: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
   /**
    * Every frame its members' room, and what no set holds eased out of the
    * frames it lies over (workflow/fitFrames `framesSettled`), as the pointer

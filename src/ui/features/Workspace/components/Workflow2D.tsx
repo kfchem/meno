@@ -56,7 +56,8 @@ import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { devicePx, thinLine } from "../pageGl/units";
 import { useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
-import type { Region } from "../pageGl/hits";
+import type { Region, Side } from "../pageGl/hits";
+import { sizedByHand } from "../workflow/fitFrames";
 import type { PageIcon } from "../pageGl/icons";
 import type { PageTipAt } from "../pageGl/PagePlaced";
 import type { Shape } from "../pageGl/shapes";
@@ -932,6 +933,28 @@ export default function Workflow2D() {
     );
   };
 
+  /** A set sized by a side or a corner, as a conversation's frame is: never inside its members' room, a side dragged out kept where it is let go. */
+  const sizeSet = (side: Side, e: ReactPointerEvent, set: WorkflowSet) => {
+    if (e.button !== 0) return;
+    const start = worldOf(e.clientX, e.clientY);
+    const was = { x0: set.x0, y0: set.y0, x1: set.x1, y1: set.y1 };
+    const gesture = `${performance.now()}`;
+    follow(
+      e,
+      (p) => {
+        const dx = p.x - start.x;
+        const dy = p.y - start.y;
+        const f = { ...was };
+        if (side.includes("e")) f.x1 = was.x1 + dx;
+        if (side.includes("w")) f.x0 = was.x0 + dx;
+        if (side.includes("n")) f.y1 = was.y1 + dy;
+        if (side.includes("s")) f.y0 = was.y0 + dy;
+        store.getState().sizeSet(set.id, side, f, gesture);
+      },
+      () => {},
+    );
+  };
+
   /** A step dragged by its card; clicked, opened to its options, or shut. */
   const dragStep = (e: ReactPointerEvent, step: WorkflowStep) => {
     if (e.button !== 0) return;
@@ -1338,6 +1361,8 @@ export default function Workflow2D() {
       tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
       nameOnly: true,
       sign: signOf(b.id),
+      // (its sides and corners sized by hand, where its frame is its members' room)
+      ...(sizedByHand(b) ? { edges: true as const } : {}),
     };
   });
   // a Repeat's frame round the steps it runs pass by pass (workflow/repeat), by WebGL as a set's is: dashed and quiet, its tab "Repeat"
@@ -1397,6 +1422,10 @@ export default function Workflow2D() {
         return;
       }
       dragSet(asPress(e), b);
+    },
+    edgeDown: (key, side, e) => {
+      const b = setById.get(stepOfKey(key));
+      if (b && sizedByHand(b)) sizeSet(side, asPress(e), b);
     },
     hover: (key, on) => {
       const id = stepOfKey(key);

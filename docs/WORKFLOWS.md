@@ -41,7 +41,7 @@ each is merged, this file describes what is built.
    conformer sets*, below).
 5. **A set holds its members, in order**: what lies inside its frame as
    it is made; a structure moved into it joins it, one moved out leaves
-   it; the frame is always its members' room.
+   it; the frame is never smaller than its members' room.
 6. **xTB first.** Programs installed separately - ORCA, Gaussian and
    others - are to be run later, through the same kinds of step.
 7. **This computer only**, for now. A cluster or a remote machine comes
@@ -275,18 +275,35 @@ pointer does; put back by an undo, they glide back.
   the two are one;
 - a step's result set holds what its step made, in its order, and takes
   nothing in: dragged into it, a structure stays outside the set;
-- **the frame is its members' room** (the maintainer, 2026-11-11), never
-  sized by hand: each member's box as it is drawn - a structure's labels,
+- **the frame is never smaller than its members' room, and a size
+  dragged larger is kept** (the maintainer, 2026-11-27; until then, from
+  2026-11-11, the frame was its members' room and never sized by hand).
+  The room is each member's box as it is drawn - a structure's labels,
   its record's number below it (Enumerate's #n) and a molecule's frames
   chip below it included - and half a bond about
   them, with room for the name above and never narrower than a name needs
-  (`workflow/fitFrames`). It grows and shrinks as they change - a structure
-  drawn on, a bigger look, a member deleted - its edges eased, in the same
-  step as the edit; a workspace saved with frames of other sizes is fitted
-  as it opens. Its tab drags it, with all it holds - except where
+  (`workflow/fitFrames`). A frame's sides and corners are dragged to size
+  it, as a conversation's frame is - the pointer over an edge says so, and
+  nothing else is drawn: a side dragged out is held where it is let go,
+  one dragged in stops at the room as it is dragged, and one dragged back
+  to the room is the room's again. One drag is one step to undo. The frame
+  grows and shrinks as the members change - a structure drawn on, a bigger
+  look, a member deleted - its edges eased, in the same step as the edit,
+  but never in past a side held: a member that comes to need more grows
+  it round it, and needing less again, it goes back to the side where it
+  was put. A held side goes with the set wherever it is moved, and is
+  saved with it: a workspace opens with each frame its members' room or
+  the size it was given, whichever is larger. A frame sized out over a
+  thing no set holds takes nothing in: it is eased out of it as the
+  pointer is let go, and another set's frame pushed away, as by any frame
+  that grows; what is drawn in its empty room is a chemist's set's
+  member, as what is drawn in any of its frames is. A step's result set is sized the same way, its
+  step's other exits kept under it; a set holding a table, a number, a
+  chart, or what was not read is not sized by hand. Its tab drags it, with all it holds - except where
   something of a member lies on the tab or the frame's edge (an atom, a
   bond, the selection's turn handle): a press there is the member's, so a
-  member's handle on the frame's top edge turns it, and a double-click on
+  member's handle on the frame's top edge turns it, an atom on a side is
+  the atom's, not the side's, and a double-click on
   an atom under the tab's words draws on it (`pageGl/PageHits`);
 - **nothing lies half over a frame.** While a member is dragged its frame
   stays where it is, so that it can be dragged out. Let go, a member with
@@ -1854,8 +1871,8 @@ undone and saved with it; an input made from the selection's port, or
 *Use as input* in its menu; wires drawn from a port that gives or back from one
 that takes, picked up off a step and put into another, replaced, and
 deleted (Delete or Backspace on one, its menu, or picked up and let go
-on nothing); a set dragged by its tab with what it holds, its frame always its
-members' room, chosen by a click on its tab; steps dragged, opened in
+on nothing); a set dragged by its tab with what it holds, its frame never
+smaller than its members' room, chosen by a click on its tab; steps dragged, opened in
 place to their options by a click; Quick Add's one button; Meno's *As
 conformers*, *Energy window*, *Duplicates* and *Populations*, run from a
 step's menu - the steps before it first, where they have not run or have
@@ -2587,8 +2604,10 @@ Then, of the leftovers the maintainer chose:
   part of the same edit, one step to undo (`framesFitted`, settled on each
   edit of the workspace's document). A member moved whole leaves it as it
   is until the pointer is let go (`framesSettled`, joined to the
-  gesture's step), so that it can be dragged out. Frames are no longer
-  sized by hand (the maintainer, 2026-11-11).
+  gesture's step), so that it can be dragged out. A frame's side dragged
+  out by hand is kept where it was put, and the frame is never dragged
+  smaller than its members' room (the maintainer, 2026-11-27; from
+  2026-11-11 until then frames were not sized by hand).
 - **Sets, steps and wires fade out as they go**, as they fade in; a
   deleted one is left as it was, taking no pointer, for the fade.
 - **A thin bar on a running card** fills as its jobs end, where it runs

@@ -17,16 +17,22 @@
  *
  * While a member moves its frame stays where it is: it could never be
  * dragged out of it otherwise (`framesFitted`).
+ *
+ * A side of the frame dragged out by hand is held where it was put (the
+ * maintainer, 2026-11-27): the frame is its members' room and no held side
+ * nearer than where the chemist put it (`heldFrame`). A side is never dragged
+ * inside the room (`setSized`); one dragged back to it is the room's again.
  */
 import { moveMolecules3d, type WorkspaceDocument } from "../document";
-import type { Atom, Bond, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import type { Atom, Bond, Model, Molecule3D, PictureItem, SetSized, WorkflowSet } from "../store/types";
+import type { Side } from "../pageGl/hits";
 import { drawnBox } from "../../../../utils/importers";
 import { cornersOf } from "../utils/selection";
 import { cardRect } from "../pageGl/conversationCard";
 import { drawnIn, inside, recordNumber, structuresOf, setMembers, type Frame } from "./entries";
 import { BETWEEN, CARD_H, CARD_W, SET_PAD, SET_TOP } from "./look";
 import { exitsOf } from "./kinds";
-import { moveSet, resizeSet } from "./model";
+import { fitSet, moveSet, resizeSet } from "./model";
 import { unseenSets } from "./onPage";
 import { keepExitsUnder, LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
@@ -175,6 +181,86 @@ export function frameAround(boxes: readonly Frame[]): Frame {
 
 const sameFrame = (a: Frame, b: Frame) => Math.abs(a.x0 - b.x0) <= EPS && Math.abs(a.x1 - b.x1) <= EPS && Math.abs(a.y0 - b.y0) <= EPS && Math.abs(a.y1 - b.y1) <= EPS;
 
+const SIDES = ["x0", "x1", "y0", "y1"] as const;
+const sameSized = (a: SetSized | undefined, b: SetSized | undefined) => SIDES.every((k) => (a?.[k] == null ? b?.[k] == null : b?.[k] != null && Math.abs(a[k]! - b[k]!) <= EPS));
+
+/** Whether a set's frame is sized by hand: one whose frame is its members' room (`holdsToFit`), and a chemist's set holding nothing - emptied, or made empty - which keeps the frame it has. */
+export function sizedByHand(set: WorkflowSet): boolean {
+  return holdsToFit(set) || (!set.made && !set.members?.length && !set.table && set.number == null && !set.chart && !set.collection?.length && !set.drawnCollection?.length && !set.unread);
+}
+
+/** Where a set's sides sized out by hand lie on the page (`WorkflowSet.sized`): only those it has. */
+export function heldSides(set: WorkflowSet): Partial<Frame> {
+  const s = set.sized;
+  if (!s) return {};
+  return {
+    ...(s.x0 != null ? { x0: set.x0 + s.x0 } : {}),
+    ...(s.x1 != null ? { x1: set.x1 - s.x1 } : {}),
+    ...(s.y0 != null ? { y0: set.y0 + s.y0 } : {}),
+    ...(s.y1 != null ? { y1: set.y1 - s.y1 } : {}),
+  };
+}
+
+/** The frame round `room` with no side nearer than a side held where it was put (`held`), and how far inside it each held side then lies. */
+export function heldFrame(room: Frame, held: Partial<Frame>): { frame: Frame; sized?: SetSized } {
+  const frame = { x0: Math.min(room.x0, held.x0 ?? Infinity), x1: Math.max(room.x1, held.x1 ?? -Infinity), y0: Math.min(room.y0, held.y0 ?? Infinity), y1: Math.max(room.y1, held.y1 ?? -Infinity) };
+  const sized: SetSized = {
+    ...(held.x0 != null ? { x0: held.x0 - frame.x0 } : {}),
+    ...(held.x1 != null ? { x1: frame.x1 - held.x1 } : {}),
+    ...(held.y0 != null ? { y0: held.y0 - frame.y0 } : {}),
+    ...(held.y1 != null ? { y1: frame.y1 - held.y1 } : {}),
+  };
+  return Object.keys(sized).length ? { frame, sized } : { frame };
+}
+
+/**
+ * The room a set's frame is never sized inside: its members' (`frameAround`); for a chemist's set holding nothing, a frame as
+ * small as a name reads in, against the side across from the one dragged. None where a molecule's room cannot be worked out.
+ */
+function roomFor(doc: WorkspaceDocument, set: WorkflowSet, side: Side, extentOf: Reach | undefined): Frame | null {
+  if (set.members?.length) {
+    const boxes = memberBoxes(doc, set, extentOf);
+    return boxes && frameAround(boxes);
+  }
+  const w = LEAST_W + 2 * SET_PAD;
+  const h = SET_PAD + SET_TOP;
+  return {
+    x0: side.includes("w") ? set.x1 - w : set.x0,
+    x1: side.includes("e") ? set.x0 + w : set.x1,
+    y0: side.includes("s") ? set.y1 - h : set.y0,
+    y1: side.includes("n") ? set.y0 + h : set.y1,
+  };
+}
+
+/**
+ * `doc` with a set's frame sized by a side or a corner (`side`) to `asked`, as the pointer is dragged: each side dragged out past
+ * its members' room held where it was put, one dragged as far as the room or inside it stopped there - the room's again, no side
+ * held - and the sides not dragged as they were. A step's result set keeps its step's other exits under it (run
+ * `keepExitsUnder`). Nothing else moves: what the frame comes to lie over is settled as the pointer is let go (`framesSettled`).
+ */
+export function setSized(doc: WorkspaceDocument, id: number, side: Side, asked: Frame, extentOf: Reach | undefined): WorkspaceDocument {
+  const set = doc.sets?.find((b) => b.id === id);
+  if (!set || !sizedByHand(set)) return doc;
+  const room = roomFor(doc, set, side, extentOf);
+  if (!room) return doc;
+  const held = heldSides(set);
+  const take = (k: (typeof SIDES)[number], out: boolean) => {
+    if (out) held[k] = asked[k];
+    else delete held[k];
+  };
+  if (side.includes("w")) take("x0", asked.x0 < room.x0 - EPS);
+  if (side.includes("e")) take("x1", asked.x1 > room.x1 + EPS);
+  if (side.includes("s")) take("y0", asked.y0 < room.y0 - EPS);
+  if (side.includes("n")) take("y1", asked.y1 > room.y1 + EPS);
+  // (a side not dragged: where it is - its members' room's, or held)
+  const now: Frame = { x0: Math.min(room.x0, set.x0), x1: Math.max(room.x1, set.x1), y0: Math.min(room.y0, set.y0), y1: Math.max(room.y1, set.y1) };
+  const fit = heldFrame({ x0: side.includes("w") ? room.x0 : now.x0, x1: side.includes("e") ? room.x1 : now.x1, y0: side.includes("s") ? room.y0 : now.y0, y1: side.includes("n") ? room.y1 : now.y1 }, held);
+  let out = fitSet(doc, id, fit.frame, fit.sized);
+  const step = set.made && out.steps?.find((s) => s.id === set.made!.step);
+  if (step && out !== doc) out = keepExitsUnder(out, step);
+  return out;
+}
+
 /** What an edit changed, looked up once for all the sets it asks of: the page before it and after it by id. */
 type Edit = { was: WorkspaceDocument; now: WorkspaceDocument; atoms: () => [Map<number, Atom>, Map<number, Atom>]; molecules: () => Map<number, Molecule3D>; pictures: () => Map<number, PictureItem> };
 function editOf(now: WorkspaceDocument, was: WorkspaceDocument): Edit {
@@ -240,7 +326,8 @@ function pageUnchanged(doc: WorkspaceDocument, before: WorkspaceDocument): boole
 /**
  * `doc` after an edit (`before`; none as a workspace opens, or as the
  * pointer is let go: every set then), each set's frame its members' room
- * (`frameAround`), as the edit leaves them - grown and shrunk, a step's
+ * (`frameAround`) and no side nearer than one sized out by hand
+ * (`heldFrame`), as the edit leaves them - grown and shrunk, a step's
  * result set then keeping the sets of its step's other exits under it
  * (run `keepExitsUnder`). A set a member of which moved whole in the edit
  * keeps its frame: it is being dragged, and a member dragged out would
@@ -271,9 +358,10 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
     if (edit && (!prior || memberMoved(edit, set, prior))) continue;
     const boxes = memberBoxes(doc, set, extentOf, on);
     if (!boxes) continue;
-    const frame = frameAround(boxes);
-    if (sameFrame(set, frame)) continue;
-    out = resizeSet(out, set.id, frame);
+    // (and no side nearer than one sized out by hand: a member needing more grows it, one needing less again leaves it where it was put)
+    const fit = heldFrame(frameAround(boxes), heldSides(set));
+    if (sameFrame(set, fit.frame) && sameSized(set.sized, fit.sized)) continue;
+    out = fitSet(out, set.id, fit.frame, fit.sized);
     if (set.made) steps.add(set.made.step);
   }
   for (const id of steps) {

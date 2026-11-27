@@ -1691,7 +1691,8 @@ it, in `features/Workspace/pageGl/`:
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -
   copied from its menu. Its sets' frames and tabs (`FrameTabs`): the tab
-  drags it (its frame is its members' room, never sized by hand), two presses on a chemist's
+  drags it, its sides and corners size it (never smaller than its members' room, a side dragged out
+  kept where it is let go: the maintainer, 2026-11-27; until then, from 2026-11-11, never sized by hand), two presses on a chemist's
   set's tab write its name anew where it stands (`PageField`): drawn in
   its own size and weight, in a white box, with its caret, what is
   selected and what an input method is composing underlined; typed into a

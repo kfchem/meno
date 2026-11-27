@@ -72,12 +72,12 @@ describe("a set's members", () => {
     expect(membersOfSet(swapped)).toEqual([{ molecule: 1 }, { molecule: 2 }]);
   });
 
-  it("follow a resized frame in one edit: what newly lies inside joins, what newly lies outside leaves", () => {
+  it("follow a resized frame in one edit: what newly lies outside leaves; what it was sized over joins not (the maintainer, 2026-11-27)", () => {
     let doc = addMolecule3d(addMolecule3d(emptyWorkspaceDocument(), water({ x: 0, y: 0 })), water({ x: 8, y: 0 }));
     doc = addMolecule3d(doc, water({ x: 14, y: 0 }));
     doc = addSet(doc, { x0: -2, y0: -2, x1: 10, y1: 2 });
     const resized = settled(resizeSet(doc, 1, { x0: 6, y0: -2, x1: 16, y1: 2 }), doc);
-    expect(membersOfSet(resized)).toEqual([{ molecule: 2 }, { molecule: 3 }]);
+    expect(membersOfSet(resized)).toEqual([{ molecule: 2 }]);
   });
 
   it("drop a member deleted from the page, with nothing asked", () => {

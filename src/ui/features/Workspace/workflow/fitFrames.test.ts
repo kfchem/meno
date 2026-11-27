@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 import { gestureStep } from "../../../../lib/doc/document";
 import type { DocumentStore } from "../../../../lib/doc";
-import { addMolecule3d, addPicture, createWorkspaceDocument, moveMolecule3d, type WorkspaceDocument } from "../document";
+import { addMolecule3d, addPicture, createWorkspaceDocument, moveMolecule3d, removeMolecule3d, type WorkspaceDocument } from "../document";
 import type { Model, Molecule3D } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
 import { setMembers, type Frame } from "./entries";
-import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
+import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, setSized, sizedByHand, structureBox } from "./fitFrames";
 import { BETWEEN, CARD_H, CARD_W, CHIP, PX, SET_PAD, SET_TOP } from "./look";
-import { addSet, markMade } from "./model";
+import { addSet, markMade, moveSet } from "./model";
 import { LEAST_W, NUMBER_ROOM, roomOf, type RunWith } from "./run";
 
 /** Each molecule reaching R about its middle, as a look draws it: 2.4 across, less than a name's room (LEAST_W). */
@@ -642,5 +642,115 @@ describe("a frame that grows pushes the sets it would lie over (backlog 257)", (
       expect(overlaps(s), `${n} sets`).toBe(0);
       for (let k = 2; k <= n; k++) expect(frameOf(s, k - 1).y0 - frameOf(s, k).y1, `${n} sets, gap ${k}`).toBeCloseTo(BETWEEN, 9);
     }
+  });
+});
+
+describe("a set's frame sized by hand (the maintainer, 2026-11-27)", () => {
+  /** Molecules 1 at (0, 0) and 2 at (4, 0) in set 1, fitted to them; molecule 3, held by no set, at `loose` where it is given. */
+  function two(loose?: { x: number; y: number }): DocumentStore<WorkspaceDocument> {
+    const doc = workspace();
+    doc.edit("place", (d) => addMolecule3d(addMolecule3d(d, mol(0, 0)), mol(4, 0)));
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 7, y1: 3 }));
+    if (loose) doc.edit("place", (d) => addMolecule3d(d, mol(loose.x, loose.y)));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    return doc;
+  }
+  const room = (d: WorkspaceDocument) => frameAround(memberBoxes(d, d.sets![0], reach)!);
+  /** Its right side dragged to x. */
+  const right = (doc: DocumentStore<WorkspaceDocument>, x: number) => doc.edit("size", (d) => setSized(d, 1, "e", { ...frameOf(d), x1: x }, reach));
+
+  it("is sized by its sides where its frame is its members' room, and a chemist's set holding nothing too; one holding a table is not", () => {
+    const doc = two();
+    expect(sizedByHand(doc.getState().sets![0])).toBe(true);
+    expect(sizedByHand({ id: 9, x0: 0, y0: 0, x1: 1, y1: 1 })).toBe(true);
+    expect(sizedByHand({ id: 9, x0: 0, y0: 0, x1: 1, y1: 1, made: { step: 2, exit: "out" } })).toBe(false);
+    expect(sizedByHand({ id: 9, x0: 0, y0: 0, x1: 1, y1: 1, table: { columns: [], rows: [] } as never })).toBe(false);
+  });
+
+  it("keeps a side dragged out where it was put, the others its members' room", () => {
+    const doc = two();
+    const r = room(doc.getState());
+    right(doc, r.x1 + 5);
+    close(frameOf(doc.getState()), { ...r, x1: r.x1 + 5 });
+    expect(doc.getState().sets![0].sized).toEqual({ x1: 0 });
+  });
+
+  it("never goes inside its members' room: a side dragged in stops there, held no more", () => {
+    const doc = two();
+    const r = room(doc.getState());
+    right(doc, r.x1 + 5);
+    right(doc, r.x1 - 3);
+    close(frameOf(doc.getState()), r);
+    expect(doc.getState().sets![0].sized).toBeUndefined();
+    // (the left side and a corner the same: the bottom-left corner dragged up and right, into the members)
+    doc.edit("size", (d) => setSized(d, 1, "sw", { ...frameOf(d), x0: r.x0 + 2, y0: r.y0 + 2 }, reach));
+    close(frameOf(doc.getState()), r);
+  });
+
+  it("keeps the side given when a member is deleted, and as the document settles and the pointer is let go", () => {
+    const doc = two();
+    const r = room(doc.getState());
+    right(doc, r.x1 + 5);
+    doc.edit("delete", (d) => removeMolecule3d(d, 2));
+    const after = room(doc.getState());
+    expect(after.x1).toBeLessThan(r.x1);
+    close(frameOf(doc.getState()), { ...after, x1: r.x1 + 5 });
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    close(frameOf(doc.getState()), { ...after, x1: r.x1 + 5 });
+    // (and as a workspace opens: fitted with no edit before it)
+    close(frameOf(framesFitted(doc.getState(), undefined, reach)), { ...after, x1: r.x1 + 5 });
+  });
+
+  it("grows round a member that comes to need more, and goes back to the side given as it needs less again", () => {
+    const doc = two();
+    const r = room(doc.getState());
+    right(doc, r.x1 + 2);
+    const down = doc.getState();
+    doc.edit("drag", (d) => moveMolecule3d(d, 2, { x: 7.5, y: 0 }));
+    doc.edit("let go", (d) => framesSettled(d, down, reach));
+    const grown = room(doc.getState());
+    expect(grown.x1).toBeGreaterThan(r.x1 + 2);
+    close(frameOf(doc.getState()), grown);
+    const back = doc.getState();
+    doc.edit("drag", (d) => moveMolecule3d(d, 2, { x: 4, y: 0 }));
+    doc.edit("let go", (d) => framesSettled(d, back, reach));
+    close(frameOf(doc.getState()), { ...r, x1: r.x1 + 2 });
+  });
+
+  it("takes the size given along as the set is dragged by its tab", () => {
+    const doc = two();
+    const r = room(doc.getState());
+    right(doc, r.x1 + 5);
+    doc.edit("move", (d) => moveSet(d, 1, 3, -7));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    close(frameOf(doc.getState()), { x0: r.x0 + 3, x1: r.x1 + 8, y0: r.y0 - 7, y1: r.y1 - 7 });
+  });
+
+  it("sized out over a thing no set holds takes it not in: it is eased out as the pointer is let go, as a growing frame eases it", () => {
+    const doc = two({ x: 12, y: 0 });
+    const r = room(doc.getState());
+    expect(r.x1).toBeLessThan(12 - R);
+    const down = doc.getState();
+    right(doc, 14);
+    doc.edit("let go", (d) => framesSettled(d, down, reach));
+    const d = doc.getState();
+    expect(d.sets![0].members).toHaveLength(2);
+    expect(frameOf(d).x1).toBeCloseTo(14, 9);
+    // (just outside it, the padding from its edge, on the nearer side)
+    expect(at(d, 3).x - R).toBeCloseTo(14 + SET_PAD, 9);
+  });
+
+  it("pushes another set's frame away as a growing frame does", () => {
+    const doc = two();
+    doc.edit("place", (d) => addMolecule3d(d, mol(2, -12)));
+    doc.edit("set", (d) => addSet(d, { x0: -2, y0: -15, x1: 6, y1: -9 }));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    const below = frameOf(doc.getState(), 2);
+    const down = doc.getState();
+    doc.edit("size", (d) => setSized(d, 1, "s", { ...frameOf(d), y0: below.y1 - 2 }, reach));
+    doc.edit("let go", (d) => framesSettled(d, down, reach));
+    const d = doc.getState();
+    expect(frameOf(d).y0).toBeCloseTo(below.y1 - 2, 9);
+    expect(frameOf(d, 2).y1).toBeCloseTo(below.y1 - 2 - BETWEEN, 9);
   });
 });

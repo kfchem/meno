@@ -6,7 +6,7 @@ import { resultOf } from "./flow";
 import { exitsOf, type StepKind } from "./kinds";
 import { BETWEEN } from "./look";
 import { addSet, addStep, connect } from "./model";
-import { framesFitted } from "./fitFrames";
+import { framesFitted, framesSettled, setSized } from "./fitFrames";
 import { fitResultSets, runStep, type RunWith } from "./run";
 
 /** Each molecule reaching `r` Å about its middle, as a look draws it. */
@@ -87,5 +87,18 @@ describe("a step's two exits, each a conformer set", () => {
     const dy = after[0].at.y - before[0].at.y;
     expect(dy).toBeLessThan(0);
     after.forEach((m, i) => expect(m.at.y - before[i].at.y).toBeCloseTo(dy, 9));
+  });
+});
+
+describe("a step's first exit's set sized by hand (the maintainer, 2026-11-27)", () => {
+  it("keeps the step's other exits under it and apart, as it is dragged down and as the pointer is let go", () => {
+    const doc = ran("energy-window", { window: 1 }, 1.2);
+    const first = resultOf(doc, 2, exitsOf("energy-window")[0].id)!;
+    const sized = setSized(doc, first.id, "s", { ...first, y0: first.y0 - 9 }, reaching(1.2));
+    expect(resultOf(sized, 2, exitsOf("energy-window")[0].id)!.y0).toBeCloseTo(first.y0 - 9, 9);
+    apart(sized);
+    const settled = framesSettled(framesFitted(sized, doc, reaching(1.2)), doc, reaching(1.2));
+    expect(resultOf(settled, 2, exitsOf("energy-window")[0].id)!.y0).toBeCloseTo(first.y0 - 9, 9);
+    apart(settled);
   });
 });
