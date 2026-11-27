@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { chair, fused } from "../../../../lib/chem/perception/projection/solids";
-import { drawn } from "../../../../lib/chem/perception/projection/views";
+import { fused } from "../../../../lib/chem/perception/projection/solids";
 import { cipMarksOf } from "../chem/cipMarks";
 import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
-import { chairDrawing, FIRST_FORM, seenPlaces } from "./chair";
-import { fusableBonds, fusedOn, type Fuse, type FuseHow } from "./fuse";
+import { chairDrawing, chairOf, FIRST_FORM, seenPlaces } from "./chair";
+import { fusableBonds, fusedOn, SHORT_PLACE, type Fuse, type FuseHow } from "./fuse";
+import { chairExtension, projectionBond, projectionDrop } from "./extend";
+import { projectionsIn } from "./rings";
 
 const draw = () => chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100 });
 
@@ -229,46 +230,78 @@ describe("what Meno reads back from a fused chair", () => {
     }
   });
 
-  it("reads a group at any free place of either ring of every fused pair the way the solid has it (288 drawings)", () => {
+  it("reads a group at any free place of either ring of every fused pair, at the place as it is drawn - short or not - the way the solid has it (1152 drawings)", () => {
     // (the answer is the solid's own: each centre's sense from the chair's coordinates, a group's atom one bond along its free direction;
-    //  the drawing's group is put along the direction `drawn` gives it, as the chair's own groups are)
-    const d = draw();
+    //  the drawing's group is put where a bond led out of its atom goes - `placesOf`, the places as the page draws them)
     const det = (o: readonly number[], p: (readonly number[])[]) => {
       const v = p.map((x) => [x[0] - o[0], x[1] - o[1], x[2] - o[2]]);
       return v[0][0] * (v[1][1] * v[2][2] - v[1][2] * v[2][1]) - v[0][1] * (v[1][0] * v[2][2] - v[1][2] * v[2][0]) + v[0][2] * (v[1][0] * v[2][1] - v[1][1] * v[2][0]);
     };
     let read = 0;
-    for (let k = 0; k < 6; k++) {
-      const [i, j] = d.solid.bonds[k];
-      for (const how of WAYS) {
-        const solid = fused(chair(), k, "chair", how);
-        const picture = drawn(solid, FIRST_FORM)!;
-        for (let q = 0; q < 10; q++) {
-          if (q === i || q === j) continue;
-          for (const free of solid.free.filter((f) => f.at === q)) {
-            const m = fuse({ atoms: d.atoms, bonds: d.bonds }, 100 + k, how);
+    for (const picture of PICTURES) {
+      const d = pictured(picture);
+      for (let k = 0; k < 6; k++) {
+        const [i, j] = d.solid.bonds[k];
+        for (const how of WAYS) {
+          const solid = fused(d.solid, k, "chair", how);
+          const m0 = fuse({ atoms: d.atoms, bonds: d.bonds }, 100 + k, how);
+          for (let q = 0; q < 10; q++) {
+            if (q === i || q === j) continue;
             const id = q < 6 ? d.ring[q] : 500 + q - 6;
-            const atom = m.atoms.find((a) => a.id === id)!;
-            const seen = picture.free.find((f) => f.free === free)!;
-            m.atoms.push({ id: 50, el: "C", r: 0.9, x: atom.x + seen.x * NOMINAL_BOND_LENGTH, y: atom.y + seen.y * NOMINAL_BOND_LENGTH });
-            m.bonds.push({ id: 200, a: id, b: 50, order: 1 });
-            const where = new Map<number, readonly number[]>(d.ring.map((r, s) => [r, solid.atoms[s]]));
-            for (let s = 6; s < 10; s++) where.set(500 + s - 6, solid.atoms[s]);
-            where.set(50, solid.atoms[q].map((x, n) => x + free.direction[n]));
-            const { input } = identityInputOf(m);
-            const said = `bond ${k}, ${named(how)}, atom ${q} ${free.kind}`;
-            expect(input.atoms[m.atoms.findIndex((a) => a.id === id)].tetra, said).toBeTruthy();
-            input.atoms.forEach((a, n) => {
-              if (!a.tetra) return;
-              const truth = det(where.get(m.atoms[n].id)!, a.tetra.neighbours.slice(0, 3).map((x) => where.get(m.atoms[x].id)!)) > 0 ? 1 : -1;
-              expect(a.tetra.volume, `${said}: centre ${m.atoms[n].id}`).toBe(truth);
-            });
-            read++;
+            const places = placesOf(m0, id);
+            for (const free of solid.free.filter((f) => f.at === q)) {
+              const place = places.find((s) => s.free.kind === free.kind && s.free.face === free.face)!;
+              const m: Model = { atoms: [...m0.atoms, { id: 50, el: "C", r: 0.9, ...place.at }], bonds: [...m0.bonds, { id: 200, a: id, b: 50, order: 1 }] };
+              const where = new Map<number, readonly number[]>(d.ring.map((r, s) => [r, solid.atoms[s]]));
+              for (let s = 6; s < 10; s++) where.set(500 + s - 6, solid.atoms[s]);
+              where.set(50, solid.atoms[q].map((x, n) => x + free.direction[n]));
+              const { input } = identityInputOf(m);
+              const said = `form ${picture.form}${picture.flip ? " flipped" : ""}, bond ${k}, ${named(how)}, atom ${q} ${free.kind}`;
+              expect(input.atoms[m.atoms.findIndex((a) => a.id === id)].tetra, said).toBeTruthy();
+              input.atoms.forEach((a, n) => {
+                if (!a.tetra) return;
+                const truth = det(where.get(m.atoms[n].id)!, a.tetra.neighbours.slice(0, 3).map((x) => where.get(m.atoms[x].id)!)) > 0 ? 1 : -1;
+                expect(a.tetra.volume, `${said}: centre ${m.atoms[n].id}`).toBe(truth);
+              });
+              read++;
+            }
           }
         }
       }
     }
-    expect(read).toBe(288);
+    expect(read).toBe(1152);
+  });
+
+  it("reads R and S on two methyl-cis-decalins as worked by hand: a methyl at a place drawn short, and one on the folded ring's far atom", () => {
+    // By hand, the first picture of the chair fused cis on its ring bond between atoms 2 and 3 (bond 101). The new atoms: 500 beside atom 2,
+    // 501 beside atom 3, then 502 and 503. Decalin's numbers: atom 3 is C8a, 501 C1, 502 C2, 503 C3, 500 C4, atom 2 C4a; of the first ring
+    // atom 4 (beside 3) is C8 and atom 1 (beside 2) C5. The methyl on C2 both times: a 2-methyl-cis-decalin.
+    // CIP ranks: at C2, C1 > C3 (both (C,H,H); one sphere on, C8a (C,C,H) beats C4 (C,H,H)) > CH3 > H; at C8a, C4a (C,C,H) > C1 > C8 (both
+    // (C,H,H); one sphere on, C2 (C,C,H) beats C7 (C,H,H)) > H; at C4a, C8a (C,C,H) > C4 > C5 (they tie at (C,H,H) and again at C3 against
+    // C6, both (C,H,H); one sphere on, C2 (C,C,H) beats C7 (C,H,H)) > H.
+    // (a) Upper face, the methyl at C2's axial place - drawn two thirds long, as at full length it would end on another place.
+    // (b) Lower face, the methyl at C2's equatorial place - the place a double-click takes; led out by the plain rule before, as the
+    //     ring was no chair of the tool's, the group gave C2 no configuration at all.
+    // The sense of each from the solid's own atoms, the H at the place the drawing leaves free: seen from opposite the H, the first three
+    // clockwise is R - the triple product of the first three about the centre negative. The solid is the one the page is: the tool finds
+    // this picture as the flipped chair seen in form 0, its atoms 4 and 5 the bond's (as the page's 2 and 3), fused as `fused` builds it -
+    // and the unflipped chair fused on its bond 1, seen in form 1, the same picture, gives the same. Worked so: (a) C2 R, C8a S, C4a R;
+    // (b) C2 S, C8a R, C4a S.
+    const d = draw();
+    const cases: [FuseHow, number, "axial" | "equatorial", [string, string, string]][] = [
+      [{ cis: 1 }, 502, "axial", ["R", "S", "R"]],
+      [{ cis: -1 }, 502, "equatorial", ["S", "R", "S"]],
+    ];
+    for (const [how, id, kind, byHand] of cases) {
+      const m0 = fuse({ atoms: d.atoms, bonds: d.bonds }, 101, how);
+      const place = placesOf(m0, id).find((s) => s.free.kind === kind)!;
+      const here = m0.atoms.find((a) => a.id === id)!;
+      const length = Math.hypot(place.at.x - here.x, place.at.y - here.y) / NOMINAL_BOND_LENGTH;
+      if (kind === "axial") expect(length).toBeCloseTo(SHORT_PLACE, 9);
+      const m: Model = { atoms: [...m0.atoms, { id: 50, el: "C", r: 0.9, ...place.at }], bonds: [...m0.bonds, { id: 200, a: id, b: 50, order: 1 }] };
+      const marks = cipMarksOf(m);
+      expect([id, d.ring[2], d.ring[1]].map((c) => marks.centres.get(c)), `${named(how)} ${kind}`).toEqual(byHand);
+    }
   });
 
   it("is a fused pair no tool flips: Flip chair is not offered on any of the eighteen, trans or cis", async () => {
@@ -319,5 +352,144 @@ describe("how a fused pair is drawn", () => {
       for (const how of WAYS) if (crossing(fuse({ atoms: d.atoms, bonds: d.bonds }, 100 + k, how)).length) across.add(`${k} ${named(how)}`);
     }
     expect([...across].sort()).toEqual(["1 cis, upper face", "2 cis, upper face", "4 cis, lower face", "5 cis, lower face"]);
+  });
+});
+
+/** The places a bond led out of atom `id` of a drawing can go to, as the page draws them (`projectionsIn`, `seenPlaces`), by free position. */
+function placesOf(m: Model, id: number) {
+  const found = projectionsIn(m).find((p) => p.ring.includes(id))!;
+  const k = found.index.get(id)!;
+  const here = m.atoms.find((a) => a.id === id)!;
+  return seenPlaces(found.drawing, k).map((p) => ({ free: p.free, at: { x: here.x + p.place.x - found.drawing.atoms[k].x, y: here.y + p.place.y - found.drawing.atoms[k].y } }));
+}
+
+/** The places of atom `id` of a lone chair as the tool's chair has them (`chairOf`, `chairDrawing`), by free position. */
+function lonePlaces(m: Model, id: number) {
+  const ring = m.atoms.filter((a) => a.z != null).map((a) => a.id);
+  const c = chairOf(m, ring)!;
+  const d = chairDrawing({ at: c.at, form: c.form, flip: c.flip, firstId: 1, firstBondId: 1, length: c.scale });
+  const k = c.index.get(id)!;
+  const here = m.atoms.find((a) => a.id === id)!;
+  return seenPlaces(d, k).map((p) => ({ free: p.free, at: { x: here.x + p.place.x - d.atoms[k].x, y: here.y + p.place.y - d.atoms[k].y } }));
+}
+
+describe("groups led out of a fused pair", () => {
+  /** Every one of the 72 fused pairs: four pictures of the chair, six ring bonds, three ways. */
+  const all = PICTURES.flatMap((p) => [0, 1, 2, 3, 4, 5].flatMap((k) => WAYS.map((how) => ({ said: `form ${p.form}${p.flip ? " flipped" : ""}, bond ${k}, ${named(how)}`, d: pictured(p), m: fuse({ atoms: pictured(p).atoms, bonds: pictured(p).bonds }, 100 + k, how) }))));
+  const angle = (x: number, y: number) => (((Math.atan2(y, x) * 180) / Math.PI) % 180 + 180) % 180;
+  const gap = (a: number, b: number) => Math.min(Math.abs(a - b), 180 - Math.abs(a - b));
+
+  it("leads a bond out of every atom of the new ring to its own free places, each on one of the four lines its ring bonds leave free; a double-click takes the equatorial first", () => {
+    expect(all).toHaveLength(72);
+    for (const { said, d, m } of all) {
+      const at = new Map(m.atoms.map((a) => [a.id, a]));
+      const lines = [...new Set(d.bonds.map((b) => Math.round(angle(at.get(b.b)!.x - at.get(b.a)!.x, at.get(b.b)!.y - at.get(b.a)!.y) * 1e6) / 1e6)), 90];
+      expect(new Set(lines).size, said).toBe(4);
+      for (const id of [500, 501, 502, 503]) {
+        const a = at.get(id)!;
+        const own = m.bonds.filter((b) => b.a === id || b.b === id).map((b) => at.get(b.a === id ? b.b : b.a)!).map((o) => angle(o.x - a.x, o.y - a.y));
+        const ends = new Map<string, { x: number; y: number; name: string }>();
+        for (let t = 0; t < 360; t += 5) {
+          const r = (t * Math.PI) / 180;
+          const e = chairExtension(m, id, { x: a.x + 40 * Math.cos(r), y: a.y + 40 * Math.sin(r) });
+          if (e) ends.set(`${e.end.x.toFixed(6)} ${e.end.y.toFixed(6)}`, { ...e.end, name: e.name });
+        }
+        expect([...ends.values()].map((e) => e.name).sort(), `${said}, atom ${id}`).toEqual(["axial", "equatorial"]);
+        for (const e of ends.values()) {
+          const dir = angle(e.x - a.x, e.y - a.y);
+          const line = lines.find((l) => gap(dir, l) < 1e-6);
+          expect(line, `${said}, atom ${id} ${e.name}: ${dir}`).toBeDefined();
+          expect(own.some((o) => gap(o, line!) < 1e-6), `${said}, atom ${id} ${e.name}`).toBe(false);
+        }
+        const first = projectionBond(m, id);
+        const equatorial = [...ends.values()].find((e) => e.name === "equatorial")!;
+        expect(first !== "full" && first != null && Math.hypot(first.x - equatorial.x, first.y - equatorial.y) < 1e-9, `${said}, atom ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("draws no place's end within 0.29 of a bond of an atom or of another place's end, and no group's bond along a ring bond", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    for (const { said, m } of all) {
+      const at = new Map(m.atoms.map((a) => [a.id, a]));
+      const ring = m.atoms.filter((a) => a.z != null).map((a) => a.id);
+      const ends = ring.flatMap((id) => placesOf(m, id).map((p) => ({ id, ...p.at })));
+      for (const e of ends) {
+        for (const a of m.atoms) if (a.id !== e.id) expect(Math.hypot(a.x - e.x, a.y - e.y) / L, `${said}: a place of ${e.id} by atom ${a.id}`).toBeGreaterThanOrEqual(0.29);
+        for (const f of ends) if (f !== e) expect(Math.hypot(f.x - e.x, f.y - e.y) / L, `${said}: places of ${e.id} and ${f.id}`).toBeGreaterThanOrEqual(0.29);
+        const a = at.get(e.id)!;
+        for (const b of m.bonds) {
+          const [p, q] = [at.get(b.a)!, at.get(b.b)!];
+          const cross = Math.abs((q.x - p.x) * (e.y - a.y) - (q.y - p.y) * (e.x - a.x)) / (L * L);
+          const side = (w: { x: number; y: number }) => (q.x - p.x) * (w.y - p.y) - (q.y - p.y) * (w.x - p.x);
+          // (parallel to a ring bond and on its line, the two overlapping: along it)
+          if (cross > 1e-6 || Math.abs(side(a)) / (L * L) > 1e-6) continue;
+          const t = (w: { x: number; y: number }) => ((w.x - p.x) * (q.x - p.x) + (w.y - p.y) * (q.y - p.y)) / ((q.x - p.x) ** 2 + (q.y - p.y) ** 2);
+          const [lo, hi] = [Math.min(t(a), t(e)), Math.max(t(a), t(e))];
+          expect(hi <= 1e-9 || lo >= 1 - 1e-9, `${said}: a group of ${e.id} along bond ${b.id}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("draws a lone chair's places exactly as before, and the first ring's unshortened ones; a short place lies along its own line, two thirds long", () => {
+    for (const p of PICTURES) {
+      const d = pictured(p);
+      const lone = { atoms: d.atoms, bonds: d.bonds };
+      for (const id of d.ring) {
+        const was = lonePlaces(lone, id);
+        const now = placesOf(lone, id);
+        expect(now.length).toBe(was.length);
+        for (const p of now) {
+          const q = was.find((w) => w.free.kind === p.free.kind && w.free.face === p.free.face)!;
+          expect(Math.hypot(p.at.x - q.at.x, p.at.y - q.at.y)).toBeLessThan(1e-9);
+        }
+      }
+    }
+    let short = 0;
+    for (const { said, d, m } of all) {
+      const lone = { atoms: d.atoms, bonds: d.bonds };
+      for (let k = 0; k < 6; k++) {
+        const was = lonePlaces(lone, d.ring[k]);
+        for (const now of placesOf(m, d.ring[k])) {
+          const before = was.find((w) => w.free.kind === now.free.kind && w.free.face === now.free.face)!;
+          const [dx, dy] = [before.at.x - d.atoms[k].x, before.at.y - d.atoms[k].y];
+          const [nx, ny] = [now.at.x - d.atoms[k].x, now.at.y - d.atoms[k].y];
+          if (Math.hypot(nx - dx, ny - dy) < 1e-9) continue;
+          short++;
+          expect(nx, `${said}, atom ${k}`).toBeCloseTo(dx * SHORT_PLACE, 9);
+          expect(ny, `${said}, atom ${k}`).toBeCloseTo(dy * SHORT_PLACE, 9);
+        }
+      }
+    }
+    // (the first ring's places that would end on an atom of the new ring at full length: 16 over the 72 drawings)
+    expect(short).toBe(16);
+  });
+
+  it("holds a short place as any: the second double-click goes to the other place, then none; dragged round, a group rests at each place at its own length, and two swapped take each other's", () => {
+    // (the first picture fused cis on the upper face of bond 1: the new ring's atom 8 - id 502 - has its axial place drawn short)
+    const d = draw();
+    let m = fuse({ atoms: d.atoms, bonds: d.bonds }, 101, { cis: 1 });
+    const here = m.atoms.find((a) => a.id === 502)!;
+    const places = placesOf(m, 502);
+    const [eq, ax] = ["equatorial", "axial"].map((kind) => places.find((p) => p.free.kind === kind)!.at);
+    const long = (p: { x: number; y: number }) => Math.hypot(p.x - here.x, p.y - here.y) / NOMINAL_BOND_LENGTH;
+    expect(long(ax)).toBeCloseTo(SHORT_PLACE, 9);
+    expect(long(eq)).toBeCloseTo(1, 9);
+    const add = (id: number, p: { x: number; y: number }) => (m = { atoms: [...m.atoms, { id, el: "C", r: 0.9, ...p }], bonds: [...m.bonds, { id: id + 100, a: 502, b: id, order: 1 }] });
+    expect(projectionBond(m, 502)).toEqual(eq);
+    add(60, eq);
+    expect(projectionBond(m, 502)).toEqual(ax);
+    expect(chairExtension(m, 502, eq)).toEqual({ end: ax, name: "axial" });
+    add(61, ax);
+    expect(projectionBond(m, 502)).toBe("full");
+    expect(chairExtension(m, 502, ax)).toBeNull();
+    // (the short group dragged toward the other place: the two change places, each at the length of the place it goes to)
+    const drop = projectionDrop(m, 61, eq)!;
+    expect(drop.to).toEqual(eq);
+    expect(drop.swap!.get(60)!.x).toBeCloseTo(ax.x, 9);
+    expect(drop.swap!.get(60)!.y).toBeCloseTo(ax.y, 9);
+    // (dragged a little off and let go toward its own place, it rests there, short)
+    expect(projectionDrop(m, 61, { x: ax.x + 0.2, y: ax.y })!.to).toEqual(ax);
   });
 });
