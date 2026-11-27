@@ -36,13 +36,13 @@
 - 矢印のそばに置いた言葉は、矢印の上か下に並び、矢印が言葉に合わせて伸びます。
 - 言葉を右クリックすると、「Edit text」、「Bold」、「Italic」、「Bullets」、「Colour…」、「Align left」「Align centre」「Align right」「Justify」、「Superscript」「Subscript」があります。メニューのアイコンの下では、大きさ（ポイントで 8、10、12、14、18、24。ほかの大きさは 4〜288 を入力して Enter）、行間（1、1.15、1.5、2。ほかは 0.5〜4）、書体を選べます。選ぶとすぐに反映され、メニューは開いたままなので、続けてほかのものも試せます。
 
-構造の名前や番号は、その原子か結合、または 3D 分子の右クリックメニューにある「Add text」で、構造の下に書けます。この言葉は構造に属し、構造と一緒に動き、回り、コピーされ、削除されます。言葉の右クリックメニューの「Free from its structure」で、構造から離れます。
+構造の名前や番号は、その原子か結合、または 3D 分子の右クリックメニューにある「Add text」で、構造の下に書けます。構造に言葉が付くと、メニューにはもう出ません。この言葉は構造に属し、構造と一緒に動き、回り、コピーされ、削除されます。言葉の右クリックメニューの「Free from its structure」で、構造から離れます。
 
 ## 矢印とサイクル {#arrows}
 
 「Arrow」は、クリックで一本置き、ドラッグで引いて描きます。矢印を右クリックすると、種類（「Reaction arrow」「Equilibrium」「Retrosynthetic」「No reaction」）、矢じり、「Dashed line」、太さ（「Thin line」「Regular line」「Thick line」）、そしてすべての矢印の見た目を決める「Arrow style…」を選べます。
 
-何もないところをダブルクリックして出てくるものの「Scheme」を選ぶと、「Plus」「Electron-pushing arrow」「Catalytic cycle」「Slide」が並びます。「Plus」は、ダブルクリックしたところに「+」を置きます。「Electron-pushing arrow」では、矢印が出ていく原子か結合を押し、行き先の原子か結合まで導いてクリックします。Escape で取りやめます。原子や結合の右クリックメニューの「Electron-pushing arrow」か「Fishhook arrow」でも、そこから始められます。
+何もないところをダブルクリックして出てくるものの「Scheme」を選ぶと、「Plus」「Electron-pushing arrow」「Catalytic cycle」「Slide」が並びます。「Plus」は、ダブルクリックしたところに「+」を置きます。「Electron-pushing arrow」では、矢印が出ていく原子か結合をクリックします。矢印はボタンを押さずに動かすポインタについてきます。行き先の原子か結合、または結合ができる二つの原子の間をクリックすると、矢印が置かれます。何もないところをクリックするか Escape で取りやめます。
 
 触媒サイクルは「Scheme」の「Catalytic cycle」で作ります。言葉を載せる矢印の輪です。その線を右クリックすると、「Arrow coming in」と「Arrow going out」（その場で言葉を打ちます）、「Turn clockwise」か「Turn anticlockwise」、矢印が載せた言葉の手前でどれだけ切れるか（「Arrows close」から「Arrows well apart」まで）を選べます。
 

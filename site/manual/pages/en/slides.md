@@ -36,13 +36,13 @@ A film rendered with its *Background* set to *Transparent* lies on the slide wit
 - Words put down beside an arrow stand above or below it, and the arrow grows to fit them.
 - Right-click words for *Edit text*, *Bold*, *Italic*, *Bullets*, *Colour…*, *Align left*, *Align centre*, *Align right*, *Justify*, *Superscript* and *Subscript*. Under the menu's icons are their size in points - 8, 10, 12, 14, 18 or 24, or any from 4 to 288, typed and given with Enter - their line spacing - 1, 1.15, 1.5 or 2, or any from 0.5 to 4 - and their typeface. Each is given at once, and the menu stays open to try another.
 
-A structure's name or number goes under it with *Add text*, on the right-click menu of one of its atoms or bonds, or of a molecule in 3D. Those words belong to the structure: they move, turn, copy and are deleted with it. *Free from its structure*, on the words' right-click menu, lets them go.
+A structure's name or number goes under it with *Add text*, on the right-click menu of one of its atoms or bonds, or of a molecule in 3D; once the structure has its words, the menu no longer offers it. Those words belong to the structure: they move, turn, copy and are deleted with it. *Free from its structure*, on the words' right-click menu, lets them go.
 
 ## Arrows and cycles {#arrows}
 
 *Arrow* puts one down with a click, or draws it with a drag. Right-click an arrow to choose its kind - *Reaction arrow*, *Equilibrium*, *Retrosynthetic* or *No reaction* - its heads, *Dashed line*, its thickness (*Thin line*, *Regular line*, *Thick line*), and *Arrow style…* for every arrow's look.
 
-*Scheme*, in what a double-click on empty space offers, opens *Plus*, *Electron-pushing arrow*, *Catalytic cycle* and *Slide*. *Plus* puts a "+" where you double-clicked. For an *Electron-pushing arrow*, press the atom or bond it leaves, lead it to the atom or bond it goes to, and click; Escape lets it go. The right-click menu of an atom or a bond begins one from there too, as *Electron-pushing arrow* or *Fishhook arrow*.
+*Scheme*, in what a double-click on empty space offers, opens *Plus*, *Electron-pushing arrow*, *Catalytic cycle* and *Slide*. *Plus* puts a "+" where you double-clicked. For an *Electron-pushing arrow*, click the atom or bond it leaves; the arrow then follows the pointer with the button up. Click the atom or bond it goes to, or the gap between two atoms where a bond forms, to put it down. A click on nothing, or Escape, lets it go.
 
 A catalytic cycle, *Catalytic cycle* under *Scheme*, is a ring of arrows with words on it. Right-click its line for *Arrow coming in* and *Arrow going out* - type their words at once - *Turn clockwise* or *Turn anticlockwise*, and how far its arrows stop short of the words on it, from *Arrows close* to *Arrows well apart*.
 

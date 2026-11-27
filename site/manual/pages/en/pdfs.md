@@ -25,7 +25,7 @@ Double-click a PDF, or choose *Read* on its right-click menu. It opens in a colu
 - On a touch screen, a finger drags the pages up and down.
 - *Hide texts* closes the column, and the PDF stays on the page. *Show texts*, on the right-click menu of empty space, opens it again.
 
-A text file or a Markdown text (.txt, .md) dropped on the window is read the same way, under a tab of its own beside the PDFs. Click a tab to show what it holds, and the × on it to stop reading it. A Markdown text is shown formatted; the button at the top of the column, *Show source*, shows what it is written in, and *Show formatted* goes back.
+A text file or a Markdown text (.txt, .md) dropped on the window is read the same way, under a tab of its own beside the PDFs. Click a tab to show what it holds, and the × on it to stop reading it. A Markdown text is shown formatted. While its tab is chosen, the top of the column has a button marked `</>`, its tip *Show source*: a click shows what the text is written in, and a second click, its tip now *Show formatted*, goes back.
 
 ## Finding words {#find}
 
@@ -47,7 +47,7 @@ A paper names its compounds by numbers. Rest the pointer on one in the text - a 
 
 - Drag the picture onto the page: where Meno read the structure whole, it is put down there, as when it is dragged out of its figure.
 - Click its page to go to the figure in the reading column; the structure is marked there for a moment.
-- Hold ⌥ (Alt on Windows) to have a number taken that is set plainly, not in bold and not after a word like "compound".
+- A number set plainly, not in bold and not after a word like "compound", brings a card while ⌥ (Alt on Windows) is held with the pointer on it.
 - While Meno is still going through the figures, the card says "Reading this PDF’s figures…". When the number is drawn nowhere in the PDF, it says "No drawing of this compound was found in this PDF."
 
 The card comes in the reading column, and on a PDF shown full size on the page once its words are large enough to read.
