@@ -285,7 +285,12 @@ export default function FitToContent2D({
     if (!showRequest || showRequest.n === shown.current) return;
     shown.current = showRequest.n;
     const cam = camera as THREE.OrthographicCamera;
-    const to = viewToShow({ x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 }, { w: size.width, h: size.height, cover: store.getState().cover }, showRequest.box, paddingPx);
+    // (the column as it will be once it is open - one opening with what was put down, as a new chat's does, still shut now
+    //  - or shut: the view follows it there, so the show is answered for where it comes to rest)
+    const st = store.getState();
+    const open = st.textsOpen && (st.conversationShown != null || st.pdfShown != null || st.textShown != null || st.setTableShown != null);
+    const cover = open ? (st.columnFilled ? size.width : st.columnWidth) : 0;
+    const to = viewToShow({ x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 }, { w: size.width, h: size.height, cover, coverNow: st.cover }, showRequest.box, paddingPx);
     if (!to) return;
     setViewGoal(cam, { zoom: to.zoom, x: to.x, y: to.y });
     invalidate();

@@ -5,6 +5,10 @@
  * (`cover`, its width on the screen) - else moved along, as little as
  * takes it in with a margin, and only if that is not enough, out as little
  * as needed, it in the middle of what can be seen. Never further in.
+ * A column opening (or shutting, or going wider) as it is asked counts as
+ * it will be once it is there: the view follows the column by half as much
+ * as it covers more (components/coverLayer `FollowCover`), so the view goes
+ * now to where that following brings it to rest showing it - one move.
  */
 
 /** A box on the page. */
@@ -14,10 +18,20 @@ export type View = { x: number; y: number; zoom: number };
 
 /**
  * The view that shows `box` whole on a canvas `w` by `h` pixels, `cover`
- * of its right side under the column, `marginPx` round it - or null, where
- * `view` shows it already.
+ * of its right side under the column once it is there (`coverNow` of it
+ * now, where it is still opening or shutting: the view following it the
+ * rest of the way), `marginPx` round it - or null, where `view`, followed,
+ * shows it already.
  */
-export function viewToShow(view: View, screen: { w: number; h: number; cover: number }, box: ShowBox, marginPx = 48): View | null {
+export function viewToShow(view: View, screen: { w: number; h: number; cover: number; coverNow?: number }, box: ShowBox, marginPx = 48): View | null {
+  // (what the column's following has still to move the view, in screen pixels)
+  const ahead = (screen.cover - (screen.coverNow ?? screen.cover)) / 2;
+  const to = shownBeside({ ...view, x: view.x + ahead / view.zoom }, screen, box, marginPx);
+  if (!to) return null;
+  return { ...to, x: to.x - ahead / to.zoom };
+}
+
+function shownBeside(view: View, screen: { w: number; h: number; cover: number }, box: ShowBox, marginPx: number): View | null {
   const cover = Math.max(0, Math.min(screen.cover, screen.w * 0.8));
   const seenW = screen.w - cover;
   const z = view.zoom;

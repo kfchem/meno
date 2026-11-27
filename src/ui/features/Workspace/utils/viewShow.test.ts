@@ -37,6 +37,30 @@ describe("what was just put down, shown", () => {
     const small = viewToShow({ ...view, zoom: 0.5 }, screen, { x0: -1, x1: 1, y0: -1, y1: 1 });
     expect(small).toBeNull();
   });
+
+  it("counts a column opening as it is asked as open: the view, followed by it the rest of the way, comes to rest showing it whole", () => {
+    // (the column to cover the right 400 pixels, not open yet; the view will follow it by half of that, 20 of the page)
+    const opening = { ...screen, cover: 400, coverNow: 0 };
+    const followed = (to: { x: number; y: number; zoom: number }) => ({ ...to, x: to.x + 200 / to.zoom });
+    // (seen whole on the canvas now, but under the column once it is open: moved along, as little as takes it in beside it)
+    const right = { x0: 20, x1: 30, y0: -2, y1: 2 };
+    expect(viewToShow(view, { ...screen, cover: 0 }, right)).toBeNull();
+    const to = viewToShow(view, opening, right)!;
+    expect(to.zoom).toBe(10);
+    const rest = followed(to);
+    expect(rest.x + 50 - 40).toBeCloseTo(30 + 4.8, 9);
+    // (too wide for what the column leaves: out as little as needed, never in, in the middle of what is seen once it is open)
+    const wide = { x0: -40, x1: 40, y0: -5, y1: 5 };
+    const out = viewToShow(view, opening, wide)!;
+    expect(out.zoom).toBeCloseTo((600 - 96) / 80, 9);
+    const at = followed(out);
+    expect(at.x - 500 / out.zoom).toBeCloseTo(-40 - 48 / out.zoom, 9);
+    expect(at.x + 500 / out.zoom - 400 / out.zoom).toBeCloseTo(40 + 48 / out.zoom, 9);
+    // (seen whole where the following brings the view: left as it is - the following alone takes it there)
+    expect(viewToShow(view, opening, { x0: 0, x1: 4, y0: -2, y1: 2 })).toBeNull();
+    // (and one shutting: the view, followed back, shows what it would not have before)
+    expect(viewToShow(view, { ...screen, cover: 0, coverNow: 400 }, { x0: -65, x1: -60, y0: -2, y1: 2 })).toBeNull();
+  });
 });
 
 describe("a put-down asks to be shown", () => {
