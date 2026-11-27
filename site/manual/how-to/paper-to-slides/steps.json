@@ -1,0 +1,160 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [],
+  "steps": [
+    {
+      "id": "open",
+      "shot": "01-open.webp",
+      "mark": {
+        "kind": "shortcut",
+        "text": "O"
+      }
+    },
+    {
+      "id": "read",
+      "shot": "02-read.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 800,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "take-first",
+      "shot": "03-take-first.webp",
+      "mark": {
+        "kind": "drag",
+        "x": 1058,
+        "y": 1024,
+        "w": 0,
+        "h": 0,
+        "path": [
+          [
+            1058,
+            1024
+          ],
+          [
+            300,
+            450
+          ]
+        ]
+      }
+    },
+    {
+      "id": "take-second",
+      "shot": "04-take-second.webp",
+      "mark": {
+        "kind": "drag",
+        "x": 1902,
+        "y": 1024,
+        "w": 0,
+        "h": 0,
+        "path": [
+          [
+            1902,
+            1024
+          ],
+          [
+            300,
+            1200
+          ]
+        ]
+      }
+    },
+    {
+      "id": "choose-first",
+      "shot": "05-choose-first.webp",
+      "mark": {
+        "kind": "longpress",
+        "x": 341,
+        "y": 147,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "menu-first",
+      "shot": "06-menu-first.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 341,
+        "y": 147,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "slide-first",
+      "shot": "07-slide-first.webp",
+      "mark": {
+        "kind": "click",
+        "x": 90,
+        "y": 864,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "choose-second",
+      "shot": "08-choose-second.webp",
+      "mark": {
+        "kind": "longpress",
+        "x": 312,
+        "y": 816,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "menu-second",
+      "shot": "09-menu-second.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 312,
+        "y": 816,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "slide-second",
+      "shot": "10-slide-second.webp",
+      "mark": {
+        "kind": "click",
+        "x": 90,
+        "y": 1244,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "present-menu",
+      "shot": "11-present-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 300,
+        "y": 1450,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "present",
+      "shot": "12-present.webp",
+      "mark": {
+        "kind": "click",
+        "x": 34,
+        "y": 578,
+        "w": 628,
+        "h": 64
+      }
+    }
+  ],
+  "result": "result.webp"
+}
