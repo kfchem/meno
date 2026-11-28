@@ -1540,6 +1540,19 @@ describe("how far a bond stops short of a label", () => {
       expect(Math.hypot(line.x2 - line.x1, line.y2 - line.y1)).toBeCloseTo(L * BOND_SEEN_LEAST, 9);
     });
 
+    it("takes the l of a Cl beside a platinum out of the line's way: flat trans-PtCl2", () => {
+      const atoms: Atom[] = [
+        { id: 1, x: 0, y: 0, el: "Pt" },
+        { id: 2, x: -L, y: 0, el: "Cl" },
+        { id: 3, x: L, y: 0, el: "Cl" },
+        { id: 4, x: 0, y: L, el: "N" },
+        { id: 5, x: 0, y: -L, el: "N" },
+      ];
+      const bonds: Bond[] = [1, 2, 3, 4].map((k) => ({ a1: 0, a2: k, order: 1 as const }));
+      // (the left Cl's l toward the platinum: the line ran 0.021 into it, taken from each end alike; now under 0.01 into either end)
+      for (const d of depths(atoms, bonds, 0)) expect(d).toBeLessThan(0.01);
+    });
+
     it("gives the margins up first, then shares the rest alike, never an end deeper than taking from each end alike would", () => {
       // (asks 1.0 and 0.6, letters 0.9 and 0.5, half width 0.05: depths 0.95 - trim and 0.55 - trim, 0.3 past the margins. Alike would
       // take 0.75 and 0.45, 0.2 and 0.1 into them: both ends into their letters, neither may go deeper, and so it is as alike)
