@@ -8,7 +8,7 @@
 import { pluginById } from "../../../../lib/calc/catalog";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings, type SavedProcedure } from "../../../../lib/settings/appSettings";
-import { byOf, doerName, MENO } from "./doers";
+import { absentName, byOf, doerName, MENO } from "./doers";
 import { kindInfo } from "./kinds";
 import { partsBounds, type FlowParts } from "./parts";
 import { readWorkflow } from "./saved";
@@ -80,19 +80,19 @@ export function procedureLine(parts: FlowParts): string {
     .map((s) => {
       const by = byOf(s);
       const p = pluginById(by);
-      const who = by === MENO.id ? MENO.name : p ? doerName(p) : by;
+      const who = by === MENO.id ? MENO.name : p ? doerName(p) : absentName(by);
       return `${kindInfo(s.kind).name} · ${who}`;
     })
     .join(" → ");
 }
 
-/** What a procedure needs that is not added: the plugins its steps are done by, by name - none, where every one is. */
+/** What a procedure needs that is not added: the plugins its steps are done by, by name as Settings, Plugins shows each (`absentName`) - none, where every one is. */
 export function procedureNeeds(parts: FlowParts, added: Record<string, string> = useReaders.getState().state): string[] {
   const missing = new Set<string>();
   for (const s of parts.steps) {
     const by = byOf(s);
     if (by === MENO.id || added[by] === "added") continue;
-    missing.add(pluginById(by)?.name ?? by);
+    missing.add(absentName(by));
   }
   return [...missing];
 }

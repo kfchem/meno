@@ -2488,6 +2488,11 @@ Decided while building it, for the maintainer to confirm:
 - **Quick Add offers every procedure saved**: one that needs a plugin
   not added is shown, but cannot be put down, and says what it needs.
   A wire let go on empty space offers none.
+- **A plugin not here is named as Settings, Plugins names it**, never by
+  its id: on a step's card, in a procedure's line and what it needs, and
+  in what a step says when run without it ("Tool is not added: add it in
+  Settings, Plugins") - by the list of plugins online's name where Meno
+  has none of its own; one on neither list is "a plugin not known here".
 
 ### The look, and conformers chosen on purpose (2026-10-10)
 

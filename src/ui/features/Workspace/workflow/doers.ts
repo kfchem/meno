@@ -16,6 +16,7 @@ import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
+import { listedName } from "../../../../lib/plugins/known";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
 import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, optionsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
@@ -95,12 +96,21 @@ export const isAdded = (by: string) => by === MENO.id || useReaders.getState().s
 /** Who does a step, by id: as it says - or, a step saved before steps said, Meno where Meno does its kind. */
 export const byOf = (step: Pick<WorkflowStep, "kind" | "by">): string => step.by ?? (MENO_DOES.includes(step.kind) ? MENO.id : "");
 
-/** Who does a step, by name: Meno, or a plugin Meno knows of - by its id, one it does not. */
+/** Who does a step, by name: Meno, or a plugin Meno knows of - one not here by its name as Settings, Plugins shows it (`absentName`). */
 export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefined {
   const by = byOf(step);
   if (!by) return undefined;
   const p = pluginById(by);
-  return by === MENO.id ? MENO : { id: by, name: p ? doerName(p) : by };
+  return by === MENO.id ? MENO : { id: by, name: p ? doerName(p) : absentName(by) };
+}
+
+/** What a plugin not here to do a step is called: its name as Settings, Plugins shows it - one Meno knows of, or one on the list of plugins online - never its id; "a plugin not known here", one on neither. */
+export const absentName = (by: string): string => anyPluginById(by)?.name ?? listedName(by) ?? "a plugin not known here";
+
+/** What a step says where the plugin `by` that does it is not here to: the plugin by its name as Settings, Plugins shows it, and what to do - or, one on neither Meno's list nor the list online, so. */
+export function absentSaid(by: string): string {
+  const name = anyPluginById(by)?.name ?? listedName(by);
+  return name ? `${name} is not added: add it in Settings, Plugins` : "The plugin that does this step is neither here nor among the plugins online";
 }
 
 /**
