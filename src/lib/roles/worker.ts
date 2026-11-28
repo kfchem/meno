@@ -6,6 +6,7 @@ import { useAppSettings } from "../settings/appSettings";
 import { onWorkerStopped, workerOf, workerRunning } from "../plugins/process";
 import { useReaders } from "../calc/workers";
 import type { ChemClient } from "./client";
+import { startFailure } from "../plugins/failureSaid";
 
 /**
  * The worker of the plugin that fills a role (lib/plugins/roles,
@@ -135,9 +136,10 @@ export function pluginWorker(plugin: PythonPlugin): Promise<ChemClient> {
   if (!worker) {
     worker = start(plugin).catch((e: unknown) => {
       starting.delete(plugin.id);
-      const message = e instanceof Error ? e.message : String(e);
-      useChem.setState(e instanceof TakenAway ? { state: "idle" } : { state: "failed", message });
-      throw e;
+      // (the back end's or the program's own words to Meno's log; said in Meno's: lib/plugins/failureSaid)
+      const failed = startFailure(plugin.name, e);
+      useChem.setState(e instanceof TakenAway ? { state: "idle" } : { state: "failed", message: failed.message });
+      throw failed;
     });
     starting.set(plugin.id, worker);
   }

@@ -559,7 +559,17 @@ brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
 an atom and an aromatic one), an H written as an atom ("H is left out of
 a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
-aromatic ring that cannot alternate. A molecule the dictionary has - a
+aromatic ring that cannot alternate. Where a plugin, or what runs it, fails and
+nothing is known of the SMILES itself, the words are plain and say what
+can be done - "This SMILES could not be drawn. Try again.", "<plugin>
+could not be started. Remove it and add it again in Settings, Plugins." -
+and what the failure came with goes to Meno's log, never to the screen
+(lib/plugins/failureSaid; the same words where a plugin is not added, in
+Settings, Plugins). A compound found by its name is said so too ("This
+compound could not be drawn. Try again.", "<plugin> could not look this
+name up. Try again."); where no plugin here draws it, the plugins online
+that do are offered, as for a SMILES typed, and the compound is drawn once
+one is added. A molecule the dictionary has - a
 reagent, a formula read by rule, a ligand bound only by pairs it lends:
 DMF, Et3N, PdCl2, THF, typed as written or in small letters (dmf,
 et3n), as a label is given its case on the canvas; a formula in capitals

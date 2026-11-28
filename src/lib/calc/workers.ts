@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { failureSaid, setUpUnfinishedSaid } from "../plugins/failureSaid";
 import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
 import { ALL_PLUGINS, anyPluginById, DEPENDS_REFUSED, manifestOf, pluginName, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { askToConnectAll, type ConsentRequest } from "../net/network";
@@ -147,7 +148,7 @@ export async function addPlugin(p: Plugin): Promise<void> {
     try {
       await getPlugin(entry!);
     } catch (e) {
-      const said = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+      const said = `${p.name} was not added: ${failureSaid(e, setUpUnfinishedSaid)}`;
       setState(p.id, "absent", said);
       throw e;
     }
@@ -176,7 +177,7 @@ export async function addPlugin(p: Plugin): Promise<void> {
   try {
     asks = (await Promise.all(all.map(async (q) => (await setUpQuestions(q.profile)).map((request) => ({ name: q.name, request }))))).flat();
   } catch (e) {
-    const why = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+    const why = `${p.name} was not added: ${failureSaid(e, setUpUnfinishedSaid)}`;
     setState(p.id, "absent", why);
     throw e;
   }
@@ -236,7 +237,7 @@ async function addOne(p: Plugin, askedWithOthers?: readonly ConsentRequest[]): P
       markTakenAway(p, false);
       setState(p.id, "added");
     } catch (e) {
-      const why = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+      const why = `${p.name} was not added: ${failureSaid(e, setUpUnfinishedSaid)}`;
       setState(p.id, "absent", why);
       // (said where it is known to have failed: never left to what the state seems to have done)
       for (const tell of failed) tell(p, why);

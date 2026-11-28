@@ -2,7 +2,8 @@
 import { NoPlugin, type ChemState } from "../../../lib/roles/worker";
 import type { RoleId } from "../../../lib/plugins/roles";
 import { firstSetUpStep, type FirstSetUpCard } from "../../../lib/plugins/firstSetUp";
-import type { Reading } from "./chem/resolve";
+import { sameFormula, type Reading } from "./chem/resolve";
+import { failureSaid } from "../../../lib/plugins/failureSaid";
 
 /** What came of it: drawn (null), or why not - and, where no plugin here reads it, the role the plugins online are offered for (./RoleOffer). */
 export type SmilesRead = null | { error: string; needs: RoleId | null };
@@ -17,8 +18,27 @@ export async function readSmiles(smiles: string, onSmiles: (smiles: string) => P
     await onSmiles(smiles);
     return null;
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err), needs: err instanceof NoPlugin ? err.role : null };
+    return notDrawnSaid(err, SMILES_NOT_DRAWN);
   }
+}
+
+/** What is said where a SMILES typed was not drawn and nothing more is known in Meno's words. */
+export const SMILES_NOT_DRAWN = "This SMILES could not be drawn. Try again.";
+
+/** What is said where a compound found by its name was not drawn and nothing more is known in Meno's words. */
+export const FOUND_NOT_DRAWN = "This compound could not be drawn. Try again.";
+
+/** What is said where a name could not be looked up and nothing more is known in Meno's words: `plugin`, by its own name. */
+export const lookUpFailedSaid = (plugin: string) => `${plugin} could not look this name up. Try again.`;
+
+/**
+ * Why a structure asked for in Quick Add - a SMILES typed, a compound found by its name - was not drawn: in
+ * Meno's words where they say why ("This SMILES could not be read: …"); where no plugin here draws it, that one
+ * is needed, with the plugins online that do (./RoleOffer); else `plain`, the failure itself to Meno's log
+ * (lib/plugins/failureSaid).
+ */
+export function notDrawnSaid(err: unknown, plain: string): { error: string; needs: RoleId | null } {
+  return { error: failureSaid(err, plain), needs: err instanceof NoPlugin ? err.role : null };
 }
 
 /**
@@ -84,4 +104,10 @@ export function chemistryLine(chem: ChemState, share: number | undefined, waitin
   if (!step) return null;
   if (chem.state === "starting") return `${step}. The first one takes a moment.`;
   return `${step}.${waiting ? " This is drawn when it is ready." : ""}`;
+}
+
+/** What a reading under the SMILES field shows, as words: its name (or "SMILES", or its label) and its formula, once where they are one. */
+export function readingSaid(r: Reading): string {
+  const head = r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : r.as === "label" ? r.label : r.formula;
+  return r.as === "label" && !r.name && sameFormula(r.label, r.formula) ? head : `${head} \u00b7 ${r.formula}`;
 }

@@ -26,6 +26,7 @@
  * a step under way (a download, uv building the environment) runs to its end,
  * as nothing can cut it short today.
  */
+import { failureSaid, setUpUnfinishedSaid } from "./failureSaid";
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { allowAnswered, formatBytes, useNetwork, type ConsentRequest } from "../net/network";
@@ -245,7 +246,8 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
     end();
   } catch (e) {
     if (stopped) return end();
-    failed(e instanceof Error ? e.message : String(e));
+    // (in Meno's words: what the back end said goes to Meno's log - ./failureSaid)
+    failed(failureSaid(e, `It was not set up: ${setUpUnfinishedSaid}`));
   }
 }
 

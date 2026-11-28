@@ -19,7 +19,8 @@ import { togglesOn } from "./utils/press";
 import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
-import { afterAdded, chemistryLine, enterDoes, fieldRows, readSmiles } from "./quickAddSmiles";
+import { afterAdded, chemistryLine, enterDoes, fieldRows, FOUND_NOT_DRAWN, lookUpFailedSaid, notDrawnSaid, readingSaid, readSmiles } from "./quickAddSmiles";
+import { failureSaid } from "../../../lib/plugins/failureSaid";
 import { useDownloads } from "../../../lib/pyEnv";
 import { calcMadeWith, toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
@@ -536,6 +537,8 @@ function SmilesField({
   useEffect(() => () => void (asked.current += 1), []);
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
+  // (a compound found that a plugin missing kept from being drawn: drawn once that plugin is added, not looked up again)
+  const foundAgain = useRef<NamedStructure | null>(null);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) input.current?.focus();
@@ -550,6 +553,7 @@ function SmilesField({
   }, [seed]);
   /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
   const read = (smiles: string) => {
+    foundAgain.current = null;
     reading.current = true;
     setBusy(true);
     setError(null);
@@ -568,11 +572,18 @@ function SmilesField({
   /** A compound found drawn; or why not, said under the field. */
   const draw = (f: NamedStructure) => {
     if (!finder || !onFound) return;
+    foundAgain.current = null;
     reading.current = true;
     setBusy(true);
     setError(null);
     void onFound(f, finder.name)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => {
+        // (said as a SMILES not drawn is - a plugin missing offered as there, and drawn once it is added: `foundAgain`)
+        const r = notDrawnSaid(e, FOUND_NOT_DRAWN);
+        foundAgain.current = r.needs ? f : null;
+        setError(r.error);
+        setNeeds(r.needs);
+      })
       .finally(() => {
         reading.current = false;
         setBusy(false);
@@ -587,7 +598,7 @@ function SmilesField({
     setPick(0);
     setLooked({ name, going: true });
     void lookUpName(finder, name)
-      .catch((e: unknown): NameFound => ({ error: e instanceof Error ? e.message : String(e) }))
+      .catch((e: unknown): NameFound => ({ error: failureSaid(e, lookUpFailedSaid(finder.name)) }))
       .then((found) => {
         if (asked.current !== mine) return;
         setLooked({ name, found });
@@ -706,7 +717,9 @@ function SmilesField({
                 setError(null);
                 setNeeds(null);
               };
+              const found = foundAgain.current;
               if (needs === "names") letGo();
+              else if (found) draw(found);
               else afterAdded(text, reading.current, read, letGo);
             }}
           />
@@ -734,6 +747,7 @@ function FoundRows({ found, chosen, service, onChoose }: { found: { found: Named
               type="button"
               role="radio"
               aria-checked={i === chosen}
+              aria-label={[`${f.title} · ${f.formula} · ${f.id}`, ...(notes.length ? [notes.join(", ")] : [])].join(", ")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onChoose(i)}
               className={`w-full rounded-md border px-2 py-1 text-left text-[11px] leading-snug transition-colors duration-150 ease-meno ${i === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
@@ -785,6 +799,8 @@ export function DrawAs({
           type="button"
           role="radio"
           aria-checked={r === chosen}
+          // (named by the words it shows, its formula's counts among them - not left to how its parts are set)
+          aria-label={readingSaid(r)}
           // (the field keeps the keys: Enter still draws)
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onChoose(i)}
@@ -805,6 +821,7 @@ export function DrawAs({
           type="button"
           role="radio"
           aria-checked={lookup.chosen}
+          aria-label={lookup.text}
           aria-disabled={lookup.dim || undefined}
           onMouseDown={(e) => e.preventDefault()}
           onClick={lookup.onChoose}

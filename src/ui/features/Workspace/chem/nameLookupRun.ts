@@ -10,6 +10,7 @@ import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import { askToConnect, useNetwork, type ConsentRequest } from "../../../../lib/net/network";
 import { stopWorker, workerOf, workerRunning, type PluginWorker } from "../../../../lib/plugins/process";
 import { pyEnvReady } from "../../../../lib/pyEnv";
+import { startFailure } from "../../../../lib/plugins/failureSaid";
 import { foundOf, lookupConsentOf, lookupHosts, lookupPurpose, MOST_NAMED, NAME_MOST, type NameFound } from "./nameLookup";
 
 /**
@@ -53,7 +54,10 @@ export async function lookUpName(p: PythonPlugin, name: string, steps: LookupSte
   if (!(await steps.ask(lookupConsentOf(p)))) return { error: `Nothing was sent: looking names up at ${hosts.join(", ")} was not allowed.` };
   // (its worker started before it was allowed goes out nowhere: started again, now it may - the backend begins its task as it starts)
   if (!before && steps.running(p.id)) await steps.stop(p.id, `${p.name} was started again: it may now look names up`);
-  const worker = await steps.worker(p);
+  // (one that cannot be started said so in Meno's words: lib/plugins/failureSaid)
+  const worker = await steps.worker(p).catch((e: unknown) => {
+    throw startFailure(p.name, e);
+  });
   return foundOf(await worker.chem.request("find_name", { name: asked, most: MOST_NAMED }, LOOKUP_MS), MOST_NAMED, hosts);
 }
 

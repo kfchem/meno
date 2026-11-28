@@ -48,6 +48,8 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
   [/^Meno: the plugins in place could not be read\.$/, (m) => m[0]],
   // (chem/make3d conformersGrowing: a round of a 3D structure's search going on that failed - its error after it, kept as an error is)
   [/^Meno: a 3D structure's search ended: a round failed\.$/, (m) => m[0]],
+  // (plugins/failureSaid: a failure said on the screen in plain words - what came with it after it, kept as a failure is)
+  [/^Meno: a failure was said in plain words; what came with it:$/, (m) => m[0]],
   // (installLog's own)
   [/^not caught(, in a promise)?:$/, (m) => m[0]],
   // (where in React's tree a part stopped: components' names, a line each)
