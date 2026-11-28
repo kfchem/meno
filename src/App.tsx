@@ -72,6 +72,7 @@ import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
 import { watchOpenedFiles } from "./lib/openedFiles";
+import { sayCameBack, tellOpenFiles } from "./lib/pageBack";
 import { onItsWay } from "./ui/views/onItsWay";
 
 /** Meno started by the system: every page waits, not empty, until it is known whether a file was opened with it (ui/views/onItsWay). */
@@ -201,6 +202,16 @@ export default function App() {
       ),
     [],
   );
+  // ...and the files they hold, told to the app as they change, to be opened
+  // again should the page stop under Meno (lib/pageBack); and, where this
+  // page is the one started again after that, what came of the work, said
+  // once as Meno's notices are.
+  useEffect(() => {
+    if (isTauri()) tellOpenFiles();
+  }, [state]);
+  useEffect(() => {
+    if (isTauri()) void sayCameBack(setNotice);
+  }, []);
 
   // Undo/redo belong to the active tab, not to the app as a whole.
   const activeIdRef = useRef(state.activeId);

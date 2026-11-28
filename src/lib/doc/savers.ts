@@ -84,6 +84,14 @@ export function heldElsewhere(path: string, own: string | undefined, tabs: reado
 }
 
 /**
+ * Where each of `tabs` - the window's, as listed - is saved, or opened from
+ * where its view is not yet there (`tabHolding`'s path): those that have one.
+ */
+export function savedPaths(tabs: readonly ListedTab[] = listed()): string[] {
+  return tabs.map((t) => (paths.has(t.id) ? paths.get(t.id)!() : t.openedFrom)).filter((p): p is string => !!p);
+}
+
+/**
  * Workspace files found to open, each in a tab of its own, by its one true
  * path (`truePathOf`): one a tab already holds - however its path was
  * written, in another case, through a link - brings that tab forward

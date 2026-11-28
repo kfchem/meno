@@ -73,9 +73,14 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
     if !app.try_fs_scope().is_some_and(|scope| may_write(&path, &target, |p| scope.is_allowed(p))) {
         return Err(format!("Meno may not write to {}", path.display()));
     }
+    // (the workspace file the page said it saves: followed, so that a page that stops meanwhile is told what the file is - pagestop.rs)
+    let told = app.state::<crate::pagestop::PageStop>().write_begins(&path, &target)?;
     tauri::async_runtime::spawn_blocking(move || {
-        replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
-        .map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
+        let done = replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most));
+        if told {
+            app.state::<crate::pagestop::PageStop>().write_ends(&path, &target, done.is_ok());
+        }
+        done.map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
             .map_err(|e| format!("{}: {e}", path.display()))
     })
     .await

@@ -287,6 +287,63 @@ the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
 the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
 the document, and a save that fails says so under the canvas's card.
 
+## When the page stops (`pagestop.rs`)
+
+The page itself can stop under Meno: the system takes its process away
+(short of memory), or it ends of itself. The back end goes on; what it does
+(`src-tauri/src/pagestop.rs`, `lib/pageBack.ts`):
+
+- **One line in Meno's log**: that the window's page stopped, how where the
+  system says (its process ended; on Windows, the web view's own process
+  ended), whether a save was under way - never which file - and what Meno
+  did.
+- **The page started again** in the same window. The workspace files its
+  tabs held are opened again from their files, as a file opened from outside
+  Meno is (`opened.rs`): each as it was last saved. The page tells the back
+  end which they are as its tabs change and after each save (`page_files`);
+  only workspace files it may read are kept, in memory alone. Tabs never
+  saved, Settings and the like are not opened again: where nothing was
+  saved, the page comes back empty, never half of what was there.
+- **Said once**, in the window's notice (as a file that could not be read is
+  said), by the page started again as it comes up (`page_came_back`; none
+  at any other start): "Meno's window stopped working and was started
+  again. What was not saved is lost.", then "The files that were open are
+  open again, as they were last saved." where any were.
+- **A save under way.** The page tells the back end the name of the
+  workspace file it saves as the save begins, and that it ended as it ends
+  (`page_saving`, round `saveTo` in `fileActions.ts`). Its bytes are written
+  by the back end (`write_document`; FILE-IO.md, *Save and Export*), apart
+  from the page, so a page that stops during a save leaves the file one of
+  two ways, and which is said. Where the bytes were handed over, the
+  writing goes on to its end, and what is said waits for it: "Route.meno
+  was being saved, and the save was finished: Route.meno is as saved." (or,
+  where it failed, as next). Where they were not, they are never written
+  after it - a write the stopped page asked for is refused - and the file is
+  as it was: "Route.meno was being saved, and that save did not happen:
+  Route.meno is as it was before."
+- **Never a loop.** A page that stops again within two minutes of being
+  started again (`SOON`: long enough to read the files opened again, so
+  that one that stops the page as it opens is caught) is not started a
+  third time; nor is one where, on Windows, the web view's own process
+  ended and no page can be shown. Then a native message - the one place
+  Meno uses one, as no page is there to say it - says the same ("Meno's
+  window stopped working again, soon after it was started again." or
+  "Meno's window stopped working.", what was not saved, the save, "Meno
+  will close."), and Meno closes as a quit closes it once it is
+  dismissed (`RunEvent::Exit`: its sidecars ended; a running job goes on
+  apart from Meno, as after any quit).
+- **A page that stops answering** but has not ended (Windows tells this
+  apart): logged once, nothing more. It is not started again: a long piece
+  of work in the page may still end, and starting it again would lose it.
+
+How it is heard: on macOS through Tauri's `on_web_content_process_terminate`
+(any other window's page, the talk's, is started again, as the web view
+does where nothing is asked of it); on Windows through WebView2's
+`ProcessFailed`, its kind read - the page's process ended, it stopped
+answering, or the web view's own process ended; the others (a frame's, the
+GPU's, a helper's) WebView2 sees to. On Linux it is not handled: nothing in
+Tauri tells of it there, and Meno does nothing of its own.
+
 ## The main window's size and place (`windowstate.rs`)
 
 The main window's frame - its size in logical pixels, its place in the
