@@ -2600,8 +2600,10 @@ lipids each have their own way of being drawn, which it should know.
    (`chem/layoutWorker.ts`), as a large structure takes it up to a second.
    - What the engine is given is read out of the drawing itself
      (`lib/layout/drawn.ts`): each centre's configuration from its wedges,
-     read as RDKit reads them, and each double bond's from its sides. So
-     Clean-up no longer needs RDKit, and works before it is set up.
+     by the one rule of a wedge's narrow end at its centre - the atom at
+     the wide end of a wedge in front of the page, of hashes behind it
+     (`perception/stereo/from2d.ts`) - and each double bond's from its
+     sides. So Clean-up needs no plugin, and works before any is set up.
    - An H drawn on a stereocentre is taken as the centre's own: kept if
      the engine draws one there, taken away if not, and one added where the
      engine draws an H the drawing had not. An H that is more than an H -

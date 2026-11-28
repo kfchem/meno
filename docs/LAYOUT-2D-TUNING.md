@@ -127,7 +127,7 @@ npm run layout-bench                         # or --only=Name,Name
 npm run layout-compare -- /tmp/before.json   # what moved, and why
 npm run layout-labels                        # labels, as drawn
 npm run layout-stereo                        # then, in the chem environment:
-<chem python> scripts/layout/stereo.py       # the stereochemistry, as RDKit reads it
+<chem python> scripts/layout/stereo.py       # each centre's and double bond's CIP label, read back from the drawing apart from Meno's own reader
 npx vitest run src/lib/layout
 npm run typecheck
 ```
