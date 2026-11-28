@@ -3,7 +3,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { useEffect, useRef, type RefObject } from "react";
 import { DURATION, EASE, EASE_SLIDE, FADE, LEAVE } from "../theme/motion";
-import { dragWithin, scrollToShow, tabGestures, watchDragEnds, type DragMark } from "./tabDrag";
+import { dragTo, dragWithin, reorders, scrollToShow, tabGestures, watchDragEnds, type DragMark } from "./tabDrag";
 import { risesAfter, tabInitial, tabRoom, useMovedAlong, useRises } from "./tabMotion";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
@@ -35,7 +35,7 @@ export function TabStrip({
   close: (id: string) => void;
 }) {
   // (the drag of a tab under way, by its pointer: ended wherever and however it ends - ./tabDrag `watchDragEnds`)
-  const draggingRef = useRef<number | null>(null);
+  const draggingRef = useRef<DragMark>({ current: null }).current;
   useEffect(() => watchDragEnds(draggingRef, window), []);
   // (the tabs there were as the bar was first drawn come in as they are; those added after it rise)
   const first = useRef(new Set(tabOrder));
@@ -79,7 +79,7 @@ export function TabStrip({
         ref={stripRef}
         axis="x"
         values={tabOrder}
-        onReorder={reorder}
+        onReorder={(order: string[]) => reorders(draggingRef) && reorder(order)}
         layoutScroll
         className="flex h-full items-end min-w-0 pl-1.5 pr-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
         data-tauri-drag-region
@@ -150,9 +150,9 @@ function Tab({
         const el = self.current;
         const room = within.current?.getBoundingClientRect();
         const ul = strip.current;
-        if (draggingRef.current == null || !el || !room || !ul) return;
+        if ((draggingRef.current == null && draggingRef.over == null) || !el || !room || !ul) return;
         const laid = ul.getBoundingClientRect().left + ul.clientLeft + el.offsetLeft - ul.scrollLeft;
-        const kept = dragWithin(v, laid, el.offsetWidth, room);
+        const kept = dragTo(draggingRef, v, (at) => dragWithin(at, laid, el.offsetWidth, room));
         if (kept !== v) x.set(kept);
       }),
     [x, within, strip, draggingRef],

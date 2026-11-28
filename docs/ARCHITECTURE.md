@@ -150,8 +150,13 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   anywhere on the window, the window left, Escape - in one place
   (`ui/layouts/tabDrag` `endDrag`, `watchDragEnds`), a press by the same
   pointer the last guard, so that no drag left marked under way refuses
-  the tabs pressed after it. A second pointer pressing during a drag
-  chooses nothing and leaves that drag as it is. Closing the tab in front
+  the tabs pressed after it. A drag ended by Escape or by the window left,
+  its pointer still down, goes no further: the tab back in its place, no
+  other order taken from it, its release choosing nothing. A new primary
+  pointer of the drag's kind going down - a touch is primary only with no
+  other on the screen - finds a drag whose end never came over, and is a
+  press; a second pointer pressing during a drag chooses nothing and
+  leaves that drag as it is. Closing the tab in front
   brings the one beside it forward - on its right, else on its left - and
   opens none.
 - `Deck` renders **all** open tabs and hides the inactive ones; views receive an

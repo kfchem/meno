@@ -22,12 +22,28 @@ export function scrollToShow(left: number, tab: number, scrollLeft: number, widt
   return null;
 }
 
-/** The drag of a tab under way: the pointer that holds it, or null where none is. */
-export type DragMark = { current: number | null };
+/**
+ * The drag of a tab: the pointer that holds it while it is under way, and the kind of pointer it is (`current`,
+ * `kind`); and the pointer of one ended before that pointer was let go - by Escape, by the window left - still down
+ * (`over`), whose drag goes no further: the tab back in its place, and no other order of the tabs taken from it.
+ */
+export type DragMark = { current: number | null; kind?: string; over?: number | null };
 
-/** A drag of a tab over - every way one ends comes here, and only here. */
-export function endDrag(mark: DragMark): void {
+/** A drag of a tab over - every way one ends comes here, and only here: `held`, its pointer still down. */
+export function endDrag(mark: DragMark, held = false): void {
+  mark.over = held && mark.current != null ? mark.current : null;
   mark.current = null;
+}
+
+/** Whether the tabs may be put in another order by a drag: only by one under way. */
+export function reorders(mark: DragMark): boolean {
+  return mark.current != null;
+}
+
+/** Where a dragged tab is to be at `x`, its drag kept within the strip by `within`: at its place, a drag ended with its pointer still down. */
+export function dragTo(mark: DragMark, x: number, within: (x: number) => number): number {
+  if (mark.over != null) return 0;
+  return mark.current != null ? within(x) : x;
 }
 
 /**
@@ -37,11 +53,13 @@ export function endDrag(mark: DragMark): void {
  */
 export function watchDragEnds(mark: DragMark, on: Pick<Window, "addEventListener" | "removeEventListener">): () => void {
   const pointer = (e: Event) => {
-    if (mark.current != null && (e as PointerEvent).pointerId === mark.current) endDrag(mark);
+    const id = (e as PointerEvent).pointerId;
+    if (mark.current != null && id === mark.current) endDrag(mark);
+    if (mark.over != null && id === mark.over) mark.over = null;
   };
-  const left = () => endDrag(mark);
+  const left = () => endDrag(mark, true);
   const key = (e: Event) => {
-    if ((e as KeyboardEvent).key === "Escape") endDrag(mark);
+    if ((e as KeyboardEvent).key === "Escape") endDrag(mark, true);
   };
   on.addEventListener("pointerup", pointer, true);
   on.addEventListener("pointercancel", pointer, true);
@@ -55,6 +73,9 @@ export function watchDragEnds(mark: DragMark, on: Pick<Window, "addEventListener
   };
 }
 
+/** A pointer pressed, as a tab hears it. */
+export type Press = { pointerId: number; isPrimary?: boolean; pointerType?: string };
+
 /**
  * What a tab does as it is pressed and dragged, as the strip gives it (ui/layouts/Tabs): a drag begun marks it under
  * way, held by its pointer; its end ends it (`endDrag`); a press chooses (`pressTab`).
@@ -62,13 +83,18 @@ export function watchDragEnds(mark: DragMark, on: Pick<Window, "addEventListener
 export function tabGestures(mark: DragMark, choose: () => void): {
   onDragStart: (e: object) => void;
   onDragEnd: () => void;
-  onPointerDown: (e: { pointerId: number }) => void;
+  onPointerDown: (e: Press) => void;
 } {
   return {
-    // (a drag by touch has no pointer of its own to be told by: the first)
-    onDragStart: (e) => void (mark.current = "pointerId" in e && typeof e.pointerId === "number" ? e.pointerId : 1),
+    onDragStart: (e) => {
+      // (a drag by touch with no pointer of its own to be told by: the first)
+      const p = e as Partial<Press>;
+      mark.current = typeof p.pointerId === "number" ? p.pointerId : 1;
+      mark.kind = p.pointerType ?? "mouse";
+      mark.over = null;
+    },
     onDragEnd: () => endDrag(mark),
-    onPointerDown: (e) => pressTab(mark, e.pointerId, choose),
+    onPointerDown: (e) => pressTab(mark, e, choose),
   };
 }
 
@@ -77,12 +103,16 @@ export function tabGestures(mark: DragMark, choose: () => void): {
  * the pointer a drag was marked by - one whose end never came to the strip,
  * the button let go outside the window, over another program - finds that
  * drag over: once left marked as under way, it had every tab pressed after
- * it refused, with nothing said. A second pointer pressing while a drag is
- * in hand chooses nothing, and leaves that drag as it is - its tab still
- * kept within the strip.
+ * it refused, with nothing said. So does a primary pointer of the drag's
+ * kind going down: a touch is primary only with no other touch on the
+ * screen (Pointer Events), so the touch that held the drag is gone. Any
+ * other pointer pressing while a drag is in hand - a second finger -
+ * chooses nothing, and leaves that drag as it is, its tab still kept
+ * within the strip.
  */
-export function pressTab(mark: DragMark, pointerId: number, choose: () => void): void {
-  if (mark.current != null && mark.current !== pointerId) return;
+export function pressTab(mark: DragMark, press: Press, choose: () => void): void {
+  const gone = press.isPrimary === true && press.pointerType != null && press.pointerType === mark.kind;
+  if (mark.current != null && mark.current !== press.pointerId && !gone) return;
   endDrag(mark);
   choose();
 }
