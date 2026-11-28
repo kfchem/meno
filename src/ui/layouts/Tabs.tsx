@@ -36,7 +36,7 @@ export function TabStrip({
 }) {
   // (the drag of a tab under way, by its pointer: ended wherever and however it ends - ./tabDrag `watchDragEnds`)
   const draggingRef = useRef<DragMark>({ current: null }).current;
-  useEffect(() => watchDragEnds(draggingRef, window), []);
+  useEffect(() => watchDragEnds(draggingRef, window), [draggingRef]);
   // (the tabs there were as the bar was first drawn come in as they are; those added after it rise)
   const first = useRef(new Set(tabOrder));
   const stripRef = useRef<HTMLUListElement>(null);
