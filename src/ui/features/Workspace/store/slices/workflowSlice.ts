@@ -1,4 +1,5 @@
 import type { Table } from "../../../../../lib/table";
+import { moveSteps } from "../../../../../lib/doc/takeSteps";
 import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -220,10 +221,11 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         }));
       }
     },
-    holdUndo: (direction: "undo" | "redo") => {
-      const gone = wf.runningGone(doc.getState(), doc.peek(direction));
+    holdUndo: (by: number) => {
+      // (where they would come to, however many: a step running now and not there is taken away)
+      const gone = wf.runningGone(doc.getState(), doc.peek(by));
       if (!gone.length) return false;
-      set({ askUndo: { direction, steps: gone.length } });
+      set({ askUndo: { by, steps: gone.length } });
       return true;
     },
     letUndo: (go: boolean) => {
@@ -231,9 +233,8 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       set({ askUndo: null });
       if (!asked || !go) return;
       // (stopped as deleting them stops them: their jobs, and their files once ended)
-      for (const step of wf.runningGone(doc.getState(), doc.peek(asked.direction))) forgetJobs(step);
-      if (asked.direction === "undo") doc.undo();
-      else doc.redo();
+      for (const step of wf.runningGone(doc.getState(), doc.peek(asked.by))) forgetJobs(step);
+      moveSteps(doc, asked.by);
     },
     putDownProcedure: (id: string, x: number, y: number) => {
       const procedure = proceduresSaved().find((p) => p.id === id);

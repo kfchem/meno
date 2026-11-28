@@ -14,6 +14,7 @@ function doc(steps: number, redone = 0) {
     asked,
     undo: () => (asked.push("undo"), steps > 0),
     redo: () => (asked.push("redo"), redone > 0),
+    travel: (n: number) => (asked.push(`travel ${n}`), n < 0 ? steps >= -n : redone >= n),
   };
 }
 

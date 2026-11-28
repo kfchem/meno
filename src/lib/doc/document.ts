@@ -177,8 +177,12 @@ export interface DocumentStore<T> {
    * is taken back.
    */
   takeBackTo(depth: number, state: T): boolean;
-  /** The state an undo (or a redo) would come to, without coming to it: none where there is nothing to undo (to redo). */
-  peek(direction: "undo" | "redo"): T | undefined;
+  /**
+   * The state an undo (or a redo) would come to, without coming to it - or,
+   * given a number, the state `travel` of it would: none where there are not
+   * so many steps to take.
+   */
+  peek(to: "undo" | "redo" | number): T | undefined;
   /** Replaces the content and forgets the history, e.g. after opening a file. */
   reset(state: T, label?: string): void;
   /**
@@ -423,8 +427,10 @@ export function createDocument<T>(
       return true;
     },
 
-    peek(direction) {
-      return direction === "undo" ? past[past.length - 1]?.state : future[0]?.state;
+    peek(to) {
+      const n = to === "undo" ? -1 : to === "redo" ? 1 : Math.trunc(to);
+      if (n < 0) return past[past.length + n]?.state;
+      return n > 0 ? future[n - 1]?.state : undefined;
     },
 
     steps() {

@@ -1994,16 +1994,17 @@ export type EditorState = {
   /** A running step asked to be deleted: the question asked (Workspace). */
   askDeleteStep: number | null;
   /**
-   * An undo (or a redo) that would take away a running step: held, and the
-   * question deleting it asks asked first (`askUndo`, Workspace) - true
-   * where it is held so; false where it takes nothing running away, left to
-   * be done as any undo.
+   * Steps back (below 0) or forward that would take away a running step - an
+   * undo, a redo, or many at once from the history: held, and the question
+   * deleting it asks asked first, once (`askUndo`, Workspace) - true where
+   * they are held so; false where they take nothing running away, left to be
+   * taken as any undo.
    */
-  holdUndo: (direction: "undo" | "redo") => boolean;
+  holdUndo: (by: number) => boolean;
   /** The undo held (`holdUndo`) let go: done - the running steps it takes away stopped first, their jobs as deleting them stops them - or, `go` false, not. */
   letUndo: (go: boolean) => void;
   /** An undo or a redo held, that would take away running steps (`holdUndo`). */
-  askUndo: { direction: "undo" | "redo"; steps: number } | null;
+  askUndo: { by: number; steps: number } | null;
   /** A wire from a set into a step's input - the first that takes it, where none is named - where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number, port?: string) => boolean;
   removeWire: (id: number) => void;

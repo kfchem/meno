@@ -13,7 +13,8 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { undoIntent } from "./shortcuts";
+import { IS_MAC, undoIntent } from "./shortcuts";
+import { takeSteps, type StepsDoc } from "./takeSteps";
 
 export type EditCommand = "undo" | "redo";
 
@@ -27,18 +28,32 @@ export function fieldHasUndo(active: unknown): boolean {
   return undoIntent({ key: "z", metaKey: true, target: active }) === null;
 }
 
-/** What choosing a command of the menu did: the field's own undo, the document's step, or nothing - none to take back. */
-export type EditDone = "field" | "document" | "nothing";
+/** What choosing a command of the menu did: the field's own undo, the document's step, held by the page first (`takeSteps`), or nothing - none to take back. */
+export type EditDone = "field" | "document" | "held" | "nothing";
 
 /**
  * Undo or redo as the keys do it: in a field of the browser's own editing,
- * its undo (`field`, given where the page asks the browser); else a step of
- * the active document (`doc`, none while no tab holds one).
+ * its undo (`field`, given where the page asks the browser: `fieldStep`);
+ * else a step of the active document (`doc`, none while no tab holds one),
+ * taken as the keys take it (`takeSteps`).
  */
-export function editFromMenu(command: EditCommand, o: { active: unknown; doc: { undo(): boolean; redo(): boolean } | undefined; field: (command: EditCommand) => boolean }): EditDone {
+export function editFromMenu(command: EditCommand, o: { active: unknown; doc: StepsDoc | undefined; field: (command: EditCommand) => boolean }): EditDone {
   if (fieldHasUndo(o.active)) return o.field(command) ? "field" : "nothing";
-  if (!o.doc) return "nothing";
-  return (command === "undo" ? o.doc.undo() : o.doc.redo()) ? "document" : "nothing";
+  const done = takeSteps(o.doc, command === "undo" ? -1 : 1);
+  return done === "taken" ? "document" : done;
+}
+
+/**
+ * The undo (or redo) of the field `el` has the focus of, as its keys do it:
+ * the keys given to it first - words typed on the page keep an undo of
+ * their own, taken from the keys (pageField) - and, where it takes none of
+ * them, the browser's own (an input's). Whether it was taken either way.
+ */
+export function fieldStep(el: Element | null, command: EditCommand, mac = IS_MAC): boolean {
+  if (!el) return false;
+  const key = new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: mac, ctrlKey: !mac, shiftKey: command === "redo", bubbles: true, cancelable: true });
+  if (!el.dispatchEvent(key)) return true;
+  return document.execCommand(command);
 }
 
 /** Which of the menu's items can do anything: those the active document has a step for - and both while a field of the browser's own undo has the focus, whose history is not known here. */
