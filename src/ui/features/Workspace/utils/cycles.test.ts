@@ -200,6 +200,20 @@ describe("the words that are an arrow's own, beside another arrow", () => {
     }
   });
 
+  it("an arrow with no words whose end comes right by its neighbour's words, either side and either way, never takes them", () => {
+    for (let k = -4; k <= 4; k++) {
+      if (k === 0) continue;
+      for (const way of ["in", "out"] as const) {
+        const near: Branch = { at: Math.PI / 2 + (k * Math.PI) / 18, way };
+        const p = page([top, near], [{ text: "Ar-X", by: 0 }]);
+        expect(wordsOfBranches(p.cycle(), p.things())).toEqual([p.ids[0], null]);
+        p.turn();
+        expect(wordsOfBranches(p.cycle(), p.things())).toEqual([p.ids[0], null]);
+        expect(p.atRule(p.ids[0], 0)).toBe(true);
+      }
+    }
+  });
+
   it("two arrows side by side, each with words, each keep their own through a turn", () => {
     const p = page([top, beside], [{ text: "Ar-X", by: 0 }, { text: "L", by: 1 }]);
     expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);

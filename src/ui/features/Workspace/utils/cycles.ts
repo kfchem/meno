@@ -7,7 +7,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { wordsSet } from "../../../../lib/chem/captions";
-import { branchPath, branchWordsAt, cycleArrows, cycleMembers, endKey, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
+import { branchWordsAt, cycleArrows, cycleMembers, endKey, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { styleOf } from "../../../../lib/chem/style";
 import { DURATION, follow, TAU } from "../../../theme/motion";
@@ -28,8 +28,8 @@ export const cyclePointed: { id: number | null; angle: number } = { id: null, an
 
 /** How near a cycle's line a thing let go is put on it, in bonds. */
 const SNAP = 1.0;
-/** How near the far end of an arrow coming in or going out its words' box comes, to be its words, in bonds: a little over twice the gap they are set at (`WORDS_GAP`), so that words moved well away by hand are no arrow's. */
-const LABEL_NEAR = 0.7;
+/** How near words stand to where an arrow coming in or going out sets words of their size (`branchWordsAt`), their middle, to be its words, in bonds: a nudge by hand keeps them its own, words moved well away are no arrow's. */
+const LABEL_NEAR = 0.8;
 /** How near a cycle's line anything is measured, in bonds: what lies further can be on no cycle, nor be put on one, nor be the words by its arrows. */
 const NEAR = 3;
 
@@ -154,18 +154,24 @@ export function arrowsOfCycles(cycles: readonly Cycle[], things: readonly CycleT
 /**
  * The words by each arrow coming in or going out of a cycle, of `things`, in
  * the order of its arrows. Nothing on the page ties words to an arrow but
- * where they stand, so each set of words is the one arrow's whose far end its
- * box comes nearest, within `LABEL_NEAR` bonds - no arrow's, where two ends
- * are as near - and each arrow has the nearest of the words so its own: none,
- * where none are. A set of words is never two arrows', nor taken by an arrow
- * whose neighbour's end it stands nearer.
+ * where they stand, so each set of words is the one arrow's by which they
+ * stand nearest where that arrow sets words of their size (`branchWordsAt`),
+ * within `LABEL_NEAR` bonds - no arrow's, where two are as near - and each
+ * arrow has the nearest of the words so its own: none, where none are. A set
+ * of words is never two arrows', nor taken by a wordless arrow whose end
+ * happens to come near them.
  */
 export function wordsOfBranches(c: Cycle, things: readonly CycleThing[]): (number | null)[] {
-  const ends = (c.branches ?? []).map((b) => branchPath(c, b, NOMINAL_BOND_LENGTH).end);
-  const best: ({ d: number; id: number } | null)[] = ends.map(() => null);
+  const branches = c.branches ?? [];
+  const best: ({ d: number; id: number } | null)[] = branches.map(() => null);
   for (const t of things) {
     if (t.caption == null) continue;
-    const ds = ends.map((l) => Math.hypot(Math.max(t.box.x0 - l.x, 0, l.x - t.box.x1), Math.max(t.box.y0 - l.y, 0, l.y - t.box.y1)));
+    const half = { w: (t.box.x1 - t.box.x0) / 2, h: (t.box.y1 - t.box.y0) / 2 };
+    const mid = { x: (t.box.x0 + t.box.x1) / 2, y: (t.box.y0 + t.box.y1) / 2 };
+    const ds = branches.map((b) => {
+      const m = branchWordsAt(c, b, NOMINAL_BOND_LENGTH, half);
+      return Math.hypot(mid.x - m.x, mid.y - m.y);
+    });
     let at = -1;
     let tied = false;
     ds.forEach((d, i) => {

@@ -2266,9 +2266,10 @@ All hover-based, as above.
     more across than up or down, they stand beside its end and run on
     away from it; else they stand over or under it (`lib/chem/cycle`
     `wordsBeyond`). Words are an arrow's own by where they stand: each set
-    goes to the one arrow whose end it is nearest, within 0.7 of a bond,
-    so an arrow without words never takes its neighbour's, and words
-    moved well away are no arrow's. *Remove
+    goes to the one arrow by which it stands nearest where that arrow sets
+    words, within 0.8 of a bond. So an arrow without words never takes
+    its neighbour's, even with its end close by them, and words moved
+    well away are no arrow's. *Remove
     this arrow* takes the one there away. One put there grows - in from
     its far end, or out from the circle - and one taken away goes the
     same way back.
