@@ -210,7 +210,22 @@ export function mergedSet(first: readonly SetEntry[], second: readonly SetEntry[
  * the drawing thread may read it: known - asked first (`rebondKeysAsked`) - or small enough to work out here (chem/identityOff
  * `identityKnown`); else worked out here all the same, as where a caller could not ask first.
  */
-const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "constitution")?.text ?? structureKey(e);
+const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "constitution", REBOND_IN_PLACE_MOST)?.text ?? structureKey(e);
+
+/**
+ * The most atoms a bonding entry not yet known may have for its key to be worked out on the drawing thread: a constitution's key
+ * costs less than identity, and every structure up to this size measured in review took less than a frame - the slowest a
+ * palladium with one triphenylphosphine, 35 atoms, about 12 ms; triphenylphosphine itself and a hundred-carbon chain about 4 and
+ * 16 ms - where the next, palladium with two, 69 atoms, took about 100 ms.
+ */
+export const REBOND_IN_PLACE_MOST = 35;
+
+/**
+ * How long Re-bond waits on its keys before it is shown working: as long as a copy is made before "Copying…" is shown
+ * (clipboardActions `COPYING_SHOWN_AFTER_MS`), Meno's wait before it says a short piece of work is under way - so that one
+ * done sooner flashes nothing.
+ */
+export const REBOND_WORKING_AFTER_MS = 250;
 
 /**
  * Each of `bonding`'s structures as its key (`rebondKey`) asked off the drawing thread (chem/identityOff `identityAsked`) - a large
@@ -229,7 +244,8 @@ export function rebondKeysAsked(bonding: readonly SetEntry[], answered?: (done: 
 }
 
 /** Whether each of `bonding`'s structures is known as its key, or small enough to work out here (`rebondKey`): nothing to ask first. */
-export const rebondKeysKnown = (bonding: readonly SetEntry[]): boolean => bonding.every((e, i) => identityKnown(constitutionOf(entryOfSet(e, String(i))), "constitution") != null);
+export const rebondKeysKnown = (bonding: readonly SetEntry[]): boolean =>
+  bonding.every((e, i) => identityKnown(constitutionOf(entryOfSet(e, String(i))), "constitution", REBOND_IN_PLACE_MOST) != null);
 
 /**
  * *Re-bond* (lib/steps `rebonded`): each entry of *Geometry* given the

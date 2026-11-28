@@ -59,7 +59,7 @@ import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { DRAWN_AND_3D, runDuplicatesDrawnInTurns, runMenoInTurns } from "../../workflow/meno";
 import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
-import { atomMapPlan, atomMapSet, moleculeOfEntry, rebondKeysAsked, rebondKeysKnown, type EntriesMapped } from "../../workflow/structureSteps";
+import { atomMapPlan, atomMapSet, moleculeOfEntry, rebondKeysAsked, rebondKeysKnown, REBOND_WORKING_AFTER_MS, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
@@ -655,6 +655,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   const menoStops = new Set<number>();
   /** How to stop at once a step worked in a plugin's worker as Meno's are (a conformer search on structures drawn): its worker stopped. */
   const menoKills = new Map<number, () => void>();
+  /** The Re-bonds waiting on their keys, shown working or not yet (`rebondOff`): Run pressed again meanwhile starts nothing. */
+  const rebondWaiting = new Set<number>();
 
   /**
    * Meno's Duplicates, worked out in turns that let the page go on - a
@@ -775,12 +777,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   /**
    * *Re-bond* (workflow/structureSteps `rebondedSet`): each bonding entry's structure as its key - which a large one, a metal with
-   * its phosphines, takes long to work out - asked off the drawing thread first (`rebondKeysAsked`), the step working meanwhile,
-   * how many are known of how many; then run as any Meno step is, one edit, reading them. Known already, or small enough to work
-   * out here, it runs at once, never shown working. Stopped meanwhile, it is said stopped and nothing is made.
+   * its phosphines, takes long to work out - asked off the drawing thread first (`rebondKeysAsked`); then run as any Meno step is,
+   * one edit, reading them. Known already, or small enough to work out here, it runs at once. Shown working - how many are known
+   * of how many - only once the keys have taken `REBOND_WORKING_AFTER_MS`, so that a short wait flashes nothing. Stopped
+   * meanwhile (`menoKills`), the wait ends at once: it is said stopped, nothing is made, and the keys that land later are only
+   * kept for the next run.
    */
   async function rebondOff(id: number, at: number): Promise<void> {
-    if (get().menoWorking[id]) return;
+    if (get().menoWorking[id] || rebondWaiting.has(id)) return;
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const bonding = inputOf(d, id, "bonding");
@@ -788,6 +792,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!rebondKeysKnown(entries)) {
       const key = inputKey(d, step, "meno");
       menoStops.delete(id);
+      let done = 0;
+      let shown = false;
+      // (waiting still: a key landing after a Stop shows nothing)
+      let waiting = true;
       const working = (patch: { done: number } | null) =>
         set((prev) => {
           const rest = { ...prev.menoWorking };
@@ -795,18 +803,34 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           else delete rest[id];
           return { ...prev, menoWorking: rest };
         });
-      working({ done: 0 });
+      const later = setTimeout(() => {
+        shown = true;
+        working({ done });
+      }, REBOND_WORKING_AFTER_MS);
+      let stop: () => void = () => {};
+      const stopped = new Promise<"stopped">((end) => (stop = () => end("stopped")));
+      rebondWaiting.add(id);
+      menoKills.set(id, stop);
+      let ended: "stopped" | void;
       try {
-        await rebondKeysAsked(entries, (done) => {
-          if (get().menoWorking[id]) working({ done });
-        });
+        ended = await Promise.race([
+          rebondKeysAsked(entries, (n) => {
+            done = n;
+            if (waiting && shown) working({ done });
+          }),
+          stopped,
+        ]);
       } finally {
-        working(null);
+        waiting = false;
+        clearTimeout(later);
+        rebondWaiting.delete(id);
+        menoKills.delete(id);
+        menoStops.delete(id);
+        if (shown) working(null);
       }
       const still = stepOf(doc.getState(), id);
       if (!still) return;
-      if (menoStops.has(id)) {
-        menoStops.delete(id);
+      if (ended === "stopped") {
         const took = Date.now() - at;
         return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, kind: still.kind, ...(still.options ? { options: still.options } : {}) }));
       }

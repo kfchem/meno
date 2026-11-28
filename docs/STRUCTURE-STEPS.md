@@ -215,12 +215,13 @@ start of a restrained minimisation towards the product.
 - **While it runs.** Each bonding entry's structure is known by its key
   once, however many geometries take its bonds. A large structure's key -
   a metal with four phosphines on it - takes long to work out, so it is
-  worked out off the drawing thread first: the step shows as working
-  meanwhile, how many of the bonding entries are known of how many, and
-  nothing is made until all are; then the step's results come in as one
-  edit, which one undo takes away. Small ones are known at once, and the
-  step runs at once. Stopped meanwhile, it makes nothing and says it was
-  stopped.
+  worked out off the drawing thread first, and nothing is made until all
+  are; then the step's results come in as one edit, which one undo takes
+  away. A wait longer than a moment shows the step working, how many of
+  the bonding entries are known of how many; a shorter one shows
+  nothing. Small ones are known at once, and the step runs at once.
+  Stopped meanwhile, it ends at once, makes nothing and says it was
+  stopped; keys worked out after that are kept for the next run.
 - **Group and lineage.** The group is *a → b*: the geometry entry's group,
   then the bonding entry's (each entry's own id where it has none). Both
   entries are its lineage.
