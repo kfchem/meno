@@ -103,9 +103,12 @@ export function patched(text, patch, file) {
   return { text: out, changed: true };
 }
 
-/** Each package's files in `modules` changed; an error, said, where a version or a text is not as known. */
+/**
+ * Each package's files in `modules` changed. Every file is read and checked first - its version known, its text as known or changed
+ * already - and nothing is written unless all are: an error, said, leaves the install as it was, not changed in part.
+ */
 export function patchAll(modules) {
-  let changed = false;
+  const writes = [];
   for (const patch of PATCHES) {
     const root = join(modules, patch.pkg);
     if (!existsSync(root)) continue;
@@ -114,14 +117,13 @@ export function patchAll(modules) {
     for (const file of Object.keys(patch.files)) {
       const path = join(root, file);
       const out = patched(readFileSync(path, "utf8"), patch, file);
-      if (!out.changed) continue;
-      writeFileSync(path, out.text);
-      changed = true;
+      if (out.changed) writes.push([path, out.text]);
     }
   }
+  for (const [path, text] of writes) writeFileSync(path, text);
   // (what the dev server made of the files before, made again)
-  if (changed) rmSync(join(modules, ".vite"), { recursive: true, force: true });
-  return changed;
+  if (writes.length) rmSync(join(modules, ".vite"), { recursive: true, force: true });
+  return writes.length > 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
