@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument } from "../document";
 import { addStep } from "./model";
 import { setsOnPage, unseenSets } from "./onPage";
-import { madeByRun, viewStillSince } from "./runShown";
+import { madeByRun, ranBy, viewStillSince } from "./runShown";
+import { heldByRepeats } from "./flow";
 
 const view = { x0: 0, x1: 800, y0: -600, y1: 0 };
 
@@ -36,5 +37,26 @@ describe("what the end of Run all shows", () => {
     expect(viewStillSince(view, { ...view }, true)).toBe(false);
     expect(viewStillSince(null, view, false)).toBe(false);
     expect(viewStillSince(view, null, false)).toBe(false);
+  });
+
+  it("takes in the sets of the steps a Repeat holds, as it runs them - Run all naming the Repeat alone", () => {
+    const one = addStep(emptyWorkspaceDocument(), "optimise", 0, 0);
+    const held = one.steps![0].id;
+    const doc = { ...one, steps: [...one.steps!, { id: 900, kind: "repeat", x: -100, y: 100, by: "meno", frame: { w: 600, h: 400 }, holds: [held] }] } as typeof one;
+    // (what Run all and Run from here name: the Repeat, not the step it holds - flow `heldByRepeats`)
+    expect(heldByRepeats(doc, [held])).toEqual([900]);
+    expect(madeByRun(doc, [900])).toBeNull();
+    const ran = ranBy(doc, [900]);
+    expect(ran).toContain(held);
+    const sets = setsOnPage(doc, (doc.sets ?? []).filter((x) => x.made?.step === held));
+    expect(sets.length).toBeGreaterThan(0);
+    expect(madeByRun(doc, ran)).toEqual(madeByRun(doc, [held]));
+  });
+
+  it("is one rule for Run, Run from here and Run all: each a run of its steps and those before it it runs first", () => {
+    const one = addStep(emptyWorkspaceDocument(), "optimise", 0, 0);
+    const [a] = one.steps!.map((s) => s.id);
+    expect(ranBy(one, [a])).toEqual([a]);
+    expect(madeByRun(one, ranBy(one, [a]))).toEqual(madeByRun(one, [a]));
   });
 });

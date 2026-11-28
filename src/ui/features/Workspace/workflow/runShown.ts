@@ -1,6 +1,6 @@
 /**
- * What the end of *Run all* shows (docs/WORKFLOWS.md, *Starting and
- * stopping*): the sets its steps made, as what is put down is shown
+ * What the end of a run shows - *Run*, *Run from here* and *Run all* alike
+ * (docs/WORKFLOWS.md, *Starting and stopping*): the sets its steps made, as what is put down is shown
  * (utils/viewShow) - the view eased along, or out as little as needed, only
  * where they are not seen whole; and never where the chemist has taken the
  * view meanwhile: moved it since the run began, or holding a press as it
@@ -9,8 +9,19 @@
 import type { WorkspaceDocument } from "../document";
 import { setsOnPage } from "./onPage";
 import { partsBounds } from "./parts";
+import { stepOf, stepsRun, type Flow } from "./flow";
 
 type Box = { x0: number; x1: number; y0: number; y1: number };
+
+/**
+ * The steps a run of `targets` runs: each, those before it it runs first (flow `stepsRun`), and those a Repeat among them
+ * holds - it runs them, pass by pass.
+ */
+export function ranBy(doc: Flow, targets: readonly number[]): number[] {
+  const ran = stepsRun(doc, targets);
+  const held = ran.flatMap((id) => stepOf(doc, id)?.holds ?? []);
+  return [...new Set([...ran, ...held])];
+}
 
 /** How far the sets that the steps `ran` made reach on the page: those drawn on it, not those held. Null where they made none drawn. */
 export function madeByRun(doc: Pick<WorkspaceDocument, "sets" | "wires" | "steps">, ran: readonly number[]): Box | null {

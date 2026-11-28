@@ -98,8 +98,8 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf, cutShort } from "./utils/workspace";
 import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
-import { madeByRun, viewStillSince } from "./workflow/runShown";
-import { allToRun } from "./workflow/flow";
+import { madeByRun, ranBy, viewStillSince } from "./workflow/runShown";
+import { allToRun, heldByRepeats, stepsAfter } from "./workflow/flow";
 import { pressHeld } from "./components/pressHeld";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
@@ -514,16 +514,21 @@ function WorkspaceContent({
     const covered = store.getState().cover / cam.zoom;
     return { x0: cam.position.x - w, x1: cam.position.x + w - covered, y0: cam.position.y - h, y1: cam.position.y + h };
   }, [camRef, domRef]);
-  // Run all, and the sets its steps made shown once all have ended, where they are not seen whole - as what is put down is
-  // shown (utils/viewShow) - unless the chemist moved the view since it began, or holds a press as it ends (workflow/runShown)
-  const runAllShown = useCallback(async () => {
-    const ran = allToRun(store.getState());
-    const began = viewBox();
-    await store.getState().runAll();
-    if (!viewStillSince(began, viewBox(), pressHeld())) return;
-    const box = madeByRun(store.getState(), ran);
-    if (box) store.getState().requestShow(box);
-  }, [store, viewBox]);
+  // A run - Run, Run from here, Run all alike - and the sets its steps made shown once all have ended, where they are not seen
+  // whole - as what is put down is shown (utils/viewShow) - unless the chemist moved the view since it began, or holds a press as
+  // it ends (workflow/runShown)
+  const runShown = useCallback(
+    async (targets: readonly number[], run: () => Promise<void>) => {
+      const ran = ranBy(store.getState(), targets);
+      const began = viewBox();
+      await run();
+      if (!viewStillSince(began, viewBox(), pressHeld())) return;
+      const box = madeByRun(store.getState(), ran);
+      if (box) store.getState().requestShow(box);
+    },
+    [store, viewBox],
+  );
+  const runAllShown = () => runShown(allToRun(store.getState()), () => store.getState().runAll());
   // a talk given from the slide that is most nearly what is seen (docs/PRESENTING.md)
   const presentHere = useCallback(() => {
     const st = store.getState();
@@ -2383,7 +2388,8 @@ function WorkspaceContent({
             // (a program installed separately found nowhere: Settings, Plugins, where it is located)
             const s = store.getState().steps.find((x) => x.id === menu.id);
             if (s && missingFor(s)) return openSettingsAt("plugins");
-            void store.getState().runStep(menu.id);
+            const id = menu.id;
+            void runShown([id], () => store.getState().runStep(id));
           }}
           step={(() => {
             const s = menu.kind === "step" ? store.getState().steps.find((x) => x.id === menu.id) : undefined;
@@ -2393,7 +2399,7 @@ function WorkspaceContent({
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
-              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id), note: runNote(st, s.id) }),
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void runShown(heldByRepeats(st, [s.id, ...stepsAfter(st, s.id)]), () => st.runFrom(s.id)), note: runNote(st, s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () =>
                     void st
                       .showStepFiles(s.id)
