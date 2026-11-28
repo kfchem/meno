@@ -152,13 +152,23 @@ describe("labels inside a Haworth ring", () => {
     expect(Number(((after.atoms.find((a) => a.id === 50)!.y - d.atoms[2].y) / d.scale).toFixed(2))).toBe(0.46);
   });
 
-  it("draws as main does where no step clears: a six-ring's CH2OH up from C-2 beside an OH up from C-3 - read either way it meets a bond or the OH", () => {
-    const { d, model } = ringWith(6, "CH2OH", "O");
-    expect(meetings(model).has(50)).toBe(true);
-    const after = stepped(model);
-    const length = (id: number, k: number) => Number(((after.atoms.find((a) => a.id === id)!.y - d.atoms[k].y) / d.scale).toFixed(2));
-    expect([length(50, 2), length(51, 3)]).toEqual([HAWORTH_UP_BEFORE, HAWORTH_UP_BEFORE]);
-    expect(meetings(after)).toEqual(meetings(asMain(d, model)));
+  it("raises a six-ring's CH2OH up from C-2 beside an OH up from C-3 above the OH's row, read strictly clear; the five-ring's drawn as main does", () => {
+    const six = ringWith(6, "CH2OH", "O");
+    expect(meetings(six.model).has(50)).toBe(true);
+    const after = stepped(six.model);
+    const length = (m: Model, d: typeof six.d, id: number, k: number) => (m.atoms.find((a) => a.id === id)!.y - d.atoms[k].y) / d.scale;
+    // (the OH keeps its stem; the CH2OH stands higher, still below the ring's back edge, read toward the ring's middle; nothing touches,
+    //  no graze let pass)
+    expect(Math.abs(length(after, six.d, 51, 3) - length(six.model, six.d, 51, 3))).toBeLessThan(1e-9);
+    expect(length(after, six.d, 50, 2)).toBeGreaterThan(length(after, six.d, 51, 3) + 0.2);
+    expect(length(after, six.d, 50, 2)).toBeLessThan((six.d.atoms[0].y - six.d.atoms[2].y) / six.d.scale);
+    expect(textOf(after, 50)).toBe("HOH2C");
+    expect(touching(after)).toEqual([]);
+    // (the five-ring, whose middle is lower: no height clears them, read either way - both at main's 0.40, as main draws them)
+    const five = ringWith(5, "CH2OH", "O");
+    const five2 = stepped(five.model);
+    expect([length(five2, five.d, 50, 2), length(five2, five.d, 51, 3)].map((x) => Number(x.toFixed(2)))).toEqual([HAWORTH_UP_BEFORE, HAWORTH_UP_BEFORE]);
+    expect(meetings(five2)).toEqual(meetings(asMain(five.d, five.model)));
   });
 
   it("gives way first with a back atom's down label over a front atom's up label where they meet: C-5's CH2OH shortens, C-3's OH keeps its stem", () => {
@@ -233,8 +243,9 @@ describe("labels inside a Haworth ring", () => {
       expect(g.reads, name).toBe(way);
       expect(textOf(after, 50), name).toBe(text);
       expect(meetings(after).has(50), name).toBe(false);
-      // (the stem as the ring's proportions set it: C-2's OH no longer drawn at main's short stub)
-      expect(Math.abs(g.y - model.atoms.find((a) => a.id === 50)!.y), name).toBeLessThan(1e-9);
+      // (the stem as the ring's proportions set it, or higher where that clears a touch: C-2's OH no longer drawn at main's short stub)
+      expect(Math.abs(g.y - d.atoms[k].y) - Math.abs(model.atoms.find((a) => a.id === 50)!.y - d.atoms[k].y), name).toBeGreaterThan(-1e-9);
+      expect(touching(after), name).toEqual([]);
       expect(Math.abs(g.y - d.atoms[k].y) / d.scale, name).toBeGreaterThan(0.46);
     }
   });
@@ -339,11 +350,11 @@ describe("labels inside a Haworth ring", () => {
       [5, [[4, "down", "OH"]], ["HO | HO"]],
       // (an OH up from C-3 meets nothing as it reads: left as it is)
       [6, [[3, "up", "OH"]], ["OH | OH"]],
-      // (a CH2OH up from C-3 beside C-2's HO: read CH2OH it would run into the HO on the one row; HOH2C is the way that meets less,
-      //  and the HO stays HO)
-      [6, [[2, "up", "OH"], [3, "up", "CH2OH"]], ["HO | HO", "HOH2C | HOH2C"]],
-      // (the swap - C-2's CH2OH, then C-3's OH: no reading takes a meeting away, so each reads as its bonds decide)
-      [6, [[2, "up", "CH2OH"], [3, "up", "OH"]], ["CH2OH | CH2OH", "OH | OH"]],
+      // (a CH2OH up from C-3 beside C-2's HO: read CH2OH it would run into the HO on the one row - it stands higher, above the HO's row,
+      //  and reads so; the HO stays HO)
+      [6, [[2, "up", "OH"], [3, "up", "CH2OH"]], ["HO | HO", "CH2OH | CH2OH"]],
+      // (the swap - C-2's CH2OH, then C-3's OH: the CH2OH stands higher, above the OH's row, read toward the ring's middle)
+      [6, [[2, "up", "CH2OH"], [3, "up", "OH"]], ["HOH2C | HOH2C", "OH | OH"]],
     ] as const;
     for (const [size, put, want] of cases) expect(drawn(size, put), `${size}: ${JSON.stringify(put)}`).toEqual(want);
   });

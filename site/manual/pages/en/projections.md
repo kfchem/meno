@@ -28,7 +28,7 @@ Each atom of a chair or a Haworth ring has two places for a group; each carbon o
 Some groups are drawn shorter than a bond so that they do not run into something.
 
 - On two fused chairs, a group whose end would land on an atom of the other ring, or on another group's end, is drawn two thirds of a bond long, and one third where it would cross a bond. It is still at its place and is read as one.
-- On a Haworth ring, a label that runs into another label or a bond is first turned to read the other way - HO for OH, HOH2C for CH2OH - and, if it still meets something, drawn nearer its atom.
+- On a Haworth ring, a label that runs into another label or a bond is first turned to read the other way - HO for OH, HOH2C for CH2OH. If it still meets something, a label up from a front atom may stand higher, above its neighbour's label; where that does not help, a label is drawn nearer its atom.
 
 ## Moving a group to its other place {#moving}
 
