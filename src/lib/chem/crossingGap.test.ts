@@ -314,13 +314,73 @@ describe("the gap where a bond passes behind another", () => {
         expect(crossing(0.3, [0])).toHaveLength(1);
       });
 
-      it("never leaves nothing of a bond: where the breaks leave only crumbs and a short piece between them, that piece is drawn", () => {
-        // (the bond 1.2 long, from (0, -1) to (0, 0.2), both ends joined; fronts 0.25 and 0.95 along it, at y = -0.75 and -0.05: past
-        // the breaks the ends leave 0.0625 each, crumbs, and between them 0.325, under a break - the longest piece, drawn, as before)
+      it("narrows the breaks, all alike, until what is left reads as the bond: a short bond crossed near each end", () => {
+        // (the bond 1.2 long, from (0, -1) to (0, 0.2), both ends joined; fronts 0.25 and 0.95 along it, at y = -0.75 and -0.05. Whole,
+        // the breaks leave crumbs at the ends and 0.325 between them, under a break: nothing that reads as the bond. Narrowed to s of
+        // their width, the piece between runs from -0.75 + 0.1875 s to -0.05 - 0.1875 s, 0.7 - 0.375 s long: a break's length, 0.375,
+        // from s = 0.867 down - in tenths, 0.8: -0.6 to -0.2. The ends, 0.1 each, stay crumbs)
         const spans = crossing(0.2, [-0.75, -0.05], false);
         expect(spans).toHaveLength(1);
-        closeTo(spans[0][0], -0.5625);
-        closeTo(spans[0][1], -0.2375);
+        closeTo(spans[0][0], -0.6);
+        closeTo(spans[0][1], -0.2);
+      });
+
+      describe("whatever the bond is drawn as", () => {
+        // (the same set-up, the bond behind drawn each way Meno draws a bond)
+        // (`end`: the bond's end at (0, 0.2) joined to another bond, or free - a double bond to a free end is drawn centred, as C=O)
+        const drawnAs = (back: Partial<Bond>, fronts = [-0.75, -0.05], end = true) => {
+          const atoms: Atom[] = [
+            { id: 0, x: 0, y: -1, el: "C", z: -1 },
+            { id: 1, x: 0, y: 0.2, el: "C", z: -1 },
+            { id: 2, x: -1, y: -1.5, el: "C", z: -1 },
+            { id: 3, x: 1, y: 0.7, el: "C", z: -1 },
+            ...fronts.flatMap((y, k) => [{ id: 10 + 2 * k, x: -L, y, el: "C", z: 1 }, { id: 11 + 2 * k, x: L, y, el: "C", z: 1 }]),
+          ];
+          const bonds: Bond[] = [
+            { a1: 0, a2: 1, order: 1, ...back },
+            { a1: 0, a2: 2, order: 1 },
+            ...(end ? [{ a1: 1, a2: 3, order: 1 as const }] : []),
+            ...fronts.map((_, k) => ({ a1: 4 + 2 * k, a2: 5 + 2 * k, order: 1 as const })),
+          ];
+          const { polys, lines } = buildAllPrimitives(atoms, bonds, style(), ZOOM);
+          // (what lies along x = 0 between the atoms' rows: the bond behind - its lines' pieces as shapes, its strokes as lines)
+          const near = (pts: Vec2[]) => pts.every((q) => Math.abs(q.x) < 0.45 && q.y > -1.3 && q.y < 0.45);
+          const shapes = polys.filter((p) => near(p.points)).map((p) => [Math.min(...p.points.map((q) => q.y)), Math.max(...p.points.map((q) => q.y))]);
+          const strokes = lines.filter((l) => near([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]));
+          return { shapes, strokes };
+        };
+        const middle = (shapes: number[][]) => shapes.filter(([lo, hi]) => lo > -0.95 && hi < 0.15);
+
+        it("a single, double (offset or centred), triple, wedge, bold or dative bond keeps each of its lines from -0.6 to -0.2", () => {
+          const each: [Partial<Bond>, number, boolean][] = [[{}, 1, true], [{ order: 2 }, 2, true], [{ order: 2 }, 2, false], [{ order: 3 }, 3, true], [{ stereo: "up" }, 1, true], [{ display: "bold" }, 1, true], [{ dative: true }, 1, true]];
+          for (const [back, n, end] of each) {
+            const kept = middle(drawnAs(back, undefined, end).shapes);
+            expect(kept, JSON.stringify(back)).toHaveLength(n);
+            for (const [lo, hi] of kept) {
+              closeTo(lo, -0.6);
+              closeTo(hi, -0.2);
+            }
+          }
+        });
+
+        it("a hashed bond keeps two strokes; a hashed wedge whose two strokes both lie in the breaks is drawn with no break", () => {
+          expect(drawnAs({ display: "hashed" }).strokes.length).toBeGreaterThanOrEqual(2);
+          // (the hashed wedge 1.2 long has two strokes, at 0.35 and 0.925 along it - both inside the breaks, and the second at the
+          // second break's middle, cut by it however narrow: no break leaves two, so none is made - both strokes drawn, as uncrossed)
+          const crossed = drawnAs({ stereo: "down" }).strokes;
+          const whole = drawnAs({ stereo: "down" }, []).strokes;
+          expect(crossed).toHaveLength(2);
+          expect(JSON.stringify(crossed)).toBe(JSON.stringify(whole));
+        });
+
+        it("breaks each kind crossed once in its middle where it always did: nothing changes where enough is left", () => {
+          // (one front at y = -0.4, 0.6 along: the break from -0.5875 to -0.2125, both ends long)
+          for (const back of [{}, { order: 2 }, { order: 3 }, { stereo: "up" }, { display: "bold" }] as Partial<Bond>[]) {
+            const { shapes } = drawnAs(back, [-0.4]);
+            expect(shapes.length, JSON.stringify(back)).toBeGreaterThan(0);
+            for (const [lo, hi] of shapes) expect(hi <= -0.5875 + 1e-9 || lo >= -0.2125 - 1e-9, JSON.stringify(back)).toBe(true);
+          }
+        });
       });
 
       it("never leaves a dot between two breaks: every piece cut at both ends is a break's length or more", () => {
