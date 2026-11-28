@@ -4132,9 +4132,10 @@ it.
   entry's own goes on with it, unread.
 - **An entry's state** is Meno's own too (`state`, entries `entryState`):
   "finished" where it is a result to stand on - converged, not failed,
-  its file's marks read - else why not, in the words a step's line
-  counts failures in ("not converged", "refused", "the program stopped
-  with an error"), or "not known if finished". "state = finished" keeps the
+  its file's record of which frames failed read - else why not, in the
+  words a step's line counts failures in ("not converged", "refused",
+  "the program stopped with an error"), or "not known if finished",
+  where that record did not read: the states a Filter's condition names. "state = finished" keeps the
   finished and sets the rest aside, each saying what it is ("not state =
   finished (not converged)"): the Filter a step's refusal names, where a
   value is read from results (an Energy diagram's levels: meno

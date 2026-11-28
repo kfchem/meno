@@ -77,7 +77,9 @@ describe("a procedure", () => {
     expect(absentSaid("tightbind")).toBe("Tightbind is not added: add it in Settings, Plugins");
     // (Quick Add's row: what it needs, and where it is added)
     expect(procedureTip({ name: "Screen", needs: procedureNeeds(away) })).toBe("Screen - needs Made-up Tool: add it in Settings, Plugins");
-    expect(procedureTip({ name: "Screen", needs: ["Tool", "a plugin Meno does not know the name of"] })).toBe("Screen - needs Tool and a plugin Meno does not know the name of: add them in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: ["Tool", "a plugin Meno does not know the name of"] })).toBe("Screen - needs Tool and a plugin Meno does not know the name of: plugins are added in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: procedureNeeds({ ...away, steps: away.steps.map((s) => (s.by === "made-up-tool" ? { ...s, by: "never-listed" } : s)) }) })).toBe("Screen - needs a plugin Meno does not know the name of: plugins are added in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: ["Tool", "Other"] })).toBe("Screen - needs Tool and Other: add them in Settings, Plugins");
     expect(procedureTip({ name: "Screen", needs: [] })).toBe("Screen");
   });
 

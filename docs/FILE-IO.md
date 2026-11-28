@@ -289,8 +289,8 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   none), then, where there are several frames, `frame i/n`, then, where the
   frame's energy is known, `E = <hartrees to ten decimals> Eh`: for
   example `water frame 2/3 E = -76.0261000000 Eh`. Where the frame did
-  not finish - it failed, or its marks of which frames failed did not
-  read - why, after it, as an SD file's `> <Failed>` says it:
+  not finish - it failed, or whether it finished is not known, its file's
+  record of which frames failed not read - why, after it, as an SD file's `> <Failed>` says it:
   `oh frame 2/2 E = -75.3900000000 Eh failed: not converged: stopped at
   200 cycles`, so that no reader takes its energy for a result. On one
   line, and plain text, which programs that read the layout take as a

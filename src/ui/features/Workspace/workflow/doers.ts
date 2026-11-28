@@ -8,7 +8,7 @@
  */
 import { looksOffered, renderOptions } from "../render/renderOptions";
 import { chosenFrom, presetOffer } from "../render/presets";
-import { absentName, anyPluginById, pluginById, PLUGINS, presetsFor, UNNAMED_PLUGIN } from "../../../../lib/calc/catalog";
+import { absentName, anyPluginById, pluginById, PLUGINS, PLUGINS_ADDED_WHERE, presetsFor, UNNAMED_PLUGIN } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
 import { defaultsFrom, valuesOf, type Option, type OptionValues } from "../../../../lib/options";
 import { RING_CONFORMERS, roundsAsked, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
@@ -108,7 +108,7 @@ export { absentName };
 /** What a step says where the plugin `by` that does it is not here to: the plugin by its name as Settings, Plugins shows it (`absentName`), and what to do - or, where Meno knows no name of it, so, and where plugins are added. */
 export function absentSaid(by: string): string {
   const name = absentName(by);
-  return name !== UNNAMED_PLUGIN ? `${name} is not added: add it in Settings, Plugins` : "The plugin that does this step is not added, and Meno does not know its name: plugins are added in Settings, Plugins";
+  return name !== UNNAMED_PLUGIN ? `${name} is not added: add it in Settings, Plugins` : `The plugin that does this step is not added, and Meno does not know its name: ${PLUGINS_ADDED_WHERE}`;
 }
 
 /**

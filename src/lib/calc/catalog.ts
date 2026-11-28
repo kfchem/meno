@@ -169,6 +169,9 @@ export const pluginName = (id: string): string => anyPluginById(id)?.name ?? lis
 /** What a plugin not added is called where the chemist is told of it: its name as Settings, Plugins shows it - the one Meno knows of, or else the list of plugins online's - and, where Meno knows neither, "a plugin Meno does not know the name of": never its id. */
 export const absentName = (id: string): string => anyPluginById(id)?.name ?? listedName(id) ?? UNNAMED_PLUGIN;
 
+/** Where plugins are added, said where one is needed that Meno knows no name of (`absentName`): what the chemist can do. */
+export const PLUGINS_ADDED_WHERE = "plugins are added in Settings, Plugins";
+
 /** A plugin Meno knows no name of, said (`absentName`). */
 export const UNNAMED_PLUGIN = "a plugin Meno does not know the name of";
 
