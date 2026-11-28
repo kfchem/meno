@@ -20,6 +20,8 @@ export type CycleBox = { x0: number; y0: number; x1: number; y1: number };
 
 /** An arrow coming in to the cycle, or going out of it, where it joins the circle: an angle, in radians, anticlockwise from the circle's right (y up). */
 export type CycleBranch = { at: number; way: "in" | "out" };
+/** Whether two arrows coming in or going out are the one arrow: joining at the same place, the same way. A cycle has one arrow of each way at a place, at most. */
+export const sameBranch = (a: CycleBranch, b: CycleBranch) => a.at === b.at && a.way === b.way;
 
 /**
  * A cycle: its middle and radius, in the drawing's units; the way it goes
@@ -202,24 +204,120 @@ function curvePoints(s: P, q: P, e: P, n = 16): P[] {
 /**
  * Where an arrow coming in to a cycle, or going out of it, runs: from
  * outside the circle, curving in to join it at the angle it says, along
- * the cycle's way - or from there, along its way, curving out - and where
- * its words go, at its far end.
+ * the cycle's way - or from there, along its way, curving out - its far
+ * end, and the way on out of the arrow there (`toward`, of length 1): on
+ * out of its head, or back out of its tail - the way its words go.
  */
-export function branchPath(c: Pick<Cycle, "x" | "y" | "r" | "ccw">, b: CycleBranch, bond: number): { points: P[]; end: P; label: P } {
+export function branchPath(c: Pick<Cycle, "x" | "y" | "r" | "ccw">, b: CycleBranch, bond: number): { points: P[]; end: P; toward: P } {
   const way = wayOf(c);
   const j = pointOn(c, c.r, b.at);
   const t = { x: -Math.sin(b.at) * way, y: Math.cos(b.at) * way };
   const n = { x: Math.cos(b.at), y: Math.sin(b.at) };
   const L = BRANCH_ALONG * bond;
   const D = BRANCH_OUT * bond;
+  const unit = (from: P, to: P): P => {
+    const l = Math.hypot(to.x - from.x, to.y - from.y);
+    return { x: (to.x - from.x) / l, y: (to.y - from.y) / l };
+  };
   if (b.way === "in") {
     const s = { x: j.x - t.x * L + n.x * D, y: j.y - t.y * L + n.y * D };
     const q = { x: j.x - t.x * L * 0.55, y: j.y - t.y * L * 0.55 };
-    return { points: curvePoints(s, q, j), end: s, label: { x: s.x + n.x * 0.8 * bond, y: s.y + n.y * 0.8 * bond } };
+    return { points: curvePoints(s, q, j), end: s, toward: unit(q, s) };
   }
   const e = { x: j.x + t.x * L + n.x * D, y: j.y + t.y * L + n.y * D };
   const q = { x: j.x + t.x * L * 0.55, y: j.y + t.y * L * 0.55 };
-  return { points: curvePoints(j, q, e), end: e, label: { x: e.x + n.x * 0.8 * bond, y: e.y + n.y * 0.8 * bond } };
+  return { points: curvePoints(j, q, e), end: e, toward: unit(q, e) };
+}
+
+/** How far the words at the far end of an arrow coming in or going out stand clear of its head or tail, and of its line, in bonds. */
+export const WORDS_GAP = 0.3;
+
+/** Words set on from a point: the point, the way on from it (of length 1), and how far clear of it they stand - in the drawing's units. */
+export type WordsBeyond = { x: number; y: number; dx: number; dy: number; gap: number };
+
+/**
+ * Where a box as large as `half` (half its width and height) stands set
+ * on from a point, its middle: the nearest place along the way on from it
+ * where it comes no nearer than the gap to the point or to any of `clear`.
+ */
+function boxBeyond(o: WordsBeyond, half: { w: number; h: number }, clear: readonly P[]): P {
+  const { w, h } = half;
+  const g = o.gap;
+  // (the stretch of the way on, from the point, over which a box set there comes nearer p than the gap - its box grown by the gap all round, its corners round: two boxes and four circles, which make one stretch together)
+  const holding = (p: P): [number, number] | null => {
+    const rx = p.x - o.x;
+    const ry = p.y - o.y;
+    const pieces: [number, number][] = [];
+    const inBox = (a: number, b: number) => {
+      const span = (rel: number, d: number, r: number): [number, number] =>
+        Math.abs(d) < 1e-12 ? (Math.abs(rel) < r ? [-Infinity, Infinity] : [Infinity, -Infinity]) : [Math.min((rel - r) / d, (rel + r) / d), Math.max((rel - r) / d, (rel + r) / d)];
+      const [ax, bx] = span(rx, o.dx, a);
+      const [ay, by] = span(ry, o.dy, b);
+      if (Math.max(ax, ay) < Math.min(bx, by)) pieces.push([Math.max(ax, ay), Math.min(bx, by)]);
+    };
+    inBox(w + g, h);
+    inBox(w, h + g);
+    for (const kx of [-1, 1])
+      for (const ky of [-1, 1]) {
+        // (|p - (point + s way + corner)| < g, the way of length 1)
+        const cx = rx - kx * w;
+        const cy = ry - ky * h;
+        const along = cx * o.dx + cy * o.dy;
+        const rest = g * g - (cx * cx + cy * cy - along * along);
+        if (rest > 0) pieces.push([along - Math.sqrt(rest), along + Math.sqrt(rest)]);
+      }
+    return pieces.length ? [Math.min(...pieces.map((x) => x[0])), Math.max(...pieces.map((x) => x[1]))] : null;
+  };
+  const held = [o, ...clear].map(holding).filter((x): x is [number, number] => x != null);
+  let s = 0;
+  // (on past each stretch it lies in, until it lies in none)
+  for (let moved = true; moved; ) {
+    moved = false;
+    for (const [lo, hi] of held) {
+      if (s > lo - 1e-12 && s < hi) {
+        s = hi;
+        moved = true;
+      }
+    }
+  }
+  return { x: o.x + o.dx * s, y: o.y + o.dy * s };
+}
+
+/** How far a point lies from a box about `m`, `half` across. */
+const fromBox = (p: P, m: P, half: { w: number; h: number }) => Math.hypot(Math.max(Math.abs(p.x - m.x) - half.w, 0), Math.max(Math.abs(p.y - m.y) - half.h, 0));
+
+/**
+ * Where words as large as `half` (half their width and height) stand set
+ * on from a point - an arrow's head, or its tail - their middle, as a
+ * chemist sets them by hand, one rule whatever way the arrow runs: a
+ * square as tall as the words is set on along the way, the gap clear of
+ * the point and of `clear` (the arrow's line), so that the way decides
+ * which side of the words faces the point; set beside it - the way more
+ * across than up or down - longer words run on away from it, their near
+ * side where the square's is (to the right of it, left-aligned; to the
+ * left, right-aligned); set over or under it, they lie across the way.
+ * Their nearest side or corner is the gap from the point, however wide
+ * they are; where running on would bring them nearer the line than the
+ * gap, they are set on along the way whole.
+ */
+export function wordsBeyond(o: WordsBeyond, half: { w: number; h: number }, clear: readonly P[] = []): P {
+  const core = { w: Math.min(half.w, half.h), h: half.h };
+  const m = boxBeyond(o, core, clear);
+  const beside = Math.abs(m.x - o.x) - core.w >= Math.abs(m.y - o.y) - core.h;
+  const at = beside ? { x: m.x + Math.sign(m.x - o.x) * (half.w - core.w), y: m.y } : m;
+  const g = o.gap - 1e-9;
+  return [o, ...clear].every((p) => fromBox(p, at, half) >= g) ? at : boxBeyond(o, half, clear);
+}
+
+/** Where the words at the far end of a cycle's arrow coming in or going out stand, their middle, as large as `half`: on out of its head or tail, the gap clear of it and of its line (`wordsBeyond`). */
+export function branchWordsAt(c: Pick<Cycle, "x" | "y" | "r" | "ccw">, b: CycleBranch, bond: number, half: { w: number; h: number }): P {
+  const p = branchPath(c, b, bond);
+  return wordsBeyond(branchBeyond(p, bond), half, p.points);
+}
+
+/** The far end of a cycle's arrow coming in or going out, as words are set on from it. */
+export function branchBeyond(p: { end: P; toward: P }, bond: number): WordsBeyond {
+  return { x: p.end.x, y: p.end.y, dx: p.toward.x, dy: p.toward.y, gap: WORDS_GAP * bond };
 }
 
 /**

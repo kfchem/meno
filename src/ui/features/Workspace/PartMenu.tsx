@@ -566,7 +566,7 @@ export default function PartMenu({
     onBack: () => void;
   };
   /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
-  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void; onResetEnd?: () => void; onResetAll?: () => void };
+  cycle?: { onIn: () => void; onOut: () => void; inHere?: boolean; outHere?: boolean; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void; onResetEnd?: () => void; onResetAll?: () => void };
   /** A rectangle, its corners rounded, made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
@@ -990,8 +990,9 @@ export default function PartMenu({
       : target.kind === "cycle" && cycle
       ? [
           ...colour,
-          { name: "Arrow coming in", keys: "", run: cycle.onIn },
-          { name: "Arrow going out", keys: "", run: cycle.onOut },
+          // (one of that way there already: not put there again - the other way, yes)
+          cycle.inHere ? { name: "Arrow coming in (one is here)", keys: "", run: () => {}, disabled: true } : { name: "Arrow coming in", keys: "", run: cycle.onIn },
+          cycle.outHere ? { name: "Arrow going out (one is here)", keys: "", run: () => {}, disabled: true } : { name: "Arrow going out", keys: "", run: cycle.onOut },
           ...(cycle.onRemoveArrow ? [{ name: "Remove this arrow", keys: "", run: cycle.onRemoveArrow }] : []),
           { name: cycle.ccw ? "Turn clockwise" : "Turn anticlockwise", keys: "", run: cycle.onTurn, divider: true },
           // (how far its arrows stop short of what is on it, ticked as it is)

@@ -1015,7 +1015,11 @@ work.meno (zip)
   places in it; docs/PDF.md, step 3), and words given a size of their own
   or letters marked keep them (`captions[].size`, in points, and
   `captions[].marks`: ranges of their letters, each bold, italic, a colour
-  or raised or lowered; docs/EDITOR-2D.md, *Text*). Pictures on the page are listed in
+  or raised or lowered; docs/EDITOR-2D.md, *Text*). Words of a catalytic
+  cycle's arrow coming in or going out name it (`captions[].branch`: the
+  cycle's `id`, the angle `at` where the arrow joins the circle, and its
+  `way`, `in` or `out`; docs/EDITOR-2D.md, *Catalytic cycles*); one naming
+  an arrow the file does not hold reads as free words. Pictures on the page are listed in
   `pictures`, each by its image's SHA-256 with its place, size and turn
   (docs/PDF.md, step 4a); one cut out of a PDF keeps where it came from
   (`pictures[].from`: the PDF's SHA-256, its page and the box on it;

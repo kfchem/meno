@@ -25,8 +25,8 @@ import { marksOf, stylesOf, WORDS_SIZE_RANGE, WORDS_SPACING_RANGE, type WordsMar
 import { isBox, moved as shapeMoved, roundedBeforePt, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
-import type { Arrow, Atom, AtomStack, Bond, Caption, CaptionOf, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
-import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
+import type { Arrow, Atom, AtomStack, Bond, Caption, CaptionBranch, CaptionOf, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import { sameBranch, type Cycle, type CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
 import { imaginaryOf, readCalc, UNMARKED, type Unmarked } from "../../../../lib/calc/output";
@@ -79,6 +79,12 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
     ...(pluses.length ? { pluses } : {}),
     ...(captions.length ? { captions } : {}),
   };
+}
+
+/** The cycle's arrow words are the words of, as it reads: by the cycle, where the arrow joins it and its way. */
+function branchRead(v: unknown): { branch?: CaptionBranch } {
+  const b = v as { cycle?: unknown; at?: unknown; way?: unknown } | null | undefined;
+  return b && typeof b === "object" && isNum(b.cycle) && isNum(b.at) && (b.way === "in" || b.way === "out") ? { branch: { cycle: b.cycle, at: b.at, way: b.way } } : {};
 }
 
 /** The structure words belong to, as it reads: an atom drawn (`ids`), or a molecule in 3D by its place among those carried - checked once those are read. */
@@ -373,7 +379,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
         x: c.x,
         y: c.y,
         text: c.text,
-        ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : ofRead(c.of, ids)),
+        ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : c.of != null ? ofRead(c.of, ids) : branchRead(c.branch)),
         ...(isNum(c.width) && c.width > 0 ? { width: c.width } : {}),
         ...(c.align === "left" || c.align === "right" || c.align === "justify" ? { align: c.align } : {}),
         ...(from ? { from } : {}),
@@ -390,6 +396,14 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     );
   }, "caption");
   const molecules3d = readEach(r.molecules3d, readCarried3D, "molecule3d");
+  // (the words of a cycle's arrow not there are free)
+  const cycles = readEach(r.cycles, readCycle, "cycle");
+  for (const [i, c] of captions.entries()) {
+    if (c.branch && !cycles.some((cy) => cy.id === c.branch!.cycle && cy.branches?.some((b) => sameBranch(b, c.branch!)))) {
+      const { branch: _b, ...free } = c;
+      captions[i] = free;
+    }
+  }
   // (words that belong to a molecule in 3D - by its place among those it carries - not there are free)
   for (const [i, c] of captions.entries()) {
     if (c.of && "molecule" in c.of && !(Number.isInteger(c.of.molecule) && c.of.molecule >= 0 && c.of.molecule < molecules3d.length)) {
@@ -523,10 +537,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     ...(pictures.length ? { pictures } : {}),
     ...(slides.length ? { slides } : {}),
     ...(shapes.length ? { shapes } : {}),
-    ...(() => {
-      const cycles = readEach(r.cycles, readCycle, "cycle");
-      return cycles.length ? { cycles } : {};
-    })(),
+    ...(cycles.length ? { cycles } : {}),
     ...(() => {
       const inks = readEach(r.inks, readInk, "ink");
       return inks.length ? { inks } : {};
@@ -550,7 +561,7 @@ const TITLE_MOST = 400;
 function readCycle(raw: unknown): Cycle | null {
   const c = raw as Partial<Record<keyof Cycle, unknown>> | null;
   if (!c || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || !isNum(c.r) || !(c.r > 0)) return null;
-  const branches = (Array.isArray(c.branches) ? (c.branches as Partial<CycleBranch>[]) : []).filter((b): b is CycleBranch => isEntry(b) && isNum(b.at) && (b.way === "in" || b.way === "out"));
+  const branches = (Array.isArray(c.branches) ? (c.branches as Partial<CycleBranch>[]) : []).filter((b): b is CycleBranch => isEntry(b) && isNum(b.at) && (b.way === "in" || b.way === "out")).filter((b, i, all) => all.findIndex((x) => sameBranch(x, b)) === i);
   return {
     id: c.id,
     x: c.x,

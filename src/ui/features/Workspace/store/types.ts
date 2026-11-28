@@ -16,7 +16,7 @@ import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
-import type { Cycle } from "../../../../lib/chem/cycle";
+import type { Cycle, CycleBranch, WordsBeyond } from "../../../../lib/chem/cycle";
 export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
@@ -298,6 +298,13 @@ export type Caption = {
    * deleted with it. Never over an arrow as well.
    */
   of?: CaptionOf;
+  /**
+   * The cycle's arrow coming in or going out they are the words of
+   * (docs/EDITOR-2D.md, *Catalytic cycles*): by the cycle, where the arrow
+   * joins it and which way it goes, in or out - carried round, turned and copied with it, however long
+   * they are made. Never over an arrow, nor a structure's, as well.
+   */
+  branch?: CaptionBranch;
   width?: number;
   align?: "left" | "right" | "justify";
   from?: WordsFrom;
@@ -317,11 +324,15 @@ export type Caption = {
  * spacing of their own or the labels' (`size`, `font`, `lines` null),
  * their letters marked otherwise (`marks`, none for plain).
  */
+/** The arrow of a cycle words are the words of: the cycle, by its id, and the arrow, by where it joins it and which way it goes (lib/chem/cycle `sameBranch`). */
+export type CaptionBranch = { cycle: number } & CycleBranch;
 /** The structure words belong to: a drawing's, by one of its atoms; or a molecule in 3D. */
 export type CaptionOf = { atom: number } | { molecule: number };
 export type CaptionPatch = {
   /** Belonging to a structure, or (null) to none: free. */
   of?: CaptionOf | null;
+  /** The words of a cycle's arrow, or (null) of none: free. */
+  branch?: CaptionBranch | null;
   text?: string;
   x?: number;
   y?: number;
@@ -1836,9 +1847,12 @@ export type EditorState = {
    * `n`, given as it opens. `drawn` once the words being written are drawn,
    * in place of the caption's own. `press`, where a press on the caption's
    * words opened it: the caret put there - and a drag (`drag`) selecting on
-   * from there - as if it had pressed there among them.
+   * from there - as if it had pressed there among them. `beyond`, new
+   * words set on from a point as they grow - an arrow's far end - the gap
+   * clear of it and of `clear` (lib/chem/cycle `wordsBeyond`) - the words,
+   * kept, those of the cycle's arrow `branch`.
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf; beyond?: WordsBeyond & { clear?: readonly { x: number; y: number }[] }; branch?: Caption["branch"] } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
@@ -1860,7 +1874,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; of?: CaptionOf }) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; of?: CaptionOf; branch?: Caption["branch"] }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words
