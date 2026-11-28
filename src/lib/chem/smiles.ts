@@ -484,8 +484,14 @@ function bracketAtom(body: string): { atom: SmilesAtom; mark: string } {
 
 // --- writing -----------------------------------------------------------------
 
-/** An atom to write: its element ("*" for an attachment), and what a bracket says of it. */
-export type SmilesAtomOut = { el: string; charge?: number; isotope?: number; hs: number };
+/**
+ * An atom to write: its element ("*" for an attachment), what a bracket says of it, and its configuration where it is a
+ * tetrahedral centre to write with its @ or @@ (`tetra`, as the reader gives it: its neighbours by index, -1 for its H, last).
+ */
+export type SmilesAtomOut = { el: string; charge?: number; isotope?: number; hs: number; tetra?: Configuration };
+
+/** A SMILES as written (`smilesWritten`), and the configurations given that it does not state - centres by atom, double bonds by bond index. */
+export type SmilesWritten = { text: string; unwritten: { centres: number[]; bonds: number[] } };
 
 /** The hydrogens OpenSMILES gives an organic-subset atom written plainly, for bonds summing to `sum`. */
 function plainHydrogens(el: string, sum: number): number | null {
@@ -495,76 +501,302 @@ function plainHydrogens(el: string, sum: number): number | null {
   return v == null ? 0 : v - sum;
 }
 
+/** The sign of the permutation that takes `from` to `to` (the same entries in another order): 1 even, -1 odd. */
+function permutationSign(from: readonly number[], to: readonly number[]): 1 | -1 {
+  const at = to.map((x) => from.indexOf(x));
+  let sign: 1 | -1 = 1;
+  for (let p = 0; p < at.length; p++) for (let q = p + 1; q < at.length; q++) if (at[p] > at[q]) sign = sign === 1 ? -1 : 1;
+  return sign;
+}
+
+/** A centre's neighbours as a configuration counts them: its lone pair (-3) last where it has three. */
+const fourOf = (t: Configuration): number[] => (t.neighbours.length === 3 ? [...t.neighbours, -3] : [...t.neighbours]);
+
+/** Whether two configurations of one centre, its neighbours in either order, are the same. */
+function sameConfiguration(p: Configuration, q: Configuration): boolean {
+  const [a, b] = [fourOf(p), fourOf(q)];
+  if (a.length !== b.length || a.some((x) => !b.includes(x))) return false;
+  return p.volume * permutationSign(a, b) === q.volume;
+}
+
 /**
  * Atoms and bonds as SMILES (OpenSMILES), from atom `start` - an
  * abbreviation's "*" first, as Meno writes them. Bonds are written as
  * their orders (Kekulé), an atom plainly where the organic subset's
  * hydrogens are its own and in brackets otherwise: with its isotope, its
  * hydrogens and its charge. Rings are closed with digits, then %nn; parts
- * not joined to the rest follow after a dot.
+ * not joined to the rest follow after a dot. A configuration given is
+ * written (`smilesWritten`); none given, none is.
  */
 export function writeSmiles(atoms: readonly SmilesAtomOut[], bonds: readonly SmilesBond[], start = 0): string {
+  return smilesWritten(atoms, bonds, start).text;
+}
+
+/**
+ * `writeSmiles`, with each configuration given written as `readSmiles` reads it (OpenSMILES): a centre's @ or @@ by its
+ * neighbours in the order the text gives them - the atom before it, its H, its ring closures as their digits come, the atoms
+ * after it - and a double bond's cis or trans by a / or \ on a single bond at each end, one bond's mark serving both double
+ * bonds of a conjugated chain where it lies between them. What it cannot state so is left unwritten, and said
+ * (`unwritten`), never written otherwise: a centre whose neighbours are not the atom's own; one with a lone pair the reader
+ * would not take where the walk puts it (written first, or closing a ring at itself), where no other start avoids that; a
+ * double bond with no single bond at an end, or whose marks would state another double bond's that is not given, or that
+ * the text read back does not state as given. Its text is read back, and a mark that does not read as given is taken out.
+ */
+export function smilesWritten(atoms: readonly SmilesAtomOut[], bonds: readonly SmilesBond[], start = 0): SmilesWritten {
   const near = atoms.map(() => [] as { to: number; order: number; bond: number }[]);
   bonds.forEach((b, i) => {
     near[b.a1].push({ to: b.a2, order: b.order, bond: i });
     near[b.a2].push({ to: b.a1, order: b.order, bond: i });
   });
   const sums = atoms.map((_, i) => near[i].reduce((s, e) => s + e.order, 0));
-  // which bonds the walk goes along; the rest close rings
-  const seen = atoms.map(() => false);
-  const tree = new Set<number>();
-  const walk = (u: number) => {
-    seen[u] = true;
-    for (const e of near[u]) {
-      if (!seen[e.to]) {
-        tree.add(e.bond);
-        walk(e.to);
+  const doubled = atoms.map((_, i) => near[i].some((e) => e.order === 2));
+  // (the centres that can be written at all: their neighbours the atom's own, and four of them with its H, or three and a lone
+  //  pair that holds it - as the reader takes them)
+  const given = atoms.flatMap((a, i) => (a.tetra ? [i] : []));
+  const pyramid = given.some((i) => atoms[i].tetra!.neighbours.length === 3)
+    ? lonePairCentres(
+        atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs })),
+        bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+      )
+    : () => false;
+  const lonePair = (i: number) => atoms[i].tetra!.neighbours.length === 3;
+  const centres = new Set(
+    given.filter((i) => {
+      const ns = atoms[i].tetra!.neighbours;
+      const own = near[i].map((e) => e.to);
+      const atomsOf = ns.filter((n) => n !== -1);
+      if (new Set(own).size !== own.length || atomsOf.length !== own.length || atomsOf.some((n) => !own.includes(n))) return false;
+      if (ns.includes(-1)) return ns.length === 4 && ns.indexOf(-1) === 3 && atoms[i].hs === 1;
+      return atoms[i].hs === 0 && (ns.length === 4 || (ns.length === 3 && pyramid(i)));
+    }),
+  );
+  // (the walk: which bonds it goes along, the rest closing rings, and each atom's place in the text)
+  const plan = (first: number) => {
+    const seen = atoms.map(() => false);
+    const tree = new Set<number>();
+    const parent = atoms.map(() => -1);
+    const place = atoms.map(() => -1);
+    const roots: number[] = [];
+    let count = 0;
+    const walk = (u: number) => {
+      seen[u] = true;
+      place[u] = count++;
+      for (const e of near[u]) {
+        if (!seen[e.to]) {
+          tree.add(e.bond);
+          parent[e.to] = u;
+          walk(e.to);
+        }
+      }
+    };
+    for (const r of [first, start, ...atoms.map((_, i) => i)]) {
+      if (r >= 0 && r < atoms.length && !seen[r]) {
+        roots.push(r);
+        walk(r);
       }
     }
+    // (a lone pair's centre the reader would not take: written first, or closing a ring at itself with no double bond on it)
+    const refused = [...centres].filter((i) => lonePair(i) && (parent[i] < 0 || (!doubled[i] && near[i].some((e) => !tree.has(e.bond)))));
+    return { tree, parent, place, roots, refused };
   };
-  const roots: number[] = [];
-  for (const r of [start, ...atoms.map((_, i) => i)]) {
-    if (r < atoms.length && !seen[r]) {
-      roots.push(r);
-      walk(r);
-    }
+  let walked = plan(-1);
+  for (let r = 0; walked.refused.length && r < atoms.length; r++) {
+    const other = plan(r);
+    if (other.refused.length < walked.refused.length) walked = other;
   }
-  const symbol = (order: number) => (order === 2 ? "=" : order === 3 ? "#" : order === 4 ? ":" : "");
-  const atomText = (i: number) => {
-    const a = atoms[i];
-    if (a.el === "*" && !a.charge && !a.isotope && !a.hs) return "*";
-    const plain = plainHydrogens(a.el, sums[i]);
-    if (!a.charge && !a.isotope && plain === a.hs) return a.el;
-    const charge = !a.charge ? "" : `${a.charge > 0 ? "+" : "-"}${Math.abs(a.charge) > 1 ? Math.abs(a.charge) : ""}`;
-    return `[${a.isotope ?? ""}${a.el}${a.hs ? `H${a.hs > 1 ? a.hs : ""}` : ""}${charge}]`;
+  const { tree, parent, place, roots } = walked;
+  for (const i of walked.refused) centres.delete(i);
+  // (each atom's neighbours in the order the reader takes a centre's: the atom before it, its H, its ring closures, the atoms after it)
+  const order = (u: number): number[] => [
+    ...(parent[u] >= 0 ? [parent[u]] : []),
+    ...(atoms[u].hs === 1 ? [-1] : []),
+    ...near[u].filter((e) => !tree.has(e.bond)).map((e) => e.to),
+    ...near[u].filter((e) => tree.has(e.bond) && parent[e.to] === u).map((e) => e.to),
+  ];
+  const markOf = (u: number): string => {
+    const t = atoms[u].tetra!;
+    let written = order(u);
+    if (lonePair(u)) written = [written[0], -3, ...written.slice(1)];
+    return t.volume * permutationSign(fourOf(t), written) === 1 ? "@" : "@@";
   };
-  const digits = new Map<number, number>();
-  const free: number[] = [];
-  let next = 1;
-  const written = atoms.map(() => false);
-  const write = (u: number): string => {
-    written[u] = true;
-    let out = atomText(u);
-    for (const e of near[u]) {
-      if (tree.has(e.bond)) continue;
-      const open = digits.get(e.bond);
-      if (open != null) {
-        out += open < 10 ? `${open}` : `%${open}`;
-        digits.delete(e.bond);
-        free.push(open);
-      } else {
-        free.sort((x, y) => x - y);
-        const n = free.length ? free.shift()! : next++;
-        digits.set(e.bond, n);
-        out += symbol(e.order) + (n < 10 ? `${n}` : `%${n}`);
+  // (a marked bond as the reader takes its direction: from the atom written first to the other)
+  const from = (k: number) => (place[bonds[k].a1] < place[bonds[k].a2] ? bonds[k].a1 : bonds[k].a2);
+  const excluded = new Set<number>();
+  const marks = (): Map<number, boolean> => {
+    // (each double bond given, in turn: a single bond at each end - one marked already, else the one to its reference - and
+    //  the sides they say, kept as parities among the marked bonds; one that cannot agree with those placed, or whose marks
+    //  would state a double bond not given, is left unwritten)
+    const ends = (k: number) => [bonds[k].a1, bonds[k].a2];
+    const singles = (e: number, k: number) => near[e].filter((x) => x.bond !== k && x.order === 1);
+    const marked = new Set<number>();
+    const placed: number[] = [];
+    const solve = (doubles: readonly number[], on: ReadonlySet<number>) => {
+      const up = new Map<number, { root: number; flip: boolean }>();
+      const find = (s: number): { root: number; flip: boolean } => {
+        const p = up.get(s);
+        if (!p) return { root: s, flip: false };
+        const r = find(p.root);
+        const out = { root: r.root, flip: p.flip !== r.flip };
+        up.set(s, out);
+        return out;
+      };
+      // (s and t differ by `odd`: false where both are written alike)
+      const join = (s: number, t: number, odd: boolean): boolean => {
+        const [x, y] = [find(s), find(t)];
+        if (x.root === y.root) return (x.flip !== y.flip) === odd;
+        up.set(x.root, { root: y.root, flip: x.flip !== y.flip !== odd });
+        return true;
+      };
+      const away = (s: number, e: number) => from(s) !== e;
+      for (const k of doubles) {
+        const { refs, cis } = bonds[k].cisTrans!;
+        const [e1, e2] = ends(k);
+        const at = (e: number) => singles(e, k).filter((x) => on.has(x.bond));
+        // (two marked at one end: its two neighbours, on opposite sides)
+        for (const e of [e1, e2]) {
+          const here = at(e);
+          for (let p = 1; p < here.length; p++) if (!join(here[0].bond, here[p].bond, !(away(here[0].bond, e) !== away(here[p].bond, e)))) return false;
+        }
+        for (const x of at(e1))
+          for (const y of at(e2)) {
+            const same = (x.to === refs[0]) === (y.to === refs[1]) ? cis : !cis;
+            if (!join(x.bond, y.bond, !same !== (away(x.bond, e1) !== away(y.bond, e2)))) return false;
+          }
       }
+      return up;
+    };
+    const statesOther = (on: ReadonlySet<number>, done: ReadonlySet<number>) =>
+      bonds.some((b, k) => b.order === 2 && !done.has(k) && (!b.cisTrans || excluded.has(k)) && ends(k).every((e) => singles(e, k).some((x) => on.has(x.bond))));
+    for (let k = 0; k < bonds.length; k++) {
+      const b = bonds[k];
+      if (b.order !== 2 || !b.cisTrans || excluded.has(k)) continue;
+      const pick = (e: number, ref: number) => {
+        const c = singles(e, k);
+        return (c.find((x) => marked.has(x.bond)) ?? c.find((x) => x.to === ref) ?? c[0])?.bond;
+      };
+      const [s1, s2] = [pick(b.a1, b.cisTrans.refs[0]), pick(b.a2, b.cisTrans.refs[1])];
+      if (s1 == null || s2 == null || !near[b.a1].some((x) => x.to === b.cisTrans!.refs[0]) || !near[b.a2].some((x) => x.to === b.cisTrans!.refs[1])) {
+        excluded.add(k);
+        continue;
+      }
+      const on = new Set([...marked, s1, s2]);
+      const pending = new Set(bonds.flatMap((x, j) => (j > k && x.order === 2 && x.cisTrans && !excluded.has(j) ? [j] : [])));
+      if (!solve([...placed, k], on) || statesOther(on, pending)) {
+        excluded.add(k);
+        continue;
+      }
+      placed.push(k);
+      marked.add(s1).add(s2);
     }
-    const children = near[u].filter((e) => tree.has(e.bond) && !written[e.to]);
-    children.forEach((e, k) => {
-      const branch = symbol(e.order) + write(e.to);
-      out += k < children.length - 1 ? `(${branch})` : branch;
-    });
+    const up = solve(placed, marked) || new Map();
+    // (each set of marks bound together: the first written a "/")
+    const out = new Map<number, boolean>();
+    const firstOf = new Map<number, boolean>();
+    const written = [...marked].sort((s, t) => Math.max(place[bonds[s].a1], place[bonds[s].a2]) - Math.max(place[bonds[t].a1], place[bonds[t].a2]));
+    for (const s of written) {
+      let r = { root: s, flip: false };
+      for (let p = up.get(s); p; p = up.get(r.root)) r = { root: p.root, flip: r.flip !== p.flip };
+      if (!firstOf.has(r.root)) firstOf.set(r.root, !r.flip);
+      out.set(s, firstOf.get(r.root)! === !r.flip);
+    }
     return out;
   };
-  return roots.map(write).join(".");
+  const symbol = (order: number) => (order === 2 ? "=" : order === 3 ? "#" : order === 4 ? ":" : "");
+  const text = (slashes: ReadonlyMap<number, boolean>, marked: ReadonlySet<number>) => {
+    const atomText = (i: number) => {
+      const a = atoms[i];
+      const mark = marked.has(i) ? markOf(i) : "";
+      if (a.el === "*" && !a.charge && !a.isotope && !a.hs && !mark) return "*";
+      const plain = plainHydrogens(a.el, sums[i]);
+      if (!a.charge && !a.isotope && plain === a.hs && !mark) return a.el;
+      const charge = !a.charge ? "" : `${a.charge > 0 ? "+" : "-"}${Math.abs(a.charge) > 1 ? Math.abs(a.charge) : ""}`;
+      return `[${a.isotope ?? ""}${a.el}${mark}${a.hs ? `H${a.hs > 1 ? a.hs : ""}` : ""}${charge}]`;
+    };
+    const bondText = (k: number) => (slashes.has(k) ? (slashes.get(k) ? "/" : "\\") : symbol(bonds[k].order));
+    const digits = new Map<number, number>();
+    const free: number[] = [];
+    let next = 1;
+    const write = (u: number): string => {
+      let out = atomText(u);
+      for (const e of near[u]) {
+        if (tree.has(e.bond)) continue;
+        const open = digits.get(e.bond);
+        if (open != null) {
+          out += open < 10 ? `${open}` : `%${open}`;
+          digits.delete(e.bond);
+          free.push(open);
+        } else {
+          free.sort((x, y) => x - y);
+          const n = free.length ? free.shift()! : next++;
+          digits.set(e.bond, n);
+          out += bondText(e.bond) + (n < 10 ? `${n}` : `%${n}`);
+        }
+      }
+      const children = near[u].filter((e) => tree.has(e.bond) && parent[e.to] === u);
+      children.forEach((e, k) => {
+        const branch = bondText(e.bond) + write(e.to);
+        out += k < children.length - 1 ? `(${branch})` : branch;
+      });
+      return out;
+    };
+    return roots.map(write).join(".");
+  };
+  // (read back: each configuration as given, and none stated that was not; a double bond that reads otherwise, and those whose
+  //  marks touch it, taken out, until it reads so - or, the text not read at all, its centres with a lone pair, then every mark)
+  if (!centres.size && !bonds.some((b) => b.cisTrans)) return { text: text(new Map(), centres), unwritten: { centres: given, bonds: [] } };
+  const byPlace = atoms.map(() => 0);
+  place.forEach((p, i) => (byPlace[p] = i));
+  const fromPlaces = (t: Configuration): Configuration => ({ neighbours: t.neighbours.map((n) => (n < 0 ? n : byPlace[n])), volume: t.volume });
+  for (let round = 0; ; round++) {
+    const slashes = round > bonds.length ? new Map<number, boolean>() : marks();
+    const written = text(slashes, centres);
+    let back: Smiles;
+    try {
+      back = readSmiles(written);
+    } catch {
+      const pairs = [...centres].filter(lonePair);
+      if (pairs.length) pairs.forEach((i) => centres.delete(i));
+      else if (centres.size || slashes.size) {
+        centres.clear();
+        bonds.forEach((_, k) => excluded.add(k));
+      } else return { text: written, unwritten: { centres: given, bonds: bonds.flatMap((b, k) => (b.cisTrans ? [k] : [])) } };
+      continue;
+    }
+    const wrong = new Set<number>();
+    for (const c of centres) {
+      const t = back.atoms[place[c]]?.tetra;
+      if (!t || !sameConfiguration(atoms[c].tetra!, fromPlaces(t))) centres.delete(c);
+    }
+    const readOf = new Map(back.bonds.map((b) => [[byPlace[b.a1], byPlace[b.a2]].sort((p, q) => p - q).join(","), b.cisTrans]));
+    bonds.forEach((b, k) => {
+      if (b.order !== 2) return;
+      const read = readOf.get([b.a1, b.a2].sort((p, q) => p - q).join(","));
+      const meant = b.cisTrans && !excluded.has(k) ? b.cisTrans : undefined;
+      if (!read && !meant) return;
+      const ok =
+        read &&
+        meant &&
+        (() => {
+          const [r1, r2] = read.refs.map((n) => byPlace[n]);
+          const atA1 = near[b.a1].some((x) => x.to === r1) && r1 !== b.a2 ? r1 : r2;
+          const atA2 = atA1 === r1 ? r2 : r1;
+          return (read.cis !== (atA1 !== meant.refs[0]) !== (atA2 !== meant.refs[1])) === meant.cis;
+        })();
+      if (!ok) wrong.add(k);
+    });
+    const runEnds = (back.cumulated ?? []).flatMap((c) => c.atoms.map((n) => byPlace[n]));
+    if (!wrong.size && !runEnds.length && !(back.axes ?? []).length) {
+      const said = (k: number) => !!bonds[k].cisTrans && (excluded.has(k) || !slashes.size);
+      return {
+        text: written,
+        unwritten: { centres: given.filter((i) => !centres.has(i)), bonds: bonds.flatMap((b, k) => (b.cisTrans && said(k) ? [k] : [])) },
+      };
+    }
+    // (the double bonds read wrong, and every one whose marks touch an atom of theirs or a run's end)
+    const touched = new Set([...[...wrong].flatMap((k) => [bonds[k].a1, bonds[k].a2]), ...runEnds]);
+    bonds.forEach((b, k) => {
+      if (b.order !== 2 || !b.cisTrans) return;
+      if (wrong.has(k) || [b.a1, b.a2].some((e) => near[e].some((x) => slashes.has(x.bond) && (touched.has(x.to) || touched.has(e))))) excluded.add(k);
+    });
+  }
 }
