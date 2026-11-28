@@ -8,20 +8,20 @@
  * `setStructuresTable`).
  */
 import { moleculesAsTable, WHAT_COLUMN, type Cell, type ConstitutionOf, type Table, type TableColumn } from "../../../../lib/table";
-import { writeSmiles, type SmilesAtomOut } from "../../../../lib/chem/smiles";
+import { smilesWritten, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
-import { identityInputOf } from "../chem/identityOf";
+import { identityInputOf, withGroups } from "../chem/identityOf";
 import { identityText } from "../../../../lib/chem/identity";
 import { BEFORE_THE_EDIT, drawnAsEntry, FINISHED, recordNumber, recordWhy, STATE_FINISHED, type DrawnEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 
 /** The column of each structure's SMILES as the step that made it gave it, its stereo with it - none where none did. */
 export const SMILES_RECORD_COLUMN = "SMILES (record)";
-/** The column of each structure's SMILES as Meno writes it from the drawing (`drawnSmiles`): its constitution only - what the drawing says of its stereo is read (`identityInputOf`), but not written in it. */
-export const SMILES_DRAWING_COLUMN = "SMILES (drawing, constitution only)";
-/** The column that says where a structure's drawing carries stereo that its SMILES from the drawing leaves out, where any does. */
+/** The column of each structure's SMILES as Meno writes it from the drawing (`drawnSmiles`): its centres' and double bonds' configurations with it, as the drawing says them. */
+export const SMILES_DRAWING_COLUMN = "SMILES (drawing)";
+/** The column that says where a structure's drawing carries stereo that its SMILES from the drawing does not write, where any does. */
 export const STEREO_COLUMN = "stereo in the drawing";
 /** What it says there: so that two enantiomers never read the same without it. */
 export const STEREO_NOT_WRITTEN = "stereo drawn, not written here";
@@ -35,45 +35,68 @@ export const EDITED_SINCE = `edited since: ${BEFORE_THE_EDIT}`;
 const SMILES_PROPERTY = "smiles";
 
 /**
- * A structure drawn as SMILES, as Meno writes it from the drawing: its
+ * A structure drawn as SMILES, as Meno writes it from the drawing, and
+ * whether the drawing carries stereo that it does not write. Written: its
  * constitution, bonds in Kekulé form, each atom's hydrogens as Meno counts
- * them - no stereo written, though Meno reads what the drawing says of it
- * (`drawnStereo`). A label that is no element - an abbreviation, an R
- * group - is written as "*".
+ * them, a label that is no element - an abbreviation, an R group - as
+ * "*"; and each wedged centre's @ or @@ and each double bond's cis or
+ * trans, as Meno reads them of the drawing (`identityInputOf`, as a
+ * structure's identity does). Not written, and said (`left`): an axis, an
+ * odd cumulene's cis or trans, a metal's donors across from each other
+ * where they tell one isomer from another (cisplatin's, not PtCl4 2-'s,
+ * which every pairing writes alike), centres drawn in an AND or OR group
+ * (a SMILES would state one configuration of them), wedges that do not
+ * read, and any centre or double bond the writer cannot state
+ * (lib/chem/smiles `smilesWritten`).
  */
-export function drawnSmiles(drawn: Model): string {
+export function drawnWritten(drawn: Model): { smiles: string; left: boolean } {
+  if (!drawn.atoms.length) return { smiles: "", left: false };
   const index = new Map(drawn.atoms.map((a, i) => [a.id, i]));
   const hs = undrawnHydrogens(drawn);
-  const atoms: SmilesAtomOut[] = drawn.atoms.map((a) =>
-    isElementSymbol(a.el) && !a.abbrev
-      ? { el: a.el, hs: hs.get(a.id) ?? 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) }
-      : { el: "*", hs: 0 },
-  );
+  const { input, unread } = identityInputOf(drawn);
+  // (the AND and OR groups its centres are drawn in: the atoms' own marks, as a structure's identity takes them)
+  const groups = withGroups(input, drawn).groups ?? [];
+  const grouped = new Set(groups.flatMap((g) => g.atoms));
+  const atoms: SmilesAtomOut[] = drawn.atoms.map((a, i) => {
+    const tetra = input.atoms[i]?.tetra;
+    return isElementSymbol(a.el) && !a.abbrev
+      ? {
+          el: a.el,
+          hs: hs.get(a.id) ?? 0,
+          ...(a.charge ? { charge: a.charge } : {}),
+          ...(a.isotope ? { isotope: a.isotope } : {}),
+          ...(tetra ? { tetra: { neighbours: [...tetra.neighbours], volume: tetra.volume } } : {}),
+        }
+      : { el: "*", hs: 0 };
+  });
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const stated = new Map(input.bonds.flatMap((b) => (b.stereo ? [[pair(b.a, b.b), b.stereo] as const] : [])));
   const bonds = drawn.bonds.flatMap((b) => {
     const a1 = index.get(b.a);
     const a2 = index.get(b.b);
-    return a1 == null || a2 == null ? [] : [{ a1, a2, order: b.order }];
+    if (a1 == null || a2 == null) return [];
+    const st = stated.get(pair(a1, a2));
+    return [{ a1, a2, order: b.order, ...(st ? { cisTrans: { refs: [st.refs[0], st.refs[1]] as [number, number], cis: st.cis } } : {}) }];
   });
-  return atoms.length ? writeSmiles(atoms, bonds, 0) : "";
+  const written = smilesWritten(atoms, bonds, 0, { groups });
+  const notWritten =
+    unread.length > 0 ||
+    input.atoms.some((a, i) => a.tetra && (grouped.has(i) || !atoms[i].tetra)) ||
+    written.unwritten.centres.length > 0 ||
+    written.unwritten.bonds.length > 0 ||
+    !!input.axes?.length ||
+    !!input.cumulated?.length;
+  if (notWritten || !input.arrangements?.length) return { smiles: written.text, left: notWritten };
+  // (a metal's donors across from each other, where they say something: cisplatin's, not PtCl4 2-'s, which every pairing writes alike)
+  const { arrangements: _said, ...plain } = input;
+  return { smiles: written.text, left: identityText(input) !== identityText(plain) };
 }
 
-/**
- * Whether a structure's drawing carries stereo - a centre wedged, a double
- * bond's cis or trans, an axis - or wedges that do not read: what Meno
- * reads of it (`identityInputOf`), which its SMILES from the drawing does
- * not write. A metal's donors across from each other count where they
- * tell one isomer from another (cisplatin's), not where every pairing is
- * the same compound (PtCl4 2-'s).
- */
-export function drawnStereo(drawn: Model): boolean {
-  if (!drawn.atoms.length) return false;
-  const { input, unread } = identityInputOf(drawn);
-  if (unread.length > 0 || input.atoms.some((a) => a.tetra) || input.bonds.some((b) => b.stereo) || !!input.axes?.length) return true;
-  // (a metal's donors across from each other, where they say something: cisplatin's, not PtCl4 2-'s, which every pairing writes alike)
-  if (!input.arrangements?.length) return false;
-  const { arrangements: _said, ...plain } = input;
-  return identityText(input) !== identityText(plain);
-}
+/** A structure drawn as SMILES, as Meno writes it from the drawing (`drawnWritten`). */
+export const drawnSmiles = (drawn: Model): string => drawnWritten(drawn).smiles;
+
+/** Whether a structure's drawing carries stereo that its SMILES from the drawing does not write (`drawnWritten`). */
+export const drawnStereo = (drawn: Model): boolean => drawnWritten(drawn).left;
 
 /** Whether a cell holds no value: none at all, or a value not worked out or not applicable (`notGiven`) - last in a sort, either way. */
 export const noValue = (c: Cell) => c == null || (typeof c === "string" && /^not (worked out|applicable): /.test(c));
@@ -111,10 +134,10 @@ export const STRUCTURE_COLUMN = "structure";
  * for each, in their order. Its columns: the row's id (`idOf`); what it is
  * ("structure 3 of 120"); its SMILES as the step that made it gave it,
  * where any did (`SMILES (record)`), and as Meno writes it from the
- * drawing, its constitution only (`drawnSmiles`) - the two never mixed in
- * one column - and, where its drawing carries stereo that leaves out
- * (`drawnStereo`), that it does, so that two enantiomers never read alike
- * unsaid;
+ * drawing, its stereo with it (`drawnSmiles`) - the two never mixed in
+ * one column - and, where its drawing carries stereo that it does not
+ * write (`drawnStereo`), that it does, so that two isomers never read
+ * alike unsaid;
  * its state - "finished", "failed: <why>", or edited since its properties
  * were given (`EDITED_SINCE`), never finished then; why it was set aside,
  * where any was; then each property its record holds, under its own name,
@@ -168,7 +191,8 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
     return typeof v === "string" && v ? v : null;
   });
   const aside = entries.map((e) => recordWhy(e.record));
-  const stereo = entries.map((e) => drawnStereo(e.drawn));
+  const fromDrawing = entries.map((e) => drawnWritten(e.drawn));
+  const stereo = fromDrawing.map((w) => w.left);
   const anyStereo = stereo.some(Boolean);
   const anyRecorded = recorded.some((s) => s != null);
   const anyAside = aside.some((w) => w != null);
@@ -192,7 +216,7 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
     numbered ? recordNumber(e.record)! : k + 1,
     `structure ${k + 1} of ${n}`,
     ...(anyRecorded ? [recorded[k]] : []),
-    drawnSmiles(e.drawn),
+    fromDrawing[k].smiles,
     ...(anyStereo ? [stereo[k] ? STEREO_NOT_WRITTEN : null] : []),
     e.record?.stale === BEFORE_THE_EDIT ? EDITED_SINCE : String(read[k].properties[STATE_COLUMN]?.value ?? ""),
     ...(anyAside ? [aside[k] ?? null] : []),

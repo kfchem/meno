@@ -3802,12 +3802,17 @@ molecules in 3D does: *Open as a table* on its menu (workflow
   record holds by that name said apart as `structure (record)` (2026-11-06); its SMILES as the step that made it
   gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
   where any did; its SMILES as Meno writes it from the drawing (`SMILES
-  (drawing, constitution only)`: Kekulé, a label of no element as `*`,
-  no `@` or `/`). Meno reads the drawing's stereo - wedged centres, cis
-  and trans, axes (lib/layout `readStereo`, as a structure's identity
-  does) - but does not write it in this SMILES yet: where a drawing
-  carries any, or wedges that do not read, its row says so in *stereo in
-  the drawing* ("stereo drawn, not written here"). The two SMILES are
+  (drawing)`: Kekulé, a label of no element as `*`, each wedged centre's
+  `@` or `@@` and each double bond's `/` and `\` as Meno reads them of
+  the drawing - lib/layout `readStereo`, as a structure's identity does -
+  and none where the drawing leaves one open). What that SMILES does not
+  write - an axis, an odd cumulene's cis or trans, a metal's donors across
+  from each other where they tell isomers apart, centres drawn in an AND
+  or OR group (a SMILES would state one configuration of them), wedges
+  that do not read, and a centre or double bond the text cannot state
+  without stating another one wrong (lib/chem/smiles `smilesWritten`, which
+  reads its own text back) - its row says in *stereo in the drawing*
+  ("stereo drawn, not written here"). The two SMILES are
   never mixed in one column, and two enantiomers never read alike
   unsaid.
   Then its state - "finished", "failed: <why>", or "edited
