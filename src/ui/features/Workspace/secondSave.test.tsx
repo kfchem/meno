@@ -30,8 +30,13 @@ const io = vi.hoisted(() => ({
   sent: [] as number[],
   packed: [] as number[],
   readWhole: 0,
+  /** Something else writing over the file once a save has put it in place, before Meno looks at it: what it leaves there. */
+  overWritten: null as Uint8Array | null,
+  /** Whether noting where the job files are fails. */
+  noteFails: false,
+  picked: null as string | null,
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => null }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => io.picked }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: async (p: string) => io.disk.has(p),
   readFile: async (p: string) => {
@@ -62,8 +67,12 @@ vi.mock("../../../lib/doc/menoFileWriter", async () => {
   };
 });
 // (the backend's writer: the page's bytes, and each job file added - from its folder, or copied from the file named, checked)
-vi.mock("../../../lib/io/writeDocument", () => ({
-  writeDocument: async (path: string, content: Uint8Array, _keepOld: boolean, appended: readonly Appended[] = []) => {
+vi.mock("./workflow/keptJobs", async (real) => {
+  const kept = await real<typeof import("./workflow/keptJobs")>();
+  return { ...kept, noteJobFilesSaved: (...a: Parameters<typeof kept.noteJobFilesSaved>) => (io.noteFails ? Promise.reject(new Error("not noted")) : kept.noteJobFilesSaved(...a)) };
+});
+vi.mock("../../../lib/io/writeDocument", () => {
+  const writeDocumentNow = async (path: string, content: Uint8Array, _keepOld: boolean, appended: readonly Appended[] = []) => {
     io.sent.push(content.length);
     // (what the page wrote, as it wrote it - the first entry, what it is, stored)
     const entries: Zippable = Object.fromEntries(Object.entries(unzipSync(content)).map(([name, data]) => [name, [data, { level: name.startsWith("files/") ? 6 : 0 }]]));
@@ -72,13 +81,19 @@ vi.mock("../../../lib/io/writeDocument", () => ({
       const from = io.disk.get(a.from);
       if (!from) throw new Error(`${a.from} is not there`);
       const data = unzipSync(from.bytes, { filter: (f) => f.name === `files/${a.sha256}` })[`files/${a.sha256}`];
-      if (!data || sha256Hex(data) !== a.sha256) throw new Error(`${a.from} no longer holds ${a.name}`);
+      // (as src-tauri keptjobs.rs says it)
+      if (!data || sha256Hex(data) !== a.sha256) throw new Error(`${a.name} could not be kept: ${a.from.split("/").pop()} no longer holds a file it kept`);
       entries[`files/${a.sha256}`] = [data, { level: 6 }];
     }
     io.disk.set(path, { bytes: zipSync(entries), mtime: ++io.clock });
-    return null;
-  },
-}));
+    if (io.overWritten) io.disk.set(path, { bytes: io.overWritten, mtime: ++io.clock });
+    io.overWritten = null;
+    // (the file as Meno finds it in its place)
+    const f = io.disk.get(path)!;
+    return { kept: null, now: { size: f.bytes.length, mtime: f.mtime } };
+  };
+  return { writeDocumentNow, writeDocument: async (...a: Parameters<typeof writeDocumentNow>) => (await writeDocumentNow(...a)).kept };
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 extend(THREE as never);
@@ -104,6 +119,9 @@ afterEach(async () => {
   io.sent.length = 0;
   io.packed.length = 0;
   io.readWhole = 0;
+  io.overWritten = null;
+  io.noteFails = false;
+  io.picked = null;
 });
 
 async function tabOf(doc: ReturnType<typeof createWorkspaceDocument>): Promise<() => FileActions> {
@@ -197,5 +215,53 @@ describe("a workspace saved again and again in one session", () => {
       expect(c.packed).toBe(0);
       expect(c.sent).toBeLessThan(w.total / 10);
     }
+  });
+
+  /** The job files the file at `path` holds, whole. */
+  const jobFilesIn = (path: string) => readMenoFile(io.disk.get(path)!.bytes).files.filter((f) => f.media === JOB_FILE_MEDIA && readMenoFile(io.disk.get(path)!.bytes).data(f.sha256));
+
+  /** The workspace saved once, and the file then written over by something else before Meno looks at it: one that holds none of its job files. */
+  async function noteOfAFileWrittenOver() {
+    const w = openedWorkspace();
+    const files = await tabOf(w.doc);
+    io.overWritten = menoFileBytes("{}", []);
+    w.store.getState().addAtom(0, 0, "C");
+    await act(async () => void (await files().save()));
+    expect(jobFilesIn(SAVED)).toHaveLength(0);
+    w.store.getState().addAtom(1.5, 0, "C");
+    return { w, files };
+  }
+
+  it("saves again where a file its job files were to be copied from was written over since: each kept from what the page holds of it, the save said to have worked", async () => {
+    const { w, files } = await noteOfAFileWrittenOver();
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(jobFilesIn(SAVED)).toHaveLength(JOBS);
+    expect(w.store.getState().savedPath).toBe(SAVED);
+    // (and the next save copies them from that file again, none read into the page)
+    const before = w.inflated();
+    w.store.getState().addAtom(3, 0, "C");
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(w.inflated() - before).toBe(0);
+    expect(jobFilesIn(SAVED)).toHaveLength(JOBS);
+  });
+
+  it("saves as another file there too", async () => {
+    const { files } = await noteOfAFileWrittenOver();
+    io.picked = "/made/up/copy.meno";
+    await act(async () => void (await files().saveAs()));
+    expect(files().error).toBeNull();
+    expect(jobFilesIn("/made/up/copy.meno")).toHaveLength(JOBS);
+  });
+
+  it("never says a save that was written failed for want of a note of where its job files are", async () => {
+    const w = openedWorkspace();
+    const files = await tabOf(w.doc);
+    io.noteFails = true;
+    w.store.getState().addAtom(0, 0, "C");
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(jobFilesIn(SAVED)).toHaveLength(JOBS);
   });
 });

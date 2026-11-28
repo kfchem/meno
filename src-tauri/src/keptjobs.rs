@@ -492,7 +492,7 @@ pub struct ClearedSaved {
 }
 
 /// A file as it is now: its size, and when it was last written; none where it is not a file.
-fn now_of(path: &Path) -> Option<FileNow> {
+pub(crate) fn now_of(path: &Path) -> Option<FileNow> {
     let m = fs::metadata(path).ok().filter(|m| m.is_file())?;
     let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     Some(FileNow { size: m.len(), mtime })
@@ -924,6 +924,31 @@ mod tests {
         let back = write_back(&root.join("kept"), ID, "work/run.out", &sha256, |file, sha| carried(&mut sources, &from, &sha256, &mut Hashed { file, sha }, &mut buf)).unwrap();
         assert!(!back.differs);
         assert_eq!(fs::read(root.join("kept").join(ID).join("work/run.out")).unwrap(), out);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_save_over_the_file_its_job_files_are_copied_from_holds_every_one_whole_and_says_the_file_as_it_now_is() {
+        // (the file the last save wrote, holding two job files: saved over again, each copied from it as the new one is written)
+        let root = temp("over-itself");
+        let outs = [b"SCF Done ".repeat(8_000), b"Normal termination ".repeat(5_000)];
+        let shas: Vec<String> = outs.iter().map(|o| hex(&Sha256::digest(o))).collect();
+        let files: Vec<(&str, &[u8])> = shas.iter().map(String::as_str).zip(outs.iter().map(Vec::as_slice)).collect();
+        let (path, _) = saved(&root, &files, &[]);
+        let appended: Vec<Appended> = shas.iter().map(|s| Appended { sha256: s.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(path.clone()) }).collect();
+        for _ in 0..2 {
+            crate::savefile::replace_keeping(&path, false, |file| crate::savefile::document_written(file, &base_zip("{}"), Some((std::slice::from_ref(&root), &appended[..])), Some(MOST_WORKSPACE_FILE))).unwrap();
+            let mut z = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
+            for (sha, out) in shas.iter().zip(&outs) {
+                let mut bytes = Vec::new();
+                z.by_name(&format!("files/{sha}")).unwrap().read_to_end(&mut bytes).unwrap();
+                assert_eq!(&bytes, out);
+            }
+            let now = now_of(&path).unwrap();
+            assert_eq!(now.size, fs::metadata(&path).unwrap().len());
+        }
+        // (nothing of its own left beside it)
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

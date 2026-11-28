@@ -124,6 +124,31 @@ export async function noteJobFilesSaved(
 }
 
 /**
+ * After a save failed, as Meno's backend said why (`message`): each file
+ * its job files were to be copied from (`appended`'s `from`) that it found
+ * no longer holding one, or not to be read (src-tauri keptjobs.rs
+ * `carried`) - written over since it was noted - taken no longer as where
+ * they are, so that a save made again keeps each from what the page holds
+ * of it, or, where it holds nothing of it, says it is not had. Whether any
+ * was: none, the failure was another's, and nothing is changed.
+ */
+export function dropNotedSources(message: string, appended: readonly Appended[]): boolean {
+  const failed = new Set(
+    appended.flatMap((a) => {
+      const name = a.from?.split(/[\\/]/).pop();
+      return a.from && name && (message.includes(`${name} no longer holds a file it kept`) || message.includes(`${name} could not be read`)) ? [a.from] : [];
+    }),
+  );
+  if (!failed.size) return false;
+  for (const [sha256, h] of held) {
+    if (!h.from || !failed.has(h.from.path)) continue;
+    const { from: _, ...rest } = h;
+    held.set(sha256, rest);
+  }
+  return true;
+}
+
+/**
  * After a save to `path`: the folders of the jobs it holds whole
  * (`clearableJobs`) moved to the system's Trash by Meno's backend - each
  * only where the file there, read back, holds every file of the job's
