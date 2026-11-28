@@ -1195,6 +1195,15 @@ data, local data and caches (`folders.rs`; tauri.conf.json's
 | local data: environments, tools, jobs, plugins' downloads | the data folder | `%LOCALAPPDATA%\Meno\data` | the data folder |
 | caches: PDFs' pages, ligand data | `~/Library/Caches/Meno` | the local data folder | `$XDG_CACHE_HOME/Meno` |
 
+A build given other folders - a release candidate built with a config of
+its own beside tauri.conf.json, whose `appDirectoriesOverride` names folders
+apart from the released Meno's - keeps everything in those: at a start,
+before anything uses them, Meno takes the folders from the config it was
+built with (`folders::built_with`), so its log, its settings and a job's
+runner, which has no window to ask, find the same folders as Tauri's
+`app_*_dir` and the window. What a Meno before 0.1.14 kept is still moved
+into the released Meno's folders, whose it is.
+
 The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
 in the webview) holds what is large and of this computer alone: uv's and pixi's
 environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
