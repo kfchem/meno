@@ -147,3 +147,22 @@ table lists every timeout changed; all others are as they were:
 | lib/layout/cage.test.ts | are as given in a solid found from bond distances, a ring fusion th... | 0.3 s | 5 s | 30 s |
 | ui/features/Workspace/utils/frames.property.test.ts | an XYZ file, as the page takes it (readStructures, then checkedStru... | 0.3 s | 5 s | 30 s |
 | ui/features/Workspace/components/drawnZoom.test.tsx | is read through useDrawnZoom by every layer of the drawing sized on... | 0.3 s | 5 s | 30 s |
+
+## Work, not time
+
+A test that guards how much work something does - that work kept is not
+done again, that an index is made once and not at every step, that work
+grows as its input does and not as its square - counts the work rather
+than timing it. A count is the same on any machine, busy or not; a time,
+or a ratio of times, is not, and such a test failed on a busy machine for
+a reason not the code's.
+
+`stepsOf(run)` in `src/testing/steps.ts` counts the calls `run` makes of a
+`Math` function, of a `Map`'s or a `Set`'s look-ups and changes, and of an
+array's own ways of going over itself. It counts calls, not plain
+arithmetic, so the test says beside it what the work it guards calls, and
+is seen once to fail with that work done the wrong way: everything done
+again (`utils/byStructure.test.ts`, `layoutStructures.test.ts`), the
+drawing gone over at every step of a stroke (`utils/stroke.test.ts`), each
+note tried against every bond (`lib/chem/groupLabelClear.test.ts`). A
+bound is set between the two counts, well clear of each.

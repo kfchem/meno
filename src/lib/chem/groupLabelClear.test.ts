@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox, type Atom, type Bond, type LayoutOptions, type TextItem } from "./layout2d";
 import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "./acs";
+import { stepsOf } from "../../testing/steps";
 
 const L = NOMINAL_BOND_LENGTH;
 const opts = (): LayoutOptions => acsWorldOptions([], [], { units: "world" });
@@ -167,40 +168,17 @@ describe("what is said beside an atom, among labels and other notes", () => {
 });
 
 describe("placing every note of a large mapped drawing", () => {
-  /**
-   * How many times longer `run` takes on `large` than on `small`, by the CPU time of the least of several tries (as cleanUp.test's), each
-   * try at least 200 ms: a process's CPU time is counted in steps of about 16 ms on Windows, too coarse a step against a shorter try.
-   */
-  function slower<T>(small: T, large: T, run: (x: T) => void): number {
-    const least = [Infinity, Infinity];
-    run(small);
-    run(large);
-    for (let k = 0; k < 5; k++) {
-      [small, large].forEach((x, i) => {
-        const started = process.cpuUsage();
-        let times = 0;
-        let spent = 0;
-        do {
-          run(x);
-          times++;
-          const used = process.cpuUsage(started);
-          spent = used.user + used.system;
-        } while (spent < 200_000);
-        least[i] = Math.min(least[i], spent / times);
-      });
-    }
-    return least[1] / least[0];
-  }
-
-  // (a chain nine times as long: time as its notes would take nine times as long, time as their pairs eighty-one - the bound between them
-  //  by a factor of three each way, so that neither a slow machine's noise nor its speed decides it)
-  it("takes time as its notes do: a chain nine times as long takes well under twenty-seven times as long", () => {
+  // (a chain nine times as long: work as its notes would take nine times as much, work as their pairs eighty-one - the bound between
+  //  them by a factor of three each way. Counted, not timed: each note is tried against the bonds, labels and notes filed near its atom,
+  //  each try a distance; tried against every one of the drawing's, the tries grow as their pairs do)
+  it("takes work as its notes do: a chain nine times as long takes well under twenty-seven times as much", () => {
     const chain = (n: number) => ({
       atoms: Array.from({ length: n }, (_, i) => ({ id: i + 1, x: i * L * 0.866, y: i % 2 ? L / 2 : 0, el: "C", map: i + 1 })) as Atom[],
       bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 as const })) as Bond[],
     });
     const o = opts();
-    expect(slower(chain(300), chain(2700), (c) => layoutMolecule(c.atoms, c.bonds, o, 40))).toBeLessThan(27);
+    const [few, many] = [chain(300), chain(2700)].map((c) => stepsOf(() => layoutMolecule(c.atoms, c.bonds, o, 40)));
+    expect(many).toBeLessThan(27 * few);
   });
 });
 

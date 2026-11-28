@@ -11,6 +11,7 @@ import {
 } from "./stroke";
 import type { Pt } from "./extendSnap";
 import { chairDrawing, seenPlaces } from "../projections/chair";
+import { stepsOf } from "../../../../testing/steps";
 import { measured } from "../../../../testing/timeouts";
 
 const L = 1;
@@ -219,25 +220,30 @@ describe("a chain stroke traced round fused rings", () => {
 });
 
 describe("a chain stroke beside a large drawing", () => {
-  it("takes no longer a step for the drawing's 28 000 atoms: it is gone over once, not at every step", () => {
-    // (a thousand chains of 28 atoms, well away from where the stroke is drawn)
-    const atoms: { id: number; x: number; y: number }[] = [];
-    const bonds: { a: number; b: number }[] = [];
-    for (let m = 0; m < 1000; m++)
-      for (let k = 0; k < 28; k++) {
-        const id = m * 28 + k + 1;
-        atoms.push({ id, x: 100 + (m % 40) * 30 + k * 0.87, y: 100 + Math.floor(m / 40) * 3 + (k % 2) * 0.5 });
-        if (k) bonds.push({ a: id - 1, b: id });
-      }
-    const drawing = { atoms, bonds };
-    const cpu = () => process.cpuUsage().user / 1000;
-    const t0 = cpu();
-    let s = startStroke("chain", NEW_ATOM, drawing, { x: 0, y: 0 }, L);
-    for (let x = 0.05; x <= 2.5; x += 0.05) s = advanceStroke(drawing, s, { x, y: 0.2 }, L);
-    const spent = cpu() - t0;
-    expect(s.nodes.length).toBeGreaterThanOrEqual(2);
-    // (gone over once: about 70 ms of CPU; gone over at every step, about 950)
-    expect(spent).toBeLessThan(350);
+  it("takes no more work a step for the drawing's 28 000 atoms: it is gone over once, not at every step", () => {
+    // (chains of 28 atoms, well away from where the stroke is drawn: one of them, and a thousand)
+    const page = (chains: number) => {
+      const atoms: { id: number; x: number; y: number }[] = [];
+      const bonds: { a: number; b: number }[] = [];
+      for (let m = 0; m < chains; m++)
+        for (let k = 0; k < 28; k++) {
+          const id = m * 28 + k + 1;
+          atoms.push({ id, x: 100 + (m % 40) * 30 + k * 0.87, y: 100 + Math.floor(m / 40) * 3 + (k % 2) * 0.5 });
+          if (k) bonds.push({ a: id - 1, b: id });
+        }
+      return { atoms, bonds };
+    };
+    const stroke = (drawing: ReturnType<typeof page>) => {
+      let s = startStroke("chain", NEW_ATOM, drawing, { x: 0, y: 0 }, L);
+      for (let x = 0.05; x <= 2.5; x += 0.05) s = advanceStroke(drawing, s, { x, y: 0.2 }, L);
+      return s;
+    };
+    const [small, large] = [page(1), page(1000)];
+    expect(stroke(page(1000)).nodes.length).toBeGreaterThanOrEqual(2);
+    // (counted, not timed: the 27 972 atoms more are each filed once - by id, by square, by what they are bonded to - a few steps
+    //  each for the whole stroke; gone over at each of its fifty steps, they would be fifty times as many)
+    const more = stepsOf(() => stroke(large)) - stepsOf(() => stroke(small));
+    expect(more).toBeLessThan(40 * (large.atoms.length - small.atoms.length));
   });
 });
 
