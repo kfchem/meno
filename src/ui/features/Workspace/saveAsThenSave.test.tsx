@@ -19,6 +19,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("@tauri-apps/plugin-fs", () => ({ exists: async () => false }));
 vi.mock("../../../lib/io/writeDocument", () => ({
   writeDocument: async (path: string) => (io.written.push(path), null),
+  writeDocumentNow: async (path: string) => (io.written.push(path), { kept: null, now: null }),
 }));
 vi.mock("../../../lib/io/truePath", () => ({ truePath: async (p: string) => p }));
 vi.mock("../../../lib/jobs", async (real) => ({ ...(await real<object>()), fileNow: async () => null }));

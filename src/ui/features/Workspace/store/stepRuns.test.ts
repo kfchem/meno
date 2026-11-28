@@ -168,7 +168,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { useInstalled } from "../../../../lib/plugins/installed";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
 import { readWorkflow } from "../workflow/saved";
-import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace";
+import { readWorkspace, workspaceText } from "../utils/workspace";
 import { calcLine } from "../../../../lib/calc/output";
 import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
@@ -183,6 +183,7 @@ import { holdTable } from "../workflow/model";
 import { restraintRowsIn, restraintsTable } from "../../../../lib/steps/restraints";
 import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
+import { heldFile } from "../../../../test/keptFilesHeld";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
@@ -791,7 +792,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc?.wavefunction).toMatchObject({ name: "water.molden", kind: "molden" });
     // (held, for a step after it to be given; and kept in the workspace's file)
     expect((await heldOutput(m.calc!.wavefunction!.sha256))?.text).toBe("[Molden Format]\n");
-    const file = readMenoFile((await workspaceFile(st())).bytes);
+    const file = readMenoFile((await heldFile(st())).bytes);
     expect(file.files.map((f) => f.sha256)).toContain(m.calc!.wavefunction!.sha256);
   });
 

@@ -8,8 +8,9 @@ import { cardRect } from "../pageGl/conversationCard";
 import { frameAround, structureBox } from "../workflow/fitFrames";
 import { addSet } from "../workflow/model";
 import { connectStoreToDocument, createEditorStore } from "./index";
-import { readKept, readWorkspace, workspaceFile } from "../utils/workspace";
+import { readKept, readWorkspace } from "../utils/workspace";
 import { workspaceOfFile } from "../../../views/openFile";
+import { heldFile } from "../../../../test/keptFilesHeld";
 
 /** Two chains of two carbons: atoms 1-2 at the origin, 3-4 far to the right. */
 const page = () => ({
@@ -176,7 +177,7 @@ describe("a workspace opened with a frame sized by hand", () => {
     doc.edit("size", (d) => ({ ...d, sets: d.sets!.map((b) => ({ ...b, x0: -40, y0: -30, x1: 60, y1: 50 })) }));
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
-    const saved = readWorkspace(workspaceOfFile((await workspaceFile(store.getState())).bytes)!)!;
+    const saved = readWorkspace(workspaceOfFile((await heldFile(store.getState())).bytes)!)!;
     const { ws } = await readKept(saved);
     const fresh = createWorkspaceDocument();
     const opened = createEditorStore(fresh);
@@ -223,7 +224,7 @@ describe("a set's frame sized by hand, in the store (the maintainer, 2026-11-27)
   it("opens with the size it was saved with: its members' room, and no side nearer than one dragged out", async () => {
     const { store, room } = sized();
     store.getState().sizeSet(1, "n", { ...room, y1: room.y1 + 6 }, "drag");
-    const saved = readWorkspace(workspaceOfFile((await workspaceFile(store.getState())).bytes)!)!;
+    const saved = readWorkspace(workspaceOfFile((await heldFile(store.getState())).bytes)!)!;
     const { ws } = await readKept(saved);
     const fresh = createWorkspaceDocument();
     const opened = createEditorStore(fresh);

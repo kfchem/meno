@@ -6,8 +6,8 @@ import type { CatalogueEntry } from "../../lib/plugins/catalogue";
 import { kindOf, MENO_KINDS, registerKinds } from "../../lib/io/kinds";
 import { connectStoreToDocument, createEditorStore } from "../features/Workspace/store";
 import { createWorkspaceDocument } from "../features/Workspace/document";
-import { workspaceFile } from "../features/Workspace/utils/workspace";
 import { MANIFESTS } from "../../lib/plugins/known";
+import { heldFile } from "../../test/keptFilesHeld";
 
 const MOL = `ethanol
   Meno
@@ -175,7 +175,7 @@ describe("a file told to be a workspace that does not read", () => {
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
-    const { bytes } = await workspaceFile(store.getState());
+    const { bytes } = await heldFile(store.getState());
     const json = workspaceOfFile(bytes)!;
     expect(unreadWorkspaceSaid("mine.meno", json, kindOf("mine.meno", json))).toBeNull();
   });

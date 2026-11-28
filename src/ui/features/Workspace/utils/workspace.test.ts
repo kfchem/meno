@@ -4,7 +4,7 @@ vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.rej
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
-import { readKept, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
+import { readKept, readWorkspace, workspaceProblem, workspaceText } from "./workspace";
 import { addSet, addStep } from "../workflow/model";
 import { placeResults } from "../workflow/run";
 import { collectionHash, countOf, numberedRecord, recordNumber, setMembers } from "../workflow/entries";
@@ -14,6 +14,7 @@ import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/ca
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
 import { floatsText, resultKey } from "../../../../lib/calc/results";
+import { heldFile } from "../../../../test/keptFilesHeld";
 
 const water3d = {
   atoms: [
@@ -161,7 +162,7 @@ describe("a workspace file", () => {
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 0, y: 0 }, calc: { readers: ["meno"], source } as never }] });
-    const { bytes } = await workspaceFile(store.getState());
+    const { bytes } = await heldFile(store.getState());
     // (the output in it, once; where it was, no longer said)
     const file = readMenoFile(bytes);
     expect(file.files).toEqual([{ sha256: source.sha256, name: "water.cube", kind: "cube", media: "text/plain", size: new TextEncoder().encode(text).length }]);
@@ -172,7 +173,7 @@ describe("a workspace file", () => {
     // (one not to be had - held nowhere, not where it was - is not kept, keeps where it was, and is named)
     const gone = { name: "gone.out", sha256: "e".repeat(64), kind: "quanta", path: "/data/gone.out" };
     store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 9, y: 0 }, calc: { readers: ["manyread"], source: gone } as never }] });
-    const saved = await workspaceFile(store.getState());
+    const saved = await heldFile(store.getState());
     const both = readMenoFile(saved.bytes);
     expect(both.files.map((f) => f.name)).toEqual(["water.cube"]);
     expect(both.workspace).toContain("/data/gone.out");
@@ -201,7 +202,7 @@ describe("a workspace file", () => {
       { name: "notes.txt", text: "a note" },
     ]);
     store.getState().showText(store.getState().texts[1].id);
-    const { bytes } = await workspaceFile(store.getState());
+    const { bytes } = await heldFile(store.getState());
     const file = readMenoFile(bytes);
     // (the output and the text that is its words kept once; no text said to be anywhere)
     expect(file.files.map((f) => f.name)).toEqual(["run.out", "job.inp", "notes.txt"]);

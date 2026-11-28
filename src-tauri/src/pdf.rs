@@ -693,7 +693,7 @@ fn drawers() -> usize {
     std::thread::available_parallelism().map(|n| n.get().saturating_sub(1)).unwrap_or(1).clamp(1, 3)
 }
 
-fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("pdf");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)

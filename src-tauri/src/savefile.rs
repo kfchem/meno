@@ -39,8 +39,11 @@ const MOST_KEPT: usize = 1000;
 /// from its job's folder to the hidden file before it reaches the disk and
 /// takes the old one's place (keptjobs.rs `append_job_files`) - so that a
 /// job file changed or gone fails the save, and the file there is as it was.
+/// Given back with the file as it is once in its place (`now`: its size and
+/// when it was written, as `file_now` gives them), looked at at once - so
+/// that the page notes the file it wrote, not one written over it since.
 #[tauri::command]
-pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
+pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<Written, String> {
     let path = request
         .headers()
         .get("path")
@@ -50,7 +53,7 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         .ok_or("no file was named to write to")?;
     let keep_old = request.headers().get("keep-old").is_some_and(|v| v == "1");
     let mut bytes = bytes_of(request.body()).ok_or("a document is sent as its bytes")?;
-    let appended = match request.headers().get("appended") {
+    let mut appended: Vec<crate::keptjobs::Appended> = match request.headers().get("appended") {
         None => Vec::new(),
         Some(n) => {
             let n = n.to_str().ok().and_then(|n| n.parse::<usize>().ok()).filter(|&n| n <= bytes.len()).ok_or("the job files to add are not said")?;
@@ -60,9 +63,34 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         }
     };
     let jobs_root = if appended.is_empty() { None } else { Some(crate::jobs::all_roots(&app)?) };
-    // (a job file carried from the workspace's file it was opened from: one the page could have read)
-    if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f)) {
-        return Err(format!("Meno may not read {}", from.display()));
+    // (a job file carried from a workspace's file: one the page could have read - or a copy a save kept beside one, or
+    //  beside the file this one is written to, where a link takes it)
+    if let Some(a) = appended.iter().find(|a| a.from.as_deref().is_some_and(|f| !crate::keptjobs::may_take_from(f, a.via.as_deref(), Some(&path), |p| may_read(&app, p)))) {
+        return Err(format!("Meno may not read {}", a.from.as_deref().unwrap_or(Path::new("")).display()));
+    }
+    // (an output's own file, where it was: one the page may read - as it read it before)
+    if let Some(at) = appended.iter().filter_map(|a| a.at.as_deref()).find(|f| !may_read(&app, f)) {
+        return Err(format!("Meno may not read {}", at.display()));
+    }
+    // (a PDF Meno holds: where it holds them)
+    if appended.iter().any(|a| a.pdf) {
+        let pdfs = crate::pdf::cache_dir(&app)?;
+        for a in appended.iter_mut().filter(|a| a.pdf) {
+            a.pdfs_at = Some(pdfs.clone());
+        }
+    }
+    // (one the page sent, found nowhere else: where Meno set it down for this save - taken away once it is written, or not)
+    let staged_root = if appended.iter().any(|a| a.staged.is_some()) { Some(crate::local_data_dir(&app)?.join(crate::keptjobs::STAGED)) } else { None };
+    let mut staged = Vec::new();
+    if let Some(root) = &staged_root {
+        for a in appended.iter_mut().filter(|a| a.staged.is_some()) {
+            a.staged_at = crate::keptjobs::staged_in(root, a.staged.as_deref().unwrap_or_default());
+            if let Some(d) = &a.staged_at {
+                if !staged.contains(d) {
+                    staged.push(d.clone());
+                }
+            }
+        }
     }
     let most = most_for(&path, !appended.is_empty());
     // (as the plugin takes a path: whole, and going up nowhere)
@@ -74,12 +102,24 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         return Err(format!("Meno may not write to {}", path.display()));
     }
     tauri::async_runtime::spawn_blocking(move || {
-        replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
-        .map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
-            .map_err(|e| format!("{}: {e}", path.display()))
+        let written = replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
+            .map(|kept| Written { kept: kept.map(|k| k.to_string_lossy().into_owned()), now: crate::keptjobs::now_of(&target) })
+            .map_err(|e| format!("{}: {e}", path.display()));
+        for d in &staged {
+            let _ = fs::remove_dir_all(d);
+        }
+        written
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// A document written: where the file it replaced was kept beside it, where
+/// it was (`kept`); and the file as it is now in its place (`now`).
+#[derive(serde::Serialize)]
+pub struct Written {
+    pub kept: Option<String>,
+    pub now: Option<crate::keptjobs::FileNow>,
 }
 
 /// The most the document at `path` may come to, where it is held to one: a
@@ -178,7 +218,7 @@ fn may_write(path: &Path, target: &Path, allowed: impl Fn(&Path) -> bool) -> boo
 /// The bytes sent: as they are, or - where the window could send them only
 /// as JSON, as the file system plugin also takes them - a list of numbers,
 /// each a byte; none where they are neither.
-fn bytes_of(body: &tauri::ipc::InvokeBody) -> Option<Vec<u8>> {
+pub(crate) fn bytes_of(body: &tauri::ipc::InvokeBody) -> Option<Vec<u8>> {
     match body {
         tauri::ipc::InvokeBody::Raw(bytes) => Some(bytes.clone()),
         tauri::ipc::InvokeBody::Json(serde_json::Value::Array(list)) => list.iter().map(|v| v.as_u64().and_then(|b| u8::try_from(b).ok())).collect(),
@@ -665,7 +705,7 @@ fn sync_dir(dir: &Path) -> io::Result<()> {
 
 /// Where a document named `path` is written: `path`, or - where it is a
 /// link - the file at the end of its links, there or not.
-fn real_target(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn real_target(path: &Path) -> io::Result<PathBuf> {
     let mut at = path.to_path_buf();
     for _ in 0..MOST_LINKS {
         match fs::symlink_metadata(&at) {

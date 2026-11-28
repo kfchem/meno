@@ -1090,21 +1090,32 @@ work.meno (zip)
   list of the files it keeps is damaged, and its files were opened without
   it). A file the list leaves out is had the same way. A broken list alone
   never keeps a workspace from opening.
+- **Save takes every file a workspace keeps from where it is, never
+  through the page.** The outputs its molecules were read from, its texts,
+  its PDFs and its pictures are listed by the page, by their SHA-256, with
+  the workspace's JSON; Meno then adds each to the file being written from
+  wherever it finds it whole (`src-tauri/src/keptjobs.rs`,
+  `kept_files_where`): the file saved over as it is now - whoever wrote
+  it - the workspace file the canvas was last saved to, or opened from, a
+  copy a save kept beside either, an output's own file where it was read
+  from (only bytes that are what its SHA-256 says), the PDFs Meno holds -
+  each through the same reach Open and Save gave Meno to that file, and
+  each checked against its SHA-256 as it is written, as a step's job files
+  are (*A step's jobs*). Save As takes them from the file saved to before.
+  Each is kept as the page always kept it: a text deflated, a PDF, a
+  picture or a film stored as it is; the same names, the same list. Only
+  one found nowhere is sent from what the page holds of it, alone, once the
+  save is to be written, and set down by Meno until it is; the page never
+  reads the file saved before, nor gathers or packs a kept file's bytes.
 - **Save never drops a file still to be had, and names what it could not
-  keep.** A file the workspace has that is held nowhere this session - a
-  PDF Meno could not open (one damaged past mending), a picture or an
-  output held nowhere, an output not where it was, a text that could not
-  be read - is taken from the
-  workspace file the canvas was last saved to, or opened from, where that
-  holds it whole (its CRC-32 and its SHA-256 as they should be): read
-  before the new file takes its place - by Save As too, which reads the
-  file saved to before - and only where something would else be left
-  out, through the same reach Open and Save gave Meno to that file. One to
-  be had from nowhere - damaged there too, not in it, or there being no
-  such file - does not keep the workspace from being saved, which would
-  put new work at risk: it is saved without it, and Save says so, where
-  its failures are said, until dismissed: "Saved, but figure.png is not in
-  the file: it could not be read." Where the file saved over is the one
+  keep.** One to be had from nowhere - damaged where it was, not in any
+  file, held nowhere this session - does not keep the workspace from being
+  saved, which would put new work at risk: it is saved without it, and
+  Save says so, where its failures are said, until dismissed: "Saved, but
+  figure.png is not in the file: it could not be read." Job files had
+  from nowhere are counted in the same sentence: "Saved, but figure.png
+  and 2 files of steps' jobs are not in the file: they could not be
+  read." Where the file saved over is the one
   it was last saved to, and that still has something of one in it,
   damaged - or does not read as a workspace at all, so that what it holds
   is not known - it may be the only copy, and partly to be had: it is first
@@ -1241,13 +1252,38 @@ left out, with its size.
   changed since it was listed fails the save, and the file saved before
   stays as it was. Only a plain file inside its job's folder is read: never
   through a link, whatever the page's list says.
-- **Kept again from the file it was opened from.** A workspace opened on
-  another computer has its jobs' files in the `.meno` it was opened from.
-  Saved again, Meno reads them from that file as the new one is written -
-  each checked against its SHA-256 - while that file is still as it was
-  opened (its size and when it was written). Where it has changed, or the
-  workspace was opened with no path, they are kept from what was held of
-  it as it was opened, through the page.
+- **Kept again from wherever they are.** A workspace opened on another
+  computer has its jobs' files in the `.meno` it was opened from. Saved
+  again, Meno takes each from wherever it finds it whole
+  (`src-tauri/src/keptjobs.rs`, `job_files_where`): the files the
+  workspace was opened from or saved to this session, the file it is saved
+  over as it is now - whoever wrote it, a copy of it put there from outside
+  too - a copy a save kept beside any of them (`aspirin.meno.bak`), and its
+  job's folder - beside the file a link of any of them reaches, too. A
+  save takes a file from a place Meno may read, or from a copy kept beside
+  one or beside the file one reaches through links, and from nothing else:
+  what the lookup may name, the write takes. Each is known by
+  its name, its SHA-256, and taken only if its bytes are what that says,
+  checked as the new file is written; its size is only a first filter of
+  where to look, and when a file was written is not looked at. Where a file holds
+  one under its name that is not it, the save is made again at once, each
+  read whole and checked first, so that it is taken from elsewhere. So the
+  second save of a session, and every one after, costs the page what the
+  first did, whatever was done to the file meanwhile.
+- **Never all through the page.** Only a job file Meno finds nowhere is
+  sent from what the page holds of it - read from the file it was opened
+  from as it was, one file at a time, only once the size warning is
+  answered (none sent for a save cancelled, and none of those its answer
+  leaves out), each sent alone as its bytes and set
+  down by Meno, checked against its SHA-256, in its local data folder
+  (`saving/`) until the save is written: the page holds no more than the
+  largest of them at once, never all of them, packed or not. What was set
+  down goes once the save is written, or not; what a page or Meno stopped
+  half way left goes as Meno next starts, once it has been untouched for
+  some minutes. One the page holds nothing of either is recorded as not
+  had, as above, and Save says how many: "Saved, but 2 files of steps'
+  jobs are not in the file: they could not be read." No piece is taken
+  that is larger than a workspace's file may hold.
 - **Raw outputs can name this computer.** A program's output and its logs
   often hold the user's name, the folders it ran in and the computer's
   name: Gaussian and ORCA print the host they ran on, for one. Meno never

@@ -4,7 +4,9 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { partsBounds, type FlowParts } from "./parts";
-import { centredParts, procedureFileName, procedureLine, procedureNeeds, procedureOf, proceduresSaved, removeProcedure, renameProcedure, saveProcedure, suggestedName } from "./procedures";
+import { centredParts, procedureFileName, procedureLine, procedureNeeds, procedureOf, proceduresSaved, procedureWorkspace, removeProcedure, renameProcedure, saveProcedure, suggestedName } from "./procedures";
+import { rememberOutput } from "../../../../lib/calc/asks";
+import type { WorkflowSet } from "../store/types";
 
 /** A procedure's parts: an empty input set wired into an optimisation by Tightbind, whose exit's set (6) goes into Meno's energy window - its exits' sets 7 and 8. */
 const PARTS: FlowParts = {
@@ -28,6 +30,17 @@ const PARTS: FlowParts = {
 afterEach(() => {
   useAppSettings.setState({ procedures: [] });
   useReaders.setState({ state: {}, problem: {} });
+});
+
+describe("a procedure written as a workspace", () => {
+  it("keeps no file: it is written where its parts keep none, and refused where they would keep one it does not hold", async () => {
+    await expect(procedureWorkspace({ id: "p", name: "P", saved: 0, parts: PARTS })).resolves.toBeInstanceOf(Uint8Array);
+    // (a set holding a molecule read from an output: a file the workspace would keep, still to be added)
+    const source = await rememberOutput("water.out", "an output of water", "orca");
+    const water = { id: "w", name: "water", atoms: [], bonds: [], calc: { source } } as unknown as NonNullable<WorkflowSet["collection"]>[number];
+    const parts = { ...PARTS, sets: [{ ...PARTS.sets[0], collection: [water] }, ...PARTS.sets.slice(1)] } as FlowParts;
+    await expect(procedureWorkspace({ id: "p", name: "P", saved: 0, parts })).rejects.toThrow(/keeps no file/);
+  });
 });
 
 describe("a procedure", () => {

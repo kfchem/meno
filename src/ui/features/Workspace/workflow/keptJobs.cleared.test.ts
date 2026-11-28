@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClearedSaved, KeptJobFile } from "../../../../lib/jobs";
 import type { WorkflowStep } from "../store/types";
-import { clearableJobs, clearSavedJobs, heldJobPacked, heldJobSource, holdJobFilesOf, jobsToKeep, recordOf, sizeAsk, type JobsKept } from "./keptJobs";
+import { clearableJobs, clearSavedJobs, heldJobPacked, heldJobSource, holdJobFilesOf, jobsToKeep, dropNotedSources, noteJobFilesSaved, recordOf, sizeAsk, type JobsKept } from "./keptJobs";
 import { JOB_FILE_MEDIA, menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
 import { sha256Hex } from "../../../../lib/binary/sha256";
 
@@ -20,6 +20,9 @@ const folder = (tag: "a" | "b"): KeptJobFile[] => [
 ];
 const step = (id: number, jobs: string[], more: Partial<WorkflowStep> = {}): WorkflowStep => ({ id, kind: "optimise", x: 0, y: 0, ran: { at: 1, ok: true, said: "done", input: "in", jobs }, ...more });
 const SAVED = "/work/page.meno";
+/** Meno's backend asked where each job file is, as `place` says of each by its SHA-256. */
+const where = (place: (sha256: string) => Promise<string | null>) => async (asked: readonly { sha256: string }[]) =>
+  Promise.all(asked.map(async (a) => ((p) => (p ? { from: p } : null))(await place(a.sha256))));
 const AS_SAVED = { size: 12345, mtime: 1700000000 };
 
 /** The backend, as asked: every job asked for gone - or those `left`, each why - and what it was asked. */
@@ -44,6 +47,8 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     // (one file of four from the file it was opened from: not cleared)
     const one: JobsKept = { ...kept, appended: kept.appended.map((a, k) => (k === 0 ? { ...a, from: "/elsewhere/opened.meno" } : a)) };
     expect(clearableJobs(one)).toEqual([]);
+    // (one of them sent by the page, found nowhere else: not cleared)
+    expect(clearableJobs({ ...kept, appended: kept.appended.map((a, k) => (k === 0 ? { ...a, staged: "0b6f5c1e-0000-4000-8000-0000000000ff" } : a)) })).toEqual([]);
     // (one file of four not appended at all: not cleared)
     expect(clearableJobs({ ...kept, appended: kept.appended.slice(1) })).toEqual([]);
   });
@@ -68,11 +73,11 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     // (its record held for the session, as a file opened keeps one)
     expect(recordOf(steps[0], J1)).toEqual(kept.records.get(J1));
     // (saved again, its folder gone: every file read by Meno from the file just written, where that is as it was)
-    const again = await jobsToKeep(steps, async () => null, () => null, (s) => heldJobSource(s, async () => AS_SAVED));
+    const again = await jobsToKeep(steps, async () => null, () => null, where((s) => heldJobSource(s, async () => AS_SAVED)));
     expect(again.records.get(J1)).toEqual(kept.records.get(J1));
     expect(again.appended.map((a) => [a.name, a.from])).toEqual(folder("a").map((f) => [f.name, SAVED]));
     // (that file changed since - moved, or written by another - not read from it: said not to be had, never taken from a file it no longer is)
-    const changed = await jobsToKeep(steps, async () => null, () => null, (s) => heldJobSource(s, async () => ({ ...AS_SAVED, size: 1 })));
+    const changed = await jobsToKeep(steps, async () => null, () => null, where((s) => heldJobSource(s, async () => ({ ...AS_SAVED, size: 1 }))));
     expect(changed.records.get(J1)?.left?.map((l) => [l.name, l.why])).toEqual(folder("a").map((f) => [f.name, "not had"]));
     // (and, gone, never asked to go again: its files now kept from the file, not its folder)
     expect(clearableJobs(again)).toEqual([]);
@@ -110,7 +115,7 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     expect(first.bytes).toBe(60 + 200 + 4000 + 8);
     expect((await clearSavedJobs(SAVED, first, backend().clear)).gone).toEqual([J]);
     // (edited, and saved again: the same files, now from the file saved - about what the first save counted them at)
-    const second = await jobsToKeep(steps, async () => null, () => null, async () => SAVED);
+    const second = await jobsToKeep(steps, async () => null, () => null, where(async () => SAVED));
     expect(second.appended.map((a) => a.from)).toEqual(files.map(() => SAVED));
     expect([second.bytes, second.adds]).toEqual([first.bytes, first.adds]);
     for (const f of files) expect(heldJobPacked(f.sha256)).toBe(f.deflated);
@@ -130,9 +135,58 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     const opened = step(1, ["0b6f5c1e-0000-4000-8000-000000000022"]);
     opened.ran!.kept = [{ job: "0b6f5c1e-0000-4000-8000-000000000022", files: [{ name: "work/job.out", sha256: hash, size: data.length, role: "read" }] }];
     // (read again from that file by Meno, or carried by the page where it has changed: either way at its packed size)
-    const there = await jobsToKeep([opened], async () => null, () => data, async () => "/w/opened.meno");
+    const there = await jobsToKeep([opened], async () => null, () => data, where(async () => "/w/opened.meno"));
     expect([there.adds, there.bytes]).toEqual([packed, packed]);
-    const carried = await jobsToKeep([opened], async () => null, () => data, async () => null);
+    const carried = await jobsToKeep([opened], async () => null, () => data, where(async () => null));
     expect(carried.bytes).toBe(packed);
+  });
+
+  it("notes every job file a save holds as kept in the file it just wrote, as that file is - and the next save copies each from there, while it is so", async () => {
+    const data = new TextEncoder().encode("another job's output, made up\n".repeat(300));
+    const hash = sha256Hex(data);
+    const bytes = menoFileBytes("{}", [{ sha256: hash, name: "work/job.out", media: JOB_FILE_MEDIA, data }]);
+    holdJobFilesOf(readMenoFile(bytes), { path: "/w/elsewhere.meno", size: bytes.length, mtime: 1 });
+    const job = "0b6f5c1e-0000-4000-8000-000000000033";
+    const opened = step(1, [job]);
+    opened.ran!.kept = [{ job, files: [{ name: "work/job.out", sha256: hash, size: data.length, role: "read" }] }];
+    const disk = new Map([["/w/elsewhere.meno", { size: bytes.length, mtime: 1 }]]);
+    const now = async (p: string) => disk.get(p) ?? null;
+    // (saved over the file it was opened from: that file is no longer as it was opened)
+    const first = await jobsToKeep([opened], async () => null, undefined, where((h) => heldJobSource(h, now)));
+    expect(first.appended.map((a) => a.from)).toEqual(["/w/elsewhere.meno"]);
+    disk.set("/w/elsewhere.meno", { size: 999, mtime: 2 });
+    // (nothing noted where the file just written cannot be looked at)
+    await noteJobFilesSaved("/w/elsewhere.meno", first, async () => null);
+    expect(await heldJobSource(hash, now)).toBeNull();
+    await noteJobFilesSaved("/w/elsewhere.meno", first, now);
+    const second = await jobsToKeep([opened], async () => null, () => { throw new Error("read into the page"); }, where((h) => heldJobSource(h, now)));
+    expect(second.appended.map((a) => a.from)).toEqual(["/w/elsewhere.meno"]);
+    expect(second.staged).toBeNull();
+    expect(heldJobPacked(hash)).toBe(first.packed.get(hash));
+    // (changed again by something else: no longer taken from there)
+    disk.set("/w/elsewhere.meno", { size: 5, mtime: 3 });
+    expect(await heldJobSource(hash, now)).toBeNull();
+  });
+
+  // (the texts as Meno's backend builds them, word for word - pinned there too: src-tauri/src/keptjobs.rs, the test
+  //  `carries_a_kept_file_from_the_workspace_file_it_was_opened_from_streamed_and_checked`)
+  it.each([
+    ["work/run.out could not be kept: noted.meno no longer holds a file it kept"],
+    ["work/run.out could not be kept: noted.meno no longer holds a file it kept as it was"],
+    ["work/run.out could not be kept: noted.meno could not be read: invalid Zip archive: Could not find EOCD"],
+  ])("takes a file its job files were noted in as no longer where they are, where the backend says %s", async (said) => {
+    const data = new TextEncoder().encode(`a made-up output for ${said}\n`.repeat(50));
+    const hash = sha256Hex(data);
+    const path = "/w/noted.meno";
+    const at = { size: 10, mtime: 1 };
+    holdJobFilesOf(readMenoFile(menoFileBytes("{}", [{ sha256: hash, name: "work/run.out", media: JOB_FILE_MEDIA, data }])), { path, ...at });
+    const now = async () => at;
+    expect(await heldJobSource(hash, now)).toBe(path);
+    const appended = [{ sha256: hash, job: "0b6f5c1e-0000-4000-8000-000000000044", name: "work/run.out", from: path }];
+    // (another failure - the disk full - leaves the note as it is)
+    expect(dropNotedSources("No space left on device (os error 28)", appended)).toBe(false);
+    expect(await heldJobSource(hash, now)).toBe(path);
+    expect(dropNotedSources(said, appended)).toBe(true);
+    expect(await heldJobSource(hash, now)).toBeNull();
   });
 });
