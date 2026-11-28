@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { coveredLength, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
 import { measureLabelBox } from "../../../../lib/chem/layout2d";
 import type { Molecule3D } from "../store/types";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
@@ -179,6 +179,70 @@ describe("a measurement in a picture", () => {
     const a = measureLabelBox(one, undefined);
     const b = measureLabelBox(two, undefined);
     const overlap = Math.min(a.max.x, b.max.x) > Math.max(a.min.x, b.min.x) && Math.min(a.max.y, b.max.y) > Math.max(a.min.y, b.min.y);
+    expect(overlap).toBe(false);
+  });
+
+  // a flat six-ring of carbons 1.39 Å apart, each with its hydrogen 1.09 Å further out, its bonds alternating, and the distance
+  // across it from one carbon to the one opposite measured
+  const ring = (() => {
+    const atoms: { el: string; x: number; y: number; z: number }[] = [];
+    for (let k = 0; k < 6; k++) atoms.push({ el: "C", x: 1.39 * Math.cos((k * Math.PI) / 3), y: 1.39 * Math.sin((k * Math.PI) / 3), z: 0 });
+    for (let k = 0; k < 6; k++) atoms.push({ el: "H", x: 2.48 * Math.cos((k * Math.PI) / 3), y: 2.48 * Math.sin((k * Math.PI) / 3), z: 0 });
+    const bonds = [
+      ...Array.from({ length: 6 }, (_, k) => ({ a1: k, a2: (k + 1) % 6, order: k % 2 ? 1 : 2 })),
+      ...Array.from({ length: 6 }, (_, k) => ({ a1: k, a2: k + 6, order: 1 })),
+    ];
+    return { atoms, bonds, at: { x: 4, y: -3 }, measures: [{ id: 1, atoms: [0, 3] }] };
+  })();
+  const hidingH = { ...STYLE_3D, primary: { ...STYLE_3D.primary, hydrogens: "carbonHidden" as const } };
+  /** How far a value's box, as a picture writes it, runs into what the picture draws: the deepest into a drawn ball, and the most of a drawn stick's band it covers. */
+  const runsInto = (m: typeof ring, style: typeof STYLE_3D, mark: ReturnType<typeof measurePictureMarks>[number]) => {
+    const b = measureLabelBox(mark, undefined);
+    const box = { x: (b.min.x + b.max.x) / 2, y: (b.min.y + b.max.y) / 2, hx: (b.max.x - b.min.x) / 2, hy: (b.max.y - b.min.y) / 2 };
+    let ball = 0;
+    let stick = 0;
+    for (const k of pictureMarks(m, style)) {
+      if (k.kind === "ball") {
+        const dx = Math.max(Math.abs(k.c.x - box.x) - box.hx, 0);
+        const dy = Math.max(Math.abs(k.c.y - box.y) - box.hy, 0);
+        ball = Math.max(ball, k.r - Math.hypot(dx, dy));
+      } else stick = Math.max(stick, coveredLength(box, { a: k.a, b: k.b, r: k.width / 2 }));
+    }
+    return { ball, stick };
+  };
+
+  it("writes a value across a ring clear of every ball and every bond the picture draws, its hydrogens hidden or shown", () => {
+    for (const style of [hidingH, STYLE_3D]) {
+      for (const size of [0.75, 1]) {
+        const [mark] = measurePictureMarks(ring, style, size);
+        const { ball, stick } = runsInto(ring, style, mark);
+        // (clear: at most a hair's breadth into a ball's edge, none of a bond)
+        expect(ball).toBeLessThan(0.05 * size);
+        expect(stick).toBe(0);
+        // and beside what it measures: its middle no further from the line's middle than the ring and the value reach
+        const line = { x: (mark.lines[0][0].x + mark.lines[mark.lines.length - 1][1].x) / 2, y: (mark.lines[0][0].y + mark.lines[mark.lines.length - 1][1].y) / 2 };
+        expect(Math.hypot(mark.label.x - line.x, mark.label.y - line.y)).toBeLessThan((2.48 + 0.6) * WORLD_PER_ANGSTROM + 2 * size);
+      }
+    }
+  });
+
+  it("keeps a value that covered nothing just where it was: on its line's middle", () => {
+    // (the long pair, bonds drawn between its three atoms, none near the middle of the line)
+    const long = { ...pair(9), bonds: [{ a1: 0, a2: 2, order: 1 }] };
+    const [mark] = measurePictureMarks(long, STYLE_3D, 0.75);
+    const [a, b] = [mark.lines[0][0], mark.lines[mark.lines.length - 1][1]];
+    expect(mark.label.x).toBeCloseTo((a.x + b.x) / 2, 6);
+    expect(mark.label.y).toBeCloseTo((a.y + b.y) / 2, 6);
+  });
+
+  it("keeps a value clear of those written before it over another molecule", () => {
+    const long = pair(9);
+    const [first] = measurePictureMarks(long, STYLE_3D, 0.75);
+    const b = measureLabelBox(first, undefined);
+    const before = [{ x: (b.min.x + b.max.x) / 2, y: (b.min.y + b.max.y) / 2, hx: (b.max.x - b.min.x) / 2, hy: (b.max.y - b.min.y) / 2 }];
+    const [second] = measurePictureMarks(long, STYLE_3D, 0.75, undefined, undefined, undefined, before);
+    const c = measureLabelBox(second, undefined);
+    const overlap = Math.min(b.max.x, c.max.x) > Math.max(b.min.x, c.min.x) && Math.min(b.max.y, c.max.y) > Math.max(b.min.y, c.min.y);
     expect(overlap).toBe(false);
   });
 });

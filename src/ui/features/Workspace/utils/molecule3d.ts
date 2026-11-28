@@ -11,7 +11,7 @@ import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesC
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
 import { ADDED_MARK, atomsLeftOutMark, CCD_HYDROGENS_MARK, ESTIMATED_MARK, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
-import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
+import { measureLabelBox, type MeasureMark, type SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import { MARK_SCALE, stereoTextEms } from "../chem/marks";
 import type { Carried3D, Growing3D, Molecule3D, Turn3D } from "../store/types";
@@ -205,9 +205,10 @@ export function valueSpots(values: readonly ValueAt[], page = 1): SpotAbout[] {
  * the balls (atoms, as circles), the labels already placed about it and the
  * sticks (bonds) where it can be: the way `preferred` - the widest gap
  * between its bonds - when that is clear, or else the clear way nearest it;
- * or a little further out, the same way round; or else where it hides
- * least. A ball hidden outright counts for more than two touched at their
- * edges, and either for more than a bond covered.
+ * or a little further out, the same way round - half its height further at
+ * a time, `farther` times; or else where it hides least. A ball hidden
+ * outright counts for more than two touched at their edges, and either for
+ * more than a bond covered.
  */
 export function labelSpot(
   o: { x: number; y: number },
@@ -217,10 +218,12 @@ export function labelSpot(
   balls: readonly { x: number; y: number; r: number }[],
   placed: readonly LabelBox[],
   sticks: readonly Stick[] = [],
+  farther = 1,
 ): LabelBox {
   const start = Math.atan2(preferred.y, preferred.x);
   let best: { box: LabelBox; hides: number } | null = null;
-  for (const out of [reach, reach + half.y]) {
+  for (let j = 0; j <= farther; j++) {
+    const out = reach + j * half.y;
     for (let k = 0; k < 24; k++) {
       // (the preferred way, then a step either side of it, and so on round)
       const a = start + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * LABEL_STEP;
@@ -1520,12 +1523,25 @@ export function plainNoteOf(m: Molecule3D): string | null {
   return entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy, lastUnfinished(m));
 }
 
+/** How far what a molecule says keeps from a value it goes round, as a share of its size. */
+const NOTE_APART = 0.15;
+
 /**
  * What a picture of a molecule says over it (`saidOf`): each `size` high, one over another, centred over its
- * highest atom - or ribbon - on a white ground as a measurement's value is.
- * None for a molecule with nothing to say.
+ * highest atom - or ribbon - on a white ground as a measurement's value is. The measurements' values are written
+ * first (measurePictureMarks), beside what they measure; what the molecule says goes round them (`placed`, their
+ * boxes, in `family`): moved up, or sideways along the molecule's top, only as far as it must to stand clear of
+ * every one - where none is in the way, just where it was. None for a molecule with nothing to say.
  */
-export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye, marks?: readonly SolidMark[]): MeasureMark[] {
+export function notePictureMarks(
+  m: Carried3D,
+  style: Style3D,
+  size: number,
+  eye?: Eye,
+  marks?: readonly SolidMark[],
+  placed: readonly LabelBox[] = [],
+  family?: string,
+): MeasureMark[] {
   const molecule = { ...m, id: 0 } as Molecule3D;
   const solid = solidOf(molecule, style);
   const notes = saidOf(molecule, solid, lookOf(m));
@@ -1545,7 +1561,7 @@ export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye
   }
   if (!Number.isFinite(y1)) return [];
   // (half its height above the molecule, its ground half its height again; the next above it)
-  return notes.map((text, i) => ({
+  const said = notes.map((text, i) => ({
     lines: [],
     fan: [],
     width: 0,
@@ -1555,6 +1571,28 @@ export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye
     size,
     color: HIDDEN_MARK_COLOUR,
   }));
+  const boxes = said.map((t) => measureLabelBox(t, family));
+  const clearAt = (dx: number, dy: number) =>
+    boxes.every((b) =>
+      placed.every((p) => b.max.x + dx <= p.x - p.hx || b.min.x + dx >= p.x + p.hx || b.max.y + dy <= p.y - p.hy || b.min.y + dy >= p.y + p.hy),
+    );
+  if (clearAt(0, 0)) return said;
+  // the least way off that is clear: up, to just over a value; sideways, to just beside one - its middle over the molecule still
+  const gap = NOTE_APART * size;
+  const left = Math.min(...boxes.map((b) => b.min.x)), right = Math.max(...boxes.map((b) => b.max.x));
+  const foot = Math.min(...boxes.map((b) => b.min.y));
+  const ups = [0, ...placed.map((p) => p.y + p.hy + gap - foot).filter((d) => d > 0)];
+  const sides = [0, ...placed.flatMap((p) => [p.x + p.hx + gap - left, p.x - p.hx - gap - right])].filter((d) => Math.abs(d) <= (x1 - x0) / 2);
+  let best: { dx: number; dy: number } | null = null;
+  for (const dy of ups) {
+    for (const dx of sides) {
+      if (best && Math.hypot(dx, dy) >= Math.hypot(best.dx, best.dy)) continue;
+      if (clearAt(dx, dy)) best = { dx, dy };
+    }
+  }
+  // (over the highest of them, there is always room)
+  const { dx, dy } = best ?? { dx: 0, dy: Math.max(...ups) };
+  return said.map((t) => ({ ...t, label: { x: t.label.x + dx, y: t.label.y + dy } }));
 }
 
 /** How far a molecule's frames chip hangs below where it hangs from, in page pixels (workflow/look CHIP makes room for it). */

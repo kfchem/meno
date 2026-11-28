@@ -17,7 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
-import { createSVG, HALO_EMS, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
+import { createSVG, HALO_EMS, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions, type MeasureMark } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { arrowsOfCycles, cycleThings } from "./utils/cycles";
 import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
@@ -818,12 +818,19 @@ export function drawingLayout(
     take(xs, ys);
   }
   // and their measurements, over them: their values as large as the
-  // drawing's R and S, and clear of the atoms
+  // drawing's R and S, beside what they measure, clear of the balls and
+  // sticks drawn and of each other
   const markSize = (opts.units === "px" ? opts.fontPx / layout.zoom : opts.fontPx) * MARK_SCALE;
   const family = labelSetOf(opts).fontFamily;
-  const measures = (model.molecules3d ?? []).flatMap((m) => measurePictureMarks(m, style3dOf(aromatic), markSize, undefined, family));
-  // and over each, what it says of itself: its hydrogens hidden or not in its file, its bond orders not known
-  (model.molecules3d ?? []).forEach((m, i) => measures.push(...notePictureMarks(m, style3dOf(aromatic), markSize, undefined, marksOf[i])));
+  const boxOf = (m: MeasureMark) => {
+    const box = measureLabelBox(m, family);
+    return { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
+  };
+  const measures: MeasureMark[] = [];
+  for (const m of model.molecules3d ?? []) measures.push(...measurePictureMarks(m, style3dOf(aromatic), markSize, undefined, family, solids, measures.map(boxOf)));
+  // and over each, what it says of itself - its hydrogens hidden or not in its file, its bond orders not known -
+  // round the values, and round what those before it say
+  (model.molecules3d ?? []).forEach((m, i) => measures.push(...notePictureMarks(m, style3dOf(aromatic), markSize, undefined, marksOf[i], measures.map(boxOf), family)));
   if (measures.length) {
     layout.measures = measures;
     const xs: number[] = [];
@@ -844,10 +851,7 @@ export function drawingLayout(
   // each other (utils/molecule3d stereoPictureSpots3d), as large as the
   // drawing's (without the canvas's least size, which has no meaning at a
   // picture's size in print), in its blue on a white halo
-  const values = measures.map((m) => {
-    const box = measureLabelBox(m, family);
-    return { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
-  });
+  const values = measures.map(boxOf);
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
   const stereo = (model.molecules3d ?? []).flatMap((m) =>

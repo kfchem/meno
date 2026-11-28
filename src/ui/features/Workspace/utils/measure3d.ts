@@ -3,11 +3,11 @@
  * show them - pure, over atoms' places in the molecule's own frame.
  */
 import * as THREE from "three";
-import { measureLabelBox, type MeasureMark } from "../../../../lib/chem/layout2d";
+import { measureLabelBox, type MeasureMark, type SolidMark } from "../../../../lib/chem/layout2d";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { COLORS } from "../../../theme/colors";
 import type { Carried3D, Molecule3D } from "../store/types";
-import { frameOf, heightOf, labelSpot, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM, type LabelBox } from "./molecule3d";
+import { coveredLength, frameOf, heightOf, labelSpot, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM, type LabelBox, type Stick } from "./molecule3d";
 import { seenAt, type Eye } from "./page";
 
 /**
@@ -170,13 +170,27 @@ export function piecesOf(marks: MeasureMarks): [THREE.Vector3, THREE.Vector3][] 
  * `size` high (world units), in `family`.
  *
  * A value is written where the canvas writes it - a distance's on the
- * middle of its line - when it covers no atom there. A value is as large as
- * the drawing's R and S, so on a short distance it would cover the atoms it
- * measures. Then it moves off: beside its line, on the side away from the
- * molecule's middle, or the nearest way round from there that covers no atom
- * and no value written before it.
+ * middle of its line - when it covers nothing the picture draws there (a
+ * ball or a stick, `drawn`: the picture's own marks, `pictureMarks`) and no
+ * value written before it (`before`, and those of this molecule before it).
+ * A value is as large as the drawing's R and S, so on a short distance, or
+ * across a ring, it would cover the atoms and bonds it lies over. Then it
+ * moves off: beside its line, on the side away from the molecule's middle,
+ * or the nearest way round from there that is clear - as near its line as
+ * it can stand clear, out to VALUE_FARTHER of its half heights further. A
+ * molecule so crowded that nothing within that is clear has its value where
+ * it covers least. Values are placed before what a molecule says of itself
+ * (notePictureMarks), which goes round them.
  */
-export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye, family?: string): MeasureMark[] {
+export function measurePictureMarks(
+  m: Carried3D,
+  style: Style3D,
+  size: number,
+  eye?: Eye,
+  family?: string,
+  drawn?: readonly SolidMark[],
+  before: readonly LabelBox[] = [],
+): MeasureMark[] {
   const measures = m.measures ?? [];
   if (!measures.length) return [];
   const molecule = { ...m, id: 0 } as Molecule3D;
@@ -187,27 +201,26 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
   // (as large as it is shown: docs/WORKSPACE.md, *Magnified display*)
   const mag = magnifiedOf(m);
-  const seenK = (v: THREE.Vector3) => {
+  const seen = (v: THREE.Vector3) => {
     const p = v.clone().applyQuaternion(q).multiplyScalar(mag);
     const at = seenAt(m.at.x + p.x, m.at.y + p.y, height + p.z, eye);
-    return { ...at, k: at.k * mag };
-  };
-  const seen = (v: THREE.Vector3) => {
-    const at = seenK(v);
     return { x: at.x, y: at.y };
   };
   const n = m.atoms.length;
-  // every atom's ball as the picture shows it, and the molecule's middle
-  const radii = solid.radii[look];
-  const balls = Array.from({ length: n }, (_, i) => {
-    const s = seenK(at(places, i));
-    return { x: s.x, y: s.y, r: radii[i] * s.k };
-  });
+  // each atom's place as the picture shows it, and the molecule's middle
+  const points = Array.from({ length: n }, (_, i) => seen(at(places, i)));
   const middle = {
-    x: balls.reduce((t, b) => t + b.x, 0) / Math.max(n, 1),
-    y: balls.reduce((t, b) => t + b.y, 0) / Math.max(n, 1),
+    x: points.reduce((t, b) => t + b.x, 0) / Math.max(n, 1),
+    y: points.reduce((t, b) => t + b.y, 0) / Math.max(n, 1),
   };
-  const placed: LabelBox[] = [];
+  // what the picture draws, as it draws it: its balls and its sticks
+  const balls: { x: number; y: number; r: number }[] = [];
+  const sticks: Stick[] = [];
+  for (const k of drawn ?? pictureMarks(m, style, eye)) {
+    if (k.kind === "ball") balls.push({ x: k.c.x, y: k.c.y, r: k.r });
+    else sticks.push({ a: k.a, b: k.b, r: k.width / 2 });
+  }
+  const placed: LabelBox[] = [...before];
   // (none of an atom its look leaves out - hydrogens on carbon, where it
   // hides them - as the canvas draws none: Molecule3DView)
   const hidden = solid.hidden[look];
@@ -228,23 +241,28 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
         size,
         color: COLORS.highlight,
       };
-      const spot = valueSpot(mark, x.atoms.map((i) => balls[i]), middle, balls, placed, family);
+      const spot = valueSpot(mark, x.atoms.map((i) => points[i]), middle, balls, sticks, placed, family);
       placed.push(spot);
       return { ...mark, label: { x: spot.x, y: spot.y } };
     });
 }
 
+/** How many times, half its height at a time, a value is tried further off its line for a clear place (labelSpot `farther`): three of its heights in all. */
+const VALUE_FARTHER = 6;
+
 /**
  * Where a measurement's value is written in a picture: on its point, when
- * it covers no atom and no value placed before it there; or else off it,
- * clear of them (labelSpot) - a distance's square to its line, an angle's
- * out from its atoms - on the side away from the molecule's `middle`.
+ * it covers no ball, no stick and no value placed before it there; or else
+ * off it, clear of them (labelSpot) - a distance's square to its line, an
+ * angle's out from its atoms - on the side away from the molecule's
+ * `middle`.
  */
 function valueSpot(
   mark: MeasureMark,
   own: readonly { x: number; y: number }[],
   middle: { x: number; y: number },
   balls: readonly { x: number; y: number; r: number }[],
+  sticks: readonly Stick[],
   placed: readonly LabelBox[],
   family: string | undefined,
 ): LabelBox {
@@ -254,7 +272,7 @@ function valueSpot(
   const covers = (b: { x: number; y: number; r: number }) =>
     Math.hypot(Math.max(Math.abs(b.x - here.x) - here.hx, 0), Math.max(Math.abs(b.y - here.y) - here.hy, 0)) < b.r;
   const crowds = (p: LabelBox) => Math.abs(p.x - here.x) < p.hx + here.hx && Math.abs(p.y - here.y) < p.hy + here.hy;
-  if (!balls.some(covers) && !placed.some(crowds)) return here;
+  if (!balls.some(covers) && !sticks.some((st) => coveredLength(here, st) > 0) && !placed.some(crowds)) return here;
   // the way off: square to a distance's line, out from an angle's atoms
   let way =
     own.length === 2
@@ -264,5 +282,5 @@ function valueSpot(
   if (Math.hypot(way.x, way.y) < 1e-9) way = { x: 0, y: 1 };
   // (away from the molecule's middle)
   if (way.x * (o.x - middle.x) + way.y * (o.y - middle.y) < 0) way = { x: -way.x, y: -way.y };
-  return labelSpot(o, VALUE_GAP * mark.size, { x: here.hx, y: here.hy }, way, balls, placed);
+  return labelSpot(o, VALUE_GAP * mark.size, { x: here.hx, y: here.hy }, way, balls, placed, sticks, VALUE_FARTHER);
 }

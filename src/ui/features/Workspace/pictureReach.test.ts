@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { solidsBounds } from "../../../lib/chem/layout2d";
+import { labelSetOf, measureLabelBox, solidsBounds } from "../../../lib/chem/layout2d";
 import { ACS_1996 } from "../../../lib/chem/style";
 import { bondsByDistance } from "../../../utils/structureParsers";
 import { drawingLayout } from "./fileActions";
@@ -60,6 +60,46 @@ describe("a picture of molecules in 3D", () => {
     const again = notePictureMarks(m, style, 12);
     expect(again.length).toBeGreaterThan(0);
     expect(notePictureMarks(m, style, 12, undefined, pictureMarks(m, style))).toEqual(again);
+  });
+
+  /** A zigzag of thirty carbons 1.54 Å apart, no hydrogen in its file and its bond orders not known, its two ends' distance measured. */
+  const chain: Carried3D = {
+    atoms: Array.from({ length: 30 }, (_, i) => ({ el: "C", x: 1.27 * i, y: i % 2 ? 0.43 : -0.43, z: 0 })),
+    bonds: Array.from({ length: 29 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
+    bondOrders: "unknown",
+    at: { x: 0, y: 0 },
+    measures: [{ id: 1, atoms: [0, 29] }],
+  } as Carried3D;
+  const boxOf = (m: { label: { x: number; y: number }; text: string; size: number }, family: string | undefined) => measureLabelBox(m, family);
+  const apart = (a: ReturnType<typeof boxOf>, b: ReturnType<typeof boxOf>) =>
+    Math.min(a.max.x, b.max.x) <= Math.max(a.min.x, b.min.x) || Math.min(a.max.y, b.max.y) <= Math.max(a.min.y, b.min.y);
+
+  it("writes what a molecule says over it clear of its measurements' values, inside the picture", () => {
+    const { layout, opts } = drawingLayout({ atoms: [], bonds: [], molecules3d: [chain] } as unknown as Parameters<typeof drawingLayout>[0], aromatic, ACS_1996);
+    const family = labelSetOf(opts).fontFamily;
+    const marks = layout.measures ?? [];
+    const values = marks.filter((m) => m.lines.length);
+    const notes = marks.filter((m) => !m.lines.length);
+    expect(values).toHaveLength(1);
+    expect(notes.length).toBeGreaterThanOrEqual(2);
+    const { min, max } = layout.bounds;
+    for (const note of notes) {
+      const box = boxOf(note, family);
+      expect(apart(box, boxOf(values[0], family))).toBe(true);
+      for (const other of notes) if (other !== note) expect(apart(box, boxOf(other, family))).toBe(true);
+      expect(box.min.x).toBeGreaterThanOrEqual(min.x);
+      expect(box.max.x).toBeLessThanOrEqual(max.x);
+      expect(box.min.y).toBeGreaterThanOrEqual(min.y);
+      expect(box.max.y).toBeLessThanOrEqual(max.y);
+    }
+  });
+
+  it("writes what a molecule says just where it did when no value is in its way", () => {
+    const style = style3dOf({});
+    const m = { ...chain, measures: [] } as Carried3D;
+    // (a value far off it changes nothing)
+    const far = { x: 1000, y: 0, hx: 1, hy: 1 };
+    expect(notePictureMarks(m, style, 12, undefined, undefined, [far])).toEqual(notePictureMarks(m, style, 12));
   });
 
   it("are none, made a step at a time, once a copy begun since no longer wants them", async () => {
