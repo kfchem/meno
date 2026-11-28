@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createDocument } from "../../lib/doc/document";
 import TopBar from "./TopBar";
-import UndoButton, { keepFocus } from "./UndoButton";
+import UndoButton from "./UndoButton";
+import { keepFocus } from "./undoHistory";
 
 const ctl = { tabOrder: [], tabsById: {}, activeId: null, reorder() {}, select() {}, close() {}, add() {}, openFiles() {} };
 
@@ -13,7 +14,8 @@ describe("Undo in the title bar", () => {
     expect(html.indexOf('aria-label="Undo"')).toBeLessThan(html.indexOf('aria-label="Save"'));
     expect(html.indexOf('aria-label="Save"')).toBeLessThan(html.indexOf('aria-label="Settings"'));
     expect(html).toMatch(/aria-label="Undo" aria-disabled="true"/);
-    expect(renderToStaticMarkup(<UndoButton doc={createDocument({ n: 0 })} />)).toContain("opacity-40");
+    expect(renderToStaticMarkup(<UndoButton doc={createDocument({ n: 0 })} />)).toContain('aria-disabled="true"');
+    expect(html).toContain("aria-disabled:opacity-40");
   });
 
   it("is on, as its neighbours are, with a step to take back", () => {
@@ -21,8 +23,7 @@ describe("Undo in the title bar", () => {
     doc.edit("add atom", (s) => ({ n: s.n + 1 }));
     const html = renderToStaticMarkup(<UndoButton doc={doc} />);
     expect(html).toContain('aria-disabled="false"');
-    expect(html).not.toContain("opacity-40");
-    expect(html).toContain("hover:bg-gray-200");
+    expect(html).toContain("hover:bg-gh-hover");
     expect(html).toContain("Undo Add atom");
   });
 

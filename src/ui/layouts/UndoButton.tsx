@@ -1,18 +1,12 @@
 import clsx from "clsx";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useLayoutEffect, useReducer, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
 import { RISE } from "../theme/motion";
 import { useLeaving } from "../theme/leaving";
 import { longPressMs } from "../features/Workspace/longPress";
 import UndoIcon from "./UndoIcon";
-import { canUndo, chooseStep, hasHistory, historyRows, isLit, pressHold, undoClick, undoTip, type UndoDoc } from "./undoHistory";
-
-/** A press on the button or the list that leaves the focus - and with it the selection - where it was: on the page, or in a field. */
-export const keepFocus = (e: Pick<MouseEvent, "preventDefault" | "stopPropagation">) => {
-  e.preventDefault();
-  e.stopPropagation();
-};
+import { canUndo, keepFocus, chooseStep, hasHistory, historyRows, isLit, pressHold, undoClick, undoTip, type UndoDoc } from "./undoHistory";
 
 /**
  * Undo, in the title bar by Save and Settings: a click takes one step back
@@ -67,11 +61,8 @@ export default function UndoButton({ doc }: { doc: UndoDoc | undefined }) {
           press.rightClick(listed);
         }}
         style={{ touchAction: "manipulation" }}
-        className={clsx(
-          "h-7 w-7 rounded-md flex items-center justify-center text-gh-gray transition-[color,background-color,opacity] duration-150 ease-meno",
-          can ? "hover:bg-gray-200 hover:text-gh-black" : "opacity-40",
-          open && "bg-gray-200 text-gh-black",
-        )}
+        // (as Save beside it: faint with nothing to do, and lit while its list is open)
+        className="h-7 w-7 rounded-md flex items-center justify-center text-gh-gray transition-[color,background-color,opacity] duration-150 ease-meno hover:bg-gh-hover hover:text-gh-black aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-gh-gray aria-expanded:bg-gh-hover aria-expanded:text-gh-black aria-expanded:opacity-100"
       >
         <UndoIcon className="h-4.5 w-4.5" />
       </button>

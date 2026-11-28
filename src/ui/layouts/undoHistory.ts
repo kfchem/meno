@@ -19,6 +19,12 @@ export function undoClick(o: { active: unknown; doc: UndoDoc | undefined; field:
   return editFromMenu("undo", o);
 }
 
+/** A press on the button or the list that leaves the focus - and with it the selection - where it was: on the page, or in a field. */
+export function keepFocus(e: { preventDefault(): void; stopPropagation(): void }): void {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
 /** Whether a click has a step to take back: as Edit > Undo is on (`editMenuState`). */
 export function canUndo(doc: UndoDoc | undefined, active: unknown): boolean {
   return editMenuState(doc ? doc.history() : null, active).undo;

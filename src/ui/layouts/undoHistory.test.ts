@@ -75,7 +75,11 @@ describe("Undo held, or right-clicked", () => {
       clear: (id) => void due.delete(id),
       pass(ms) {
         now += ms;
-        for (const [id, d] of [...due]) if (d.at <= now) (due.delete(id), d.run());
+        for (const [id, d] of [...due]) {
+          if (d.at > now) continue;
+          due.delete(id);
+          d.run();
+        }
       },
     };
   }
