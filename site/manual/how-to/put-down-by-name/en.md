@@ -6,8 +6,8 @@ Type a SMILES or a name into Quick Add, and the structure is put down where you 
 2. {#plugins} Choose *Plugins*.
 3. {#add} Scroll down to *PubChem*, and choose *Add* at its right. Meno gets the plugin and sets it up, once. If it says *Added* already, go on to the next step.
 4. {#back} Click the *Workspace* tab to go back to the page.
-5. {#open-quick-add} Double-click an empty spot on the page. A row of icons opens, with a field under it.
-6. {#type-smiles} Type a SMILES: here, `CC(=O)Oc1ccccc1C(=O)O`. Under the field, *SMILES* shows the formula it reads.
+5. {#open-quick-add} Double-click an empty spot on the page. A row of icons opens.
+6. {#type-smiles} Type a SMILES: here, `CC(=O)Oc1ccccc1C(=O)O`. A field opens under the icons as you type; under it, *SMILES* shows the formula it reads.
 7. {#put-down-smiles} Press Enter. The structure is put down where you double-clicked. The first time, Meno starts its chemistry plugin first, which takes a moment.
 8. {#open-quick-add-again} Double-click another empty spot on the page.
 9. {#type-name} Type a name: here, `morphine`.
