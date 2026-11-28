@@ -38,6 +38,19 @@ describe("the back end's word on the window", () => {
     expect(pageMotion.seen()).toBe(false);
   });
 
+  it("drops the answer to its ask where an event came after it was sent: started minimised and restored meanwhile, it is seen", async () => {
+    let answer!: (seen: boolean) => void;
+    tauri.answer = new Promise<boolean>((r) => (answer = r));
+    const { hearWindowSeen, pageMotion } = await fresh();
+    const heard = hearWindowSeen();
+    // (the ask on its way, the listener on: the window restored - the event first, the late answer, unseen, after it)
+    await vi.waitFor(() => expect(tauri.heard).not.toBeNull());
+    tauri.heard!({ payload: true });
+    answer(false);
+    await heard;
+    expect(pageMotion.seen()).toBe(true);
+  });
+
   it("missing - asking fails, or outside the app - leaves the window taken as seen", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     tauri.answer = Promise.reject(new Error("no such command"));
