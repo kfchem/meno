@@ -490,6 +490,9 @@ function bracketAtom(body: string): { atom: SmilesAtom; mark: string } {
  */
 export type SmilesAtomOut = { el: string; charge?: number; isotope?: number; hs: number; tetra?: Configuration };
 
+/** How `smilesWritten` writes: the centres drawn in AND or OR groups, by atom, and the reader its text is read back by (Meno's own; another only in a test). */
+export type WrittenOptions = { groups?: readonly { atoms: readonly number[] }[]; readBack?: (text: string) => Smiles };
+
 /** A SMILES as written (`smilesWritten`), and the configurations given that it does not state - centres by atom, double bonds by bond index. */
 export type SmilesWritten = { text: string; unwritten: { centres: number[]; bonds: number[] } };
 
@@ -540,9 +543,18 @@ export function writeSmiles(atoms: readonly SmilesAtomOut[], bonds: readonly Smi
  * (`unwritten`), never written otherwise: a centre whose neighbours are not the atom's own; one with a lone pair the reader
  * would not take where the walk puts it (written first, or closing a ring at itself), where no other start avoids that; a
  * double bond with no single bond at an end, or whose marks would state another double bond's that is not given, or that
- * the text read back does not state as given. Its text is read back, and a mark that does not read as given is taken out.
+ * the text read back does not state as given. Its text is read back, and a mark that does not read as given is taken out and
+ * the text written again, until all it states reads back as given - at most once for each configuration given and twice
+ * more, after which it is written with no mark at all. A centre in an AND or OR group (`groups`: a racemate, a mixture of
+ * the group's two hands, or one hand not known which) has no mark a plain SMILES could give it: it is never written with
+ * one hand, and is said; a centre beside it drawn absolute is the same in every member the group stands for, and keeps its.
  */
-export function smilesWritten(atoms: readonly SmilesAtomOut[], bonds: readonly SmilesBond[], start = 0): SmilesWritten {
+export function smilesWritten(
+  atoms: readonly SmilesAtomOut[],
+  bonds: readonly SmilesBond[],
+  start = 0,
+  { groups = [], readBack = readSmiles }: WrittenOptions = {},
+): SmilesWritten {
   const near = atoms.map(() => [] as { to: number; order: number; bond: number }[]);
   bonds.forEach((b, i) => {
     near[b.a1].push({ to: b.a2, order: b.order, bond: i });
@@ -560,8 +572,10 @@ export function smilesWritten(atoms: readonly SmilesAtomOut[], bonds: readonly S
       )
     : () => false;
   const lonePair = (i: number) => atoms[i].tetra!.neighbours.length === 3;
+  const grouped = new Set(groups.flatMap((g) => g.atoms));
   const centres = new Set(
     given.filter((i) => {
+      if (grouped.has(i)) return false;
       const ns = atoms[i].tetra!.neighbours;
       const own = near[i].map((e) => e.to);
       const atomsOf = ns.filter((n) => n !== -1);
@@ -747,12 +761,14 @@ export function smilesWritten(atoms: readonly SmilesAtomOut[], bonds: readonly S
   const byPlace = atoms.map(() => 0);
   place.forEach((p, i) => (byPlace[p] = i));
   const fromPlaces = (t: Configuration): Configuration => ({ neighbours: t.neighbours.map((n) => (n < 0 ? n : byPlace[n])), volume: t.volume });
+  const rounds = given.length + bonds.length + 2;
   for (let round = 0; ; round++) {
+    if (round >= rounds) return { text: text(new Map(), new Set()), unwritten: { centres: given, bonds: bonds.flatMap((b, k) => (b.cisTrans ? [k] : [])) } };
     const slashes = round > bonds.length ? new Map<number, boolean>() : marks();
     const written = text(slashes, centres);
     let back: Smiles;
     try {
-      back = readSmiles(written);
+      back = readBack(written);
     } catch {
       const pairs = [...centres].filter(lonePair);
       if (pairs.length) pairs.forEach((i) => centres.delete(i));
@@ -763,10 +779,13 @@ export function smilesWritten(atoms: readonly SmilesAtomOut[], bonds: readonly S
       continue;
     }
     const wrong = new Set<number>();
-    for (const c of centres) {
+    // (a centre that reads back otherwise: taken out, and the text written again without its mark)
+    const before = centres.size;
+    for (const c of [...centres]) {
       const t = back.atoms[place[c]]?.tetra;
       if (!t || !sameConfiguration(atoms[c].tetra!, fromPlaces(t))) centres.delete(c);
     }
+    if (centres.size < before) continue;
     const readOf = new Map(back.bonds.map((b) => [[byPlace[b.a1], byPlace[b.a2]].sort((p, q) => p - q).join(","), b.cisTrans]));
     bonds.forEach((b, k) => {
       if (b.order !== 2) return;

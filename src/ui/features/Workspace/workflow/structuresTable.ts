@@ -12,7 +12,7 @@ import { smilesWritten, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
-import { identityInputOf } from "../chem/identityOf";
+import { identityInputOf, withGroups } from "../chem/identityOf";
 import { identityText } from "../../../../lib/chem/identity";
 import { BEFORE_THE_EDIT, drawnAsEntry, FINISHED, recordNumber, recordWhy, STATE_FINISHED, type DrawnEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
@@ -49,12 +49,14 @@ const SMILES_PROPERTY = "smiles";
  * read, and any centre or double bond the writer cannot state
  * (lib/chem/smiles `smilesWritten`).
  */
-function drawnWritten(drawn: Model): { smiles: string; left: boolean } {
+export function drawnWritten(drawn: Model): { smiles: string; left: boolean } {
   if (!drawn.atoms.length) return { smiles: "", left: false };
   const index = new Map(drawn.atoms.map((a, i) => [a.id, i]));
   const hs = undrawnHydrogens(drawn);
   const { input, unread } = identityInputOf(drawn);
-  const grouped = new Set((input.groups ?? []).flatMap((g) => g.atoms));
+  // (the AND and OR groups its centres are drawn in: the atoms' own marks, as a structure's identity takes them)
+  const groups = withGroups(input, drawn).groups ?? [];
+  const grouped = new Set(groups.flatMap((g) => g.atoms));
   const atoms: SmilesAtomOut[] = drawn.atoms.map((a, i) => {
     const tetra = input.atoms[i]?.tetra;
     return isElementSymbol(a.el) && !a.abbrev
@@ -63,7 +65,7 @@ function drawnWritten(drawn: Model): { smiles: string; left: boolean } {
           hs: hs.get(a.id) ?? 0,
           ...(a.charge ? { charge: a.charge } : {}),
           ...(a.isotope ? { isotope: a.isotope } : {}),
-          ...(tetra && !grouped.has(i) ? { tetra: { neighbours: [...tetra.neighbours], volume: tetra.volume } } : {}),
+          ...(tetra ? { tetra: { neighbours: [...tetra.neighbours], volume: tetra.volume } } : {}),
         }
       : { el: "*", hs: 0 };
   });
@@ -76,7 +78,7 @@ function drawnWritten(drawn: Model): { smiles: string; left: boolean } {
     const st = stated.get(pair(a1, a2));
     return [{ a1, a2, order: b.order, ...(st ? { cisTrans: { refs: [st.refs[0], st.refs[1]] as [number, number], cis: st.cis } } : {}) }];
   });
-  const written = smilesWritten(atoms, bonds, 0);
+  const written = smilesWritten(atoms, bonds, 0, { groups });
   const notWritten =
     unread.length > 0 ||
     input.atoms.some((a, i) => a.tetra && (grouped.has(i) || !atoms[i].tetra)) ||

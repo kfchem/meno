@@ -24,7 +24,7 @@ import type { WorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
 import { nameOf, setMembers } from "../workflow/entries";
 import { kindInfo } from "../workflow/kinds";
-import { drawnSmiles, drawnStereo } from "../workflow/structuresTable";
+import { drawnSmiles, drawnWritten } from "../workflow/structuresTable";
 import { inScope, readSeenId, seenId, SEEN_KINDS, type InScope, type Scope, type SeenId, type SeenKind } from "./scope";
 
 /** A tool's answer: what it found, or why not, in plain words. */
@@ -91,13 +91,14 @@ export function readOne(d: WorkspaceDocument, s: InScope, kind: SeenKind, id: nu
   switch (kind) {
     case "structure": {
       const drawn = structureModel(d, s.structureAtoms.get(id)!);
+      const written = drawnWritten(drawn);
       return {
         // (an atom holding a group says so: a Pr typed is propyl's label, not praseodymium - chem/drawing `readAs`)
         atoms: drawn.atoms.map((a) => ({ id: a.id, el: a.el, x: a.x, y: a.y, ...(a.charge ? { charge: a.charge } : {}), ...(a.abbrev ? { group: true } : {}) })),
         bonds: drawn.bonds.map((b) => ({ a: b.a, b: b.b, order: b.order })),
-        smiles: drawnSmiles(drawn),
+        smiles: written.smiles,
         // (stereo the drawing says, which its SMILES from the drawing does not write)
-        ...(drawnStereo(drawn) ? { stereo: "drawn, not written in the SMILES" } : {}),
+        ...(written.left ? { stereo: "drawn, not written in the SMILES" } : {}),
       };
     }
     case "molecule": {

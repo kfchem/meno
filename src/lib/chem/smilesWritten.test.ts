@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readSmiles, smilesWritten, writeSmiles, type Smiles, type SmilesAtomOut } from "./smiles";
 import { implicitHydrogens } from "./molecule";
 import { identityText } from "./identity";
-import { cipInput } from "./cip/testdata/cipFrom";
+import { cipInput, cipSaid } from "./cip/testdata/cipFrom";
 
 /** A structure read from a SMILES written in Kekulé form, as the writer takes it: each atom's H counted, its configuration kept. */
 function out(s: Smiles): SmilesAtomOut[] {
@@ -142,4 +142,68 @@ describe("each configuration turned over is written apart", () => {
       }
     });
   }
+});
+
+describe("centres drawn in an AND or OR group", () => {
+  // (a centre in a group stands for both its hands - a racemate or a mixture, or one hand not known which: a plain SMILES can
+  //  state neither, so it gets no mark and is said; a centre beside it drawn absolute is the same in every member, and keeps its)
+  it("writes a grouped centre with no mark, and says so", () => {
+    const s = readSmiles("N[C@@H](C)C(=O)O");
+    expect(smilesWritten(out(s), s.bonds, 0, { groups: [{ atoms: [1] }] })).toEqual({ text: "NC(C)C(=O)O", unwritten: { centres: [1], bonds: [] } });
+  });
+  it("keeps an absolute centre's mark beside a grouped one, and leaves a group of two unmarked", () => {
+    const s = readSmiles("C[C@@H](O)[C@H](F)CC");
+    expect(smilesWritten(out(s), s.bonds, 0, { groups: [{ atoms: [3] }] })).toEqual({ text: "C[C@@H](O)C(F)CC", unwritten: { centres: [3], bonds: [] } });
+    expect(smilesWritten(out(s), s.bonds, 0, { groups: [{ atoms: [1, 3] }] })).toEqual({ text: "CC(O)C(F)CC", unwritten: { centres: [1, 3], bonds: [] } });
+  });
+  it("leaves double bonds as they are: they are not grouped", () => {
+    const s = readSmiles("C/C=C/[C@@H](O)CC");
+    expect(smilesWritten(out(s), s.bonds, 0, { groups: [{ atoms: [3] }] }).text).toBe("C/C=C/C(O)CC");
+  });
+});
+
+describe("the read-back takes out a mark that does not read as given", () => {
+  // (a stand-in for the reader that reads every centre turned over, or every double bond the other way: no text may carry
+  //  a mark that did not read back as given - written again without it, and said)
+  const turned = (text: string): Smiles => {
+    const s = readSmiles(text);
+    return {
+      ...s,
+      atoms: s.atoms.map((a) => (a.tetra ? { ...a, tetra: { ...a.tetra, volume: -a.tetra.volume as 1 | -1 } } : a)),
+      bonds: s.bonds.map((b) => (b.cisTrans ? { ...b, cisTrans: { ...b.cisTrans, cis: !b.cisTrans.cis } } : b)),
+    };
+  };
+  it("writes a centre that reads back otherwise with no mark", () => {
+    const s = readSmiles("N[C@@H](C)C(=O)O");
+    expect(smilesWritten(out(s), s.bonds, 0, { readBack: turned })).toEqual({ text: "NC(C)C(=O)O", unwritten: { centres: [1], bonds: [] } });
+  });
+  it("writes a double bond that reads back otherwise with no mark, and ends", () => {
+    const s = readSmiles("F/C=C/[C@@H](O)C");
+    expect(smilesWritten(out(s), s.bonds, 0, { readBack: turned })).toEqual({ text: "FC=CC(O)C", unwritten: { centres: [3], bonds: [1] } });
+  });
+});
+
+describe("the hand anchored on known compounds, typed", () => {
+  // (by the CIP rules on paper: L-alanine S; (R)-glyceraldehyde, from its CH2OH: H, OH, CHO clockwise, R; (S)-lactic acid;
+  //  L-tartaric acid 2R,3R; meso-tartaric acid R,S, the same compound as its mirror image)
+  const labels = (smiles: string) => cipSaid(cipInput(smiles)).map((x) => x.split(":")[1]).sort();
+  const anchors: [string, string[]][] = [
+    ["N[C@@H](C)C(=O)O", ["S"]],
+    ["OC[C@@H](O)C=O", ["R"]],
+    ["C[C@H](O)C(=O)O", ["S"]],
+    ["[C@@H]([C@H](C(=O)O)O)(C(=O)O)O", ["R", "R"]],
+    ["[C@@H]([C@@H](C(=O)O)O)(C(=O)O)O", ["R", "S"]],
+  ];
+  for (const [smiles, said] of anchors) {
+    it(`${smiles}: ${said.join(",")}, written from every start`, () => {
+      expect(labels(smiles)).toEqual(said);
+      const n = readSmiles(smiles).atoms.length;
+      for (let start = 0; start < n; start++) expect(labels(written(smiles, start))).toEqual(said);
+    });
+  }
+  it("writes meso-tartaric acid and its mirror image as one compound, and L- and D-tartaric acid apart", () => {
+    const [meso, mirror] = [written("[C@@H]([C@@H](C(=O)O)O)(C(=O)O)O"), written("[C@H]([C@H](C(=O)O)O)(C(=O)O)O")];
+    expect(same(meso, mirror)).toBe(true);
+    expect(same(written("[C@@H]([C@H](C(=O)O)O)(C(=O)O)O"), written("[C@H]([C@@H](C(=O)O)O)(C(=O)O)O"))).toBe(false);
+  });
 });

@@ -154,6 +154,81 @@ describe("a set of structures drawn as a table", () => {
     expect(t.columns.map((c) => c.name)).not.toContain("stereo in the drawing");
   });
 
+  it("writes no hand for a centre drawn in an AND or OR group, and says so: a racemate is never written as one enantiomer", () => {
+    // (CHFClBr wedged up and down, its C in AND1, then in OR1: both drawings stand for the same, and write the same, unmarked)
+    const chfclbr = (stereo: "up" | "down", kind: "and" | "or"): Model => ({
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0, r: 0.9, stereoGroup: { kind, n: 1 } },
+        { id: 2, el: "F", x: 0, y: 1.5, r: 0.9 },
+        { id: 3, el: "Cl", x: 1.3, y: -0.75, r: 0.9 },
+        { id: 4, el: "Br", x: -1.3, y: -0.75, r: 0.9 },
+      ] as Atom[],
+      bonds: [
+        { id: 5, a: 1, b: 2, order: 1, stereo },
+        { id: 6, a: 1, b: 3, order: 1 },
+        { id: 7, a: 1, b: 4, order: 1 },
+      ],
+    });
+    for (const kind of ["and", "or"] as const) {
+      const t = structuresAsTable([chfclbr("up", kind), chfclbr("down", kind)].map((drawn, place) => ({ place, drawn })));
+      expect(column(t, "SMILES (drawing)")).toEqual(["C(F)(Cl)Br", "C(F)(Cl)Br"]);
+      expect(column(t, "stereo in the drawing")).toEqual(["stereo drawn, not written here", "stereo drawn, not written here"]);
+    }
+  });
+
+  it("keeps an absolute centre's hand beside a grouped one, and writes neither of a group of two", () => {
+    // (2-chloro-3-fluorobutane, both centres wedged: its C3 in AND1 stands for a pair of diastereomers, its C2 the same in
+    //  both - so C2 keeps its mark and C3 has none; both in AND1, the pair and its mirror, neither)
+    const butane = (groups: Record<number, "and">): Model => ({
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+        { id: 2, el: "C", x: 1.3, y: 0.75, r: 0.9, ...(groups[2] ? { stereoGroup: { kind: groups[2], n: 1 } } : {}) },
+        { id: 3, el: "C", x: 2.6, y: 0, r: 0.9, ...(groups[3] ? { stereoGroup: { kind: groups[3], n: 1 } } : {}) },
+        { id: 4, el: "C", x: 3.9, y: 0.75, r: 0.9 },
+        { id: 5, el: "Cl", x: 1.3, y: 2.25, r: 0.9 },
+        { id: 6, el: "F", x: 2.6, y: -1.5, r: 0.9 },
+      ] as Atom[],
+      bonds: [
+        { id: 7, a: 1, b: 2, order: 1 },
+        { id: 8, a: 2, b: 3, order: 1 },
+        { id: 9, a: 3, b: 4, order: 1 },
+        { id: 10, a: 2, b: 5, order: 1, stereo: "up" },
+        { id: 11, a: 3, b: 6, order: 1, stereo: "up" },
+      ],
+    });
+    const absolute = drawnSmiles(butane({}));
+    expect(absolute).toMatch(/^C\[C@@?H\]\(\[C@@?H\]\(C\)F\)Cl$/);
+    expect(drawnStereo(butane({}))).toBe(false);
+    expect(drawnSmiles(butane({ 3: "and" }))).toBe(absolute.replace(/\[C@@?H\](\(C\)F)/, "C$1"));
+    expect(drawnStereo(butane({ 3: "and" }))).toBe(true);
+    expect(drawnSmiles(butane({ 2: "and", 3: "and" }))).toBe("CC(C(C)F)Cl");
+    expect(drawnStereo(butane({ 2: "and", 3: "and" }))).toBe(true);
+  });
+
+  it("writes (S)-lactic acid drawn with its OH hashed, and (R) with it wedged", () => {
+    // (y runs up: OH above the centre, CH3 lower left, COOH lower right, H on the other side of the OH. Wedged, H behind:
+    //  OH, COOH, CH3 go clockwise, R; hashed, S)
+    const lactic = (stereo: "up" | "down"): Model => ({
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+        { id: 2, el: "O", x: 0, y: 1.5, r: 0.9 },
+        { id: 3, el: "C", x: -1.3, y: -0.75, r: 0.9 },
+        { id: 4, el: "C", x: 1.3, y: -0.75, r: 0.9 },
+        { id: 5, el: "O", x: 2.6, y: 0, r: 0.9 },
+        { id: 6, el: "O", x: 1.3, y: -2.25, r: 0.9 },
+      ] as Atom[],
+      bonds: [
+        { id: 7, a: 1, b: 2, order: 1, stereo },
+        { id: 8, a: 1, b: 3, order: 1 },
+        { id: 9, a: 1, b: 4, order: 1 },
+        { id: 10, a: 4, b: 5, order: 2 },
+        { id: 11, a: 4, b: 6, order: 1 },
+      ],
+    });
+    expect(cipSaid(cipInput(drawnSmiles(lactic("down"))))).toEqual(["C0:S"]);
+    expect(cipSaid(cipInput(drawnSmiles(lactic("up"))))).toEqual(["C0:R"]);
+  });
+
   it("says where a drawing carries stereo its SMILES does not write: a wedge that does not read", () => {
     // (trimethylamine with a wedge on one bond: its N turns over, the wedge states nothing - said, not written)
     const amine: Model = {
