@@ -16,6 +16,7 @@ import { matchedOn, valuesOn } from "../../../../lib/nodes/match";
 import { rebonded } from "../../../../lib/steps/rebond";
 import { structureKey } from "../../../../lib/steps/restructure";
 import { constitutionOf } from "../../../../lib/nodes/group";
+import { metal } from "../../../../lib/chem/perception/elements";
 import { identityAsked, identityKnown } from "../chem/identityOff";
 import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions } from "../../../../lib/steps/compareBonding";
 import { combined } from "../../../../lib/steps/combine";
@@ -210,7 +211,7 @@ export function mergedSet(first: readonly SetEntry[], second: readonly SetEntry[
  * the drawing thread may read it: known - asked first (`rebondKeysAsked`) - or small enough to work out here (chem/identityOff
  * `identityKnown`); else worked out here all the same, as where a caller could not ask first.
  */
-const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "constitution", REBOND_IN_PLACE_MOST)?.text ?? structureKey(e);
+const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "constitution", rebondInPlaceMost(e))?.text ?? structureKey(e);
 
 /**
  * The most atoms a bonding entry not yet known may have for its key to be worked out on the drawing thread: a constitution's key
@@ -218,6 +219,16 @@ const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "consti
  * a palladium with one triphenylphosphine, 35 atoms - where the next tried, a palladium with two, 69 atoms, took several frames.
  */
 export const REBOND_IN_PLACE_MOST = 35;
+
+/**
+ * The most atoms `e` may have for its key to be worked out on the drawing thread (`REBOND_IN_PLACE_MOST`) - none where it holds a
+ * metal (lib/chem/perception/elements `metal`). What a key costs is not its count of atoms: it is the like atoms it must tell
+ * apart, and a metal with four or six like ligands round it, well under that size, took two or three frames where organic
+ * structures as symmetric and as large took far under one. So an entry with a metal is always asked of the worker, and its short
+ * wait shows nothing (`REBOND_WORKING_AFTER_MS`). The size of the largest set of like atoms was weighed too: it is itself the
+ * work the key does, so it cannot be had cheaply before it.
+ */
+export const rebondInPlaceMost = (e: Pick<Entry, "structure">): number => (e.structure.atoms.some((a) => metal.has(a.el)) ? 0 : REBOND_IN_PLACE_MOST);
 
 /**
  * How long Re-bond waits on its keys before it is shown working: as long as a copy is made before "Copying…" is shown
@@ -244,7 +255,10 @@ export function rebondKeysAsked(bonding: readonly SetEntry[], answered?: (done: 
 
 /** Whether each of `bonding`'s structures is known as its key, or small enough to work out here (`rebondKey`): nothing to ask first. */
 export const rebondKeysKnown = (bonding: readonly SetEntry[]): boolean =>
-  bonding.every((e, i) => identityKnown(constitutionOf(entryOfSet(e, String(i))), "constitution", REBOND_IN_PLACE_MOST) != null);
+  bonding.every((e, i) => {
+    const entry = entryOfSet(e, String(i));
+    return identityKnown(constitutionOf(entry), "constitution", rebondInPlaceMost(entry)) != null;
+  });
 
 /**
  * *Re-bond* (lib/steps `rebonded`): each entry of *Geometry* given the

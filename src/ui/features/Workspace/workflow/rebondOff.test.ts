@@ -27,7 +27,7 @@ import type { Molecule3D } from "../store/types";
 import { addSet, addStep, connect } from "./model";
 import { kindInfo } from "./kinds";
 import { runMenoPair } from "./meno";
-import { rebondKeysAsked, REBOND_WORKING_AFTER_MS } from "./structureSteps";
+import { rebondKeysAsked, rebondKeysKnown, REBOND_WORKING_AFTER_MS } from "./structureSteps";
 import { runStep, type RunWith } from "./run";
 import type { SetEntry } from "./entries";
 
@@ -135,6 +135,29 @@ describe("Re-bond run on the page, with workers", () => {
     d = connect(d, { set: b }, step, second);
     return { d, step };
   }
+
+  /** Tetracarbonylnickel, made up: a metal with four like ligands, 9 atoms - small, and yet what a key costs most. */
+  const niCO4 = (): SetEntry => {
+    const atoms = [{ el: "Ni" }, ...[0, 1, 2, 3].flatMap(() => [{ el: "C" }, { el: "O" }])];
+    const bonds = [0, 1, 2, 3].flatMap((k) => [
+      { a1: 0, a2: 1 + 2 * k, order: 1 },
+      { a1: 1 + 2 * k, a2: 2 + 2 * k, order: 3 },
+    ]);
+    return { compound: 0, number: 1, atoms, bonds, xyz: atoms.flatMap((_, i) => [i, 0, 0]) } as unknown as SetEntry;
+  };
+
+  it("asks a metal's key of the worker however small it is, and works a small organic one out in place", async () => {
+    const metal = [niCO4()];
+    expect(rebondKeysKnown(metal)).toBe(false);
+    expect(held.length).toBe(1);
+    expect(worked.here).toBe(0);
+    answer();
+    await rebondKeysAsked(metal);
+    expect([rebondKeysKnown(metal), worked]).toEqual([true, { all: 1, here: 0 }]);
+    // (triphenylphosphine, 34 atoms and no metal: in place, nothing asked)
+    expect(rebondKeysKnown([asEntry(pph3())])).toBe(true);
+    expect([held.length, worked.here]).toEqual([0, 1]);
+  });
 
   /** The page in a store of its own, and what the store said of the step's working, at every change. */
   function opened(d: ReturnType<typeof page>["d"], step: number) {
