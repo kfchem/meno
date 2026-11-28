@@ -249,14 +249,17 @@ copies it into the run's folder and Meno is started on the copy.
   has each place (links followed, in any case): a folder that is not there,
   one Meno was never started in, one whose first card was never answered,
   this account's own home, one in the repository or holding it, and one in
-  the run's folder or holding it.
+  the run's folder or holding it. A home in which plugins were set up
+  before Meno showed that card, and its question about them answered, keeps
+  no answer to the card and never shows it: it is taken as answered, as
+  Meno takes it.
 - **Copied** (`Copy-ReadyHome`) from its Meno folder
   (`Library/Application Support/Meno`) alone - nothing of the prepared home
   outside the entries named here is read or copied - cloned where the disk can: the
-  plugins added (`plugins`); uv's and pixi's folders - their caches, the
+  plugins added, with the list of plugins online Meno keeps beside them,
+  its signature and state (`plugins`); uv's and pixi's folders - their caches, the
   Pythons, the plugins' downloaded files and the records of each set up
-  (`uv`, `pixi`); the tools Meno fetched (`tools`); the list of plugins
-  online (`catalogue.json` and its signature and state). Left out: the log
+  (`uv`, `pixi`); the tools Meno fetched (`tools`). Left out: the log
   and the network log, the window's place, jobs, the jobs kept and the
   working folder chosen for them, presets, whatever else is there, and the
   rest of the home - the caches, the web view's folders, the fonts Meno puts
@@ -266,7 +269,9 @@ copies it into the run's folder and Meno is started on the copy.
   by a copy of what is there; one leading to nothing is left out; one
   leading anywhere else - elsewhere in the prepared home or out of it - back
   into a folder it is in, or round with other links, stops the copy at
-  once, saying which, and what was copied is taken away. Only then is
+  once, saying which, and what was copied is taken away. A link inside
+  what is taken out below (a venv's Python leads to the prepared home's own
+  by its full path) is not followed: that part goes at once. Only then is
   anything taken out - of the
   copy alone, by its literal name, after checking that it lies inside the
   copy as the disk has it: what names the folder it was made in (each
