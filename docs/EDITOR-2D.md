@@ -560,16 +560,25 @@ an atom and an aromatic one), an H written as an atom ("H is left out of
 a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
 aromatic ring that cannot alternate. Where a plugin, or what runs it, fails and
-nothing is known of the SMILES itself, the words are plain and say what
-can be done - "This SMILES could not be drawn. Try again.", "<plugin>
-could not be started. Remove it and add it again in Settings, Plugins." -
-and what the failure came with goes to Meno's log, never to the screen
-(lib/plugins/failureSaid; the same words where a plugin is not added, in
-Settings, Plugins). A compound found by its name is said so too ("This
-compound could not be drawn. Try again.", "<plugin> could not look this
-name up. Try again."); where no plugin here draws it, the plugins online
-that do are offered, as for a SMILES typed, and the compound is drawn once
-one is added. A molecule the dictionary has - a
+nothing is known of the SMILES itself, the words say what could not be
+done and what truly can be, by what kind of failure it was (lib/plugins/
+failureSaid `failureKind`): no answer in time, or the plugin stopped -
+"<plugin> did not answer. Try again."; the plugin answered that it could
+not - "This SMILES could not be made into a structure.", nothing asked
+again; its set-up not whole - "<plugin> could not be started: its set-up
+is not whole. Remove it and add it again in Settings, Plugins." (removing
+it takes its environment away; adding it makes it anew); the network off
+or not allowed - "<plugin> needs the network; Meno is offline.", as the
+look-up row says it; anything else - that it could not be done, and
+"Meno's log, in Settings, General, can be sent with a report." The same
+words where a plugin is not added, in Settings, Plugins, and on the first
+start's card. Meno's log is told which plugin, where and what kind of
+failure ("Meno: Sketchkit: start failed: outside.") - never the words
+the failure came with, which may name a file. A compound found by its
+name is said so too ("This compound could not be made into a
+structure.", "<plugin> could not look this name up."); where no plugin
+here draws it, the plugins online that do are offered, as for a SMILES
+typed, and the compound is drawn once one is added. A molecule the dictionary has - a
 reagent, a formula read by rule, a ligand bound only by pairs it lends:
 DMF, Et3N, PdCl2, THF, typed as written or in small letters (dmf,
 et3n), as a label is given its case on the canvas; a formula in capitals

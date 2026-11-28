@@ -10,7 +10,7 @@ import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import { askToConnect, useNetwork, type ConsentRequest } from "../../../../lib/net/network";
 import { stopWorker, workerOf, workerRunning, type PluginWorker } from "../../../../lib/plugins/process";
 import { pyEnvReady } from "../../../../lib/pyEnv";
-import { startFailure } from "../../../../lib/plugins/failureSaid";
+import { offlineWords, startFailure } from "../../../../lib/plugins/failureSaid";
 import { foundOf, lookupConsentOf, lookupHosts, lookupPurpose, MOST_NAMED, NAME_MOST, type NameFound } from "./nameLookup";
 
 /**
@@ -33,7 +33,7 @@ export type LookupSteps = {
 };
 
 /** Where Meno is offline: what the lookup row says, before anything is asked. */
-export const offlineSaid = (p: PythonPlugin) => `${p.name} needs the network; Meno is offline`;
+export const offlineSaid = (p: PythonPlugin) => offlineWords(p.name);
 
 /** Where the plugin is not added (taken away, or its set-up not done): what the lookup row says, before anything is asked. */
 export const notAddedSaid = (p: PythonPlugin) => `${p.name} is not added: add it in Settings, Plugins`;

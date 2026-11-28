@@ -41,7 +41,7 @@ describe("a plugin's worker, asked for the first time", () => {
     expect(await statesStarting("tightbind")).toEqual(["setting-up", "starting", "ready"]);
   });
 
-  it("that cannot be started is said so in plain words, with what to do - what the back end said kept off the screen, for the log", async () => {
+  it("that cannot be started is said so in plain words, with what to do - what the back end said kept off the screen and out of the log", async () => {
     refused = "forbidden path: /home/someone/data/uv/plugin-x/venv/bin/python";
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const plugin = PLUGINS.find((p) => p.id === "sketchkit")!;
@@ -49,9 +49,10 @@ describe("a plugin's worker, asked for the first time", () => {
       () => "started",
       (e: unknown) => (e instanceof Error ? e.message : String(e)),
     );
-    expect(said).toBe(`${plugin.name} could not be started. Remove it and add it again in Settings, Plugins.`);
+    expect(said).toBe(`${plugin.name} could not be started: Meno may not reach its files. Meno's log, in Settings, General, can be sent with a report.`);
     expect(useChem.getState()).toMatchObject({ state: "failed", message: said });
-    expect(warn).toHaveBeenCalledWith(expect.any(String), refused);
+    // (the log told which plugin, where and what kind - never the text, which names a file)
+    expect(warn).toHaveBeenCalledWith(`Meno: ${plugin.name}: start failed: outside.`);
     warn.mockRestore();
   });
 });

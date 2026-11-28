@@ -26,7 +26,7 @@
  * a step under way (a download, uv building the environment) runs to its end,
  * as nothing can cut it short today.
  */
-import { failureSaid, setUpUnfinishedSaid } from "./failureSaid";
+import { setUpFailed } from "./failureSaid";
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { allowAnswered, formatBytes, useNetwork, type ConsentRequest } from "../net/network";
@@ -210,6 +210,8 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
   const failed = (why: string) => useFirstSetUp.setState({ phase: "failed", why }, true);
   // (stopped: the card goes, nothing more done)
   const end = () => useFirstSetUp.setState({ phase: "none" }, true);
+  // (the plugin set up, by its name, once it is known: what a failure is said of)
+  let named = "The plugin";
   try {
     going("list");
     if (!(await deps.allow([CATALOGUE_PURPOSE]))) return failed("Meno is offline: nothing was fetched.");
@@ -222,6 +224,7 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
     // (none, or more than one: the chemist chooses - each to add, or why not - as where the role is asked of)
     if (offered.length !== 1) return void useFirstSetUp.setState({ phase: "choose" }, true);
     const entry = offered[0];
+    named = entry.name;
     const plugin = { id: entry.id, name: entry.name, licence: entry.licence, size: formatBytes(entry.source.bytes) };
     if (here.length !== 1) {
       going("files", plugin);
@@ -246,8 +249,8 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
     end();
   } catch (e) {
     if (stopped) return end();
-    // (in Meno's words: what the back end said goes to Meno's log - ./failureSaid)
-    failed(failureSaid(e, `It was not set up: ${setUpUnfinishedSaid}`));
+    // (in Meno's words, or by its kind - what the back end said never on the card: ./failureSaid)
+    failed(setUpFailed(named, e));
   }
 }
 

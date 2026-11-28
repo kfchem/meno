@@ -13,32 +13,23 @@ export type SmilesRead = null | { error: string; needs: RoleId | null };
  * plugin offered for it is added (./RoleOffer `done`): what was typed is
  * drawn then, not typed again.
  */
-export async function readSmiles(smiles: string, onSmiles: (smiles: string) => Promise<void>): Promise<SmilesRead> {
+export async function readSmiles(smiles: string, onSmiles: (smiles: string) => Promise<void>, plugin: string): Promise<SmilesRead> {
   try {
     await onSmiles(smiles);
     return null;
   } catch (err) {
-    return notDrawnSaid(err, SMILES_NOT_DRAWN);
+    return notDrawnSaid(err, "SMILES", plugin);
   }
 }
-
-/** What is said where a SMILES typed was not drawn and nothing more is known in Meno's words. */
-export const SMILES_NOT_DRAWN = "This SMILES could not be drawn. Try again.";
-
-/** What is said where a compound found by its name was not drawn and nothing more is known in Meno's words. */
-export const FOUND_NOT_DRAWN = "This compound could not be drawn. Try again.";
-
-/** What is said where a name could not be looked up and nothing more is known in Meno's words: `plugin`, by its own name. */
-export const lookUpFailedSaid = (plugin: string) => `${plugin} could not look this name up. Try again.`;
 
 /**
  * Why a structure asked for in Quick Add - a SMILES typed, a compound found by its name - was not drawn: in
  * Meno's words where they say why ("This SMILES could not be read: …"); where no plugin here draws it, that one
- * is needed, with the plugins online that do (./RoleOffer); else `plain`, the failure itself to Meno's log
- * (lib/plugins/failureSaid).
+ * is needed, with the plugins online that do (./RoleOffer); else by what kind of failure it was, for `plugin`
+ * by its name (lib/plugins/failureSaid).
  */
-export function notDrawnSaid(err: unknown, plain: string): { error: string; needs: RoleId | null } {
-  return { error: failureSaid(err, plain), needs: err instanceof NoPlugin ? err.role : null };
+export function notDrawnSaid(err: unknown, where: "SMILES" | "compound", plugin: string): { error: string; needs: RoleId | null } {
+  return { error: failureSaid(err, where, plugin), needs: err instanceof NoPlugin ? err.role : null };
 }
 
 /**
@@ -50,6 +41,17 @@ export function afterAdded(typed: string, reading: boolean, read: (smiles: strin
   const smiles = typed.trim();
   if (smiles && !reading) read(smiles);
   else letGo();
+}
+
+/**
+ * The plugin offered under the field added (./RoleOffer `done`): where it was offered for a compound found by its
+ * name (`found`), that compound drawn - not looked up again; where it was for looking names up, the offer let go
+ * (a name is looked up only on the chemist's Enter); else what was typed read again (`afterAdded`).
+ */
+export function offerDone<F>(needs: RoleId, found: F | null, typed: string, reading: boolean, does: { read: (smiles: string) => void; draw: (found: F) => void; letGo: () => void }): void {
+  if (needs === "names") does.letGo();
+  else if (found) does.draw(found);
+  else afterAdded(typed, reading, does.read, does.letGo);
 }
 
 /**
@@ -106,8 +108,15 @@ export function chemistryLine(chem: ChemState, share: number | undefined, waitin
   return `${step}.${waiting ? " This is drawn when it is ready." : ""}`;
 }
 
-/** What a reading under the SMILES field shows, as words: its name (or "SMILES", or its label) and its formula, once where they are one. */
+/** What a reading under the SMILES field shows: its name (or "SMILES", or its label, or its formula) and its formula after it - none where the head is that formula already. */
+export function readingParts(r: Reading): { head: string; headIsFormula: boolean; formula: string | null } {
+  const named = r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : null;
+  const head = named ?? (r.as === "label" ? r.label : r.formula);
+  return { head, headIsFormula: named === null, formula: r.as === "label" && !r.name && sameFormula(r.label, r.formula) ? null : r.formula };
+}
+
+/** What a reading under the SMILES field shows, as words: its name for assistive technology (`readingParts`). */
 export function readingSaid(r: Reading): string {
-  const head = r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : r.as === "label" ? r.label : r.formula;
-  return r.as === "label" && !r.name && sameFormula(r.label, r.formula) ? head : `${head} \u00b7 ${r.formula}`;
+  const { head, formula } = readingParts(r);
+  return formula ? `${head} \u00b7 ${formula}` : head;
 }

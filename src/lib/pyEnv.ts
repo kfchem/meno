@@ -5,6 +5,7 @@ import {
   mkdir,
 } from "@tauri-apps/plugin-fs";
 import { writeAppFile } from "./io/writeDocument";
+import { CarriesBackEnd } from "./plugins/failureSaid";
 import { filesSetUp, pixiSetUp, uvSetUp, type SetUpReach } from "./plugins/setUpSources";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -326,7 +327,8 @@ export async function ensurePyEnv(
   };
   // (a file there that could not be read - held by another program, not allowed, a share gone: not known to be changed, so neither
   //  fetched over nor run with; said, with why, and read again the next time)
-  if (unreadable.length) throw new Error(`${unreadable.join("; ")} - ${unreadable.length === 1 ? "it" : "they"} could not be read, so ${pluginOf(profile)?.name ?? profile} cannot run. Meno reads ${unreadable.length === 1 ? "it" : "them"} again the next time.`);
+  // (carrying the system's words and its files' names: never shown as it is - lib/plugins/failureSaid)
+  if (unreadable.length) throw new CarriesBackEnd(`${unreadable.join("; ")} - ${unreadable.length === 1 ? "it" : "they"} could not be read, so ${pluginOf(profile)?.name ?? profile} cannot run. Meno reads ${unreadable.length === 1 ? "it" : "them"} again the next time.`);
   // (set up, with the files besides the user was told of)
   const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) });
   const extra = besides(pluginOf(profile));

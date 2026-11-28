@@ -244,6 +244,9 @@ export class ChemError extends Error {}
 /** No answer in the time a request was given: the worker held on it is started afresh (lib/plugins/queue). */
 export class ChemTimeout extends ChemError {}
 
+/** A worker's answer that it could not do what it was asked (`{ok: false, error}`): its words, not written for the screen (lib/plugins/failureSaid). */
+export class ChemRefusal extends ChemError {}
+
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (e: Error) => void;
@@ -329,7 +332,7 @@ export class ChemClient {
     clearTimeout(p.timer);
     this.watch?.settled(m.id!);
     if (m.ok) p.resolve(m.result);
-    else p.reject(new ChemError(m.error ?? `${this.name} could not answer`));
+    else p.reject(new ChemRefusal(m.error ?? `${this.name} could not answer`));
   }
 
   /**
