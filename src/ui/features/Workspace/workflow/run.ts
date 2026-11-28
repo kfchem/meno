@@ -12,7 +12,7 @@ import { boxOf } from "../chem/make3d";
 import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { turnAfter, turnOver } from "../utils/align3d";
+import { principalTurn, turnAfter, turnOver } from "../utils/align3d";
 import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
@@ -767,6 +767,22 @@ export function laidOver(
   });
 }
 
+/**
+ * How a molecule a step gave is first seen where nothing it came from says how - one a step made, or moved with no entry
+ * of its atoms to lay it over (docs/WORKFLOWS.md, *Results*): as a molecule opened from a file is (utils/align3d
+ * `principalTurn`), along its principal axes in the frame it is first shown at - an optimisation's path at its end, else
+ * its first - so that its shape is seen (a bent molecule bent, a planar one face-on) and the same geometry is always seen
+ * the same way. Only the view is turned; its coordinates are as the step gave them.
+ */
+export function firstSeen(m: Pick<Molecule3D, "atoms" | "frames" | "path" | "entryFrames">): Turn3D | undefined {
+  const f = m.path ? framesOf(m) - 1 : m.entryFrames?.length === 1 ? m.entryFrames[0] : 0;
+  return principalTurn(frameXyz(m, f));
+}
+
+/** Each of `molecules` turned as `turns` says (`laidOver`, `viewKept`), and where that says nothing, as it is first seen (`firstSeen`). */
+export const seenAs = (molecules: readonly Pick<Molecule3D, "atoms" | "frames" | "path" | "entryFrames">[], turns?: readonly (Turn3D | undefined)[]): (Turn3D | undefined)[] =>
+  molecules.map((m, i) => turns?.[i] ?? firstSeen(m));
+
 /** How near, in angstroms, a result's atoms are to an entry's to be where they were: a step that passed it through, not one that moved it. */
 const KEPT_AT = 1e-6;
 
@@ -783,14 +799,27 @@ export function viewKept(
   entries: readonly SetEntry[],
   turnOf: (e: SetEntry) => Turn3D | undefined,
 ): (Turn3D | undefined)[] {
+  return keptFrom(molecules, entries).map((k) => (k < 0 ? undefined : turnOf(entries[k])));
+}
+
+/** `viewKept`, and each molecule no entry has the atoms of - one a step moved or made - as it is first seen (`firstSeen`); one passed through seen as its source is, turned or not. */
+export function viewKeptOrFirst(
+  molecules: readonly Pick<Molecule3D, "atoms" | "frames" | "path" | "entryFrames">[],
+  entries: readonly SetEntry[],
+  turnOf: (e: SetEntry) => Turn3D | undefined,
+): (Turn3D | undefined)[] {
+  return keptFrom(molecules, entries).map((k, i) => (k < 0 ? firstSeen(molecules[i]) : turnOf(entries[k])));
+}
+
+/** Of each molecule, the place of the entry it was passed through from, its atoms where they were - -1, none (`viewKept`). */
+function keptFrom(molecules: readonly Pick<Molecule3D, "atoms" | "frames">[], entries: readonly SetEntry[]): number[] {
   // (each entry taken once, in order: copies of one molecule, its atoms where the other's are, each turned as its own was - found in review)
   const taken = new Set<number>();
   return molecules.map((m) => {
     const xyz = frameXyz(m, framesOf(m) - 1);
     const k = entries.findIndex((e, i) => !taken.has(i) && e.atoms.length === m.atoms.length && e.atoms.every((a, j) => a.el === m.atoms[j].el) && e.xyz.every((v, j) => Math.abs(v - xyz[j]) <= KEPT_AT));
-    if (k < 0) return undefined;
-    taken.add(k);
-    return turnOf(entries[k]);
+    if (k >= 0) taken.add(k);
+    return k;
   });
 }
 

@@ -56,7 +56,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type CarriedRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, seenAs, viewKeptOrFirst, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { DRAWN_AND_3D, runDuplicatesDrawnInTurns, runMenoInTurns } from "../../workflow/meno";
 import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
@@ -358,7 +358,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what leaves by Out seen as what came into In, where it passed through unmoved: its room made for it so turned, then turned - as
     //  any step's results are, workflow/run `viewKept`)
     const turns3d = get().turns3d;
-    const outTurns = viewKept(out, setEntries(input.molecules, holds), (e) => (e.from != null ? turns3d[e.from] : undefined));
+    const outTurns = viewKeptOrFirst(out, setEntries(input.molecules, holds), (e) => (e.from != null ? turns3d[e.from] : undefined));
     const before = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
     doc.edit("results", (x) => {
       const s = stepOf(x, id);
@@ -835,17 +835,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /**
    * How a step's results are first turned: where they are what came in worked out, each laid over what it was worked out from, turned as
    * that is (workflow/run `laidOver`); where the step passed them through, its atoms where they were, turned as the molecule each came from
-   * is (`viewKept`) - one a step moved or made seen as it is first seen.
+   * is (`viewKept`) - one a step moved or made seen as it is first seen, along its principal axes (workflow/run `seenAs`).
    */
   function turnsFor(d: WorkspaceDocument, id: number, kind: StepKind, results: RunResults): (Turn3D | undefined)[] | undefined {
+    // (those it gave, then those it set aside: the turns of both, in the order they are put down)
+    const all = [...results.molecules, ...results.rest];
     const input = inputOf(d, id);
-    if (!input || input.holds === "structures" || results.holds === "conformers") return undefined;
+    if (!input || input.holds === "structures" || results.holds === "conformers") return seenAs(all);
     const turns = get().turns3d;
     const entries = setEntries(input.molecules, input.holds);
     const turnOf = (e: SetEntry) => (e.from != null ? turns[e.from] : undefined);
-    // (those it gave, then those it set aside: the turns of both, in the order they are put down)
-    const all = [...results.molecules, ...results.rest];
-    return LAID_OVER.includes(kind) ? laidOver(all, entries, turnOf) : viewKept(all, entries, turnOf);
+    return LAID_OVER.includes(kind) ? seenAs(all, laidOver(all, entries, turnOf)) : viewKeptOrFirst(all, entries, turnOf);
   }
 
   /**
@@ -858,7 +858,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const made = (doc.getState().molecules3d ?? []).filter((m) => !before.has(m.id));
     if (!made.length) return;
     const turns = get().turns3d;
-    const kept = viewKept(made, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
+    const kept = viewKeptOrFirst(made, setEntries(input.molecules, input.holds), (e) => (e.from != null ? turns[e.from] : undefined));
     made.forEach((m, i) => {
       const turn = kept[i];
       if (turn && !turns[m.id]) get().setTurn3d(m.id, turn);

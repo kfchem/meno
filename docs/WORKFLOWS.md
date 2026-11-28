@@ -2440,8 +2440,16 @@ each came from is (run `viewKept`): a water seen face-on in what came in
 is seen face-on in the step's set, never edge-on as if its geometry had
 changed. Its room in the set is made for it so turned, and copies of
 one molecule are each turned as their own source was. A molecule a step
-moved or made, and one whose source was never turned, is seen as it is
-first seen; so, for now, is one in a set held off the page.
+moved or made with nothing to lay it over - a conformer search's, one
+made from structures drawn - is first seen as a molecule opened from a
+file is: along its principal axes (utils/align3d `principalTurn`), its
+longest extent across, its next up, its least towards the viewer, in the
+frame it is first shown at (an optimisation's path at its end), so that
+a bent three-atom molecule is seen bent and a planar one face-on, and
+the same geometry is seen the same way in every card of a run (run
+`firstSeen`). Only the view is turned; its coordinates are as the step
+gave them. One passed through from a source never turned is seen as
+that source is, unturned; so, for now, is one in a set held off the page.
 
 - **By the view's turn**, not by turning the coordinates, which would
   part them from the output they were read from (its vibrations, the
