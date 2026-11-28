@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { aboutDrawing, colourTargetGone, menuTargetGone } from "./menuTarget";
+import { aboutDrawing, colourTargetGone, menuTargetGone, pushFromMenu } from "./menuTarget";
 import { ringKeyOf } from "./rings";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { MenuTarget } from "../PartMenu";
@@ -127,5 +127,21 @@ describe("a right-click menu as the drawing changes (Workspace closes only those
     expect(aboutDrawing(on(null, null))).toBe(false);
     // (a selection of molecules in 3D alone is not the drawing's)
     expect(aboutDrawing({ ...on("molecule3d", 1), selection: "here", drawing: false })).toBe(false);
+  });
+});
+
+describe("an electron-pushing arrow begun from a right-click menu", () => {
+  // (a right-click selects the thing under the pointer - alone, where it was not selected - so its menu is the selection's:
+  //  docs/EDITOR-2D.md, *Selecting*)
+  const rightClicked = (kind: MenuTarget["kind"], id: number | null): MenuTarget => ({ ...on(kind, id), selection: "here", drawing: true });
+
+  it("leaves the atom or the bond right-clicked, which the right-click selected", () => {
+    expect(pushFromMenu(rightClicked("atom", 4))).toEqual({ atom: 4 });
+    expect(pushFromMenu(rightClicked("bond", 9))).toEqual({ bond: 9 });
+  });
+
+  it("is begun from no other menu", () => {
+    for (const kind of ["ring", "push", "arrow", "caption", "molecule3d", null] as const) expect(pushFromMenu(rightClicked(kind, 1))).toBeNull();
+    expect(pushFromMenu(rightClicked("atom", null))).toBeNull();
   });
 });
