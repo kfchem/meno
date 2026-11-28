@@ -160,7 +160,7 @@ function HistoryMenu({ doc, under, onClose }: { doc: UndoDoc; under: HTMLElement
       {...held}
       role="menu"
       aria-label="History"
-      className="fixed z-50 w-max min-w-[12rem] max-w-[20rem] rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none overflow-y-auto overscroll-contain"
+      className="fixed z-50 grid content-start min-w-[12rem] max-w-[20rem] rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none overflow-y-auto overscroll-contain"
       style={place}
       onMouseDown={keepFocus}
       onContextMenu={(e) => e.preventDefault()}
@@ -184,7 +184,7 @@ function HistoryMenu({ doc, under, onClose }: { doc: UndoDoc; under: HTMLElement
               chooseStep(doc, row.offset);
             }}
             className={clsx(
-              "w-full h-8 px-3 text-left truncate outline-none transition-colors duration-150 ease-meno",
+              "min-w-0 h-8 px-3 text-left truncate outline-none transition-colors duration-150 ease-meno",
               isLit(row.offset, pointed) && "bg-gh-base",
               row.forward && !isLit(row.offset, pointed) && "text-gh-gray",
             )}
