@@ -1,0 +1,143 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [
+    "RDKit",
+    "PubChem"
+  ],
+  "steps": [
+    {
+      "id": "settings",
+      "shot": "01-settings.webp",
+      "mark": {
+        "kind": "click",
+        "x": 2328,
+        "y": 12,
+        "w": 56,
+        "h": 56
+      }
+    },
+    {
+      "id": "plugins",
+      "shot": "02-plugins.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1554,
+        "y": 128,
+        "w": 146,
+        "h": 64
+      }
+    },
+    {
+      "id": "add",
+      "shot": "03-add.webp",
+      "mark": {
+        "kind": "click",
+        "x": 2094,
+        "y": 1198,
+        "w": 96,
+        "h": 58,
+        "near": [
+          210,
+          1156,
+          1980,
+          100
+        ]
+      }
+    },
+    {
+      "id": "back",
+      "shot": "04-back.webp",
+      "mark": {
+        "kind": "click",
+        "x": 194,
+        "y": 26,
+        "w": 120,
+        "h": 32
+      }
+    },
+    {
+      "id": "open-quick-add",
+      "shot": "05-open-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 560,
+        "y": 420,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "type-smiles",
+      "shot": "06-type-smiles.webp",
+      "mark": {
+        "kind": "type",
+        "text": "CC(=O)Oc1ccccc1C(=O)O"
+      }
+    },
+    {
+      "id": "put-down-smiles",
+      "shot": "07-put-down-smiles.webp",
+      "mark": {
+        "kind": "key",
+        "text": "Enter"
+      }
+    },
+    {
+      "id": "open-quick-add-again",
+      "shot": "08-open-quick-add-again.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1500,
+        "y": 420,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "type-name",
+      "shot": "09-type-name.webp",
+      "mark": {
+        "kind": "type",
+        "text": "morphine"
+      }
+    },
+    {
+      "id": "look-up",
+      "shot": "10-look-up.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1650,
+        "y": 590,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "allow",
+      "shot": "11-allow.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1458,
+        "y": 968,
+        "w": 120,
+        "h": 70
+      }
+    },
+    {
+      "id": "let-go",
+      "shot": "12-let-go.webp",
+      "mark": {
+        "kind": "click",
+        "x": 400,
+        "y": 1350,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "result": "result.webp"
+}

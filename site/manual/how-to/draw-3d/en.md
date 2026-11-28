@@ -8,3 +8,4 @@ Draw a ring with the pointer, and its 3D structure rises out of the drawing.
 4. {#lead-ring} Move the pointer round the six corners of a ring, without pressing the button, and click where you began.
 5. {#right-click} Right-click an atom of the ring.
 6. {#make-3d} Choose *3D structure*: the icon marked *3D* in the top row of the menu. The 3D structure rises out of the drawing and comes to rest beside it.
+7. {#let-go} Click an empty spot on the page. The drawing and its 3D structure stand side by side.
