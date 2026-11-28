@@ -1,0 +1,295 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [],
+  "steps": [
+    {
+      "id": "open-quick-add",
+      "shot": "01-open-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1100,
+        "y": 680,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "scheme",
+      "shot": "02-scheme.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1518,
+        "y": 662,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1128,
+          652,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "cycle",
+      "shot": "03-cycle.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1290,
+        "y": 752,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1138,
+          742,
+          778,
+          82
+        ]
+      }
+    },
+    {
+      "id": "catalyst-open",
+      "shot": "04-catalyst-open.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1100,
+        "y": 1112,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "catalyst-text",
+      "shot": "05-catalyst-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1366,
+        "y": 1094,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1128,
+          1084,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "catalyst",
+      "shot": "06-catalyst.webp",
+      "mark": {
+        "kind": "type",
+        "text": "L2Pd(0)"
+      }
+    },
+    {
+      "id": "second-open",
+      "shot": "07-second-open.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 726,
+        "y": 464,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "second-text",
+      "shot": "08-second-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 992,
+        "y": 446,
+        "w": 72,
+        "h": 72,
+        "near": [
+          754,
+          436,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "second",
+      "shot": "09-second.webp",
+      "mark": {
+        "kind": "type",
+        "text": "L2Pd(Ar)X"
+      }
+    },
+    {
+      "id": "third-open",
+      "shot": "10-third-open.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1474,
+        "y": 464,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "third-text",
+      "shot": "11-third-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1740,
+        "y": 446,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1502,
+          436,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "third",
+      "shot": "12-third.webp",
+      "mark": {
+        "kind": "type",
+        "text": "L2Pd(Ar)Ar'"
+      }
+    },
+    {
+      "id": "arrow-in-menu",
+      "shot": "13-arrow-in-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 675,
+        "y": 605,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "arrow-in",
+      "shot": "14-arrow-in.webp",
+      "mark": {
+        "kind": "click",
+        "x": 704,
+        "y": 720,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "arrow-in-words",
+      "shot": "15-arrow-in-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "Ar-X"
+      }
+    },
+    {
+      "id": "metal-in-menu",
+      "shot": "16-metal-in-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 952,
+        "y": 274,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "metal-in",
+      "shot": "17-metal-in.webp",
+      "mark": {
+        "kind": "click",
+        "x": 982,
+        "y": 390,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "metal-in-words",
+      "shot": "18-metal-in-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "Ar'-M"
+      }
+    },
+    {
+      "id": "metal-out-menu",
+      "shot": "19-metal-out-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1248,
+        "y": 274,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "metal-out",
+      "shot": "20-metal-out.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1278,
+        "y": 454,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "metal-out-words",
+      "shot": "21-metal-out-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "M-X"
+      }
+    },
+    {
+      "id": "arrow-out-menu",
+      "shot": "22-arrow-out-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1532,
+        "y": 680,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "arrow-out",
+      "shot": "23-arrow-out.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1562,
+        "y": 860,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "arrow-out-words",
+      "shot": "24-arrow-out-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "Ar-Ar'"
+      }
+    },
+    {
+      "id": "let-go",
+      "shot": "25-let-go.webp",
+      "mark": {
+        "kind": "click",
+        "x": 2100,
+        "y": 1300,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "result": "result.webp"
+}

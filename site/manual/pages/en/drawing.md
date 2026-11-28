@@ -1,6 +1,6 @@
 # Drawing
 
-How to draw structures on the page with the pointer: bonds out of atoms, chains and rings led round, labels typed where they stand.
+How to draw structures on the page with the pointer: bonds out of atoms, chains and rings led round, labels typed where they stand - or a structure put down by its SMILES or its name.
 
 ## Moving round the page {#view}
 
@@ -10,7 +10,33 @@ How to draw structures on the page with the pointer: bonds out of atoms, chains 
 
 ## Starting on empty space {#quick-add}
 
-Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked. Or just type a SMILES: it goes into the SMILES field. The first SMILES takes a moment.
+Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it. Choose one, and it is put down where you double-clicked. Escape, or a click anywhere else, closes the row.
+
+- *Bond*, *Chain*, *SMILES*, *Text* and *Arrow*.
+- *Scheme* opens a second row: *Plus*, *Electron-pushing arrow*, *Catalytic cycle* and *Slide*.
+- *Marks on the page* opens *Rectangle*, *Ellipse*, *Line* and *Pen*, which draw on the page and say nothing chemical.
+- *Projections* opens *Chair*, *Haworth ring* and *Newman projection* ([below](#projections)).
+- *Conversation* puts down a conversation with an assistant.
+- *Calculations*, after a thin line, opens the steps of a [workflow](workflows#steps).
+
+Or just type a SMILES: the first key opens the SMILES field with it, the rest goes in after it, and Enter draws it. The first SMILES takes a moment. A label Meno's dictionary knows - DMF, THF, Et3N - is drawn from the dictionary, its name and formula shown under the field as you type. Where the text could be read two ways, each is offered there - *SMILES* and a formula for the letters read as a SMILES, or the dictionary's name and its formula: click one, or choose it with the up and down arrows, then press Enter.
+
+## A structure by its name {#by-name}
+
+A name is looked up in an online database, through a plugin that does it: add one in Settings, *Plugins*, or from *Look it up as a name…*, as told below. Once one is added, the *SMILES* icon is called *SMILES or name*.
+
+1. Double-click empty space and type the name - aspirin, say.
+2. Under the field, the last row reads *Look up “aspirin” at*, then the plugin's name. Nothing leaves the computer while you type: the name goes out only when you choose that row, with a click or with Enter.
+3. The first time, Meno asks whether names may go there: the question names the place and the plugin, and says that each name you choose to look up goes there and nothing else does. *Allow* lets it; *Not now* sends nothing, and says so. Settings, *Network*, lists what you allowed under *Allowed*; *Withdraw* takes it back.
+4. While the name is looked up, the row says *Looking up…*.
+
+One compound found is drawn at once, as a typed SMILES is, and one undo takes it away. Several are listed in the database's own order, none chosen for you: each by its name, formula and number in the database, with what is not plain about it, such as *1 of 3 stereocentres not defined*. Click one, or choose it with the arrows and press Enter. Where nothing has that name, the field says so.
+
+Before anything is drawn, Meno checks the structure it reads against the formula and charge the database gives. Where they differ, nothing is drawn, and the field says both formulas. A stereocentre or a double bond the database leaves undefined is drawn open, and Meno says so.
+
+- Offline, the row is dimmed and says the plugin needs the network.
+- With no such plugin added, text that reads as no structure is answered under the field by what went wrong, and *Look it up as a name…*. Choose it for the plugins online that look names up, each offered as *Add* and its name (*List the plugins online* first, where they are not listed yet). Once one is added, press Enter to look the name up.
+- Nothing is kept: the same name looked up twice goes out twice.
 
 ## Bonds and atoms {#bonds}
 
@@ -21,8 +47,9 @@ Point at an atom, and it lights up: what comes next is done to it.
 - Drag an atom to move it. Dropped on another atom, it becomes that atom.
 - Lead a bond onto an atom already there, and it closes the ring.
 - Point at a bond and press 1, 2 or 3 to make it single, double or triple. Press 1 again on a single bond for a wedge, again for a hashed wedge, and again for a plain bond; the next wedge then has its narrow end at the other atom. Press 2 again on a double bond to move its second line. A key changes only the bond under the pointer.
-- Double-click a bond to make it double; triple-click it to make it triple.
+- Double-click a bond to make it double; triple-click it to make it triple. Double-click a double bond to move its second line.
 - Click a bond to turn it: a double or triple bond becomes single; a single bond goes round wedge, hashed wedge, and plain with its other end narrow.
+- Where two bonds of a structure cross, right-click one of them near the crossing and choose *In front* or *Behind*. The bond behind is drawn with a gap where it passes the other. Choose the same item again to take the gap away.
 
 ## Chains and rings {#chains}
 
@@ -55,12 +82,28 @@ Point at an atom and type: O, NH2, OMe, Ph. The label is written where it stands
 
 With atoms chosen, just type: the label goes to every chosen atom, wherever the pointer is, and a small count says how many. Press Enter to keep it, Escape to let it go.
 
+A label is read as a chemist means it: typed small, tbscl becomes TBSCl, and the name of a reagent or a ligand is read before a metal's symbol. Where Meno keeps something other than what you typed, the atom's right-click menu has *As typed:* and your text, to keep it as you typed it.
+
+- *Expand abbreviation*, on the menu of a label such as OTBS, draws the group out.
+- To keep a group of your own as a label, select its atoms and choose *Save as abbreviation…* on their right-click menu. It is kept in Settings, [*Dictionary*](settings#dictionary).
+
 ## Right-click: what an atom or a bond can be {#menus}
 
 Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list. A right-click chooses what it is on; the menu's first line says what it acts on - *This atom*, or *3 atoms, 2 bonds* when you right-click one of several chosen. Then an atom's charge, or a bond's kind, is set on every chosen atom or bond at once, and *Cut* and *Copy* take everything chosen.
 
-- An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Electron-pushing arrow*, *Fishhook arrow*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here*, *Unpaired electron*, *Select this structure* and *Magnification*.
-- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* opens a second row: *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*. *Delete bond* is last. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
+- An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here* (where the atom has room for another bond), *Unpaired electron*, *Select this structure* and *Magnification*.
+- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* opens a second row: *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*. *Delete bond* is last. The list holds *Clean up this structure*, *3D structure*, *Colour…*, *Select this structure* and the rest.
+
+## Arrows for electrons {#electron-arrows}
+
+A curved arrow shows where electrons go: with a full head for a pair, with a half head - a fishhook - for one. Each is put down with a full head; *Fishhook (half head)*, on its right-click menu, makes it a fishhook.
+
+1. Double-click empty space, open *Scheme*, and choose *Electron-pushing arrow*.
+2. Click the atom or the bond the electrons leave.
+3. Move the pointer with the button up: the arrow follows it to the atom or the bond under it, or to the gap between two atoms where a bond forms.
+4. Click there to put it down. Or, at step 2, press on the atom or bond and drag to where the arrow goes, and let go there.
+
+A click on nothing, or Escape, lets it go. The arrow stays with its atoms as they are moved or cleaned up. Drag its line to bend it; right-click it for *Full head*, *Fishhook (half head)*, *Colour…* and *Delete arrow*, and, where it was bent by hand, *Bend as Meno does*. An arrow from a negative charge has *From the charge* and *From a lone pair*. Reaction arrows are on the page on [slides](slides#arrows).
 
 ## Choosing what to work on {#selecting}
 

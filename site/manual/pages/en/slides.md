@@ -4,7 +4,7 @@ How to make a talk of what is on the page - slides, and presenting them - and ho
 
 ## Slides {#slides}
 
-A slide is a frame on the page: what lies under it is what the audience sees. Choose what a slide should hold, right-click, and choose *Slide around these*; or make one of what is in view, from what a double-click on empty space offers. A new slide goes last in the talk.
+A slide is a frame on the page: what lies under it is what the audience sees. Choose what a slide should hold, right-click, and choose *Slide around these*; or make one of what is in view: double-click empty space, choose *Scheme*, then *Slide*. A new slide goes last in the talk.
 
 - Its number stands at its upper left, and a dashed arrow leads on to the next slide. Neither shows in the talk, nor in any picture of the page.
 - Drag its number onto another slide to put it in that place; *Earlier in the talk* and *Later in the talk*, on its right-click menu, move it one place.
@@ -25,6 +25,8 @@ Once the page has a slide, right-click empty space and choose *Present* (⇧⌘�
 
 To give a slide to Word or PowerPoint, choose *Select what is on it* and copy (⌘C, or Ctrl+C): it pastes in as a picture of what is on it. PDFs and pictures on the slide are not drawn into it.
 
+A film rendered with its *Background* set to *Transparent* lies on the slide with what is under it showing through. *Save film…*, on its right-click menu, saves it with that transparency, but not every program reads such a film: where it must lie on another program's slide, render it on that slide's colour.
+
 ## Words {#words}
 
 *Text*, from what a double-click on empty space offers, puts words there. Type them: Enter keeps them, Shift+Enter starts a new line, and Escape lets them go.
@@ -34,19 +36,23 @@ To give a slide to Word or PowerPoint, choose *Select what is on it* and copy (�
 - Words put down beside an arrow stand above or below it, and the arrow grows to fit them.
 - Right-click words for *Edit text*, *Bold*, *Italic*, *Bullets*, *Colour…*, *Align left*, *Align centre*, *Align right*, *Justify*, *Superscript* and *Subscript*. Under the menu's icons are their size in points - 8, 10, 12, 14, 18 or 24, or any from 4 to 288, typed and given with Enter - their line spacing - 1, 1.15, 1.5 or 2, or any from 0.5 to 4 - and their typeface. Each is given at once, and the menu stays open to try another.
 
+A structure's name or number goes under it with *Add text*, on the right-click menu of one of its atoms or bonds, or of a molecule in 3D; once the structure has its words, the menu no longer offers it. Those words belong to the structure: they move, turn, copy and are deleted with it. *Free from its structure*, on the words' right-click menu, lets them go.
+
 ## Arrows and cycles {#arrows}
 
 *Arrow* puts one down with a click, or draws it with a drag. Right-click an arrow to choose its kind - *Reaction arrow*, *Equilibrium*, *Retrosynthetic* or *No reaction* - its heads, *Dashed line*, its thickness (*Thin line*, *Regular line*, *Thick line*), and *Arrow style…* for every arrow's look.
 
-A catalytic cycle, also from what a double-click on empty space offers, is a ring of arrows with words on it. Right-click its line for *Arrow coming in* and *Arrow going out* - type their words at once - *Turn clockwise* or *Turn anticlockwise*, and how far its arrows stop short of the words on it, from *Arrows close* to *Arrows well apart*.
+*Scheme*, in what a double-click on empty space offers, opens *Plus*, *Electron-pushing arrow*, *Catalytic cycle* and *Slide*. *Plus* puts a "+" where you double-clicked. For an *Electron-pushing arrow*, click the atom or bond it leaves; the arrow then follows the pointer with the button up. Click the atom or bond it goes to, or the gap between two atoms where a bond forms, to put it down. A click on nothing, or Escape, lets it go.
+
+A catalytic cycle, *Catalytic cycle* under *Scheme*, is a ring of arrows with words on it. Right-click its line for *Arrow coming in* and *Arrow going out* - type their words at once - *Turn clockwise* or *Turn anticlockwise*, and how far its arrows stop short of the words on it, from *Arrows close* to *Arrows well apart*.
 
 ## Shapes and writing by hand {#shapes}
 
-*Shapes* opens a row of *Rectangle*, *Ellipse* and *Line*. Press one and drag, or click it, lead it with the button up, and click. Shift makes a square or a circle, or keeps a line to steps of 15°.
+*Marks on the page*, in what a double-click on empty space offers, opens a row of *Rectangle*, *Ellipse*, *Line* and *Pen*. Press a shape and drag, or click it, lead it with the button up, and click. Shift makes a square or a circle, or keeps a line to steps of 15°.
 
 - Right-click a shape for *Corners…* (a rectangle's), its line - *Line as bonds*, *1 pt line*, *2 pt line*, *Dashed line* - and *Bring to front* or *Send to back*.
 - *Box around these*, on the right-click menu of what is chosen, draws a rectangle round it.
-- *Pen* opens the pen's card: *Pen*, *Marker* and *Eraser*, with their colours and widths. *Done*, or Escape, ends it; *Delete writing*, on writing's right-click menu, takes it away.
+- *Pen*, at the end of that row, opens the pen's card: *Pen*, *Marker* and *Eraser*, with their colours and widths. *Done*, or Escape, ends it; *Delete writing*, on writing's right-click menu, takes it away.
 
 ## Colour {#colour}
 
