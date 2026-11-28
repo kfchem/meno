@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClearedSaved, KeptJobFile } from "../../../../lib/jobs";
 import type { WorkflowStep } from "../store/types";
-import { clearableJobs, clearSavedJobs, heldJobPacked, heldJobSource, holdJobFilesOf, jobsToKeep, noteJobFilesSaved, recordOf, sizeAsk, type JobsKept } from "./keptJobs";
+import { clearableJobs, clearSavedJobs, heldJobPacked, heldJobSource, holdJobFilesOf, jobsToKeep, dropNotedSources, noteJobFilesSaved, recordOf, sizeAsk, type JobsKept } from "./keptJobs";
 import { JOB_FILE_MEDIA, menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
 import { sha256Hex } from "../../../../lib/binary/sha256";
 
@@ -160,6 +160,28 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     expect(heldJobPacked(hash)).toBe(first.packed.get(hash));
     // (changed again by something else: no longer taken from there)
     disk.set("/w/elsewhere.meno", { size: 5, mtime: 3 });
+    expect(await heldJobSource(hash, now)).toBeNull();
+  });
+
+  // (the texts as Meno's backend builds them, word for word - pinned there too: src-tauri/src/keptjobs.rs, the test
+  //  `carries_a_kept_file_from_the_workspace_file_it_was_opened_from_streamed_and_checked`)
+  it.each([
+    ["work/run.out could not be kept: noted.meno no longer holds a file it kept"],
+    ["work/run.out could not be kept: noted.meno no longer holds a file it kept as it was"],
+    ["work/run.out could not be kept: noted.meno could not be read: invalid Zip archive: Could not find EOCD"],
+  ])("takes a file its job files were noted in as no longer where they are, where the backend says %s", async (said) => {
+    const data = new TextEncoder().encode(`a made-up output for ${said}\n`.repeat(50));
+    const hash = sha256Hex(data);
+    const path = "/w/noted.meno";
+    const at = { size: 10, mtime: 1 };
+    holdJobFilesOf(readMenoFile(menoFileBytes("{}", [{ sha256: hash, name: "work/run.out", media: JOB_FILE_MEDIA, data }])), { path, ...at });
+    const now = async () => at;
+    expect(await heldJobSource(hash, now)).toBe(path);
+    const appended = [{ sha256: hash, job: "0b6f5c1e-0000-4000-8000-000000000044", name: "work/run.out", from: path }];
+    // (another failure - the disk full - leaves the note as it is)
+    expect(dropNotedSources("No space left on device (os error 28)", appended)).toBe(false);
+    expect(await heldJobSource(hash, now)).toBe(path);
+    expect(dropNotedSources(said, appended)).toBe(true);
     expect(await heldJobSource(hash, now)).toBeNull();
   });
 });

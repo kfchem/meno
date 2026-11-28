@@ -917,7 +917,18 @@ mod tests {
         assert_eq!(bytes, out);
         // (one it does not hold, or holds as something else: the save fails)
         let other = Appended { sha256: "a".repeat(64), ..one.clone() };
-        assert!(append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[other]).unwrap_err().contains("no longer holds"));
+        // (said in these very words: the page knows by them that a file its job files were noted in was written over, and makes
+        //  the save again without it - src/ui/features/Workspace/workflow/keptJobs.ts `dropNotedSources`, its test in
+        //  keptJobs.cleared.test.ts feeding it these texts)
+        assert_eq!(
+            append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[other]).unwrap_err(),
+            "work/run.out could not be kept: opened.meno no longer holds a file it kept"
+        );
+        let bad = root.join("bad.meno");
+        fs::write(&bad, b"not a zip").unwrap();
+        let unread = Appended { from: Some(bad), ..one.clone() };
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[unread]).unwrap_err();
+        assert!(err.starts_with("work/run.out could not be kept: bad.meno could not be read: "), "{err}");
         // (and written back out from it, for Show files)
         let mut sources = Sources::new();
         let mut buf = vec![0u8; CHUNK];
