@@ -12,13 +12,19 @@ Choose structures, or molecules in 3D. A port - a small ring - shows on the righ
 
 A set holds what lay inside its frame when it was made, in the order they lie on the page: top to bottom, left to right. Drag something into a set you made, or out of it, to add it or take it away.
 
+- While you hold a structure, a set's frame shows what letting go would do: its edge coloured where it would take the structure in, dashed grey where the structure would leave it.
+- A frame grows round what it holds, and is never smaller than that. Drag its sides or corners to make it larger: the size you give it is kept.
+- A frame that grows over another set pushes that set out of its way. One undo takes back the drag and all it moved.
+
 ## Steps {#steps}
 
-A step is one kind of calculation, done by Meno or by a plugin. Double-click empty space, choose *Calculations*, then a step: each line is a plugin you added, or Meno, with the kinds of step it does.
+A step is one kind of calculation, done by Meno or by a plugin. Double-click empty space and choose *Calculations*, the last icon in Quick Add's row, after a divider (pointed at, it says *Calculations*); then choose a step. Each line is a plugin you added, or Meno, with the kinds of step it does.
 
 - A step's card shows what it does and how, and what it is doing: *Ready*, *Waiting*, *Running*, *Done*, *Failed*, *Stopped*, or *Changed · run again*.
-- Click a card to open its options. A double-click, *Close* or Escape closes it.
+- Click a card to open its options, or right-click it and choose *Options…*. A double-click on the card, *Close* or Escape closes them.
+- Right-click a card for its menu. Its icons along the top, such as *Run*, *Run from here*, *Options…* and *Delete step*, say their names when pointed at.
 - A step starts with the defaults in Settings, *Calculations*. What you change on its card changes that step alone.
+- A number or text option of a plugin's step, and the strength of *Torsion restraints*, can be taken from a property each entry carries - a named value, such as an energy an earlier step worked out - so that each entry has its own. Press the small button at the right end of the field, *From a property*, and type the property's name; press it again to go back to the value on the card. An entry that does not carry that property leaves by *Failed*, saying why.
 
 ## Wires and ports {#wires}
 
@@ -52,28 +58,51 @@ Right-click a step and choose *Run*: it runs, after any step before it that has 
 - *Show log* and *Show files* are on a step's menu once it has run.
 - A step's results come in as one step to undo.
 
+## Repeating steps {#repeat}
+
+A *Repeat* is a frame round steps that runs them pass by pass: what one pass gives can go round again, until it is done.
+
+- Double-click empty space, choose *Calculations*, then *Repeat* in Meno's list, further down it (scroll the list): an empty frame is put down, and you drag steps into it.
+- Or right-click a step, or one of several you chose, and choose *Repeat these steps*: the frame is drawn round them, and the wires that crossed its edge are wired through it. Where more than one set comes into those steps, no Repeat is made, and Meno says why.
+- One undo takes either away.
+
+Its card stands at the frame's top left.
+
+- *In*, on its card, takes what comes from outside.
+- *This pass*, inside the frame, gives each pass's entries to the first steps inside.
+- Wire what should go round once more to *Again*, and what is finished to *Done*.
+- *Out* holds all that reached *Done*, over every pass. In a Repeat put down empty, it lies inside the frame, under *This pass*; with *Repeat these steps*, it is put just outside the frame, to its right.
+
+A step is in a Repeat when the middle of its card is inside the frame: drag a card in or out to add it or take it away. Wires cross the frame only through these ports; a wire that would cross it otherwise is not made, and the card says why.
+
+Click its card for its options:
+
+- *Repeat*: *A number of times*, with *Passes*; *Until none goes again*, with *At most, passes*; or *Over values*, with *Values, one to a line*.
+- *Variable (blank: none)*: a name. With *A number of times* or *Until none goes again*, *From* and *Step* give its first value and how much it changes; with *Over values*, its values are those lines. *Unit (blank: none)* gives their unit. Each entry carries the variable under its name, a property that a step inside can take an option from (see [steps](#steps)).
+- *Counted*: *Per entry*, each entry's value stepping each time it goes round, or *Per pass*.
+- *Each pass starts*: *From where restraints were first held*, *From the last pass*, or *From what came in*.
+
+Run it as any step. While it runs, it says the pass under way: *pass 2 of 3*. A step inside that fails ends the passes, and the Repeat says which step and in which pass. What is still going round when the passes end leaves by *Out*, and its line says how many.
+
 ## A template: from a drawn reaction to the energy diagram {#template}
 
-*templates/confots-xtb.meno*, in the Meno repository, is a workspace holding a whole workflow and no results: the stages of a ConfoTS-type study of a reaction, from the reaction drawn to its energy diagram, each step set to a starting value that is yours to change. A second file, *confots-dft.meno*, goes on from the diagram to the DFT stage. Open one, draw your own reaction over the example, and run it.
+Two workspaces hold a whole workflow and no results, every step set to a starting value that is yours to change: *confots-xtb.meno*, from a reaction drawn to its energy diagram, and *confots-dft.meno*, which goes on from the diagram to a DFT stage. They are in the [templates folder](https://github.com/kfchem/meno/tree/main/templates) of Meno's repository.
 
-What it does, stage by stage. Each stage is a row, headed on the page:
+1. Add the RDKit plugin and the ORCA plugin in Settings, *Plugins*.
+2. Open one of the files.
+3. Draw your reaction inside the frame called *The reaction: draw over it*, and delete the example.
+4. Right-click empty space and choose *Run all*.
 
-- **The reaction.** A set round the drawn reaction says each structure's role from the arrow: reactant, product or reagent. The reactants and the products are taken apart; the reagents are left out, counted on the line. A reactant heavier than 512 g/mol is refused: change the number in its filter.
-- **3D for each species.** One 3D structure for each reactant and product, every hydrogen there. The products are then numbered as the reactant (*Atom map*), which also gives the bonds that change.
-- **Conformers of each species.** A conformer search on every species, in rounds until one brings no new conformer within 10 kcal/mol of the lowest (at most 5000 tries), kept to those within 10 kcal/mol of the lowest, optimised, with those that are the same removed, those whose bonding is not the species' removed, and then those within 5 kcal/mol, at most 64.
-- **Pairs.** Each conformer of one side given the other side's bonding and minimised, the torsions that turned from trans across the other side's double bonds held again, in three rounds. Both directions are wired: to the products, and to the reactant.
-- **Paths.** A path search from each conformer to its ends, the highest point of each as a saddle point guess, kept where it has exactly one imaginary frequency; then the reaction path from it both ways, its two ends checked against the species, and only those saddle points kept whose ends are the reactant and the product they were made for.
-- **Diagram.** The minima and the saddle points, with their free energies, drawn as an *Energy diagram*: a column for the reactant, one for the saddle points, one for the products, a thin line for every conformer of a level, each saddle point joined to its two ends, zero at the reactant. The barriers are worked out: each saddle point above the lowest conformer of the reactant it was made from. The share of the reaction through each path is not in the template: Meno has no step for it yet.
+Each stage is a row, headed on the page:
 
-To use your own reaction, draw it over the example inside the frame called *The reaction: draw over it*, and delete the example. The set takes what lies in its frame. Two reactants of one reaction are taken as one side together.
+- **The reaction.** The set round the reaction gives each structure its role from the arrow: reactant, product or reagent. The reagents are left out. A reactant heavier than 512 g/mol is refused: change the number in its filter.
+- **3D for each species.** One 3D structure for each reactant and product, every hydrogen there, the products numbered as the reactant (*Atom map*).
+- **Conformers of each species.** A conformer search, kept to those within 10 kcal/mol of the lowest, optimised, with duplicates removed, then to those within 5 kcal/mol, at most 64.
+- **Pairs to the products**, **Pairs to the reactant.** Each conformer of one side given the other side's bonding and minimised. Both directions are wired; *Pass the side with fewer* lets through the side with fewer conformers for each species, or both.
+- **Paths to the products**, **Paths to the reactant.** A path search from each conformer to its end, the highest point as a guess at the saddle point, kept where it has exactly one imaginary frequency; then the reaction path both ways from it, kept where its two ends are the reactant and the product it was made for.
+- **Diagram (xTB).** The minima and the saddle points, with their free energies, drawn as an *Energy diagram*, zero at the reactant, each barrier measured from the lowest conformer of the reactant it was made from.
 
-The template uses the RDKit plugin (conformers, minimisation, descriptors) and the ORCA plugin (its own GFN2-xTB method for optimisations, frequencies, the path search and the reaction path). Add them in Settings, *Plugins*, and run on the computer that has them.
-
-- **Torsions held again.** Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The strengths, 50, 100 and 150, are yours to change; no equivalence to another program's force constant is claimed.
-- **Failed entries.** An entry a step could not do leaves by its *Failed* exit. To run it again with other options, wire *Failed* into a copy of the step (copy and paste it, change what you want) and merge its results with the first step's: a chain of runs again is yours to add where you meet the failures.
-- **Your own.** Right-click any step and choose *Save as procedure…*: it is offered under *Calculations* from then on, to put down again.
-- **Not in it.** An IRC at the DFT level, and the share of the reaction through each path, are not in either file. The template takes one reactant structure (or reactants drawn as one).
-- **A reaction path that does not converge is kept as far as it came.** A reaction path one of whose sides stops before its end is kept as far as it came, and the step's line says so ("1 not converged, kept as far as it came"). Its ends are optimised and their bonding compared, as every path's are: whether the path joins the reactant and the product it was made for, those decide.
+The template takes one reactant structure, or reactants drawn as one. An entry a step could not do leaves by its *Failed* exit: to try it again with other options, wire *Failed* into a copy of the step and change what you want there. A reaction path that stops short of its end is kept as far as it came, and its step's line says so.
 
 ## Saving and sharing {#saving}
 
