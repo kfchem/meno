@@ -92,6 +92,22 @@ describe("the seam between the core's reading and the engine's views of cages", 
     expect(read.n.views).toBe(1);
   }, 60_000);
 
+  it("a cage's views are kept by its structure: a second drawing of it, from new arrays and moved, is given the same views, not searched again; another structure - the same rings with another H count - its own", () => {
+    const bare = stripped(engineDrawn("C12C3C4C1C5C2C3C45"));
+    const viewsOf = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => cageViews(d.atoms, d.bonds)([0, 1, 2, 3, 4, 5, 6, 7]).views();
+    const first = viewsOf(bare);
+    expect(first.length).toBeGreaterThan(0);
+    const moved = { atoms: bare.atoms.map((a, i) => ({ ...a, x: a.x + (i === 0 ? 0.3 : 0), y: a.y + 1 })), bonds: bare.bonds.map((b, k) => ({ ...b, ...(k === 0 ? { bold: true } : {}) })) };
+    expect(viewsOf(moved)).toBe(first);
+    // (a methyl on one corner, drawn as an H count: no longer the same structure)
+    const other = { atoms: bare.atoms.map((a, i) => (i === 0 ? { ...a, hs: 0 } : { ...a })), bonds: bare.bonds };
+    expect(viewsOf(other)).not.toBe(first);
+    // (and the order the system's atoms are asked in is the order of the places in each view: kept apart)
+    const turned = cageViews(bare.atoms, bare.bonds)([7, 6, 5, 4, 3, 2, 1, 0]).views();
+    expect(turned).not.toBe(first);
+    expect(turned[0].map((p) => p.z)).toEqual([...first[0]].reverse().map((p) => p.z));
+  }, 60_000);
+
   it("a hydrogen bond between two axial groups of a chair closes no ring: the chair is still read; the same bond as a real one, it is not", () => {
     const d = stripped(chair({ 0: "axial", 2: "axial" }));
     const [p, q] = [d.atoms.length - 2, d.atoms.length - 1];
