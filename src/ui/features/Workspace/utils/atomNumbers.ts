@@ -301,6 +301,23 @@ export function numbersLeftOut(heights: ArrayLike<number>, shares: ArrayLike<num
   return n;
 }
 
+/**
+ * What of a molecule's view - from its own space to the camera's - the
+ * places of its numbers (`numberPlaces`) depend on: how it is turned, alone.
+ * Where it stands before the camera and how large it is shown - what a zoom
+ * or a pan changes - move and scale every ball and stick alike, which leaves
+ * each number where it was on its ball; so the places are worked out again
+ * as the molecule turns, never as the page zooms.
+ */
+export function placesViewKey(view: THREE.Matrix4): string {
+  const e = view.elements;
+  const s = Math.hypot(e[0], e[1], e[2]) || 1;
+  let key = "";
+  // (the turn's nine terms, the scale taken out; rounded far below what moves a number, so that a scale's last bit does not count)
+  for (const k of [0, 1, 2, 4, 5, 6, 8, 9, 10]) key += `${Math.round((e[k] / s) * 1e9)},`;
+  return key;
+}
+
 /** Points across a ball as seen, in its radius's units: a grid over its disc. */
 const GRID = 11;
 const SAMPLES: [number, number][] = [];

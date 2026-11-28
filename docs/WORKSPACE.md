@@ -2196,7 +2196,12 @@ as R and S are, cannot be told from its neighbours'.
   is drawn smaller, and not at all under half its size. While the molecule
   turns, a number keeps its place for as long as it still fits there, and
   glides to a new one rather than hopping. Past 600 atoms every number is
-  set in its ball's middle.
+  set in its ball's middle. Where they go is worked out again only as the
+  molecule turns or changes shape (a film, a conformer's frame, a style
+  going over): zooming or panning the page moves and scales every ball
+  alike and leaves each number where it is, so it is not worked out then
+  (`placesViewKey`) - a space-filling molecule, whose balls hide much of
+  each other, zooms as smoothly with its numbers shown as without.
 - **Too small to read.** A number whose digits would be under 6 pixels
   high on the screen is not drawn, so that, zooming out, the hydrogens'
   go first. Numbers come and go eased (0.08 s), each on its own.

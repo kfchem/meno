@@ -34,7 +34,7 @@ import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
 import { ballLinesOf, ballNumbersOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
 import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAttributes } from "../utils/jointNumbers";
-import { atomGlyphsOf, glyphsWidth, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
+import { atomGlyphsOf, glyphsWidth, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, placesViewKey, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
@@ -1270,7 +1270,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
         mesh.updateWorldMatrix(true, false);
         const view = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
         const scale = new THREE.Vector3().setFromMatrixScale(view).x;
-        const key = view.elements.join() + fill.current + risen.current + bondR;
+        // (worked out again as it turns or changes shape - never as the page zooms or pans: `placesViewKey`)
+        const key = placesViewKey(view) + fill.current + risen.current + bondR;
         if (!numbersPlaced.current || numbersAt.current !== key) {
           numbersPlaced.current = true;
           numbersAt.current = key;
