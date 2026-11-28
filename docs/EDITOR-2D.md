@@ -1726,6 +1726,13 @@ All hover-based, as above.
   and E/Z from a button on the canvas, later shown on what they are asked
   for on; valence warnings in Settings › Chemistry; neither in an exported
   picture.)
+  - **Said by the element.** What the mark says names the atom's element
+    ("a valence of 5, where carbon takes at most 4"). On a label that
+    stands for a group - MeCN, OMe, a Pr held as propyl - it names the
+    element of the group's atom that carries the label's bonds, which is
+    the atom checked: "where nitrogen takes at most 3" on MeCN, never the
+    label's letters, nor praseodymium for propyl (`ValenceProblem.as`,
+    lib/chem/molWriter `writtenElements`).
   - **A halogen bridging metals** (μ-X; the maintainer, 2026-10-18) -
     μ-Cl in [Pd(allyl)Cl]2, drawn with a plain bond to each metal - is
     not marked: its bonds to metals count as the dative bonds they are, so

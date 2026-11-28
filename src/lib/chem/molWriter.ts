@@ -230,6 +230,19 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
 }
 
 /**
+ * The element each atom drawn is written as, by id: its own, or - a label
+ * written out (MeCN, OMe, a Pr held as propyl) - that of the group's atom
+ * the label carries its bonds by, which a file and the checks put in the
+ * label's place (MeCN's N, OMe's O, propyl's C). An atom written as no
+ * element - an alias, an R, a pi system's star - is not in it.
+ */
+export function writtenElements(model: WriterModel): Map<number, string> {
+  const { model: out, aliases } = prepared(model);
+  const drawn = new Set(model.atoms.map((a) => a.id));
+  return new Map(out.atoms.filter((a) => drawn.has(a.id) && !aliases.has(a.id) && ELEMENT_SYMBOLS.has(a.el)).map((a) => [a.id, a.el]));
+}
+
+/**
  * The atoms drawn that, written out as a file has them - each label as the
  * atoms it stands for - have an atom with more bonds than it takes
  * (./molecule `mostBonds`; a hydrogen one, none charged or with its
