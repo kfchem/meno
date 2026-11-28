@@ -172,8 +172,14 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   (`editFromMenu`), held for the long press (`longPressMs`) or
   right-clicked it opens the front tab's history under it - its steps by
   their labels, a conversation's said as its, those to redo faint above
-  *Now* - and a step chosen is gone to in one change (`travel`). There is
-  no button for redo: the keys, Edit > Redo and the list do it. Save is a
+  *Now* - and a step chosen is gone to in one change (`travel`). The keys,
+  Edit > Undo and Redo, the button and the list take steps one way
+  (`lib/doc/takeSteps`): the page's hold is asked first - a gesture let
+  go, nothing while words are typed, a question before a running step
+  is taken away - whichever asked. A press on the button or the list is
+  no press on the page (`ui/layouts/pressKeepsPage`): the focus, and what
+  is under way there, are left as they are. There is no button for redo:
+  the keys, Edit > Redo and the list do it. Save is a
   button in the title bar, by
   Settings (`ctl.save`, the front tab's saver from `lib/doc/savers`), and
   Ctrl/Cmd+S; Export is the selection's (Select all first, for the whole
