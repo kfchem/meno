@@ -10,10 +10,19 @@
  * lines are drawn on the canvas under them - so the web view's own pan of a
  * finger found nothing to move there (and took the pointer from them as it
  * tried). The body is therefore given `touch-action: none`, and the finger's
- * pointer is followed here. A mouse, a pen and the wheel are not touched;
- * nor is a second finger.
+ * pointer is followed here. A mouse, a pen and the wheel are not touched.
+ *
+ * A second finger put down with the first pinches, where the body can be
+ * made larger or smaller (`pinch` - a PDF): spread, it zooms in, closed,
+ * out, the point midway between them held there, and moved together they
+ * carry it with them. Lifting either goes on as the other's drag, from
+ * where it is. Where there is no zoom (a text, a Markdown text), and for a
+ * third finger, a second is not followed. A first finger put down - the
+ * system's primary pointer, so no other finger is on the screen - always
+ * starts afresh, whatever a finger whose lift never came left behind.
  */
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
+import type { Pt } from "../../../../lib/input/pinch";
 
 /** How far a finger goes before it is a drag, not a press, in px - as a pointer's click (TextColumn). */
 export const FINGER_STILL_PX = 4;
@@ -28,10 +37,21 @@ const HELD_MS = 80;
 const GLIDE_FRICTION = 4;
 export const GLIDE_LEAST = 20;
 
-/** What a body moved by a finger asks for: what moves it by px (positive: further down, further right), and what a finger's press without a move does there. */
-export type FingerScrolled = {
+/**
+ * Two fingers pinching a body: where it is as they come down (`begin`), and
+ * what shows it as they have pinched it since, from there - from `a0` and
+ * `b0` to `a1` and `b1`, in the window's CSS pixels.
+ */
+export type Pinched<V> = {
+  begin: () => V;
+  to: (begun: V, fingers: { a0: Pt; b0: Pt; a1: Pt; b1: Pt }) => void;
+};
+
+/** What a body moved by a finger asks for: what moves it by px (positive: further down, further right), what a finger's press without a move does there, and what two fingers' pinch does. */
+export type FingerScrolled<V = unknown> = {
   scrollBy: (dx: number, dy: number) => void;
   press?: (down: PointerEvent, up: PointerEvent) => void;
+  pinch?: Pinched<V>;
 };
 
 /** The part of an element a finger is followed on. */
@@ -48,10 +68,21 @@ const windowFrames: Frames = {
 };
 
 /** A finger followed on `el`, moving it by `scrollBy`; what to call to stop following it. */
-export function fingerScroll(el: Followed, { scrollBy, press }: FingerScrolled, frames: Frames = windowFrames): () => void {
+export function fingerScroll<V>(el: Followed, { scrollBy, press, pinch }: FingerScrolled<V>, frames: Frames = windowFrames): () => void {
   const touchWas = el.style.touchAction;
   el.style.touchAction = "none";
-  let finger: { id: number; down: PointerEvent; x: number; y: number; dragging: boolean; mx: Move[]; my: Move[] } | null = null;
+  // (one finger: where it came down, where it was last moved by, where it is now)
+  let finger: { id: number; down: PointerEvent; x: number; y: number; now: Pt; dragging: boolean; mx: Move[]; my: Move[] } | null = null;
+  // (two fingers: each where it came down and where it is now, and where the body was as the second came down)
+  type Held = { id: number; down: PointerEvent; at: Pt; now: Pt };
+  let two: { a: Held; b: Held; begun: V } | null = null;
+  const hold = (id: number) => {
+    try {
+      el.setPointerCapture?.(id);
+    } catch {
+      // (let go already)
+    }
+  };
   let glide: { vx: number; vy: number; t: number | null; frame: number } | null = null;
   const stopGlide = () => {
     if (glide) frames.cancel(glide.frame);
@@ -75,21 +106,51 @@ export function fingerScroll(el: Followed, { scrollBy, press }: FingerScrolled, 
   const onDown = (e: PointerEvent) => {
     // (anything put down stops a glide)
     stopGlide();
-    if (!isFinger(e) || !e.isPrimary) return;
-    finger = { id: e.pointerId, down: e, x: e.clientX, y: e.clientY, dragging: false, mx: [], my: [] };
+    if (!isFinger(e)) return;
+    if (e.isPrimary) {
+      // (a first finger: no other is on the screen, so whatever was left of one whose lift never came is let go, and this one starts afresh)
+      two = null;
+      finger = { id: e.pointerId, down: e, x: e.clientX, y: e.clientY, now: { x: e.clientX, y: e.clientY }, dragging: false, mx: [], my: [] };
+      return;
+    }
+    const f = finger;
+    if (!two && f && pinch && e.pointerId !== f.id) {
+      // (a second finger: a pinch, from where both are - the first's press, or drag, ends here)
+      finger = null;
+      const at = { x: e.clientX, y: e.clientY };
+      two = { a: { id: f.id, down: f.down, at: f.now, now: f.now }, b: { id: e.pointerId, down: e, at, now: at }, begun: pinch.begin() };
+      hold(f.id);
+      hold(e.pointerId);
+      return;
+    }
+  };
+  /** The finger left of two, lifted or cancelled: a drag from where it is now, as if it had been one all along. */
+  const leftOf = (gone: number) => {
+    const t = two;
+    if (!t) return false;
+    const left = t.a.id === gone ? t.b : t.b.id === gone ? t.a : null;
+    if (!left) return false;
+    two = null;
+    finger = { id: left.id, down: left.down, x: left.now.x, y: left.now.y, now: left.now, dragging: true, mx: [], my: [] };
+    return true;
   };
   const onMove = (e: PointerEvent) => {
+    const t = two;
+    if (t) {
+      const held = t.a.id === e.pointerId ? t.a : t.b.id === e.pointerId ? t.b : null;
+      if (!held || !pinch) return;
+      held.now = { x: e.clientX, y: e.clientY };
+      pinch.to(t.begun, { a0: t.a.at, b0: t.b.at, a1: t.a.now, b1: t.b.now });
+      return;
+    }
     const f = finger;
     if (!f || e.pointerId !== f.id) return;
+    f.now = { x: e.clientX, y: e.clientY };
     if (!f.dragging) {
       if (Math.hypot(e.clientX - f.down.clientX, e.clientY - f.down.clientY) < FINGER_STILL_PX) return;
       f.dragging = true;
       // (held, should it go out over the column's edge)
-      try {
-        el.setPointerCapture?.(e.pointerId);
-      } catch {
-        // (let go already)
-      }
+      hold(e.pointerId);
     }
     const dx = f.x - e.clientX;
     const dy = f.y - e.clientY;
@@ -100,6 +161,7 @@ export function fingerScroll(el: Followed, { scrollBy, press }: FingerScrolled, 
     if (dx || dy) scrollBy(dx, dy);
   };
   const onUp = (e: PointerEvent) => {
+    if (leftOf(e.pointerId)) return;
     const f = finger;
     if (!f || e.pointerId !== f.id) return;
     finger = null;
@@ -114,6 +176,7 @@ export function fingerScroll(el: Followed, { scrollBy, press }: FingerScrolled, 
     glide.frame = frames.ask(step);
   };
   const onCancel = (e: PointerEvent) => {
+    if (leftOf(e.pointerId)) return;
     if (finger?.id === e.pointerId) finger = null;
   };
   // (the wheel takes over from a glide)
@@ -125,6 +188,8 @@ export function fingerScroll(el: Followed, { scrollBy, press }: FingerScrolled, 
   el.addEventListener("wheel", onWheel, { passive: true });
   return () => {
     stopGlide();
+    finger = null;
+    two = null;
     el.removeEventListener("pointerdown", onDown);
     el.removeEventListener("pointermove", onMove);
     el.removeEventListener("pointerup", onUp);

@@ -6,6 +6,7 @@ import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/i
 import { useEditor, useEditorStore } from "../store";
 import { setViewPanning, letViewGoalGo, stopViewGoal, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, tookViewRelaid, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
+import { PAGE_TOUCH, pageTouches, touchBegins } from "./pageTouches";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import { fingersStep, makesPinch, pinchedView, type Pt } from "../../../../lib/input/pinch";
@@ -278,10 +279,11 @@ export function PanZoom2D() {
     // the point between them, and moved as it moves (lib/input/pinch). A
     // second finger come down soon after the first, or before the first has
     // gone a bond's length, or while it moves the view, makes a pinch of it,
-    // whatever the first came down on: what the first began is taken back
-    // as if it had never been - no bond, no move, no selection - and both
-    // are the pinch's alone. Otherwise the first goes on, and the second is
-    // no press at all. (On a Mac a trackpad's pinch comes as gestures, above.)
+    // whatever the first came down on of the page: what the first began is
+    // taken back as if it had never been - no bond, no move, no selection -
+    // and both are the pinch's alone. Otherwise the first goes on, and the
+    // second is no press at all. A touch begun off the page is none of this
+    // (pageTouches). (On a Mac a trackpad's pinch comes as gestures, above.)
     const touches = new Map<number, Pt>();
     let first: { id: number; at: Pt; t: number } | null = null;
     let fingers: { a: number; b: number } | null = null;
@@ -293,6 +295,16 @@ export function PanZoom2D() {
     const onTouchDown = (e: PointerEvent) => {
       if (e.pointerType !== "touch") return;
       const at = { x: e.clientX, y: e.clientY };
+      if (touchBegins(e) && touches.size > 0) {
+        // (a new touch's first finger: what was left of a finger whose lift never came is let go - pageTouches)
+        touches.clear();
+        unheard.clear();
+        first = null;
+        if (fingers) {
+          fingers = null;
+          setViewPanning(false);
+        }
+      }
       if (touches.size === 0) {
         touches.set(e.pointerId, at);
         first = { id: e.pointerId, at, t: e.timeStamp };
@@ -370,10 +382,6 @@ export function PanZoom2D() {
       pointer.current.moved();
       pinchLetGo();
     };
-    window.addEventListener("pointerdown", onTouchDown, true);
-    window.addEventListener("pointermove", onTouchMove, true);
-    window.addEventListener("pointerup", onTouchUp, true);
-    window.addEventListener("pointercancel", onTouchUp, true);
     const readWheel = wheelReader();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -458,6 +466,11 @@ export function PanZoom2D() {
     // is the view's; what is laid on the page in its own layer keeps its own, so that a list there still scrolls under a finger)
     dom.style.touchAction = "none";
     box.style.touchAction = "none";
+    // (the fingers the page's: those of a touch begun on what is marked the page here - one begun in the column, a dialog, a menu or a
+    // field typed into is none of the page's, every finger of it, even one that comes down on the page: pageTouches)
+    const marked = [dom, box, layer].filter((el): el is HTMLElement => !!el);
+    for (const el of marked) el.setAttribute(PAGE_TOUCH, "");
+    const offTouches = pageTouches(window, { down: onTouchDown, move: onTouchMove, up: onTouchUp });
     box.addEventListener("wheel", onWheel, { passive: false });
     box.addEventListener("gesturestart", onGestureStart);
     box.addEventListener("gesturechange", onGestureChange);
@@ -481,10 +494,8 @@ export function PanZoom2D() {
     layer?.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
-      window.removeEventListener("pointerdown", onTouchDown, true);
-      window.removeEventListener("pointermove", onTouchMove, true);
-      window.removeEventListener("pointerup", onTouchUp, true);
-      window.removeEventListener("pointercancel", onTouchUp, true);
+      offTouches();
+      for (const el of marked) el.removeAttribute(PAGE_TOUCH);
       dom.removeEventListener("pointercancel", lostPan);
       dom.removeEventListener("lostpointercapture", lostPan);
       window.removeEventListener("blur", lostPan);

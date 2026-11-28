@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { followLink, followsLink, goBack, isBackKey, linkHint, readerOf } from "./pdfColumnReader";
+import { followLink, followsLink, goBack, isBackKey, linkHint, readerOf, ZOOM_LEAST, ZOOM_MOST } from "./pdfColumnReader";
 import { pointOn } from "../../../../lib/pdf/column";
 import { lensGoesWhenMoved } from "../utils/compoundLens";
 
@@ -103,6 +103,38 @@ describe("the column's reader", () => {
     r.fitWidth();
     settle(r);
     expect(r.zoom).toBeCloseTo(1);
+  });
+
+  it("is pinched by two fingers at once, what lies midway between them held there, within the zoom's limits, and rests where they leave it", () => {
+    const { r } = reading();
+    r.goTo(2);
+    settle(r);
+    const begun = r.view();
+    const before = (() => {
+      const { l, top, left } = r.seen();
+      return pointOn(l, left + 200, top + 300);
+    })();
+    const f = (spread: number, dy = 0) => ({ a0: { x: 180, y: 300 }, b0: { x: 220, y: 300 }, a1: { x: 200 - spread / 2, y: 300 + dy }, b1: { x: 200 + spread / 2, y: 300 + dy } });
+    r.pinch(begun, f(100, -50));
+    // (shown so at once, not eased there)
+    expect(r.zoom).toBeCloseTo(2.5);
+    expect(r.step(1 / 60)).toBe(false);
+    const { l, top, left } = r.seen();
+    const after = pointOn(l, left + 200, top + 250);
+    expect(after.page).toBe(before.page);
+    expect(after.u).toBeCloseTo(before.u, 6);
+    expect(after.v).toBeCloseTo(before.v, 6);
+    // (as far as the column zooms, and no further)
+    r.pinch(begun, f(4000));
+    expect(r.zoom).toBe(ZOOM_MOST);
+    r.pinch(begun, f(8));
+    expect(r.zoom).toBe(ZOOM_LEAST);
+    // (back where they came down: where it began - and kept there once it rests)
+    r.pinch(begun, f(40));
+    settle(r);
+    expect(r.view().zoom).toBeCloseTo(begun.zoom, 9);
+    expect(r.view().top).toBeCloseTo(begun.top, 6);
+    expect(r.here().zoom).toBeCloseTo(1);
   });
 
   it("follows a link in the PDF there, and comes back with Back; a web page opens in the browser, only the web's", () => {

@@ -19,7 +19,7 @@ How to put a paper on the page, read it beside your work, take its structures ou
 
 Double-click a PDF, or choose *Read* on its right-click menu. It opens in a column on the right of the page, its pages one under another, with a tab at the top for each PDF or text you are reading.
 
-- Turn the wheel to scroll; pinch, or hold ⌘ (Ctrl on Windows) and turn the wheel, to zoom. ← and → go a page at a time.
+- Turn the wheel to scroll; pinch, or hold ⌘ (Ctrl on Windows) and turn the wheel, to zoom. On a touch screen, drag with one finger to scroll and pinch with two to zoom. ← and → go a page at a time.
 - Click the page number to go to a page; double-click it to fit the pages to the column's width.
 - *Fill the workspace* (⇧⌘F, or Ctrl+Shift+F) gives the column the whole window; *Back beside the canvas* puts it back.
 - On a touch screen, a finger drags the pages up and down.

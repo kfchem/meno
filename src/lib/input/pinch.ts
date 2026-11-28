@@ -24,6 +24,24 @@ export function fingersStep(a0: Pt, b0: Pt, a1: Pt, b1: Pt): { scale: number; fr
   return { scale, from: { x: (a0.x + b0.x) / 2, y: (a0.y + b0.y) / 2 }, to: { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 } };
 }
 
+/**
+ * Two fingers from where they came down, `a0` and `b0`, to where they are
+ * now, `a1` and `b1` (screen pixels): how far they have zoomed since, and
+ * the point between them then and now. A spread nearer than
+ * `LEAST_SPREAD_PX` counts as that near, so that fingers come closer hold
+ * the zoom they had reached there, and fingers come down closer begin to
+ * zoom from there as they part - with no jump either way. Nothing that is
+ * not a number zooms or moves anything.
+ */
+export function fingersSince(a0: Pt, b0: Pt, a1: Pt, b1: Pt): { scale: number; from: Pt; to: Pt } {
+  const from = { x: (a0.x + b0.x) / 2, y: (a0.y + b0.y) / 2 };
+  const to = { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 };
+  if (![a0, b0, a1, b1].every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) return { scale: 1, from: { x: 0, y: 0 }, to: { x: 0, y: 0 } };
+  const was = Math.max(LEAST_SPREAD_PX, Math.hypot(b0.x - a0.x, b0.y - a0.y));
+  const now = Math.max(LEAST_SPREAD_PX, Math.hypot(b1.x - a1.x, b1.y - a1.y));
+  return { scale: now / was, from, to };
+}
+
 /** The point on the page shown at `p` on the screen. */
 export function pageUnder(view: PageView, box: ScreenBox, p: Pt): Pt {
   return { x: view.x + (p.x - box.left - box.width / 2) / view.zoom, y: view.y - (p.y - box.top - box.height / 2) / view.zoom };

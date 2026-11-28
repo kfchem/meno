@@ -1,4 +1,6 @@
-// Before anything else: the page's errors and warnings into Meno's log as well (lib/log)
+// First of all, before any other listener is put on the window: whose a touch is (touchesFirst)
+import "./touchesFirst";
+// Before anything else but that: the page's errors and warnings into Meno's log as well (lib/log)
 import "./lib/logStart";
 // Before anything draws text: where text finds the characters its font lacks.
 import "./ui/fonts/textRenderer";

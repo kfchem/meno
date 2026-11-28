@@ -9,6 +9,7 @@
  * half way down the third page's place, which runs from just above its top
  * to just above the next one's.
  */
+import { fingersSince, type Pt } from "../input/pinch";
 
 /** The margin round the pages and the gap between them, in CSS pixels. */
 export const COLUMN_MARGIN = 12;
@@ -110,4 +111,45 @@ export function pointOf(l: ColumnLayout, at: { page: number; u: number; v: numbe
 export function pageUnder(l: ColumnLayout, x: number, y: number): number | null {
   const i = l.pages.findIndex((p) => x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h);
   return i < 0 ? null : i;
+}
+
+/** What is seen of the column: how large its pages are (1: the widest as wide as the column), and how far down and across what is seen begins, in CSS pixels. */
+export type ColumnView = { zoom: number; top: number; left: number };
+
+/** How far down and across what is seen may begin, at a layout, `width` wide and `tall` of it seen: kept within the pages. */
+export function keptWithin(l: ColumnLayout, width: number, tall: number, top: number, left: number): { top: number; left: number } {
+  return { top: Math.min(Math.max(0, top), deepest(l, tall)), left: Math.min(Math.max(0, left), Math.max(0, l.width - width)) };
+}
+
+/**
+ * The column after two fingers went from `a0` and `b0` to `a1` and `b1`
+ * (CSS pixels on what is read of it, `width` wide and `tall` seen), from
+ * `view`: as much larger as they spread apart, or smaller as they close,
+ * within `least` and `most` - and moved so that the point of a page that
+ * lay midway between them lies midway between them still, kept within the
+ * pages. Two fingers moving together move it and zoom nothing.
+ *
+ * Worked out from where the fingers were when they came down, not step by
+ * step, so that a pinch out and back in comes back to where it began.
+ * Fingers come closer than `LEAST_SPREAD_PX` hold the zoom they had
+ * reached there (`fingersSince`); a coordinate that is not a number
+ * changes nothing.
+ */
+export function pinchedColumn(
+  sizes: readonly (readonly [number, number])[],
+  width: number,
+  tall: number,
+  view: ColumnView,
+  fingers: { a0: Pt; b0: Pt; a1: Pt; b1: Pt },
+  least: number,
+  most: number,
+): ColumnView {
+  const { a0, b0, a1, b1 } = fingers;
+  if (![a0, b0, a1, b1].every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) return view;
+  const { scale, from, to } = fingersSince(a0, b0, a1, b1);
+  const zoom = Math.min(most, Math.max(least, view.zoom * scale));
+  const held = pointOn(columnLayout(sizes, width, view.zoom), view.left + from.x, view.top + from.y);
+  const l = columnLayout(sizes, width, zoom);
+  const p = pointOf(l, held);
+  return { zoom, ...keptWithin(l, width, tall, p.y - to.y, p.x - to.x) };
 }

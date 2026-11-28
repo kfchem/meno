@@ -255,6 +255,32 @@ let go while still zooming, it glides as a trackpad's pinch does. A second
 finger later than that, the first drawing or moving, is no press at all. A
 pen writes as before.
 
+All this is for a touch begun on the page - on the canvas, or on what is
+laid on it (a chip, a step's card) - and the second finger is the page's
+wherever it lands. Whose a touch is, is decided once, as its first finger
+comes down, and holds until the last is lifted (`pageTouches`). A touch
+begun anywhere else - in the column, in Settings, a dialog, a menu, a field
+typed into, even on the page - is not the page's: the page hears none of
+its fingers, not even one put down on the page while it lasts, so two
+fingers on a PDF in the column pinch the column, and never the page beside
+it. With one finger in the column and another put down on the page, the
+column scrolls under its own and nothing on the page moves. This is
+decided by one listener on the window (`ownTouches`), put on before any
+other listener there: by `touchesFirst.ts`, the module main.tsx imports
+first, which imports only `pageTouches`, which imports nothing - modules
+are run in the order they are imported, so no other module's code has run
+yet (`touchesFirst.test.ts` keeps that order). A finger of a touch not the
+page's that comes down on the page is kept from every listener after it -
+its down, its moves and its lift or cancel alike - so nothing on the page
+hears one of them without the others. (Its pointerover, pointerleave and
+the like are not kept.) What is the page is marked on the canvas's box and
+on the layer the page's HTML is laid in (`PAGE_TOUCH`). A first finger (no
+other on the screen) always begins a new touch, and so does the next
+finger once the window has been left or hidden - a lift may go unheard
+then - so a finger whose lift never came decides nothing; a finger let go
+of that way is still kept from the page, or still the page's, till its own
+lift.
+
 On Windows Alt pressed and let go on its own does nothing. Windows would
 take it as the keyboard's way into the window's menu, which Meno's window
 does not show, and the next key would go to that menu and the page answer
@@ -274,8 +300,10 @@ the keys still zooms nothing of the WebView's own. The page takes every pinch fo
 touchpad's comes as the wheel with Ctrl held, which the canvas follows as
 on a Mac and whose default the page prevents everywhere (`main.tsx`), so
 that it zooms the page nowhere; a touch screen's finds no pinch allowed
-but the canvas's (`touch-action: none` on the canvas, `pan-x pan-y` on the
-page, `App.css`), and a list still scrolls under a finger.
+but the canvas's and the reading column's (`touch-action: none` on the
+canvas, and on what is read in the column, which follows the fingers
+itself - docs/PDF.md, *In the column*; `pan-x pan-y` on the page,
+`App.css`), and a list still scrolls under a finger.
 A drawing is laid out again as the view zooms only once the zoom has
 moved a hundredth from the one it was laid out at: the last of a wheel's
 zoom, in steps too small to see for most of a second, lays nothing out
