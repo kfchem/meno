@@ -873,7 +873,11 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   never more than two thirds, whatever the labels: a third of a bond is
   always seen, its end touching a label's letters or digits (13C's) where
   it must, and a wedge shows its width (`BOND_SEEN_LEAST`; the maintainer,
-  2026-10-14). Where one of
+  2026-10-14). What the two thirds cannot give is taken first from the
+  margins past the letters, down to the line's half width, so that its
+  round end stops at the letters rather than in them (the l of a Cl set
+  toward the platinum of a flat trans-PtCl2), and only then from each end
+  alike. Where one of
   them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
   long enough for the two to keep their margins, in the drawing's style -
   measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,

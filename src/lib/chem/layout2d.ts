@@ -2913,7 +2913,7 @@ export function labelTrims(
   deg?: Map<number, number>,
   labelShapes?: Map<number, Vec2[][]>,
   doubleSides?: Map<Bond, number | undefined>,
-): { a: number; b: number; room: number } {
+): { a: number; b: number; room: number; marginA: number; marginB: number } {
   const units = opts.units ?? "px";
   const fontWorld = toWorld(opts.fontPx, zoom, units);
   const margin = (opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16) * (bond.close ? LABEL_MARGIN_CLOSE : 1);
@@ -2948,11 +2948,10 @@ export function labelTrims(
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
     return labelClearance(hulls, towards, margin, band);
   };
-  return {
-    a: reach(bond.a1, p, dir, -across.right1, across.left1),
-    b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
-    room: L0 * (opts.labelShareMax ?? 0.9),
-  };
+  const a = reach(bond.a1, p, dir, -across.right1, across.left1);
+  const b = reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2);
+  // (and how much of each is the margin past the letters, which a bond with too little room gives up first: none where nothing stops it)
+  return { a, b, room: L0 * (opts.labelShareMax ?? 0.9), marginA: Math.min(margin, a), marginB: Math.min(margin, b) };
 }
 
 /**
@@ -3054,8 +3053,20 @@ export function buildBondPrimitives(
   // And whatever the labels, a bond is seen for a third of its length at
   // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
   // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  // What it lacks is taken first from the margins past the letters, down to
+  // the line's half width - its round end's reach - so that its ink stops at
+  // theirs (the l of a Cl set toward a metal it is bonded to); then from all
+  // of each end alike.
   const seen = L0 * BOND_SEEN_LEAST;
   if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
+    const over = trimA + trimB - Math.max(0, L0 - seen);
+    const giveA = Math.max(0, (trims.a > 0 ? (trims.marginA * trimA) / trims.a : 0) - lineHalf);
+    const giveB = Math.max(0, (trims.b > 0 ? (trims.marginB * trimB) / trims.b : 0) - lineHalf);
+    const g = giveA + giveB > 0 ? Math.min(1, over / (giveA + giveB)) : 0;
+    trimA -= giveA * g;
+    trimB -= giveB * g;
+  }
+  if (trimA + trimB > 0 && L0 - trimA - trimB < seen - 1e-12) {
     const k = Math.max(0, L0 - seen) / (trimA + trimB);
     trimA *= k;
     trimB *= k;

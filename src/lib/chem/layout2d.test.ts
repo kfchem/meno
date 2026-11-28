@@ -1490,6 +1490,31 @@ describe("how far a bond stops short of a label", () => {
     expect(kept.x2 - kept.x1).toBeCloseTo(0.6 * 0.6, 9);
   });
 
+  it("gives up the margins past the letters first where a bond has too little room, so that its end stops at a Cl's l, not in it", () => {
+    // flat trans-PtCl2 with two amines, its bonds a nominal bond long: the Cl on the left has its l set toward the platinum, and Pt and
+    // Cl together want more of the bond than the two thirds they may take. Taken from each end alike, margins and letters, the left
+    // line's round end ran 0.021 into the l's ink; the margins given first, it runs in no more than a few thousandths
+    const L = NOMINAL_BOND_LENGTH;
+    const o = acsWorldOptions([], [], { units: "world", minLinePx: 0, joinStyle: "round" });
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "Pt" },
+      { id: 2, x: -L, y: 0, el: "Cl" },
+      { id: 3, x: L, y: 0, el: "Cl" },
+      { id: 4, x: 0, y: L, el: "N" },
+      { id: 5, x: 0, y: -L, el: "N" },
+    ];
+    const bonds: Bond[] = [1, 2, 3, 4].map((k) => ({ a1: 0, a2: k, order: 1 as const }));
+    const out = layoutMolecule(atoms, bonds, o, 26.67);
+    const left = out.lines.find((l) => Math.max(l.x1, l.x2) < 0 && Math.abs(l.y1) < 1e-9)!;
+    const end = Math.min(left.x1, left.x2) - left.widthPx / 26.67 / 2;
+    const cl = out.texts.find((t) => t.text === "Cl" && t.x < 0)!;
+    const [, ell] = labelHulls(cl, cl.fontPx, labelSetOf(o));
+    const inkRight = cl.x + Math.max(...ell.map((p) => p.x));
+    expect(inkRight - end).toBeLessThan(0.006);
+    // (and the bond is seen for a third of its length still)
+    expect(Math.abs(left.x2 - left.x1)).toBeCloseTo(L * BOND_SEEN_LEAST, 9);
+  });
+
   it("shows a wedge's width at its broad end however wide the label there", () => {
     const o = opts();
     // a wedge from a carbon to a wide label on a short bond: the label would
