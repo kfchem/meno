@@ -45,8 +45,8 @@ export default function SaveAbbreviationPanel({
         <h2 className="text-sm font-semibold text-gh-black">Save as abbreviation</h2>
         <button
           onClick={onClose}
-          aria-label="Close"
-          title="Close"
+          aria-label="Close Save as abbreviation"
+          title="Close Save as abbreviation"
           className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-gh-base"
         >
           <XMarkIcon className="h-4 w-4" />

@@ -24,4 +24,10 @@ describe("a workspace's Styles card", () => {
     const other = settings.preset === "rsc" ? "acs1996" : "rsc";
     expect(panel({ preset: other, changes: {} })).toContain("Use Settings&#x27; styles");
   });
+
+  it("names its close button by what it closes, as its title says - not the window's own Close", () => {
+    const { preset } = useAppSettings.getInitialState().drawingStyle;
+    expect(panel({ preset, changes: {} })).toContain('aria-label="Close Styles"');
+    expect(panel({ preset, changes: {} })).not.toContain('aria-label="Close"');
+  });
 });
