@@ -4028,7 +4028,15 @@ in.
     centre open are one;
   - a salt is one whichever ion is written first;
   - tautomers and protonation states are the structures drawn: nothing is
-    made alike that is not drawn alike.
+    made alike that is not drawn alike;
+  - but a few pairs of compounds Meno cannot yet tell apart are counted as
+    one, the second set aside as a copy of the first: the two mirror-image
+    forms of an octahedral metal ([Co(en)3]3+), two metals sharing an edge
+    with their axial groups on one side or on opposite sides, cis and
+    trans of a six-bonded main-group atom such as SF4Cl2, and cis and
+    trans of a metal hydride whose H is written in the metal's label
+    rather than drawn as its own atom (WORKFLOWS-FOUNDATION.md, *what
+    identity joins*).
 - **The first of each is kept**, in the order they came; the rest go out
   of the second exit, *Alike*, each saying which it is the same as ("Same
   as 3"): by the number their records carry where every one carries one

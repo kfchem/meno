@@ -381,9 +381,9 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 The texts are compared, not their keys. `identity` also says whether the
 canonical search was complete: where it ran out of steps (`settleBudget`),
 one structure may be written two ways, so a duplicate can be missed, but two
-different structures are never written the same - save those that differ only
-by the hand of an octahedral centre, which is not yet told (*Duplicates,
-and what judges them*). A drawing's structures are
+different structures are never written the same - save the few that identity
+does not yet tell apart, listed under *Duplicates, and what judges them*
+(*what identity joins*). A drawing's structures are
 read for it by `chem/identityOf.ts`, which also names any atom whose wedges
 it could not read. The rule is checked against RDKit's canonical isomeric
 SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
@@ -1076,7 +1076,19 @@ drawn, aromatic rings as one form.* What that means, plainly:
   them at the metal is at least 150 degrees (four donors) or 135 (six:
   a terpyridine holds its outer donors short of a line), with no other
   donor within 15 degrees of that angle. A flattened tetrahedron and a
-  trigonal prism have none. As for a centre, an arrangement that sets
+  trigonal prism have none. An entry's stereo key in 3D holds those pairs
+  in one key with its ligands' configurations as its places give them -
+  centres, double bonds' cis or trans - so that which ligand is across
+  which donor is kept with the hand of each: PtCl(L)3 with two L of one
+  hand and one of the other, the odd one across Cl or beside it, is two
+  stereoisomers. A main-group atom of six bonds (SF4Cl2) carries no
+  arrangement yet (below, *what identity joins*); a drawing nobody made
+  marks it "Which of its bonded atoms are next to each other is not
+  given". A hydrogen counted in a metal's label, or written inside its
+  bracket (`[PtH]`), has no place among the donors: such a metal is given
+  no arrangement and no mark, so cis- and trans-PtHCl(PMe3)2 drawn so are
+  one structure; with the H drawn as an atom of its own, bonded to the
+  metal, they are two. As for a centre, an arrangement that sets
   nothing is filled in: PtCl4 2-, PtCl3(NH3)-, [Co(NH3)6]3+, Pt(en)Cl2
   and [Co(en)3]3+ are one structure each, given or not. A metal all of
   whose donors, or all but one, are groups alike as wholes (each hanging
@@ -1094,13 +1106,23 @@ drawn, aromatic rings as one form.* What that means, plainly:
   matching neither isomer until it is given. Two metals held by bridges,
   whose cis and trans dimers differ only together ([Pt2Cl4(NH3)2]), are
   each taken as not given alike, not only the one the canonical order
-  fills last (`arrangementOpen`). The hand of an octahedral
-  centre is not yet told: the two enantiomers of [Co(en)3]3+ are one
-  structure. With two such centres, or one beside another place that is
-  set, structures that differ by a hand are joined though they are not
-  mirror images: two metals of six donors sharing an edge, their axial
-  donors on one side of the bridges' plane or on opposite sides, are one
-  structure where they are two compounds;
+  fills last (`arrangementOpen`);
+- **what identity joins** - the one list of two compounds that identity,
+  for now, writes as one structure (each a known limit, to be cured):
+  - the hand of an octahedral centre: the two enantiomers of
+    [Co(en)3]3+ are one structure. With two such centres, or one beside
+    another place that is set, structures that differ by a hand are
+    joined though they are not mirror images: two metals of six donors
+    sharing an edge, their axial donors on one side of the bridges' plane
+    or on opposite sides, are one structure where they are two compounds;
+  - the arrangement of a main-group atom of six bonds: cis- and
+    trans-SF4Cl2, fac- and mer-SF3Cl3 are one structure each pair;
+  - a metal's hydride counted in its label or bracket, not drawn as an
+    atom (above): its cis and trans forms are one structure.
+
+  For a step that judges structures drawn by identity - *Duplicates* on
+  structures drawn, *Same as* - two such compounds are counted as one:
+  the second is set aside as a copy of the first;
 - **a limit, on the safe side:** some writings that leave the same thing
   unsaid in different ways get two identities. (4-Methylcyclohexylidene)
   acetic acid drawn with its double bond bent and its centre plain, and
@@ -1108,8 +1130,7 @@ drawn, aromatic rings as one form.* What that means, plainly:
   "either enantiomer", yet are two structures. Its centre alone sets
   nothing, and its double bond alone, but once either is given the other
   decides. Alike structures can be told apart this way; unlike ones are
-  never joined by it (the hand of an octahedral centre, above, is the one
-  case that joins), and only writings that state no single compound are
+  never joined by it (only *what identity joins*, above, joins), and only writings that state no single compound are
   affected;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the

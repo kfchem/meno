@@ -4,9 +4,10 @@
  */
 import { valencesAt } from "../../../../lib/chem/molecule";
 import { isMetal, squarePlanarMetal, type FourView } from "../../../../lib/layout/perceive";
-import { arrangementOpen, type IdentityInput } from "../../../../lib/chem/identity";
+import { arrangementOpen, symmetryOrbits, type IdentityInput } from "../../../../lib/chem/identity";
+import { arrangedCentre } from "../../../../lib/chem/arrangement";
 import type { Model } from "../store/types";
-import { ARRANGEMENT_SAID, arrangementAs } from "../utils/arrangement";
+import { arrangementAs, arrangementSaid } from "../utils/arrangement";
 import { drawingOf } from "./drawing";
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -20,7 +21,17 @@ const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
  */
 export function arrangementNotGiven(input: IdentityInput, v: FourView, a: number): boolean {
   const nb = v.neighbours(a);
-  if (!isMetal(v.el(a)) || nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return false;
+  if (nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return false;
+  // (a main-group centre of six bonds - SF4Cl2 - whose bonds could lie round it more ways than one: identity holds no arrangement of
+  //  one yet, so its own test cannot be asked; its atoms alike by the whole structure's symmetry (lib/chem/identity
+  //  `symmetryOrbits`) can - every arrangement of six alike, or of five alike and one, is one, any other is more)
+  if (!isMetal(v.el(a))) {
+    if (!arrangedCentre(v.el(a), nb.length)) return false;
+    const { orbit } = symmetryOrbits(input);
+    const alike = new Map<number, number>();
+    for (const d of nb) alike.set(orbit[d], (alike.get(orbit[d]) ?? 0) + 1);
+    return Math.max(...alike.values()) < 5;
+  }
   if (nb.length === 4 && !squarePlanarMetal(v, a, (el, charge) => valencesAt(el, charge)[0], true)?.sure) return false;
   if (nb.length !== 4 && nb.length !== 6) return false;
   return arrangementOpen(input, a);
@@ -58,7 +69,7 @@ export function arrangementsMarked(model: Model, arranged: ReadonlySet<number> =
     if (arranged.has(a.id)) return a;
     if (!arrangementNotGiven(input, view, i)) return a;
     marked = true;
-    return { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, model.atoms, model.bonds) } };
+    return { ...a, unsure: { said: [arrangementSaid(a.el)], as: arrangementAs(a, model.atoms, model.bonds) } };
   });
   return marked ? { ...model, atoms } : model;
 }

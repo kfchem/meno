@@ -14,7 +14,7 @@ const READ_ALREADY: Record<string, number> = {
   "ui/features/Workspace/chem/arrangementsMarked.ts": 2,
   // (a layout's input, made by layoutJob through readAs: relayoutFrom, oppositesKept; poseAllyls's map of readAs; and the drawing read,
   //  `drawingOf`, made through readAs: wedgeOctahedron; relayoutFrom's check of a six-bond metal with a tridentate, on the layout's input)
-  "ui/features/Workspace/chem/engineLayout.ts": 7,
+  "ui/features/Workspace/chem/engineLayout.ts": 6,
   // (an atom holding a group passed by first: `a.abbrev || isMetal(a.el)`)
   "ui/features/Workspace/chem/etaBound.ts": 1,
   // (a SMILES's atoms: no drawing's)
@@ -23,6 +23,8 @@ const READ_ALREADY: Record<string, number> = {
   "ui/features/Workspace/chem/identityOf.ts": 2,
   // (the atoms of the MOL blocks the plugin made of a structure, halvesMade: a file's atoms, each an element - a held group went out written through readAs)
   "ui/features/Workspace/chem/openStereo.ts": 1,
+  // (the centre an arrangement mark is put on, a metal or a six-bond main-group atom - an element's symbol, no label: arrangementSaid)
+  "ui/features/Workspace/utils/arrangement.ts": 1,
 };
 
 // The other readers of an element's symbol - a valence (`canTakeBond`, `implicitHydrogens`, `valencesAt`) or a halogen (`HALOGEN.has`) - asked
