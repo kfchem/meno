@@ -14,6 +14,7 @@ import { addMolecule3d, createWorkspaceDocument } from "../document";
 import type { Look3D, Molecule3D, Turn3D } from "../store/types";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import Molecules3D from "./Molecules3D";
+import { ballNumbersOf } from "./shading3d";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 vi.mock("./WarmShaders3D", () => ({ default: () => null }));
@@ -67,7 +68,7 @@ function chain(): Omit<Molecule3D, "id"> {
   }
   h(0, -1.03, -0.36, 0);
   h(C - 1, 1.03, C % 2 ? -0.36 : 0.36, 0);
-  return { atoms, bonds, at: { x: 0, y: 0 }, atomNumbers: { kind: "order" } };
+  return { atoms, bonds, at: { x: 0, y: 0 } };
 }
 
 const mounted: (() => Promise<void>)[] = [];
@@ -78,14 +79,15 @@ afterEach(async () => {
 });
 
 /** The chain mounted in the look given, numbers shown, turned a little so that its balls hide some of each other; its frames run by hand. */
-async function mount(look: Look3D | undefined) {
+async function mount(look: Look3D | undefined, o: { numbers?: "at mount" | "later"; zoom?: number } = {}) {
+  const numbers = o.numbers ?? "at mount";
   vi.stubGlobal("window", { addEventListener: () => undefined, removeEventListener: () => undefined, setTimeout, clearTimeout, devicePixelRatio: 1 });
   vi.stubGlobal("requestAnimationFrame", () => 0);
   vi.stubGlobal("cancelAnimationFrame", () => undefined);
   const doc = createWorkspaceDocument();
   const store = storeOf(doc);
   connectStoreToDocument(store, doc);
-  doc.edit("add", (d) => addMolecule3d(d, { ...chain(), ...(look ? { look } : {}) }));
+  doc.edit("add", (d) => addMolecule3d(d, { ...chain(), ...(look ? { look } : {}), ...(numbers === "at mount" ? { atomNumbers: { kind: "order" as const } } : {}) }));
   const id = store.getState().molecules3d[0].id;
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.5, 0.7, 0.2));
   store.getState().setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
@@ -104,7 +106,7 @@ async function mount(look: Look3D | undefined) {
   let clock = performance.now();
   vi.spyOn(performance, "now").mockImplementation(() => clock);
   const camera = state.camera as THREE.OrthographicCamera;
-  camera.zoom = 20;
+  camera.zoom = o.zoom ?? 20;
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
   const frame = async () => {
@@ -118,6 +120,8 @@ async function mount(look: Look3D | undefined) {
     let at: Float32Array | null = null;
     state.scene.traverse((o) => {
       const a = (o as THREE.Mesh).geometry?.getAttribute?.("ballNumberPlace");
+      // (the atoms' own mesh: the one whose balls carry their numbers)
+      if (a && !(o as THREE.Mesh).geometry.getAttribute("ballNumber")) return;
       if (a && !at) at = Float32Array.from(a.array as Float32Array);
     });
     return at as Float32Array | null;
@@ -140,7 +144,25 @@ async function mount(look: Look3D | undefined) {
     store.getState().setTurn3d(id, [q.x, q.y, q.z, q.w] as Turn3D);
     await frame();
   };
-  return { frame, places, zoomStep, turn };
+  /** The atoms' mesh: whether its material shows the numbers, and each ball's number. */
+  const drawnNumbers = () => {
+    let got: { shown: number; numbers: number[] } | null = null;
+    state.scene.traverse((o) => {
+      const g = (o as THREE.Mesh).geometry;
+      const a = g?.getAttribute?.("ballNumber");
+      if (a && g.getAttribute("ballNumberPlace") && !got) got = { shown: ballNumbersOf((o as THREE.Mesh).material as THREE.MeshStandardMaterial).shown.value, numbers: Array.from(a.array as Float32Array) };
+    });
+    return got as { shown: number; numbers: number[] } | null;
+  };
+  const select = async () => {
+    store.getState().selectMolecules3d([id]);
+    await frame();
+  };
+  const show = async () => {
+    store.getState().setAtomNumbers([{ id }], true);
+    await frame();
+  };
+  return { frame, places, zoomStep, turn, show, select, drawnNumbers, camera };
 }
 
 describe("atom numbers while the page zooms", () => {
@@ -172,4 +194,33 @@ describe("atom numbers while the page zooms", () => {
     for (let k = 0; k < 60; k++) await v.frame();
     expect(Array.from(v.places()!)).toEqual(Array.from(before));
   });
+
+  // (numbers turned on while the page is zoomed far out - balls a few pixels across - then zoomed in step by step)
+  for (const when of ["while zoomed far out", "on the first frame"] as const)
+    it(`ball and stick, numbers turned on ${when}: placed, and as a molecule showing them from the start places them`, async () => {
+      const far = when === "while zoomed far out";
+      const v = await mount(undefined, { numbers: "later", zoom: far ? 0.6 : 20 });
+      if (!far) {
+        await v.show();
+      } else {
+        for (let k = 0; k < 10; k++) await v.frame();
+        // (chosen first, as a molecule is to be right-clicked)
+        await v.select();
+        await v.show();
+      }
+      for (let k = 0; k < 60; k++) await v.frame();
+      if (far) for (let k = 0; v.camera.zoom < 20; k++) await v.zoomStep(1.12);
+      for (let k = 0; k < 60; k++) await v.frame();
+      const got = v.places()!;
+      // (every number shown, at full strength)
+      for (let i = 0; i < got.length / 4; i++) expect(got[4 * i + 3], `atom ${i + 1}`).toBe(1);
+      const drawn = v.drawnNumbers()!;
+      expect(drawn.shown).toBe(1);
+      expect(drawn.numbers.every((c) => c > 0)).toBe(true);
+      const zoom = v.camera.zoom;
+      for (const unmount of mounted.splice(0)) await unmount();
+      const from = await mount(undefined, { zoom });
+      expect(Array.from(got)).toEqual(Array.from(from.places()!));
+    });
 });
+
