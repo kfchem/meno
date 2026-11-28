@@ -31,7 +31,8 @@ import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { IS_MAC, keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
-import { editFromMenu, editMenuState, tellEditMenu, watchEditMenu } from "./lib/doc/editMenu";
+import { editFromMenu, editMenuState, fieldStep, tellEditMenu, watchEditMenu } from "./lib/doc/editMenu";
+import { takeSteps } from "./lib/doc/takeSteps";
 import { openEachOnce, saverOf, setTabsListed } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
@@ -220,12 +221,13 @@ export default function App() {
       const id = activeIdRef.current;
       const held = id ? documentsRef.current.get(id) : undefined;
       if (!held) return;
-      const changed =
-        intent === "undo" ? held.doc.undo() : held.doc.redo();
-      if (changed) e.preventDefault();
+      // (taken as every other way takes them - the page's hold first: lib/doc/takeSteps - and the key no one else's)
+      if (takeSteps(held.doc, intent === "undo" ? -1 : 1) === "nothing") return;
+      e.preventDefault();
+      e.stopPropagation();
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
   // The app menu's Edit > Undo and Redo (macOS) do what the keys do (lib/doc/editMenu), and are greyed where the active
@@ -235,7 +237,7 @@ export default function App() {
     return watchEditMenu((command) => {
       const id = activeIdRef.current;
       const doc = id ? documentsRef.current.get(id)?.doc : undefined;
-      editFromMenu(command, { active: document.activeElement, doc, field: (c) => document.execCommand(c) });
+      editFromMenu(command, { active: document.activeElement, doc, field: (c) => fieldStep(document.activeElement, c) });
     });
   }, []);
   useEffect(() => {
@@ -804,6 +806,8 @@ export default function App() {
       dispatch({ type: "ADD_TAB", tab: viewRegistry.workspace.create("Workspace") });
     },
     openFiles: pickFiles,
+    // (the tab in front's document, where its kind keeps one: Undo's, as the keys')
+    doc: state.activeId && state.tabsById[state.activeId] ? getDocument(state.tabsById[state.activeId]) : undefined,
     // (the workspace in front, as Ctrl/Cmd+S saves it)
     ...(state.activeId && state.tabsById[state.activeId]?.content.kind === "workspace"
       ? { save: () => void saverOf(state.activeId!)?.() }

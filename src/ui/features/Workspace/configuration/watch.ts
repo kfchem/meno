@@ -35,7 +35,7 @@ export const MENO_MOVES: Readonly<Record<string, string>> = {
   "turn selection": "Rotate",
   "expand abbreviation": "Expand",
   "show as abbreviation": "Contract",
-  "stack again": "Stack",
+  "gather into a stack": "Stack",
 };
 
 /** The descriptor of each unit, by "centre-<id>" or "bond-<id>", in `marks` (chem/cipMarks): R, S, E, Z, Ra... */

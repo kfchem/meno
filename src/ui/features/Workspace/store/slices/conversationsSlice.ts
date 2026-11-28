@@ -80,7 +80,7 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
       doc.edit("move conversation", (d) => updateConversation(d, id, { frame: { x0: c.x0 + dx, y0: c.y0 + dy, x1: c.x1 + dx, y1: c.y1 + dy } }), gesture ? gestureStep(`conversation-move:${id}:${gesture}`) : {});
     },
     resizeConversation: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) =>
-      doc.edit("size conversation", (d) => updateConversation(d, id, { frame }), gesture ? gestureStep(`conversation-size:${id}:${gesture}`) : {}),
+      doc.edit("resize conversation", (d) => updateConversation(d, id, { frame }), gesture ? gestureStep(`conversation-size:${id}:${gesture}`) : {}),
     updateConversation: (id: number, patch: ConversationPatch) => doc.edit("change conversation", (d) => updateConversation(d, id, patch)),
     removeConversation: (id: number) => {
       if (get().talking[id]?.running) return;

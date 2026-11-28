@@ -69,7 +69,7 @@ export function createRecordsSlice(doc: DocumentStore<WorkspaceDocument>, set: S
       const gone = { atoms: fullModel.atoms.filter((a) => ids.has(a.id)), bonds: fullModel.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
       const swap = { from: [...ids], to: [], start: performance.now(), gone };
       set((prev: EditorState) => ({ ...prev, recordsShown: { ...prev.recordsShown, [stack]: shown }, recordSwaps: { ...prev.recordSwaps, [stack]: swap } }));
-      doc.edit("stack again", (d) => ops.gatherRecords(d, stack, recordsGathered(d.model, stack)));
+      doc.edit("gather into a stack", (d) => ops.gatherRecords(d, stack, recordsGathered(d.model, stack)));
       done(stack, swap);
     },
   };

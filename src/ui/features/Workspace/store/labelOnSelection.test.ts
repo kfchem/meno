@@ -45,7 +45,7 @@ describe("a label typed on the selection's atoms", () => {
     const els = () => st().model.atoms.map((x) => x.el);
     expect(els()).toEqual(["OMe", "C", "OMe", "OMe"]);
     expect(doc.history().undoDepth).toBe(depth + 1);
-    expect(doc.history().undoLabel).toBe("label 3 atoms: OMe");
+    expect(doc.history().undoLabel).toBe("change 3 atoms to OMe");
     expect([...st().sel.atoms].sort()).toEqual([a, c, d].sort());
     doc.undo();
     expect(els()).toEqual(["C", "C", "C", "C"]);

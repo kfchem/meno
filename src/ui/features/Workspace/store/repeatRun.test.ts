@@ -147,7 +147,7 @@ describe("a Repeat run pass by pass", () => {
 });
 
 describe("a Repeat run with the page round it (found in review)", () => {
-  /** The labels of the document's edits from here on: each step's run is one "run". */
+  /** The labels of the document's edits from here on: each step's run is one "run step". */
   const counting = (doc: unknown) => {
     const labels: string[] = [];
     const d = doc as { edit: (label: string, fn: unknown, ...rest: unknown[]) => unknown };
@@ -163,7 +163,7 @@ describe("a Repeat run with the page round it (found in review)", () => {
     const { st, doc } = page({ repeat: "until", most: 10 });
     const labels = counting(doc);
     await st().runAll();
-    expect(labels.filter((l) => l === "run")).toHaveLength(3);
+    expect(labels.filter((l) => l === "run step")).toHaveLength(3);
   });
 
   it("shows what leaves by Out as it came into In: a water turned there, turned the same in Out", async () => {

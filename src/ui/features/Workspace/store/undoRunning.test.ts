@@ -38,12 +38,12 @@ function running() {
 describe("an undo that would take away a running step", () => {
   it("is held, and asked about, where it takes the step away - not where it takes only its wire", () => {
     const { doc, st, step } = running();
-    expect(st().holdUndo("undo")).toBe(false);
+    expect(st().holdUndo(-1)).toBe(false);
     doc.undo();
     expect(st().wires).toHaveLength(0);
     const depth = doc.history().undoDepth;
-    expect(st().holdUndo("undo")).toBe(true);
-    expect(st().askUndo).toEqual({ direction: "undo", steps: 1 });
+    expect(st().holdUndo(-1)).toBe(true);
+    expect(st().askUndo).toEqual({ by: -1, steps: 1 });
     expect(st().steps.map((s) => s.id)).toEqual([step]);
     expect(doc.history().undoDepth).toBe(depth);
   });
@@ -51,7 +51,7 @@ describe("an undo that would take away a running step", () => {
   it("leaves the history where it was when the question is cancelled", () => {
     const { doc, st, step } = running();
     doc.undo();
-    st().holdUndo("undo");
+    st().holdUndo(-1);
     st().letUndo(false);
     expect(st().askUndo).toBeNull();
     expect(st().steps.map((s) => s.id)).toEqual([step]);
@@ -61,7 +61,7 @@ describe("an undo that would take away a running step", () => {
   it("stops the step's jobs, as deleting it does, and then undoes, when it is answered yes", async () => {
     const { doc, st } = running();
     doc.undo();
-    st().holdUndo("undo");
+    st().holdUndo(-1);
     st().letUndo(true);
     expect(st().askUndo).toBeNull();
     expect(st().steps).toHaveLength(0);
@@ -75,7 +75,33 @@ describe("an undo that would take away a running step", () => {
     doc.undo();
     const run = { at: 2, input: "k", options: {}, jobs: [{ id: "job-2", entries: [0], reads: [] }], kind: "conformers" as const };
     doc.amend((d) => setRunning(d, step, run), { unsaved: true });
-    expect(st().holdUndo("redo")).toBe(true);
-    expect(st().askUndo).toEqual({ direction: "redo", steps: 1 });
+    expect(st().holdUndo(1)).toBe(true);
+    expect(st().askUndo).toEqual({ by: 1, steps: 1 });
+  });
+});
+
+/**
+ * The title bar's history goes many steps back at once, and its Undo one: a
+ * running step those would take away is asked about once, as the keys ask,
+ * and stopped when it is answered yes.
+ */
+describe("many steps back at once that would take away a running step", () => {
+  it("is held and asked about once, where the steps come to a page without it", () => {
+    const { doc, st, step } = running();
+    const depth = doc.history().undoDepth;
+    expect(st().holdUndo(-2)).toBe(true);
+    expect(st().askUndo).toEqual({ by: -2, steps: 1 });
+    expect(st().steps.map((s) => s.id)).toEqual([step]);
+    expect(doc.history().undoDepth).toBe(depth);
+  });
+
+  it("goes all the way back in one change, the step's jobs stopped first, when it is answered yes", async () => {
+    const { doc, st } = running();
+    const depth = doc.history().undoDepth;
+    st().holdUndo(-2);
+    st().letUndo(true);
+    expect(st().steps).toHaveLength(0);
+    expect(doc.history().undoDepth).toBe(depth - 2);
+    await vi.waitFor(() => expect(asked.stopped).toContain("job-1"));
   });
 });

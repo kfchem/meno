@@ -147,7 +147,7 @@ describe("a stack of drawings", () => {
     state().selectAll();
     expect(state().sel.atoms.size).toBe(6);
     state().gatherRecords(1, 2);
-    expect(doc.history().undoLabel).toBe("stack again");
+    expect(doc.history().undoLabel).toBe("gather into a stack");
     expect(state().recordsShown).toEqual({ 1: 2 });
     expect(ids(state().model.atoms)).toEqual([5, 6]);
     state().fullModel.atoms.forEach((a, i) => {

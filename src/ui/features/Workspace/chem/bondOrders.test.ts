@@ -111,7 +111,7 @@ describe("a molecule in 3D's bond orders, sought from its shape", () => {
     expect(molecule().bonds[0].order).toBe(2);
     expect(molecule().bondOrders).toBe("assigned");
     expect(stillUnknown(molecule())).toEqual([]);
-    expect(doc.history().undoLabel).toBe("bond orders");
+    expect(doc.history().undoLabel).toBe("set bond orders");
 
     answers.add_hydrogens = () => ({
       molblock: writeMolfile3d(
@@ -158,7 +158,7 @@ describe("a molecule in 3D's bond orders, sought from its shape", () => {
     expect(await ordersFromDictionary(store, molecule().id)).toEqual({ given: 3, of: 3, absent: [] });
     expect(molecule().bonds[0].order).toBe(2);
     expect(molecule()).toMatchObject({ bondOrders: "dictionary", chainOrders: "dictionary" });
-    expect(doc.history().undoLabel).toBe("bond orders");
+    expect(doc.history().undoLabel).toBe("set bond orders");
     // (all known: not offered again; its ligand's hydrogens are)
     expect(canAskDictionary(molecule())).toBe(false);
     expect(canAddHydrogens(molecule(), [2, 3])).toBe(true);
@@ -173,7 +173,7 @@ describe("a molecule in 3D's bond orders, sought from its shape", () => {
     expect(molecule().bonds[0].order).toBe(2);
     expect(molecule().bondOrders).toBe("estimated");
     expect(stillUnknown(molecule())).toEqual([]);
-    expect(doc.history().undoLabel).toBe("bond orders");
+    expect(doc.history().undoLabel).toBe("set bond orders");
     doc.undo();
     expect(molecule().bondOrders).toBe("unknown");
 

@@ -122,6 +122,8 @@ Right-click a structure and choose *Clean up this structure* - or, for what is c
 
 ⌘Z (Ctrl+Z on Windows) takes back the last thing done. In the middle of a stroke - a chain, an arrow, a box being drawn - it lets that stroke go and nothing more.
 
+The arrow curving back, at the top right by Settings, does the same with a click - while you are typing a label or a text, or in a field, it takes back what you typed there, and you go on typing. Hold it, or right-click it, for the history: the steps you can go back to, newest at the top. Choose one to go straight back to it, or choose a faint step above *Now* to do it again. Where going back would take away a step that is still running, you are asked first, as when you delete it.
+
 ## Into Word and PowerPoint {#office}
 
 Copy what is chosen (⌘C, or Ctrl+C) and paste it into a Word document or a PowerPoint slide. It goes in as a drawing that keeps Meno's own record of it.

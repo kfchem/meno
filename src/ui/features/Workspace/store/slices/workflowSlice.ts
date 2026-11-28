@@ -1,4 +1,5 @@
 import type { Table } from "../../../../../lib/table";
+import { moveSteps } from "../../../../../lib/doc/takeSteps";
 import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -70,7 +71,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     },
     renameSet: (id: number, name: string) => doc.edit("rename set", (d) => wf.renameSet(d, id, name)),
     keepSet: (id: number, keep: boolean) => doc.edit(keep ? "keep set in file" : "keep set out of file", (d) => wf.keepSet(d, id, keep)),
-    keepRawOutputs: (id: number, keep: boolean) => doc.edit(keep ? "keep raw outputs" : "keep no raw outputs", (d) => wf.keepRawOutputs(d, id, keep)),
+    keepRawOutputs: (id: number, keep: boolean) => doc.edit(keep ? "keep raw outputs" : "stop keeping raw outputs", (d) => wf.keepRawOutputs(d, id, keep)),
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextWorkflowId ?? 1;
       doc.edit("add set", (d) => wf.addSet(d, frame));
@@ -78,7 +79,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     },
     placeTable: (table: Table, at: { x: number; y: number }, name?: string) => {
       const id = doc.getState().nextWorkflowId ?? 1;
-      doc.edit("put table", (d) => wf.addTableSet(d, at, table, name));
+      doc.edit("add table", (d) => wf.addTableSet(d, at, table, name));
       return id;
     },
     watchFrames: () => {
@@ -110,7 +111,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("fit frames", (d) => framesSettled(d, down, extentIn(d)), { joinTop: true });
     },
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
-    sizeSet: (id: number, side: Side, asked: Frame, gesture?: string) => doc.edit("size set", (d) => setSized(d, id, side, asked, extentIn(d)), coalesce("set-size", id, gesture)),
+    sizeSet: (id: number, side: Side, asked: Frame, gesture?: string) => doc.edit("resize set", (d) => setSized(d, id, side, asked, extentIn(d)), coalesce("set-size", id, gesture)),
     // (the one asked for shown in the column - a PDF read there before giving way, as a text asked for does)
     readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null })),
     showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null }),
@@ -220,10 +221,11 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         }));
       }
     },
-    holdUndo: (direction: "undo" | "redo") => {
-      const gone = wf.runningGone(doc.getState(), doc.peek(direction));
+    holdUndo: (by: number) => {
+      // (where they would come to, however many: a step running now and not there is taken away)
+      const gone = wf.runningGone(doc.getState(), doc.peek(by));
       if (!gone.length) return false;
-      set({ askUndo: { direction, steps: gone.length } });
+      set({ askUndo: { by, steps: gone.length } });
       return true;
     },
     letUndo: (go: boolean) => {
@@ -231,9 +233,8 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       set({ askUndo: null });
       if (!asked || !go) return;
       // (stopped as deleting them stops them: their jobs, and their files once ended)
-      for (const step of wf.runningGone(doc.getState(), doc.peek(asked.direction))) forgetJobs(step);
-      if (asked.direction === "undo") doc.undo();
-      else doc.redo();
+      for (const step of wf.runningGone(doc.getState(), doc.peek(asked.by))) forgetJobs(step);
+      moveSteps(doc, asked.by);
     },
     putDownProcedure: (id: string, x: number, y: number) => {
       const procedure = proceduresSaved().find((p) => p.id === id);
@@ -258,7 +259,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     },
     connect: (from: Parameters<typeof wf.connect>[1], to: number, port?: string) => {
       const was = doc.getState();
-      doc.edit("wire", (d) => wf.connect(d, from, to, port));
+      doc.edit("add wire", (d) => wf.connect(d, from, to, port));
       return doc.getState() !== was;
     },
     /** A step's result set held off the page opened to be seen on it, or closed again (model `openedSet`, workflow/held): an edit, undone as one. */
@@ -294,7 +295,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         set((prev: EditorState) => ({ ...prev, hoveredWire: prev.hoveredWire === id ? null : prev.hoveredWire }));
     },
     rewire: (id: number, to: number, port?: string) => {
-      doc.edit("wire", (d) => {
+      doc.edit("add wire", (d) => {
         const w = d.wires?.find((x) => x.id === id);
         const at = port ?? w?.to.port ?? ONE_INPUT;
         if (!w || (w.to.step === to && w.to.port === at)) return d;

@@ -120,6 +120,9 @@ export type HistoryInfo = {
   dirty: boolean;
 };
 
+/** A step of the history: what its edit is called (`edit(label, ...)`), and who made it where it was not the person (`EditMeta.by`). */
+export type HistoryStep = { label: string; by?: string };
+
 export interface DocumentStore<T> {
   getState(): T;
   /** Notifies on every state change, including undo and redo. */
@@ -150,6 +153,17 @@ export interface DocumentStore<T> {
   undo(): boolean;
   redo(): boolean;
   /**
+   * The steps around the present: `back`, those undo would take back, the
+   * next first; `forward`, those redo would put back, the next first.
+   */
+  steps(): { back: HistoryStep[]; forward: HistoryStep[] };
+  /**
+   * Goes `n` steps back (n < 0) or forward (n > 0) as one change: told once,
+   * none of the states between reached - as `-n` undos, or `n` redos, would
+   * end. False, and nothing done, where there are not that many, or n is 0.
+   */
+  travel(n: number): boolean;
+  /**
    * Takes back the step a gesture made (its `coalesceKey`), as if it had
    * never been: a drag let go of by Escape. Nothing is left to redo. False
    * where the step on top is not that gesture's - it made none.
@@ -163,8 +177,12 @@ export interface DocumentStore<T> {
    * is taken back.
    */
   takeBackTo(depth: number, state: T): boolean;
-  /** The state an undo (or a redo) would come to, without coming to it: none where there is nothing to undo (to redo). */
-  peek(direction: "undo" | "redo"): T | undefined;
+  /**
+   * The state an undo (or a redo) would come to, without coming to it - or,
+   * given a number, the state `travel` of it would: none where there are not
+   * so many steps to take.
+   */
+  peek(to: "undo" | "redo" | number): T | undefined;
   /** Replaces the content and forgets the history, e.g. after opening a file. */
   reset(state: T, label?: string): void;
   /**
@@ -409,8 +427,36 @@ export function createDocument<T>(
       return true;
     },
 
-    peek(direction) {
-      return direction === "undo" ? past[past.length - 1]?.state : future[0]?.state;
+    peek(to) {
+      const n = to === "undo" ? -1 : to === "redo" ? 1 : Math.trunc(to);
+      if (n < 0) return past[past.length + n]?.state;
+      return n > 0 ? future[n - 1]?.state : undefined;
+    },
+
+    steps() {
+      const step = (e: Entry<T>): HistoryStep => (e.by != null ? { label: e.label, by: e.by } : { label: e.label });
+      // (the state undo would leave is the step's before it: the first state, opened, is no step to take back)
+      const back = past.length ? [present, ...past.slice(1).reverse()].map(step) : [];
+      return { back, forward: future.map(step) };
+    },
+
+    travel(n) {
+      unmoved();
+      const k = Math.abs(Math.trunc(n));
+      if (!k || (n < 0 ? past.length : future.length) < k) return false;
+      if (n < 0) {
+        const moved = past.splice(past.length - k);
+        future = [...moved.slice(1), present, ...future];
+        present = moved[0];
+      } else {
+        const moved = future.splice(0, k);
+        past.push(present, ...moved.slice(0, -1));
+        present = moved[k - 1];
+      }
+      travelled = true;
+      last = "travel";
+      notify();
+      return true;
     },
 
     redo() {

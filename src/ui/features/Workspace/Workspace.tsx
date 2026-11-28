@@ -148,7 +148,6 @@ import {
   presentIntent,
   saveIntent,
   shortcutLabel,
-  undoIntent,
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
@@ -253,6 +252,7 @@ import type { SelectableKind } from "./store/slices/selectionSlice";
 import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menuScope";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
+import { holdSteps } from "../../../lib/doc/takeSteps";
 import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapOffered, mapStanding, numberingSaid, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
@@ -1179,38 +1179,32 @@ function WorkspaceContent({
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
   const askDeleteSet = useEditor((s) => s.askDeleteSet);
   const setsNow = useEditor((s) => s.sets);
-  // An undo or a redo that would take away a running step is held, and asks
-  // first what deleting it asks (heard before the app's own undo, App.tsx)
+  // Steps back or forward asked of this page's document - by the keys, Edit > Undo, the title bar's
+  // Undo or its history, all one way (lib/doc/takeSteps) - are held first where they should be: an undo
+  // or a redo that would take away a running step asks first what deleting it asks
   const askUndo = useEditor((s) => s.askUndo);
   useEffect(() => {
-    if (!active) return;
+    const doc = documentOf(store);
+    if (!active || !doc) return;
     // (not in a talk, where Escape ends the talk: a pen's stroke there is let be)
     const escape = () => {
       if (!store.getState().presenting) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
     };
-    const onKey = (e: KeyboardEvent) => {
-      // (words typed on the page: their field's undo is theirs - undoIntent leaves it the keys)
-      const intent = undoIntent(e);
-      if (!intent) return;
+    const held = holdSteps(doc, (n) => {
       const s = store.getState();
-      // (an undo come from elsewhere while they are typed: nothing, never the document's under them;
-      // a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
+      // (asked from elsewhere while words are typed on the page - their field's undo is theirs: nothing, never the document's
+      // under them; a gesture under way - a chain, a shape, a drag: let go as Escape lets it go, by its own Escape, and nothing more)
       const words = wordsUnderWay(s);
       if (words || gestureUnderWay(s) || viewPanning()) {
-        e.preventDefault();
-        e.stopPropagation();
         if (!words) escape();
-        return;
+        return true;
       }
-      if (!s.holdUndo(intent)) return;
-      e.preventDefault();
-      e.stopPropagation();
-    };
-    window.addEventListener("keydown", onKey, true);
+      return s.holdUndo(n);
+    });
     // (a gesture lost - the window left, the pointer taken: let go, its flags with it)
     const lost = letLostGesturesGo(window, () => store.getState(), escape);
     return () => {
-      window.removeEventListener("keydown", onKey, true);
+      held();
       lost();
     };
   }, [active, store]);

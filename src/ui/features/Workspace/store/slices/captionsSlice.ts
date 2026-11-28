@@ -97,7 +97,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("mark text", (d) => ops.markCaptions(d, ids, (c) => marksAll(c.text, c.marks, r)));
     },
     freeCaption: (id: number) => {
-      doc.edit("free text", (d) => ops.updateCaption(d, id, { of: null }));
+      doc.edit("detach text", (d) => ops.updateCaption(d, id, { of: null }));
     },
     removeCaption: (id: number) => {
       if (doc.edit("delete text", (d) => ops.removeCaption(d, id)))

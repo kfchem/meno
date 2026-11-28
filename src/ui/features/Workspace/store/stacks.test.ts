@@ -81,7 +81,7 @@ describe("a stack of molecules in 3D", () => {
     state().selectAll();
     expect([...state().sel3d]).toEqual([1, 2, 3, 4]);
     state().gatherStack(1, 2);
-    expect(doc.history().undoLabel).toBe("stack again");
+    expect(doc.history().undoLabel).toBe("gather into a stack");
     expect(state().stacksShown).toEqual({ 1: 2 });
     // (where it stood as it was laid out)
     for (const m of state().molecules3d.slice(0, 3)) {
