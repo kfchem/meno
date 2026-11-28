@@ -747,7 +747,8 @@ on a page), and the **Newman projection** (`newman`).
   own places), what hangs from it carried as drawn, turned as its bond to the ring turns, the ring's wedges gone (its configuration is in the
   depth now), as one step. A wedge narrow at an atom off the ring is that atom's - a centre beside the ring or further out, such as the CH of
   1-cyclohexylethanol, its wedge on the bond to the ring or on one of its own - and stays as drawn, narrow at that centre, which reads as it did
-  in the chair, after *Flip chair* and after *Draw flat*; *Flip chair*
+  in the chair, after *Flip chair* and after *Draw flat*. A wavy bond between a ring atom and a centre off the ring is taken off with the
+  ring's wedges, and that centre stays open, as it was drawn; *Flip chair*
   gives the other chair, *Draw flat* or Undo the flat drawing again. Which of the two chairs is drawn is this tool's convention, not a rule of
   any text and no statement of the favoured conformer (1-methyl-1-phenylcyclohexane comes out phenyl equatorial; 5 of the 16
   D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): each group given a kind by the atom bound to the ring, ordered after published conformational energies (A-values) -

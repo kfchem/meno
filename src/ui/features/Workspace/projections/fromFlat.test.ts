@@ -624,8 +624,10 @@ describe("Draw as chair as the page draws it: offered only where the page then d
     const plain = drawnFromSmiles("CC(O)C1CCCCC1");
     const { c, near } = carbinol(plain);
     const ringAtom = near(c).find((n) => flatRingOf(plain, n))!;
-    for (const stereo of ["up", "down"] as const) {
+    // (by hand: O > the ring carbon > CH3 > H; the drawn bonds go O down, the ring up-left, CH3 up-right, the H behind a wedge, in front of a hash)
+    for (const [stereo, letter] of [["up", "R"], ["down", "S"]] as const) {
       const flat = wedgeAt(plain, c, ringAtom, stereo);
+      expect(descriptors(flat), stereo).toEqual([[c, letter]]);
       const { chair, first } = await throughFlip(flat, ringAtom);
       expect(first, stereo).toEqual({ axial: 0, equatorial: 1 });
       // (the wedge kept, narrow at the centre it belongs to)
@@ -637,7 +639,9 @@ describe("Draw as chair as the page draws it: offered only where the page then d
     const plain = drawnFromSmiles("CC(O)C1CCCCC1");
     const { c, o, near } = carbinol(plain);
     const ringAtom = near(c).find((n) => flatRingOf(plain, n))!;
-    for (const stereo of ["up", "down"] as const) {
+    // (by hand, as above: the wedge on the OH puts the H behind as on the ring bond - R; the hash S)
+    for (const [stereo, letter] of [["up", "R"], ["down", "S"]] as const) {
+      expect(descriptors(wedgeAt(plain, c, o, stereo)), stereo).toEqual([[c, letter]]);
       const { first } = await throughFlip(wedgeAt(plain, c, o, stereo), ringAtom);
       expect(first, stereo).toEqual({ axial: 0, equatorial: 1 });
     }
@@ -654,8 +658,13 @@ describe("Draw as chair as the page draws it: offered only where the page then d
   }, measured(10000));
 
   it("draws a ring whose atom is a centre carrying a centre - trans-1-(2-methylcyclohexyl)ethanol, either centre off the ring - diequatorial, then diaxial, every descriptor kept", async () => {
-    for (const s of ["C[C@@H](O)[C@@H]1CCCC[C@H]1C", "C[C@H](O)[C@@H]1CCCC[C@H]1C"]) {
+    // (by hand: the CH R in the first, S in the second; the ring 1R,2R in both - C-1 the carbon carrying the CH(OH))
+    for (const [s, letter] of [["C[C@@H](O)[C@@H]1CCCC[C@H]1C", "R"], ["C[C@H](O)[C@@H]1CCCC[C@H]1C", "S"]] as const) {
       const flat = drawnFromSmiles(s);
+      const { c, near } = carbinol(flat);
+      const one = near(c).find((n) => flatRingOf(flat, n))!;
+      const two = flat.atoms.find((a) => a.id !== one && flatRingOf(flat, a.id) && flat.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 3)!.id;
+      expect(new Map(descriptors(flat)), s).toEqual(new Map([[c, letter], [one, "R"], [two, "R"]]));
       const ringAtom = flat.atoms.find((a) => flatRingOf(flat, a.id) && flat.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 3)!.id;
       const { first } = await throughFlip(flat, ringAtom);
       expect(descriptors(flat), s).toHaveLength(3);
