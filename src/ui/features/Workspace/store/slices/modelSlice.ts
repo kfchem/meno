@@ -51,7 +51,7 @@ import { editAtTrueSize } from "../../utils/trueSize";
 import { extentIn, style3dOf } from "../../style3dOf";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
-import { principalTurn } from "../../utils/align3d";
+import { firstTurn } from "../../utils/firstTurn";
 import { noteTurns } from "../turnJournal";
 import { fischerCentres, fischerWedges } from "../../utils/fischer";
 
@@ -1163,7 +1163,8 @@ function journalTurns(doc: DocumentStore<WorkspaceDocument>, before: WorkspaceDo
 
 /**
  * Each molecule in 3D added from a file, first seen along its principal
- * axes (utils/align3d `principalTurn`): its coordinates as the file has
+ * axes in the frame it is first shown at (utils/firstTurn, the rule *Reset
+ * turn* gives back): its coordinates as the file has
  * them, the view turned - a linear molecule side-on, a planar one face-on;
  * one tied to a drawing as the drawing lies. Numbered as `shownFrames`
  * numbers them.
@@ -1171,8 +1172,7 @@ function journalTurns(doc: DocumentStore<WorkspaceDocument>, before: WorkspaceDo
 function shownTurns(scheme: ImportedScheme | undefined, first: number, shown: EditorState["turns3d"]): EditorState["turns3d"] {
   const out = { ...shown };
   (scheme?.molecules3d ?? []).forEach((m, i) => {
-    if (m.drawnFrom) return;
-    const turn = principalTurn(m.atoms.flatMap((a) => [a.x, a.y, a.z ?? 0]));
+    const turn = firstTurn(m);
     if (turn) out[first + i] = turn;
   });
   return out;
