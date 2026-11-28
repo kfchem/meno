@@ -26,6 +26,8 @@ import { footOf, importedScheme } from "../../src/ui/features/Workspace/utils/fr
 import { editorModelOf, processFileContent, type ProcessedFileResult } from "../../src/ui/features/Workspace/utils/io";
 import { sheetNameRoom, sheetOf } from "../../src/ui/features/Workspace/utils/textSheets";
 import { workspaceFile } from "../../src/ui/features/Workspace/utils/workspace";
+import { sendPieces } from "../../src/ui/features/Workspace/workflow/keptJobs";
+import { withFilesAdded } from "../../src/lib/doc/menoFile";
 import { xyzFrames } from "../../src/utils/structureParsers";
 import { isMarkdown } from "../../src/lib/text/markdown";
 
@@ -306,6 +308,10 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   const plan = planned();
   for (const { r, p, nameY } of plan) r.put(p, nameY);
   const boxes = plan.map((q) => q.box);
-  const { bytes } = await workspaceFile(store.getState());
+  // (no Meno here to add the files it keeps from the disk: each, held by the page, added as Meno adds it)
+  const file = await workspaceFile(store.getState());
+  const sent = new Map<string, Uint8Array>();
+  await sendPieces(file, async (_save, sha256, b) => void sent.set(sha256, b));
+  const bytes = withFilesAdded(file.bytes, file.appended, (sha) => sent.get(sha));
   return { bytes, boxes, title: titleBox };
 }

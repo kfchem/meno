@@ -23,7 +23,7 @@
  * list of them damaged or gone is not believed, and they are had without
  * it. A workspace is written only within the limits it is read with.
  */
-import { strFromU8, strToU8, zipSync, type Zippable } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
 import { sha256Hex } from "../binary/sha256";
 import { entryBytes, zipEntries, type ZipEntry } from "../binary/zip";
 
@@ -114,6 +114,22 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[], lis
   // (the list of them - a few hundred bytes a file - cannot come near the workspace's limit, which it is read with)
   entries["files.json"] = [strToU8(JSON.stringify(index, null, 1)), { level: 0, ...(mtime ? { mtime } : {}) }];
   return zipSync({ ...entries, ...kept });
+}
+
+/**
+ * A workspace's file as the page wrote it (`menoFileBytes`, its files
+ * listed) with the files it lists added, where there is no Meno backend to
+ * add them from the disk (src-tauri keptjobs.rs `append_job_files`) - a
+ * document built by a script: each of `added`, in order, whose bytes `data`
+ * has, stored as Meno stores it - a text deflated, the rest as it is.
+ */
+export function withFilesAdded(bytes: Uint8Array, added: readonly { sha256: string; media?: string }[], data: (sha256: string) => Uint8Array | null | undefined): Uint8Array {
+  const entries: Zippable = Object.fromEntries(Object.entries(unzipSync(bytes)).map(([name, d]) => [name, [d, { level: 0 }]]));
+  for (const a of added) {
+    const d = data(a.sha256);
+    if (d && !entries[`files/${a.sha256}`]) entries[`files/${a.sha256}`] = [d, { level: a.media?.startsWith("text/") ? 6 : 0 }];
+  }
+  return zipSync(entries);
 }
 
 /** A workspace file read: its workspace, the files it keeps, and each one's bytes, read when wanted. */

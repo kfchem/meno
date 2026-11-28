@@ -9,8 +9,7 @@
  * tests.
  */
 import { readFile } from "@tauri-apps/plugin-fs";
-import { unzipSync, zipSync, type Zippable } from "fflate";
-import { readMenoFile, type MenoFile } from "../lib/doc/menoFile";
+import { readMenoFile, withFilesAdded, type MenoFile } from "../lib/doc/menoFile";
 import type { FoundKeptFile, KeptFilesWhere } from "../lib/jobs";
 import { sendPieces, type JobsKept } from "../ui/features/Workspace/workflow/keptJobs";
 import { workspaceFile, type SavedFile } from "../ui/features/Workspace/utils/workspace";
@@ -52,11 +51,11 @@ export async function heldFile(state: State, jobs?: JobsKept): Promise<SavedFile
   };
   const file = await workspaceFile(state, jobs, { where });
   await sendPieces(file, async (_save, sha256, bytes) => void staged.set(sha256, bytes));
-  const entries: Zippable = Object.fromEntries(Object.entries(unzipSync(file.bytes)).map(([name, data]) => [name, [data, { level: 0 }]]));
+  const fromFiles = new Map<string, Uint8Array>();
   for (const a of file.appended) {
     const from = a.from ? await at(a.from) : null;
-    const data = a.staged ? staged.get(a.sha256) : from ? from.data(a.sha256) : null;
-    if (data) entries[`files/${a.sha256}`] = [data, { level: a.media?.startsWith("text/") ? 6 : 0 }];
+    const data = from ? from.data(a.sha256) : null;
+    if (data) fromFiles.set(a.sha256, data);
   }
-  return { ...file, bytes: zipSync(entries) };
+  return { ...file, bytes: withFilesAdded(file.bytes, file.appended, (sha) => staged.get(sha) ?? fromFiles.get(sha)) };
 }
