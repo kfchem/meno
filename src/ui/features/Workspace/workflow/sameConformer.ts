@@ -19,7 +19,7 @@
  * them: the ways of all its atoms are tried instead.
  */
 import { canonicalSearched, symmetryClasses } from "../../../../lib/layout/canonical";
-import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
+import { BOND_REACH, bondedPairs, bondingDistance, bondRadii, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { huckelBonds } from "../../../../lib/chem/huckel";
 import { rmsd } from "./rmsd";
 
@@ -31,6 +31,10 @@ export const SAME_CONFORMER = 0.01;
  * 2026-11-01), so a pair costs some 6 ms at most here, and most pairs are told apart by the bound before any.
  */
 export const ALIKE_WAYS = 1000;
+
+/** What a step says where `n` entries had more pairs near a bond's reach than `OPEN_MOST`: each bonded as its distances say, so a duplicate could be missed - never two made one. */
+export const openSaid = (n: number) =>
+  `${n} entr${n === 1 ? "y has" : "ies have"} more than ${OPEN_MOST} bonds half made: duplicates of ${n === 1 ? "it" : "them"} could be missed`;
 
 /** What a step says where `n` compounds' ways passed `ALIKE_WAYS`: their atoms were taken atom against atom, so a duplicate could be missed - never two made one. */
 export const cappedSaid = (n: number) =>
@@ -210,46 +214,157 @@ export class Sameness {
 }
 
 /**
- * Geometries of the same atoms put in one numbering by where their atoms
- * stand, not by the numbers or bonds they came with: a saddle point found
- * from both directions is numbered and bonded by each side's own map. Each
- * is bonded by distance (`bondedPairs`, as a file of atoms alone is, all
- * single) and written in its own order (`canonicalSearched`); those written
- * alike are one group, numbered as its first: atom j of the group is the
- * member's own atom `from[j]`, its place `xyz`'s j-th. One whose bonds by
- * distance differ from another's - a bond just at the reach in one alone -
- * is of another group: a duplicate can be missed so, never two made one,
- * since the group's members are still compared by `Sameness`.
+ * How far, in ångströms, a pair's distance may lie from the reach of a
+ * bond (`bondingDistance`) and the bond be taken both as made and as not
+ * (`AlikeWhereTheyStand`), for a molecule of `n` atoms. Two geometries
+ * within `SAME_CONFORMER` RMSD of each other, laid over at their best, have
+ * their atoms' moves' squares sum to at most n x SAME_CONFORMER²; a distance
+ * between two atoms changes by no more than their two moves together, at
+ * most √(2n) x SAME_CONFORMER (all the difference in those two atoms). Half
+ * that either side of the reach: one geometry's distance taken as made
+ * only (below the band) and the other's as not made only (above it) are
+ * then further apart than the rule lets them be - so two geometries one by
+ * the rule always share one way of being bonded (15 atoms: 0.027 Å; 100
+ * atoms: 0.071 Å).
  */
-export function byWhereTheyStand(given: readonly { atoms: readonly Atom[]; xyz: readonly number[] }[]): { atoms: Atom[]; bonds: Bond[]; members: { at: number; xyz: number[]; from: number[] }[] }[] {
-  const groups = new Map<string, { atoms: Atom[]; bonds: Bond[]; place: number[]; members: { at: number; xyz: number[]; from: number[] }[] }>();
-  given.forEach(({ atoms, xyz }, at) => {
-    const pairs = bondedPairs(xyz, bondRadii(atoms.map((a) => a.el)));
-    const bonds: Bond[] = [];
-    for (let k = 0; k < pairs.length; k += 2) bonds.push({ a1: pairs[k], a2: pairs[k + 1], order: 1 });
-    // (an isotope is part of what an atom is; a charge is not - each side's map may give the same atoms charges of its own, the whole's charge compared apart)
-    const { text, ranks } = canonicalSearched({
-      atoms: atoms.map((a) => ({ el: a.isotope ? `${a.isotope}${a.el}` : a.el, hs: 0 })),
-      bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: 1 })),
-    });
+export const openBand = (n: number): number => (SAME_CONFORMER * Math.sqrt(2 * n)) / 2;
+/** The most bonds left open (`openBand`) tried both ways: 2^4 = 16 numberings of a geometry at most. Past it, each is taken as its distance says - a duplicate can then be missed, never two made one. */
+export const OPEN_MOST = 4;
+/** The numberings worked out (`AlikeWhereTheyStand`), and of how many geometries - counted so that a test can tell how the work grows, which time cannot. */
+export const numbered = { geometries: 0, numberings: 0 };
+
+type Way = { text: string; ranks: number[]; bonds: Bond[] };
+
+/**
+ * Whether geometries of the same atoms are one structure in 3D - the same
+ * conformer (`Sameness`) - by where their atoms stand, not by the numbers
+ * or bonds they came with: a saddle point found from both directions is
+ * numbered and bonded by each side's own map. Each is bonded by distance
+ * (`bondedPairs`' reach, all single) and numbered in its own order
+ * (`canonicalSearched`); a pair near the reach (`openBand`) - a bond half
+ * made, as at a saddle point - is taken both as made and as not, a
+ * numbering for each way (at most `OPEN_MOST` such pairs). Two geometries
+ * written alike in any of their ways are laid over each other in that
+ * numbering, which atoms are which given by it, and judged by `Sameness`:
+ * all atoms within `SAME_CONFORMER`, turned and moved, never reflected,
+ * one-to-one and element to element. Each geometry's ways are worked out
+ * once, when it is first asked about, so that work can be done one
+ * geometry at a time.
+ */
+export class AlikeWhereTheyStand {
+  private readonly ways = new Map<number, Way[]>();
+  private readonly sames = new Map<string, Sameness>();
+  /** Geometries whose ways onto themselves were too many to try (`Sameness.capped`): a duplicate of one could be missed. */
+  readonly capped = new Set<number>();
+  /** Geometries with more pairs near the reach than `OPEN_MOST`, each taken as its distance says: a duplicate of one could be missed. */
+  readonly opened = new Set<number>();
+
+  constructor(private readonly given: readonly { atoms: readonly Atom[]; xyz: readonly number[] }[]) {}
+
+  /** Geometry `i`'s ways worked out now, where they are not yet: a turn's work, one geometry at a time. */
+  prepare(i: number): void {
+    this.waysOf(i);
+  }
+
+  private waysOf(i: number): Way[] {
+    const known = this.ways.get(i);
+    if (known) return known;
+    const { atoms, xyz } = this.given[i];
     const n = atoms.length;
-    const whole = ranks.length === n && new Set(ranks).size === n && ranks.every((r) => r >= 0 && r < n);
-    // (a numbering not one place for each atom: on its own, as it came)
-    const key = whole ? text : `#${at}`;
-    const atPlace = new Array<number>(n);
-    if (whole) ranks.forEach((r, i) => (atPlace[r] = i));
-    else for (let i = 0; i < n; i++) atPlace[i] = i;
-    const g = groups.get(key);
-    if (!g) {
-      groups.set(key, { atoms: atoms.map((a) => ({ el: a.el, ...(a.isotope ? { isotope: a.isotope } : {}) })), bonds, place: whole ? ranks : atPlace, members: [{ at, xyz: [...xyz], from: atoms.map((_, i) => i) }] });
-      return;
+    const radii = bondRadii(atoms.map((a) => a.el));
+    const band = openBand(n);
+    // (the least two radii together: the reach widened by the band over it reaches every pair's own reach and band)
+    const [r0, r1] = [...radii].sort((x, y) => x - y);
+    const least = r0 + r1;
+    // (every pair within the reach and the band beyond it: at least as far as each pair's own reach, the band added)
+    const pairs = n > 1 ? bondedPairs(xyz, radii, BOND_REACH + band / least, REACH_FLOOR + band) : [];
+    const made: Bond[] = [];
+    const open: Bond[] = [];
+    for (let k = 0; k < pairs.length; k += 2) {
+      const [a, b] = [pairs[k], pairs[k + 1]];
+      const d = Math.hypot(xyz[3 * a] - xyz[3 * b], xyz[3 * a + 1] - xyz[3 * b + 1], xyz[3 * a + 2] - xyz[3 * b + 2]);
+      const reach = bondingDistance(radii[a], radii[b]);
+      if (d < reach - band) made.push({ a1: a, a2: b, order: 1 });
+      else if (d <= reach + band) open.push({ a1: a, a2: b, order: 1 });
     }
-    // (the group's atom j stands at place g.place[j]; this one's atom there is atPlace[g.place[j]])
-    const from = g.place.map((p) => atPlace[p]);
-    g.members.push({ at, xyz: from.flatMap((i) => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]]), from });
-  });
-  return [...groups.values()].map(({ atoms, bonds, members }) => ({ atoms, bonds, members }));
+    // (past OPEN_MOST open, each as its distance says: the plain bonds by distance)
+    const tried = open.length > OPEN_MOST ? [] : open;
+    if (open.length > OPEN_MOST) {
+      this.opened.add(i);
+      for (const b of open) if (Math.hypot(xyz[3 * b.a1] - xyz[3 * b.a2], xyz[3 * b.a1 + 1] - xyz[3 * b.a2 + 1], xyz[3 * b.a1 + 2] - xyz[3 * b.a2 + 2]) < bondingDistance(radii[b.a1], radii[b.a2])) made.push(b);
+    }
+    const out: Way[] = [];
+    for (let mask = 0; mask < 1 << tried.length; mask++) {
+      const bonds = [...made, ...tried.filter((_, k) => mask & (1 << k))];
+      // (an isotope is part of what an atom is; a charge is not - each side's map may give the same atoms charges of its own, the whole's charge compared apart)
+      const { text, ranks } = canonicalSearched({
+        atoms: atoms.map((a) => ({ el: a.isotope ? `${a.isotope}${a.el}` : a.el, hs: 0 })),
+        bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: 1 })),
+      });
+      numbered.numberings++;
+      // (a numbering not one place for each atom: no way of its own, compared with none)
+      if (ranks.length === n && new Set(ranks).size === n && ranks.every((r) => r >= 0 && r < n)) out.push({ text, ranks, bonds });
+    }
+    numbered.geometries++;
+    this.ways.set(i, out);
+    return out;
+  }
+
+  private sameOf(i: number, w: Way): Sameness {
+    const key = `${i}|${w.text}`;
+    let s = this.sames.get(key);
+    if (!s) {
+      const { atoms, xyz } = this.given[i];
+      s = new Sameness(atoms.map((a) => ({ el: a.el, ...(a.isotope ? { isotope: a.isotope } : {}) })), w.bonds, xyz);
+      if (s.capped) this.capped.add(i);
+      this.sames.set(key, s);
+    }
+    return s;
+  }
+
+  /** Each way geometry `j` is written as `i` is in one of `i`'s: `i`'s atom k is `j`'s atom from[k]. */
+  private *shared(i: number, j: number): Generator<{ same: Sameness; from: number[] }> {
+    const theirs = new Map(this.waysOf(j).map((w) => [w.text, w]));
+    for (const w of this.waysOf(i)) {
+      const t = theirs.get(w.text);
+      if (!t) continue;
+      const atPlace = new Array<number>(t.ranks.length);
+      t.ranks.forEach((r, k) => (atPlace[r] = k));
+      yield { same: this.sameOf(i, w), from: w.ranks.map((r) => atPlace[r]) };
+    }
+  }
+
+  private inOrder(j: number, from: readonly number[]): number[] {
+    const xyz = this.given[j].xyz;
+    return from.flatMap((k) => [xyz[3 * k], xyz[3 * k + 1], xyz[3 * k + 2]]);
+  }
+
+  /** What `Sameness.bound` compares of geometry `i`, by its own atoms: each element's atoms' distances from its centre, in order - whatever order they are numbered in. */
+  signature(i: number): Float64Array {
+    const { atoms, xyz } = this.given[i];
+    const n = atoms.length;
+    const c = centreOf(xyz, n);
+    const by = new Map<string, number[]>();
+    atoms.forEach((a, k) => by.set(a.el, [...(by.get(a.el) ?? []), Math.hypot(xyz[3 * k] - c[0], xyz[3 * k + 1] - c[1], xyz[3 * k + 2] - c[2])]));
+    return Float64Array.from([...by.keys()].sort().flatMap((el) => by.get(el)!.sort((p, q) => p - q)));
+  }
+
+  /** Whether geometries `i` and `j` are one conformer, by where their atoms stand. */
+  same(i: number, j: number): boolean {
+    for (const { same, from } of this.shared(i, j)) if (same.same(this.given[i].xyz, this.inOrder(j, from))) return true;
+    return false;
+  }
+
+  /** Where `j` is the mirror image of `i` (`Sameness.mirrorOf`), where each atom of `i` is taken in it, by `j`'s own numbers: `i`'s atom k plays in `j` the part of its atom to[k]. */
+  mirrorOf(i: number, j: number): number[] | null {
+    for (const { same, from } of this.shared(i, j)) {
+      const laid = same.mirrorOf(this.given[i].xyz, this.inOrder(j, from));
+      if (laid) return laid.to.map((k) => from[k]);
+    }
+    return null;
+  }
 }
+
 
 /**
  * The most steps the search for a molecule's ways takes - an atom tried as

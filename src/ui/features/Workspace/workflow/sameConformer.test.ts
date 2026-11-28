@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ALIKE_WAYS, SAME_CONFORMER, Sameness, WAY_STEPS, work } from "./sameConformer";
-import { runMeno } from "./meno";
+import { ALIKE_WAYS, numbered, SAME_CONFORMER, Sameness, WAY_STEPS, work } from "./sameConformer";
+import { runMeno, runMenoInTurns } from "./meno";
 import { rmsd } from "./rmsd";
 import { entryOfSet, setEntries, type SetEntry } from "./entries";
 
@@ -276,6 +276,96 @@ describe("Duplicates within each value of a property, its entries numbered each 
     expect(swap.map((i) => order[i] < 2 ? "O" : "H")).toEqual(["O", "O", "H", "H"]);
     const reflected = gauche.map((v, k) => (k % 3 === 0 ? -v : v));
     expect(rmsd(reflected, renumbered(mirror, swap))).toBeLessThan(1e-6);
+  });
+});
+
+describe("Duplicates within each value of a property, a bond half made", () => {
+  // (a made-up hydrogen moving from a carbon to an oxygen, H3C...H...OH: C, three H on it, the moving H on the C-O line
+  //  `ch` from the C, the O 1.25 Å past it, its own H; seven atoms. The C...H reach is (0.75 + 0.32) x 1.2 = 1.284 Å)
+  function transfer(ch: number): { atoms: { el: string }[]; xyz: number[] } {
+    const xyz = [0, 0, 0];
+    for (let k = 0; k < 3; k++) {
+      const t = (2 * Math.PI * k) / 3;
+      xyz.push(1.028 * Math.cos(t), 1.028 * Math.sin(t), -0.363);
+    }
+    const o = ch + 1.25;
+    const t = (104 * Math.PI) / 180;
+    xyz.push(0, 0, ch, 0, 0, o, 0.97 * Math.sin(t), 0, o - 0.97 * Math.cos(t));
+    return { atoms: ["C", "H", "H", "H", "H", "O", "H"].map((el) => ({ el })), xyz };
+  }
+  const path = { path: { value: "p", unit: "none" as const, status: "computed" as const } };
+  /** Copies of `given`, each its atoms numbered in `orders[k]` (its atom i is the given's orders[k][i]), turned by 37k degrees and moved, bonded as each's own map has it: the moving H on the C in the first, on the O in the rest. */
+  function copies(given: { atoms: { el: string }[]; xyz: number[] }[], orders: number[][]): SetEntry[] {
+    const ms = given.map((g, k) => {
+      const order = orders[k % orders.length];
+      const xyz = turned(renumbered(g.xyz, order), 37 * k, [k, -k, 2 * k]);
+      const on = order.indexOf(k === 0 ? 0 : 5);
+      const bonds = order.flatMap((was, i) => (was === 4 ? [{ a1: i, a2: on, order: 1 }] : was === 0 || was === 5 ? [] : [{ a1: i, a2: order.indexOf(was === 6 ? 5 : 0), order: 1 }]));
+      return { id: k + 1, at: { x: 0, y: 0 }, atoms: order.map((i, a) => ({ ...g.atoms[i], x: xyz[3 * a], y: xyz[3 * a + 1], z: xyz[3 * a + 2] })), bonds, energies: [-k * 1e-6], imaginary: [[-1200]], properties: [path] };
+    });
+    return setEntries(ms, "molecules");
+  }
+  const BY = { within: "each value", groupBy: "path" };
+  const ORDERS = [
+    [0, 1, 2, 3, 4, 5, 6],
+    [6, 5, 4, 3, 2, 1, 0],
+    [4, 0, 5, 1, 6, 2, 3],
+    [2, 6, 1, 5, 0, 4, 3],
+  ];
+
+  it("keeps one: two copies whose moving H lies either side of the reach - 1.282 and 1.286 Å, far within 0.01 Å RMSD", () => {
+    // (on paper: the H 0.004 Å apart along the line, all else alike - an RMSD of at most 0.004 / √7 = 0.0015 Å)
+    numbered.geometries = 0;
+    numbered.numberings = 0;
+    const out = runMeno("duplicates", copies([transfer(1.282), transfer(1.286)], ORDERS), "molecules", BY);
+    expect(out.said).toBe("1 of 2 entries kept · rest 1");
+    // (the work: one pair near the reach in each, taken both ways - two numberings each)
+    expect(numbered).toEqual({ geometries: 2, numberings: 4 });
+  });
+
+  it("keeps one of four copies with the moving H at exactly the reach", () => {
+    const out = runMeno("duplicates", copies([1, 2, 3, 4].map(() => transfer(1.284)), ORDERS), "molecules", BY);
+    expect(out.said).toBe("1 of 4 entries kept · rest 3");
+  });
+
+  it("keeps two: the saddle point and the hydrogen fully on the carbon - 0.19 Å apart, well past 0.01 Å RMSD", () => {
+    // (pins what must not change: on paper the H moves 0.19 Å, an RMSD after the fit of some 0.07 Å)
+    const out = runMeno("duplicates", copies([transfer(1.284), transfer(1.09)], ORDERS), "molecules", BY);
+    expect(out.said).toBe("2 of 2 entries kept");
+  });
+
+  it("past the bonds half made it tries both ways, bonds each as its distances say - a duplicate missed, said, never two made one", () => {
+    // (a made-up CH5 at the reach: five H round a C, a trigonal bipyramid - five pairs near the reach, past the four tried)
+    const ch5 = (last: number) => {
+      const r = [1.284, 1.284, 1.284, 1.284, last];
+      const dirs = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-0.5, Math.sqrt(3) / 2, 0], [-0.5, -Math.sqrt(3) / 2, 0]];
+      return { atoms: ["C", "H", "H", "H", "H", "H"].map((el) => ({ el })), xyz: [0, 0, 0, ...dirs.flatMap((d, k) => d.map((v) => v * r[k]))] };
+    };
+    const entries = (a: number, b: number) =>
+      setEntries(
+        [ch5(a), ch5(b)].map((g, k) => {
+          const xyz = turned(g.xyz, 50 * k);
+          return { id: k + 1, at: { x: 0, y: 0 }, atoms: g.atoms.map((x, i) => ({ ...x, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })), bonds: [], energies: [0], imaginary: [[-900]], properties: [path] };
+        }),
+        "molecules",
+      );
+    numbered.numberings = 0;
+    // (alike: one numbering each, the same - one, and said)
+    expect(runMeno("duplicates", entries(1.284, 1.284), "molecules", BY).said).toBe("1 of 2 entries kept · rest 1 · 2 entries have more than 4 bonds half made: duplicates of them could be missed");
+    expect(numbered.numberings).toBe(2);
+    // (one H 0.008 Å either side of the reach: one by the rule, missed - two, and said)
+    expect(runMeno("duplicates", entries(1.28, 1.288), "molecules", BY).said).toBe("2 of 2 entries kept · 2 entries have more than 4 bonds half made: duplicates of them could be missed");
+  });
+
+  it("works out each entry's numberings in a turn of its own, letting the page go on between", async () => {
+    const all = copies([1, 2, 3, 4, 5, 6].map((k) => transfer(1.28 + 0.001 * k)), ORDERS);
+    numbered.geometries = 0;
+    const seen: number[] = [];
+    const out = await runMenoInTurns("duplicates", all, "molecules", BY, undefined, { slice: 0, now: () => 0, pause: async () => void seen.push(numbered.geometries) });
+    expect(out?.said).toBe("1 of 6 entries kept · rest 5");
+    // (between two turns, at most one entry's numberings worked out)
+    expect(seen.every((n, i) => n - (seen[i - 1] ?? 0) <= 1)).toBe(true);
+    expect(seen.length).toBeGreaterThanOrEqual(5);
   });
 });
 
