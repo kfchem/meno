@@ -525,15 +525,32 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   of a bond, or nearest letters read in no label, within 1.2 bonds, is
   unsure, and says so. A label the matcher cannot read, or whose bond was
   lost, would otherwise be left out with what it holds, and what is left
-  can be a whole structure that is not the picture's.
+  can be a whole structure that is not the picture's. Letters read in no
+  label that make a word an atom's label reads as - a counter-ion's Na,
+  its sign lost or not taken - standing farther off than that are said
+  too, by the atom nearest them however far: an ion or a group of the
+  structure may be missing.
+- **A hetero atom left open**: read from a picture, an O, S, Se or N
+  written bare - no H, no charge, no charge drawn by it, no radical's
+  dots - whose bonds come to fewer than it takes (two for O, S and Se,
+  three for N; a bond of a ring drawn with a circle counts one and a
+  half, a dative bond none) is unsure and says so: an acetate whose
+  minus was not traced reads so, and would otherwise be filled with an
+  H as an acid. A chemist writes a hetero atom's H's, so a ring's or an
+  ether's O, a carbonyl's O, an amine's or an imine's N are never open;
+  this is said wherever the atom stands and however large its piece.
 - **A small piece of carbons alone** (2026-11-19): read from a picture,
   a piece - atoms joined by bonds - of six atoms or fewer, all of them
   carbons with no label, is unsure and says that it may be a number or
   letters read as bonds: a digit or a letter the matcher does not read
   is traced as a line or two. So is such a piece holding a carbon with
-  no label beside a larger one - within a bond of the larger one's box -
-  saying it may be part of the structure, its bond not read: an OH come
-  off with a stray carbon, a tert-butyl
+  no label beside a larger one - an atom of it as near an atom of the
+  larger one as the longest bond read in the picture and half a bond
+  more, never under a bond and a half: a group cut off by one bond not
+  traced stands one drawn bond off, and a bond to a label or a
+  stretched one is longer than most - saying it may be part of the
+  structure, its bond not read: an OH come off with a stray carbon, a
+  tert-butyl
   with its CH-OH. Neither is ever left out - a cyclohexane or a hexane
   drawn alone is such a piece, and comes through said. Six is inferred,
   not measured on papers: set on Meno's made pictures, above every stray
@@ -555,7 +572,9 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   traced, would otherwise leave its ring open with nothing said.
 - **A small piece beside a structure** (2026-11-26): read from a picture,
   a piece of two to four atoms, labels and all, none of them charged,
-  within a bond of the box of a larger piece, is unsure and says it may
+  as near a larger piece as *A small piece of carbons alone* has it
+  (atom to atom, the longest bond read and half a bond more), is unsure
+  and says it may
   be part of the structure, its bond not read - a joint traced open cuts
   off a side chain's carbons, a C-N or a C-OH so. A counter-ion is
   charged or a single atom and is not said; a piece further off is a

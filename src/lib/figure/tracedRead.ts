@@ -9,8 +9,8 @@
 import type { Box, FigureDrawn, FigureLetter } from "./drawn";
 import type { GlyphShape } from "./glyphs";
 import type { Pixels } from "./inkFit";
-import { readFigure, type FigureRead } from "./read";
-import { onPage, tracePicture, unreadInk } from "./trace";
+import { labelText, readFigure, wordsOf, type FigureRead } from "./read";
+import { LEFT_NEAR, onPage, tracePicture, unreadInk } from "./trace";
 
 /** Where the picture's pixels lie: a pixel is `scale` of the place's units, its top left at `x`, `y` there. */
 export type PictureAt = { scale: number; x: number; y: number };
@@ -53,7 +53,65 @@ export function readTracedPicture(
   for (const i of besidePieces(read)) if (!read.atoms[i].unsure?.includes(APART_SAID)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), APART_SAID];
   for (const i of alkaliOnCarbon(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ALKALI_SAID];
   for (const i of atOnePlace(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ONE_PLACE_SAID];
+  // (an O, S, Se or N written bare, no H, no charge, with fewer bonds than it takes: a charge's sign, a bond or an H not read - said
+  //  wherever it stands and however large its piece, never filled with H in silence)
+  for (const i of openLabels(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), OPEN_SAID];
+  // (a word an atom's label reads as - a counter-ion's Na, its sign lost or not taken - standing apart, read as no atom: said by the atom
+  //  nearest it, however far, never left out in silence)
+  for (const [i, said] of wordsApart(read, reads)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];
   return read;
+}
+
+/**
+ * The words of a picture's letters read in no label that read as a label - an element, an ion, a group - standing farther than
+ * `LEFT_NEAR` from every atom (nearer, `unreadInk` says the letter): each said by the atom nearest it, by atom.
+ */
+export function wordsApart(read: Pick<FigureRead, "atoms" | "bond" | "left">, reads: (label: string) => boolean): Map<number, string> {
+  const out = new Map<number, string>();
+  if (!read.atoms.length || !read.left?.letters.length) return out;
+  for (const w of wordsOf(read.left.letters)) {
+    const text = labelText(w, reads);
+    // (an element's symbol, an ion's or a group's name begins with a capital: a word that does not is no atom's)
+    if (!/^[A-Z]/.test(text) || !reads(text)) continue;
+    const m = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
+    let [best, at] = [Infinity, -1];
+    read.atoms.forEach((a, i) => {
+      const d = Math.hypot(a.x - m.x, a.y - m.y);
+      if (d < best) [best, at] = [d, i];
+    });
+    if (at >= 0 && best > LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `"${text}" stands apart in the picture and was read as no atom: an ion or a group of the structure may be missing.`);
+  }
+  return out;
+}
+
+/**
+ * The bonds an element written bare takes, uncharged, where a drawing leaves no H unwritten: a chemist writes a hetero atom's H's
+ * (OH, NH2, SH), so a bare O, S or Se has two bonds - a ring's or an ether's O, a carbonyl's O with its double bond - and a bare N
+ * three - a ring's, an amine's, an imine's with its double bond, a nitrile's with its triple. One with fewer is an anion whose minus
+ * was lost, an H or a bond not read: open (`openLabels`).
+ */
+const BARE_TAKES: Record<string, number> = { O: 2, S: 2, Se: 2, N: 3 };
+export const OPEN_SAID = "As read, it has fewer bonds than it takes and no charge: a charge's sign, a bond or an H was not read.";
+
+/**
+ * The atoms of a read written as a bare O, S, Se or N - the label that one element alone, or read as that element - with no charge, no
+ * charge drawn by it and no radical's dots, whose bonds come to fewer than it takes (`BARE_TAKES`): a bond as its order, a bond of a
+ * ring drawn with a circle as one and a half, a dative bond none (its pair is the donor's own).
+ */
+export function openLabels(read: Pick<FigureRead, "atoms" | "bonds">): number[] {
+  const sum = read.atoms.map(() => 0);
+  for (const b of read.bonds) {
+    if (b.dative) continue;
+    const n = b.aromatic ? 1.5 : b.order;
+    sum[b.a] += n;
+    sum[b.b] += n;
+  }
+  return read.atoms.flatMap((a, i) => {
+    const el = a.label ?? a.el ?? "";
+    const takes = BARE_TAKES[el];
+    if (takes === undefined || a.charge || a.marked || a.dots) return [];
+    return sum[i] < takes ? [i] : [];
+  });
 }
 
 /**
@@ -119,7 +177,7 @@ export function inLineCarbons(read: Pick<FigureRead, "atoms" | "bonds">): number
 /**
  * A piece of a picture read - atoms joined by bonds - of this many atoms or fewer is said where all of it is carbons with no label: a
  * compound's number or a letter traced may read as such bonds (a 1 or a 7 as a line, a % as a few); and where it holds such a carbon and
- * lies beside a larger piece - within a bond of its box, as `besidePieces` has it: a group whose bond to the structure was not read (an
+ * lies beside a larger piece - within `besideReach` of an atom of it, as `besidePieces` has it: a group whose bond to the structure was not read (an
  * OH with a stray carbon, a tert-butyl with its CH-OH). A whole small molecule drawn apart - an amino acid a few bonds off another
  * structure - is beside none, and is not said for it. Never left out: a cyclohexane or a hexane drawn alone is such a piece, and comes
  * through said. Inferred from made pictures (docs/PDF.md, *A picture traced*).
@@ -139,13 +197,29 @@ export function tinyPieces(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): 
   });
 }
 
-/** Whether a piece of a read lies beside one of `larger`: an atom of it within a bond of that piece's box. */
-function besideLarger(read: Pick<FigureRead, "atoms" | "bond">, p: readonly number[], larger: readonly number[][]): boolean {
-  const boxOf = (q: readonly number[]) => [Math.min(...q.map((i) => read.atoms[i].x)), Math.min(...q.map((i) => read.atoms[i].y)), Math.max(...q.map((i) => read.atoms[i].x)), Math.max(...q.map((i) => read.atoms[i].y))];
-  return larger.some((q) => {
-    const [x0, y0, x1, y1] = boxOf(q);
-    return p.some((i) => read.atoms[i].x >= x0 - read.bond && read.atoms[i].x <= x1 + read.bond && read.atoms[i].y >= y0 - read.bond && read.atoms[i].y <= y1 + read.bond);
-  });
+/**
+ * How far past the longest bond read in a picture a piece's atom may stand from an atom of a larger piece and still be said to lie
+ * beside it, in the picture's bond (`besideReach`): an atom read at a label stands at the label's middle, which may lie half a label's
+ * width - about half a bond - off where a bond drawn to it is aimed.
+ */
+const BESIDE_SLACK = 0.5;
+
+/**
+ * How near an atom of a larger piece a piece's atom stands when it lies beside it: a group cut off by one bond not traced stands one
+ * drawn bond from the atom it belonged to, and a drawn bond may be longer than most - stretched in a crowded drawing, or to a label - so
+ * the reach is the longest bond read in the picture, measured between its atoms (a label's gap and all), and `BESIDE_SLACK` more; never
+ * under a bond and a half. Measured atom to atom, as a bond joins atoms: a piece farther than that from every atom of the larger piece
+ * is no group of it cut off by one bond.
+ */
+export function besideReach(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number {
+  const longest = Math.max(0, ...read.bonds.map((b) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y)));
+  return Math.max(longest + BESIDE_SLACK * read.bond, (1 + BESIDE_SLACK) * read.bond);
+}
+
+/** Whether a piece of a read lies beside one of `larger`: an atom of it within `besideReach` of an atom of that piece. */
+function besideLarger(read: Pick<FigureRead, "atoms" | "bonds" | "bond">, p: readonly number[], larger: readonly number[][]): boolean {
+  const reach = besideReach(read);
+  return larger.some((q) => p.some((i) => q.some((j) => Math.hypot(read.atoms[i].x - read.atoms[j].x, read.atoms[i].y - read.atoms[j].y) <= reach)));
 }
 
 /** The pieces of a read - atoms joined by bonds - each its atoms. */
@@ -159,8 +233,8 @@ function piecesOf(read: Pick<FigureRead, "atoms" | "bonds">): number[][] {
 }
 
 /**
- * A piece standing beside a structure (`besidePieces`): of two atoms to this many, none of them charged, within a bond of a larger piece's
- * box. A joint traced open cuts a group off so - a side chain's two or three carbons, a C-N, a C-O - and drawings rarely set a free
+ * A piece standing beside a structure (`besidePieces`): of two atoms to this many, none of them charged, within `besideReach` of an atom of
+ * a larger piece. A joint traced open cuts a group off so - a side chain's two or three carbons, a C-N, a C-O - and drawings rarely set a free
  * ethane or methylamine beside a molecule; a counter-ion is charged or one atom, and is not said.
  */
 export const BESIDE_PIECE = 4;

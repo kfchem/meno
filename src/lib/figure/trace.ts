@@ -1284,7 +1284,7 @@ export function onPage(s: Shapes, k: number, dx: number, dy: number): Shapes {
 /** A letter-sized patch the letters' matcher reads as no letter, this near an atom read (in the bond), leaves that atom unsure. */
 const UNREAD_NEAR = 0.6;
 /** ... and a letter read but in no label, this near: a label whose bond was not read stands a bond off the atom it was drawn on. */
-const LEFT_NEAR = 1.2;
+export const LEFT_NEAR = 1.2;
 
 /**
  * Ink a picture holds that was read as nothing, beside the structure read from it: a letter-sized patch of its traced shapes that no
@@ -1315,7 +1315,7 @@ export function unreadInk(read: FigureRead, shapes: Shapes, known: readonly Glyp
       const d = dist(a, m);
       if (d < best) [best, at] = [d, i];
     });
-    if (at >= 0 && best <= LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `"${l.c}" beside it in the picture was read in no label.`);
+    if (at >= 0 && best <= LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `A mark beside it in the picture, read as "${l.c}", is in no label: a letter of a label, or a charge's sign, was not read.`);
   }
   return out;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alkaliOnCarbon, atOnePlace, besidePieces, BESIDE_PIECE, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
+import { alkaliOnCarbon, atOnePlace, besidePieces, besideReach, BESIDE_PIECE, openLabels, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
 import type { ReadAtom, ReadBond } from "./read";
 
 describe("how finely a box holding pictures is drawn to be traced", () => {
@@ -69,12 +69,36 @@ describe("a small piece of a picture read, of carbons alone", () => {
     expect(tinyPieces(read(big, salt))).toEqual([]);
   });
 
-  it("is not said for a larger piece standing well off it - a small molecule drawn apart, read whole", () => {
-    const big = piece(0, 12, true);
-    // (an alanine-like piece of six, carbons and labels, three bonds beyond the larger piece's box, and one bond beyond it)
-    const six = (from: number, at: number) => ({ ...piece(from, 6, false, (k) => (k === 2 ? { label: "OH" } : k === 4 ? { label: "NH2" } : {})), atoms: piece(from, 6, false, (k) => (k === 2 ? { label: "OH" } : k === 4 ? { label: "NH2" } : {})).atoms.map((a, k) => ({ ...a, x: at + k })) });
-    expect(tinyPieces(read(big, six(12, 11 + 3)))).toEqual([]);
-    expect(tinyPieces(read(big, six(12, 11 + 1)))).toEqual([{ atoms: [12, 13, 14, 15, 16, 17], apart: true }]);
+  it("is said within the picture's reach of a larger piece's atom - a group cut off by one bond not traced - and not beyond it", () => {
+    // (a chain of twelve, bonds of 1; an alanine-like piece of six, carbons and labels, its first atom `gap` on from the chain's end)
+    const chain = piece(0, 12);
+    const six = (gap: number) => {
+      const p = piece(12, 6, false, (k) => (k === 2 ? { label: "OH" } : k === 4 ? { label: "NH2" } : {}));
+      return { ...p, atoms: p.atoms.map((a, k) => ({ ...a, x: 11 + gap + k })) };
+    };
+    const said = [{ atoms: [12, 13, 14, 15, 16, 17], apart: true }];
+    // (the longest bond read is 1: the reach a bond and a half)
+    expect(besideReach(read(chain))).toBeCloseTo(1.5, 6);
+    // (one drawn bond off, and a little more - a bond to a label, or stretched)
+    expect(tinyPieces(read(chain, six(1)))).toEqual(said);
+    expect(tinyPieces(read(chain, six(1.05)))).toEqual(said);
+    expect(tinyPieces(read(chain, six(1.45)))).toEqual(said);
+    // (past every bond the picture has, and half a bond more: no bond of it was cut - a small molecule drawn apart, read whole)
+    expect(tinyPieces(read(chain, six(1.55)))).toEqual([]);
+    expect(tinyPieces(read(chain, six(3)))).toEqual([]);
+  });
+
+  it("takes its reach from the longest bond the picture has: a stretched bond lets a group stand that much farther", () => {
+    const chain = piece(0, 12);
+    // (the chain's last bond drawn 1.4 long)
+    const stretched = { ...chain, atoms: chain.atoms.map((a, k) => (k === 11 ? { ...a, x: 10 + 1.4 } : a)) };
+    const six = (gap: number) => {
+      const p = piece(12, 6, false, (k) => (k === 2 ? { label: "OH" } : {}));
+      return { ...p, atoms: p.atoms.map((a, k) => ({ ...a, x: 11.4 + gap + k })) };
+    };
+    expect(besideReach(read(stretched))).toBeCloseTo(1.9, 6);
+    expect(tinyPieces(read(stretched, six(1.7)))).toEqual([{ atoms: [12, 13, 14, 15, 16, 17], apart: true }]);
+    expect(tinyPieces(read(stretched, six(2)))).toEqual([]);
   });
 });
 
@@ -189,5 +213,44 @@ describe("three things a picture's read says, never reads silently", () => {
     expect(atOnePlace({ atoms, bonds, bond: 1 })).toEqual([0, 6]);
     expect(atOnePlace({ atoms, bonds: [...bonds, bond(6, 0)], bond: 1 })).toEqual([]);
     expect(atOnePlace({ atoms: [...ring().slice(0, 6), at(0.4, -1)], bonds, bond: 1 })).toEqual([]);
+  });
+});
+
+describe("a hetero atom written bare whose bonds leave it open", () => {
+  /** Atoms by label (none for a carbon), bonds by [a, b, order]; a unit apart. */
+  const mol = (labels: (Partial<ReadAtom> | string | null)[], bonds: [number, number, 1 | 2 | 3][]) => ({
+    atoms: labels.map((l, k): ReadAtom => ({ x: k, y: 0, ...(typeof l === "string" ? { label: l } : (l ?? {})) })),
+    bonds: bonds.map(([a, b, order]): ReadBond => ({ a, b, order })),
+  });
+
+  it("is said where an acetate's minus was not read: its O with one bond, bare, uncharged", () => {
+    // (CH3-C(=O)-O, the sign lost)
+    expect(openLabels(mol([null, null, "O", "O"], [[0, 1, 1], [1, 2, 2], [1, 3, 1]]))).toEqual([3]);
+    // (a thiolate's S, an amide's N with one bond, an O at a long chain's end)
+    expect(openLabels(mol([null, "S"], [[0, 1, 1]]))).toEqual([1]);
+    expect(openLabels(mol([null, "N"], [[0, 1, 1]]))).toEqual([1]);
+    expect(openLabels(mol([null, null, null, null, null, null, null, "O"], [[0, 1, 1], [1, 2, 1], [2, 3, 1], [3, 4, 1], [4, 5, 1], [5, 6, 1], [6, 7, 1]]))).toEqual([7]);
+  });
+
+  it("is not said where the label fills it: an acid's OH, an ether's O, a carbonyl's O, an amine's N, an N-oxide with its charges, alanine", () => {
+    // (acetic acid)
+    expect(openLabels(mol([null, null, "O", "OH"], [[0, 1, 1], [1, 2, 2], [1, 3, 1]]))).toEqual([]);
+    // (dimethyl ether; a ring's O)
+    expect(openLabels(mol([null, "O", null], [[0, 1, 1], [1, 2, 1]]))).toEqual([]);
+    expect(openLabels(mol([null, null, "O", null, null], [[0, 1, 1], [1, 2, 1], [2, 3, 1], [3, 4, 1], [4, 0, 1]]))).toEqual([]);
+    // (trimethylamine; an imine's N; a nitrile's N)
+    expect(openLabels(mol([null, "N", null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1]]))).toEqual([]);
+    expect(openLabels(mol([null, "N", null], [[0, 1, 2], [1, 2, 1]]))).toEqual([]);
+    expect(openLabels(mol([null, "N"], [[0, 1, 3]]))).toEqual([]);
+    // (trimethylamine N-oxide drawn with its charges: N+ and O-, or charges read on the atoms)
+    expect(openLabels(mol([null, "N+", null, null, "O\u2212"], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 1]]))).toEqual([]);
+    expect(openLabels(mol([null, { label: "N", charge: 1 }, null, null, { label: "O", charge: -1 }], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 1]]))).toEqual([]);
+    // (alanine: CH3-CH(NH2)-C(=O)OH)
+    expect(openLabels(mol([null, null, "NH2", null, "O", "OH"], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [3, 4, 2], [3, 5, 1]]))).toEqual([]);
+    // (a radical's O, its dot drawn; a charge drawn in a ring by it; an aromatic ring's N, its bonds one and a half)
+    expect(openLabels(mol([null, { label: "O", dots: 1 }], [[0, 1, 1]]))).toEqual([]);
+    expect(openLabels(mol([null, { label: "O", marked: -1 }], [[0, 1, 1]]))).toEqual([]);
+    const ring = mol([null, null, "N", null, null, null], [[0, 1, 1], [1, 2, 1], [2, 3, 1], [3, 4, 1], [4, 5, 1], [5, 0, 1]]);
+    expect(openLabels({ ...ring, bonds: ring.bonds.map((b) => ({ ...b, aromatic: true as const })) })).toEqual([]);
   });
 });
