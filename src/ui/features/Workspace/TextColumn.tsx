@@ -1078,12 +1078,21 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     // (the column moved by a hand - scrolled, zoomed: its card stood by a word that is elsewhere now - let go, eased as when the pointer
     //  leaves; the pointer resting on a number again brings that number's - docs/PDF.md, *A compound's number*)
     const offMoved = lensGoesWhenMoved(reader, () => store.getState(), id);
-    // (a finger dragged moves the column, gliding on as it is let go; put down and taken up where it was, a press, as a click)
+    // (a finger dragged moves the column, gliding on as it is let go; put down and taken up where it was, a press, as a click;
+    //  two pinch it, larger or smaller about the point between them, followed as they go)
     const offFinger = fingerScroll(el, {
       scrollBy: (dx, dy) => reader.scrollBy(dx, dy, true),
       press: (down, up) => {
         pressed(down);
         letGo(up);
+      },
+      pinch: {
+        begin: () => reader.view(),
+        to: (begun, { a0, b0, a1, b1 }) => {
+          const r = el.getBoundingClientRect();
+          const on = (p: { x: number; y: number }) => ({ x: p.x - r.left, y: p.y - r.top });
+          reader.pinch(begun, { a0: on(a0), b0: on(b0), a1: on(a1), b1: on(b1) });
+        },
       },
     });
     el.addEventListener("wheel", onWheel, { passive: false });

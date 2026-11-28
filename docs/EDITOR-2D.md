@@ -274,8 +274,10 @@ the keys still zooms nothing of the WebView's own. The page takes every pinch fo
 touchpad's comes as the wheel with Ctrl held, which the canvas follows as
 on a Mac and whose default the page prevents everywhere (`main.tsx`), so
 that it zooms the page nowhere; a touch screen's finds no pinch allowed
-but the canvas's (`touch-action: none` on the canvas, `pan-x pan-y` on the
-page, `App.css`), and a list still scrolls under a finger.
+but the canvas's and the reading column's (`touch-action: none` on the
+canvas, and on what is read in the column, which follows the fingers
+itself - docs/PDF.md, *In the column*; `pan-x pan-y` on the page,
+`App.css`), and a list still scrolls under a finger.
 A drawing is laid out again as the view zooms only once the zoom has
 moved a hundredth from the one it was laid out at: the last of a wheel's
 zoom, in steps too small to see for most of a second, lays nothing out

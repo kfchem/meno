@@ -144,8 +144,16 @@ stops being part of the work.
   A text and a Markdown text read in the column were the same, and move
   under a finger now as well; a conversation and a table there scroll in
   a box of their own, and always did.)
-- **Larger or smaller** by a pinch over the column, or Ctrl/⌘ with the
-  wheel there - the column's own, never the canvas's. *Fit width* comes
+- **Larger or smaller** by a pinch over the column - on a trackpad, or
+  two fingers on a touch screen - or Ctrl/⌘ with the wheel there - the
+  column's own, never the canvas's. Two fingers on a touch screen spread
+  make the pages larger, closed smaller, what lies midway between them
+  staying there, and moved together they carry the pages with them; lifted
+  one at a time, the one left goes on as a finger's drag. The zoom, its
+  limits, and the marks and found structures on the pages go with it as
+  with any other pinch. A text and a Markdown text read in the column
+  have no zoom, by a pinch or otherwise: two fingers there move them as
+  one does. *Fit width* comes
   back with a double-click on the number. The column is as wide as its
   edge is dragged.
 - **Its name among the texts' names** along the column's top. Closing it
@@ -1046,6 +1054,7 @@ Built:
   - The wheel and two fingers move them. A notch is eased, fingers are followed as they go.
   - A finger on a touch screen moves them too, followed as it goes and gliding on once let go; still, it is a click (`fingerScroll`: the column's body takes no pan of the system's own, `touch-action: none`, and follows the finger itself, as the canvas does).
   - A pinch, or Ctrl or ⌘ with the wheel, makes them larger or smaller about the pointer, from a quarter of the column's width to eight times it.
+  - Two fingers on a touch screen pinch them as well (`fingerScroll`'s `pinch`, `ColumnReader.pinch`): a second finger put down with the first ends the first's press or drag, and from then on the column is shown at once as the two have pinched it since they came down - zoomed by how far they have spread or closed, within the same limits, and placed so that the point of a page midway between them when they came down is midway between them now, kept within the pages (`pinchedColumn` in `lib/pdf/column.ts`, which takes the point between two fingers and how far they spread from `lib/input/pinch.ts`, as the canvas does). Worked out from where they came down rather than step by step, a long pinch out and back in comes back to where it began. Lifted, either finger leaves the other a drag from where it is; a third finger, a mouse and a pen are not part of it; a finger taken by the system lets go of what it held. As with a trackpad's pinch, the tiles drawn are scaled while it goes and drawn again sharp once it stops.
   - With the pointer over them, the arrow keys, Page Up and Page Down, Home and End move them, and ← and → go a page.
 - **Joined to its stack.**
   - The page most in view is the page on top of the stack. The column moves it quietly, with no turn on the stack.
