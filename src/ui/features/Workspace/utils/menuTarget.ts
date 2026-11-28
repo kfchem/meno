@@ -1,6 +1,6 @@
 import type { ColourTarget } from "../ColourCard";
 import type { MenuTarget } from "../PartMenu";
-import type { EditorState } from "../store/types";
+import type { EditorState, PushEnd } from "../store/types";
 import { ringThere } from "./rings";
 
 /** What a right-click menu's part is looked for in. */
@@ -20,6 +20,21 @@ const has = (items: readonly { id: number }[], id: number | null) => id != null 
  */
 export function aboutDrawing(target: MenuTarget): boolean {
   return target.kind === "atom" || target.kind === "bond" || target.kind === "ring" || (target.selection !== "none" && target.drawing !== false);
+}
+
+/**
+ * Where an electron-pushing arrow begun from a right-click menu leaves
+ * (docs/EDITOR-2D.md, *Electron-pushing arrows*): the atom or the bond the
+ * menu is of - the right-click selected it, alone where it was not selected,
+ * and the arrow leaves it whatever else is selected with it; null on any
+ * other menu. (With whole structures selected the menu leaves the entries
+ * out itself: PartMenu, `scope.whole`.)
+ */
+export function pushFromMenu(target: Pick<MenuTarget, "kind" | "id">): PushEnd | null {
+  if (target.id == null) return null;
+  if (target.kind === "atom") return { atom: target.id };
+  if (target.kind === "bond") return { bond: target.id };
+  return null;
 }
 
 /**

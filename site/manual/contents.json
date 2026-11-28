@@ -1,6 +1,6 @@
 {
   "languages": ["en", "ja"],
-  "pages": ["installing", "drawing", "3d", "workflows", "pdfs", "slides", "files", "plugins", "settings"],
+  "pages": ["installing", "drawing", "projections", "stereochemistry", "3d", "pictures", "workflows", "steps", "calculations", "conversations", "pdfs", "slides", "files", "plugins", "settings"],
   "words": {
     "en": {
       "language": "English",
@@ -43,5 +43,5 @@
       "wholeWindow": "ウィンドウ全体を表示"
     }
   },
-  "howTo": ["draw-3d", "draw-reaction-scheme"]
+  "howTo": ["draw-3d", "draw-reaction-scheme", "draw-catalytic-cycle", "draw-chair"]
 }

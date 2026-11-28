@@ -41,9 +41,20 @@ $cardYes = @("AXButton`tSet up", "AXGroup`t", "AXGroup`tSet up chemistry?", "AXW
 $cardNo = @("AXButton`tNot now", "AXGroup`t", "AXGroup`tSet up chemistry?")
 Check "the card's Set up" (Test-NetworkYes -Chain $cardYes) $true
 Check "the card's Not now" (Test-NetworkYes -Chain $cardNo) $false
+foreach ($no in @("Not now", "Cancel", "Stop")) {
+    # (the buttons a recording presses to decline: never taken for a yes)
+    Check "$no, a recording's no, is no yes" (Test-NetworkYes -Chain @("AXButton`t$no", "AXGroup`t", "AXGroup`tDownload RDKit?")) $false
+    Check "$no goes on, pressed among buttons read" ($null -eq (Find-YesUnder -Buttons @([pscustomobject]@{ Name = $no; X = 10; Y = 10; Width = 40; Height = 20 }) -At @{ X = 20; Y = 15 })) $true
+}
 Check "Settings' Set up of a plugin" (Test-NetworkYes -Chain @("AXButton`tSet up Example Plugin", "AXGroup`tChemistry")) $true
 Check "the card's title, no button" (Test-NetworkYes -Chain @("AXStaticText`tSet up chemistry?", "AXGroup`t")) $false
 Check "a word that only begins so is no yes" (Test-YesName "Set upright") $false
+Check "the card's Keep up to date" (Test-NetworkYes -Chain @("AXButton`tKeep up to date", "AXGroup`t")) $true
+Check "the card's Try again, a set-up fetched again" (Test-YesName "Try again") $true
+Check "Settings' Update all of the plugins" (Test-YesName "Update all (2)") $true
+Check "Settings' Update to a plugin's newer version" (Test-YesName "Update to 0.2.0") $true
+Check "Restart now, into a newer Meno" (Test-YesName "Restart now") $true
+Check "the update question's title, no button" (Test-NetworkYes -Chain @("AXStaticText`tKeep up to date", "AXGroup`t")) $false
 $said = try { Assert-NotNetworkYes -Look (Read $cardYes) -What "a click"; "" } catch { $_.Exception.Message }
 Check "a click on the card's Set up stops, saying which" ($said -like "a click would answer a question about the network yes ('Set up')*nothing was sent.") $true
 Check "a press within the card's Set up, among buttons read, stops" ((Find-YesUnder -Buttons @([pscustomobject]@{ Name = "Set up"; X = 10; Y = 10; Width = 40; Height = 20 }) -At @{ X = 20; Y = 15 }).Name) "Set up"
