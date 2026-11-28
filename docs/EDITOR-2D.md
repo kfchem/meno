@@ -2833,10 +2833,15 @@ lipids each have their own way of being drawn, which it should know.
      atom than a tetrahedral centre's four (a phosphorane's P), or a wavy
      bond at it - rather than lose it, saying which of these it is
      (`drawn.ts` `unreadWhy`). What it says, in the line over the canvas,
-     is about the structures it left as drawn: an undo that takes them
-     away takes the words out of sight, a redo brings them back, and
-     anything drawn meanwhile, or the structures deleted, lets them go
-     (`utils/tiedSaying.ts`). A centre whose fourth group is a lone pair
+     is about the structures it left as drawn, as they were then: the
+     words are shown while those structures are just so, and go out of
+     sight, with nothing said, once they are not - taken away by an undo,
+     deleted, or changed (an atom of them moved or changed, a bond at them
+     added or taken away). An undo or a redo that brings them back as
+     they were brings the words back with them; its X lets them go for
+     good (`utils/tiedSaying.ts`). So too *Save as abbreviation*'s words
+     on a selection it cannot save; with nothing selected, its words are
+     about nothing in particular and stay until dismissed. A centre whose fourth group is a lone pair
      that keeps its configuration (*Centres by a lone pair*) - a sulfoxide's
      or a sulfonium's S, a phosphine's P, an oxaziridine's N - is read from
      its wedge and laid out like any other, on one wedge. A wedge
