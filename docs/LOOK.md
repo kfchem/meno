@@ -73,7 +73,7 @@ test keeps the two the same (`src/ui/theme/colors.test.ts`).
 | `gh-gray` | rgb(89, 99, 110) | text that says less: notes, shortcuts, a disabled item |
 | `gh-line` | rgb(209, 217, 224) | every line of the interface: borders, separators |
 | `gh-base` | rgb(246, 248, 250) | a row or button under the pointer; a chosen chip; a panel's ground |
-| `gh-hover` | rgb(229, 231, 235) | a title-bar button under the pointer, or whose list is open (Undo; its neighbours' grey) |
+| `gh-hover` | rgb(229, 231, 235) | a title-bar button under the pointer, or whose list is open (Undo; its neighbours' grey); in Undo's history, the steps a choice would go over |
 | `gh-background`, `accel-white` | white | menus, cards, the page |
 | `accel-base` | rgb(49, 118, 137) | Meno's own colour: what is chosen (a segment, a radio's dot, a checkbox's tick, a switch on, a slider's thumb), a primary button, a focused control's border |
 | `accel-lightbase` | rgb(207, 231, 238) | a chosen card or chip's ground (a look, a format), with an `accel-base` border |

@@ -117,7 +117,8 @@ body {
   --color-gh-line: rgb(209, 217, 224);
   --color-gh-gray: rgb(89, 99, 110);
   /* Under a title-bar button pointed at or open: the grey its neighbours there are
-     hovered in (Tailwind's gray-200), by name. */
+     hovered in (Tailwind's gray-200), by name; and, in Undo's history, the steps a
+     choice would go over. */
   --color-gh-hover: rgb(229, 231, 235);
 
   /* What is pointed at or picked - a structure, a word - and only that

@@ -196,7 +196,7 @@ function HistoryMenu({ doc, under, onClose }: { doc: UndoDoc; under: HTMLElement
             }}
             className={clsx(
               "min-w-0 h-8 px-3 text-left truncate outline-none transition-colors duration-150 ease-meno",
-              isLit(row.offset, pointed) && "bg-gh-base",
+              isLit(row.offset, pointed) && "bg-gh-hover",
               row.forward && !isLit(row.offset, pointed) && "text-gh-gray",
             )}
           >
