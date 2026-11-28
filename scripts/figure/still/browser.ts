@@ -13,17 +13,26 @@ import { delimiter, join } from "node:path";
 /** The environment variable that names the browser to use, before any other is looked for. */
 export const BROWSER_VARIABLE = "STILL_BROWSER";
 
+/** The environment variable that chooses the GPU (`gpu`) over the browser's own software drawing (`software`, the default). */
+export const GL_VARIABLE = "STILL_GL";
+
+/** WebGL by ANGLE on SwiftShader, the browser's own software GL, allowed for WebGL: the same on any machine, with or without a GPU or a screen (README.md says why). */
+const SOFTWARE_GL = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
+
 /**
  * The options the browser is started with, besides its profile and port:
- * the new headless mode (no window, no screen needed); WebGL by ANGLE on
- * SwiftShader, the browser's own software GL, allowed for WebGL - the same
- * on any machine, with or without a GPU or a screen (README.md says why);
- * and none of its own traffic to the network.
+ * the new headless mode (no window, no screen needed); the software GL
+ * unless `STILL_GL` is `gpu` (`env`); and none of its own traffic to the
+ * network. Any other value of `STILL_GL` is an error.
  */
-export const BROWSER_OPTIONS = [
-  "--headless",
-  "--use-angle=swiftshader",
-  "--enable-unsafe-swiftshader",
+export function browserOptions(env: Record<string, string | undefined> = process.env): string[] {
+  const gl = env[GL_VARIABLE] ?? "software";
+  if (gl !== "software" && gl !== "gpu") throw new Error(`${GL_VARIABLE} is "${gl}": give gpu or software.`);
+  return ["--headless", ...(gl === "software" ? SOFTWARE_GL : []), ...QUIET];
+}
+
+/** Options that keep the browser's own traffic off the network. */
+const QUIET = [
   "--no-first-run",
   "--no-default-browser-check",
   "--disable-background-networking",
@@ -81,13 +90,17 @@ export type Page = { evaluate<T>(expression: string): Promise<T> };
 /**
  * `withPage` given a page of the browser at `path` opened at `url`, once
  * `ready` (an expression) is true in it; the browser ended afterwards, by
- * its process id, and its profile folder deleted, however `withPage` ends.
+ * its process id, and its profile folder deleted, however `withPage` ends
+ * - an interrupt too (`endedOnSignal`). Started with `options`.
  */
-export async function withBrowserPage<T>(path: string, url: string, ready: string, withPage: (page: Page) => Promise<T>): Promise<T> {
+export async function withBrowserPage<T>(path: string, url: string, ready: string, withPage: (page: Page) => Promise<T>, options: readonly string[] = browserOptions()): Promise<T> {
   const profile = mkdtempSync(join(tmpdir(), "meno-still-profile-"));
-  const child = spawn(path, [...BROWSER_OPTIONS, `--user-data-dir=${profile}`, "--remote-debugging-port=0", "about:blank"], {
+  const child = spawn(path, [...options, `--user-data-dir=${profile}`, "--remote-debugging-port=0", "about:blank"], {
     stdio: ["ignore", "ignore", "pipe"],
   });
+  // (interrupted: the browser ended and its profile deleted all the same)
+  const signals = (["SIGINT", "SIGTERM"] as const).map((s) => [s, () => void endedOnSignal(s, child, profile)] as const);
+  for (const [s, h] of signals) process.once(s, h);
   try {
     const socket = await devtools(child);
     try {
@@ -116,8 +129,31 @@ export async function withBrowserPage<T>(path: string, url: string, ready: strin
       socket.close();
     }
   } finally {
+    for (const [s, h] of signals) process.off(s, h);
     await ended(child);
     rmSync(profile, { recursive: true, force: true });
+  }
+}
+
+/** The usual exit status after `signal`: 128 and its number. */
+const SIGNAL_STATUS = { SIGINT: 130, SIGTERM: 143 } as const;
+
+/**
+ * What an interrupt does while the browser is up: `child` ended by its
+ * process id, its `profile` folder deleted, and the script ended with the
+ * signal's usual status (`exit`, Node's own where not given).
+ */
+export async function endedOnSignal(
+  signal: keyof typeof SIGNAL_STATUS,
+  child: ChildProcess,
+  profile: string,
+  exit: (code: number) => void = (code) => process.exit(code),
+): Promise<void> {
+  try {
+    await ended(child);
+  } finally {
+    rmSync(profile, { recursive: true, force: true });
+    exit(SIGNAL_STATUS[signal]);
   }
 }
 

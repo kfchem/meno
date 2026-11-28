@@ -15,6 +15,7 @@ import { workspace3dOf, type Workspace3D } from "../../../src/lib/chem/workspace
 import { DEFAULT_STYLE_3D_CHOICE } from "../../../src/lib/chem/style3d";
 import { PICTURE_DPIS, DEFAULT_APP_SETTINGS } from "../../../src/lib/settings/appSettings";
 import type { Carried3D, Turn3D } from "../../../src/ui/features/Workspace/store/types";
+import { principalTurn } from "../../../src/ui/features/Workspace/utils/align3d";
 import { readStructures } from "../../../src/lib/io/structures";
 import { bondsByDistance } from "../../../src/utils/structureParsers";
 
@@ -32,7 +33,7 @@ export type Figure = {
   noStick?: [number, number][];
   /** False leaves out the hydrogens on carbon (the picture is then smaller than the molecule); true, the default, shows every atom. */
   hydrogens?: boolean;
-  /** The view: three atoms (their plane faces the eye, the first two lying left to right), or two (that pair lies left to right, the rest spread as far as it goes up and down); none, as read. */
+  /** The view: three atoms (their plane faces the eye, the first two lying left to right), or two (that pair lies left to right, the rest spread as far as it goes up and down); none, as Meno first shows the file opened (its principal axes). */
   view?: number[];
   /** Pixels to the inch, as Settings offers them for a copied picture (300, 600 or 1200); Settings' own where not given. */
   dpi?: number;
@@ -166,6 +167,9 @@ export function stillInput(f: Figure, text: string): StillInput {
     } catch (e) {
       return fail(f, `view: ${e instanceof Error ? e.message : String(e)}`);
     }
+  } else {
+    // (none asked for: as Meno first shows the file opened - along the principal axes of its atoms as the file first has them)
+    turn = principalTurn(frames[0]);
   }
   const molecule: Carried3D = {
     atoms,

@@ -32,7 +32,8 @@ WebSocket); the page makes the PNG a copy of molecules in 3D alone puts on
 the clipboard - the same calls, in the same order: the drawing laid out,
 the molecule drawn by WebGL as the canvas draws it (large pictures in tiles,
 as the app draws them), and the measured distances' values written over it.
-The browser is then ended by its process id and its profile folder deleted.
+The browser is then ended by its process id and its profile folder deleted,
+on an interrupt (Ctrl-C, or a signal to end) too.
 Where the page has no WebGL, or Meno does not draw the picture, the run
 stops and says why, with the options the browser was started with; it never
 gives another drawing instead.
@@ -44,10 +45,14 @@ The browser is started with these options (browser.ts `BROWSER_OPTIONS`):
   browser's own software GL. Without them a browser on a machine with a GPU
   gives the page its GPU, but one with no GPU or no screen may give it no
   WebGL at all; with them the picture is drawn the same way on any machine.
-  It is the same code's drawing either way; the run says which WebGL the
-  page has.
+  The run says which WebGL the page has.
 - options that keep the browser's own traffic off the network (no
   background networking, component updates, sync, extensions or pings).
+
+`STILL_GL=gpu` starts the browser without the two software-GL options, so
+that the page draws on the machine's GPU where the browser gives it one.
+Both ways run the same drawing code; the software drawing is the default so
+that one machine's picture equals another's.
 
 ## The manifest
 
@@ -86,7 +91,8 @@ One JSON file. `out` is the folder the pictures are written to, and each
 - `view`: three atoms - their plane faces the eye, the first two lying left to
   right, the third above that line; or two atoms - that pair lies left to
   right, and the rest of the molecule is spread as wide as it can be up and
-  down; or none - as the file has it.
+  down; or none - as Meno first shows the file when it is opened, along the
+  principal axes of its atoms as the file first has them.
 - `dpi`: the picture's resolution, one of those Settings offers for a copied
   picture: 300, 600 or 1200; Settings' own, 600, where left out. The
   picture's size is the molecule's at the drawing style's own scale, as a
@@ -107,4 +113,6 @@ The style is a new workspace's own (its drawing style and its styles in
 3D). What Meno says over a molecule in a picture made of it is said here
 too - that its bond orders are not known (an XYZ file has none), that its
 hydrogens on carbon are hidden. Sticks from an XYZ file show which atoms are
-joined, not bond orders.
+joined, not bond orders. Unlike a picture Meno copies, the PNG carries no record of
+the structure to be pasted back: it is a still for a report, and a record
+made outside a workspace from an XYZ file could pass for one Meno kept.

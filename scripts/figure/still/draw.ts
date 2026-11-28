@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
-import { withBrowserPage, BROWSER_OPTIONS } from "./browser";
+import { browserOptions, withBrowserPage } from "./browser";
 import type { StillInput } from "./still";
 import type { StillOutput } from "./page/entry";
 
@@ -64,9 +64,13 @@ export type Drawn = { name: string; png: Uint8Array; dpi: number; width: number;
  * `said` is told the WebGL the page has.
  */
 export async function drawnFigures(figures: readonly StillInput[], browser: string, said: (line: string) => void = () => {}): Promise<Drawn[]> {
+  const options = browserOptions();
   const page = await builtPage();
+  // (interrupted: the built page deleted too - the browser's own clean-up then ends the script: ./browser endedOnSignal)
+  const gone = () => rmSync(page, { recursive: true, force: true });
+  for (const s of ["SIGINT", "SIGTERM"] as const) process.once(s, gone);
   const { server, url } = await served(page);
-  const started = `(started with ${BROWSER_OPTIONS.join(" ")})`;
+  const started = `(started with ${options.join(" ")})`;
   try {
     return await withBrowserPage(browser, url, "typeof window.stillPicture === 'function'", async (p) => {
       const gl = await p.evaluate<string | null>("window.stillWebgl()");
@@ -79,9 +83,10 @@ export async function drawnFigures(figures: readonly StillInput[], browser: stri
         out.push({ name: f.name, png: Uint8Array.from(Buffer.from(r.png, "base64")), dpi: r.dpi, width: r.width, height: r.height });
       }
       return out;
-    });
+    }, options);
   } finally {
+    for (const s of ["SIGINT", "SIGTERM"] as const) process.off(s, gone);
     await new Promise((done) => server.close(done));
-    rmSync(page, { recursive: true, force: true });
+    gone();
   }
 }

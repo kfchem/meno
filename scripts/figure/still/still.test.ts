@@ -9,7 +9,10 @@ import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { browserPlaces, foundBrowser, NO_BROWSER } from "./browser";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { principalTurn } from "../../../src/ui/features/Workspace/utils/align3d";
+import { browserOptions, browserPlaces, endedOnSignal, foundBrowser, NO_BROWSER } from "./browser";
 import { drawnFigures } from "./draw";
 import { readManifest, stillInput, turnByAtoms } from "./still";
 
@@ -76,10 +79,18 @@ describe("a figure made ready for Meno's picture", () => {
     expect(lost.measures).toEqual([{ id: 1, atoms: [0, 1] }]);
   });
 
-  it("the view is the molecule's turn; none, as read", () => {
+  it("the view is the molecule's turn; none, Meno's own first view of the file: its principal axes", () => {
     const three = xyz(["O 0 0 0", "N 0 2 0", "C 0 0 3"]);
     expect(stillInput({ name: "v", xyz: "", view: [1, 2, 3] }, three).molecule.turn).toEqual(turnByAtoms([0, 0, 0, 0, 2, 0, 0, 0, 3], [0, 1, 2]));
-    expect(stillInput({ name: "v", xyz: "" }, three).molecule.turn).toBeUndefined();
+    // Two oxygens 4 apart along the file's z, a nitrogen 0.5 off their middle along y: the longest spread is along z,
+    // which Meno lays across the screen (x) - not along the file's x, as the file's own axes would show it.
+    const places = [0, 0, 0, 0, 0, 4, 0, 0.5, 2];
+    const opened = stillInput({ name: "v", xyz: "" }, xyz(["O 0 0 0", "O 0 0 4", "N 0 0.5 2"])).molecule.turn!;
+    expect(opened).toEqual(principalTurn(places));
+    const [a, b] = [0, 1].map((i) => turned(places, opened, i));
+    expect(Math.abs(b.x - a.x)).toBeCloseTo(4, 6);
+    expect(b.y - a.y).toBeCloseTo(0, 6);
+    expect(b.z - a.z).toBeCloseTo(0, 6);
   });
 
   it("the second frame is the one drawn where asked", () => {
@@ -179,6 +190,30 @@ describe("the browser", () => {
     expect(foundBrowser({ PATH: "/opt/bin:/usr/bin" }, "linux", (p) => p === "/usr/bin/chromium")).toBe("/usr/bin/chromium");
   });
 
+  it("software drawing unless STILL_GL is gpu; any other value refused", () => {
+    expect(browserOptions({})).toEqual(expect.arrayContaining(["--headless", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]));
+    const gpu = browserOptions({ STILL_GL: "gpu" });
+    expect(gpu).toContain("--headless");
+    expect(gpu.some((o) => /swiftshader/.test(o))).toBe(false);
+    expect(() => browserOptions({ STILL_GL: "fast" })).toThrow(/STILL_GL is "fast": give gpu or software/);
+  });
+
+  it("an interrupt ends the browser by its process id, deletes its profile, and exits with the signal's status", async () => {
+    // (a stand-in for the browser: a Node process that waits for ever)
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    await new Promise((done) => child.once("spawn", done));
+    const profile = mkdtempSync(join(tmpdir(), "still-profile-"));
+    writeFileSync(join(profile, "kept"), "x");
+    const codes: number[] = [];
+    await endedOnSignal("SIGINT", child, profile, (code) => codes.push(code));
+    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    expect(existsSync(profile)).toBe(false);
+    expect(codes).toEqual([130]);
+    const other = mkdtempSync(join(tmpdir(), "still-profile-"));
+    await endedOnSignal("SIGTERM", child, other, (code) => codes.push(code));
+    expect(codes).toEqual([130, 143]);
+  });
+
   it("none found: none, and what to set is said", () => {
     expect(foundBrowser({ PATH: "/usr/bin" }, "linux", nowhere)).toBeNull();
     expect(NO_BROWSER).toMatch(/set STILL_BROWSER/);
@@ -217,19 +252,19 @@ function pngPixels(png: Uint8Array) {
   return { width, height, dpi, px };
 }
 
-/** The browser on this machine, or why there is none. */
-const { browser, none } = (() => {
+/** The browser on this machine; none found in the usual places (a skip), or one named that is not there (a failure). */
+const { browser, wrong } = (() => {
   try {
-    const found = foundBrowser();
-    return { browser: found, none: found ? "" : NO_BROWSER };
+    return { browser: foundBrowser(), wrong: null };
   } catch (e) {
-    return { browser: null, none: e instanceof Error ? e.message : String(e) };
+    return { browser: null, wrong: e instanceof Error ? e : new Error(String(e)) };
   }
 })();
 
 describe("Meno's own picture, drawn in a browser", () => {
-  // (where none is on this machine - CI has none - skipped, and why said)
-  it.skipIf(!browser)(browser ? "two oxygens 2 angstroms apart, measured: drawn at 300 and 600 dpi" : `skipped: ${none}`, async () => {
+  // (where none is found in the usual places - CI has none - skipped, and why said; a browser named that is not there fails)
+  it.skipIf(!browser && !wrong)(browser || wrong ? "two oxygens 2 angstroms apart, measured: drawn at 300 and 600 dpi" : `skipped: ${NO_BROWSER}`, async () => {
+    if (wrong) throw wrong;
     // O (0,0,0), O (2,0,0), seen as read: the two balls side by side on one row, the dashed line between them.
     const f = { name: "o2", xyz: "", distances: [[1, 2]] as [number, number][] };
     const [low, high] = await drawnFigures([stillInput({ ...f, dpi: 300 }, xyz(["O 0 0 0", "O 2 0 0"])), stillInput({ ...f, name: "o2b", dpi: 600 }, xyz(["O 0 0 0", "O 2 0 0"]))], browser!);
