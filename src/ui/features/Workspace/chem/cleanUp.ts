@@ -226,11 +226,12 @@ export async function cleanUp(
   //  kept by the layout itself, `relayoutFrom`)
   const isKept = (part: Model) => !flat && newmansIn(part).length > 0;
   const parts = all.filter((part) => !isKept(part));
-  const pairs = all.filter(isKept).map((part) => ({ formula: partFormula(part), why: "it is a Newman projection, drawn as it is - Draw flat, in its right-click menu, lays it out flat" }));
+  const pairs = all.filter(isKept).map((part) => ({ part, formula: partFormula(part), why: "it is a Newman projection, drawn as it is - Draw flat, in its right-click menu, lays it out flat" }));
   if (!parts.length) throw new CleanUpRefused(pairs, all.length);
   // (each on its own: one whose wedges cannot be kept, refused before it is laid out, named with the rest below)
   const settled = await Promise.allSettled(parts.map((part) => laidOutWithLabels(part, expanded)));
-  const cleaned = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  // (each with the part it was laid out from: what is left as drawn is named by its atoms as they are on the page)
+  const cleaned = settled.flatMap((r, i) => (r.status === "fulfilled" ? [{ ...r.value, from: parts[i] }] : []));
   const unlaid = settled.flatMap((r, i) => (r.status === "rejected" ? [{ part: parts[i], why: r.reason instanceof Error ? r.reason.message : String(r.reason) }] : []));
   if (store.getState().model !== held) {
     throw new Error(
@@ -265,8 +266,9 @@ export async function cleanUp(
       done.flatMap((t) => t.c.labels),
     );
   }
-  const left = [...unlaid, ...refused.map((t) => ({ part: t.c.part, why: t.why! }))];
-  const named = [...left.map((l) => ({ formula: partFormula(l.part), why: l.why })), ...pairs];
+  // (`from`, the part as it is on the page - what is named by its atoms; `part`, as it was laid out - what its formula is read from)
+  const left: { part: Model; from: Model; why: string }[] = [...unlaid.map((u) => ({ ...u, from: u.part })), ...refused.map((t) => ({ part: t.c.part, from: t.c.from, why: t.why! }))];
+  const named = [...left.map((l) => ({ part: l.from, formula: partFormula(l.part), why: l.why })), ...pairs];
   if (named.length) throw new CleanUpRefused(named, all.length);
 }
 
@@ -276,14 +278,20 @@ export async function cleanUp(
  * all). Its message says so whole.
  */
 export class CleanUpRefused extends Error {
+  /** What it left as drawn, each by its formula, and why. */
+  readonly refused: readonly { formula: string; why: string }[];
+  /** The atoms of what it left as drawn, as they are on the page: what its words are about. */
+  readonly atoms: readonly number[];
   constructor(
-    readonly refused: readonly { formula: string; why: string }[],
+    refused: readonly { formula: string; why: string; part?: Model }[],
     readonly of: number,
   ) {
     // (of one among others laid out, not "nothing was moved": that one was left as it is)
     const each = refused.map((r) => `${r.formula}: ${r.why.replace(/, so nothing was moved\.?$/, ", so it was left as it is")}`).join("; ");
     super(of === 1 ? `Clean-up left ${refused[0].formula} as drawn: ${refused[0].why}.` : `Clean-up left ${refused.length} of ${of} structures as drawn - ${each}.`);
     this.name = "CleanUpRefused";
+    this.atoms = refused.flatMap((r) => r.part?.atoms.map((a) => a.id) ?? []);
+    this.refused = refused.map(({ formula, why }) => ({ formula, why }));
   }
 }
 

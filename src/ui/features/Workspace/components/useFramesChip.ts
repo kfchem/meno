@@ -106,7 +106,10 @@ export function useFramesChip({
       if (!onCanvas || hitNow.current({ x: e.clientX, y: e.clientY })?.key !== key) shut();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") shut();
+      if (e.key !== "Escape") return;
+      // (taken: nothing behind it - the column - answers it too)
+      e.preventDefault();
+      shut();
     };
     window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("keydown", onKey, true);

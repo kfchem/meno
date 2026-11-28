@@ -251,6 +251,9 @@ pointer does; put back by an undo, they glide back.
      stays.
 4. **Or from the menu**: right-click the selection, *Use as input*.
 
+   Either way the set is one step to undo: its frame, fitted to what it
+   holds as the press is let go, is part of that step.
+
 **A set holds its members, in order** (decided; WORKFLOWS-FOUNDATION.md,
 *Members are explicit*):
 

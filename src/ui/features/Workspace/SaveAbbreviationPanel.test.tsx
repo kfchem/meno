@@ -18,4 +18,9 @@ describe("the Save as abbreviation panel", () => {
     expect(panel(said)).toContain(said);
     expect(panel()).not.toContain("not kept");
   });
+
+  it("names its close button by what it closes, as its title says - not the window's own Close", () => {
+    expect(panel()).toContain('aria-label="Close Save as abbreviation"');
+    expect(panel()).not.toContain('aria-label="Close"');
+  });
 });

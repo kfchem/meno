@@ -1013,7 +1013,10 @@ export default function Workflow2D() {
       if (!(hit?.key === `set:${chosenSet}` && hit.part === "tab")) letGo();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") letGo();
+      if (e.key !== "Escape") return;
+      // (taken: the set let go first, the column left open)
+      e.preventDefault();
+      letGo();
     };
     window.addEventListener("pointerdown", onPress, true);
     window.addEventListener("keydown", onKey, true);

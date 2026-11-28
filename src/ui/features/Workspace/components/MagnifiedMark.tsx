@@ -27,7 +27,12 @@ export default function MagnifiedMark({ k, onSet, onActive }: { k: number; onSet
     const away = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // (taken: nothing behind it - the column - answers it too)
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+    };
     window.addEventListener("pointerdown", away, true);
     window.addEventListener("keydown", key);
     return () => {

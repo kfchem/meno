@@ -366,6 +366,13 @@ export class Editor implements FieldHost {
     this.edit({ from: Math.min(to, this.sel.head), to: Math.max(to, this.sel.head), insert: "" });
   }
 
+  /** Escape: words selected let go, the caret where the selection's head was; whether there were any. */
+  letSelectionGo(): boolean {
+    if (isCaret(this.sel)) return false;
+    this.moved(caretAt(this.sel.head));
+    return true;
+  }
+
   /** A click: the caret there, or the selection drawn on to there; two clicks a word, three a line. */
   pressAt(x: number, y: number, clicks: number, extend: boolean): Sel {
     const at = this.at(x, y);

@@ -821,6 +821,25 @@ numbers - is background work, and it never stalls a frame:
   2026-10-10): on empty space, with a PDF or a text open there, the work
   comes back to the canvas; what was read goes back down to its place, as
   when the column is hidden. The next double-click opens Quick Add.
+- **Escape shuts the column** too, as its hide control does, eased -
+  the last thing Escape does. Each press goes, in turn, to the first of
+  these there is, and goes no further:
+  - a menu, a card or a question open over the page closes;
+  - words being typed keep it: in a field, written on the page, or
+    composed by an input method;
+  - a gesture under way - a bond being drawn, a box, ink, the view being
+    panned - ends;
+  - the search of PDFs closes;
+  - the column filling the workspace goes back beside the canvas;
+  - words selected in the column - in a PDF, a Markdown text or a plain
+    text - or what is selected on the page are let go;
+  - and then the column shuts. A text in the column with the keys is no
+    field for Escape: it lets its selected words go, and the next Escape
+    shuts the column.
+
+  An Escape Meno sends itself, to end a gesture it lets go of - an undo
+  made in the middle of one, the window left, a pinch taking over - never
+  shuts the column (`columnEscape.ts`).
 - **A picture is a texture on a sheet**. A figure at 600 dpi - a whole
   A4 page is about 5000 × 7000 pixels - fits within what the graphics
   card takes.

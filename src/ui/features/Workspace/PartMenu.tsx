@@ -619,7 +619,11 @@ export default function PartMenu({
   useEffect(() => {
     if (leaving) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        // (taken: nothing behind the menu - the column - answers it too)
+        e.preventDefault();
+        onClose();
+      }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       // (in a field of the menu's - a size typed - the keys are the field's)
       if (!arrowMovesMenu(e.target)) return;

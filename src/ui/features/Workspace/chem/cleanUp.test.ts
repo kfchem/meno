@@ -401,6 +401,8 @@ describe("cleanUp", () => {
     );
     expect(refused).toBeInstanceOf(CleanUpRefused);
     expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C4H11N: the wedges at C .*, so it was left as it is\.$/);
+    // (its words about that structure: its atoms, as they are on the page - a warning tied to them, utils/tiedSaying - and not the butane's)
+    expect([...(refused as CleanUpRefused).atoms].sort((a, b) => a - b)).toEqual(cross.map((a) => a.id));
     const after = store.getState().model;
     for (const a of cross) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
     const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);

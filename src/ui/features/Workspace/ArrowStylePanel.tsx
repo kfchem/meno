@@ -51,8 +51,8 @@ export default function ArrowStylePanel({
         <h2 className="text-sm font-semibold text-gh-black">Arrow</h2>
         <button
           onClick={onClose}
-          aria-label="Close"
-          title="Close"
+          aria-label="Close Arrow"
+          title="Close Arrow"
           className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-gh-base"
         >
           <XMarkIcon className="h-4 w-4" />

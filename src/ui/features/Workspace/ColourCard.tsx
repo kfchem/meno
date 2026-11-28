@@ -66,7 +66,10 @@ export default function ColourCard({
   useEffect(() => {
     if (leaving) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // (taken: nothing behind it - the column - answers it too)
+      e.preventDefault();
+      onClose();
     };
     const onPress = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node)) onClose();
