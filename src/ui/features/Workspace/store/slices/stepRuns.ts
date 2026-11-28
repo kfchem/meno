@@ -33,7 +33,7 @@ import { EXAMINE_MS, type IsomerConfiguration } from "../../../../../lib/chem/st
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { boundGroups } from "../../../../../lib/boundOptions";
-import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
+import { absentSaid, byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
 import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
@@ -400,7 +400,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void viewsKept(d0, id, before);
     }
     const plugin = pluginById(by);
-    if (!plugin) return void fail(id, "Nothing added does this step", at, key);
+    if (!plugin) return void fail(id, by ? absentSaid(by) : "Nothing added does this step", at, key);
     // (a plugin stopped - one it uses not added, or not of a version it works with - runs nothing, saying why)
     const stopped = stoppedOf(plugin, addedNow());
     if (stopped) return void fail(id, `${plugin.name} is stopped. ${stopped}.`, at, key);
@@ -1748,7 +1748,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * place of those it held, with what it did, as one edit; why not, where
    * none was.
    */
-  async function finishRender(id: number, run: StepRunning, records: readonly (Job | null)[], plugin: PythonPlugin | undefined, ran: Omit<StepRan, "ok" | "said">) {
+  async function finishRender(id: number, run: StepRunning, records: readonly (Job | null)[], by: string, plugin: PythonPlugin | undefined, ran: Omit<StepRan, "ok" | "said">) {
     const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
     const { theirs } = renderChoices("render", run.options);
     const made: Rendered[] = [];
@@ -1762,7 +1762,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         continue;
       }
       if (!client) {
-        whys.push("What did it is not added");
+        whys.push(absentSaid(by));
         continue;
       }
       try {
@@ -1934,7 +1934,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       }
       // (Render's: pictures, beside the step - no set)
       if (kind === "render") {
-        await finishRender(id, run, records, plugin, { at: run.at, input: run.input, took, jobs: ids, ...as });
+        await finishRender(id, run, records, by, plugin, { at: run.at, input: run.input, took, jobs: ids, ...as });
         return close();
       }
       // (what came in when it started, as it was taken then; opened again, what comes in now, where it is still what came in - its options aside, which may change as it runs)
@@ -2008,7 +2008,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         const record = records[k]!;
         if (!client || !plugin) {
-          fails(mine, "not-started", "What did it is not added");
+          fails(mine, "not-started", absentSaid(by));
           continue;
         }
         if (mine.some((e) => !e)) {

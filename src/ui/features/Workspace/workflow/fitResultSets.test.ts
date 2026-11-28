@@ -251,8 +251,8 @@ describe("a result set of molecules narrower than their frames chips", () => {
     const saddle = { ...one, imaginary: [[-450]] };
     const failed = { ...one, failed: [{ kind: "not-converged" as const, why: "stopped at 200 cycles" }] };
     expect(chipWide(saddle)).toBeGreaterThan(chipWide(one) + 20 * CHIP_CHAR);
-    // (one of a single frame that failed: no lowest to stand above, said in its energy's place - its chip as wide as that, and why)
-    expect(chipWide(failed)).toBeGreaterThanOrEqual(("1 / 1 · none finished: no lowest to stand above · not converged".length) * CHIP_CHAR);
+    // (one of a single frame that failed: no frame finished, said in its energy's place - its chip as wide as that, and why)
+    expect(chipWide(failed)).toBeGreaterThanOrEqual(("1 / 1 · no frame finished · not converged".length) * CHIP_CHAR);
     let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     d = placeResults(d, d.steps![0], { molecules: [saddle, { ...saddle, imaginary: [[-1234.5]] }, failed], rest: [], holds: "molecules" }, { extentOf: reaching(0.4) });
     const set = d.sets![0];

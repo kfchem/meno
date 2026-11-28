@@ -8,7 +8,7 @@
  */
 import { looksOffered, renderOptions } from "../render/renderOptions";
 import { chosenFrom, presetOffer } from "../render/presets";
-import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
+import { absentName, anyPluginById, pluginById, PLUGINS, PLUGINS_ADDED_WHERE, presetsFor, UNNAMED_PLUGIN } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
 import { defaultsFrom, valuesOf, type Option, type OptionValues } from "../../../../lib/options";
 import { RING_CONFORMERS, roundsAsked, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
@@ -95,12 +95,20 @@ export const isAdded = (by: string) => by === MENO.id || useReaders.getState().s
 /** Who does a step, by id: as it says - or, a step saved before steps said, Meno where Meno does its kind. */
 export const byOf = (step: Pick<WorkflowStep, "kind" | "by">): string => step.by ?? (MENO_DOES.includes(step.kind) ? MENO.id : "");
 
-/** Who does a step, by name: Meno, or a plugin Meno knows of - by its id, one it does not. */
+/** Who does a step, by name: Meno, or a plugin Meno knows of - one not here by its name as Settings, Plugins shows it (`absentName`). */
 export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefined {
   const by = byOf(step);
   if (!by) return undefined;
   const p = pluginById(by);
-  return by === MENO.id ? MENO : { id: by, name: p ? doerName(p) : by };
+  return by === MENO.id ? MENO : { id: by, name: p ? doerName(p) : absentName(by) };
+}
+
+export { absentName };
+
+/** What a step says where the plugin `by` that does it is not here to: the plugin by its name as Settings, Plugins shows it (`absentName`), and what to do - or, where Meno knows no name of it, so, and where plugins are added. */
+export function absentSaid(by: string): string {
+  const name = absentName(by);
+  return name !== UNNAMED_PLUGIN ? `${name} is not added: add it in Settings, Plugins` : `The plugin that does this step is not added, and Meno does not know its name: ${PLUGINS_ADDED_WHERE}`;
 }
 
 /**

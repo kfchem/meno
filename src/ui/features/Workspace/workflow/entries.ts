@@ -5,7 +5,7 @@
  * set that is; and its entries, each a structure with what has been found of
  * it.
  */
-import { FAILURE_WORDS, type Failure } from "./failures";
+import { FAILURE_WORDS, RECORD_UNREAD, UNREAD_STATE, type Failure } from "./failures";
 import { convergedOf, type Converged } from "./converged";
 import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
@@ -1020,7 +1020,7 @@ export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUn
 });
 
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
-export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
+export const MARKS_UNREAD = `whether it finished, and so whether it is a minimum, is not known: ${RECORD_UNREAD}`;
 
 export { PATH_FRAME, REFINED_SAID, STARTED_SAID };
 
@@ -1384,7 +1384,7 @@ export const FINISHED = "finished";
 export const STATE_FINISHED = `state = ${FINISHED}`;
 export function entryState(e: Pick<SetEntry, "failed" | "marksUnread">): string {
   if (e.failed) return FAILURE_WORDS[e.failed.kind] ?? e.failed.kind;
-  return e.marksUnread ? "marks not read" : FINISHED;
+  return e.marksUnread ? UNREAD_STATE : FINISHED;
 }
 
 /** The properties an entry carries of its own under names Meno gives its own (`menoProperties`), which its entry record reads as Meno's: none, mostly. */

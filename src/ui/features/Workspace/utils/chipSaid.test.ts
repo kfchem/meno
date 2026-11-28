@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { unitsHeld } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "../workflow/failures";
-import { barsAbove, FAILURES_ASTRAY, NO_LOWEST, NOT_FINISHED } from "./barsAbove";
+import { barsAbove, NO_ENERGY, NO_LOWEST, NOT_FINISHED, NOT_KNOWN } from "./barsAbove";
 import { chipCopy, chipDetails, chipEnergies, LOWER_FOUND, MADE_GROUP, OUT_OF_WINDOW, setChipRuns, share, singleChipRuns, type ChipFacts, type SetChip } from "./chipSaid";
 
 const kcal = (e: number) => e / 627.509474;
@@ -55,12 +55,19 @@ describe("a set's chip, shut, as runs to draw", () => {
     expect(said({ count: 1, frame: 0, energies: [-100], populations: [1] })).toBe("1 / 1 · 0.00 kcal/mol · 100%");
   });
 
-  it("says no frame stands above another where none finished, or where its failures do not line up with its frames", () => {
+  it("says no frame stands above another where none finished, or where which finished is not known: its marks unread, or not one to each frame", () => {
     const energies = [-76, -76.0015936014, -77];
-    expect(said({ count: 3, frame: 0, energies, marksUnread: true })).toContain(NO_LOWEST);
-    const short = [null, { kind: "not-converged" as const, why: "x" }];
-    expect(barsAbove(energies, short)).toEqual({ above: [null, null, null], noBaseline: true, why: FAILURES_ASTRAY, given: [true, true, true] });
-    expect(said({ count: 3, frame: 0, energies, failed: short })).toContain(FAILURES_ASTRAY);
+    const stopped = { kind: "not-converged" as const, why: "x" };
+    expect(said({ count: 3, frame: 0, energies, failed: [stopped, stopped, stopped] })).toContain(NO_LOWEST);
+    expect(said({ count: 3, frame: 0, energies, marksUnread: true })).toContain(NOT_KNOWN);
+    expect(said({ count: 3, frame: 0, energies, marksUnread: true })).not.toContain(NO_LOWEST);
+    const short = [null, stopped];
+    expect(barsAbove(energies, short)).toEqual({ above: [null, null, null], noBaseline: true, why: NOT_KNOWN, given: [true, true, true] });
+    expect(said({ count: 3, frame: 0, energies, failed: short })).toContain(NOT_KNOWN);
+  });
+
+  it("says why a frame has no energy above the lowest in the chemist's words: what happened, never how it is worked out", () => {
+    expect([NO_LOWEST, NOT_KNOWN, NOT_FINISHED, NO_ENERGY]).toEqual(["no frame finished", "which frames finished is not known", "not finished", "no energy"]);
   });
 
   it("stands each bar above the lowest of the frames that finished - one that failed is no zero, and has no bar", () => {

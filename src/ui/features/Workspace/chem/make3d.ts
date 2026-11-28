@@ -173,9 +173,20 @@ export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
   const unstated = bare.filter(isNotStated);
   const lone = bare.filter((a) => !isNotStated(a));
   const said: string[] = [];
-  if (lone.length) said.push(madeAny || unstated.length ? `${bareNames(lone)} ${lone.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.` : "One atom alone has no 3D structure.");
+  if (lone.length) said.push(madeAny || unstated.length ? `${bareNames(lone)} ${lone.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.${madeAny ? takenAlong(lone) : ""}` : "One atom alone has no 3D structure.");
   if (unstated.length) said.push(`${bareNames(unstated)} ${madeAny || lone.length ? (unstated.length > 1 ? "were left out" : "was left out") : unstated.length > 1 ? "have no 3D structure" : "has no 3D structure"}: ${NOT_STATED_THEIR(unstated.length)}.`);
   return said.join(" ");
+}
+
+/**
+ * How bare atoms left out beside others made are taken along, said after
+ * them: *Make one structure* (PartMenu, utils/joinedParts) makes an ion and
+ * its counter-ion one structure, made in 3D as one molecule.
+ */
+function takenAlong(lone: Model["atoms"]): string {
+  const many = lone.length > 1;
+  const with_ = lone.every((a) => (a.charge ?? 0) !== 0) ? (many ? "their counter-ions" : "its counter-ion") : many ? "the structures they belong to" : "the structure it belongs to";
+  return ` To take ${many ? "them" : "it"} with ${with_}, select ${many ? "them together" : "both"}, right-click and choose Make one structure first.`;
 }
 
 /** Why a structure with a metal whose ligands are not stated has no 3D structure, of one or of more. */

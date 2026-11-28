@@ -60,7 +60,7 @@ describe("a Filter step", () => {
     expect(STATE_FINISHED).toBe("state = finished");
     expect(ran(doc)).toMatchObject({
       ok: true,
-      said: "2 of 6 entries kept \u00b7 rest 4 (2: not state = finished (marks not read); 1: not state = finished (not converged); 1: not state = finished (refused))",
+      said: "2 of 6 entries kept \u00b7 rest 4 (2: not state = finished (not known if finished); 1: not state = finished (not converged); 1: not state = finished (refused))",
     });
     expect(out(doc)[0].numbers).toEqual([1, 4]);
   });

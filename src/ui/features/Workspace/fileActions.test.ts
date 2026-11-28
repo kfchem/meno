@@ -479,7 +479,7 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const xyz = xyzFileText([water as never], "t", { frames: "all" });
     expect(xyz.split("\n").filter((l) => l.startsWith("oh"))).toEqual(["oh frame 1/2 E = -75.4000000000 Eh", "oh frame 2/2 E = -75.3900000000 Eh failed: not converged: stopped at 200 cycles"]);
     const xyzUnread = xyzFileText([{ ...water, failed: undefined, marksUnread: true } as never], "t", { frames: "all" });
-    expect(xyzUnread.match(/failed: its marks of which frames failed could not be read/g)).toHaveLength(2);
+    expect(xyzUnread.match(/failed: whether it finished is not known: its file's record of which frames failed could not be read/g)).toHaveLength(2);
   });
 
   it("writes a ring bound to a metal through all its atoms as a file holds one - a star at its centre, a bond to its atoms - and reads it back so", () => {

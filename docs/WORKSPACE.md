@@ -801,7 +801,11 @@ Taken on 2026-10-13:
   for (THF, DMSO, MeOH, Et3N). A bare atom - Na+, Cl-, a lone metal, a label
   of nothing known - is not: alone, Meno says that one atom alone has no 3D
   structure; beside others made - a salt's counter-ions - it is left out,
-  and a notice names it (`standsForMolecule`, `bareWords`, chem/make3d).
+  and a notice names it and the way to take it along: "Na+ was left out:
+  one atom alone has no 3D structure. To take it with its counter-ion,
+  select both, right-click and choose Make one structure first." Made one structure,
+  an ion and its counter-ion are made in 3D as one molecule
+  (`standsForMolecule`, `bareWords`, chem/make3d).
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
   quaternion, `utils/align3d`), its atoms grow on the drawing's, go over
   to their places in 3D as it comes up off the page, and it moves to rest

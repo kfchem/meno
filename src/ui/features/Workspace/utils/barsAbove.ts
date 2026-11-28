@@ -2,16 +2,16 @@ import { factor } from "../../../../lib/units";
 import { least } from "../../../../lib/chem/lists";
 import type { Failure } from "../workflow/failures";
 
-/** What a molecule's frames chip says where its failures are not one to each frame. */
-export const FAILURES_ASTRAY = "its frames' failures do not line up";
+/** What a molecule's frames chip says where which of its frames finished is not known: its marks of failed frames did not read, or are not one to each frame. */
+export const NOT_KNOWN = "which frames finished is not known";
 /** What it says of a frame's energy where none of its frames finished. */
-export const NO_LOWEST = "none finished: no lowest to stand above";
+export const NO_LOWEST = "no frame finished";
 /** What it says of a frame's energy where that frame did not finish, though another did. */
 export const NOT_FINISHED = "not finished";
 /** What it says of a frame's energy where its file gave it none, though it gave another frame one. */
 export const NO_ENERGY = "no energy";
 
-/** What a chip says of frame `k` that has no height above the lowest: why (`bars.why`), none finished, it was given no energy, or it did not finish. */
+/** What a chip says of frame `k` that has no height above the lowest: why (`bars.why`: which finished is not known), none finished, it was given no energy, or it did not finish. */
 export const noneSaid = (bars: ReturnType<typeof barsAbove>, k: number): string =>
   bars.why ?? (bars.noBaseline ? NO_LOWEST : bars.given[k] ? NOT_FINISHED : NO_ENERGY);
 
@@ -26,9 +26,10 @@ export const aboveSaid = (bars: ReturnType<typeof barsAbove>, k: number, fromSta
 
 /**
  * Each frame's energy above the lowest of those that finished, in kcal/mol:
- * none of one that did not - it failed, or its marks did not read
- * (`marksUnread`) - which is no frame's zero either. All of them none,
- * where none finished (`noBaseline`).
+ * none of one that did not - it failed - which is no frame's zero either.
+ * All of them none, where none finished (`noBaseline`), or where which
+ * finished is not known (`why`): its marks did not read (`marksUnread`), or
+ * are not one to each frame.
  */
 export function barsAbove(
   energies: readonly number[],
@@ -38,8 +39,8 @@ export function barsAbove(
   // (which frames were given an energy at all: one given none - NaN, its file's line holding none - says so, not that it did not finish)
   const given = energies.map((e) => Number.isFinite(e));
   // (failures not one to each frame say nothing of which finished: none is taken to have - never every one)
-  if (failed && failed.length !== energies.length) return { above: energies.map(() => null), noBaseline: true, why: FAILURES_ASTRAY, given };
-  const finished = (i: number) => !marksUnread && !failed?.[i] && given[i];
+  if (marksUnread || (failed && failed.length !== energies.length)) return { above: energies.map(() => null), noBaseline: true, why: NOT_KNOWN, given };
+  const finished = (i: number) => !failed?.[i] && given[i];
   const done = energies.filter((_, i) => finished(i));
   if (!done.length) return { above: energies.map(() => null), noBaseline: true, given };
   const lowest = least(done);

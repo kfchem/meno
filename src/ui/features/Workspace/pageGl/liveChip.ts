@@ -11,7 +11,7 @@ import { colourHex, colourMix, COLORS } from "../../../theme/colors";
 import { barsAbove, NO_LOWEST, NOT_FINISHED } from "../utils/barsAbove";
 import { chipWidthOf } from "../utils/chipWidth";
 import { aboutLine, chipDetails, isSingle, LOWER_FOUND, OUT_OF_WINDOW, setChipRuns, singleChipRuns, type ChipFacts, type SaidRun } from "../utils/chipSaid";
-import { failureSaid } from "../workflow/failures";
+import { failureSaid, UNREAD_SAID } from "../workflow/failures";
 import { greatest } from "../../../../lib/chem/lists";
 import type { CardGroups } from "../components/PointedCard3D";
 import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
@@ -488,7 +488,7 @@ export function toneColour(tone: number): string {
 
 /** Why a bar did not finish, as it is said in the tip over it: its marks unread, why its step failed, or not finished. */
 export function unfinishedWhy(c: ChipFacts, i: number): string {
-  return c.marksUnread ? "its marks could not be read" : c.failed?.[i] ? failureSaid(c.failed[i]!) : "not finished";
+  return c.marksUnread ? UNREAD_SAID : c.failed?.[i] ? failureSaid(c.failed[i]!) : "not finished";
 }
 
 /** At rest: a chip's look shut, as `chips` `shutChip` draws it - the parity its tests hold. */

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { anyPluginById, stoppedOf } from "../calc/catalog";
-import { setInstalled } from "./known";
+import { setInstalled, setListedNames } from "./known";
 import { acceptManifest } from "./manifest";
 
 // (the made-up test plugins, as src/test/pluginsInPlace puts them in place - here a few at a time, as a chemist gets them)
@@ -25,7 +25,11 @@ describe("a plugin that uses another not got yet", () => {
     inPlace("lumen-looks");
     const p = anyPluginById("lumen-looks");
     expect(p).toBeDefined();
-    expect(stoppedOf(p!, new Set(["lumen-looks"]))).toBe("Needs lumen, which is not added");
+    // (named as Settings, Plugins names it - here by the list of plugins online - never by its id; where Meno knows no name of it, so)
+    expect(stoppedOf(p!, new Set(["lumen-looks"]))).toBe("Needs a plugin Meno does not know the name of, which is not added");
+    setListedNames([{ id: "lumen", name: "Lumen" }]);
+    expect(stoppedOf(p!, new Set(["lumen-looks"]))).toBe("Needs Lumen, which is not added");
+    setListedNames([]);
   });
 
   it("takes the one it uses as any once that is got and added - read again, as Meno does on each one got", () => {

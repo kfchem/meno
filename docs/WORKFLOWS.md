@@ -1410,7 +1410,8 @@ set is (2026-10-21):
   energy out ("not stated" where nothing says). No share is shown: a
   share needs a temperature, and the set does not hold one.
 - **A row that did not finish says so** in its *Failed* column - the
-  failure in words ("not converged", "refused"), or "marks not read" -
+  failure in words ("not converged", "refused"), or "not known if
+  finished" where its file's record of which frames failed did not read -
   and its energy above is blank: the lowest is taken among those that
   finished alone, and the line at the top says so ("ΔE above the lowest of
   8 that finished; 2 not counted"). An SD file written of such a
@@ -2488,6 +2489,24 @@ Decided while building it, for the maintainer to confirm:
 - **Quick Add offers every procedure saved**: one that needs a plugin
   not added is shown, but cannot be put down, and says what it needs.
   A wire let go on empty space offers none.
+- **A plugin not here is named as Settings, Plugins names it**, never by
+  its id: on a step's card, in a procedure's line and what it needs
+  ("Screen - needs Tool: add it in Settings, Plugins"), in what a step
+  says when run without it ("Tool is not added: add it in Settings,
+  Plugins"), and in why a plugin added is stopped - by the list of
+  plugins online's name where Meno has none of its own. Where Meno knows
+  no name of it, it is "a plugin Meno does not know the name of", and a
+  step run without it says "The plugin that does this step is not added,
+  and Meno does not know its name: plugins are added in Settings,
+  Plugins" (`absentName`, lib/calc/catalog; `absentSaid`, workflow/doers).
+- **Which frames finished is not known** where a file's record of which
+  frames failed, or are no minimum, did not read (`marksUnread`). One set
+  of words says it everywhere (workflow/failures `RECORD_UNREAD`): a
+  frame's bar and a file's line, "whether it finished is not known: its
+  file's record of which frames failed could not be read"; a table's
+  cell and Filter's `state`, "not known if finished"; a step that
+  refuses it, "whether it finished, and so whether it is a minimum, is
+  not known: ..." (`MARKS_UNREAD`).
 
 ### The look, and conformers chosen on purpose (2026-10-10)
 
@@ -2499,8 +2518,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   made round what is drawn, labels included (an OH reaches past its O); a
   result set is as large as its molecules reach, each in any of its
   frames as it is turned, with room for its frames chip below it - as
-  wide as all it says, of every frame: why its energy is not given ("none
-  finished: no lowest to stand above") and what it says after it - why it
+  wide as all it says, of every frame: why its energy is not given ("no frame
+  finished", "which frames finished is not known") and what it says after it - why it
   failed, its imaginary frequencies, its warnings (2026-10-31: a saddle
   point's chip ran into its neighbours', a failed one's past the frame) -
   and no larger than its name needs.
@@ -4113,9 +4132,10 @@ it.
   entry's own goes on with it, unread.
 - **An entry's state** is Meno's own too (`state`, entries `entryState`):
   "finished" where it is a result to stand on - converged, not failed,
-  its file's marks read - else why not, in the words a step's line
-  counts failures in ("not converged", "refused", "the program stopped
-  with an error"), or "marks not read". "state = finished" keeps the
+  its file's record of which frames failed read - else why not, in the
+  words a step's line counts failures in ("not converged", "refused",
+  "the program stopped with an error"), or "not known if finished",
+  where that record did not read: the states a Filter's condition names. "state = finished" keeps the
   finished and sets the rest aside, each saying what it is ("not state =
   finished (not converged)"): the Filter a step's refusal names, where a
   value is read from results (an Energy diagram's levels: meno

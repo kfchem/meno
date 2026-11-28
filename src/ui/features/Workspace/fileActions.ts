@@ -37,7 +37,7 @@ import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/
 import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks, stereoPictureSpots3d } from "./utils/molecule3d";
 import { isSkeleton } from "./utils/completeness";
-import { FAILURE_WORDS } from "./workflow/failures";
+import { FAILURE_WORDS, UNREAD_SAID } from "./workflow/failures";
 import { skeletonWhy } from "../../../lib/chem/skeleton";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE, STEREO_GAP, stereoPictureItems, stereoTextItem } from "./chem/marks";
@@ -551,7 +551,7 @@ export function propertiesSaid(drawn: Drawn): string[] {
  */
 function failedSaid(m: Carried3D, i: number): string | null {
   const n = 1 + (m.frames?.length ?? 0);
-  if (m.marksUnread) return "its marks of which frames failed could not be read";
+  if (m.marksUnread) return UNREAD_SAID;
   return m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
 }
 

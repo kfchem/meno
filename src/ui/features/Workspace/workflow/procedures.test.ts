@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { setListedNames } from "../../../../lib/plugins/known";
+import { absentSaid } from "./doers";
+import { procedureTip } from "../quickAddLabel";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { partsBounds, type FlowParts } from "./parts";
@@ -28,6 +31,7 @@ const PARTS: FlowParts = {
 afterEach(() => {
   useAppSettings.setState({ procedures: [] });
   useReaders.setState({ state: {}, problem: {} });
+  setListedNames([]);
 });
 
 describe("a procedure", () => {
@@ -59,6 +63,24 @@ describe("a procedure", () => {
     expect(procedureNeeds(PARTS)).toEqual(["Tightbind"]);
     useReaders.setState({ state: { tightbind: "added" }, problem: {} });
     expect(procedureNeeds(PARTS)).toEqual([]);
+  });
+
+  it("names a plugin not here by its name as Settings, Plugins shows it - on the list of plugins online - and what to do; never by its id", () => {
+    const away: FlowParts = { ...PARTS, steps: PARTS.steps.map((s) => (s.by === "tightbind" ? { ...s, by: "made-up-tool" } : s)) };
+    expect(procedureNeeds(away)).toEqual(["a plugin Meno does not know the name of"]);
+    expect(procedureLine(away)).toBe("Optimise · a plugin Meno does not know the name of → Energy window · Meno");
+    expect(absentSaid("made-up-tool")).toBe("The plugin that does this step is not added, and Meno does not know its name: plugins are added in Settings, Plugins");
+    setListedNames([{ id: "made-up-tool", name: "Made-up Tool" }]);
+    expect(procedureNeeds(away)).toEqual(["Made-up Tool"]);
+    expect(procedureLine(away)).toBe("Optimise · Made-up Tool → Energy window · Meno");
+    expect(absentSaid("made-up-tool")).toBe("Made-up Tool is not added: add it in Settings, Plugins");
+    expect(absentSaid("tightbind")).toBe("Tightbind is not added: add it in Settings, Plugins");
+    // (Quick Add's row: what it needs, and where it is added)
+    expect(procedureTip({ name: "Screen", needs: procedureNeeds(away) })).toBe("Screen - needs Made-up Tool: add it in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: ["Tool", "a plugin Meno does not know the name of"] })).toBe("Screen - needs Tool and a plugin Meno does not know the name of: plugins are added in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: procedureNeeds({ ...away, steps: away.steps.map((s) => (s.by === "made-up-tool" ? { ...s, by: "never-listed" } : s)) }) })).toBe("Screen - needs a plugin Meno does not know the name of: plugins are added in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: ["Tool", "Other"] })).toBe("Screen - needs Tool and Other: add them in Settings, Plugins");
+    expect(procedureTip({ name: "Screen", needs: [] })).toBe("Screen");
   });
 
   it("is written to share with its middle at the page's origin, where a workspace opened is first seen", () => {

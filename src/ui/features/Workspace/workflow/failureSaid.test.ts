@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { FAILURE_WORDS, failureSaid, failuresLine, failuresSaid, WHY_SHUT } from "./failures";
 import { unfinishedWhy } from "../pageGl/liveChip";
+import { entryState, MARKS_UNREAD } from "./entries";
 import { chipMarks as setMarks, type ChipFacts } from "../utils/chipSaid";
 import { chipMarks as framesMarks } from "../utils/molecule3d";
 
@@ -43,7 +44,10 @@ describe("a failure said", () => {
     expect(framesMarks({ failed: [error("A.")] }, 0, 1)).toBe(failureSaid(error("A.")));
     const facts = { count: 2, frame: 0, failed: [null, error(long)] } as unknown as ChipFacts;
     expect(unfinishedWhy(facts, 1)).toBe(`${FAILURE_WORDS["program-error"]}: ${long}`);
-    expect(unfinishedWhy({ ...facts, marksUnread: true }, 1)).toBe("its marks could not be read");
+    expect(unfinishedWhy({ ...facts, marksUnread: true }, 1)).toBe("whether it finished is not known: its file's record of which frames failed could not be read");
+    // (the same state in a step's refusal, and as Filter's state reads it: one set of words, workflow/failures)
+    expect(MARKS_UNREAD).toBe("whether it finished, and so whether it is a minimum, is not known: its file's record of which frames failed could not be read");
+    expect(entryState({ marksUnread: true })).toBe("not known if finished");
   });
 });
 

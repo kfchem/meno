@@ -1,3 +1,5 @@
+import { PLUGINS_ADDED_WHERE, UNNAMED_PLUGIN } from "../../../lib/calc/catalog";
+
 /** How wide Quick Add's calculations stand (./QuickAddCalculations): as their names need, whatever the row above them holds. */
 
 /** What stands about a name in a row of the list: a step's indent and icon and the gaps before it, and a count or its room after it, in px. */
@@ -26,3 +28,9 @@ const SHOWN_LEAST = 6;
 
 /** The most the steps of the one open stand before they scroll, with `rows` rows: what the rows leave, never less than `SHOWN_LEAST` of them. */
 export const stepsMost = (rows: number) => Math.max(SHOWN_LEAST * CALC_ROW, CALC_MOST - rows * CALC_ROW);
+
+/** What a saved procedure's row in Quick Add says over it: its name - and, one that needs plugins not added, which, by name (workflow/procedures `procedureNeeds`), and where they are added - where Meno knows no name of one, as a step run without it says (`PLUGINS_ADDED_WHERE`). */
+export const procedureTip = (p: { name: string; needs: readonly string[] }): string =>
+  !p.needs.length
+    ? p.name
+    : `${p.name} - needs ${p.needs.join(" and ")}: ${p.needs.includes(UNNAMED_PLUGIN) ? PLUGINS_ADDED_WHERE : `add ${p.needs.length > 1 ? "them" : "it"} in Settings, Plugins`}`;
