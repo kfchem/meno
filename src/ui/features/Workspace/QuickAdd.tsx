@@ -19,10 +19,11 @@ import { togglesOn } from "./utils/press";
 import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
-import { afterAdded, chemistryLine, enterDoes, fieldRows, readSmiles } from "./quickAddSmiles";
+import { chemistryLine, offerDone, enterDoes, fieldRows, notDrawnSaid, readingParts, readingSaid, readSmiles } from "./quickAddSmiles";
+import { failureSaid } from "../../../lib/plugins/failureSaid";
 import { useDownloads } from "../../../lib/pyEnv";
 import { calcMadeWith, toggledPanel, type QuickPanel } from "./quickAddPanel";
-import { resolve, sameFormula, type Reading } from "./chem/resolve";
+import { resolve, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 import { rolePlugin } from "../../../lib/roles/worker";
 import { useNetwork } from "../../../lib/net/network";
@@ -536,6 +537,8 @@ function SmilesField({
   useEffect(() => () => void (asked.current += 1), []);
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
+  // (a compound found that a plugin missing kept from being drawn: drawn once that plugin is added, not looked up again)
+  const foundAgain = useRef<NamedStructure | null>(null);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) input.current?.focus();
@@ -550,11 +553,12 @@ function SmilesField({
   }, [seed]);
   /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
   const read = (smiles: string) => {
+    foundAgain.current = null;
     reading.current = true;
     setBusy(true);
     setError(null);
     setNeeds(null);
-    void readSmiles(smiles, onSmiles)
+    void readSmiles(smiles, onSmiles, rolePlugin("smiles")?.name ?? "Its plugin")
       .then((r) => {
         if (!r) return;
         setError(r.error);
@@ -568,11 +572,18 @@ function SmilesField({
   /** A compound found drawn; or why not, said under the field. */
   const draw = (f: NamedStructure) => {
     if (!finder || !onFound) return;
+    foundAgain.current = null;
     reading.current = true;
     setBusy(true);
     setError(null);
     void onFound(f, finder.name)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => {
+        // (said as a SMILES not drawn is - a plugin missing offered as there, and drawn once it is added: `foundAgain`)
+        const r = notDrawnSaid(e, "compound", rolePlugin("smiles")?.name ?? "Its plugin");
+        foundAgain.current = r.needs ? f : null;
+        setError(r.error);
+        setNeeds(r.needs);
+      })
       .finally(() => {
         reading.current = false;
         setBusy(false);
@@ -587,7 +598,7 @@ function SmilesField({
     setPick(0);
     setLooked({ name, going: true });
     void lookUpName(finder, name)
-      .catch((e: unknown): NameFound => ({ error: e instanceof Error ? e.message : String(e) }))
+      .catch((e: unknown): NameFound => ({ error: failureSaid(e, "look-up", finder.name) }))
       .then((found) => {
         if (asked.current !== mine) return;
         setLooked({ name, found });
@@ -689,7 +700,11 @@ function SmilesField({
           {chemistryLine(chem, share, busy, card)}
         </div>
       )}
-      {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
+      {error && (
+        <div role="alert" className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">
+          {error}
+        </div>
+      )}
       {/* (no plugin looks names up and nothing here reads the text: the role offered, quietly - looked up later only on the chemist's Enter) */}
       {error && !needs && onFound && !finder && !readings.length && (
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setNeeds("names")} className="px-0.5 pt-1 text-[11px] text-gh-gray hover:text-gh-black transition-colors duration-150 ease-meno">
@@ -706,8 +721,7 @@ function SmilesField({
                 setError(null);
                 setNeeds(null);
               };
-              if (needs === "names") letGo();
-              else afterAdded(text, reading.current, read, letGo);
+              offerDone(needs, foundAgain.current, text, reading.current, { read, draw, letGo });
             }}
           />
         </div>
@@ -734,6 +748,7 @@ function FoundRows({ found, chosen, service, onChoose }: { found: { found: Named
               type="button"
               role="radio"
               aria-checked={i === chosen}
+              aria-label={[`${f.title} · ${f.formula} · ${f.id}`, ...(notes.length ? [notes.join(", ")] : [])].join(", ")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onChoose(i)}
               className={`w-full rounded-md border px-2 py-1 text-left text-[11px] leading-snug transition-colors duration-150 ease-meno ${i === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
@@ -785,19 +800,15 @@ export function DrawAs({
           type="button"
           role="radio"
           aria-checked={r === chosen}
+          // (named by the words it shows, its formula's counts among them - not left to how its parts are set)
+          aria-label={readingSaid(r)}
           // (the field keeps the keys: Enter still draws)
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onChoose(i)}
           className={`h-6 max-w-full truncate rounded-full border px-2 text-[11px] leading-6 transition-colors duration-150 ease-meno ${r === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
         >
-          {r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : <FormulaText text={r.as === "label" ? r.label : r.formula} />}
-          {/* (a label that is its formula, PdCl2, is said once) */}
-          {!(r.as === "label" && !r.name && sameFormula(r.label, r.formula)) && (
-            <>
-              {" \u00b7 "}
-              <FormulaText text={r.formula} />
-            </>
-          )}
+          {/* (what it shows and what it is named by, from one place: ./quickAddSmiles `readingParts`; a label that is its formula, PdCl2, said once) */}
+          <ReadingShown r={r} />
         </button>
       ))}
       {lookup && (
@@ -805,6 +816,7 @@ export function DrawAs({
           type="button"
           role="radio"
           aria-checked={lookup.chosen}
+          aria-label={lookup.text}
           aria-disabled={lookup.dim || undefined}
           onMouseDown={(e) => e.preventDefault()}
           onClick={lookup.onChoose}
@@ -814,6 +826,22 @@ export function DrawAs({
         </button>
       )}
     </div>
+  );
+}
+
+/** A reading's words as `readingParts` has them, a formula's counts set below the line. */
+function ReadingShown({ r }: { r: Reading }) {
+  const { head, headIsFormula, formula } = readingParts(r);
+  return (
+    <>
+      {headIsFormula ? <FormulaText text={head} /> : head}
+      {formula && (
+        <>
+          {" \u00b7 "}
+          <FormulaText text={formula} />
+        </>
+      )}
+    </>
   );
 }
 

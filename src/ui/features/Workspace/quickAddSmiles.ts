@@ -2,7 +2,8 @@
 import { NoPlugin, type ChemState } from "../../../lib/roles/worker";
 import type { RoleId } from "../../../lib/plugins/roles";
 import { firstSetUpStep, type FirstSetUpCard } from "../../../lib/plugins/firstSetUp";
-import type { Reading } from "./chem/resolve";
+import { sameFormula, type Reading } from "./chem/resolve";
+import { failureSaid } from "../../../lib/plugins/failureSaid";
 
 /** What came of it: drawn (null), or why not - and, where no plugin here reads it, the role the plugins online are offered for (./RoleOffer). */
 export type SmilesRead = null | { error: string; needs: RoleId | null };
@@ -12,13 +13,23 @@ export type SmilesRead = null | { error: string; needs: RoleId | null };
  * plugin offered for it is added (./RoleOffer `done`): what was typed is
  * drawn then, not typed again.
  */
-export async function readSmiles(smiles: string, onSmiles: (smiles: string) => Promise<void>): Promise<SmilesRead> {
+export async function readSmiles(smiles: string, onSmiles: (smiles: string) => Promise<void>, plugin: string): Promise<SmilesRead> {
   try {
     await onSmiles(smiles);
     return null;
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err), needs: err instanceof NoPlugin ? err.role : null };
+    return notDrawnSaid(err, "SMILES", plugin);
   }
+}
+
+/**
+ * Why a structure asked for in Quick Add - a SMILES typed, a compound found by its name - was not drawn: in
+ * Meno's words where they say why ("This SMILES could not be read: …"); where no plugin here draws it, that one
+ * is needed, with the plugins online that do (./RoleOffer); else by what kind of failure it was, for `plugin`
+ * by its name (lib/plugins/failureSaid).
+ */
+export function notDrawnSaid(err: unknown, where: "SMILES" | "compound", plugin: string): { error: string; needs: RoleId | null } {
+  return { error: failureSaid(err, where, plugin), needs: err instanceof NoPlugin ? err.role : null };
 }
 
 /**
@@ -30,6 +41,17 @@ export function afterAdded(typed: string, reading: boolean, read: (smiles: strin
   const smiles = typed.trim();
   if (smiles && !reading) read(smiles);
   else letGo();
+}
+
+/**
+ * The plugin offered under the field added (./RoleOffer `done`): where it was offered for a compound found by its
+ * name (`found`), that compound drawn - not looked up again; where it was for looking names up, the offer let go
+ * (a name is looked up only on the chemist's Enter); else what was typed read again (`afterAdded`).
+ */
+export function offerDone<F>(needs: RoleId, found: F | null, typed: string, reading: boolean, does: { read: (smiles: string) => void; draw: (found: F) => void; letGo: () => void }): void {
+  if (needs === "names") does.letGo();
+  else if (found) does.draw(found);
+  else afterAdded(typed, reading, does.read, does.letGo);
 }
 
 /**
@@ -84,4 +106,17 @@ export function chemistryLine(chem: ChemState, share: number | undefined, waitin
   if (!step) return null;
   if (chem.state === "starting") return `${step}. The first one takes a moment.`;
   return `${step}.${waiting ? " This is drawn when it is ready." : ""}`;
+}
+
+/** What a reading under the SMILES field shows: its name (or "SMILES", or its label, or its formula) and its formula after it - none where the head is that formula already. */
+export function readingParts(r: Reading): { head: string; headIsFormula: boolean; formula: string | null } {
+  const named = r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : null;
+  const head = named ?? (r.as === "label" ? r.label : r.formula);
+  return { head, headIsFormula: named === null, formula: r.as === "label" && !r.name && sameFormula(r.label, r.formula) ? null : r.formula };
+}
+
+/** What a reading under the SMILES field shows, as words: its name for assistive technology (`readingParts`). */
+export function readingSaid(r: Reading): string {
+  const { head, formula } = readingParts(r);
+  return formula ? `${head} \u00b7 ${formula}` : head;
 }

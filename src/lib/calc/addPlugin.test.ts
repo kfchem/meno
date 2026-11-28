@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Plugins added one after another: each set-up held until the test ends it, done or failed.
 const asked: string[] = [];
-const ends = new Map<string, { done: () => void; fail: (why: string) => void }>();
+const ends = new Map<string, { done: () => void; fail: (why: unknown) => void }>();
 vi.mock("../plugins/process", () => ({ stopWorker: async () => undefined, workerOf: async () => ({}) }));
 vi.mock("../pyEnv", () => ({
   ensurePyEnv: (profile: string) =>
     new Promise<string>((resolve, reject) => {
       asked.push(profile);
-      ends.set(profile, { done: () => resolve(""), fail: (why) => reject(new Error(why)) });
+      // (refused as the back end refuses: with its text, not an Error)
+      ends.set(profile, { done: () => resolve(""), fail: (why) => reject(why) });
     }),
   pyEnvReady: async () => false,
   removePyEnv: async () => undefined,
@@ -58,7 +59,8 @@ describe("plugins added one after another", () => {
     ends.get(c.profile)!.done();
     expect(await Promise.all(added)).toEqual([undefined, "failed", undefined]);
     expect(states()).toEqual(["added", "absent", "added"]);
-    const said = `${b.name} was not added: uv pip install failed: Access is denied. (os error 5)`;
+    // (in plain words, with what to do: the back end's text to the log, never on the screen)
+    const said = `${b.name} was not added: its set-up could not be finished. Meno's log, in Settings, General, can be sent with a report.`;
     expect(useReaders.getState().problem[b.id]).toBe(said);
     // (Plugins shown again, a file read: the plugins looked at afresh - what went wrong still said)
     await addedReaders([a, b, c]);
@@ -124,5 +126,13 @@ describe("plugins added one after another", () => {
     ends.get(b.profile)!.done();
     await Promise.all([first, again]);
     expect(states().slice(0, 2)).toEqual(["added", "added"]);
+  });
+
+  it("keeps, where a set-up fails in Meno's own words, those words on it", async () => {
+    const added = addPlugin(a).catch(() => "failed");
+    await settle();
+    ends.get(a.profile)!.fail(new Error(`Setting up ${a.name} needs the network, and was not allowed it (Meno is offline, or the download was declined).`));
+    expect(await added).toBe("failed");
+    expect(useReaders.getState().problem[a.id]).toBe(`${a.name} was not added: Setting up ${a.name} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
   });
 });
