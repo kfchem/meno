@@ -26,12 +26,12 @@ The drawing style and the 3D styles in Settings are the ones new workspaces star
 
 ## 3D {#3d}
 
-*Molecules in 3D*: the styles new workspaces show molecules in, as *Primary* and *Secondary*; how each style draws a molecule - *Atoms*, *Hydrogens on carbon*, chains, surfaces, lines and more; *Atom colours*; and, under *Every style*, the light, orbitals and densities, ribbons and turning.
+*Molecules in 3D*: the styles new workspaces show molecules in, as *Primary* and *Secondary*; how each style draws a molecule - *Atoms*, *Hydrogens on carbon*, chains, surfaces, lines and more; *Atom colours*; and, under *Every style*, the light, orbitals and densities, ribbons and turning. *Preview* shows a molecule in the style being set; double-click it to set the other of *Primary* and *Secondary*.
 
 ## Chemistry {#chemistry}
 
 - *Point out atoms with too many bonds*: a mark, on the page only, on an atom drawn with more bonds than it takes.
-- Which plugin does each thing for Meno - from *SMILES to a structure, and back* to *Pictures and films of molecules in 3D, rendered* - and, where two plugins can, which of them; its options stand under it.
+- Which plugin does each thing for Meno - from *Structures from SMILES, and SMILES from structures* to *Pictures and films of molecules in 3D, rendered* - and, where two plugins can, which of them; its options stand under it.
 - *Keep conformers within*: conformers far above the lowest are set aside as they are made.
 
 ## Files {#files}
