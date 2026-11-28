@@ -117,9 +117,16 @@ describe("a lone atom made in 3D", () => {
     expect(blocksOf(salt, all)).toHaveLength(1);
     const bare = bareAtomsOf(salt, all);
     expect(bare.map((a) => a.id)).toEqual([5, 6, 7]);
-    expect(bareWords(bare, true)).toBe("Na+, Cl\u2212 and Ca2+ were left out: one atom alone has no 3D structure.");
-    expect(bareWords(bare.slice(0, 1), true)).toBe("Na+ was left out: one atom alone has no 3D structure.");
+    // (beside others made: named, and the way to take them along - Make one structure, as the menu names it)
+    expect(bareWords(bare, true)).toBe("Na+, Cl\u2212 and Ca2+ were left out: one atom alone has no 3D structure. To take them with their counter-ions, select them together and choose Make one structure first.");
+    expect(bareWords(bare.slice(0, 1), true)).toBe("Na+ was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both and choose Make one structure first.");
     expect(bareWords(bare.slice(0, 1), false)).toBe("One atom alone has no 3D structure.");
+    // (a lone atom of no charge beside others made - a metal - is no counter-ion)
+    expect(bareWords([{ id: 8, x: 12, y: 0, r: 0.9, el: "Pd" }], true)).toBe("Pd was left out: one atom alone has no 3D structure. To take it with the structure it belongs to, select both and choose Make one structure first.");
+    // (and that way takes it: made one structure, the ions are no bare atoms - they are made in 3D with the rest)
+    const one = { ...salt, atoms: salt.atoms.map((a) => ({ ...a, joined: 1 })) };
+    expect(bareAtomsOf(one, all)).toEqual([]);
+    expect(blocksOf(one, all)).toHaveLength(1);
   });
 });
 
@@ -954,7 +961,7 @@ describe("a hydrogen bond drawn, made in 3D", () => {
       expect(blocksOf(salt(bond), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3]]);
       const bare = bareAtomsOf(salt(bond), bond ? [1] : [1, 4]);
       expect(bare.map((a) => a.id)).toEqual([4]);
-      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure.");
+      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both and choose Make one structure first.");
     }
     expect(drawnBlocksOf(salt(true), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3], [4]]);
   });

@@ -41,7 +41,7 @@ describe("a drawn metal whose ligands are not stated", () => {
     expect(bareWords(bareAtomsOf(pdX2, [1, 2, 3]), false)).toBe("Pd has no 3D structure: its ligands are not stated.");
     // (beside a structure made, and beside a lone ion: each said by its own why)
     const salt: Model = { atoms: [atom(1, "MgX"), { ...atom(2, "Na", 4), charge: 1 }], bonds: [] } as Model;
-    expect(bareWords(bareAtomsOf(salt, [1, 2]), true)).toBe("Na+ was left out: one atom alone has no 3D structure. MgX was left out: its ligands are not stated.");
+    expect(bareWords(bareAtomsOf(salt, [1, 2]), true)).toBe("Na+ was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both and choose Make one structure first. MgX was left out: its ligands are not stated.");
     // (a lone metal stays one atom alone)
     expect(bareWords(bareAtomsOf(lone("Pd"), [1]), false)).toBe("One atom alone has no 3D structure.");
   });
