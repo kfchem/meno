@@ -1,6 +1,6 @@
 # Look through a molecule's conformers
 
-Put a small chain down from its SMILES, make it in 3D, and go through the conformers Meno made of it.
+Put a small chain down from its SMILES, make it in 3D, and go through the conformers Meno made of it. If chemistry is not set up yet, set it up first, as the first step of *Draw a structure and see it in 3D* shows.
 
 1. {#open-quick-add} Double-click an empty spot on the page. A row of icons opens, with a field under it.
 2. {#type-smiles} Type `CCCCC`, the SMILES of pentane. Under the field, *SMILES* shows the formula it reads.
@@ -12,6 +12,6 @@ Put a small chain down from its SMILES, make it in 3D, and go through the confor
 8. {#press-bar} Press a bar. The molecule shows that conformer, and the chip says its number, energy and share.
 9. {#drag-bars} Drag along the bars, from the last back to the first. The molecule goes through the conformers one by one as the pointer passes each bar, and ends on the lowest.
 10. {#how-made} Click the arrow at the foot of the chip. It opens on how the conformers were made: the method and the program, the rounds tried, and how many were set aside as the same as one kept.
-11. {#show-menu} Right-click the molecule in 3D.
+11. {#show-menu} Right-click the molecule in 3D. The chip closes, and the molecule's menu opens.
 12. {#show-all} Choose *Show all conformers*. The others are drawn over the one shown, each as dark as it is likely.
-13. {#let-go} Click an empty spot on the page. The chip closes, and the conformers stay drawn over one another.
+13. {#let-go} Click an empty spot on the page. The molecule is no longer chosen, and the conformers stay drawn over one another.
