@@ -92,14 +92,18 @@ Meno up to date?" (`src/ui/network/ConsentDialog.tsx`) - is answered by the
 person at the computer, never by a run, on either desktop. Every such
 question has one yes, *Allow and download*; the card Meno shows as it
 first starts, "Set up chemistry?", has *Set up*, as has Settings' *Set up
-<plugin>*. A click or a drag whose press
+<plugin>*, and its question about keeping Meno up to date *Keep up to date*.
+What fetches or applies again something allowed before is taken for a yes
+too: the card's *Try again*, Settings' *Update all (n)* and *Update to
+<version>* of a plugin, and *Restart now* into a newer Meno. A click or a drag whose press
 or release would land on it, or a key, a shortcut or typing sent while it
 has the focus, stops the run before anything is sent; Escape, which answers
 no, always goes. The platform module reads the part at the point, or the
 one with the focus, and what it sits in (`[MacGui]::ChainAt` and
 `FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
 on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`,
-`Set up` or `Set up ...`.
+`Set up`, `Set up ...`, `Keep up to date`, `Try again`, `Update all...`,
+`Update to ...` or `Restart now`.
 On Windows a press is told by the buttons themselves: Tauri lays a pane
 for its resize borders over the whole page, which lets the mouse through
 but stops UI Automation, so what is at any point reads as that pane. Every
@@ -206,7 +210,8 @@ unless told otherwise. The verbs are MenoTutorial.psm1's:
 | | |
 |---|---|
 | `Set-Tutorial -Needs chemistry` | what the page says a reader needs, in its own words |
-| `New-TutorialHome` | an empty home for `Start-Meno -HomeFolder`: Meno as someone opening it the first time sees it, its first start's questions and all; thrown away with the run's folder |
+| `New-TutorialHome` | an empty home for `Start-Meno -HomeFolder`, in the run's folder: Meno as someone opening it the first time sees it, its first start's questions and all; left in the run's folder with the shots |
+| `New-TutorialHome -Ready [-PluginEnvironments] [-Network]` | a fresh copy of the prepared home (below) in the run's folder, for `Start-Meno -HomeFolder`: its plugins there and its first start's questions answered; taken away as the run ends, unless `-KeepOpen` |
 | `Part Button "Not now" [-Within] [-Row] [-Reveal]` | a part of the window by its name (`Find-MenoPart`) |
 | `Point 600 400` | a point of the window, for the drawing on the page |
 | `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`, `Shortcut -Text`. `-NotDone` records a step the run must not take - the yes of a question about the network, which is the reader's to answer - and leaves it undone. A step done goes through the verbs above, so the guard stops it before it would answer such a question yes |
@@ -216,8 +221,112 @@ A part found `-Within` another (a dialog) or by its `-Row` keeps that one's
 place as well: the page shows the picture near the spot wide enough to take
 it in. A page's steps are its ids; its words, in `en.md` and `ja.md`, carry
 the same ids in the same order, or the website's build refuses them.
-`tests/tutorial.tests.ps1` checks what a step keeps and a drag's way, with
-no app: `pwsh -NoProfile -File scripts/gui/tests/tutorial.tests.ps1`.
+`tests/tutorial.tests.ps1` checks what a step keeps, a drag's way and the
+copy of a prepared home, with no app:
+`pwsh -NoProfile -File scripts/gui/tests/tutorial.tests.ps1`.
+
+### The prepared home
+
+Most pages need a plugin, and Meno adds one only after the person's own
+yes to a question about the network - which a run never gives, in any
+home. So the steps a page records after such a question are recorded from a
+**prepared home**: a folder a person made once, by hand, never a run, in
+which Meno was started as if it were the home, its first questions answered
+and the plugins the pages need added, and Meno quit. A run never starts
+Meno in that folder and never writes in it: each `New-TutorialHome -Ready`
+copies it into the run's folder and Meno is started on the copy.
+
+- **Made** on a Mac, with the app that records:
+  `open -n --env HOME=<folder> <Meno.app>`, in a new empty folder. In it:
+  the card Meno shows as it first starts answered, the plugins the pages
+  need added in Settings, *Plugins*, and each used once, so that it is set
+  up. Nothing else is needed, and nothing else is copied (below).
+- **Kept** outside the repository: nothing of the computer it was made on
+  goes into git. A run is given it by `run.ps1 -ReadyHome <folder>`, or else
+  `MENO_TUTORIAL_HOME=<folder>`; a tutorial asks for it with one line,
+  `Start-Meno -HomeFolder (New-TutorialHome -Ready)`, and without it the
+  run stops, saying where to give it. Refused, saying which, as the disk
+  has each place (links followed, in any case): a folder that is not there,
+  one Meno was never started in, one whose first card was never answered,
+  this account's own home, one in the repository or holding it, and one in
+  the run's folder or holding it.
+- **Copied** (`Copy-ReadyHome`) from its Meno folder
+  (`Library/Application Support/Meno`) alone - nothing of the prepared home
+  outside the entries named here is read or copied - cloned where the disk can: the
+  plugins added (`plugins`); uv's and pixi's folders - their caches, the
+  Pythons, the plugins' downloaded files and the records of each set up
+  (`uv`, `pixi`); the tools Meno fetched (`tools`); the list of plugins
+  online (`catalogue.json` and its signature and state). Left out: the log
+  and the network log, the window's place, jobs, the jobs kept and the
+  working folder chosen for them, presets, whatever else is there, and the
+  rest of the home - the caches, the web view's folders, the fonts Meno puts
+  in the home's own.
+- **Links**: a copy holds none. Each link in what is copied is followed in
+  the prepared home: one leading into those entries is replaced in the copy
+  by a copy of what is there; one leading to nothing is left out; one
+  leading anywhere else - elsewhere in the prepared home or out of it - back
+  into a folder it is in, or round with other links, stops the copy at
+  once, saying which, and what was copied is taken away. Only then is
+  anything taken out - of the
+  copy alone, by its literal name, after checking that it lies inside the
+  copy as the disk has it: what names the folder it was made in (each
+  plugin's `venv`, `.pixi`, `activation.json`), which Meno leaves out itself
+  when its folder moves and makes again at the first use, and a plugin's
+  set-up cut short (`plugins/.staging`).
+- **Settings** are made afresh, as a fresh home has them, with only this of
+  the prepared home's: `format`; of `plugins`, `firstSetUp` (how the card
+  was answered), `usedBeforeAsked`, `roles` and `removed` (plugins' ids) -
+  so that the card and the question about plugins set up before do not come
+  again; and `updates.asked`, set, so that Meno does not ask to keep itself
+  up to date. Nothing else is carried: no style, colour set, program
+  located, procedure, option or key Meno adds later.
+- **The network**: a copy allows no purpose to use it, so a run from it
+  asks as a fresh home would - and a run never answers yes. Keeping Meno up
+  to date is never carried: with it not allowed, Meno does not look for a
+  newer Meno, download one or show its notice.
+- **The plugins' environments**: a copy holds each plugin but not its
+  environment, which Meno sets up again the first time the plugin is
+  asked, under the plugin's own purpose (`python-env:plugin-<id>`). So a
+  recording that uses a plugin needs `New-TutorialHome -Ready
+  -PluginEnvironments`, which carries over the prepared home's yes to that
+  purpose for each plugin in the copy and nothing else (the purpose matched
+  exactly, letter case included, as Meno matches it) - and may be used
+  only where the person who prepared the home agreed that recordings set
+  the plugins' environments up again, and fetch the plugins' own files,
+  over the network. That one yes covers both: setting the environment up
+  (`py_env_setup_uv`, `py_env_setup_pixi` in `src-tauri/src/lib.rs`) and
+  downloading the files a plugin needs besides its packages
+  (`plugin_files` in `src-tauri/src/plugfiles.rs`). Each goes out through
+  Meno's own network, only to the hosts that set-up names
+  (`src/lib/plugins/setUpSources.ts`):
+  - uv, the first time, and Python itself: releases.astral.sh;
+  - the packages a uv plugin takes from the Python Package Index: pypi.org
+    and files.pythonhosted.org;
+  - a pixi plugin's: pixi itself, the first time, from github.com and
+    release-assets.githubusercontent.com; its packages from
+    conda.anaconda.org; and pypi.org and files.pythonhosted.org where it
+    takes some from the Python Package Index;
+  - a package the plugin's lock fixes to a web address of its own, and the
+    plugin's own files: the hosts in those addresses, which the plugin
+    names (its lock and its manifest), so they are known only from that
+    plugin - and, where such an address is on github.com, also
+    codeload.github.com (a repository's archive) or
+    release-assets.githubusercontent.com (a release's file), and, where it
+    is on huggingface.co, any host under hf.co.
+
+  It is not told to stay offline, so it may ask those hosts even where the
+  copied caches hold all it needs. It reaches no other host, and the yes
+  lets nothing else in Meno use the network: not the plugin catalogue, not
+  keeping Meno up to date, and not another plugin's set-up.
+  `-Network` carries every purpose allowed there over - only where that
+  person agreed that recordings use all those hosts.
+- **Taken away** as the run ends, with Meno closed (`Remove-TutorialHomes`),
+  unless `-KeepOpen`: the shots stay in the run's folder.
+- **Out of a copy's reach**: what macOS keeps for the account rather than in
+  the home - a key kept in the keychain, the open and save panels' last
+  folders, the apps chosen to open a kind of file. A page that would show
+  any of them is not recorded from a prepared home, and its pictures are
+  each looked at before they are committed.
 
 ## What a platform module provides
 
