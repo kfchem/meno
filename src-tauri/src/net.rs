@@ -28,6 +28,33 @@ const MOST_HOSTS: usize = 64;
 /// How long an idle connection is kept open.
 const IDLE: Duration = Duration::from_secs(120);
 
+/// How long a connection on a task begun at rest may be quiet, with no
+/// request of its worker's waiting, before it lets go of its run
+/// (`Holding::let_go`). Kept open for reuse after an answer, it would
+/// otherwise hold the run - its notice pulsing as under way - with nothing
+/// moving, till the server closes it or `IDLE` passes. Two seconds: four
+/// of the proxy's half-second reports to the window (`pipe`), so the last
+/// bytes of a reply that trail its answer stay in its run, and short
+/// beside the while a finished notice lingers (NetworkToasts.tsx
+/// `LINGER_MS`, 6 s), so the notice goes much as it would had the
+/// connection closed. Bytes on it again begin a run of their own.
+const QUIET: Duration = Duration::from_secs(2);
+
+/// How long a few bytes from the host that come on a connection let go of
+/// (`Holding::let_go`) - no more than `CLOSING_MOST` - are held back to see
+/// whether its end follows them: a server closing a connection kept open
+/// says a few bytes as it does (an encrypted connection's notice that it
+/// closes) and closes. Its end following, nothing is passed on: the
+/// worker's side is simply closed, as a server's end closes it, and the
+/// closing is on the record as its own closed line, its bytes counted, no
+/// notice begun for it (`pipe`). Otherwise they go as any bytes do
+/// (`Holding::moved`).
+const CLOSING: Duration = Duration::from_millis(250);
+
+/// The most a closing may say (`CLOSING`): a closing notice is tens of
+/// bytes; more is no closing, and goes as any bytes do.
+const CLOSING_MOST: usize = 256;
+
 /// How the window is told of a task or a connection: an event and its payload.
 type Tell = Box<dyn Fn(&str, serde_json::Value) + Send + Sync>;
 
@@ -41,6 +68,21 @@ struct Inner {
     granted: Mutex<HashSet<String>>,
     /// Tasks under way, by token.
     tasks: Mutex<HashMap<String, Task>>,
+    /// Tasks at rest, by token: a worker's that nothing holds under way
+    /// (`Spell`) - its last spell ended, as the window was told, its way
+    /// out still standing for when it is asked again, or reaches out.
+    resting: Mutex<HashMap<String, Task>>,
+    /// The spells of the tasks begun at rest (`begin_resting`), by token -
+    /// those alone. Locks, where more than one is held: `tasks`, then
+    /// `resting`, then this.
+    spells: Mutex<HashMap<String, Spell>>,
+    /// `QUIET`, in milliseconds, where a test sets a shorter while (0: `QUIET`).
+    quiet_ms: AtomicU64,
+    /// Counted up each time a yes is withdrawn (`revoke`), and each time a
+    /// task begun at rest ends (`end`): a connection looks at its purpose's
+    /// yes, or at its task, again only when one has moved (`Holding::moved`).
+    withdrawn: AtomicU64,
+    ends: AtomicU64,
     /// Recent connections, newest last.
     recent: Mutex<Vec<Connection>>,
     port: OnceLock<u16>,
@@ -74,6 +116,12 @@ pub struct Task {
     pub outcome: Option<String>,
     /// Why it failed, where it said: "model.bin stopped after 422.0 MB of 1134.3 MB (the server ended it early)".
     pub reason: Option<String>,
+    /// Where the chemist stopped it - Meno set to work offline ("offline"), or
+    /// its yes withdrawn ("withdrawn") while it was under way: it ends
+    /// "done", its reason saying what stopped it, its notice going as a
+    /// finished one's does (NetworkToasts.tsx); the connection cut is on the
+    /// record as refused all the same.
+    pub stopped: Option<String>,
 }
 
 /// One connection, or one refused.
@@ -95,6 +143,27 @@ pub struct Connection {
     pub outcome: String,
     /// Why it was blocked, or how it ended (`Ended`): "the server closed it", "nothing came either way for 120 s".
     pub reason: Option<String>,
+    /// Cut as the chemist stopped its task ("offline", "withdrawn": `Task::stopped`).
+    pub stopped: Option<String>,
+}
+
+/// What holds a task begun at rest under way, in its spell: each request
+/// its worker has yet to answer counts one, taken by the worker's handle
+/// (`TaskHandle::resume`), each connection open on it one more, taken by
+/// the proxy as it is opened - so nothing goes out on its token unshown or
+/// off the record. The last let go, the spell ends: failed where anything
+/// in it did (`Net::spoil`) - a connection that failed or was refused, an
+/// answer that said it could not, a request made while Meno is offline -
+/// done where nothing did.
+#[derive(Default)]
+struct Spell {
+    holds: usize,
+    /// Whether its worker's hold is among them: a request waits.
+    asked: bool,
+    /// Where the chemist stopped it ("offline", "withdrawn", why): `Task::stopped`.
+    stopped: Option<(&'static str, &'static str)>,
+    failed: bool,
+    why: Option<String>,
 }
 
 fn now_ms() -> u64 {
@@ -151,6 +220,18 @@ impl Net {
     /// its purpose has not been allowed, or when it names no hosts, or a
     /// pattern that is not a host's.
     pub fn begin(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>) -> Result<TaskHandle, String> {
+        self.open(purpose, label, hosts, true)
+    }
+
+    /// Begins a task, as `begin` does, at rest: its way out stands, but
+    /// nothing is under way till it is asked for something (`resume`) - so
+    /// the window is told of nothing yet. A worker's, started before it is
+    /// asked anything, that lives on between what it is asked.
+    pub fn begin_resting(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>) -> Result<TaskHandle, String> {
+        self.open(purpose, label, hosts, false)
+    }
+
+    fn open(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>, under_way: bool) -> Result<TaskHandle, String> {
         if self.offline() {
             return Err(format!("{label}: Meno is offline"));
         }
@@ -175,11 +256,17 @@ impl Net {
             ended: None,
             outcome: None,
             reason: None,
+            stopped: None,
         };
         let token = uuid::Uuid::new_v4().simple().to_string();
-        self.0.tasks.lock().unwrap().insert(token.clone(), task.clone());
-        self.emit("net:task", &task);
-        self.write_log(&serde_json::json!({ "task": task }));
+        if under_way {
+            self.0.tasks.lock().unwrap().insert(token.clone(), task.clone());
+            self.emit("net:task", &task);
+            self.write_log(&serde_json::json!({ "task": task }));
+        } else {
+            self.0.resting.lock().unwrap().insert(token.clone(), task);
+            self.0.spells.lock().unwrap().insert(token.clone(), Spell::default());
+        }
         Ok(TaskHandle {
             net: self.clone(),
             token,
@@ -187,15 +274,142 @@ impl Net {
         })
     }
 
+    /// Ends a task, its way out with it: the window told, where it was
+    /// under way - one at rest had its end told as it came to rest. A spell
+    /// something in which went wrong ends failed, saying why, however its
+    /// worker ended.
     fn end(&self, token: &str, outcome: &str, reason: Option<&str>) {
-        let Some(mut task) = self.0.tasks.lock().unwrap().remove(token) else {
+        // (the window told under the tasks' lock: each task's beginning and end told in turn - `hold`, `release`)
+        let mut tasks = self.0.tasks.lock().unwrap();
+        self.0.resting.lock().unwrap().remove(token);
+        let spell = self.0.spells.lock().unwrap().remove(token);
+        if spell.is_some() {
+            self.0.ends.fetch_add(1, Ordering::SeqCst);
+        }
+        let Some(task) = tasks.remove(token) else {
             return;
         };
+        match &spell {
+            Some(s) if s.failed => self.ended(task, "failed", s.why.as_deref().or(reason)),
+            Some(Spell { stopped: Some((kind, why)), .. }) => {
+                let mut task = task;
+                task.stopped = Some((*kind).into());
+                self.ended(task, "done", Some(why));
+            }
+            _ => self.ended(task, outcome, reason),
+        }
+    }
+
+    fn ended(&self, mut task: Task, outcome: &str, reason: Option<&str>) {
         task.ended = Some(now_ms());
         task.outcome = Some(outcome.into());
         task.reason = reason.map(str::to_string);
         self.emit("net:task", &task);
         self.write_log(&serde_json::json!({ "task": task }));
+    }
+
+    /// One more hold on a task begun at rest (`Spell`): where it was at
+    /// rest, a spell of its own begun - a new task as the window and the
+    /// record see it, told as any task begun. The spell under way; none
+    /// where the task was not begun at rest, or has ended.
+    fn hold(&self, token: &str) -> Option<Task> {
+        let mut tasks = self.0.tasks.lock().unwrap();
+        let mut resting = self.0.resting.lock().unwrap();
+        let mut spells = self.0.spells.lock().unwrap();
+        let spell = spells.get_mut(token)?;
+        if let Some(last) = resting.remove(token) {
+            let task = Task { id: uuid::Uuid::new_v4().to_string(), started: now_ms(), ended: None, outcome: None, reason: None, stopped: None, ..last };
+            tasks.insert(token.into(), task.clone());
+            *spell = Spell { holds: 1, ..Spell::default() };
+            self.emit("net:task", &task);
+            self.write_log(&serde_json::json!({ "task": task }));
+            return Some(task);
+        }
+        spell.holds += 1;
+        tasks.get(token).cloned()
+    }
+
+    /// A hold let go (`hold`): the last of them, and the spell ends - done,
+    /// or failed where something in it went wrong - the task at rest, its
+    /// way out kept.
+    fn release(&self, token: &str) {
+        let mut tasks = self.0.tasks.lock().unwrap();
+        let mut resting = self.0.resting.lock().unwrap();
+        let mut spells = self.0.spells.lock().unwrap();
+        let Some(spell) = spells.get_mut(token) else { return };
+        if !tasks.contains_key(token) {
+            return;
+        }
+        spell.holds = spell.holds.saturating_sub(1);
+        if spell.holds > 0 {
+            return;
+        }
+        let Some(mut task) = tasks.remove(token) else { return };
+        task.ended = Some(now_ms());
+        task.outcome = Some(if spell.failed { "failed" } else { "done" }.into());
+        task.reason = spell.why.take();
+        // (stopped by the chemist, nothing having gone wrong before: done, saying what stopped it)
+        if let (false, Some((kind, why))) = (spell.failed, spell.stopped.take()) {
+            task.stopped = Some(kind.into());
+            task.reason = Some(why.into());
+        }
+        spell.failed = false;
+        spell.stopped = None;
+        resting.insert(token.into(), task.clone());
+        self.emit("net:task", &task);
+        self.write_log(&serde_json::json!({ "task": task }));
+    }
+
+    /// A yes withdrawn: nothing more goes for it, open connections included (`Holding::moved`).
+    pub fn revoke(&self, purpose: &str) {
+        self.0.granted.lock().unwrap().remove(purpose);
+        self.0.withdrawn.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Whether a task begun at rest is still there, under way or at rest.
+    fn known(&self, token: &str) -> bool {
+        self.0.spells.lock().unwrap().contains_key(token)
+    }
+
+    /// Whether a request of its worker's waits in the task's run (`Spell`).
+    fn waits(&self, token: &str) -> bool {
+        self.0.spells.lock().unwrap().get(token).is_some_and(|s| s.asked)
+    }
+
+    fn asked(&self, token: &str, asked: bool) {
+        if let Some(s) = self.0.spells.lock().unwrap().get_mut(token) {
+            s.asked = asked;
+        }
+    }
+
+    /// How long a connection may be quiet before it lets go of its run (`QUIET`).
+    fn quiet(&self) -> Duration {
+        match self.0.quiet_ms.load(Ordering::Relaxed) {
+            0 => QUIET,
+            ms => Duration::from_millis(ms),
+        }
+    }
+
+    /// Something in the spell under way went wrong, saying why where it
+    /// said: it ends failed. The first reason kept. Nothing once the chemist
+    /// has stopped it (`stop`): what goes wrong after - its worker's answer
+    /// that it could not - comes of the stop.
+    fn spoil(&self, token: &str, why: Option<&str>) {
+        let mut spells = self.0.spells.lock().unwrap();
+        let Some(spell) = spells.get_mut(token).filter(|s| s.holds > 0 && s.stopped.is_none()) else { return };
+        spell.failed = true;
+        if spell.why.is_none() {
+            spell.why = why.map(str::to_string);
+        }
+    }
+
+    /// The spell under way stopped by the chemist (`Task::stopped`): it ends
+    /// done, saying so - unless something had gone wrong in it before.
+    fn stop(&self, token: &str, kind: &'static str, why: &'static str) {
+        let mut spells = self.0.spells.lock().unwrap();
+        if let Some(spell) = spells.get_mut(token).filter(|s| s.holds > 0 && s.stopped.is_none()) {
+            spell.stopped = Some((kind, why));
+        }
     }
 
     fn emit<T: Serialize>(&self, event: &str, payload: &T) {
@@ -245,6 +459,7 @@ impl Net {
             received: 0,
             outcome: "blocked".into(),
             reason: Some(reason.into()),
+            stopped: None,
         };
         self.record(&c);
     }
@@ -390,6 +605,32 @@ impl TaskHandle {
     pub fn fail(mut self, why: &str) {
         self.net.end(&self.token, "failed", Some(why));
         self.ended = true;
+    }
+
+    /// Its worker's requests all answered: their hold let go (`Spell`) -
+    /// the spell ends where nothing else holds it, and its notice goes as
+    /// any finished task's does; its way out kept.
+    pub fn rest(&self) {
+        self.net.asked(&self.token, false);
+        self.net.release(&self.token);
+    }
+
+    /// Its worker asked something: held under way till it is answered
+    /// (`rest`), a spell of its own where it was at rest - failed, where
+    /// Meno is offline: nothing goes out for it.
+    pub fn resume(&self) {
+        if self.net.hold(&self.token).is_some() {
+            self.net.asked(&self.token, true);
+            if self.net.offline() {
+                self.net.spoil(&self.token, Some("Meno is offline"));
+            }
+        }
+    }
+
+    /// Something in its spell under way went wrong - an answer that said it
+    /// could not: the spell ends failed.
+    pub fn spoil(&self) {
+        self.net.spoil(&self.token, None);
     }
 }
 
@@ -547,10 +788,17 @@ impl Net {
             let _ = client.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n").await;
             return;
         };
-        let task = request
-            .token
-            .as_deref()
-            .and_then(|t| self.0.tasks.lock().unwrap().get(t).cloned());
+        // (one begun at rest is held under way while the connection is open - a spell begun where it rested: shown, on the record, its bytes counted in the spell they flow in)
+        let (task, holding) = match request.token.as_deref() {
+            None => (None, Holding::new(self, None, None)),
+            Some(t) => match self.hold(t) {
+                Some(task) => {
+                    let holding = Holding::new(self, Some(t), Some(&task.purpose));
+                    (Some(task), holding)
+                }
+                None => (self.0.tasks.lock().unwrap().get(t).cloned(), Holding::new(self, None, None)),
+            },
+        };
         let mut c = Connection {
             id: self.0.next.fetch_add(1, Ordering::SeqCst),
             task_id: task.as_ref().map(|t| t.id.clone()),
@@ -564,6 +812,7 @@ impl Net {
             received: 0,
             outcome: "open".into(),
             reason: None,
+            stopped: None,
         };
         let mut refusal = if request.method != "CONNECT" {
             Some(("405 Method Not Allowed", "only encrypted connections go through Meno"))
@@ -586,11 +835,11 @@ impl Net {
             let found = tokio::time::timeout(Duration::from_secs(20), tokio::net::lookup_host((request.host.as_str(), request.port))).await;
             let found: Vec<std::net::SocketAddr> = match found {
                 Ok(Ok(a)) => a.collect(),
-                Ok(Err(e)) => return self.fail(&mut client, c, &e.to_string()).await,
-                Err(_) => return self.fail(&mut client, c, "timed out").await,
+                Ok(Err(e)) => return self.fail(&mut client, c, &holding, &e.to_string()).await,
+                Err(_) => return self.fail(&mut client, c, &holding, "timed out").await,
             };
             if found.is_empty() {
-                return self.fail(&mut client, c, "no address").await;
+                return self.fail(&mut client, c, &holding, "no address").await;
             }
             if found.iter().any(|a| inward(a.ip())) {
                 refusal = Some(("403 Forbidden", "an address on this computer or its own network"));
@@ -605,6 +854,7 @@ impl Net {
             c.reason = Some(reason.into());
             c.ended = Some(now_ms());
             self.record(&c);
+            holding.spoil(reason);
             return;
         }
         self.record(&c);
@@ -617,50 +867,298 @@ impl Net {
         let upstream = tokio::time::timeout(Duration::from_secs(20), connecting).await;
         let upstream = match upstream {
             Ok(Ok(s)) => s,
-            Ok(Err(e)) => return self.fail(&mut client, c, &e.to_string()).await,
-            Err(_) => return self.fail(&mut client, c, "timed out").await,
+            Ok(Err(e)) => return self.fail(&mut client, c, &holding, &e.to_string()).await,
+            Err(_) => return self.fail(&mut client, c, &holding, "timed out").await,
         };
         if client
             .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             .await
             .is_err()
         {
-            return;
+            return self.fail(&mut client, c, &holding, "the connection to the client broke").await;
         }
-        self.pipe(client, upstream, c).await;
+        self.pipe(client, upstream, c, holding).await;
     }
 
-    async fn fail(&self, client: &mut TcpStream, mut c: Connection, why: &str) {
+    async fn fail(&self, client: &mut TcpStream, mut c: Connection, holding: &Holding, why: &str) {
         let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
         c.outcome = "failed".into();
         c.reason = Some(why.into());
         c.ended = Some(now_ms());
         self.record(&c);
+        holding.spoil(why);
     }
 
     /// Carries the connection both ways, counting, and telling the window
     /// how it goes twice a second - and, ended, how (`Ended`).
-    async fn pipe(&self, client: TcpStream, upstream: TcpStream, mut c: Connection) {
+    ///
+    /// On a task begun at rest, quiet for `QUIET` with no request waiting,
+    /// it lets go of its run - the run ends, its notice going - and is on
+    /// the record as done for now; bytes on it again begin a run of their
+    /// own (`Holding::moved`, before they are carried), and from then it is
+    /// on the record again, as a connection of that run's, its bytes
+    /// counted from there.
+    async fn pipe(&self, client: TcpStream, upstream: TcpStream, mut c: Connection, holding: Arc<Holding>) {
         let sent = Arc::new(AtomicU64::new(0));
         let received = Arc::new(AtomicU64::new(0));
-        let done = carry(client, upstream, sent.clone(), received.clone(), IDLE);
+        let done = carry(client, upstream, sent.clone(), received.clone(), IDLE, Some(holding.clone()));
         tokio::pin!(done);
+        let quiet = self.quiet();
+        let tick = Duration::from_millis(500).min(quiet / 2);
+        // (what was counted before the part of it on the record now; whether that part has ended, let go)
+        let (mut sent_before, mut received_before) = (0, 0);
+        let mut let_go = false;
         let ended = loop {
             tokio::select! {
                 ended = &mut done => break ended,
-                _ = tokio::time::sleep(Duration::from_millis(500)) => {
-                    c.sent = sent.load(Ordering::Relaxed);
-                    c.received = received.load(Ordering::Relaxed);
+                _ = tokio::time::sleep(tick) => {
+                    let (s, r) = (sent.load(Ordering::Relaxed), received.load(Ordering::Relaxed));
+                    if let Some(task) = holding.again() {
+                        // (bytes again, after it let go: on the record anew, under the run they began - counted from where it let go, nothing having been carried since)
+                        c = Connection {
+                            id: self.0.next.fetch_add(1, Ordering::SeqCst),
+                            task_id: Some(task.id),
+                            purpose: Some(task.purpose),
+                            label: Some(task.label),
+                            started: now_ms(),
+                            ended: None,
+                            sent: 0,
+                            received: 0,
+                            outcome: "open".into(),
+                            reason: None,
+                            ..c
+                        };
+                        let_go = false;
+                    }
+                    if let_go {
+                        continue;
+                    }
+                    c.sent = s - sent_before;
+                    c.received = r - received_before;
+                    if holding.let_go(quiet) {
+                        c.outcome = "done".into();
+                        c.reason = Some(format!("nothing came either way for {} s; kept open", quiet.as_secs_f64()));
+                        c.ended = Some(now_ms());
+                        (sent_before, received_before) = (s, r);
+                        let_go = true;
+                    }
                     self.record(&c);
                 }
             }
         };
-        c.sent = sent.load(Ordering::Relaxed);
-        c.received = received.load(Ordering::Relaxed);
+        if let Some(task) = holding.again() {
+            c = Connection { id: self.0.next.fetch_add(1, Ordering::SeqCst), task_id: Some(task.id), purpose: Some(task.purpose), label: Some(task.label), started: now_ms(), ended: None, outcome: "open".into(), reason: None, ..c };
+            let_go = false;
+        }
+        if let Some(why) = holding.cut() {
+            // (bytes on it that could not go: not carried, the connection cut - on the record as refused, saying why: under the run it held, which fails, or - let go of - a line of its own, kept from the network; what went since counted either way)
+            if let_go {
+                c = Connection { id: self.0.next.fetch_add(1, Ordering::SeqCst), task_id: None, started: now_ms(), ..c };
+            }
+            c.sent = sent.load(Ordering::Relaxed) - sent_before;
+            c.received = received.load(Ordering::Relaxed) - received_before;
+            c.outcome = "blocked".into();
+            c.reason = Some(why);
+            c.stopped = holding.stopped().map(str::to_string);
+            c.ended = Some(now_ms());
+            self.record(&c);
+            return;
+        }
+        if let_go {
+            // (it went quiet, let go, and closed - with a few closing bytes, or none: its closing a line of its own on the record, of no run, so no notice comes for it)
+            c = Connection {
+                id: self.0.next.fetch_add(1, Ordering::SeqCst),
+                task_id: None,
+                started: now_ms(),
+                ended: Some(now_ms()),
+                sent: sent.load(Ordering::Relaxed) - sent_before,
+                received: received.load(Ordering::Relaxed) - received_before,
+                outcome: "done".into(),
+                reason: Some(holding.said(ended)),
+                ..c
+            };
+            self.record(&c);
+            return;
+        }
+        c.sent = sent.load(Ordering::Relaxed) - sent_before;
+        c.received = received.load(Ordering::Relaxed) - received_before;
         c.outcome = "done".into();
-        c.reason = Some(ended.said(IDLE));
+        c.reason = Some(holding.said(ended));
         c.ended = Some(now_ms());
         self.record(&c);
+    }
+}
+
+/// A connection's hold on the run of the task begun at rest it goes out
+/// under (`Net::hold`): let go as the connection ends, however it ends, or
+/// once it has been quiet a while with no request waiting (`let_go`) -
+/// taken again, a run of its own, as bytes move on it once more (`moved`).
+struct Holding {
+    net: Net,
+    token: Option<String>,
+    /// The purpose of its task, its consent looked at again where bytes wake it (`moved`).
+    purpose: String,
+    stir: Mutex<Stir>,
+}
+
+/// How a connection's hold stands: whether it is held, when bytes last
+/// moved on it, and the run they began where they moved after it let go -
+/// till `pipe` puts it on the record anew (`again`).
+struct Stir {
+    held: bool,
+    last: Instant,
+    again: Option<Task>,
+    /// Chunks on their way, read and not yet written out (`moved`, `wrote`): never let go mid-way.
+    writing: usize,
+    /// Why it was cut, where bytes on it could not go (`moved`).
+    cut: Option<String>,
+    /// `Inner::withdrawn` and `Inner::ends` as it last looked.
+    withdrawn: u64,
+    ends: u64,
+    /// The bytes of a closing not passed on (`CLOSING`).
+    withheld: u64,
+    /// Whether the last chunk carried came from the host: only then is
+    /// what the host says next, with its end, a closing (`CLOSING`) - where
+    /// the worker said last, it may be the answer it waits for.
+    host_last: bool,
+    /// Where the chemist cut it ("offline", "withdrawn": `Task::stopped`).
+    stopped: Option<&'static str>,
+}
+
+impl Holding {
+    /// `token`'s run held - one begun at rest, its hold taken - or none.
+    fn new(net: &Net, token: Option<&str>, purpose: Option<&str>) -> Arc<Holding> {
+        let (withdrawn, ends) = (net.0.withdrawn.load(Ordering::SeqCst), net.0.ends.load(Ordering::SeqCst));
+        let stir = Stir { held: token.is_some(), last: Instant::now(), again: None, writing: 0, cut: None, withdrawn, ends, withheld: 0, host_last: false, stopped: None };
+        Arc::new(Holding { net: net.clone(), token: token.map(str::to_string), purpose: purpose.unwrap_or_default().to_string(), stir: Mutex::new(stir) })
+    }
+
+    /// The connection failed, or was refused: so did its run.
+    fn spoil(&self, why: &str) {
+        if let Some(t) = &self.token {
+            self.net.spoil(t, Some(why));
+        }
+    }
+
+    /// Bytes about to be carried, either way: whether they may go. None
+    /// where Meno is offline, the yes for its purpose has been withdrawn,
+    /// or its task has ended - looked at for every chunk, held or not:
+    /// then nothing goes, it is cut (`cut`), and a run it held fails. Where
+    /// it had let go, a run of its own begun first, told to the window
+    /// before they go.
+    fn moved(&self, from_host: bool) -> bool {
+        let Some(t) = &self.token else { return true };
+        let mut stir = self.stir.lock().unwrap();
+        if stir.cut.is_some() {
+            return false;
+        }
+        // (two counts read for each chunk: its yes and its task looked at again only when one has moved, or as it wakes)
+        let (withdrawn, ends) = (self.net.0.withdrawn.load(Ordering::SeqCst), self.net.0.ends.load(Ordering::SeqCst));
+        let look = !stir.held;
+        // (the proxy's own words for a connection refused)
+        // (and, where it is the chemist's own switch - offline, a yes withdrawn - what they stopped)
+        let mut why = if self.net.offline() {
+            Some(("Meno is offline", Some(("offline", "stopped: Meno is offline"))))
+        } else if (look || withdrawn != stir.withdrawn) && !self.net.allowed(&self.purpose) {
+            Some(("not allowed to use the network", Some(("withdrawn", "stopped: no longer allowed"))))
+        } else if (look || ends != stir.ends) && !self.net.known(t) {
+            Some(("its task had ended", None))
+        } else {
+            None
+        };
+        (stir.withdrawn, stir.ends) = (withdrawn, ends);
+        if why.is_none() && !stir.held {
+            match self.net.hold(t) {
+                Some(task) => {
+                    stir.held = true;
+                    stir.again = Some(task);
+                }
+                None => why = Some(("its task had ended", None)),
+            }
+        }
+        if let Some((why, stop)) = why {
+            // (the chemist's own switch stops a run it held; anything else fails it)
+            if stir.held {
+                match stop {
+                    Some((kind, said)) => self.net.stop(t, kind, said),
+                    None => self.net.spoil(t, Some(why)),
+                }
+                stir.stopped = stop.map(|(kind, _)| kind);
+            }
+            stir.cut = Some(why.into());
+            return false;
+        }
+        stir.host_last = from_host;
+        stir.last = Instant::now();
+        stir.writing += 1;
+        true
+    }
+
+    /// A closing not passed on (`CLOSING`): its bytes, for the record.
+    fn withheld(&self, n: usize) {
+        self.stir.lock().unwrap().withheld += n as u64;
+    }
+
+    /// A chunk `moved` let go written out: the connection quiet from now.
+    fn wrote(&self) {
+        if self.token.is_none() {
+            return;
+        }
+        let mut stir = self.stir.lock().unwrap();
+        stir.writing = stir.writing.saturating_sub(1);
+        stir.last = Instant::now();
+    }
+
+    /// Whether what the host says now, with its end, may be a closing: it
+    /// has let go, and the last chunk carried came from the host.
+    fn may_close(&self) -> bool {
+        let stir = self.stir.lock().unwrap();
+        self.token.is_some() && !stir.held && stir.host_last
+    }
+
+    /// Where the chemist cut it, if they did.
+    fn stopped(&self) -> Option<&'static str> {
+        self.stir.lock().unwrap().stopped
+    }
+
+    /// How it ended, in words (`HowEnded::said`), and the bytes of a closing not passed on, where there were some.
+    fn said(&self, ended: HowEnded) -> String {
+        match self.stir.lock().unwrap().withheld {
+            0 => ended.said(IDLE),
+            n => format!("{}; the {n} bytes it said as it did were not passed on", ended.said(IDLE)),
+        }
+    }
+
+    /// Why it was cut, if it was.
+    fn cut(&self) -> Option<String> {
+        self.stir.lock().unwrap().cut.clone()
+    }
+
+    /// Lets go where it is held, nothing has moved on it for `quiet`, and
+    /// no request waits: whether it did.
+    fn let_go(&self, quiet: Duration) -> bool {
+        let Some(t) = &self.token else { return false };
+        let mut stir = self.stir.lock().unwrap();
+        if !stir.held || stir.writing > 0 || stir.last.elapsed() < quiet || self.net.waits(t) {
+            return false;
+        }
+        stir.held = false;
+        self.net.release(t);
+        true
+    }
+
+    /// The run bytes began on it after it let go, once.
+    fn again(&self) -> Option<Task> {
+        self.stir.lock().unwrap().again.take()
+    }
+}
+
+impl Drop for Holding {
+    fn drop(&mut self) {
+        let held = self.stir.get_mut().map(|s| s.held).unwrap_or(false);
+        if let (Some(t), true) = (&self.token, held) {
+            self.net.release(t);
+        }
     }
 }
 
@@ -671,6 +1169,8 @@ enum Ended {
     Closed,
     Broke,
     Idle,
+    /// Cut by Meno: bytes on it that could begin no run (`Holding::moved`).
+    Cut,
 }
 
 /// How a connection ended, as the first of its two ways to end ended (`carry`).
@@ -689,6 +1189,7 @@ impl HowEnded {
             Ended::Closed => format!("{who} closed it"),
             Ended::Broke => format!("the connection to {who} broke"),
             Ended::Idle => format!("nothing came either way for {} s", idle.as_secs()),
+            Ended::Cut => "Meno cut it".into(),
         }
     }
 }
@@ -699,18 +1200,28 @@ impl HowEnded {
 /// connection: until 0.1.18 that way was ended after `IDLE` of its own
 /// silence, the host told the client was done, and a large download cut
 /// short after two minutes. Ended where nothing came either way for `idle`.
-async fn carry(client: TcpStream, upstream: TcpStream, sent: Arc<AtomicU64>, received: Arc<AtomicU64>, idle: Duration) -> HowEnded {
+async fn carry(client: TcpStream, upstream: TcpStream, sent: Arc<AtomicU64>, received: Arc<AtomicU64>, idle: Duration, holding: Option<Arc<Holding>>) -> HowEnded {
     let (cr, cw) = client.into_split();
     let (ur, uw) = upstream.into_split();
     let start = Instant::now();
     let moved = Arc::new(AtomicU64::new(0));
-    let up = tokio::spawn(copy(cr, uw, sent, moved.clone(), start, idle));
-    let down = tokio::spawn(copy(ur, cw, received, moved, start, idle));
+    let up = tokio::spawn(copy(cr, uw, sent, moved.clone(), start, idle, holding.clone().map(|h| (h, false))));
+    let down = tokio::spawn(copy(ur, cw, received, moved, start, idle, holding.map(|h| (h, true))));
     tokio::pin!(up, down);
-    // (the first way to end says how the connection ended; the other is waited for)
+    // (the first way to end says how the connection ended; the other is waited for - stopped, where Meno cut it)
     let first = tokio::select! {
-        u = &mut up => { let _ = (&mut down).await; HowEnded { from_host: false, how: u.unwrap_or(Ended::Broke) } }
-        d = &mut down => { let _ = (&mut up).await; HowEnded { from_host: true, how: d.unwrap_or(Ended::Broke) } }
+        u = &mut up => {
+            let how = u.unwrap_or(Ended::Broke);
+            if how == Ended::Cut { down.abort(); }
+            let _ = (&mut down).await;
+            HowEnded { from_host: false, how }
+        }
+        d = &mut down => {
+            let how = d.unwrap_or(Ended::Broke);
+            if how == Ended::Cut { up.abort(); }
+            let _ = (&mut up).await;
+            HowEnded { from_host: true, how }
+        }
     };
     first
 }
@@ -722,7 +1233,11 @@ async fn copy(
     moved: Arc<AtomicU64>,
     start: Instant,
     idle: Duration,
+    // (the connection's hold on its run, and whether this is the way from the host)
+    holding: Option<(Arc<Holding>, bool)>,
 ) -> Ended {
+    let from_host = holding.as_ref().is_some_and(|(_, f)| *f);
+    let holding = holding.map(|(h, _)| h);
     let mut buf = vec![0u8; 16 * 1024];
     let ended = loop {
         let n = match tokio::time::timeout(idle, from.read(&mut buf)).await {
@@ -738,10 +1253,36 @@ async fn copy(
                 break Ended::Idle;
             }
         };
-        if to.write_all(&buf[..n]).await.is_err() {
+        let mut n = n;
+        if from_host && n <= CLOSING_MOST && holding.as_ref().is_some_and(|h| h.may_close()) {
+            // (a few bytes from the host, let go of: its end, following at once, makes them its closing - nothing passed on, the worker's side closed, the bytes counted)
+            let more = tokio::time::timeout(CLOSING, from.read(&mut buf[n..])).await;
+            if let Ok(Ok(0) | Err(_)) = more {
+                if let Some(h) = &holding {
+                    h.withheld(n);
+                }
+                count.fetch_add(n as u64, Ordering::Relaxed);
+                break Ended::Closed;
+            }
+            if let Ok(Ok(m)) = more {
+                n += m;
+            }
+        }
+        // (no byte carried outside a run shown and on the record: none at all, where none may begin)
+        if let Some(h) = &holding {
+            if !h.moved(from_host) {
+                break Ended::Cut;
+            }
+        }
+        // (counted as it is let go: where this way is stopped mid-write - the other cut - it is on the record all the same)
+        count.fetch_add(n as u64, Ordering::Relaxed);
+        let wrote = to.write_all(&buf[..n]).await;
+        if let Some(h) = &holding {
+            h.wrote();
+        }
+        if wrote.is_err() {
             break Ended::Broke;
         }
-        count.fetch_add(n as u64, Ordering::Relaxed);
         moved.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
     };
     let _ = to.shutdown().await;
@@ -776,7 +1317,7 @@ pub fn net_set_offline(net: tauri::State<'_, Net>, offline: bool) {
     net.0.offline.store(offline, Ordering::SeqCst);
 }
 
-/// For other modules' tests: a purpose allowed, and the tasks not yet ended.
+/// For other modules' tests: a purpose allowed, the tasks not yet ended, and what the window is told.
 #[cfg(test)]
 impl Net {
     pub fn allow(&self, purpose: &str) {
@@ -787,9 +1328,18 @@ impl Net {
         self.0.tasks.lock().unwrap().len()
     }
 
-    /// The tasks not yet ended: each one's purpose, and the hosts it may reach.
-    pub fn tasks_running(&self) -> Vec<(String, Option<Vec<String>>)> {
-        self.0.tasks.lock().unwrap().values().map(|t| (t.purpose.clone(), t.hosts.clone())).collect()
+
+    /// What the window is told from now on, each event and its payload, in turn.
+    pub fn told(&self) -> Arc<Mutex<Vec<(String, serde_json::Value)>>> {
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let kept = heard.clone();
+        let _ = self.0.tell.set(Box::new(move |event, payload| kept.lock().unwrap().push((event.to_string(), payload))));
+        heard
+    }
+
+    /// The tasks at rest: each one's purpose, and the hosts it may reach.
+    pub fn tasks_resting(&self) -> Vec<(String, Option<Vec<String>>)> {
+        self.0.resting.lock().unwrap().values().map(|t| (t.purpose.clone(), t.hosts.clone())).collect()
     }
 }
 
@@ -800,7 +1350,7 @@ pub fn net_grant(net: tauri::State<'_, Net>, purpose: String) {
 
 #[tauri::command]
 pub fn net_revoke(net: tauri::State<'_, Net>, purpose: String) {
-    net.0.granted.lock().unwrap().remove(&purpose);
+    net.revoke(&purpose);
 }
 
 /// A connection the web view was kept from making, for the record.
@@ -841,7 +1391,7 @@ mod tests {
         let (client_in, mut client) = pair().await;
         let (mut host, host_out) = pair().await;
         let (sent, received) = (Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)));
-        let carried = tokio::spawn(carry(client_in, host_out, sent.clone(), received.clone(), idle));
+        let carried = tokio::spawn(carry(client_in, host_out, sent.clone(), received.clone(), idle, None));
         client.write_all(b"GET").await.unwrap();
         let mut asked = [0u8; 3];
         host.read_exact(&mut asked).await.unwrap();
@@ -872,7 +1422,7 @@ mod tests {
         let (client_in, _client) = pair().await;
         let (_host, host_out) = pair().await;
         let started = Instant::now();
-        let how = carry(client_in, host_out, Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)), idle).await;
+        let how = carry(client_in, host_out, Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)), idle, None).await;
         assert_eq!(how.how, Ended::Idle);
         assert!(started.elapsed() >= idle && started.elapsed() < Duration::from_secs(3));
         assert_eq!(how.said(Duration::from_secs(120)), "nothing came either way for 120 s");
@@ -1040,7 +1590,7 @@ mod tests {
         // another where it is named, and that one alone
         assert!(host_named(&hosts, "example.org", Some(8443)));
         assert!(!host_named(&hosts, "example.org", Some(443)) && !host_named(&hosts, "example.org", Some(80)));
-        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, reason: None, hosts: Some(hosts) };
+        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, reason: None, stopped: None, hosts: Some(hosts) };
         assert_eq!(task.refuses("pypi.org", 443), None);
         assert_eq!(task.refuses("pypi.org", 80), Some("not a port its consent named"));
         assert_eq!(task.refuses("example.com", 443), Some("not a host its consent named"));
@@ -1369,5 +1919,478 @@ mod tests {
             let lower: Vec<_> = cmd.get_envs().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
             assert!(lower.iter().any(|k| k == "https_proxy"));
         }
+    }
+
+    /// The tasks the window was told of, by id, each as last told, in the order they were first told.
+    fn spells_told(told: &Mutex<Vec<(String, serde_json::Value)>>) -> Vec<serde_json::Value> {
+        let mut out: Vec<serde_json::Value> = Vec::new();
+        for (_, t) in told.lock().unwrap().iter().filter(|(e, _)| e == "net:task") {
+            match out.iter_mut().find(|o| o["id"] == t["id"]) {
+                Some(o) => *o = t.clone(),
+                None => out.push(t.clone()),
+            }
+        }
+        out
+    }
+
+    /// Waits, a little at a time, till `what` holds - or a while has gone.
+    async fn till(what: impl Fn() -> bool) {
+        for _ in 0..500 {
+            if what() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    #[test]
+    fn a_connection_on_a_task_at_rest_begins_a_spell_of_it_shown_and_on_the_record_till_it_closes() {
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            let told = net.told();
+            let path = std::env::temp_dir().join(format!("meno-net-rest-{}.jsonl", uuid::Uuid::new_v4()));
+            let _ = net.0.log.set(path.clone());
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            assert_eq!((net.running(), spells_told(&told).len()), (0, 0));
+
+            // (reached out unasked: a spell of its own, told as begun, the connection under it)
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            let spells = spells_told(&told);
+            assert_eq!((net.running(), spells.len()), (1, 1));
+            assert!(spells[0]["ended"].is_null());
+            let id = spells[0]["id"].as_str().unwrap().to_string();
+            assert_eq!(net.0.recent.lock().unwrap()[0].task_id.as_deref(), Some(id.as_str()));
+            // (closed, nothing asked: the spell ends, done - its bytes under it)
+            hello(&mut c).await;
+            drop(c);
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!((spells.len(), spells[0]["outcome"].as_str()), (1, Some("done")), "{spells:?}");
+            let conn = net.0.recent.lock().unwrap()[0].clone();
+            assert_eq!((conn.task_id.as_deref(), conn.sent, conn.received, conn.outcome.as_str()), (Some(id.as_str()), 5, 5, "done"));
+            // (on the record: the spell begun and ended, the connection under it)
+            let log = std::fs::read_to_string(&path).unwrap();
+            let entries: Vec<serde_json::Value> = log.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+            let of_spell = entries.iter().filter(|e| e["task"]["id"] == id.as_str()).count();
+            assert_eq!(of_spell, 2, "{log}");
+            assert!(entries.iter().any(|e| e["connection"]["taskId"] == id.as_str() && e["connection"]["outcome"] == "done"), "{log}");
+
+            // (a host its consent did not name: still refused - a spell of its own, failed, saying why)
+            let (_, status) = ask_for(port, "elsewhere.example.org", 443, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!(spells.len(), 2);
+            assert_eq!(spells[1]["outcome"], "failed");
+            assert!(spells[1]["reason"].is_string(), "{spells:?}");
+            assert_eq!(net.running(), 0);
+            let _ = std::fs::remove_file(&path);
+        });
+    }
+
+    #[test]
+    fn bytes_count_under_the_spell_they_flow_in_a_connection_kept_open_holding_it_under_way() {
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            let told = net.told();
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            // (asked; a connection opened for it, kept open past its answer)
+            task.resume();
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            task.rest();
+            assert_eq!(net.running(), 1, "a connection still open: its spell still under way");
+            // (asked again while it is open: the same spell, the bytes under it)
+            task.resume();
+            hello(&mut c).await;
+            drop(c);
+            till(|| net.0.recent.lock().unwrap()[0].outcome == "done").await;
+            assert_eq!(net.running(), 1, "a request still waits");
+            task.rest();
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!(spells.len(), 1, "{spells:?}");
+            assert_eq!(spells[0]["outcome"], "done");
+            let conn = net.0.recent.lock().unwrap()[0].clone();
+            assert_eq!((conn.task_id.as_deref(), conn.received), (spells[0]["id"].as_str(), 5));
+        });
+    }
+
+    #[test]
+    fn a_spell_in_which_anything_went_wrong_ends_failed_saying_why() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let told = net.told();
+            // (a port nothing listens on)
+            let dead = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{dead}")])).unwrap();
+            let last = || spells_told(&told).last().cloned().unwrap();
+            // (its answer said it could not)
+            task.resume();
+            task.spoil();
+            task.rest();
+            assert_eq!(last()["outcome"], "failed");
+            // (the next, where nothing went wrong: done - nothing carried over)
+            task.resume();
+            task.rest();
+            assert_eq!(last()["outcome"], "done");
+            // (a connection that failed)
+            task.resume();
+            let (_, status) = ask(port, dead, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 502 Bad Gateway");
+            task.rest();
+            till(|| net.running() == 0).await;
+            assert_eq!(last()["outcome"], "failed");
+            assert!(last()["reason"].is_string());
+            // (asked while Meno is offline: failed, saying so - its connection refused under it)
+            net.0.offline.store(true, Ordering::SeqCst);
+            task.resume();
+            let (_, status) = ask(port, dead, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            task.rest();
+            till(|| net.running() == 0).await;
+            assert_eq!((last()["outcome"].as_str(), last()["reason"].as_str()), (Some("failed"), Some("Meno is offline")));
+            let refused = net.0.recent.lock().unwrap().last().cloned().unwrap();
+            assert_eq!((refused.outcome.as_str(), refused.task_id.as_deref()), ("blocked", last()["id"].as_str()));
+            // (its worker gone mid-spell, its answer having said it could not: failed, though nothing was left unanswered)
+            net.0.offline.store(false, Ordering::SeqCst);
+            task.resume();
+            task.spoil();
+            task.finish(true);
+            assert_eq!(last()["outcome"], "failed");
+            assert_eq!(spells_told(&told).len(), 5);
+            assert_eq!(net.running(), 0);
+        });
+    }
+
+    /// Somewhere to go on the loopback address that says back all it is told, till it is closed: its port.
+    async fn echoes() -> u16 {
+        let echo = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let to = echo.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((mut s, _)) = echo.accept().await {
+                tokio::spawn(async move {
+                    let mut b = [0u8; 64];
+                    while let Ok(n) = s.read(&mut b).await {
+                        if n == 0 || s.write_all(&b[..n]).await.is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+        });
+        to
+    }
+
+    #[test]
+    fn a_connection_kept_open_and_quiet_after_the_answer_lets_go_of_its_run_and_bytes_on_it_again_begin_one_of_their_own() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let to = echoes().await;
+            let told = net.told();
+            let path = std::env::temp_dir().join(format!("meno-net-quiet-{}.jsonl", uuid::Uuid::new_v4()));
+            let _ = net.0.log.set(path.clone());
+            // (a shorter quiet while, for the test)
+            net.0.quiet_ms.store(500, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            // (asked; its answer comes over a connection kept open for reuse)
+            task.resume();
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            hello(&mut c).await;
+            task.rest();
+            // (quiet, nothing waiting: the run ends, done, the connection open still)
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!((spells.len(), spells[0]["outcome"].as_str()), (1, Some("done")), "{spells:?}");
+            let first = net.0.recent.lock().unwrap()[0].clone();
+            assert_eq!((first.task_id.as_deref(), first.sent, first.received, first.outcome.as_str()), (spells[0]["id"].as_str(), 5, 5, "done"));
+            assert!(first.ended.is_some());
+            // (bytes on it again: a run of their own, under way before they went, the connection on the record again under it)
+            hello(&mut c).await;
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!(spells.len(), 2, "{spells:?}");
+            assert_eq!(spells[1]["outcome"], "done");
+            let recent = net.0.recent.lock().unwrap().clone();
+            assert_eq!(recent.len(), 2, "{recent:?}");
+            assert_eq!((recent[1].task_id.as_deref(), recent[1].sent, recent[1].received, recent[1].outcome.as_str()), (spells[1]["id"].as_str(), 5, 5, "done"));
+            // (closed with nothing more: no run begun again, its closing a line of its own, of no run)
+            drop(c);
+            till(|| net.0.recent.lock().unwrap().len() == 3).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            assert_eq!((spells_told(&told).len(), net.0.recent.lock().unwrap().len(), net.running()), (2, 3, 0));
+            let closing = net.0.recent.lock().unwrap()[2].clone();
+            assert_eq!((closing.task_id, closing.reason.as_deref()), (None, Some("the client closed it")));
+            // (on the record: each run, and the connection under each)
+            let log = std::fs::read_to_string(&path).unwrap();
+            let entries: Vec<serde_json::Value> = log.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+            for spell in &spells {
+                assert!(entries.iter().any(|e| e["connection"]["taskId"] == spell["id"] && e["connection"]["received"] == 5), "{log}");
+            }
+            let _ = std::fs::remove_file(&path);
+        });
+    }
+
+    #[test]
+    fn a_quiet_connection_with_a_request_still_waiting_keeps_its_run() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let to = echoes().await;
+            let told = net.told();
+            net.0.quiet_ms.store(500, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            task.resume();
+            let (mut c, _) = ask(port, to, Some(&task.token)).await;
+            hello(&mut c).await;
+            // (quiet past its while - a server thinking - the request unanswered: under way, the connection open on the record)
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            assert_eq!(net.running(), 1);
+            assert!(spells_told(&told)[0]["ended"].is_null());
+            assert_eq!(net.0.recent.lock().unwrap()[0].outcome, "open");
+            // (answered: then quiet, it lets go)
+            task.rest();
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!((spells.len(), spells[0]["outcome"].as_str()), (1, Some("done")));
+            drop(c);
+        });
+    }
+
+    /// Somewhere to go that says back what it is told once, then - bidden - says `last` and closes (or, not `close`, holds it open a while): its port, and the bidding.
+    async fn closes_when_bidden(last: &'static [u8], close: bool) -> (u16, Arc<tokio::sync::Notify>) {
+        let place = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let to = place.local_addr().unwrap().port();
+        let bid = Arc::new(tokio::sync::Notify::new());
+        let bidden = bid.clone();
+        tokio::spawn(async move {
+            let Ok((mut s, _)) = place.accept().await else { return };
+            let mut b = [0u8; 64];
+            let n = s.read(&mut b).await.unwrap_or(0);
+            let _ = s.write_all(&b[..n]).await;
+            bidden.notified().await;
+            let _ = s.write_all(last).await;
+            if !close {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+        (to, bid)
+    }
+
+    /// A connection through the proxy on `task`'s token, asked for, answered, then quiet till it let go of its run.
+    async fn let_go_of(net: &Net, port: u16, to: u16, task: &TaskHandle) -> TcpStream {
+        task.resume();
+        let (mut c, status) = ask(port, to, Some(&task.token)).await;
+        assert_eq!(status, "HTTP/1.1 200 Connection Established");
+        hello(&mut c).await;
+        task.rest();
+        // (its run ended, and the connection on the record as let go)
+        till(|| net.running() == 0 && net.0.recent.lock().unwrap().last().is_some_and(|l| l.outcome != "open")).await;
+        assert_eq!(net.running(), 0);
+        c
+    }
+
+    /// Whether `c` was cut: nothing comes back on it but its end.
+    async fn cut(c: &mut TcpStream) -> bool {
+        let mut b = [0u8; 8];
+        matches!(tokio::time::timeout(Duration::from_secs(5), c.read(&mut b)).await, Ok(Ok(0) | Err(_)))
+    }
+
+    #[test]
+    fn bytes_on_a_connection_let_go_of_that_may_begin_no_run_are_not_carried_and_it_is_cut_on_the_record() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let to = echoes().await;
+            let told = net.told();
+            net.0.quiet_ms.store(500, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            let refused = |why: &str| {
+                let last = net.0.recent.lock().unwrap().last().cloned().unwrap();
+                last.outcome == "blocked" && last.reason.as_deref() == Some(why) && last.task_id.is_none()
+            };
+            // (Meno set to work offline while it was let go of)
+            let mut c = let_go_of(&net, port, to, &task).await;
+            net.0.offline.store(true, Ordering::SeqCst);
+            c.write_all(b"hello").await.unwrap();
+            assert!(cut(&mut c).await, "carried while offline");
+            till(|| refused("Meno is offline")).await;
+            assert!(refused("Meno is offline"));
+            assert_eq!((spells_told(&told).len(), net.running()), (1, 0), "no run begun");
+            net.0.offline.store(false, Ordering::SeqCst);
+            // (its yes withdrawn)
+            let mut c = let_go_of(&net, port, to, &task).await;
+            net.revoke("python-env:test");
+            c.write_all(b"hello").await.unwrap();
+            assert!(cut(&mut c).await, "carried with its yes withdrawn");
+            till(|| refused("not allowed to use the network")).await;
+            assert!(refused("not allowed to use the network"));
+            assert_eq!((spells_told(&told).len(), net.running()), (2, 0));
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            // (its task ended - its worker gone - the connection outliving it)
+            let mut c = let_go_of(&net, port, to, &task).await;
+            task.finish(true);
+            c.write_all(b"hello").await.unwrap();
+            assert!(cut(&mut c).await, "carried with its task ended");
+            till(|| refused("its task had ended")).await;
+            assert!(refused("its task had ended"));
+            assert_eq!((spells_told(&told).len(), net.running()), (3, 0));
+        });
+    }
+
+    #[test]
+    fn a_server_closing_a_connection_let_go_of_has_its_closing_on_the_record_and_begins_no_notice() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let told = net.told();
+            net.0.quiet_ms.store(500, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            for (last, before) in [(&b"bye"[..], 0), (&b""[..], 1)] {
+                let (to, bid) = closes_when_bidden(last, true).await;
+                let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+                let mut c = let_go_of(&net, port, to, &task).await;
+                let lines = net.0.recent.lock().unwrap().len();
+                // (the server closes it, saying a few bytes as it does, or none)
+                bid.notify_one();
+                let mut heard = Vec::new();
+                let _ = tokio::time::timeout(Duration::from_secs(5), c.read_to_end(&mut heard)).await;
+                assert_eq!(heard, b"", "nothing of its closing passed on");
+                // (and the worker, told its end, closes its side)
+                drop(c);
+                till(|| net.0.recent.lock().unwrap().len() == lines + 1).await;
+                let closing = net.0.recent.lock().unwrap().last().cloned().unwrap();
+                let said = if last.is_empty() { "the server closed it".to_string() } else { format!("the server closed it; the {} bytes it said as it did were not passed on", last.len()) };
+                assert_eq!((closing.task_id.as_deref(), closing.outcome.as_str(), closing.received, closing.reason.as_deref()), (None, "done", last.len() as u64, Some(said.as_str())), "{closing:?}");
+                // (no run begun for it: no notice)
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                assert_eq!((spells_told(&told).len(), net.running()), (before + 1, 0), "{:?}", spells_told(&told));
+            }
+        });
+    }
+
+    #[test]
+    fn a_closing_is_passed_on_neither_offline_nor_with_its_yes_withdrawn_and_bytes_from_the_host_that_wake_it_offline_are_cut() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let told = net.told();
+            net.0.quiet_ms.store(500, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            // (the server closes it, saying a few bytes as it does - while offline, then with the yes withdrawn: nothing passed on, the closing on the record)
+            for offline in [true, false] {
+                let (to, bid) = closes_when_bidden(b"bye", true).await;
+                net.0.granted.lock().unwrap().insert("python-env:test".into());
+                let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+                let mut c = let_go_of(&net, port, to, &task).await;
+                let lines = net.0.recent.lock().unwrap().len();
+                if offline {
+                    net.0.offline.store(true, Ordering::SeqCst);
+                } else {
+                    net.revoke("python-env:test");
+                }
+                bid.notify_one();
+                let mut heard = Vec::new();
+                let _ = tokio::time::timeout(Duration::from_secs(5), c.read_to_end(&mut heard)).await;
+                assert_eq!(heard, b"", "a closing passed on (offline: {offline})");
+                drop(c);
+                till(|| net.0.recent.lock().unwrap().len() == lines + 1).await;
+                let closing = net.0.recent.lock().unwrap().last().cloned().unwrap();
+                assert_eq!((closing.task_id.as_deref(), closing.received), (None, 3), "{closing:?}");
+                net.0.offline.store(false, Ordering::SeqCst);
+            }
+            // (bytes from the host, not its end, waking it while offline: not passed on, cut, on the record)
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let (to, bid) = closes_when_bidden(b"ping", false).await;
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            let mut c = let_go_of(&net, port, to, &task).await;
+            let runs = spells_told(&told).len();
+            net.0.offline.store(true, Ordering::SeqCst);
+            bid.notify_one();
+            let mut heard = Vec::new();
+            let _ = tokio::time::timeout(Duration::from_secs(5), c.read_to_end(&mut heard)).await;
+            assert_eq!(heard, b"");
+            till(|| net.0.recent.lock().unwrap().last().is_some_and(|l| l.outcome == "blocked")).await;
+            let cut = net.0.recent.lock().unwrap().last().cloned().unwrap();
+            assert_eq!((cut.task_id.as_deref(), cut.reason.as_deref()), (None, Some("Meno is offline")));
+            assert_eq!((spells_told(&told).len(), net.running()), (runs, 0));
+        });
+    }
+
+    #[test]
+    fn a_connection_holding_its_run_carries_nothing_more_once_meno_is_offline_or_its_yes_withdrawn() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let to = echoes().await;
+            let told = net.told();
+            for offline in [true, false] {
+                net.0.granted.lock().unwrap().insert("python-env:test".into());
+                let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+                task.resume();
+                let (mut c, _) = ask(port, to, Some(&task.token)).await;
+                hello(&mut c).await;
+                let run = spells_told(&told).last().unwrap()["id"].as_str().unwrap().to_string();
+                let (why, kind, said, lines) = if offline {
+                    net.0.offline.store(true, Ordering::SeqCst);
+                    ("Meno is offline", "offline", "stopped: Meno is offline", net.0.recent.lock().unwrap().len())
+                } else {
+                    net.revoke("python-env:test");
+                    ("not allowed to use the network", "withdrawn", "stopped: no longer allowed", net.0.recent.lock().unwrap().len())
+                };
+                // (mid-way: nothing more carried, either way)
+                c.write_all(b"hello").await.unwrap();
+                assert!(cut(&mut c).await, "carried on (offline: {offline})");
+                till(|| net.0.recent.lock().unwrap().last().is_some_and(|l| l.outcome == "blocked")).await;
+                let line = net.0.recent.lock().unwrap().last().cloned().unwrap();
+                // (on the record under its run, what went before counted)
+                assert_eq!((line.task_id.as_deref(), line.sent, line.received, line.reason.as_deref(), line.stopped.as_deref()), (Some(run.as_str()), 5, 5, Some(why), Some(kind)), "{line:?}");
+                assert_eq!(net.0.recent.lock().unwrap().len(), lines, "the same line, ended");
+                // (its worker's answer that it could not, after the stop, is of the stop: the run ends done, saying the chemist stopped it)
+                task.spoil();
+                task.rest();
+                till(|| net.running() == 0).await;
+                let last = spells_told(&told).last().cloned().unwrap();
+                assert_eq!((last["outcome"].as_str(), last["reason"].as_str(), last["stopped"].as_str()), (Some("done"), Some(said), Some(kind)));
+                net.0.offline.store(false, Ordering::SeqCst);
+            }
+        });
+    }
+
+    #[test]
+    fn a_small_reply_after_a_long_wait_to_what_the_worker_said_last_reaches_it_under_a_run() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let told = net.told();
+            net.0.quiet_ms.store(300, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            // (a server slower than the quiet while: a short reply, its end at once)
+            let place = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+            let to = place.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                let Ok((mut s, _)) = place.accept().await else { return };
+                let mut b = [0u8; 64];
+                let _ = s.read(&mut b).await;
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                let _ = s.write_all(b"HTTP/1.0 404 Not Found\r\n\r\n").await;
+            });
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            // (the worker reaches out unasked, and says last)
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            c.write_all(b"GET / HTTP/1.0\r\n\r\n").await.unwrap();
+            let mut heard = Vec::new();
+            let _ = tokio::time::timeout(Duration::from_secs(5), c.read_to_end(&mut heard)).await;
+            assert_eq!(heard, b"HTTP/1.0 404 Not Found\r\n\r\n", "the reply reached the worker");
+            drop(c);
+            till(|| net.running() == 0 && net.0.recent.lock().unwrap().last().is_some_and(|l| l.outcome == "done" && l.received > 0)).await;
+            let spells = spells_told(&told);
+            let line = net.0.recent.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(spells.len(), 2, "its first run let go while the server thought; the reply began another: {spells:?}");
+            assert_eq!((line.task_id.as_deref(), line.received), (spells[1]["id"].as_str(), 26), "{line:?}");
+        });
     }
 }

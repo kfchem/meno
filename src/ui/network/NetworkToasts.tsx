@@ -22,6 +22,7 @@ import {
 } from "../../lib/net/network";
 import { useAppSettings } from "../../lib/settings/appSettings";
 import { noticeShown, useUpdate, useUpdateDownloads } from "../../lib/update";
+import { taskLook } from "./taskLook";
 
 /** How long a finished task, or a refusal, stays in view. */
 const LINGER_MS = 6000;
@@ -136,15 +137,12 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       ))}
       {!talk.on && cards.map(({ key, task, conns }) => {
         const blocked = !task;
-        const hosts = [
-          ...new Set(
-            conns.filter((c) => c.outcome !== "blocked").map((c) => c.host),
-          ),
-        ];
+        const look = task ? taskLook(task, conns) : null;
+        const hosts = look?.hosts ?? [];
         const received = conns.reduce((n, c) => n + c.received, 0);
-        const refused = conns.filter((c) => c.outcome === "blocked").length;
-        const failed = task?.outcome === "failed";
-        const running = task && !task.ended;
+        const refused = look?.refused.length ?? 0;
+        const failed = !!look?.failed;
+        const running = !!look?.running;
         const Icon = blocked
           ? NoSymbolIcon
           : running
@@ -201,10 +199,10 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
                       {hosts.length > 0 ? " · " : ""}
                       {refused} refused
                       {hosts.length === 0 &&
-                        `: ${conns.find((c) => c.outcome === "blocked")?.reason ?? ""}`}
+                        `: ${look?.refused[0]?.reason ?? ""}`}
                     </span>
                   )}
-                  {!running && <span> · {failed ? "failed" : "done"}</span>}
+                  {!running && <span> · {look?.stopped ?? (failed ? "failed" : "done")}</span>}
                 </>
               )}
             </div>

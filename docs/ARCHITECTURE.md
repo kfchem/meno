@@ -1746,8 +1746,45 @@ to be able to work with nothing going out at all.
   one other: begun as a task under its own purpose (`model:<id>@<hosts>`,
   `lookup:<id>@<hosts>`) with the hosts its manifest in place names, read
   by the backend (`model.rs` `hosted_of`), never taken from the page; till
-  that purpose is allowed it has no task, and goes nowhere. A plugin fills
-  at most one such role. What Meno fetches itself is a task too, under
+  that purpose is allowed it has no task, and goes nowhere. Its task is
+  begun at rest (`Net::begin_resting`): its way out stands for as long as
+  the worker runs, but it is under way - told to the window, its notice in
+  the corner, on the network's record - only while something holds it
+  (`net.rs` `Spell`): a request written to the worker that waits for its
+  answer (`model.rs` `asking`, `heard`), or a connection open on its token,
+  which the proxy holds it by from the moment it is opened, so nothing goes
+  out on it unshown or off the record. Each time it is held from rest is a
+  task of its own (a spell), and a connection's bytes count under the spell
+  they flow in. A connection holds its spell while bytes move on it, or a
+  request waits; kept open for reuse and quiet for two seconds (`net.rs`
+  `QUIET`) with no request waiting, it lets go - the spell ends with its
+  answer, its notice going - and is on the record as done for then. Bytes
+  on it again begin a spell of their own before they are carried, and it
+  is on the record again under that spell. Every chunk either way, on such
+  a connection held or let go of, is looked at first (`Holding::moved`):
+  where Meno is offline, the yes for its purpose has been withdrawn
+  (`Net::revoke`) or its task has ended, nothing more is carried, the
+  connection is cut, and it is on the record as refused, saying why - under
+  the spell it held, which then fails, or as a line of its own, kept from
+  the network. Where it is the chemist's own switch - Meno set offline, or
+  the yes withdrawn - that stopped a spell under way, the spell ends done,
+  saying what stopped it (`Task::stopped`), and its notice goes as a
+  finished one's does with no fault shown; the connection's refused line on
+  the record is as any other's. A server's closing of it once let go of -
+  its end, and the few bytes that come just before it (`CLOSING`, at most
+  `CLOSING_MOST`), where the host said the last that went before it let go
+  - begins no spell and passes nothing on (where the worker said last, what
+  the host says may be its reply, and goes as any bytes do): the worker's side is closed, and
+  the closing is on the record as a closed line of its own, its bytes
+  counted, with no notice. A worker that closes such a connection with no
+  bytes is on the record the same way; one that says bytes as it closes
+  (its own closing notice) begins a short spell for them, as any bytes do. The last hold let
+  go, the spell ends and its notice goes as any finished task's does:
+  failed where anything in it went wrong (an answer that said `"ok":
+  false`, a connection that failed or was refused, a request made while
+  Meno is offline - "Meno is offline", as the proxy says it), done where
+  nothing did; the worker gone with a request unanswered, that spell fails
+  too. A plugin fills at most one such role. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an
   environment needs one (`tools.rs`), a plugin's downloads as it is set up
   - a model's weights, Blender (`plugfiles.rs`, under the plugin's

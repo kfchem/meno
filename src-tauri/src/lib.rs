@@ -903,7 +903,12 @@ fn stop_worker(models: &model::Models, state: &ProcState, id: &str) -> bool {
 /// end is the worker's end; its keys are kept to be taken out of whatever
 /// either stream still has to say, and let go once both are read.
 fn read_worker_output<R: Read>(models: &model::Models, id: &str, stream: R, main: bool, mut each: impl FnMut(String)) {
-    each_line(stream, |s| each(models.scrub(id, &s).into_owned()));
+    each_line(stream, |s| {
+        if main {
+            models.heard(id, &s);
+        }
+        each(models.scrub(id, &s).into_owned())
+    });
     if main {
         models.ended(id);
     }
@@ -934,9 +939,21 @@ async fn ext_stdin(app: AppHandle, id: String, data: String) -> Result<(), Strin
         return Err("A converse request is sent only as Meno sends it".into());
     }
     // (off the commands' threads: a write a stuck worker holds up waits on its own)
-    tauri::async_runtime::spawn_blocking(move || write_stdin(&app.state::<ProcState>(), &id, &data))
+    tauri::async_runtime::spawn_blocking(move || write_asked(&app.state::<model::Models>(), &app.state::<ProcState>(), &id, &data))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Writes requests to a sidecar (`write_stdin`), a plugin's worker that goes
+/// out under way on the network while they wait for their answers - and not
+/// at all for those whose writing failed (model.rs `asking`).
+fn write_asked(models: &model::Models, state: &ProcState, id: &str, data: &str) -> Result<(), String> {
+    models.asking(id, data);
+    let written = write_stdin(state, id, data);
+    if written.is_err() {
+        models.not_asked(id, data);
+    }
+    written
 }
 
 /// A conversation's request, on its way to a model plugin's worker, the
@@ -945,7 +962,7 @@ async fn ext_stdin(app: AppHandle, id: String, data: String) -> Result<(), Strin
 #[tauri::command]
 async fn ext_converse(app: AppHandle, id: String, request: String) -> Result<(), String> {
     let line = app.state::<model::Models>().converse_line(&id, &request)?;
-    tauri::async_runtime::spawn_blocking(move || write_stdin(&app.state::<ProcState>(), &id, &line))
+    tauri::async_runtime::spawn_blocking(move || write_asked(&app.state::<model::Models>(), &app.state::<ProcState>(), &id, &line))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -990,7 +1007,8 @@ fn installed_manifest(data: &Path, id: &str) -> Option<serde_json::Value> {
 /// till the person has allowed that purpose, for those very hosts, or where
 /// Meno is offline.
 fn hosted_task(net: &net::Net, id: &str, kind: model::Hosted, hosts: &[String]) -> Option<net::TaskHandle> {
-    net.begin(&kind.purpose(id, hosts), &kind.label(id), Some(hosts.to_vec())).ok()
+    // (at rest till it is asked something: under way only while a request waits for its answer - model.rs `asking`)
+    net.begin_resting(&kind.purpose(id, hosts), &kind.label(id), Some(hosts.to_vec())).ok()
 }
 
 #[tauri::command]
@@ -1905,11 +1923,104 @@ mod tests {
         // (after the yes: a task to the hosts named, those alone, under its own purpose)
         net.allow(&model::Hosted::Names.purpose("finder", &hosts));
         let task = hosted_task(&net, "finder", model::Hosted::Names, &hosts).expect("its task, once allowed");
-        assert_eq!(net.tasks_running(), vec![("lookup:finder@names.example.org".to_string(), Some(hosts.clone()))]);
+        assert_eq!(net.tasks_resting(), vec![("lookup:finder@names.example.org".to_string(), Some(hosts.clone()))]);
         task.finish(true);
         // (the plugin updated to name another host: another purpose, not allowed till asked of again)
         assert!(hosted_task(&net, "finder", model::Hosted::Names, &["names.example.org".to_string(), "other.example.net".to_string()]).is_none());
         assert_eq!(net.running(), 0);
+    }
+
+    #[test]
+    fn a_names_plugins_worker_that_runs_on_after_its_answer_has_its_network_task_ended_with_the_answer() {
+        let Some(python) = a_python() else {
+            assert!(std::env::var_os("CI").is_none(), "no Python on CI: the names worker test did not run");
+            eprintln!("no Python here: not run");
+            return;
+        };
+        let dir = std::env::temp_dir().join(format!("meno-names-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        // (a worker that answers each name it is asked and runs on, as a plugin's does; asked to hold, it answers nothing)
+        let worker = dir.join("worker.py");
+        fs::write(&worker, "import json, sys\nfor line in sys.stdin:\n    asked = json.loads(line)\n    if asked['op'] == 'find_name':\n        print(json.dumps({'id': asked['id'], 'ok': True, 'result': []}), flush=True)\n").unwrap();
+        let net = net::Net::default();
+        let told = net.told();
+        let hosts = vec!["names.example.org".to_string()];
+        net.allow(&model::Hosted::Names.purpose("finder", &hosts));
+        let tasks = || -> Vec<serde_json::Value> {
+            let mut out: Vec<serde_json::Value> = Vec::new();
+            for (_, t) in told.lock().unwrap().iter().filter(|(e, _)| e == "net:task") {
+                match out.iter_mut().find(|o| o["id"] == t["id"]) {
+                    Some(o) => *o = t.clone(),
+                    None => out.push(t.clone()),
+                }
+            }
+            out
+        };
+        let state = Arc::new(ProcState(Mutex::new(HashMap::new())));
+        let mut child = Command::new(python).arg(&worker).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let stdout = child.stdout.take().unwrap();
+        let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
+        state.lock().insert("w1".into(), (child, stdin));
+        let models = Arc::new(model::Models::new(Box::new(model::MemoryKeys(Mutex::new(HashMap::new())))));
+        models.started("w1", "finder", model::Hosted::Names, hosted_task(&net, "finder", model::Hosted::Names, &hosts));
+        let out = {
+            let models = models.clone();
+            std::thread::spawn(move || read_worker_output(&models, "w1", stdout, true, |_| {}))
+        };
+        let until = |what: &dyn Fn(&[serde_json::Value]) -> bool| {
+            let by = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while !what(&tasks()) && std::time::Instant::now() < by {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            tasks()
+        };
+        // (a name looked up, as the page asks: its task begun, then ended with the answer - the worker running on)
+        write_asked(&models, &state, "w1", "{\"id\":1,\"op\":\"find_name\",\"name\":\"aspirin\",\"most\":5}\n").unwrap();
+        let seen = until(&|t| t.len() == 1 && t[0]["ended"].is_number());
+        assert_eq!(seen.len(), 1, "one task for the look-up: {seen:?}");
+        assert_eq!(seen[0]["outcome"], "done", "the look-up's task ended with its answer: {seen:?}");
+        assert_eq!(net.running(), 0);
+        assert!(matches!(state.lock().get_mut("w1").map(|(c, _)| c.try_wait()), Some(Ok(None))), "the worker runs on");
+        // (asked what it does not answer: its task still under way, its notice kept)
+        write_asked(&models, &state, "w1", "{\"id\":2,\"op\":\"hold\"}\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let seen = tasks();
+        assert_eq!(seen.len(), 2, "{seen:?}");
+        assert!(seen[1]["ended"].is_null() && net.running() == 1, "a request unanswered keeps its task: {seen:?}");
+        // (stopped, as ext_kill stops it, the request still unanswered: that task failed)
+        stop_worker(&models, &state, "w1");
+        out.join().unwrap();
+        assert_eq!(tasks()[1]["outcome"], "failed");
+        assert_eq!((net.running(), net.tasks_resting().len()), (0, 0));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_answer_that_comes_in_two_reads_ends_its_look_ups_network_task_as_one_line() {
+        /// A worker's output that comes a piece at a time, each piece one read.
+        struct Pieces(std::collections::VecDeque<&'static [u8]>);
+        impl Read for Pieces {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                let Some(piece) = self.0.pop_front() else { return Ok(0) };
+                buf[..piece.len()].copy_from_slice(piece);
+                Ok(piece.len())
+            }
+        }
+        let net = net::Net::default();
+        let told = net.told();
+        let hosts = vec!["names.example.org".to_string()];
+        net.allow(&model::Hosted::Names.purpose("finder", &hosts));
+        let models = model::Models::new(Box::new(model::MemoryKeys(Mutex::new(HashMap::new()))));
+        models.started("w1", "finder", model::Hosted::Names, hosted_task(&net, "finder", model::Hosted::Names, &hosts));
+        models.asking("w1", "{\"id\":1,\"op\":\"find_name\",\"name\":\"aspirin\"}\n");
+        let output = Pieces([&b"{\"id\":1,\"o"[..], &b"k\":true,\"result\":[]}\n"[..]].into_iter().collect());
+        let mut lines = Vec::new();
+        // (read to its end: the worker gone - had the answer not been heard whole, its look-up would end failed)
+        read_worker_output(&models, "w1", output, true, |l| lines.push(l));
+        assert_eq!(lines, vec!["{\"id\":1,\"ok\":true,\"result\":[]}".to_string()]);
+        let ends: Vec<serde_json::Value> = told.lock().unwrap().iter().filter(|(e, t)| e == "net:task" && t["ended"].is_number()).map(|(_, t)| t.clone()).collect();
+        assert_eq!(ends.len(), 1, "{ends:?}");
+        assert_eq!(ends[0]["outcome"], "done");
     }
 
     #[test]

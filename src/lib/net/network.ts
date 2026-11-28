@@ -23,6 +23,10 @@ export type NetTask = {
   started: number;
   ended?: number | null;
   outcome?: "done" | "failed" | null;
+  /** Why it failed, or what stopped it, where it said. */
+  reason?: string | null;
+  /** Where the chemist stopped it while it was under way: Meno set to work offline, or its yes withdrawn (net.rs `Task::stopped`). */
+  stopped?: "offline" | "withdrawn" | null;
 };
 
 /** One connection, or one refused. */
@@ -39,6 +43,8 @@ export type NetConnection = {
   received: number;
   outcome: "open" | "done" | "failed" | "blocked";
   reason?: string | null;
+  /** Cut as the chemist stopped its task (`NetTask.stopped`): on the record as refused, no refusal of theirs on its card. */
+  stopped?: "offline" | "withdrawn" | null;
 };
 
 /** A purpose's first use of the network, waiting on the user's yes or no. */
