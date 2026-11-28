@@ -13,10 +13,10 @@ import { offersOf, type CatalogueEntry, type Offer } from "../../../lib/plugins/
 import { getPlugin, listOnline, useOnline, type Online } from "../../../lib/plugins/online";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
-import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
+import { locate, lookAgainOnceDone, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
 import { showSettingsSection } from "./section";
-import { usePluginsHere } from "../../../lib/plugins/known";
+import { onPluginsChanged, usePluginsHere } from "../../../lib/plugins/known";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
@@ -74,7 +74,12 @@ export default function PluginSettings() {
     const look = () => void lookForAll(PLUGINS);
     look();
     window.addEventListener("focus", look);
-    return () => window.removeEventListener("focus", look);
+    // (and again as a plugin's Add, update or Remove has finished: its row says what is there, at once)
+    const stop = lookAgainOnceDone(useReaders, onPluginsChanged, () => PLUGINS);
+    return () => {
+      window.removeEventListener("focus", look);
+      stop();
+    };
   }, []);
   return (
     <div className="space-y-3">
