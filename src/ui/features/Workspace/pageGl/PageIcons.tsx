@@ -1,6 +1,6 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { runningTick } from "./runningTick";
+import { useRunningMotion } from "./useRunningMotion";
 import * as THREE from "three";
 import { colourHex } from "../../../theme/colors";
 import { atlasVersion, CELL, cellOf, pageIconDrawing, pageIconNames, type PageIcon } from "./icons";
@@ -189,13 +189,14 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     invalidate();
     return () => g.dispose();
   }, [items, ready, material, invalidate]);
-  // (one turning on its own: the time told to the shader at each frame drawn, and a frame asked for, thirty a second, while any turns)
+  // (one turning on its own: how far it has turned told to the shader at each frame drawn, and a frame asked for, thirty a second,
+  //  while any turns and the page is seen - none asked unseen, or where the system asks for less motion: runningTick)
   const spinning = items.some((t) => t.spin);
-  const tick = useMemo(runningTick, []);
-  useEffect(() => tick.stop, [tick]);
-  useFrame(({ clock, invalidate: again }) => {
+  const tick = useRunningMotion(spinning);
+  useFrame(({ invalidate: again }, dt) => {
     if (!spinning) return;
-    material.uniforms.uTime.value = clock.elapsedTime;
+    tick.step(dt);
+    material.uniforms.uTime.value = tick.time();
     tick.ask(again);
   });
   return ready ? <mesh ref={mesh} material={material} renderOrder={order} frustumCulled={false} visible={false} /> : null;

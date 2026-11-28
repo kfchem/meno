@@ -170,6 +170,13 @@ in 3D, arrows, text - and is made of three things:
 - **Wires.** Curves from port to port, leaving and arriving level; while
   a step runs, the wire into it moves (a slow dash),
   and goes still when it is done.
+- **Running, unseen.** A running step's icon turns and its wire's dashes
+  move only while the page can be seen: with Meno's window hidden or
+  minimised, or the page's tab not the one shown, they ask nothing of the
+  computer's graphics, and shown again they go on where they stood. A
+  window merely behind another still moves - a run is watched beside
+  other work. Where the system asks for less motion, they stand still:
+  the running icon and the dashed wire still say that it runs.
 
 They are page items, as an arrow or a molecule in 3D is: they lie on the
 page, at the page's scale, zoom and pan with it, and are saved with it.
