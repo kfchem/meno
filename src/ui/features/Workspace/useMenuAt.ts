@@ -1,5 +1,9 @@
 import { useLayoutEffect, type RefObject } from "react";
 import { placeMenu } from "./menuAt";
+import { DURATION } from "../../theme/motion";
+
+/** How long a menu takes to go to its new place as it grows, in ms: as something coming into view does. */
+const EASE_MS = DURATION.base * 1000;
 
 /** What a menu needs of the canvas to stand at a point on the page and keep it there. */
 export type MenuAnchor = {
@@ -34,25 +38,33 @@ export function useMenuAt(ref: RefObject<HTMLElement | null>, from: { x: number;
 /**
  * A menu's element `el` stood at `from` on the canvas (`useMenuAt`), and kept
  * there frame by frame, and as it grows, until the stop it returns is called.
+ * Kept at its point as the view moves, it goes with the page at once; placed
+ * again as it grows - a panel opened in it, upward - it eases there, as all
+ * that moves in Meno does.
  */
 export function standMenu(el: HTMLElement, from: { x: number; y: number }, anchor: MenuAnchor): () => void {
   let last = "";
   // (the point on the page that it was opened at, taken once)
   const at = anchor.world(from);
-  const place = () => {
+  let lastAt = "";
+  const place = (grown = false) => {
     const p = (at && anchor.project(at)) ?? from;
+    const atKey = `${p.x},${p.y}`;
     const view = anchor.room() ?? { width: Infinity, height: Infinity, cover: 0 };
     const c = placeMenu(p, { width: el.offsetWidth, height: el.offsetHeight }, view, view.cover);
     const key = `${c.left},${c.top},${c.up},${c.leftward}`;
     if (key === last) return;
+    // (eased only where the page has not moved under it: with the page, it goes at once, as the page does)
+    el.style.transition = last && grown && atKey === lastAt ? `left ${EASE_MS}ms var(--ease-meno), top ${EASE_MS}ms var(--ease-meno)` : "none";
     last = key;
+    lastAt = atKey;
     el.style.left = `${c.left}px`;
     el.style.top = `${c.top}px`;
     // (it grows in from the corner nearest its point: from below where it opened upward)
     el.style.transformOrigin = `${c.up ? "bottom" : "top"} ${c.leftward ? "right" : "left"}`;
   };
   place();
-  const ro = new ResizeObserver(place);
+  const ro = new ResizeObserver(() => place(true));
   ro.observe(el);
   let frame = requestAnimationFrame(function follow() {
     place();

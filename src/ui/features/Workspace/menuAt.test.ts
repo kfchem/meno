@@ -87,7 +87,7 @@ describe("a menu stood on the canvas (standMenu)", () => {
     return a;
   };
   // (a stand-in for the menu's element: the tests run with no DOM)
-  const element = (width: number, height: number) => ({ offsetWidth: width, offsetHeight: height, style: { left: "", top: "", transformOrigin: "" } }) as unknown as HTMLElement;
+  const element = (width: number, height: number) => ({ offsetWidth: width, offsetHeight: height, style: { left: "", top: "", transformOrigin: "", transition: "" } }) as unknown as HTMLElement;
   let frames: FrameRequestCallback[] = [];
   beforeEach(() => {
     shift = { x: 0, y: 0 };
@@ -142,6 +142,31 @@ describe("a menu stood on the canvas (standMenu)", () => {
     shift = { x: 0, y: 260 };
     nextFrame();
     expect(el.style.top).toBe(`${560 + MENU_OFF - 100}px`);
+    // (going with the page, it is not eased: it is where the page has it, frame by frame)
+    expect(el.style.transition).toBe("none");
+    stop();
+  });
+
+  it("grown upward - a panel opened in it, low in the window - eases to its new place, the view as it is", () => {
+    let grow: () => void = () => {};
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(f: () => void) {
+          grow = f;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const box = { offsetWidth: 300, offsetHeight: 40, style: { left: "", top: "", transformOrigin: "", transition: "" } };
+    const el = box as unknown as HTMLElement;
+    const stop = standMenu(el, { x: 300, y: 560 }, anchor({ width: 800, height: 600, cover: 0 }));
+    expect(el.style.top).toBe(`${560 + MENU_OFF - 40}px`);
+    box.offsetHeight = 75;
+    grow();
+    expect(el.style.top).toBe(`${560 + MENU_OFF - 75}px`);
+    expect(el.style.transition).toContain("top");
     stop();
   });
 });
