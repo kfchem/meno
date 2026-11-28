@@ -15,16 +15,21 @@ CI, which is why nothing in the workflow calls it.
 With -Tutorial it records one of the manual's "How do I...?" pages instead
 (MenoTutorial.psm1): a script in tutorials/, its steps' shots and marks
 written into site/manual/how-to/<page>/, its window 1200x780 unless told.
+-ReadyHome (or MENO_TUTORIAL_HOME) names the prepared home a tutorial's
+New-TutorialHome -Ready copies: one a person made by hand, outside the
+repository (README, Recording a how-to page).
 
 .EXAMPLE
 pwsh scripts/gui/run.ps1 -Scenario drag-atoms
 pwsh scripts/gui/run.ps1 -Scenario drag-atoms -Out .gui-runs/before
-pwsh scripts/gui/run.ps1 -Tutorial draw-3d
+pwsh scripts/gui/run.ps1 -Tutorial draw-3d -ReadyHome <prepared home>
 #>
 [CmdletBinding()]
 param(
     [string] $Scenario,
     [string] $Tutorial,
+    # The prepared home a tutorial copies (New-TutorialHome -Ready); else MENO_TUTORIAL_HOME.
+    [string] $ReadyHome,
     [string] $Out,
     # What `npm run tauri build` last produced by default; point this at
     # another build to test that one instead.
@@ -70,7 +75,8 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
 if ($Tutorial) {
     Import-Module (Join-Path $PSScriptRoot "MenoTutorial.psm1") -Force
-    Start-Tutorial -Raw $Out -Dest (Join-Path (Resolve-Path "$PSScriptRoot/../..") "site/manual/how-to/$Tutorial") -Version (Get-MenoVersion -Path $(if ($Exe -match "^(.*\.app)/Contents/MacOS/") { $Matches[1] } else { $Exe }))
+    $repository = (Resolve-Path "$PSScriptRoot/../..").Path
+    Start-Tutorial -Raw $Out -Dest (Join-Path $repository "site/manual/how-to/$Tutorial") -Ready (Resolve-ReadyHome -Given $ReadyHome) -Repository $repository -Version (Get-MenoVersion -Path $(if ($Exe -match "^(.*\.app)/Contents/MacOS/") { $Matches[1] } else { $Exe }))
 }
 
 $script:StepNo = 0
@@ -457,5 +463,7 @@ try {
         Get-MenoApp | ForEach-Object {
             Close-MenoProcess -Process $_
         }
+        # (each copy of a prepared home the tutorial made, taken away with Meno closed)
+        if ($Tutorial) { Remove-TutorialHomes }
     }
 }

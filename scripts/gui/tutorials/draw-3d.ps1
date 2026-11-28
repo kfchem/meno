@@ -1,9 +1,19 @@
 # How do I draw a structure and see it in 3D? The card Meno shows as it
 # first starts, "Set up chemistry?" - the reader's to answer, so it is shot
 # in an empty home and answered "Not now" there - then a ring led round with
-# the pointer, and its 3D structure from its right-click menu, recorded in
-# the computer's own Meno, where chemistry is set up: the 3D structure
-# rising out of the drawing.
+# the pointer, and its 3D structure from its right-click menu, recorded in a
+# copy of the prepared home, where a person added the plugin by hand: the 3D
+# structure rising out of the drawing.
+#
+# The copy holds the plugin but not its environment, which Meno sets up
+# again the first time the plugin is asked - over the network, under a yes
+# the copy carries only with New-TutorialHome -Ready -PluginEnvironments
+# (README, The prepared home). That switch is not given here until the
+# person who prepared the home has agreed to it. Until then Meno asks at the
+# first step that needs the plugin - make-3d, or lead-ring already where the
+# drawing's checks ask it as the ring closes - and the run stops after
+# make-3d, where it looks for a question, with nothing pressed: the steps
+# from that question on, and the result, cannot be recorded.
 
 Set-Tutorial -Needs "RDKit"
 
@@ -46,8 +56,8 @@ function Wait-NoNotice {
     throw "a notice about keeping Meno up to date stayed for a minute: no picture taken with it"
 }
 
-# the rest where chemistry is set up: the computer's own Meno
-Start-Meno
+# the rest where chemistry is set up: a copy of the prepared home
+Start-Meno -HomeFolder (New-TutorialHome -Ready)
 Wait-NoNotice -FirstSec 8
 Step open-quick-add DoubleClick -At (Point $start[0] $start[1])
 Wait-NoNotice

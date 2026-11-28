@@ -3,6 +3,10 @@
 # question has one yes, "Allow and download" - and the card Meno shows as it
 # first starts (src/ui/network/FirstSetUpCard.tsx), "Set up chemistry?", has
 # its own, "Set up", as has Settings' set-up of a plugin, "Set up <plugin>";
+# the card's question about keeping Meno up to date has "Keep up to date",
+# and what fetches or applies something allowed before - the card's "Try
+# again", Settings' "Update all (n)" and "Update to <version>" of a plugin,
+# and "Restart now" into a newer Meno - is taken for a yes as well;
 # a click or a drag that would
 # press it, or a key that would - one sent while it has the focus, Escape
 # (a no) aside - stops the run before anything is sent, on either desktop.
@@ -23,8 +27,9 @@
 # MENO_GUI_ANSWER_NETWORK_YES=1, set by hand for one run, lets such input
 # through, saying so. Nothing in the repository sets it.
 
-# (the yes of each: "Allow and download", "Allow ..."; the first start's card's "Set up", Settings' "Set up <plugin>")
-$script:YesNames = @("Allow*", "Set up", "Set up *")
+# (the yes of each: "Allow and download", "Allow ..."; the first start's card's "Set up", Settings' "Set up <plugin>";
+# the card's "Keep up to date" and "Try again"; Settings' "Update all (n)", "Update to <version>"; "Restart now" into an update)
+$script:YesNames = @("Allow*", "Set up", "Set up *", "Keep up to date", "Try again", "Update all*", "Update to *", "Restart now")
 $script:ButtonRoles = @("AXButton", "Button")
 # (what a Mac's hit test lands on before the web view has built its page's parts: the page itself, or what holds it)
 $script:PageHolders = @("AXWebArea", "AXScrollArea", "AXWindow", "AXApplication", "")
@@ -149,7 +154,7 @@ function Test-NetworkYes {
       .SYNOPSIS
       Whether a part of the window - its chain of "role<TAB>name", itself
       first, then what it sits in - is the yes of a question about the
-      network, or in it: a button named Allow..., or Set up.
+      network, or in it: a button named as one of $script:YesNames.
     #>
     param([AllowEmptyCollection()] [string[]] $Chain = @())
     foreach ($link in $Chain) {
