@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { atomGlyphsOf, atomNumbersOf, glyphCode, glyphsWidth, PRIME_WIDTH, SUP_SIZE, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX, ballNumberUniforms } from "./atomNumbers";
+import * as THREE from "three";
+import { atomGlyphsOf, atomNumbersOf, glyphCode, glyphsWidth, PRIME_WIDTH, SUP_SIZE, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX, ballNumberUniforms, placesViewKey } from "./atomNumbers";
 
 describe("atom numbers", () => {
   it("are each atom's place, counted from 1, or its atom-map number where it has one", () => {
@@ -102,5 +103,47 @@ describe("a number on a ball as its glyphs: digits, a locant's letters, primes a
 describe("atom numbers on the balls on the page", () => {
   it("have no least height there: drawn at any size, scaled with the zoom (a picture sets its own)", () => {
     expect(ballNumberUniforms().least.value).toBe(0);
+  });
+});
+
+describe("where the numbers go, as the page zooms and pans", () => {
+  // (three made-up balls, hiding some of each other as seen)
+  const centres = [0, 0, 0, 0.5, 0.1, 0.4, -0.3, 0.45, 0.8];
+  const radii = [0.6, 0.5, 0.55];
+  const heights = [0.78, 0.78, 0.78];
+  const digits = [1, 1, 1];
+  const at = (k: number, dx: number, dy: number, dz: number) => {
+    const out = new Float32Array(9);
+    numberPlaces(
+      centres.map((c, i) => c * k + [dx, dy, dz][i % 3]),
+      radii.map((r) => r * k),
+      heights,
+      digits,
+      out,
+    );
+    return [...out];
+  };
+
+  it("stand where they stood on their balls, the molecule moved and scaled as a zoom moves and scales it", () => {
+    const here = at(1, 0, 0, 0);
+    expect(here.some((v, i) => i % 3 !== 2 && v !== 0)).toBe(true);
+    for (const [k, x, y, z] of [
+      [2, 0, 0, 0],
+      [0.5, 3, -2, -7],
+      [1.7, -0.25, 0.5, 1],
+    ])
+      at(k, x, y, z).forEach((v, i) => expect(v).toBeCloseTo(here[i], 6));
+  });
+
+  it("are worked out again as the molecule turns, not as its view is moved or scaled", () => {
+    const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, -0.9, 0.3));
+    const view = (k: number, x: number, y: number, z: number, q = turn) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(k, k, k));
+    const key = placesViewKey(view(1, 0, 0, -5));
+    expect(placesViewKey(view(1.06, 0.3, -0.2, -5))).toBe(key);
+    expect(placesViewKey(view(40, -12, 8, -9))).toBe(key);
+    const turned = turn.clone().premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.01));
+    expect(placesViewKey(view(1, 0, 0, -5, turned))).not.toBe(key);
+    // (a mirror image is not the molecule turned)
+    expect(placesViewKey(new THREE.Matrix4().makeScale(1, 1, -1).multiply(view(1, 0, 0, -5)))).not.toBe(key);
   });
 });
