@@ -151,6 +151,11 @@ pure logic only. The built app is checked with real pointer and keyboard input
 by the harness in [`scripts/gui/`](scripts/gui/README.md), run by hand on
 Windows and macOS.
 
+The type check keeps what it learnt in `.cache/tsc/` (ignored by git), so the
+next `npm run typecheck` or `npm run build` checks again only the files that
+changed and those that depend on them; deleting the folder makes the next run
+start from nothing. Nothing else changes: it reports the same errors.
+
 Rust-side checks (run from `src-tauri/`):
 
 ```bash

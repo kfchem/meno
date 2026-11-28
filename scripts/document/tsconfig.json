@@ -1,6 +1,6 @@
 {
   "//": "The document script runs the app's own code (build.ts, build.stage.ts), so it is typechecked with it, against the app's settings: a change to the document breaks the build, not a file.",
   "extends": "../../tsconfig.json",
-  "compilerOptions": { "noEmit": true },
+  "compilerOptions": { "noEmit": true, "tsBuildInfoFile": "../../.cache/tsc/scripts-document.tsbuildinfo" },
   "include": ["*.ts", "../../src"]
 }

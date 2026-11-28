@@ -20,7 +20,7 @@ const NATIVE_CONTROLS_NOT_YET = Object.keys(LOOK.notYet.nativeControls);
 const COLOUR_LITERALS_NOT_YET = Object.keys(LOOK.notYet.colourLiterals);
 
 export default tseslint.config(
-  { ignores: ["dist", "src-tauri"] },
+  { ignores: ["dist", "src-tauri", ".cache"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
