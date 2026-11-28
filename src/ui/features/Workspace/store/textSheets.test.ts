@@ -55,6 +55,47 @@ describe("a text's sheet", () => {
     expect(sheetOf("# Title\n", false).md).toBeUndefined();
   });
 
+  it("counts a Chinese or Japanese letter two across, as wide as it is set: the sheet as wide as its line, cut where it must be", () => {
+    // (worked first: 30 such letters are 60 across - wider than the least 32, narrower than the most 80)
+    const thirty = sheetOf("あ".repeat(30));
+    expect(thirty.cols).toBe(60);
+    expect(thirty.lines[0]).toBe("あ".repeat(30));
+    expect(thirty.w).toBeCloseTo((60 * SHEET_LETTER * SHEET_TYPE_PT + 2 * SHEET_PAD_PT) * POINT);
+    expect(thirty.cut).toBeUndefined();
+    // (mixed, no spaces: "ab" and 40 letters are 82 across - "ab" and 39 of them shown, 80, and the line said to be cut)
+    const mixed = sheetOf(`ab${"漢".repeat(40)}`);
+    expect(mixed.cols).toBe(SHEET_MOST_COLS);
+    expect(mixed.lines[0]).toBe(`ab${"漢".repeat(39)}`);
+    expect(mixed.cut).toBe(1);
+    // (one letter short of room for a wide one: it is left off, not drawn half over the edge)
+    expect(sheetOf(`a${"か".repeat(40)}`).lines[0]).toBe(`a${"か".repeat(39)}`);
+    // (full-width forms too; half-width kana are narrow)
+    expect(sheetOf("ＡＢＣ".repeat(12)).cols).toBe(72);
+    expect(sheetOf("ｱ".repeat(40)).cols).toBe(40);
+  });
+
+  it("says where its text goes on past it, and how many of its lines are cut at its edge", () => {
+    // (45 lines of one letter: the sheet shows 40; the 41st begins after 40 letters and their 40 line ends)
+    const tall = Array.from({ length: 45 }, (_, i) => String.fromCharCode(97 + (i % 26))).join("\n") + "\n";
+    const s = sheetOf(tall);
+    expect(s.more).toBe(80);
+    expect(tall.slice(s.more).split("\n")[0]).toBe(String.fromCharCode(97 + (40 % 26)));
+    expect(s.cut).toBeUndefined();
+    expect(sheetOf("a\n".repeat(SHEET_MOST_LINES)).more).toBeUndefined();
+    expect(sheetOf(`${"x".repeat(90)}\nshort\n${"y".repeat(81)}`).cut).toBe(2);
+    // (Markdown: where the first row it leaves off begins in the text written)
+    const md = Array.from({ length: 400 }, (_, i) => `Paragraph ${i}.`).join("\n\n");
+    const long = sheetOf(md, true);
+    expect(long.more).toBeDefined();
+    expect(md.slice(long.more)).toMatch(/^Paragraph \d+\./);
+    // (the paragraph it begins is the first the sheet's rows leave out; the one before it is shown)
+    const k = Number(/^Paragraph (\d+)/.exec(md.slice(long.more!))![1]);
+    const shownWords = long.md!.laid.rows.slice(0, long.md!.rows).flatMap((r) => r.pieces.map((p) => p.text)).join("");
+    expect(shownWords).toContain(`Paragraph ${k - 1}.`);
+    expect(shownWords).not.toContain(`Paragraph ${k}.`);
+    expect(sheetOf("# Title\n\nSome *words*.\n", true).more).toBeUndefined();
+  });
+
   it("is put on the page an icon, where asked, a row of them, clear of a sheet already there and its name", () => {
     const first = ops.textsInRow([{ name: "a.txt", text: "a" }], { x: 0, y: 0 }, { texts: [] });
     const s = sheetOf("a");

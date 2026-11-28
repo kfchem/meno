@@ -16,7 +16,8 @@ it("builds the manifest's workspace", async () => {
   const file = resolve(process.cwd(), path);
   const folder = dirname(file);
   const manifest = JSON.parse(readFileSync(file, "utf8")) as Manifest;
-  const { bytes } = await buildDocument(manifest, (p) => readFileSync(resolve(folder, p), "utf8"));
+  const { bytes, notes } = await buildDocument(manifest, (p) => readFileSync(resolve(folder, p), "utf8"));
+  for (const note of notes) console.warn(note);
   const out = resolve(folder, manifest.out ?? `${basename(file).replace(/\.json$/i, "")}.meno`);
   writeFileSync(out, bytes);
   console.log(`-> ${out}`);
