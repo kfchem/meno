@@ -211,7 +211,7 @@ function editor() {
   const step = st().addStep("optimise", "tightbind", 10, 0);
   st().connect({ set }, step);
   doc.markSaved();
-  return { doc, st, step };
+  return { doc, st, step, store };
 }
 
 const settle = () => new Promise((go) => setTimeout(go, 0));
@@ -1339,6 +1339,34 @@ describe("a step that runs a plugin's program", () => {
     expect(st().textFlight).toBeNull();
     const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
     expect(ws?.texts.find((t) => t.name === log.name)?.of).toEqual({ step });
+  });
+
+  it("shows the log of a step that is not running as it is - looked at, not followed: its workspace left as saved while another step runs", async () => {
+    const { doc, st, step, store } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+    // (as in a workspace opened again: none of its jobs looked at - and the job's folder gone, its results cleared)
+    store.setState({ jobsSeen: {} });
+    jobs.delete(idOf(1));
+    await st().showStepLog(step);
+    await st().showStepLog(step);
+    const log = st().texts.find((t) => t.name.endsWith("log"))!;
+    expect(log.text).toBe("(Nothing yet)");
+    // (saved; then another step runs, its jobs looked at - and nothing done to this workspace)
+    const other = st().addStep("optimise", "tightbind", 30, 0);
+    st().connect({ set: st().sets[0].id }, other);
+    void st().runStep(other);
+    await settle();
+    await settle();
+    doc.markSaved();
+    await st().lookAtJobs();
+    await st().lookAtJobs();
+    expect(st().texts.find((t) => t.id === log.id)!.text).toBe("(Nothing yet)");
+    expect(doc.history().dirty).toBe(false);
   });
 
   it("shows the log of a step of several jobs in one text - the first, then another chosen - never a text for each", async () => {

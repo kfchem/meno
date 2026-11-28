@@ -1862,8 +1862,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = t.of.step;
     doc.amend((x) => ops.setTextOf(ops.editText(x, text, all || "(Nothing yet)"), text, { step, ...(jobs.length > 1 ? { jobs, job: k } : {}) }), { unsaved: true });
     for (const [job, at] of [...shown]) if (at === text) shown.delete(job);
+    // (followed only while its step runs it: the log of a job ended - or not known in this session, a workspace opened
+    // again, its results cleared - is looked at, not followed, and its text never changes unasked, nor the workspace with it)
     const seen = get().jobsSeen[jobs[k]];
-    if (!seen || !finished(seen.state)) shown.set(jobs[k], text);
+    const underWay = stepOf(doc.getState(), step)?.running?.jobs.some((j) => j.id === jobs[k]);
+    if (underWay && (!seen || !finished(seen.state))) shown.set(jobs[k], text);
   }
 
   /** The texts that show a job's log, followed: what it has said since, added - with no step to undo, and to be kept when the workspace is saved. */
@@ -1876,7 +1879,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       }
       const seen = get().jobsSeen[job];
       const all = await wholeLog(job);
-      if (all !== t.text) doc.amend((x) => ops.editText(x, text, all), { unsaved: true });
+      // (nothing read - none written yet, or none there to read: what it shows stays)
+      if (all && all !== t.text) doc.amend((x) => ops.editText(x, text, all), { unsaved: true });
       if (seen && finished(seen.state)) shown.delete(job);
     }
   }
