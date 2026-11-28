@@ -6,7 +6,7 @@ import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/i
 import { useEditor, useEditorStore } from "../store";
 import { setViewPanning, letViewGoalGo, stopViewGoal, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, tookViewRelaid, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
-import { PAGE_TOUCH, pageTouches } from "./pageTouches";
+import { PAGE_TOUCH, pageTouches, touchBegins } from "./pageTouches";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import { fingersStep, makesPinch, pinchedView, type Pt } from "../../../../lib/input/pinch";
@@ -295,8 +295,8 @@ export function PanZoom2D() {
     const onTouchDown = (e: PointerEvent) => {
       if (e.pointerType !== "touch") return;
       const at = { x: e.clientX, y: e.clientY };
-      if (e.isPrimary && touches.size > 0) {
-        // (a first finger, none other on the screen: what was left of a finger whose lift never came is let go)
+      if (touchBegins(e) && touches.size > 0) {
+        // (a new touch's first finger: what was left of a finger whose lift never came is let go - pageTouches)
         touches.clear();
         unheard.clear();
         first = null;

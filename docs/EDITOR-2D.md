@@ -265,14 +265,21 @@ its fingers, not even one put down on the page while it lasts, so two
 fingers on a PDF in the column pinch the column, and never the page beside
 it. With one finger in the column and another put down on the page, the
 column scrolls under its own and nothing on the page moves. This is
-decided by one listener on the window, put on before any other
-(`ownTouches`, from main.tsx): a finger of a touch not the page's that
-comes down on the page is kept from every listener after it - its down,
-its moves and its lift alike - so nothing on the page hears half of a
-finger's life and is left holding it. What is the page is marked on the
-canvas's box and on the layer the page's HTML is laid in (`PAGE_TOUCH`). A
-first finger (no other on the screen) always begins a new touch, so a
-finger whose lift never came decides nothing.
+decided by one listener on the window (`ownTouches`), put on before any
+other listener there: by `touchesFirst.ts`, the module main.tsx imports
+first, which imports only `pageTouches`, which imports nothing - modules
+are run in the order they are imported, so no other module's code has run
+yet (`touchesFirst.test.ts` keeps that order). A finger of a touch not the
+page's that comes down on the page is kept from every listener after it -
+its down, its moves and its lift or cancel alike - so nothing on the page
+hears one of them without the others. (Its pointerover, pointerleave and
+the like are not kept.) What is the page is marked on the canvas's box and
+on the layer the page's HTML is laid in (`PAGE_TOUCH`). A first finger (no
+other on the screen) always begins a new touch, and so does the next
+finger once the window has been left or hidden - a lift may go unheard
+then - so a finger whose lift never came decides nothing; a finger let go
+of that way is still kept from the page, or still the page's, till its own
+lift.
 
 On Windows Alt pressed and let go on its own does nothing. Windows would
 take it as the keyboard's way into the window's menu, which Meno's window

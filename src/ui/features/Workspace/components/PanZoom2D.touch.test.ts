@@ -89,6 +89,8 @@ vi.mock("../store", () => ({
 
 /** The window: heard first, in the capture phase, then the element a finger came down on, which hears all that finger's later events, unless the window's handler kept the event to itself. */
 const win = Object.assign(new EventTarget(), { setTimeout, clearTimeout });
+/** The document, as far as it tells whether the window is hidden. */
+const shown = Object.assign(new EventTarget(), { visibilityState: "visible" });
 const heldTo = new Map<number, Part>();
 function send(type: string, id: number, x: number, y: number, on?: Part, primary?: boolean) {
   const target = on ?? heldTo.get(id)!;
@@ -128,7 +130,7 @@ let wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 beforeAll(async () => {
   Object.assign(globalThis, { window: win, PointerEvent: Event, KeyboardEvent: Event, HTMLElement: Part });
   const { ownTouches } = await import("./pageTouches");
-  ownTouches(win as never);
+  ownTouches(win as never, shown as never);
   const { PanZoom2D } = await import("./PanZoom2D");
   PanZoom2D();
   fingerScroll(column as never, { scrollBy: (_dx, dy) => scrolled.push(dy), pinch: { begin: () => 0, to: () => {} } }, { ask: () => 1, cancel: () => {} });
@@ -216,6 +218,49 @@ describe("the page's pan and zoom, under fingers", () => {
     send("pointerup", 9, 725, 300);
     send("pointerup", 8, 275, 300);
     expect(scrolled).toEqual([]);
+    expect(await pagePans()).toBe(true);
+  });
+});
+
+describe("a finger whose lift never came", () => {
+  it("off the page, holds its touch under way while the window has it - a finger said not to be first, on the canvas, is that touch's - and once the window is left, the next finger on the canvas pans, whatever it is said to be", async () => {
+    await wait(150);
+    rest();
+    const before = viewAt();
+    send("pointerdown", 30, 700, 300, column, true);
+    // (its lift never heard)
+    drag(31, 300, 300, 100, canvas);
+    expect(viewAt()).toEqual(before);
+    win.dispatchEvent(new Event("blur"));
+    send("pointerdown", 32, 300, 300, canvas, false);
+    for (let i = 1; i <= 5; i++) send("pointermove", 32, 300, 300 + 20 * i);
+    send("pointerup", 32, 300, 400);
+    expect(Math.abs(viewAt().y - before.y)).toBeGreaterThan(50);
+    // (its lift come late: the column's, as its down was)
+    send("pointerup", 30, 700, 300);
+    expect(await pagePans()).toBe(true);
+  });
+
+  it("on the page, once the window is hidden, leaves the next touch in the column to the column - every finger of it, whatever it is said to be", async () => {
+    await wait(150);
+    rest();
+    const heard: string[] = [];
+    for (const type of ["pointerdown", "pointermove", "pointerup"]) column.addEventListener(type, (e) => heard.push(`${type.slice(7)} ${(e as PointerEvent).pointerId}`));
+    send("pointerdown", 40, 300, 300, canvas, true);
+    // (its lift never heard)
+    shown.visibilityState = "hidden";
+    shown.dispatchEvent(new Event("visibilitychange"));
+    shown.visibilityState = "visible";
+    const before = viewAt();
+    send("pointerdown", 41, 650, 300, column, false);
+    send("pointerdown", 42, 750, 300, column, false);
+    send("pointermove", 41, 630, 300);
+    send("pointermove", 42, 770, 300);
+    send("pointerup", 42, 770, 300);
+    send("pointerup", 41, 630, 300);
+    expect(heard).toEqual(["down 41", "down 42", "move 41", "move 42", "up 42", "up 41"]);
+    expect(viewAt()).toEqual(before);
+    send("pointerup", 40, 300, 300);
     expect(await pagePans()).toBe(true);
   });
 });

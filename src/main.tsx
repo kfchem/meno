@@ -1,4 +1,6 @@
-// Before anything else: the page's errors and warnings into Meno's log as well (lib/log)
+// First of all, before any other listener is put on the window: whose a touch is (touchesFirst)
+import "./touchesFirst";
+// Before anything else but that: the page's errors and warnings into Meno's log as well (lib/log)
 import "./lib/logStart";
 // Before anything draws text: where text finds the characters its font lacks.
 import "./ui/fonts/textRenderer";
@@ -12,11 +14,6 @@ import { installCursors } from "./ui/theme/cursors";
 import { watchInput } from "./lib/core/calm";
 import { enumerateWorkerMade } from "./ui/features/Workspace/workflow/enumerateOff";
 import { startIconPictures } from "./ui/iconPictures";
-import { ownTouches } from "./ui/features/Workspace/components/pageTouches";
-
-// Whose a touch is - the page's, or the part of the window it began in -
-// decided before anything else hears a finger (pageTouches)
-ownTouches(window);
 
 // Meno's own pointers, for whatever asks for one (ui/theme/cursors)
 installCursors();
