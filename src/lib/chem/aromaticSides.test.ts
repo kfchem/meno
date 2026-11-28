@@ -111,4 +111,18 @@ describe("ringSides", () => {
     const bonds = [bond(0, 1), bond(1, 2), bond(2, 0), bond(0, 3, 2)];
     expect(ringSides(4, bonds, [..."CCCO"]).has(3)).toBe(false);
   });
+
+  it("counts a five-ring's left-over atom by Meno's aromatic rule, its charge too: an N with a + charge gives no lone pair, a C- gives one", () => {
+    // (a five-ring - its left-over atom 0, C1=C2, C3=C4 - fused at C3=C4 to a four-ring C3, C4, C6, C5: as aromatic, the shared
+    //  double bond goes into the five-ring; not aromatic, into the smaller ring, the four)
+    const bonds = [bond(0, 1), bond(1, 2, 2), bond(2, 3), bond(3, 4, 2), bond(4, 0), bond(3, 5), bond(5, 6), bond(6, 4)];
+    const five = [0, 1, 2, 3, 4];
+    const four = [3, 4, 5, 6];
+    const at = (el: string, charge: number) => into(ringSides(7, bonds, [el, "C", "C", "C", "C", "C", "C"], [charge, 0, 0, 0, 0, 0, 0]), 3);
+    expect(at("N", 0)).toEqual(five);
+    expect(at("N", 1)).toEqual(four);
+    expect(at("O", 1)).toEqual(four);
+    expect(at("C", -1)).toEqual(five);
+    expect(at("C", 0)).toEqual(four);
+  });
 });

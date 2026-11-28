@@ -9,7 +9,8 @@ import { elementOf, endsAsDrawn } from "../chalcogenEnds";
 import { drawnRoundMetal } from "../elements";
 import { canonicalSearched, canonicalWritten, settingCisTrans, symmetryClasses, type SymmetryInput } from "../symmetry";
 import { inSmallRing } from "./candidates";
-import { lonePairCentres } from "./lonePairs";
+import { lonePairCentres, trigonalEnd } from "./lonePairs";
+import { runsOf } from "./runs";
 
 /**
  * Two donors of one metal that its ligand joins by a ring of this many atoms or fewer, the metal counted, are never across: a chelate's
@@ -48,7 +49,8 @@ export type Blank = (
  * them a plain hydrogen, or three and a lone pair it keeps
  * (./lonePairCentres) - an H among the three for a P, As, Sb or Bi (a
  * secondary phosphine's P); a double bond, each end with a group but the other
- * end and no other double bond, in no ring of seven or fewer (./candidates `inSmallRing`); and a
+ * end and no other double bond, each end trigonal-planar (./lonePairs
+ * `trigonalEnd`), in no ring of seven or fewer (./candidates `inSmallRing`); and a
  * run of cumulated double bonds between two carbons, each with a group -
  * even, an axis; odd, a cis or trans. A biaryl's axis is none: only a
  * drawing states one (ST-1.7).
@@ -83,23 +85,26 @@ export function blanksOf(g: SymmetryInput): Blank[] {
     else if (around[i].length + hs(i) === 3 && pyramid(i)) out.push({ kind: "centre", at: i, neighbours: [...around[i], ...(hs(i) ? [-1] : [])], own: [i], sides: [around[i]] });
   }
   const others = (end: number, partner: number) => around[end].filter((m) => m !== partner);
+  const orders = g.atoms.map(() => 0);
+  for (const b of g.bonds) {
+    orders[b.a] += b.order;
+    orders[b.b] += b.order;
+  }
+  const trigonal = (i: number) => trigonalEnd(element(i), g.atoms[i].charge ?? 0, around[i].length, orders[i], hs(i));
   g.bonds.forEach((b, k) => {
     if (b.order !== 2 || b.stereo || doubles[b.a].length !== 1 || doubles[b.b].length !== 1) return;
     const [p, q] = [others(b.a, b.b), others(b.b, b.a)];
-    if (!p.length || !q.length || inSmallRing(g, k)) return;
+    if (!p.length || !q.length || !trigonal(b.a) || !trigonal(b.b) || inSmallRing(g, k)) return;
     out.push({ kind: "bond", at: k, refs: [p[0], q[0]], own: [b.a, b.b], sides: [p, q] });
   });
-  // (a run: from an end of one double bond through atoms of two to the other end of one)
+  // (a run: from an end of one double bond through atoms of two to the other end of one - through a C or an N+ bonded by its two
+  //  double bonds alone, the readers' rule, ./runs `linear`: no blank of an axis where no reader reads one)
   const given = new Set([...(g.axes ?? []), ...(g.cumulated ?? [])].map((x) => [...x.atoms].sort((u, v) => u - v).join(",")));
-  for (let e = 0; e < n; e++) {
-    if (doubles[e].length !== 1 || doubles[doubles[e][0]].length !== 2) continue;
-    let [before, at, count] = [e, doubles[e][0], 1];
-    while (doubles[at].length === 2 && count <= n) {
-      const next = doubles[at].find((m) => m !== before)!;
-      [before, at, count] = [at, next, count + 1];
-    }
-    const f = at;
-    if (f <= e || doubles[f].length !== 1 || element(e) !== "C" || element(f) !== "C" || given.has(`${e},${f}`)) continue;
+  const linearRuns = runsOf({ atoms: g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0 })), bonds: g.bonds }, "linear").all;
+  for (const run of linearRuns) {
+    const [e, f] = [run.atoms[0], run.atoms[run.atoms.length - 1]];
+    const count = run.doubles;
+    if (doubles[e].length !== 1 || doubles[f].length !== 1 || element(e) !== "C" || element(f) !== "C" || given.has(`${e},${f}`)) continue;
     const [p, q] = [others(e, doubles[e][0]), others(f, doubles[f][0])];
     if (!p.length || !q.length) continue;
     out.push({ kind: count % 2 ? "cumulated" : "axis", ends: [e, f], refs: [p[0], q[0]], own: [e, f], sides: [p, q] });

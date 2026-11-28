@@ -73,14 +73,14 @@ describe("an odd cumulene's cis or trans in places", () => {
   };
 
   it("reads cis where the two Cl lie on one side of the run, trans on the two, and nothing where they are turned between", () => {
-    expect(runsFrom3d(around, bonds, placed(0)).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
-    expect(runsFrom3d(around, bonds, placed(180)).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);
-    expect(runsFrom3d(around, bonds, placed(0)).shownOn.cumulated).toEqual([1]);
+    expect(runsFrom3d(around, bonds, placed(0), around.map(() => ({ el: "C" }))).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
+    expect(runsFrom3d(around, bonds, placed(180), around.map(() => ({ el: "C" }))).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);
+    expect(runsFrom3d(around, bonds, placed(0), around.map(() => ({ el: "C" }))).shownOn.cumulated).toEqual([1]);
   });
 
   it("keeps the bound where it stands: a turn with a cosine of 0.7 reads one, of 0.3 none", () => {
     // (45.6 degrees and 72.5 degrees from the one side: the groups' offsets within or past half a quarter turn of in line)
-    expect(runsFrom3d(around, bonds, placed(45.6)).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
-    expect(runsFrom3d(around, bonds, placed(72.5)).cumulated).toEqual([]);
+    expect(runsFrom3d(around, bonds, placed(45.6), around.map(() => ({ el: "C" }))).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
+    expect(runsFrom3d(around, bonds, placed(72.5), around.map(() => ({ el: "C" }))).cumulated).toEqual([]);
   });
 });

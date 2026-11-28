@@ -155,3 +155,44 @@ describe("a sulfinyl H, R-S(=O)-H, keeps no configuration (the chemistry check's
     expect(notCandidate(g, { kind: "centre", at: 1 })).toBe(NOT_CANDIDATE.three);
   });
 });
+
+describe("a double bond's ends: trigonal-planar, or no cis or trans", () => {
+  it("takes no double bond to an ylide's S or P, or to a sulfoximine's or a sulfilimine's S: their ends' groups do not lie in one plane", () => {
+    // (a sulfonium ylide, CH3CH=S(CH3)CH2CH3: its S three groups and a lone pair - a centre, its 'double bond' no cis or trans)
+    expect(found("CC=S(C)CC")).toEqual(["centre 2"]);
+    expect(whyNotBond("CC=S(C)CC", 1, 2)).toBe(NOT_CANDIDATE.notTrigonal);
+    // (a sulfilimine, its S three groups and a lone pair; a sulfoximine charge-separated, its S four; a phosphorus ylide's P, four)
+    expect(found("CS(CC)=NC")).toEqual(["centre 1"]);
+    expect(whyNotBond("CS(CC)=NC", 1, 4)).toBe(NOT_CANDIDATE.notTrigonal);
+    expect(found("C[S+]([O-])(CC)=NC")).toEqual(["centre 1"]);
+    expect(whyNotBond("C[S+]([O-])(CC)=NC", 1, 5)).toBe(NOT_CANDIDATE.notTrigonal);
+    expect(whyNotBond("CC=P(C)(C)CC", 1, 2)).toBe(NOT_CANDIDATE.notTrigonal);
+    // (and none of them a blank to be filled either way)
+    for (const s of ["CC=S(C)CC", "CS(CC)=NC", "C[S+]([O-])(CC)=NC", "CC=P(C)(C)CC"]) expect(blanksOf(graph(s)).filter((b) => b.kind === "bond"), s).toEqual([]);
+  });
+
+  it("keeps one whose ends are trigonal-planar: a sulfine's S (two groups and a lone pair), a silene's Si (three and none)", () => {
+    expect(found("CC=[S+][O-]")).toEqual(["bond 1-2"]);
+    expect(found("CC=[Si](C)CC")).toEqual(["bond 1-2"]);
+  });
+});
+
+describe("what a run goes on through: the readers' rule, a C or an N+", () => {
+  it("offers no axis through an S, a P+ or a B- between two double bonds - no reader reads one there - nor asks one filled", () => {
+    for (const s of ["FC=S=CF", "CC(F)=S=C(F)C", "FC=[P+]=CF", "FC=[B-]=CF"]) {
+      expect(found(s), s).toEqual([]);
+      expect(blanksOf(graph(s)).filter((b) => b.kind === "axis" || b.kind === "cumulated"), s).toEqual([]);
+    }
+  });
+
+  it("keeps the axis of an allene, of a run of four double bonds and of an N+ in the middle, as a candidate and as a blank", () => {
+    for (const [s, axis] of [
+      ["FC=C=CF", "axis 1-3"],
+      ["FC=C=C=C=CF", "axis 1-5"],
+      ["FC=[N+]=CF", "axis 1-3"],
+    ]) {
+      expect(found(s), s).toEqual([axis]);
+      expect(blanksOf(graph(s)).filter((b) => b.kind === "axis").map((b) => ("ends" in b ? b.ends.join("-") : "")), s).toEqual([axis.slice(5)]);
+    }
+  });
+});

@@ -4003,6 +4003,7 @@ function primitivesOf(
     atoms.length,
     bonds,
     atoms.map((a) => a.el),
+    atoms.map((a) => a.charge ?? 0),
   );
   // each atom's bonds, in their order, each once: what a bond's neighbours
   // are read from, rather than from every bond in the drawing

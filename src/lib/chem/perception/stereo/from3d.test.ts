@@ -76,15 +76,15 @@ describe("a configuration read from places", () => {
       const [c5, h4] = [turned(1.2), turned(-1.0)];
       return { 0: [-0.7, 1.2, 0], 1: [0, 0, 0], 2: [1.31, 0, 0], 3: [2.62, 0, 0], 4: [3.32 + c5[0], c5[1], c5[2]], 5: [-0.5, -0.9, 0], 6: [2.62 + h4[0], h4[1], h4[2]] };
     };
-    const square = runsFrom3d(around, bonds, placed(90));
+    const square = runsFrom3d(around, bonds, placed(90), around.map(() => ({ el: "C" })));
     expect(square.axes).toHaveLength(1);
     expect(square.shownOn.axes).toEqual([1]);
-    const mirror = runsFrom3d(around, bonds, placed(-90));
+    const mirror = runsFrom3d(around, bonds, placed(-90), around.map(() => ({ el: "C" })));
     expect(mirror.axes.map((a) => a.sense)).toEqual(square.axes.map((a) => -a.sense));
     // (turned under `FLAT_ALLENE`'s sine from one plane: no hand)
     expect(FLAT_ALLENE).toBe(0.5);
-    expect(runsFrom3d(around, bonds, placed(20)).axes).toEqual([]);
-    expect(runsFrom3d(around, bonds, placed(40)).axes).toHaveLength(1);
+    expect(runsFrom3d(around, bonds, placed(20), around.map(() => ({ el: "C" }))).axes).toEqual([]);
+    expect(runsFrom3d(around, bonds, placed(40), around.map(() => ({ el: "C" }))).axes).toHaveLength(1);
   });
 
   it("reads a centre's sense from its first three neighbours, and none under the tolerance its reader names", () => {

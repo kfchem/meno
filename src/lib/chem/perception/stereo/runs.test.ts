@@ -51,10 +51,9 @@ describe("a run of cumulated double bonds, end to end", () => {
 });
 
 describe("what a run goes on through", () => {
-  it("the reader's: a carbon or an N+ - a sulfur's C=S=C is bent, no run; any atom bonded by two double bonds alone, in 3D", () => {
+  it("the readers': a carbon or an N+ - a sulfur's C=S=C is bent, no run; a neutral N between two double bonds, none", () => {
     const sulfur = chain(["C", "C", "S", "C", "C"], [1, 2, 2, 1]);
     expect(shown(sulfur)).toEqual([]);
-    expect(shown(sulfur, "bondedByTwo")).toEqual([{ atoms: [1, 2, 3], doubles: 2, odd: false }]);
     const nPlus = chain(["C", "C", "N", "C", "C"], [1, 2, 2, 1], [], { 2: 1 });
     expect(shown(nPlus)).toEqual([{ atoms: [1, 2, 3], doubles: 2, odd: false }]);
     const nNeutral = chain(["C", "C", "N", "C", "C"], [1, 2, 2, 1]);
@@ -66,14 +65,13 @@ describe("what a run goes on through", () => {
     const g = chain(["C", "C", "C"], [2, 2], [{ a: 1, b: 3, order: 1 }]);
     (g.atoms as { el: string }[]).push({ el: "C" });
     expect(shown(g)).toEqual([]);
-    expect(shown(g, "bondedByTwo")).toEqual([]);
     expect(shown(g, "twoDoubles")).toEqual([{ atoms: [0, 1, 2], doubles: 2, odd: false }]);
   });
 
   it("an atom of three double bonds is no middle by any rule: a run goes on through two", () => {
     // (C=S(=C)=O, a sulfur with three double bonds)
     const g: RunGraph = { atoms: [{ el: "C" }, { el: "S" }, { el: "C" }, { el: "O" }], bonds: [{ a: 0, b: 1, order: 2 }, { a: 1, b: 2, order: 2 }, { a: 1, b: 3, order: 2 }] };
-    expect(shown(g, "bondedByTwo")).toEqual([]);
+    expect(shown(g)).toEqual([]);
     expect(shown(g, "twoDoubles")).toEqual([]);
   });
 

@@ -157,4 +157,29 @@ describe("the two aromatic forms: identity's (every alternating cycle) and geome
     expect(form.extra).toBe("kept");
     expect(form.bonds.filter((b) => b.stereo)).toEqual([]);
   });
+
+  it("find no Hückel ring that turns back through the bond it starts from: methylenecyclopropene's three-ring, its C=C out of the ring", () => {
+    // (C0=C1, C1-C2, C2=C3, C3-C1: from the single bond C1-C2 the walk reaches C1 again from C3 - the start, not C0 - and stops)
+    const g: ChemGraph = {
+      atoms: Array.from({ length: 4 }, () => ({ el: "C" })),
+      bonds: [
+        { a: 0, b: 1, order: 2 },
+        { a: 1, b: 2, order: 1 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 1, order: 1 },
+      ],
+    };
+    expect(huckelBonds(g.atoms.length, g.bonds).size).toBe(0);
+    expect(huckelForm(g)).toBe(g);
+  });
+
+  it("keep a bond's order where its search runs past the steps it may take: two alike may then be told apart, never two unlike made one", () => {
+    // ([18]annulene, one ring of 18 = 4n + 2: every bond found in full; with the search cut at two steps, none - each keeps its order)
+    const annulene: ChemGraph = { atoms: Array.from({ length: 18 }, () => ({ el: "C" })), bonds: ring(18).map((k) => ({ a: k, b: (k + 1) % 18, order: k % 2 ? 1 : 2 })) };
+    expect(huckelBonds(18, annulene.bonds).size).toBe(18);
+    expect(huckelBonds(18, annulene.bonds, 2).size).toBe(0);
+    // (benzene's ring closes within the same two steps: found)
+    const six = ring(6).map((k) => ({ a: k, b: (k + 1) % 6, order: k % 2 ? 1 : 2 }));
+    expect(huckelBonds(6, six, 2).size).toBe(6);
+  });
 });

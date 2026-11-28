@@ -24,6 +24,16 @@ describe("what a molecule in 3D says of the units it shows no R or S on", () => 
     expect(chipDetails({ count: 1, frame: 0, stereoSaid: stereoSaidRows(m) }, 0).find((g) => g.group === "Stereo")?.rows).toHaveLength(3);
   });
 
+  it("says of an allene that has no hand for lying flat that the groups at its two ends lie in one plane", () => {
+    // (C4=C5=C6, its first double bond said flat - lib/chem/cip/in3d)
+    const allene: Pick<Molecule3D, "atoms" | "bonds" | "stereo"> = {
+      atoms: Array.from({ length: 8 }, (_, i) => ({ el: "C", x: i, y: 0, z: 0 })),
+      bonds: Array.from({ length: 7 }, (_, i) => ({ a1: i, a2: i + 1, order: i === 3 || i === 4 ? 2 : 1 })),
+      stereo: { atoms: { 1: "R" }, bonds: {}, shown: { atoms: [1], bonds: [] }, said: { atoms: {}, bonds: { 3: "flat" } } },
+    };
+    expect(stereoSaidRows(allene)).toEqual([{ label: "C4=C5", text: "No Ra or Sa: the groups at its two ends lie nearly in one plane here." }]);
+  });
+
   it("says nothing where no R or S is shown on it, nor where none has a why", () => {
     expect(stereoSaidRows(chain(8, { atoms: { 1: "R" }, bonds: {}, said }))).toEqual([]);
     expect(stereoSaidRows(chain(8, { atoms: { 1: "R" }, bonds: {}, shown: { atoms: [1], bonds: [] } }))).toEqual([]);

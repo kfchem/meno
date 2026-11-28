@@ -897,7 +897,11 @@ whether their groups are alike is identity's question, below:
   Sb or Bi as without one (a secondary phosphine's P, the maintainer's
   ruling of 2026-11-06), never for an N, S, Se or Te. Identity fills such
   a P as any centre: with two alike groups on it, a wedge sets nothing;
-- a double bond with a group besides the other end on each end, in no
+- a double bond with a group besides the other end on each end, each end
+  trigonal-planar - its neighbours, hydrogens and lone pairs three at most
+  (a sulfine's S is; a sulfonium ylide's or a sulfilimine's S, a
+  sulfoximine's, a phosphorus ylide's P are not: their groups do not lie in
+  one plane with the bond, the same rule identity keeps) - in no
   ring of seven atoms or fewer (P-93.5.1.4.1: there it is cis; for fused
   and bridged rings Meno takes the smallest ring through the bond), and
   not a C=N whose E/Z is none of its own (*Which C=N*, docs/WORKFLOWS.md);

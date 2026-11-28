@@ -301,8 +301,8 @@ function keepsSide(n: number, bonds: readonly ChemBond[]): (b: ChemBond) => bool
 /** The most steps the search for one bond's Hückel ring takes; past it, the bond keeps its order: two alike can then be told apart, never two unlike made one. */
 const RING_STEPS = 100_000;
 
-/** The bonds of Hückel rings, each by its atoms ("a,b", the lower first). */
-export function huckelBonds(n: number, bonds: readonly { a: number; b: number; order: number }[]): Set<string> {
+/** The bonds of Hückel rings, each by its atoms ("a,b", the lower first); `most`, the steps of each bond's search (`RING_STEPS`). */
+export function huckelBonds(n: number, bonds: readonly { a: number; b: number; order: number }[], most = RING_STEPS): Set<string> {
   const mate = new Array<number>(n).fill(-1);
   const doubles = new Array<number>(n).fill(0);
   const triple = new Array<boolean>(n).fill(false);
@@ -334,7 +334,7 @@ export function huckelBonds(n: number, bonds: readonly { a: number; b: number; o
     let steps = 0;
     const walk = (x: number, m: number): boolean => {
       for (const y of singles[x]) {
-        if (++steps > RING_STEPS) return false;
+        if (++steps > most) return false;
         if (y === goal) {
           if (m % 2 === 1) return true;
           continue;

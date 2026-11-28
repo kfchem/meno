@@ -69,7 +69,7 @@
  * In the core (foundation part 14 B), moved unchanged from
  * lib/chem/lonePairCentres, which re-exports it.
  */
-import { drawnRoundMetal } from "../elements";
+import { drawnRoundMetal, metal } from "../elements";
 import { flatRingAtoms } from "../flatRings";
 import { smallestRings } from "../rings";
 import { PYRAMID_VALENCE } from "../hydrogens";
@@ -263,6 +263,23 @@ export const GIVES_A_METAL_A_PAIR: ReadonlySet<string> = new Set(["N", "P", "As"
 export function lonePairOfThree(el: string, charge: number, neighbours: number, bondOrders: number, hs: number): boolean {
   const valence = PYRAMID_VALENCE.get(el) ?? 0;
   return valence > 0 && neighbours + hs === 3 && valence - charge - bondOrders - hs >= 2;
+}
+
+/**
+ * Whether an end of a double bond is a trigonal-planar centre, which a cis or trans across that bond needs: no metal, and its
+ * `neighbours`, its `hs` hydrogens and its lone pairs three at most (VSEPR) - only then do the double bond and the groups on its
+ * ends lie in one plane. A C=C's, a C=N's, an N=N's, a silene's or a disilene's ends are; so is a sulfine's S (two neighbours and
+ * a lone pair: its E and Z are two compounds). A sulfonium ylide's or a sulfilimine's S (three neighbours and a lone pair), a
+ * sulfoxonium ylide's or a sulfoximine's S (four neighbours), a phosphorus ylide's P (four) and a metal carbene's metal are not:
+ * their "double bond" is ylidic or dative, with no planar pi bond to hold a cis or trans. The lone pairs counted as the CIP counts
+ * them (`lonePairOfThree`). The one rule identity (../symmetry `settingCisTrans`), the candidates (./candidates), the blanks
+ * (./units `blanksOf`) and 3D's reader (lib/chem/cip/in3d) ask.
+ */
+export function trigonalEnd(el: string, charge: number, neighbours: number, bondOrders: number, hs: number): boolean {
+  if (metal.has(el)) return false;
+  const groups = neighbours + Math.max(0, hs);
+  if (groups > 3) return false;
+  return !(groups === 3 && lonePairOfThree(el, charge, neighbours, bondOrders, Math.max(0, hs)));
 }
 
 /**

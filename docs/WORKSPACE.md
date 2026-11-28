@@ -855,7 +855,9 @@ Taken on 2026-10-13:
   "No R or S: its groups lie nearly in a plane here." where its places
   give it no sense (its volume under the flat bound, never a sign
   guessed), "No R or S: this N does not keep a configuration." for an N
-  that exchanges its H (as the drawing's tip says it), and the drawing's
+  that exchanges its H (as the drawing's tip says it), "No Ra or Sa: the
+  groups at its two ends lie nearly in one plane here." for an allene
+  whose places give it no hand, and the drawing's
   words for a structure too large to work out; the units of one reason on one row,
   named by their atoms (C4, C7), counted past six. Nothing is said of an
   atom or a bond that is no unit - two of its groups alike (under the
