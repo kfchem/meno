@@ -173,7 +173,7 @@ describe("a 3D look chosen on the canvas or in Settings", () => {
     expect(after.molecules3d!.find((m) => m.id === id)!.look).toBe("secondary");
     expect(fitted(after, look)).toEqual({ count: 4, inside: true, apart: true });
     expect(after.sets![0].x1).toBeGreaterThan(before.sets![0].x1);
-    expect(doc.history().undoLabel).toBe("secondary style");
+    expect(doc.history().undoLabel).toBe("use secondary style");
     doc.undo();
     expect(doc.getState()).toBe(before);
   });
@@ -187,7 +187,7 @@ describe("a 3D look chosen on the canvas or in Settings", () => {
     const swapped: RunWith["extentOf"] = (m, turn) => reachOverFrames({ ...m, id: 0 }, style3dIn(doc.getState().style3d, choice), turn);
     expect(fitted(doc.getState(), swapped)).toEqual({ count: 4, inside: true, apart: true });
     expect(doc.getState().sets![0].x1).toBeGreaterThan(before.sets![0].x1);
-    expect(doc.history().undoLabel).toBe("3D style");
+    expect(doc.history().undoLabel).toBe("change 3D style");
     doc.undo();
     expect(doc.getState()).toBe(before);
     expect(fitted(doc.getState(), look)).toEqual({ count: 4, inside: true, apart: true });

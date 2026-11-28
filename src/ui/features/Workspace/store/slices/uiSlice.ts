@@ -230,7 +230,7 @@ export function createUiSlice(
       const atom = get().model.atoms.find((a) => a.id === atomId);
       if (!atom?.typed) return;
       const typed = atom.typed;
-      doc.edit("label as typed", (d) => ops.setAtomChemistry(d, atomId, { el: typed }));
+      doc.edit("keep label as typed", (d) => ops.setAtomChemistry(d, atomId, { el: typed }));
     },
 
     labelShown: () => set((prev: EditorState) => (prev.labelLeft ? { ...prev, labelLeft: null } : prev)),
@@ -246,14 +246,14 @@ export function createUiSlice(
       })),
 
     setAromaticEnabled: (v: boolean) => {
-      doc.edit("aromatic circles", (d) => ops.setAromaticEnabled(d, v));
+      doc.edit("change aromatic circles", (d) => ops.setAromaticEnabled(d, v));
     },
 
     setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => {
       // (once: the style set and the page converted with it, one step)
       if (!coalesceKey) {
         drag = null;
-        doc.edit("drawing style", (d) => restyledDocument(d, style));
+        doc.edit("change drawing style", (d) => restyledDocument(d, style));
         return;
       }
       // (a slider's tick: from the workspace as its drag began; a new drag,
@@ -261,7 +261,7 @@ export function createUiSlice(
       const now = doc.getState();
       if (!drag || drag.key !== coalesceKey || drag.last !== now) drag = { key: coalesceKey, start: now, last: now };
       const start = drag.start;
-      doc.edit("drawing style", () => restyledDocument(start, style), { coalesceKey });
+      doc.edit("change drawing style", () => restyledDocument(start, style), { coalesceKey });
       drag.last = doc.getState();
     },
 
@@ -271,7 +271,7 @@ export function createUiSlice(
       const style = style3dIn(style3d, useAppSettings.getState().style3d);
       const { turns3d } = get();
       doc.edit(
-        "3D style",
+        "change 3D style",
         (d) => fitResultSets(ops.setDocumentStyle3d(d, style3d), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id]),
         coalesceKey ? { coalesceKey } : undefined,
       );
@@ -285,7 +285,7 @@ export function createUiSlice(
         const style3d = { ...doc.getState().style3d, ...roles };
         const style = style3dIn(style3d, useAppSettings.getState().style3d);
         const { turns3d } = get();
-        doc.edit("3D style", (d) => fitResultSets(ops.setDocumentStyle3d(d, style3d), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id]), step);
+        doc.edit("change 3D style", (d) => fitResultSets(ops.setDocumentStyle3d(d, style3d), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id]), step);
       }
       if (drawing) easeStyle(doc, drawing, undefined, step);
     },
@@ -297,7 +297,7 @@ export function createUiSlice(
     },
 
     toggleAromatic: () => {
-      doc.edit("aromatic circles", (d) =>
+      doc.edit("change aromatic circles", (d) =>
         ops.setAromaticEnabled(d, !d.aromaticEnabled),
       );
     },
@@ -333,11 +333,11 @@ export function createUiSlice(
     },
 
     setRingEnabled: (key: string, v: boolean) => {
-      doc.edit("aromatic circle", (d) => ops.setRingEnabled(d, key, v));
+      doc.edit("change aromatic circle", (d) => ops.setRingEnabled(d, key, v));
     },
 
     toggleRing: (key: string) => {
-      doc.edit("aromatic circle", (d) =>
+      doc.edit("change aromatic circle", (d) =>
         ops.setRingEnabled(d, key, !d.aromaticRings[key]),
       );
     },

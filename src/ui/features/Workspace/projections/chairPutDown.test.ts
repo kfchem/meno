@@ -60,7 +60,7 @@ describe("the chair's icon clicked again", () => {
     expect(second.atoms).toHaveLength(6);
     expect(formOf(second)).toBe(0);
     expect(doc.history().undoDepth).toBe(depth + 1);
-    expect(doc.history().undoLabel).toBe("the chair's other view");
+    expect(doc.history().undoLabel).toBe("show the chair's other view");
     // (where it was: the ring's middle kept, each bond as long; still a chair of the tool's, its depth that view's)
     const mid = (m: typeof first) => ({ x: m.atoms.reduce((t, a) => t + a.x, 0) / 6, y: m.atoms.reduce((t, a) => t + a.y, 0) / 6 });
     expect(mid(second).x).toBeCloseTo(mid(first).x, 9);
@@ -86,7 +86,7 @@ describe("the chair's icon clicked again", () => {
     expect(both.atoms).toHaveLength(12);
     // (the first chair untouched: each of its atoms where it was)
     for (const a of first.atoms) expect(both.atoms.find((b) => b.id === a.id)).toMatchObject({ x: a.x, y: a.y, z: a.z });
-    expect(doc.history().undoLabel).not.toBe("the chair's other view");
+    expect(doc.history().undoLabel).not.toBe("show the chair's other view");
   });
 
   it("puts down another where anything was done since: a group drawn on it, or another edit", () => {

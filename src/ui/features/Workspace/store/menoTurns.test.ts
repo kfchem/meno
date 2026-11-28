@@ -143,6 +143,6 @@ describe("Meno's Duplicates, run from the page", () => {
     const after = st().steps.find((s) => s.id === step)!;
     expect(after.ran).toMatchObject({ ok: true, said: "0:00 \u00b7 2 of 3 kept" });
     expect(st().sets.filter((b) => b.made?.step === step && b.made.holds)).toHaveLength(2);
-    expect(doc.history().undoLabel).toBe("run");
+    expect(doc.history().undoLabel).toBe("run step");
   });
 });

@@ -275,7 +275,7 @@ describe("the Haworth icon clicked again", () => {
     expect(doc.getState().model.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "C", "O"]);
     expect(doc.getState().model.bonds).toHaveLength(5);
     expect(doc.history().undoDepth).toBe(depth + 1);
-    expect(doc.history().undoLabel).toBe("a ring of five");
+    expect(doc.history().undoLabel).toBe("make five-membered ring");
     nearEdge();
     // (in its place: its middle where the six's was, near enough - a ring of five's middle is not a six's)
     expect(Math.hypot(mid().x - where.x, mid().y - where.y)).toBeLessThan(0.5);

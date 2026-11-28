@@ -110,9 +110,9 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
   it("is one step, undone and done again, named for what was done", () => {
     const { doc, st, ac, bd } = editor();
     st().orderCrossing(ac, bd, "behind");
-    expect(doc.history().undoLabel).toBe("bond behind");
+    expect(doc.history().undoLabel).toBe("put bond behind");
     st().orderCrossing(ac, bd, "front");
-    expect(doc.history().undoLabel).toBe("bond in front");
+    expect(doc.history().undoLabel).toBe("put bond in front");
     doc.undo();
     expect(bondOf(st().model, ac).behind).toEqual([bd]);
     doc.undo();

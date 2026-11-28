@@ -32,7 +32,7 @@ export function createInksSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       const before = doc.getState();
       const piece = join != null ? before.inks?.find((k) => k.id === join) : undefined;
       const fresh = before.nextInkId ?? 1;
-      if (!doc.edit("write", (d) => ops.addInkStroke(d, look, stroke, join))) return null;
+      if (!doc.edit("write by hand", (d) => ops.addInkStroke(d, look, stroke, join))) return null;
       // (on the piece it joined, if it did)
       return piece && doc.getState().inks?.find((k) => k.id === piece.id)?.strokes.length !== piece.strokes.length ? piece.id : fresh;
     },
@@ -42,7 +42,7 @@ export function createInksSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       doc.edit("colour writing", (d) => ops.colourInks(d, ids, color), gesture ? gestureStep(`colour-inks:${gesture}`) : undefined),
     writePdfStroke: (pdf: number, page: number, look: InkLook, stroke: InkStroke, join?: number | null) => {
       const before = doc.getState().pdfs?.find((p) => p.id === pdf)?.inks ?? [];
-      if (!doc.edit("write", (d) => ops.addPdfInkStroke(d, pdf, page, look, stroke, join))) return null;
+      if (!doc.edit("write by hand", (d) => ops.addPdfInkStroke(d, pdf, page, look, stroke, join))) return null;
       const after = doc.getState().pdfs?.find((p) => p.id === pdf)?.inks ?? [];
       // (the piece it joined, or the one it made)
       return after.length > before.length ? after.length - 1 : (join ?? null);

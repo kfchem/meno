@@ -369,15 +369,15 @@ export const createModelSlice = (
     doc.edit(show ? "show atom numbers" : "hide atom numbers", (d) => ops.setAtomNumbers(d, of, show));
   },
   setAtomNumberKind: (molecules: readonly number[], kind: Parameters<typeof ops.setAtomNumberKind>[2]) => {
-    doc.edit("atom numbers' kind", (d) => ops.setAtomNumberKind(d, molecules, kind));
+    doc.edit("change atom numbering", (d) => ops.setAtomNumberKind(d, molecules, kind));
   },
 
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => {
-    doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
+    doc.edit("map atoms", (d) => ops.setAtomMap(d, arrowId, map));
   },
 
   addStructureMaps: (maps: readonly ArrowAtomMap[], replacing: readonly number[] = []) => {
-    if (maps.length) doc.edit("atom map", (d) => ops.addStructureMaps(d, maps, replacing).doc);
+    if (maps.length) doc.edit("map atoms", (d) => ops.addStructureMaps(d, maps, replacing).doc);
   },
 
   joinStructures: (ids: Iterable<number>) => {
@@ -387,7 +387,7 @@ export const createModelSlice = (
 
   separateStructures: (ids: Iterable<number>) => {
     const atoms = [...ids];
-    doc.edit("separate", (d) => ops.separateStructures(d, atoms));
+    doc.edit("separate structures", (d) => ops.separateStructures(d, atoms));
   },
 
   showStructureMaps: (ids: readonly number[], shown: boolean) => {
@@ -397,7 +397,7 @@ export const createModelSlice = (
 
   otherStructureMaps: (ids: readonly number[]) => {
     const of = new Set(ids);
-    doc.edit("other atom map", (d) =>
+    doc.edit("show another atom map", (d) =>
       ops.setStructureMaps(
         d,
         (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.maps.length > 1 ? { ...m, map: { ...m.map, chosen: (m.map.chosen + 1) % m.map.maps.length, shown: true } } : m)),
@@ -436,7 +436,7 @@ export const createModelSlice = (
 
   otherAtomMap: (arrowId: number) => {
     const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
-    if (map && map.maps.length > 1) doc.edit("other atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, chosen: (map.chosen + 1) % map.maps.length, shown: true }));
+    if (map && map.maps.length > 1) doc.edit("show another atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, chosen: (map.chosen + 1) % map.maps.length, shown: true }));
   },
 
   setStereoShown: (of: Parameters<typeof ops.setStereoShown>[1], show: boolean) => {
@@ -505,7 +505,7 @@ export const createModelSlice = (
     const atoms = doc.getState().model.atoms;
     const changing = [...new Set(ids)].map((id) => atoms.find((a) => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a && !!a.radical !== on);
     if (!changing.length) return;
-    doc.edit(on ? "unpaired electron" : "no unpaired electron", (d) =>
+    doc.edit(on ? "add unpaired electron" : "remove unpaired electron", (d) =>
       changing.reduce((acc, atom) => ops.setAtomChemistry(acc, atom.id, { ...atom, radical: on ? "doublet" : undefined }), d),
     );
   },
@@ -537,7 +537,7 @@ export const createModelSlice = (
 
   // (which of two crossing bonds is in front, said from the right-click menu: one step, named for what was done - chem/crossings)
   orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => {
-    doc.edit(how === "front" ? "bond in front" : "bond behind", (d) => ops.orderCrossing(d, bondId, otherId, how));
+    doc.edit(how === "front" ? "put bond in front" : "put bond behind", (d) => ops.orderCrossing(d, bondId, otherId, how));
   },
 
   // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's
@@ -806,7 +806,7 @@ export const createModelSlice = (
       const form: 0 | 1 = was.form === 1 ? 0 : 1;
       const d = chairDrawing({ at: was.at, form, firstId: 1, firstBondId: 1, length: was.length });
       const moves = was.ids.map((id, k) => ({ id, x: d.atoms[k].x, y: d.atoms[k].y, z: d.atoms[k].z }));
-      doc.edit("the chair's other view", (dd) => ops.placeAtoms(dd, moves));
+      doc.edit("show the chair's other view", (dd) => ops.placeAtoms(dd, moves));
       chairPuts.set(get().model, { ...was, form });
       return;
     }
@@ -840,7 +840,7 @@ export const createModelSlice = (
     const middle = was ? was.at : at;
     const drawing = haworthDrawing({ at: middle, size, firstId: 1, firstBondId: 1 });
     const before = new Set(get().model.atoms.map((a) => a.id));
-    if (was) doc.edit(size === 5 ? "a ring of five" : "a ring of six", (d) => ops.appendModel(ops.deleteParts(d, was.ids, []), drawing));
+    if (was) doc.edit(size === 5 ? "make five-membered ring" : "make six-membered ring", (d) => ops.appendModel(ops.deleteParts(d, was.ids, []), drawing));
     else get().pasteModel(centredAt(drawing, at));
     const added = get().model.atoms.filter((a) => !before.has(a.id));
     if (added.length !== size) return;
@@ -1050,7 +1050,7 @@ export const createModelSlice = (
   },
 
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => {
-    doc.edit("arrow", (d) => ops.setArrowForm(d, ids, patch), gesture ? { coalesceKey: `arrow-form:${gesture}` } : undefined);
+    doc.edit("change arrow", (d) => ops.setArrowForm(d, ids, patch), gesture ? { coalesceKey: `arrow-form:${gesture}` } : undefined);
   },
 
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => {
@@ -1134,7 +1134,7 @@ export const createModelSlice = (
   },
 
   setArrowLook: (id: number, look: ArrowLook, coalesceKey?: string) => {
-    doc.edit("arrow style", (d) => ops.setArrowLook(d, id, look), { coalesceKey });
+    doc.edit("change arrow style", (d) => ops.setArrowLook(d, id, look), { coalesceKey });
   },
 });
 

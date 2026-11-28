@@ -252,7 +252,7 @@ describe("a step that runs a plugin's program", () => {
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["tbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)
-    expect(doc.history()).toMatchObject({ dirty: true, undoLabel: "wire" });
+    expect(doc.history()).toMatchObject({ dirty: true, undoLabel: "add wire" });
     expect(readWorkflow({ sets: st().sets, steps: st().steps, wires: st().wires })?.steps[0].running).toEqual(running);
 
     // its job running: the card says so, and what its log says last
@@ -275,7 +275,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.frames).toHaveLength(1);
     expect(st().frames3d[m.id]).toBe(1);
     // its results one step to undo: undone, the run stays over
-    expect(doc.history().undoLabel).toBe("results");
+    expect(doc.history().undoLabel).toBe("add results");
     doc.undo();
     expect(st().molecules3d).toHaveLength(1);
     expect(st().steps.find((s) => s.id === step)!.running).toBeUndefined();
@@ -565,7 +565,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     // (its wire undone while its job runs: nothing comes into it now)
-    expect(doc.history().undoLabel).toBe("wire");
+    expect(doc.history().undoLabel).toBe("add wire");
     doc.undo();
     expect(st().wires).toHaveLength(0);
     end(1);
@@ -2233,7 +2233,7 @@ describe("Render as a step", () => {
     expect(setMembers(st(), set).pictures).toEqual([first[0].id]);
     expect(set.x0).toBeGreaterThan(st().steps.find((s) => s.id === step)!.x + CARD_W);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:12 \u00b7 1 picture" });
-    expect(doc.history().undoLabel).toBe("render");
+    expect(doc.history().undoLabel).toBe("render picture");
 
     // run again: its picture made anew, the earlier one gone - one step to undo
     rendering();

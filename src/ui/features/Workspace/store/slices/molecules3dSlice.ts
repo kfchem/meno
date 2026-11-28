@@ -98,7 +98,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing: number[] = [], key?: string) => {
       if (!made.length) return [];
       const first = doc.getState().nextMolecule3dId ?? 1;
-      const label = replacing.length ? "3D structure made again" : made.length > 1 ? "3D structures" : "3D structure";
+      const label = replacing.length ? "make 3D structure again" : made.length > 1 ? "make 3D structures" : "make 3D structure";
       const ids = made.map((_, i) => first + i);
       // (an undo puts back how the one made again was turned; a redo, how
       // the ones made were)
@@ -327,7 +327,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       // (a result set they no longer fit in that look laid out again, its frame widened: the same step to undo)
       const style = style3dOf(get());
       const { turns3d } = get();
-      doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) =>
+      doc.edit(look === "secondary" ? "use secondary style" : "use primary style", (d) =>
         fitResultSets(ops.setLook3d(d, ids, look), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(ids)),
       );
     },
@@ -335,7 +335,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const style = style3dOf(get());
       const { turns3d } = get();
       doc.edit(
-        "magnification",
+        "change magnification",
         (d) => {
           const both = ops.setMagnified3d(ops.setMagnified2d(d, atoms, k), molecules, k);
           return molecules.length ? fitResultSets(both, (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(molecules)) : both;
@@ -348,7 +348,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const style = style3dOf(get());
       const { turns3d } = get();
       doc.edit(
-        "magnification",
+        "change magnification",
         (d) => fitResultSets(ops.setMagnified3d(d, ids, k), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(ids)),
         gesture ? { coalesceKey: `magnify:${gesture}` } : undefined,
       );
@@ -362,7 +362,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     setFramesConformers: (id: number, on: boolean) => {
       const before = doc.getState();
       const shownBefore = get().frames3d[id];
-      doc.edit(on ? "frames as conformers" : "frames not conformers", (d) =>
+      doc.edit(on ? "treat frames as conformers" : "treat frames as separate", (d) =>
         ops.changeMolecule3d(d, id, (m) => {
           if (on) return { ...m, conformerSet: true };
           const { conformerSet: _set, ...rest } = m;
@@ -459,7 +459,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       if (!g) return;
       // (written once, as its search ends: one step with its making where nothing came between, else one of its own)
       doc.edit(
-        "3D structure",
+        "make 3D structure",
         (d) =>
           ops.changeMolecule3d(d, id, (m) => {
             const { frames: _frames, ...rest } = m;

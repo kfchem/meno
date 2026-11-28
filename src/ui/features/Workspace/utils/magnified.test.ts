@@ -115,7 +115,7 @@ describe("a molecule in 3D shown magnified", () => {
     store.getState().setMagnified3d([id], 1.6, "drag");
     store.getState().setMagnified3d([id], 2, "drag");
     expect(doc.getState().molecules3d![0].magnified).toBe(2);
-    expect(doc.history().undoLabel).toBe("magnification");
+    expect(doc.history().undoLabel).toBe("change magnification");
     doc.undo();
     expect(doc.getState()).toBe(before);
     store.getState().setMagnified3d([id], 0.5);

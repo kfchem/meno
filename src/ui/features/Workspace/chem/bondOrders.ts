@@ -108,7 +108,7 @@ export async function ordersFromSmiles(store: EditorStore, id: number, atom: num
   const chem = await chemWorker("drawing");
   const block = blockOf(m, atoms);
   const r = await chem.request("orders_from_smiles", { molblock: block.molblock, smiles: smiles.trim() }, ORDERS_MS);
-  store.getState().changeMolecule3d("bond orders", id, (cur) => {
+  store.getState().changeMolecule3d("set bond orders", id, (cur) => {
     const next = withOrders(cur, block.atoms, r.molblock);
     if (!next) return cur;
     const left = (cur.biopolymer ? stillUnknown(cur) : []).filter((i) => !block.atoms.includes(i));
@@ -133,7 +133,7 @@ export function estimateOrders(store: EditorStore, id: number, atom: number | nu
     bondsAmong(m, atoms),
   );
   if (!r.decided) throw new Error("Some of these bond orders cannot be told from the distances: give them from a SMILES.");
-  store.getState().changeMolecule3d("bond orders", id, (cur) => {
+  store.getState().changeMolecule3d("set bond orders", id, (cur) => {
     const next = withPartOrders(cur, atoms, r.orders, r.charges);
     const left = (cur.biopolymer ? stillUnknown(cur) : []).filter((i) => !atoms.includes(i));
     const { unknownOrders: _was, ...rest } = withOrdersBy(next, atoms, "estimated");
@@ -180,7 +180,7 @@ export async function ordersFromDictionary(store: EditorStore, id: number): Prom
   const looked = await componentsNamed(residues.map((r) => r.name));
   if (!looked) return null;
   let given = 0;
-  store.getState().changeMolecule3d("bond orders", id, (cur) => {
+  store.getState().changeMolecule3d("set bond orders", id, (cur) => {
     const r = withComponents(cur, looked.components);
     if (!r?.given.length) return cur;
     given = r.given.length;

@@ -278,7 +278,7 @@ describe("molecules in 3D and their drawings", () => {
       { m: { ...water, at: { x: 14, y: 0 } }, turn: [0, 1, 0, 0], from: { x: 1, y: 1 } },
     ]);
     expect(ids).toEqual([3, 4]);
-    expect(doc.history().undoLabel).toBe("3D structures");
+    expect(doc.history().undoLabel).toBe("make 3D structures");
     expect(state().turns3d[4]).toEqual([0, 1, 0, 0]);
     expect(state().rising3d[4].start).toBeGreaterThan(state().rising3d[3].start);
     state().risen3d(3);
@@ -294,7 +294,7 @@ describe("molecules in 3D and their drawings", () => {
     state().riseMolecules3d([{ m: { ...water, at: { x: 0, y: 0 } }, turn: [0, 1, 0, 0], from: { x: 0, y: 0 } }], [1]);
     expect(state().molecules3d.map((m) => m.id)).toEqual([2, 3]);
     expect(state().turns3d[1]).toBeUndefined();
-    expect(doc.history().undoLabel).toBe("3D structure made again");
+    expect(doc.history().undoLabel).toBe("make 3D structure again");
     doc.undo();
     expect(state().molecules3d.map((m) => m.id)).toEqual([1, 2]);
     expect(state().turns3d[1]).toEqual(turned);
@@ -505,7 +505,7 @@ describe("a molecule in 3D switched to its other look", () => {
     const { doc, state } = editor();
     state().switchLook3d(1);
     expect(state().molecules3d.map((m) => m.look)).toEqual(["secondary", undefined]);
-    expect(doc.history().undoLabel).toBe("secondary style");
+    expect(doc.history().undoLabel).toBe("use secondary style");
     state().switchLook3d(1);
     expect(state().molecules3d.map((m) => m.look)).toEqual([undefined, undefined]);
     // selected together, both go over to the other look of the one switched

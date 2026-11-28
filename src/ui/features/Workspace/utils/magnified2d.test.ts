@@ -138,7 +138,7 @@ describe("a structure in 2D shown magnified", () => {
       expect(a.y).toBeCloseTo(propane().atoms[i].y, 9);
       expect(a.magnified).toBeUndefined();
     });
-    expect(doc.history().undoLabel).toBe("magnification");
+    expect(doc.history().undoLabel).toBe("change magnification");
     doc.undo();
     expect(doc.getState()).toBe(before);
   });

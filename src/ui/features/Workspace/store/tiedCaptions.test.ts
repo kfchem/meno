@@ -128,7 +128,7 @@ describe("text that belongs to a structure", () => {
   it("is freed in one step: then left where it is as its structure moves, and never tied again by being near", () => {
     const { doc, state, atoms, id, x0, y0 } = chainWithText();
     state().freeCaption(id);
-    expect(doc.history().undoLabel).toBe("free text");
+    expect(doc.history().undoLabel).toBe("detach text");
     expect(words(state, id)?.of).toBeUndefined();
     state().moveAtoms(state().model.atoms.map((a) => ({ id: a.id, x: a.x + 3, y: a.y })), "drag");
     expect(words(state, id)).toMatchObject({ x: x0 + 1.5, y: y0 - 4.5 });

@@ -68,7 +68,7 @@ describe("a workspace's styles in 3D, in its store", () => {
     const ws = before;
     st().setDocumentStyle3d({ ...ws, primary: ws.secondary, secondary: ws.primary });
     expect(st().docStyle3d.primary.id).toBe("space");
-    expect(doc.history().undoLabel).toBe("3D style");
+    expect(doc.history().undoLabel).toBe("change 3D style");
     doc.undo();
     expect(st().docStyle3d).toBe(before);
     doc.redo();
