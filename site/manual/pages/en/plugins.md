@@ -33,21 +33,3 @@ Settings, *Chemistry*, lists what plugins do for Meno's own work - *Structures f
 Click *Online*, at the top of the window, to work offline - or turn on *Work offline* in Settings, *Network*. Nothing then leaves this computer: nothing is asked, nothing is downloaded, and so no plugin can be set up meanwhile.
 
 Settings, *Network*, keeps the record: what has been allowed, each with *Withdraw* to take the yes back, and every connection since Meno started.
-
-## The plugins Meno offers {#offered}
-
-The list is Meno's list of plugins online, fetched once Meno is allowed to ask for it (Settings, *Network*); it can grow between releases. At the time of writing:
-
-- **RDKit**: makes sense of a structure as it is drawn - hydrogens, valence, aromatic rings, R and S, E and Z - reads and writes SMILES, and makes structures in 3D and their conformers.
-- **MolScribe**, **MolNexTR**: read structures from pictures - a figure a PDF holds as a picture, a screenshot.
-- **Blender**: renders pictures and films of molecules in 3D.
-- **cclib**: reads the outputs of many calculation programs.
-- **PySCF**: works out orbitals and densities on a grid, from a Molden file.
-- **xTB**: optimises molecules in 3D and works out their energies and vibrations.
-- **CREST**: searches for a molecule's conformers in 3D.
-- **ORCA interface**, **Gaussian interface**: optimise molecules in 3D and work out their energies and vibrations, with ORCA or Gaussian 16 installed separately.
-- **Multiwfn interface**, **NCIPLOT interface**: show non-covalent interactions as surfaces coloured by their strength, with Multiwfn or NCIPLOT installed separately.
-- **CReM**: makes new structures from seeds, by replacing their fragments.
-- **REINVENT 4**: makes new molecules with a generative model of SMILES.
-- A plugin that finds a structure by its name in a database outside Meno. In Quick Add, where chemistry is set up and the text typed does not read, *Look it up as a name…* offers it; once it is added, a row under the field offers to look the name up with it. It sends the name and nothing else.
-- A plugin that talks with a model for a conversation on the page; it is chosen, with its key, in Settings, *Conversations*.
