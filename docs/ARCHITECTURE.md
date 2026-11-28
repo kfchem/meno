@@ -1204,10 +1204,18 @@ runner, which has no window to ask, find the same folders as Tauri's
 `app_*_dir` and the window. Meno works a named folder out as Tauri does
 where it begins with `$DATA`, `$LOCALDATA`, `$CONFIG`, `$CACHE` or `$HOME`,
 or is absolute; a folder the config does not name is Tauri's own, under
-the build's identifier. Any other (another of Tauri's variables, or a
-relative path, which Tauri puts beside the app in a place that differs by
-system) Meno does not guess: it does not start, and says why, rather than
-keep anything in the released Meno's folders in their place. What a Meno
+the build's identifier. Two failures are told apart. A name the config
+gets wrong - another of Tauri's variables, or a relative path, which Tauri
+puts beside the app in a place that differs by system - Meno does not
+guess: it does not start, a job's runner with it, rather than keep
+anything in the released Meno's folders in their place. It says why on its
+standard error, which a windowed build shows nobody, so the refusal is for
+whoever builds such a config and starts it from a terminal or a runner. A
+known variable this computer gives no folder for (no data folder; on a Mac
+or Linux a relative `HOME`) is no fault of the config: Meno starts as it
+did before, with no such folder - no log, and a job's runner that finds no
+folder ends without running the job - and never the released Meno's
+folders in its place. What a Meno
 before 0.1.14 kept is still moved into the released Meno's folders, whose
 it is.
 

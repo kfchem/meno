@@ -87,16 +87,23 @@ pub struct Built {
 }
 
 /// The folders of the config Meno was built with, taken at a start (lib.rs
-/// `run`; later calls change nothing) - or why Meno cannot keep its things
-/// where that config says, in which case it must not start: no folder is
-/// then given, never the released Meno's in place of those named.
+/// `run`; later calls change nothing) - or, where the config names a folder
+/// wrongly, why: such a build must not start (no folder is then given,
+/// never the released Meno's in place of those named). A folder this
+/// computer does not give is no reason not to start.
 pub fn built_with(built: Built) -> Result<(), String> {
+    checked(&built, &system_folder)?;
+    let _ = BUILT_WITH.set(built);
+    Ok(())
+}
+
+/// Why `built`'s config names its folders wrongly, where it does - the system's folders as `system` gives them, which play no part.
+fn checked(built: &Built, system: &dyn Fn(&str) -> Option<PathBuf>) -> Result<(), String> {
     for which in [Named::Data, Named::LocalData] {
         if let Some(over) = &built.over {
-            named_by(over, which)?;
+            named_in(over, which, system)?;
         }
     }
-    let _ = BUILT_WITH.set(built);
     Ok(())
 }
 
@@ -107,15 +114,54 @@ pub enum Named {
     LocalData,
 }
 
+/// Where an `appDirectoriesOverride` puts one of Meno's folders.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Where {
+    /// In this folder.
+    At(PathBuf),
+    /// It names none for it: Tauri's own, the system folder under the identifier.
+    NotNamed,
+    /// In a system folder this computer gives none of (no data folder; on a Mac or Linux a relative HOME):
+    /// no folder, as where there is no override - Meno starts, keeps no log, and runs no job.
+    NoneHere,
+}
+
+/// The system folder a variable an override may begin with stands for, as
+/// Tauri finds it (the same `dirs` calls); None where this computer gives
+/// none, or gives one that is not absolute.
+fn system_folder(var: &str) -> Option<PathBuf> {
+    match var {
+        "$DATA" => dirs::data_dir(),
+        "$LOCALDATA" => dirs::data_local_dir(),
+        "$CONFIG" => dirs::config_dir(),
+        "$CACHE" => dirs::cache_dir(),
+        "$HOME" => dirs::home_dir(),
+        _ => None,
+    }
+    .filter(|p| p.is_absolute())
+}
+
+/// The variables Meno works out as Tauri does.
+const KNOWN: [&str; 5] = ["$DATA", "$LOCALDATA", "$CONFIG", "$CACHE", "$HOME"];
+
+/// Where `over` puts folder `which` (`named_in`, this computer's own folders) - a test's way in.
+#[cfg(test)]
+fn named_by(over: &AppDirectoriesOverride, which: Named) -> Result<Where, String> {
+    named_in(over, which, &system_folder)
+}
+
 /// Where `over` puts folder `which`: a path beginning with `$DATA`,
 /// `$LOCALDATA`, `$CONFIG`, `$CACHE` or `$HOME` in that system folder, as
 /// Tauri resolves it; an absolute path as it is; one folder for them all
 /// (`Root`) for both - `.` and a trailing separator dropped, as Tauri does.
-/// None where `over` names none for it. Any other path is refused, with
-/// why: Tauri's other variables, and a relative path (which Tauri puts
-/// beside the app, a folder that differs by system and by how Meno is
-/// installed) - so that Meno never guesses a folder Tauri may not have.
-pub fn named_by(over: &AppDirectoriesOverride, which: Named) -> Result<Option<PathBuf>, String> {
+/// A name the config gets wrong is refused, with why: Tauri's other
+/// variables, and a relative path (which Tauri puts beside the app, a folder
+/// that differs by system and by how Meno is installed) - so that Meno never
+/// guesses a folder Tauri may not have. A known variable this computer
+/// gives no folder for is no fault of the config: `Where::NoneHere`. The
+/// system's folders as `system` gives them (`system_folder`, or a test's
+/// stand-in).
+fn named_in(over: &AppDirectoriesOverride, which: Named, system: &dyn Fn(&str) -> Option<PathBuf>) -> Result<Where, String> {
     let path = match over {
         AppDirectoriesOverride::Root(root) => Some(root),
         AppDirectoriesOverride::Directories(d) => match which {
@@ -123,47 +169,47 @@ pub fn named_by(over: &AppDirectoriesOverride, which: Named) -> Result<Option<Pa
             Named::LocalData => d.local_data.as_ref(),
         },
     };
-    let Some(path) = path else { return Ok(None) };
+    let Some(path) = path else { return Ok(Where::NotNamed) };
     let refused = |why: &str| Err(format!("the folders this Meno was built to keep its things in cannot be worked out: `{}` {why}", path.display()));
     let mut parts = path.components();
     if let Some(std::path::Component::Normal(first)) = parts.next() {
         if let Some(var) = first.to_str().filter(|v| v.starts_with('$')) {
-            let base = match var {
-                "$DATA" => data_base(),
-                "$LOCALDATA" => local_data_base(),
-                "$CONFIG" => dirs::config_dir().filter(|p| p.is_absolute()),
-                "$CACHE" => cache_base(),
-                "$HOME" => dirs::home_dir().filter(|p| p.is_absolute()),
-                _ => return refused(&format!("begins with `{var}`; Meno knows only $DATA, $LOCALDATA, $CONFIG, $CACHE and $HOME")),
-            };
-            let Some(base) = base else { return refused(&format!("begins with `{var}`, a folder this computer has none of")) };
-            return Ok(Some(base.join(parts.as_path()).components().collect()));
+            if !KNOWN.contains(&var) {
+                return refused(&format!("begins with `{var}`; Meno knows only {}", KNOWN.join(", ")));
+            }
+            return Ok(system(var).map_or(Where::NoneHere, |base| Where::At(base.join(parts.as_path()).components().collect())));
         }
     }
     if path.is_absolute() {
-        return Ok(Some(path.components().collect()));
+        return Ok(Where::At(path.components().collect()));
     }
     refused("is not absolute and begins with no folder's variable")
 }
 
-/// Folder `which` as `built` has it: where its override names it, there (or
-/// none, where that cannot be worked out - never the released Meno's in its
-/// place); where it names none, Tauri's own, the system folder's under the
-/// identifier; nothing taken (a test), the released Meno's.
+/// Folder `which` as `built` has it: where its override names it, there -
+/// none where this computer gives no such folder, or where the name cannot
+/// be worked out: never the released Meno's in its place; where it names
+/// none, Tauri's own, the system folder under the identifier; nothing taken
+/// (a test), the released Meno's.
 pub fn folder_of(built: Option<&Built>, which: Named) -> Option<PathBuf> {
+    folder_in(built, which, &system_folder)
+}
+
+/// `folder_of`, the system's folders as `system` gives them.
+fn folder_in(built: Option<&Built>, which: Named, system: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
     let Some(built) = built else {
         return match which {
             Named::Data => meno_data_dir(),
             Named::LocalData => meno_local_data_dir(),
         };
     };
-    match built.over.as_ref().map(|over| named_by(over, which)) {
-        Some(Ok(Some(path))) => Some(path),
-        Some(Err(_)) => None,
-        Some(Ok(None)) | None => match which {
-            Named::Data => data_base(),
-            Named::LocalData => local_data_base(),
-        }
+    match built.over.as_ref().map(|over| named_in(over, which, system)) {
+        Some(Ok(Where::At(path))) => Some(path),
+        Some(Ok(Where::NoneHere) | Err(_)) => None,
+        Some(Ok(Where::NotNamed)) | None => system(match which {
+            Named::Data => "$DATA",
+            Named::LocalData => "$LOCALDATA",
+        })
         .map(|b| b.join(&built.identifier)),
     }
 }
@@ -526,13 +572,13 @@ mod tests {
     fn a_build_given_other_folders_keeps_everything_in_them() {
         // (folders of its own, as a release candidate's config gives them beside tauri.conf.json's)
         let trial = over(r#"{"data":"$DATA/MenoTrial","localData":"$LOCALDATA/MenoTrial/./data/"}"#);
-        assert_eq!(named_by(&trial, Named::Data), Ok(data_base().map(|b| b.join("MenoTrial"))));
-        assert_eq!(named_by(&trial, Named::LocalData), Ok(local_data_base().map(|b| b.join("MenoTrial").join("data"))));
+        assert_eq!(named_by(&trial, Named::Data), Ok(Where::At(data_base().unwrap().join("MenoTrial"))));
+        assert_eq!(named_by(&trial, Named::LocalData), Ok(Where::At(local_data_base().unwrap().join("MenoTrial").join("data"))));
         let built = Built { over: Some(trial), identifier: "dev.example.trial".into() };
         assert_eq!(folder_of(Some(&built), Named::Data), data_base().map(|b| b.join("MenoTrial")));
         // (one folder for them all)
         let root = over(r#""$HOME/MenoTrial""#);
-        assert_eq!(named_by(&root, Named::LocalData), Ok(dirs::home_dir().map(|h| h.join("MenoTrial"))));
+        assert_eq!(named_by(&root, Named::LocalData), Ok(Where::At(dirs::home_dir().unwrap().join("MenoTrial"))));
         // (a folder the override does not name: Tauri's own, the system folder's under the identifier)
         let data_only = Built { over: Some(over(r#"{"data":"$DATA/MenoTrial"}"#)), identifier: "dev.example.trial".into() };
         assert_eq!(folder_of(Some(&data_only), Named::LocalData), local_data_base().map(|b| b.join("dev.example.trial")));
@@ -546,6 +592,22 @@ mod tests {
             }
             assert!(built_with(built).is_err(), "{named}");
         }
+        // (a known variable this computer gives no folder for - no data folder, or a relative HOME, as a
+        // stand-in for the system's answer: no fault of the config, so no refusal and a start, but no folder,
+        // as where there is no override - and never the released Meno's)
+        let none_here = |_: &str| -> Option<PathBuf> { None };
+        let own_folders = Built { over: Some(over(r#"{"data":"$DATA/MenoTrial","localData":"$HOME/MenoTrial"}"#)), identifier: "dev.example.trial".into() };
+        for which in [Named::Data, Named::LocalData] {
+            assert_eq!(named_in(own_folders.over.as_ref().unwrap(), which, &none_here), Ok(Where::NoneHere));
+            assert_eq!(folder_in(Some(&own_folders), which, &none_here), None);
+        }
+        let data_only_here = Built { over: Some(over(r#"{"data":"$DATA/MenoTrial"}"#)), identifier: "dev.example.trial".into() };
+        assert_eq!(folder_in(Some(&data_only_here), Named::LocalData, &none_here), None);
+        // (and what is refused is the config's fault alone, whatever the system gives)
+        let wrong = over(r#"{"data":"$DOCUMENT/MenoTrial"}"#);
+        assert!(named_in(&wrong, Named::Data, &none_here).is_err());
+        assert!(checked(&own_folders, &none_here).is_ok());
+        assert!(checked(&Built { over: Some(wrong), identifier: "dev.example.trial".into() }, &none_here).is_err());
         // (and the config Meno is built with - this platform's over the main one, as the build merges them -
         // names the folders the released Meno's are, both of them, on every platform)
         let read = |name: &str| -> Option<serde_json::Value> { fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(name)).ok().map(|t| serde_json::from_str(&t).unwrap()) };
