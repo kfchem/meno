@@ -98,6 +98,9 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf, cutShort } from "./utils/workspace";
 import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
+import { madeByRun, ranBy, untouchedSince, type PageNow } from "./workflow/runShown";
+import { allToRun, heldByRepeats, stepsAfter } from "./workflow/flow";
+import { actsSoFar, pressHeld, typing } from "./components/pressHeld";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone, pushFromMenu } from "./utils/menuTarget";
@@ -511,6 +514,27 @@ function WorkspaceContent({
     const covered = store.getState().cover / cam.zoom;
     return { x0: cam.position.x - w, x1: cam.position.x + w - covered, y0: cam.position.y - h, y1: cam.position.y + h };
   }, [camRef, domRef]);
+  // A run - Run, Run from here, Run all alike - and the sets its steps made shown once all have ended, where they are not seen
+  // whole - as what is put down is shown (utils/viewShow) - only where the chemist has done nothing on the page since they asked
+  // for it: no press, no key, the same selection, tab and view; else nothing moves and nothing is said (workflow/runShown)
+  const frontNow = useRef(active);
+  frontNow.current = active;
+  const pageNow = useCallback((): PageNow => {
+    const st = store.getState();
+    return { view: viewBox(), acts: actsSoFar(), selected: [st.sel, st.sel3d, st.selFlow], tab: frontNow.current, held: pressHeld(), typing: typing() };
+  }, [store, viewBox]);
+  const runShown = useCallback(
+    async (targets: readonly number[], run: () => Promise<void>) => {
+      const ran = ranBy(store.getState(), targets);
+      const began = pageNow();
+      await run();
+      if (!untouchedSince(began, pageNow())) return;
+      const box = madeByRun(store.getState(), ran);
+      if (box) store.getState().requestShow(box);
+    },
+    [store, pageNow],
+  );
+  const runAllShown = () => runShown(allToRun(store.getState()), () => store.getState().runAll());
   // a talk given from the slide that is most nearly what is seen (docs/PRESENTING.md)
   const presentHere = useCallback(() => {
     const st = store.getState();
@@ -1810,7 +1834,7 @@ function WorkspaceContent({
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
-          { name: "Run all", keys: "", run: () => void store.getState().runAll(), divider: true, note: runAllNote(store.getState()) },
+          { name: "Run all", keys: "", run: () => void runAllShown(), divider: true, note: runAllNote(store.getState()) },
           ...(steps.some((x) => x.running) ? [{ name: "Stop all", keys: "", run: () => store.getState().stopAll() }] : []),
         ]
       : []),
@@ -2370,7 +2394,8 @@ function WorkspaceContent({
             // (a program installed separately found nowhere: Settings, Plugins, where it is located)
             const s = store.getState().steps.find((x) => x.id === menu.id);
             if (s && missingFor(s)) return openSettingsAt("plugins");
-            void store.getState().runStep(menu.id);
+            const id = menu.id;
+            void runShown([id], () => store.getState().runStep(id));
           }}
           step={(() => {
             const s = menu.kind === "step" ? store.getState().steps.find((x) => x.id === menu.id) : undefined;
@@ -2380,7 +2405,7 @@ function WorkspaceContent({
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
-              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id), note: runNote(st, s.id) }),
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void runShown(heldByRepeats(st, [s.id, ...stepsAfter(st, s.id)]), () => st.runFrom(s.id)), note: runNote(st, s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () =>
                     void st
                       .showStepFiles(s.id)

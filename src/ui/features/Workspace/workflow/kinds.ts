@@ -1616,7 +1616,8 @@ export const briefOf = (o: Option) => o.brief ?? o.label.replace(/\s*\([^)]*\)/g
  * switch on by its label, a choice by its name and what is chosen ("Method: GFN2-xTB"), so that two choices alike never
  * read as one twice; several choices with one value said once, the options after it ("Set aside: parts, radicals"), after the
  * rest - so a choice that differs is read first, where a card cuts its line short. One of
- * none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it).
+ * none, a number that sets nothing (its `unset`) and a number not given yet, left out; or as `said` says it (a kind's
+ * `how`, where Meno does it).
  */
 export function howOf(
   options: readonly Option[],
@@ -1646,6 +1647,8 @@ export function howOf(
       // (one taken from a property: by the property's name, "= k", with its unit)
       const from = bound?.[o.id];
       if (from && (o.type === "number" || o.type === "text")) return [`${boundSaid(from)}${o.unit ? ` ${o.unit}` : ""}`];
+      // (a number not given yet - none typed, its field emptied - says nothing: its card asks for it in its state's words)
+      if (o.type === "number" && (typeof v === "number" ? !Number.isFinite(v) : !String(v).trim())) return [];
       if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "choice") {
         const c = chosen(o);

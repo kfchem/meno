@@ -35,7 +35,11 @@ export type EditDone = "field" | "document" | "nothing";
  * its undo (`field`, given where the page asks the browser); else a step of
  * the active document (`doc`, none while no tab holds one).
  */
-export function editFromMenu(command: EditCommand, o: { active: unknown; doc: { undo(): boolean; redo(): boolean } | undefined; field: (command: EditCommand) => boolean }): EditDone {
+export function editFromMenu(
+  command: EditCommand,
+  o: { active: unknown; doc: { undo(): boolean; redo(): boolean } | undefined; field: (command: EditCommand) => boolean; /** Told first that the chemist chose it: something done on the page. */ chosen?: () => void },
+): EditDone {
+  o.chosen?.();
   if (fieldHasUndo(o.active)) return o.field(command) ? "field" : "nothing";
   if (!o.doc) return "nothing";
   return (command === "undo" ? o.doc.undo() : o.doc.redo()) ? "document" : "nothing";

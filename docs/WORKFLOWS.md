@@ -164,7 +164,13 @@ in 3D, arrows, text - and is made of three things:
   on its left edge too.
 - **Steps.** A small card: who does it (*xTB*), with the icon of what it
   does; below it, what it does and how (*Optimise · GFN2-xTB*), whole, on
-  two lines where it needs them; and what it is doing (*Ready*, *Running
+  as many lines as it needs - broken between its parts, and inside a part
+  only between the items of a list it names (*too many bonds, no
+  electrons*), never inside one. Past four lines it is cut, its last
+  line ending in an ellipsis, on the card shut and opened alike: a
+  setting of long numbers (five digits in each of *Compare bonding*'s)
+  or a long text typed into an option can take more. Opened, the card's
+  options show each value whole. And what it is doing (*Ready*, *Running
   0:42*), with its state's icon under the first. It takes on its left
   edge and gives on its right.
 - **Wires.** Curves from port to port, leaving and arriving level; while
@@ -1158,6 +1164,21 @@ Conformers go through a workflow as any set does (decided):
 No key starts a run (decided: menus, at first). Steps run in the order
 their wires give; steps that do not depend on one another may run at
 once (*Several at once*).
+
+**What a run made, shown.** *Run*, *Run from here* and *Run all* alike:
+once every step the run ran has ended - those before it that it ran
+first, and those a Repeat among them holds - the sets those steps made
+are shown as what is put down is shown (WORKSPACE.md,
+*Putting things down*): where they are not seen whole - past the window's
+edge in a small window - the view eases along to take them in, or out as
+little as needed; seen whole, it stays. It moves only where the chemist
+has done nothing on the page since they pressed: no press anywhere, no
+key (an edit, a menu, a card opened, a text written each take one), no
+command chosen from the app's menu bar, no cut, copy, paste or drop, the
+same things selected, the same tab in front, the view where it stood -
+and nothing held or being written as the run ends. Anything done, and
+the view stays where they have it, and nothing is said: what the run
+made is on the page beside its step (workflow/runShown).
 
 **An empty set** (2026-10-30). A step before it that ran well may give
 nothing this time: a branch that took none, a last round of restraints
@@ -2429,8 +2450,25 @@ each came from is (run `viewKept`): a water seen face-on in what came in
 is seen face-on in the step's set, never edge-on as if its geometry had
 changed. Its room in the set is made for it so turned, and copies of
 one molecule are each turned as their own source was. A molecule a step
-moved or made, and one whose source was never turned, is seen as it is
-first seen; so, for now, is one in a set held off the page.
+moved or made with nothing to lay it over - a conformer search's, one
+made from structures drawn - is first seen as a molecule opened from a
+file is, by the one rule *Reset turn* gives back (utils/firstTurn): one
+tied to a drawing lies as its drawing lies, unturned; any other is seen
+along its principal axes (utils/align3d `principalTurn`) - its longest
+extent across, its next up, its least towards the viewer - in the frame
+it is first shown at, decided in one place (utils/firstTurn
+`firstFrame`) for a step's results and a file's molecules alike: the
+frame a file gives (a calculation's output shown at its last geometry);
+else an optimisation's path at its end, the geometry it converged on and
+the frame on screen as its set lands; else one of a single entry among
+its frames at that entry; else its first frame - a conformer set's first
+entry, the one shown first, its frames sharing that one turn so that
+showing another never turns the view.
+So a bent three-atom molecule is seen bent and a planar one face-on, the
+same geometry is seen the same way in every card of a run, and *Reset
+turn* on a result just landed changes nothing. Only the view is turned;
+its coordinates are as the step gave them. One passed through from a source never turned is seen as
+that source is, unturned; so, for now, is one in a set held off the page.
 
 - **By the view's turn**, not by turning the coordinates, which would
   part them from the output they were read from (its vibrations, the
@@ -2506,7 +2544,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   and no larger than its name needs.
 - **Steps' cards**: the icons in a column of their own - what it does,
   and its state's beside its state - and no rule; what it does and how,
-  whole, on two lines where it needs them. A step Meno does may say its
+  whole, on the lines it needs, four at most, broken as its state is
+  (pageGl/cardFace `settingLines`). A step Meno does may say its
   options its own way (*Choose one*: *Lowest in energy*, *Number 3*).
 - **Chips on the page** (*How it looks*): drawn at the page's scale -
   `--page`, set on the layer the page's HTML is drawn in as the zoom
@@ -3363,8 +3402,8 @@ page could not be read after one run.
     there, so nothing on the page moves. One a wire from a step's exit
     brought goes close by that step's card instead (place `placeNext`,
     *A step added from an exit*). A card is kept clear of, and put down,
-    as tall as its words can draw it closed (look `CARD_TALL`, 135 px:
-    what it does and its state each on two lines, what its program said,
+    as tall as its words can draw it closed (look `CARD_TALL`, 167 px:
+    what it does on four lines and its state on two, what its program said,
     its bar) - not as tall as its ports reach (`CARD_H`), which its words
     can outgrow. A card the chemist drags lands
     where they let it go. Put down
