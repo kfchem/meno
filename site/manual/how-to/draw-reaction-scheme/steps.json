@@ -1,0 +1,511 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [],
+  "steps": [
+    {
+      "id": "open-quick-add",
+      "shot": "01-open-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 666,
+        "y": 452,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "chain",
+      "shot": "02-chain.webp",
+      "mark": {
+        "kind": "click",
+        "x": 780,
+        "y": 434,
+        "w": 72,
+        "h": 72,
+        "near": [
+          694,
+          424,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "ring",
+      "shot": "03-ring.webp",
+      "mark": {
+        "kind": "trace",
+        "x": 666,
+        "y": 452,
+        "w": 0,
+        "h": 0,
+        "path": [
+          [
+            666,
+            452
+          ],
+          [
+            676,
+            446
+          ],
+          [
+            687,
+            440
+          ],
+          [
+            698,
+            434
+          ],
+          [
+            708,
+            428
+          ],
+          [
+            718,
+            422
+          ],
+          [
+            729,
+            416
+          ],
+          [
+            740,
+            410
+          ],
+          [
+            750,
+            404
+          ],
+          [
+            760,
+            410
+          ],
+          [
+            771,
+            416
+          ],
+          [
+            782,
+            422
+          ],
+          [
+            792,
+            428
+          ],
+          [
+            802,
+            434
+          ],
+          [
+            813,
+            440
+          ],
+          [
+            824,
+            446
+          ],
+          [
+            834,
+            452
+          ],
+          [
+            834,
+            464
+          ],
+          [
+            834,
+            476
+          ],
+          [
+            834,
+            488
+          ],
+          [
+            834,
+            500
+          ],
+          [
+            834,
+            513
+          ],
+          [
+            834,
+            525
+          ],
+          [
+            834,
+            537
+          ],
+          [
+            834,
+            549
+          ],
+          [
+            824,
+            555
+          ],
+          [
+            813,
+            561
+          ],
+          [
+            802,
+            567
+          ],
+          [
+            792,
+            573
+          ],
+          [
+            782,
+            579
+          ],
+          [
+            771,
+            585
+          ],
+          [
+            760,
+            591
+          ],
+          [
+            750,
+            597
+          ],
+          [
+            740,
+            591
+          ],
+          [
+            729,
+            585
+          ],
+          [
+            718,
+            579
+          ],
+          [
+            708,
+            573
+          ],
+          [
+            698,
+            567
+          ],
+          [
+            687,
+            561
+          ],
+          [
+            676,
+            555
+          ],
+          [
+            666,
+            549
+          ],
+          [
+            666,
+            537
+          ],
+          [
+            666,
+            525
+          ],
+          [
+            666,
+            513
+          ],
+          [
+            666,
+            500
+          ],
+          [
+            666,
+            488
+          ],
+          [
+            666,
+            476
+          ],
+          [
+            666,
+            464
+          ],
+          [
+            666,
+            452
+          ]
+        ]
+      }
+    },
+    {
+      "id": "bond",
+      "shot": "04-bond.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 750,
+        "y": 404,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "oxygen",
+      "shot": "05-oxygen.webp",
+      "mark": {
+        "kind": "type",
+        "x": 750,
+        "y": 307,
+        "w": 0,
+        "h": 0,
+        "text": "O"
+      }
+    },
+    {
+      "id": "arrow-quick-add",
+      "shot": "06-arrow-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 500,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "arrow",
+      "shot": "07-arrow.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1542,
+        "y": 482,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1228,
+          472,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "over-quick-add",
+      "shot": "08-over-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 410,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "over-text",
+      "shot": "09-over-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1466,
+        "y": 392,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1228,
+          382,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "over-words",
+      "shot": "10-over-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "PCC"
+      }
+    },
+    {
+      "id": "over-enter",
+      "shot": "11-over-enter.webp",
+      "mark": {
+        "kind": "key",
+        "text": "Enter"
+      }
+    },
+    {
+      "id": "under-quick-add",
+      "shot": "12-under-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1200,
+        "y": 572,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "under-text",
+      "shot": "13-under-text.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1466,
+        "y": 554,
+        "w": 72,
+        "h": 72,
+        "near": [
+          1228,
+          544,
+          798,
+          92
+        ]
+      }
+    },
+    {
+      "id": "under-words",
+      "shot": "14-under-words.webp",
+      "mark": {
+        "kind": "type",
+        "text": "CH2Cl2"
+      }
+    },
+    {
+      "id": "under-enter",
+      "shot": "15-under-enter.webp",
+      "mark": {
+        "kind": "key",
+        "text": "Enter"
+      }
+    },
+    {
+      "id": "choose",
+      "shot": "16-choose.webp",
+      "mark": {
+        "kind": "longpress",
+        "x": 666,
+        "y": 500,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "copy",
+      "shot": "17-copy.webp",
+      "mark": {
+        "kind": "shortcut",
+        "text": "C"
+      }
+    },
+    {
+      "id": "paste",
+      "shot": "18-paste.webp",
+      "mark": {
+        "kind": "shortcut",
+        "x": 1650,
+        "y": 452,
+        "w": 0,
+        "h": 0,
+        "text": "V"
+      }
+    },
+    {
+      "id": "double",
+      "shot": "19-double.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 1650,
+        "y": 355,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "let-go-copy",
+      "shot": "20-let-go-copy.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1200,
+        "y": 950,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "page-menu",
+      "shot": "21-page-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1200,
+        "y": 950,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "styles",
+      "shot": "22-styles.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1230,
+        "y": 1314,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "acs",
+      "shot": "23-acs.webp",
+      "mark": {
+        "kind": "click",
+        "x": 2008,
+        "y": 934,
+        "w": 360,
+        "h": 212
+      }
+    },
+    {
+      "id": "close-styles",
+      "shot": "24-close-styles.webp",
+      "mark": {
+        "kind": "click",
+        "x": 2312,
+        "y": 94,
+        "w": 56,
+        "h": 58
+      }
+    },
+    {
+      "id": "choose-everything",
+      "shot": "25-choose-everything.webp",
+      "mark": {
+        "kind": "shortcut",
+        "text": "A"
+      }
+    },
+    {
+      "id": "copy-everything",
+      "shot": "26-copy-everything.webp",
+      "mark": {
+        "kind": "shortcut",
+        "text": "C"
+      }
+    },
+    {
+      "id": "let-go",
+      "shot": "27-let-go.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1200,
+        "y": 950,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "result": "result.webp"
+}
