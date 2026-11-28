@@ -53,7 +53,7 @@ import { setMolecules } from "../../workflow/entries";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresLine, folded, stoppedSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type CarriedRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, splitByFailures, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type CarriedRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -2174,7 +2174,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const adopted = run.adopted && Object.keys(run.adopted).length ? { adopted: run.adopted } : {};
       const gives = givesFor(kind, holds ?? "molecules");
       // (refused, and its run closed as any other)
-      if (gives) bringIn(id, worked, gives, { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...adopted, ...as }, failedOnes);
+      // (a compound some of whose conformers failed: what was done of it, and what failed, each a part of it)
+      const split = gives ? splitByFailures(kind, gives, worked, failedOnes) : null;
+      if (gives && split) bringIn(id, split.worked, gives, { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...adopted, ...as }, split.failed);
       else fail(id, ON_DRAWN, run.at, run.input);
       close();
     } catch (e) {

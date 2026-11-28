@@ -1539,6 +1539,27 @@ describe("a step that runs a plugin's program", () => {
     expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "stopped", why: "It stopped without finishing" }]]);
   });
 
+  it("marks a compound split by failures a part of its search on both sides - its conformers done, and the one that failed - so that no shares are shown over the two as if over all three", async () => {
+    const { doc, st, step } = editor();
+    // (one compound, three conformers of it from a search)
+    doc.edit("water", (d) => ({
+      ...d,
+      molecules3d: d.molecules3d!.map((m) => ({ ...m, conformerSet: true, frames: [m.atoms.flatMap((a) => [a.x, a.y + 0.01, a.z]), m.atoms.flatMap((a) => [a.x, a.y + 0.02, a.z])], energies: [-5.07, -5.069, -5.068] })),
+    }));
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(3);
+    end(1);
+    end(2, "gone");
+    end(3);
+    await st().lookAtJobs();
+    await ran;
+    const of = (exit: string) => setMembers(st(), resultOf(st(), step, exit)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(of("out").map((m) => [m.frames?.length ?? 0, !!m.partOf])).toEqual([[1, true]]);
+    expect(of("failed").map((m) => !!m.partOf)).toEqual([true]);
+  });
+
   it("refuses an entry whose output says it ran in another solvation than its step asked - out of its Failed exit, saying both - whatever program ran it", async () => {
     const { st, step } = waters(3);
     st().updateStep(step, { options: { solvent: "water" } });

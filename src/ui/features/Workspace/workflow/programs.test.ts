@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, notAsAsked, passedAsLone, passedSaid, passesAsLone, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, solvationAsked, UNLINKED_WHY, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, splitByFailures, hartrees, isFailure, jobEntries, notAsAsked, passedAsLone, passedSaid, passesAsLone, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, solvationAsked, UNLINKED_WHY, workedOf } from "./programs";
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
@@ -553,5 +553,35 @@ describe("a molecule whose frames are a path", () => {
     expect(more).toEqual([]);
     expect(entry.xyz).toEqual(path.frames![1]);
     expect(entry.energy).toBe(-5.07);
+  });
+});
+
+describe("a compound split by failures", () => {
+  // (three compounds of a conformer set, each conformer optimised: a's first two done and its third failed; b's all
+  //  done; c's all failed)
+  const water = (compound: number, number: number, failed?: boolean): Worked => ({
+    compound,
+    number,
+    atoms: [{ el: "O", x: 0, y: 0, z: 0 }, { el: "H", x: 0.96, y: 0, z: 0 }, { el: "H", x: -0.24, y: 0.93 + 0.01 * number, z: 0 }],
+    bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }],
+    xyz: [0, 0, 0, 0.96, 0, 0, -0.24, 0.93 + 0.01 * number, 0],
+    energy: -76 - 0.001 * number,
+    ...(failed ? { failed: { kind: "not-converged" as const, why: "not converged" } } : {}),
+  });
+  const done = [water(0, 1), water(0, 2), water(1, 1), water(1, 2)];
+  const failed = [water(0, 3, true), water(2, 1, true), water(2, 2, true)];
+
+  it("marks what was done of it, and what failed, each a part of it - a compound all done, or all failed, as it came", () => {
+    const out = splitByFailures("optimise", "conformers", done, failed);
+    expect(out.worked.map((e) => [e.compound, e.number, !!e.partOf])).toEqual([[0, 1, true], [0, 2, true], [1, 1, false], [1, 2, false]]);
+    expect(out.failed.map((e) => [e.compound, e.number, !!e.partOf])).toEqual([[0, 3, true], [2, 1, false], [2, 2, false]]);
+    // (so its molecule is a part, and its chip shows no shares over the two done as if they were the compound's)
+    const { molecules } = resultsOf({ ok: true, holds: "conformers", kept: out.worked, aside: [], said: "" }, "optimise");
+    expect(molecules.map((m) => !!m.partOf)).toEqual([true, false]);
+  });
+
+  it("marks none of a search's conformers, found anew and whole, nor of a set of molecules, of no search", () => {
+    expect(splitByFailures("conformers", "conformers", done, failed).worked.some((e) => e.partOf)).toBe(false);
+    expect(splitByFailures("optimise", "molecules", done, failed).worked.some((e) => e.partOf)).toBe(false);
   });
 });

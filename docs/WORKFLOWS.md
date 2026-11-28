@@ -1446,6 +1446,11 @@ so (`partOf`), and its chip shows no shares:
   keeps is the compound as it came, its copies merged into those kept -
   whole, unless what came in was a part. Out of a compound set, the
   copies are of a structure there twice, of no search, and not marked;
+- a compound split by failures: of a step a program does on a conformer
+  set - an optimisation of each conformer - what it did of a compound some
+  of whose conformers failed, and those out of its *Failed* exit (a
+  compound all done, or all failed, is whole; a search's conformers are
+  found anew, whole);
 - whatever any step makes of a part: an optimisation of it, a step of
   Meno's on it, *As conformers* grouping it with others.
 
@@ -1900,10 +1905,30 @@ Decided while building it, for the maintainer to confirm:
 - **Duplicates within each value of a property** (2026-10-31, the same
   transition state found by two paths): *Compared within: Each value of
   a property*, and *The property* named - "product", "path". Entries of
-  one value, of the same atoms bonded alike in the same order and the
-  same charge and spin, are compared across compounds - each saddle
-  point a path search gives is its own compound - with the same one
-  definition of alike, no threshold of its own; the lower kept, each
+  one value, of the same atoms and the same charge and spin, are compared
+  across compounds - each saddle point a path search gives is its own
+  compound - with the same one definition of alike, no threshold of its
+  own. They need not come numbered or bonded alike: the same saddle point
+  found from both directions is numbered and bonded by each side's own
+  map. So which atom of one is which of the other is found from where
+  they stand - each bonded by distance, as a file of atoms alone is, and
+  numbered in its own order by Meno's canonical numbering - never from
+  the numbers they came with; a mirror image is still another, unless
+  counted in. A bond half made, as at a saddle point, lies near the
+  reach: a pair whose distance is within a band of it is taken both as
+  made and as not, a numbering for each way, and two entries are
+  compared where any of their numberings agree - so whether two are the
+  same never turns on which side of the reach a stretched bond falls.
+  The band is half of the most two geometries within 0.01 Å RMSD of each
+  other can differ in one distance, 0.01 Å x √(2n) for n atoms (all the
+  difference in those two atoms): 0.027 Å either side for 15 atoms,
+  0.071 Å for 100. At most 4 such pairs are taken both ways (16
+  numberings); past that, each is bonded as its distance says, and the
+  step's line says so ("1 entry has more than 4 bonds half made:
+  duplicates of it could be missed") - a duplicate can be missed so,
+  never two different saddle points made one. Each entry's numberings
+  are worked out in a turn of its own, the page going on between. The
+  lower kept, each
   other one out of *Alike* naming it ("the same as b #1, which was
   kept"). Lower only where their energies were worked out alike - across
   paths they need not be: free energies where each has one, by the same
