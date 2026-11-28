@@ -312,7 +312,30 @@ they hang from.
   least twice a single bond's width). Every line, hash and shape of the
   bond behind is cut by the same band, the pieces left have nothing
   between them in the page, the SVG and the EMF alike, and a piece left
-  shorter than the clear space is not drawn; in a picture of pixels laid
+  shorter than the clear space is not drawn. A piece between two breaks -
+  a short bond passing behind two others - is drawn only where it is at
+  least as long as a break (twice the clear space and a line width):
+  shorter, it would float between the gaps as a dot or a dash, and the two
+  breaks are drawn as one; a piece at an end of the bond keeps the bond's
+  end, a methyl's as a ring atom's, down to the clear space. A break is
+  the bond in front's, and never costs the bond behind its being seen:
+  what is left must read as that bond. A bond of strokes (hashed, a hashed
+  wedge, dashed, dotted) keeps two strokes, or as many as it has; any
+  other keeps, of each of its own lines and shapes (each line of a double
+  or triple bond, a wedge, a bold bar, a dative bond's line), a piece seen
+  for the clear space at least beyond the clear space from each atom; a
+  wavy bond as much of its wave. Where the breaks would leave less, they
+  are narrowed, all alike, a tenth of their width at a time, while each
+  still leaves a gap seen - a line width each side of the bond in front
+  (`CROSSING_LEAST_GAP`) - until it reads: a short bond crossed near both
+  its ends keeps its middle. A break is seen or absent: where even the
+  narrowest such breaks leave too little, the bond behind is drawn whole,
+  and which of the two is in front is then not shown; a bond of strokes
+  drawn so leaves out a stroke the front's line lies on, where two others
+  are left. A wedge's piece keeps the wedge's own edges, so it narrows
+  toward the narrow end; how plainly depends on its length - a piece as
+  long as the clear space on a bond of the usual length differs in width
+  across it by about a twelfth of the broad end's. In a picture of pixels laid
   out with a least line width the clear space is never under three pixels
   (the page's drawing has none: its gap scales with the page, as its lines
   do), and bonds crossing at under ten
@@ -868,7 +891,17 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   never more than two thirds, whatever the labels: a third of a bond is
   always seen, its end touching a label's letters or digits (13C's) where
   it must, and a wedge shows its width (`BOND_SEEN_LEAST`; the maintainer,
-  2026-10-14). Where one of
+  2026-10-14). What the two thirds cannot give is taken first from the
+  margins past the letters, down to the line's round end touching them,
+  and what is still lacking is shared so that the deeper end goes in as
+  little as it can - but no end goes further into its letters than taking
+  from each end alike, in proportion, would take it (`seenTrims`). So an
+  end that would be left clear of its letters gives its margin to the
+  other: the l of a Cl set toward a platinum is no longer run into while
+  the P keeps a margin. Not cured: where both ends would run into their
+  letters, they still do, as much as before - on a bond of ordinary
+  length between two labels the line can still meet a letter, and only
+  a longer bond takes it clear. Where one of
   them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
   long enough for the two to keep their margins, in the drawing's style -
   measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,

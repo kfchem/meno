@@ -4,6 +4,7 @@ import {
   bondKind,
   buildAllPrimitives,
   BOND_SEEN_LEAST,
+  seenTrims,
   buildBondPrimitives,
   FEWEST_HASHES,
   joinsAtAtoms,
@@ -1488,6 +1489,86 @@ describe("how far a bond stops short of a label", () => {
     // (a share set lower than the rule is kept)
     const [kept] = buildBondPrimitives(atoms, bond, opts({ labelShareMax: 0.4 }), ZOOM).lines;
     expect(kept.x2 - kept.x1).toBeCloseTo(0.6 * 0.6, 9);
+  });
+
+  describe("two labels on a bond too short for both", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const o = acsWorldOptions([], [], { units: "world", minLinePx: 0, joinStyle: "round" });
+    const closeTo = (a: number, b: number) => expect(a).toBeCloseTo(b, 9);
+    /**
+     * How far the line of the bond from atom `k` runs into each end's letters, its round end and all: from its ink's end to the furthest its
+     * label's letters reach toward it where the line runs (within its half width). Under 0, clear of them by so much.
+     */
+    const depths = (atoms: Atom[], bonds: Bond[], k: number): [number, number] => {
+      const out = layoutMolecule(atoms, bonds, o, 26.67);
+      const [P, Q] = [atoms[bonds[k].a1], atoms[bonds[k].a2]];
+      const len = Math.hypot(Q.x - P.x, Q.y - P.y);
+      const u = { x: (Q.x - P.x) / len, y: (Q.y - P.y) / len };
+      const line = out.lines.find((l) => {
+        const c = { x: (l.x1 + l.x2) / 2 - P.x, y: (l.y1 + l.y2) / 2 - P.y };
+        return Math.abs(c.x * u.y - c.y * u.x) < 1e-6 && c.x * u.x + c.y * u.y > 0 && c.x * u.x + c.y * u.y < len;
+      })!;
+      const half = line.widthPx / 26.67 / 2;
+      return ([[P, 1], [Q, -1]] as const).map(([X, s]) => {
+        const w = { x: u.x * s, y: u.y * s };
+        const t = out.texts.find((t) => Math.abs(t.x - X.x) < 1e-9 && Math.abs(t.y - X.y) < 1e-9)!;
+        const inkEnd = Math.min(...[[line.x1, line.y1], [line.x2, line.y2]].map(([x, y]) => (x - X.x) * w.x + (y - X.y) * w.y)) - half;
+        let reach = -Infinity;
+        for (const hull of labelHulls(t, t.fontPx, labelSetOf(o), false))
+          hull.forEach((p, i) => {
+            const q = hull[(i + 1) % hull.length];
+            for (let f = 0; f <= 1; f += 1 / 64) {
+              const r = { x: p.x + (q.x - p.x) * f + t.x - X.x, y: p.y + (q.y - p.y) * f + t.y - X.y };
+              if (Math.abs(r.y * w.x - r.x * w.y) <= half) reach = Math.max(reach, r.x * w.x + r.y * w.y);
+            }
+          });
+        return reach - inkEnd;
+      }) as [number, number];
+    };
+
+    it("shares what they lack so that neither end runs far into its letters: a Cl's l and a Pt at 30 degrees", () => {
+      // (a Cl below and left of a Pt, a nominal bond apart at 30 degrees, the Cl's l set toward the bond: taken from each end alike, in
+      // proportion to what each label asks, the line ran 0.110 into the l's foot and stopped 0.100 short of the P - read as one stroke
+      // with the l; shared so that the deeper end is as shallow as it can be, it runs into neither by more than a hair)
+      const r = Math.PI / 6;
+      const atoms: Atom[] = [{ id: 1, x: 0, y: 0, el: "Cl" }, { id: 2, x: L * Math.cos(r), y: L * Math.sin(r), el: "Pt" }];
+      const [cl, pt] = depths(atoms, [{ a1: 0, a2: 1, order: 1 }], 0);
+      expect(cl).toBeLessThan(0.02);
+      expect(pt).toBeLessThan(0.02);
+      // (and the bond is seen for a third of its length still)
+      const line = layoutMolecule(atoms, [{ a1: 0, a2: 1, order: 1 }], o, 26.67).lines[0];
+      expect(Math.hypot(line.x2 - line.x1, line.y2 - line.y1)).toBeCloseTo(L * BOND_SEEN_LEAST, 9);
+    });
+
+    it("takes the l of a Cl beside a platinum out of the line's way: flat trans-PtCl2", () => {
+      const atoms: Atom[] = [
+        { id: 1, x: 0, y: 0, el: "Pt" },
+        { id: 2, x: -L, y: 0, el: "Cl" },
+        { id: 3, x: L, y: 0, el: "Cl" },
+        { id: 4, x: 0, y: L, el: "N" },
+        { id: 5, x: 0, y: -L, el: "N" },
+      ];
+      const bonds: Bond[] = [1, 2, 3, 4].map((k) => ({ a1: 0, a2: k, order: 1 as const }));
+      // (the left Cl's l toward the platinum: the line ran 0.021 into it, taken from each end alike; now under 0.01 into either end)
+      for (const d of depths(atoms, bonds, 0)) expect(d).toBeLessThan(0.01);
+    });
+
+    it("gives the margins up first, then shares the rest alike, never an end deeper than taking from each end alike would", () => {
+      // (asks 1.0 and 0.6, letters 0.9 and 0.5, half width 0.05: depths 0.95 - trim and 0.55 - trim, 0.3 past the margins. Alike would
+      // take 0.75 and 0.45, 0.2 and 0.1 into them: both ends into their letters, neither may go deeper, and so it is as alike)
+      const [a, b] = seenTrims([1.0, 0.6], [0.9, 0.5], 1.2, 0.05);
+      closeTo(a, 0.75);
+      closeTo(b, 0.45);
+      // (asks 1.2 and 0.6, letters 1.1 and 0.2: 1.15 and 0.25 with the round ends, 0.2 past the margins. Alike would take 0.8 and 0.4 -
+      // 0.35 into the first, the second clear; the second may go no deeper than that, so 0 into it, the first 0.2: shallower than alike)
+      const [c, e] = seenTrims([1.2, 0.6], [1.1, 0.2], 1.2, 0.05);
+      closeTo(c, 0.95);
+      closeTo(e, 0.25);
+      // (enough margin for both: each keeps some, no end into its letters)
+      const [f, g] = seenTrims([1.0, 0.6], [0.6, 0.3], 1.2, 0.05);
+      expect(0.65 - f).toBeLessThanOrEqual(0);
+      expect(0.35 - g).toBeLessThanOrEqual(0);
+    });
   });
 
   it("shows a wedge's width at its broad end however wide the label there", () => {

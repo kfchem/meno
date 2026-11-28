@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
+import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
 import {
   bondSide,
   exitDistance,
@@ -119,6 +120,34 @@ describe("marksOf", () => {
     expect([...marksOf(adduct([bond(2, 2, 3)]), at(5)).valence]).toEqual([[2, { valence: 5, most: 3 }]]);
     const outOf: Model = { ...adduct(), bonds: [{ ...bond(1, 2, 1), dative: true }] };
     expect([...marksOf(outOf, at(4)).valence]).toEqual([[2, { valence: 4, most: 3 }]]);
+  });
+});
+
+describe("a label's valence mark", () => {
+  // a made-up label on a made-up neighbour: what was checked is the group's atom in the label's place
+  const labelled = (el: string, order: 1 | 2 | 3, extra: Partial<Model["atoms"][number]> = {}): Model => ({
+    atoms: [atom(1, 0, 0), { ...atom(2, 1.5, 0, el), ...extra }],
+    bonds: [bond(3, 1, 2, order)],
+  });
+  const flagged = (model: Model, valence: number, most: number) =>
+    marksOf(model, { atoms: [{ index: 0, hydrogens: 0 }, { index: 1, hydrogens: 0, valenceError: { valence, most } }], bonds: [] }).valence.get(2)!;
+
+  it("names the element of the atom that carries the label's bonds, never the label", () => {
+    // MeCN by its N: a double bond to it gives N a valence of 5 where it takes 3 (C#N, and the two)
+    const mecn = flagged(labelled("MeCN", 2), 5, 3);
+    expect(mecn).toEqual({ valence: 5, most: 3, as: "N" });
+    expect(valenceMessage("MeCN", mecn)).toBe("Too many bonds: a valence of 5, where nitrogen takes at most 3.");
+    // OMe by its O: a triple bond to it, a valence of 4 where O takes 2
+    expect(valenceMessage("OMe", flagged(labelled("OMe", 3), 4, 2))).toBe("Too many bonds: a valence of 4, where oxygen takes at most 2.");
+  });
+
+  it("names a group held under an element's symbol by its carbon, not as that element", () => {
+    const pr = labelled("Pr", 2, { abbrev: placedAbbreviation("Pr", { x: -1.5, y: 0 }, 1.5)! });
+    expect(valenceMessage("Pr", flagged(pr, 5, 4))).toBe("Too many bonds: a valence of 5, where carbon takes at most 4.");
+  });
+
+  it("leaves an element's own mark as it was", () => {
+    expect(flagged(labelled("N", 3), 4, 3)).toEqual({ valence: 4, most: 3 });
   });
 });
 

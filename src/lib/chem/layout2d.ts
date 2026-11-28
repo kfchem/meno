@@ -1223,6 +1223,8 @@ function labelClearance(
   d: Vec2,
   margin: number,
   band: { n: Vec2; lo: number; hi: number },
+  /** The letter on the atom measured whole (the bond leaves from within it); false: only where the line runs, as of the others. */
+  whole = true,
 ): number {
   const lo = band.lo - margin;
   const hi = band.hi + margin;
@@ -1231,7 +1233,7 @@ function labelClearance(
   // the band's edges, and reaches furthest at a corner of it or where an edge
   // crosses the band's)
   for (const hull of hulls) {
-    if (aroundOrigin(hull)) {
+    if (whole && aroundOrigin(hull)) {
       for (const p of hull) reach = Math.max(reach, vdot(p, d));
       continue;
     }
@@ -2913,7 +2915,7 @@ export function labelTrims(
   deg?: Map<number, number>,
   labelShapes?: Map<number, Vec2[][]>,
   doubleSides?: Map<Bond, number | undefined>,
-): { a: number; b: number; room: number } {
+): { a: number; b: number; room: number; inkA: number; inkB: number } {
   const units = opts.units ?? "px";
   const fontWorld = toWorld(opts.fontPx, zoom, units);
   const margin = (opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16) * (bond.close ? LABEL_MARGIN_CLOSE : 1);
@@ -2924,21 +2926,21 @@ export function labelTrims(
   const n = vperp(dir);
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
-  const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
+  const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number, margined = margin) => {
     // (a label being written: on its way from what its bonds stopped short of before, `k` of the way)
     if (at.writing) {
       const band = { n, lo, hi };
       const set = labelSetOf(opts);
       const clear = (w: Writing): number => {
         const k = Math.min(1, Math.max(0, w.k));
-        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margin, band) : drawn(idx, at, towards, band);
+        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margined, band, margined > 0) : drawn(idx, at, towards, band, margined);
         return k >= 1 ? now : (w.was ? clear(w.was) : 0) * (1 - k) + now * k;
       };
       return clear(at.writing);
     }
-    return drawn(idx, at, towards, { n, lo, hi });
+    return drawn(idx, at, towards, { n, lo, hi }, margined);
   };
-  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }) => {
+  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }, margined: number) => {
     // (a pi system's centre, where a haptic bond ends, has no label to stop
     // short of: the line reaches the centre, as the bond is to the system
     // as a whole - IUPAC GR-1.7)
@@ -2946,12 +2948,16 @@ export function labelTrims(
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
-    return labelClearance(hulls, towards, margin, band);
+    return labelClearance(hulls, towards, margined, band, margined > 0);
   };
+  // (and how far each label's letters reach where the line itself runs, with no margin - the letter on the atom measured there too, not
+  // whole: what the line's end would run into, `seenTrims`)
   return {
     a: reach(bond.a1, p, dir, -across.right1, across.left1),
     b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
     room: L0 * (opts.labelShareMax ?? 0.9),
+    inkA: reach(bond.a1, p, dir, -across.right1, across.left1, 0),
+    inkB: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2, 0),
   };
 }
 
@@ -3001,6 +3007,32 @@ function itemsHulls(items: readonly TextItem[], fontSize: number, set: LabelSet)
 
 /** The least share of a bond seen between the labels at its ends, however much of it they would take. */
 export const BOND_SEEN_LEAST = 1 / 3;
+
+/**
+ * Where a bond's two labels would take more of it than leaves a third seen (`BOND_SEEN_LEAST`), how far each end stops from its atom,
+ * the two together `most`. `trims` are what each label asks (its letters' reach and the margin past them); `ink` how far its letters
+ * reach where the line itself runs, no margin; `half` the line's half width, its round end's reach. An end with no label asks nothing
+ * and is not moved. An end's depth is how far the line's ink runs into its letters: its letters' reach and `half`, less its trim (under
+ * 0, a margin is left). The margins give way first; what is still lacking is shared so that the deeper end goes in as little as it can,
+ * the two alike where they may - but no end deeper into its letters than taking from each end alike, in proportion to what it asks,
+ * would take it, nor past its own atom. So an end that would be left clear gives its margin to the other; where both would run into
+ * their letters, both do, as they would alike.
+ */
+export function seenTrims(trims: readonly [number, number], ink: readonly [number, number], most: number, half: number): [number, number] {
+  const total = trims[0] + trims[1];
+  const alike = trims.map((t) => (total > 0 ? (t * most) / total : 0));
+  // (each end's depth: its letters and the line's round end, less its trim - an end with no label is not moved)
+  const base = trims.map((t, k) => (t > 0 ? ink[k] + half : 0));
+  const need = base[0] + base[1] - most;
+  // (the least depth - its whole trim kept - and the most: no deeper than alike, nor past its atom)
+  const lo = base.map((b, k) => (trims[k] > 0 ? b - trims[k] : 0));
+  const hi = base.map((b, k) => (trims[k] > 0 ? Math.max(lo[k], Math.min(Math.max(0, b - alike[k]), b)) : 0));
+  const clamp = (v: number, k: number) => Math.min(hi[k], Math.max(lo[k], v));
+  let d0 = clamp(trims[0] > 0 && trims[1] > 0 ? need / 2 : trims[0] > 0 ? need : 0, 0);
+  const d1 = clamp(need - d0, 1);
+  d0 = clamp(need - d1, 0);
+  return [base[0] - d0, base[1] - d1];
+}
 
 export function buildBondPrimitives(
   atoms: Atom[],
@@ -3053,12 +3085,11 @@ export function buildBondPrimitives(
   }
   // And whatever the labels, a bond is seen for a third of its length at
   // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
-  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14). How
+  // the two ends give way: `seenTrims`.
   const seen = L0 * BOND_SEEN_LEAST;
   if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
-    const k = Math.max(0, L0 - seen) / (trimA + trimB);
-    trimA *= k;
-    trimB *= k;
+    [trimA, trimB] = seenTrims([trimA, trimB], [trims.inkA, trims.inkB], Math.max(0, L0 - seen), lineHalf);
   }
   const p1 = vadd(p1o, vscale(dir, trimA));
   const p2 = vadd(p2o, vscale(dir, -trimB));
@@ -4389,6 +4420,11 @@ export const CROSSING_LEAST_ANGLE_DEG = 10;
  * is); a vector writer has none, and nor has the page's drawing (`thinDrawn`), whose gap scales with the page as its lines do.
  */
 export const CROSSING_CLEAR_FLOOR_PX = 3;
+/**
+ * The least gap, in line widths, a break narrowed so that the bond behind still reads (`brokenBehind`) leaves each side of the bond in
+ * front: a gap as wide as a line is seen as one. Narrower, the break would be a nick, and none is made: the bond behind is drawn whole.
+ */
+export const CROSSING_LEAST_GAP = 1;
 
 type Built = ReturnType<typeof buildBondPrimitives>;
 
@@ -4506,7 +4542,12 @@ export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | und
  * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
  * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
  * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
- * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn; bonds
+ * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn, nor
+ * one between two breaks shorter than a break (twice the clear space and a line width): what is left of a short bond behind two others is
+ * never a dot or a dash between its gaps, which are then one; a piece at an end of the bond, its own end there, keeps the bond's end. And
+ * what is left always reads as the bond: where the breaks would leave too little of it, they are narrowed while each still leaves a gap
+ * seen (`CROSSING_LEAST_GAP`), and past that none is made - the bond drawn whole, a stroke the front lies on left out where two others
+ * are left; bonds
  * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
  * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
  * breaks make (none: a cut end is finished flat by the cut).
@@ -4542,6 +4583,8 @@ function brokenBehind(
   const sinLeast = Math.sin((CROSSING_LEAST_ANGLE_DEG * Math.PI) / 180);
   // where the bond crosses the ones in front of it: a band along each, to leave clear
   const bands: Band[] = [];
+  // (for each band, how far the front's own ink reaches either side of its middle: what a narrowed band leaves seen past it)
+  const inkHalves: number[] = [];
   for (const o of bonds) {
     if (o === bond || o.endpoints?.length) continue;
     if (o.a1 === bond.a1 || o.a1 === bond.a2 || o.a2 === bond.a1 || o.a2 === bond.a2) continue;
@@ -4570,52 +4613,119 @@ function brokenBehind(
     const [middle, half] = [(lo + hi) / 2, ((hi - lo) / 2) * share];
     // (across the front bond as `vcross(fd, point - q)` measures it: the normal (-fd.y, fd.x))
     bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: middle - half, hi: middle + half });
+    inkHalves.push((span.hi - span.lo) / 2);
   }
   if (!bands.length) return { lines, polys, ends: [] };
   const alongOf = (pt: Vec2) => vdot(vsub(pt, p), dir);
   const acrossOf = (band: Band, pt: Vec2) => vdot(vsub(pt, band.origin), band.normal);
-  /** The bands a shape reaches into. */
-  const reaching = (pts: readonly Vec2[]) =>
-    bands.filter((band) => {
-      const across = pts.map((pt) => acrossOf(band, pt));
-      return Math.max(...across) > band.lo && Math.min(...across) < band.hi;
+  // (a piece between two breaks, cut at both its ends, is drawn only as long as a break or longer: shorter, it would be a dot or a dash
+  // floating between the gaps, not a stretch of the bond)
+  const leastBetween = 2 * clear + lineWidth;
+  /**
+   * The bond with every band, `share` of its width about its middle, taken out of each of its lines and shapes: the pieces left either side
+   * of each band, cut along its edges; crumbs left out - a piece shorter than the clear space, and one between two breaks shorter than a
+   * break (`leastBetween`), the two breaks then one. Each line or shape with the pieces kept of it.
+   */
+  const broken = (share: number) => {
+    const narrowed = bands.map((band) => {
+      const [middle, half] = [(band.lo + band.hi) / 2, ((band.hi - band.lo) / 2) * share];
+      return { ...band, lo: middle - half, hi: middle + half };
     });
-  /** A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out. */
-  const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
-    let pieces: Vec2[][] = [pts];
-    for (const band of reached) {
-      const [below, above] = [
-        { x: band.origin.x + band.normal.x * band.lo, y: band.origin.y + band.normal.y * band.lo },
-        { x: band.origin.x + band.normal.x * band.hi, y: band.origin.y + band.normal.y * band.hi },
-      ];
-      pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
+    const reaching = (pts: readonly Vec2[]) =>
+      narrowed.filter((band) => {
+        const across = pts.map((pt) => acrossOf(band, pt));
+        return Math.max(...across) > band.lo && Math.min(...across) < band.hi;
+      });
+    const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
+      const whole = pts.map(alongOf);
+      const [from, to] = [Math.min(...whole), Math.max(...whole)];
+      let pieces: Vec2[][] = [pts];
+      for (const band of reached) {
+        const [below, above] = [
+          { x: band.origin.x + band.normal.x * band.lo, y: band.origin.y + band.normal.y * band.lo },
+          { x: band.origin.x + band.normal.x * band.hi, y: band.origin.y + band.normal.y * band.hi },
+        ];
+        pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
+      }
+      return pieces.filter((piece) => {
+        const along = piece.map(alongOf);
+        const [lo, hi] = [Math.min(...along), Math.max(...along)];
+        const atAnEnd = lo <= from + 1e-9 || hi >= to - 1e-9;
+        return hi - lo >= (atAnEnd ? clear : leastBetween);
+      });
+    };
+    const out = { lines: [] as LineSeg[], polys: [] as Poly[], kept: [] as { span: [number, number]; pieces: Vec2[][] }[] };
+    for (const l of lines) {
+      const ll = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
+      const ends = [alongOf({ x: l.x1, y: l.y1 }), alongOf({ x: l.x2, y: l.y2 })];
+      const span: [number, number] = [Math.min(...ends), Math.max(...ends)];
+      if (ll < 1e-9) {
+        out.lines.push(l);
+        continue;
+      }
+      const shape = lineShape(l, halfWidthOf(l));
+      const reached = reaching(shape);
+      // (a line no band reaches, whole; one cut, the shape it fills, cut)
+      if (!reached.length) {
+        out.lines.push(l);
+        out.kept.push({ span, pieces: [shape] });
+        continue;
+      }
+      const pieces = cut(shape, reached);
+      for (const piece of pieces) out.polys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
+      out.kept.push({ span, pieces });
     }
-    // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn)
-    return pieces.filter((piece) => {
-      const along = piece.map(alongOf);
-      return Math.max(...along) - Math.min(...along) >= clear;
-    });
+    for (const poly of polys) {
+      const along = poly.points.map(alongOf);
+      const span: [number, number] = [Math.min(...along), Math.max(...along)];
+      const reached = reaching(poly.points);
+      const pieces = reached.length ? cut(poly.points, reached) : [poly.points];
+      for (const piece of pieces) out.polys.push(reached.length ? { ...poly, points: piece } : poly);
+      out.kept.push({ span, pieces });
+    }
+    return out;
   };
-  const outLines: LineSeg[] = [];
-  const outPolys: Poly[] = [];
-  for (const l of lines) {
-    const ll = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
-    if (ll < 1e-9) {
-      outLines.push(l);
-      continue;
-    }
-    const shape = lineShape(l, halfWidthOf(l));
-    const reached = reaching(shape);
-    // (a line no band reaches, whole; one cut, the shape it fills, cut)
-    if (!reached.length) outLines.push(l);
-    else for (const piece of cut(shape, reached)) outPolys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
+  // A break is the bond in front's, and never costs the bond behind its being seen: what is left must read as that bond. A bond of strokes
+  // (hashed, a hashed wedge, dashed, dotted) keeps two strokes, or as many as it has; any other keeps, of each of its own lines and shapes
+  // (those running most of its length: each line of a double bond, a wedge, a bold bar), a piece seen for the clear space at least
+  // (`clear`: the speck rule's length) beyond the joints at its atoms - the clear space from each - and a wavy bond as much of its wave.
+  // Where the breaks would leave less, they are narrowed, all alike, while each still leaves a gap seen (`CROSSING_LEAST_GAP`), until it
+  // reads; past that, none is made.
+  const kind = bondKind(bond);
+  const strokes = kind === "hashed" || kind === "hashedWedge" || kind === "dashed" || kind === "dotted";
+  const seenOf = (piece: Vec2[]) => {
+    const along = piece.map(alongOf);
+    return Math.max(0, Math.min(Math.max(...along), length - clear) - Math.max(Math.min(...along), clear));
+  };
+  const reads = (out: ReturnType<typeof broken>) => {
+    if (strokes) return out.kept.filter((k) => k.pieces.length).length >= Math.min(2, out.kept.length);
+    const own = out.kept.filter((k) => k.span[1] - k.span[0] >= length / 2);
+    if (own.length) return own.every((k) => k.pieces.some((piece) => seenOf(piece) >= clear - 1e-9));
+    return out.kept.reduce((sum, k) => sum + k.pieces.reduce((t, piece) => t + seenOf(piece), 0), 0) >= clear - 1e-9;
+  };
+  // (a break is seen or absent: narrowed only while the gap it leaves each side of the front's ink is a gap to the eye -
+  // `CROSSING_LEAST_GAP` line widths - and below that, none)
+  const leastGap = CROSSING_LEAST_GAP * lineWidth;
+  const seenGap = (share: number) => Math.min(...bands.map((band, k) => ((band.hi - band.lo) / 2) * share - inkHalves[k]));
+  for (const share of [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]) {
+    if (share < 1 && seenGap(share) < leastGap - 1e-9) break;
+    const out = broken(share);
+    if (reads(out)) return { lines: out.lines, polys: out.polys, ends: [] };
   }
-  for (const poly of polys) {
-    const reached = reaching(poly.points);
-    if (!reached.length) outPolys.push(poly);
-    else for (const piece of cut(poly.points, reached)) outPolys.push({ ...poly, points: piece });
+  // (drawn whole, which is in front no longer shown; a bond of strokes leaves out a stroke the front's line lies on - no small cross of
+  // the two - where two others are left)
+  if (strokes) {
+    const onFront = (pts: readonly Vec2[]) =>
+      bands.some((band, k) => {
+        const middle = (band.lo + band.hi) / 2;
+        const across = pts.map((pt) => acrossOf(band, pt));
+        return Math.max(...across) > middle - inkHalves[k] && Math.min(...across) < middle + inkHalves[k];
+      });
+    const lineOn = (l: LineSeg) => onFront(lineShape(l, halfWidthOf(l)));
+    const left = lines.filter((l) => !lineOn(l)).length + polys.filter((poly) => !onFront(poly.points)).length;
+    if (left >= 2 && left < lines.length + polys.length) return { lines: lines.filter((l) => !lineOn(l)), polys: polys.filter((poly) => !onFront(poly.points)), ends: [] };
   }
-  return { lines: outLines, polys: outPolys, ends: [] };
+  return { lines, polys, ends: [] };
 }
 
 /**

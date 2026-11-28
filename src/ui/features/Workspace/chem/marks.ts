@@ -10,7 +10,8 @@
  * kept them out of every picture.
  */
 import type { Analysis } from "../../../../lib/roles/client";
-import { molIndex } from "../../../../lib/roles/molblock";
+import { isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
+import { writtenElements } from "../../../../lib/chem/molWriter";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { isMetal } from "../../../../lib/layout/perceive";
 import { readAs } from "./drawing";
@@ -37,7 +38,13 @@ export const MARK_HALF_HEIGHT = 0.42;
 /** How far apart two of R, S, E and Z keep at the least, in ems of their size. */
 export const MARKS_APART = 0.6;
 
-export type ValenceProblem = { valence: number; most?: number };
+/**
+ * An atom's valence past what it takes: its valence and, where known, the
+ * most it takes; and, on a label written out (MeCN, OMe), the element of
+ * the group's atom that carries the label's bonds (`as`: MeCN's N), which
+ * is what was checked.
+ */
+export type ValenceProblem = { valence: number; most?: number; as?: string };
 
 export type ChemMarks = {
   /** Atoms with more bonds than they can have, by id. */
@@ -68,11 +75,16 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
     centres: new Map(),
     doubleBonds: new Map(),
   };
+  // (each label's element as written out - the group's atom in its place: made once, and only where a label has too many bonds)
+  let written: Map<number, string> | undefined;
   for (const a of analysis.atoms) {
     const atom = atoms[a.index];
     if (!atom) continue;
-    if (a.valenceError && !bridgesMetals(model, atom, a.valenceError) && !takesArrows(model, atom, a.valenceError))
-      marks.valence.set(atom.id, a.valenceError);
+    if (a.valenceError && !bridgesMetals(model, atom, a.valenceError) && !takesArrows(model, atom, a.valenceError)) {
+      const label = atom.abbrev || !isElementSymbol(atom.el);
+      const as = label ? (written ??= writtenElements(model)).get(atom.id) : undefined;
+      marks.valence.set(atom.id, as ? { ...a.valenceError, as } : a.valenceError);
+    }
   }
   return marks;
 }
@@ -154,9 +166,9 @@ function takesArrows(model: Model, atom: Model["atoms"][number], p: ValenceProbl
 
 const NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
-/** What is wrong with an atom's valence, in words. */
+/** What is wrong with an atom's valence, in words: named by its element - a label's by that of its atom that carries its bonds (`as`). */
 export function valenceMessage(el: string, p: ValenceProblem): string {
-  const name = NAMES.get(el) ?? el;
+  const name = NAMES.get(p.as ?? el) ?? el;
   return p.most != null
     ? `Too many bonds: a valence of ${p.valence}, where ${name} takes at most ${p.most}.`
     : `Too many bonds: a valence of ${p.valence} is more than ${name} takes.`;
