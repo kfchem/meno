@@ -665,3 +665,84 @@ describe("what a document's last change was", () => {
     expect(doc.lastChange()).toBe("reset");
   });
 });
+
+describe("a document's steps, and going several at once", () => {
+  const made = () => {
+    let t = 0;
+    const doc = createDocument({ n: 0 }, { now: () => (t += 10_000) });
+    for (const label of ["add atom", "add bond", "draw chain"]) doc.edit(label, (s) => ({ n: s.n + 1 }));
+    doc.actAs("conversation", changeSet("turn-1", "a conversation, by a test model"), () => {
+      doc.edit("add structure", (s) => ({ n: s.n + 1 }));
+      return undefined;
+    });
+    return doc;
+  };
+
+  it("names the steps to take back, the next first, and those to do again, the next first", () => {
+    const doc = made();
+    expect(doc.steps()).toEqual({
+      back: [{ label: "conversation", by: "a conversation, by a test model" }, { label: "draw chain" }, { label: "add bond" }, { label: "add atom" }],
+      forward: [],
+    });
+    doc.undo();
+    doc.undo();
+    expect(doc.steps().back.map((s) => s.label)).toEqual(["add bond", "add atom"]);
+    expect(doc.steps().forward.map((s) => s.label)).toEqual(["draw chain", "conversation"]);
+  });
+
+  it("has no step to take back on a document as it was opened", () => {
+    expect(createDocument({ n: 0 }).steps()).toEqual({ back: [], forward: [] });
+  });
+
+  it("goes n steps back in one change, as n undos end, told once", () => {
+    const doc = made();
+    const told = vi.fn();
+    doc.subscribe(told);
+    expect(doc.travel(-3)).toBe(true);
+    expect(told).toHaveBeenCalledTimes(1);
+    expect(doc.getState()).toEqual({ n: 1 });
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 3, undoLabel: "add atom", redoLabel: "add bond" });
+    expect(doc.travelled()).toBe(true);
+    expect(doc.lastChange()).toBe("travel");
+    const step = made();
+    step.undo();
+    step.undo();
+    step.undo();
+    expect(step.getState()).toEqual(doc.getState());
+    expect(step.steps()).toEqual(doc.steps());
+  });
+
+  it("goes n steps forward in one change, as n redos end", () => {
+    const doc = made();
+    doc.travel(-4);
+    expect(doc.getState()).toEqual({ n: 0 });
+    expect(doc.travel(2)).toBe(true);
+    expect(doc.getState()).toEqual({ n: 2 });
+    expect(doc.steps().back.map((s) => s.label)).toEqual(["add bond", "add atom"]);
+    expect(doc.steps().forward.map((s) => s.label)).toEqual(["draw chain", "conversation"]);
+    expect(doc.history().redoBy).toBeUndefined();
+    doc.redo();
+    expect(doc.history().redoBy).toBe("a conversation, by a test model");
+  });
+
+  it("does nothing beyond the history, nor for no step", () => {
+    const doc = made();
+    const told = vi.fn();
+    doc.subscribe(told);
+    expect(doc.travel(-5)).toBe(false);
+    expect(doc.travel(1)).toBe(false);
+    expect(doc.travel(0)).toBe(false);
+    expect(told).not.toHaveBeenCalled();
+    expect(doc.getState()).toEqual({ n: 4 });
+  });
+
+  it("is not gone on while a change set runs", () => {
+    const doc = made();
+    expect(() =>
+      doc.actAs("conversation", changeSet("turn-2", "a conversation, by a test model"), () => {
+        doc.travel(-1);
+        return undefined;
+      }),
+    ).toThrow();
+  });
+});
