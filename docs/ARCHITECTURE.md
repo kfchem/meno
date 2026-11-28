@@ -1766,9 +1766,15 @@ to be able to work with nothing going out at all.
   (`Net::revoke`) or its task has ended, nothing more is carried, the
   connection is cut, and it is on the record as refused, saying why - under
   the spell it held, which then fails, or as a line of its own, kept from
-  the network. A server's closing of it once let go of - its end, and the
-  few bytes that come just before it (`CLOSING`, at most `CLOSING_MOST`) -
-  begins no spell and passes nothing on: the worker's side is closed, and
+  the network. Where it is the chemist's own switch - Meno set offline, or
+  the yes withdrawn - that stopped a spell under way, the spell ends done,
+  saying what stopped it (`Task::stopped`), and its notice goes as a
+  finished one's does with no fault shown; the connection's refused line on
+  the record is as any other's. A server's closing of it once let go of -
+  its end, and the few bytes that come just before it (`CLOSING`, at most
+  `CLOSING_MOST`), where the host said the last that went before it let go
+  - begins no spell and passes nothing on (where the worker said last, what
+  the host says may be its reply, and goes as any bytes do): the worker's side is closed, and
   the closing is on the record as a closed line of its own, its bytes
   counted, with no notice. A worker that closes such a connection with no
   bytes is on the record the same way; one that says bytes as it closes

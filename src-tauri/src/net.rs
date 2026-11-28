@@ -116,6 +116,12 @@ pub struct Task {
     pub outcome: Option<String>,
     /// Why it failed, where it said: "model.bin stopped after 422.0 MB of 1134.3 MB (the server ended it early)".
     pub reason: Option<String>,
+    /// Where the chemist stopped it - Meno set to work offline ("offline"), or
+    /// its yes withdrawn ("withdrawn") while it was under way: it ends
+    /// "done", its reason saying what stopped it, its notice going as a
+    /// finished one's does (NetworkToasts.tsx); the connection cut is on the
+    /// record as refused all the same.
+    pub stopped: Option<String>,
 }
 
 /// One connection, or one refused.
@@ -137,6 +143,8 @@ pub struct Connection {
     pub outcome: String,
     /// Why it was blocked, or how it ended (`Ended`): "the server closed it", "nothing came either way for 120 s".
     pub reason: Option<String>,
+    /// Cut as the chemist stopped its task ("offline", "withdrawn": `Task::stopped`).
+    pub stopped: Option<String>,
 }
 
 /// What holds a task begun at rest under way, in its spell: each request
@@ -152,6 +160,8 @@ struct Spell {
     holds: usize,
     /// Whether its worker's hold is among them: a request waits.
     asked: bool,
+    /// Where the chemist stopped it ("offline", "withdrawn", why): `Task::stopped`.
+    stopped: Option<(&'static str, &'static str)>,
     failed: bool,
     why: Option<String>,
 }
@@ -246,6 +256,7 @@ impl Net {
             ended: None,
             outcome: None,
             reason: None,
+            stopped: None,
         };
         let token = uuid::Uuid::new_v4().simple().to_string();
         if under_way {
@@ -280,6 +291,11 @@ impl Net {
         };
         match &spell {
             Some(s) if s.failed => self.ended(task, "failed", s.why.as_deref().or(reason)),
+            Some(Spell { stopped: Some((kind, why)), .. }) => {
+                let mut task = task;
+                task.stopped = Some((*kind).into());
+                self.ended(task, "done", Some(why));
+            }
             _ => self.ended(task, outcome, reason),
         }
     }
@@ -302,7 +318,7 @@ impl Net {
         let mut spells = self.0.spells.lock().unwrap();
         let spell = spells.get_mut(token)?;
         if let Some(last) = resting.remove(token) {
-            let task = Task { id: uuid::Uuid::new_v4().to_string(), started: now_ms(), ended: None, outcome: None, reason: None, ..last };
+            let task = Task { id: uuid::Uuid::new_v4().to_string(), started: now_ms(), ended: None, outcome: None, reason: None, stopped: None, ..last };
             tasks.insert(token.into(), task.clone());
             *spell = Spell { holds: 1, ..Spell::default() };
             self.emit("net:task", &task);
@@ -332,14 +348,18 @@ impl Net {
         task.ended = Some(now_ms());
         task.outcome = Some(if spell.failed { "failed" } else { "done" }.into());
         task.reason = spell.why.take();
+        // (stopped by the chemist, nothing having gone wrong before: done, saying what stopped it)
+        if let (false, Some((kind, why))) = (spell.failed, spell.stopped.take()) {
+            task.stopped = Some(kind.into());
+            task.reason = Some(why.into());
+        }
         spell.failed = false;
+        spell.stopped = None;
         resting.insert(token.into(), task.clone());
         self.emit("net:task", &task);
         self.write_log(&serde_json::json!({ "task": task }));
     }
 
-    /// Something in the spell under way went wrong, saying why where it
-    /// said: it ends failed. The first reason kept.
     /// A yes withdrawn: nothing more goes for it, open connections included (`Holding::moved`).
     pub fn revoke(&self, purpose: &str) {
         self.0.granted.lock().unwrap().remove(purpose);
@@ -370,12 +390,25 @@ impl Net {
         }
     }
 
+    /// Something in the spell under way went wrong, saying why where it
+    /// said: it ends failed. The first reason kept. Nothing once the chemist
+    /// has stopped it (`stop`): what goes wrong after - its worker's answer
+    /// that it could not - comes of the stop.
     fn spoil(&self, token: &str, why: Option<&str>) {
         let mut spells = self.0.spells.lock().unwrap();
-        let Some(spell) = spells.get_mut(token).filter(|s| s.holds > 0) else { return };
+        let Some(spell) = spells.get_mut(token).filter(|s| s.holds > 0 && s.stopped.is_none()) else { return };
         spell.failed = true;
         if spell.why.is_none() {
             spell.why = why.map(str::to_string);
+        }
+    }
+
+    /// The spell under way stopped by the chemist (`Task::stopped`): it ends
+    /// done, saying so - unless something had gone wrong in it before.
+    fn stop(&self, token: &str, kind: &'static str, why: &'static str) {
+        let mut spells = self.0.spells.lock().unwrap();
+        if let Some(spell) = spells.get_mut(token).filter(|s| s.holds > 0 && s.stopped.is_none()) {
+            spell.stopped = Some((kind, why));
         }
     }
 
@@ -426,6 +459,7 @@ impl Net {
             received: 0,
             outcome: "blocked".into(),
             reason: Some(reason.into()),
+            stopped: None,
         };
         self.record(&c);
     }
@@ -778,6 +812,7 @@ impl Net {
             received: 0,
             outcome: "open".into(),
             reason: None,
+            stopped: None,
         };
         let mut refusal = if request.method != "CONNECT" {
             Some(("405 Method Not Allowed", "only encrypted connections go through Meno"))
@@ -924,6 +959,7 @@ impl Net {
             c.received = received.load(Ordering::Relaxed) - received_before;
             c.outcome = "blocked".into();
             c.reason = Some(why);
+            c.stopped = holding.stopped().map(str::to_string);
             c.ended = Some(now_ms());
             self.record(&c);
             return;
@@ -938,10 +974,7 @@ impl Net {
                 sent: sent.load(Ordering::Relaxed) - sent_before,
                 received: received.load(Ordering::Relaxed) - received_before,
                 outcome: "done".into(),
-                reason: Some(match holding.withheld_bytes() {
-                    0 => ended.said(IDLE),
-                    n => format!("{}; the {n} bytes it said as it did were not passed on", ended.said(IDLE)),
-                }),
+                reason: Some(holding.said(ended)),
                 ..c
             };
             self.record(&c);
@@ -950,7 +983,7 @@ impl Net {
         c.sent = sent.load(Ordering::Relaxed) - sent_before;
         c.received = received.load(Ordering::Relaxed) - received_before;
         c.outcome = "done".into();
-        c.reason = Some(ended.said(IDLE));
+        c.reason = Some(holding.said(ended));
         c.ended = Some(now_ms());
         self.record(&c);
     }
@@ -984,13 +1017,19 @@ struct Stir {
     ends: u64,
     /// The bytes of a closing not passed on (`CLOSING`).
     withheld: u64,
+    /// Whether the last chunk carried came from the host: only then is
+    /// what the host says next, with its end, a closing (`CLOSING`) - where
+    /// the worker said last, it may be the answer it waits for.
+    host_last: bool,
+    /// Where the chemist cut it ("offline", "withdrawn": `Task::stopped`).
+    stopped: Option<&'static str>,
 }
 
 impl Holding {
     /// `token`'s run held - one begun at rest, its hold taken - or none.
     fn new(net: &Net, token: Option<&str>, purpose: Option<&str>) -> Arc<Holding> {
         let (withdrawn, ends) = (net.0.withdrawn.load(Ordering::SeqCst), net.0.ends.load(Ordering::SeqCst));
-        let stir = Stir { held: token.is_some(), last: Instant::now(), again: None, writing: 0, cut: None, withdrawn, ends, withheld: 0 };
+        let stir = Stir { held: token.is_some(), last: Instant::now(), again: None, writing: 0, cut: None, withdrawn, ends, withheld: 0, host_last: false, stopped: None };
         Arc::new(Holding { net: net.clone(), token: token.map(str::to_string), purpose: purpose.unwrap_or_default().to_string(), stir: Mutex::new(stir) })
     }
 
@@ -1007,7 +1046,7 @@ impl Holding {
     /// then nothing goes, it is cut (`cut`), and a run it held fails. Where
     /// it had let go, a run of its own begun first, told to the window
     /// before they go.
-    fn moved(&self) -> bool {
+    fn moved(&self, from_host: bool) -> bool {
         let Some(t) = &self.token else { return true };
         let mut stir = self.stir.lock().unwrap();
         if stir.cut.is_some() {
@@ -1017,12 +1056,13 @@ impl Holding {
         let (withdrawn, ends) = (self.net.0.withdrawn.load(Ordering::SeqCst), self.net.0.ends.load(Ordering::SeqCst));
         let look = !stir.held;
         // (the proxy's own words for a connection refused)
+        // (and, where it is the chemist's own switch - offline, a yes withdrawn - what they stopped)
         let mut why = if self.net.offline() {
-            Some("Meno is offline")
+            Some(("Meno is offline", Some(("offline", "stopped: Meno is offline"))))
         } else if (look || withdrawn != stir.withdrawn) && !self.net.allowed(&self.purpose) {
-            Some("not allowed to use the network")
+            Some(("not allowed to use the network", Some(("withdrawn", "stopped: no longer allowed"))))
         } else if (look || ends != stir.ends) && !self.net.known(t) {
-            Some("its task had ended")
+            Some(("its task had ended", None))
         } else {
             None
         };
@@ -1033,16 +1073,22 @@ impl Holding {
                     stir.held = true;
                     stir.again = Some(task);
                 }
-                None => why = Some("its task had ended"),
+                None => why = Some(("its task had ended", None)),
             }
         }
-        if let Some(why) = why {
+        if let Some((why, stop)) = why {
+            // (the chemist's own switch stops a run it held; anything else fails it)
             if stir.held {
-                self.net.spoil(t, Some(why));
+                match stop {
+                    Some((kind, said)) => self.net.stop(t, kind, said),
+                    None => self.net.spoil(t, Some(why)),
+                }
+                stir.stopped = stop.map(|(kind, _)| kind);
             }
             stir.cut = Some(why.into());
             return false;
         }
+        stir.host_last = from_host;
         stir.last = Instant::now();
         stir.writing += 1;
         true
@@ -1063,14 +1109,24 @@ impl Holding {
         stir.last = Instant::now();
     }
 
-    /// Whether it holds its run now.
-    fn held(&self) -> bool {
-        self.token.is_none() || self.stir.lock().unwrap().held
+    /// Whether what the host says now, with its end, may be a closing: it
+    /// has let go, and the last chunk carried came from the host.
+    fn may_close(&self) -> bool {
+        let stir = self.stir.lock().unwrap();
+        self.token.is_some() && !stir.held && stir.host_last
     }
 
-    /// The bytes of a closing not passed on.
-    fn withheld_bytes(&self) -> u64 {
-        self.stir.lock().unwrap().withheld
+    /// Where the chemist cut it, if they did.
+    fn stopped(&self) -> Option<&'static str> {
+        self.stir.lock().unwrap().stopped
+    }
+
+    /// How it ended, in words (`HowEnded::said`), and the bytes of a closing not passed on, where there were some.
+    fn said(&self, ended: HowEnded) -> String {
+        match self.stir.lock().unwrap().withheld {
+            0 => ended.said(IDLE),
+            n => format!("{}; the {n} bytes it said as it did were not passed on", ended.said(IDLE)),
+        }
     }
 
     /// Why it was cut, if it was.
@@ -1198,7 +1254,7 @@ async fn copy(
             }
         };
         let mut n = n;
-        if from_host && n <= CLOSING_MOST && holding.as_ref().is_some_and(|h| !h.held()) {
+        if from_host && n <= CLOSING_MOST && holding.as_ref().is_some_and(|h| h.may_close()) {
             // (a few bytes from the host, let go of: its end, following at once, makes them its closing - nothing passed on, the worker's side closed, the bytes counted)
             let more = tokio::time::timeout(CLOSING, from.read(&mut buf[n..])).await;
             if let Ok(Ok(0) | Err(_)) = more {
@@ -1214,10 +1270,12 @@ async fn copy(
         }
         // (no byte carried outside a run shown and on the record: none at all, where none may begin)
         if let Some(h) = &holding {
-            if !h.moved() {
+            if !h.moved(from_host) {
                 break Ended::Cut;
             }
         }
+        // (counted as it is let go: where this way is stopped mid-write - the other cut - it is on the record all the same)
+        count.fetch_add(n as u64, Ordering::Relaxed);
         let wrote = to.write_all(&buf[..n]).await;
         if let Some(h) = &holding {
             h.wrote();
@@ -1225,7 +1283,6 @@ async fn copy(
         if wrote.is_err() {
             break Ended::Broke;
         }
-        count.fetch_add(n as u64, Ordering::Relaxed);
         moved.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
     };
     let _ = to.shutdown().await;
@@ -1533,7 +1590,7 @@ mod tests {
         // another where it is named, and that one alone
         assert!(host_named(&hosts, "example.org", Some(8443)));
         assert!(!host_named(&hosts, "example.org", Some(443)) && !host_named(&hosts, "example.org", Some(80)));
-        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, reason: None, hosts: Some(hosts) };
+        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, reason: None, stopped: None, hosts: Some(hosts) };
         assert_eq!(task.refuses("pypi.org", 443), None);
         assert_eq!(task.refuses("pypi.org", 80), Some("not a port its consent named"));
         assert_eq!(task.refuses("example.com", 443), Some("not a host its consent named"));
@@ -2277,12 +2334,12 @@ mod tests {
                 let (mut c, _) = ask(port, to, Some(&task.token)).await;
                 hello(&mut c).await;
                 let run = spells_told(&told).last().unwrap()["id"].as_str().unwrap().to_string();
-                let (why, lines) = if offline {
+                let (why, kind, said, lines) = if offline {
                     net.0.offline.store(true, Ordering::SeqCst);
-                    ("Meno is offline", net.0.recent.lock().unwrap().len())
+                    ("Meno is offline", "offline", "stopped: Meno is offline", net.0.recent.lock().unwrap().len())
                 } else {
                     net.revoke("python-env:test");
-                    ("not allowed to use the network", net.0.recent.lock().unwrap().len())
+                    ("not allowed to use the network", "withdrawn", "stopped: no longer allowed", net.0.recent.lock().unwrap().len())
                 };
                 // (mid-way: nothing more carried, either way)
                 c.write_all(b"hello").await.unwrap();
@@ -2290,14 +2347,50 @@ mod tests {
                 till(|| net.0.recent.lock().unwrap().last().is_some_and(|l| l.outcome == "blocked")).await;
                 let line = net.0.recent.lock().unwrap().last().cloned().unwrap();
                 // (on the record under its run, what went before counted)
-                assert_eq!((line.task_id.as_deref(), line.sent, line.received, line.reason.as_deref()), (Some(run.as_str()), 5, 5, Some(why)), "{line:?}");
+                assert_eq!((line.task_id.as_deref(), line.sent, line.received, line.reason.as_deref(), line.stopped.as_deref()), (Some(run.as_str()), 5, 5, Some(why), Some(kind)), "{line:?}");
                 assert_eq!(net.0.recent.lock().unwrap().len(), lines, "the same line, ended");
+                // (its worker's answer that it could not, after the stop, is of the stop: the run ends done, saying the chemist stopped it)
+                task.spoil();
                 task.rest();
                 till(|| net.running() == 0).await;
                 let last = spells_told(&told).last().cloned().unwrap();
-                assert_eq!((last["outcome"].as_str(), last["reason"].as_str()), (Some("failed"), Some(why)));
+                assert_eq!((last["outcome"].as_str(), last["reason"].as_str(), last["stopped"].as_str()), (Some("done"), Some(said), Some(kind)));
                 net.0.offline.store(false, Ordering::SeqCst);
             }
+        });
+    }
+
+    #[test]
+    fn a_small_reply_after_a_long_wait_to_what_the_worker_said_last_reaches_it_under_a_run() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let told = net.told();
+            net.0.quiet_ms.store(300, Ordering::Relaxed);
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            // (a server slower than the quiet while: a short reply, its end at once)
+            let place = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+            let to = place.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                let Ok((mut s, _)) = place.accept().await else { return };
+                let mut b = [0u8; 64];
+                let _ = s.read(&mut b).await;
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                let _ = s.write_all(b"HTTP/1.0 404 Not Found\r\n\r\n").await;
+            });
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            // (the worker reaches out unasked, and says last)
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            c.write_all(b"GET / HTTP/1.0\r\n\r\n").await.unwrap();
+            let mut heard = Vec::new();
+            let _ = tokio::time::timeout(Duration::from_secs(5), c.read_to_end(&mut heard)).await;
+            assert_eq!(heard, b"HTTP/1.0 404 Not Found\r\n\r\n", "the reply reached the worker");
+            drop(c);
+            till(|| net.running() == 0 && net.0.recent.lock().unwrap().last().is_some_and(|l| l.outcome == "done" && l.received > 0)).await;
+            let spells = spells_told(&told);
+            let line = net.0.recent.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(spells.len(), 2, "its first run let go while the server thought; the reply began another: {spells:?}");
+            assert_eq!((line.task_id.as_deref(), line.received), (spells[1]["id"].as_str(), 26), "{line:?}");
         });
     }
 }
