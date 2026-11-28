@@ -23,6 +23,8 @@ const READ_ALREADY: Record<string, number> = {
   "ui/features/Workspace/chem/identityOf.ts": 2,
   // (the atoms of the MOL blocks the plugin made of a structure, halvesMade: a file's atoms, each an element - a held group went out written through readAs)
   "ui/features/Workspace/chem/openStereo.ts": 1,
+  // (the centre an arrangement mark is put on, a metal or a six-bond main-group atom - an element's symbol, no label: arrangementSaid)
+  "ui/features/Workspace/utils/arrangement.ts": 1,
 };
 
 // The other readers of an element's symbol - a valence (`canTakeBond`, `implicitHydrogens`, `valencesAt`) or a halogen (`HALOGEN.has`) - asked

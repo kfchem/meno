@@ -5,12 +5,20 @@
  */
 import type { Atom, Bond } from "../store/types";
 import { atomAs } from "./atomAs";
+import { isMetal } from "../../../../lib/layout/perceive";
 
 /** What an arrangement mark's `as` begins with: it is compared with `arrangementAs`, not `atomAs`. */
 export const ARRANGED = "arrangement|";
 
 /** The line an arrangement mark says. */
 export const ARRANGEMENT_SAID = "Which donors are next to each other is not given.";
+/** The same line on a centre that is no metal - a main-group atom of six bonds, SF4Cl2's S: its bonded atoms are no donors. */
+export const BONDED_ARRANGEMENT_SAID = "Which of its bonded atoms are next to each other is not given.";
+
+/** The line an arrangement mark says on a centre of element `el`: "donors" at a metal, "its bonded atoms" at any other centre. */
+export function arrangementSaid(el: string): string {
+  return isMetal(el) ? ARRANGEMENT_SAID : BONDED_ARRANGEMENT_SAID;
+}
 
 /** The atom as `atomAs` has it, and the pairs of its neighbours next to each other round it, by id: changed by moving them round. */
 export function arrangementAs(a: Pick<Atom, "id" | "el" | "charge" | "x" | "y">, atoms: readonly Pick<Atom, "id" | "x" | "y">[], bonds: readonly Bond[]): string {

@@ -7,7 +7,7 @@ import { isMetal, squarePlanarMetal, type FourView } from "../../../../lib/layou
 import { arrangementOpen, symmetryOrbits, type IdentityInput } from "../../../../lib/chem/identity";
 import { arrangedCentre } from "../../../../lib/chem/arrangement";
 import type { Model } from "../store/types";
-import { ARRANGEMENT_SAID, arrangementAs } from "../utils/arrangement";
+import { arrangementAs, arrangementSaid } from "../utils/arrangement";
 import { drawingOf } from "./drawing";
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -69,7 +69,7 @@ export function arrangementsMarked(model: Model, arranged: ReadonlySet<number> =
     if (arranged.has(a.id)) return a;
     if (!arrangementNotGiven(input, view, i)) return a;
     marked = true;
-    return { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, model.atoms, model.bonds) } };
+    return { ...a, unsure: { said: [arrangementSaid(a.el)], as: arrangementAs(a, model.atoms, model.bonds) } };
   });
   return marked ? { ...model, atoms } : model;
 }

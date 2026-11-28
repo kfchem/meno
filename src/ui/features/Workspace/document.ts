@@ -17,7 +17,7 @@ import { takesLabelPair } from "../../../lib/chem/molWriter";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
-import { ARRANGEMENT_SAID, arrangementAs } from "./utils/arrangement";
+import { arrangementAs, arrangementSaid } from "./utils/arrangement";
 import { atomAs } from "./utils/atomAs";
 import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
@@ -713,7 +713,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
   // its neighbours lie round it as they do now - docs/LAYOUT-2D.md, *A metal with four bonds*)
   for (const [i, a] of atoms.entries()) {
     if (!to.get(a.id)?.arrangementOpen) continue;
-    atoms[i] = { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, atoms, bonds) } };
+    atoms[i] = { ...a, unsure: { said: [arrangementSaid(a.el)], as: arrangementAs(a, atoms, bonds) } };
   }
   // (a centre of a chair laid flat whose group was drawn where its reading could not place it: left open, and marked
   // so, why with it, until it is changed - nothing silent)

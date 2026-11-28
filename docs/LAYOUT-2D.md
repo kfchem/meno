@@ -568,7 +568,9 @@ they hang from.
   four with two axial donors, two terpyridines - is marked all the same,
   though only one arrangement can be; the mark makes no structure wrong.
   A main-group atom of six bonds in a drawing nobody made - SF4Cl2,
-  [PF4Cl2]-, SF3Cl3 - is marked so too, its octahedral mark in a SMILES
+  [PF4Cl2]-, SF3Cl3 - is marked so too, in its own words, "Which of its
+  bonded atoms are next to each other is not given." (a metal's keep
+  "donors"), its octahedral mark in a SMILES
   (@OH1 to @OH30, which Meno reads only at a metal) given or not: Meno
   keeps no arrangement of one yet, so its picture is one nobody gave. Not
   where every way is one (SF6, SF5Cl: its atoms alike by the whole

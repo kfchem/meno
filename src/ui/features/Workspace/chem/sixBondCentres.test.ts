@@ -5,7 +5,7 @@ import { readSmiles } from "../../../../lib/chem/smiles";
 import { identityText, type IdentityInput } from "../../../../lib/chem/identity";
 import type { Model } from "../store/types";
 import { readMarks } from "../utils/figures";
-import { ARRANGEMENT_SAID } from "../utils/arrangement";
+import { ARRANGEMENT_SAID, BONDED_ARRANGEMENT_SAID, arrangementSaid } from "../utils/arrangement";
 import { laidOut } from "./cleanUp";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { arrangementsDrawn, identityOfDrawn } from "./identityOf";
@@ -78,8 +78,8 @@ describe("a main-group centre of six bonds: its bonds across kept as drawn, and 
     const kept = (els: string[]) => markedAt(arrangementsMarked(drawn("S", els.map((el, k) => ({ el, at: angles[k] })))), "S");
     expect(kept(["F", "F", "F", "F", "F", "F"])).toBeUndefined();
     expect(kept(["Cl", "F", "F", "F", "F", "F"])).toBeUndefined();
-    expect(kept(["Cl", "F", "F", "Cl", "F", "F"])).toBe(ARRANGEMENT_SAID);
-    expect(kept(["Cl", "Cl", "Cl", "F", "F", "F"])).toBe(ARRANGEMENT_SAID);
+    expect(kept(["Cl", "F", "F", "Cl", "F", "F"])).toBe(BONDED_ARRANGEMENT_SAID);
+    expect(kept(["Cl", "Cl", "Cl", "F", "F", "F"])).toBe(BONDED_ARRANGEMENT_SAID);
     // (a carbon's or a boron's six neighbours are a cage's: no mark)
     const cage = drawn("B", ["H", "C", "B", "B", "C", "B"].map((el, k) => ({ el, at: angles[k] })));
     expect(readMarks(arrangementsMarked(cage)).atoms.get(1)).toBeUndefined();
@@ -93,10 +93,22 @@ describe("a main-group centre of six bonds: its bonds across kept as drawn, and 
     expect(() => readSmiles(smiles, { metalMarks: true })).toThrow(/only a metal's is read/);
     blockOf = block("S", ["Cl", "F", "F", "F", "F", "Cl"], [180, 60, 120, 240, 300, 0]);
     const typed = await structureFromSmiles(smiles, MENO);
-    expect(markedAt(typed, "S")).toBe(ARRANGEMENT_SAID);
+    expect(markedAt(typed, "S")).toBe(BONDED_ARRANGEMENT_SAID);
     // (and SF6 typed: one arrangement, nothing to say)
     blockOf = block("S", ["F", "F", "F", "F", "F", "F"], [180, 60, 120, 240, 300, 0]);
     expect(markedAt(await structureFromSmiles("F[S@OH1](F)(F)(F)(F)F", MENO), "S")).toBeUndefined();
+  });
+});
+
+describe("the mark's words by the centre: a metal's donors, any other centre's bonded atoms", () => {
+  it("one line for a metal, another for S, Si, P or I", () => {
+    expect(BONDED_ARRANGEMENT_SAID).toBe("Which of its bonded atoms are next to each other is not given.");
+    for (const el of ["Pt", "Co", "Pd"]) expect(arrangementSaid(el)).toBe(ARRANGEMENT_SAID);
+    for (const el of ["S", "Si", "P", "I"]) expect(arrangementSaid(el)).toBe(BONDED_ARRANGEMENT_SAID);
+  });
+  it("a metal kept as it came keeps the donors' line", () => {
+    const co = drawn("Co", ["Cl", "Cl", "N", "N", "N", "N"].map((el, k) => ({ el, at: 60 * k, ...(el === "N" ? { valence: 4 } : {}) })));
+    expect(markedAt(arrangementsMarked({ ...co, atoms: co.atoms.map((a, i) => (i ? a : { ...a, charge: 1 })) }), "Co")).toBe(ARRANGEMENT_SAID);
   });
 });
 
