@@ -40,3 +40,7 @@ __pycache__/
 # PDFium, fetched for the build (scripts/fetch-pdfium.mjs)
 src-tauri/pdfium/
 .roundtrip-rdkit/
+
+# What the type check keeps between runs (tsconfig.json, tsBuildInfoFile);
+# deleting it makes the next check start from nothing
+.cache/
