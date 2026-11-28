@@ -125,7 +125,9 @@ function Resolve-ReadyHome {
 # window's place, jobs and the jobs kept, the working folder chosen for jobs,
 # presets saved, what a later Meno adds - is left out, and so is all of the
 # home outside that folder.
-$script:ReadyKeeps = @("plugins", "uv", "pixi", "tools", "catalogue.json", "catalogue.json.minisig", "catalogue-state.json")
+$script:ReadyKeeps = @("plugins", "uv", "pixi", "tools")
+# (in the copy, what names the folder it was made in: each plugin's uv venv, pixi's .pixi and activation.json, and a set-up cut short)
+$script:MadeWhere = '^((?:uv/plugin-[^/]+/venv)|(?:pixi/plugin-[^/]+/(?:\.pixi|activation\.json))|(?:plugins/\.staging))(?:/|$)'
 # (the copy is cloned where the disk can, -c; links copied as links, -P, and then dealt with one by one)
 $script:CloneArgs = @("-cRP")
 # (keeping Meno up to date: never in a recording, whatever was allowed)
@@ -196,7 +198,13 @@ function Get-ReadyProblem {
     try { $s = Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json -AsHashtable } catch { return "its settings.json is not JSON: '$settings'" }
     if ($s -isnot [System.Collections.IDictionary]) { return "its settings.json is not Meno's: '$settings'" }
     $plugins = $s["plugins"]
-    if (-not ($plugins -is [System.Collections.IDictionary] -and $plugins["firstSetUp"])) { return "the card Meno shows as it first starts was never answered in '$From': answer it there, by hand" }
+    # (the card is not shown again where it was answered; nor, where it was never answered, where plugins were set up there
+    # before and the question about them answered - a home a Meno before the card made: lib/plugins/firstSetUp
+    # `offerFirstSetUp`, installed.rs `set_up_before`, lib/plugins/usedBefore)
+    $answered = $plugins -is [System.Collections.IDictionary] -and $plugins["firstSetUp"] -in @("yes", "no", "done")
+    $setUpBefore = @(foreach ($maker in "uv", "pixi") { Get-ChildItem -LiteralPath (Join-Path $meno "$maker/stamps") -File -Filter "plugin-*.json" -Force -ErrorAction SilentlyContinue }).Count -gt 0
+    $askedBefore = $plugins -is [System.Collections.IDictionary] -and $plugins["usedBeforeAsked"] -eq $true
+    if (-not $answered -and -not ($setUpBefore -and $askedBefore)) { return "the card Meno shows as it first starts was never answered in '$From': answer it there, by hand" }
     return $null
 }
 
@@ -345,6 +353,12 @@ function Copy-ReadyHome {
             $links = @(& /usr/bin/find "$toReal" -type l 2>$null)
             if (-not $links.Count) { break }
             foreach ($link in $links) {
+                # (one inside what names the folder it was made in, taken away below: not followed - a venv's Python leads to
+                # the prepared home's own, by its full path - and that part taken away now, with every link in it)
+                $rel = $link.Substring($toMeno.Length + 1)
+                if ($rel -match $script:MadeWhere) {
+                    Remove-InCopy -Path "$toMeno/$($Matches[1])" -Copy $toReal; continue
+                }
                 $within = @($sources | Where-Object { Test-Within $link $_[0] } | Sort-Object { $_[0].Length } -Descending)
                 $original = $within[0][1] + $link.Substring($within[0][0].Length)
                 $short = $link.Substring($toMeno.Length + 1)

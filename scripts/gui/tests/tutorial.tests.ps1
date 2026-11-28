@@ -96,9 +96,9 @@ function Prepared([string] $name) {
     Put "$m/pixi/plugin-render/.pixi/envs/default/x" "x"
     Put "$m/pixi/plugin-render/pixi.toml" "[project]"
     Put "$m/tools/uv/0.0.1/uv" "uv"
-    Put "$m/catalogue.json" "{}"
-    Put "$m/catalogue.json.minisig" "sig"
-    Put "$m/catalogue-state.json" "{}"
+    Put "$m/plugins/catalogue-2.json" "{}"
+    Put "$m/plugins/catalogue-2.json.minisig" "sig"
+    Put "$m/plugins/catalogue-2-state.json" "{}"
     Put "$m/logs/Meno.log" "a log"
     Put "$m/network-log.jsonl" "{}"
     Put "$m/window-state.json" "{}"
@@ -124,7 +124,7 @@ try {
         Check "a copy made" (Copy-Of $home1 $copy) ""
         $to = Join-Path $copy $menoIn
         Check "the prepared home untouched" ((Listing $home1) -ceq $before) $true
-        $kept = @("plugins/sketchkit/0.1.0/manifest.json", "uv/stamps/plugin-sketchkit.json", "uv/cache/wheel.txt", "uv/plugin-sketchkit/files/data.txt", "pixi/plugin-render/pixi.toml", "tools/uv/0.0.1/uv", "catalogue.json", "catalogue.json.minisig", "catalogue-state.json")
+        $kept = @("plugins/sketchkit/0.1.0/manifest.json", "uv/stamps/plugin-sketchkit.json", "uv/cache/wheel.txt", "uv/plugin-sketchkit/files/data.txt", "pixi/plugin-render/pixi.toml", "tools/uv/0.0.1/uv", "plugins/catalogue-2.json", "plugins/catalogue-2.json.minisig", "plugins/catalogue-2-state.json")
         Check "the plugins, their makers' folders, the tools and the list copied" (@($kept | Where-Object { -not (Test-Path -LiteralPath (Join-Path $to $_)) }) -join ", ") ""
         $gone = @("logs", "network-log.jsonl", "window-state.json", "jobs", "jobs-folder.json", "plugins/.staging", "uv/plugin-sketchkit/venv", "pixi/plugin-render/.pixi", "pixi/plugin-render/activation.json")
         Check "the log, the window's place, jobs, a set-up cut short and what names where it was made left out" (@($gone | Where-Object { Test-Path -LiteralPath (Join-Path $to $_) }) -join ", ") ""
@@ -259,6 +259,33 @@ try {
         Check "a folder Meno was never started in: said so" ((& $fail (Join-Path $scratch "empty")) -like "*holds no Meno started there*") $true
         Put "unanswered/$menoIn/settings.json" '{"plugins": {"removed": []}}'
         Check "a home whose first card was not answered: said so" ((& $fail (Join-Path $scratch "unanswered")) -like "*never answered*") $true
+        # (a home a Meno before the card made: plugins set up there, the question about them answered, no card's answer)
+        Put "before/$menoIn/settings.json" '{"plugins": {"removed": [], "usedBeforeAsked": true}}'
+        Put "before/$menoIn/uv/stamps/plugin-sketchkit.json" "{}"
+        Check "a home whose plugins were set up before the card, and asked about: copied" (Copy-Of (Join-Path $scratch "before") (Join-Path $scratch "run-before/h")) ""
+        Put "notasked/$menoIn/settings.json" '{"plugins": {"removed": []}}'
+        Put "notasked/$menoIn/uv/stamps/plugin-sketchkit.json" "{}"
+        Check "plugins set up before, the question about them not answered: said so" ((& $fail (Join-Path $scratch "notasked")) -like "*never answered*") $true
+        Put "nostamp/$menoIn/settings.json" '{"plugins": {"removed": [], "usedBeforeAsked": true}}'
+        Check "asked about plugins set up before, none set up: said so" ((& $fail (Join-Path $scratch "nostamp")) -like "*never answered*") $true
+        Put "odd/$menoIn/settings.json" '{"plugins": {"firstSetUp": "maybe"}}'
+        Check "a card's answer Meno does not know: said so" ((& $fail (Join-Path $scratch "odd")) -like "*never answered*") $true
+        # (a venv's Python, a link to the prepared home's own by its full path, as uv makes it: the venv left out, not followed)
+        $outside = Join-Path $scratch "elsewhere/python3.12"
+        Put "elsewhere/python3.12" "a python"
+        $home3 = Prepared "home3"
+        [System.IO.Directory]::CreateDirectory((Join-Path $home3 "$menoIn/uv/plugin-sketchkit/venv/bin")) | Out-Null
+        Link "home3/$menoIn/uv/plugin-sketchkit/venv/bin/python" $outside
+        Link "home3/$menoIn/pixi/plugin-render/.pixi/envs/default/python" $outside
+        Link "home3/$menoIn/plugins/.staging/half/python" $outside
+        $before3 = Listing $home3
+        $was3 = Listing (Join-Path $scratch "elsewhere")
+        $to3 = Join-Path $scratch "run3/h"
+        Check "a venv's link out of the prepared home: the copy made" (Copy-Of $home3 $to3) ""
+        Check "the venv, .pixi and the set-up cut short left out; the copy holds no link" "$(Test-Path -LiteralPath "$to3/$menoIn/uv/plugin-sketchkit/venv") $(Test-Path -LiteralPath "$to3/$menoIn/pixi/plugin-render/.pixi") $(Test-Path -LiteralPath "$to3/$menoIn/plugins/.staging") $(NoLinks $to3)" "False False False 0"
+        Check "the prepared home and what its links lead to untouched" "$((Listing $home3) -ceq $before3) $((Listing (Join-Path $scratch 'elsewhere')) -ceq $was3)" "True True"
+        Link "home3/$menoIn/uv/plugin-sketchkit/files/python" $outside
+        Check "a link out of the prepared home elsewhere in uv: still refused" ((& $fail $home3) -like "*out of the prepared home*") $true
     }
     & $tutorial { param($raw) Start-Tutorial -Raw $raw -Dest $raw } (Join-Path $scratch "run10")
     $err = try { & $tutorial { New-TutorialHome -Ready } | Out-Null; "" } catch { "$_" }
