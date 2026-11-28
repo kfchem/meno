@@ -9,7 +9,7 @@
  * half way down the third page's place, which runs from just above its top
  * to just above the next one's.
  */
-import { fingersStep, type Pt } from "../input/pinch";
+import { fingersSince, type Pt } from "../input/pinch";
 
 /** The margin round the pages and the gap between them, in CSS pixels. */
 export const COLUMN_MARGIN = 12;
@@ -131,6 +131,9 @@ export function keptWithin(l: ColumnLayout, width: number, tall: number, top: nu
  *
  * Worked out from where the fingers were when they came down, not step by
  * step, so that a pinch out and back in comes back to where it began.
+ * Fingers come closer than `LEAST_SPREAD_PX` hold the zoom they had
+ * reached there (`fingersSince`); a coordinate that is not a number
+ * changes nothing.
  */
 export function pinchedColumn(
   sizes: readonly (readonly [number, number])[],
@@ -141,7 +144,9 @@ export function pinchedColumn(
   least: number,
   most: number,
 ): ColumnView {
-  const { scale, from, to } = fingersStep(fingers.a0, fingers.b0, fingers.a1, fingers.b1);
+  const { a0, b0, a1, b1 } = fingers;
+  if (![a0, b0, a1, b1].every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) return view;
+  const { scale, from, to } = fingersSince(a0, b0, a1, b1);
   const zoom = Math.min(most, Math.max(least, view.zoom * scale));
   const held = pointOn(columnLayout(sizes, width, view.zoom), view.left + from.x, view.top + from.y);
   const l = columnLayout(sizes, width, zoom);

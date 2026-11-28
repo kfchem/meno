@@ -17,7 +17,9 @@
  * out, the point midway between them held there, and moved together they
  * carry it with them. Lifting either goes on as the other's drag, from
  * where it is. Where there is no zoom (a text, a Markdown text), and for a
- * third finger, a second is not followed.
+ * third finger, a second is not followed. A first finger put down - the
+ * system's primary pointer, so no other finger is on the screen - always
+ * starts afresh, whatever a finger whose lift never came left behind.
  */
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import type { Pt } from "../../../../lib/input/pinch";
@@ -104,9 +106,15 @@ export function fingerScroll<V>(el: Followed, { scrollBy, press, pinch }: Finger
   const onDown = (e: PointerEvent) => {
     // (anything put down stops a glide)
     stopGlide();
-    if (!isFinger(e) || two) return;
+    if (!isFinger(e)) return;
+    if (e.isPrimary) {
+      // (a first finger: no other is on the screen, so whatever was left of one whose lift never came is let go, and this one starts afresh)
+      two = null;
+      finger = { id: e.pointerId, down: e, x: e.clientX, y: e.clientY, now: { x: e.clientX, y: e.clientY }, dragging: false, mx: [], my: [] };
+      return;
+    }
     const f = finger;
-    if (f && pinch && e.pointerId !== f.id) {
+    if (!two && f && pinch && e.pointerId !== f.id) {
       // (a second finger: a pinch, from where both are - the first's press, or drag, ends here)
       finger = null;
       const at = { x: e.clientX, y: e.clientY };
@@ -115,8 +123,6 @@ export function fingerScroll<V>(el: Followed, { scrollBy, press, pinch }: Finger
       hold(e.pointerId);
       return;
     }
-    if (f || !e.isPrimary) return;
-    finger = { id: e.pointerId, down: e, x: e.clientX, y: e.clientY, now: { x: e.clientX, y: e.clientY }, dragging: false, mx: [], my: [] };
   };
   /** The finger left of two, lifted or cancelled: a drag from where it is now, as if it had been one all along. */
   const leftOf = (gone: number) => {

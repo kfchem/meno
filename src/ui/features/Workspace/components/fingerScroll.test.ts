@@ -128,20 +128,36 @@ function pinched() {
   const begun: number[] = [];
   const pinches: { begun: number; a0: number[]; b0: number[]; a1: number[]; b1: number[] }[] = [];
   const xy = (p: { x: number; y: number }) => [p.x, p.y];
-  fingerScroll(el as never, {
+  let next: ((t: number) => void) | null = null;
+  const off = fingerScroll(el as never, {
     scrollBy: (dx, dy) => moved.push([dx, dy]),
     press: (d) => presses.push(d.type),
     pinch: {
       begin: () => begun.push(begun.length + 1),
       to: (b, f) => pinches.push({ begun: b, a0: xy(f.a0), b0: xy(f.b0), a1: xy(f.a1), b1: xy(f.b1) }),
     },
-  }, { ask: () => 1, cancel: () => {} });
+  }, {
+    ask: (f) => {
+      next = f;
+      return 1;
+    },
+    cancel: () => {
+      next = null;
+    },
+  });
   const send = (type: string, id: number, x: number, y: number, more: Record<string, unknown> = {}) => {
-    const e = Object.assign(new Event(type), { pointerId: id, pointerType: "touch", isPrimary: id === 1, clientX: x, clientY: y, ...more });
-    Object.defineProperty(e, "timeStamp", { value: 0 });
+    const { t = 0, ...rest } = more;
+    const e = Object.assign(new Event(type), { pointerId: id, pointerType: "touch", isPrimary: id === 1, clientX: x, clientY: y, ...rest });
+    Object.defineProperty(e, "timeStamp", { value: t });
     el.dispatchEvent(e);
   };
-  return { el, moved, presses, begun, pinches, send };
+  const frame = (t: number) => {
+    const f = next;
+    next = null;
+    f?.(t);
+    return !!f;
+  };
+  return { el, off, moved, presses, begun, pinches, send, frame };
 }
 
 describe("two fingers over a PDF in the column", () => {
@@ -245,5 +261,91 @@ describe("two fingers over a PDF in the column", () => {
     b.send("pointermove", 180, 300, 16, { pointerId: 2, isPrimary: false });
     b.send("pointermove", 100, 280, 24);
     expect(b.moved).toEqual([[0, 20]]);
+  });
+});
+
+describe("a finger whose lift never came", () => {
+  it("over a text, leaves it moved by the next first finger put down, as if it had been lifted", () => {
+    const b = body();
+    b.send("pointerdown", 100, 300, 0);
+    b.send("pointermove", 100, 290, 16);
+    b.send("pointerdown", 100, 400, 500, { pointerId: 3 });
+    b.send("pointermove", 100, 380, 516, { pointerId: 3 });
+    b.send("pointermove", 100, 280, 532);
+    expect(b.moved).toEqual([
+      [0, 10],
+      [0, 20],
+    ]);
+  });
+
+  it("over a PDF, makes no pinch of the next first finger put down: that one moves it", () => {
+    const b = pinched();
+    b.send("pointerdown", 1, 100, 300);
+    b.send("pointerdown", 3, 50, 400, { isPrimary: true });
+    b.send("pointermove", 3, 50, 380, { isPrimary: true });
+    expect(b.begun).toEqual([]);
+    expect(b.moved).toEqual([[0, 20]]);
+  });
+
+  it("nor do two whose lifts never came: the next first finger moves it, and a second with it pinches afresh", () => {
+    const b = pinched();
+    b.send("pointerdown", 1, 100, 300);
+    b.send("pointerdown", 2, 140, 300);
+    b.send("pointermove", 2, 150, 300);
+    b.send("pointerdown", 4, 50, 400, { isPrimary: true });
+    b.send("pointermove", 4, 50, 380, { isPrimary: true });
+    b.send("pointermove", 2, 170, 300);
+    expect(b.moved).toEqual([[0, 20]]);
+    expect(b.pinches.length).toBe(1);
+    b.send("pointerdown", 5, 90, 380);
+    b.send("pointermove", 5, 100, 380);
+    expect(b.begun).toEqual([1, 2]);
+    expect(b.pinches[1]).toEqual({ begun: 2, a0: [50, 380], b0: [90, 380], a1: [50, 380], b1: [100, 380] });
+  });
+
+  it("its pointer's capture lost on the way, leaves the next first finger a finger again", () => {
+    const b = pinched();
+    b.send("pointerdown", 1, 100, 300);
+    b.send("pointermove", 1, 100, 280);
+    b.send("lostpointercapture", 1, 100, 280);
+    b.send("pointerdown", 6, 60, 300, { isPrimary: true });
+    b.send("pointermove", 6, 60, 250, { isPrimary: true });
+    expect(b.moved).toEqual([
+      [0, 20],
+      [0, 50],
+    ]);
+    expect(b.begun).toEqual([]);
+  });
+});
+
+describe("two fingers pinching", () => {
+  it("are let go of when the column closes: their moves after ask for nothing, and the body is as it was", () => {
+    const b = pinched();
+    b.send("pointerdown", 1, 100, 300);
+    b.send("pointerdown", 2, 140, 300);
+    b.send("pointermove", 2, 160, 300);
+    b.off();
+    b.send("pointermove", 2, 200, 300);
+    b.send("pointermove", 1, 80, 300);
+    b.send("pointerup", 1, 80, 300);
+    expect(b.pinches.length).toBe(1);
+    expect(b.moved).toEqual([]);
+    expect(b.el.style.touchAction).toBe("");
+  });
+
+  it("put down while it glides, stop the glide and pinch from where it stopped", () => {
+    const b = pinched();
+    b.send("pointerdown", 1, 100, 400, { t: 0 });
+    [16, 32, 48, 64].forEach((t, i) => b.send("pointermove", 1, 100, 380 - 20 * i, { t }));
+    b.send("pointerup", 1, 100, 320, { t: 70 });
+    expect(b.frame(80)).toBe(true);
+    const glided = b.moved.length;
+    b.send("pointerdown", 1, 100, 300, { t: 100 });
+    b.send("pointerdown", 2, 140, 300, { t: 110 });
+    b.send("pointermove", 2, 160, 300, { t: 120 });
+    expect(b.frame(130)).toBe(false);
+    expect(b.moved.length).toBe(glided);
+    expect(b.begun).toEqual([1]);
+    expect(b.pinches).toEqual([{ begun: 1, a0: [100, 300], b0: [140, 300], a1: [100, 300], b1: [160, 300] }]);
   });
 });

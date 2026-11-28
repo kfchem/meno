@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LEAST_SPREAD_PX } from "../input/pinch";
 import { atOf, COLUMN_GAP, COLUMN_MARGIN, columnLayout, deepest, pageInView, pagesInView, pageUnder, pinchedColumn, pointOf, pointOn, topOf, type ColumnView } from "./column";
 
 const A4: [number, number] = [595, 842];
@@ -108,6 +109,32 @@ describe("two fingers pinching the column", () => {
     expect(pinch({ zoom: 0.5, top: 0, left: 0 }, [0, 150], [100, 150], [45, 150], [55, 150]).zoom).toBe(0.25);
     const top = pinch({ zoom: 1, top: 0, left: 0 }, [40, 150], [60, 150], [40, 250], [60, 250]);
     expect(top).toEqual({ zoom: 1, top: 0, left: 0 });
+  });
+
+  it("closed nearer than a pinch can be measured, holds the zoom it had there and does not spring back", () => {
+    const begun: ColumnView = { zoom: 4, top: 600, left: 100 };
+    const at = (spread: number) => pinch(begun, [0, 150], [100, 150], [50 - spread / 2, 150], [50 + spread / 2, 150]).zoom;
+    expect(at(10)).toBeCloseTo(0.4);
+    expect(at(LEAST_SPREAD_PX)).toBeCloseTo((4 * LEAST_SPREAD_PX) / 100);
+    expect(at(LEAST_SPREAD_PX - 0.1)).toBeCloseTo((4 * LEAST_SPREAD_PX) / 100);
+    expect(at(2)).toBeCloseTo((4 * LEAST_SPREAD_PX) / 100);
+    expect(at(0)).toBeCloseTo((4 * LEAST_SPREAD_PX) / 100);
+  });
+
+  it("begun with the fingers nearer than that, zooms as soon as they part far enough, from where it was, with no jump", () => {
+    const begun: ColumnView = { zoom: 1, top: 100, left: 0 };
+    const at = (spread: number) => pinch(begun, [47.5, 150], [52.5, 150], [50 - spread / 2, 150], [50 + spread / 2, 150]).zoom;
+    expect(at(5)).toBe(1);
+    expect(at(LEAST_SPREAD_PX)).toBeCloseTo(1);
+    expect(at(LEAST_SPREAD_PX + 0.1)).toBeCloseTo((LEAST_SPREAD_PX + 0.1) / LEAST_SPREAD_PX);
+    expect(at(2 * LEAST_SPREAD_PX)).toBeCloseTo(2);
+    expect(at(120)).toBe(8);
+  });
+
+  it("given a place that is not a number, changes nothing", () => {
+    const begun: ColumnView = { zoom: 2, top: 300, left: 40 };
+    expect(pinch(begun, [40, 150], [60, 150], [NaN, 150], [70, 150])).toEqual(begun);
+    expect(pinch(begun, [40, Infinity], [60, 150], [30, 150], [70, 150])).toEqual(begun);
   });
 
   it("taken out and back in, a frame at a time, comes back to where it began - past a limit and back too", () => {
