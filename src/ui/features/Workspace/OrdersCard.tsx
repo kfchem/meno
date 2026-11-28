@@ -24,7 +24,10 @@ export default function OrdersCard({ onGive, onCancel }: { onGive: (smiles: stri
   useEffect(() => {
     if (!inFront) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key !== "Escape") return;
+      // (taken: nothing behind it - the column - answers it too)
+      e.preventDefault();
+      onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

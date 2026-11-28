@@ -715,12 +715,14 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // any press - on the page, in a talk, anywhere - or Escape stops the molecules turning once, gently (utils/turnOnce)
   useEffect(() => {
     const stop = () => {
-      if (!turningOnce(store)) return;
+      if (!turningOnce(store)) return false;
       stopTurnsOnce(store);
       invalidate();
+      return true;
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") stop();
+      // (one that stopped them is taken: the column, behind, left open)
+      if (e.key === "Escape" && stop()) e.preventDefault();
     };
     window.addEventListener("pointerdown", stop, true);
     window.addEventListener("keydown", onKey, true);

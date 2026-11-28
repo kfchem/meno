@@ -128,7 +128,11 @@ export default function MarkdownBody({ entry, reader, value, name = "Text" }: Pr
     } else if (mod && key === "a") {
       e.preventDefault();
       reader.selectAll();
-    } else if (e.key === "Escape") reader.select({ anchor: reader.sel.head, head: reader.sel.head });
+    } else if (e.key === "Escape" && reader.sel.anchor !== reader.sel.head) {
+      // (words selected let go first, the column left open; with none, Escape goes on to shut it)
+      e.preventDefault();
+      reader.select({ anchor: reader.sel.head, head: reader.sel.head });
+    }
     else if (e.key === "Home" || (mod && e.key === "ArrowUp")) at(0);
     else if (e.key === "End" || (mod && e.key === "ArrowDown")) at(reader.mostTop);
     else if (e.key === "ArrowDown") at(reader.scrollTop + ARROW_PX);

@@ -253,6 +253,8 @@ import type { SelectableKind } from "./store/slices/selectionSlice";
 import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menuScope";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
+import { shutColumnOnceHeard } from "./columnEscape";
+import { useTiedSaying } from "./utils/tiedSaying";
 import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapOffered, mapStanding, numberingSaid, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
@@ -476,6 +478,8 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
+  // (a warning about a structure, tied to it: out of sight while an undo has it gone, back with a redo - utils/tiedSaying)
+  const { shown: chemShown, sayAbout } = useTiedSaying(documentOf(store), chemError, setChemError);
   // (what the chemistry's line offers to do, where it offers something: a plugin chosen to read pictures, by name, where Meno read none -
   //  with the words it was offered beside, shown only while the line says them: another error put there lets it go)
   const [chemOffer, setChemOffer] = useState<{ what: string; run: () => void; beside: string | null } | null>(null);
@@ -489,16 +493,14 @@ function WorkspaceContent({
       setChemError(null);
       cleanUp(store, aroundAtom, flat)
         .catch((e: unknown) =>
-          setChemError(
-            // (what it left as drawn, named - the rest laid out: its own words; anything else, a failure)
-            e instanceof CleanUpRefused ? e.message : `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
-          ),
+          // (what it left as drawn, named - the rest laid out: its own words, about those structures; anything else, a failure)
+          e instanceof CleanUpRefused ? sayAbout(e.message, e.atoms) : setChemError(`Clean-up failed: ${e instanceof Error ? e.message : String(e)}`),
         )
         .finally(() => {
           cleaningNow.current = false;
         });
     },
-    [store],
+    [store, sayAbout],
   );
   // The page in view, in world units: what the camera sees of it
   const viewBox = useCallback((): Box | null => {
@@ -1146,6 +1148,9 @@ function WorkspaceContent({
       } else if (isDeselectKey(e) && (selected || st.chosen3d || st.pdfSel || st.pdfBox) && !busy && !menu) {
         // (Esc with the menu open closes the menu only)
         st.clearSel();
+      } else if (isDeselectKey(e) && st.textsOpen && !busy && !menu) {
+        // (and, nothing smaller left, Esc shuts the column as its Hide does - once no card over the page has taken it: ./columnEscape)
+        shutColumnOnceHeard(e, store);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1676,7 +1681,7 @@ function WorkspaceContent({
     import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
     files: { text: files.error, dismiss: files.dismissError },
     chem: {
-      text: chemError,
+      text: chemShown,
       dismiss: () => {
         setChemError(null);
         setChemOffer(null);
@@ -2362,7 +2367,7 @@ function WorkspaceContent({
           onSaveAbbreviation={() => {
             const { model: m, sel } = store.getState();
             const made = abbreviationFromSelection(m, sel.atoms);
-            if ("problem" in made) setChemError(`This selection cannot be saved as an abbreviation. ${made.problem}`);
+            if ("problem" in made) sayAbout(`This selection cannot be saved as an abbreviation. ${made.problem}`, sel.atoms);
             else openSaveAbbreviation([...sel.atoms], made.smiles, made.notKept);
           }}
           onRunStep={() => {

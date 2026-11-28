@@ -2832,7 +2832,11 @@ lipids each have their own way of being drawn, which it should know.
      aziridine's, a B), where a wedge states none, more groups round an
      atom than a tetrahedral centre's four (a phosphorane's P), or a wavy
      bond at it - rather than lose it, saying which of these it is
-     (`drawn.ts` `unreadWhy`). A centre whose fourth group is a lone pair
+     (`drawn.ts` `unreadWhy`). What it says, in the line over the canvas,
+     is about the structures it left as drawn: an undo that takes them
+     away takes the words out of sight, a redo brings them back, and
+     anything drawn meanwhile, or the structures deleted, lets them go
+     (`utils/tiedSaying.ts`). A centre whose fourth group is a lone pair
      that keeps its configuration (*Centres by a lone pair*) - a sulfoxide's
      or a sulfonium's S, a phosphine's P, an oxaziridine's N - is read from
      its wedge and laid out like any other, on one wedge. A wedge
