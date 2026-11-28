@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alkaliOnCarbon, atOnePlace, besidePieces, besideReach, BESIDE_PIECE, ionApartSaid, openLabels, valenceUnread, wordsApart, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
+import { alkaliOnCarbon, atOnePlace, besidePieces, besideReach, BESIDE_PIECE, ionApartSaid, openLabels, OVER_SAID, valenceUnread, wordsApart, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
 import type { ReadAtom, ReadBond } from "./read";
 
 describe("how finely a box holding pictures is drawn to be traced", () => {
@@ -283,6 +283,45 @@ describe("an atom whose bonds its element cannot hold uncharged, no charge read"
     expect(kinds(mol([null, "N", "O", "O"], [[0, 1, 1], [1, 2, 2], [1, 3, 2]]))).toEqual([]);
     // (its plus read)
     expect(kinds(mol([null, "N+", null, null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 1]]))).toEqual([]);
+  });
+});
+
+describe("too many bonds, where a plain line is a dative bond or the element's valence is as drawn", () => {
+  const mol = (labels: (Partial<ReadAtom> | string | null)[], bonds: [number, number, 1 | 2 | 3][]) => ({
+    atoms: labels.map((l, k): ReadAtom => ({ x: k, y: 0, ...(typeof l === "string" ? { label: l } : (l ?? {})) })),
+    bonds: bonds.map(([a, b, order]): ReadBond => ({ a, b, order })),
+  });
+  const kinds = (m: ReturnType<typeof mol>) => [...valenceUnread(m)];
+
+  it("is not said on a donor bonded to a metal by a plain line: a pyridine's N, a phosphine's P, an ether's O", () => {
+    // (a pyridine's N drawn with its double bond: C=N-C and the line to Pd)
+    expect(kinds(mol([null, "N", null, "Pd"], [[0, 1, 2], [1, 2, 1], [1, 3, 1]]))).toEqual([]);
+    // (Ph3P-Pd: four single bonds at P, one to the metal)
+    expect(kinds(mol([null, null, null, "P", "Pd"], [[0, 3, 1], [1, 3, 1], [2, 3, 1], [3, 4, 1]]))).toEqual([]);
+    // (THF's O on Mg)
+    expect(kinds(mol([null, "O", null, "Mg"], [[0, 1, 1], [1, 2, 1], [1, 3, 1]]))).toEqual([]);
+  });
+
+  it("is not said on a halogen above its valence of one: an iodane's I, a perchlorate's Cl", () => {
+    // (PhI(OAc)2: I with three single bonds; an IBX-like I with a double bond to O as well)
+    expect(kinds(mol([null, "I", "O", "O", null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [2, 4, 1], [3, 5, 1]]))).toEqual([]);
+    expect(kinds(mol([null, "I", "O", "O", null], [[0, 1, 1], [1, 2, 1], [1, 3, 2], [2, 4, 1]]))).toEqual([]);
+    // (perchlorate drawn with three double bonds and its O-: Cl as drawn)
+    expect(kinds(mol(["Cl", "O", "O", "O", { label: "O", charge: -1 }], [[0, 1, 2], [0, 2, 2], [0, 3, 2], [0, 4, 1]]))).toEqual([]);
+  });
+
+  it("is not said on an adduct drawn with a plain line, a donor on a B or an Al of four - but a B of four with no donor is", () => {
+    // (an amine-borane H3N-BH3 drawn as Me3N-BMe3: N of four, B of four)
+    expect(kinds(mol([null, null, null, "N", "B", null, null, null], [[0, 3, 1], [1, 3, 1], [2, 3, 1], [3, 4, 1], [4, 5, 1], [4, 6, 1], [4, 7, 1]]))).toEqual([]);
+    // (an etherate, Et2O-AlMe3: O of three on Al of four)
+    expect(kinds(mol([null, "O", null, "Al", null, null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [3, 4, 1], [3, 5, 1], [3, 6, 1]]))).toEqual([]);
+    // (a tetrafluoroborate, a tetraphenylborate: B of four, its minus not shown)
+    expect(kinds(mol(["B", "F", "F", "F", "F"], [[0, 1, 1], [0, 2, 1], [0, 3, 1], [0, 4, 1]]))).toEqual([[0, "many"]]);
+    expect(kinds(mol(["B", null, null, null, null], [[0, 1, 1], [0, 2, 1], [0, 3, 1], [0, 4, 1]]))).toEqual([[0, "many"]]);
+  });
+
+  it("says too many in one sentence, true whether the sign was drawn or not", () => {
+    expect(OVER_SAID).toBe("As read, it has more bonds than its element takes without a charge, and no charge: its charge's sign is not shown or was not read.");
   });
 });
 

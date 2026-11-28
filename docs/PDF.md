@@ -541,7 +541,16 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   or 6; F, Cl, Br, I 1), is unsure and says so. Too few - an acetate's O
   whose minus was not traced, a Cl read alone with no bond - would
   otherwise be filled with H; too many - an N or a B with four bonds, an
-  O with three - had a plus or a minus not read. A bond counts as its
+  O with three - has a plus or a minus not shown or not read. Too many is
+  judged on B, N, O, S and P alone: a halogen's higher valences (an
+  iodane's I, a perchlorate's Cl) are as drawn. It is never said on an
+  atom bonded to a metal, whose donor bond is often drawn as a plain
+  line (a pyridine's N on Pd, a phosphine's P, an ether's O on Mg), nor
+  on a donor with one bond too many bonded to a B or an Al of four bonds
+  (an amine-borane, an etherate drawn with a plain line). A B of four
+  bonds with no such donor - a tetrafluoroborate whose minus is not
+  shown - is said. An element the table does not hold, such as Se, is
+  not judged. A bond counts as its
   order, one of a ring drawn with a circle as one and a half (an atom of
   such a ring is not judged to have too many: its ring's order is open),
   a dative bond none. A chemist writes a hetero atom's H's, so a ring's

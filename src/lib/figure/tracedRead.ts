@@ -119,7 +119,7 @@ export function wordsApart(read: Pick<FigureRead, "atoms" | "bonds" | "bond" | "
 }
 
 export const OPEN_SAID = "As read, it has fewer bonds than its element takes and no charge: a charge's sign, a bond or an H was not read.";
-export const OVER_SAID = "As read, it has more bonds than its element takes without a charge, and no charge: its charge's sign was not read.";
+export const OVER_SAID = "As read, it has more bonds than its element takes without a charge, and no charge: its charge's sign is not shown or was not read.";
 /** An open atom with a lone ion standing apart: one sentence for both. */
 export const openIonSaid = (ion: string) => `As read, it has fewer bonds than its element takes and no charge, and "${ion}" stands apart: its charge's sign was not read, "${ion}" its counter-ion.`;
 /** A charged structure with a lone ion standing apart, read as no atom. */
@@ -129,7 +129,8 @@ export const ionApartSaid = (ion: string) => `"${ion}" stands apart, read as no 
  * The atoms of a read written as their element alone - the label that one symbol, or read as that element - of the elements whose
  * uncharged valences Meno knows (lib/chem `NORMAL_VALENCES`), carbon aside, with no charge read, none drawn by it and no radical's dots,
  * whose bonds the element cannot hold uncharged: "few", fewer than its least valence (an O with one, a Cl with none); "many", more than
- * that and none of its valences (an N or a B with four, an O with three; an S with four or six, a P with five, are as drawn). A bond counts
+ * that and none of its valences (an N or a B with four, an O with three; an S with four or six, a P with five, are as drawn), judged on
+ * B, N, O, S and P alone (`MANY_JUDGED`), never on an atom bonded to a metal, nor on a donor and the B or Al of four it is bonded to. A bond counts
  * as its order, a bond of a ring drawn with a circle as one and a half, a dative bond none; an atom with a bond of such a ring is not
  * judged "many" (its order is the ring's to work out). A chemist writes a hetero atom's H's, so a ring's or an ether's O, a carbonyl's O,
  * an amine's, an imine's or a nitrile's N are never "few".
@@ -145,15 +146,45 @@ export function valenceUnread(read: Pick<FigureRead, "atoms" | "bonds">): Map<nu
     if (b.aromatic) ringed.add(b.a).add(b.b);
   }
   const out = new Map<number, "few" | "many">();
+  const elOf = (i: number) => read.atoms[i].label ?? read.atoms[i].el ?? "";
+  const near = read.atoms.map((): number[] => []);
+  for (const b of read.bonds) {
+    near[b.a].push(b.b);
+    near[b.b].push(b.a);
+  }
+  const takesOf = (i: number) => (elOf(i) === "C" ? undefined : NORMAL_VALENCES[elOf(i)]);
+  const uncharged = (i: number) => !read.atoms[i].charge && !read.atoms[i].marked && !read.atoms[i].dots;
+  // (a donor with one bond more than its element takes, bonded to a B or an Al of four: an adduct drawn with a plain line - an amine-borane,
+  //  an etherate - neither atom of it said)
+  const donorOne = (i: number) => DONOR.has(elOf(i)) && uncharged(i) && !ringed.has(i) && sum[i] === takesOf(i)![0] + 1;
+  const acceptorFour = (i: number) => ACCEPTOR.has(elOf(i)) && uncharged(i) && sum[i] === 4;
+  const adduct = (i: number) => (donorOne(i) && near[i].some(acceptorFour)) || (acceptorFour(i) && near[i].some(donorOne));
   read.atoms.forEach((a, i) => {
-    const el = a.label ?? a.el ?? "";
-    const takes = el === "C" ? undefined : NORMAL_VALENCES[el];
-    if (!takes || a.charge || a.marked || a.dots) return;
+    const takes = takesOf(i);
+    if (!takes || !uncharged(i)) return;
     if (sum[i] < takes[0]) out.set(i, "few");
-    else if (!ringed.has(i) && sum[i] > takes[0] && !takes.includes(sum[i])) out.set(i, "many");
+    else if (
+      MANY_JUDGED.has(elOf(i)) &&
+      !ringed.has(i) &&
+      sum[i] > takes[0] &&
+      !takes.includes(sum[i]) &&
+      // (bonded to a metal: a donor's bond to it drawn as a plain line - a pyridine's to Pd, a phosphine's, an ether's to Mg)
+      !near[i].some((j) => metal.has(elOf(j))) &&
+      !adduct(i)
+    )
+      out.set(i, "many");
   });
   return out;
 }
+
+/**
+ * The elements judged to have too many bonds (`valenceUnread`): those of the second and third rows whose higher valences, uncharged, are
+ * the table's own; a halogen's higher valences - an iodane's I, a perchlorate's Cl - are as drawn.
+ */
+const MANY_JUDGED = new Set(["B", "N", "O", "S", "P"]);
+/** The donors and acceptors of an adduct drawn with a plain line (`valenceUnread`). */
+const DONOR = new Set(["N", "O", "S", "P"]);
+const ACCEPTOR = new Set(["B", "Al"]);
 
 /** The atoms `valenceUnread` finds with too few bonds. */
 export const openLabels = (read: Pick<FigureRead, "atoms" | "bonds">): number[] => [...valenceUnread(read)].flatMap(([i, k]) => (k === "few" ? [i] : []));
