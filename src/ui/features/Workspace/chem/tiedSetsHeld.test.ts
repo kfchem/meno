@@ -7,11 +7,16 @@ import { describe, expect, it } from "vitest";
 import { isomersOf } from "../../../../lib/chem/isomers";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { asGiven, blocksRead } from "./menoIsomers";
+import type { Model } from "../store/types";
 import { drawnFromSmiles } from "./testdata/identityCases";
 
 /** The centres the first stereoisomer of a structure keeps among the frames made (chem/menoIsomers `asGiven`), by element. */
 function kept(smiles: string): string[] {
-  const part = drawnFromSmiles(smiles);
+  return keptOf(drawnFromSmiles(smiles));
+}
+
+/** The same, of a structure drawn by hand. */
+function keptOf(part: Model): string[] {
   const block = writeMolfile(part);
   const read = blocksRead([block])!;
   const counted = isomersOf(read.input);
@@ -26,9 +31,27 @@ describe("a set of tied bridgeheads is kept only where turning it makes another 
     ["DABCO", "C1CN2CCN1CC2"],
     ["bicyclo[2.2.2]octane", "C1CC2CCC1CC2"],
     ["adamantane", "C1C2CC3CC1CC(C2)C3"],
-    ["cubane", "C12C3C4C1C5C2C3C45"],
   ])("%s: none kept - the turned cage is the same one", (_, smiles) => {
     expect(kept(smiles)).toEqual([]);
+  });
+
+  // (drawn by hand as a chemist draws it, one square face round the other: what is kept depends on its atoms and bonds alone, and the
+  //  engine's laying out of a cube - far the longest part of drawing it from its SMILES - is not what this proves)
+  it("cubane: none kept - the turned cage is the same one", () => {
+    const at: [number, number][] = [
+      [0, 0], [3, 0], [3, 3], [0, 3],
+      [0.75, 0.75], [2.25, 0.75], [2.25, 2.25], [0.75, 2.25],
+    ];
+    const faces = [
+      [0, 1], [1, 2], [2, 3], [3, 0],
+      [4, 5], [5, 6], [6, 7], [7, 4],
+      [0, 4], [1, 5], [2, 6], [3, 7],
+    ];
+    const cubane: Model = {
+      atoms: at.map(([x, y], i) => ({ id: i + 1, el: "C", x, y, r: 0.9 })) as Model["atoms"],
+      bonds: faces.map(([a, b], k) => ({ id: 1000 + k, a: a + 1, b: b + 1, order: 1 as const })),
+    };
+    expect(keptOf(cubane)).toEqual([]);
   });
 
   it("Troeger's base: both N kept", () => {
