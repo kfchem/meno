@@ -30,7 +30,7 @@ export type CageViewsOf = (atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
 
 /** A drawing's atoms with the depth its rings drawn in perspective give them (`recognition`). */
 export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], cageViews?: CageViewsOf): readonly DrawnAtom[] {
-  return recognition(atoms, bonds, cageViews).atoms;
+  return recognition(atoms, bonds, cageViews, false).atoms;
 }
 
 /**
@@ -38,26 +38,35 @@ export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly
  * perspective", "read as a Haworth ring", or - unread - why, and what to draw. Where a centre's R or S is shown, its tip says it.
  */
 export function recognisedSaid(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], cageViews?: CageViewsOf): ReadonlyMap<number, string> {
-  return recognition(atoms, bonds, cageViews).said;
+  return recognition(atoms, bonds, cageViews, true).said;
 }
 
 type Recognition = { atoms: readonly DrawnAtom[]; said: Map<number, string> };
-/** The last recognitions, by the drawing's atoms and bonds as given: one drawing is read for its identity, its R and S and its marks in turn. */
-const kept = new WeakMap<readonly DrawnAtom[], { bonds: readonly DrawnBond[]; places: string; views?: CageViewsOf; got: Recognition }>();
+/**
+ * The last recognitions, by the drawing's atoms and bonds as given: one drawing is read for its identity, its R and S and its marks in turn.
+ * `words`: whether what is said of each atom was worked out too - a reading of the atoms alone leaves out what only the words need (`recognise`),
+ * and is worked out again, words and all, where they are asked.
+ */
+const kept = new WeakMap<readonly DrawnAtom[], { bonds: readonly DrawnBond[]; places: string; views?: CageViewsOf; words: boolean; got: Recognition }>();
 
-function recognition(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], cageViews?: CageViewsOf): Recognition {
+function recognition(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], cageViews: CageViewsOf | undefined, words: boolean): Recognition {
   // (the places, depths and bonds as they are now: an array changed in place is read again)
   const places = atoms.map((a) => `${a.x} ${a.y} ${a.z ?? ""}`).join(";") + "|" + bonds.map((b) => `${b.a} ${b.b} ${b.order} ${b.bold ? 1 : 0} ${b.wedge ? 1 : 0}`).join(";");
   const before = kept.get(atoms);
-  if (before && before.bonds === bonds && before.places === places && before.views === cageViews) return before.got;
-  const got = recognise(atoms, bonds, cageViews);
-  kept.set(atoms, { bonds, places, views: cageViews, got });
+  if (before && before.bonds === bonds && before.places === places && before.views === cageViews && (before.words || !words)) return before.got;
+  const got = recognise(atoms, bonds, cageViews, words);
+  kept.set(atoms, { bonds, places, views: cageViews, words, got });
   return got;
 }
 
 const key = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 
-function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[], cageViews?: CageViewsOf): Recognition {
+/**
+ * The recognition of a drawing (see the file's header): its atoms, and - where `saying` - what is said of them. Without the words, a bridged
+ * system or a cage with no bold bond is not fitted to its views: with no near edge marked, no fit gives it a depth (./recognise
+ * `recogniseByViews`), so its atoms are as drawn whatever the views; the fit says only which words are said there.
+ */
+function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[], cageViews: CageViewsOf | undefined, saying: boolean): Recognition {
   // (the structure's bonds alone: a hydrogen bond drawn closes no ring - between two groups of a chair it would make it a bridged system)
   const bonds = drawn.filter(ofTheStructure);
   const said = new Map<number, string>();
@@ -94,6 +103,8 @@ function recognise(atoms: readonly DrawnAtom[], drawn: readonly DrawnBond[], cag
     const asked = cageViews && (bridged || rings.length >= 2) ? (views ??= cageViews(atoms, drawn))(sys.atoms) : null;
     if (bridged || asked?.cage) {
       if (!asked) continue;
+      // (no near edge marked: no depth whatever the views - only the words need them)
+      if (!bold.length && !saying) continue;
       const got = recogniseByViews(places, asked.views(), bold);
       if (got.kind === "unread") for (const i of sys.atoms) said.set(i, got.why);
       if (got.kind !== "depth") continue;

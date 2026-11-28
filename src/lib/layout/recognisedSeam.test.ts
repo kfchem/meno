@@ -12,7 +12,7 @@ import { BETWEEN_AXIAL_AND_EQUATORIAL, recognisedSaid, withRecognisedDepth, type
 import { cageViews } from "./recognised";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { chair, haworth } from "./testdata/projections";
-import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../chem/perception/projection/recognise";
+import { NOT_MARKED, READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../chem/perception/projection/recognise";
 
 const stripped = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => ({ atoms: d.atoms.map(({ z: _z, centre: _c, ...a }) => a), bonds: d.bonds });
 const engineDrawn = (smi: string) => {
@@ -61,6 +61,51 @@ describe("the seam between the core's reading and the engine's views of cages", 
     const marked = { atoms: bare.atoms, bonds: bare.bonds.map((b, k) => (k === near ? { ...b, bold: true } : b)) };
     expect(withRecognisedDepth(marked.atoms, marked.bonds, cageViews).filter((a) => a.z != null)).toHaveLength(8);
     expect(withRecognisedDepth(bare.atoms, bare.bonds, cageViews)).toBe(bare.atoms);
+  }, 60_000);
+
+  it("a cage drawn flat with no bold bond: its views are not asked for its reading, which they cannot change, but are for the words, which come as before", () => {
+    const bare = stripped(engineDrawn("C12C3C4C1C5C2C3C45"));
+    const read = counting();
+    expect(withRecognisedDepth(bare.atoms, bare.bonds, read.provider)).toBe(bare.atoms);
+    expect(read.n.systems).toBe(1);
+    expect(read.n.views).toBe(0);
+    // (the words asked of the same drawing: the views then, once - the same words a reading with them always gave)
+    const said = recognisedSaid(bare.atoms, bare.bonds, read.provider);
+    expect(read.n.views).toBe(1);
+    expect([...said.keys()].sort((p, q) => p - q)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect([...new Set(said.values())]).toEqual([NOT_MARKED]);
+    // (and the words asked first: the reading after them asks nothing more)
+    const first = counting();
+    const again = { atoms: bare.atoms.map((a) => ({ ...a })), bonds: bare.bonds };
+    recognisedSaid(again.atoms, again.bonds, first.provider);
+    expect(withRecognisedDepth(again.atoms, again.bonds, first.provider)).toBe(again.atoms);
+    expect(first.n.views).toBe(1);
+  }, 60_000);
+
+  it("a cage drawn flat with a bold near edge: its views are asked for its reading", () => {
+    const d = engineDrawn("C12C3C4C1C5C2C3C45");
+    const bare = stripped(d);
+    const near = d.bonds.map((b, k) => ({ k, z: (d.atoms[b.a].z ?? -Infinity) + (d.atoms[b.b].z ?? -Infinity) })).sort((p, q) => q.z - p.z)[0].k;
+    const marked = { atoms: bare.atoms, bonds: bare.bonds.map((b, k) => (k === near ? { ...b, bold: true } : b)) };
+    const read = counting();
+    expect(withRecognisedDepth(marked.atoms, marked.bonds, read.provider).filter((a) => a.z != null)).toHaveLength(8);
+    expect(read.n.views).toBe(1);
+  }, 60_000);
+
+  it("a cage's views are kept by its structure: a second drawing of it, from new arrays and moved, is given the same views, not searched again; another structure - the same rings with another H count - its own", () => {
+    const bare = stripped(engineDrawn("C12C3C4C1C5C2C3C45"));
+    const viewsOf = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => cageViews(d.atoms, d.bonds)([0, 1, 2, 3, 4, 5, 6, 7]).views();
+    const first = viewsOf(bare);
+    expect(first.length).toBeGreaterThan(0);
+    const moved = { atoms: bare.atoms.map((a, i) => ({ ...a, x: a.x + (i === 0 ? 0.3 : 0), y: a.y + 1 })), bonds: bare.bonds.map((b, k) => ({ ...b, ...(k === 0 ? { bold: true } : {}) })) };
+    expect(viewsOf(moved)).toBe(first);
+    // (a methyl on one corner, drawn as an H count: no longer the same structure)
+    const other = { atoms: bare.atoms.map((a, i) => (i === 0 ? { ...a, hs: 0 } : { ...a })), bonds: bare.bonds };
+    expect(viewsOf(other)).not.toBe(first);
+    // (and the order the system's atoms are asked in is the order of the places in each view: kept apart)
+    const turned = cageViews(bare.atoms, bare.bonds)([7, 6, 5, 4, 3, 2, 1, 0]).views();
+    expect(turned).not.toBe(first);
+    expect(turned[0].map((p) => p.z)).toEqual([...first[0]].reverse().map((p) => p.z));
   }, 60_000);
 
   it("a hydrogen bond between two axial groups of a chair closes no ring: the chair is still read; the same bond as a real one, it is not", () => {

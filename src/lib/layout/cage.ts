@@ -629,7 +629,36 @@ export function projectCage(mol: Molecule, given: RingSystem, rank = 0): CageVie
   const drawn = textbook(mol, sys, X, index, bonds, rank);
   if (drawn && drawn.cost < 8) return drawn;
   if (rank) return null;
+  return searchedView(mol, sys, X, index, bonds);
+}
 
+/**
+ * Every view `projectCage` gives a cage - its ranks 0 to 3, each as `projectCage(mol, given, rank)` gives it - and those `tiedViews`
+ * gives, the same views in the same order, from one search of the textbook's: the ranks and the ties are all read off the one search,
+ * which each of them alone would make in full.
+ */
+export function everyCageView(mol: Molecule, given: RingSystem): { ranked: (CageView | null)[]; tied: CageView[] } {
+  const sys = inStructureOrder(mol, given);
+  const atoms = sys.atoms;
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const bonds = bondsWithin(mol, index);
+  const X = embed(mol, atoms);
+  const twin = twinChairs(mol, sys, X, index, bonds);
+  if (twin) return { ranked: [twin, null, null, null], tied: [] };
+  const hands = textbookHands(mol, sys, X, index, bonds);
+  const ranked = [0, 1, 2, 3].map((rank) => {
+    const drawn = hands && picked(atoms, hands, rank);
+    if (drawn && drawn.cost < 8) return drawn;
+    return rank ? null : searchedView(mol, sys, X, index, bonds);
+  });
+  const tied: CageView[] = [];
+  const best = hands && picked(atoms, hands, 0, tied);
+  return { ranked, tied: best && best.cost < 8 ? tied : [] };
+}
+
+/** A cage seen from where it reads best, where the textbook's way of drawing it gives no view good enough (`projectCage`). */
+function searchedView(mol: Molecule, sys: RingSystem, X: Vec3[], index: Map<number, number>, bonds: [number, number][]): CageView {
+  const atoms = sys.atoms;
   let best: Point[] = [];
   let bestDepth: number[] = [];
   let bestCost = Infinity;
@@ -968,6 +997,18 @@ function textbook(
   rank = 0,
   tied?: CageView[],
 ): CageView | null {
+  const hands = textbookHands(mol, sys, X, index, bonds);
+  return hands && picked(sys.atoms, hands, rank, tied);
+}
+
+/** A view the textbook's way gives (`textbook`), found: its places, depths, the bonds out of it, and how well it reads. */
+type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
+
+/**
+ * The textbook's search (`textbook`): every view it finds, of each hand, best first, one of each look; the hand with the best first.
+ * Null where the solid has no six-membered ring.
+ */
+function textbookHands(mol: Molecule, sys: RingSystem, X: Vec3[], index: Map<number, number>, bonds: [number, number][]): Found[][] | null {
   const atoms = sys.atoms;
   const cycles = sixCycles(mol, atoms);
   if (!cycles.length) return null;
@@ -979,7 +1020,6 @@ function textbook(
   ];
   const at = (a: number) => X[index.get(a)!];
   const inSmallRings = ringDoubleBonds(mol, index);
-  type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
   // (the atoms of every six-membered ring the solid has as a chair or a
   // boat: a bond axial to one is drawn upright, the ring drawn by the
   // template or not)
@@ -1081,7 +1121,11 @@ function textbook(
       return !seen.has(k) && (seen.add(k), true);
     });
   };
-  const hands = [...best.values()].map(looks).sort((p, q) => p[0].cost - q[0].cost);
+  return [...best.values()].map(looks).sort((p, q) => p[0].cost - q[0].cost);
+}
+
+/** The view of rank `rank` of the textbook's search (`textbookHands`), with the other hand's best for its other side; and into `tied`, every view as good as the best. */
+function picked(atoms: number[], hands: Found[][], rank: number, tied?: CageView[]): CageView | null {
   if (!hands.length || rank >= hands[0].length) return null;
   const found = [hands[0][rank], ...(hands[1] ? [hands[1][0]] : [])];
   const view = (f: Found): Omit<CageView, "other"> => {

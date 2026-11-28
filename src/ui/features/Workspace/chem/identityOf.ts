@@ -77,7 +77,17 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     return texts.size === 1 ? ways[0] : null;
   };
   const arrangements = arrangementsDrawn(drawing, part, oneOf);
-  return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, read).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds, cageViews) };
+  // (what the reading in perspective says at each atom worked out only where it is read - a cage's words need its views searched, which
+  //  the reading of its configuration, with no near edge marked, does not: lib/chem/perception/projection/depth)
+  let perspective: ReadonlyMap<number, string> | null = null;
+  return {
+    input: arrangements.length ? { ...input, arrangements } : input,
+    unread: unreadWedges(drawing, read).map((i) => part.atoms[i].id),
+    bondAt,
+    get perspective() {
+      return (perspective ??= recognisedSaid(drawing.atoms, drawing.bonds, cageViews));
+    },
+  };
 }
 
 /** A structure drawn's identity (lib/chem `identity`), its AND and OR groups with it (`withGroups`), and the atoms whose wedges it could not read (`identityInputOf`). */
