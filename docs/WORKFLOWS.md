@@ -166,8 +166,11 @@ in 3D, arrows, text - and is made of three things:
   does; below it, what it does and how (*Optimise · GFN2-xTB*), whole, on
   as many lines as it needs - broken between its parts, and inside a part
   only between the items of a list it names (*too many bonds, no
-  electrons*), never inside one; only a setting past four lines, a text
-  far longer than any option says, is cut - and what it is doing (*Ready*, *Running
+  electrons*), never inside one. Past four lines it is cut, its last
+  line ending in an ellipsis, on the card shut and opened alike: a
+  setting of long numbers (five digits in each of *Compare bonding*'s)
+  or a long text typed into an option can take more. Opened, the card's
+  options show each value whole. And what it is doing (*Ready*, *Running
   0:42*), with its state's icon under the first. It takes on its left
   edge and gives on its right.
 - **Wires.** Curves from port to port, leaving and arriving level; while
@@ -1162,8 +1165,10 @@ No key starts a run (decided: menus, at first). Steps run in the order
 their wires give; steps that do not depend on one another may run at
 once (*Several at once*).
 
-**What *Run all* made, shown.** Once every step it ran has ended, the
-sets those steps made are shown as what is put down is shown (WORKSPACE.md,
+**What a run made, shown.** *Run*, *Run from here* and *Run all* alike:
+once every step the run ran has ended - those before it that it ran
+first, and those a Repeat among them holds - the sets those steps made
+are shown as what is put down is shown (WORKSPACE.md,
 *Putting things down*): where they are not seen whole - past the window's
 edge in a small window - the view eases along to take them in, or out as
 little as needed; seen whole, it stays. It does not move where the

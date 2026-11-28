@@ -146,13 +146,13 @@ export function listLines(text: string, sizePx: number, maxPx: number): string[]
   return lines;
 }
 
-/** The most lines a step's setting takes on its card: past them, only a text far longer than any option says, the last cut with an ellipsis. */
+/** The most lines a step's setting takes on its card: past them - long numbers, a long text typed into an option - the last is cut with an ellipsis; opened, its options say each value whole. */
 export const SETTING_MOST = 4;
 
 /**
  * What a step does and how, on its card (its setting): whole, on as many lines as it needs, broken as its state is -
  * between its parts (`partLines`), and inside a part only between the items of a list it names, never inside one, where
- * that part alone is wider than a line. Only a setting past `SETTING_MOST` lines is cut.
+ * that part alone is wider than a line. A setting past `SETTING_MOST` lines is cut.
  */
 export const settingLines = (text: string, maxPx: number): string[] => clamped(text, 11, maxPx, SETTING_MOST, (t, size, max) => partLines(t, size, max, listLines));
 

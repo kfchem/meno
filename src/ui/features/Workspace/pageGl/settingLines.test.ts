@@ -56,7 +56,7 @@ describe("a step's setting on its card", () => {
     expect(more.words - one.words).toBe((more.summary.length - 1) * 16);
   });
 
-  it("is cut only past its most lines, a text far longer than any option says", () => {
+  it("is cut only past its most lines, its last line ending in an ellipsis", () => {
     const long = settingOf("Note", Array.from({ length: 40 }, (_, i) => `word${i}`).join(" "));
     const lines = settingLines(long, WORDS_COL);
     expect(lines).toHaveLength(SETTING_MOST);
