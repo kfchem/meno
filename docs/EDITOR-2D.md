@@ -765,9 +765,12 @@ on a page), and the **Newman projection** (`newman`).
   2006 ST-3.2: a perspective drawing states every centre's configuration): the item is greyed with the reason, "Its configuration is not
   drawn: a chair would state one." The centres counted are those of the whole ring together, so two ring atoms that are centres only to each
   other count: 1,4-dimethylcyclohexane, 4-tert-butylcyclohexanol and scyllo-inositol drawn with no wedge are not drawn as chairs, and
-  4-methylcyclohexanol with a wedge on its OH alone - which sets nothing - has its methyl on a wavy bond. Guarded: if the chair would read
-  as another compound - a configuration changed, or one stated that the drawing leaves open - nothing is changed and Meno says it is its
-  own fault. Offered on a single
+  4-methylcyclohexanol with a wedge on its OH alone - which sets nothing - has its methyl on a wavy bond. A ring carbon whose wedges state
+  no centre of the compound - a wedge and a hash on the two methyls of a 2,2-dimethyloxane, or on an oxane's C-4 - has each group on the
+  face its wedge says all the same, and a ring carbon drawn plain whose groups make no centre (methylcyclohexane's, a gem-dimethyl) states
+  none in the chair: the chair says what the flat drawing said, atom by atom. Guarded: if the chair would read as another compound - a
+  configuration changed, or one stated that the drawing leaves open - nothing is changed and Meno says it is its own fault; the item is
+  asked the same question before it is offered, so it is greyed with that line rather than offered and then refused. Offered on a single
   ring of single bonds at saturated atoms, nothing fused, spiro or bridged on it, not yet drawn with depth: no cyclohexanone or cyclohexene,
   no fused rings yet. Groups that come to lie over each other are left for the chemist.
 - **Clean-up keeps a chair as drawn**, its groups laid out onto it, as it keeps any ring in perspective (*Clean-up keeps a projection*,

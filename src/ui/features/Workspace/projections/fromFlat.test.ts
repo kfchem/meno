@@ -3,7 +3,8 @@ import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
 import type { Model } from "../store/types";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { chairsIn } from "./chair";
-import { CHAIR_CHANGED, chairFromFlat, groupKind, NOT_DRAWN } from "./fromFlat";
+import { sameStereo } from "../chem/engineLayout";
+import { CHAIR_CHANGED, chairFromFlat, flatRingOf, type FromFlat, groupKind, NOT_DRAWN } from "./fromFlat";
 import { measured } from "../../../../testing/timeouts";
 
 // *Draw as chair* (docs/EDITOR-2D.md, *Projections*): the known answers of the brief, each a flat drawing of a SMILES as Clean-up draws it.
@@ -94,11 +95,6 @@ describe("a flat six-ring drawn as a chair (Draw as chair)", () => {
     // (an OH centre left open: which of the two given ones then sets nothing depends on the order they are asked in)
     for (const w of ["C1[C@H](O)C[C@@H](O)C[CH](O)1", "[C@@H]1(O)C[C@@H](O)C[CH](O)C1", "C1[C@@H](O)C[C@H](O)C[CH](O)1"]) drawn(w, 1);
   }, measured(2000));
-
-  it("refuses, and draws nothing, where the chair would read as another compound: a 1,3,5-ring with a tert-butyl and two OH, one OH open", () => {
-    // (the given OH's meaning hangs on the open one: Meno does not draw this chair yet, and says so)
-    expect(chairFromFlat(drawnFromSmiles("C1[CH](O)C[C@H](C(C)(C)C)C[C@@H](O)1"), 1)).toEqual({ refused: CHAIR_CHANGED });
-  }, measured(1000));
 
   it("draws every writing of 1,2,4,5-tetramethylcyclohexane as the compound drawn", () => {
     const groups = byCompound(writings("C[C{}H]1C[C{}H](C)[C{}H](C)C[C{}H]1C", 4));
@@ -531,4 +527,122 @@ describe("a group's kind on a ring, by the atom bound to it", () => {
     ];
     for (const [first, k] of table) expect(kind(first), first).toBe(k);
   }, measured(3000));
+});
+
+describe("Draw as chair as the page draws it: offered only where the page then draws it, and Draw flat back", () => {
+  /** A page holding `flat`, its atom ids kept. */
+  async function page(flat: Model) {
+    const { createWorkspaceDocument } = await import("../document");
+    const { connectStoreToDocument, createEditorStore } = await import("../store");
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    doc.edit("the flat drawing", (d) => ({ ...d, model: flat, nextId: Math.max(...flat.atoms.map((a) => a.id), ...flat.bonds.map((b) => b.id)) + 1 }));
+    return { doc, store };
+  }
+  /** `m` with the bonds from ring atom `at` to `up` and `down` a wedge and a hash, their narrow ends at `at`. */
+  const wedged = (m: Model, at: number, up: number, down: number): Model => ({
+    ...m,
+    bonds: m.bonds.map((b) => {
+      const other = b.a === at ? b.b : b.b === at ? b.a : null;
+      return other === up ? { ...b, stereo: "up" as const, narrow: at } : other === down ? { ...b, stereo: "down" as const, narrow: at } : b;
+    }),
+  });
+  /** The ring atom of `m` with four neighbours drawn, and its two groups off the ring. */
+  const carrying = (m: Model) => {
+    const at = m.atoms.find((a) => m.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 4)!.id;
+    const ring = new Set(flatRingOf(m, at));
+    const groups = m.bonds.flatMap((b) => (b.a === at ? [b.b] : b.b === at ? [b.a] : [])).filter((n) => !ring.has(n));
+    return { at, groups };
+  };
+
+  /** *Draw as chair* offered on the ring through `id` and drawn by the page; then *Draw flat*: each the compound it was, each atom's wedges kept. */
+  async function chairAndBack(flat: Model, id: number) {
+    const made = chairFromFlat(flat, id);
+    expect(made && !("refused" in made) ? "offered" : made, "offered").toBe("offered");
+    const { doc, store } = await page(flat);
+    expect(store.getState().drawAsChair(made as FromFlat), "drawn by the page").toBeNull();
+    const chair = doc.getState().model;
+    expect(chairsIn(chair, new Set(chair.atoms.map((a) => a.id)))).toHaveLength(1);
+    expect(identityOfDrawn(chair).text).toBe(identityOfDrawn(flat).text);
+    expect(sameStereo(flat, chair), "each ring atom's groups on the faces the flat drawing says").toBe(true);
+    const { cleanUp } = await import("../chem/cleanUp");
+    await cleanUp(store, null, true);
+    const back = doc.getState().model;
+    expect(back.atoms.every((a) => a.z == null), "laid flat").toBe(true);
+    expect(identityOfDrawn(back).text, "Draw flat: the same compound").toBe(identityOfDrawn(flat).text);
+    return { chair, back, ...axialOf(chair) };
+  }
+
+  it("draws a ring carbon with a wedge and a hash on two alike groups - no centre - either way round, each group on the face its wedge says", async () => {
+    // (2,2-, 3,3- and 4,4-dimethyloxane and 1,1-dimethylcyclohexane: one methyl axial, one equatorial, in any chair; offered, then
+    //  refused by the page before - half of these drawings came out with the two methyls the other way up)
+    for (const s of ["CC1(C)CCCCO1", "CC1(C)CCCOC1", "CC1(C)CCOCC1", "CC1(C)CCCCC1"]) {
+      const plain = drawnFromSmiles(s);
+      const { at, groups } = carrying(plain);
+      for (const [up, down] of [groups, [...groups].reverse()]) {
+        const flat = wedged(plain, at, up, down);
+        const { chair } = await chairAndBack(flat, at);
+        expect(axialOf(chair), s).toMatchObject({ axial: 1, equatorial: 1 });
+        // (the chair says which methyl is up: the one wedged, not the one hashed)
+        expect(sameStereo(wedged(plain, at, down, up), chair), s).toBe(false);
+      }
+    }
+  }, measured(20000));
+
+  it("draws a 4-ethyl-4-methyloxane wedged either way with the larger ethyl equatorial: the chair whose up place is equatorial at C-4 for the up group", async () => {
+    const plain = drawnFromSmiles("CC1(CC)CCOCC1");
+    const { at, groups } = carrying(plain);
+    const ethyl = groups.find((g) => plain.bonds.filter((b) => b.a === g || b.b === g).length === 2)!;
+    for (const [up, down] of [groups, [...groups].reverse()]) {
+      const { chair } = await chairAndBack(wedged(plain, at, up, down), at);
+      const p = new Map(chair.atoms.map((a) => [a.id, a]));
+      // (axial: straight up or down from its ring atom; the ethyl not so)
+      expect(Math.abs(p.get(ethyl)!.x - p.get(at)!.x)).toBeGreaterThan(1e-6);
+    }
+  }, measured(8000));
+
+  it("draws plain rings whose ring carbons carry one group or two alike, no centre among them, with no configuration read in the chair", async () => {
+    // (methylcyclohexane, cyclohexanol, 4-methyloxane, 2,2-dimethyloxane, 1,1,4,4-tetramethylcyclohexane: refused by the page before -
+    //  the chair read a configuration at each such carbon the flat drawing did not state)
+    // (each with its groups axial as a chemist counts them: none for one group, one of each alike pair)
+    for (const [s, id, axial] of [["CC1CCCCC1", 2, 0], ["OC1CCCCC1", 2, 0], ["CC1CCOCC1", 2, 0], ["CC1(C)CCCCO1", 2, 1], ["CC1(C)CCC(C)(C)CC1", 2, 2]] as const) {
+      const { chair } = await chairAndBack(drawnFromSmiles(s), id);
+      expect(axialOf(chair).axial, s).toBe(axial);
+    }
+  }, measured(12000));
+
+  it("draws 2-ethyl-2-methyloxane, either enantiomer, as the compound drawn, its two groups one axial and one equatorial", async () => {
+    for (const s of ["C[C@]1(CC)CCCCO1", "C[C@@]1(CC)CCCCO1"]) {
+      const { chair } = await chairAndBack(drawnFromSmiles(s), 2);
+      expect(axialOf(chair), s).toMatchObject({ axial: 1, equatorial: 1 });
+    }
+  }, measured(6000));
+
+  it("draws 2,3- and 2,6-dimethyloxane, cis and trans: trans-2,3 and cis-2,6 diequatorial, cis-2,3 and trans-2,6 one axial", async () => {
+    // (written as trans- and cis-1,2- and cis- and trans-1,3-dimethylcyclohexane are, the ring O in a CH2's place)
+    expect(await chairAndBack(drawnFromSmiles("C[C@@H]1OCCC[C@H]1C"), 2)).toMatchObject({ axial: 0, equatorial: 2 });
+    expect(await chairAndBack(drawnFromSmiles("C[C@H]1OCCC[C@H]1C"), 2)).toMatchObject({ axial: 1, equatorial: 1 });
+    expect(await chairAndBack(drawnFromSmiles("C[C@@H]1CCC[C@H](C)O1"), 2)).toMatchObject({ axial: 0, equatorial: 2 });
+    expect(await chairAndBack(drawnFromSmiles("C[C@H]1CCC[C@H](C)O1"), 2)).toMatchObject({ axial: 1, equatorial: 1 });
+  }, measured(12000));
+
+  it("draws a cyclohexane carbon with a wedge and a hash beside a centre - 1-ethyl-1,2-dimethylcyclohexane, both diastereomers - as the compound drawn", async () => {
+    for (const s of ["C[C@]1(CC)CCCC[C@@H]1C", "C[C@@]1(CC)CCCC[C@@H]1C"]) {
+      const { chair } = await chairAndBack(drawnFromSmiles(s), 2);
+      expect(axialOf(chair).axial + axialOf(chair).equatorial, s).toBe(3);
+    }
+  }, measured(6000));
+
+  it("draws a pyranose-like ring with a wedge and a hash on its C-1 and four centres more as the compound drawn: beta-D-glucopyranose with a methyl on C-1", async () => {
+    // (beta-D-glucopyranose's SMILES with C-1's H a methyl: its OH on C-1 and every other group as in glucose)
+    const { chair } = await chairAndBack(drawnFromSmiles("OC[C@H]1O[C@@](C)(O)[C@H](O)[C@@H](O)[C@@H]1O"), 3);
+    expect(axialOf(chair)).toMatchObject({ axial: 1, equatorial: 5 });
+  }, measured(6000));
+
+  it("draws a 1,3,5-ring with a tert-butyl and two OH, one OH open, as the compound drawn: the given OH on the face its wedge says", async () => {
+    // (refused before: the given OH sets nothing without the open one, and was put by its size, not by its wedge)
+    const { chair } = await chairAndBack(drawnFromSmiles("C1[CH](O)C[C@H](C(C)(C)C)C[C@@H](O)1"), 1);
+    expect(chair.bonds.filter((b) => b.stereo === "wavy")).toHaveLength(1);
+  }, measured(6000));
 });

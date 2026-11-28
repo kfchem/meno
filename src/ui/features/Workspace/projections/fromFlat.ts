@@ -19,7 +19,9 @@
  * Offered on a single saturated six-ring in this build: no ring fused, spiro or bridged on it, no double bond at its atoms, no depth yet.
  * Not offered where the ring has stereocentres and the drawing gives the configuration of none (ST-3.2: a perspective drawing states the
  * configuration of every centre with no wavy bond; one wholly unknown is drawn flat). A ring centre the drawing leaves open keeps it open:
- * its group equatorial, on a wavy bond.
+ * its group equatorial, on a wavy bond. A ring carbon whose wedges state no centre of the compound (a wedge and a hash on a
+ * gem-dimethyl, on an oxane's C-4) has its groups on the faces they are drawn on, and one drawn plain is read as no centre in the chair: the
+ * chair says, atom by atom, what the flat drawing says - as the page's guard reads them, which is asked before the item is offered.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { aromaticIn } from "../../../../lib/chem/aromaticity";
@@ -28,6 +30,7 @@ import { smallestRings } from "../../../../lib/layout/rings";
 import { identityText } from "../../../../lib/chem/identity";
 import { canonicalRanks } from "../../../../lib/layout/canonical";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
+import { sameStereo, stereoOf } from "../chem/engineLayout";
 import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairDrawing, FIRST_FORM, ringAlone, seenPlaces, type ChairDrawing } from "./chair";
@@ -196,6 +199,13 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
   if (!ring) return null;
   const { given, open, ranks } = centresOf(part, ring);
   if (!given.size && open.size) return { refused: NOT_DRAWN };
+  // (what the drawing's wedges say at each ring atom, by atom id, centre or not: at a carbon whose two groups are alike - a gem-dimethyl - or
+  //  that the ring makes no centre - an oxane's C-4 - they state no configuration of the compound, but which group is up is drawn, and kept)
+  const drawnSays = stereoOf(part);
+  const said = drawnSays.centres;
+  // (the ring atoms the chair is read at as centres: those whose configuration the flat drawing states or leaves open, and each CH2, which
+  //  is none however it is read - a ring carbon whose groups make no centre and drawn plain states none in the chair either)
+  const stated = new Set(ring.filter((r) => given.has(r) || open.has(r) || said.has(r) || (drawnSays.hydrogens.get(r) ?? 0) >= 2));
   const at = new Map(part.atoms.map((a) => [a.id, a]));
   const inRing = new Set(ring);
   const near = (x: number) => part.bonds.flatMap((b) => (b.a === x ? [b.b] : b.b === x ? [b.a] : []));
@@ -284,7 +294,7 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
             const gs = groups.get(r)!;
             let onEq: number | undefined;
             let onAx: number | undefined;
-            const t = given.get(r);
+            const t = given.get(r) ?? (open.has(r) ? undefined : said.get(r));
             if (t && gs.length >= 1) {
               // (the groups on the two places the way round that states the configuration read: the solid's own sense against the reader's)
               const tryWay = (e: number | undefined, x: number | undefined) => {
@@ -352,7 +362,8 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
   const atoms = new Map<number, Atom>();
   for (const r of ring) {
     const p = best.d.atoms[best.at.get(r)!];
-    atoms.set(r, { ...at.get(r)!, x: p.x, y: p.y, z: p.z, stereoCentre: true, stereoShown: true });
+    const { stereoCentre: _c, ...was } = at.get(r)!;
+    atoms.set(r, { ...was, x: p.x, y: p.y, z: p.z, ...(stated.has(r) ? { stereoCentre: true } : {}), stereoShown: true });
   }
   for (const r of ring) {
     for (const g of groups.get(r)!) {
@@ -379,6 +390,8 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
   }
   // (the last check: the chair is the compound the flat drawing is, or nothing is drawn and the fault is said)
   const made = { atoms: [...atoms.values()], bonds };
-  if (identityOfDrawn(withChair(part, made)).text !== identityOfDrawn(part).text) return { refused: CHAIR_CHANGED };
+  //  - read as the page's own guard reads it, by atom id, so that what is offered is what the page then draws
+  const chair = withChair(part, made);
+  if (identityOfDrawn(chair).text !== identityOfDrawn(part).text || !sameStereo(part, chair)) return { refused: CHAIR_CHANGED };
   return made;
 }
