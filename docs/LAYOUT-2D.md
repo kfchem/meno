@@ -312,7 +312,12 @@ they hang from.
   least twice a single bond's width). Every line, hash and shape of the
   bond behind is cut by the same band, the pieces left have nothing
   between them in the page, the SVG and the EMF alike, and a piece left
-  shorter than the clear space is not drawn; in a picture of pixels laid
+  shorter than the clear space is not drawn. A piece between two breaks -
+  a short bond passing behind two others - is drawn only where it is at
+  least as long as a break (twice the clear space and a line width):
+  shorter, it would float between the gaps as a dot or a dash, and the two
+  breaks are drawn as one; a piece at an end of the bond keeps the bond's
+  end, a methyl's as a ring atom's, down to the clear space; in a picture of pixels laid
   out with a least line width the clear space is never under three pixels
   (the page's drawing has none: its gap scales with the page, as its lines
   do), and bonds crossing at under ten

@@ -4506,7 +4506,9 @@ export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | und
  * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
  * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
  * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
- * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn; bonds
+ * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn, nor
+ * one between two breaks shorter than a break (twice the clear space and a line width): what is left of a short bond behind two others is
+ * never a dot or a dash between its gaps, which are then one; a piece at an end of the bond, its own end there, keeps the bond's end; bonds
  * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
  * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
  * breaks make (none: a cut end is finished flat by the cut).
@@ -4580,8 +4582,16 @@ function brokenBehind(
       const across = pts.map((pt) => acrossOf(band, pt));
       return Math.max(...across) > band.lo && Math.min(...across) < band.hi;
     });
-  /** A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out. */
+  // (a piece between two breaks, cut at both its ends, is drawn only as long as a break or longer: shorter, it would be a dot or a dash
+  // floating between the gaps, not a stretch of the bond)
+  const leastBetween = 2 * clear + lineWidth;
+  /**
+   * A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out - a
+   * piece shorter than the clear space, and one between two breaks shorter than a break (`leastBetween`), the two breaks then one.
+   */
   const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
+    const whole = pts.map(alongOf);
+    const [from, to] = [Math.min(...whole), Math.max(...whole)];
     let pieces: Vec2[][] = [pts];
     for (const band of reached) {
       const [below, above] = [
@@ -4590,10 +4600,12 @@ function brokenBehind(
       ];
       pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
     }
-    // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn)
+    // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn; nor is one between two breaks shorter than a break)
     return pieces.filter((piece) => {
       const along = piece.map(alongOf);
-      return Math.max(...along) - Math.min(...along) >= clear;
+      const [lo, hi] = [Math.min(...along), Math.max(...along)];
+      const atAnEnd = lo <= from + 1e-9 || hi >= to - 1e-9;
+      return hi - lo >= (atAnEnd ? clear : leastBetween);
     });
   };
   const outLines: LineSeg[] = [];

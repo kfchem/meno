@@ -261,6 +261,70 @@ describe("the gap where a bond passes behind another", () => {
       }
     });
 
+    describe("what is left of a short bond behind others", () => {
+      // The bond behind runs up x = 0 from (0, -1), joined there to another bond, to (0, top); plain bonds in front cross it square along
+      // y = 0 and, where asked, y = 0.6. Each break reaches 0.0375 + 0.15 = 0.1875 either side of its front bond: a break is 0.375 along
+      // the bond behind - twice the clear space and a line width. Below y = 0 the bond leaves the drawing at (0, -1); its end at (0, top) is
+      // free or, where asked, joined to another bond.
+      const BREAK = 2 * CLEAR + LINE;
+      const crossing = (top: number, fronts: number[], free = true) => {
+        const atoms: Atom[] = [
+          { id: 0, x: 0, y: -1, el: "C", z: -1 },
+          { id: 1, x: 0, y: top, el: "C", z: -1 },
+          { id: 2, x: -1, y: -1.5, el: "C", z: -1 },
+          ...(free ? [] : [{ id: 3, x: 1, y: top + 0.5, el: "C", z: -1 }]),
+          ...fronts.flatMap((y, k) => [{ id: 10 + 2 * k, x: -L, y, el: "C", z: 1 }, { id: 11 + 2 * k, x: L, y, el: "C", z: 1 }]),
+        ];
+        const n = free ? 3 : 4;
+        const bonds: Bond[] = [
+          { a1: 0, a2: 1, order: 1 },
+          { a1: 0, a2: 2, order: 1 },
+          ...(free ? [] : [{ a1: 1, a2: 3, order: 1 as const }]),
+          ...fronts.map((_, k) => ({ a1: n + 2 * k, a2: n + 2 * k + 1, order: 1 as const })),
+        ];
+        const { polys, lines } = buildAllPrimitives(atoms, bonds, style(), ZOOM);
+        // (the bond behind's pieces, each by how far up it runs; the front bonds and the bond at (0, -1) lie elsewhere)
+        const upright = (pts: Vec2[]) => pts.every((q) => Math.abs(q.x) < 0.1) && Math.max(...pts.map((q) => q.y)) > -0.9;
+        const spans = [
+          ...polys.filter((p) => upright(p.points)).map((p) => p.points.map((q) => q.y)),
+          ...lines.filter((l) => upright([{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }])).map((l) => [l.y1, l.y2]),
+        ].map((ys) => [Math.min(...ys), Math.max(...ys)]);
+        return spans.sort((p, q) => p[0] - q[0]);
+      };
+
+      it("leaves no piece on its own between two breaks shorter than a break: the two breaks are one", () => {
+        // (fronts at 0 and 0.6: between the breaks 0.1875 to 0.4125, 0.225 - more than the clear space, less than a break)
+        expect(0.225).toBeLessThan(BREAK);
+        const short = crossing(1.6, [0, 0.6]);
+        expect(short).toHaveLength(2);
+        closeTo(short[0][1], -0.1875);
+        closeTo(short[1][0], 0.7875);
+        // (fronts at 0 and 0.8: 0.4125 between the breaks, more than a break - drawn, the bond in three)
+        const long = crossing(1.6, [0, 0.8]);
+        expect(long).toHaveLength(3);
+        closeTo(long[1][0], 0.1875);
+        closeTo(long[1][1], 0.6125);
+      });
+
+      it("keeps the piece at an end of the bond, its own end there, down to the clear space, free or joined: the bond's end is shown", () => {
+        // (one front at 0, the end at 0.5: 0.3125 left past the break, more than the clear space - drawn, a methyl's end as a ring's)
+        expect(crossing(0.5, [0])).toHaveLength(2);
+        expect(crossing(0.5, [0], false)).toHaveLength(2);
+        // (the end at 0.3: 0.1125 left, under the clear space - a crumb, not drawn)
+        expect(crossing(0.3, [0])).toHaveLength(1);
+      });
+
+      it("never leaves a dot between two breaks: every piece cut at both ends is a break's length or more", () => {
+        for (const gap of [0.45, 0.5, 0.55, 0.6, 0.7, 0.75, 0.8, 0.9]) {
+          const spans = crossing(1.6, [0, gap]);
+          const between = spans.filter(([lo, hi]) => lo > -0.99 && hi < 1.59);
+          for (const [lo, hi] of between) expect(hi - lo, `${gap}`).toBeGreaterThanOrEqual(BREAK - 1e-9);
+          // (and what is between, when it is not drawn, leaves one gap from the first break's near edge to the second's far edge)
+          if (!between.length) expect(spans).toHaveLength(2);
+        }
+      });
+    });
+
     it("cuts nothing of bonds all but along each other: under the least angle", () => {
       expect(CROSSING_LEAST_ANGLE_DEG).toBe(10);
       expect(pieces(scene(5).polys)).toHaveLength(0);
