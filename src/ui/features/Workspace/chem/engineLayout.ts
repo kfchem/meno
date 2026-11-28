@@ -20,7 +20,7 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
 import { againstLowest, compared, saidOf, type Difference, type Said, type SaidCentre } from "../../../../lib/chem/perception/stereo/compare";
 import { keepsAny, keptAsDrawn, keptReading } from "../configuration/kept";
-import { pairingDrawn } from "../../../../lib/chem/arrangement";
+import { arrangedCentre, pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type Arranged, type CisTrans } from "../../../../lib/layout/perceive";
@@ -55,6 +55,8 @@ export type LayoutJob = {
   bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
+  /** The hydrogen bonds of the drawing, by their two input atoms ("a,b", the smaller first): laid out as drawn, but no donor of the atom they reach (`oppositesKept`). */
+  hydrogenBonds?: ReadonlySet<string>;
   /**
    * A ring in perspective the drawing gives no depth, its depth worked out (lib/chem/perception/projection/depth): each such atom's depth, by its input
    * index - so that Clean-up keeps it as drawn, as it keeps one drawn with depth, and stores no depth for it.
@@ -228,7 +230,8 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   //  one into the other, for any metal - docs/LAYOUT-2D.md, *At an atom in no ring*)
   const fourForm = new Map<number, "x" | "cross">();
   part.atoms.forEach((a, i) => {
-    const mine = bondsOf.get(i) ?? [];
+    // (a hydrogen bond to it is none of its donors: lib/chem/perception/graph `ofTheStructure`, as identity reads them)
+    const mine = (bondsOf.get(i) ?? []).filter((k) => ofTheStructure(drawing.bonds[k]));
     if (!isMetal(readAs(a)) || mine.length !== 4) return;
     // (not a chelate's metal - two of its donors joined other than through it: its own rules lay it out)
     const donors = mine.map((k) => (drawing.bonds[k].a === i ? drawing.bonds[k].b : drawing.bonds[k].a));
@@ -362,7 +365,9 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
   // laid out, the bonds to its atoms become that one bond (chem/eta, the
   // maintainer, 2026-10-17).
   const bound = etaBondedAtomByAtom(input);
-  if (!bound.length) return { input, ids, folded, ...withOcts, ...recognised };
+  const hBonds = new Set(drawing.bonds.flatMap((b) => (!ofTheStructure(b) && at.has(b.a) && at.has(b.b) ? [pairKey(at.get(b.a)!, at.get(b.b)!)] : [])));
+  const hydrogen = hBonds.size ? { hydrogenBonds: hBonds } : {};
+  if (!bound.length) return { input, ids, folded, ...withOcts, ...recognised, ...hydrogen };
   const dropped = new Set(bound.flatMap((r) => r.bonds));
   const atoms = [...input.atoms];
   const bonds = input.bonds.filter((_, i) => !dropped.has(i));
@@ -371,7 +376,7 @@ export function layoutJob(part: Model, given: ReadonlySet<number> = new Set()): 
     bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
   }
   const systems = bound.map((r) => ({ metal: ids[r.metal], atoms: r.ring.map((a) => ids[a]) }));
-  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems, ...withOcts, ...recognised };
+  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems, ...withOcts, ...recognised, ...hydrogen };
 }
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -397,7 +402,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // (with the drawing's style, its labels as they would be drawn where the layout puts them: what a crowded donor's groups must
   // keep clear of)
   const labels = style ? labelsDrawn(model, ids, style) : undefined;
-  const laid = octahedraKept(job, opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite, labels));
+  const laid = octahedraKept(job, opposite && !opposite.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, opposite, labels, job.hydrogenBonds));
   // (a six-bond metal with a tridentate - three of its donors in one ligand - laid out other than as three lines through it: the
   // layout cannot yet put a fused tridentate's metal on its spokes, and a picture off the lines can show two donors
   // side by side that are across - refused, saying so, rather than drawn so)
@@ -1238,6 +1243,7 @@ export function oppositesKept(
   laid: Layout2D,
   only?: ReadonlySet<number>,
   labels?: (x: readonly number[], y: readonly number[]) => Map<number, InkBox>,
+  hydrogenBonds?: ReadonlySet<string>,
 ): Layout2D {
   const near = input.atoms.map(() => [] as number[]);
   for (const { a, b } of input.bonds) {
@@ -1253,9 +1259,10 @@ export function oppositesKept(
   // each other)
   const moved: { m: number; donors: number[]; units: Set<number>[] }[] = [];
   for (let m = 0; m < was.length; m++) {
-    const donors = near[m];
+    // (its donors: a hydrogen bond to it is none - lib/chem/perception/graph `ofTheStructure`, as identity reads them)
+    const donors = near[m].filter((d) => !hydrogenBonds?.has(pairKey(m, d)));
     const n = donors.length;
-    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
+    if (!arrangedCentre(input.atoms[m].el, n) || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
     // (each donor's unit: what it carries, reached not through the metal - a chelate's, its donors' together)
     const reach = donors.map((d) => {
       const seen = new Set([d]);

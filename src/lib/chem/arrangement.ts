@@ -19,6 +19,20 @@
 import { identityKey, type IdentityAtom } from "./identity";
 import { AROMATIC_BOND, kekuleOrders } from "./kekulize";
 import { isMetal, type Arranged } from "../layout/perceive";
+import { lonePairsIn3d } from "./lonePairsIn3d";
+import { cisAt, senseAt } from "./perception/stereo/from3d";
+
+/** The elements that are no metal and stand at the middle of six bonds as an octahedron (SF6, PF6-, TeCl6, IF6+): `arrangedCentre`. */
+const SIX_BOND_ELEMENTS = new Set(["Si", "Ge", "P", "As", "Sb", "S", "Se", "Te", "Cl", "Br", "I", "Xe"]);
+
+/**
+ * Whether an atom of element `el` with `donors` bonds is a centre whose bonds' arrangement - which lie across from each other -
+ * says which compound it is: a metal of four or six donors, or a main-group atom of six bonds (`SIX_BOND_ELEMENTS`: trans- and
+ * cis-SF4Cl2 are two compounds). A carbon or a boron of six neighbours is a cage's, and none.
+ */
+export function arrangedCentre(el: string, donors: number): boolean {
+  return isMetal(el) ? donors === 4 || donors === 6 : donors === 6 && SIX_BOND_ELEMENTS.has(el);
+}
 
 /** How near, in degrees, the next pairing's pairs may each come to the straightest's before a drawing says neither (`pairingDrawn`). */
 export const DRAWN_TIE = 20;
@@ -165,9 +179,10 @@ export function arrangementsIn3d(atoms: readonly AtomIn3d[], bonds: readonly Bon
 
 /**
  * The same for two molecules in 3D exactly when their constitution and
- * their metals' donors across (`arrangementsIn3d`) are, whatever order
- * their atoms are in: lib/chem/identity's key of the molecule with those
- * pairs and no other configuration, a metal whose places give none filled
+ * their metals' donors across (`arrangementsIn3d`) are, with the
+ * configurations of their ligands where those are (`configurationsIn3d`),
+ * whatever order their atoms are in: lib/chem/identity's key of the
+ * molecule with those pairs and those configurations, a metal whose places give none filled
  * in where every pairing would write it the same (NiCl4 2- tetrahedral and
  * planar), and left open where they would not. None for a molecule with no
  * metal of four or six donors.
@@ -179,11 +194,60 @@ export function arrangementKey(atoms: readonly AtomIn3d[], bonds: readonly BondI
   // (bonds marked aromatic written out as a Kekulé structure first, as lib/chem/lonePairsIn3d does: identity takes the
   //  aromatic form of any one)
   const written = bonds.some((b) => b.order === AROMATIC_BOND) ? kekuleOrders(atoms.map((a) => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}) })), bonds) : bonds.map((b) => b.order);
+  // (and the configurations of its ligands as the places give them, in the same key: which ligand is across which donor and
+  //  the hand of each are one fact - PtCl(L)3 with two L of one hand and one of the other, the odd one across Cl or not, is two
+  //  compounds, which a key of the pairs beside a key of the hands would make one)
+  const { tetra, sides } = configurationsIn3d(atoms, bonds, xyz, around, written);
   return identityKey({
-    atoms: atoms.map((a): IdentityAtom => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) })),
-    bonds: bonds.map((b, k) => ({ a: b.a1, b: b.a2, order: written[k] })),
+    atoms: atoms.map((a, i): IdentityAtom => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}), ...(tetra.has(i) ? { tetra: tetra.get(i)! } : {}) })),
+    bonds: bonds.map((b, k) => ({ a: b.a1, b: b.a2, order: written[k], ...(sides.has(k) ? { stereo: sides.get(k)! } : {}) })),
     ...(arrangements.length ? { arrangements } : {}),
   });
+}
+
+/**
+ * The configurations a molecule's places in 3D give besides its metals' pairs, as identity takes them: each centre of four
+ * bonds that is no metal and has no two bonds across (`ACROSS_FOUR`: a square-planar XeF2Cl2 has no hand), by the sign of the
+ * volume its first three neighbours span; each centre of three bonds and a lone pair the rule keeps (lib/chem/lonePairsIn3d: a
+ * sulfoxide's S); and each double bond's cis or trans, by its first neighbour at each end. One flat - a volume or a side of
+ * none - is left out. Identity's own fill sets aside every one that sets nothing (a CH2, a ring's double bond).
+ */
+function configurationsIn3d(
+  atoms: readonly AtomIn3d[],
+  bonds: readonly BondIn3d[],
+  xyz: readonly number[],
+  around: readonly number[][],
+  written: readonly number[],
+): { tetra: Map<number, { neighbours: number[]; volume: 1 | -1 }>; sides: Map<number, { refs: [number, number]; cis: boolean }> } {
+  const at = (i: number) => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
+  const placed = (i: number) => at(i).every(Number.isFinite);
+  const tetra = new Map<number, { neighbours: number[]; volume: 1 | -1 }>();
+  atoms.forEach((a, c) => {
+    const nb = around[c];
+    if (isMetal(a.el) || nb.length !== 4 || !placed(c) || nb.some((d) => !placed(d))) return;
+    const v = nb.map((d) => at(d).map((x, k) => x - at(c)[k]));
+    const wide = v.some((p, i) => v.some((q, j) => j > i && angleOf(p, q) >= ACROSS_FOUR));
+    const volume = wide ? 0 : senseAt([0, 0, 0], v);
+    if (volume) tetra.set(c, { neighbours: [...nb], volume });
+  });
+  const three = atoms.flatMap((_, c) => (around[c].length === 3 ? [c] : []));
+  for (const [c, t] of lonePairsIn3d(atoms, bonds, xyz, three).read) tetra.set(c, t);
+  const sides = new Map<number, { refs: [number, number]; cis: boolean }>();
+  bonds.forEach((b, k) => {
+    if (written[k] !== 2) return;
+    const p = around[b.a1].find((d) => d !== b.a2);
+    const q = around[b.a2].find((d) => d !== b.a1);
+    if (p == null || q == null || ![b.a1, b.a2, p, q].every(placed)) return;
+    const cis = cisAt(at(b.a1), at(b.a2), at(p), at(q));
+    if (cis != null) sides.set(k, { refs: [p, q], cis });
+  });
+  return { tetra, sides };
+}
+
+/** The angle between two bonds from one atom, in degrees. */
+function angleOf(p: readonly number[], q: readonly number[]): number {
+  const cos = (p[0] * q[0] + p[1] * q[1] + p[2] * q[2]) / (Math.hypot(...p) * Math.hypot(...q));
+  return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
 }
 
 function aroundOf(n: number, bonds: readonly BondIn3d[]): number[][] {

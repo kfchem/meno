@@ -1076,7 +1076,15 @@ drawn, aromatic rings as one form.* What that means, plainly:
   them at the metal is at least 150 degrees (four donors) or 135 (six:
   a terpyridine holds its outer donors short of a line), with no other
   donor within 15 degrees of that angle. A flattened tetrahedron and a
-  trigonal prism have none. As for a centre, an arrangement that sets
+  trigonal prism have none. An entry's stereo key in 3D holds those pairs
+  in one key with its ligands' configurations as its places give them -
+  centres, double bonds' cis or trans - so that which ligand is across
+  which donor is kept with the hand of each: PtCl(L)3 with two L of one
+  hand and one of the other, the odd one across Cl or beside it, is two
+  stereoisomers. A main-group atom of six bonds (SF4Cl2) carries no
+  arrangement yet: its cis and trans forms are one structure; a drawing
+  nobody made marks it "Which donors are next to each other is not
+  given". As for a centre, an arrangement that sets
   nothing is filled in: PtCl4 2-, PtCl3(NH3)-, [Co(NH3)6]3+, Pt(en)Cl2
   and [Co(en)3]3+ are one structure each, given or not. A metal all of
   whose donors, or all but one, are groups alike as wholes (each hanging

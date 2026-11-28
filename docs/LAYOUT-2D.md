@@ -567,6 +567,13 @@ they hang from.
   own rigid shape fixes its donors round the metal - a porphyrin's ring of
   four with two axial donors, two terpyridines - is marked all the same,
   though only one arrangement can be; the mark makes no structure wrong.
+  A main-group atom of six bonds in a drawing nobody made - SF4Cl2,
+  [PF4Cl2]-, SF3Cl3 - is marked so too, its octahedral mark in a SMILES
+  (@OH1 to @OH30, which Meno reads only at a metal) given or not: Meno
+  keeps no arrangement of one yet, so its picture is one nobody gave. Not
+  where every way is one (SF6, SF5Cl: its atoms alike by the whole
+  structure's symmetry, six or five of them). Drawn by the chemist, it is
+  kept as drawn, unmarked, as a metal is.
   How its spokes are laid out is section 7's. Donors are told apart, here and for
   four, as ligands - all each carries, not only the atom on the metal:
   [Pt(NH2Me)2(NH2Et)2]2+ is two and two, [Co(NH2Me)4(NH2Et)2]3+ four and

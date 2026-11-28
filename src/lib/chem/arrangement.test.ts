@@ -448,4 +448,37 @@ describe("which donors are across, read", () => {
     // (no metal of four or six donors: no key)
     expect(arrangementKey([{ el: "C" }, { el: "O" }], [{ a1: 0, a2: 1, order: 1 }], [0, 0, 0, 1.4, 0, 0])).toBeNull();
   });
+
+  it("in 3D: PtCl(L)3 with two L of one hand and one of the other - the odd one across Cl or beside it - keyed apart; turned, or the two cis L changed round, the same", () => {
+    // (each L an N bonded to a C carrying H, F and a CH3's C: a centre whose hand is `hand`; the Pt square planar in the xy plane, Cl on +x)
+    const molecule = (hands: { across: 1 | -1; up: 1 | -1; down: 1 | -1 }, turn = 0) => {
+      const atoms: { el: string }[] = [{ el: "Pt" }, { el: "Cl" }];
+      const bonds = [{ a1: 0, a2: 1, order: 1 }];
+      const places: number[][] = [[0, 0, 0], [2.3, 0, 0]];
+      const ligand = (dir: number[], hand: 1 | -1) => {
+        const n = atoms.length;
+        atoms.push({ el: "N" }, { el: "C" }, { el: "H" }, { el: "F" }, { el: "C" });
+        const side = [-dir[1], dir[0], 0];
+        const c = dir.map((d) => d * 3.5);
+        const off = (a: number, b: number, z: number) => c.map((x, i) => x + dir[i] * a + side[i] * b + [0, 0, 1][i] * z);
+        places.push(dir.map((d) => d * 2.0), c, off(0.4, 0.9, 0), off(0.4, -0.5, 0.8 * hand), off(0.4, -0.5, -0.8 * hand));
+        bonds.push({ a1: 0, a2: n, order: 1 }, ...[1, 2, 3, 4].map((k) => ({ a1: k === 1 ? n : n + 1, a2: n + k, order: 1 })));
+      };
+      ligand([-1, 0, 0], hands.across);
+      ligand([0, 1, 0], hands.up);
+      ligand([0, -1, 0], hands.down);
+      const t = deg(turn);
+      const xyz = places.flatMap(([x, y, z]) => [x, y * Math.cos(t) - z * Math.sin(t), y * Math.sin(t) + z * Math.cos(t)]);
+      return arrangementKey(atoms, bonds, xyz);
+    };
+    // (worked out first: of two L of one hand and one of the other, the odd one across Cl, or beside it - two compounds; the two
+    //  beside Cl are changed round by a turn about the Cl-Pt-L line, so which of them is the odd one makes no third)
+    const oddAcross = molecule({ across: -1, up: 1, down: 1 });
+    const oddBeside = molecule({ across: 1, up: 1, down: -1 });
+    expect(oddAcross).not.toBe(oddBeside);
+    expect(molecule({ across: 1, up: -1, down: 1 })).toBe(oddBeside);
+    expect(molecule({ across: -1, up: 1, down: 1 }, 70)).toBe(oddAcross);
+    // (and the mirror image of the odd one across - two of the other hand, the odd one across - another compound again)
+    expect(molecule({ across: 1, up: -1, down: -1 })).not.toBe(oddAcross);
+  });
 });

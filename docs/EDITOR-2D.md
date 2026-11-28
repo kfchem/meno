@@ -1667,9 +1667,14 @@ All hover-based, as above.
   kept, an atom put on another - is left as drawn and named by its formula
   and why, the others laid out all the same, as one undo step.)
   - **A four- or six-bond metal keeps its donors opposite each other as
-    drawn** (`oppositesKept`): which pairs stand opposite is its isomer -
+    drawn** (`oppositesKept`), and so does a main-group atom of six bonds
+    (S, Se, Te, P, As, Sb, Si, Ge, a halogen or Xe: lib/chem/arrangement
+    `arrangedCentre`): which pairs stand opposite is its isomer -
     transplatin and cisplatin are two compounds, as are trans- and
-    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise, the
+    cis-[CoCl2(NH3)4]+ and trans- and cis-SF4Cl2. A hydrogen bond drawn to
+    the metal is none of its donors, as identity reads them: where the
+    layout cannot then keep the others as drawn, nothing is moved, and
+    that is said. Where the engine set them otherwise, the
     donors' units are moved round the metal into the layout's places:
     each turned about it whole with all it carries, a chelate of two also
     mirrored across the line between its donors, its wedges turned over,
