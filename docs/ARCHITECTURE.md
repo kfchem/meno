@@ -297,30 +297,47 @@ The page itself can stop under Meno: the system takes its process away
   system says (its process ended; on Windows, the web view's own process
   ended), whether a save was under way - never which file - and what Meno
   did.
-- **The page started again** in the same window. The workspace files its
-  tabs held are opened again from their files, as a file opened from outside
-  Meno is (`opened.rs`): each as it was last saved. The page tells the back
-  end which they are as its tabs change and after each save (`page_files`);
-  only workspace files it may read are kept, in memory alone. Tabs never
-  saved, Settings and the like are not opened again: where nothing was
-  saved, the page comes back empty, never half of what was there.
-- **Said once**, in the window's notice (as a file that could not be read is
-  said), by the page started again as it comes up (`page_came_back`; none
-  at any other start): "Meno's window stopped working and was started
-  again. What was not saved is lost.", then "The files that were open are
-  open again, as they were last saved." where any were.
+- **The page started again** in the same window, at once. The workspace
+  files its tabs held are opened again from their files, as a file opened
+  from outside Meno is (`opened.rs`): each as it was last saved. The page
+  tells the back end which they are as its tabs change and after each save
+  (`page_files`, looked at off the window's thread); only workspace files it
+  may read are kept, in memory alone. Tabs never saved, Settings and the
+  like are not opened again: where nothing was saved, the page comes back
+  empty, never half of what was there.
+- **Said once**, by the page started again as it comes up
+  (`page_came_back`; none at any other start), in the window's notice -
+  kept before anything said after it, a file that could not be read among
+  them, till OK: "Meno's window stopped working and was started again. What
+  was not saved is lost.", then "The files that were open are open again,
+  as they were last saved." where any were.
 - **A save under way.** The page tells the back end the name of the
-  workspace file it saves as the save begins, and that it ended as it ends
-  (`page_saving`, round `saveTo` in `fileActions.ts`). Its bytes are written
-  by the back end (`write_document`; FILE-IO.md, *Save and Export*), apart
-  from the page, so a page that stops during a save leaves the file one of
-  two ways, and which is said. Where the bytes were handed over, the
-  writing goes on to its end, and what is said waits for it: "Route.meno
-  was being saved, and the save was finished: Route.meno is as saved." (or,
-  where it failed, as next). Where they were not, they are never written
-  after it - a write the stopped page asked for is refused - and the file is
-  as it was: "Route.meno was being saved, and that save did not happen:
-  Route.meno is as it was before."
+  workspace file it saves as the save begins - and is given a token for
+  that save, which its write is sent with - and that it ended as it ends
+  (`page_saving`, `page_saved`, round `saveTo` in `fileActions.ts`;
+  `writeDocument`'s `save` header). Its bytes are written by the back end
+  (`write_document`; FILE-IO.md, *Save and Export*), apart from the page,
+  and the write's end is marked however it ends - written, failed, or its
+  task gone without saying (`Mark`, dropped at its end). So what is said is
+  what the file is:
+  - its bytes not yet handed over as the page stopped: never written after
+    it (a write with that save's token is refused; a later save of the same
+    file has a token of its own) - "Route.meno was being saved, and that
+    save did not happen: Route.meno is as it was before.";
+  - written already, or failed: "... and the save was finished: Route.meno
+    is as saved." or the words above, at once;
+  - still being written: said at once that what came of it is said once it
+    has ended ("Route.meno was being saved: what came of that save is said
+    here once it has ended."). That file is not opened again till then -
+    the rest are, at once - so that no tab holds the file as it was before
+    while the save puts the new one in its place. Once it has ended (waited
+    for at most `REOPEN_WAIT`, ten minutes, as a large file to a slow disk
+    may take), it is opened again and what it is said after the first words
+    (`page_came_back_later`, told by `page-came-back`): finished, did not
+    happen, or, where its write ended without saying how, "Meno cannot tell
+    whether that save was finished: look at Route.meno before saving over
+    it." Past the limit it is not opened, and it is said: "that save has not
+    ended yet: open Route.meno again later, to see what it holds."
 - **Never a loop.** A page that stops again within two minutes of being
   started again (`SOON`: long enough to read the files opened again, so
   that one that stops the page as it opens is caught) is not started a
@@ -331,7 +348,11 @@ The page itself can stop under Meno: the system takes its process away
   "Meno's window stopped working.", what was not saved, the save, "Meno
   will close."), and Meno closes as a quit closes it once it is
   dismissed (`RunEvent::Exit`: its sidecars ended; a running job goes on
-  apart from Meno, as after any quit).
+  apart from Meno, as after any quit). A save being written is waited for
+  first, at most `CLOSE_WAIT`, half a minute, as the window shows nothing
+  meanwhile; past it the message says "that save had not ended: once Meno is
+  started again, open Route.meno to see what it holds." Stops after Meno has
+  begun to close are let be: one message only.
 - **A page that stops answering** but has not ended (Windows tells this
   apart): logged once, nothing more. It is not started again: a long piece
   of work in the page may still end, and starting it again would lose it.

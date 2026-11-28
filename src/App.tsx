@@ -97,6 +97,9 @@ export default function App() {
   };
   // Shown when an action is refused, e.g. the WebGL canvas budget is full.
   const [notice, setNotice] = useState<string | null>(null);
+  // What came of the work, where this page is the one started again after the page stopped under Meno: kept
+  // above any notice said after it, till dismissed (lib/pageBack).
+  const [backSaid, setBackSaid] = useState<string[]>([]);
   // (a talk given in the window: the title bar makes way for it)
   const presenting = usePresentingWindow((s) => s.on);
   // Something with unsaved changes, waiting on a yes or a no.
@@ -210,7 +213,8 @@ export default function App() {
     if (isTauri()) tellOpenFiles();
   }, [state]);
   useEffect(() => {
-    if (isTauri()) void sayCameBack(setNotice);
+    if (!isTauri()) return;
+    return sayCameBack((words) => setBackSaid((was) => [...was, words]));
   }, []);
 
   // Undo/redo belong to the active tab, not to the app as a whole.
@@ -929,16 +933,19 @@ export default function App() {
         }}
       />
       <AnimatePresence>
-      {notice && (
+      {(notice || backSaid.length > 0) && (
         <motion.div
           key="notice"
           {...RISE}
           role="alert"
           className="absolute top-12 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex items-start gap-3 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
-          <span className="break-words">{notice}</span>
+          <span className="break-words">{[...backSaid, notice].filter(Boolean).join(" ")}</span>
           <button
-            onClick={() => setNotice(null)}
+            onClick={() => {
+              setNotice(null);
+              setBackSaid([]);
+            }}
             className="shrink-0 underline text-gh-gray hover:text-gh-black"
           >
             OK

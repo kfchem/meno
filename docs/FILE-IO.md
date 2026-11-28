@@ -688,10 +688,11 @@ How these behave:
   its hidden copy perhaps beside it; the next save of that file takes away
   such a copy left more than six hours before (`sweep_parts`): one can be as
   large as the file. The page that asked for a save stopping under Meno
-  stops nothing of it: bytes handed over are written to the end and the
-  file is as saved; bytes not yet handed over are never written after it,
-  and the file is as it was - which of the two, the page started again says
-  (ARCHITECTURE.md, *When the page stops*).
+  stops nothing of it: bytes handed over are written to the end, and the
+  file is as saved - or, where the write then fails, as it was; bytes not
+  yet handed over are never written after it, and the file is as it was.
+  Which it is, the page started again says once the write has ended, and
+  only then opens that file again (ARCHITECTURE.md, *When the page stops*).
 - **A workspace's file is never larger than Meno can open again** (#555).
   Opening reads the whole file into the page, and the reader takes no ZIP64
   (`lib/binary/zip.ts`), so a file of 4 GB or more would never open. On a

@@ -73,13 +73,19 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
     if !app.try_fs_scope().is_some_and(|scope| may_write(&path, &target, |p| scope.is_allowed(p))) {
         return Err(format!("Meno may not write to {}", path.display()));
     }
-    // (the workspace file the page said it saves: followed, so that a page that stops meanwhile is told what the file is - pagestop.rs)
-    let told = app.state::<crate::pagestop::PageStop>().write_begins(&path, &target)?;
+    // (the workspace's save the page said it makes - the `save` header, its token: its write followed to its end,
+    //  however it ends, so that a page that stops meanwhile is told what the file is - pagestop.rs)
+    let save = request.headers().get("save").and_then(|t| t.to_str().ok()).and_then(|t| t.parse::<u64>().ok());
+    let mut mark = app.state::<crate::pagestop::PageStop>().write_begins(save)?.map(|token| {
+        let app = app.clone();
+        crate::pagestop::Mark::new(move |written| app.state::<crate::pagestop::PageStop>().write_ends(token, written))
+    });
     tauri::async_runtime::spawn_blocking(move || {
         let done = replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most));
-        if told {
-            app.state::<crate::pagestop::PageStop>().write_ends(&path, &target, done.is_ok());
+        if let Some(mark) = mark.as_mut() {
+            mark.ended(done.is_ok());
         }
+        drop(mark);
         done.map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
             .map_err(|e| format!("{}: {e}", path.display()))
     })

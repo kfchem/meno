@@ -1377,8 +1377,10 @@ pub fn run() {
             opened::opened_files,
             // the page stopped under Meno: what it tells as it goes, and what it is told as it comes back
             pagestop::page_saving,
+            pagestop::page_saved,
             pagestop::page_files,
             pagestop::page_came_back,
+            pagestop::page_came_back_later,
             // Meno as the default app for them, chosen in Settings
             defaults::defaults_state,
             defaults::defaults_use,
