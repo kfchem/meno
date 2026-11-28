@@ -1315,7 +1315,7 @@ export function unreadInk(read: FigureRead, shapes: Shapes, known: readonly Glyp
       const d = dist(a, m);
       if (d < best) [best, at] = [d, i];
     });
-    if (at >= 0 && best <= LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `A mark beside it in the picture, read as "${l.c}", is in no label: a letter of a label, or a charge's sign, was not read.`);
+    if (at >= 0 && best <= LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `A letter or sign beside it in the picture, read as "${l.c}", belongs to no atom: a letter of an atom's symbol, or a charge's sign, was not read.`);
   }
   return out;
 }

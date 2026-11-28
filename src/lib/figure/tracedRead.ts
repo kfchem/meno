@@ -11,6 +11,8 @@ import type { GlyphShape } from "./glyphs";
 import type { Pixels } from "./inkFit";
 import { labelText, readFigure, wordsOf, type FigureRead } from "./read";
 import { LEFT_NEAR, onPage, tracePicture, unreadInk } from "./trace";
+import { NORMAL_VALENCES } from "../chem/perception/hydrogens";
+import { metal } from "../chem/perception/elements";
 
 /** Where the picture's pixels lie: a pixel is `scale` of the place's units, its top left at `x`, `y` there. */
 export type PictureAt = { scale: number; x: number; y: number };
@@ -53,66 +55,108 @@ export function readTracedPicture(
   for (const i of besidePieces(read)) if (!read.atoms[i].unsure?.includes(APART_SAID)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), APART_SAID];
   for (const i of alkaliOnCarbon(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ALKALI_SAID];
   for (const i of atOnePlace(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ONE_PLACE_SAID];
-  // (an O, S, Se or N written bare, no H, no charge, with fewer bonds than it takes: a charge's sign, a bond or an H not read - said
-  //  wherever it stands and however large its piece, never filled with H in silence)
-  for (const i of openLabels(read)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), OPEN_SAID];
-  // (a word an atom's label reads as - a counter-ion's Na, its sign lost or not taken - standing apart, read as no atom: said by the atom
-  //  nearest it, however far, never left out in silence)
-  for (const [i, said] of wordsApart(read, reads)) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), said];
+  // (an atom written as its element alone, no charge read, whose bonds the element cannot hold uncharged - too few: an O with one bond,
+  //  a Cl with none; too many: an N with four - a charge's sign, a bond or an H not read: said wherever it stands, never filled with H in
+  //  silence; and a lone ion's word standing apart where the structure by it is not whole without it - said once, with the atom it
+  //  answers)
+  const open = valenceUnread(read);
+  const apart = wordsApart(read, reads, open);
+  for (const [i, kind] of open) {
+    const ion = apart.get(i);
+    read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), kind === "few" ? (ion ? openIonSaid(ion) : OPEN_SAID) : OVER_SAID];
+    apart.delete(i);
+  }
+  for (const [i, ion] of apart) read.atoms[i].unsure = [...(read.atoms[i].unsure ?? []), ionApartSaid(ion)];
   return read;
 }
 
+/** The halides: an ion of one atom, as a metal's is. */
+const HALIDE = new Set(["F", "Cl", "Br", "I"]);
+
+/** A word that reads as one lone ion - a metal or a halide, alone, with or without its count and sign (Na, K+, 2 Na+, Cl-, Ca2+) - its symbol; else null. */
+function loneIon(text: string): string | null {
+  const m = /^(?:\d+\s*)?([A-Z][a-z]?)(?:\d*[+\u2212-])?$/.exec(text.replace(/\s+/g, " ").trim());
+  return m && (metal.has(m[1]) || HALIDE.has(m[1])) ? m[1] : null;
+}
+
+/** A read atom's charge: as read on it, drawn by it, or written at its label's end - there, its signs counted (a digit before them is the H's). */
+function chargeOf(a: FigureRead["atoms"][number]): number {
+  if (a.charge) return a.charge;
+  if (a.marked) return a.marked;
+  const m = /([+\u2212-]+)$/.exec(a.label ?? "");
+  return m ? (m[1].startsWith("+") ? 1 : -1) * m[1].length : 0;
+}
+
 /**
- * The words of a picture's letters read in no label that read as a label - an element, an ion, a group - standing farther than
- * `LEFT_NEAR` from every atom (nearer, `unreadInk` says the letter): each said by the atom nearest it, by atom.
+ * The lone ions' words of a picture's letters that no atom took (`loneIon`), each by the atom nearest it, where the structure that atom is
+ * part of is not whole without an ion: charged as read, or holding an atom `open` (too few bonds). A molecule's formula - a reagent's,
+ * NaOH, K2CO3 - is no lone ion; a lone ion by a structure read whole and neutral is a reagent's, not the structure's. Nearer than
+ * `LEFT_NEAR`, the letter is said by `unreadInk` already. By atom, the ion's word: for an open atom, that atom; else the atom nearest.
  */
-export function wordsApart(read: Pick<FigureRead, "atoms" | "bond" | "left">, reads: (label: string) => boolean): Map<number, string> {
+export function wordsApart(read: Pick<FigureRead, "atoms" | "bonds" | "bond" | "left">, reads: (label: string) => boolean, open: ReadonlyMap<number, "few" | "many"> = new Map()): Map<number, string> {
   const out = new Map<number, string>();
   if (!read.atoms.length || !read.left?.letters.length) return out;
+  const pieces = piecesOf(read);
+  const pieceOf = new Map(pieces.flatMap((p, k) => p.map((i) => [i, k] as const)));
   for (const w of wordsOf(read.left.letters)) {
     const text = labelText(w, reads);
-    // (an element's symbol, an ion's or a group's name begins with a capital: a word that does not is no atom's)
-    if (!/^[A-Z]/.test(text) || !reads(text)) continue;
+    if (!loneIon(text)) continue;
     const m = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
     let [best, at] = [Infinity, -1];
     read.atoms.forEach((a, i) => {
       const d = Math.hypot(a.x - m.x, a.y - m.y);
       if (d < best) [best, at] = [d, i];
     });
-    if (at >= 0 && best > LEFT_NEAR * read.bond && !out.has(at)) out.set(at, `"${text}" stands apart in the picture and was read as no atom: an ion or a group of the structure may be missing.`);
+    if (at < 0 || best <= LEFT_NEAR * read.bond) continue;
+    const piece = pieces[pieceOf.get(at)!];
+    const opened = piece.find((i) => open.get(i) === "few");
+    const charge = piece.reduce((sum, i) => sum + chargeOf(read.atoms[i]), 0);
+    if (opened === undefined && !charge) continue;
+    const to = opened ?? at;
+    if (!out.has(to)) out.set(to, text);
   }
   return out;
 }
 
-/**
- * The bonds an element written bare takes, uncharged, where a drawing leaves no H unwritten: a chemist writes a hetero atom's H's
- * (OH, NH2, SH), so a bare O, S or Se has two bonds - a ring's or an ether's O, a carbonyl's O with its double bond - and a bare N
- * three - a ring's, an amine's, an imine's with its double bond, a nitrile's with its triple. One with fewer is an anion whose minus
- * was lost, an H or a bond not read: open (`openLabels`).
- */
-const BARE_TAKES: Record<string, number> = { O: 2, S: 2, Se: 2, N: 3 };
-export const OPEN_SAID = "As read, it has fewer bonds than it takes and no charge: a charge's sign, a bond or an H was not read.";
+export const OPEN_SAID = "As read, it has fewer bonds than its element takes and no charge: a charge's sign, a bond or an H was not read.";
+export const OVER_SAID = "As read, it has more bonds than its element takes without a charge, and no charge: its charge's sign was not read.";
+/** An open atom with a lone ion standing apart: one sentence for both. */
+export const openIonSaid = (ion: string) => `As read, it has fewer bonds than its element takes and no charge, and "${ion}" stands apart: its charge's sign was not read, "${ion}" its counter-ion.`;
+/** A charged structure with a lone ion standing apart, read as no atom. */
+export const ionApartSaid = (ion: string) => `"${ion}" stands apart, read as no atom: it may be this ion's counter-ion.`;
 
 /**
- * The atoms of a read written as a bare O, S, Se or N - the label that one element alone, or read as that element - with no charge, no
- * charge drawn by it and no radical's dots, whose bonds come to fewer than it takes (`BARE_TAKES`): a bond as its order, a bond of a
- * ring drawn with a circle as one and a half, a dative bond none (its pair is the donor's own).
+ * The atoms of a read written as their element alone - the label that one symbol, or read as that element - of the elements whose
+ * uncharged valences Meno knows (lib/chem `NORMAL_VALENCES`), carbon aside, with no charge read, none drawn by it and no radical's dots,
+ * whose bonds the element cannot hold uncharged: "few", fewer than its least valence (an O with one, a Cl with none); "many", more than
+ * that and none of its valences (an N or a B with four, an O with three; an S with four or six, a P with five, are as drawn). A bond counts
+ * as its order, a bond of a ring drawn with a circle as one and a half, a dative bond none; an atom with a bond of such a ring is not
+ * judged "many" (its order is the ring's to work out). A chemist writes a hetero atom's H's, so a ring's or an ether's O, a carbonyl's O,
+ * an amine's, an imine's or a nitrile's N are never "few".
  */
-export function openLabels(read: Pick<FigureRead, "atoms" | "bonds">): number[] {
+export function valenceUnread(read: Pick<FigureRead, "atoms" | "bonds">): Map<number, "few" | "many"> {
   const sum = read.atoms.map(() => 0);
+  const ringed = new Set<number>();
   for (const b of read.bonds) {
     if (b.dative) continue;
     const n = b.aromatic ? 1.5 : b.order;
     sum[b.a] += n;
     sum[b.b] += n;
+    if (b.aromatic) ringed.add(b.a).add(b.b);
   }
-  return read.atoms.flatMap((a, i) => {
+  const out = new Map<number, "few" | "many">();
+  read.atoms.forEach((a, i) => {
     const el = a.label ?? a.el ?? "";
-    const takes = BARE_TAKES[el];
-    if (takes === undefined || a.charge || a.marked || a.dots) return [];
-    return sum[i] < takes ? [i] : [];
+    const takes = el === "C" ? undefined : NORMAL_VALENCES[el];
+    if (!takes || a.charge || a.marked || a.dots) return;
+    if (sum[i] < takes[0]) out.set(i, "few");
+    else if (!ringed.has(i) && sum[i] > takes[0] && !takes.includes(sum[i])) out.set(i, "many");
   });
+  return out;
 }
+
+/** The atoms `valenceUnread` finds with too few bonds. */
+export const openLabels = (read: Pick<FigureRead, "atoms" | "bonds">): number[] => [...valenceUnread(read)].flatMap(([i, k]) => (k === "few" ? [i] : []));
 
 /**
  * How far short of where their lines cross two bonds' free ends may stop to be a label's (`lostLabelEnds`), in a bond: a label's half
@@ -212,9 +256,18 @@ const BESIDE_SLACK = 0.5;
  * is no group of it cut off by one bond.
  */
 export function besideReach(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number {
-  const longest = Math.max(0, ...read.bonds.map((b) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y)));
+  // (bonds longer than `BESIDE_LONGEST` of the picture's bond are no bonds as drawn - a rule, a bracket or an arrow read as one - and do
+  //  not widen it)
+  const lengths = read.bonds.map((b) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y));
+  const longest = Math.max(0, ...lengths.filter((l) => l <= BESIDE_LONGEST * read.bond));
   return Math.max(longest + BESIDE_SLACK * read.bond, (1 + BESIDE_SLACK) * read.bond);
 }
+
+/**
+ * The longest a bond read may be, in the picture's bond, to set `besideReach`: a stretched bond in a crowded drawing or a bond to a label
+ * runs to about a bond and a half; twice the picture's bond is none a chemist draws as one bond.
+ */
+const BESIDE_LONGEST = 2;
 
 /** Whether a piece of a read lies beside one of `larger`: an atom of it within `besideReach` of an atom of that piece. */
 function besideLarger(read: Pick<FigureRead, "atoms" | "bonds" | "bond">, p: readonly number[], larger: readonly number[][]): boolean {

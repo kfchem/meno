@@ -3,15 +3,16 @@
  * Meno in its own style and printed to PDF, as the PDF reader gives it), painted at 300 dpi with their letters given, and read as a
  * picture is (lib/figure/tracedRead `readTracedPicture`). What stands apart is read right, or said:
  * - a salt drawn as two ions apart, its acetate's minus lost: the O left with one bond says so (`openLabels`), however far the Na stands,
- *   and the Na, read as no atom, is said by the atom nearest it (`wordsApart`);
+ *   and the Na, read as no atom, is said with it as its counter-ion, once (`valenceUnread`, `wordsApart`);;
  * - two neutral molecules apart, alanine beside a ring: each read right, nothing said;
- * - ibuprofen with the bond to its carboxyl left out: the carboxyl, one bond off, is said to be apart (`tinyPieces`).
+ * - ibuprofen with the bond to its carboxyl left out: the carboxyl, one bond off, is said to be apart (`tinyPieces`);
+ * - alanine's OH set half a bond off its bond: the bond's end says the letters that belong to no atom (lib/figure/trace `unreadInk`).
  */
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigurePath, PathStep } from "../../../../lib/figure/drawn";
 import type { FigureRead } from "../../../../lib/figure/read";
 import { readDrawnLabel } from "../../../../lib/figure/structure";
-import { APART_SAID, OPEN_SAID, readTracedPicture } from "../../../../lib/figure/tracedRead";
+import { APART_SAID, openIonSaid, readTracedPicture } from "../../../../lib/figure/tracedRead";
 import { partFormula } from "../chem/cleanUp";
 import { identityOfDrawn } from "../chem/identityOf";
 import { figureLabels, pictureResult } from "./figures";
@@ -63,11 +64,14 @@ describe("a picture of structures standing apart, made from Meno's drawings", ()
     const cation: FigureDrawn = { paths: salt.paths.filter(plus), letters: salt.letters.filter((l) => l.c !== "O"), pictures: [] };
     for (const off of [0, 60, 150]) {
       const r = read(together(anion, moved(cation, off)));
-      const open = r.atoms.filter((a) => a.unsure?.includes(OPEN_SAID));
-      expect(open.map((a) => a.label), String(off)).toEqual(["O"]);
-      // (the Na, apart, read as no atom: said by the atom nearest it, never left out in silence)
-      expect(r.atoms.some((a) => a.unsure?.some((u) => u.startsWith('"Na') ))).toBe(true);
+      // (said once, on the O: its sign lost, the Na its counter-ion - not again by the Na)
+      const said = r.atoms.flatMap((a) => (a.unsure ?? []).map((u) => [a.label ?? "C", u]));
+      expect(said, String(off)).toEqual([["O", openIonSaid("Na")]]);
     }
+    // (its minus drawn in its ring, the Na apart: however that ring is traced, the read says something - never an acid in silence)
+    const whole: FigureDrawn = { paths: salt.paths.filter((p) => !plus(p)), letters: salt.letters.filter((l) => l.c === "O"), pictures: [] };
+    const r = read(together(whole, moved(cation, 150)));
+    expect(r.atoms.some((a) => a.unsure?.length)).toBe(true);
   }, measured(6000));
 
   it("two neutral molecules apart, alanine beside a ring: each read right, nothing said", () => {
@@ -88,5 +92,15 @@ describe("a picture of structures standing apart, made from Meno's drawings", ()
     const r = read({ ...f, paths: f.paths.filter((p) => !cut(p)) });
     const apart = r.atoms.filter((a) => a.unsure?.includes(APART_SAID));
     expect(apart.map((a) => a.label ?? "C").sort()).toEqual(["C", "O", "OH"]);
+  }, measured(3000));
+  it("a group's word set off its bond - alanine's OH half a bond too far: the bond's free end says the letters that belong to no atom", () => {
+    const f = alanine as unknown as FigureDrawn;
+    // (its bond runs from (100.6, 92.6) to (109.0, 97.4): the O and the H moved on along it by half a bond)
+    const off = (l: FigureDrawn["letters"][number]) => l.box[1] > 95 && l.box[1] < 98;
+    const away: FigureDrawn = { ...f, letters: [...f.letters.filter((l) => !off(l)), ...moved({ paths: [], letters: f.letters.filter(off), pictures: [] }, 6.2, 3.6).letters] };
+    const r = read(away);
+    const said = r.atoms.flatMap((a) => (a.unsure ?? []).map((u) => [a.label ?? "C", u]));
+    // (`unreadInk`: the letters within reach of the bond's end, read in no atom - the end not taken for a methyl in silence)
+    expect(said).toEqual([["C", 'A letter or sign beside it in the picture, read as "O", belongs to no atom: a letter of an atom\'s symbol, or a charge\'s sign, was not read.']]);
   }, measured(3000));
 });

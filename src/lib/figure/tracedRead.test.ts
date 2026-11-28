@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alkaliOnCarbon, atOnePlace, besidePieces, besideReach, BESIDE_PIECE, openLabels, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
+import { alkaliOnCarbon, atOnePlace, besidePieces, besideReach, BESIDE_PIECE, ionApartSaid, openLabels, valenceUnread, wordsApart, inLineCarbons, lostLabelEnds, LOST_LABEL_REACH, ONE_PLACE, pictureDpi, tinyPieces, TINY_PIECE } from "./tracedRead";
 import type { ReadAtom, ReadBond } from "./read";
 
 describe("how finely a box holding pictures is drawn to be traced", () => {
@@ -252,5 +252,71 @@ describe("a hetero atom written bare whose bonds leave it open", () => {
     expect(openLabels(mol([null, { label: "O", marked: -1 }], [[0, 1, 1]]))).toEqual([]);
     const ring = mol([null, null, "N", null, null, null], [[0, 1, 1], [1, 2, 1], [2, 3, 1], [3, 4, 1], [4, 5, 1], [5, 0, 1]]);
     expect(openLabels({ ...ring, bonds: ring.bonds.map((b) => ({ ...b, aromatic: true as const })) })).toEqual([]);
+  });
+});
+
+describe("an atom whose bonds its element cannot hold uncharged, no charge read", () => {
+  const mol = (labels: (Partial<ReadAtom> | string | null)[], bonds: [number, number, 1 | 2 | 3][]) => ({
+    atoms: labels.map((l, k): ReadAtom => ({ x: k, y: 0, ...(typeof l === "string" ? { label: l } : (l ?? {})) })),
+    bonds: bonds.map(([a, b, order]): ReadBond => ({ a, b, order })),
+  });
+  const kinds = (m: ReturnType<typeof mol>) => [...valenceUnread(m)];
+
+  it("is said with too few: a lone halogen with no bond - its minus lost, or no part of the structure - as an O with one", () => {
+    expect(kinds(mol(["Cl"], []))).toEqual([[0, "few"]]);
+    expect(kinds(mol(["Br"], []))).toEqual([[0, "few"]]);
+    expect(kinds(mol([null, "Cl"], [[0, 1, 1]]))).toEqual([]);
+    expect(kinds(mol([{ label: "Cl", charge: -1 }], []))).toEqual([]);
+  });
+
+  it("is said with too many: an N or a B with four, an O with three - a sign not read; an S with four or six and a P with five are as drawn", () => {
+    // (tetramethylammonium, its plus lost; a pyridine N-oxide's N drawn with its double bonds, its plus lost)
+    expect(kinds(mol([null, "N", null, null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 1]]))).toEqual([[1, "many"]]);
+    // (and its O, its minus lost too, has too few)
+    expect(kinds(mol([null, "N", null, "O"], [[0, 1, 2], [1, 2, 1], [1, 3, 1]]))).toEqual([[1, "many"], [3, "few"]]);
+    expect(kinds(mol([null, "B", null, null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 1]]))).toEqual([[1, "many"]]);
+    expect(kinds(mol([null, "O", null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1]]))).toEqual([[1, "many"]]);
+    // (a sulfoxide, a sulfone, a phosphine oxide, a phosphate's P, a nitro's N drawn with two double bonds)
+    expect(kinds(mol([null, "S", null, "O"], [[0, 1, 1], [1, 2, 1], [1, 3, 2]]))).toEqual([]);
+    expect(kinds(mol([null, "S", null, "O", "O"], [[0, 1, 1], [1, 2, 1], [1, 3, 2], [1, 4, 2]]))).toEqual([]);
+    expect(kinds(mol([null, "P", null, null, "O"], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 2]]))).toEqual([]);
+    expect(kinds(mol([null, "N", "O", "O"], [[0, 1, 1], [1, 2, 2], [1, 3, 2]]))).toEqual([]);
+    // (its plus read)
+    expect(kinds(mol([null, "N+", null, null, null], [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 1]]))).toEqual([]);
+  });
+});
+
+describe("a lone ion's word standing apart, read as no atom", () => {
+  /** Letters set from `x`, `y`, a letter 0.6 wide. */
+  const letters = (text: string, x: number, y = 0) => [...text].map((c, k) => ({ c, box: [x + 0.6 * k, y - 0.35, x + 0.6 * k + 0.5, y + 0.35] as [number, number, number, number], at: null, size: 0.7 }));
+  const reads = (l: string) => /^[A-Z]/.test(l);
+  /** A ketone, propanone, its O double bonded, and the words given far off. */
+  const ketone = (...words: string[]) => ({
+    atoms: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: -1, label: "O" }] as ReadAtom[],
+    bonds: [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 1, b: 3, order: 2 }] as ReadBond[],
+    bond: 1,
+    left: { letters: words.flatMap((w, k) => letters(w, 6 + 5 * k)) },
+  });
+
+  it("is not said by a structure read whole and neutral: a reagent's or a solvent's word, a lone Na too", () => {
+    for (const w of ["NaBH4", "MeOH", "Na", "K2CO3", "Pd/C", "heat", "NaOH", "HCl", "THF", "Et3N"]) expect(wordsApart(ketone(w), reads), w).toEqual(new Map());
+  });
+
+  it("is said by a structure charged as read - an ammonium with its chloride apart, an acetate with its sodium - as its counter-ion", () => {
+    const ammonium = {
+      atoms: [{ x: 0, y: 0 }, { x: 1, y: 0, label: "NH3+" }] as ReadAtom[],
+      bonds: [{ a: 0, b: 1, order: 1 }] as ReadBond[],
+      bond: 1,
+      left: { letters: letters("Cl-", 6) },
+    };
+    expect(wordsApart(ammonium, reads)).toEqual(new Map([[1, "Cl-"]]));
+    const acetate = { ...ketone("Na"), atoms: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0, label: "O", charge: -1 }, { x: 1, y: -1, label: "O" }] as ReadAtom[] };
+    expect(wordsApart(acetate, reads)).toEqual(new Map([[2, "Na"]]));
+    expect(ionApartSaid("Na")).toBe('"Na" stands apart, read as no atom: it may be this ion\'s counter-ion.');
+  });
+
+  it("goes to the open atom where its structure has one: the acetate's O whose minus was lost", () => {
+    const lost = { ...ketone("Na"), atoms: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0, label: "O" }, { x: 1, y: -1, label: "O" }] as ReadAtom[] };
+    expect(wordsApart(lost, reads, valenceUnread(lost))).toEqual(new Map([[2, "Na"]]));
   });
 });

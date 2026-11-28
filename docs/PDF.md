@@ -525,28 +525,39 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   of a bond, or nearest letters read in no label, within 1.2 bonds, is
   unsure, and says so. A label the matcher cannot read, or whose bond was
   lost, would otherwise be left out with what it holds, and what is left
-  can be a whole structure that is not the picture's. Letters read in no
-  label that make a word an atom's label reads as - a counter-ion's Na,
-  its sign lost or not taken - standing farther off than that are said
-  too, by the atom nearest them however far: an ion or a group of the
-  structure may be missing.
-- **A hetero atom left open**: read from a picture, an O, S, Se or N
-  written bare - no H, no charge, no charge drawn by it, no radical's
-  dots - whose bonds come to fewer than it takes (two for O, S and Se,
-  three for N; a bond of a ring drawn with a circle counts one and a
-  half, a dative bond none) is unsure and says so: an acetate whose
-  minus was not traced reads so, and would otherwise be filled with an
-  H as an acid. A chemist writes a hetero atom's H's, so a ring's or an
-  ether's O, a carbonyl's O, an amine's or an imine's N are never open;
-  this is said wherever the atom stands and however large its piece.
+  can be a whole structure that is not the picture's. A lone ion's word
+  that no atom took - a metal or a halide, alone, with or without its
+  count and sign: Na, K+, Cl- - standing farther off than that is said
+  where the structure nearest it is not whole without an ion: charged as
+  read, or with an atom left open (below). It is said as that
+  structure's counter-ion, and, where an atom is open, in that atom's one
+  sentence. A molecule's formula - a reagent's or a solvent's, NaOH,
+  MeOH, K2CO3, NaBH4 - is no lone ion, and a lone Na by a structure read
+  whole and neutral is a reagent's: neither is said.
+- **An atom its bonds do not fit**: read from a picture, an atom written
+  as its element alone - no H, no charge, no charge drawn by it, no
+  radical's dots - whose bonds its element cannot hold uncharged, by the
+  valences Meno fills hydrogens to (B 3; N 3 or 5; O 2; P 3 or 5; S 2, 4
+  or 6; F, Cl, Br, I 1), is unsure and says so. Too few - an acetate's O
+  whose minus was not traced, a Cl read alone with no bond - would
+  otherwise be filled with H; too many - an N or a B with four bonds, an
+  O with three - had a plus or a minus not read. A bond counts as its
+  order, one of a ring drawn with a circle as one and a half (an atom of
+  such a ring is not judged to have too many: its ring's order is open),
+  a dative bond none. A chemist writes a hetero atom's H's, so a ring's
+  or an ether's O, a carbonyl's O, an amine's, an imine's or a nitrile's
+  N are never said; a sulfoxide's or a sulfone's S and a phosphate's P
+  are as drawn. This is said wherever the atom stands and however large
+  its structure.
 - **A small piece of carbons alone** (2026-11-19): read from a picture,
   a piece - atoms joined by bonds - of six atoms or fewer, all of them
   carbons with no label, is unsure and says that it may be a number or
   letters read as bonds: a digit or a letter the matcher does not read
   is traced as a line or two. So is such a piece holding a carbon with
   no label beside a larger one - an atom of it as near an atom of the
-  larger one as the longest bond read in the picture and half a bond
-  more, never under a bond and a half: a group cut off by one bond not
+  larger one as the longest bond read in the picture - of those no
+  longer than two bonds: a longer one is a rule, a bracket or an arrow
+  read as a bond - and half a bond more, never under a bond and a half: a group cut off by one bond not
   traced stands one drawn bond off, and a bond to a label or a
   stretched one is longer than most - saying it may be part of the
   structure, its bond not read: an OH come off with a stray carbon, a

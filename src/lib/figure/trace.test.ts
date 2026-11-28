@@ -535,7 +535,7 @@ describe("ink read as nothing beside a structure read", () => {
     const letter = (x: number, y: number) => ({ c: "O", box: [x - 5, y - 10, x + 5, y + 10] as [number, number, number, number], at: null, size: 10 });
     const near = unreadInk(read([letter(170, 0)]), shapes([]), []);
     expect([...near.keys()]).toEqual([2]);
-    expect(near.get(2)).toBe('A mark beside it in the picture, read as "O", is in no label: a letter of a label, or a charge\'s sign, was not read.');
+    expect(near.get(2)).toBe('A letter or sign beside it in the picture, read as "O", belongs to no atom: a letter of an atom\'s symbol, or a charge\'s sign, was not read.');
     expect(unreadInk(read([letter(180, 0)]), shapes([]), []).size).toBe(0);
   });
 });
