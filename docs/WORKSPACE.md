@@ -358,8 +358,8 @@ Taken while stage 1 was built, on 2026-10-03:
     bonds - covered the very atoms it measured (found on Windows,
     2026-10-05); one across a ring is wider than the ring, and goes out
     past it - further, space-filling, where the balls are larger. Of the
-    clear places, one nearer its own line than any other measurement's is
-    taken first, so that it reads as that line's; where there is none,
+    clear places, one plainly nearer its own line than any other
+    measurement's (by half its letters' size) is taken first, so that it reads as that line's; where there is none,
     as with many lines through one place, it may stand nearer another's,
     and nothing joins it to its own. In a molecule so crowded that no
     place near the line is clear, the value goes where it covers least.

@@ -302,4 +302,27 @@ describe("a measurement in a picture", () => {
       }
     }
   });
+
+  it("looks, for each value, only at what is drawn near it: on a large sheet, a small part of all of it", () => {
+    // a flat square sheet of carbons 30 a side, 1.54 Å apart, bonded to the next along and across, and ten short distances over it
+    const side = 30;
+    const atoms = Array.from({ length: side * side }, (_, i) => ({ el: "C", x: 1.54 * (i % side), y: 1.54 * Math.floor(i / side), z: 0 }));
+    const bonds = atoms.flatMap((_, i) => [
+      ...(i % side < side - 1 ? [{ a1: i, a2: i + 1, order: 1 }] : []),
+      ...(i + side < atoms.length ? [{ a1: i, a2: i + side, order: 1 }] : []),
+    ]);
+    const measures = Array.from({ length: 10 }, (_, k) => {
+      const i = (3 + 2 * k) * side + 3 + 2 * k;
+      return { id: k + 1, atoms: [i, i + 2] };
+    });
+    const sheet = { atoms, bonds, at: { x: 0, y: 0 }, measures };
+    const tally = { marks: 0 };
+    const marks = measurePictureMarks(sheet, STYLE_3D, 0.75, undefined, undefined, undefined, [], tally);
+    expect(marks).toHaveLength(10);
+    // (all against all, each value would look at every ball and stick drawn)
+    const all = pictureMarks(sheet, STYLE_3D).length;
+    expect(all).toBeGreaterThan(2500);
+    expect(tally.marks).toBeLessThan((10 * all) / 5);
+  });
 });
+

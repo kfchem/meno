@@ -191,6 +191,7 @@ export function measurePictureMarks(
   family?: string,
   drawn?: readonly SolidMark[],
   before: readonly LabelBox[] = [],
+  tally?: { marks: number },
 ): MeasureMark[] {
   const measures = m.measures ?? [];
   if (!measures.length) return [];
@@ -246,9 +247,12 @@ export function measurePictureMarks(
       };
       return { mark, own: x.atoms.map((i) => points[i]) };
     });
+  // (binned once, so that each value's search looks only at what is near it - however large the molecule)
+  const near = marksNear(balls, sticks, 4 * size);
+  const largest = balls.reduce((r, b) => Math.max(r, b.r), 0);
   return made.map(({ mark, own }, k) => {
     const others = made.filter((_, j) => j !== k).map((x) => x.mark.lines);
-    const spot = valueSpot(mark, own, middle, balls, sticks, placed, family, others);
+    const spot = valueSpot(mark, own, middle, near, largest, placed, family, others, tally);
     placed.push(spot);
     return { ...mark, label: { x: spot.x, y: spot.y } };
   });
@@ -285,6 +289,8 @@ function jointNumberBoxes(m: Carried3D, style: Style3D, seen: (v: THREE.Vector3)
 
 /** How many times, half its height at a time, a value is tried further off its line for a clear place (labelSpot `farther`): three of its heights, and as far again as the largest ball drawn is across. */
 const VALUE_FARTHER = 6;
+/** How much nearer its own line than any other measurement's a value must stand to be read as its line's, as a share of its size. */
+const OWN_LINE_NEARER = 0.5;
 /** Within this share of its size of the molecule's middle, a value's line runs through it: which side is away from it is no question of a sign. */
 const SIDE_TIE = 0.1;
 
@@ -297,6 +303,30 @@ function offLines(p: { x: number; y: number }, pieces: readonly (readonly [{ x: 
     near = Math.min(near, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
   }
   return near;
+}
+
+/**
+ * A picture's balls and sticks binned by where they reach, in square cells `cell` across: those that reach into a box, in the order
+ * given - each once - for a value's search to look at, and nothing that cannot touch it.
+ */
+function marksNear(balls: readonly { x: number; y: number; r: number }[], sticks: readonly Stick[], cell: number) {
+  const cells = new Map<string, number[]>();
+  const span = (x0: number, y0: number, x1: number, y1: number, each: (key: string) => void) => {
+    for (let i = Math.floor(x0 / cell); i <= Math.floor(x1 / cell); i++) for (let j = Math.floor(y0 / cell); j <= Math.floor(y1 / cell); j++) each(`${i},${j}`);
+  };
+  const put = (k: number) => (key: string) => {
+    const list = cells.get(key);
+    if (list) list.push(k);
+    else cells.set(key, [k]);
+  };
+  balls.forEach((b, k) => span(b.x - b.r, b.y - b.r, b.x + b.r, b.y + b.r, put(k)));
+  sticks.forEach((st, k) => span(Math.min(st.a.x, st.b.x) - st.r, Math.min(st.a.y, st.b.y) - st.r, Math.max(st.a.x, st.b.x) + st.r, Math.max(st.a.y, st.b.y) + st.r, put(balls.length + k)));
+  return (x0: number, y0: number, x1: number, y1: number) => {
+    const found = new Set<number>();
+    span(x0, y0, x1, y1, (key) => cells.get(key)?.forEach((k) => found.add(k)));
+    const ks = [...found].sort((p, q) => p - q);
+    return { balls: ks.filter((k) => k < balls.length).map((k) => balls[k]), sticks: ks.filter((k) => k >= balls.length).map((k) => sticks[k - balls.length]) };
+  };
 }
 
 /**
@@ -313,17 +343,26 @@ function valueSpot(
   mark: MeasureMark,
   own: readonly { x: number; y: number }[],
   middle: { x: number; y: number },
-  balls: readonly { x: number; y: number; r: number }[],
-  sticks: readonly Stick[],
+  near: ReturnType<typeof marksNear>,
+  largestBall: number,
   placed: readonly LabelBox[],
   family: string | undefined,
   others: readonly MeasureMark["lines"][] = [],
+  tally?: { marks: number },
 ): LabelBox {
   const box = measureLabelBox(mark, family);
   const o = mark.label;
   const here: LabelBox = { x: o.x, y: o.y, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
   // (everything as far again as it keeps clear of: VALUE_GAP)
   const gap = VALUE_GAP * mark.size;
+  // how far out it is looked for: three of its heights, and as far again as the largest ball drawn is across
+  const farther = VALUE_FARTHER + Math.ceil((2 * (largestBall > 0 ? largestBall + gap : 0)) / here.hy);
+  // (what it can touch, anywhere it is tried: its box, its nearest edge at most `out` from its point (labelSpot), reaches no
+  // further across than `out` and its whole width, nor up or down than `out` and its whole height - and a hair, for the sums)
+  const out = gap + farther * here.hy + 0.01 * mark.size;
+  const ax = out + 2 * here.hx + gap, ay = out + 2 * here.hy + gap;
+  const { balls, sticks } = near(o.x - ax, o.y - ay, o.x + ax, o.y + ay);
+  if (tally) tally.marks += balls.length + sticks.length;
   const grownBalls = balls.filter((b) => b.r > 0).map((b) => ({ ...b, r: b.r + gap }));
   const grownSticks = sticks.map((st) => ({ ...st, r: st.r + gap }));
   const grownPlaced = placed.map((p) => ({ ...p, hx: p.hx + gap, hy: p.hy + gap }));
@@ -344,9 +383,8 @@ function valueSpot(
   const side = u.x * (o.x - middle.x) + u.y * (o.y - middle.y);
   const flip = Math.abs(side) >= SIDE_TIE * mark.size ? side < 0 : Math.abs(u.y) >= SIDE_TIE ? u.y < 0 : u.x < 0;
   if (flip) way = { x: -way.x, y: -way.y };
-  const largest = grownBalls.reduce((r, b) => Math.max(r, b.r), 0);
-  const farther = VALUE_FARTHER + Math.ceil((2 * largest) / here.hy);
   const ownLines = mark.lines;
-  const fits = others.length ? (b: LabelBox) => offLines(b, ownLines) < Math.min(...others.map((l) => offLines(b, l))) : undefined;
+  // (nearer its own by OWN_LINE_NEARER of its size at least: a tie reads as neither's)
+  const fits = others.length ? (b: LabelBox) => offLines(b, ownLines) < Math.min(...others.map((l) => offLines(b, l))) - OWN_LINE_NEARER * mark.size : undefined;
   return labelSpot(o, gap, { x: here.hx, y: here.hy }, way, grownBalls, grownPlaced, grownSticks, farther, fits);
 }
