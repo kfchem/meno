@@ -6,14 +6,11 @@
 # structure rising out of the drawing.
 #
 # The copy holds the plugin but not its environment, which Meno sets up
-# again the first time the plugin is asked - over the network, under a yes
-# the copy carries only with New-TutorialHome -Ready -PluginEnvironments
-# (README, The prepared home). That switch is not given here until the
-# person who prepared the home has agreed to it. Until then Meno asks at the
-# first step that needs the plugin - make-3d, or lead-ring already where the
-# drawing's checks ask it as the ring closes - and the run stops after
-# make-3d, where it looks for a question, with nothing pressed: the steps
-# from that question on, and the result, cannot be recorded.
+# again the first time the plugin is asked - over the network, under the
+# yes the copy carries with New-TutorialHome -Ready -PluginEnvironments
+# (README, The prepared home), which the person who prepared the home
+# agreed to for recordings. The ring is cyclohexane: it has no
+# stereoisomers, so the 3D structure asks nothing about them.
 
 Set-Tutorial -Needs "RDKit"
 
@@ -57,7 +54,7 @@ function Wait-NoNotice {
 }
 
 # the rest where chemistry is set up: a copy of the prepared home
-Start-Meno -HomeFolder (New-TutorialHome -Ready)
+Start-Meno -HomeFolder (New-TutorialHome -Ready -PluginEnvironments)
 Wait-NoNotice -FirstSec 8
 Step open-quick-add DoubleClick -At (Point $start[0] $start[1])
 Wait-NoNotice
@@ -68,14 +65,28 @@ Wait-NoNotice
 Step right-click RightClick -At (Point $start[0] $start[1])
 Wait-NoNotice
 Step make-3d Click -At (Part MenuItem "3D structure")
-# (the plugin's worker starts the first time it is asked, then the structure rises out of the drawing)
-Start-Sleep -Seconds 10
-Wait-MenoSettled -TimeoutMs 8000 | Out-Null
-# (a question here - to download, to allow, to set up - is the reader's: shot, never answered, and the run stops)
-$asked = @()
-foreach ($like in "Allow*", "Set up*") { $asked += Get-MenoPartsLike -Role Button -Like $like }
-if ($asked.Count) {
-    Save-MenoShot -Path (Join-Path $Out "asked.png") | Out-Null
-    throw "Meno asks '$($asked[0].Name)' after 3D structure: that is the reader's to answer. Stopped; nothing pressed."
+# (the first time, Meno sets the plugin's environment up again and starts its worker; then the structure rises out of the
+# drawing)
+# (the chip and the 3D structure are drawn on the page, out of Accessibility's sight: the run waits three minutes, any question
+# to download, allow or set up - the reader's - stopping it unanswered, and the pictures are each looked at before they are kept)
+$until = (Get-Date).AddMinutes(3)
+while ((Get-Date) -lt $until) {
+    $asked = @()
+    foreach ($like in "Allow*", "Set up*") { $asked += Get-MenoPartsLike -Role Button -Like $like }
+    if ($asked.Count) {
+        Save-MenoShot -Path (Join-Path $Out "asked.png") | Out-Null
+        throw "Meno asks '$($asked[0].Name)' after 3D structure: that is the reader's to answer. Stopped; nothing pressed."
+    }
+    Start-Sleep -Seconds 2
 }
+Wait-MenoSettled -TimeoutMs 8000 | Out-Null
+# (it rises and comes to rest: an eased move, given time to end)
+Start-Sleep -Seconds 4
+Wait-MenoSettled -TimeoutMs 8000 | Out-Null
 Wait-NoNotice
+
+# the molecule let go: a click on empty page, low on the left
+Move-MenoPointer -X 300 -Y 1300
+Start-Sleep -Milliseconds 400
+Step let-go Click -At (Point 400 1300)
+Start-Sleep -Seconds 2
