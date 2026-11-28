@@ -60,12 +60,13 @@ export function watchDragEnds(mark: DragMark, on: Pick<Window, "addEventListener
  * way, held by its pointer; its end ends it (`endDrag`); a press chooses (`pressTab`).
  */
 export function tabGestures(mark: DragMark, choose: () => void): {
-  onDragStart: (e: { pointerId?: number }) => void;
+  onDragStart: (e: object) => void;
   onDragEnd: () => void;
   onPointerDown: (e: { pointerId: number }) => void;
 } {
   return {
-    onDragStart: (e) => void (mark.current = e.pointerId ?? 1),
+    // (a drag by touch has no pointer of its own to be told by: the first)
+    onDragStart: (e) => void (mark.current = "pointerId" in e && typeof e.pointerId === "number" ? e.pointerId : 1),
     onDragEnd: () => endDrag(mark),
     onPointerDown: (e) => pressTab(mark, e.pointerId, choose),
   };
