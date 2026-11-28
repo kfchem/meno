@@ -98,6 +98,9 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf, cutShort } from "./utils/workspace";
 import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
+import { madeByRun, viewStillSince } from "./workflow/runShown";
+import { allToRun } from "./workflow/flow";
+import { pressHeld } from "./components/pressHeld";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone, pushFromMenu } from "./utils/menuTarget";
@@ -511,6 +514,16 @@ function WorkspaceContent({
     const covered = store.getState().cover / cam.zoom;
     return { x0: cam.position.x - w, x1: cam.position.x + w - covered, y0: cam.position.y - h, y1: cam.position.y + h };
   }, [camRef, domRef]);
+  // Run all, and the sets its steps made shown once all have ended, where they are not seen whole - as what is put down is
+  // shown (utils/viewShow) - unless the chemist moved the view since it began, or holds a press as it ends (workflow/runShown)
+  const runAllShown = useCallback(async () => {
+    const ran = allToRun(store.getState());
+    const began = viewBox();
+    await store.getState().runAll();
+    if (!viewStillSince(began, viewBox(), pressHeld())) return;
+    const box = madeByRun(store.getState(), ran);
+    if (box) store.getState().requestShow(box);
+  }, [store, viewBox]);
   // a talk given from the slide that is most nearly what is seen (docs/PRESENTING.md)
   const presentHere = useCallback(() => {
     const st = store.getState();
@@ -1810,7 +1823,7 @@ function WorkspaceContent({
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
-          { name: "Run all", keys: "", run: () => void store.getState().runAll(), divider: true, note: runAllNote(store.getState()) },
+          { name: "Run all", keys: "", run: () => void runAllShown(), divider: true, note: runAllNote(store.getState()) },
           ...(steps.some((x) => x.running) ? [{ name: "Stop all", keys: "", run: () => store.getState().stopAll() }] : []),
         ]
       : []),

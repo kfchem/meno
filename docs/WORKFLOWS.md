@@ -1162,6 +1162,14 @@ No key starts a run (decided: menus, at first). Steps run in the order
 their wires give; steps that do not depend on one another may run at
 once (*Several at once*).
 
+**What *Run all* made, shown.** Once every step it ran has ended, the
+sets those steps made are shown as what is put down is shown (WORKSPACE.md,
+*Putting things down*): where they are not seen whole - past the window's
+edge in a small window - the view eases along to take them in, or out as
+little as needed; seen whole, it stays. It does not move where the
+chemist has moved the view since the run began, or holds a press as it
+ends: the view is theirs (workflow/runShown).
+
 **An empty set** (2026-10-30). A step before it that ran well may give
 nothing this time: a branch that took none, a last round of restraints
 that held none. A step whose input is such a set ends at once, done, and
