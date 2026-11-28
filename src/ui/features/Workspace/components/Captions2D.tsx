@@ -20,6 +20,7 @@ import { GLIDE_MS } from "./DrawnLayout";
 import { pressHeld } from "./pressHeld";
 import { markGlideStep, type MarkGlides } from "../utils/markGlide";
 import { arrowsBeside } from "./drawnArrows";
+import { branchDropped } from "../utils/cycles";
 import { type Held } from "./held";
 import { HeldGlow } from "./HeldLight";
 import { WholeTexts2D } from "./Labels2D";
@@ -295,7 +296,9 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
         });
       // (words that belong to a structure stay its, put down near an arrow or not)
       const placed = captionPlace(q, { w: halfW, h: halfH }, c.of ? [] : arrowsBeside(s, opts, labelSetOf(opts), c.id), opts.fontPx, others);
-      s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null }, gesture);
+      // (the words of a cycle's arrow stay its, put down near where it sets them; taken well away, free - and free words put down there, those of an arrow with none, its)
+      const branch = c.of || placed.arrow != null ? null : branchDropped(s.cycles, s.captions, c, placed, { w: halfW, h: halfH });
+      s.updateCaption(c.id, { x: placed.x, y: placed.y, arrow: placed.arrow ?? null, ...(c.of ? {} : { branch }) }, gesture);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);

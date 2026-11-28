@@ -1241,7 +1241,7 @@ export type ImportedScheme = {
   shapes?: Omit<Shape, "id">[];
   /** Catalytic cycles. */
   cycles?: Omit<Cycle, "id">[];
-  /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), where it is - or belonging to a structure: an atom by its id here, a molecule in 3D by its place among those it brings. */
+  /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), where it is - or belonging to a structure: an atom by its id here, a molecule in 3D by its place among those it brings - or the words of an arrow of a cycle it brings, that cycle by its place among them. */
   captions?: (Omit<Caption, "id" | "arrow"> & { arrowAt?: number })[];
   /** Molecules in 3D a file brings, where they are to stand - and, where it says, the frame each shows (an optimisation's last). */
   molecules3d?: (Omit<Molecule3D, "id"> & { frame?: number; list?: CarriedList; shown?: true })[];
@@ -1256,7 +1256,10 @@ export function schemeOf(part: Drawn): ImportedScheme {
     cycles: (part.cycles ?? []).map(({ id: _id, ...c }) => c),
     captions: (part.captions ?? []).map(({ id: _id, arrow, ...c }) => {
       const at = arrow == null ? -1 : (part.arrows ?? []).findIndex((a) => a.id === arrow);
-      return { ...c, ...(at >= 0 ? { arrowAt: at } : {}) };
+      // (the words of a cycle's arrow, that cycle by its place among those brought - of one not brought, free)
+      const { branch, ...rest } = c;
+      const cy = branch ? (part.cycles ?? []).findIndex((x) => x.id === branch.cycle) : -1;
+      return { ...rest, ...(at >= 0 ? { arrowAt: at } : {}), ...(branch && cy >= 0 ? { branch: { cycle: cy, at: branch.at } } : {}) };
     }),
     // (how one was turned, and its frame, are the view's: not the document's)
     molecules3d: (part.molecules3d ?? []).map(({ turn: _turn, frame: _frame, list: _list, ...m }) => m),
@@ -1274,13 +1277,16 @@ export function withImportedScheme(
   for (const { x, y, angle, length, ...rest } of scheme?.arrows ?? []) next = addArrow(next, x, y, angle, length, rest);
   for (const p of scheme?.pluses ?? []) next = addPlus(next, p.x, p.y);
   for (const sh of scheme?.shapes ?? []) next = addShape(next, sh);
+  // (and the words of a cycle's arrow it brings are of that arrow, its cycle as it is numbered here)
+  const firstCycle = next.nextCycleId ?? 1;
   for (const cy of scheme?.cycles ?? []) next = addCycle(next, cy);
   // (and words that belong to a molecule in 3D it brings, by its place among them, to that molecule as it is numbered here)
   const first3d = doc.nextMolecule3dId ?? 1;
   const brought = scheme?.molecules3d?.length ?? 0;
-  for (const { arrowAt, of, ...c } of scheme?.captions ?? []) {
+  for (const { arrowAt, of, branch, ...c } of scheme?.captions ?? []) {
     const owner = of && "molecule" in of ? (of.molecule < brought ? { molecule: first3d + of.molecule } : undefined) : of;
-    next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : owner ? { of: owner } : {}) });
+    const by = branch && branch.cycle < (scheme?.cycles?.length ?? 0) ? { cycle: firstCycle + branch.cycle, at: branch.at } : undefined;
+    next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : owner ? { of: owner } : by ? { branch: by } : {}) });
   }
   // (the frame each shows is the canvas's to keep, not the document's; a
   // stack it brings, numbered after the document's own - utils/stacks)
@@ -2319,12 +2325,14 @@ export function updateCaption(
   const captions = doc.captions ?? [];
   const index = captions.findIndex((c) => c.id === id);
   if (index < 0) return doc;
-  const { arrow, of, width, align, size, font, lines, marks, ...rest } = patch;
+  const { arrow, of, branch, width, align, size, font, lines, marks, ...rest } = patch;
   const was = captions[index];
   // (belonging to the structure it did, unless said - none, free; put over an arrow, free of it)
   const owner = of === undefined ? was.of : (of ?? undefined);
   // (over the arrow it was over, unless said; as wide as it was, unless said - none, as its words)
   const link = arrow === undefined ? was.arrow : (arrow ?? undefined);
+  // (the words of the cycle's arrow they were, unless said - none, free)
+  const by = branch === undefined ? was.branch : (branch ?? undefined);
   const wide = width === undefined ? was.width : width != null && width > 0 ? width : undefined;
   // (centred, unless said otherwise)
   const lie = align === undefined ? was.align : align === "center" ? undefined : align;
@@ -2334,11 +2342,11 @@ export function updateCaption(
   const face = font === undefined ? was.font : font || undefined;
   const spaced = lines === undefined ? was.lines : lines != null && lines > 0 && lines !== 1 ? lines : undefined;
   const marked = marks === undefined ? was.marks : marks.length ? marks : undefined;
-  const { arrow: _was, of: _of, width: _wide, align: _lie, size: _size, font: _font, lines: _lines, marks: _marks, ...kept } = was;
+  const { arrow: _was, of: _of, branch: _by, width: _wide, align: _lie, size: _size, font: _font, lines: _lines, marks: _marks, ...kept } = was;
   const next: Caption = {
     ...kept,
     ...rest,
-    ...(link != null ? { arrow: link } : owner ? { of: owner } : {}),
+    ...(link != null ? { arrow: link } : owner ? { of: owner } : by ? { branch: by } : {}),
     ...(wide != null ? { width: wide } : {}),
     ...(lie ? { align: lie } : {}),
     ...(sized != null ? { size: sized } : {}),
@@ -2347,7 +2355,7 @@ export function updateCaption(
     ...(marked ? { marks: marked } : {}),
   };
   const sameMarks = JSON.stringify(next.marks ?? []) === JSON.stringify(was.marks ?? []);
-  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.of === was.of && next.width === was.width && next.align === was.align && next.size === was.size && next.font === was.font && next.lines === was.lines && sameMarks) return doc;
+  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.of === was.of && next.branch === was.branch && next.width === was.width && next.align === was.align && next.size === was.size && next.font === was.font && next.lines === was.lines && sameMarks) return doc;
   const out = captions.slice();
   out[index] = next;
   return { ...doc, captions: out };
@@ -2758,13 +2766,20 @@ export function updateCycle(doc: WorkspaceDocument, id: number, patch: CyclePatc
     ...(gap != null && Number.isFinite(gap) ? { gap: Math.min(GAP_MOST, Math.max(0, gap)) } : {}),
     ...(Object.keys(ends).length ? { ends } : {}),
   };
-  return { ...doc, cycles: doc.cycles!.map((c, i) => (i === at ? next : c)) };
+  return freedOfBranches({ ...doc, cycles: doc.cycles!.map((c, i) => (i === at ? next : c)) });
 }
 
 export function removeCycles(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
   const gone = new Set(ids);
   if (!doc.cycles?.some((c) => gone.has(c.id))) return doc;
-  return { ...doc, cycles: doc.cycles.filter((c) => !gone.has(c.id)) };
+  return freedOfBranches({ ...doc, cycles: doc.cycles.filter((c) => !gone.has(c.id)) });
+}
+
+/** `doc` with the words of a cycle's arrow no longer there - taken away, or its cycle - free words where they stand. */
+function freedOfBranches(doc: WorkspaceDocument): WorkspaceDocument {
+  const there = (b: { cycle: number; at: number }) => !!doc.cycles?.some((c) => c.id === b.cycle && c.branches?.some((x) => x.at === b.at));
+  if (!doc.captions?.some((w) => w.branch && !there(w.branch))) return doc;
+  return { ...doc, captions: doc.captions.map((w) => (w.branch && !there(w.branch) ? (({ branch: _b, ...free }) => free)(w) : w)) };
 }
 
 /** `doc` without the shapes `ids`. */

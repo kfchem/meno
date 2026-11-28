@@ -41,7 +41,7 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         return { ...prev, wordsWriting: words };
       }),
     setQuickAdd: (q: EditorState["quickAdd"]) => set({ quickAdd: q }),
-    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number; of?: Caption["of"] }) => {
+    addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number; of?: Caption["of"]; branch?: Caption["branch"] }) => {
       const id = doc.getState().nextCaptionId ?? 1;
       doc.edit("add text", (d) =>
         ops.addCaption(d, {
@@ -57,6 +57,8 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           ...(more?.shape != null ? { shape: more.shape } : {}),
           // (belonging to a structure - never over an arrow as well)
           ...(more?.of && arrow == null ? { of: more.of } : {}),
+          // (the words of a cycle's arrow - never over an arrow, nor a structure's, as well)
+          ...(more?.branch && arrow == null && !more.of ? { branch: more.branch } : {}),
         }),
       );
       return id;

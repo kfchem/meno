@@ -81,6 +81,12 @@ export function partToCopy(drawn: Drawn, sel: Sel, around: number | null): Drawn
   };
 }
 
+/** The cycle's arrow words are the words of, as it reads: by the cycle, and where the arrow joins it. */
+function branchRead(v: unknown): { branch?: { cycle: number; at: number } } {
+  const b = v as { cycle?: unknown; at?: unknown } | null | undefined;
+  return b && typeof b === "object" && isNum(b.cycle) && isNum(b.at) ? { branch: { cycle: b.cycle, at: b.at } } : {};
+}
+
 /** The structure words belong to, as it reads: an atom drawn (`ids`), or a molecule in 3D by its place among those carried - checked once those are read. */
 function ofRead(v: unknown, ids: ReadonlySet<unknown>): { of?: CaptionOf } {
   const o = v as { atom?: unknown; molecule?: unknown } | null | undefined;
@@ -373,7 +379,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
         x: c.x,
         y: c.y,
         text: c.text,
-        ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : ofRead(c.of, ids)),
+        ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : c.of != null ? ofRead(c.of, ids) : branchRead(c.branch)),
         ...(isNum(c.width) && c.width > 0 ? { width: c.width } : {}),
         ...(c.align === "left" || c.align === "right" || c.align === "justify" ? { align: c.align } : {}),
         ...(from ? { from } : {}),
@@ -390,6 +396,14 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     );
   }, "caption");
   const molecules3d = readEach(r.molecules3d, readCarried3D, "molecule3d");
+  // (the words of a cycle's arrow not there are free)
+  const cycles = readEach(r.cycles, readCycle, "cycle");
+  for (const [i, c] of captions.entries()) {
+    if (c.branch && !cycles.some((cy) => cy.id === c.branch!.cycle && cy.branches?.some((b) => b.at === c.branch!.at))) {
+      const { branch: _b, ...free } = c;
+      captions[i] = free;
+    }
+  }
   // (words that belong to a molecule in 3D - by its place among those it carries - not there are free)
   for (const [i, c] of captions.entries()) {
     if (c.of && "molecule" in c.of && !(Number.isInteger(c.of.molecule) && c.of.molecule >= 0 && c.of.molecule < molecules3d.length)) {
@@ -523,10 +537,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     ...(pictures.length ? { pictures } : {}),
     ...(slides.length ? { slides } : {}),
     ...(shapes.length ? { shapes } : {}),
-    ...(() => {
-      const cycles = readEach(r.cycles, readCycle, "cycle");
-      return cycles.length ? { cycles } : {};
-    })(),
+    ...(cycles.length ? { cycles } : {}),
     ...(() => {
       const inks = readEach(r.inks, readInk, "ink");
       return inks.length ? { inks } : {};

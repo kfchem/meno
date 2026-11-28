@@ -2265,18 +2265,26 @@ All hover-based, as above.
     grow and wherever the arrow is round the circle. Where the arrow runs
     more across than up or down, they stand beside its end and run on
     away from it; else they stand over or under it (`lib/chem/cycle`
-    `wordsBeyond`). Words are an arrow's own by where they stand: each set
-    goes to the one arrow by which it stands nearest where that arrow sets
-    words, within 0.8 of a bond. So an arrow without words never takes
-    its neighbour's, even with its end close by them, and words moved
-    well away are no arrow's. *Remove
-    this arrow* takes the one there away. One put there grows - in from
+    `wordsBeyond`). Written again, longer or shorter, they grow and
+    shrink away from the arrow, their side facing it kept where it was.
+    The words typed at an arrow are its own, however long they are made
+    and nudged by hand: they go with the cycle as it is moved,
+    sized, turned, copied and pasted, and are kept so in the file. An
+    arrow without words never takes its neighbour's. Words dragged well
+    away from where their arrow sets them (more than 0.8 of a bond) are
+    free text; free words dropped there, by an arrow with none, become
+    its own. Words emptied are gone, as any words are. *Remove
+    this arrow* takes the one there away; its words stay where they
+    are, as free text. One put there grows - in from
     its far end, or out from the circle - and one taken away goes the
     same way back.
   - **Turned round** from its menu, each stretch's head travels along it
     to its other end, smallest half way, where it turns; the arrows coming
     in and going out swing across to the other side of where they join,
-    their words carried with them - one step.
+    their words carried with them - one step. Words nudged by hand keep
+    their nudge mirrored with their arrow, so they stay as clear of it.
+    Turned back before the turn is done, everything goes back from where
+    it has got to, the words to exactly where they were.
   - **Selected** by a click on its line, or taken hold of by holding
     still on it a moment; selected, a drag moves it with what is on it and
     the words at its arrows' ends, and its handle at the lower right sizes

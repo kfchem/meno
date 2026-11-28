@@ -298,6 +298,13 @@ export type Caption = {
    * deleted with it. Never over an arrow as well.
    */
   of?: CaptionOf;
+  /**
+   * The cycle's arrow coming in or going out they are the words of
+   * (docs/EDITOR-2D.md, *Catalytic cycles*): by the cycle, and where the
+   * arrow joins it - carried round, turned and copied with it, however long
+   * they are made. Never over an arrow, nor a structure's, as well.
+   */
+  branch?: { cycle: number; at: number };
   width?: number;
   align?: "left" | "right" | "justify";
   from?: WordsFrom;
@@ -322,6 +329,8 @@ export type CaptionOf = { atom: number } | { molecule: number };
 export type CaptionPatch = {
   /** Belonging to a structure, or (null) to none: free. */
   of?: CaptionOf | null;
+  /** The words of a cycle's arrow, or (null) of none: free. */
+  branch?: { cycle: number; at: number } | null;
   text?: string;
   x?: number;
   y?: number;
@@ -1838,9 +1847,10 @@ export type EditorState = {
    * words opened it: the caret put there - and a drag (`drag`) selecting on
    * from there - as if it had pressed there among them. `beyond`, new
    * words set on from a point as they grow - an arrow's far end - the gap
-   * clear of it and of `clear` (lib/chem/cycle `wordsBeyond`).
+   * clear of it and of `clear` (lib/chem/cycle `wordsBeyond`) - the words,
+   * kept, those of the cycle's arrow `branch`.
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf; beyond?: WordsBeyond & { clear?: readonly { x: number; y: number }[] } } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf; beyond?: WordsBeyond & { clear?: readonly { x: number; y: number }[] }; branch?: Caption["branch"] } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
@@ -1862,7 +1872,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; of?: CaptionOf }) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; of?: CaptionOf; branch?: Caption["branch"] }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words

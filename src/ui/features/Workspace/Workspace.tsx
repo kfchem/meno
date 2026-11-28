@@ -2612,9 +2612,9 @@ function WorkspaceContent({
             const near = branches.findIndex((b) => Math.abs(Math.atan2(Math.sin(b.at - at), Math.cos(b.at - at))) < (12 * Math.PI) / 180);
             const add = (way: "in" | "out") => {
               st.updateCycle(cy.id, { branches: [...branches, { at, way }] });
-              // (its words written at once, set on from its far end the gap clear of it as they grow: Escape, or nothing written, leaves it without)
+              // (its words written at once, set on from its far end the gap clear of it as they grow, and kept as its own: Escape, or nothing written, leaves it without)
               const path = branchPath(cy, { at, way }, NOMINAL_BOND_LENGTH);
-              st.setCaptionEdit({ id: null, at: path.end, beyond: { ...branchBeyond(path, NOMINAL_BOND_LENGTH), clear: path.points } });
+              st.setCaptionEdit({ id: null, at: path.end, beyond: { ...branchBeyond(path, NOMINAL_BOND_LENGTH), clear: path.points }, branch: { cycle: cy.id, at } });
             };
             return {
               onIn: () => add("in"),

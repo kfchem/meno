@@ -18,7 +18,7 @@ import type { Caption, Model } from "../store/types";
 import { structuresOf } from "../workflow/entries";
 
 /** What may lie on a cycle: a structure, by its atoms, or words, by their id - the box round it, and what is drawn of it (`ink`), for the circle to stop short of. */
-export type CycleThing = { atoms?: number[]; caption?: number; box: CycleBox; ink?: CycleInk };
+export type CycleThing = { atoms?: number[]; caption?: number; branch?: Caption["branch"]; box: CycleBox; ink?: CycleInk };
 
 /**
  * Where a cycle was last pointed at on its line, round it (radians): where an
@@ -28,7 +28,7 @@ export const cyclePointed: { id: number | null; angle: number } = { id: null, an
 
 /** How near a cycle's line a thing let go is put on it, in bonds. */
 const SNAP = 1.0;
-/** How near words stand to where an arrow coming in or going out sets words of their size (`branchWordsAt`), their middle, to be its words, in bonds: a nudge by hand keeps them its own, words moved well away are no arrow's. */
+/** How near words are put down, by hand, to where an arrow coming in or going out sets words of their size (`branchWordsAt`), their middle, to be its words, in bonds: a nudge keeps them its own, words taken well away are free. */
 const LABEL_NEAR = 0.8;
 /** How near a cycle's line anything is measured, in bonds: what lies further can be on no cycle, nor be put on one, nor be the words by its arrows. */
 const NEAR = 3;
@@ -88,8 +88,9 @@ export function cycleThings(model: Pick<Model, "atoms" | "bonds">, captions: rea
   for (const c of captions) {
     const w = wordsSet(c, opts, set);
     const box = { x0: c.x - w.halfW, y0: c.y - w.halfH, x1: c.x + w.halfW, y1: c.y + w.halfH };
-    if (near && !near.some((cy) => nearLine(cy, box, reach))) continue;
-    out.push({ caption: c.id, box, ink: { lines: [], boxes: [box] } });
+    // (the words of one of those cycles' arrows, however far they reach)
+    if (near && !near.some((cy) => nearLine(cy, box, reach) || c.branch?.cycle === cy.id)) continue;
+    out.push({ caption: c.id, ...(c.branch ? { branch: c.branch } : {}), box, ink: { lines: [], boxes: [box] } });
   }
   return out;
 }
@@ -152,44 +153,67 @@ export function arrowsOfCycles(cycles: readonly Cycle[], things: readonly CycleT
 }
 
 /**
- * The words by each arrow coming in or going out of a cycle, of `things`, in
- * the order of its arrows. Nothing on the page ties words to an arrow but
- * where they stand, so each set of words is the one arrow's by which they
- * stand nearest where that arrow sets words of their size (`branchWordsAt`),
- * within `LABEL_NEAR` bonds - no arrow's, where two are as near - and each
- * arrow has the nearest of the words so its own: none, where none are. A set
- * of words is never two arrows', nor taken by a wordless arrow whose end
- * happens to come near them.
+ * The words of each arrow coming in or going out of a cycle, of `things`,
+ * in the order of its arrows: those that say they are its words (`branch`,
+ * set as they are written at it), wherever they stand and however long
+ * they are - none, where none say so.
  */
 export function wordsOfBranches(c: Cycle, things: readonly CycleThing[]): (number | null)[] {
-  const branches = c.branches ?? [];
-  const best: ({ d: number; id: number } | null)[] = branches.map(() => null);
-  for (const t of things) {
-    if (t.caption == null) continue;
-    const half = { w: (t.box.x1 - t.box.x0) / 2, h: (t.box.y1 - t.box.y0) / 2 };
-    const mid = { x: (t.box.x0 + t.box.x1) / 2, y: (t.box.y0 + t.box.y1) / 2 };
-    const ds = branches.map((b) => {
-      const m = branchWordsAt(c, b, NOMINAL_BOND_LENGTH, half);
-      return Math.hypot(mid.x - m.x, mid.y - m.y);
-    });
-    let at = -1;
-    let tied = false;
-    ds.forEach((d, i) => {
-      if (at < 0 || d < ds[at] - 1e-6) [at, tied] = [i, false];
-      else if (d <= ds[at] + 1e-6) tied = true;
-    });
-    if (at < 0 || tied || ds[at] >= LABEL_NEAR * NOMINAL_BOND_LENGTH) continue;
-    const was = best[at];
-    if (!was || ds[at] < was.d) best[at] = { d: ds[at], id: t.caption };
-  }
-  return best.map((w) => w?.id ?? null);
+  return (c.branches ?? []).map((b) => branchWords(c, b, things));
 }
 
-/** The words by the far end of one of a cycle's arrows coming in or going out, of `things` (`wordsOfBranches`): none, where none are its own. */
+/** The cycle and its arrow words are the words of: none, for words of no arrow there. */
+function branchOf(cycles: readonly Cycle[], w: Pick<Caption, "branch">): { c: Cycle; b: CycleBranch } | null {
+  const c = w.branch && cycles.find((x) => x.id === w.branch!.cycle);
+  const b = c && c.branches?.find((x) => x.at === w.branch!.at);
+  return c && b ? { c, b } : null;
+}
+
+/**
+ * Words of a cycle's arrow opened to be written: where they stand as they
+ * grow or shrink, as large as `half` - set on from the arrow's end as the
+ * rule sets words of their size, their side facing it kept the gap clear
+ * of it, any move of theirs by hand kept. None, for words of no arrow.
+ */
+export function branchOpened(cycles: readonly Cycle[], w: Caption, style: DrawingStyle): ((half: { w: number; h: number }) => { x: number; y: number }) | null {
+  const own = branchOf(cycles, w);
+  if (!own) return null;
+  const opts = editorLayoutOptions(style);
+  const set = wordsSet(w, opts, labelSetOf(opts));
+  const was = branchWordsAt(own.c, own.b, NOMINAL_BOND_LENGTH, { w: set.halfW, h: set.halfH });
+  const by = { x: w.x - was.x, y: w.y - was.y };
+  return (half) => {
+    const m = branchWordsAt(own.c, own.b, NOMINAL_BOND_LENGTH, half);
+    return { x: m.x + by.x, y: m.y + by.y };
+  };
+}
+
+/**
+ * Words put down by hand with their middle at `at`, as large as `half`:
+ * the cycle's arrow they are the words of - their own still, put down near
+ * where it sets them (`LABEL_NEAR`); or, free, one with no words of its
+ * own that they are put down by - or none, taken well away from any.
+ */
+export function branchDropped(cycles: readonly Cycle[], captions: readonly Caption[], w: Caption, at: { x: number; y: number }, half: { w: number; h: number }): Caption["branch"] | null {
+  const near = (c: Cycle, b: CycleBranch) => {
+    const m = branchWordsAt(c, b, NOMINAL_BOND_LENGTH, half);
+    return Math.hypot(at.x - m.x, at.y - m.y);
+  };
+  const own = branchOf(cycles, w);
+  if (own) return near(own.c, own.b) < LABEL_NEAR * NOMINAL_BOND_LENGTH ? w.branch! : null;
+  let best: { d: number; to: { cycle: number; at: number } } | null = null;
+  for (const c of cycles)
+    for (const b of c.branches ?? []) {
+      if (captions.some((x) => x.id !== w.id && x.branch?.cycle === c.id && x.branch.at === b.at)) continue;
+      const d = near(c, b);
+      if (d < LABEL_NEAR * NOMINAL_BOND_LENGTH && (!best || d < best.d)) best = { d, to: { cycle: c.id, at: b.at } };
+    }
+  return best?.to ?? null;
+}
+
+/** The words of one of a cycle's arrows coming in or going out, of `things` (`wordsOfBranches`): none, where none are its own. */
 export function branchWords(c: Cycle, b: CycleBranch, things: readonly CycleThing[]): number | null {
-  const branches = c.branches ?? [];
-  const i = branches.findIndex((x) => x.at === b.at && x.way === b.way);
-  return i >= 0 ? wordsOfBranches(c, things)[i] : wordsOfBranches({ ...c, branches: [...branches, b] }, things)[branches.length];
+  return things.find((t) => t.caption != null && t.branch?.cycle === c.id && t.branch.at === b.at)?.caption ?? null;
 }
 
 /** What goes with a cycle as it is moved or sized: what is on its line, and the words at its arrows' far ends. */
@@ -338,36 +362,63 @@ export class CycleChange {
   }
 }
 
+/** The turns of cycles on their way, by page and cycle: the words they carry, each from where it was to where it goes - and how to stop one. */
+type Turning = { moves: { id: number; x: number; y: number; tx: number; ty: number }[]; stop: () => void };
+const turnings = new WeakMap<EditorStore, Map<number, Turning>>();
+
 /**
- * A cycle turned round, as one step: the way it goes, and the words by its
+ * A cycle turned round, as one step: the way it goes, and the words of its
  * arrows coming in and going out carried across to where those arrows now
- * end, in time with the arrows swinging across (`TURN_S`, `turnEase`).
+ * end, in time with the arrows swinging across (`TURN_S`, `turnEase`). Any
+ * move of theirs by hand is kept as each arrow is: mirrored with it, across
+ * the line from the cycle's middle to where it joins it - so that words
+ * nudged clear of an arrow stay as clear of it turned. Turned back on the
+ * way, they go back from where they have got to, to where they were.
  */
 export function turnCycle(store: EditorStore, id: number, frame: (go: () => void) => void = (go) => void requestAnimationFrame(go)): void {
   const st = store.getState();
   const c = st.cycles.find((x) => x.id === id);
   if (!c) return;
   const turned: Cycle = { ...c, ccw: c.ccw ? undefined : true };
-  const things = cycleThings(st.model, st.captions, styleOf(st.docStyle), [c]);
-  const own = wordsOfBranches(c, things);
-  const moves = (c.branches ?? []).flatMap((b, i) => {
-    const id = own[i];
-    const words = st.captions.find((w) => w.id === id);
-    const box = things.find((t) => t.caption === id)?.box;
-    if (!words || !box) return [];
-    // (where words of their size stand by the arrow, and by the arrow turned: moved by as much, any move of theirs by hand kept)
-    const half = { w: (box.x1 - box.x0) / 2, h: (box.y1 - box.y0) / 2 };
-    const from = branchWordsAt(c, b, NOMINAL_BOND_LENGTH, half);
-    const to = branchWordsAt(turned, b, NOMINAL_BOND_LENGTH, half);
-    return [{ id: words.id, x: words.x, y: words.y, dx: to.x - from.x, dy: to.y - from.y }];
-  });
+  const turning = turnings.get(store) ?? new Map<number, Turning>();
+  turnings.set(store, turning);
+  const before = turning.get(id);
+  before?.stop();
+  const now = (w: number) => st.captions.find((x) => x.id === w);
+  const moves = before
+    ? before.moves.flatMap((m) => {
+        const w = now(m.id);
+        return w ? [{ id: m.id, x: w.x, y: w.y, tx: m.x, ty: m.y }] : [];
+      })
+    : (() => {
+        const things = cycleThings(st.model, st.captions, styleOf(st.docStyle), [c]);
+        const own = wordsOfBranches(c, things);
+        return (c.branches ?? []).flatMap((b, i) => {
+          const words = now(own[i] ?? NaN);
+          const box = things.find((t) => t.caption === own[i])?.box;
+          if (!words || !box) return [];
+          // (where words of their size stand by the arrow, and by the arrow turned: their move by hand from there mirrored with the arrow)
+          const half = { w: (box.x1 - box.x0) / 2, h: (box.y1 - box.y0) / 2 };
+          const from = branchWordsAt(c, b, NOMINAL_BOND_LENGTH, half);
+          const to = branchWordsAt(turned, b, NOMINAL_BOND_LENGTH, half);
+          const n = { x: Math.cos(b.at), y: Math.sin(b.at) };
+          const off = { x: words.x - from.x, y: words.y - from.y };
+          const along = off.x * n.x + off.y * n.y;
+          return [{ id: words.id, x: words.x, y: words.y, tx: to.x + 2 * along * n.x - off.x, ty: to.y + 2 * along * n.y - off.y }];
+        });
+      })();
   const gesture = `turn-${performance.now()}`;
   const start = performance.now();
+  let stopped = false;
+  const self = { moves, stop: () => void (stopped = true) };
+  turning.set(id, self);
   const go = () => {
+    if (stopped) return;
     const t = Math.min((performance.now() - start) / (TURN_S * 1000), 1);
     const u = turnEase(t);
-    store.getState().updateCycle(id, { ccw: !c.ccw }, gesture, moves.map((m) => ({ id: m.id, x: m.x + m.dx * u, y: m.y + m.dy * u })));
+    store.getState().updateCycle(id, { ccw: !c.ccw }, gesture, moves.map((m) => ({ id: m.id, x: t >= 1 ? m.tx : m.x + (m.tx - m.x) * u, y: t >= 1 ? m.ty : m.y + (m.ty - m.y) * u })));
     if (t < 1) frame(go);
+    else if (turning.get(id) === self) turning.delete(id);
   };
   go();
 }

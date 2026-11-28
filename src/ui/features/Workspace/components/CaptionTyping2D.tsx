@@ -42,6 +42,8 @@ import { TAU, follow } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import { tiedOpened, writtenPlace } from "../utils/tiedCaptions";
 import { wordsBeyond } from "../../../../lib/chem/cycle";
+import { branchOpened } from "../utils/cycles";
+import { styleOf } from "../../../../lib/chem/style";
 import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
 import { stylesThrough, WordsEditor } from "../utils/wordsEditor";
@@ -124,7 +126,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const [tied] = useState(() => (caption ? tiedOpened({ model: store.getState().model, style: store.getState().docStyle }, caption, opts) : null));
   // (new words at an arrow's far end: set on from it, the gap clear of it and of its line, as they grow)
   const beyond = !caption ? edit.beyond : undefined;
-  const at = left && caption ? { x: caption.x, y: caption.y } : tied ? writtenPlace(tied, { w: laid.halfW, h: laid.halfH }) : beyond ? wordsBeyond(beyond, { w: laid.halfW, h: laid.halfH }, beyond.clear) : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
+  // (the words of a cycle's arrow, written again: their side facing its end kept the gap clear of it as they grow or shrink, any move by hand kept)
+  const [byArrow] = useState(() => (caption?.branch ? branchOpened(store.getState().cycles, caption, styleOf(store.getState().docStyle)) : null));
+  const at = left && caption ? { x: caption.x, y: caption.y } : tied ? writtenPlace(tied, { w: laid.halfW, h: laid.halfH }) : byArrow ? byArrow({ w: laid.halfW, h: laid.halfH }) : beyond ? wordsBeyond(beyond, { w: laid.halfW, h: laid.halfH }, beyond.clear) : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
   const places = captionPlaces(text, at.x, at.y, fs, ownSet, width, align, marks, lineEms);
   const shown = c ? captionPlaces(shownText, at.x, at.y, fs, ownSet, width, align, shownMarks, lineEms) : places;
   // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
@@ -187,7 +191,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
           const placed = edit.beyond
             ? { ...wordsBeyond(edit.beyond, half(text), edit.beyond.clear), arrow: undefined }
             : captionPlace(edit.at, half(text), edit.of ? [] : arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
-          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : {}) });
+          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : edit.branch ? { branch: edit.branch } : {}) });
         }
       } else if (!text.trim()) {
         s.removeCaption(edit.id);
@@ -196,7 +200,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
         // (over an arrow: kept clear of it as it grows or shrinks; a box, its top where it was)
         const arrow = caption.arrow != null ? arrowsBeside(s, opts, set, edit.id).find((a) => a.id === caption.arrow) : undefined;
         const placed = arrow ? captionPlace({ x: caption.x, y: caption.y }, half(text), [arrow], opts.fontPx, others) : null;
-        const y = tied ? writtenPlace(tied, half(text)) : top != null ? { y: top - half(text).h } : {};
+        const y = tied ? writtenPlace(tied, half(text)) : byArrow ? byArrow(half(text)) : top != null ? { y: top - half(text).h } : {};
         s.updateCaption(edit.id, { text, marks: kept, size: own ?? null, ...(placed ? { x: placed.x, y: placed.y, arrow: placed.arrow ?? null } : y) });
       }
     }
