@@ -158,9 +158,9 @@ export function createUiSlice(
             const at = acc.model.atoms.find((a) => a.id === i);
             return at ? ops.setAtomChemistry(acc, i, chem(acc, at), as) : acc;
           }, d);
-          // (a labelled group up from a Haworth ring's front atom, its label with no clear way where it stands - beside another inside
-          //  the ring - stepped down its vertical until it is clear, in the same step: projections/haworthLabels)
-          const steps = haworthLabelsStepped(labelled.model, editorLayoutOptions(styleOf(labelled.style)));
+          // (the labels inside the Haworth ring an atom labelled belongs to, set clear of each other and of the ring's bonds, in the
+          //  same step: projections/haworthLabels)
+          const steps = haworthLabelsStepped(labelled.model, editorLayoutOptions(styleOf(labelled.style)), new Set(ids));
           // (and each label's bond inside the ring stops close to it, so that its stem shows as the figures draw it)
           const close = haworthStemsClose(labelled.model);
           return steps.length || close.length ? ops.placeAtoms(labelled, steps, close) : labelled;
