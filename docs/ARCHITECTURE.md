@@ -1760,13 +1760,19 @@ to be able to work with nothing going out at all.
   `QUIET`) with no request waiting, it lets go - the spell ends with its
   answer, its notice going - and is on the record as done for then. Bytes
   on it again begin a spell of their own before they are carried, and it
-  is on the record again under that spell - none where Meno is offline,
-  the purpose is no longer allowed or the task has ended: then nothing is
-  carried, the connection is cut, and it is on the record as refused, kept
-  from the network. A server's closing of it once let go of - its end, and
-  the few bytes that come just before it (`CLOSING`) - begins no spell: it
-  is carried, and on the record as a closed line of its own, with no
-  notice. The last hold let
+  is on the record again under that spell. Every chunk either way, on such
+  a connection held or let go of, is looked at first (`Holding::moved`):
+  where Meno is offline, the yes for its purpose has been withdrawn
+  (`Net::revoke`) or its task has ended, nothing more is carried, the
+  connection is cut, and it is on the record as refused, saying why - under
+  the spell it held, which then fails, or as a line of its own, kept from
+  the network. A server's closing of it once let go of - its end, and the
+  few bytes that come just before it (`CLOSING`, at most `CLOSING_MOST`) -
+  begins no spell and passes nothing on: the worker's side is closed, and
+  the closing is on the record as a closed line of its own, its bytes
+  counted, with no notice. A worker that closes such a connection with no
+  bytes is on the record the same way; one that says bytes as it closes
+  (its own closing notice) begins a short spell for them, as any bytes do. The last hold let
   go, the spell ends and its notice goes as any finished task's does:
   failed where anything in it went wrong (an answer that said `"ok":
   false`, a connection that failed or was refused, a request made while
