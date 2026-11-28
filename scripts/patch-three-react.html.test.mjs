@@ -85,11 +85,26 @@ function inCommit(work) {
 const settled = () => act(async () => {});
 
 let folder;
-/** drei's Html as the script changes it, from `text` (the installed file's, read) - or as `change` makes it, to see a test fail. */
-async function htmlOf(change = (text) => patched(text, PATCHES[0], "web/Html.js").text) {
-  const installed = readFileSync(join(here, "..", "node_modules", "@react-three", "drei", "web", "Html.js"), "utf8");
+const HTML = PATCHES[0];
+/** The Html's file as installed here - read, never written: changed already where the install ran the script, as it is in CI. */
+const installed = () => readFileSync(join(here, "..", "node_modules", "@react-three", "drei", "web", "Html.js"), "utf8");
+/** `text` as drei has it, whichever of the two known states it is in: each change the script makes taken back; neither, said. */
+function asDreiHasIt(text) {
+  if (!text.includes(HTML.sign)) return text;
+  let out = text;
+  for (const [was, now] of HTML.files["web/Html.js"]) {
+    const at = out.indexOf(now);
+    if (at < 0 || out.indexOf(now, at + 1) >= 0) throw new Error("drei's web/Html.js is neither as drei has it nor as scripts/patch-three-react.mjs changes it");
+    out = out.slice(0, at) + was + out.slice(at + now.length);
+  }
+  if (out.includes(HTML.sign)) throw new Error("drei's web/Html.js is neither as drei has it nor as scripts/patch-three-react.mjs changes it");
+  return out;
+}
+const asChanged = (text) => patched(asDreiHasIt(text), HTML, "web/Html.js").text;
+/** drei's Html made from a copy of `from` (the installed file's text, in either state) in the state `make` brings it to. */
+async function htmlOf(from, make = asChanged) {
   const copy = join(mkdtempSync(join(folder, "copy-")), "Html.js");
-  writeFileSync(copy, change(installed));
+  writeFileSync(copy, make(from));
   return (await import(/* @vite-ignore */ pathToFileURL(copy).href)).Html;
 }
 
@@ -107,7 +122,6 @@ const shown = (layer, key = "chip", text = "a made-up chip") => React.createElem
 beforeAll(async () => {
   folder = mkdtempSync(join(here, ".patched-html-"));
   vi.stubGlobal("document", { createElement: () => node("the Html's element") });
-  Html = await htmlOf();
 });
 afterAll(() => {
   vi.unstubAllGlobals();
@@ -119,7 +133,17 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe("drei's Html, as scripts/patch-three-react.mjs changes it", () => {
+// (from the file as drei has it, and from the file changed already, as an install that ran the script leaves it: the same either way)
+describe.each([
+  ["as drei has it", (text) => asDreiHasIt(text)],
+  ["changed already", (text) => asChanged(text)],
+])("drei's Html, as scripts/patch-three-react.mjs changes it, from the installed file %s", (_, start) => {
+  let from;
+  beforeAll(async () => {
+    from = start(installed());
+    Html = await htmlOf(from);
+  });
+
   it("mounted and unmounted again and again leaves nothing, each root unmounted once, after the commit, and says nothing", async () => {
     // (heard from once the scene is made: the scene's own clock, from the packages as installed here, is not the Html's)
     await page();
@@ -170,12 +194,12 @@ describe("drei's Html, as scripts/patch-three-react.mjs changes it", () => {
   });
 
   it("as drei has it, unchanged, unmounts its root inside the commit: what the change is for", async () => {
-    Html = await htmlOf((text) => text);
+    Html = await htmlOf(from, asDreiHasIt);
     await page();
     const layer = node("the layer");
     inCommit(() => fiberRoot.render(shown(layer)));
     inCommit(() => fiberRoot.render(null));
     expect(seen.roots[0].unmounted).toEqual(["in the commit"]);
-    Html = await htmlOf();
+    Html = await htmlOf(from);
   });
 });
