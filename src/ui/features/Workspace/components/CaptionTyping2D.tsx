@@ -41,6 +41,7 @@ import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import { tiedOpened, writtenPlace } from "../utils/tiedCaptions";
+import { wordsBeyond } from "../../../../lib/chem/cycle";
 import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
 import { stylesThrough, WordsEditor } from "../utils/wordsEditor";
@@ -121,14 +122,16 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const halfH = Math.max(laid.halfH, fs / 2);
   // (words that belong to a structure keep their side of its box and the gap to it as they are written - the edge nearest it where it was: utils/tiedCaptions)
   const [tied] = useState(() => (caption ? tiedOpened({ model: store.getState().model, style: store.getState().docStyle }, caption, opts) : null));
-  const at = left && caption ? { x: caption.x, y: caption.y } : tied ? writtenPlace(tied, { w: laid.halfW, h: laid.halfH }) : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
+  // (new words at an arrow's far end: set on from it, the gap clear of it and of its line, as they grow)
+  const beyond = !caption ? edit.beyond : undefined;
+  const at = left && caption ? { x: caption.x, y: caption.y } : tied ? writtenPlace(tied, { w: laid.halfW, h: laid.halfH }) : beyond ? wordsBeyond(beyond, { w: laid.halfW, h: laid.halfH }, beyond.clear) : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
   const places = captionPlaces(text, at.x, at.y, fs, ownSet, width, align, marks, lineEms);
   const shown = c ? captionPlaces(shownText, at.x, at.y, fs, ownSet, width, align, shownMarks, lineEms) : places;
   // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
   const arrows = useEditor((s) => s.arrows);
   const captions = useEditor((s) => s.captions);
   const beside = useMemo(() => arrowsBeside({ arrows, captions }, opts, set, edit.id), [arrows, captions, opts, set, edit.id]);
-  const goes = left || !text.trim() ? null : caption ? (caption.arrow != null ? { arrow: caption.arrow, ...at } : null) : captionPlace(edit.at, { w: laid.halfW, h: laid.halfH }, beside, fs);
+  const goes = left || !text.trim() || beyond ? null : caption ? (caption.arrow != null ? { arrow: caption.arrow, ...at } : null) : captionPlace(edit.at, { w: laid.halfW, h: laid.halfH }, beside, fs);
   useWordsWriting(goes?.arrow != null ? { arrow: goes.arrow, x: goes.x, y: goes.y, halfW: laid.halfW, halfH: laid.halfH } : null, n);
   // what is drawn: the caret, what is selected and the light round them as the words drawn have them - those last given, until they are drawn
   const latest = useRef<WritingDrawn | null>(null);
@@ -181,7 +184,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
       if (edit.id == null) {
         if (text.trim()) {
           // (text that belongs to a structure is over no arrow: where it was opened)
-          const placed = captionPlace(edit.at, half(text), edit.of ? [] : arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
+          const placed = edit.beyond
+            ? { ...wordsBeyond(edit.beyond, half(text), edit.beyond.clear), arrow: undefined }
+            : captionPlace(edit.at, half(text), edit.of ? [] : arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
           still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : {}) });
         }
       } else if (!text.trim()) {

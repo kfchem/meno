@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { angleOn, branchPath, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, inkDistance, MARGIN, ontoCycle, type Cycle, type CycleBox, type CycleInk } from "./cycle";
+import { angleOn, branchPath, branchWordsAt, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, inkDistance, MARGIN, ontoCycle, WORDS_GAP, wordsBeyond, type Cycle, type CycleBox, type CycleInk } from "./cycle";
 import { arrowPath, arrowPieces, type ArrowMeasures } from "./reactionArrow";
 
 const BOND = 1;
@@ -192,6 +192,94 @@ describe("an arrow coming in or going out", () => {
   it("is put where the menu was asked for on the line", () => {
     expect(angleOn(c, { x: 0, y: 4.2 }, 0.5)).toBeCloseTo(Math.PI / 2);
     expect(angleOn(c, { x: 0, y: 2 }, 0.5)).toBeNull();
+  });
+});
+
+describe("the words at the far end of an arrow coming in or going out", () => {
+  /** How far a point lies from a box about `m`, `half` across. */
+  const fromBox = (p: { x: number; y: number }, m: { x: number; y: number }, half: { w: number; h: number }) =>
+    Math.hypot(Math.max(Math.abs(p.x - m.x) - half.w, 0), Math.max(Math.abs(p.y - m.y) - half.h, 0));
+  // (a letter, a formula, long words - about as large as the drawing's labels set them, in bonds)
+  const sizes = [
+    { w: 0.17, h: 0.3 },
+    { w: 0.55, h: 0.3 },
+    { w: 1.6, h: 0.3 },
+    { w: 0.9, h: 0.55 },
+  ];
+  const cases = [false, true].flatMap((ccw) =>
+    (["in", "out"] as const).flatMap((way) => Array.from({ length: 24 }, (_, k) => ({ ccw, b: { at: (k * Math.PI) / 12, way } }))),
+  );
+
+  it("stand clear of its head or tail by the gap, and of its line, at every place round the circle and either way round", () => {
+    for (const { ccw, b } of cases) {
+      const cy = { ...c, ccw: ccw || undefined };
+      const p = branchPath(cy, b, BOND);
+      for (const half of sizes) {
+        const m = branchWordsAt(cy, b, BOND, half);
+        const tag = `${b.way} at ${Math.round((b.at * 180) / Math.PI)}, ${ccw ? "anticlockwise" : "clockwise"}, ${half.w} wide`;
+        // (the end itself: the gap from it, no more than a hair over)
+        expect(fromBox(p.end, m, half), tag).toBeGreaterThan(WORDS_GAP * BOND - 1e-6);
+        // (the line: nowhere nearer than the gap)
+        for (const q of p.points) expect(fromBox(q, m, half), tag).toBeGreaterThan(WORDS_GAP * BOND - 1e-6);
+      }
+    }
+  });
+
+  it("stand no further from its head or tail than the gap, so that each is as near as the next", () => {
+    for (const { ccw, b } of cases) {
+      const cy = { ...c, ccw: ccw || undefined };
+      const p = branchPath(cy, b, BOND);
+      for (const half of sizes) {
+        const m = branchWordsAt(cy, b, BOND, half);
+        const d = Math.min(...p.points.map((q) => fromBox(q, m, half)));
+        expect(d, `${b.way} at ${Math.round((b.at * 180) / Math.PI)}`).toBeLessThan(WORDS_GAP * BOND + 1e-6);
+      }
+    }
+  });
+
+  it("lie on out of the arrow: ahead of its head, behind its tail", () => {
+    for (const { ccw, b } of cases) {
+      const cy = { ...c, ccw: ccw || undefined };
+      const p = branchPath(cy, b, BOND);
+      const m = branchWordsAt(cy, b, BOND, sizes[2]);
+      expect((m.x - p.end.x) * p.toward.x + (m.y - p.end.y) * p.toward.y).toBeGreaterThan(0);
+      // (and out of the circle)
+      expect(Math.hypot(m.x - c.x, m.y - c.y)).toBeGreaterThan(Math.hypot(p.end.x - c.x, p.end.y - c.y));
+    }
+  });
+
+  it("going out to the right, or down and to the right, stand clear of its head - words on the left, of its tail", () => {
+    // (on the right of the circle, clockwise: its head pointing right and down)
+    for (const at of [0, -Math.PI / 12, -Math.PI / 6, Math.PI / 12]) {
+      const b = { at, way: "out" as const };
+      const p = branchPath(c, b, BOND);
+      expect(p.toward.x).toBeGreaterThan(0.4);
+      const half = sizes[1];
+      const m = branchWordsAt(c, b, BOND, half);
+      expect(fromBox(p.end, m, half)).toBeCloseTo(WORDS_GAP * BOND, 6);
+    }
+    // (on the left, coming in: the words to the left of its tail, their right side the gap from it)
+    const into = { at: Math.PI, way: "in" as const };
+    const tail = branchPath(c, into, BOND);
+    const m = branchWordsAt(c, into, BOND, sizes[2]);
+    expect(m.x + sizes[2].w).toBeLessThan(tail.end.x);
+    expect(fromBox(tail.end, m, sizes[2])).toBeCloseTo(WORDS_GAP * BOND, 6);
+  });
+
+  it("are set in the drawing's own measure: twice the bond, twice as far", () => {
+    const b = { at: -Math.PI / 8, way: "out" as const };
+    const one = branchWordsAt(c, b, 1, { w: 0.5, h: 0.3 });
+    const two = branchWordsAt({ ...c, r: 2 * c.r }, b, 2, { w: 1, h: 0.6 });
+    expect(two.x).toBeCloseTo(2 * one.x, 9);
+    expect(two.y).toBeCloseTo(2 * one.y, 9);
+  });
+
+  it("set on from a point, lie past anything to be kept clear of on the way", () => {
+    const o = { x: 0, y: 0, dx: 1, dy: 0, gap: 0.25 };
+    expect(wordsBeyond(o, { w: 1, h: 0.3 })).toEqual({ x: 1.25, y: 0 });
+    // (a point a little ahead, in the way of the box: past it, the gap clear)
+    const m = wordsBeyond(o, { w: 1, h: 0.3 }, [{ x: 0.5, y: 0.1 }]);
+    expect(m.x).toBeCloseTo(1.75);
   });
 });
 

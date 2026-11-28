@@ -2259,7 +2259,14 @@ All hover-based, as above.
     its line opens, where it was right-clicked: one coming in curves in
     from outside and joins the circle along the way it goes; one going out
     leaves it so and curves out, its head at its far end. Each is given
-    words at its far end, typed at once, which go with the cycle; *Remove
+    words at its far end, typed at once, which go with the cycle. They
+    stand on out of the arrow - past its head, or back past its tail - a
+    small gap (0.3 of a bond) clear of that end and of its line, as they
+    grow while typed: the way the arrow runs there decides which side of
+    them faces it - beside it where it runs more across than up or down,
+    their near side the gap from it (to its right left-aligned, to its
+    left right-aligned), over or under it else - whatever their length,
+    at every place round the circle (`lib/chem/cycle` `wordsBeyond`). *Remove
     this arrow* takes the one there away. One put there grows - in from
     its far end, or out from the circle - and one taken away goes the
     same way back.

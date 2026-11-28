@@ -7,7 +7,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { wordsSet } from "../../../../lib/chem/captions";
-import { branchPath, cycleArrows, cycleMembers, endKey, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
+import { branchPath, branchWordsAt, cycleArrows, cycleMembers, endKey, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { styleOf } from "../../../../lib/chem/style";
 import { DURATION, follow, TAU } from "../../../theme/motion";
@@ -28,7 +28,7 @@ export const cyclePointed: { id: number | null; angle: number } = { id: null, an
 
 /** How near a cycle's line a thing let go is put on it, in bonds. */
 const SNAP = 1.0;
-/** How near the far end of an arrow coming in or going out its words lie, to go with the cycle, in bonds. */
+/** How near the far end of an arrow coming in or going out its words' box comes, to go with the cycle, in bonds. */
 const LABEL_NEAR = 1.4;
 /** How near a cycle's line anything is measured, in bonds: what lies further can be on no cycle, nor be put on one, nor be the words by its arrows. */
 const NEAR = 3;
@@ -151,13 +151,13 @@ export function arrowsOfCycles(cycles: readonly Cycle[], things: readonly CycleT
   return cycles.flatMap((c) => cycleArrows(c, boxes, NOMINAL_BOND_LENGTH, membersOn(c, things)));
 }
 
-/** The words by the far end of a cycle's arrow coming in or going out, of `things`: the nearest, within `LABEL_NEAR` bonds - none, where there are none. */
+/** The words by the far end of a cycle's arrow coming in or going out, of `things`: those whose box comes nearest it, within `LABEL_NEAR` bonds - none, where there are none. */
 export function branchWords(c: Cycle, b: CycleBranch, things: readonly CycleThing[]): number | null {
-  const l = branchPath(c, b, NOMINAL_BOND_LENGTH).label;
+  const l = branchPath(c, b, NOMINAL_BOND_LENGTH).end;
   let best: { d: number; id: number } | null = null;
   for (const t of things) {
     if (t.caption == null) continue;
-    const d = Math.hypot((t.box.x0 + t.box.x1) / 2 - l.x, (t.box.y0 + t.box.y1) / 2 - l.y);
+    const d = Math.hypot(Math.max(t.box.x0 - l.x, 0, l.x - t.box.x1), Math.max(t.box.y0 - l.y, 0, l.y - t.box.y1));
     if (d < LABEL_NEAR * NOMINAL_BOND_LENGTH && (!best || d < best.d)) best = { d, id: t.caption };
   }
   return best?.id ?? null;
@@ -321,10 +321,14 @@ export function turnCycle(store: EditorStore, id: number, frame: (go: () => void
   const turned: Cycle = { ...c, ccw: c.ccw ? undefined : true };
   const things = cycleThings(st.model, st.captions, styleOf(st.docStyle), [c]);
   const moves = (c.branches ?? []).flatMap((b) => {
-    const words = st.captions.find((w) => w.id === branchWords(c, b, things));
-    if (!words) return [];
-    const from = branchPath(c, b, NOMINAL_BOND_LENGTH).label;
-    const to = branchPath(turned, b, NOMINAL_BOND_LENGTH).label;
+    const id = branchWords(c, b, things);
+    const words = st.captions.find((w) => w.id === id);
+    const box = things.find((t) => t.caption === id)?.box;
+    if (!words || !box) return [];
+    // (where words of their size stand by the arrow, and by the arrow turned: moved by as much, any move of theirs by hand kept)
+    const half = { w: (box.x1 - box.x0) / 2, h: (box.y1 - box.y0) / 2 };
+    const from = branchWordsAt(c, b, NOMINAL_BOND_LENGTH, half);
+    const to = branchWordsAt(turned, b, NOMINAL_BOND_LENGTH, half);
     return [{ id: words.id, x: words.x, y: words.y, dx: to.x - from.x, dy: to.y - from.y }];
   });
   const gesture = `turn-${performance.now()}`;

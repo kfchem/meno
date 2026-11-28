@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { branchPath, cycleMembers, endKey, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
+import { branchWordsAt, cycleMembers, endKey, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import type { Model } from "../store/types";
 import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey } from "./cycles";
 
@@ -130,7 +130,7 @@ describe("the words by a cycle's arrow", () => {
   const style = styleOf(DEFAULT_STYLE_CHOICE);
   const b = { at: Math.PI / 2, way: "in" as const };
   const c: Cycle = { id: 1, x: 0, y: 0, r: 4.5 * B, branches: [b] };
-  const l = branchPath(c, b, B).label;
+  const l = branchWordsAt(c, b, B, { w: 0.8 * B, h: 0.3 * B });
   const words = (id: number, x: number, y: number) => ({ id, x, y, text: "ArX" }) as never;
 
   it("are the nearest by its far end, and go with the cycle", () => {

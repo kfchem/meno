@@ -218,7 +218,7 @@ import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
 import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
-import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
+import { branchBeyond, branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
 import { CONVERSATION_FRAME } from "./conversation/ops";
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
@@ -2612,9 +2612,9 @@ function WorkspaceContent({
             const near = branches.findIndex((b) => Math.abs(Math.atan2(Math.sin(b.at - at), Math.cos(b.at - at))) < (12 * Math.PI) / 180);
             const add = (way: "in" | "out") => {
               st.updateCycle(cy.id, { branches: [...branches, { at, way }] });
-              // (its words written at once where its far end is: Escape, or nothing written, leaves it without)
-              const label = branchPath(cy, { at, way }, NOMINAL_BOND_LENGTH).label;
-              st.setCaptionEdit({ id: null, at: label });
+              // (its words written at once, set on from its far end the gap clear of it as they grow: Escape, or nothing written, leaves it without)
+              const path = branchPath(cy, { at, way }, NOMINAL_BOND_LENGTH);
+              st.setCaptionEdit({ id: null, at: path.end, beyond: { ...branchBeyond(path, NOMINAL_BOND_LENGTH), clear: path.points } });
             };
             return {
               onIn: () => add("in"),

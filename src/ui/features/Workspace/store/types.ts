@@ -16,7 +16,7 @@ import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
-import type { Cycle } from "../../../../lib/chem/cycle";
+import type { Cycle, WordsBeyond } from "../../../../lib/chem/cycle";
 export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
@@ -1836,9 +1836,11 @@ export type EditorState = {
    * `n`, given as it opens. `drawn` once the words being written are drawn,
    * in place of the caption's own. `press`, where a press on the caption's
    * words opened it: the caret put there - and a drag (`drag`) selecting on
-   * from there - as if it had pressed there among them.
+   * from there - as if it had pressed there among them. `beyond`, new
+   * words set on from a point as they grow - an arrow's far end - the gap
+   * clear of it and of `clear` (lib/chem/cycle `wordsBeyond`).
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; of?: CaptionOf; beyond?: WordsBeyond & { clear?: readonly { x: number; y: number }[] } } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
