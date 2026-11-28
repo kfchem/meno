@@ -4420,6 +4420,11 @@ export const CROSSING_LEAST_ANGLE_DEG = 10;
  * is); a vector writer has none, and nor has the page's drawing (`thinDrawn`), whose gap scales with the page as its lines do.
  */
 export const CROSSING_CLEAR_FLOOR_PX = 3;
+/**
+ * The least gap, in line widths, a break narrowed so that the bond behind still reads (`brokenBehind`) leaves each side of the bond in
+ * front: a gap as wide as a line is seen as one. Narrower, the break would be a nick, and none is made: the bond behind is drawn whole.
+ */
+export const CROSSING_LEAST_GAP = 1;
 
 type Built = ReturnType<typeof buildBondPrimitives>;
 
@@ -4540,7 +4545,9 @@ export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | und
  * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn, nor
  * one between two breaks shorter than a break (twice the clear space and a line width): what is left of a short bond behind two others is
  * never a dot or a dash between its gaps, which are then one; a piece at an end of the bond, its own end there, keeps the bond's end. And
- * what is left always reads as the bond: where the breaks would leave too little of it, they are narrowed, down to none; bonds
+ * what is left always reads as the bond: where the breaks would leave too little of it, they are narrowed while each still leaves a gap
+ * seen (`CROSSING_LEAST_GAP`), and past that none is made - the bond drawn whole, a stroke the front lies on left out where two others
+ * are left; bonds
  * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
  * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
  * breaks make (none: a cut end is finished flat by the cut).
@@ -4576,6 +4583,8 @@ function brokenBehind(
   const sinLeast = Math.sin((CROSSING_LEAST_ANGLE_DEG * Math.PI) / 180);
   // where the bond crosses the ones in front of it: a band along each, to leave clear
   const bands: Band[] = [];
+  // (for each band, how far the front's own ink reaches either side of its middle: what a narrowed band leaves seen past it)
+  const inkHalves: number[] = [];
   for (const o of bonds) {
     if (o === bond || o.endpoints?.length) continue;
     if (o.a1 === bond.a1 || o.a1 === bond.a2 || o.a2 === bond.a1 || o.a2 === bond.a2) continue;
@@ -4604,6 +4613,7 @@ function brokenBehind(
     const [middle, half] = [(lo + hi) / 2, ((hi - lo) / 2) * share];
     // (across the front bond as `vcross(fd, point - q)` measures it: the normal (-fd.y, fd.x))
     bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: middle - half, hi: middle + half });
+    inkHalves.push((span.hi - span.lo) / 2);
   }
   if (!bands.length) return { lines, polys, ends: [] };
   const alongOf = (pt: Vec2) => vdot(vsub(pt, p), dir);
@@ -4679,7 +4689,8 @@ function brokenBehind(
   // (hashed, a hashed wedge, dashed, dotted) keeps two strokes, or as many as it has; any other keeps, of each of its own lines and shapes
   // (those running most of its length: each line of a double bond, a wedge, a bold bar), a piece seen for the clear space at least
   // (`clear`: the speck rule's length) beyond the joints at its atoms - the clear space from each - and a wavy bond as much of its wave.
-  // Where the breaks would leave less, they are narrowed, all alike, down to none, until it reads.
+  // Where the breaks would leave less, they are narrowed, all alike, while each still leaves a gap seen (`CROSSING_LEAST_GAP`), until it
+  // reads; past that, none is made.
   const kind = bondKind(bond);
   const strokes = kind === "hashed" || kind === "hashedWedge" || kind === "dashed" || kind === "dotted";
   const seenOf = (piece: Vec2[]) => {
@@ -4692,9 +4703,27 @@ function brokenBehind(
     if (own.length) return own.every((k) => k.pieces.some((piece) => seenOf(piece) >= clear - 1e-9));
     return out.kept.reduce((sum, k) => sum + k.pieces.reduce((t, piece) => t + seenOf(piece), 0), 0) >= clear - 1e-9;
   };
+  // (a break is seen or absent: narrowed only while the gap it leaves each side of the front's ink is a gap to the eye -
+  // `CROSSING_LEAST_GAP` line widths - and below that, none)
+  const leastGap = CROSSING_LEAST_GAP * lineWidth;
+  const seenGap = (share: number) => Math.min(...bands.map((band, k) => ((band.hi - band.lo) / 2) * share - inkHalves[k]));
   for (const share of [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]) {
+    if (share < 1 && seenGap(share) < leastGap - 1e-9) break;
     const out = broken(share);
     if (reads(out)) return { lines: out.lines, polys: out.polys, ends: [] };
+  }
+  // (drawn whole, which is in front no longer shown; a bond of strokes leaves out a stroke the front's line lies on - no small cross of
+  // the two - where two others are left)
+  if (strokes) {
+    const onFront = (pts: readonly Vec2[]) =>
+      bands.some((band, k) => {
+        const middle = (band.lo + band.hi) / 2;
+        const across = pts.map((pt) => acrossOf(band, pt));
+        return Math.max(...across) > middle - inkHalves[k] && Math.min(...across) < middle + inkHalves[k];
+      });
+    const lineOn = (l: LineSeg) => onFront(lineShape(l, halfWidthOf(l)));
+    const left = lines.filter((l) => !lineOn(l)).length + polys.filter((poly) => !onFront(poly.points)).length;
+    if (left >= 2 && left < lines.length + polys.length) return { lines: lines.filter((l) => !lineOn(l)), polys: polys.filter((poly) => !onFront(poly.points)), ends: [] };
   }
   return { lines, polys, ends: [] };
 }

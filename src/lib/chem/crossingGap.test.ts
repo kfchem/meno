@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSVG, buildAllPrimitives, CROSSING_CLEAR, CROSSING_CLEAR_FLOOR_PX, CROSSING_LEAST_ANGLE_DEG, CROSSING_LEAST_BREAK, layoutMolecule, type Atom, type Bond, type LayoutOptions, type Poly, type Vec2 } from "./layout2d";
+import { createSVG, buildAllPrimitives, CROSSING_CLEAR, CROSSING_CLEAR_FLOOR_PX, CROSSING_LEAST_ANGLE_DEG, CROSSING_LEAST_BREAK, CROSSING_LEAST_GAP, layoutMolecule, type Atom, type Bond, type LayoutOptions, type Poly, type Vec2 } from "./layout2d";
 import { layoutEmf, emfRecords } from "./emf";
 import { acsWorldOptions, NOMINAL_BOND_LENGTH as L } from "./acs";
 
@@ -323,6 +323,42 @@ describe("the gap where a bond passes behind another", () => {
         expect(spans).toHaveLength(1);
         closeTo(spans[0][0], -0.6);
         closeTo(spans[0][1], -0.2);
+      });
+
+      it("narrows a break only while it leaves a gap seen, a line width each side of the front's line; past that, makes none", () => {
+        expect(CROSSING_LEAST_GAP).toBe(1);
+        // (a break narrowed to s of its width leaves 0.1875 s - 0.0375 each side of the front's line: a line width, 0.075, down to s = 0.6.
+        // The bond 0.9 long, from (0, -1) to (0, -0.1), fronts at y = -0.8 and -0.3: between the breaks 0.5 - 0.375 s, a break's length
+        // only from s = 0.333 - past the least gap. So no break is made: the bond drawn whole, one line from -1 to -0.1)
+        const spans = crossing(-0.1, [-0.8, -0.3], false);
+        expect(spans).toHaveLength(1);
+        closeTo(spans[0][0], -1);
+        closeTo(spans[0][1], -0.1);
+      });
+
+      it("leaves out of a hashed wedge drawn with no break the stroke the front's line lies on, where two others are left", () => {
+        // (a hashed wedge 1.8 long, from (0, -1) to (0, 0.8): strokes at y = -0.65, -0.2583, 0.1333 and 0.525, each a line width
+        // across. Fronts at -0.65 - on the first stroke - and 0.09 past the second and third: those two lie in their breaks at every
+        // width that leaves a gap seen (0.1125 each side at the least), so two strokes cannot be kept and no break is made. The first
+        // stroke, under its front's line, is left out; the other three are drawn whole, the fourth too)
+        const ys = [-0.65, -0.2583 + 0.09, 0.1333 + 0.09];
+        const atoms: Atom[] = [
+          { id: 0, x: 0, y: -1, el: "C", z: -1 },
+          { id: 1, x: 0, y: 0.8, el: "C", z: -1 },
+          { id: 2, x: -1, y: -1.5, el: "C", z: -1 },
+          { id: 3, x: 1, y: 1.3, el: "C", z: -1 },
+          ...ys.flatMap((y, k) => [{ id: 10 + 2 * k, x: -L, y, el: "C", z: 1 }, { id: 11 + 2 * k, x: L, y, el: "C", z: 1 }]),
+        ];
+        const bonds: Bond[] = [
+          { a1: 0, a2: 1, order: 1, stereo: "down" },
+          { a1: 0, a2: 2, order: 1 },
+          { a1: 1, a2: 3, order: 1 },
+          ...ys.map((_, k) => ({ a1: 4 + 2 * k, a2: 5 + 2 * k, order: 1 as const })),
+        ];
+        const { lines, polys } = buildAllPrimitives(atoms, bonds, style(), ZOOM);
+        const strokes = lines.filter((l) => Math.abs(l.y1 - l.y2) < 1e-9 && Math.max(Math.abs(l.x1), Math.abs(l.x2)) < 0.3).map((l) => l.y1);
+        expect(strokes.map((y) => +y.toFixed(3))).toEqual([-0.258, 0.133, 0.525]);
+        expect(polys.filter((p) => p.points.every((q) => Math.abs(q.x) < 0.3))).toHaveLength(0);
       });
 
       describe("whatever the bond is drawn as", () => {

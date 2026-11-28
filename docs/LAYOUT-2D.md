@@ -325,9 +325,14 @@ they hang from.
   or triple bond, a wedge, a bold bar, a dative bond's line), a piece seen
   for the clear space at least beyond the clear space from each atom; a
   wavy bond as much of its wave. Where the breaks would leave less, they
-  are narrowed, all alike, a tenth of their width at a time, down to none,
-  until it reads - a short bond crossed near both its ends keeps its
-  middle. A wedge's piece keeps the wedge's own edges, so it narrows
+  are narrowed, all alike, a tenth of their width at a time, while each
+  still leaves a gap seen - a line width each side of the bond in front
+  (`CROSSING_LEAST_GAP`) - until it reads: a short bond crossed near both
+  its ends keeps its middle. A break is seen or absent: where even the
+  narrowest such breaks leave too little, the bond behind is drawn whole,
+  and which of the two is in front is then not shown; a bond of strokes
+  drawn so leaves out a stroke the front's line lies on, where two others
+  are left. A wedge's piece keeps the wedge's own edges, so it narrows
   toward the narrow end; how plainly depends on its length - a piece as
   long as the clear space on a bond of the usual length differs in width
   across it by about a twelfth of the broad end's. In a picture of pixels laid
