@@ -39,6 +39,7 @@ describe("a set as a table", () => {
       [MARKS_NOT_READ, undefined],
       [MARKS_NOT_READ, undefined],
     ]);
+    expect(MARKS_NOT_READ).toBe("not known if finished");
     // (all finished: nothing said)
     expect(aboveSaid(tableRows([water(1, 0, 1, [-76, -77], { made: { how: [], energies: "Field X" } })], "conformers"))).toBeNull();
   });

@@ -1,6 +1,6 @@
 import { boltzmann } from "../../../../lib/boltzmann";
 import { imaginaryWords } from "../../../../lib/calc/output";
-import { FAILURE_WORDS, failureSaid, WHY_SHUT } from "../workflow/failures";
+import { FAILURE_WORDS, failureSaid, RECORD_UNREAD, WHY_SHUT } from "../workflow/failures";
 import { easeInOut, easeOut } from "../../../theme/motion";
 import { ROOM_TEMPERATURE } from "../../../../lib/units";
 import * as THREE from "three";
@@ -290,7 +290,7 @@ export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imagin
   // (a structure of several parts, each searched alone: one part varied at a time, the rest at their lowest - no compound's population)
   if (m.partsAlone) return PARTS_ALONE_WHY;
   // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
-  if (m.marksUnread) return "its frames' marks could not be read, so whether each is a minimum is not known: no shares are given";
+  if (m.marksUnread) return `whether each frame finished, and so is a minimum, is not known: ${RECORD_UNREAD} - no shares are given`;
   const n = 1 + (m.frames?.length ?? 0);
   const name = (i: number) => `#${m.numbers?.length === n ? m.numbers[i] : i + 1}`;
   const unconverged = m.failed?.length === n ? m.failed.findIndex((f) => f?.kind === "not-converged") : -1;

@@ -11,7 +11,7 @@ import type { Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
 import { calcFrame, compoundLetter, frameMarks, frameXyz, framesOf, marksOf, nameOf } from "./entries";
-import { FAILURE_WORDS } from "./failures";
+import { FAILURE_WORDS, UNREAD_STATE } from "./failures";
 
 /** One entry of a set, as its table shows it. */
 export type TableRow = {
@@ -51,7 +51,7 @@ export function energiesFrom(m: Pick<Molecule3D, "calc" | "energies" | "made">):
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 /** What a row says whose file's marks of which frames failed did not read. */
-export const MARKS_NOT_READ = "marks not read";
+export const MARKS_NOT_READ = UNREAD_STATE;
 
 /**
  * What the table's *above* column says of what it is over: the lowest of

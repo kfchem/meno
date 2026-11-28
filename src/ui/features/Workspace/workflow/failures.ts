@@ -8,6 +8,13 @@
 
 import { whyCounted } from "../../../../lib/whyCounted";
 
+/** Why it is not known whether a frame finished, where its file's record of which frames failed - or are no minimum - did not read (`marksUnread`). */
+export const RECORD_UNREAD = "its file's record of which frames failed could not be read";
+/** A frame or an entry so, in a few words: a table's cell, Filter's `state`. */
+export const UNREAD_STATE = "not known if finished";
+/** A frame so, in a line: a bar's tip, a file's line. */
+export const UNREAD_SAID = `whether it finished is not known: ${RECORD_UNREAD}`;
+
 /** Why an entry failed, by kind - each said in plain words (`FAILURE_WORDS`). */
 export const FAILURE_KINDS = ["not-started", "stopped", "program-error", "refused", "wrong-molecule", "no-geometry", "not-converged", "failed"] as const;
 export type FailureKind = (typeof FAILURE_KINDS)[number];

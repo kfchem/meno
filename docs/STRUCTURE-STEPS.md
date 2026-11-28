@@ -571,7 +571,7 @@ conformers, case F, F2).
   "from 1"`): a step that takes atoms from the table reads them by that,
   never by assumption (*Measure*). A conformer mapped onto its species has
   no rows.
-- **State.** An entry not finished - failed, or its marks not read - is
+- **State.** An entry not finished - failed, or not known if finished - is
   set aside as not finished, never passed on as one that is. An entry
   renumbered keeps its energy and its imaginary frequencies, which are of
   its geometry however it is numbered, and its thermochemistry and
