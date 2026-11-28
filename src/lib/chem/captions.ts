@@ -21,6 +21,14 @@ export const WORDS_SPACINGS: readonly number[] = [1, 1.15, 1.5, 2];
 /** The least and the most line spacing a box may have, as a multiple of single spacing. */
 export const WORDS_SPACING_RANGE: readonly [number, number] = [0.5, 4];
 
+/**
+ * A word space at `fontSize` in the label set's font: the font's own space, as wide as it sets between two words - between the words of a
+ * caption, and the least between two labels on one row of text that are to read as two (a Haworth ring's labels).
+ */
+export function wordSpace(fontSize: number, set: LabelSet): number {
+  return runsWidth([{ text: " " }], fontSize, set);
+}
+
 /** How far apart words' lines are, baseline to baseline, in ems: single spacing, or as many times it as their own spacing says. */
 export function wordsLineEms(c: { lines?: number }): number {
   return c.lines != null && c.lines > 0 ? c.lines * CAPTION_LINE : CAPTION_LINE;
@@ -702,7 +710,7 @@ export function captionPlaces(
   const at: { line: number; x: number; inside?: true }[] = [];
   // (the places between letters as the reader sees them - an emoji with its modifiers one, a letter of two code units one: no caret goes inside one)
   const between = new Set([...letterStarts(text), text.length]);
-  const space = runsWidth([{ text: " " }], fontSize, set);
+  const space = wordSpace(fontSize, set);
   let li = 0;
   let from = 0;
   for (const typed of text.split("\n")) {

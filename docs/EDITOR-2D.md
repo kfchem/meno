@@ -806,18 +806,41 @@ on a page), and the **Newman projection** (`newman`).
   led out by a double-click or a drag and its label typed over it or given by *Edit label* (the atom keeps
   the way, `reads`, and the page and a picture made of it draw it so: an OH up from the right-hand front atom reads HO, its H off the bond going up from it, and
   keeps its full stem; in a five-ring, whose near edge's bonds rise steeply, a label up from a front atom
-  or down from a side atom reads away from its atom's rising bond). Then one that still meets something
+  or down from a side atom reads away from its atom's rising bond). Each time a label of a
+  Haworth ring is typed, that ring's labels inside its picture are set afresh from the ring's own stems,
+  each read as its bonds decide - never from where an earlier label put them - so that the picture depends
+  on what is drawn alone (a ManNAc relabelled a glucose is the glucose typed afresh); the other rings of
+  the page stand as they are. A stem inside the ring that was lengthened or shortened by hand goes back to
+  the ring's own length the next time a label of that ring is typed: the drawing cannot tell a length set
+  by hand from one Meno set. This is read first strictly - no touch at all between a label's ink and
+  another label, any line (its width counted) or any filled shape, and two labels on one row of text, one
+  of them inside the ring, at least a word space apart (the label font's own space, `wordSpace` in lib/chem/captions, as between a caption's words), so that
+  they never read as one word - an AcHN beside a lone H closer than that reads "HAcHN"; two labels level on
+  the ring's own stems that far apart or more stay level, as a mannopyranose's HO and OH. Where a
+  label still touches something so read, a back atom's down label gives way first, toward its atom; then
+  one front atom's up label is read either way and, where that is not enough, rises along its vertical
+  into the ring's middle, below the ring's back edge, by the least height that sets every label inside
+  the ring clear and adds no touch to any other - the others on the ring's own stems, as they gave way or
+  with every back atom's down label as short as it may be (an NHAc up from C-2 of a mannopyranose drawn
+  without its H atoms reads AcHN, above C-3's OH, which keeps its stem; a CH2OH up from a six-ring's front atom beside a label up from the
+  other likewise; an L-galactopyranose's CH2OH and an L-fucopyranose's CH3 down from C-5 give way above
+  C-2's HO). Only where nothing
+  clears them so is a graze let pass, as follows. Then one that still meets something
   steps along its vertical toward its atom by the least that clears every label:
   a back atom's down label first, to as little as 0.30, then a front atom's up label, to as little as
   0.40, the length before these; where no step clears them, the front atoms' up labels stand at 0.40 and
-  every label reads as before, so that nothing is drawn worse than it was. A label that meets nothing is
-  left as it reads. A group that is no label - a carbon drawn out, with
-  what it carries - is never moved, so a bond drawn on from it has its room. Clean-up and *Draw flat* let
-  the way a label reads go, so that its bonds decide again. Not yet clear, as before these lengths: a
-  CH2OH up from a front atom beside a second label up from the other, in either ring - wider than the
-  ring's near edge, read either way it meets that label or a bond rising from its own atom, and no row
-  above them stands clear of the ring O and the back bonds; and in the six-ring an OH up from the
-  right-hand front atom under a CH2OH down from C-5. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  every label reads as its bonds decide, so that nothing is drawn worse than it was. A group that is no
+  label - a carbon drawn out, with what it carries - is never moved, so a bond drawn on from it has its
+  room; a carbon written out that carries nothing, a CH3, is a label. Clean-up and *Draw flat* let
+  the way a label reads go, so that its bonds decide again. Every aldohexose, pyranose and furanose, each
+  anomer, the 2- and 6-deoxy sugars, glucuronic and L-iduronic acid, the N-acetyl amino sugars, the methyl
+  glycosides and alpha-L-galactopyranose, each with and without its H atoms, are drawn so with no label
+  touching anything and none closer than a word space on a row (`haworthSugars.test.ts`; a furanose's Fischer
+  side chain led down from C-4 drawn half a bond longer than its free place, since a carbon drawn out is
+  never moved and a group across it at that place lies on the near edge's bold bond), except what is not
+  yet clear: a beta-ManNAc drawn with its H atoms, whose NHAc no height sets both off C-3's OH and a word
+  space from C-5's H; and in the five-ring a CH2OH up from a front atom beside a second label up from the other.
+  These stand as before the strict reading, a graze let pass. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
   each the compound of their SMILES, and two; beta laid flat by *Draw flat* is the same compound, and so is the 4C1 chair of it built with
