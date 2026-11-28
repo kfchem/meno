@@ -93,6 +93,11 @@ src/
                           them, takes each letter from the first font that has it and places letters
                           by GPOS's kerning and marks alone, as a browser does (scripts/patch-troika.mjs,
                           run after every install)
+  ui/features/Workspace/components/PageHtml
+                          drei's Html, laid over the canvas. After every install (scripts/patch-three-react.mjs)
+                          its root is kept while its place changes and unmounted after React's commit once it
+                          has gone, and fiber's store keeps time with a clock of its own that reads as
+                          three's Clock does, which three now warns of at every start
   ui/network/             consent dialog, activity cards, Settings › Network
   ui/views/registry       TabKind -> { Component, create } table
   ui/views/Deck           renders every open tab, hides inactive ones with CSS
