@@ -23,7 +23,7 @@ import { COLORS } from "../../../theme/colors";
 import { ICON_NAME_WIDTH, pointOf, scaleOf } from "../../../../lib/pdf/layout";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { DOUBLE_CLICK_MS } from "../constants";
-import { iconScaleOf, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetNameRoom, sheetOfText } from "../utils/textSheets";
+import { iconScaleOf, restWords, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetNameRoom, sheetOfText } from "../utils/textSheets";
 import { dragSelection } from "../utils/dragSelection";
 import { follow, TAU } from "../../../theme/motion";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
@@ -327,6 +327,20 @@ function Sheet({
                 </Text>
               ) : null,
             )}
+          {/* a text that goes on past its sheet: its last line says how many lines are not on it, in the name's grey */}
+          {s.rest && live && (
+            <Text
+              font={plexMono}
+              fontSize={SHEET_TYPE_PT * point}
+              anchorX="left"
+              anchorY="middle"
+              position={[s.rest.x, -s.rest.y, Z_STEP / 4]}
+              color={GRAY}
+              raycast={noRaycast}
+            >
+              {restWords(s.rest.lines)}
+            </Text>
+          )}
         </group>
       </group>
       {/* far off, its picture of its words over them - the words' own look, drawn once - fading as they take over */}

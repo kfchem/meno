@@ -2,7 +2,8 @@
  * A text's sheet on the page (docs/PDF.md, *A text*): as large as its first
  * lines need, at the size they would be printed - Meno's monospaced type at
  * 9 points, a line every 12 - as wide as its longest line among them, up to
- * 80 letters, as tall as its first 40 lines; never smaller than a few
+ * 80 letters, as tall as its first 40 lines - a longer text's first 39,
+ * and a last line saying how many more it has; never smaller than a few
  * lines of 32 letters. Where it lies is its top left (`WorkspaceText.at`),
  * so that a text growing at its end grows down. A Markdown text's sheet
  * shows it formatted, as the column does, laid out as wide as a sheet's 80
@@ -35,9 +36,17 @@ const TAB = 4;
  * - each cut to what it holds across - or, Markdown, its rows formatted;
  * and, where the text goes on past it, where in the text the first line
  * it does not show begins (`more`), and how many of the lines it shows are
- * cut short at its right edge (`cut`).
+ * cut short at its right edge (`cut`) - and the line it ends in then,
+ * saying how many of the text's lines are not on it (`rest`), where its
+ * words begin, across from the sheet's left, and its middle down from its top.
  */
-export type TextSheet = { w: number; h: number; lines: string[]; cols: number; md?: MarkdownSheet; more?: number; cut?: number };
+export type TextSheet = { w: number; h: number; lines: string[]; cols: number; md?: MarkdownSheet; more?: number; cut?: number; rest?: { lines: number; x: number; y: number } };
+
+/** The words of a sheet's last line where its text goes on past it: how many of its lines are not on it. */
+export const restWords = (lines: number): string => `${lines} more line${lines === 1 ? "" : "s"}`;
+
+/** How many lines a text has, a last line's end ending none. */
+const linesOf = (text: string): number => text.split("\n").length - (text.endsWith("\n") && text.length > 0 ? 1 : 0);
 
 /** A Markdown text's sheet: the text laid out, how many of its rows it shows, and how large a pixel of the layout is on the page. */
 export type MarkdownSheet = { laid: Laid; rows: number; scale: number };
@@ -48,14 +57,15 @@ export const SHEET_PT_PER_PX = SHEET_TYPE_PT / FONT_PX;
 export const SHEET_MD_PX = Math.round((SHEET_MOST_COLS * SHEET_LETTER * SHEET_TYPE_PT) / SHEET_PT_PER_PX) + 2 * PAD_X;
 
 /**
- * A letter set twice as wide as the monospaced type's own - Chinese,
- * Japanese and Korean letters, and the full-width forms - as a terminal
- * sets them: a monospaced type's letter is 0.6 of its size, theirs about
- * a whole one.
+ * A wide letter - Chinese, Japanese and Korean letters, and the full-width
+ * forms - which the type a sheet's lines are set in takes from a fallback,
+ * a whole em across where a letter of its own is 0.6 of one.
  */
 const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{3FFFD}]/u;
-/** How many letters across a letter takes: two for a wide one. */
-const across = (ch: string): number => (WIDE.test(ch) ? 2 : 1);
+/** How many of the monospaced type's letters a wide letter takes across: its em, and a twentieth of one to spare (1.05 / 0.6). */
+const WIDE_ACROSS = 1.75;
+/** How many letters across a letter takes: a wide one, `WIDE_ACROSS`. */
+const across = (ch: string): number => (WIDE.test(ch) ? WIDE_ACROSS : 1);
 
 /** A line as a sheet shows it: its tabs as spaces to the next stop, cut to `cols` letters - a wide letter that would not fit left off. */
 function shownLine(line: string, cols: number): string {
@@ -64,6 +74,8 @@ function shownLine(line: string, cols: number): string {
   for (const ch of line) {
     if (col >= cols) break;
     if (ch === "\t") {
+      // (from the letter a wide one's part ends in)
+      col = Math.ceil(col);
       const n = Math.min(TAB - (col % TAB), cols - col);
       out += " ".repeat(n);
       col += n;
@@ -77,10 +89,10 @@ function shownLine(line: string, cols: number): string {
   return out;
 }
 
-/** How many letters a line takes across, its tabs to their stops, a wide letter two. */
+/** How many letters a line takes across, its tabs to their stops, a wide letter `WIDE_ACROSS`. */
 function lettersAcross(line: string): number {
   let col = 0;
-  for (const ch of line) col += ch === "\t" ? TAB - (col % TAB) : across(ch);
+  for (const ch of line) col = ch === "\t" ? Math.ceil(col) + TAB - (Math.ceil(col) % TAB) : col + across(ch);
   return col;
 }
 
@@ -96,7 +108,7 @@ export function sheetOf(text: string, markdown = false, point = POINT): TextShee
   const s = sheetAtAcs(text, markdown);
   if (point === POINT) return s;
   const f = point / POINT;
-  return { ...s, w: s.w * f, h: s.h * f, ...(s.md ? { md: { ...s.md, scale: s.md.scale * f } } : {}) };
+  return { ...s, w: s.w * f, h: s.h * f, ...(s.md ? { md: { ...s.md, scale: s.md.scale * f } } : {}), ...(s.rest ? { rest: { ...s.rest, x: s.rest.x * f, y: s.rest.y * f } } : {}) };
 }
 
 /** A text's own sheet, at the point it was laid at. */
@@ -122,20 +134,29 @@ function markdownSheet(text: string): TextSheet {
   let laid = layOut(blocks.slice(0, 8), SHEET_MD_PX, measureText);
   for (let n = 16; laid.height < most && n / 2 < blocks.length; n *= 2) laid = layOut(blocks.slice(0, n), SHEET_MD_PX, measureText);
   const least = (SHEET_LEAST_LINES * SHEET_LINE_PT + 2 * SHEET_PAD_PT) / SHEET_PT_PER_PX;
-  let rows = 0;
-  let foot = 0;
-  for (const r of laid.rows) {
-    if (r.y + r.h > most - PAD_FOOT) break;
-    rows++;
-    foot = r.y + r.h;
-  }
-  const h = Math.max(least, Math.min(laid.height, foot + PAD_FOOT));
+  // (the rows that fit - and where some do not, those that fit over a line left for saying so)
+  const line = SHEET_LINE_PT / SHEET_PT_PER_PX;
+  const fit = (room: number) => {
+    let n = 0;
+    let at = 0;
+    for (const r of laid.rows) {
+      if (r.y + r.h > room) break;
+      n++;
+      at = r.y + r.h;
+    }
+    return { n, at };
+  };
+  let { n: rows, at: foot } = fit(most - PAD_FOOT);
+  const goesOn = rows < laid.rows.length;
+  if (goesOn) ({ n: rows, at: foot } = fit(most - PAD_FOOT - line));
   const scale = SHEET_PT_PER_PX * POINT;
   // (where the first row it does not show begins in the text written: its first words', a table's row's too)
   const next = laid.rows[rows];
   const words = next?.pieces.map((p) => p.src).filter((at) => at >= 0) ?? [];
   const more = next ? (words.length ? Math.min(...words) : next.src) : undefined;
-  return { w: SHEET_MD_PX * scale, h: h * scale, lines: [], cols: SHEET_MOST_COLS, md: { laid, rows, scale }, ...(more != null ? { more } : {}) };
+  const h = goesOn ? foot + line + PAD_FOOT : Math.max(least, Math.min(laid.height, foot + PAD_FOOT));
+  const rest = more != null ? { lines: linesOf(text) - text.slice(0, more).split("\n").length + 1, x: PAD_X * scale, y: (foot + line / 2) * scale } : undefined;
+  return { w: SHEET_MD_PX * scale, h: h * scale, lines: [], cols: SHEET_MOST_COLS, md: { laid, rows, scale }, ...(more != null ? { more, rest } : {}) };
 }
 
 /** A text's sheet, its lines as they are written. */
@@ -143,14 +164,17 @@ function plainSheet(text: string): TextSheet {
   const all = text.split("\n");
   // (a last line ending the text's last line is none)
   if (all.length > 1 && all[all.length - 1] === "") all.pop();
-  const first = all.slice(0, SHEET_MOST_LINES);
-  const cols = Math.min(SHEET_MOST_COLS, Math.max(SHEET_LEAST_COLS, ...first.map(lettersAcross)));
-  const rows = Math.max(SHEET_LEAST_LINES, first.length);
+  // (a text longer than a sheet: its last line says how many are not on it)
+  const goesOn = all.length > SHEET_MOST_LINES;
+  const first = all.slice(0, goesOn ? SHEET_MOST_LINES - 1 : SHEET_MOST_LINES);
+  const cols = Math.min(SHEET_MOST_COLS, Math.max(SHEET_LEAST_COLS, ...first.map((l) => Math.ceil(lettersAcross(l)))));
+  const rows = goesOn ? SHEET_MOST_LINES : Math.max(SHEET_LEAST_LINES, first.length);
   const wPt = cols * SHEET_LETTER * SHEET_TYPE_PT + 2 * SHEET_PAD_PT;
   const hPt = rows * SHEET_LINE_PT + 2 * SHEET_PAD_PT;
-  const more = all.length > SHEET_MOST_LINES ? first.reduce((at, l) => at + l.length + 1, 0) : undefined;
+  const more = goesOn ? first.reduce((at, l) => at + l.length + 1, 0) : undefined;
   const cut = first.filter((l) => lettersAcross(l) > cols).length;
-  return { w: wPt * POINT, h: hPt * POINT, lines: first.map((l) => shownLine(l, cols)), cols, ...(more != null ? { more } : {}), ...(cut ? { cut } : {}) };
+  const rest = goesOn ? { lines: all.length - first.length, x: SHEET_PAD_PT * POINT, y: (SHEET_PAD_PT + (first.length + 0.5) * SHEET_LINE_PT) * POINT } : undefined;
+  return { w: wPt * POINT, h: hPt * POINT, lines: first.map((l) => shownLine(l, cols)), cols, ...(more != null ? { more, rest } : {}), ...(cut ? { cut } : {}) };
 }
 
 /** Where a sheet lies on the page: left, right, foot and top. */

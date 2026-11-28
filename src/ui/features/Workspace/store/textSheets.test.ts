@@ -15,6 +15,7 @@ import {
   SHEET_MOST_LINES,
   SHEET_PAD_PT,
   SHEET_TYPE_PT,
+  restWords,
   sheetOf,
   sheetRoom,
 } from "../utils/textSheets";
@@ -34,8 +35,16 @@ describe("a text's sheet", () => {
     expect(small.h).toBeCloseTo((3 * SHEET_LINE_PT + 2 * SHEET_PAD_PT) * POINT);
     const big = sheetOf(Array.from({ length: 60 }, () => "x".repeat(120)).join("\n"));
     expect(big.cols).toBe(SHEET_MOST_COLS);
-    expect(big.lines).toHaveLength(SHEET_MOST_LINES);
+    // (60 lines: 39 of them, and a last line saying the other 21 are not on it)
+    expect(big.lines).toHaveLength(SHEET_MOST_LINES - 1);
+    expect(big.rest?.lines).toBe(21);
+    expect(restWords(21)).toBe("21 more lines");
+    expect(restWords(1)).toBe("1 more line");
+    expect(big.rest?.y).toBeCloseTo((SHEET_PAD_PT + 39.5 * SHEET_LINE_PT) * POINT);
+    expect(big.h).toBeCloseTo((SHEET_MOST_LINES * SHEET_LINE_PT + 2 * SHEET_PAD_PT) * POINT);
     expect(big.lines[0]).toHaveLength(SHEET_MOST_COLS);
+    // (40 lines: all on it, no line said)
+    expect(sheetOf("a\n".repeat(SHEET_MOST_LINES)).rest).toBeUndefined();
     // (a tab to its next stop)
     expect(sheetOf("a\tb").lines[0]).toBe("a   b");
   });
@@ -55,31 +64,34 @@ describe("a text's sheet", () => {
     expect(sheetOf("# Title\n", false).md).toBeUndefined();
   });
 
-  it("counts a Chinese or Japanese letter two across, as wide as it is set: the sheet as wide as its line, cut where it must be", () => {
-    // (worked first: 30 such letters are 60 across - wider than the least 32, narrower than the most 80)
+  it("counts a Chinese or Japanese letter as wide as it is set, an em and a twentieth: the sheet as wide as its line, cut where it must be", () => {
+    // (worked first: a monospaced letter is 0.6 em, a wide one 1.05 em with its margin - 1.75 letters; 30 of them are 52.5, a sheet of 53)
     const thirty = sheetOf("あ".repeat(30));
-    expect(thirty.cols).toBe(60);
+    expect(thirty.cols).toBe(53);
     expect(thirty.lines[0]).toBe("あ".repeat(30));
-    expect(thirty.w).toBeCloseTo((60 * SHEET_LETTER * SHEET_TYPE_PT + 2 * SHEET_PAD_PT) * POINT);
+    expect(thirty.w).toBeCloseTo((53 * SHEET_LETTER * SHEET_TYPE_PT + 2 * SHEET_PAD_PT) * POINT);
     expect(thirty.cut).toBeUndefined();
-    // (mixed, no spaces: "ab" and 40 letters are 82 across - "ab" and 39 of them shown, 80, and the line said to be cut)
-    const mixed = sheetOf(`ab${"漢".repeat(40)}`);
+    // (mixed, no spaces: "ab" and 50 letters are 2 + 87.5 across - "ab" and 44 of them shown, 79, the 45th past 80, and the line said to be cut)
+    const mixed = sheetOf(`ab${"漢".repeat(50)}`);
     expect(mixed.cols).toBe(SHEET_MOST_COLS);
-    expect(mixed.lines[0]).toBe(`ab${"漢".repeat(39)}`);
+    expect(mixed.lines[0]).toBe(`ab${"漢".repeat(44)}`);
     expect(mixed.cut).toBe(1);
-    // (one letter short of room for a wide one: it is left off, not drawn half over the edge)
-    expect(sheetOf(`a${"か".repeat(40)}`).lines[0]).toBe(`a${"か".repeat(39)}`);
-    // (full-width forms too; half-width kana are narrow)
-    expect(sheetOf("ＡＢＣ".repeat(12)).cols).toBe(72);
+    // ("ab" and 44 fit, 79 across: no cut)
+    expect(sheetOf(`ab${"漢".repeat(44)}`).cut).toBeUndefined();
+    // (full-width forms too - 36 of them 63 across; half-width kana are narrow)
+    expect(sheetOf("ＡＢＣ".repeat(12)).cols).toBe(63);
     expect(sheetOf("ｱ".repeat(40)).cols).toBe(40);
+    // (a tab after a wide letter goes to the next stop from the letter its part ends in: 1.75 is in the second, the stop at 4)
+    expect(sheetOf("あ\tb").lines[0]).toBe("あ  b");
   });
 
   it("says where its text goes on past it, and how many of its lines are cut at its edge", () => {
-    // (45 lines of one letter: the sheet shows 40; the 41st begins after 40 letters and their 40 line ends)
+    // (45 lines of one letter: the sheet shows 39 and says 6 more; the 40th begins after 39 letters and their 39 line ends)
     const tall = Array.from({ length: 45 }, (_, i) => String.fromCharCode(97 + (i % 26))).join("\n") + "\n";
     const s = sheetOf(tall);
-    expect(s.more).toBe(80);
-    expect(tall.slice(s.more).split("\n")[0]).toBe(String.fromCharCode(97 + (40 % 26)));
+    expect(s.more).toBe(78);
+    expect(tall.slice(s.more).split("\n")[0]).toBe(String.fromCharCode(97 + 39 - 26));
+    expect(s.rest?.lines).toBe(6);
     expect(s.cut).toBeUndefined();
     expect(sheetOf("a\n".repeat(SHEET_MOST_LINES)).more).toBeUndefined();
     expect(sheetOf(`${"x".repeat(90)}\nshort\n${"y".repeat(81)}`).cut).toBe(2);
@@ -93,6 +105,10 @@ describe("a text's sheet", () => {
     const shownWords = long.md!.laid.rows.slice(0, long.md!.rows).flatMap((r) => r.pieces.map((p) => p.text)).join("");
     expect(shownWords).toContain(`Paragraph ${k - 1}.`);
     expect(shownWords).not.toContain(`Paragraph ${k}.`);
+    // (its last line says how many lines of the text are not on it: from the one the paragraph is on - its 2k+1st of 799 - to the end; under its rows, in its height)
+    expect(long.rest?.lines).toBe(799 - 2 * k);
+    expect(long.rest!.y).toBeLessThan(long.h);
+    expect(long.rest!.y).toBeGreaterThan(long.md!.laid.rows[long.md!.rows - 1].y * long.md!.scale);
     expect(sheetOf("# Title\n\nSome *words*.\n", true).more).toBeUndefined();
   });
 
