@@ -185,8 +185,21 @@ pub struct Plan {
     pub later: Vec<String>,
 }
 
+/// The file being written as the page stopped, waited for: its save's token, its name, and the files of that name
+/// to open once its write has ended - those its tabs held, and any the chemist opens meanwhile, by any way.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Waiting {
+    token: u64,
+    name: String,
+    later: Vec<String>,
+}
+
 #[derive(Default)]
 struct Held {
+    /// The file whose save was being written as the page stopped, while it is waited for.
+    waiting: Option<Waiting>,
+    /// The last list of files the page told (`page_files`), so that an older list taken later is let be.
+    files_told: u64,
     /// The save the page tells of now.
     saving: Option<Saving>,
     /// The save under way as the page last stopped.
@@ -226,6 +239,10 @@ impl Held {
         } else {
             (Vec::new(), Vec::new())
         };
+        self.waiting = saving
+            .as_ref()
+            .filter(|s| s.written == Written::Writing && then == Then::StartAgain)
+            .map(|s| Waiting { token: s.token, name: s.name.clone(), later: later.clone() });
         if then == Then::StartAgain {
             self.started_again = Some(now);
             self.unanswered = false;
@@ -324,6 +341,38 @@ impl PageStop {
         self.ended.notify_all();
     }
 
+    /// Of `paths`, those to open now; the rest - of the name of the file waited for - kept to open once its write has ended.
+    pub fn hold_opens(&self, paths: Vec<String>) -> Vec<String> {
+        let mut held = self.held();
+        let Some(waiting) = held.waiting.as_mut() else { return paths };
+        let (now, later) = split_files(paths, Some(&waiting.name));
+        for p in later {
+            if !waiting.later.contains(&p) {
+                waiting.later.push(p);
+            }
+        }
+        now
+    }
+
+    /// A document to be written to a file named `name` - by the save of `token`, if it is one - once the write of the
+    /// stopped page's save of that file has ended, so that the two never interleave and what is said of the first
+    /// stays true: at most `limit`; refused past it.
+    pub fn write_after_left(&self, name: &str, token: Option<u64>, limit: Duration) -> Result<(), String> {
+        let until = Instant::now() + limit;
+        let mut held = self.held();
+        loop {
+            let before = held.left.as_ref().is_some_and(|s| s.written == Written::Writing && s.name == name && Some(s.token) != token);
+            if !before {
+                return Ok(());
+            }
+            let now = Instant::now();
+            if now >= until {
+                return Err(format!("{name} is still being written by the save made as Meno's window stopped; save again once that save has ended"));
+            }
+            held = self.ended.wait_timeout(held, until - now).unwrap_or_else(|e| e.into_inner()).0;
+        }
+    }
+
     /// The stopped page's save of `token` once its write has ended, or at most `limit` on: as it is then
     /// (`Writing`, where its end was not seen).
     fn left_after(&self, token: u64, limit: Duration) -> Option<Saving> {
@@ -355,14 +404,28 @@ pub fn page_saved(state: tauri::State<'_, PageStop>, token: u64) {
 /// The workspace files the page's tabs hold: those it may read, which are workspace files, kept to open again -
 /// looked at off the window's thread (a folder on a network gone must not hold the window).
 #[tauri::command]
-pub async fn page_files(app: AppHandle, paths: Vec<String>) {
+pub async fn page_files(app: AppHandle, paths: Vec<String>, told: u64) {
     let _ = tauri::async_runtime::spawn_blocking(move || {
         use tauri_plugin_fs::FsExt;
         let scope = app.try_fs_scope();
         let paths = paths.into_iter().filter(|p| scope.as_ref().is_some_and(|s| s.is_allowed(p)) && crate::opened::is_workspace(Path::new(p))).collect();
-        app.state::<PageStop>().held().files = paths;
+        let state = app.state::<PageStop>();
+        let mut held = state.held();
+        // (each list in its turn: one looked at more slowly never takes a later one's place)
+        if told > held.files_told {
+            held.files_told = told;
+            held.files = paths;
+        }
     })
     .await;
+}
+
+/// Of the workspace files the page is to open - picked in Open, dropped, double-clicked - those it opens now: the
+/// file whose save was being written as the page stopped is held back till that write has ended, and opened then,
+/// as saved.
+#[tauri::command]
+pub fn page_hold_opens(state: tauri::State<'_, PageStop>, paths: Vec<String>) -> Vec<String> {
+    state.hold_opens(paths)
 }
 
 /// What the page, started again after it stopped, is told of it at once - once; none at any other start.
@@ -400,36 +463,61 @@ pub fn stopped(app: &AppHandle, kind: Kind) {
 /// The page started again: the files opened again now taken by it as it comes up, as files opened from outside are
 /// (opened.rs); the file being saved, once its write has ended.
 fn start_again(app: &AppHandle, plan: Plan) {
-    crate::opened::open(app, plan.now);
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.reload();
-    }
+    let reload = || {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.reload();
+        }
+    };
+    let told = || {
+        let _ = app.emit("page-came-back", ());
+    };
+    run_start_again(&app.state::<PageStop>(), plan, REOPEN_WAIT, |files| crate::opened::open(app, files), reload, told);
+}
+
+/// `start_again` as it runs, the window's parts given: `open` takes files to open, `reload` starts the page again,
+/// `told` tells it there is more to say.
+fn run_start_again(state: &PageStop, plan: Plan, limit: Duration, open: impl Fn(Vec<String>), reload: impl FnOnce(), told: impl FnOnce()) {
+    open(plan.now);
+    reload();
     let Some(token) = plan.saving.filter(|s| s.written == Written::Writing).map(|s| s.token) else { return };
-    let state = app.state::<PageStop>();
-    let Some(saving) = state.left_after(token, REOPEN_WAIT) else { return };
-    let reopen = saving.written != Written::Writing && !plan.later.is_empty();
+    let Some(saving) = state.left_after(token, limit) else { return };
+    // (its files, those held and those opened meanwhile, taken as the wait ends: an Open from then on opens at once)
+    let later = {
+        let mut held = state.held();
+        match held.waiting.take() {
+            Some(w) if w.token == token => w.later,
+            other => {
+                held.waiting = other;
+                Vec::new()
+            }
+        }
+    };
+    let reopen = saving.written != Written::Writing && !later.is_empty();
     if reopen {
-        crate::opened::open(app, plan.later);
+        open(later);
     }
     state.held().later_said = Some(later_said(&saving, reopen));
-    let _ = app.emit("page-came-back", ());
+    told();
 }
 
 /// Meno closed after a native message - a save being written waited for, at most `CLOSE_WAIT` - as a quit closes it
 /// (RunEvent::Exit), however the message goes.
 fn close(app: &AppHandle, plan: Plan) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let show = |words: String| {
+        app.dialog().message(words).title("Meno").kind(MessageDialogKind::Error).buttons(MessageDialogButtons::Ok).blocking_show();
+    };
+    run_close(&app.state::<PageStop>(), plan, CLOSE_WAIT, show, || app.exit(0));
+}
+
+/// `close` as it runs: `show` shows the message, and returns once it is dismissed; then `exit`, whatever it gave.
+fn run_close(state: &PageStop, plan: Plan, limit: Duration, show: impl FnOnce(String), exit: impl FnOnce()) {
     let saving = match plan.saving {
-        Some(s) if s.written == Written::Writing => app.state::<PageStop>().left_after(s.token, CLOSE_WAIT).or(Some(s)),
+        Some(s) if s.written == Written::Writing => state.left_after(s.token, limit).or(Some(s)),
         other => other,
     };
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-    app.dialog()
-        .message(said(plan.then, saving.as_ref(), false))
-        .title("Meno")
-        .kind(MessageDialogKind::Error)
-        .buttons(MessageDialogButtons::Ok)
-        .blocking_show();
-    app.exit(0);
+    show(said(plan.then, saving.as_ref(), false));
+    exit();
 }
 
 /// The main window's page watched for its stopping, on Windows: WebView2's `ProcessFailed`.
@@ -634,6 +722,124 @@ mod tests {
         assert_eq!(
             said(plan.then, Some(&left), false),
             "Meno's window stopped working again, soon after it was started again. What was not saved is lost. Route.meno was being saved, and the save was finished: Route.meno is as saved. Meno will close."
+        );
+    }
+
+    /// A stop of the page while `name` is being written, its files `files`: the state, the save's token, its write's mark, and the plan.
+    fn stopped_while_writing(name: &str, files: &[&str]) -> (Arc<PageStop>, u64, Mark, Plan) {
+        let state = Arc::new(PageStop::default());
+        state.held().files = files.iter().map(|f| f.to_string()).collect();
+        let token = state.saving(name.into());
+        state.write_begins(Some(token)).unwrap();
+        let write = mark(&state, token);
+        let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
+        (state, token, write, plan)
+    }
+
+    #[test]
+    fn start_again_opens_the_rest_at_once_and_the_file_being_saved_once_its_write_has_ended_an_open_of_it_meanwhile_too() {
+        let (state, _, mut write, plan) = stopped_while_writing("Route.meno", &["/w/a.meno", "/w/Route.meno"]);
+        let done: Arc<Mutex<Vec<String>>> = Arc::default();
+        let (runs, said) = (state.clone(), done.clone());
+        let run = std::thread::spawn(move || {
+            let (open, reload, told) = (said.clone(), said.clone(), said.clone());
+            run_start_again(
+                &runs,
+                plan,
+                Duration::from_secs(60),
+                move |files| open.lock().unwrap().push(format!("open {}", files.join(" "))),
+                move || reload.lock().unwrap().push("reload".into()),
+                move || told.lock().unwrap().push("told".into()),
+            );
+        });
+        // the chemist opens the file by hand while its write goes on - from Open, or from outside: held back, not opened now
+        assert_eq!(state.hold_opens(vec!["/w/Route.meno".into(), "/w/b.meno".into(), "/x/Route.meno".into()]), vec!["/w/b.meno".to_string()]);
+        write.ended(true);
+        drop(write);
+        run.join().unwrap();
+        // the rest at once, the page started again, then the file - once, as saved - and the later words told
+        assert_eq!(*done.lock().unwrap(), ["open /w/a.meno", "reload", "open /w/Route.meno /x/Route.meno", "told"]);
+        assert_eq!(state.held().later_said.as_deref(), Some("Route.meno was being saved, and the save was finished: Route.meno is as saved. It is open again."));
+        // and once the write has ended, an Open of it opens at once
+        assert_eq!(state.hold_opens(vec!["/w/Route.meno".into()]), vec!["/w/Route.meno".to_string()]);
+    }
+
+    #[test]
+    fn start_again_with_no_save_under_way_opens_every_file_at_once_and_says_nothing_more() {
+        let state = PageStop::default();
+        state.held().files = vec!["/w/a.meno".into()];
+        let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
+        let done = Mutex::new(Vec::new());
+        run_start_again(&state, plan, Duration::ZERO, |f| done.lock().unwrap().push(f.join(" ")), || done.lock().unwrap().push("reload".into()), || done.lock().unwrap().push("told".into()));
+        assert_eq!(*done.lock().unwrap(), ["/w/a.meno", "reload"]);
+        assert!(state.held().later_said.is_none());
+        assert_eq!(state.hold_opens(vec!["/w/a.meno".into()]), vec!["/w/a.meno".to_string()]);
+    }
+
+    #[test]
+    fn a_save_over_the_file_being_written_waits_for_that_write_and_is_refused_only_past_the_limit() {
+        let (state, first, write, _) = stopped_while_writing("Route.meno", &[]);
+        let second = state.saving("Route.meno".into());
+        assert_eq!(state.write_begins(Some(second)), Ok(Some(second)));
+        // past the limit, while the first is still being written: refused, in true words
+        assert_eq!(
+            state.write_after_left("Route.meno", Some(second), Duration::ZERO),
+            Err("Route.meno is still being written by the save made as Meno's window stopped; save again once that save has ended".into())
+        );
+        // another file, or the first write itself: at once
+        assert_eq!(state.write_after_left("Other.meno", Some(second), Duration::ZERO), Ok(()));
+        assert_eq!(state.write_after_left("Route.meno", Some(first), Duration::ZERO), Ok(()));
+        // within it: written only after the first write has ended
+        let order: Arc<Mutex<Vec<&str>>> = Arc::default();
+        let (waits, written) = (state.clone(), order.clone());
+        let later = std::thread::spawn(move || {
+            waits.write_after_left("Route.meno", Some(second), Duration::from_secs(60)).unwrap();
+            written.lock().unwrap().push("second written");
+        });
+        order.lock().unwrap().push("first ended");
+        drop(write);
+        later.join().unwrap();
+        assert_eq!(*order.lock().unwrap(), ["first ended", "second written"]);
+    }
+
+    #[test]
+    fn close_shows_its_message_once_the_save_has_ended_and_then_exits() {
+        let (state, _, mut write, _) = stopped_while_writing("Route.meno", &[]);
+        // a second stop soon after: closed
+        state.held().started_again = Some(Instant::now());
+        let token = state.saving("Route.meno".into());
+        state.write_begins(Some(token)).unwrap();
+        let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
+        assert_eq!(plan.then, Then::CloseAgain);
+        write.ended(true);
+        drop(write);
+        let second = mark(&state, token);
+        let done: Arc<Mutex<Vec<String>>> = Arc::default();
+        let (runs, seen) = (state.clone(), done.clone());
+        let run = std::thread::spawn(move || {
+            let (show, exit) = (seen.clone(), seen.clone());
+            run_close(&runs, plan, Duration::from_secs(60), move |w| show.lock().unwrap().push(w), move || exit.lock().unwrap().push("exit".into()));
+        });
+        drop(second);
+        run.join().unwrap();
+        assert_eq!(
+            *done.lock().unwrap(),
+            [
+                "Meno's window stopped working again, soon after it was started again. What was not saved is lost. Route.meno was being saved, and Meno cannot tell whether that save was finished: look at Route.meno before saving over it. Meno will close.".to_string(),
+                "exit".to_string()
+            ]
+        );
+        // and past its limit, without waiting longer: said so, and exits all the same
+        let (state, _, _write, mut plan) = stopped_while_writing("Route.meno", &[]);
+        plan.then = Then::CloseGone;
+        let done = Mutex::new(Vec::new());
+        run_close(&state, plan, Duration::ZERO, |w| done.lock().unwrap().push(w), || done.lock().unwrap().push("exit".into()));
+        assert_eq!(
+            *done.lock().unwrap(),
+            [
+                "Meno's window stopped working. What was not saved is lost. Route.meno was being saved, and that save had not ended: once Meno is started again, open Route.meno to see what it holds. Meno will close.".to_string(),
+                "exit".to_string()
+            ]
         );
     }
 

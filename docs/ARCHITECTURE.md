@@ -329,8 +329,15 @@ The page itself can stop under Meno: the system takes its process away
   - still being written: said at once that what came of it is said once it
     has ended ("Route.meno was being saved: what came of that save is said
     here once it has ended."). That file is not opened again till then -
-    the rest are, at once - so that no tab holds the file as it was before
-    while the save puts the new one in its place. Once it has ended (waited
+    the rest are, at once - nor is it opened meanwhile by any way the
+    chemist opens it (Open, a drop, a double-click from outside: the page
+    asks first, `page_hold_opens`): each is opened once, after the write's
+    end, as saved, so that no tab holds the file as it was before while
+    the save puts the new one in its place. A save over that file meanwhile
+    - Save As onto it from another tab - waits on the back end for that
+    write's end, never writing alongside it, at most as long; past it, it
+    is refused: "Route.meno is still being written by the save made as
+    Meno's window stopped; save again once that save has ended". Once it has ended (waited
     for at most `REOPEN_WAIT`, ten minutes, as a large file to a slow disk
     may take), it is opened again and what it is said after the first words
     (`page_came_back_later`, told by `page-came-back`): finished, did not

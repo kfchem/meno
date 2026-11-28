@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameBack, saveTokenFor, sayCameBack, tellOpenFiles, whileSaving } from "./pageBack";
+import { cameBack, openableNow, saveTokenFor, sayCameBack, tellOpenFiles, whileSaving } from "./pageBack";
 
 type Heard = (event: string, handler: () => void) => Promise<() => void>;
 
@@ -119,6 +119,19 @@ describe("what the page tells the app as it goes", () => {
     tellOpenFiles(["/w/a.meno"], to);
     tellOpenFiles(["/w/a.meno", "/w/b.meno"], to);
     tellOpenFiles([], to);
-    expect(asked.filter(([c]) => c === "page_files").map(([, a]) => a.paths)).toEqual([["/w/a.meno"], ["/w/a.meno", "/w/b.meno"], []]);
+    const sent = asked.filter(([c]) => c === "page_files");
+    expect(sent.map(([, a]) => a.paths)).toEqual([["/w/a.meno"], ["/w/a.meno", "/w/b.meno"], []]);
+    // (each with its number, in its turn: the app lets an older list be)
+    const numbers = sent.map(([, a]) => a.told as number);
+    expect(numbers).toEqual([...numbers].sort((a, b) => a - b));
+    expect(new Set(numbers).size).toBe(3);
+  });
+
+  it("opens now only what the app does not hold back, and everything where it cannot be asked", async () => {
+    const to = async (command: string, args: Record<string, unknown>) =>
+      command === "page_hold_opens" ? (args.paths as string[]).filter((p) => !p.endsWith("Route.meno")) : null;
+    expect(await openableNow(["/w/a.meno", "/w/Route.meno"], to)).toEqual(["/w/a.meno"]);
+    expect(await openableNow(["/w/a.meno", "/w/Route.meno"], () => Promise.reject(new Error("no app")))).toEqual(["/w/a.meno", "/w/Route.meno"]);
+    expect(await openableNow([], to)).toEqual([]);
   });
 });

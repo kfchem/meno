@@ -15,15 +15,16 @@ import { savedPaths } from "./doc/savers";
 type Send = (command: string, args: Record<string, unknown>) => Promise<unknown>;
 const send: Send = (command, args) => invoke(command, args);
 
-/** The last list of files told, so that the same list is not told again. */
+/** The last list of files told, so that the same list is not told again; and how many have been, each list sent with its number. */
 let told: string | undefined;
+let lists = 0;
 
 /** The files the window's tabs hold now (lib/doc/savers), told to the app where they changed. */
 export function tellOpenFiles(paths: readonly string[] = savedPaths(), to: Send = send): void {
   const key = JSON.stringify(paths);
   if (key === told) return;
   told = key;
-  void to("page_files", { paths: [...paths] }).catch(() => {});
+  void to("page_files", { paths: [...paths], told: ++lists }).catch(() => {});
 }
 
 /** The last part of `path`, as a file's name. */
@@ -93,4 +94,16 @@ export function sayCameBack(say: (words: string) => void, to: Send = send, hear:
     gone = true;
     stop?.();
   };
+}
+
+/**
+ * Of the workspace files to open - picked in Open, dropped, double-clicked -
+ * those to open now: the app holds back the file whose save was being
+ * written as the page stopped, and opens it once that write has ended, as
+ * saved. All of them where the app cannot be asked.
+ */
+export async function openableNow(paths: readonly string[], to: Send = send): Promise<string[]> {
+  if (!paths.length) return [];
+  const now = (await to("page_hold_opens", { paths: [...paths] }).catch(() => null)) as string[] | null;
+  return Array.isArray(now) ? now : [...paths];
 }

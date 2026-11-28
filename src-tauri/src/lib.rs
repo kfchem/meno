@@ -1379,6 +1379,7 @@ pub fn run() {
             pagestop::page_saving,
             pagestop::page_saved,
             pagestop::page_files,
+            pagestop::page_hold_opens,
             pagestop::page_came_back,
             pagestop::page_came_back_later,
             // Meno as the default app for them, chosen in Settings

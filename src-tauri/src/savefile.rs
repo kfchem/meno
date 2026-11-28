@@ -80,7 +80,17 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         let app = app.clone();
         crate::pagestop::Mark::new(move |written| app.state::<crate::pagestop::PageStop>().write_ends(token, written))
     });
+    let stops = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // (a file the stopped page's save is still writing: this write after it, never alongside it - pagestop.rs)
+        //  (by the name the page gave it, as the page names its saves)
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if let Err(e) = stops.state::<crate::pagestop::PageStop>().write_after_left(&name, save, crate::pagestop::REOPEN_WAIT) {
+            if let Some(mark) = mark.as_mut() {
+                mark.ended(false);
+            }
+            return Err(e);
+        }
         let done = replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most));
         if let Some(mark) = mark.as_mut() {
             mark.ended(done.is_ok());
