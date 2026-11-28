@@ -8,6 +8,7 @@ import { editorLayoutOptions, layoutAtomOf, layoutBonds } from "./layoutOptions"
 import { degrees, narrowEnd } from "./chem/drawing";
 import { bondKindStepPatch, singleRoundPatch } from "./utils/bondKinds";
 import type { Atom, Bond } from "./store/types";
+import { stepsOf } from "../../../testing/steps";
 
 type M = { atoms: Atom[]; bonds: Bond[] };
 
@@ -223,24 +224,16 @@ describe("a drawing laid out a structure at a time", () => {
     expect(layoutByStructure(marked, bonds, opts, ZOOM, structureLayouts())).toEqual(layoutMolecule(marked, bonds, opts, ZOOM));
   });
 
-  it("lays out one structure of a thousand moved in a small share of the time the thousand take", () => {
+  it("lays out one structure of a thousand moved in a small share of the work the thousand take", () => {
     const m = row(Array.from({ length: 40 }, () => cholesterol), 3, 25);
     const { atoms, bonds } = laidOut(m);
     const kept = structureLayouts();
-    const cpu = (f: () => void) => {
-      const c = process.cpuUsage();
-      f();
-      const d = process.cpuUsage(c);
-      return (d.user + d.system) / 1000;
-    };
-    const all = cpu(() => layoutByStructure(atoms, bonds, opts, ZOOM, kept));
+    const all = stepsOf(() => layoutByStructure(atoms, bonds, opts, ZOOM, kept));
     const n = cholesterol.atoms.length;
-    let one = Infinity;
-    for (let k = 1; k <= 5; k++) {
-      const moved = atoms.map((a, i) => (i < n ? { ...a, x: a.x + 0.1 * k } : a));
-      one = Math.min(one, cpu(() => layoutByStructure(moved, bonds, opts, ZOOM, kept)));
-    }
-    // (28 000 atoms: about 2 s whole on this machine, about 20 ms for one structure)
+    const moved = atoms.map((a, i) => (i < n ? { ...a, x: a.x + 0.1 } : a));
+    const one = stepsOf(() => layoutByStructure(moved, bonds, opts, ZOOM, kept));
+    // (counted, not timed: the drawing split into structures again, each of the 999 not moved taken as it was laid out,
+    //  the one moved laid out again; laid out again, all thousand would be)
     expect(one).toBeLessThan(all / 20);
   }, 120_000);
 });

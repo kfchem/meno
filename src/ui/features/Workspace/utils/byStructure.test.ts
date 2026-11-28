@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { unsureOf, type Unsure } from "../chem/drawing";
 import type { Atom, Bond, Model } from "../store/types";
 import { byStructure, structureValues } from "./byStructure";
+import { stepsOf } from "../../../../testing/steps";
 
 const at = (id: number, deg: number, from = { x: 0, y: 0 }): Atom => ({ id, el: "C", x: from.x + 1.5 * Math.cos((deg * Math.PI) / 180), y: from.y + 1.5 * Math.sin((deg * Math.PI) / 180) }) as Atom;
 
@@ -66,21 +67,14 @@ describe("what is made of each structure of a drawing", () => {
     expect(unsureOf(spread, kept).atoms).toEqual(new Set([100]));
   });
 
-  it("works out one structure of a thousand moved in a small share of the time the thousand take", () => {
+  it("works out one structure of a thousand moved in a small share of the work the thousand take", () => {
     const m = join(...Array.from({ length: 1000 }, (_, k) => fan(100 * (k + 1), 10 * k)));
     const kept = structureValues<Unsure>();
-    const cpu = (f: () => void) => {
-      const c = process.cpuUsage();
-      f();
-      const d = process.cpuUsage(c);
-      return (d.user + d.system) / 1000;
-    };
-    const all = cpu(() => unsureOf(m, kept));
-    let one = Infinity;
-    for (let k = 1; k <= 5; k++) {
-      const moved = { ...m, atoms: m.atoms.map((a) => (a.id === 101 ? { ...a, x: a.x + 0.01 * k } : a)) };
-      one = Math.min(one, cpu(() => unsureOf(moved, kept)));
-    }
-    expect(one).toBeLessThan(all / 3);
+    const all = stepsOf(() => unsureOf(m, kept));
+    const moved = { ...m, atoms: m.atoms.map((a) => (a.id === 101 ? { ...a, x: a.x + 0.01 } : a)) };
+    const one = stepsOf(() => unsureOf(moved, kept));
+    // (counted, not timed: the 999 structures not moved are taken as they were - each looked up, its atoms and bonds
+    //  seen to be the same objects - and the one moved is worked out again; worked out again, all thousand would be)
+    expect(one).toBeLessThan(all / 20);
   });
 });
