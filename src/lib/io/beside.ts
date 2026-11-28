@@ -5,6 +5,20 @@
  * rule for all Meno exports: the canvas's, and a text's.
  */
 
+/**
+ * A file's name, or a path, as a file of another kind: its own ending -
+ * the kind of file it was - gone, the new one in its place ("ethanol.mol"
+ * as "ethanol.png", "a/b.log" as "a/b.mov"). A name with no ending has the
+ * new one added; what only looks like one - "compound 3.1", digits alone -
+ * is no ending, and stays. A calculation's job named after its file
+ * ("opt.log, job 2") loses its file's ending likewise ("opt, job 2.png").
+ * One rule for every name Meno suggests for a file of another kind.
+ */
+export function withEnding(name: string, ext: string): string {
+  const ending = /\.(?=[0-9]*[A-Za-z])[A-Za-z0-9]{1,8}(?=(, job \d+)?$)/;
+  return `${name.replace(ending, "")}.${ext}`;
+}
+
 /** `path` numbered `n`, its extension kept: "a/b.inp" as "a/b-2.inp"; "a/README" as "a/README-2". */
 export function numbered(path: string, n: number): string {
   const ext = /\.[^.\\/]*$/.exec(path)?.[0] ?? "";

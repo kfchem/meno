@@ -1217,7 +1217,16 @@ many jobs filled the column). Of several, it shows the first, and a
 compact chooser in the column's header - *Job 2 of 12 · failed* -
 shows another in its place, followed while it runs; the jobs and the one
 shown are kept with the workspace (`TextOf.jobs`, `job`). Run again, it
-shows the first of its new jobs. A log is a text of the workspace like
+shows the first of its new jobs. Only a job under way is followed: the
+log of one ended - or of a workspace opened again, or of a step whose
+results were cleared - is shown as it is, and never changes unasked, nor
+leaves the workspace unsaved while another step runs; where nothing can
+be read of a job's log, what its text shows stays. Looking at a log is
+no edit: *Show log* - and another of its jobs chosen in the chooser -
+leaves the workspace as saved, or as unsaved, as it was, and makes no
+step to undo (Undo takes back the chemist's own last step, the log
+staying open); the log is kept with the workspace at the next save made
+for any reason. A log is a text of the workspace like
 any other,
 but with no sheet on the page: its step is its body, and it rises out of
 the step's card into the column, and goes back into it as the column

@@ -55,7 +55,7 @@ import { readerClient } from "../../../lib/calc/workers";
 import { writtenAtoms, writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { writeXyz, xyzComment } from "../../../lib/chem/xyzWriter";
-import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
+import { firstFreeBeside, takenBeside, withEnding } from "../../../lib/io/beside";
 import { greatest, least } from "../../../lib/chem/lists";
 import { layoutByStructure, structureLayouts } from "../../../lib/chem/layoutStructures";
 import { STYLE_3D, type Style3D } from "../../../lib/chem/style3d";
@@ -108,10 +108,8 @@ export function exportKinds(what: Holds): WriterId[] {
   return ["mol", "sdf", ...pdb, "svg"];
 }
 
-/** `path` with the extension `ext` in place of its own. */
-function withExtension(path: string, ext: string): string {
-  return `${path.replace(/\.[^.\\/]*$/, "")}.${ext}`;
-}
+/** `path` with the extension `ext` in place of its own (lib/io/beside `withEnding`). */
+const withExtension = withEnding;
 
 /** How a workspace's file is written, each part given apart where tests give their own (`writtenWhere`). */
 export type SaveWays = {

@@ -341,7 +341,13 @@ without sound. A film is a picture whose media is `video/mp4`: it is
 moved, made larger, turned, selected, copied, deleted and saved with the
 workspace as any picture is. Its menu offers **Pause** or **Play** and
 **Save film…**; a picture's, **Save picture…**. A film is not copied as a
-picture for other programs.
+picture for other programs. A render of one molecule is named after it -
+after the file it came from, that file's ending gone: a render of
+`ethanol.mol` is `ethanol.png` or `ethanol.mp4` - and is offered to be
+saved under that name, as the kind of file it is saved as (`ethanol.mov`
+for a film with transparency); of several, *Render*. Every name Meno
+offers for a file of another kind - Export, Save As, a render - is made
+by one rule (`lib/io/beside` `withEnding`).
 
 ### A film on a transparent background
 

@@ -32,7 +32,8 @@ import { isMatte, type Matte } from "../../../../lib/picture/matte";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { style3dOf } from "../style3dOf";
 import type { EditorStore } from "../store";
-import type { PictureItem } from "../store/types";
+import type { Molecule3D, PictureItem } from "../store/types";
+import { withEnding } from "../../../../lib/io/beside";
 import { pictureToAdd } from "../utils/pictures";
 import { freePlace, pageBoxes } from "../utils/freePlace";
 import { PX } from "../workflow/look";
@@ -391,7 +392,14 @@ export function stopRenders(store: EditorStore): Promise<void> {
 
 /** What a render is called: after the molecule rendered, where it is one with a name. */
 function renderName(store: EditorStore, ids: readonly number[], extension: string): string {
-  const ms = store.getState().molecules3d.filter((m) => ids.includes(m.id));
+  return renderFileName(store.getState().molecules3d.filter((m) => ids.includes(m.id)), extension);
+}
+
+/**
+ * What a render of `ms` is called: after the one molecule it shows - the file it came from, that file's ending gone
+ * (lib/io/beside `withEnding`: "ethanol.mol" rendered as "ethanol.png", never "ethanol.mol.png") - or else *Render*.
+ */
+export function renderFileName(ms: readonly Pick<Molecule3D, "name">[], extension: string): string {
   const named = ms.length === 1 && ms[0].name ? ms[0].name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80) : "";
-  return `${named || "Render"}.${extension}`;
+  return named ? withEnding(named, extension) : `Render.${extension}`;
 }

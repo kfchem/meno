@@ -65,7 +65,7 @@ import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { DrawnModel, DrawnRecord, EditorState, JobSeen, Model, Molecule3D, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { DrawnModel, DrawnRecord, EditorState, JobSeen, Model, WorkspaceText, Molecule3D, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, CANVAS_LOOK, finishEntry, looksOffered } from "../../render/renderOptions";
 import { handOff, stepRefused, withPresets } from "../../render/presets";
 import { progressOf, SCENE } from "../../render/renders";
@@ -1860,10 +1860,43 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const t = (doc.getState().texts ?? []).find((x) => x.id === text);
     if (!t?.of || !("step" in t.of)) return;
     const step = t.of.step;
-    doc.amend((x) => ops.setTextOf(ops.editText(x, text, all || "(Nothing yet)"), text, { step, ...(jobs.length > 1 ? { jobs, job: k } : {}) }), { unsaved: true });
+    // (a job under way: what it says is the run's, to be saved; one ended only looked at - another of its jobs chosen
+    // in the chooser, say - leaves the workspace as saved, or as unsaved, as it was)
+    const underWay = stepOf(doc.getState(), step)?.running?.jobs.some((j) => j.id === jobs[k]);
+    doc.amend((x) => ops.setTextOf(ops.editText(x, text, all || "(Nothing yet)"), text, { step, ...(jobs.length > 1 ? { jobs, job: k } : {}) }), underWay ? { unsaved: true } : {});
     for (const [job, at] of [...shown]) if (at === text) shown.delete(job);
+    // (followed only while its step runs it: the log of a job ended - or not known in this session, a workspace opened
+    // again, its results cleared - is looked at, not followed, and its text never changes unasked, nor the workspace with it)
     const seen = get().jobsSeen[jobs[k]];
-    if (!seen || !finished(seen.state)) shown.set(jobs[k], text);
+    if (underWay && (!seen || !finished(seen.state))) shown.set(jobs[k], text);
+  }
+
+  /**
+   * A step's log, looked at for the first time, added to the workspace as what is learnt of it, not done to it
+   * (`DocumentStore.amend`, as a log followed is written): no step to undo, and the workspace left as saved - or as
+   * unsaved - as it was; kept with it at the next save made for any reason. In every state its history holds, under
+   * one id none of them uses, so that an undo or a redo keeps it, its column still showing it. Its id.
+   */
+  function lookedAt(text: WorkspaceText): number {
+    // (one step, one log: where a state holds the step's log already - one closed since, back by an undo - that one, brought up to date)
+    const step = text.of && "step" in text.of ? text.of.step : null;
+    const logOf = (x: WorkspaceDocument) => (step == null ? undefined : (x.texts ?? []).find((t) => !t.at && t.of && "step" in t.of && t.of.step === step));
+    let held: number | null = null;
+    let id = text.id;
+    doc.amend((x) => {
+      held ??= logOf(x)?.id ?? null;
+      id = Math.max(id, x.nextTextId ?? 0, ...(x.texts ?? []).map((t) => t.id + 1));
+      return x;
+    });
+    if (held != null) id = held;
+    const kept = { ...text, id };
+    doc.amend((x) => {
+      const log = logOf(x);
+      if (!log) return { ...x, texts: [...(x.texts ?? []), kept], nextTextId: Math.max(x.nextTextId ?? 0, id + 1) };
+      if (log.text === kept.text && log.name === kept.name && JSON.stringify(log.of) === JSON.stringify(kept.of)) return x;
+      return { ...x, texts: x.texts!.map((t) => (t === log ? { ...log, name: kept.name, text: kept.text, of: kept.of } : t)) };
+    });
+    return id;
   }
 
   /** The texts that show a job's log, followed: what it has said since, added - with no step to undo, and to be kept when the workspace is saved. */
@@ -1876,7 +1909,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       }
       const seen = get().jobsSeen[job];
       const all = await wholeLog(job);
-      if (all !== t.text) doc.amend((x) => ops.editText(x, text, all), { unsaved: true });
+      // (nothing read - none written yet, or none there to read: what it shows stays)
+      if (all && all !== t.text) doc.amend((x) => ops.editText(x, text, all), { unsaved: true });
       if (seen && finished(seen.state)) shown.delete(job);
     }
   }
@@ -2345,17 +2379,16 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (open) {
         last = open.id;
         // (a log of one of several jobs as it was named before - *Optimise log 1* - named as the step's log now)
-        if (open.name !== `${name} log`) doc.amend((x) => ({ ...x, texts: (x.texts ?? []).map((t) => (t.id === open.id ? { ...t, name: `${name} log` } : t)) }), { unsaved: true });
+        if (open.name !== `${name} log`) doc.amend((x) => ({ ...x, texts: (x.texts ?? []).map((t) => (t.id === open.id ? { ...t, name: `${name} log` } : t)) }));
         const of = open.of as { step: number; jobs?: string[]; job?: number };
         // (its jobs as they are now - run again since: the first shown; one job: its log as it is now)
         if (!several || JSON.stringify(of.jobs) !== JSON.stringify(jobs)) await showLogJob(open.id, jobs, 0);
       } else {
         const text = await wholeLog(jobs[0], step);
         const made = ops.addTexts(doc.getState(), [{ name: `${name} log`, text: text || "(Nothing yet)", of: { step: id, ...(several ? { jobs, job: 0 } : {}) } }]);
-        if (made.doc !== doc.getState()) doc.edit("open text", () => made.doc);
         if (made.last == null) return;
-        last = made.last;
-        if (step.running) shown.set(jobs[0], made.last);
+        last = made.doc !== doc.getState() ? lookedAt(made.doc.texts!.find((t) => t.id === made.last)!) : made.last;
+        if (step.running) shown.set(jobs[0], last);
       }
       // (rising out of its step into the column, where the column is not showing it already)
       set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, conversationShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });

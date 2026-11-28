@@ -38,6 +38,7 @@ import { sha256Hex } from "../../../../lib/binary/sha256";
 import type { CalcSource } from "../../../../lib/calc/output";
 import { JOB, readWorkflow, type SavedWorkflow } from "../workflow/saved";
 import { withKeptJobs, type JobsKept } from "../workflow/keptJobs";
+import { withEnding } from "../../../../lib/io/beside";
 
 export const WORKSPACE = "meno-workspace";
 /** The version a workspace's JSON is written at: 2 since sets keep their members (docs/FILE-IO.md, *The workspace file*). */
@@ -339,7 +340,7 @@ function picturesToKeep(pictures: readonly PictureItem[]): { kept: KeptData[]; n
     // (a film on a transparent background: its film with transparency beside it, once)
     if (!p.forSlides || seen.has(p.forSlides) || kept.some((k) => k.sha256 === p.forSlides)) continue;
     const slides = pictureBytes(p.forSlides);
-    const name = p.name.replace(/\.mp4$/i, "") + ".mov";
+    const name = withEnding(p.name, "mov");
     if (slides) kept.push({ sha256: p.forSlides, name, media: FILM_FOR_SLIDES, data: slides });
     else notKept.push({ sha256: p.forSlides, name, media: FILM_FOR_SLIDES });
   }
@@ -440,7 +441,7 @@ export function keptNamedIn(text: string): KeptName[] {
     ...ws.texts.map((t) => ({ sha256: t.sha256, name: t.name, media: "text/plain" })),
     ...ws.pdfs.map((p) => ({ sha256: p.sha256, name: p.name, media: "application/pdf" })),
     ...(ws.drawn.pictures ?? []).map((p) => ({ sha256: p.sha256, name: p.name, media: p.media })),
-    ...(ws.drawn.pictures ?? []).flatMap((p) => (p.forSlides ? [{ sha256: p.forSlides, name: p.name.replace(/\.mp4$/i, "") + ".mov", media: FILM_FOR_SLIDES }] : [])),
+    ...(ws.drawn.pictures ?? []).flatMap((p) => (p.forSlides ? [{ sha256: p.forSlides, name: withEnding(p.name, "mov"), media: FILM_FOR_SLIDES }] : [])),
   ];
 }
 

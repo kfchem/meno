@@ -84,4 +84,32 @@ describe("tab reducer", () => {
     expect(reducer(s, { type: "RENAME_TAB", id: "x", label: "y" })).toBe(s);
     expect(reducer(s, { type: "PATCH_DATA", id: "x", patch: {} })).toBe(s);
   });
+
+  it("brings only a tab that is open to the front: one gone already leaves the one in front as it is, never a page with none", () => {
+    const s = reducer(withTabs("a", "b"), { type: "SELECT_TAB", id: "a" });
+    expect(reducer(s, { type: "SELECT_TAB", id: "gone" })).toBe(s);
+    expect(reducer(s, { type: "SELECT_TAB", id: "b" }).activeId).toBe("b");
+  });
+
+  it("keeps every open tab in the bar, whatever order it is told - one added or put in another's place meanwhile included", () => {
+    // (an order taken before "d" was added, and with "b" twice: "d" kept at the end, "b" once)
+    const s = reducer(withTabs("a", "b", "c", "d"), { type: "REORDER", order: ["c", "b", "a", "b"] });
+    expect(s.tabOrder).toEqual(["c", "b", "a", "d"]);
+    // (one put in another's place - a file opened over a blank canvas - while a drag's order still names the one it replaced)
+    let r = reducer(withTabs("a", "b"), { type: "REPLACE_TAB", id: "a", tab: tab("n") });
+    r = reducer(r, { type: "REORDER", order: ["b", "a"] });
+    expect(r.tabOrder).toEqual(["b", "n"]);
+    expect(Object.keys(r.tabsById).sort()).toEqual(["b", "n"]);
+  });
+
+  it("closing a page brings the tab beside it to the front - Settings among them - and opens no new one", () => {
+    let s = reducer(withTabs("w1", "settings", "w2"), { type: "SELECT_TAB", id: "w2" });
+    s = reducer(s, { type: "CLOSE_TAB", id: "w2" });
+    expect(s.activeId).toBe("settings");
+    expect(s.tabOrder).toEqual(["w1", "settings"]);
+    s = reducer(s, { type: "SELECT_TAB", id: "w1" });
+    s = reducer(s, { type: "CLOSE_TAB", id: "w1" });
+    expect(s.activeId).toBe("settings");
+    expect(s.tabOrder).toEqual(["settings"]);
+  });
 });

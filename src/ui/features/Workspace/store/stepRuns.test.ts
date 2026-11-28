@@ -211,7 +211,7 @@ function editor() {
   const step = st().addStep("optimise", "tightbind", 10, 0);
   st().connect({ set }, step);
   doc.markSaved();
-  return { doc, st, step };
+  return { doc, st, step, store };
 }
 
 const settle = () => new Promise((go) => setTimeout(go, 0));
@@ -1339,6 +1339,89 @@ describe("a step that runs a plugin's program", () => {
     expect(st().textFlight).toBeNull();
     const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
     expect(ws?.texts.find((t) => t.name === log.name)?.of).toEqual({ step });
+  });
+
+  it("shows its log, looked at, as no edit: the workspace as saved, no step to undo - the chemist's own last step what undo takes back - and kept at the next save", async () => {
+    const { doc, st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" }, log: "cycle 1\n" });
+    await st().lookAtJobs();
+    await ran;
+    // (a real edit of the chemist's, then saved)
+    st().updateStep(step, { options: { method: "tb1", solvent: "none", level: "normal" } });
+    doc.markSaved();
+    const before = doc.history();
+    await st().showStepLog(step);
+    const log = st().texts.find((t) => t.name.endsWith("log"))!;
+    expect(log.text).toBe("cycle 1\n");
+    expect(doc.history()).toMatchObject({ dirty: false, undoDepth: before.undoDepth, undoLabel: before.undoLabel });
+    // (undo: the chemist's last step taken back - the log still there, its column still showing it)
+    expect(doc.undo()).toBe(true);
+    expect(st().steps.find((x) => x.id === step)!.options).not.toMatchObject({ method: "tb1" });
+    expect(st().texts.find((t) => t.id === log.id)?.text).toBe("cycle 1\n");
+    expect(st().textShown).toBe(log.id);
+    expect(doc.redo()).toBe(true);
+    expect(st().texts.find((t) => t.id === log.id)?.text).toBe("cycle 1\n");
+    // (one real edit, and saved: the file holds the log)
+    st().updateStep(step, { options: { method: "tb2", solvent: "none", level: "normal" } });
+    expect(doc.history().dirty).toBe(true);
+    const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
+    expect(ws?.texts.find((t) => t.name === log.name)?.of).toEqual({ step });
+    expect(st().texts.find((t) => t.id === log.id)?.text).toBe("cycle 1\n");
+  });
+
+  it("keeps one log for a step: shown twice, one text; shown, closed and shown again, one log of the step in every state an undo or a redo comes to", async () => {
+    const { doc, st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" }, log: "cycle 1\n" });
+    await st().lookAtJobs();
+    await ran;
+    const logsOf = () => st().texts.filter((t) => t.of && "step" in t.of && t.of.step === step);
+    await st().showStepLog(step);
+    await st().showStepLog(step);
+    expect(logsOf()).toHaveLength(1);
+    const first = logsOf()[0].id;
+    st().removeText(first);
+    expect(logsOf()).toHaveLength(0);
+    // (its job's log grown meanwhile: shown again, as it is now)
+    jobs.get(idOf(1))!.log = "cycle 1\ncycle 2\n";
+    await st().showStepLog(step);
+    expect(logsOf()).toMatchObject([{ id: first, text: "cycle 1\ncycle 2\n" }]);
+    // (back past the close, and on again: one log of the step every time, under one id)
+    while (doc.undo()) expect(logsOf().map((t) => t.id)).toEqual([first]);
+    while (doc.redo()) expect(logsOf().map((t) => t.id)).toEqual([first]);
+  });
+
+  it("shows the log of a step that is not running as it is - looked at, not followed: its workspace left as saved while another step runs", async () => {
+    const { doc, st, step, store } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+    // (as in a workspace opened again: none of its jobs looked at - and the job's folder gone, its results cleared)
+    store.setState({ jobsSeen: {} });
+    jobs.delete(idOf(1));
+    await st().showStepLog(step);
+    await st().showStepLog(step);
+    const log = st().texts.find((t) => t.name.endsWith("log"))!;
+    expect(log.text).toBe("(Nothing yet)");
+    // (saved; then another step runs, its jobs looked at - and nothing done to this workspace)
+    const other = st().addStep("optimise", "tightbind", 30, 0);
+    st().connect({ set: st().sets[0].id }, other);
+    void st().runStep(other);
+    await settle();
+    await settle();
+    doc.markSaved();
+    await st().lookAtJobs();
+    await st().lookAtJobs();
+    expect(st().texts.find((t) => t.id === log.id)!.text).toBe("(Nothing yet)");
+    expect(doc.history().dirty).toBe(false);
   });
 
   it("shows the log of a step of several jobs in one text - the first, then another chosen - never a text for each", async () => {

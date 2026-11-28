@@ -141,6 +141,24 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
 
 - `tabOrder` is the visual order in the title bar; `mountOrder` is the stable
   render order so reordering tabs never remounts a WebGL canvas.
+- No tab is refused unseen in three ways it once was: `SELECT_TAB` takes
+  only a tab that is open (one gone meanwhile leaves the one in front as
+  it is, never a window with no page); `REORDER` keeps every open tab in
+  the bar once, whatever order a drag gives (one added or put in another's
+  place during it comes after the rest); and a drag of a tab is over at
+  every way it ends - its own end, its pointer let go or cancelled
+  anywhere on the window, the window left, Escape - in one place
+  (`ui/layouts/tabDrag` `endDrag`, `watchDragEnds`), a press by the same
+  pointer the last guard, so that no drag left marked under way refuses
+  the tabs pressed after it. A drag ended by Escape or by the window left,
+  its pointer still down, goes no further: the tab back in its place, no
+  other order taken from it, its release choosing nothing. A new primary
+  pointer of the drag's kind going down - a touch is primary only with no
+  other on the screen - finds a drag whose end never came over, and is a
+  press; a second pointer pressing during a drag chooses nothing and
+  leaves that drag as it is. Closing the tab in front
+  brings the one beside it forward - on its right, else on its left - and
+  opens none.
 - `Deck` renders **all** open tabs and hides the inactive ones; views receive an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
   `frameloop` to `"never"`) while inactive. (Workflow tabs, whose nodes held
