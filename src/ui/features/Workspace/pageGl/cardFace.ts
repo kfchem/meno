@@ -40,6 +40,9 @@ export const CARD = {
   shadow: { blurPx: 2, offsetYPx: 1, alpha: 0.05 },
 } as const;
 
+/** How wide its words' column is, in page px: beside its icons, inside its padding and hair. */
+export const WORDS_COL = CARD.w - 2 * CARD.hair - 2 * CARD.side - CARD.icon - CARD.gap;
+
 /** A state's tone: quiet (grey), Meno's colour (done, running), or attention (failed, refused). */
 export type CardTone = "quiet" | "base" | "attention";
 export const TONE: Record<CardTone, string> = { quiet: COLORS.quiet, base: COLORS.base, attention: COLORS.attention };
@@ -99,9 +102,9 @@ const wordLines = (text: string, sizePx: number, maxPx: number): string[] => wra
  * A step's line in lines no wider than `maxPx`, broken only between its parts (joined by " · "; the dot at the end of
  * the line, or where it does not fit there, at the start of the next), so that a count stays with its words: "rest 1",
  * "2 of 3 entries kept", a time. A part wider than a line by itself runs on and breaks among its own words, as
- * `wordLines` lays it. The words are those of `text`, nothing put in.
+ * `wordLines` lays it - or `inside` does. The words are those of `text`, nothing put in.
  */
-export function partLines(text: string, sizePx: number, maxPx: number): string[] {
+export function partLines(text: string, sizePx: number, maxPx: number, inside: (text: string, sizePx: number, maxPx: number) => string[] = wordLines): string[] {
   const parts = text.split(" \u00b7 ");
   const lines: string[] = [];
   let line = "";
@@ -116,7 +119,7 @@ export function partLines(text: string, sizePx: number, maxPx: number): string[]
     }
     // (a part that fits a line by itself starts the next; one wider than a line - or than a line with its dot - runs on where it is, broken among its words)
     const alone = line !== "\u00b7" && textWidth(part, sizePx) <= maxPx + 1e-6;
-    const laid = alone ? [...(line ? [line] : []), part] : wordLines(on, sizePx, maxPx);
+    const laid = alone ? [...(line ? [line] : []), part] : inside(on, sizePx, maxPx);
     lines.push(...laid.slice(0, -1));
     line = laid[laid.length - 1] ?? "";
   });
@@ -124,10 +127,39 @@ export function partLines(text: string, sizePx: number, maxPx: number): string[]
   return lines;
 }
 
+/**
+ * Words in lines no wider than `maxPx`, broken only after the commas of a list ("too many bonds, no electrons") or a
+ * part's dot, so that each of its items stays whole; an item wider than a line by itself runs on and breaks among its
+ * own words.
+ */
+export function listLines(text: string, sizePx: number, maxPx: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  text.split(/(?<=[,\u00b7]) /).forEach((item) => {
+    const on = line ? `${line} ${item}` : item;
+    if (textWidth(on, sizePx) <= maxPx + 1e-6) return void (line = on);
+    const laid = line && textWidth(item, sizePx) <= maxPx + 1e-6 ? [line, item] : wordLines(on, sizePx, maxPx);
+    lines.push(...laid.slice(0, -1));
+    line = laid[laid.length - 1] ?? "";
+  });
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** The most lines a step's setting takes on its card: past them, only a text far longer than any option says, the last cut with an ellipsis. */
+export const SETTING_MOST = 4;
+
+/**
+ * What a step does and how, on its card (its setting): whole, on as many lines as it needs, broken as its state is -
+ * between its parts (`partLines`), and inside a part only between the items of a list it names, never inside one, where
+ * that part alone is wider than a line. Only a setting past `SETTING_MOST` lines is cut.
+ */
+export const settingLines = (text: string, maxPx: number): string[] => clamped(text, 11, maxPx, SETTING_MOST, (t, size, max) => partLines(t, size, max, listLines));
+
 /** How a card's words lie: each block's lines and the card's height, in page px (`cardFace`). */
 export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "progress" | "high">): { summary: string[]; state: string[]; height: number; words: number } {
-  const col = CARD.w - 2 * CARD.hair - 2 * CARD.side - CARD.icon - CARD.gap;
-  const summary = clamped(c.summary, 11, col, 2);
+  const col = WORDS_COL;
+  const summary = settingLines(c.summary, col);
   const state = stateLines(c.state.text, col);
   const words = CARD.top + CARD.whoLine + summary.length * CARD.line + CARD.stateTop + state.length * CARD.line + (c.said ? CARD.line : 0) + (c.progress != null ? CARD.barTop + CARD.bar : 0) + CARD.bottom;
   // (its words in a grid at least as tall as a card, inside its hair of padding: as its HTML, StepCard)

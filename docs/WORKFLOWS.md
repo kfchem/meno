@@ -164,7 +164,10 @@ in 3D, arrows, text - and is made of three things:
   on its left edge too.
 - **Steps.** A small card: who does it (*xTB*), with the icon of what it
   does; below it, what it does and how (*Optimise · GFN2-xTB*), whole, on
-  two lines where it needs them; and what it is doing (*Ready*, *Running
+  as many lines as it needs - broken between its parts, and inside a part
+  only between the items of a list it names (*too many bonds, no
+  electrons*), never inside one; only a setting past four lines, a text
+  far longer than any option says, is cut - and what it is doing (*Ready*, *Running
   0:42*), with its state's icon under the first. It takes on its left
   edge and gives on its right.
 - **Wires.** Curves from port to port, leaving and arriving level; while
@@ -2506,7 +2509,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   and no larger than its name needs.
 - **Steps' cards**: the icons in a column of their own - what it does,
   and its state's beside its state - and no rule; what it does and how,
-  whole, on two lines where it needs them. A step Meno does may say its
+  whole, on the lines it needs, four at most, broken as its state is
+  (pageGl/cardFace `settingLines`). A step Meno does may say its
   options its own way (*Choose one*: *Lowest in energy*, *Number 3*).
 - **Chips on the page** (*How it looks*): drawn at the page's scale -
   `--page`, set on the layer the page's HTML is drawn in as the zoom
@@ -3363,8 +3367,8 @@ page could not be read after one run.
     there, so nothing on the page moves. One a wire from a step's exit
     brought goes close by that step's card instead (place `placeNext`,
     *A step added from an exit*). A card is kept clear of, and put down,
-    as tall as its words can draw it closed (look `CARD_TALL`, 135 px:
-    what it does and its state each on two lines, what its program said,
+    as tall as its words can draw it closed (look `CARD_TALL`, 167 px:
+    what it does on four lines and its state on two, what its program said,
     its bar) - not as tall as its ports reach (`CARD_H`), which its words
     can outgrow. A card the chemist drags lands
     where they let it go. Put down

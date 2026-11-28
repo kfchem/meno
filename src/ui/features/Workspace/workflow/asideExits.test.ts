@@ -176,8 +176,8 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     const plain = filter();
     expect(placeBelow(plain, 0, 0, CARD_W, CARD_H).y1).toBeLessThanOrEqual(-CARD_TALL - BETWEEN + 1e-9);
     expect(placeCard(plain, 0, 0).y).toBeLessThanOrEqual(-CARD_TALL - BETWEEN + 1e-9);
-    // (as tall as the tallest card is drawn closed - pageGl/cardFace: its words cut at two lines each, a line said, a bar)
-    const long = "words long enough to run past two lines of a card, and on past them, and on past them again";
+    // (as tall as the tallest card is drawn closed - pageGl/cardFace: what it does cut past four lines, its state past two, a line said, a bar)
+    const long = "words long enough to run past two lines of a card, and on past them, and on past them again, and again past four of them";
     expect(CARD_TALL / PX).toBe(cardLines({ summary: long, state: { text: long, tone: "quiet" }, said: "x", progress: 0 }).height);
     // (a card put down above a set it would reach, drawn as tall as its words can draw it: lower)
     const under = addSet(emptyWorkspaceDocument(), { x0: 0, y0: below - CARD_H, x1: CARD_W, y1: below });

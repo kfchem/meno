@@ -13,6 +13,7 @@ import { cardHighOf, type KindInfo, type StepKind } from "./kinds";
 import { CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
 import { cardState } from "./cardState";
 import { COPYABLE } from "../hooks/useKeepUnselected";
+import { settingLines, WORDS_COL } from "../pageGl/cardFace";
 
 /**
  * A port's look (docs/WORKFLOWS.md, *How it looks*): as it is; or, while a
@@ -220,8 +221,13 @@ export default function StepCard(p: StepCardProps) {
             </span>
             <span className="h-5 truncate text-[13px] font-medium leading-5 text-gh-black">{p.who}</span>
             <span />
-            <span className="text-[11px] leading-4 text-gh-gray line-clamp-2" title={summary}>
-              {summary}
+            {/* (laid as its face lays it, pageGl/cardFace `settingLines`: whole, broken between its parts, the face under it the same) */}
+            <span className="text-[11px] leading-4 text-gh-gray" title={summary}>
+              {settingLines(summary, WORDS_COL).map((l, i) => (
+                <span key={i} className="block whitespace-nowrap">
+                  {l}
+                </span>
+              ))}
             </span>
             <span className={clsx("mt-1.5 flex h-4 items-center transition-colors duration-200 ease-meno", line.tone)}>
               {line.Icon && <line.Icon className={clsx("h-3.5 w-3.5", line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
