@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { pairsMarked, readSmiles } from "./smiles";
+import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { identityText } from "./identity";
+import { cipInput } from "./cip/testdata/cipFrom";
 
 describe("a double bond's cis or trans, read from SMILES", () => {
   // (OpenSMILES: a neighbour written before its end with "/" lies below it,
@@ -248,5 +251,51 @@ describe("a metal's square-planar or octahedral mark, read as which neighbours a
     expect(across("[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH3]4.[NH3]5.Cl6")).toEqual(["Cl-Cl", "N-N", "N-N"]);
     // (two N joined only by a chain of eight atoms - a ring of ten with the metal, as a porphyrin's opposite N - may be across)
     expect(across("[Co@OH1+]123456.[NH2]1CCCCCCCC[NH2]6.Cl2.Cl3.[NH3]4.[NH3]5")).toEqual(["Cl-N", "Cl-N", "N-N"]);
+  });
+});
+
+describe("a ring carbon whose charge and H are stated (a bracket's [cH+], [cH-])", () => {
+  // (a carbocation of two ring bonds and its H has its three bonds, and an empty p orbital: no double bond; a carbanion's
+  //  likewise, its lone pair in the ring. Where the rest of the ring cannot then alternate, it is refused, never given a
+  //  fourth bond at the cation)
+  const ofSmiles = (text: string) => {
+    const s = readSmiles(text);
+    return { atoms: s.atoms, bonds: s.bonds, at: s.atoms.findIndex((a) => a.charge) };
+  };
+  const ordersAt = (text: string) => {
+    const { atoms, bonds, at } = ofSmiles(text);
+    const orders = kekuleOrders(atoms, bonds);
+    return bonds.flatMap((b, k) => (b.a1 === at || b.a2 === at ? [orders[k]] : []));
+  };
+  it("gives a tropylium's, a cyclopentadienyl cation's and a cyclopentadienide's charged carbon only single bonds", () => {
+    expect(ordersAt("c1cccc[cH+]c1")).toEqual([1, 1]);
+    expect(ordersAt("[cH+]1cccc1")).toEqual([1, 1]);
+    expect(ordersAt("c1ccc[cH-]1")).toEqual([1, 1]);
+    expect(aromaticRefusal(ofSmiles("c1cccc[cH+]c1").atoms, ofSmiles("c1cccc[cH+]c1").bonds)).toBeNull();
+  });
+  it("never gives a ring carbocation a fourth bond: rings of six and eight with one [cH+] are refused", () => {
+    for (const text of ["c1cc[cH+]cc1", "c1cccc[cH+]cc1"]) {
+      expect(ordersAt(text)).toEqual([1, 1]);
+      const { atoms, bonds } = ofSmiles(text);
+      expect(aromaticRefusal(atoms, bonds)).toEqual(atoms.map((_, i) => i));
+    }
+  });
+  it("gives a substituted tropylium's charged carbon no double bond, and a phenyl cation's its one", () => {
+    expect(ordersAt("c1cccc[c+](C)c1").filter((o) => o === 2)).toEqual([]);
+    expect(ordersAt("[c+]1ccccc1").filter((o) => o === 2)).toEqual([2]);
+  });
+});
+
+describe("a three-membered ring's N written with a hand", () => {
+  // (Meno keeps an aziridine's N as a centre only with a halogen, an O or an N beside it (lib/chem/lonePairCentres): a plain
+  //  N-alkyl one is a conformer's to find, and its hand is refused with the reason, never dropped unsaid)
+  it("refuses a plain N-methyl aziridine's hand, saying why", () => {
+    expect(() => readSmiles("C[C@H]1C[N@]1C")).toThrow(/a N of three neighbours keeps no configuration of its own/);
+  });
+  it("reads an N-chloro aziridine's N, its two hands two isomers", () => {
+    const [p, q] = [readSmiles("C[C@H]1[N@](Cl)C1"), readSmiles("C[C@H]1[N@@](Cl)C1")];
+    expect(p.atoms[2].tetra && q.atoms[2].tetra).toBeTruthy();
+    expect(p.atoms[2].tetra!.volume).toBe(-q.atoms[2].tetra!.volume);
+    expect(identityText(cipInput("C[C@H]1[N@](Cl)C1"))).not.toBe(identityText(cipInput("C[C@H]1[N@@](Cl)C1")));
   });
 });

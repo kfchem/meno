@@ -574,7 +574,10 @@ shown. A SMILES alone is drawn as before, nothing said under it. An
 aromatic SMILES that cannot be given single and double bonds as written
 is refused wherever it is typed, never read by adding an H nobody wrote:
 c1cccc1 (cyclopentadiene's ring written aromatic), c1ccnc1 (pyrrole
-without its [nH]), c1cncn1 - "its aromatic ring of 5 atoms (1, 2, 3, 4
+without its [nH]), c1cncn1, c1cc[cH+]cc1 (a ring carbon written as a
+cation with its H has its three bonds and takes no double bond - never a
+fourth bond at the C+ - so the five carbons left cannot alternate; a
+tropylium's c1cccc[cH+]c1 can) - "its aromatic ring of 5 atoms (1, 2, 3, 4
 and 5) cannot have alternating double bonds: is a charge or an H
 missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
 plugin that reads SMILES refuses it). A bond written with no symbol between

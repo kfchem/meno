@@ -225,8 +225,12 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     const charge = atoms[i]?.charge ?? 0;
     const hs = atoms[i]?.hs;
     // (a charged carbon, a tropylium's or a cyclopentadienide's: as the ring needs - and a silabenzene's Si, a germabenzene's
-    //  Ge, as carbon)
-    if (el === "C" || el === "Si" || el === "Ge") return charge ? "may" : "needs";
+    //  Ge, as carbon. One whose H is stated has its bonds fixed by it: a [cH+] or a [cH-] of two ring bonds has its three,
+    //  and takes no double bond - never a fourth bond at a carbocation)
+    if (el === "C" || el === "Si" || el === "Ge") {
+      if (!charge) return "needs";
+      return hs != null && implicitHydrogens(el, degree[i] + hs, charge) <= 0 ? "never" : "may";
+    }
     if (PNICTOGENS.has(el)) {
       // a pyrrole-type N-H that says so takes none; nor an azolide's [n-], which lends its pair as that N-H's N does
       if (degree[i] === 2 && charge <= 0 && hs != null && hs > 0) return "never";
