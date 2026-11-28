@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pairsMarked, readSmiles } from "./smiles";
 import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { smilesInput } from "../layout/smilesInput";
 import { identityText } from "./identity";
 import { cipInput } from "./cip/testdata/cipFrom";
 
@@ -279,6 +280,14 @@ describe("a ring carbon whose charge and H are stated (a bracket's [cH+], [cH-])
       const { atoms, bonds } = ofSmiles(text);
       expect(aromaticRefusal(atoms, bonds)).toEqual(atoms.map((_, i) => i));
     }
+    // (typed, it says where to look: the atom written with an H and a charge - its H may be one too many; the phenyl cation
+    //  is c1cc[c+]cc1, read with its double bond)
+    expect(() => smilesInput("c1cc[cH+]cc1")).toThrow(
+      "This SMILES could not be read: its aromatic ring of 6 atoms (1, 2, 3, 4, 5 and 6) cannot have alternating double bonds as written: atom 4 is written with an H and a charge, which leave no room for a double bond",
+    );
+    expect(() => smilesInput("c1cc[c+]cc1")).not.toThrow();
+    // (a refusal of the same kind with no such atom keeps its words)
+    expect(() => smilesInput("c1cccc1")).toThrow(/cannot have alternating double bonds: is a charge or an H missing\?$/);
   });
   it("gives a substituted tropylium's charged carbon no double bond, and a phenyl cation's its one", () => {
     expect(ordersAt("c1cccc[c+](C)c1").filter((o) => o === 2)).toEqual([]);
@@ -287,7 +296,7 @@ describe("a ring carbon whose charge and H are stated (a bracket's [cH+], [cH-])
 });
 
 describe("a three-membered ring's N written with a hand", () => {
-  // (Meno keeps an aziridine's N as a centre only with a halogen, an O or an N beside it (lib/chem/lonePairCentres): a plain
+  // (Meno keeps an aziridine's N as a centre only with a halogen, an O or an N beside it (perception/stereo/lonePairs): a plain
   //  N-alkyl one is a conformer's to find, and its hand is refused with the reason, never dropped unsaid)
   it("refuses a plain N-methyl aziridine's hand, saying why", () => {
     expect(() => readSmiles("C[C@H]1C[N@]1C")).toThrow(/a N of three neighbours keeps no configuration of its own/);

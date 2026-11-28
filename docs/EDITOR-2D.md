@@ -574,13 +574,17 @@ shown. A SMILES alone is drawn as before, nothing said under it. An
 aromatic SMILES that cannot be given single and double bonds as written
 is refused wherever it is typed, never read by adding an H nobody wrote:
 c1cccc1 (cyclopentadiene's ring written aromatic), c1ccnc1 (pyrrole
-without its [nH]), c1cncn1, c1cc[cH+]cc1 (a ring carbon written as a
-cation with its H has its three bonds and takes no double bond - never a
-fourth bond at the C+ - so the five carbons left cannot alternate; a
-tropylium's c1cccc[cH+]c1 can) - "its aromatic ring of 5 atoms (1, 2, 3, 4
+without its [nH]), c1cncn1 - "its aromatic ring of 5 atoms (1, 2, 3, 4
 and 5) cannot have alternating double bonds: is a charge or an H
 missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
-plugin that reads SMILES refuses it). A bond written with no symbol between
+plugin that reads SMILES refuses it). A ring carbon written as a cation
+or an anion with its H, [cH+] or [cH-], has its three bonds and takes no
+double bond - never a fourth bond at the C+ - so where the rest of its
+ring cannot alternate, it is refused, saying where to look:
+c1cc[cH+]cc1 - "its aromatic ring of 6 atoms (1, 2, 3, 4, 5 and 6) cannot
+have alternating double bonds as written: atom 4 is written with an H
+and a charge, which leave no room for a double bond" (the phenyl cation
+is c1cc[c+]cc1; a tropylium's c1cccc[cH+]c1 is read). A bond written with no symbol between
 two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
 joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
 is single, and each ring is read as its own. A bond written aromatic

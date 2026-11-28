@@ -186,8 +186,20 @@ export function ringCannotAlternate(atoms: readonly number[]): string {
   return `its aromatic ring of ${ring.length} ${ring.length === 1 ? "atom" : "atoms"} (${listed}) cannot have alternating double bonds`;
 }
 
-/** What typed input is told where Meno's own reader refuses its aromatic ring (`ringCannotAlternate`): what is likely left out of it. */
-export const typedRingRefused = (atoms: readonly number[]) => `${ringCannotAlternate(atoms)}: is a charge or an H missing?`;
+/**
+ * What typed input is told where Meno's own reader refuses its aromatic ring (`ringCannotAlternate`): where an atom of the ring is
+ * written with both an H and a charge (`chargedWithH`, by place, as c1cc[cH+]cc1's [cH+]), that this leaves it no double bond -
+ * the place to look, since its H may be one too many as well as one too few; else what is likely left out of it.
+ */
+export function typedRingRefused(atoms: readonly number[], chargedWithH: readonly number[] = []): string {
+  const at = chargedWithH.filter((a) => atoms.includes(a)).sort((a, b) => a - b);
+  if (!at.length) return `${ringCannotAlternate(atoms)}: is a charge or an H missing?`;
+  const listed = at.length === 1 ? `atom ${at[0] + 1} is` : `atoms ${at.slice(0, -1).map((a) => a + 1).join(", ")} and ${at[at.length - 1] + 1} are`;
+  return `${ringCannotAlternate(atoms)} as written: ${listed} written with an H and a charge, which leave no room for a double bond`;
+}
+
+/** The atoms written with both an H and a charge (a bracket's [cH+], [cH-]), by place: where `typedRingRefused` says to look. */
+export const chargedWithH = (atoms: readonly { hs?: number; charge?: number }[]): number[] => atoms.flatMap((a, i) => (a.hs && a.charge ? [i] : []));
 
 /** What the plugin that fills the SMILES role says when it cannot read one: its words, before Meno's why. */
 export const NOT_READ = "This SMILES could not be read.";
