@@ -1755,8 +1755,12 @@ to be able to work with nothing going out at all.
   which the proxy holds it by from the moment it is opened, so nothing goes
   out on it unshown or off the record. Each time it is held from rest is a
   task of its own (a spell), and a connection's bytes count under the spell
-  it was opened in, which lasts as long as that connection is open - a
-  request made while one is still open joins that spell. The last hold let
+  they flow in. A connection holds its spell while bytes move on it, or a
+  request waits; kept open for reuse and quiet for two seconds (`net.rs`
+  `QUIET`) with no request waiting, it lets go - the spell ends with its
+  answer, its notice going - and is on the record as done for then. Bytes
+  on it again begin a spell of their own before they are carried, and it
+  is on the record again under that spell. The last hold let
   go, the spell ends and its notice goes as any finished task's does:
   failed where anything in it went wrong (an answer that said `"ok":
   false`, a connection that failed or was refused, a request made while
