@@ -478,20 +478,19 @@ pub(crate) fn may_take_from(from: &Path, via: Option<&Path>, target: Option<&Pat
     if may_read(from) {
         return true;
     }
-    let Some(original) = copy_of(from) else { return false };
     let real = |p: &Path| crate::savefile::real_target(p).ok();
-    may_read(&original) || target.is_some_and(|t| real(t).as_deref() == Some(original.as_path())) || via.is_some_and(|v| may_read(v) && (v == original || real(v).as_deref() == Some(original.as_path())))
+    copy_of(from).into_iter().any(|original| {
+        may_read(&original) || target.is_some_and(|t| real(t).as_deref() == Some(original.as_path())) || via.is_some_and(|v| may_read(v) && (v == original || real(v).as_deref() == Some(original.as_path())))
+    })
 }
 
-/// The file `path` is a copy of, kept beside it by a save (`copies_beside`): none where it is not one.
-pub(crate) fn copy_of(path: &Path) -> Option<PathBuf> {
-    let name = path.file_name()?.to_str()?;
-    let stem = name.strip_suffix(".bak")?;
-    let stem = match stem.rsplit_once('.') {
-        Some((s, n)) if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && s.to_ascii_lowercase().ends_with(".meno") => s,
-        _ => stem,
-    };
-    (!stem.is_empty()).then(|| path.with_file_name(stem))
+/// The files `path` may be a copy of, kept beside one by a save - each file whose copies `copies_beside` would name
+/// it among, whatever that file's name (`x.2.bak` is the copy `.2` of `x`, and the first copy of `x.2`): none where
+/// it is no such copy.
+pub(crate) fn copy_of(path: &Path) -> Vec<PathBuf> {
+    let Some(stem) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".bak")) else { return Vec::new() };
+    let numbered = stem.rsplit_once('.').and_then(|(s, n)| n.parse::<usize>().ok().filter(|&k| (1..MOST_COPIES_LOOKED_IN).contains(&k) && n == k.to_string()).map(|_| s));
+    [Some(stem), numbered].into_iter().flatten().filter(|s| !s.is_empty()).map(|s| path.with_file_name(s)).collect()
 }
 
 /// Whether the workspace file in `sources` at `from` holds `a` - by its
@@ -1440,8 +1439,8 @@ mod tests {
             holding(&target, &[]);
             holding(&root.join("large.meno.bak"), &[(&sha, &out)]);
             assert_eq!(all(&asked(&sha, out.len(), &[])), found("large.meno.bak"));
-            assert_eq!(copy_of(&root.join("large.meno.bak")), Some(target.clone()));
-            assert_eq!(copy_of(&root.join("large.meno.3.bak")), Some(target.clone()));
+            assert_eq!(copy_of(&root.join("large.meno.bak")), vec![target.clone()]);
+            assert!(copy_of(&root.join("large.meno.3.bak")).contains(&target));
             fs::remove_file(root.join("large.meno.bak")).unwrap();
             // (the file gone: from the file the workspace was opened from)
             fs::remove_file(&target).unwrap();
@@ -1922,5 +1921,56 @@ mod tests {
         zip::ZipArchive::new(Cursor::new(out)).unwrap().by_name(&format!("files/{sha}")).unwrap().read_to_end(&mut back).unwrap();
         assert_eq!(back, bytes);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_save_through_a_link_takes_a_kept_file_from_a_numbered_copy_beside_a_real_file_of_any_name() {
+        let root = temp("own-link-any-name");
+        let real_dir = root.join("real");
+        fs::create_dir_all(&real_dir).unwrap();
+        // (the real file's name does not end in .meno)
+        let real = real_dir.join("notes.zip");
+        let link = root.join("w.meno");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let bytes = vec![7u8; 3_000];
+        let sha = hex(&Sha256::digest(&bytes));
+        // (the only copy in a numbered copy a save kept beside the real file)
+        holding(&real, &[]);
+        holding(&real_dir.join("notes.zip.2.bak"), &[(&sha, &bytes)]);
+        let readable = |p: &Path| p == link;
+        let w = kept_where(&link, Some(&link), std::slice::from_ref(&link), &[asked_kept(&sha, None)], None, false, readable);
+        let f = w.found[0].clone().unwrap();
+        let (from, via) = (PathBuf::from(f.from.unwrap()), f.via.map(PathBuf::from));
+        assert_eq!(from, real_dir.join("notes.zip.2.bak"));
+        // (what the lookup named, the write takes)
+        assert!(may_take_from(&from, via.as_deref(), Some(&link), readable));
+        // (and a copy beside some other file, not)
+        assert!(!may_take_from(&real_dir.join("other.zip.2.bak"), via.as_deref(), Some(&link), readable));
+        // (the job files' lookup names only what the write takes, too)
+        let job = found_where(&link, &[asked(&sha, bytes.len(), &[&link])], &[], false, readable).remove(0).unwrap();
+        assert!(may_take_from(Path::new(&job.from.unwrap()), job.via.as_deref().map(Path::new), Some(&link), readable));
+        // (and the save written holds it whole)
+        let appended = vec![Appended { from: Some(from.clone()), via: via.clone(), ..kept(&sha, "image/png") }];
+        let out = append_job_files(Cursor::new(base_zip("{}")), &[], &appended).unwrap().into_inner();
+        let mut back = Vec::new();
+        zip::ZipArchive::new(Cursor::new(out)).unwrap().by_name(&format!("files/{sha}")).unwrap().read_to_end(&mut back).unwrap();
+        assert_eq!(back, bytes);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn every_copy_the_lookup_names_maps_back_to_its_file_whatever_its_name() {
+        let dir = Path::new("/d");
+        for name in ["a.meno", "notes.zip", "plain", "x.1", "v.2.meno"] {
+            let place = dir.join(name);
+            for n in 0..MOST_COPIES_LOOKED_IN {
+                let copy = dir.join(if n == 0 { format!("{name}.bak") } else { format!("{name}.{n}.bak") });
+                assert!(copy_of(&copy).contains(&place), "{} is not taken as a copy of {}", copy.display(), place.display());
+            }
+        }
+        // (not a copy of anything)
+        assert!(copy_of(&dir.join("a.meno")).is_empty());
+        assert!(copy_of(&dir.join(".bak")).is_empty());
     }
 }
