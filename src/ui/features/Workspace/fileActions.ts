@@ -5,7 +5,7 @@ import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow } from "../../../lib/jobs";
 import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
-import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, noteJobFilesSaved, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
@@ -978,6 +978,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       );
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
+      // (its job files, from now on copied by Meno from the file just written - never read back into the page by the next save)
+      await noteJobFilesSaved(kept, at.jobs);
       // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
       //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
       //  docs/WORKFLOWS.md, *A job's folder*)

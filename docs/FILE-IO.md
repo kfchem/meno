@@ -1245,9 +1245,14 @@ left out, with its size.
   another computer has its jobs' files in the `.meno` it was opened from.
   Saved again, Meno reads them from that file as the new one is written -
   each checked against its SHA-256 - while that file is still as it was
-  opened (its size and when it was written). Where it has changed, or the
-  workspace was opened with no path, they are kept from what was held of
-  it as it was opened, through the page.
+  opened (its size and when it was written). Each save then notes the file
+  it has just written, as it is, as where every job file it holds is: the
+  next save reads them from that file in the same way, so that the second
+  save of a session, and every one after, costs the page what the first
+  did - never every job file read back into the page and packed again.
+  Where the file has changed since, or the workspace was opened with no
+  path, they are kept from what was held of it as it was opened, through
+  the page.
 - **Raw outputs can name this computer.** A program's output and its logs
   often hold the user's name, the folders it ran in and the computer's
   name: Gaussian and ORCA print the host they ran on, for one. Meno never
