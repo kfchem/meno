@@ -19,25 +19,27 @@ import { fillsAmong } from "./rings";
 import { styleOf, type StyleChoice } from "../../../../lib/chem/style";
 import { POINT, pointFor } from "../../../../lib/pdf/layout";
 import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
-import type { Carried3D, Drawn, EditorState, LostText, Member, Molecule3D, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
+import type { Carried3D, Drawn, EditorState, Member, Molecule3D, PdfItem, PictureItem, TextOf } from "../store/types";
 import { collectionHash, setMembers } from "../workflow/entries";
 import { shownIn } from "../workflow/heldView";
 import { pdfBytes } from "../../../../lib/pdf/reader";
 import { readPdfsAt } from "./pdfItems";
 import { anyLeftOut, leftOut, noting, type LeftOut } from "./readNotes";
 import { readStructureMaps, type StructureMap } from "../chem/structureMaps";
-import { pictureBytes } from "../../../../lib/picture/held";
+import { pictureBytes, pictureBytesNow } from "../../../../lib/picture/held";
 import { FILM_FOR_SLIDES } from "../../../../lib/picture/image";
 import { placesRead, readDrawn } from "./copyPaste";
-import { calcShowing, heldOutput, outputsToKeep, sha256Of } from "../../../../lib/calc/asks";
+import { calcShowing, heldOutput, outputBytes, sha256Of } from "../../../../lib/calc/asks";
 import { writeMenoFile } from "../../../../lib/doc/menoFileWriter";
-import { readMenoFile, type KeptData, type KeptName, type MenoFile } from "../../../../lib/doc/menoFile";
-import { readFile } from "@tauri-apps/plugin-fs";
+import type { KeptFile, KeptName } from "../../../../lib/doc/menoFile";
+import { isTauri } from "@tauri-apps/api/core";
+import { keptFilesWhere, type AskedKeptFile } from "../../../../lib/jobs";
+import type { Appended } from "../../../../lib/io/writeDocument";
 import { markNotHad } from "../../../../lib/doc/notHad";
 import { sha256Hex } from "../../../../lib/binary/sha256";
 import type { CalcSource } from "../../../../lib/calc/output";
 import { JOB, readWorkflow, type SavedWorkflow } from "../workflow/saved";
-import { withKeptJobs, type JobsKept } from "../workflow/keptJobs";
+import { jobFilesNamed, jobFilesNotHadSaid, withKeptJobs, type JobsKept, type Piece } from "../workflow/keptJobs";
 
 export const WORKSPACE = "meno-workspace";
 /** The version a workspace's JSON is written at: 2 since sets keep their members (docs/FILE-IO.md, *The workspace file*). */
@@ -223,174 +225,141 @@ function outputKept<M extends Pick<Molecule3D, "calc">>(m: M, kept: ReadonlySet<
 }
 
 /**
- * A workspace's file as Save writes it: its bytes, and the files it has
- * that could not be had to keep - each by its name; and whether the file it
- * was last saved to may hold something of those still (`lastHolds`): it has
- * one of them in it, damaged, or it does not read as a workspace at all -
- * so that, saved over, it is kept beside the new one (fileActions).
+ * A workspace's file as Save writes it: its bytes - its JSON and the list of
+ * the files it keeps, and nothing else - and the files Meno adds to it from
+ * the disk as it is written (`appended`, src-tauri keptjobs.rs), with where
+ * those found nowhere else were set down as the page sent them (`staged`:
+ * the save's own; none where none was) and about what they all add
+ * (`adds`); the files it has that could not be had to keep - each by its
+ * name; and whether the file it was last saved to may hold something of
+ * those still (`lastHolds`): it has one of them in it, damaged, or it does
+ * not read as a workspace at all - so that, saved over, it is kept beside
+ * the new one (fileActions).
  */
-export type SavedFile = { bytes: Uint8Array; notKept: string[]; lastHolds: boolean };
+export type SavedFile = { bytes: Uint8Array; notKept: string[]; lastHolds: boolean; appended: Appended[]; staged: string | null; pending: Piece[]; adds: number };
+
+/** How a save finds and sends the files a workspace keeps, each part given apart where tests give their own. */
+export type KeptWays = {
+  /** Where it is saved to: where Meno looks first, as the file is now. None, the file it was last saved to. */
+  target?: string | null;
+  /** Whether each place is read whole for each file, and checked (`keptFilesWhere`) - a save made again once one changed as it was written. */
+  whole?: boolean;
+  where?: typeof keptFilesWhere;
+};
+
+/** A file a workspace keeps, as a save asks for it: what the file lists of it, where it may be, and how the page has its bytes - read only where Meno finds it nowhere. */
+type Wanted = KeptName & { asked: AskedKeptFile; bytes: () => Promise<Uint8Array | null> };
+
+/** Where nothing finds the files: outside Meno's app, as in a test given none. */
+const NOWHERE: typeof keptFilesWhere = async (_t, _s, _p, asked) => ({ found: asked.map(() => null), holds: false });
 
 /**
- * The canvas as its workspace file: its JSON, every output its molecules
- * were read from that can be had - held this session, or where it was -
- * its texts, its PDFs and its pictures. One not held - a PDF Meno could not
- * open, a picture or an output held nowhere - is taken from the file the
- * canvas was last saved to, or opened from (`savedPath`), where that holds
- * it whole: read before the new file takes its place, and only where
- * something would else be left out, so that a save never drops a file
- * still to be had. One to be had from nowhere - damaged, or in neither -
- * is not kept, and named (`notKept`): the workspace is saved without it,
- * so that nothing new is lost for it, and its JSON still has it where it
- * lay - by what it is known by, which its file does not hold - so that,
- * opened again, it is named again, never taken for one that is there.
- * Given what a save keeps of its steps' jobs (`jobs`, workflow/keptJobs):
- * a list of their files, whose bytes Meno adds from the disk as it is
- * written (src-tauri keptjobs.rs) - never any of them packed by the page.
+ * The canvas as its workspace file: its JSON, and, by their SHA-256, every
+ * output its molecules were read from, its texts, its PDFs and its
+ * pictures - each added by Meno from wherever it finds it whole (src-tauri
+ * keptjobs.rs `kept_files_where`): the file saved to as it is now, the file
+ * the canvas was last saved to or opened from (`savedPath`), a copy kept
+ * beside either, an output's own file where it was, the PDFs Meno holds -
+ * never read into the page. Only one found nowhere is sent from what the
+ * page holds of it - one at a time, once the save is to be written, set
+ * down by Meno before the file is (`pending`, workflow/keptJobs
+ * `sendPieces`), never held after - so that the page never holds more
+ * than one of them beyond what it held already. One to be had from nowhere -
+ * damaged, or held nowhere - is not kept, and named (`notKept`): the
+ * workspace is saved without it, so that nothing new is lost for it, and its
+ * JSON still has it where it lay - by what it is known by, which its file
+ * does not hold - so that, opened again, it is named again, never taken for
+ * one that is there. Given what a save keeps of its steps' jobs (`jobs`,
+ * workflow/keptJobs): a list of their files, whose bytes Meno adds from the
+ * disk as it is written too.
  */
-export async function workspaceFile(state: Saved & { savedPath?: string | null }, jobs?: JobsKept): Promise<SavedFile> {
+export async function workspaceFile(state: Saved & { savedPath?: string | null }, jobs?: JobsKept, ways: KeptWays = {}): Promise<SavedFile> {
+  const { whole = false, where = isTauri() ? keptFilesWhere : NOWHERE } = ways;
+  const savedPath = state.savedPath ?? null;
+  const target = ways.target ?? savedPath;
   // (the outputs they were read from, and the wavefunctions kept with them)
   // (a large result set's molecules too: they are on no page - WorkflowSet.collection)
   const molecules = [...state.molecules3d, ...(state.sets ?? []).flatMap((b) => (b.keep === false ? [] : (b.collection ?? [])))];
   const sources = molecules.flatMap((m): CalcSource[] => [m.calc?.source, m.calc?.wavefunction].filter((s): s is CalcSource => !!s));
-  const outputs = await outputsToKeep(sources);
-  const texts = await textsToKeep(state.texts ?? []);
-  const pdfs = await pdfsToKeep(state.pdfs ?? []);
-  const pictures = picturesToKeep(state.pictures ?? []);
-  const lost = await lostToKeep(state.textsLost ?? [], new Set([...outputs.kept, ...texts].map((k) => k.sha256)));
-  const wanting: KeptName[] = [
-    ...outputs.notKept.map((s) => ({ sha256: s.sha256, name: s.name, ...(s.kind ? { kind: s.kind } : {}), media: "text/plain" })),
-    ...lost.notKept,
-    ...pdfs.notKept,
-    ...pictures.notKept,
-  ];
-  const { carried, holds } = wanting.length ? await carriedFrom(state.savedPath ?? null, wanting) : { carried: [], holds: false };
-  const had = new Set(carried.map((c) => c.sha256));
-  // (an output kept, carried or held, is said to be nowhere else)
-  const keptOutputs = new Set([...outputs.kept.map((k) => k.sha256), ...outputs.notKept.map((s) => s.sha256).filter((h) => had.has(h))]);
-  const bytes = await writeMenoFile(
-    workspaceText(state, keptOutputs, texts.map((t) => t.sha256), jobs?.records),
-    [...outputs.kept, ...texts, ...lost.kept, ...pdfs.kept, ...pictures.kept, ...carried],
-    jobs?.listed ?? [],
-  );
-  const notKept = wanting.filter((w) => !had.has(w.sha256));
-  return { bytes, notKept: notKept.map((w) => w.name), lastHolds: notKept.length > 0 && holds };
+  const wanted = new Map<string, Wanted>();
+  const want = (w: Wanted) => void (SHA.test(w.sha256) && !wanted.has(w.sha256) && wanted.set(w.sha256, w));
+  for (const s of sources)
+    want({ sha256: s.sha256, name: s.name, ...(s.kind ? { kind: s.kind } : {}), media: "text/plain", asked: { sha256: s.sha256, ...(s.path ? { at: s.path } : {}) }, bytes: () => outputBytes(s) });
+  // (the texts, each by the SHA-256 of its words: each made UTF-8 only while it is hashed - and sent, where it is found nowhere)
+  const texts: string[] = [];
+  for (const t of state.texts ?? []) {
+    const size = new TextEncoder().encode(t.text).length;
+    const sha256 = await sha256Of(t.text);
+    texts.push(sha256);
+    want({ sha256, name: t.name, media: "text/plain", asked: { sha256, size }, bytes: async () => new TextEncoder().encode(t.text) });
+  }
+  for (const t of state.textsLost ?? []) want({ sha256: t.sha256, name: t.name, media: "text/plain", asked: { sha256: t.sha256 }, bytes: () => outputBytes(t) });
+  for (const p of state.pdfs ?? []) want({ sha256: p.sha256, name: p.name, media: "application/pdf", asked: { sha256: p.sha256, pdf: true }, bytes: () => pdfHeld(p.sha256) });
+  for (const p of state.pictures ?? []) {
+    want({ sha256: p.sha256, name: p.name, media: p.media, asked: { sha256: p.sha256 }, bytes: async () => pictureBytesNow(p.sha256) });
+    // (a film on a transparent background: its film with transparency beside it, once)
+    if (p.forSlides) want({ sha256: p.forSlides, name: p.name.replace(/\.mp4$/i, "") + ".mov", media: FILM_FOR_SLIDES, asked: { sha256: p.forSlides }, bytes: async () => pictureBytesNow(p.forSlides!) });
+  }
+  const all = [...wanted.values()];
+  const places = savedPath && isWorkspaceFile(savedPath) ? [savedPath] : [];
+  const { found, holds } = all.length && target ? await where(target, savedPath && isWorkspaceFile(savedPath) ? savedPath : null, places, all.map((w) => w.asked), whole) : await NOWHERE("", null, [], all.map((w) => w.asked), whole);
+  const listed: KeptFile[] = [];
+  const appended: Appended[] = [];
+  const notKept: string[] = [];
+  const pending: Piece[] = [];
+  let staged: string | null = null;
+  let adds = 0;
+  for (const [k, w] of all.entries()) {
+    const { asked: _, bytes: read, ...named } = w;
+    const at = found[k];
+    if (at) {
+      listed.push({ ...named, size: at.size });
+      appended.push({ sha256: w.sha256, job: "", name: w.name, media: w.media, ...(at.from ? { from: at.from } : {}), ...(at.via ? { via: at.via } : {}), ...(at.at && w.asked.at ? { at: w.asked.at } : {}), ...(at.pdf ? { pdf: true as const } : {}) });
+      adds += at.packed;
+      continue;
+    }
+    // (found nowhere: to be sent from what the page holds of it - this one alone, read as it is sent once the save is to be
+    //  written (workflow/keptJobs `sendPieces`): whether it holds it, and its size, known now, its bytes let go)
+    const size = (await read())?.length;
+    if (size == null) {
+      notKept.push(w.name);
+      continue;
+    }
+    staged ??= crypto.randomUUID();
+    pending.push({ sha256: w.sha256, name: w.name, read });
+    listed.push({ ...named, size });
+    appended.push({ sha256: w.sha256, job: "", name: w.name, media: w.media, staged });
+    adds += size;
+  }
+  // (an output kept is said to be nowhere else)
+  const keptShas = new Set(appended.map((a) => a.sha256));
+  const keptOutputs = new Set(sources.map((s) => s.sha256).filter((h) => keptShas.has(h)));
+  const bytes = await writeMenoFile(workspaceText(state, keptOutputs, texts, jobs?.records), [], [...listed, ...(jobs?.listed ?? [])]);
+  return { bytes, notKept, lastHolds: notKept.length > 0 && holds, appended, staged, pending, adds };
 }
 
-/**
- * Of the files a workspace has that are held nowhere this session, each
- * that the workspace file at `path` - the one it was last saved to, or
- * opened from - holds whole, as that file has it (lib/doc/menoFile: what
- * its CRC-32 and its SHA-256 say), kept as it is known here; none where
- * there is no such file, or it is not one that reads. It is read as the
- * canvas reads and writes it - within the files Meno may reach, as Open or
- * Save gave them. And whether that file may still hold something of one
- * it does not hold whole (`holds`): it has it in it, damaged; or it is
- * there but does not read as a workspace.
- */
-async function carriedFrom(path: string | null, wanting: readonly KeptName[]): Promise<{ carried: KeptData[]; holds: boolean }> {
-  if (!path || !isWorkspaceFile(path)) return { carried: [], holds: false };
-  let bytes: Uint8Array;
-  try {
-    bytes = await readFile(path);
-  } catch {
-    // (not there, or not to be read: nothing of it to keep)
-    return { carried: [], holds: false };
-  }
-  let file: MenoFile;
-  try {
-    file = readMenoFile(bytes);
-  } catch {
-    return { carried: [], holds: true };
-  }
-  const carried: KeptData[] = [];
-  let holds = false;
-  for (const w of wanting) {
-    const data = file.data(w.sha256);
-    if (data) carried.push({ ...w, data });
-    else if (file.holds(w.sha256)) holds = true;
-  }
-  return { carried, holds };
+/** A PDF as Meno holds it (lib/pdf/reader), where it is what its SHA-256 says; one held damaged marked not had. */
+async function pdfHeld(sha256: string): Promise<Uint8Array | null> {
+  const data = await pdfBytes(sha256).catch(() => null);
+  if (data && sha256Hex(data) === sha256) return data;
+  if (data) markNotHad(sha256);
+  return null;
 }
 
 /**
  * What Save says of the files a workspace has that it could not keep, each
- * named (`workspaceFile`'s `notKept`) - none where it kept them all; and,
- * where the file saved over was kept beside the new one, as what (`kept`,
- * its name).
+ * named (`workspaceFile`'s `notKept`), and of its steps' job files it could
+ * have from nowhere, counted (`jobFiles`), in one sentence - none where it
+ * kept them all; and, where the file saved over was kept beside the new
+ * one, as what (`kept`, its name).
  */
-export function notKeptSaid(names: readonly string[], kept?: string | null): string | null {
-  if (!names.length) return null;
-  const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  const said = names.length === 1 ? `Saved, but ${listed} is not in the file: it could not be read.` : `Saved, but ${listed} are not in the file: they could not be read.`;
+export function notKeptSaid(names: readonly string[], kept?: string | null, jobFiles = 0): string | null {
+  const jobs = jobFilesNamed(jobFiles);
+  if (!names.length) return jobFilesNotHadSaid(jobFiles);
+  const all = jobs ? [...names, jobs] : names;
+  const listed = all.length === 1 ? all[0] : `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
+  const said = all.length === 1 ? `Saved, but ${listed} is not in the file: it could not be read.` : `Saved, but ${listed} are not in the file: they could not be read.`;
   return kept ? `${said} The file as it was is kept beside it as ${kept}.` : said;
-}
-
-/** The pictures as a workspace's file keeps them: each image as it is, once - those held this session (lib/picture/held); and those not. */
-function picturesToKeep(pictures: readonly PictureItem[]): { kept: KeptData[]; notKept: KeptName[] } {
-  const seen = new Map<string, PictureItem>();
-  for (const p of pictures) if (!seen.has(p.sha256)) seen.set(p.sha256, p);
-  const kept: KeptData[] = [];
-  const notKept: KeptName[] = [];
-  for (const p of seen.values()) {
-    const data = pictureBytes(p.sha256);
-    if (data) kept.push({ sha256: p.sha256, name: p.name, media: p.media, data });
-    else notKept.push({ sha256: p.sha256, name: p.name, media: p.media });
-    // (a film on a transparent background: its film with transparency beside it, once)
-    if (!p.forSlides || seen.has(p.forSlides) || kept.some((k) => k.sha256 === p.forSlides)) continue;
-    const slides = pictureBytes(p.forSlides);
-    const name = p.name.replace(/\.mp4$/i, "") + ".mov";
-    if (slides) kept.push({ sha256: p.forSlides, name, media: FILM_FOR_SLIDES, data: slides });
-    else notKept.push({ sha256: p.forSlides, name, media: FILM_FOR_SLIDES });
-  }
-  return { kept, notKept };
-}
-
-/** The PDFs as a workspace's file keeps them: each as it was, once, read from where Meno holds it (lib/pdf/reader); and those it holds no more. */
-async function pdfsToKeep(pdfs: readonly PdfItem[]): Promise<{ kept: KeptData[]; notKept: KeptName[] }> {
-  const seen = new Map<string, string>();
-  for (const p of pdfs) if (!seen.has(p.sha256)) seen.set(p.sha256, p.name);
-  const read = await Promise.all(
-    [...seen].map(async ([sha256, name]) => {
-      const data = await pdfBytes(sha256).catch(() => null);
-      // (held where Meno keeps its PDFs, on the disk: kept only if it is still what its SHA-256 says - never a damaged copy saved as fine)
-      if (data && sha256Hex(data) === sha256) return { sha256, name, data };
-      if (data) markNotHad(sha256);
-      return { sha256, name, data: null };
-    }),
-  );
-  return {
-    kept: read.flatMap(({ sha256, name, data }) => (data ? [{ sha256, name, media: "application/pdf", data }] : [])),
-    notKept: read.filter((r) => !r.data).map((r) => ({ sha256: r.sha256, name: r.name, media: "application/pdf" })),
-  };
-}
-
-/**
- * The texts that could not be read as a workspace's file keeps them: each
- * whose words are held this session after all, by its SHA-256 (lib/calc/
- * asks), or kept already (`keptAlready`: an output's, a text's of the same
- * words); and those not. Their words are not taken into the workspace -
- * each opens again as a text, its words read, from the file saved.
- */
-async function lostToKeep(lost: readonly LostText[], keptAlready: ReadonlySet<string>): Promise<{ kept: KeptData[]; notKept: KeptName[] }> {
-  const kept: KeptData[] = [];
-  const notKept: KeptName[] = [];
-  const encoder = new TextEncoder();
-  for (const t of new Map(lost.map((x) => [x.sha256, x])).values()) {
-    if (keptAlready.has(t.sha256)) continue;
-    const held = await heldOutput(t.sha256);
-    if (held) kept.push({ sha256: t.sha256, name: t.name, media: "text/plain", data: encoder.encode(held.text) });
-    else notKept.push({ sha256: t.sha256, name: t.name, media: "text/plain" });
-  }
-  return { kept, notKept };
-}
-
-/** The texts as a workspace's file keeps them, in order: each as UTF-8, by its SHA-256 - one an output's too kept once. */
-async function textsToKeep(texts: readonly WorkspaceText[]): Promise<KeptData[]> {
-  const encoder = new TextEncoder();
-  return Promise.all(
-    texts.map(async (t) => ({ sha256: await sha256Of(t.text), name: t.name, media: "text/plain", data: encoder.encode(t.text) })),
-  );
 }
 
 /**

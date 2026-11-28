@@ -116,7 +116,7 @@ export const fileNow = (path: string) => invoke<{ size: number; mtime: number | 
 /** A job file a save keeps whose job's folder the page did not find (src-tauri keptjobs.rs `job_files_where`): by its SHA-256, its job, its name and size there, and the workspace files to look in first (`from`). */
 export type AskedJobFile = { sha256: string; job: string; name: string; size: number; from: string[] };
 /** Where Meno found one: in the workspace file `from`, or - none said - in its job's folder. */
-export type FoundJobFile = { from?: string };
+export type FoundJobFile = { from?: string; via?: string };
 /**
  * Where Meno finds each job file `asked` for a save to `target` - none for
  * one it finds nowhere: in the files each names, `target` as it is now, a
@@ -124,6 +124,22 @@ export type FoundJobFile = { from?: string };
  * whole and checked by its SHA-256, else by its name and size alone.
  */
 export const jobFilesWhere = (target: string, asked: readonly AskedJobFile[], whole: boolean) => invoke<(FoundJobFile | null)[]>("job_files_where", { target, asked, whole });
+/** One of a workspace's own files a save keeps - an output, a text, a PDF, a picture - asked for by its SHA-256: its size, where known without reading it; an output's own file, where it was read from (`at`); whether it is a PDF Meno may hold (`pdf`). */
+export type AskedKeptFile = { sha256: string; size?: number; at?: string; pdf?: boolean };
+/** Where Meno finds one: in the workspace file `from` (through the place `via`, where it is a copy kept beside one), its own file where it was (`at`), or where Meno holds its PDFs (`pdf`); its size, and about what it comes to in a workspace's file (`packed`). */
+export type FoundKeptFile = { from?: string; via?: string; at?: true; pdf?: true; size: number; packed: number };
+/** Where Meno finds each, and whether the file last saved to may still hold something of one found nowhere (`holds`). */
+export type KeptFilesWhere = { found: (FoundKeptFile | null)[]; holds: boolean };
+/**
+ * Where Meno finds each of a workspace's own files `asked` for a save to
+ * `target` (keptjobs.rs `kept_files_where`): in the files the page names
+ * (`places`), `target` as it is now, a copy kept beside any of them, an
+ * output's own file, the PDFs Meno holds - so that the page sends only
+ * those found nowhere; and whether `saved` holds something of one found
+ * nowhere.
+ */
+export const keptFilesWhere = (target: string, saved: string | null, places: readonly string[], asked: readonly AskedKeptFile[], whole: boolean) =>
+  invoke<KeptFilesWhere>("kept_files_where", { target, saved, places, asked, whole });
 /** One job file's bytes, sent alone, set down by Meno for the save `save` - checked by its SHA-256 - to be added to the file as it is written (keptjobs.rs `job_file_staged`). */
 export const stageJobFile = async (save: string, sha256: string, bytes: Uint8Array): Promise<void> => void (await invoke("job_file_staged", bytes, { headers: { save, sha256 } }));
 /** The job files set down for the save `save` taken away: a save that was not written (keptjobs.rs `job_files_unstaged`). */

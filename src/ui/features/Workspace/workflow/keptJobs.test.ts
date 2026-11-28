@@ -3,7 +3,7 @@ import type { KeptJobFile } from "../../../../lib/jobs";
 import { JOB_FILE_MEDIA, menoFileBytes, MOST_FILE, MOST_WORKSPACE_FILE, readMenoFile } from "../../../../lib/doc/menoFile";
 import type { WorkflowStep } from "../store/types";
 import { readFileSync } from "node:fs";
-import { heldJobFile, heldJobSource, holdJobFilesOf, jobsOfStep, jobsToKeep, showFilesSaid, sizeAsk, takesPast, withKeptJobs } from "./keptJobs";
+import { heldJobFile, heldJobSource, holdJobFilesOf, jobsOfStep, jobsToKeep, sendPieces, showFilesSaid, sizeAsk, takesPast, withKeptJobs } from "./keptJobs";
 
 const J1 = "0b6f5c1e-0000-4000-8000-000000000001";
 const J2 = "0b6f5c1e-0000-4000-8000-000000000002";
@@ -79,7 +79,10 @@ describe("what a save keeps of the steps' jobs", () => {
     ];
     const bytes = new Map([[sha("1"), new Uint8Array([1, 2, 3])]]);
     const sent: { save: string; sha256: string; bytes: Uint8Array }[] = [];
-    const kept = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, undefined, undefined, async (save, sha256, b) => void sent.push({ save, sha256, bytes: b }));
+    const kept = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null);
+    // (nothing sent until the save is to be written)
+    expect(sent).toEqual([]);
+    await sendPieces(kept, async (save, sha256, b) => void sent.push({ save, sha256, bytes: b }));
     expect(kept.records.get(J3)).toEqual({
       job: J3,
       files: [{ name: "work/job.out", sha256: sha("1"), size: 3, role: "read" }],
@@ -105,7 +108,8 @@ describe("what a save keeps of the steps' jobs", () => {
     expect(there.adds).toBe(3);
     // (found nowhere by Meno: sent from what was held of it as it was opened, alone)
     const sent: string[] = [];
-    const changed = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async (asked) => asked.map(() => null), undefined, async (_save, sha256) => void sent.push(sha256));
+    const changed = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async (asked) => asked.map(() => null));
+    await sendPieces(changed, async (_save, sha256) => void sent.push(sha256));
     expect(changed.appended.map((a) => [a.sha256, !!a.staged, a.from])).toEqual([[sha("1"), true, undefined]]);
     expect(sent).toEqual([sha("1")]);
   });

@@ -8,8 +8,22 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 
-/** A job's file to be added to a workspace's file from the disk as it is written (src-tauri keptjobs.rs `Appended`): from its job's folder, from a workspace's file that holds it (`from`), or from where Meno set it down as the page sent it for this save (`staged`). */
-export type Appended = { sha256: string; job: string; name: string; from?: string; staged?: string };
+/** A file to be added to a workspace's file from the disk as it is written (src-tauri keptjobs.rs `Appended`) - a job's, or the workspace's own (`media`): from its job's folder, from a workspace's file that holds it (`from`), from an output's own file (`at`), from the PDFs Meno holds (`pdf`), or from where Meno set it down as the page sent it for this save (`staged`). */
+export type Appended = {
+  sha256: string;
+  job: string;
+  name: string;
+  from?: string;
+  /** Where `from` is a copy kept beside a place the page named, that place. */
+  via?: string;
+  staged?: string;
+  /** Not a job's: one of the workspace's own files, by its media type - kept as the page kept it, a text deflated, the rest stored. */
+  media?: string;
+  /** An output's own file, where it was read from. */
+  at?: string;
+  /** A PDF Meno holds. */
+  pdf?: true;
+};
 
 /**
  * `content` - bytes, or text written as UTF-8 - written to `path`, where

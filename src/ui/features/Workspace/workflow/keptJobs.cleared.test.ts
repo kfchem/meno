@@ -23,9 +23,6 @@ const SAVED = "/work/page.meno";
 /** Meno's backend asked where each job file is, as `place` says of each by its SHA-256. */
 const where = (place: (sha256: string) => Promise<string | null>) => async (asked: readonly { sha256: string }[]) =>
   Promise.all(asked.map(async (a) => ((p) => (p ? { from: p } : null))(await place(a.sha256))));
-/** The pieces sent, by SHA-256, as Meno sets them down. */
-const pieces: string[] = [];
-const stage = async (_save: string, sha256: string) => void pieces.push(sha256);
 const AS_SAVED = { size: 12345, mtime: 1700000000 };
 
 /** The backend, as asked: every job asked for gone - or those `left`, each why - and what it was asked. */
@@ -140,7 +137,7 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     // (read again from that file by Meno, or carried by the page where it has changed: either way at its packed size)
     const there = await jobsToKeep([opened], async () => null, () => data, where(async () => "/w/opened.meno"));
     expect([there.adds, there.bytes]).toEqual([packed, packed]);
-    const carried = await jobsToKeep([opened], async () => null, () => data, where(async () => null), undefined, stage);
+    const carried = await jobsToKeep([opened], async () => null, () => data, where(async () => null));
     expect(carried.bytes).toBe(packed);
   });
 

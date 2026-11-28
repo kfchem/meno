@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument, isBlankDocument } from "../document";
-import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace";
+import { readWorkspace, workspaceText } from "../utils/workspace";
 import { centredAt, readRecord, recordText } from "../utils/copyPaste";
 import { POINT } from "../../../../lib/pdf/layout";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { holdFilm, holdPicture, holdPicturesOf, pictureBytes } from "../../../../lib/picture/held";
 import { cornersOf } from "../utils/selection";
 import type { PictureToAdd } from "./types";
+import { heldFile } from "../../../../test/keptFilesHeld";
 
 /** A PNG's signature, its header for `w` by `h`, and its end: what Meno takes to be a picture, `seed` making each its own. */
 function png(w: number, h: number, seed = 0): Uint8Array {
@@ -97,7 +98,7 @@ describe("pictures on the page", () => {
     state().updatePicture(id, { turn: 0.5 });
     const ws = readWorkspace(workspaceText(state()));
     expect(ws?.drawn.pictures?.[0]).toMatchObject({ name: "figure.png", x: 5, y: 6, turn: 0.5, px: [120, 60] });
-    const file = readMenoFile((await workspaceFile(store.getState())).bytes);
+    const file = readMenoFile((await heldFile(store.getState())).bytes);
     const kept = file.files.find((f) => f.media === "image/png");
     expect(kept?.sha256).toBe(state().pictures[0].sha256);
     expect(file.data(kept!.sha256)).toEqual(pictureBytes(kept!.sha256));
@@ -123,7 +124,7 @@ describe("pictures on the page", () => {
     expect(state().picturesLaid.has(id!)).toBe(true);
     const [pasted] = state().addPictures([await held("figure.png", 10, 10, 9)], { x: 0, y: 0 });
     expect(state().picturesLaid.has(pasted)).toBe(false);
-    const file = readMenoFile((await workspaceFile(store.getState())).bytes);
+    const file = readMenoFile((await heldFile(store.getState())).bytes);
     expect(file.files.find((f) => f.media === "video/mp4")?.sha256).toBe(film.sha256);
     holdPicturesOf(file);
     const again = editor();
@@ -141,7 +142,7 @@ describe("pictures on the page", () => {
     const slides = (await holdFilm(mov))!;
     const { store, state } = editor();
     state().putPicture({ name: "turning.mp4", sha256: film.sha256, media: "video/mp4", px: [1280, 720], x: 0, y: 0, w: 16, h: 9, matte: "below", forSlides: slides.sha256 });
-    const file = readMenoFile((await workspaceFile(store.getState())).bytes);
+    const file = readMenoFile((await heldFile(store.getState())).bytes);
     // (both files kept, the film with transparency as what it is, by its own name)
     expect(file.files.find((f) => f.sha256 === slides.sha256)).toMatchObject({ media: "video/quicktime", name: "turning.mov" });
     expect(file.data(slides.sha256)).toEqual(mov);

@@ -30,8 +30,10 @@ export type JobsKept = {
   /** The files to be added from the disk, listed with the workspace's files as it is written (`files.json`). */
   listed: KeptFile[];
   appended: Appended[];
-  /** Where the files Meno found nowhere were set down, sent from what the page holds of them one at a time (`stageJobFile`): the save's own, none where none was. */
+  /** Where the files Meno found nowhere are set down, sent from what the page holds of them one at a time (`stageJobFile`): the save's own, none where none is. */
   staged: string | null;
+  /** Those files, to be sent once the save is to be written (`sendPieces`) - never before the size warning is answered: each by its SHA-256 and name, read only as it is sent. */
+  pending: Piece[];
   /** How many job files this save could have from nowhere - not in the file, or anywhere Meno looked, and held of nothing by the page: each recorded as not had, and said (`jobFilesNotHadSaid`). */
   notHad: number;
   /** About how much each step's jobs add to the file, deflated, largest first. */
@@ -45,6 +47,31 @@ export type JobsKept = {
   /** About how much each file kept comes to in the file, deflated, by SHA-256: held for the next save, where its folder goes once this one holds it. */
   packed: Map<string, number>;
 };
+
+/** A file found nowhere but in what the page holds of it: read only as it is sent. */
+export type Piece = { sha256: string; name: string; read: () => Promise<Uint8Array | null> | Uint8Array | null };
+
+/**
+ * The files a save found nowhere but in what the page holds of them
+ * (`pending`), sent one at a time - each read as it is sent, and let go -
+ * and set down by Meno for the save `staged` (`stage`) until it is written:
+ * only once the save is to be written, its size warning answered. Where one
+ * is no longer held, or is not set down, those set down for it are taken
+ * away, and the save is not written.
+ */
+export async function sendPieces(of: { staged: string | null; pending: readonly Piece[] }, stage: (save: string, sha256: string, bytes: Uint8Array) => Promise<void> = stageJobFile): Promise<void> {
+  if (!of.staged || !of.pending.length) return;
+  try {
+    for (const p of of.pending) {
+      const bytes = await p.read();
+      if (!bytes) throw new Error(`${p.name} could not be kept: it is no longer held`);
+      await stage(of.staged, p.sha256, bytes);
+    }
+  } catch (e) {
+    void unstageJobFiles(of.staged).catch(() => undefined);
+    throw e;
+  }
+}
 
 /** A step's jobs, of its run and the runs it keeps, each once. */
 export const jobsOfStep = (s: WorkflowStep): string[] => [...new Set([s.ran, ...(s.runs ?? [])].flatMap((r) => r?.jobs ?? []))];
@@ -164,14 +191,15 @@ export function dropNotedSources(message: string, appended: readonly Appended[])
 }
 
 /**
- * Whether a save failed (`message`, as Meno's backend said why) as a job
- * file it was to take from a workspace's file, or from what the page sent,
+ * Whether a save failed (`message`, as Meno's backend said why) as a file
+ * it was to take from a workspace's file, an output's own file, the PDFs
+ * Meno holds, or from what the page sent,
  * was not there as it was asked for (src-tauri keptjobs.rs `carried`): the
  * file changed since Meno was asked where it is. Made again at once, Meno
  * then reads each whole to find where it is (`findJobFiles`, `whole`).
  */
 export const takenFromElsewhereFailed = (message: string, appended: readonly Appended[]): boolean =>
-  appended.some((a) => a.from || a.staged) && message.includes(" could not be kept: ");
+  appended.some((a) => a.from || a.staged || a.at || a.pdf) && message.includes(" could not be kept: ");
 
 /**
  * Where Meno's backend finds each job file asked for (`asked`), for a save
@@ -257,9 +285,8 @@ export async function jobsToKeep(
   bytesOf: (sha256: string) => Uint8Array | null = heldJobFile,
   where: (asked: readonly Omit<AskedJobFile, "from">[]) => Promise<(FoundJobFile | null)[]> = async (asked) => asked.map(() => null),
   packedOf: (sha256: string) => number | undefined = heldJobPacked,
-  stage: (save: string, sha256: string, bytes: Uint8Array) => Promise<void> = stageJobFile,
 ): Promise<JobsKept> {
-  const out: JobsKept = { records: new Map(), listed: [], appended: [], staged: null, notHad: 0, steps: [], bytes: 0, adds: 0, largest: 0, packed: new Map() };
+  const out: JobsKept = { records: new Map(), listed: [], appended: [], staged: null, pending: [], notHad: 0, steps: [], bytes: 0, adds: 0, largest: 0, packed: new Map() };
   const seen = new Set<string>();
   const stepBytes = new Map<number, number>();
   const add = (step: number, n: number) => stepBytes.set(step, (stepBytes.get(step) ?? 0) + n);
@@ -313,22 +340,18 @@ export async function jobsToKeep(
     const at = found[k];
     let staged: string | undefined;
     if (!at) {
-      // (found nowhere: sent from what the page holds of it - this one alone, read as it is sent)
-      const data = bytesOf(a.sha256);
-      if (!data) {
+      // (found nowhere: to be sent from what the page holds of it - this one alone, read as it is sent, once the save is
+      //  to be written: whether it holds it known now, its bytes let go)
+      if (!bytesOf(a.sha256)) {
         notHad.add(a.sha256);
         continue;
       }
       out.staged ??= crypto.randomUUID();
-      // (a piece not set down: the save not written, and those set down for it taken away)
-      await stage(out.staged, a.sha256, data).catch((e: unknown) => {
-        void unstageJobFiles(out.staged!).catch(() => undefined);
-        throw e;
-      });
+      out.pending.push({ sha256: a.sha256, name: a.name, read: () => bytesOf(a.sha256) });
       staged = out.staged;
     }
     out.listed.push({ sha256: a.sha256, name: a.name, media: JOB_FILE_MEDIA, size: a.size });
-    out.appended.push({ sha256: a.sha256, job: a.job, name: a.name, ...(at?.from ? { from: at.from } : {}), ...(staged ? { staged } : {}) });
+    out.appended.push({ sha256: a.sha256, job: a.job, name: a.name, ...(at?.from ? { from: at.from } : {}), ...(at?.via ? { via: at.via } : {}), ...(staged ? { staged } : {}) });
     out.largest = Math.max(out.largest, a.size);
     // (deflated again as it is written: about what the file it comes from kept it at - not its size, unpacked)
     const packed = packedOf(a.sha256) ?? a.size;
@@ -364,9 +387,12 @@ export function withKeptJobs(steps: readonly WorkflowStep[], records: ReadonlyMa
   return steps.map((s) => ({ ...s, ...(s.ran ? { ran: ran(s.ran) } : {}), ...(s.runs ? { runs: s.runs.map(ran) } : {}) }));
 }
 
-/** What Save says of the job files a save could have from nowhere (`JobsKept`'s `notHad`), counted: none where it had them all. */
+/** The job files a save could have from nowhere (`JobsKept`'s `notHad`), counted, as Save names them: none where it had them all. */
+export const jobFilesNamed = (n: number): string | null => (n === 0 ? null : n === 1 ? "1 file of a step's job" : `${n.toLocaleString("en")} files of steps' jobs`);
+
+/** What Save says of the job files a save could have from nowhere, alone (utils/workspace `notKeptSaid` says them with the rest): none where it had them all. */
 export const jobFilesNotHadSaid = (n: number): string | null =>
-  n === 0 ? null : n === 1 ? "Saved, but 1 job file of its steps is not in the file: it could not be read." : `Saved, but ${n.toLocaleString("en")} job files of its steps are not in the file: they could not be read.`;
+  n === 0 ? null : n === 1 ? "Saved, but 1 file of a step's job is not in the file: it could not be read." : `Saved, but ${jobFilesNamed(n)} are not in the file: they could not be read.`;
 
 /** The size a save past which says the workspace is large, by default (docs/WORKFLOWS-FOUNDATION.md, answer Q), in MB. */
 export const LARGE_WORKSPACE_MB = 500;

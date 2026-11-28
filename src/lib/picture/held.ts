@@ -64,6 +64,23 @@ export function pictureBytes(sha256: string): Uint8Array | null {
   return h.bytes;
 }
 
+/**
+ * A picture's bytes as `pictureBytes` has them, but - read from its
+ * workspace's file - not held for the session after: what a save sends of
+ * one found nowhere else, held only while it is sent.
+ */
+export function pictureBytesNow(sha256: string): Uint8Array | null {
+  const h = held.get(sha256);
+  if (!h) return null;
+  if (h.bytes) return h.bytes;
+  const bytes = h.read?.() ?? null;
+  if (!bytes) {
+    held.delete(sha256);
+    markNotHad(sha256);
+  }
+  return bytes;
+}
+
 /** Each picture a workspace's file keeps, held - and each film with transparency kept beside one - its bytes read from the file when first wanted. */
 export function holdPicturesOf(file: Pick<MenoFile, "files" | "data">): void {
   for (const f of file.files) {

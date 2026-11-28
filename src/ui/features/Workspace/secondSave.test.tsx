@@ -223,6 +223,8 @@ function madeUpOutput(seed: number, n: number): Uint8Array {
 }
 
 let JOBS = 6;
+/** What each job file is to its job: a raw output, where a test leaves them out. */
+let ROLE: "read" | "raw" = "read";
 let EACH = 256 * 1024;
 const SAVED = "/made/up/large.meno";
 let made = 0;
@@ -247,7 +249,7 @@ function openedWorkspace(): { store: ReturnType<typeof storeOf>; doc: ReturnType
     kind: "optimise",
     x: 0,
     y: 0,
-    ran: { at: 1, ok: true, said: "done", input: "in", jobs, kept: files.map((f) => ({ job: f.job, files: [{ name: "work/job.out", sha256: f.sha256, size: f.data.length, role: "read" as const }] })) },
+    ran: { at: 1, ok: true, said: "done", input: "in", jobs, kept: files.map((f) => ({ job: f.job, files: [{ name: "work/job.out", sha256: f.sha256, size: f.data.length, role: ROLE }] })) },
   };
   const bytes = menoFileBytes(JSON.stringify({ steps: [step] }), files.map((f) => ({ sha256: f.sha256, name: "work/job.out", media: JOB_FILE_MEDIA, data: f.data })));
   io.disk.set(SAVED, { bytes, mtime: ++io.clock });
@@ -388,8 +390,8 @@ describe("a workspace saved again and again in one session", () => {
     await act(async () => void (await files().save()));
     expect(files().error).toBeNull();
     expect(io.pieces).toEqual(Array.from({ length: JOBS }, () => EACH));
-    // (the k-th sent once k had been read: never all read first)
-    expect(readAtEach).toEqual(Array.from({ length: JOBS }, (_, k) => (k + 1) * EACH));
+    // (each read once, alone, to know it is held, before the save may ask its size - then the k-th sent once k had been read again: never all held at once)
+    expect(readAtEach).toEqual(Array.from({ length: JOBS }, (_, k) => JOBS * EACH + (k + 1) * EACH));
     expect(io.packed).toEqual([0]);
     expect(verifies(SAVED)).toBe(true);
     // (and set down only for that save: nothing left)
@@ -453,12 +455,47 @@ describe("a workspace saved again and again in one session", () => {
     }
   }, 60_000);
 
-  it("leaves nothing set down where the page's own packing fails after pieces were set down", async () => {
+  it("asks how large a save may be before anything is looked for whole or sent: Cancel sets nothing down, and without raw outputs none of them is sent", async () => {
+    const { useAppSettings } = await import("../../../lib/settings/appSettings");
+    const was = useAppSettings.getState().calculations;
+    ROLE = "raw";
+    try {
+      const { files } = await savedThen(() => null);
+      // (past a size small enough that this save asks: the file gone, nothing beside it)
+      useAppSettings.setState({ calculations: { ...was, largeWorkspaceMB: 0.01 } });
+      const asked = async (answer: "all" | "no raw" | "cancel") => {
+        let saving: Promise<unknown> = Promise.resolve();
+        await act(async () => void (saving = files().save()));
+        for (let i = 0; i < 100 && !files().sizeAsked; i++) await act(async () => void (await new Promise((r) => setTimeout(r, 5))));
+        expect(files().sizeAsked).not.toBeNull();
+        // (asked before any piece is set down, or any file read whole to be found)
+        expect(io.pieces).toEqual([]);
+        expect(io.staged.size).toBe(0);
+        expect(io.asks.every((whole) => !whole)).toBe(true);
+        await act(async () => void (files().sizeAsked!.answer(answer), await saving));
+      };
+      await asked("cancel");
+      expect(io.pieces).toEqual([]);
+      expect(io.staged.size).toBe(0);
+      expect(io.disk.has(SAVED)).toBe(false);
+      await asked("no raw");
+      // (none of the raw outputs sent or set down: what is sent is what the answer keeps)
+      expect(io.pieces).toEqual([]);
+      expect(io.staged.size).toBe(0);
+      expect(files().error).toBeNull();
+      expect(io.disk.has(SAVED)).toBe(true);
+    } finally {
+      ROLE = "read";
+      useAppSettings.setState({ calculations: was });
+    }
+  });
+
+  it("sends nothing and leaves nothing set down where the page's own packing fails", async () => {
     const { files } = await savedThen(() => null);
     io.packFails = true;
     await act(async () => void (await files().save()));
     expect(files().error).toMatch(/^Save failed: /);
-    expect(io.pieces).toHaveLength(JOBS);
+    expect(io.pieces).toHaveLength(0);
     expect(io.staged.size).toBe(0);
   });
 
@@ -481,7 +518,7 @@ describe("a workspace saved again and again in one session", () => {
     w.doc.edit("kept", (d) => ({ ...d, steps: [{ ...step, ran: { ...step.ran!, kept: step.ran!.kept!.map((k, i) => (i === 0 ? { ...k, files: [...k.files, gone] } : k)) } }] }));
     w.store.getState().addAtom(0, 0, "C");
     await act(async () => void (await files().save()));
-    expect(files().error).toBe("Saved, but 1 job file of its steps is not in the file: it could not be read.");
+    expect(files().error).toBe("Saved, but 1 file of a step's job is not in the file: it could not be read.");
     expect(verifies(SAVED)).toBe(true);
   });
 });

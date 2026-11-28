@@ -20,13 +20,14 @@ vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.rej
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument, isBlankDocument } from "../document";
 import { lostSaid } from "./texts";
-import { notKeptSaid, readKept, readWorkspace, workspaceFile, workspaceText } from "./workspace";
+import { notKeptSaid, readKept, readWorkspace, workspaceText } from "./workspace";
 import { menoFileBytes, readMenoFile, type KeptData } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
 import { heldOutput } from "../../../../lib/calc/asks";
 import { pictureBytes } from "../../../../lib/picture/held";
 import { isNotHad } from "../../../../lib/doc/notHad";
 import { useNotices } from "../../../notices";
+import { heldFile } from "../../../../test/keptFilesHeld";
 
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 
@@ -113,7 +114,7 @@ describe("a file a workspace keeps, damaged in its file", () => {
     expect(isNotHad(sha(w.figure))).toBe(true);
     expect(isNotHad(sha(w.other))).toBe(false);
     // saved: said not kept, by its name - and not in the file, nor listed as it were
-    const saved = await workspaceFile(st());
+    const saved = await heldFile(st());
     expect(saved.notKept).toEqual(["figure.png"]);
     expect(notKeptSaid(saved.notKept)).toBe("Saved, but figure.png is not in the file: it could not be read.");
     const file = readMenoFile(saved.bytes);
@@ -168,7 +169,7 @@ describe("a workspace whose list of the files it keeps is broken", () => {
       expect(pictureBytes(sha(w.other))).toEqual(w.other);
       expect((await heldOutput(sha(w.log)))?.text).toBe(new TextDecoder().decode(w.log));
       expect(st().texts.map((t) => t.text)).toEqual([w.notes]);
-      const saved = await workspaceFile(st());
+      const saved = await heldFile(st());
       expect(saved.notKept).toEqual([]);
       const file = readMenoFile(saved.bytes);
       expect(file.listDamaged).toBe(false);
@@ -204,7 +205,7 @@ describe("a save that cannot keep a file the workspace has", () => {
     st().addPdfs([{ name: "kept.pdf", sha256: sha(pdf), pages: [[595, 842]] }], { x: 0, y: 40 });
     st().addPdfs([{ name: "paper.pdf", sha256: "c".repeat(64), pages: [[595, 842]] }], { x: 40, y: 40 });
     st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["manyread"], source: { name: "gone.out", sha256: "e".repeat(64), kind: "quanta" } } as never }] });
-    const saved = await workspaceFile(st());
+    const saved = await heldFile(st());
     expect(saved.notKept).toEqual(["gone.out", "paper.pdf", "lost.png"]);
     expect(notKeptSaid(saved.notKept)).toBe("Saved, but gone.out, paper.pdf and lost.png are not in the file: they could not be read.");
     const file = readMenoFile(saved.bytes);
@@ -222,7 +223,7 @@ describe("a save that cannot keep a file the workspace has", () => {
     damaged[12] ^= 0x01;
     pdfsHeld.set(sha(whole), damaged);
     st().addPdfs([{ name: "held.pdf", sha256: sha(whole), pages: [[595, 842]] }], { x: 0, y: 40 });
-    const saved = await workspaceFile(st());
+    const saved = await heldFile(st());
     expect(saved.notKept).toEqual(["held.pdf"]);
     expect(readMenoFile(saved.bytes).files).toEqual([]);
     expect(isNotHad(sha(whole))).toBe(true);
@@ -269,7 +270,7 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
 
   it("takes each - a PDF, a picture, an output - from the file it was saved to, whole, as it was there, and names none", async () => {
     const w = savedBefore("carried", "/work/carried.meno");
-    const saved = await workspaceFile(w.st());
+    const saved = await heldFile(w.st());
     expect(saved.notKept).toEqual([]);
     const file = readMenoFile(saved.bytes);
     expect(file.listDamaged).toBe(false);
@@ -289,7 +290,7 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
     const damaged = w.before.slice();
     damaged[at + 3] ^= 0x10;
     disk.set("/work/damaged.meno", damaged);
-    const saved = await workspaceFile(w.st());
+    const saved = await heldFile(w.st());
     expect(saved.notKept).toEqual(["figure.png"]);
     const file = readMenoFile(saved.bytes);
     expect(file.files.map((f) => f.name).sort()).toEqual(["locked.pdf", "run.log"]);
@@ -299,41 +300,41 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
   it("says the file it was saved to may still hold what it cannot keep only where it has it in it damaged, or does not read - once, not at every save", async () => {
     const w = savedBefore("last holds", "/work/last.meno");
     // (all of it whole there: all kept, nothing to keep the file for)
-    expect(await workspaceFile(w.st())).toMatchObject({ notKept: [], lastHolds: false });
+    expect(await heldFile(w.st())).toMatchObject({ notKept: [], lastHolds: false });
     const at = Buffer.from(w.before).indexOf(Buffer.from(w.picture.subarray(300, 340)));
     const damaged = w.before.slice();
     damaged[at + 3] ^= 0x10;
     disk.set("/work/last.meno", damaged);
-    const first = await workspaceFile(w.st());
+    const first = await heldFile(w.st());
     expect(first).toMatchObject({ notKept: ["figure.png"], lastHolds: true });
     // (saved so: the file saved over now holds nothing of it - the next save keeps nothing beside it)
     disk.set("/work/last.meno", first.bytes);
-    expect(await workspaceFile(w.st())).toMatchObject({ notKept: ["figure.png"], lastHolds: false });
+    expect(await heldFile(w.st())).toMatchObject({ notKept: ["figure.png"], lastHolds: false });
     // (a file there that does not read as a workspace at all: what it holds is not known)
     disk.set("/work/last.meno", damaged.slice(0, 200));
-    expect(await workspaceFile(w.st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: true });
+    expect(await heldFile(w.st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: true });
     // (saved nowhere before, or that file gone: none to keep)
-    expect(await workspaceFile(savedBefore("last nowhere", null).st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: false });
+    expect(await heldFile(savedBefore("last nowhere", null).st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: false });
     disk.delete("/work/last.meno");
-    expect(await workspaceFile(w.st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: false });
+    expect(await heldFile(w.st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: false });
   });
 
   it("saved nowhere before, or that file gone, names each as before", async () => {
-    expect((await workspaceFile(savedBefore("nowhere", null).st())).notKept).toEqual(["run.log", "locked.pdf", "figure.png"]);
+    expect((await heldFile(savedBefore("nowhere", null).st())).notKept).toEqual(["run.log", "locked.pdf", "figure.png"]);
     const gone = savedBefore("gone", "/work/gone.meno");
     disk.delete("/work/gone.meno");
-    expect((await workspaceFile(gone.st())).notKept).toEqual(["run.log", "locked.pdf", "figure.png"]);
+    expect((await heldFile(gone.st())).notKept).toEqual(["run.log", "locked.pdf", "figure.png"]);
   });
 
   it("Save As to a new file takes them from the file it was saved to before - and the next save from the new one", async () => {
     const w = savedBefore("save as", "/work/before.meno");
     // (Save As: written to a new file, read from the one it was saved to)
-    const first = await workspaceFile(w.st());
+    const first = await heldFile(w.st());
     expect(first.notKept).toEqual([]);
     disk.set("/work/after.meno", first.bytes);
     w.st().markSavedAs("/work/after.meno");
     disk.delete("/work/before.meno");
-    const again = await workspaceFile(w.st());
+    const again = await heldFile(w.st());
     expect(again.notKept).toEqual([]);
     const file = readMenoFile(again.bytes);
     for (const k of w.kept) expect(file.data(k.sha256)).toEqual(k.data);
@@ -396,7 +397,7 @@ describe("a text a workspace's file does not hold whole", () => {
     const w = damagedNotes("every save");
     const { st } = await opened(w.damaged);
     for (let n = 0; n < 2; n++) {
-      const saved = await workspaceFile(st());
+      const saved = await heldFile(st());
       expect(saved.notKept).toEqual(["notes.txt"]);
       const file = readMenoFile(saved.bytes);
       expect(file.files.map((f) => f.name)).toEqual(["run.log"]);
@@ -416,11 +417,11 @@ describe("a text a workspace's file does not hold whole", () => {
     const { st, doc } = await opened(w.damaged);
     st().removeLostText(st().textsLost[0].id);
     expect(st().textsLost).toEqual([]);
-    const saved = await workspaceFile(st());
+    const saved = await heldFile(st());
     expect(saved.notKept).toEqual([]);
     expect(readWorkspace(readMenoFile(saved.bytes).workspace)!.texts.map((t) => t.name)).toEqual(["run.log"]);
     doc.undo();
-    expect((await workspaceFile(st())).notKept).toEqual(["notes.txt"]);
+    expect((await heldFile(st())).notKept).toEqual(["notes.txt"]);
   });
 
   it("had again - a text of the same words come - goes, and that text is kept", async () => {
@@ -428,7 +429,7 @@ describe("a text a workspace's file does not hold whole", () => {
     const { st } = await opened(w.damaged);
     st().addTexts([{ name: "notes again.txt", text: w.notes }]);
     expect(st().textsLost).toEqual([]);
-    const saved = await workspaceFile(st());
+    const saved = await heldFile(st());
     expect(saved.notKept).toEqual([]);
     expect(new TextDecoder().decode(readMenoFile(saved.bytes).data(w.sha)!)).toBe(w.notes);
   });
@@ -438,7 +439,7 @@ describe("a text a workspace's file does not hold whole", () => {
     const { st } = await opened(w.damaged);
     disk.set("/work/whole.meno", w.whole);
     st().markSavedAs("/work/whole.meno");
-    const saved = await workspaceFile(st());
+    const saved = await heldFile(st());
     expect(saved.notKept).toEqual([]);
     const file = readMenoFile(saved.bytes);
     expect(file.files.find((f) => f.sha256 === w.sha)).toEqual({ sha256: w.sha, name: "notes.txt", media: "text/plain", size: strToU8(w.notes).length });

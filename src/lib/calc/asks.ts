@@ -129,6 +129,24 @@ export async function outputsToKeep(sources: readonly CalcSource[], read: ReadAt
   return { kept, notKept };
 }
 
+/**
+ * An output's bytes as a workspace's file keeps them (UTF-8), read now - held
+ * this session, read from the workspace file it was opened from, or read
+ * again where it was - and only if they are what its SHA-256 says; NOT held
+ * for the session after: a save that sends one from the page holds it only
+ * while it is sent. None where it cannot be had.
+ */
+export async function outputBytes(source: { sha256: string; path?: string }, read: ReadAt = readAt): Promise<Uint8Array | null> {
+  const held = outputs.get(source.sha256);
+  const checked = async (text: string | null | undefined) => {
+    if (text == null) return null;
+    const bytes = new TextEncoder().encode(text);
+    const sha = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (b) => b.toString(16).padStart(2, "0")).join("");
+    return sha === source.sha256 ? bytes : null;
+  };
+  return (await checked(held?.text ?? held?.read?.())) ?? (source.path ? await checked(await read(source.path)) : null);
+}
+
 /** The chosen file, as asked for: its path and its text; none where none was chosen. */
 export type Pick = (source: CalcSource) => Promise<{ path: string; text: string } | null>;
 

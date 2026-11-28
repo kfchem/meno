@@ -5,9 +5,10 @@ import { openedAs, textsOf } from "../../../views/openFile";
 import { createWorkspaceDocument } from "../document";
 import { recordText, readRecord } from "../utils/copyPaste";
 import { sheetOfText } from "../utils/textSheets";
-import { keptNamedIn, readKept, readWorkspace, workspaceFile } from "../utils/workspace";
+import { keptNamedIn, readKept, readWorkspace } from "../utils/workspace";
 import { connectStoreToDocument, createEditorStore } from "./index";
 import type { Drawn } from "./types";
+import { heldFile } from "../../../../test/keptFilesHeld";
 
 const WORDS = "# Aim\n\nTwo *alcohols* and a water.\n";
 
@@ -43,7 +44,7 @@ describe("a text is Markdown by what it was read as, not by its name", () => {
       { name: "Aim", text: WORDS, markdown: true, at: { x: 0, y: 0 } },
       { name: "plain", text: "just words", at: { x: 40, y: 0 } },
     ]);
-    const { bytes } = await workspaceFile(store.getState());
+    const { bytes } = await heldFile(store.getState());
     const file = readMenoFile(bytes, keptNamedIn);
     holdOutputsOf(file);
     const { ws } = await readKept(readWorkspace(file.workspace)!);

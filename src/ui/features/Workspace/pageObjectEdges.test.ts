@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 import { connectStoreToDocument, createEditorStore } from "./store";
 import { createWorkspaceDocument } from "./document";
-import { readKept, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./utils/workspace";
+import { readKept, readWorkspace, workspaceProblem, workspaceText } from "./utils/workspace";
 import { readRecord } from "./utils/copyPaste";
 import { drawingLayout, drawingSvg, drawnOf } from "./fileActions";
 import { pictureDpiFor } from "./picture";
@@ -18,6 +18,7 @@ import { ACS_1996, resolveStyle } from "../../../lib/chem/style";
 import { arrowMeasures } from "../../../lib/chem/reactionArrow";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { layoutEmf } from "../../../lib/chem/emf";
+import { heldFile } from "../../../test/keptFilesHeld";
 
 const AROM = { aromaticEnabled: false, aromaticRings: {} };
 
@@ -108,7 +109,7 @@ describe("a text whose words begin with a byte-order mark", () => {
   it("comes back as it was when its workspace opens again", async () => {
     const { st } = editor();
     st().addTexts([{ name: "notes.txt", text: "\uFEFFfrom Notepad" }]);
-    const saved = readWorkspace(workspaceOfFile((await workspaceFile(st())).bytes)!)!;
+    const saved = readWorkspace(workspaceOfFile((await heldFile(st())).bytes)!)!;
     const { ws: read, missing } = await readKept(saved);
     expect(missing).toEqual([]);
     expect(read.texts.map((t) => t.text)).toEqual(["\uFEFFfrom Notepad"]);

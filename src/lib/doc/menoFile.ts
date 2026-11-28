@@ -107,7 +107,7 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[], lis
   for (const f of listed) {
     if (!SHA.test(f.sha256) || index[f.sha256]) continue;
     if (f.size > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.size)}.`);
-    index[f.sha256] = { name: f.name, media: f.media, size: f.size };
+    index[f.sha256] = { name: f.name, ...(f.kind ? { kind: f.kind } : {}), media: f.media, size: f.size };
     count++;
   }
   if (count > MOST_FILES) throw new Error(`A workspace file keeps at most ${MOST_FILES.toLocaleString("en")} files; this workspace would keep ${count.toLocaleString("en")}.`);
