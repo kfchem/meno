@@ -1746,8 +1746,14 @@ to be able to work with nothing going out at all.
   one other: begun as a task under its own purpose (`model:<id>@<hosts>`,
   `lookup:<id>@<hosts>`) with the hosts its manifest in place names, read
   by the backend (`model.rs` `hosted_of`), never taken from the page; till
-  that purpose is allowed it has no task, and goes nowhere. A plugin fills
-  at most one such role. What Meno fetches itself is a task too, under
+  that purpose is allowed it has no task, and goes nowhere. Its task is
+  begun at rest (`Net::begin_resting`): its way out stands for as long as
+  the worker runs, but it is under way - told to the window, its notice in
+  the corner - only while a request written to the worker waits for its
+  answer (`model.rs` `asking`, `heard`), each time as a task of its own
+  that ends, done, with the last answer, and its notice goes as any
+  finished task's does; the worker gone with a request unanswered, that
+  one fails. A plugin fills at most one such role. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an
   environment needs one (`tools.rs`), a plugin's downloads as it is set up
   - a model's weights, Blender (`plugfiles.rs`, under the plugin's

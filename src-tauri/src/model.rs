@@ -10,7 +10,7 @@
 //! the worker says before the page or Meno's log sees it.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde_json::Value;
@@ -226,7 +226,8 @@ impl Keys for SystemKeys {
 
 /// A model plugin's worker, as Meno started it: whose it is, the network
 /// task it goes out under (none where its purpose was not allowed when it
-/// started, or once it has ended), every key given to it, to be taken out of
+/// started, or once it has ended) - under way only while something asked of
+/// it is unanswered (`asked`), at rest between - every key given to it, to be taken out of
 /// what it says, and how many of its streams - its output and its errors -
 /// are still read. It is forgotten, keys and all, only once the last of
 /// them is read to its end: what it said till then is all taken out.
@@ -237,9 +238,28 @@ struct Worker {
     given: Vec<String>,
     reading: u8,
     ended: bool,
+    /// The ids of the requests written to it that it has yet to answer.
+    asked: HashSet<i64>,
     /// The end of each request's words sent as they come that may begin a key, held back from the page till the next
     /// part shows whether it does (`scrub`): by the request's id.
     held: HashMap<i64, String>,
+}
+
+/// A request's id, where `line` is one: a JSON object with a number for
+/// its id and a name for what it asks (`op`), as the page writes one.
+fn request_id(line: &str) -> Option<i64> {
+    let v: Value = serde_json::from_str(line).ok()?;
+    v.get("op")?.as_str()?;
+    v.get("id")?.as_i64()
+}
+
+/// A worker's task at rest, where nothing asked of it waits for an answer.
+fn rest_if_idle(w: &Worker) {
+    if w.asked.is_empty() {
+        if let Some(task) = &w.task {
+            task.rest();
+        }
+    }
 }
 
 /// The streams of a worker read: its output and its errors.
@@ -269,19 +289,67 @@ impl Models {
     /// its streams are read: a model's, or one that looks names up - which
     /// is given no key, nor any converse request.
     pub fn started(&self, sidecar: &str, plugin: &str, kind: Hosted, task: Option<TaskHandle>) {
-        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), kind, task, given: Vec::new(), reading: STREAMS, ended: false, held: HashMap::new() });
+        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), kind, task, given: Vec::new(), reading: STREAMS, ended: false, asked: HashSet::new(), held: HashMap::new() });
+    }
+
+    /// Requests on their way to `sidecar` (`data`, as it is written to it,
+    /// line by line): its network task under way from the first of them
+    /// till the last is answered (`heard`) - as the window sees it, a task
+    /// of its own each time it is asked, never one for as long as it runs.
+    pub fn asking(&self, sidecar: &str, data: &str) {
+        let mut workers = self.workers();
+        let Some(w) = workers.get_mut(sidecar).filter(|w| !w.ended) else { return };
+        let idle = w.asked.is_empty();
+        w.asked.extend(data.lines().filter_map(request_id));
+        if idle && !w.asked.is_empty() {
+            if let Some(task) = &w.task {
+                task.resume();
+            }
+        }
+    }
+
+    /// Requests that never reached `sidecar` - their writing failed: no
+    /// answer is waited for.
+    pub fn not_asked(&self, sidecar: &str, data: &str) {
+        let mut workers = self.workers();
+        let Some(w) = workers.get_mut(sidecar) else { return };
+        for id in data.lines().filter_map(request_id) {
+            w.asked.remove(&id);
+        }
+        rest_if_idle(w);
+    }
+
+    /// A line `sidecar` said on its output: where it answers a request -
+    /// as the page takes an answer (lib/roles/client `receive`): any line
+    /// with the request's id, but a part of the words said as they come -
+    /// that one is no longer waited for; the last of them answered, and
+    /// its network task is at rest, its notice going as a finished one's.
+    pub fn heard(&self, sidecar: &str, line: &str) {
+        let Ok(Value::Object(o)) = serde_json::from_str::<Value>(line) else { return };
+        let Some(id) = o.get("id").and_then(Value::as_i64) else { return };
+        if o.contains_key("partial") && !o.contains_key("ok") {
+            return;
+        }
+        let mut workers = self.workers();
+        let Some(w) = workers.get_mut(sidecar) else { return };
+        if w.asked.remove(&id) {
+            rest_if_idle(w);
+        }
     }
 
     /// A worker gone, or stopped: its network task ended with it, and nothing
     /// more sent it. What it still says is read, its keys taken out
     /// (`read_to_end`).
     pub fn ended(&self, sidecar: &str) {
+        // (gone with something asked of it unanswered: its spell failed; at rest, its way out goes and nothing more is told)
         let task = self.workers().get_mut(sidecar).and_then(|w| {
             w.ended = true;
-            w.task.take()
+            let answered = w.asked.is_empty();
+            w.asked.clear();
+            w.task.take().map(|t| (t, answered))
         });
-        if let Some(task) = task {
-            task.finish(true);
+        if let Some((task, answered)) = task {
+            task.finish(answered);
         }
     }
 
@@ -589,6 +657,66 @@ mod tests {
         assert_eq!(m.scrub("w1", KEY), "[key]");
         m.read_to_end("w1");
         assert_eq!(m.scrub("w1", KEY), KEY);
+    }
+
+    /// The tasks the window was told of, by id, each as last told: whether it has ended, and how.
+    fn tasks_told(told: &std::sync::Mutex<Vec<(String, Value)>>) -> Vec<(String, Option<String>)> {
+        let mut out: Vec<(String, Option<String>)> = Vec::new();
+        for (_, t) in told.lock().unwrap().iter().filter(|(e, _)| e == "net:task") {
+            let id = t["id"].as_str().unwrap().to_string();
+            let outcome = t["outcome"].as_str().map(str::to_string);
+            match out.iter_mut().find(|(i, _)| *i == id) {
+                Some(o) => o.1 = outcome,
+                None => out.push((id, outcome)),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_names_workers_task_is_under_way_only_while_a_request_waits_and_its_notice_ends_with_the_answer() {
+        let net = crate::net::Net::default();
+        let told = net.told();
+        let hosts = vec!["names.example.org".to_string()];
+        net.allow(&Hosted::Names.purpose("finder", &hosts));
+        let task = net.begin_resting(&Hosted::Names.purpose("finder", &hosts), &Hosted::Names.label("finder"), Some(hosts.clone())).unwrap();
+        let m = Models::new(Box::new(MemoryKeys(Mutex::new(HashMap::new()))));
+        m.started("w1", "finder", Hosted::Names, Some(task));
+        // (started, asked nothing: nothing under way, nothing told - its way out stands)
+        assert_eq!((net.running(), tasks_told(&told).len(), net.tasks_resting().len()), (0, 0, 1));
+        // (asked: under way, told as begun; what it says that is no answer - its words as they come, a line of its library's - ends nothing)
+        m.asking("w1", "{\"id\":1,\"op\":\"find_name\",\"name\":\"aspirin\"}\n");
+        m.heard("w1", r#"{"id":1,"partial":"so far"}"#);
+        m.heard("w1", "loading tables");
+        m.heard("w1", r#"{"id":9,"ok":true}"#);
+        assert_eq!(net.running(), 1);
+        assert_eq!(tasks_told(&told), vec![(tasks_told(&told)[0].0.clone(), None)]);
+        // (answered: done, as a finished task is - its notice goes as theirs do - while the worker runs on)
+        m.heard("w1", r#"{"id":1,"ok":true,"result":[]}"#);
+        assert_eq!(net.running(), 0);
+        let first = tasks_told(&told);
+        assert_eq!((first.len(), first[0].1.as_deref()), (1, Some("done")));
+        // (asked again: a spell of its own, under way till its answer; two at once, till the last of them)
+        m.asking("w1", "{\"id\":2,\"op\":\"find_name\",\"name\":\"a\"}\n{\"id\":3,\"op\":\"find_name\",\"name\":\"b\"}\n");
+        m.heard("w1", r#"{"id":2,"ok":false,"error":"none found"}"#);
+        assert_eq!(net.running(), 1, "a request still waits: its task still under way");
+        m.heard("w1", r#"{"id":3,"ok":true,"result":[]}"#);
+        let both = tasks_told(&told);
+        assert_eq!(both.len(), 2);
+        assert!(both[0].0 != both[1].0 && both.iter().all(|(_, o)| o.as_deref() == Some("done")), "{both:?}");
+        // (a request whose writing failed waits for nothing)
+        m.asking("w1", "{\"id\":4,\"op\":\"find_name\",\"name\":\"c\"}\n");
+        m.not_asked("w1", "{\"id\":4,\"op\":\"find_name\",\"name\":\"c\"}\n");
+        assert_eq!(net.running(), 0);
+        // (gone with a request unanswered: that spell failed, and its way out goes with it)
+        m.asking("w1", "{\"id\":5,\"op\":\"find_name\",\"name\":\"d\"}\n");
+        m.ended("w1");
+        let last = tasks_told(&told);
+        assert_eq!((last.len(), last[3].1.as_deref()), (4, Some("failed")));
+        assert_eq!((net.running(), net.tasks_resting().len()), (0, 0));
+        // (ended, asked nothing more: no task begun again)
+        m.asking("w1", "{\"id\":6,\"op\":\"find_name\",\"name\":\"e\"}\n");
+        assert_eq!((net.running(), tasks_told(&told).len()), (0, 4));
     }
 
     #[test]

@@ -41,6 +41,10 @@ struct Inner {
     granted: Mutex<HashSet<String>>,
     /// Tasks under way, by token.
     tasks: Mutex<HashMap<String, Task>>,
+    /// Tasks at rest, by token: a worker's that has nothing asked of it
+    /// (`TaskHandle::rest`) - its last spell ended, as the window was told,
+    /// its way out still standing for when it is asked again (`resume`).
+    resting: Mutex<HashMap<String, Task>>,
     /// Recent connections, newest last.
     recent: Mutex<Vec<Connection>>,
     port: OnceLock<u16>,
@@ -151,6 +155,18 @@ impl Net {
     /// its purpose has not been allowed, or when it names no hosts, or a
     /// pattern that is not a host's.
     pub fn begin(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>) -> Result<TaskHandle, String> {
+        self.open(purpose, label, hosts, true)
+    }
+
+    /// Begins a task, as `begin` does, at rest: its way out stands, but
+    /// nothing is under way till it is asked for something (`resume`) - so
+    /// the window is told of nothing yet. A worker's, started before it is
+    /// asked anything, that lives on between what it is asked.
+    pub fn begin_resting(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>) -> Result<TaskHandle, String> {
+        self.open(purpose, label, hosts, false)
+    }
+
+    fn open(&self, purpose: &str, label: &str, hosts: Option<Vec<String>>, under_way: bool) -> Result<TaskHandle, String> {
         if self.offline() {
             return Err(format!("{label}: Meno is offline"));
         }
@@ -177,9 +193,13 @@ impl Net {
             reason: None,
         };
         let token = uuid::Uuid::new_v4().simple().to_string();
-        self.0.tasks.lock().unwrap().insert(token.clone(), task.clone());
-        self.emit("net:task", &task);
-        self.write_log(&serde_json::json!({ "task": task }));
+        if under_way {
+            self.0.tasks.lock().unwrap().insert(token.clone(), task.clone());
+            self.emit("net:task", &task);
+            self.write_log(&serde_json::json!({ "task": task }));
+        } else {
+            self.0.resting.lock().unwrap().insert(token.clone(), task);
+        }
         Ok(TaskHandle {
             net: self.clone(),
             token,
@@ -187,13 +207,52 @@ impl Net {
         })
     }
 
+    /// Ends a task, its way out with it: the window told, where it was
+    /// under way - one at rest had its end told as it came to rest.
     fn end(&self, token: &str, outcome: &str, reason: Option<&str>) {
-        let Some(mut task) = self.0.tasks.lock().unwrap().remove(token) else {
+        self.0.resting.lock().unwrap().remove(token);
+        let Some(task) = self.0.tasks.lock().unwrap().remove(token) else {
             return;
         };
+        self.ended(task, outcome, reason);
+    }
+
+    fn ended(&self, mut task: Task, outcome: &str, reason: Option<&str>) {
         task.ended = Some(now_ms());
         task.outcome = Some(outcome.into());
         task.reason = reason.map(str::to_string);
+        self.emit("net:task", &task);
+        self.write_log(&serde_json::json!({ "task": task }));
+    }
+
+    /// A task under way come to rest, done: ended as the window sees it,
+    /// its way out kept. Nothing where it is at rest already, or ended.
+    fn rest(&self, token: &str) {
+        // (both held at once - the tasks first, as everywhere - so that its way out is never missing in between)
+        let task = {
+            let mut tasks = self.0.tasks.lock().unwrap();
+            let Some(mut task) = tasks.remove(token) else { return };
+            task.ended = Some(now_ms());
+            task.outcome = Some("done".into());
+            task.reason = None;
+            self.0.resting.lock().unwrap().insert(token.into(), task.clone());
+            task
+        };
+        self.emit("net:task", &task);
+        self.write_log(&serde_json::json!({ "task": task }));
+    }
+
+    /// A task at rest under way again: a spell of its own, begun now, that
+    /// the window is told of as of any task begun. Nothing where it is under
+    /// way already, or ended.
+    fn resume(&self, token: &str) {
+        let task = {
+            let mut tasks = self.0.tasks.lock().unwrap();
+            let Some(last) = self.0.resting.lock().unwrap().remove(token) else { return };
+            let task = Task { id: uuid::Uuid::new_v4().to_string(), started: now_ms(), ended: None, outcome: None, reason: None, ..last };
+            tasks.insert(token.into(), task.clone());
+            task
+        };
         self.emit("net:task", &task);
         self.write_log(&serde_json::json!({ "task": task }));
     }
@@ -391,6 +450,17 @@ impl TaskHandle {
         self.net.end(&self.token, "failed", Some(why));
         self.ended = true;
     }
+
+    /// Nothing more asked of it for now: its spell ended as done - its
+    /// notice then goes as any finished task's does - its way out kept.
+    pub fn rest(&self) {
+        self.net.rest(&self.token);
+    }
+
+    /// Asked for something again: under way, as a spell of its own.
+    pub fn resume(&self) {
+        self.net.resume(&self.token);
+    }
 }
 
 impl Drop for TaskHandle {
@@ -547,10 +617,11 @@ impl Net {
             let _ = client.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n").await;
             return;
         };
-        let task = request
-            .token
-            .as_deref()
-            .and_then(|t| self.0.tasks.lock().unwrap().get(t).cloned());
+        // (one at rest still has its way out: what its worker reaches for unasked goes on the record under its last spell)
+        let task = request.token.as_deref().and_then(|t| {
+            let tasks = self.0.tasks.lock().unwrap();
+            tasks.get(t).cloned().or_else(|| self.0.resting.lock().unwrap().get(t).cloned())
+        });
         let mut c = Connection {
             id: self.0.next.fetch_add(1, Ordering::SeqCst),
             task_id: task.as_ref().map(|t| t.id.clone()),
@@ -776,7 +847,7 @@ pub fn net_set_offline(net: tauri::State<'_, Net>, offline: bool) {
     net.0.offline.store(offline, Ordering::SeqCst);
 }
 
-/// For other modules' tests: a purpose allowed, and the tasks not yet ended.
+/// For other modules' tests: a purpose allowed, the tasks not yet ended, and what the window is told.
 #[cfg(test)]
 impl Net {
     pub fn allow(&self, purpose: &str) {
@@ -787,9 +858,18 @@ impl Net {
         self.0.tasks.lock().unwrap().len()
     }
 
-    /// The tasks not yet ended: each one's purpose, and the hosts it may reach.
-    pub fn tasks_running(&self) -> Vec<(String, Option<Vec<String>>)> {
-        self.0.tasks.lock().unwrap().values().map(|t| (t.purpose.clone(), t.hosts.clone())).collect()
+
+    /// What the window is told from now on, each event and its payload, in turn.
+    pub fn told(&self) -> Arc<Mutex<Vec<(String, serde_json::Value)>>> {
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let kept = heard.clone();
+        let _ = self.0.tell.set(Box::new(move |event, payload| kept.lock().unwrap().push((event.to_string(), payload))));
+        heard
+    }
+
+    /// The tasks at rest: each one's purpose, and the hosts it may reach.
+    pub fn tasks_resting(&self) -> Vec<(String, Option<Vec<String>>)> {
+        self.0.resting.lock().unwrap().values().map(|t| (t.purpose.clone(), t.hosts.clone())).collect()
     }
 }
 
