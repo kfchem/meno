@@ -4,7 +4,7 @@
  * its best, the same from the other side, those tied with it, and the next few. The reading is the core's; these views are the engine's.
  */
 import type { CageViewsOf, ViewPoint } from "../chem/perception/projection/depth";
-import { CAGE_MOST_ATOMS, isCage, projectCage, tiedViews, type CageView } from "./cage";
+import { CAGE_MOST_ATOMS, everyCageView, isCage, type projectCage, type CageView } from "./cage";
 import { perceive, type Molecule } from "./perceive";
 import { ofTheStructure } from "../chem/perception/graph";
 
@@ -57,7 +57,9 @@ function viewsOf(mol: Parameters<typeof projectCage>[0], sys: Parameters<typeof 
     views.push(v);
     if (v.other) views.push(v.other);
   };
-  for (let rank = 0; rank < 4; rank++) add(rank ? projectCage(mol, sys, rank) : projectCage(mol, sys));
-  for (const v of tiedViews(mol, sys)) add(v);
+  // (its best four of one hand, then every view tied with the best: from one search - cage.ts `everyCageView`)
+  const { ranked, tied } = everyCageView(mol, sys);
+  for (const v of ranked) add(v);
+  for (const v of tied) add(v);
   return views.filter((v) => order.every((i) => v.pos.has(i) && v.depth.has(i))).map((v) => order.map((i) => ({ ...v.pos.get(i)!, z: v.depth.get(i)! })));
 }
