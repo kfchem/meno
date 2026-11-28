@@ -40,7 +40,37 @@ describe("a warning tied to the structure it is about, as it was", () => {
 
   it("stays through an edit elsewhere: what it is about kept as it was", () => {
     const said = tiedTo("words", [1, 2], was)!;
-    expect(tiedAfter(said, { atoms: [a1, a2, { id: 9 }, atom(10)], bonds: [b12, bond(9, 10)] })).toBe(said);
+    expect(tiedAfter(said, { atoms: [a1, a2, { id: 9 }, atom(10)], bonds: [b12, bond(9, 10)] }).hidden).toBe(false);
+  });
+
+  it("costs what the structure warned of costs, not the page: on a page of thousands of atoms, an edit elsewhere - a drag's step - reads its few atoms and bonds; the drawing it has seen, nothing", () => {
+    const many = 5000;
+    const atoms = [a1, a2, ...Array.from({ length: many }, (_, i) => atom(100 + i))];
+    const bonds = [b12, ...Array.from({ length: many - 1 }, (_, i) => bond(100 + i, 101 + i))];
+    const said = tiedTo("words", [1, 2], { atoms, bonds })!;
+    // (a step of a drag far off: one atom there made anew, the lists made anew, every element read counted)
+    let reads = 0;
+    const counted = <T,>(list: T[]) =>
+      new Proxy(list, {
+        get: (t, k, r) => {
+          if (typeof k === "string" && /^\d+$/.test(k)) reads++;
+          return Reflect.get(t, k, r);
+        },
+      });
+    const dragged = atoms.map((a, i) => (i === 3000 ? { id: a.id } : a));
+    const step = { atoms: counted(dragged), bonds: counted([...bonds]) };
+    const after = tiedAfter(said, step);
+    expect(after.hidden).toBe(false);
+    // (its two atoms and its one bond, where they lay - no more)
+    expect(reads).toBe(3);
+    reads = 0;
+    expect(tiedAfter(after, step)).toBe(after);
+    expect(reads).toBe(0);
+    // (and a step of a drag of the structure itself: seen as another at once, from where its atom lay)
+    const ownStep = { atoms: counted(atoms.map((a) => (a === a2 ? { id: 2 } : a))), bonds: counted([...bonds]) };
+    reads = 0;
+    expect(tiedAfter(after, ownStep).hidden).toBe(true);
+    expect(reads).toBeLessThanOrEqual(2);
   });
 
   it("about no atoms, is tied to nothing - shown as any other words; said after an undo took its atoms, out of sight from the first", () => {
