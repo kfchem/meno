@@ -3,12 +3,14 @@
  * show them - pure, over atoms' places in the molecule's own frame.
  */
 import * as THREE from "three";
-import { measureLabelBox, type MeasureMark } from "../../../../lib/chem/layout2d";
+import { measureLabelBox, type MeasureMark, type SolidMark } from "../../../../lib/chem/layout2d";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { COLORS } from "../../../theme/colors";
 import type { Carried3D, Molecule3D } from "../store/types";
-import { frameOf, heightOf, labelSpot, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM, type LabelBox } from "./molecule3d";
+import { coveredLength, frameOf, heightOf, labelSpot, lookOf, magnifiedOf, pictureMarks, solidOf, VALUE_GAP, WORLD_PER_ANGSTROM, type LabelBox, type Stick } from "./molecule3d";
 import { seenAt, type Eye } from "./page";
+import { atomGlyphsOf, DIGIT_CELL, glyphsWidth, numbersShownOn } from "./atomNumbers";
+import { JOINT_NUMBER_A, JOINT_RING } from "./jointNumbers";
 
 /**
  * How a measurement is drawn, on the canvas and in a picture alike: its
@@ -146,8 +148,6 @@ export function dashesOf(a: THREE.Vector3, b: THREE.Vector3): [THREE.Vector3, TH
   return out;
 }
 
-/** How far a value moved off its line stands from it, as a share of the value's size. */
-const VALUE_GAP = 0.25;
 
 /**
  * A measurement's lines as they are drawn, in the molecule's own frame: each
@@ -170,13 +170,29 @@ export function piecesOf(marks: MeasureMarks): [THREE.Vector3, THREE.Vector3][] 
  * `size` high (world units), in `family`.
  *
  * A value is written where the canvas writes it - a distance's on the
- * middle of its line - when it covers no atom there. A value is as large as
- * the drawing's R and S, so on a short distance it would cover the atoms it
- * measures. Then it moves off: beside its line, on the side away from the
- * molecule's middle, or the nearest way round from there that covers no atom
- * and no value written before it.
+ * middle of its line - when it stands VALUE_GAP clear there of what the
+ * picture draws (its balls and sticks, `drawn`: the picture's own marks,
+ * `pictureMarks`; and the atom numbers where the sticks meet) and of the
+ * values written before it (`before`, and those of this molecule before
+ * it). A value is as large as the drawing's R and S, so on a short
+ * distance, or across a ring, it would cover the atoms and bonds it lies
+ * over. Then it moves off (valueSpot): beside its line, at the first clear
+ * place found round it, a little further out each time - as far out as
+ * the largest ball drawn needs - and nearer its own line than another's
+ * where it can be. A molecule so crowded that nothing within that is clear
+ * has its value where it covers least. Values are placed before what a
+ * molecule says of itself (notePictureMarks), which goes round them.
  */
-export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, eye?: Eye, family?: string): MeasureMark[] {
+export function measurePictureMarks(
+  m: Carried3D,
+  style: Style3D,
+  size: number,
+  eye?: Eye,
+  family?: string,
+  drawn?: readonly SolidMark[],
+  before: readonly LabelBox[] = [],
+  tally?: { marks: number },
+): MeasureMark[] {
   const measures = m.measures ?? [];
   if (!measures.length) return [];
   const molecule = { ...m, id: 0 } as Molecule3D;
@@ -187,31 +203,32 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
   // (as large as it is shown: docs/WORKSPACE.md, *Magnified display*)
   const mag = magnifiedOf(m);
-  const seenK = (v: THREE.Vector3) => {
+  const seen = (v: THREE.Vector3) => {
     const p = v.clone().applyQuaternion(q).multiplyScalar(mag);
     const at = seenAt(m.at.x + p.x, m.at.y + p.y, height + p.z, eye);
-    return { ...at, k: at.k * mag };
-  };
-  const seen = (v: THREE.Vector3) => {
-    const at = seenK(v);
     return { x: at.x, y: at.y };
   };
   const n = m.atoms.length;
-  // every atom's ball as the picture shows it, and the molecule's middle
-  const radii = solid.radii[look];
-  const balls = Array.from({ length: n }, (_, i) => {
-    const s = seenK(at(places, i));
-    return { x: s.x, y: s.y, r: radii[i] * s.k };
-  });
+  // each atom's place as the picture shows it, and the molecule's middle
+  const points = Array.from({ length: n }, (_, i) => seen(at(places, i)));
   const middle = {
-    x: balls.reduce((t, b) => t + b.x, 0) / Math.max(n, 1),
-    y: balls.reduce((t, b) => t + b.y, 0) / Math.max(n, 1),
+    x: points.reduce((t, b) => t + b.x, 0) / Math.max(n, 1),
+    y: points.reduce((t, b) => t + b.y, 0) / Math.max(n, 1),
   };
-  const placed: LabelBox[] = [];
+  // what the picture draws, as it draws it: its balls and its sticks
+  const balls: { x: number; y: number; r: number }[] = [];
+  const sticks: Stick[] = [];
+  for (const k of drawn ?? pictureMarks(m, style, eye)) {
+    if (k.kind === "ball") balls.push({ x: k.c.x, y: k.c.y, r: k.r });
+    else sticks.push({ a: k.a, b: k.b, r: k.width / 2 });
+  }
+  const placed: LabelBox[] = [...before];
   // (none of an atom its look leaves out - hydrogens on carbon, where it
   // hides them - as the canvas draws none: Molecule3DView)
   const hidden = solid.hidden[look];
-  return measures
+  // (the atom numbers the picture draws where the sticks meet: wider than the joint they stand on)
+  placed.push(...jointNumberBoxes(m, style, seen, mag, eye));
+  const made = measures
     .filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n && !hidden[i]))
     .map((x) => {
       const marks = measureMarks(places, x.atoms);
@@ -228,33 +245,131 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
         size,
         color: COLORS.highlight,
       };
-      const spot = valueSpot(mark, x.atoms.map((i) => balls[i]), middle, balls, placed, family);
-      placed.push(spot);
-      return { ...mark, label: { x: spot.x, y: spot.y } };
+      return { mark, own: x.atoms.map((i) => points[i]) };
     });
+  // (binned once, so that each value's search looks only at what is near it - however large the molecule)
+  const near = marksNear(balls, sticks, 4 * size);
+  const largest = balls.reduce((r, b) => Math.max(r, b.r), 0);
+  return made.map(({ mark, own }, k) => {
+    const others = made.filter((_, j) => j !== k).map((x) => x.mark.lines);
+    const spot = valueSpot(mark, own, middle, near, largest, placed, family, others, tally);
+    placed.push(spot);
+    return { ...mark, label: { x: spot.x, y: spot.y } };
+  });
+}
+
+/**
+ * The boxes of the atom numbers a picture of a molecule draws where its sticks meet (the Sticks look: render3d, utils/jointNumbers),
+ * as `seen` places them: each centred on its atom, as high as its digits and their ring. None in a look with balls, whose numbers
+ * stand within their balls.
+ */
+function jointNumberBoxes(m: Carried3D, style: Style3D, seen: (v: THREE.Vector3) => { x: number; y: number }, mag: number, eye?: Eye): LabelBox[] {
+  const look = lookOf(m);
+  if (!m.atomNumbers || style[look].atoms !== "sticks") return [];
+  const molecule = { ...m, id: 0 } as Molecule3D;
+  const solid = solidOf(molecule, style);
+  const frame = frameOf(solid, m.frame);
+  const places = solid.frames[frame];
+  const nums = atomGlyphsOf(molecule, m.atomNumbers.kind, frame);
+  const on = numbersShownOn(molecule);
+  const left = solid.hidden[look];
+  const height = heightOf(m, solid, look);
+  const out: LabelBox[] = [];
+  m.atoms.forEach((_, i) => {
+    const digits = glyphsWidth(nums[i]);
+    if (!on[i] || left[i] || digits <= 0) return;
+    const p = at(places, i);
+    const c = seen(p);
+    const k = seenAt(m.at.x, m.at.y, height + p.z * mag, eye).k * mag;
+    const h = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * k;
+    out.push({ x: c.x, y: c.y, hx: (h * (digits * DIGIT_CELL + 2 * JOINT_RING)) / 2, hy: (h * (1 + 2 * JOINT_RING)) / 2 });
+  });
+  return out;
+}
+
+/** How many times, half its height at a time, a value is tried further off its line for a clear place (labelSpot `farther`): three of its heights, and as far again as the largest ball drawn is across. */
+const VALUE_FARTHER = 6;
+/** How much nearer its own line than any other measurement's a value must stand to be read as its line's, as a share of its size. */
+const OWN_LINE_NEARER = 0.5;
+/** Within this share of its size of the molecule's middle, a value's line runs through it: which side is away from it is no question of a sign. */
+const SIDE_TIE = 0.1;
+
+/** How far a point is from the nearest of some pieces of line. */
+function offLines(p: { x: number; y: number }, pieces: readonly (readonly [{ x: number; y: number }, { x: number; y: number }])[]): number {
+  let near = Infinity;
+  for (const [a, b] of pieces) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    near = Math.min(near, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+  }
+  return near;
+}
+
+/**
+ * A picture's balls and sticks binned by where they reach, in square cells `cell` across: those that reach into a box, in the order
+ * given - each once - for a value's search to look at, and nothing that cannot touch it.
+ */
+function marksNear(balls: readonly { x: number; y: number; r: number }[], sticks: readonly Stick[], cell: number) {
+  const cells = new Map<string, number[]>();
+  const span = (x0: number, y0: number, x1: number, y1: number, each: (key: string) => void) => {
+    for (let i = Math.floor(x0 / cell); i <= Math.floor(x1 / cell); i++) for (let j = Math.floor(y0 / cell); j <= Math.floor(y1 / cell); j++) each(`${i},${j}`);
+  };
+  const put = (k: number) => (key: string) => {
+    const list = cells.get(key);
+    if (list) list.push(k);
+    else cells.set(key, [k]);
+  };
+  balls.forEach((b, k) => span(b.x - b.r, b.y - b.r, b.x + b.r, b.y + b.r, put(k)));
+  sticks.forEach((st, k) => span(Math.min(st.a.x, st.b.x) - st.r, Math.min(st.a.y, st.b.y) - st.r, Math.max(st.a.x, st.b.x) + st.r, Math.max(st.a.y, st.b.y) + st.r, put(balls.length + k)));
+  return (x0: number, y0: number, x1: number, y1: number) => {
+    const found = new Set<number>();
+    span(x0, y0, x1, y1, (key) => cells.get(key)?.forEach((k) => found.add(k)));
+    const ks = [...found].sort((p, q) => p - q);
+    return { balls: ks.filter((k) => k < balls.length).map((k) => balls[k]), sticks: ks.filter((k) => k >= balls.length).map((k) => sticks[k - balls.length]) };
+  };
 }
 
 /**
  * Where a measurement's value is written in a picture: on its point, when
- * it covers no atom and no value placed before it there; or else off it,
- * clear of them (labelSpot) - a distance's square to its line, an angle's
- * out from its atoms - on the side away from the molecule's `middle`.
+ * it stands VALUE_GAP of its size clear of every ball, stick and value
+ * placed before it there; or else off it, as clear of them (labelSpot) - a
+ * distance's square to its line, an angle's out from its atoms - on the side
+ * away from the molecule's `middle`; or, for a line through the middle, the
+ * upper side (a line up the page: the right). Of the clear places, one
+ * nearer its own line than any of the molecule's `others` is taken first,
+ * so that a value is read as its line's.
  */
 function valueSpot(
   mark: MeasureMark,
   own: readonly { x: number; y: number }[],
   middle: { x: number; y: number },
-  balls: readonly { x: number; y: number; r: number }[],
+  near: ReturnType<typeof marksNear>,
+  largestBall: number,
   placed: readonly LabelBox[],
   family: string | undefined,
+  others: readonly MeasureMark["lines"][] = [],
+  tally?: { marks: number },
 ): LabelBox {
   const box = measureLabelBox(mark, family);
   const o = mark.label;
   const here: LabelBox = { x: o.x, y: o.y, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
+  // (everything as far again as it keeps clear of: VALUE_GAP)
+  const gap = VALUE_GAP * mark.size;
+  // how far out it is looked for: three of its heights, and as far again as the largest ball drawn is across
+  const farther = VALUE_FARTHER + Math.ceil((2 * (largestBall > 0 ? largestBall + gap : 0)) / here.hy);
+  // (what it can touch, anywhere it is tried: its box, its nearest edge at most `out` from its point (labelSpot), reaches no
+  // further across than `out` and its whole width, nor up or down than `out` and its whole height - and a hair, for the sums)
+  const out = gap + farther * here.hy + 0.01 * mark.size;
+  const ax = out + 2 * here.hx + gap, ay = out + 2 * here.hy + gap;
+  const { balls, sticks } = near(o.x - ax, o.y - ay, o.x + ax, o.y + ay);
+  if (tally) tally.marks += balls.length + sticks.length;
+  const grownBalls = balls.filter((b) => b.r > 0).map((b) => ({ ...b, r: b.r + gap }));
+  const grownSticks = sticks.map((st) => ({ ...st, r: st.r + gap }));
+  const grownPlaced = placed.map((p) => ({ ...p, hx: p.hx + gap, hy: p.hy + gap }));
   const covers = (b: { x: number; y: number; r: number }) =>
     Math.hypot(Math.max(Math.abs(b.x - here.x) - here.hx, 0), Math.max(Math.abs(b.y - here.y) - here.hy, 0)) < b.r;
   const crowds = (p: LabelBox) => Math.abs(p.x - here.x) < p.hx + here.hx && Math.abs(p.y - here.y) < p.hy + here.hy;
-  if (!balls.some(covers) && !placed.some(crowds)) return here;
+  if (!grownBalls.some(covers) && !grownSticks.some((st) => coveredLength(here, st) > 0) && !grownPlaced.some(crowds)) return here;
   // the way off: square to a distance's line, out from an angle's atoms
   let way =
     own.length === 2
@@ -262,7 +377,14 @@ function valueSpot(
       : { x: o.x - own.reduce((t, p) => t + p.x, 0) / own.length, y: o.y - own.reduce((t, p) => t + p.y, 0) / own.length };
   if (Math.hypot(way.x, way.y) < 1e-9) way = { x: o.x - middle.x, y: o.y - middle.y };
   if (Math.hypot(way.x, way.y) < 1e-9) way = { x: 0, y: 1 };
-  // (away from the molecule's middle)
-  if (way.x * (o.x - middle.x) + way.y * (o.y - middle.y) < 0) way = { x: -way.x, y: -way.y };
-  return labelSpot(o, VALUE_GAP * mark.size, { x: here.hx, y: here.hy }, way, balls, placed);
+  const len = Math.hypot(way.x, way.y);
+  const u = { x: way.x / len, y: way.y / len };
+  // (away from the molecule's middle; through it, up - or right, for a line up the page - whatever a hair of a turn makes of the sign)
+  const side = u.x * (o.x - middle.x) + u.y * (o.y - middle.y);
+  const flip = Math.abs(side) >= SIDE_TIE * mark.size ? side < 0 : Math.abs(u.y) >= SIDE_TIE ? u.y < 0 : u.x < 0;
+  if (flip) way = { x: -way.x, y: -way.y };
+  const ownLines = mark.lines;
+  // (nearer its own by OWN_LINE_NEARER of its size at least: a tie reads as neither's)
+  const fits = others.length ? (b: LabelBox) => offLines(b, ownLines) < Math.min(...others.map((l) => offLines(b, l))) - OWN_LINE_NEARER * mark.size : undefined;
+  return labelSpot(o, gap, { x: here.hx, y: here.hy }, way, grownBalls, grownPlaced, grownSticks, farther, fits);
 }

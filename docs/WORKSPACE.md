@@ -331,11 +331,12 @@ Taken while stage 1 was built, on 2026-10-03:
   - measured afresh in whatever frame is shown;
   - the pointer goes through a value to the molecule, but the menu and
     Delete over it are the measurement's.
-  - pictures - SVG, PNG, and the EMF for Office - draw them too, as the
-    canvas does: the line (a distance's dashed) and a faint fan in the
-    measurement's blue, and the value on a white ground, as large as the
-    drawing's R and S (agreed 2026-10-05). The frames chip is not drawn: it
-    is a control.
+  - pictures - SVG, PNG, and the EMF for Office - draw them too: the line
+    (a distance's dashed) and a faint fan in the measurement's blue, in
+    depth among the atoms, and the value beside it on a white ground, as
+    large as the drawing's R and S (agreed 2026-10-05), over no atom and
+    no bond the picture draws. The frames chip is not drawn: it is a
+    control.
   - The lines and fans are drawn into the molecules' image, with Meno's
     own drawing of them, so that they stand in depth among the atoms as on
     the canvas: a line running behind a ball is hidden by it (the
@@ -344,11 +345,29 @@ Taken while stage 1 was built, on 2026-10-03:
     as text. Without WebGL to draw the image, the molecules are drawn as
     discs, and the lines over them.
   - In a picture, a value is written where the canvas writes it, when it
-    covers no atom there. When it would, it moves off: beside its line,
-    on the side away from the molecule's middle, clear of the atoms and of
-    the values written before it. At that size, a value on a short
-    distance - an O and an N across two bonds - covered the very atoms it
-    measured (found on Windows, 2026-10-05).
+    stands clear there - a quarter of its letters' size off - of every
+    atom and bond the picture draws, every atom number drawn where the
+    sticks meet (the Sticks look) and every value written before it. When
+    it does not, it moves off: beside its line, on the side away from the
+    molecule's middle - for a line through the middle, as a ring's 1,4
+    distance is, the upper side (for a line up the page, the right), so
+    that turning the molecule a little does not send it across - near its
+    line, at the first clear place found round it, a little further out
+    each time. A hydrogen the look hides is not drawn, so not in the way.
+    At that size, a value on a short distance - an O and an N across two
+    bonds - covered the very atoms it measured (found on Windows,
+    2026-10-05); one across a ring is wider than the ring, and goes out
+    past it - further, space-filling, where the balls are larger. Of the
+    clear places, one plainly nearer its own line than any other
+    measurement's (by half its letters' size) is taken first, so that it reads as that line's; where there is none,
+    as with many lines through one place, it may stand nearer another's,
+    and nothing joins it to its own. In a molecule so crowded that no
+    place near the line is clear, the value goes where it covers least.
+  - What a molecule says over itself in a picture (*No H in file*, *C–H
+    hidden* and the rest: *Said over it*, below) is written after the
+    values and goes round them: up, or sideways along the molecule's top,
+    only as far as it must to stand clear of each by as much as a value
+    keeps; the picture grows to hold it.
 - **Frames.**
   - A molecule with frames has a chip under it: which frame, of how many.
     Clicked, the chip opens to a slider; clicked again, or with a press
@@ -2427,7 +2446,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   no room over it in the view - never as the molecule itself is pointed at; a
   screen reader reads them at rest (`components/NotesMark3D`; the
   maintainer, 2026-11-25). None where there is nothing to say. Every
-  picture made of it (SVG, PNG, EMF) says them over it in words.
+  picture made of it (SVG, PNG, EMF) says them over it in words, centred
+  over its highest atom, moved up or sideways only as far as it must to
+  stand clear of a measurement's value (*Measurements*, above).
 - **Found from its shape.** As a molecule comes in, opened or pasted,
   with its orders unknown, they are sought once - with the request its
   formula is drawn by (`drawing_of`, `perceive`: RDKit's
