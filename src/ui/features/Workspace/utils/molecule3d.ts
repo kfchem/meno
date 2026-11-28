@@ -206,9 +206,10 @@ export function valueSpots(values: readonly ValueAt[], page = 1): SpotAbout[] {
  * sticks (bonds) where it can be: the way `preferred` - the widest gap
  * between its bonds - when that is clear, or else the clear way nearest it;
  * or a little further out, the same way round - half its height further at
- * a time, `farther` times; or else where it hides least. A ball hidden
- * outright counts for more than two touched at their edges, and either for
- * more than a bond covered.
+ * a time, `farther` times; or else where it hides least. Of the clear
+ * places, the first that `fits` (where it is given) is taken before any
+ * other. A ball hidden outright counts for more than two touched at their
+ * edges, and either for more than a bond covered.
  */
 export function labelSpot(
   o: { x: number; y: number },
@@ -219,9 +220,11 @@ export function labelSpot(
   placed: readonly LabelBox[],
   sticks: readonly Stick[] = [],
   farther = 1,
+  fits?: (box: LabelBox) => boolean,
 ): LabelBox {
   const start = Math.atan2(preferred.y, preferred.x);
   let best: { box: LabelBox; hides: number } | null = null;
+  let clear: LabelBox | null = null;
   for (let j = 0; j <= farther; j++) {
     const out = reach + j * half.y;
     for (let k = 0; k < 24; k++) {
@@ -245,11 +248,14 @@ export function labelSpot(
         if (ox > 0 && oy > 0) hides += 2 * Math.min(ox, oy);
       }
       for (const st of sticks) hides += STICK_WEIGHT * coveredLength(box, st);
-      if (hides < CLEAR_SHARE * half.y) return box;
+      if (hides < CLEAR_SHARE * half.y) {
+        if (!fits || fits(box)) return box;
+        clear ??= box;
+      }
       if (!best || hides < best.hides) best = { box, hides };
     }
   }
-  return best!.box;
+  return clear ?? best!.box;
 }
 
 /**
@@ -1523,8 +1529,11 @@ export function plainNoteOf(m: Molecule3D): string | null {
   return entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy, lastUnfinished(m));
 }
 
-/** How far what a molecule says keeps from a value it goes round, as a share of its size. */
-const NOTE_APART = 0.15;
+/**
+ * How far what a picture writes over a molecule - a measurement's value, what the molecule says - keeps clear of what the
+ * picture draws and of each other, as a share of its letters' size: as far as a value moved off its line stands from it.
+ */
+export const VALUE_GAP = 0.25;
 
 /**
  * What a picture of a molecule says over it (`saidOf`): each `size` high, one over another, centred over its
@@ -1572,13 +1581,15 @@ export function notePictureMarks(
     color: HIDDEN_MARK_COLOUR,
   }));
   const boxes = said.map((t) => measureLabelBox(t, family));
+  // (clear: VALUE_GAP of its size from each, as a value keeps - a hair less, for the sums below)
+  const gap = VALUE_GAP * size;
+  const g = gap * (1 - 1e-9);
   const clearAt = (dx: number, dy: number) =>
     boxes.every((b) =>
-      placed.every((p) => b.max.x + dx <= p.x - p.hx || b.min.x + dx >= p.x + p.hx || b.max.y + dy <= p.y - p.hy || b.min.y + dy >= p.y + p.hy),
+      placed.every((p) => b.max.x + dx <= p.x - p.hx - g || b.min.x + dx >= p.x + p.hx + g || b.max.y + dy <= p.y - p.hy - g || b.min.y + dy >= p.y + p.hy + g),
     );
   if (clearAt(0, 0)) return said;
   // the least way off that is clear: up, to just over a value; sideways, to just beside one - its middle over the molecule still
-  const gap = NOTE_APART * size;
   const left = Math.min(...boxes.map((b) => b.min.x)), right = Math.max(...boxes.map((b) => b.max.x));
   const foot = Math.min(...boxes.map((b) => b.min.y));
   const ups = [0, ...placed.map((p) => p.y + p.hy + gap - foot).filter((d) => d > 0)];

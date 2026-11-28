@@ -16,7 +16,7 @@ import { DIGIT_CELL, digitAtlas, glyphsGlsl } from "./atomNumbers";
 /** How high a number's digits stand where the sticks meet, in ångströms: as a carbon's on its ball, ball and stick. */
 export const JOINT_NUMBER_A = 0.27;
 /** How far the ring round the digits reaches, as a share of their height. */
-const RING = 0.12;
+export const JOINT_RING = 0.12;
 /** Below this lightness of an atom's own colour (linear), its number is in white ink; above, dark - as on a ball. */
 const INK_TURN = 0.4;
 
@@ -62,9 +62,9 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
         // (at the atom, facing the viewer, a little in front of where the sticks meet)
         vec4 at = modelViewMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
         float scale = length( ( modelViewMatrix * vec4( 1.0, 0.0, 0.0, 0.0 ) ).xyz );
-        float h = height * scale * ( 1.0 + 2.0 * ${RING.toFixed(3)} );
+        float h = height * scale * ( 1.0 + 2.0 * ${JOINT_RING.toFixed(3)} );
         at.z += lift * scale;
-        at.xy += position.xy * vec2( h * ( digits * ${DIGIT_CELL.toFixed(3)} + 2.0 * ${RING.toFixed(3)} ) / ( 1.0 + 2.0 * ${RING.toFixed(3)} ), h );
+        at.xy += position.xy * vec2( h * ( digits * ${DIGIT_CELL.toFixed(3)} + 2.0 * ${JOINT_RING.toFixed(3)} ) / ( 1.0 + 2.0 * ${JOINT_RING.toFixed(3)} ), h );
         vPx = height * scale * pxPer;
         gl_Position = projectionMatrix * at;
         if ( digits <= 0.0 || jointShown <= 0.0 ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
@@ -86,7 +86,7 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
         return glyphsCover( vNumber, q, dx, dy );
       }
       void main() {
-        float ring = ${RING.toFixed(3)};
+        float ring = ${JOINT_RING.toFixed(3)};
         // (from the quad, with room for the ring round the digits)
         vec2 q = vec2( vUv.x * ( vDigits * ${DIGIT_CELL.toFixed(3)} + 2.0 * ring ) - ring, vUv.y * ( 1.0 + 2.0 * ring ) - ring );
         q.x /= ${DIGIT_CELL.toFixed(3)};

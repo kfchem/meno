@@ -7,8 +7,10 @@ import { measureLabelBox, type MeasureMark, type SolidMark } from "../../../../l
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { COLORS } from "../../../theme/colors";
 import type { Carried3D, Molecule3D } from "../store/types";
-import { coveredLength, frameOf, heightOf, labelSpot, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM, type LabelBox, type Stick } from "./molecule3d";
+import { coveredLength, frameOf, heightOf, labelSpot, lookOf, magnifiedOf, pictureMarks, solidOf, VALUE_GAP, WORLD_PER_ANGSTROM, type LabelBox, type Stick } from "./molecule3d";
 import { seenAt, type Eye } from "./page";
+import { atomGlyphsOf, DIGIT_CELL, glyphsWidth, numbersShownOn } from "./atomNumbers";
+import { JOINT_NUMBER_A, JOINT_RING } from "./jointNumbers";
 
 /**
  * How a measurement is drawn, on the canvas and in a picture alike: its
@@ -146,8 +148,6 @@ export function dashesOf(a: THREE.Vector3, b: THREE.Vector3): [THREE.Vector3, TH
   return out;
 }
 
-/** How far a value moved off its line stands from it, as a share of the value's size. */
-const VALUE_GAP = 0.25;
 
 /**
  * A measurement's lines as they are drawn, in the molecule's own frame: each
@@ -170,17 +170,18 @@ export function piecesOf(marks: MeasureMarks): [THREE.Vector3, THREE.Vector3][] 
  * `size` high (world units), in `family`.
  *
  * A value is written where the canvas writes it - a distance's on the
- * middle of its line - when it covers nothing the picture draws there (a
- * ball or a stick, `drawn`: the picture's own marks, `pictureMarks`) and no
- * value written before it (`before`, and those of this molecule before it).
- * A value is as large as the drawing's R and S, so on a short distance, or
- * across a ring, it would cover the atoms and bonds it lies over. Then it
- * moves off: beside its line, on the side away from the molecule's middle,
- * or the nearest way round from there that is clear - as near its line as
- * it can stand clear, out to VALUE_FARTHER of its half heights further. A
- * molecule so crowded that nothing within that is clear has its value where
- * it covers least. Values are placed before what a molecule says of itself
- * (notePictureMarks), which goes round them.
+ * middle of its line - when it stands VALUE_GAP clear there of what the
+ * picture draws (its balls and sticks, `drawn`: the picture's own marks,
+ * `pictureMarks`; and the atom numbers where the sticks meet) and of the
+ * values written before it (`before`, and those of this molecule before
+ * it). A value is as large as the drawing's R and S, so on a short
+ * distance, or across a ring, it would cover the atoms and bonds it lies
+ * over. Then it moves off (valueSpot): beside its line, at the first clear
+ * place found round it, a little further out each time - as far out as
+ * the largest ball drawn needs - and nearer its own line than another's
+ * where it can be. A molecule so crowded that nothing within that is clear
+ * has its value where it covers least. Values are placed before what a
+ * molecule says of itself (notePictureMarks), which goes round them.
  */
 export function measurePictureMarks(
   m: Carried3D,
@@ -224,7 +225,9 @@ export function measurePictureMarks(
   // (none of an atom its look leaves out - hydrogens on carbon, where it
   // hides them - as the canvas draws none: Molecule3DView)
   const hidden = solid.hidden[look];
-  return measures
+  // (the atom numbers the picture draws where the sticks meet: wider than the joint they stand on)
+  placed.push(...jointNumberBoxes(m, style, seen, mag, eye));
+  const made = measures
     .filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n && !hidden[i]))
     .map((x) => {
       const marks = measureMarks(places, x.atoms);
@@ -241,21 +244,70 @@ export function measurePictureMarks(
         size,
         color: COLORS.highlight,
       };
-      const spot = valueSpot(mark, x.atoms.map((i) => points[i]), middle, balls, sticks, placed, family);
-      placed.push(spot);
-      return { ...mark, label: { x: spot.x, y: spot.y } };
+      return { mark, own: x.atoms.map((i) => points[i]) };
     });
+  return made.map(({ mark, own }, k) => {
+    const others = made.filter((_, j) => j !== k).map((x) => x.mark.lines);
+    const spot = valueSpot(mark, own, middle, balls, sticks, placed, family, others);
+    placed.push(spot);
+    return { ...mark, label: { x: spot.x, y: spot.y } };
+  });
 }
 
-/** How many times, half its height at a time, a value is tried further off its line for a clear place (labelSpot `farther`): three of its heights in all. */
+/**
+ * The boxes of the atom numbers a picture of a molecule draws where its sticks meet (the Sticks look: render3d, utils/jointNumbers),
+ * as `seen` places them: each centred on its atom, as high as its digits and their ring. None in a look with balls, whose numbers
+ * stand within their balls.
+ */
+function jointNumberBoxes(m: Carried3D, style: Style3D, seen: (v: THREE.Vector3) => { x: number; y: number }, mag: number, eye?: Eye): LabelBox[] {
+  const look = lookOf(m);
+  if (!m.atomNumbers || style[look].atoms !== "sticks") return [];
+  const molecule = { ...m, id: 0 } as Molecule3D;
+  const solid = solidOf(molecule, style);
+  const frame = frameOf(solid, m.frame);
+  const places = solid.frames[frame];
+  const nums = atomGlyphsOf(molecule, m.atomNumbers.kind, frame);
+  const on = numbersShownOn(molecule);
+  const left = solid.hidden[look];
+  const height = heightOf(m, solid, look);
+  const out: LabelBox[] = [];
+  m.atoms.forEach((_, i) => {
+    const digits = glyphsWidth(nums[i]);
+    if (!on[i] || left[i] || digits <= 0) return;
+    const p = at(places, i);
+    const c = seen(p);
+    const k = seenAt(m.at.x, m.at.y, height + p.z * mag, eye).k * mag;
+    const h = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * k;
+    out.push({ x: c.x, y: c.y, hx: (h * (digits * DIGIT_CELL + 2 * JOINT_RING)) / 2, hy: (h * (1 + 2 * JOINT_RING)) / 2 });
+  });
+  return out;
+}
+
+/** How many times, half its height at a time, a value is tried further off its line for a clear place (labelSpot `farther`): three of its heights, and as far again as the largest ball drawn is across. */
 const VALUE_FARTHER = 6;
+/** Within this share of its size of the molecule's middle, a value's line runs through it: which side is away from it is no question of a sign. */
+const SIDE_TIE = 0.1;
+
+/** How far a point is from the nearest of some pieces of line. */
+function offLines(p: { x: number; y: number }, pieces: readonly (readonly [{ x: number; y: number }, { x: number; y: number }])[]): number {
+  let near = Infinity;
+  for (const [a, b] of pieces) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    near = Math.min(near, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+  }
+  return near;
+}
 
 /**
  * Where a measurement's value is written in a picture: on its point, when
- * it covers no ball, no stick and no value placed before it there; or else
- * off it, clear of them (labelSpot) - a distance's square to its line, an
- * angle's out from its atoms - on the side away from the molecule's
- * `middle`.
+ * it stands VALUE_GAP of its size clear of every ball, stick and value
+ * placed before it there; or else off it, as clear of them (labelSpot) - a
+ * distance's square to its line, an angle's out from its atoms - on the side
+ * away from the molecule's `middle`; or, for a line through the middle, the
+ * upper side (a line up the page: the right). Of the clear places, one
+ * nearer its own line than any of the molecule's `others` is taken first,
+ * so that a value is read as its line's.
  */
 function valueSpot(
   mark: MeasureMark,
@@ -265,14 +317,20 @@ function valueSpot(
   sticks: readonly Stick[],
   placed: readonly LabelBox[],
   family: string | undefined,
+  others: readonly MeasureMark["lines"][] = [],
 ): LabelBox {
   const box = measureLabelBox(mark, family);
   const o = mark.label;
   const here: LabelBox = { x: o.x, y: o.y, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
+  // (everything as far again as it keeps clear of: VALUE_GAP)
+  const gap = VALUE_GAP * mark.size;
+  const grownBalls = balls.filter((b) => b.r > 0).map((b) => ({ ...b, r: b.r + gap }));
+  const grownSticks = sticks.map((st) => ({ ...st, r: st.r + gap }));
+  const grownPlaced = placed.map((p) => ({ ...p, hx: p.hx + gap, hy: p.hy + gap }));
   const covers = (b: { x: number; y: number; r: number }) =>
     Math.hypot(Math.max(Math.abs(b.x - here.x) - here.hx, 0), Math.max(Math.abs(b.y - here.y) - here.hy, 0)) < b.r;
   const crowds = (p: LabelBox) => Math.abs(p.x - here.x) < p.hx + here.hx && Math.abs(p.y - here.y) < p.hy + here.hy;
-  if (!balls.some(covers) && !sticks.some((st) => coveredLength(here, st) > 0) && !placed.some(crowds)) return here;
+  if (!grownBalls.some(covers) && !grownSticks.some((st) => coveredLength(here, st) > 0) && !grownPlaced.some(crowds)) return here;
   // the way off: square to a distance's line, out from an angle's atoms
   let way =
     own.length === 2
@@ -280,7 +338,15 @@ function valueSpot(
       : { x: o.x - own.reduce((t, p) => t + p.x, 0) / own.length, y: o.y - own.reduce((t, p) => t + p.y, 0) / own.length };
   if (Math.hypot(way.x, way.y) < 1e-9) way = { x: o.x - middle.x, y: o.y - middle.y };
   if (Math.hypot(way.x, way.y) < 1e-9) way = { x: 0, y: 1 };
-  // (away from the molecule's middle)
-  if (way.x * (o.x - middle.x) + way.y * (o.y - middle.y) < 0) way = { x: -way.x, y: -way.y };
-  return labelSpot(o, VALUE_GAP * mark.size, { x: here.hx, y: here.hy }, way, balls, placed, sticks, VALUE_FARTHER);
+  const len = Math.hypot(way.x, way.y);
+  const u = { x: way.x / len, y: way.y / len };
+  // (away from the molecule's middle; through it, up - or right, for a line up the page - whatever a hair of a turn makes of the sign)
+  const side = u.x * (o.x - middle.x) + u.y * (o.y - middle.y);
+  const flip = Math.abs(side) >= SIDE_TIE * mark.size ? side < 0 : Math.abs(u.y) >= SIDE_TIE ? u.y < 0 : u.x < 0;
+  if (flip) way = { x: -way.x, y: -way.y };
+  const largest = grownBalls.reduce((r, b) => Math.max(r, b.r), 0);
+  const farther = VALUE_FARTHER + Math.ceil((2 * largest) / here.hy);
+  const ownLines = mark.lines;
+  const fits = others.length ? (b: LabelBox) => offLines(b, ownLines) < Math.min(...others.map((l) => offLines(b, l))) : undefined;
+  return labelSpot(o, gap, { x: here.hx, y: here.hy }, way, grownBalls, grownPlaced, grownSticks, farther, fits);
 }

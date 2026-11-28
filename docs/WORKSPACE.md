@@ -345,20 +345,29 @@ Taken while stage 1 was built, on 2026-10-03:
     as text. Without WebGL to draw the image, the molecules are drawn as
     discs, and the lines over them.
   - In a picture, a value is written where the canvas writes it, when it
-    covers no atom and no bond the picture draws there. When it would, it
-    moves off: beside its line, on the side away from the molecule's
-    middle, as near it as it can stand clear of the atoms and bonds drawn
-    (a hydrogen the look hides is not drawn, so not in the way) and of the
-    values written before it. At that size, a value on a short distance -
-    an O and an N across two bonds - covered the very atoms it measured
-    (found on Windows, 2026-10-05); one across a ring is wider than the
-    ring, and goes out past it. In a molecule so crowded that no place
-    near the line is clear, the value goes where it covers least.
+    stands clear there - a quarter of its letters' size off - of every
+    atom and bond the picture draws, every atom number drawn where the
+    sticks meet (the Sticks look) and every value written before it. When
+    it does not, it moves off: beside its line, on the side away from the
+    molecule's middle - for a line through the middle, as a ring's 1,4
+    distance is, the upper side (for a line up the page, the right), so
+    that turning the molecule a little does not send it across - near its
+    line, at the first clear place found round it, a little further out
+    each time. A hydrogen the look hides is not drawn, so not in the way.
+    At that size, a value on a short distance - an O and an N across two
+    bonds - covered the very atoms it measured (found on Windows,
+    2026-10-05); one across a ring is wider than the ring, and goes out
+    past it - further, space-filling, where the balls are larger. Of the
+    clear places, one nearer its own line than any other measurement's is
+    taken first, so that it reads as that line's; where there is none,
+    as with many lines through one place, it may stand nearer another's,
+    and nothing joins it to its own. In a molecule so crowded that no
+    place near the line is clear, the value goes where it covers least.
   - What a molecule says over itself in a picture (*No H in file*, *C–H
     hidden* and the rest: *Said over it*, below) is written after the
     values and goes round them: up, or sideways along the molecule's top,
-    only as far as it must to stand clear of each; the picture grows to
-    hold it.
+    only as far as it must to stand clear of each by as much as a value
+    keeps; the picture grows to hold it.
 - **Frames.**
   - A molecule with frames has a chip under it: which frame, of how many.
     Clicked, the chip opens to a slider; clicked again, or with a press

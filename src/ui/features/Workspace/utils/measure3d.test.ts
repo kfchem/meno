@@ -196,17 +196,17 @@ describe("a measurement in a picture", () => {
   })();
   const hidingH = { ...STYLE_3D, primary: { ...STYLE_3D.primary, hydrogens: "carbonHidden" as const } };
   /** How far a value's box, as a picture writes it, runs into what the picture draws: the deepest into a drawn ball, and the most of a drawn stick's band it covers. */
-  const runsInto = (m: typeof ring, style: typeof STYLE_3D, mark: ReturnType<typeof measurePictureMarks>[number]) => {
+  const runsInto = (m: typeof ring, style: typeof STYLE_3D, mark: ReturnType<typeof measurePictureMarks>[number], apart = 0) => {
     const b = measureLabelBox(mark, undefined);
     const box = { x: (b.min.x + b.max.x) / 2, y: (b.min.y + b.max.y) / 2, hx: (b.max.x - b.min.x) / 2, hy: (b.max.y - b.min.y) / 2 };
-    let ball = 0;
+    let ball = -Infinity;
     let stick = 0;
     for (const k of pictureMarks(m, style)) {
       if (k.kind === "ball") {
         const dx = Math.max(Math.abs(k.c.x - box.x) - box.hx, 0);
         const dy = Math.max(Math.abs(k.c.y - box.y) - box.hy, 0);
         ball = Math.max(ball, k.r - Math.hypot(dx, dy));
-      } else stick = Math.max(stick, coveredLength(box, { a: k.a, b: k.b, r: k.width / 2 }));
+      } else stick = Math.max(stick, coveredLength(box, { a: k.a, b: k.b, r: k.width / 2 + apart }));
     }
     return { ball, stick };
   };
@@ -216,9 +216,10 @@ describe("a measurement in a picture", () => {
       for (const size of [0.75, 1]) {
         const [mark] = measurePictureMarks(ring, style, size);
         const { ball, stick } = runsInto(ring, style, mark);
-        // (clear: at most a hair's breadth into a ball's edge, none of a bond)
-        expect(ball).toBeLessThan(0.05 * size);
+        // (clear, and a little way off: a quarter of its letters' size from every ball and bond, but for a hair)
+        expect(ball).toBeLessThan(-0.2 * size);
         expect(stick).toBe(0);
+        expect(runsInto(ring, style, mark, 0.2 * size).stick).toBe(0);
         // and beside what it measures: its middle no further from the line's middle than the ring and the value reach
         const line = { x: (mark.lines[0][0].x + mark.lines[mark.lines.length - 1][1].x) / 2, y: (mark.lines[0][0].y + mark.lines[mark.lines.length - 1][1].y) / 2 };
         expect(Math.hypot(mark.label.x - line.x, mark.label.y - line.y)).toBeLessThan((2.48 + 0.6) * WORLD_PER_ANGSTROM + 2 * size);
@@ -244,5 +245,61 @@ describe("a measurement in a picture", () => {
     const c = measureLabelBox(second, undefined);
     const overlap = Math.min(b.max.x, c.max.x) > Math.max(b.min.x, c.min.x) && Math.min(b.max.y, c.max.y) > Math.max(b.min.y, c.min.y);
     expect(overlap).toBe(false);
+  });
+
+  it("puts a value across a ring on the same side however little the ring is turned: up, for a line across the page", () => {
+    // (the line through the ring's middle: which side is away from the middle is a sign of nothing; the upper side is taken)
+    const hair = (deg: number) => {
+      const h = (deg * Math.PI) / 360;
+      return [Math.sin(h), 0, 0, Math.cos(h)] as [number, number, number, number];
+    };
+    for (const deg of [0, 0.01, -0.01, 1, -1]) {
+      const [mark] = measurePictureMarks({ ...ring, turn: hair(deg) }, hidingH, 0.75);
+      const lineY = (mark.lines[0][0].y + mark.lines[mark.lines.length - 1][1].y) / 2;
+      expect(mark.label.y).toBeGreaterThan(lineY);
+    }
+  });
+
+  it("puts each of three values across one ring nearer its own line than either other's", () => {
+    const three = { ...ring, measures: [{ id: 1, atoms: [0, 3] }, { id: 2, atoms: [1, 4] }, { id: 3, atoms: [2, 5] }] };
+    const marks = measurePictureMarks(three, hidingH, 0.75);
+    expect(marks).toHaveLength(3);
+    const off = (p: { x: number; y: number }, m: (typeof marks)[number]) => {
+      const a = m.lines[0][0], b = m.lines[m.lines.length - 1][1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
+      return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+    };
+    marks.forEach((m, k) => {
+      for (const [j, other] of marks.entries()) if (j !== k) expect(off(m.label, m)).toBeLessThan(off(m.label, other));
+      const { ball, stick } = runsInto(three, hidingH, m);
+      expect(ball).toBeLessThan(0);
+      expect(stick).toBe(0);
+    });
+  });
+
+  it("finds a clear place for a value across a ring drawn space-filling", () => {
+    const space = { ...hidingH, primary: { ...hidingH.primary, atoms: "space" as const } };
+    const [mark] = measurePictureMarks(ring, space, 0.75);
+    const { ball } = runsInto(ring, space, mark);
+    expect(ball).toBeLessThan(0);
+  });
+
+  it("keeps a value clear of the atom numbers drawn where the sticks meet", () => {
+    const sticks = { ...hidingH, primary: { ...hidingH.primary, atoms: "sticks" as const } };
+    const numbered = { ...ring, atomNumbers: { kind: "order" as const }, measures: [{ id: 1, atoms: [0, 3] }, { id: 2, atoms: [1, 4] }, { id: 3, atoms: [2, 5] }] };
+    // (a number's box: centred on its atom, 0.27 Å high and its ring round it - three digits' width at most here, one digit each)
+    const solid = solidOf({ ...numbered, id: 0 } as unknown as Molecule3D, sticks);
+    for (const m of measurePictureMarks(numbered, sticks, 0.75)) {
+      const b = measureLabelBox(m, undefined);
+      for (let i = 0; i < 6; i++) {
+        const x = solid.frames[0][3 * i] + numbered.at.x;
+        const y = solid.frames[0][3 * i + 1] + numbered.at.y;
+        const h = 0.27 * WORLD_PER_ANGSTROM;
+        const hx = (h * (0.62 + 0.24)) / 2, hy = (h * 1.24) / 2;
+        const apart = Math.min(b.max.x, x + hx) <= Math.max(b.min.x, x - hx) || Math.min(b.max.y, y + hy) <= Math.max(b.min.y, y - hy);
+        expect(apart).toBe(true);
+      }
+    }
   });
 });
