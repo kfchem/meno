@@ -832,12 +832,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!still) return;
       if (ended === "stopped") {
         const took = Date.now() - at;
-        return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, kind: still.kind, ...(still.options ? { options: still.options } : {}) }));
+        return void doc.edit("stop step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, kind: still.kind, ...(still.options ? { options: still.options } : {}) }));
       }
     }
     const d0 = doc.getState();
     const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
-    doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at, turnsOf: turnsFor }));
+    doc.edit("run step", (x) => runMenoStep(x, id, { ...w, byOf, now: at, turnsOf: turnsFor }));
     viewsKept(d0, id, before);
   }
 
