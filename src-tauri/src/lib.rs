@@ -31,6 +31,7 @@ mod pdfmake;
 mod net;
 mod editmenu;
 mod opened;
+mod pagestop;
 mod pinch;
 mod pixienv;
 mod plugfiles;
@@ -1198,6 +1199,18 @@ pub fn run() {
     {
         builder = builder.menu(editmenu::menu).on_menu_event(|app, event| editmenu::chosen(app, event.id().as_ref()));
     }
+    // macOS: the main window's page stopped under Meno - said, and started again (pagestop.rs); any other window's
+    // started again, as the webview does where nothing is asked of it
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.on_web_content_process_terminate(|webview| {
+            if webview.label() == "main" {
+                pagestop::stopped(webview.app_handle(), pagestop::Kind::Ended);
+            } else {
+                let _ = webview.reload();
+            }
+        });
+    }
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
@@ -1207,6 +1220,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ProcState(Mutex::new(HashMap::new())))
         .manage(net::Net::default())
+        .manage(pagestop::PageStop::default())
         .manage(jobs::WorkerAwake::default())
         .manage(model::Models::new(Box::new(model::SystemKeys)))
         .manage(pdf::PdfState::default())
@@ -1238,6 +1252,9 @@ pub fn run() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), &hidden)?.build()?
             };
             windowstate::restore(&window, app.path().app_data_dir().ok().as_deref());
+            // (its page stopping under Meno, watched for: pagestop.rs - on macOS through the builder, above)
+            #[cfg(windows)]
+            pagestop::watch(&window)?;
             // (and where Tauri has the data folder, should that be elsewhere)
             if let Ok(data) = app.path().app_data_dir() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());
@@ -1358,6 +1375,13 @@ pub fn run() {
             present::present_window,
             // workspace files opened from outside Meno
             opened::opened_files,
+            // the page stopped under Meno: what it tells as it goes, and what it is told as it comes back
+            pagestop::page_saving,
+            pagestop::page_saved,
+            pagestop::page_files,
+            pagestop::page_hold_opens,
+            pagestop::page_came_back,
+            pagestop::page_came_back_later,
             // Meno as the default app for them, chosen in Settings
             defaults::defaults_state,
             defaults::defaults_use,

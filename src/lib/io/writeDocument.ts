@@ -7,6 +7,7 @@
  * its folders - its settings - through `writeAppFile`, the same way.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { saveTokenFor } from "../pageBack";
 
 /** A job's file to be added to a workspace's file from the disk as it is written (src-tauri keptjobs.rs `Appended`): from its job's folder, or from the workspace's file it was opened from (`from`). */
 export type Appended = { sha256: string; job: string; name: string; from?: string };
@@ -24,6 +25,9 @@ export async function writeDocument(path: string, content: Uint8Array | string, 
   let bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
   const headers: Record<string, string> = { path: encodeURIComponent(path) };
   if (keepOld) headers["keep-old"] = "1";
+  // (a workspace's save under way: sent with its token, so that the app follows its write - lib/pageBack)
+  const save = saveTokenFor(path);
+  if (save !== undefined) headers.save = String(save);
   if (appended.length) {
     const list = new TextEncoder().encode(JSON.stringify(appended));
     const both = new Uint8Array(bytes.length + list.length);

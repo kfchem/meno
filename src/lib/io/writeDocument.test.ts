@@ -35,6 +35,20 @@ describe("a document written where the chemist chose", () => {
   });
 });
 
+describe("a workspace's save under way", () => {
+  it("sends its write with the save's token, and no other file's", async () => {
+    const { whileSaving } = await import("../pageBack");
+    sent.length = 0;
+    const to = async (command: string) => (command === "page_saving" ? 41 : null);
+    await whileSaving("/w/Route.meno", async () => {
+      await writeDocument("/w/Route.meno", new Uint8Array([0x50, 0x4b]));
+      await writeDocument("/w/Route.svg", "<svg/>");
+    }, to);
+    await writeDocument("/w/Route.meno", new Uint8Array([0x50, 0x4b]));
+    expect(sent.filter((s) => s.cmd === "write_document").map((s) => s.headers.save)).toEqual(["41", undefined, undefined]);
+  });
+});
+
 describe("Meno's own files", () => {
   it("go to Meno's writer as their bytes, by a path inside the folder named", async () => {
     sent.length = 0;

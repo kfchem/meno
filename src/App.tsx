@@ -72,6 +72,7 @@ import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
 import { watchOpenedFiles } from "./lib/openedFiles";
+import { openUnlessHeld, sayCameBack, tellOpenFiles } from "./lib/pageBack";
 import { onItsWay } from "./ui/views/onItsWay";
 
 /** Meno started by the system: every page waits, not empty, until it is known whether a file was opened with it (ui/views/onItsWay). */
@@ -96,6 +97,9 @@ export default function App() {
   };
   // Shown when an action is refused, e.g. the WebGL canvas budget is full.
   const [notice, setNotice] = useState<string | null>(null);
+  // What came of the work, where this page is the one started again after the page stopped under Meno: kept
+  // above any notice said after it, till dismissed (lib/pageBack).
+  const [backSaid, setBackSaid] = useState<string[]>([]);
   // (a talk given in the window: the title bar makes way for it)
   const presenting = usePresentingWindow((s) => s.on);
   // Something with unsaved changes, waiting on a yes or a no.
@@ -201,6 +205,17 @@ export default function App() {
       ),
     [],
   );
+  // ...and the files they hold, told to the app as they change, to be opened
+  // again should the page stop under Meno (lib/pageBack); and, where this
+  // page is the one started again after that, what came of the work, said
+  // once as Meno's notices are.
+  useEffect(() => {
+    if (isTauri()) tellOpenFiles();
+  }, [state]);
+  useEffect(() => {
+    if (!isTauri()) return;
+    return sayCameBack((words) => setBackSaid((was) => [...was, words]));
+  }, []);
 
   // Undo/redo belong to the active tab, not to the app as a whole.
   const activeIdRef = useRef(state.activeId);
@@ -453,7 +468,10 @@ export default function App() {
   const openPaths = async (paths: readonly string[], outside = false) => {
     const arrived = onItsWay(null);
     try {
-      await openPathsAlone(paths, outside);
+      // (the file whose save was being written as the page stopped under Meno: not read here, but opened by the app
+      //  once that write has ended - asked before anything is read: lib/pageBack)
+      if (isTauri()) await openUnlessHeld(paths, (now) => openPathsAlone(now, outside));
+      else await openPathsAlone(paths, outside);
     } finally {
       arrived();
       if (paths.length) firstActionDone();
@@ -918,16 +936,19 @@ export default function App() {
         }}
       />
       <AnimatePresence>
-      {notice && (
+      {(notice || backSaid.length > 0) && (
         <motion.div
           key="notice"
           {...RISE}
           role="alert"
           className="absolute top-12 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex items-start gap-3 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
-          <span className="break-words">{notice}</span>
+          <span className="break-words">{[...backSaid, notice].filter(Boolean).join(" ")}</span>
           <button
-            onClick={() => setNotice(null)}
+            onClick={() => {
+              setNotice(null);
+              setBackSaid([]);
+            }}
             className="shrink-0 underline text-gh-gray hover:text-gh-black"
           >
             OK

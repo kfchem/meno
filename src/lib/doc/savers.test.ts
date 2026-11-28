@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-const { heldElsewhere, openEachOnce, setSavedPathOf, setTabsListed, tabHolding } = await import("./savers");
+const { heldElsewhere, openEachOnce, savedPaths, setSavedPathOf, setTabsListed, tabHolding } = await import("./savers");
 const { truePath } = await import("../io/truePath");
 
 describe("the tab that holds a workspace's file", () => {
@@ -113,5 +113,33 @@ describe("workspace files opened", () => {
       { name: "gone.meno", path: "/Users/Chem/gone.meno" },
     ]);
     expect(tabs.map((t) => t.openedFrom)).toEqual(["/Users/Chem/Work/Aspirin.meno", "/Users/Chem/Work/Other.meno", "/Users/Chem/gone.meno"]);
+  });
+});
+
+describe("the files the tabs are tied to, told to the app to open again should the page stop", () => {
+  it("are each tab's file however it was opened, its view there or not, its store knowing it yet or not", () => {
+    // (a tab handed over from a second start, or opened again by a come-back: its view there, its store not yet knowing its file)
+    const gone = [setSavedPathOf("h1", () => null), setSavedPathOf("h2", () => "/w/b.meno")];
+    const tabs = [
+      { id: "h1", openedFrom: "/w/a.meno", label: "a.meno" },
+      { id: "h2", openedFrom: "/w/b.meno", label: "b.meno" },
+      // (its view not yet there)
+      { id: "h3", openedFrom: "/w/c.meno", label: "c.meno" },
+      // (never saved: none)
+      { id: "h4", label: "Workspace" },
+    ];
+    expect(savedPaths(tabs)).toEqual(["/w/a.meno", "/w/b.meno", "/w/c.meno"]);
+    // a tab closed: not among them
+    expect(savedPaths(tabs.filter((t) => t.id !== "h2"))).toEqual(["/w/a.meno", "/w/c.meno"]);
+    gone.forEach((g) => g());
+  });
+
+  it("follow a Save As: the tab's file is where it was saved, not where it was opened from", () => {
+    let saved: string | null = "/w/a.meno";
+    const gone = setSavedPathOf("s1", () => saved);
+    const tabs = [{ id: "s1", openedFrom: "/w/a.meno", label: "a.meno" }];
+    saved = "/x/renamed.meno";
+    expect(savedPaths(tabs)).toEqual(["/x/renamed.meno"]);
+    gone();
   });
 });

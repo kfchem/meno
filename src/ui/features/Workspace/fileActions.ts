@@ -10,6 +10,7 @@ import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
+import { whileSaving } from "../../../lib/pageBack";
 import { exportOf, mappedPairSdf } from "./chem/atomMap";
 import { pairedSdf } from "./chem/structureMaps";
 import { useCallback, useRef, useState } from "react";
@@ -1005,7 +1006,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         if (!picked) return false;
         // (a workspace, whatever it was called)
         const path = isWorkspaceFile(picked) ? picked : `${picked}.meno`;
-        return saveTo(path);
+        // (the app told of it, should the page stop meanwhile: lib/pageBack)
+        return whileSaving(path, () => saveTo(path));
       })) === true,
     [attempt, saveTo, store],
   );
@@ -1013,7 +1015,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
   /** The canvas saved where it was saved last, or else where the chemist says; whether it was. */
   const saveNow = useCallback(async () => {
     const { savedPath: path } = store.getState();
-    if (path && isWorkspaceFile(path)) return (await attempt("Save", () => saveTo(path))) === true;
+    if (path && isWorkspaceFile(path)) return (await attempt("Save", () => whileSaving(path, () => saveTo(path)))) === true;
     return saveAsNow();
   }, [attempt, saveAsNow, saveTo, store]);
 
