@@ -55,14 +55,19 @@ describe("Flip chair", () => {
     const m = methylated([[0, 1], [1, 1]]);
     const flip = flipOf(m, everything(m)) as { moves: { id: number; x: number; y: number; z?: number }[] };
     expect(identityOfDrawn(apply(m, flip.moves)).text).toBe(identityOfDrawn(m).text);
-    // (an ethyl: its second carbon moves with the first by the same step)
+    // (an ethyl: its second carbon goes with the first, as far from it and at the same angle to its bond from the ring - turned with it)
     const ethyl: Model = { atoms: [...m.atoms, { id: 90, el: "C", r: 0.9, x: m.atoms[6].x + 1, y: m.atoms[6].y }], bonds: [...m.bonds, { id: 300, a: 50, b: 90, order: 1 }] };
     const moved = apply(ethyl, (flipOf(ethyl, everything(ethyl)) as { moves: { id: number; x: number; y: number; z?: number }[] }).moves);
-    const was = ethyl.atoms.find((a) => a.id === 90)!;
-    const now = moved.atoms.find((a) => a.id === 90)!;
-    const first = [ethyl.atoms.find((a) => a.id === 50)!, moved.atoms.find((a) => a.id === 50)!];
-    expect(now.x - was.x).toBeCloseTo(first[1].x - first[0].x, 6);
-    expect(now.y - was.y).toBeCloseTo(first[1].y - first[0].y, 6);
+    const ringAtom = ethyl.bonds.find((b) => (b.a === 50 || b.b === 50) && b.id !== 300)!;
+    const r = ringAtom.a === 50 ? ringAtom.b : ringAtom.a;
+    const of = (mm: Model, id: number) => mm.atoms.find((a) => a.id === id)!;
+    const turn = (mm: Model) => {
+      const [o, p, q] = [of(mm, r), of(mm, 50), of(mm, 90)];
+      const t = Math.atan2(q.y - p.y, q.x - p.x) - Math.atan2(p.y - o.y, p.x - o.x);
+      return [Math.hypot(q.x - p.x, q.y - p.y), Math.cos(t), Math.sin(t)];
+    };
+    turn(moved).forEach((v, i) => expect(v).toBeCloseTo(turn(ethyl)[i], 6));
+    expect(identityOfDrawn(moved).text).toBe(identityOfDrawn(ethyl).text);
   });
 
   it("is none for a ring drawn by hand, a group standing at neither free position, and two chairs", () => {

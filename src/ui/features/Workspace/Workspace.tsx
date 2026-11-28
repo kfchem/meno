@@ -1276,6 +1276,17 @@ function WorkspaceContent({
   const menuLink = menuMolecule ? linkOf(menuMolecule, store.getState().fullModel) : null;
   // a record of a stack of drawings right-clicked: its stack laid out as a grid, or stacked again
   const menuAtom = menu && (menu.kind === "atom" || menu.kind === "bond") && menu.id != null ? structureAt(menu.kind, menu.id) : null;
+  // (a flat six-ring right-clicked: drawn as a chair - or why not - worked out once for the menu opened on this drawing, not each time it is drawn)
+  const chairAtMenu = useMemo(() => {
+    if (!menu || (menu.kind !== "atom" && menu.kind !== "bond") || menu.id == null) return null;
+    const at = structureAt(menu.kind, menu.id);
+    if (at == null) return null;
+    const ids = fragmentOf(model, at);
+    if (isProjection(model, ids)) return null;
+    const part = { atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
+    const atom = menu.kind === "atom" ? menu.id : model.bonds.find((b) => b.id === menu.id)?.a;
+    return atom == null ? null : chairFromFlat(part, atom);
+  }, [menu, model, structureAt]);
   const menuStack = menuAtom != null ? model.atoms.find((a) => a.id === menuAtom)?.stack : undefined;
   const menuRecords =
     menuStack && recordsOf(store.getState().fullModel, menuStack.id).length > 1
@@ -2789,17 +2800,7 @@ function WorkspaceContent({
             if (at != null) store.getState().selectStructure(at);
           }}
           asChair={(() => {
-            // (a flat six-ring right-clicked: drawn as a chair - or why not, where its configuration is not drawn)
-            if (menu.kind !== "atom" && menu.kind !== "bond") return undefined;
-            const at = structureAt(menu.kind, menu.id);
-            if (at == null || menu.id == null) return undefined;
-            const st = store.getState();
-            const ids = fragmentOf(st.model, at);
-            if (isProjection(st.model, ids)) return undefined;
-            const part = { atoms: st.model.atoms.filter((a) => ids.has(a.id)), bonds: st.model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
-            const atom = menu.kind === "atom" ? menu.id : st.model.bonds.find((b) => b.id === menu.id)?.a;
-            if (atom == null) return undefined;
-            const made = chairFromFlat(part, atom);
+            const made = chairAtMenu;
             if (!made) return undefined;
             if ("refused" in made) return { why: made.refused };
             return {

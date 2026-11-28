@@ -130,6 +130,20 @@ export function chairOf(model: { atoms: Atom[] }, ring: readonly number[]): Foun
 export type Moves = Map<number, { x: number; y: number; z?: number }>;
 
 /**
+ * Where a group's atom goes when its first atom moves from `was` to `now` and its ring atom from `from` to `to`: the group turned about its
+ * first atom as its bond to the ring turns, and carried with it - a turn, never a mirror, so every centre in the group, its bond to the ring
+ * among its bonds, reads from its wedges as it read before.
+ */
+export function turnedWith(from: { x: number; y: number }, was: { x: number; y: number }, to: { x: number; y: number }, now: { x: number; y: number }) {
+  const angle = Math.atan2(now.y - to.y, now.x - to.x) - Math.atan2(was.y - from.y, was.x - from.x);
+  const [c, s] = [Math.cos(angle), Math.sin(angle)];
+  return (p: { x: number; y: number }) => {
+    const [dx, dy] = [p.x - was.x, p.y - was.y];
+    return { x: now.x + c * dx - s * dy, y: now.y + s * dx + c * dy };
+  };
+}
+
+/**
  * The ring flip of a chair on a page (`flipped`): every ring atom takes the other picture's place and depth - drawn in the form whose end atoms
  * are the ends they were, so the chair stays where it is - and each group moves from axial to equatorial or back **on the same face**, a group
  * and everything beyond it carried by the same step. None where the ring is no chair of the tool's, or where a group of it stands at neither of
@@ -177,13 +191,9 @@ export function flipChairMoves(model: { atoms: Atom[]; bonds: Bond[] }, ring: re
       if (!place) return null;
       const target = seenPlaces(now, k).find((p) => p.free.face === place.free.face && p.free.kind !== place.free.kind)!;
       const to = { x: target.place.x - now.atoms[k].x + moves.get(id)!.x, y: target.place.y - now.atoms[k].y + moves.get(id)!.y };
-      // (the group's own atom to where it goes, relative to its ring atom, the rest of it by the same step)
-      const dx = to.x - atom.x;
-      const dy = to.y - atom.y;
-      for (const m of beyond(id, g)) {
-        const a = byId.get(m)!;
-        moves.set(m, { x: a.x + dx, y: a.y + dy });
-      }
+      // (the group's own atom to where it goes, relative to its ring atom, the rest of it turned with its bond: a centre in it reads as before)
+      const turned = turnedWith(here, atom, moves.get(id)!, to);
+      for (const m of beyond(id, g)) moves.set(m, turned(byId.get(m)!));
     }
   }
   return moves;
