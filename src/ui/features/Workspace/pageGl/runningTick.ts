@@ -7,14 +7,16 @@
  * at thirty as at sixty.
  *
  * And whether they may ask at all: this is the one place that decides it
- * for every continuous motion of the page (`pageMotion`). Unseen - the web
- * view saying its document is hidden (the window hidden, minimised or all
- * covered), or the page's tab not the one shown - none is asked; seen
- * again, the motion goes on where it stood, not where the clock would have
- * taken it. Where the system asks for less motion none is asked either: the
- * marks stand still (the running icon, the wire's dashes), still saying
- * that it runs. A window merely not in front is seen: a run is watched
- * beside another window.
+ * for every running mark of the page (`pageMotion`). Unseen - Meno's window
+ * minimised or hidden, as the back end says from the window's own state
+ * (`tellWindowSeen`, src-tauri/src/windowseen.rs); the page's document
+ * hidden; or the page's tab not the one shown - none is asked; seen again,
+ * the motion goes on where it stood, not where the clock would have taken
+ * it. Where the system asks for less motion none is asked either: the marks
+ * stand still (the running icon, the wire's dashes), still saying that it
+ * runs. A window merely not in front is seen: a run is watched beside
+ * another window. One covered by others, or on another desktop, is unseen
+ * only where the system itself tells the page so.
  */
 import { PAGE_PX } from "../utils/pageScale";
 export const RUNNING_FRAME_MS = 33;
@@ -28,17 +30,30 @@ export type MotionGate = { seen: () => boolean; still: () => boolean; watch: (ch
 const LESS_MOTION = "(prefers-reduced-motion: reduce)";
 const lessMotion = () => (typeof matchMedia === "function" ? matchMedia(LESS_MOTION) : null);
 
-/** The page's gate: seen while the web view does not say its document is hidden; still where the system asks for less motion. */
+/** What the back end last said of Meno's window: seen, unseen (minimised or hidden), or nothing yet - taken as seen. */
+let windowWord: boolean | null = null;
+const windowWatchers = new Set<() => void>();
+
+/** The back end's word on whether Meno's window can be seen (src-tauri/src/windowseen.rs): every running mark told at once. */
+export function tellWindowSeen(seen: boolean | null): void {
+  if (seen === windowWord) return;
+  windowWord = seen;
+  for (const changed of [...windowWatchers]) changed();
+}
+
+/** The page's gate: seen while the back end does not say its window is minimised or hidden and the document is not hidden; still where the system asks for less motion. */
 export const pageMotion: MotionGate = {
-  seen: () => typeof document === "undefined" || document.visibilityState !== "hidden",
+  seen: () => windowWord !== false && (typeof document === "undefined" || document.visibilityState !== "hidden"),
   still: () => !!lessMotion()?.matches,
   watch(changed) {
     const less = lessMotion();
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", changed);
     less?.addEventListener?.("change", changed);
+    windowWatchers.add(changed);
     return () => {
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", changed);
       less?.removeEventListener?.("change", changed);
+      windowWatchers.delete(changed);
     };
   },
 };

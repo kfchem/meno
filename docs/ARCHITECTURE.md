@@ -1479,6 +1479,7 @@ closing quits Meno once they have been asked to stop.
 | `present_window` | `ui/presenting.ts` | The window made to cover its screen for a talk, or back; whether that changed it (`present.rs`). |
 | `opened_files` | `lib/openedFiles.ts` | The workspace files opened from outside Meno that the page has not taken yet, taken (`opened.rs`; `opened-files` as one comes). |
 | `update_state`, `update_check`, `update_restart_after_quit` | `lib/update.ts` | Where keeping Meno up to date is; a look (and download) through the proxy; a restart into the update downloaded. |
+| `window_seen` | `ui/features/Workspace/pageGl/windowSeen.ts` | Whether the main window can be seen now - not where its own state says it is minimised or hidden (`windowseen.rs`; `window:seen` as it changes): the page's running marks ask no frames while it cannot. |
 | `job_start` | `lib/jobs.ts` | A job's folder made, its input written, its runner started; returns its id. |
 | `program_where` | `lib/plugins/installed.ts` | Where a plugin's program installed separately is, as a job would take it - where the chemist located it (that alone, `exact`, for one just picked), where the system finds programs, or where it is usually installed - with its version and, where it is too old for Meno, why; none, where it is found nowhere. |
 | `job_state`, `jobs_list` | `lib/jobs.ts` | A job's record, or every job's - *gone* where its runner went without saying how it ended. |
@@ -1493,7 +1494,8 @@ per sidecar, whether it exits by itself or through `ext_kill`. `net:task` and
 keeping Meno up to date is; `plugin-files:progress` (`{ plugin, done, total }`,
 in bytes), how far a plugin's files have come as they download; `opened-files`
 (no payload), that a workspace file was opened from outside Meno - the page
-takes it with `opened_files`. On Windows only: `native-drag` (`{ phase, x, y }`,
+takes it with `opened_files`; `window:seen` (true or false, to the main window), whether
+the main window can be seen as its own state says, at each change. On Windows only: `native-drag` (`{ phase, x, y }`,
 to the main window: `enter`, `over`, `leave`, `drop` or `gone`, and where the
 drag is, in the page's coordinates); `ole-open` and `ole-close` (a structure's
 id), as Office opens one of Meno's structures or closes it; `ole-idle` (no

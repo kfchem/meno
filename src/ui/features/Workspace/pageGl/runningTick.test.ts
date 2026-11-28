@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dashAdvance, RUNNING_FRAME_MS, runningFramesAsked, runningTick } from "./runningTick";
+import { dashAdvance, RUNNING_FRAME_MS, runningFramesAsked, runningTick, tellWindowSeen } from "./runningTick";
 import { PAGE_PX } from "../utils/pageScale";
 
 describe("a running mark's frames", () => {
@@ -209,5 +209,78 @@ describe("a running mark, seen or not", () => {
     page.show();
     vi.advanceTimersByTime(1000);
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("a running mark, by the back end's word on the window", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    tellWindowSeen(null);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("asks no frame while the window is minimised, its document still saying it is visible, and goes on at once restored", () => {
+    aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(1000);
+    const seen = invalidate.mock.calls.length;
+    expect(seen).toBeGreaterThanOrEqual(25);
+    tellWindowSeen(false);
+    vi.advanceTimersByTime(3600 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(seen);
+    expect(vi.getTimerCount()).toBe(0);
+    tellWindowSeen(true);
+    expect(invalidate).toHaveBeenCalledTimes(seen + 1);
+    vi.advanceTimersByTime(1000);
+    expect(invalidate.mock.calls.length - seen).toBeGreaterThanOrEqual(25);
+    tick.stop();
+  });
+
+  it("goes on where it stood once restored: no leap for the time it was minimised", () => {
+    aPage();
+    const tick = runningTick();
+    const drawn: number[] = [];
+    run(tick, 1000, drawn);
+    const at = tick.time();
+    tellWindowSeen(false);
+    vi.advanceTimersByTime(3600 * 1000);
+    tellWindowSeen(true);
+    vi.advanceTimersByTime(RUNNING_FRAME_MS * 2);
+    expect(Math.max(...drawn)).toBeLessThanOrEqual(RUNNING_FRAME_MS / 1000 + 1e-9);
+    expect(tick.time() - at).toBeLessThan(0.1);
+    tick.stop();
+  });
+
+  it("is unseen while either says so: the word coming while the document is hidden too, and the document shown while the window is still minimised", () => {
+    const page = aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(100);
+    page.hide();
+    tellWindowSeen(false);
+    const before = invalidate.mock.calls.length;
+    page.show();
+    vi.advanceTimersByTime(60 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(before);
+    // (restored with the document hidden: still none)
+    page.hide();
+    tellWindowSeen(true);
+    vi.advanceTimersByTime(60 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(before);
+    page.show();
+    expect(invalidate).toHaveBeenCalledTimes(before + 1);
+    tick.stop();
+  });
+
+  it("takes the window as seen where no word has come", () => {
+    aPage();
+    tellWindowSeen(null);
+    const tick = runningTick();
+    expect(run(tick, 1000)).toBeGreaterThanOrEqual(25);
+    tick.stop();
   });
 });
