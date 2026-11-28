@@ -1407,6 +1407,7 @@ pub fn run() {
             keptjobs::job_kept,
             keptjobs::file_now,
             keptjobs::job_files_where,
+            keptjobs::kept_files_where,
             keptjobs::job_file_staged,
             keptjobs::job_files_unstaged,
             keptjobs::job_write_back,
