@@ -2703,7 +2703,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
 What is put on the page - a structure read from a figure, one opened or
 dropped onto a page with something on it, molecules in 3D, a formula drawn
 from one - is selected, and shown (utils/viewShow, `requestShow`): where it
-is not seen whole, the view eases to it, as Fit eases. What can be seen is
+is not seen whole, the view eases to it, as Fit eases. A structure carried
+out of a PDF and let go on the canvas is the chemist's own placing: it is
+selected where they let it go, and the view stays as it is - a second one
+put beside the first moves nothing (`putRead`, `byHand`). What can be seen is
 the canvas the column beside it leaves: what lies under the column is not
 in view - and a column that opens with what was put down, as a new chat's
 does, counts as open: the view goes once, as the column opens, to where it

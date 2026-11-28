@@ -99,8 +99,9 @@ export function dragStructure(store: EditorStore, pdf: Pick<PdfItem, "id" | "sha
     stop();
     const world = putDownAt(store, pdf.id, e);
     set({ x: e.clientX, y: e.clientY, end: { to: world ? "page" : "back", start: performance.now() } });
-    // (put down: its middle where the pointer let go, one step, selected - and its flight drawn over it a moment, then gone)
-    if (world) store.getState().putRead(movedTo(model, world));
+    // (put down: its middle where the pointer let go, one step, selected - the view as it is, the chemist having put it
+    // where they see it - and its flight drawn over it a moment, then gone)
+    if (world) store.getState().putRead(movedTo(model, world), undefined, true);
     window.setTimeout(() => store.getState().setPdfStructureFlight(null), world ? HANDOVER_MS : BACK_MS);
   };
   window.addEventListener("pointermove", onMove);

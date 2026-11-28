@@ -955,14 +955,15 @@ export const createModelSlice = (
     }));
   },
 
-  putRead: (next: Model, scheme?: ImportedScheme) => {
+  putRead: (next: Model, scheme?: ImportedScheme, byHand?: boolean) => {
     const start = doc.getState().nextId;
     const startCaption = doc.getState().nextCaptionId ?? 1;
     if (!doc.edit("read structure", (d) => ops.withImportedScheme(ops.appendModel(d, next), scheme))) return;
     // (selected, as what is pasted is, to be moved or put right straight on - a scheme's words with it, its compounds' numbers among them)
     const endCaption = doc.getState().nextCaptionId ?? 1;
-    // (and shown: the view moved to take it in, where it is not seen whole - docs/WORKSPACE.md, *Putting things down*)
-    const box = withWordsAdded(addedBox(start, get().model), get(), startCaption);
+    // (and shown: the view moved to take it in, where it is not seen whole - docs/WORKSPACE.md, *Putting things down*;
+    // one the chemist carried there and let go is where they put it, and the view stays theirs)
+    const box = byHand ? null : withWordsAdded(addedBox(start, get().model), get(), startCaption);
     set((prev: EditorState) => ({
       ...prev,
       ...(box ? { showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } } : {}),
