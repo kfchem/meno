@@ -166,16 +166,20 @@ describe("flipping a chair on a page", () => {
     for (const a of m.atoms) expect(back.atoms.find((x) => x.id === a.id)!.x).toBeCloseTo(a.x, 9);
   });
 
-  it("carries a group with everything beyond it: an ethyl's second carbon moves with its first", () => {
+  it("carries a group with everything beyond it, turned with its bond to the ring: an ethyl's second carbon as it stood to its first and its bond", () => {
     const d = draw();
     const m = methylated(d, [[0, 1]]);
     const first = m.atoms.find((a) => a.id === 50)!;
+    const ringAtom = m.atoms.find((a) => a.id === d.ring[0])!;
     const second: Atom = { id: 70, el: "C", r: 0.9, x: first.x + 1, y: first.y + 0.2 };
     const ethyl: Model = { atoms: [...m.atoms, second], bonds: [...m.bonds, { id: 300, a: 50, b: 70, order: 1 }] };
     const moves = flipChairMoves(ethyl, d.ring)!;
-    const [dx, dy] = [moves.get(50)!.x - first.x, moves.get(50)!.y - first.y];
-    expect(moves.get(70)!.x - second.x).toBeCloseTo(dx, 9);
-    expect(moves.get(70)!.y - second.y).toBeCloseTo(dy, 9);
+    const [r, f, s] = [moves.get(d.ring[0])!, moves.get(50)!, moves.get(70)!];
+    // (the second carbon as far from the first, at the same angle to the bond from the ring: a turn, never a mirror)
+    const angle = (o: { x: number; y: number }, p: { x: number; y: number }, q: { x: number; y: number }) => Math.atan2(q.y - p.y, q.x - p.x) - Math.atan2(p.y - o.y, p.x - o.x);
+    expect(Math.hypot(s.x - f.x, s.y - f.y)).toBeCloseTo(Math.hypot(second.x - first.x, second.y - first.y), 9);
+    expect(Math.cos(angle(r, f, s))).toBeCloseTo(Math.cos(angle(ringAtom, first, second)), 9);
+    expect(Math.sin(angle(r, f, s))).toBeCloseTo(Math.sin(angle(ringAtom, first, second)), 9);
   });
 
   it("refuses a chair with a group drawn at neither of its atom's free positions: nothing is guessed", () => {

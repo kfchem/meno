@@ -1,7 +1,8 @@
 /**
  * *Draw as chair* (docs/EDITOR-2D.md, *Projections*): a flat drawing's six-membered ring drawn as a chair of the tool's - its ring on the
  * solid's places (`chairDrawing`), each group moved onto the free position that states the configuration the flat drawing states, the rest
- * of each group carried with it as drawn. The configuration is the one the reader reads from the flat drawing (Brecher 2006, ST-0.3, ST-1.10);
+ * of each group carried with it as drawn, turned as its bond to the ring turns (`turnedWith`): a centre off the ring, its wedges kept,
+ * reads as it did. The configuration is the one the reader reads from the flat drawing (Brecher 2006, ST-0.3, ST-1.10);
  * nothing else is taken from it. Pure: the model in, the atoms and bonds to change out.
  *
  * Which of the two chairs is drawn is no rule of any text: it is this tool's convention, by the KIND of each group - the atom bound to
@@ -33,7 +34,7 @@ import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { sameStereo, stereoOf } from "../chem/engineLayout";
 import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
-import { chairDrawing, FIRST_FORM, ringAlone, seenPlaces, type ChairDrawing } from "./chair";
+import { chairDrawing, FIRST_FORM, ringAlone, seenPlaces, turnedWith, type ChairDrawing } from "./chair";
 
 /**
  * A group's kind on a ring, by the atom X bound to the ring (`x`, its ring atom `ring`): 5, a carbon of four single bonds and no H
@@ -370,18 +371,23 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
       const p = best.places.get(g);
       if (!p) continue;
       const a = at.get(g)!;
-      const [dx, dy] = [p.x - a.x, p.y - a.y];
+      const q = atoms.get(r)!;
+      const turned = turnedWith(at.get(r)!, a, q, p);
       for (const h of hanging(r, g)) {
         const b = at.get(h)!;
-        atoms.set(h, { ...(atoms.get(h) ?? b), x: b.x + dx, y: b.y + dy });
+        atoms.set(h, { ...(atoms.get(h) ?? b), ...turned(b) });
       }
     }
   }
-  // (the ring's wedges gone - the configuration is in the depth now - and an open centre's group on a wavy bond)
+  // (the ring's wedges gone - the configuration is in the depth now - and an open centre's group on a wavy bond; a wedge narrow at an
+  //  atom off the ring is that atom's, a centre the chair does not draw, and stays: its group turned with its bond, it reads as it did)
+  const degree = (x: number) => part.bonds.filter((b) => b.a === x || b.b === x).length;
   const bonds: Bond[] = [];
   for (const b of part.bonds) {
     const atRing = inRing.has(b.a) || inRing.has(b.b);
     if (!atRing) continue;
+    const narrow = b.narrow ?? (degree(b.a) >= degree(b.b) ? b.a : b.b);
+    if ((b.stereo === "up" || b.stereo === "down") && !inRing.has(narrow)) continue;
     const other = inRing.has(b.a) ? b.b : b.a;
     const wavy = !(inRing.has(b.a) && inRing.has(b.b)) && best.wavy.includes(other);
     const { stereo: _s, narrow: _n, ...rest } = b;
