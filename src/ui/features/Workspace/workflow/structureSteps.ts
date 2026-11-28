@@ -14,6 +14,10 @@ import { tag } from "../../../../lib/nodes/tag";
 import { merge } from "../../../../lib/nodes/merge";
 import { matchedOn, valuesOn } from "../../../../lib/nodes/match";
 import { rebonded } from "../../../../lib/steps/rebond";
+import { structureKey } from "../../../../lib/steps/restructure";
+import { constitutionOf } from "../../../../lib/nodes/group";
+import { metal } from "../../../../lib/chem/perception/elements";
+import { identityAsked, identityKnown } from "../chem/identityOff";
 import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions } from "../../../../lib/steps/compareBonding";
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
@@ -203,6 +207,60 @@ export function mergedSet(first: readonly SetEntry[], second: readonly SetEntry[
 }
 
 /**
+ * A bonding entry's structure as its key (lib/steps/restructure `structureKey`), each re-bonded entry's that takes its bonds, as
+ * the drawing thread may read it: known - asked first (`rebondKeysAsked`) - or small enough to work out here (chem/identityOff
+ * `identityKnown`); else worked out here all the same, as where a caller could not ask first.
+ */
+const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "constitution", rebondInPlaceMost(e))?.text ?? structureKey(e);
+
+/**
+ * The most atoms a bonding entry not yet known may have for its key to be worked out on the drawing thread: a constitution's key
+ * costs less than identity, and every structure up to this size that was tried took less than a frame - the slowest of them
+ * a palladium with one triphenylphosphine, 35 atoms - where the next tried, a palladium with two, 69 atoms, took several frames.
+ */
+export const REBOND_IN_PLACE_MOST = 35;
+
+/**
+ * The most atoms `e` may have for its key to be worked out on the drawing thread (`REBOND_IN_PLACE_MOST`) - none where it holds a
+ * metal (lib/chem/perception/elements `metal`). What a key costs is not its count of atoms: it is the like atoms it must tell
+ * apart, and a metal with four or six like ligands round it, well under that size, took two or three frames where organic
+ * structures as symmetric and as large took far under one. So an entry with a metal is always asked of the worker, and its short
+ * wait shows nothing (`REBOND_WORKING_AFTER_MS`). The size of the largest set of like atoms was weighed too: it is itself the
+ * work the key does, so it cannot be had cheaply before it.
+ */
+export const rebondInPlaceMost = (e: Pick<Entry, "structure">): number => (e.structure.atoms.some((a) => metal.has(a.el)) ? 0 : REBOND_IN_PLACE_MOST);
+
+/**
+ * How long Re-bond waits on its keys before it is shown working: as long as a copy is made before "Copying…" is shown
+ * (clipboardActions `COPYING_SHOWN_AFTER_MS`), Meno's wait before it says a short piece of work is under way - so that one
+ * done sooner flashes nothing.
+ */
+export const REBOND_WORKING_AFTER_MS = 250;
+
+/**
+ * Each of `bonding`'s structures as its key (`rebondKey`) asked off the drawing thread (chem/identityOff `identityAsked`) - a large
+ * structure's, a metal's with its phosphines, taking long - `answered` told as each lands: for a caller that may wait before it
+ * re-bonds onto them (`rebondedSet`). What cannot be asked is worked out as it is read.
+ */
+export function rebondKeysAsked(bonding: readonly SetEntry[], answered?: (done: number) => void): Promise<void> {
+  let done = 0;
+  return Promise.all(
+    bonding.map((e, i) =>
+      identityAsked(constitutionOf(entryOfSet(e, String(i))), "constitution")
+        .catch(() => undefined)
+        .then(() => answered?.(++done)),
+    ),
+  ).then(() => undefined);
+}
+
+/** Whether each of `bonding`'s structures is known as its key, or small enough to work out here (`rebondKey`): nothing to ask first. */
+export const rebondKeysKnown = (bonding: readonly SetEntry[]): boolean =>
+  bonding.every((e, i) => {
+    const entry = entryOfSet(e, String(i));
+    return identityKnown(constitutionOf(entry), "constitution", rebondInPlaceMost(entry)) != null;
+  });
+
+/**
  * *Re-bond* (lib/steps `rebonded`): each entry of *Geometry* given the
  * bonds and charges of an entry of *Bonding* - each with each, or the one
  * that has the same value of a property - as one entry of its own; where
@@ -224,6 +282,9 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
   };
   // (the pairs: each with each, or each geometry with the one bonding entry of its value)
   const matched = pairs === "property" ? matchedOn(gs, bs, name, "Bonding") : null;
+  // (each bonding entry's key read once, however many geometries take its bonds)
+  const keys = new Map<number, string>();
+  const keyOf = (k: number): string => keys.get(k) ?? keys.set(k, rebondKey(bs[k])).get(k)!;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const notes = new Set<string>();
@@ -235,7 +296,7 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
       return;
     }
     for (const k of onto) {
-      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`);
+      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`, () => keyOf(k));
       if ("failed" in r) {
         aside.push(withSaid(g, SET_ASIDE, `onto ${named(bonding[k])}: ${r.failed}`));
         continue;

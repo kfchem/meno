@@ -162,16 +162,17 @@ export function identitiesAsked(inputs: readonly IdentityInput[]): Promise<Found
 }
 
 /**
- * `input`'s identity where it is known, or small enough to work out here (`IN_PLACE_MOST`); else undefined - pending - and
- * asked of the worker, so that it is known once its answer lands.
+ * `input`'s identity where it is known, or small enough to work out here (`IN_PLACE_MOST`, or `most` where a caller's own
+ * measure of what it asks says otherwise); else undefined - pending - and asked of the worker, so that it is known once its
+ * answer lands.
  */
-export function identityKnown(input: IdentityInput, kind: Asked = "identity"): Found | undefined {
+export function identityKnown(input: IdentityInput, kind: Asked = "identity", most = IN_PLACE_MOST): Found | undefined {
   if (fresh(input, kind)) return hereNow(input, kind);
   const key = keyOf(input, kind);
   const had = known.get(key);
   if (had) return had;
   // (with no workers - tests - there is no drawing thread to keep free: worked out here, as before)
-  if (inPlaceWeight(input) <= IN_PLACE_MOST || typeof Worker === "undefined") return keep(key, hereNow(input, kind));
+  if (inPlaceWeight(input) <= most || typeof Worker === "undefined") return keep(key, hereNow(input, kind));
   void identityAsked(input, kind).catch(() => {});
   return undefined;
 }

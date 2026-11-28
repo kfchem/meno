@@ -32,10 +32,11 @@ const rides = (p: Property, now: string): boolean =>
  * `e`'s properties as they stand on its structure now, `step` having changed
  * its bonding: each value of another structure (`of`) marked not applicable,
  * saying so, and each not known to be of any (`unknown`) likewise; the rest
- * as they were. And their names, those so marked.
+ * as they were. And their names, those so marked. `now` is `e`'s structure as
+ * its key (`structureKey`), where the caller has it already - worked out off
+ * the drawing thread, a large structure's taking long; else worked out here.
  */
-export function restructured(e: Entry, step: string): { entry: Entry; stale: string[]; unknown: string[] } {
-  const now = structureKey(e);
+export function restructured(e: Entry, step: string, now: string = structureKey(e)): { entry: Entry; stale: string[]; unknown: string[] } {
   const stale: string[] = [];
   const unknown: string[] = [];
   const properties: Record<string, Property> = {};
