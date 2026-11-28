@@ -7,7 +7,8 @@
  * made, where it is given a width; and, put near an arrow, set over it or
  * under it, clear of it, to go where it goes.
  */
-import { italicUnits, labelUnits, unitRuns } from "./abbreviations";
+import { italicUnits, labelUnitNames, labelUnits, unitRuns } from "./abbreviations";
+import { ELEMENTS } from "./elements";
 import { ACS_LABEL_SET, labelBox, runsPlaces, runsWidth, type LabelSet, type TextItem, type TextRun } from "./layout2d";
 import { wordsLine, type SchemeArrow } from "./reactionScheme";
 import { letterStarts } from "../text/editing";
@@ -55,9 +56,44 @@ function wordRuns(word: string): TextRun[] {
   const body = charge ? word.slice(0, -1) : word;
   const units = labelUnits(body);
   const italic = italicUnits(units).map((it, k) => it && (k === 0 || /[([,]$/.test(units[k - 1])));
-  const runs = unitRuns(units, italic);
+  let runs = unitRuns(units, italic);
+  // (a name - AB1_CD002, TS1, Fig2 - is no formula: its digits stay as typed)
+  if (!formulaUnits(units)) runs = runs.map(({ sub: _, ...r }) => r);
   if (charge) runs.push({ text: charge.replace("-", "−"), sup: true });
   return runs;
+}
+
+/** Element symbols, deuterium's D (CDCl3, D2O), and the single capitals a formula writes for a group: R2NH, R3SiCl, ArX. */
+const SYMBOLS: ReadonlySet<string> = new Set([...ELEMENTS.map((e) => e.symbol), "D", "R", "X"]);
+/** What may stand between a formula's units: brackets, a dot of a hydrate or an adduct, a bond, a prime. */
+const JOINER = /^[()[\]·•.\-−+=≡*'′″]$/;
+/** The names Meno knows, as a set - made again only when they change (the user's own abbreviations). */
+let knownNames: { from: readonly string[]; names: ReadonlySet<string> } | null = null;
+
+/**
+ * Whether a word's units read as a formula, so that its counts are set low:
+ * each that has a count after it, or begins with a capital, an element's
+ * symbol or a group, ligand or reagent Meno knows (lib/chem/abbreviations
+ * `labelUnitNames`, the user's own with them), what a bracket holds read
+ * the same way, and nothing else between them but brackets, dots and
+ * bonds. K2CO3, Pd2(dba)3, Et3N, BF3·OEt2 are formulae; AB1_CD002 (A is
+ * no symbol, and _ is in no formula), TS1, Fig2 and Run12 are names. A
+ * locant written as one - C7-H - reads as a formula: the rule cannot tell.
+ */
+function formulaUnits(units: readonly string[]): boolean {
+  const from = labelUnitNames();
+  if (knownNames?.from !== from) knownNames = { from, names: new Set(from) };
+  const known = knownNames.names;
+  const reads = (us: readonly string[]): boolean =>
+    us.every((u) => {
+      const group = /^\((.*)\)\d*$/.exec(u);
+      if (group) return reads(labelUnits(group[1]));
+      const core = u.replace(/\d+$/, "");
+      if (!/\p{L}/u.test(core)) return core === "" || JOINER.test(core);
+      if (core !== u || /^\p{Lu}/u.test(core)) return SYMBOLS.has(core) || known.has(core);
+      return true;
+    });
+  return reads(units);
 }
 
 /**

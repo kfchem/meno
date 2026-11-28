@@ -24,6 +24,26 @@ describe("a caption's words", () => {
     expect(shown("BF4-")).toBe("BF|_4|^−");
   });
 
+  it("keep a name's digits as typed: only a word of element symbols and groups Meno knows is a formula", () => {
+    // (worked from the rule first: A is no element's symbol and _ is in no formula; T, Fig, Run, G, Cat, L name nothing a formula counts)
+    expect(shown("AB1_CD002")).toBe("AB1_CD002");
+    expect(shown("Sample_A1, TS1, Fig2")).toBe("Sample_A1, TS1, Fig2");
+    expect(shown("Run12 Cat1 L1")).toBe("Run12 Cat1 L1");
+    expect(shown("XPhos Pd G3")).toBe("XPhos Pd G3");
+    expect(shown("3a, 2b")).toBe("3a, 2b");
+    // (formulae keep their counts low: elements, deuterium, groups, ligands, a hydrate's dot, a bracket's count)
+    expect(shown("H2O2")).toBe("H|_2|O|_2");
+    expect(shown("CDCl3, D2O")).toBe("CDCl|_3|, D|_2|O");
+    expect(shown("BF3·OEt2")).toBe("BF|_3|·OEt|_2");
+    expect(shown("CuSO4·5H2O")).toBe("CuSO|_4|·5H|_2|O");
+    expect(shown("[RuCl2(p-cymene)]2")).toBe("[RuCl|_2|(|/p/|-cymene)]|_2");
+    expect(shown("Ni(cod)2, R2NH")).toBe("Ni(cod)|_2|, R|_2|NH");
+    expect(shown("Ts2O, Boc2O")).toBe("Ts|_2|O, Boc|_2|O");
+    // (a locant written as a formula is - C7-H, 6-H2 - reads as one: the rule cannot tell)
+    expect(shown("C7-H")).toBe("C|_7|-H");
+    expect(shown("6-H2")).toBe("6-H|_2");
+  });
+
   it("leave what has no letters as typed: numbers, signs, ratios", () => {
     expect(shown("−78 °C, 2 h")).toBe("−78 °C, 2 h");
     expect(shown("A + B")).toBe("A + B");
