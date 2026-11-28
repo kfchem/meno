@@ -6,7 +6,7 @@
  * 0.6, a dative arrow's head a quarter of a bond long.
  */
 import { describe, expect, it } from "vitest";
-import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep, Point } from "../../../../lib/figure/drawn";
+import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "../../../../lib/figure/drawn";
 import { DATIVE_UNREAD, type FigureRead } from "../../../../lib/figure/read";
 import { readDrawnLabel } from "../../../../lib/figure/structure";
 import { readTracedPicture } from "../../../../lib/figure/tracedRead";
