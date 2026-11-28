@@ -9,7 +9,7 @@ import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
 import { pageLength, reachAt } from "../utils/pageScale";
 import { dragSelection } from "../utils/dragSelection";
-import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, membersOn, thingKey } from "../utils/cycles";
+import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, membersOn, thingKey, wordsFollowing, wordsOfBranches } from "../utils/cycles";
 import { DOUBLE_CLICK_MS } from "../constants";
 import { COLORS } from "../../../theme/colors";
 import ReactionArrow2D from "./ReactionArrow2D";
@@ -167,8 +167,16 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
     const carried = carriedByCycle(c, here);
     const atoms = st.model.atoms.filter((a) => carried.atoms.includes(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
     const words = st.captions.filter((w) => carried.captions.includes(w.id)).map((w) => ({ id: w.id, x: w.x, y: w.y }));
-    // (each structure, or words, moved as its middle is - out along the line from the cycle's middle)
-    const groups = here.filter((t) => (t.atoms ? t.atoms.some((id) => carried.atoms.includes(id)) : carried.captions.includes(t.caption!)));
+    // (the words of its arrows going where the arrows go, by the one rule a turn has too - any move by hand kept: `wordsFollowing`)
+    const own = wordsOfBranches(c, here);
+    const byArrow = (c.branches ?? []).flatMap((b, i) => {
+      const t = here.find((x) => x.caption != null && x.caption === own[i]);
+      const w = t && st.captions.find((x) => x.id === t.caption);
+      return t && w ? [{ id: w.id, b, at: { x: w.x, y: w.y }, half: { w: (t.box.x1 - t.box.x0) / 2, h: (t.box.y1 - t.box.y0) / 2 } }] : [];
+    });
+    const arrowWords = new Set(byArrow.map((w) => w.id));
+    // (each structure, or other words, moved as its middle is - out along the line from the cycle's middle)
+    const groups = here.filter((t) => (t.atoms ? t.atoms.some((id) => carried.atoms.includes(id)) : carried.captions.includes(t.caption!) && !arrowWords.has(t.caption!)));
     const gesture = `cycle-size-${performance.now()}`;
     const onMoveDrag = (mv: PointerEvent) => {
       const p = toWorld(mv.clientX, mv.clientY);
@@ -180,6 +188,11 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
         const d = { x: (m.x - c.x) * (k - 1), y: (m.y - c.y) * (k - 1) };
         if (g.atoms) for (const id of g.atoms) shift.set(`a${id}`, d);
         else shift.set(`c${g.caption}`, d);
+      }
+      const sized = { ...c, r };
+      for (const w of byArrow) {
+        const to = wordsFollowing(c, sized, w.b, w.half, w.at);
+        shift.set(`c${w.id}`, { x: to.x - w.at.x, y: to.y - w.at.y });
       }
       store.getState().moveAtoms(
         atoms.map((a) => ({ id: a.id, x: a.x + (shift.get(`a${a.id}`)?.x ?? 0), y: a.y + (shift.get(`a${a.id}`)?.y ?? 0) })),

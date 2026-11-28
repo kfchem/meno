@@ -20,6 +20,8 @@ export type CycleBox = { x0: number; y0: number; x1: number; y1: number };
 
 /** An arrow coming in to the cycle, or going out of it, where it joins the circle: an angle, in radians, anticlockwise from the circle's right (y up). */
 export type CycleBranch = { at: number; way: "in" | "out" };
+/** Whether two arrows coming in or going out are the one arrow: joining at the same place, the same way. A cycle has one arrow of each way at a place, at most. */
+export const sameBranch = (a: CycleBranch, b: CycleBranch) => a.at === b.at && a.way === b.way;
 
 /**
  * A cycle: its middle and radius, in the drawing's units; the way it goes

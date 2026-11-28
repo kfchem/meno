@@ -6,7 +6,7 @@ import type { Model } from "../store/types";
 import { createWorkspaceDocument, schemeOf, withImportedScheme, updateCycle as cycleChanged, type WorkspaceDocument } from "../document";
 import { readDrawn } from "./copyPaste";
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { arrowsOfCycles, branchDropped, branchOpened, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey, turnCycle, TURN_S, wordsOfBranches } from "./cycles";
+import { arrowsOfCycles, branchDropped, branchOpened, branchTyped, wordsFollowing, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey, turnCycle, TURN_S, wordsOfBranches } from "./cycles";
 
 const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, lo: half, hi: half });
 const settle = (e: CycleEase) => {
@@ -134,7 +134,7 @@ describe("the words by a cycle's arrow", () => {
   const b = { at: Math.PI / 2, way: "in" as const };
   const c: Cycle = { id: 1, x: 0, y: 0, r: 4.5 * B, branches: [b] };
   const l = branchWordsAt(c, b, B, { w: 0.8 * B, h: 0.3 * B });
-  const words = (id: number, x: number, y: number, own = false) => ({ id, x, y, text: "ArX", ...(own ? { branch: { cycle: 1, at: b.at } } : {}) }) as never;
+  const words = (id: number, x: number, y: number, own = false) => ({ id, x, y, text: "ArX", ...(own ? { branch: { cycle: 1, ...b } } : {}) }) as never;
 
   it("are those written at it, wherever they stand, and go with the cycle - not free words, however near", () => {
     const things = cycleThings({ atoms: [], bonds: [] }, [words(1, l.x + 0.2 * B, l.y), words(2, l.x + 0.9 * B, l.y, true), words(3, 20 * B, 0)], style, [c]);
@@ -159,7 +159,7 @@ describe("the words that are an arrow's own, beside another arrow", () => {
     const id = st().addCycle({ x: 0, y: 0, r: 4.5 * B, branches })!;
     const ids = words.map((w) => {
       // (written at the arrow: its own; set by hand, free)
-      const n = st().addCaption(w.text, 0, 0, undefined, undefined, undefined, undefined, w.by != null ? { branch: { cycle: id, at: branches[w.by].at } } : undefined);
+      const n = st().addCaption(w.text, 0, 0, undefined, undefined, undefined, undefined, w.by != null ? { branch: { cycle: id, ...branches[w.by] } } : undefined);
       const t = cycleThings(st().model, st().captions, styleOf(st().docStyle)).find((x) => x.caption === n)!;
       const off = { x: (t.box.x0 + t.box.x1) / 2, y: (t.box.y0 + t.box.y1) / 2 };
       const cy = st().cycles.find((x) => x.id === id)!;
@@ -353,7 +353,7 @@ describe("the words that are an arrow's own, beside another arrow", () => {
     expect(branchDropped(cycles, caps, own, { x: own.x + 2 * B, y: own.y + 2 * B }, half)).toBeNull();
     const ft = box(p, free.id);
     const fh = { w: (ft.x1 - ft.x0) / 2, h: (ft.y1 - ft.y0) / 2 };
-    expect(branchDropped(cycles, caps, free, branchWordsAt(p.cycle(), beside, B, fh), fh)).toEqual({ cycle: p.cycle().id, at: beside.at });
+    expect(branchDropped(cycles, caps, free, branchWordsAt(p.cycle(), beside, B, fh), fh)).toEqual({ cycle: p.cycle().id, ...beside });
     // (where an arrow with words of its own sets them: not taken from it)
     expect(branchDropped(cycles, caps, free, branchWordsAt(p.cycle(), top, B, fh), fh)).toBeNull();
   });
@@ -389,7 +389,7 @@ describe("the words that are an arrow's own, beside another arrow", () => {
     const pasted = withImportedScheme(d0, schemeOf(part));
     const copy = pasted.cycles!.find((c) => c.id !== p.cycle().id)!;
     const copies = pasted.captions!.filter((w) => !p.ids.includes(w.id));
-    expect(copies.map((w) => w.branch)).toEqual([{ cycle: copy.id, at: right.at }, { cycle: copy.id, at: top.at }]);
+    expect(copies.map((w) => w.branch)).toEqual([{ cycle: copy.id, ...right }, { cycle: copy.id, ...top }]);
     // (the originals still their own cycle's)
     expect(pasted.captions!.filter((w) => p.ids.includes(w.id)).map((w) => w.branch?.cycle)).toEqual([p.cycle().id, p.cycle().id]);
     // (words copied without their cycle: free)
@@ -400,7 +400,108 @@ describe("the words that are an arrow's own, beside another arrow", () => {
     expect(read.captions!.map((w) => w.branch)).toEqual(p.st().captions.map((w) => w.branch));
     const gone = cycleChanged(d0, p.cycle().id, { branches: [top] });
     const readGone = readDrawn(JSON.parse(JSON.stringify({ atoms: [], bonds: [], cycles: gone.cycles, captions: p.st().captions })))!;
-    expect(readGone.captions!.map((w) => w.branch)).toEqual([undefined, { cycle: p.cycle().id, at: top.at }]);
+    expect(readGone.captions!.map((w) => w.branch)).toEqual([undefined, { cycle: p.cycle().id, ...top }]);
+  });
+
+  // (an arrow coming in and one going out, joining the circle at one place - as a cycle in a textbook draws them)
+  const inAt: Branch = { at: Math.PI / 2, way: "in" };
+  const outAt: Branch = { at: Math.PI / 2, way: "out" };
+
+  it("an arrow coming in and one going out at one place each keep their own words: turned, moved, sized, one taken away, undone", () => {
+    const p = page([inAt, outAt], [{ text: "L-H", by: 0 }, { text: "H-X", by: 1 }]);
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+    expect(carriedByCycle(p.cycle(), p.things()).captions.sort()).toEqual([...p.ids].sort());
+    p.turn();
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+    expect(p.atRule(p.ids[0], 0) && p.atRule(p.ids[1], 1)).toBe(true);
+    const [a, b] = p.ids.map((n) => p.st().captions.find((w) => w.id === n)!);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(B);
+    p.turn();
+    expect(p.atRule(p.ids[0], 0) && p.atRule(p.ids[1], 1)).toBe(true);
+    // (the one going out taken away: its words free, where they stand; the one coming in keeps its own)
+    const hx = { ...p.st().captions.find((w) => w.id === p.ids[1])! };
+    p.st().updateCycle(p.cycle().id, { branches: [inAt] });
+    expect(p.st().captions.find((w) => w.id === p.ids[1])).toMatchObject({ x: hx.x, y: hx.y, text: "H-X" });
+    expect(p.st().captions.find((w) => w.id === p.ids[1])!.branch).toBeUndefined();
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual([p.ids[0]]);
+    p.doc.undo();
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+    p.doc.redo();
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual([p.ids[0]]);
+  });
+
+  it("an arrow coming in and one going out at one place: copied, pasted and read from a saved record, each copy's words its own arrow's", () => {
+    const p = page([inAt, outAt], [{ text: "L-H", by: 0 }, { text: "H-X", by: 1 }]);
+    const d0 = p.doc.getState() as WorkspaceDocument;
+    const pasted = withImportedScheme(d0, schemeOf({ atoms: [], bonds: [], cycles: p.st().cycles, captions: p.st().captions } as never));
+    const copy = pasted.cycles!.find((c) => c.id !== p.cycle().id)!;
+    const copies = pasted.captions!.filter((w) => !p.ids.includes(w.id));
+    expect(copies.map((w) => w.branch)).toEqual([{ cycle: copy.id, ...inAt }, { cycle: copy.id, ...outAt }]);
+    const things = cycleThings({ atoms: [], bonds: [] }, pasted.captions!, styleOf(p.st().docStyle), [copy]);
+    expect(wordsOfBranches(copy, things)).toEqual(copies.map((w) => w.id));
+    const read = readDrawn(JSON.parse(JSON.stringify({ atoms: [], bonds: [], cycles: p.st().cycles, captions: p.st().captions })))!;
+    expect(read.captions!.map((w) => w.branch)).toEqual([{ cycle: p.cycle().id, ...inAt }, { cycle: p.cycle().id, ...outAt }]);
+  });
+
+  it("a second arrow the same way at the same place is not kept: one link names one arrow", () => {
+    const p = page([inAt], []);
+    p.st().updateCycle(p.cycle().id, { branches: [inAt, { ...inAt }, outAt] });
+    expect(p.cycle().branches).toEqual([inAt, outAt]);
+    const read = readDrawn({ atoms: [], bonds: [], cycles: [{ id: 1, x: 0, y: 0, r: 4.5 * B, branches: [inAt, inAt] }] })!;
+    expect(read.cycles![0].branches).toEqual([inAt]);
+  });
+
+  it("a cycle deleted and undone has its words its arrows' again", () => {
+    const p = page([right, top], [{ text: "Ar-X", by: 0 }]);
+    const id = p.cycle().id;
+    p.st().removeCycle(id);
+    expect(p.st().captions[0].branch).toBeUndefined();
+    p.doc.undo();
+    expect(p.st().captions[0].branch).toEqual({ cycle: id, ...right });
+  });
+
+  it("sized smaller and larger by its handle, the words stand where the rule sets them by the arrows - clear of them - and back at the first size, where they were", () => {
+    const p = page([right, top, inAt], [{ text: "Ar-X", by: 0 }, { text: "M-X", by: 1 }, { text: "L-H", by: 2 }]);
+    lengthened(p, p.ids[0], "Ar-X, 1.1 equiv");
+    const w1 = p.st().captions.find((w) => w.id === p.ids[1])!;
+    p.st().updateCaption(p.ids[1], { x: w1.x + 0.15 * B, y: w1.y + 0.1 * B });
+    const c0 = p.cycle();
+    const first = p.ids.map((n) => ({ ...p.st().captions.find((w) => w.id === n)! }));
+    const halves = p.ids.map((n) => {
+      const t = box(p, n);
+      return { w: (t.x1 - t.x0) / 2, h: (t.y1 - t.y0) / 2 };
+    });
+    const bs = [right, top, inAt];
+    for (const r of [3 * B, 7 * B]) {
+      const c1 = { ...c0, r };
+      const to = first.map((w, i) => wordsFollowing(c0, c1, bs[i], halves[i], w));
+      // (where the rule sets them by the arrow of the cycle sized, nudged as much from there as they were: the words written longer about their middle, and those moved by hand; the others right there)
+      first.forEach((w, i) => {
+        const was = branchWordsAt(c0, bs[i], B, halves[i]);
+        const m = branchWordsAt(c1, bs[i], B, halves[i]);
+        expect(to[i].x - m.x).toBeCloseTo(w.x - was.x, 9);
+        expect(to[i].y - m.y).toBeCloseTo(w.y - was.y, 9);
+      });
+      expect(Math.hypot(to[2].x - branchWordsAt(c1, inAt, B, halves[2]).x, to[2].y - branchWordsAt(c1, inAt, B, halves[2]).y)).toBeLessThan(1e-9);
+      expect(Math.hypot(to[1].x - first[1].x, to[1].y - first[1].y)).toBeGreaterThan(0.5 * B);
+      const back = to.map((w, i) => wordsFollowing(c1, c0, bs[i], halves[i], w));
+      back.forEach((w, i) => {
+        expect(w.x).toBeCloseTo(first[i].x, 9);
+        expect(w.y).toBeCloseTo(first[i].y, 9);
+      });
+    }
+  });
+
+  it("new words typed where an arrow with none sets its words are that arrow's; typed where one with words sets them, or well away, free", () => {
+    const p = page([top, beside], [{ text: "Ar-X", by: 0 }]);
+    const half = { w: 0.6 * B, h: 0.3 * B };
+    const cycles = p.st().cycles;
+    const caps = p.st().captions;
+    expect(branchTyped(cycles, caps, undefined, branchWordsAt(p.cycle(), beside, B, half), half)).toEqual({ cycle: p.cycle().id, ...beside });
+    expect(branchTyped(cycles, caps, undefined, branchWordsAt(p.cycle(), top, B, half), half)).toBeNull();
+    expect(branchTyped(cycles, caps, undefined, { x: 0, y: -6.5 * B }, half)).toBeNull();
+    // (typed at a new arrow: its own, wherever)
+    expect(branchTyped(cycles, caps, { cycle: p.cycle().id, ...top }, { x: 0, y: -6.5 * B }, half)).toEqual({ cycle: p.cycle().id, ...top });
   });
 });
 

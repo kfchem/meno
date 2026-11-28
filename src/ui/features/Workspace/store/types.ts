@@ -16,7 +16,7 @@ import type { Bound } from "../../../../lib/boundOptions";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
-import type { Cycle, WordsBeyond } from "../../../../lib/chem/cycle";
+import type { Cycle, CycleBranch, WordsBeyond } from "../../../../lib/chem/cycle";
 export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
@@ -300,11 +300,11 @@ export type Caption = {
   of?: CaptionOf;
   /**
    * The cycle's arrow coming in or going out they are the words of
-   * (docs/EDITOR-2D.md, *Catalytic cycles*): by the cycle, and where the
-   * arrow joins it - carried round, turned and copied with it, however long
+   * (docs/EDITOR-2D.md, *Catalytic cycles*): by the cycle, where the arrow
+   * joins it and which way it goes, in or out - carried round, turned and copied with it, however long
    * they are made. Never over an arrow, nor a structure's, as well.
    */
-  branch?: { cycle: number; at: number };
+  branch?: CaptionBranch;
   width?: number;
   align?: "left" | "right" | "justify";
   from?: WordsFrom;
@@ -324,13 +324,15 @@ export type Caption = {
  * spacing of their own or the labels' (`size`, `font`, `lines` null),
  * their letters marked otherwise (`marks`, none for plain).
  */
+/** The arrow of a cycle words are the words of: the cycle, by its id, and the arrow, by where it joins it and which way it goes (lib/chem/cycle `sameBranch`). */
+export type CaptionBranch = { cycle: number } & CycleBranch;
 /** The structure words belong to: a drawing's, by one of its atoms; or a molecule in 3D. */
 export type CaptionOf = { atom: number } | { molecule: number };
 export type CaptionPatch = {
   /** Belonging to a structure, or (null) to none: free. */
   of?: CaptionOf | null;
   /** The words of a cycle's arrow, or (null) of none: free. */
-  branch?: { cycle: number; at: number } | null;
+  branch?: CaptionBranch | null;
   text?: string;
   x?: number;
   y?: number;

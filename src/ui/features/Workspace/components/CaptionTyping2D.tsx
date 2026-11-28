@@ -42,7 +42,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import { tiedOpened, writtenPlace } from "../utils/tiedCaptions";
 import { wordsBeyond } from "../../../../lib/chem/cycle";
-import { branchOpened } from "../utils/cycles";
+import { branchOpened, branchTyped } from "../utils/cycles";
 import { styleOf } from "../../../../lib/chem/style";
 import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
@@ -191,7 +191,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
           const placed = edit.beyond
             ? { ...wordsBeyond(edit.beyond, half(text), edit.beyond.clear), arrow: undefined }
             : captionPlace(edit.at, half(text), edit.of ? [] : arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
-          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : edit.branch ? { branch: edit.branch } : {}) });
+          // (typed at a new arrow, its words; typed where an arrow with none sets its words, that arrow's: `branchTyped`)
+          const branch = edit.of || placed.arrow != null ? null : branchTyped(s.cycles, s.captions, edit.branch, placed, half(text));
+          still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept, ...(edit.of ? { of: edit.of } : branch ? { branch } : {}) });
         }
       } else if (!text.trim()) {
         s.removeCaption(edit.id);

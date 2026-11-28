@@ -2267,13 +2267,18 @@ All hover-based, as above.
     away from it; else they stand over or under it (`lib/chem/cycle`
     `wordsBeyond`). Written again, longer or shorter, they grow and
     shrink away from the arrow, their side facing it kept where it was.
-    The words typed at an arrow are its own, however long they are made
-    and nudged by hand: they go with the cycle as it is moved,
-    sized, turned, copied and pasted, and are kept so in the file. An
-    arrow without words never takes its neighbour's. Words dragged well
-    away from where their arrow sets them (more than 0.8 of a bond) are
-    free text; free words dropped there, by an arrow with none, become
-    its own. Words emptied are gone, as any words are. *Remove
+    Words are an arrow's own when they are typed at the arrow just put
+    there, or typed or dropped where an arrow that has no words sets its
+    words. They stay its own however long they are made and however they
+    are nudged: they go with the cycle as it is moved, sized, turned,
+    copied and pasted, and are kept so in the file. An arrow without
+    words never takes its neighbour's, and an arrow coming in and one
+    going out at the same place each keep their own. Words become free
+    text when they are dragged on their own well away from where their
+    arrow sets them (more than 0.8 of a bond), or when their arrow is
+    taken away. Words in a drawing saved before this open as free text.
+    Words emptied are gone, as any words are. One arrow of each way can
+    be put at one place. *Remove
     this arrow* takes the one there away; its words stay where they
     are, as free text. One put there grows - in from
     its far end, or out from the circle - and one taken away goes the
@@ -2288,7 +2293,9 @@ All hover-based, as above.
   - **Selected** by a click on its line, or taken hold of by holding
     still on it a moment; selected, a drag moves it with what is on it and
     the words at its arrows' ends, and its handle at the lower right sizes
-    it, what is on it moved out or in with the line - each one undo step.
+    it, what is on it moved out or in with the line and the words at its
+    arrows' ends going with their arrows, as clear of them as before -
+    each one undo step.
   - **How far its arrows stop short** (the maintainer, 2026-10-16): half
     a bond, or what its menu sets for the cycle - a quarter, half, three
     quarters or a whole bond. Selected, each end of its arrows shows a

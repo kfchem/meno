@@ -31,13 +31,13 @@ import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from
 import { etaHeld } from "./chem/eta";
 import { wedgesHeld } from "./chem/drawing";
 import { behindRemapped, crossingsHeld, orderedCrossing } from "./chem/crossings";
-import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
+import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CaptionBranch, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
 import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved } from "../../../lib/chem/shapes";
-import { GAP_MOST, type Cycle, type CycleBranch } from "../../../lib/chem/cycle";
+import { GAP_MOST, sameBranch, type Cycle, type CycleBranch } from "../../../lib/chem/cycle";
 import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
@@ -1259,7 +1259,7 @@ export function schemeOf(part: Drawn): ImportedScheme {
       // (the words of a cycle's arrow, that cycle by its place among those brought - of one not brought, free)
       const { branch, ...rest } = c;
       const cy = branch ? (part.cycles ?? []).findIndex((x) => x.id === branch.cycle) : -1;
-      return { ...rest, ...(at >= 0 ? { arrowAt: at } : {}), ...(branch && cy >= 0 ? { branch: { cycle: cy, at: branch.at } } : {}) };
+      return { ...rest, ...(at >= 0 ? { arrowAt: at } : {}), ...(branch && cy >= 0 ? { branch: { ...branch, cycle: cy } } : {}) };
     }),
     // (how one was turned, and its frame, are the view's: not the document's)
     molecules3d: (part.molecules3d ?? []).map(({ turn: _turn, frame: _frame, list: _list, ...m }) => m),
@@ -1285,7 +1285,7 @@ export function withImportedScheme(
   const brought = scheme?.molecules3d?.length ?? 0;
   for (const { arrowAt, of, branch, ...c } of scheme?.captions ?? []) {
     const owner = of && "molecule" in of ? (of.molecule < brought ? { molecule: first3d + of.molecule } : undefined) : of;
-    const by = branch && branch.cycle < (scheme?.cycles?.length ?? 0) ? { cycle: firstCycle + branch.cycle, at: branch.at } : undefined;
+    const by = branch && branch.cycle < (scheme?.cycles?.length ?? 0) ? { ...branch, cycle: firstCycle + branch.cycle } : undefined;
     next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : owner ? { of: owner } : by ? { branch: by } : {}) });
   }
   // (the frame each shows is the canvas's to keep, not the document's; a
@@ -2756,7 +2756,9 @@ export function updateCycle(doc: WorkspaceDocument, id: number, patch: CyclePatc
     else ends[k] = Math.min(GAP_MOST, Math.max(0, v));
   }
   const ccw = patch.ccw === undefined ? was.ccw : patch.ccw || undefined;
-  const branches = patch.branches === undefined ? was.branches : patch.branches.length ? patch.branches : undefined;
+  // (one arrow of each way at a place, at most: a second the same is not kept)
+  const given = patch.branches?.filter((b, i, all) => all.findIndex((x) => sameBranch(x, b)) === i);
+  const branches = given === undefined ? was.branches : given.length ? given : undefined;
   const color = patch.color === undefined ? was.color : patch.color ?? undefined;
   const next: Cycle = {
     ...rest,
@@ -2777,7 +2779,7 @@ export function removeCycles(doc: WorkspaceDocument, ids: Iterable<number>): Wor
 
 /** `doc` with the words of a cycle's arrow no longer there - taken away, or its cycle - free words where they stand. */
 function freedOfBranches(doc: WorkspaceDocument): WorkspaceDocument {
-  const there = (b: { cycle: number; at: number }) => !!doc.cycles?.some((c) => c.id === b.cycle && c.branches?.some((x) => x.at === b.at));
+  const there = (b: CaptionBranch) => !!doc.cycles?.some((c) => c.id === b.cycle && c.branches?.some((x) => sameBranch(x, b)));
   if (!doc.captions?.some((w) => w.branch && !there(w.branch))) return doc;
   return { ...doc, captions: doc.captions.map((w) => (w.branch && !there(w.branch) ? (({ branch: _b, ...free }) => free)(w) : w)) };
 }
