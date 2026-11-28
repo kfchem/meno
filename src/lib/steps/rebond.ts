@@ -33,7 +33,14 @@ const groupOf = (e: Entry): string => {
   return typeof g === "string" || typeof g === "number" ? String(g) : e.id;
 };
 
-export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded {
+/**
+ * `geometry` given `bonding`'s bonds, as entry `id`. `key` reads the
+ * bonding's structure as its key (./restructure `structureKey`) - the
+ * entry's, which takes that structure - where the caller has it already,
+ * read only once the two are found to hold the same atoms; else it is
+ * worked out here.
+ */
+export function rebonded(geometry: Entry, bonding: Entry, id: string, key?: () => string): Rebonded {
   const g = geometry.geometry;
   if (g.kind === "frames") return { failed: "The geometry holds frames: take one frame of it first (Take frames)." };
   if (g.kind !== "3d") return { failed: `The geometry entry has no 3D places (${g.kind === "2d" ? "it is drawn" : "it has none"}).` };
@@ -67,7 +74,7 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
   if (geometry.properties.restraints)
     said.push(`The geometry's restraints were dropped: restraints hold a bonding's bonds, and the entry takes ${bonding.properties.restraints ? "the bonding's" : "the bonding's, which has none"}.`);
   // (values of the structure either was, now another: kept, marked, and said - never shown as current)
-  const { entry, stale, unknown } = restructured(made, "Re-bond");
+  const { entry, stale, unknown } = restructured(made, "Re-bond", key?.());
   if (stale.length) said.push(`${stale.join(", ")} ${stale.length === 1 ? "was" : "were"} worked out on another structure, so ${stale.length === 1 ? "it is" : "they are"} marked not applicable.`);
   // (and those not known to be of the entry's structure now: not shown as standing)
   if (unknown.length)

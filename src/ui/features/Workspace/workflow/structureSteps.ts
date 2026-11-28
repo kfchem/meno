@@ -14,6 +14,9 @@ import { tag } from "../../../../lib/nodes/tag";
 import { merge } from "../../../../lib/nodes/merge";
 import { matchedOn, valuesOn } from "../../../../lib/nodes/match";
 import { rebonded } from "../../../../lib/steps/rebond";
+import { structureKey } from "../../../../lib/steps/restructure";
+import { constitutionOf } from "../../../../lib/nodes/group";
+import { identityAsked, identityKnown } from "../chem/identityOff";
 import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions } from "../../../../lib/steps/compareBonding";
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
@@ -203,6 +206,32 @@ export function mergedSet(first: readonly SetEntry[], second: readonly SetEntry[
 }
 
 /**
+ * A bonding entry's structure as its key (lib/steps/restructure `structureKey`), each re-bonded entry's that takes its bonds, as
+ * the drawing thread may read it: known - asked first (`rebondKeysAsked`) - or small enough to work out here (chem/identityOff
+ * `identityKnown`); else worked out here all the same, as where a caller could not ask first.
+ */
+const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "constitution")?.text ?? structureKey(e);
+
+/**
+ * Each of `bonding`'s structures as its key (`rebondKey`) asked off the drawing thread (chem/identityOff `identityAsked`) - a large
+ * structure's, a metal's with its phosphines, taking long - `answered` told as each lands: for a caller that may wait before it
+ * re-bonds onto them (`rebondedSet`). What cannot be asked is worked out as it is read.
+ */
+export function rebondKeysAsked(bonding: readonly SetEntry[], answered?: (done: number) => void): Promise<void> {
+  let done = 0;
+  return Promise.all(
+    bonding.map((e, i) =>
+      identityAsked(constitutionOf(entryOfSet(e, String(i))), "constitution")
+        .catch(() => undefined)
+        .then(() => answered?.(++done)),
+    ),
+  ).then(() => undefined);
+}
+
+/** Whether each of `bonding`'s structures is known as its key, or small enough to work out here (`rebondKey`): nothing to ask first. */
+export const rebondKeysKnown = (bonding: readonly SetEntry[]): boolean => bonding.every((e, i) => identityKnown(constitutionOf(entryOfSet(e, String(i))), "constitution") != null);
+
+/**
  * *Re-bond* (lib/steps `rebonded`): each entry of *Geometry* given the
  * bonds and charges of an entry of *Bonding* - each with each, or the one
  * that has the same value of a property - as one entry of its own; where
@@ -224,6 +253,9 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
   };
   // (the pairs: each with each, or each geometry with the one bonding entry of its value)
   const matched = pairs === "property" ? matchedOn(gs, bs, name, "Bonding") : null;
+  // (each bonding entry's key read once, however many geometries take its bonds)
+  const keys = new Map<number, string>();
+  const keyOf = (k: number): string => keys.get(k) ?? keys.set(k, rebondKey(bs[k])).get(k)!;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const notes = new Set<string>();
@@ -235,7 +267,7 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
       return;
     }
     for (const k of onto) {
-      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`);
+      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`, () => keyOf(k));
       if ("failed" in r) {
         aside.push(withSaid(g, SET_ASIDE, `onto ${named(bonding[k])}: ${r.failed}`));
         continue;

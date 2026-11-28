@@ -59,7 +59,7 @@ import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, viewKept, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { DRAWN_AND_3D, runDuplicatesDrawnInTurns, runMenoInTurns } from "../../workflow/meno";
 import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
-import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
+import { atomMapPlan, atomMapSet, moleculeOfEntry, rebondKeysAsked, rebondKeysKnown, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
@@ -393,6 +393,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno" && step.kind === "check-structures") return checkDrawn(id, at);
     if (by === "meno" && step.kind === "stereoisomers") return stereoDrawn(id, at);
+    if (by === "meno" && step.kind === "rebond") return rebondOff(id, at);
     if (by === "meno") {
       const d0 = doc.getState();
       const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
@@ -770,6 +771,50 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (no time said: Meno's own steps say none)
     const outcome = atomMapSet(entries, references, m.holds as Holds3D, v, mapped);
     doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
+  }
+
+  /**
+   * *Re-bond* (workflow/structureSteps `rebondedSet`): each bonding entry's structure as its key - which a large one, a metal with
+   * its phosphines, takes long to work out - asked off the drawing thread first (`rebondKeysAsked`), the step working meanwhile,
+   * how many are known of how many; then run as any Meno step is, one edit, reading them. Known already, or small enough to work
+   * out here, it runs at once, never shown working. Stopped meanwhile, it is said stopped and nothing is made.
+   */
+  async function rebondOff(id: number, at: number): Promise<void> {
+    if (get().menoWorking[id]) return;
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const bonding = inputOf(d, id, "bonding");
+    const entries = bonding ? setEntries(bonding.molecules, bonding.holds as Holds3D) : [];
+    if (!rebondKeysKnown(entries)) {
+      const key = inputKey(d, step, "meno");
+      menoStops.delete(id);
+      const working = (patch: { done: number } | null) =>
+        set((prev) => {
+          const rest = { ...prev.menoWorking };
+          if (patch) rest[id] = { since: at, total: entries.length, ...patch };
+          else delete rest[id];
+          return { ...prev, menoWorking: rest };
+        });
+      working({ done: 0 });
+      try {
+        await rebondKeysAsked(entries, (done) => {
+          if (get().menoWorking[id]) working({ done });
+        });
+      } finally {
+        working(null);
+      }
+      const still = stepOf(doc.getState(), id);
+      if (!still) return;
+      if (menoStops.has(id)) {
+        menoStops.delete(id);
+        const took = Date.now() - at;
+        return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, kind: still.kind, ...(still.options ? { options: still.options } : {}) }));
+      }
+    }
+    const d0 = doc.getState();
+    const before = new Set((d0.molecules3d ?? []).map((m) => m.id));
+    doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at, turnsOf: turnsFor }));
+    viewsKept(d0, id, before);
   }
 
   /**
