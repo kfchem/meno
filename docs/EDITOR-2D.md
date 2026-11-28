@@ -2600,8 +2600,9 @@ lipids each have their own way of being drawn, which it should know.
    (`chem/layoutWorker.ts`), as a large structure takes it up to a second.
    - What the engine is given is read out of the drawing itself
      (`lib/layout/drawn.ts`): each centre's configuration from its wedges,
-     by the one rule of a wedge's narrow end at its centre - the atom at
-     the wide end of a wedge in front of the page, of hashes behind it
+     each read at its narrow end, its centre's: the atom at the wide end
+     of a solid wedge in front of the page, of a hashed wedge behind it,
+     and a hashed line from a centre read as the hashed wedge it states
      (`perception/stereo/from2d.ts`) - and each double bond's from its
      sides. So Clean-up needs no plugin, and works before any is set up.
    - An H drawn on a stereocentre is taken as the centre's own: kept if
