@@ -121,11 +121,15 @@ export function procedureFileName(name: string): string {
   return `${stem || "Procedure"}.meno`;
 }
 
-/** A procedure as a workspace (.meno) holds it, to be shared: its sets and steps and the wires among them, and nothing else - its middle where a workspace opened is first seen. */
+/**
+ * A procedure as a workspace (.meno) holds it, to be shared: its sets and steps and the wires among them, and nothing
+ * else - its middle where a workspace opened is first seen. It keeps no file: throws where its parts would keep one
+ * (one still to be added to the file, which these bytes alone do not hold), rather than give a file whose list names
+ * a file it lacks.
+ */
 export async function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
   const parts = centredParts(p.parts);
-  // (it has no file to keep: nothing not kept to say)
-  const { bytes } = await workspaceFile({
+  const { bytes, appended, pending } = await workspaceFile({
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -140,6 +144,7 @@ export async function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
     steps: parts.steps,
     wires: parts.wires,
   });
+  if (appended.length || pending.length) throw new Error(`A procedure keeps no file, but its parts would keep ${appended.length || pending.length}`);
   return bytes;
 }
 
