@@ -877,10 +877,16 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   always seen, its end touching a label's letters or digits (13C's) where
   it must, and a wedge shows its width (`BOND_SEEN_LEAST`; the maintainer,
   2026-10-14). What the two thirds cannot give is taken first from the
-  margins past the letters, down to the line's half width, so that its
-  round end stops at the letters rather than in them (the l of a Cl set
-  toward the platinum of a flat trans-PtCl2), and only then from each end
-  alike. Where one of
+  margins past the letters, down to the line's round end touching them,
+  and what is still lacking is shared so that the deeper end goes in as
+  little as it can - but no end goes further into its letters than taking
+  from each end alike, in proportion, would take it (`seenTrims`). So an
+  end that would be left clear of its letters gives its margin to the
+  other: the l of a Cl set toward a platinum is no longer run into while
+  the P keeps a margin. Not cured: where both ends would run into their
+  letters, they still do, as much as before - on a bond of ordinary
+  length between two labels the line can still meet a letter, and only
+  a longer bond takes it clear. Where one of
   them is at a terminal atom (Mg-Br, O-3H), Clean-up draws that bond just
   long enough for the two to keep their margins, in the drawing's style -
   measured as the drawing measures it (`lib/chem/layout2d.ts` `labelTrims`,

@@ -1223,6 +1223,8 @@ function labelClearance(
   d: Vec2,
   margin: number,
   band: { n: Vec2; lo: number; hi: number },
+  /** The letter on the atom measured whole (the bond leaves from within it); false: only where the line runs, as of the others. */
+  whole = true,
 ): number {
   const lo = band.lo - margin;
   const hi = band.hi + margin;
@@ -1231,7 +1233,7 @@ function labelClearance(
   // the band's edges, and reaches furthest at a corner of it or where an edge
   // crosses the band's)
   for (const hull of hulls) {
-    if (aroundOrigin(hull)) {
+    if (whole && aroundOrigin(hull)) {
       for (const p of hull) reach = Math.max(reach, vdot(p, d));
       continue;
     }
@@ -2913,7 +2915,7 @@ export function labelTrims(
   deg?: Map<number, number>,
   labelShapes?: Map<number, Vec2[][]>,
   doubleSides?: Map<Bond, number | undefined>,
-): { a: number; b: number; room: number; marginA: number; marginB: number } {
+): { a: number; b: number; room: number; inkA: number; inkB: number } {
   const units = opts.units ?? "px";
   const fontWorld = toWorld(opts.fontPx, zoom, units);
   const margin = (opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : fontWorld * 0.16) * (bond.close ? LABEL_MARGIN_CLOSE : 1);
@@ -2924,21 +2926,21 @@ export function labelTrims(
   const n = vperp(dir);
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
-  const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
+  const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number, margined = margin) => {
     // (a label being written: on its way from what its bonds stopped short of before, `k` of the way)
     if (at.writing) {
       const band = { n, lo, hi };
       const set = labelSetOf(opts);
       const clear = (w: Writing): number => {
         const k = Math.min(1, Math.max(0, w.k));
-        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margin, band) : drawn(idx, at, towards, band);
+        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margined, band, margined > 0) : drawn(idx, at, towards, band, margined);
         return k >= 1 ? now : (w.was ? clear(w.was) : 0) * (1 - k) + now * k;
       };
       return clear(at.writing);
     }
-    return drawn(idx, at, towards, { n, lo, hi });
+    return drawn(idx, at, towards, { n, lo, hi }, margined);
   };
-  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }) => {
+  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }, margined: number) => {
     // (a pi system's centre, where a haptic bond ends, has no label to stop
     // short of: the line reaches the centre, as the bond is to the system
     // as a whole - IUPAC GR-1.7)
@@ -2946,12 +2948,17 @@ export function labelTrims(
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
-    return labelClearance(hulls, towards, margin, band);
+    return labelClearance(hulls, towards, margined, band, margined > 0);
   };
-  const a = reach(bond.a1, p, dir, -across.right1, across.left1);
-  const b = reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2);
-  // (and how much of each is the margin past the letters, which a bond with too little room gives up first: none where nothing stops it)
-  return { a, b, room: L0 * (opts.labelShareMax ?? 0.9), marginA: Math.min(margin, a), marginB: Math.min(margin, b) };
+  // (and how far each label's letters reach where the line itself runs, with no margin - the letter on the atom measured there too, not
+  // whole: what the line's end would run into, `seenTrims`)
+  return {
+    a: reach(bond.a1, p, dir, -across.right1, across.left1),
+    b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
+    room: L0 * (opts.labelShareMax ?? 0.9),
+    inkA: reach(bond.a1, p, dir, -across.right1, across.left1, 0),
+    inkB: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2, 0),
+  };
 }
 
 /**
@@ -3000,6 +3007,32 @@ function itemsHulls(items: readonly TextItem[], fontSize: number, set: LabelSet)
 
 /** The least share of a bond seen between the labels at its ends, however much of it they would take. */
 export const BOND_SEEN_LEAST = 1 / 3;
+
+/**
+ * Where a bond's two labels would take more of it than leaves a third seen (`BOND_SEEN_LEAST`), how far each end stops from its atom,
+ * the two together `most`. `trims` are what each label asks (its letters' reach and the margin past them); `ink` how far its letters
+ * reach where the line itself runs, no margin; `half` the line's half width, its round end's reach. An end with no label asks nothing
+ * and is not moved. An end's depth is how far the line's ink runs into its letters: its letters' reach and `half`, less its trim (under
+ * 0, a margin is left). The margins give way first; what is still lacking is shared so that the deeper end goes in as little as it can,
+ * the two alike where they may - but no end deeper into its letters than taking from each end alike, in proportion to what it asks,
+ * would take it, nor past its own atom. So an end that would be left clear gives its margin to the other; where both would run into
+ * their letters, both do, as they would alike.
+ */
+export function seenTrims(trims: readonly [number, number], ink: readonly [number, number], most: number, half: number): [number, number] {
+  const total = trims[0] + trims[1];
+  const alike = trims.map((t) => (total > 0 ? (t * most) / total : 0));
+  // (each end's depth: its letters and the line's round end, less its trim - an end with no label is not moved)
+  const base = trims.map((t, k) => (t > 0 ? ink[k] + half : 0));
+  const need = base[0] + base[1] - most;
+  // (the least depth - its whole trim kept - and the most: no deeper than alike, nor past its atom)
+  const lo = base.map((b, k) => (trims[k] > 0 ? b - trims[k] : 0));
+  const hi = base.map((b, k) => (trims[k] > 0 ? Math.max(lo[k], Math.min(Math.max(0, b - alike[k]), b)) : 0));
+  const clamp = (v: number, k: number) => Math.min(hi[k], Math.max(lo[k], v));
+  let d0 = clamp(trims[0] > 0 && trims[1] > 0 ? need / 2 : trims[0] > 0 ? need : 0, 0);
+  const d1 = clamp(need - d0, 1);
+  d0 = clamp(need - d1, 0);
+  return [base[0] - d0, base[1] - d1];
+}
 
 export function buildBondPrimitives(
   atoms: Atom[],
@@ -3052,24 +3085,11 @@ export function buildBondPrimitives(
   }
   // And whatever the labels, a bond is seen for a third of its length at
   // least (BOND_SEEN_LEAST): its end may touch a label's letters or digits
-  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14).
-  // What it lacks is taken first from the margins past the letters, down to
-  // the line's half width - its round end's reach - so that its ink stops at
-  // theirs (the l of a Cl set toward a metal it is bonded to); then from all
-  // of each end alike.
+  // - 13C's - and a wedge shows its width (the maintainer, 2026-10-14). How
+  // the two ends give way: `seenTrims`.
   const seen = L0 * BOND_SEEN_LEAST;
   if (trimA + trimB > 0 && L0 - trimA - trimB < seen) {
-    const over = trimA + trimB - Math.max(0, L0 - seen);
-    const giveA = Math.max(0, (trims.a > 0 ? (trims.marginA * trimA) / trims.a : 0) - lineHalf);
-    const giveB = Math.max(0, (trims.b > 0 ? (trims.marginB * trimB) / trims.b : 0) - lineHalf);
-    const g = giveA + giveB > 0 ? Math.min(1, over / (giveA + giveB)) : 0;
-    trimA -= giveA * g;
-    trimB -= giveB * g;
-  }
-  if (trimA + trimB > 0 && L0 - trimA - trimB < seen - 1e-12) {
-    const k = Math.max(0, L0 - seen) / (trimA + trimB);
-    trimA *= k;
-    trimB *= k;
+    [trimA, trimB] = seenTrims([trimA, trimB], [trims.inkA, trims.inkB], Math.max(0, L0 - seen), lineHalf);
   }
   const p1 = vadd(p1o, vscale(dir, trimA));
   const p2 = vadd(p2o, vscale(dir, -trimB));
