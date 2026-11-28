@@ -10,6 +10,7 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { PARTS_ALONE_WHY, sharesOf, sharesWithheld, solidOf } from "../utils/molecule3d";
+import { joinedStructures } from "../utils/joinedParts";
 import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
@@ -118,15 +119,17 @@ describe("a lone atom made in 3D", () => {
     const bare = bareAtomsOf(salt, all);
     expect(bare.map((a) => a.id)).toEqual([5, 6, 7]);
     // (beside others made: named, and the way to take them along - Make one structure, as the menu names it)
-    expect(bareWords(bare, true)).toBe("Na+, Cl\u2212 and Ca2+ were left out: one atom alone has no 3D structure. To take them with their counter-ions, select them together and choose Make one structure first.");
-    expect(bareWords(bare.slice(0, 1), true)).toBe("Na+ was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both and choose Make one structure first.");
+    expect(bareWords(bare, true)).toBe("Na+, Cl\u2212 and Ca2+ were left out: one atom alone has no 3D structure. To take them with their counter-ions, select them together, right-click and choose Make one structure first.");
+    expect(bareWords(bare.slice(0, 1), true)).toBe("Na+ was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both, right-click and choose Make one structure first.");
     expect(bareWords(bare.slice(0, 1), false)).toBe("One atom alone has no 3D structure.");
     // (a lone atom of no charge beside others made - a metal - is no counter-ion)
-    expect(bareWords([{ id: 8, x: 12, y: 0, r: 0.9, el: "Pd" }], true)).toBe("Pd was left out: one atom alone has no 3D structure. To take it with the structure it belongs to, select both and choose Make one structure first.");
-    // (and that way takes it: made one structure, the ions are no bare atoms - they are made in 3D with the rest)
-    const one = { ...salt, atoms: salt.atoms.map((a) => ({ ...a, joined: 1 })) };
-    expect(bareAtomsOf(one, all)).toEqual([]);
-    expect(blocksOf(one, all)).toHaveLength(1);
+    expect(bareWords([{ id: 8, x: 12, y: 0, r: 0.9, el: "Pd" }], true)).toBe("Pd was left out: one atom alone has no 3D structure. To take it with the structure it belongs to, select both, right-click and choose Make one structure first.");
+    // (and that way takes it: Make one structure of the acetate and the Na+ - the menu's own action - and the one block made in 3D
+    //  holds every atom of both, the Na+ no bare atom; the Cl- and Ca2+ left apart are still left out, and named)
+    const one = joinedStructures(salt, [1, 5]);
+    expect(blocksOf(one, all).map((b) => [...b.atoms].sort((p, q) => p - q))).toEqual([[1, 2, 3, 4, 5]]);
+    expect(bareAtomsOf(one, all).map((a) => a.id)).toEqual([6, 7]);
+    expect(bareWords(bareAtomsOf(one, all), true)).toMatch(/^Cl\u2212 and Ca2\+ were left out/);
   });
 });
 
@@ -961,7 +964,7 @@ describe("a hydrogen bond drawn, made in 3D", () => {
       expect(blocksOf(salt(bond), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3]]);
       const bare = bareAtomsOf(salt(bond), bond ? [1] : [1, 4]);
       expect(bare.map((a) => a.id)).toEqual([4]);
-      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both and choose Make one structure first.");
+      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure. To take it with its counter-ion, select both, right-click and choose Make one structure first.");
     }
     expect(drawnBlocksOf(salt(true), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3], [4]]);
   });

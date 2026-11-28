@@ -186,7 +186,7 @@ export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
 function takenAlong(lone: Model["atoms"]): string {
   const many = lone.length > 1;
   const with_ = lone.every((a) => (a.charge ?? 0) !== 0) ? (many ? "their counter-ions" : "its counter-ion") : many ? "the structures they belong to" : "the structure it belongs to";
-  return ` To take ${many ? "them" : "it"} with ${with_}, select ${many ? "them together" : "both"} and choose Make one structure first.`;
+  return ` To take ${many ? "them" : "it"} with ${with_}, select ${many ? "them together" : "both"}, right-click and choose Make one structure first.`;
 }
 
 /** Why a structure with a metal whose ligands are not stated has no 3D structure, of one or of more. */

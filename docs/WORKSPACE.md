@@ -803,7 +803,7 @@ Taken on 2026-10-13:
   structure; beside others made - a salt's counter-ions - it is left out,
   and a notice names it and the way to take it along: "Na+ was left out:
   one atom alone has no 3D structure. To take it with its counter-ion,
-  select both and choose Make one structure first." Made one structure,
+  select both, right-click and choose Make one structure first." Made one structure,
   an ion and its counter-ion are made in 3D as one molecule
   (`standsForMolecule`, `bareWords`, chem/make3d).
 - **Rising out of the drawing.** Turned to lie over the drawing (Horn's
