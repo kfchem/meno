@@ -1760,7 +1760,13 @@ to be able to work with nothing going out at all.
   `QUIET`) with no request waiting, it lets go - the spell ends with its
   answer, its notice going - and is on the record as done for then. Bytes
   on it again begin a spell of their own before they are carried, and it
-  is on the record again under that spell. The last hold let
+  is on the record again under that spell - none where Meno is offline,
+  the purpose is no longer allowed or the task has ended: then nothing is
+  carried, the connection is cut, and it is on the record as refused, kept
+  from the network. A server's closing of it once let go of - its end, and
+  the few bytes that come just before it (`CLOSING`) - begins no spell: it
+  is carried, and on the record as a closed line of its own, with no
+  notice. The last hold let
   go, the spell ends and its notice goes as any finished task's does:
   failed where anything in it went wrong (an answer that said `"ok":
   false`, a connection that failed or was refused, a request made while
