@@ -16,7 +16,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { follow, TAU } from "../../../theme/motion";
 import type { EditorStore } from "../store";
 import type { PdfItem } from "../store/types";
-import { atOf, columnLayout, deepest, pageInView, pointOf, pointOn, topOf, type ColumnLayout } from "../../../../lib/pdf/column";
+import { atOf, columnLayout, deepest, keptWithin, pageInView, pinchedColumn, pointOf, pointOn, topOf, type ColumnLayout, type ColumnView } from "../../../../lib/pdf/column";
+import type { Pt } from "../../../../lib/input/pinch";
 import { isWebAddress, type PdfLink } from "../../../../lib/pdf/reader";
 import { IS_MAC } from "../../../../lib/doc/shortcuts";
 
@@ -113,9 +114,7 @@ export class ColumnReader {
 
   /** How far down and across what is seen begins, in CSS pixels, at a layout: kept within the pages. */
   private place(l: ColumnLayout, at: number, across: number): { top: number; left: number } {
-    const top = Math.min(Math.max(0, topOf(l, at)), deepest(l, this.tall));
-    const left = Math.min(Math.max(0, across * l.width - this.width / 2), Math.max(0, l.width - this.width));
-    return { top, left };
+    return keptWithin(l, this.width, this.tall, topOf(l, at), across * l.width - this.width / 2);
   }
 
   /** What is seen now: the layout, and how far down and across it begins. */
@@ -156,6 +155,30 @@ export class ColumnReader {
       this.zoom = zoom;
       this.hold();
     }
+    this.moved();
+  }
+
+  /** What is seen now, as a pinch begins from it: how large, and how far down and across, in CSS pixels. */
+  view(): ColumnView {
+    const { top, left } = this.seen();
+    return { zoom: this.zoom, top, left };
+  }
+
+  /**
+   * Two fingers on what is read, gone from `a0` and `b0` to `a1` and `b1`
+   * (CSS pixels on the column's body) since they came down on it at `begun`:
+   * shown at once as they have pinched it (`pinchedColumn`) - within the
+   * zoom's limits, the point midway between them held there.
+   */
+  pinch(begun: ColumnView, fingers: { a0: Pt; b0: Pt; a1: Pt; b1: Pt }): void {
+    this.goneTo = null;
+    this.sought = null;
+    const v = pinchedColumn(this.sizes, this.width, this.tall, begun, fingers, ZOOM_LEAST, ZOOM_MOST);
+    const l = this.layout(v.zoom);
+    this.zoom = v.zoom;
+    this.at = atOf(l, v.top);
+    this.across = l.width > this.width ? (v.left + this.width / 2) / l.width : 0.5;
+    this.goal = { zoom: v.zoom, anchor: null, at: this.at, across: this.across };
     this.moved();
   }
 

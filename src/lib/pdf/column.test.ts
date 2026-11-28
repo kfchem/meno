@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atOf, COLUMN_GAP, COLUMN_MARGIN, columnLayout, deepest, pageInView, pagesInView, pageUnder, pointOf, pointOn, topOf } from "./column";
+import { atOf, COLUMN_GAP, COLUMN_MARGIN, columnLayout, deepest, pageInView, pagesInView, pageUnder, pinchedColumn, pointOf, pointOn, topOf, type ColumnView } from "./column";
 
 const A4: [number, number] = [595, 842];
 const WIDE: [number, number] = [842, 595];
@@ -63,5 +63,70 @@ describe("a PDF's pages in the column", () => {
     expect(back.y).toBeCloseTo(p.y + p.h * 0.7);
     expect(pageUnder(l, p.x + 1, p.y + 1)).toBe(1);
     expect(pageUnder(l, 1, p.y + 1)).toBeNull();
+  });
+});
+
+describe("two fingers pinching the column", () => {
+  // (one page 100 by 1000 points in a column 124 wide: at 1, a point is a pixel, the page 12 in from the top and the left)
+  const SIZES: [number, number][] = [[100, 1000]];
+  const W = 124;
+  const TALL = 300;
+  const pinch = (view: ColumnView, a0: [number, number], b0: [number, number], a1: [number, number], b1: [number, number]) =>
+    pinchedColumn(SIZES, W, TALL, view, { a0: { x: a0[0], y: a0[1] }, b0: { x: b0[0], y: b0[1] }, a1: { x: a1[0], y: a1[1] }, b1: { x: b1[0], y: b1[1] } }, 0.25, 8);
+
+  it("spread twice as far apart, is twice as large, the point midway between them held there", () => {
+    const v = pinch({ zoom: 1, top: 100, left: 0 }, [40, 150], [60, 150], [30, 150], [70, 150]);
+    // (midway: 50 across, 250 down at 1 - 0.38 across the page, 0.238 down it; at 2 the page is 200 by 2000, 12 in, in a column 224 wide)
+    expect(v.zoom).toBeCloseTo(2);
+    expect(v.top).toBeCloseTo(12 + 0.238 * 2000 - 150);
+    expect(v.left).toBeCloseTo(12 + 0.38 * 200 - 50);
+    const held = pointOn(columnLayout(SIZES, W, 2), v.left + 50, v.top + 150);
+    expect(held.u).toBeCloseTo(0.38);
+    expect(held.v).toBeCloseTo(0.238);
+  });
+
+  it("closed, is smaller; the point midway between them, wherever they go, is under them still", () => {
+    const from: ColumnView = { zoom: 3, top: 900, left: 60 };
+    const before = pointOn(columnLayout(SIZES, W, 3), from.left + 50, from.top + 100);
+    const v = pinch(from, [20, 60], [80, 140], [20, 110], [50, 150]);
+    expect(v.zoom).toBeCloseTo(1.5);
+    const after = pointOn(columnLayout(SIZES, W, 1.5), v.left + 35, v.top + 130);
+    expect(after.u).toBeCloseTo(before.u);
+    expect(after.v).toBeCloseTo(before.v);
+  });
+
+  it("moved together, moves it as far as they went and zooms nothing", () => {
+    expect(pinch({ zoom: 1, top: 100, left: 0 }, [40, 150], [60, 170], [40, 120], [60, 140])).toEqual({ zoom: 1, top: 130, left: 0 });
+    const v = pinch({ zoom: 2, top: 400, left: 50 }, [40, 150], [60, 170], [30, 160], [50, 180]);
+    expect(v.zoom).toBe(2);
+    expect(v.top).toBeCloseTo(390);
+    expect(v.left).toBeCloseTo(60);
+  });
+
+  it("stops at the zoom's limits, whatever the fingers do, and stays within the pages", () => {
+    expect(pinch({ zoom: 6, top: 100, left: 0 }, [40, 150], [60, 150], [0, 150], [100, 150]).zoom).toBe(8);
+    expect(pinch({ zoom: 0.5, top: 0, left: 0 }, [0, 150], [100, 150], [45, 150], [55, 150]).zoom).toBe(0.25);
+    const top = pinch({ zoom: 1, top: 0, left: 0 }, [40, 150], [60, 150], [40, 250], [60, 250]);
+    expect(top).toEqual({ zoom: 1, top: 0, left: 0 });
+  });
+
+  it("taken out and back in, a frame at a time, comes back to where it began - past a limit and back too", () => {
+    const begun: ColumnView = { zoom: 1.7, top: 640, left: 35 };
+    // (three times as far apart at most - and ten times, past the largest)
+    for (const most of [3, 10]) {
+      let v = begun;
+      let largest = 0;
+      for (let i = 0; i <= 400; i++) {
+        const spread = 10 * (1 + (most - 1) * Math.sin((Math.PI * i) / 400));
+        const mx = 60 + 15 * Math.sin((Math.PI * i) / 100);
+        // (worked out from where they came down, as the column does)
+        v = pinch(begun, [55, 145], [65, 155], [mx - spread / 2, 150 - spread / 2], [mx + spread / 2, 150 + spread / 2]);
+        largest = Math.max(largest, v.zoom);
+      }
+      expect(largest).toBeCloseTo(Math.min(8, begun.zoom * most), 3);
+      expect(v.zoom).toBeCloseTo(begun.zoom, 9);
+      expect(v.top).toBeCloseTo(begun.top, 6);
+      expect(v.left).toBeCloseTo(begun.left, 6);
+    }
   });
 });
