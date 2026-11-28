@@ -1,28 +1,26 @@
 /**
- * A still picture of a molecule in 3D, as SVG, from one frame of an XYZ file
- * (README.md): balls and sticks as Meno draws a molecule in 3D where there is
- * no WebGL, chosen atom pairs joined by a dashed line with their distance
- * written, seen from a view chosen by atoms. A development script: its
- * input may change.
+ * What a still picture of a molecule in 3D is made from (README.md): the
+ * manifest read, strictly, and each figure made into the molecule Meno draws
+ * - one frame of an XYZ file, chosen atom pairs measured, its own sticks
+ * left out where asked, turned to a view chosen by atoms. The picture itself
+ * is Meno's own, drawn in a browser by the app's code (page/entry.ts); none is
+ * drawn here. A development script: its input may change.
  *
  * Atoms are numbered from 1, in the file's order; frames likewise.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import * as THREE from "three";
-import { createSVG } from "../../../src/lib/chem/layout2d";
-import { STYLE_PRESETS, styleOf } from "../../../src/lib/chem/style";
-import { workspace3dOf } from "../../../src/lib/chem/workspaceStyle3d";
+import { workspace3dOf, type Workspace3D } from "../../../src/lib/chem/workspaceStyle3d";
 import { DEFAULT_STYLE_3D_CHOICE } from "../../../src/lib/chem/style3d";
-import { emptyWorkspaceDocument } from "../../../src/ui/features/Workspace/document";
-import { drawingLayout, type PictureState } from "../../../src/ui/features/Workspace/fileActions";
+import { PICTURE_DPIS, DEFAULT_APP_SETTINGS } from "../../../src/lib/settings/appSettings";
 import type { Carried3D, Turn3D } from "../../../src/ui/features/Workspace/store/types";
 import { readStructures } from "../../../src/lib/io/structures";
 import { bondsByDistance } from "../../../src/utils/structureParsers";
 
 /** One picture asked for. */
 export type Figure = {
-  /** The SVG's file name, without ".svg". */
+  /** The PNG's file name, without ".png". */
   name: string;
   /** The XYZ file, relative to the manifest. */
   xyz: string;
@@ -36,14 +34,9 @@ export type Figure = {
   hydrogens?: boolean;
   /** The view: three atoms (their plane faces the eye, the first two lying left to right), or two (that pair lies left to right, the rest spread as far as it goes up and down); none, as read. */
   view?: number[];
-  /** The margin round what is drawn, as a part of its longer side; 0.06 where not given. */
-  margin?: number;
-  /** The picture's own frame, in the drawing's units as the SVG's viewBox (x, y, width, height), instead of one fitted to what is drawn. */
-  box?: [number, number, number, number];
+  /** Pixels to the inch, as Settings offers them for a copied picture (300, 600 or 1200); Settings' own where not given. */
+  dpi?: number;
 };
-
-/** What the manifest holds. */
-export type Manifest = { out: string; figures: Figure[] };
 
 const fail = (f: { name: string }, what: string): never => {
   throw new Error(`figure "${f.name}": ${what}`);
@@ -110,8 +103,42 @@ export function turnByAtoms(places: ArrayLike<number>, atoms: readonly number[])
   return [q.x, q.y, q.z, q.w];
 }
 
-/** The SVG of one figure, from its XYZ file's `text`. An atom number out of range, or a frame, is an error that names the figure and the number. */
-export function stillSvg(f: Figure, text: string): string {
+/** The keys a figure may have; any other is refused by name. */
+const FIGURE_KEYS = new Set(["name", "xyz", "frame", "distances", "noStick", "hydrogens", "view", "dpi"]);
+/** Keys the picture Meno draws cannot honour, and why. */
+const REFUSED: Record<string, string> = {
+  margin: "the picture is framed as Meno frames a copied picture, with its own small margin; it has no margin of a chosen size",
+  box: "the picture is framed as Meno frames a copied picture, round what it draws; it has no frame of a chosen size",
+};
+
+/** One figure as the page is given it (page/entry.ts): the molecule as Meno carries it, its styles in 3D where they are not a new workspace's, and the resolution. */
+export type StillInput = { name: string; molecule: Carried3D; docStyle3d?: Workspace3D; dpi: number };
+
+const isPairs = (v: unknown) => Array.isArray(v) && v.every((p) => Array.isArray(p) && p.length === 2);
+
+/** A figure as the manifest gives it, its keys and their kinds checked: an unknown key, or one Meno's picture cannot honour, is refused by name. */
+export function checkedFigure(raw: unknown, at: number): Figure {
+  const f = (raw ?? {}) as Record<string, unknown>;
+  const name = typeof f.name === "string" && f.name ? f.name : `number ${at + 1}`;
+  const said = { name };
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail(said, "is not an object");
+  if (typeof f.name !== "string" || !/^[^/\\]+$/.test(f.name) || f.name === "." || f.name === "..") return fail(said, "name: give a file name, without a folder");
+  for (const k of Object.keys(f)) {
+    if (k in REFUSED) fail(said, `${k} is not taken: ${REFUSED[k]}`);
+    if (!FIGURE_KEYS.has(k)) fail(said, `unknown key "${k}"`);
+  }
+  if (typeof f.xyz !== "string" || !f.xyz) fail(said, "xyz: give the path of an XYZ file");
+  if (f.frame !== undefined && typeof f.frame !== "number") fail(said, "frame: give a number");
+  if (f.distances !== undefined && !isPairs(f.distances)) fail(said, "distances: give pairs of atom numbers");
+  if (f.noStick !== undefined && !isPairs(f.noStick)) fail(said, "noStick: give pairs of atom numbers");
+  if (f.hydrogens !== undefined && typeof f.hydrogens !== "boolean") fail(said, "hydrogens: give true or false");
+  if (f.view !== undefined && (!Array.isArray(f.view) || (f.view.length !== 2 && f.view.length !== 3))) fail(said, "view: give two atoms or three");
+  if (f.dpi !== undefined && !(PICTURE_DPIS as readonly unknown[]).includes(f.dpi)) fail(said, `dpi: give ${PICTURE_DPIS.join(", ")} - the resolutions Meno makes a picture at`);
+  return f as Figure;
+}
+
+/** One figure made ready for the page, from its XYZ file's `text`. An atom number out of range, or a frame, is an error that names the figure and the number. */
+export function stillInput(f: Figure, text: string): StillInput {
   let read: ReturnType<typeof readStructures>;
   try {
     read = readStructures("xyz", `${f.xyz}`, text);
@@ -146,69 +173,41 @@ export function stillSvg(f: Figure, text: string): string {
     bonds: bondsByDistance(atoms).filter((b) => !lost.some((p) => same(p, [b.a1, b.a2]))),
     bondOrders: "unknown",
     at: { x: 0, y: 0 },
+    // (each pair Meno's own measurement of a distance: utils/measure3d)
     measures: shown.map((atoms, i) => ({ id: i + 1, atoms })),
     ...(turn ? { turn } : {}),
   };
-  const doc = emptyWorkspaceDocument();
-  const picture: PictureState = {
-    aromaticEnabled: doc.aromaticEnabled,
-    aromaticRings: doc.aromaticRings,
-    ...(f.hydrogens === false
-      ? { docStyle3d: workspace3dOf({ ...DEFAULT_STYLE_3D_CHOICE, looks: { balls: { hydrogens: "carbonHidden" } } }) }
-      : {}),
+  return {
+    name: f.name,
+    molecule,
+    // (a new workspace's styles in 3D, but for its hydrogens on carbon where they are left out)
+    ...(f.hydrogens === false ? { docStyle3d: workspace3dOf({ ...DEFAULT_STYLE_3D_CHOICE, looks: { balls: { hydrogens: "carbonHidden" } } }) } : {}),
+    dpi: f.dpi ?? DEFAULT_APP_SETTINGS.pictures.dpi,
   };
-  const { layout, opts } = drawingLayout({ atoms: [], bonds: [], molecules3d: [molecule] }, picture, styleOf({ preset: STYLE_PRESETS[0].id, changes: {} }));
-  // (what the page says over a molecule - how its file leaves it - is not the picture's: only the distances stay)
-  layout.measures = layout.measures?.filter((k) => k.lines.length > 0);
-  return fitted(createSVG(layout, opts), f);
 }
 
-/** The bounds of what an SVG of balls, sticks, dashes and their numbers draws: x0, y0, x1, y1. */
-export function drawnBounds(svg: string): [number, number, number, number] {
-  const n = (t: string, k: string) => Number(new RegExp(`${k}="([^"]+)"`).exec(t)![1]);
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  const take = (ax: number, ay: number, bx: number, by: number) => {
-    x0 = Math.min(x0, ax);
-    y0 = Math.min(y0, ay);
-    x1 = Math.max(x1, bx);
-    y1 = Math.max(y1, by);
-  };
-  for (const [t] of svg.matchAll(/<circle [^>]*>/g)) take(n(t, "cx") - n(t, "r"), n(t, "cy") - n(t, "r"), n(t, "cx") + n(t, "r"), n(t, "cy") + n(t, "r"));
-  for (const [t] of svg.matchAll(/<line [^>]*>/g)) {
-    const h = n(t, "stroke-width") / 2;
-    take(Math.min(n(t, "x1"), n(t, "x2")) - h, Math.min(n(t, "y1"), n(t, "y2")) - h, Math.max(n(t, "x1"), n(t, "x2")) + h, Math.max(n(t, "y1"), n(t, "y2")) + h);
-  }
-  // (a number's white ground holds the number)
-  for (const [t] of svg.matchAll(/<rect [^>]*>/g)) take(n(t, "x"), n(t, "y"), n(t, "x") + n(t, "width"), n(t, "y") + n(t, "height"));
-  return [x0, y0, x1, y1];
-}
-
-/** The SVG framed: as the figure's `box` says, or to what is drawn with an even margin, centred. The size on paper keeps the drawing's scale. */
-function fitted(svg: string, f: Figure): string {
-  const old = /viewBox="([^"]+)" width="([^"]+)"/.exec(svg)!;
-  const scale = Number(old[2]) / Number(old[1].split(" ")[2]);
-  let box = f.box;
-  if (!box) {
-    const [x0, y0, x1, y1] = drawnBounds(svg);
-    const m = (f.margin ?? 0.06) * Math.max(x1 - x0, y1 - y0);
-    box = [x0 - m, y0 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m];
-  }
-  return svg.replace(/viewBox="[^"]+" width="[^"]+" height="[^"]+"/, `viewBox="${box.join(" ")}" width="${box[2] * scale}" height="${box[3] * scale}"`);
-}
-
-/** The manifest at `path`, every figure drawn: each SVG with its name. A file that cannot be read is an error that names the figure. */
-export function drawManifest(path: string): { out: string; drawn: { name: string; svg: string }[] } {
+/** The manifest at `path`, read strictly, each figure made ready for the page. An unknown key, or a file that cannot be read, is an error that names the figure. */
+export function readManifest(path: string): { out: string; figures: StillInput[] } {
   const file = resolve(process.cwd(), path);
-  const manifest = JSON.parse(readFileSync(file, "utf8")) as Manifest;
+  const manifest = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  for (const k of Object.keys(manifest)) if (k !== "out" && k !== "figures") throw new Error(`the manifest: unknown key "${k}"`);
+  if (typeof manifest.out !== "string" || !manifest.out) throw new Error("the manifest: out: give the folder the pictures are written to");
+  if (!Array.isArray(manifest.figures)) throw new Error("the manifest: figures: give a list of figures");
   const base = dirname(file);
-  const drawn = manifest.figures.map((f) => {
+  const figures = manifest.figures.map((raw, i) => {
+    const f = checkedFigure(raw, i);
     let text: string;
     try {
       text = readFileSync(resolve(base, f.xyz), "utf8");
     } catch {
       return fail(f, `cannot read ${f.xyz}`);
     }
-    return { name: f.name, svg: stillSvg(f, text) };
+    return stillInput(f, text);
   });
-  return { out: resolve(base, manifest.out), drawn };
+  const names = new Set<string>();
+  for (const f of figures) {
+    if (names.has(f.name)) fail(f, "two figures have this name");
+    names.add(f.name);
+  }
+  return { out: resolve(base, manifest.out), figures };
 }

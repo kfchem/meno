@@ -69,7 +69,7 @@ const utf8 = new TextEncoder();
  * Meno's record of `part`, and the drawing of it laid out as a picture
  * draws it: its molecules in 3D as seen, and the layout of the rest.
  */
-function laidOut(part: Drawn, aromatic: PictureState, style: DrawingStyle) {
+export function laidOut(part: Drawn, aromatic: PictureState, style: DrawingStyle) {
   // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
   const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
   // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
@@ -190,7 +190,7 @@ export function onlySolids(layout: Layout): boolean {
  * unless the picture is too large for one, the canvas is copied pixel for
  * pixel. Its size in points, for Office, is its pixels at its resolution.
  */
-async function solidsPng(
+export async function solidsPng(
   layout: Layout,
   opts: LayoutOptions,
   drawn: SolidsDrawn,
