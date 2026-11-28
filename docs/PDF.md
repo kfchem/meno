@@ -531,8 +531,9 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   carbons with no label, is unsure and says that it may be a number or
   letters read as bonds: a digit or a letter the matcher does not read
   is traced as a line or two. So is such a piece holding a carbon with
-  no label beside a larger one, saying it may be part of the structure,
-  its bond not read: an OH come off with a stray carbon, a tert-butyl
+  no label beside a larger one - within a bond of the larger one's box -
+  saying it may be part of the structure, its bond not read: an OH come
+  off with a stray carbon, a tert-butyl
   with its CH-OH. Neither is ever left out - a cyclohexane or a hexane
   drawn alone is such a piece, and comes through said. Six is inferred,
   not measured on papers: set on Meno's made pictures, above every stray
@@ -1417,7 +1418,11 @@ it where it lies out of view.
   from its wide end, the same way and wider, is its wide half. A wedge
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
-  its corners to another is no bond. So is a line drawn down a wedge,
+  its corners to another is no bond. A short line with both its ends by
+  one corner is no edge, and is kept: a wedge's wide end drawn into the
+  bonds it meets has a corner carried out along a hashed bond's line,
+  and the hash's line beside that corner stays the hash's. A line drawn
+  down a wedge is the wedge's own as well,
   within it - or reaching up to a tenth of its length past where its tip
   is taken to be, to the point a narrow end may come to - at least half
   as long: its middle line, under the fill or
@@ -2100,8 +2105,10 @@ Not yet:
 - **An equilibrium drawn with corners** is read as its two arrows, each
   a reaction's. One whose lines differ in length, one way favoured, is
   read as a plain equilibrium.
-- **A scheme in a picture** - a figure that is a picture - is read by the
-  plugin as one structure, not as a scheme.
+- **A scheme in a picture** - a figure that is a picture - is read by
+  Meno, traced as any picture is (*A picture traced*), for its structures
+  alone, each its own: its arrows, "+" signs and words are no part of any
+  structure and are not put down with them.
 
 ### Structures picked from a PDF (decided 2026-10-23)
 

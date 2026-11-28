@@ -33,7 +33,8 @@ describe("a small piece of a picture read, of carbons alone", () => {
     atoms: Array.from({ length: n }, (_, k): ReadAtom => ({ x: from + k, y: 0, ...el(k) })),
     bonds: Array.from({ length: ring ? n : n - 1 }, (_, k): ReadBond => ({ a: from + k, b: from + ((k + 1) % n), order: 1 })),
   });
-  const read = (...ps: ReturnType<typeof piece>[]) => ({ atoms: ps.flatMap((p) => p.atoms), bonds: ps.flatMap((p) => p.bonds) });
+  // (atoms a unit apart in a row: a bond of 1)
+  const read = (...ps: ReturnType<typeof piece>[]) => ({ atoms: ps.flatMap((p) => p.atoms), bonds: ps.flatMap((p) => p.bonds), bond: 1 });
 
   it("is said where it is six atoms or fewer - a 1 or a 7 traced as a line, and a cyclohexane or a hexane drawn alone, which still come through", () => {
     expect(TINY_PIECE).toBe(6);
@@ -53,7 +54,7 @@ describe("a small piece of a picture read, of carbons alone", () => {
     const big = piece(0, 12, true);
     const bonds = big.bonds.map((b) => ({ ...b }));
     const two = piece(12, 2);
-    expect(tinyPieces({ atoms: [...big.atoms, ...two.atoms], bonds: [...bonds, ...two.bonds] })).toEqual([{ atoms: [12, 13], apart: false }]);
+    expect(tinyPieces({ atoms: [...big.atoms, ...two.atoms], bonds: [...bonds, ...two.bonds], bond: 1 })).toEqual([{ atoms: [12, 13], apart: false }]);
   });
 
   it("is said beside a larger piece where it holds a carbon with no label - a group whose bond to the structure was not read", () => {
@@ -66,6 +67,14 @@ describe("a small piece of a picture read, of carbons alone", () => {
     // (a piece of labels only beside it - a counterion written - is not)
     const salt = piece(12, 2, false, (k) => ({ label: k ? "Cl" : "H" }));
     expect(tinyPieces(read(big, salt))).toEqual([]);
+  });
+
+  it("is not said for a larger piece standing well off it - a small molecule drawn apart, read whole", () => {
+    const big = piece(0, 12, true);
+    // (an alanine-like piece of six, carbons and labels, three bonds beyond the larger piece's box, and one bond beyond it)
+    const six = (from: number, at: number) => ({ ...piece(from, 6, false, (k) => (k === 2 ? { label: "OH" } : k === 4 ? { label: "NH2" } : {})), atoms: piece(from, 6, false, (k) => (k === 2 ? { label: "OH" } : k === 4 ? { label: "NH2" } : {})).atoms.map((a, k) => ({ ...a, x: at + k })) });
+    expect(tinyPieces(read(big, six(12, 11 + 3)))).toEqual([]);
+    expect(tinyPieces(read(big, six(12, 11 + 1)))).toEqual([{ atoms: [12, 13, 14, 15, 16, 17], apart: true }]);
   });
 });
 

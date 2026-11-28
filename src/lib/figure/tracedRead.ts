@@ -119,28 +119,32 @@ export function inLineCarbons(read: Pick<FigureRead, "atoms" | "bonds">): number
 /**
  * A piece of a picture read - atoms joined by bonds - of this many atoms or fewer is said where all of it is carbons with no label: a
  * compound's number or a letter traced may read as such bonds (a 1 or a 7 as a line, a % as a few); and where it holds such a carbon and
- * lies beside a larger piece: a group whose bond to the structure was not read (an OH with a stray carbon, a tert-butyl with its CH-OH).
- * Never left out: a cyclohexane or a hexane drawn alone is such a piece, and comes through said. Inferred from made pictures (docs/PDF.md,
- * *A picture traced*).
+ * lies beside a larger piece - within a bond of its box, as `besidePieces` has it: a group whose bond to the structure was not read (an
+ * OH with a stray carbon, a tert-butyl with its CH-OH). A whole small molecule drawn apart - an amino acid a few bonds off another
+ * structure - is beside none, and is not said for it. Never left out: a cyclohexane or a hexane drawn alone is such a piece, and comes
+ * through said. Inferred from made pictures (docs/PDF.md, *A picture traced*).
  */
 export const TINY_PIECE = 6;
 export const TINY_SAID = "A small piece of carbons alone: it may be a number or letters read as bonds.";
 export const APART_SAID = "A small piece apart from the structure: it may be part of it, its bond not read.";
 
 /** The pieces of a read that are `TINY_PIECE`'s: each its atoms, and whether it is said for lying beside a larger piece. */
-export function tinyPieces(read: Pick<FigureRead, "atoms" | "bonds">): { atoms: number[]; apart: boolean }[] {
-  const up = read.atoms.map((_, i) => i);
-  const root = (i: number): number => (up[i] === i ? i : (up[i] = root(up[i])));
-  for (const b of read.bonds) up[root(b.a)] = root(b.b);
-  const pieces = new Map<number, number[]>();
-  read.atoms.forEach((_, i) => (pieces.get(root(i)) ?? pieces.set(root(i), []).get(root(i))!).push(i));
+export function tinyPieces(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): { atoms: number[]; apart: boolean }[] {
   const bare = (i: number) => !read.atoms[i].label && (!read.atoms[i].el || read.atoms[i].el === "C");
-  const all = [...pieces.values()];
-  const larger = all.some((p) => p.length > TINY_PIECE);
+  const all = piecesOf(read);
   return all.flatMap((p): { atoms: number[]; apart: boolean }[] => {
     if (p.length > TINY_PIECE || !p.some(bare)) return [];
     if (p.every(bare)) return [{ atoms: p, apart: false }];
-    return larger ? [{ atoms: p, apart: true }] : [];
+    return besideLarger(read, p, all.filter((q) => q.length > TINY_PIECE)) ? [{ atoms: p, apart: true }] : [];
+  });
+}
+
+/** Whether a piece of a read lies beside one of `larger`: an atom of it within a bond of that piece's box. */
+function besideLarger(read: Pick<FigureRead, "atoms" | "bond">, p: readonly number[], larger: readonly number[][]): boolean {
+  const boxOf = (q: readonly number[]) => [Math.min(...q.map((i) => read.atoms[i].x)), Math.min(...q.map((i) => read.atoms[i].y)), Math.max(...q.map((i) => read.atoms[i].x)), Math.max(...q.map((i) => read.atoms[i].y))];
+  return larger.some((q) => {
+    const [x0, y0, x1, y1] = boxOf(q);
+    return p.some((i) => read.atoms[i].x >= x0 - read.bond && read.atoms[i].x <= x1 + read.bond && read.atoms[i].y >= y0 - read.bond && read.atoms[i].y <= y1 + read.bond);
   });
 }
 
@@ -165,15 +169,9 @@ export const BESIDE_PIECE = 4;
 export function besidePieces(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number[] {
   const all = piecesOf(read);
   const charged = (i: number) => !!read.atoms[i].charge || !!read.atoms[i].marked || /[+\u2212-]$/.test(read.atoms[i].label ?? "");
-  const boxOf = (p: number[]) => [Math.min(...p.map((i) => read.atoms[i].x)), Math.min(...p.map((i) => read.atoms[i].y)), Math.max(...p.map((i) => read.atoms[i].x)), Math.max(...p.map((i) => read.atoms[i].y))];
   return all.flatMap((p) => {
     if (p.length < 2 || p.length > BESIDE_PIECE || p.some(charged)) return [];
-    const beside = all.some((q) => {
-      if (q.length <= p.length) return false;
-      const [x0, y0, x1, y1] = boxOf(q);
-      return p.some((i) => read.atoms[i].x >= x0 - read.bond && read.atoms[i].x <= x1 + read.bond && read.atoms[i].y >= y0 - read.bond && read.atoms[i].y <= y1 + read.bond);
-    });
-    return beside ? p : [];
+    return besideLarger(read, p, all.filter((q) => q.length > p.length)) ? p : [];
   });
 }
 
