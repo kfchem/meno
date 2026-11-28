@@ -317,7 +317,10 @@ they hang from.
   least as long as a break (twice the clear space and a line width):
   shorter, it would float between the gaps as a dot or a dash, and the two
   breaks are drawn as one; a piece at an end of the bond keeps the bond's
-  end, a methyl's as a ring atom's, down to the clear space; in a picture of pixels laid
+  end, a methyl's as a ring atom's, down to the clear space. A bond is
+  never left with nothing drawn - its atoms would read as not bonded:
+  where the breaks leave only such pieces, the longest of them is drawn.
+  In a picture of pixels laid
   out with a least line width the clear space is never under three pixels
   (the page's drawing has none: its gap scales with the page, as its lines
   do), and bonds crossing at under ten

@@ -4519,7 +4519,8 @@ export function passesBehind(bond: Bond, o: Bond, depths: readonly (number | und
  * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
  * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn, nor
  * one between two breaks shorter than a break (twice the clear space and a line width): what is left of a short bond behind two others is
- * never a dot or a dash between its gaps, which are then one; a piece at an end of the bond, its own end there, keeps the bond's end; bonds
+ * never a dot or a dash between its gaps, which are then one; a piece at an end of the bond, its own end there, keeps the bond's end; and a
+ * bond is never left with nothing drawn: where nothing else is left, the longest piece the breaks leave is; bonds
  * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
  * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
  * breaks make (none: a cut end is finished flat by the cut).
@@ -4600,7 +4601,9 @@ function brokenBehind(
    * A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out - a
    * piece shorter than the clear space, and one between two breaks shorter than a break (`leastBetween`), the two breaks then one.
    */
-  const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
+  /** Of what the bands left of each line or shape, the longest piece, crumbs too, and its length: kept where nothing else of the bond is. */
+  const longest: { piece: Vec2[]; length: number; as: (piece: Vec2[]) => void }[] = [];
+  const cut = (pts: Vec2[], reached: readonly Band[], as: (piece: Vec2[]) => void): Vec2[][] => {
     const whole = pts.map(alongOf);
     const [from, to] = [Math.min(...whole), Math.max(...whole)];
     let pieces: Vec2[][] = [pts];
@@ -4611,6 +4614,13 @@ function brokenBehind(
       ];
       pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
     }
+    let best: { piece: Vec2[]; length: number } | null = null;
+    for (const piece of pieces) {
+      const along = piece.map(alongOf);
+      const length = Math.max(...along) - Math.min(...along);
+      if (!best || length > best.length) best = { piece, length };
+    }
+    if (best) longest.push({ ...best, as });
     // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn; nor is one between two breaks shorter than a break)
     return pieces.filter((piece) => {
       const along = piece.map(alongOf);
@@ -4630,13 +4640,22 @@ function brokenBehind(
     const shape = lineShape(l, halfWidthOf(l));
     const reached = reaching(shape);
     // (a line no band reaches, whole; one cut, the shape it fills, cut)
+    const as = (piece: Vec2[]) => outPolys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
     if (!reached.length) outLines.push(l);
-    else for (const piece of cut(shape, reached)) outPolys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
+    else for (const piece of cut(shape, reached, as)) as(piece);
   }
   for (const poly of polys) {
     const reached = reaching(poly.points);
+    const as = (piece: Vec2[]) => outPolys.push({ ...poly, points: piece });
     if (!reached.length) outPolys.push(poly);
-    else for (const piece of cut(poly.points, reached)) outPolys.push({ ...poly, points: piece });
+    else for (const piece of cut(poly.points, reached, as)) as(piece);
+  }
+  // (and never nothing: a bond with nothing of it left drawn reads as no bond at all - its atoms not bonded. Where the breaks leave only
+  // crumbs, or a piece between them shorter than a break, the longest piece they leave is drawn - of each line or shape whose longest is
+  // the bond's longest, both lines of a double bond alike - so that the bond is seen, and which way it runs)
+  if (!outLines.length && !outPolys.length && longest.length) {
+    const most = Math.max(...longest.map((k) => k.length));
+    for (const k of longest) if (k.length >= most * 0.999) k.as(k.piece);
   }
   return { lines: outLines, polys: outPolys, ends: [] };
 }

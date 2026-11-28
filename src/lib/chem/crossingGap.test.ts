@@ -314,6 +314,15 @@ describe("the gap where a bond passes behind another", () => {
         expect(crossing(0.3, [0])).toHaveLength(1);
       });
 
+      it("never leaves nothing of a bond: where the breaks leave only crumbs and a short piece between them, that piece is drawn", () => {
+        // (the bond 1.2 long, from (0, -1) to (0, 0.2), both ends joined; fronts 0.25 and 0.95 along it, at y = -0.75 and -0.05: past
+        // the breaks the ends leave 0.0625 each, crumbs, and between them 0.325, under a break - the longest piece, drawn, as before)
+        const spans = crossing(0.2, [-0.75, -0.05], false);
+        expect(spans).toHaveLength(1);
+        closeTo(spans[0][0], -0.5625);
+        closeTo(spans[0][1], -0.2375);
+      });
+
       it("never leaves a dot between two breaks: every piece cut at both ends is a break's length or more", () => {
         for (const gap of [0.45, 0.5, 0.55, 0.6, 0.7, 0.75, 0.8, 0.9]) {
           const spans = crossing(1.6, [0, gap]);
