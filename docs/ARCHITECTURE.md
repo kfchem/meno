@@ -167,7 +167,14 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   on the right-click menus, with their keys: what is under the pointer, or
   the selection, has its own; on empty space, what the workspace does as a
   whole - Open…, Save As…, New text, Fit to content (Ctrl/Cmd+1), R/S and E/Z,
-  the texts, Drawing style, Run all. Save is a button in the title bar, by
+  the texts, Drawing style, Run all. Undo is a button in the title bar,
+  before Save (`ui/layouts/UndoButton`): a click is Edit > Undo's
+  (`editFromMenu`), held for the long press (`longPressMs`) or
+  right-clicked it opens the front tab's history under it - its steps by
+  their labels, a conversation's said as its, those to redo faint above
+  *Now* - and a step chosen is gone to in one change (`travel`). There is
+  no button for redo: the keys, Edit > Redo and the list do it. Save is a
+  button in the title bar, by
   Settings (`ctl.save`, the front tab's saver from `lib/doc/savers`), and
   Ctrl/Cmd+S; Export is the selection's (Select all first, for the whole
   page); a SMILES is drawn from Quick Add. Open… from the menu goes through
@@ -186,7 +193,11 @@ Drawing that line is what makes one undo mechanism work for every view, lets a
 wiring.
 
 `createDocument(initial)` returns a store with `edit(label, updater)`, `undo`,
-`redo`, `reset`, `markSaved` and `history()`. History is snapshots: updates are
+`redo`, `reset`, `markSaved` and `history()`; `steps()` names every step to
+undo and to redo (label, and maker where not the person), and `travel(n)`
+goes `n` steps back or forward as one change, told once - the title bar's
+history. A label is shown to the chemist (capitalised): it says what the
+step does, as an instruction - "add bond", "change drawing style". History is snapshots: updates are
 immutable, so untouched parts are shared rather than copied. Each document has
 its own history (Ctrl+Z belongs to the active tab, not the whole app), edits
 sharing a `coalesceKey` inside a short window collapse into one step (a drag

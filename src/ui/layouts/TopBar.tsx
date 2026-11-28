@@ -5,6 +5,8 @@ import { TabKind } from "../../lib/core";
 import { IS_MAC, shortcutLabel } from "../../lib/doc/shortcuts";
 import OfflineToggle from "../network/OfflineToggle";
 import SaveIcon from "./SaveIcon";
+import UndoButton from "./UndoButton";
+import type { UndoDoc } from "./undoHistory";
 import { TabStrip, type TabMeta } from "./Tabs";
 import { useMovedAlong } from "./tabMotion";
 import WindowButtons, { SystemButtonsRoom } from "./WindowButtons";
@@ -22,6 +24,8 @@ export type TabsController = {
   openFiles: () => void;
   /** The tab in front saved (Save), where it can be: a workspace. */
   save?: () => void;
+  /** The tab in front's document, where it keeps one: what Undo takes a step back in, and whose history it holds. */
+  doc?: UndoDoc;
 };
 
 const stop = (e: MouseEvent) => e.stopPropagation();
@@ -30,7 +34,9 @@ const stop = (e: MouseEvent) => e.stopPropagation();
  * The window's title bar, drawn by Meno: the tabs on the line that runs
  * under them, "+" for a new workspace right after the last of them (going
  * along as they come and go), and at the right, evenly spaced, online or
- * offline, Save - the tab in front, where it is a workspace - Settings, and
+ * offline, Undo - a step back in the tab in front, its history held under
+ * it (UndoButton) - Save - the tab in front, where it is a workspace -
+ * Settings, and
  * the window's buttons -
  * on a Mac the system's own, at the left, on a window with the system's
  * rounded corners and shadow (tauri.macos.conf.json); elsewhere Meno's, at
@@ -39,7 +45,7 @@ const stop = (e: MouseEvent) => e.stopPropagation();
  * commands are on the right-click menu on empty space, and keys.)
  */
 export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac?: boolean }) {
-  const { tabOrder, tabsById, activeId, reorder, select, close, add, openByKind, save } = ctl;
+  const { tabOrder, tabsById, activeId, reorder, select, close, add, openByKind, save, doc } = ctl;
   // ("+": moved along by the room a tab takes at once, eased there)
   const plus = useRef<HTMLButtonElement>(null);
   useMovedAlong(plus, tabOrder.length);
@@ -80,6 +86,7 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
 
       <div className={clsx("h-full flex items-center gap-1", mac && "pr-2")}>
         <OfflineToggle />
+        <UndoButton doc={doc} />
         <button
           aria-label="Save"
           data-guide="save"

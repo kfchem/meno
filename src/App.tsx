@@ -804,6 +804,8 @@ export default function App() {
       dispatch({ type: "ADD_TAB", tab: viewRegistry.workspace.create("Workspace") });
     },
     openFiles: pickFiles,
+    // (the tab in front's document, where its kind keeps one: Undo's, as the keys')
+    doc: state.activeId && state.tabsById[state.activeId] ? getDocument(state.tabsById[state.activeId]) : undefined,
     // (the workspace in front, as Ctrl/Cmd+S saves it)
     ...(state.activeId && state.tabsById[state.activeId]?.content.kind === "workspace"
       ? { save: () => void saverOf(state.activeId!)?.() }
