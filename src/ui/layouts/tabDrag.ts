@@ -21,3 +21,15 @@ export function scrollToShow(left: number, tab: number, scrollLeft: number, widt
   if (to > scrollLeft + width) return Math.max(0, Math.min(from, to - width));
   return null;
 }
+
+/**
+ * A tab pressed: chosen, always - a press begins no drag (one begins only
+ * as the pointer then moves), so none can be under way as it comes. A drag
+ * whose end never came - the button let go outside the window, over another
+ * program - is over by then: once left marked as under way, it had every
+ * tab pressed after it refused, with nothing said.
+ */
+export function pressTab(dragging: { current: boolean }, choose: () => void): void {
+  dragging.current = false;
+  choose();
+}

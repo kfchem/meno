@@ -44,13 +44,18 @@ export function reducer(state: State, action: Action): State {
         activeId: t.meta.id,
       };
     }
+    // (only a tab that is open: one closed or put in another's place since it was asked for - by a save, an open - left
+    // the window with no page in front, and nothing said)
     case "SELECT_TAB":
-      return { ...state, activeId: action.id };
-    case "REORDER":
-      return {
-        ...state,
-        tabOrder: action.order.filter((id) => id in state.tabsById),
-      };
+      return action.id in state.tabsById ? { ...state, activeId: action.id } : state;
+    // (every open tab kept in the bar, once: an order taken before one was added or put in another's place - a drag
+    // under way as a file opened - left that one out of the bar, open but never to be chosen; those it does not name
+    // come after, as they were)
+    case "REORDER": {
+      const named = [...new Set(action.order)].filter((id) => id in state.tabsById);
+      const rest = state.tabOrder.filter((id) => !named.includes(id));
+      return { ...state, tabOrder: [...named, ...rest] };
+    }
     case "SET_CONTENT": {
       if (!state.tabsById[action.id]) return state;
       const t = state.tabsById[action.id];

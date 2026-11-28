@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TabStrip } from "./Tabs";
-import { dragWithin, scrollToShow } from "./tabDrag";
+import { dragWithin, pressTab, scrollToShow } from "./tabDrag";
 
 describe("the tabs in the title bar", () => {
   it("are dragged as far as the room's ends, never under the + nor past the bar's start", () => {
@@ -36,5 +36,13 @@ describe("the tabs in the title bar", () => {
     expect(scrollToShow(450, 80, 100, 400, 8)).toBe(138);
     expect(scrollToShow(50, 80, 100, 400, 8)).toBe(42);
     expect(scrollToShow(4, 80, 100, 400, 8)).toBe(0);
+  });
+
+  it("choose the tab pressed, always - even after a drag whose end never came, let go outside the window", () => {
+    const chosen: string[] = [];
+    const dragging = { current: true };
+    pressTab(dragging, () => chosen.push("settings"));
+    expect(chosen).toEqual(["settings"]);
+    expect(dragging.current).toBe(false);
   });
 });

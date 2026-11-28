@@ -3,7 +3,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { useEffect, useRef, type RefObject } from "react";
 import { DURATION, EASE, EASE_SLIDE, FADE, LEAVE } from "../theme/motion";
-import { dragWithin, scrollToShow } from "./tabDrag";
+import { dragWithin, pressTab, scrollToShow } from "./tabDrag";
 import { risesAfter, tabInitial, tabRoom, useMovedAlong, useRises } from "./tabMotion";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
@@ -180,9 +180,7 @@ function Tab({
       )}
       onDragStart={() => (draggingRef.current = true)}
       onDragEnd={() => (draggingRef.current = false)}
-      onPointerDown={() => {
-        if (!draggingRef.current) onSelect();
-      }}
+      onPointerDown={() => pressTab(draggingRef, onSelect)}
       title={tab.label}
     >
       <Shoulders shown={selected} />

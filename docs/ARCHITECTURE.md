@@ -141,6 +141,15 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
 
 - `tabOrder` is the visual order in the title bar; `mountOrder` is the stable
   render order so reordering tabs never remounts a WebGL canvas.
+- A tab pressed, chosen from the title bar's buttons or brought forward by
+  Meno always comes to the front: `SELECT_TAB` takes only a tab that is
+  open (one gone meanwhile leaves the one in front as it is, never a window
+  with no page); `REORDER` keeps every open tab in the bar once, whatever
+  order a drag gives (one added or put in another's place during it comes
+  after the rest); a press on a tab chooses it even after a drag whose end
+  never came (`ui/layouts/tabDrag` `pressTab`). Closing the tab in front
+  brings the one beside it forward - on its right, else on its left - and
+  opens none.
 - `Deck` renders **all** open tabs and hides the inactive ones; views receive an
   `active` flag and are expected to pause expensive work (e.g. set the R3F
   `frameloop` to `"never"`) while inactive. (Workflow tabs, whose nodes held
