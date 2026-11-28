@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beganOnPage, pageTouches } from "./pageTouches";
+import { PAGE_TOUCH, beganOnPage, ownTouches, pageTouches } from "./pageTouches";
 import { fingerScroll } from "./fingerScroll";
 
 /** An element, as much of one as a touch needs: what it is within, and whether it is typed into. */
@@ -7,6 +7,7 @@ class Part extends EventTarget {
   readonly nodeType = 1;
   readonly style = { touchAction: "" };
   readonly captured: number[] = [];
+  readonly attrs = new Set<string>();
   constructor(
     readonly parentElement: Part | null = null,
     readonly typed = false,
@@ -17,8 +18,14 @@ class Part extends EventTarget {
     for (let p = n as Part | null; p; p = p.parentElement) if (p === this) return true;
     return false;
   }
-  closest(): Part | null {
-    return this.typed ? this : (this.parentElement?.closest() ?? null);
+  setAttribute(name: string) {
+    this.attrs.add(name);
+  }
+  /** What it is within that is marked `[name]`, or typed into. */
+  closest(selector: string): Part | null {
+    const name = /^\[([\w-]+)\]$/.exec(selector)?.[1];
+    const is = name ? this.attrs.has(name) : this.typed;
+    return is ? this : (this.parentElement?.closest(selector) ?? null);
   }
   setPointerCapture(id: number) {
     this.captured.push(id);
@@ -41,6 +48,8 @@ function screen() {
   const field = new Part(layer, true);
   const column = new Part(app);
   const dialog = new Part(app);
+  box.setAttribute(PAGE_TOUCH);
+  layer.setAttribute(PAGE_TOUCH);
   const heldTo = new Map<number, Part>();
   const send = (type: string, id: number, x: number, y: number, on?: Part, more: Record<string, unknown> = {}) => {
     const target = on ?? heldTo.get(id)!;
@@ -105,7 +114,8 @@ function pageHandlers() {
 function set(read: "pdf" | "text" = "pdf") {
   const sc = screen();
   const { s: page, handlers } = pageHandlers();
-  pageTouches(sc.win as never, (t) => beganOnPage(t, [sc.box, sc.layer as never]), handlers);
+  ownTouches(sc.win as never);
+  pageTouches(sc.win as never, handlers);
   const canvasHeard: string[] = [];
   for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) sc.canvas.addEventListener(type, (e) => canvasHeard.push(`${type.slice(7)} ${(e as PointerEvent).pointerId}`));
   const scrolled: [number, number][] = [];
@@ -125,16 +135,15 @@ function set(read: "pdf" | "text" = "pdf") {
 describe("whose a touch is", () => {
   it("is the page's begun on the canvas or on what is laid on the page, not begun in a field typed into or off the page", () => {
     const sc = screen();
-    const parts = [sc.box, sc.layer as never];
-    expect(beganOnPage(sc.canvas, parts)).toBe(true);
-    expect(beganOnPage(sc.chip, parts)).toBe(true);
+    expect(beganOnPage(sc.canvas)).toBe(true);
+    expect(beganOnPage(sc.chip)).toBe(true);
     // (a text's node within the canvas's box: by its element)
-    expect(beganOnPage({ nodeType: 3, parentElement: sc.canvas } as never, parts)).toBe(true);
-    expect(beganOnPage(sc.field, parts)).toBe(false);
-    expect(beganOnPage(sc.column, parts)).toBe(false);
-    expect(beganOnPage(sc.dialog, parts)).toBe(false);
-    expect(beganOnPage(null, parts)).toBe(false);
-    expect(beganOnPage(sc.canvas, [null])).toBe(false);
+    expect(beganOnPage({ nodeType: 3, parentElement: sc.canvas } as never)).toBe(true);
+    expect(beganOnPage(sc.field)).toBe(false);
+    expect(beganOnPage(sc.column)).toBe(false);
+    expect(beganOnPage(sc.dialog)).toBe(false);
+    expect(beganOnPage(null)).toBe(false);
+    expect(beganOnPage(new Part())).toBe(false);
   });
 });
 
@@ -213,7 +222,7 @@ describe("two fingers begun on the page", () => {
 });
 
 describe("one finger in the column and one on the page", () => {
-  it("each go to their own part: the column scrolls with its finger, the canvas hears its own as one finger, and nothing is pinched", () => {
+  it("are the column's both: the column scrolls with its own, the page hears nothing of the other - not even the canvas under it - and nothing is pinched", () => {
     const t = set();
     t.send("pointerdown", 1, 900, 300, t.column);
     t.send("pointerdown", 2, 100, 300, t.canvas);
@@ -224,7 +233,8 @@ describe("one finger in the column and one on the page", () => {
     expect(t.scrolled).toEqual([[0, 20]]);
     expect(t.pinches).toEqual([]);
     expect(t.page.zooms).toBe(0);
-    expect(t.canvasHeard).toEqual(["down 2", "move 2", "up 2"]);
+    expect(t.canvasHeard).toEqual([]);
+    expect(t.page.heard).toEqual([]);
   });
 });
 
@@ -260,7 +270,8 @@ describe("a first finger whose lift never came", () => {
   it("leaves the page's touches alone too as a new one begins in the column", () => {
     const sc = screen();
     const { s: page, handlers } = pageHandlers();
-    pageTouches(sc.win as never, (t) => beganOnPage(t, [sc.box]), handlers);
+    ownTouches(sc.win as never);
+    pageTouches(sc.win as never, handlers);
     sc.send("pointerdown", 1, 100, 300, sc.canvas, { isPrimary: true });
     sc.send("pointerdown", 2, 900, 300, sc.column, { isPrimary: true });
     sc.send("pointerdown", 3, 940, 300, sc.column, { isPrimary: false });

@@ -6,7 +6,7 @@ import { isPinch, scrollsAlong, wheelReader, zoomTaken } from "../../../../lib/i
 import { useEditor, useEditorStore } from "../store";
 import { setViewPanning, letViewGoalGo, stopViewGoal, pressMovedUnder, setPressMovedUnder, tookMovedUnderPointer, tookViewRelaid, viewDriven, viewGoalOf } from "./viewGoal";
 import { PageHtmlLayer } from "./coverLayer";
-import { beganOnPage, pageTouches } from "./pageTouches";
+import { PAGE_TOUCH, pageTouches } from "./pageTouches";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
 import { fingersStep, makesPinch, pinchedView, type Pt } from "../../../../lib/input/pinch";
@@ -466,9 +466,11 @@ export function PanZoom2D() {
     // is the view's; what is laid on the page in its own layer keeps its own, so that a list there still scrolls under a finger)
     dom.style.touchAction = "none";
     box.style.touchAction = "none";
-    // (the fingers the page's: those of a touch begun on it - one begun in the column, a dialog, a menu or a field typed into is left
-    // alone, every finger of it, by the page: pageTouches)
-    const offTouches = pageTouches(window, (target) => beganOnPage(target, [dom, box, layer]), { down: onTouchDown, move: onTouchMove, up: onTouchUp });
+    // (the fingers the page's: those of a touch begun on what is marked the page here - one begun in the column, a dialog, a menu or a
+    // field typed into is none of the page's, every finger of it, even one that comes down on the page: pageTouches)
+    const marked = [dom, box, layer].filter((el): el is HTMLElement => !!el);
+    for (const el of marked) el.setAttribute(PAGE_TOUCH, "");
+    const offTouches = pageTouches(window, { down: onTouchDown, move: onTouchMove, up: onTouchUp });
     box.addEventListener("wheel", onWheel, { passive: false });
     box.addEventListener("gesturestart", onGestureStart);
     box.addEventListener("gesturechange", onGestureChange);
@@ -493,6 +495,7 @@ export function PanZoom2D() {
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
       offTouches();
+      for (const el of marked) el.removeAttribute(PAGE_TOUCH);
       dom.removeEventListener("pointercancel", lostPan);
       dom.removeEventListener("lostpointercapture", lostPan);
       window.removeEventListener("blur", lostPan);

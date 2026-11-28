@@ -261,13 +261,18 @@ wherever it lands. Whose a touch is, is decided once, as its first finger
 comes down, and holds until the last is lifted (`pageTouches`). A touch
 begun anywhere else - in the column, in Settings, a dialog, a menu, a field
 typed into, even on the page - is not the page's: the page hears none of
-its fingers, and where it began hears them all, so two fingers on a PDF in
-the column pinch the column, and never the page beside it. One finger in
-the column and another put down on the page are each their own part's: the
-column scrolls under the one, and the page does with the other what one
-finger does there; nothing is pinched. A first finger (no other on the
-screen) always begins a new touch, so a finger whose lift never came
-decides nothing.
+its fingers, not even one put down on the page while it lasts, so two
+fingers on a PDF in the column pinch the column, and never the page beside
+it. With one finger in the column and another put down on the page, the
+column scrolls under its own and nothing on the page moves. This is
+decided by one listener on the window, put on before any other
+(`ownTouches`, from main.tsx): a finger of a touch not the page's that
+comes down on the page is kept from every listener after it - its down,
+its moves and its lift alike - so nothing on the page hears half of a
+finger's life and is left holding it. What is the page is marked on the
+canvas's box and on the layer the page's HTML is laid in (`PAGE_TOUCH`). A
+first finger (no other on the screen) always begins a new touch, so a
+finger whose lift never came decides nothing.
 
 On Windows Alt pressed and let go on its own does nothing. Windows would
 take it as the keyboard's way into the window's menu, which Meno's window
