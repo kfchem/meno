@@ -29,32 +29,45 @@ import { measured } from "../../../../testing/timeouts";
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
 /**
- * How many times as long `run` takes on `large` as on `small`: the least
- * processor time of nine runs of each, taken by turns - so that a machine
- * busy with other work, or a pause to collect garbage, slows neither alone.
- * Each run is `run` over and over until 50 ms of processor time have gone,
- * that time shared out between them: Windows counts processor time in steps
- * of about 15.6 ms, so a quicker run would read as 0 ms or as one step.
+ * The steps `run` takes over `m`, counted, not timed - a count is the same
+ * on any machine, busy or not: each atom or bond of `m` read, and each look
+ * into or addition to a set or a map. Work that grows with the input as its
+ * square shows here as its square on any machine.
  */
-function slower<T>(small: T, large: T, run: (x: T) => void): number {
-  const least = [Infinity, Infinity];
-  run(small);
-  run(large);
-  for (let k = 0; k < 9; k++) {
-    [small, large].forEach((x, i) => {
-      const started = process.cpuUsage();
-      let times = 0;
-      let spent = 0;
-      do {
-        run(x);
-        times++;
-        const used = process.cpuUsage(started);
-        spent = used.user + used.system;
-      } while (spent < 50_000);
-      least[i] = Math.min(least[i], spent / times);
+function stepsOver(m: Model, run: (m: Model) => void): number {
+  let steps = 0;
+  const counted = <X extends object>(xs: X[]): X[] =>
+    new Proxy(xs, {
+      get(t, k, r) {
+        if (typeof k === "string" && /^\d+$/.test(k)) steps++;
+        return Reflect.get(t, k, r);
+      },
     });
+  const watched = { atoms: counted(m.atoms), bonds: counted(m.bonds) };
+  const own = { has: Set.prototype.has, add: Set.prototype.add, get: Map.prototype.get, set: Map.prototype.set };
+  Set.prototype.has = function (this: Set<unknown>, v: unknown) {
+    steps++;
+    return own.has.call(this, v);
+  };
+  Set.prototype.add = function <T>(this: Set<T>, v: T) {
+    steps++;
+    return own.add.call(this, v);
+  };
+  Map.prototype.get = function <K, V>(this: Map<K, V>, k: K) {
+    steps++;
+    return own.get.call(this, k);
+  };
+  Map.prototype.set = function <K, V>(this: Map<K, V>, k: K, v: V) {
+    steps++;
+    return own.set.call(this, k, v);
+  };
+  try {
+    run(watched);
+  } finally {
+    Object.assign(Set.prototype, { has: own.has, add: own.add });
+    Object.assign(Map.prototype, { get: own.get, set: own.set });
   }
-  return least[1] / least[0];
+  return steps;
 }
 
 // a methyl on a wedge from a CH with two more carbons, drawn as a Y (as a
@@ -182,11 +195,11 @@ describe("fragmentOf and partOf", () => {
     ]);
   });
 
-  it("find the structures of a large drawing in time in step with its size", () => {
+  it("find the structures of a large drawing in steps that grow as its size does", () => {
     // (toluenes side by side: each structure found went over every bond of
     // the drawing again, and each atom asked for was looked for among every
     // atom - 17 s for a thousand structures. Eight times the structures now
-    // take about eight times as long, not sixty-four)
+    // take eight times the steps, not sixty-four)
     const page = (n: number): Model => {
       const atoms: Model["atoms"] = [];
       const bonds: Model["bonds"] = [];
@@ -198,22 +211,24 @@ describe("fragmentOf and partOf", () => {
       }
       return { atoms, bonds };
     };
-    // (what is timed is the finding alone: the checks, and the arrays they
-    // build, are made once, outside it)
-    const find = (m: Model) => ({ all: fragmentsOf(m), held: fragmentsHolding(m, m.atoms.map((a) => a.id)) });
+    // (what is counted is the finding alone: the checks, and the arrays they
+    // build, are made outside it)
+    const find = (m: Model, asked: number[]) => ({ all: fragmentsOf(m), held: fragmentsHolding(m, asked) });
     const [small, large] = [page(250), page(2000)];
     for (const m of [small, large]) {
-      const { all, held } = find(m);
+      const { all, held } = find(m, m.atoms.map((a) => a.id));
       expect(all).toHaveLength(m.atoms.length / 7);
       expect(held).toHaveLength(m.atoms.length / 7);
       expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
     }
-    expect(slower(small, large, find)).toBeLessThan(24);
-    // (nine turns of at least 50 ms of processor time for each size: about
-    // 1.2 s of it in all, alone or not. On a busy machine the ratio held -
-    // 9.7 to 11.3 with eight copies running at a load average of 50 - and
-    // the time did not, which Vitest's 5 s cut short)
-  }, measured(1_200));
+    // (the drawing eight times as large, the steps eight times as many - not sixty-four)
+    const ids = (m: Model) => m.atoms.map((a) => a.id);
+    const [few, many] = [small, large].map((m) => {
+      const asked = ids(m);
+      return stepsOver(m, (w) => find(w, asked));
+    });
+    expect(many).toBeLessThanOrEqual(8 * few);
+  });
 });
 
 describe("cleanUp, a silyl group whose file set its Si's valence", () => {

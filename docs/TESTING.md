@@ -21,7 +21,10 @@ to keep in mind when writing a test:
   15.6 ms, so a run quicker than that reads as 0 ms or as one step. A test
   that compares processor times repeats a quick run until enough time has
   gone to read it, and shares the time out (`slower` in
-  `chem/cleanUp.test.ts`).
+  `lib/chem/groupLabelClear.test.ts`). Better still, a test that proves
+  some work does not grow faster than its input counts the work rather than
+  timing it (`stepsOver` in `chem/cleanUp.test.ts`): a count is the same on
+  any machine, busy or not, where a ratio of times is not.
 
 ## Timeouts
 

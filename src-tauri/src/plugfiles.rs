@@ -1013,7 +1013,13 @@ mod tests {
         tree(src.path(), "Blender.app", "Contents/MacOS/Blender");
         std::os::unix::fs::symlink("/Applications", src.path().join("Applications")).unwrap();
         let image = dir.path().join("blender-5.2.2-macos-arm64.dmg");
-        run("/usr/bin/hdiutil", &["create".as_ref(), "-quiet".as_ref(), "-srcfolder".as_ref(), src.path().as_os_str(), "-format".as_ref(), "UDZO".as_ref(), image.as_os_str()]).unwrap();
+        // (the image written straight from the folder, then compressed as a maker's is - neither step mounts
+        // anything: `create -srcfolder` mounts a scratch volume of its own to copy into, and putting that away
+        // can fail on a busy machine, which made this test fail for a reason not the code's)
+        let written = dir.path().join("written.dmg");
+        run("/usr/bin/hdiutil", &["makehybrid".as_ref(), "-quiet".as_ref(), "-hfs".as_ref(), "-o".as_ref(), written.as_os_str(), src.path().as_os_str()]).unwrap();
+        run("/usr/bin/hdiutil", &["convert".as_ref(), "-quiet".as_ref(), written.as_os_str(), "-format".as_ref(), "UDZO".as_ref(), "-o".as_ref(), image.as_os_str()]).unwrap();
+        std::fs::remove_file(&written).unwrap();
         let d = copy(&image, Unpack::Dmg, "Blender.app/Contents/MacOS/Blender");
         let program = unpack(&image, &d, dir.path()).unwrap();
         assert_eq!(program, dir.path().join("blender-5.2.2-macos-arm64").join("Blender.app/Contents/MacOS/Blender"));
