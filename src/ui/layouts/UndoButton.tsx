@@ -160,7 +160,7 @@ function HistoryMenu({ doc, under, onClose }: { doc: UndoDoc; under: HTMLElement
       {...held}
       role="menu"
       aria-label="History"
-      className="fixed z-50 min-w-[12rem] max-w-[20rem] rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none overflow-y-auto overscroll-contain"
+      className="fixed z-50 w-max min-w-[12rem] max-w-[20rem] rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none overflow-y-auto overscroll-contain"
       style={place}
       onMouseDown={keepFocus}
       onContextMenu={(e) => e.preventDefault()}
