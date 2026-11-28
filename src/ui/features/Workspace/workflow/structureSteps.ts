@@ -214,9 +214,8 @@ const rebondKey = (e: Entry): string => identityKnown(constitutionOf(e), "consti
 
 /**
  * The most atoms a bonding entry not yet known may have for its key to be worked out on the drawing thread: a constitution's key
- * costs less than identity, and every structure up to this size measured in review took less than a frame - the slowest a
- * palladium with one triphenylphosphine, 35 atoms, about 12 ms; triphenylphosphine itself and a hundred-carbon chain about 4 and
- * 16 ms - where the next, palladium with two, 69 atoms, took about 100 ms.
+ * costs less than identity, and every structure up to this size that was tried took less than a frame - the slowest of them
+ * a palladium with one triphenylphosphine, 35 atoms - where the next tried, a palladium with two, 69 atoms, took several frames.
  */
 export const REBOND_IN_PLACE_MOST = 35;
 
