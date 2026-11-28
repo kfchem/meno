@@ -302,7 +302,9 @@ The page itself can stop under Meno: the system takes its process away
   from outside Meno is (`opened.rs`): each as it was last saved. The page
   tells the back end which they are as its tabs change and after each save
   (`page_files`, looked at off the window's thread); only workspace files it
-  may read are kept, in memory alone. Tabs never saved, Settings and the
+  may read are kept, in memory alone - each list numbered by the page that
+  sends it, so that a page started again is believed from its first list
+  and a stopped page's late list never. Tabs never saved, Settings and the
   like are not opened again: where nothing was saved, the page comes back
   empty, never half of what was there.
 - **Said once**, by the page started again as it comes up
@@ -330,11 +332,16 @@ The page itself can stop under Meno: the system takes its process away
     has ended ("Route.meno was being saved: what came of that save is said
     here once it has ended."). That file is not opened again till then -
     the rest are, at once - nor is it opened meanwhile by any way the
-    chemist opens it (Open, a drop, a double-click from outside: the page
-    asks first, `page_hold_opens`): each is opened once, after the write's
-    end, as saved, so that no tab holds the file as it was before while
-    the save puts the new one in its place. A save over that file meanwhile
-    - Save As onto it from another tab - waits on the back end for that
+    chemist opens it by its path (Open, a double-click from outside: the
+    page asks before it reads anything, `page_hold_opens`): each is opened
+    once, after the write's end, as saved, so that no tab holds the file as
+    it was before while the save puts the new one in its place. That file
+    is the one the save writes, however its path is spelled
+    (`savefile::same_file`: links followed; then the system's own count of
+    the file on macOS and Linux, so another case on a volume that does not
+    tell case apart is the same file; on Windows the paths compared without
+    case) - never another file of the same name. A save over it meanwhile -
+    Save As onto it from another tab - waits on the back end for that
     write's end, never writing alongside it, at most as long; past it, it
     is refused: "Route.meno is still being written by the save made as
     Meno's window stopped; save again once that save has ended". Once it has ended (waited

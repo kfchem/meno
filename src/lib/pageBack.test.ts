@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameBack, openableNow, saveTokenFor, sayCameBack, tellOpenFiles, whileSaving } from "./pageBack";
+import { cameBack, openableNow, openUnlessHeld, saveTokenFor, sayCameBack, tellOpenFiles, whileSaving } from "./pageBack";
 
 type Heard = (event: string, handler: () => void) => Promise<() => void>;
 
@@ -133,5 +133,26 @@ describe("what the page tells the app as it goes", () => {
     expect(await openableNow(["/w/a.meno", "/w/Route.meno"], to)).toEqual(["/w/a.meno"]);
     expect(await openableNow(["/w/a.meno", "/w/Route.meno"], () => Promise.reject(new Error("no app")))).toEqual(["/w/a.meno", "/w/Route.meno"]);
     expect(await openableNow([], to)).toEqual([]);
+  });
+
+  it("asks the app before any file is read, and reads only what it does not hold back", async () => {
+    const order: string[] = [];
+    const to = async (command: string, args: Record<string, unknown>) => {
+      if (command !== "page_hold_opens") return null;
+      order.push("asked");
+      return (args.paths as string[]).filter((p) => !p.endsWith("Route.meno"));
+    };
+    await openUnlessHeld(["/w/a.meno", "/w/Route.meno"], async (now) => void order.push(`read ${now.join(" ")}`), to);
+    expect(order).toEqual(["asked", "read /w/a.meno"]);
+  });
+
+  it("sends each list with this page's own mark, the same each time", () => {
+    const { to, asked } = app(null);
+    tellOpenFiles(["/w/p.meno"], to);
+    tellOpenFiles(["/w/q.meno"], to);
+    const pages = asked.filter(([c]) => c === "page_files").map(([, a]) => a.page);
+    expect(pages.length).toBe(2);
+    expect(typeof pages[0]).toBe("string");
+    expect(pages[0]).toBe(pages[1]);
   });
 });

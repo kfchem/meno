@@ -26,7 +26,7 @@
 //! or the web view's own process ended (no page can be shown). Linux: not
 //! handled - nothing in Tauri tells it there.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -76,12 +76,14 @@ pub enum Written {
     Shut,
 }
 
-/// A save the page told of: the file's name, and the token its write comes with.
+/// A save the page told of: the file's name, the token its write comes with, and - once its write has begun - the
+/// file it writes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Saving {
     pub name: String,
     pub token: u64,
     pub written: Written,
+    pub target: Option<PathBuf>,
 }
 
 /// What is done with a page that stopped.
@@ -168,10 +170,10 @@ pub fn later_said(saving: &Saving, reopened: bool) -> String {
     s
 }
 
-/// The files to open again as the page comes back, and those held back till the save being written ends: the file
-/// of that name.
-pub fn split_files(files: Vec<String>, writing: Option<&str>) -> (Vec<String>, Vec<String>) {
-    files.into_iter().partition(|f| writing.is_none_or(|name| Path::new(f).file_name().is_none_or(|n| n.to_string_lossy() != name)))
+/// The files to open now, and those held back till the save being written ends: the file it writes, however its
+/// path is spelled (savefile.rs `same_file`) - never another of the same name.
+pub fn split_files(files: Vec<String>, writing: Option<&Path>) -> (Vec<String>, Vec<String>) {
+    files.into_iter().partition(|f| writing.is_none_or(|target| !crate::savefile::same_file(Path::new(f), target)))
 }
 
 /// What a stop is to do, as `Held::stopped` finds it.
@@ -180,17 +182,16 @@ pub struct Plan {
     pub then: Then,
     /// The save under way as the page stopped.
     pub saving: Option<Saving>,
-    /// The files opened again as the page comes back, and those once the save being written has ended.
+    /// The files its tabs held, to open again (the file being saved among them, held back as the page comes back).
     pub now: Vec<String>,
-    pub later: Vec<String>,
 }
 
-/// The file being written as the page stopped, waited for: its save's token, its name, and the files of that name
-/// to open once its write has ended - those its tabs held, and any the chemist opens meanwhile, by any way.
+/// The file being written as the page stopped, waited for: its save's token, the file it writes, and the paths of
+/// that file to open once its write has ended - those its tabs held, and any the chemist opens meanwhile, by any way.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Waiting {
     token: u64,
-    name: String,
+    target: PathBuf,
     later: Vec<String>,
 }
 
@@ -198,8 +199,11 @@ struct Waiting {
 struct Held {
     /// The file whose save was being written as the page stopped, while it is waited for.
     waiting: Option<Waiting>,
-    /// The last list of files the page told (`page_files`), so that an older list taken later is let be.
+    /// The page whose lists of files are taken, and the last of them (`page_files`): a page that comes back is taken
+    /// from its first list, an older list of its own is let be, and a stopped page's - in `gone` - never.
+    files_from: Option<String>,
     files_told: u64,
+    gone: Vec<String>,
     /// The save the page tells of now.
     saving: Option<Saving>,
     /// The save under way as the page last stopped.
@@ -233,24 +237,38 @@ impl Held {
         self.left = saving.clone();
         self.now_said = None;
         self.later_said = None;
-        let (now_files, later) = if then == Then::StartAgain {
-            let writing = saving.as_ref().filter(|s| s.written == Written::Writing).map(|s| s.name.as_str());
-            split_files(std::mem::take(&mut self.files), writing)
-        } else {
-            (Vec::new(), Vec::new())
-        };
+        // (the page that stopped: no list of its own taken after this)
+        if let Some(page) = self.files_from.take() {
+            self.gone.push(page);
+        }
+        self.files_told = 0;
+        let files = if then == Then::StartAgain { std::mem::take(&mut self.files) } else { Vec::new() };
         self.waiting = saving
             .as_ref()
             .filter(|s| s.written == Written::Writing && then == Then::StartAgain)
-            .map(|s| Waiting { token: s.token, name: s.name.clone(), later: later.clone() });
+            .and_then(|s| Some(Waiting { token: s.token, target: s.target.clone()?, later: Vec::new() }));
         if then == Then::StartAgain {
             self.started_again = Some(now);
             self.unanswered = false;
-            self.now_said = Some(said(then, saving.as_ref(), !now_files.is_empty()));
         } else {
             self.closing = true;
         }
-        Some(Plan { then, saving, now: now_files, later })
+        Some(Plan { then, saving, now: files })
+    }
+
+    /// A list of files from `page`, its `told`-th: taken where it is the newest of the page now, or the first of a
+    /// page come back; never a stopped page's. Whether it was.
+    fn files_told(&mut self, page: &str, told: u64, files: Vec<String>) -> bool {
+        if self.gone.iter().any(|g| g == page) {
+            return false;
+        }
+        if self.files_from.as_deref() == Some(page) && told <= self.files_told {
+            return false;
+        }
+        self.files_from = Some(page.to_string());
+        self.files_told = told;
+        self.files = files;
+        true
     }
 }
 
@@ -302,7 +320,7 @@ impl PageStop {
         let mut held = self.held();
         held.tokens += 1;
         let token = held.tokens;
-        held.saving = Some(Saving { name, token, written: Written::NotYet });
+        held.saving = Some(Saving { name, token, written: Written::NotYet, target: None });
         token
     }
 
@@ -317,11 +335,12 @@ impl PageStop {
     /// A document is to be written with `token`, the save it is of: where it is the save the page tells of now,
     /// its writing begun - the token given back, to mark its end with; refused where it is the stopped page's
     /// save, not yet handed over as it stopped; anything else written as it is.
-    pub fn write_begins(&self, token: Option<u64>) -> Result<Option<u64>, String> {
+    pub fn write_begins(&self, token: Option<u64>, target: &Path) -> Result<Option<u64>, String> {
         let Some(token) = token else { return Ok(None) };
         let mut held = self.held();
         if let Some(s) = held.saving.as_mut().filter(|s| s.token == token && s.written == Written::NotYet) {
             s.written = Written::Writing;
+            s.target = Some(target.to_path_buf());
             return Ok(Some(token));
         }
         if held.left.as_ref().is_some_and(|s| s.token == token && s.written == Written::Shut) {
@@ -341,33 +360,59 @@ impl PageStop {
         self.ended.notify_all();
     }
 
-    /// Of `paths`, those to open now; the rest - of the name of the file waited for - kept to open once its write has ended.
+    /// The file waited for, by its token, where one is.
+    fn waited(&self) -> Option<(u64, PathBuf)> {
+        self.held().waiting.as_ref().map(|w| (w.token, w.target.clone()))
+    }
+
+    /// Of `paths`, those to open now; the rest - the file waited for, however its path is spelled - kept to open once
+    /// its write has ended. (The files are looked at with the lock let go: a folder gone must not hold the rest.)
     pub fn hold_opens(&self, paths: Vec<String>) -> Vec<String> {
-        let mut held = self.held();
-        let Some(waiting) = held.waiting.as_mut() else { return paths };
-        let (now, later) = split_files(paths, Some(&waiting.name));
-        for p in later {
-            if !waiting.later.contains(&p) {
-                waiting.later.push(p);
-            }
-        }
+        let Some((token, target)) = self.waited() else { return paths };
+        let (now, later) = split_files(paths, Some(&target));
+        self.keep_for_later(token, later);
         now
     }
 
-    /// A document to be written to a file named `name` - by the save of `token`, if it is one - once the write of the
-    /// stopped page's save of that file has ended, so that the two never interleave and what is said of the first
-    /// stays true: at most `limit`; refused past it.
-    pub fn write_after_left(&self, name: &str, token: Option<u64>, limit: Duration) -> Result<(), String> {
+    /// `later` kept to open once the write of `token` has ended - where it is still waited for; else opened now, so
+    /// that nothing is lost.
+    fn keep_for_later(&self, token: u64, later: Vec<String>) -> Vec<String> {
+        let mut held = self.held();
+        match held.waiting.as_mut().filter(|w| w.token == token) {
+            Some(w) => {
+                for p in later {
+                    if !w.later.contains(&p) {
+                        w.later.push(p);
+                    }
+                }
+                Vec::new()
+            }
+            None => later,
+        }
+    }
+
+    /// A document to be written to `target` - by the save of `token`, if it is one - once the write of the stopped
+    /// page's save of that same file has ended, so that the two never interleave and what is said of the first stays
+    /// true: at most `limit`; refused past it. Another file of the same name is not that file, and is written at once.
+    pub fn write_after_left(&self, target: &Path, token: Option<u64>, limit: Duration) -> Result<(), String> {
+        let first = {
+            let held = self.held();
+            held.left.clone().filter(|s| s.written == Written::Writing && Some(s.token) != token)
+        };
+        let Some(first) = first else { return Ok(()) };
+        // (looked at with the lock let go)
+        if !first.target.as_deref().is_some_and(|t| crate::savefile::same_file(t, target)) {
+            return Ok(());
+        }
         let until = Instant::now() + limit;
         let mut held = self.held();
         loop {
-            let before = held.left.as_ref().is_some_and(|s| s.written == Written::Writing && s.name == name && Some(s.token) != token);
-            if !before {
+            if !held.left.as_ref().is_some_and(|s| s.token == first.token && s.written == Written::Writing) {
                 return Ok(());
             }
             let now = Instant::now();
             if now >= until {
-                return Err(format!("{name} is still being written by the save made as Meno's window stopped; save again once that save has ended"));
+                return Err(format!("{} is still being written by the save made as Meno's window stopped; save again once that save has ended", first.name));
             }
             held = self.ended.wait_timeout(held, until - now).unwrap_or_else(|e| e.into_inner()).0;
         }
@@ -404,18 +449,14 @@ pub fn page_saved(state: tauri::State<'_, PageStop>, token: u64) {
 /// The workspace files the page's tabs hold: those it may read, which are workspace files, kept to open again -
 /// looked at off the window's thread (a folder on a network gone must not hold the window).
 #[tauri::command]
-pub async fn page_files(app: AppHandle, paths: Vec<String>, told: u64) {
+pub async fn page_files(app: AppHandle, paths: Vec<String>, told: u64, page: String) {
     let _ = tauri::async_runtime::spawn_blocking(move || {
         use tauri_plugin_fs::FsExt;
         let scope = app.try_fs_scope();
         let paths = paths.into_iter().filter(|p| scope.as_ref().is_some_and(|s| s.is_allowed(p)) && crate::opened::is_workspace(Path::new(p))).collect();
-        let state = app.state::<PageStop>();
-        let mut held = state.held();
-        // (each list in its turn: one looked at more slowly never takes a later one's place)
-        if told > held.files_told {
-            held.files_told = told;
-            held.files = paths;
-        }
+        // (each list in its turn: one looked at more slowly never takes a later one's place, nor a stopped page's a
+        //  page's come back)
+        app.state::<PageStop>().held().files_told(&page, told, paths);
     })
     .await;
 }
@@ -424,8 +465,9 @@ pub async fn page_files(app: AppHandle, paths: Vec<String>, told: u64) {
 /// file whose save was being written as the page stopped is held back till that write has ended, and opened then,
 /// as saved.
 #[tauri::command]
-pub fn page_hold_opens(state: tauri::State<'_, PageStop>, paths: Vec<String>) -> Vec<String> {
-    state.hold_opens(paths)
+pub async fn page_hold_opens(app: AppHandle, paths: Vec<String>) -> Vec<String> {
+    let all = paths.clone();
+    tauri::async_runtime::spawn_blocking(move || app.state::<PageStop>().hold_opens(paths)).await.unwrap_or(all)
 }
 
 /// What the page, started again after it stopped, is told of it at once - once; none at any other start.
@@ -477,7 +519,12 @@ fn start_again(app: &AppHandle, plan: Plan) {
 /// `start_again` as it runs, the window's parts given: `open` takes files to open, `reload` starts the page again,
 /// `told` tells it there is more to say.
 fn run_start_again(state: &PageStop, plan: Plan, limit: Duration, open: impl Fn(Vec<String>), reload: impl FnOnce(), told: impl FnOnce()) {
-    open(plan.now);
+    // (the file being written held back, the rest opened now - said at once, before the page is there to ask)
+    let writing = plan.saving.as_ref().filter(|s| s.written == Written::Writing);
+    let (now, later) = split_files(plan.now, writing.and_then(|s| s.target.as_deref()));
+    let now = [now, writing.map(|s| state.keep_for_later(s.token, later.clone())).unwrap_or(later)].concat();
+    state.held().now_said = Some(said(Then::StartAgain, plan.saving.as_ref(), !now.is_empty()));
+    open(now);
     reload();
     let Some(token) = plan.saving.filter(|s| s.written == Written::Writing).map(|s| s.token) else { return };
     let Some(saving) = state.left_after(token, limit) else { return };
@@ -559,8 +606,28 @@ mod tests {
     use std::sync::Arc;
 
     fn saving(name: &str, token: u64, written: Written) -> Option<Saving> {
-        Some(Saving { name: name.into(), token, written })
+        Some(Saving { name: name.into(), token, written, target: None })
     }
+
+    /// A folder of its own for a test, with `files` in it (each a path in it, its folders made).
+    fn folder(tag: &str, files: &[&str]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("meno-pagestop-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for f in files {
+            let at = dir.join(f);
+            std::fs::create_dir_all(at.parent().unwrap()).unwrap();
+            std::fs::write(&at, b"PK").unwrap();
+        }
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn at(dir: &Path, f: &str) -> String {
+        dir.join(f).to_string_lossy().into_owned()
+    }
+
+    /// Where the writes of tests that do not look at files go.
+    const NOWHERE: &str = "/nowhere/Route.meno";
 
     /// A write of `token` as savefile.rs makes one: its end marked as its mark is dropped.
     fn mark(state: &Arc<PageStop>, token: u64) -> Mark {
@@ -585,9 +652,8 @@ mod tests {
         let mut held = Held { files: vec!["/w/a.meno".into()], ..Held::default() };
         assert_eq!(held.stopped(Kind::NotAnswering, t0), None);
         let plan = held.stopped(Kind::Ended, t0).unwrap();
-        assert_eq!((plan.then, plan.now, plan.later.len()), (Then::StartAgain, vec!["/w/a.meno".to_string()], 0));
+        assert_eq!((plan.then, plan.now), (Then::StartAgain, vec!["/w/a.meno".to_string()]));
         assert_eq!(held.started_again, Some(t0));
-        assert!(held.now_said.as_deref().unwrap().ends_with("The files that were open are open again, as they were last saved."));
         // the second, soon: closed, nothing opened again - and a third, as Meno closes: nothing (one message only)
         let plan = held.stopped(Kind::Ended, t0 + Duration::from_secs(5)).unwrap();
         assert_eq!((plan.then, plan.now.len()), (Then::CloseAgain, 0));
@@ -597,41 +663,76 @@ mod tests {
     }
 
     #[test]
-    fn the_file_being_saved_is_held_back_and_the_rest_open_again_at_once() {
-        let mut held = Held { files: vec!["/w/a.meno".into(), "/w/Route.meno".into(), "/x/b.meno".into()], saving: saving("Route.meno", 1, Written::Writing), ..Held::default() };
-        let plan = held.stopped(Kind::Ended, Instant::now()).unwrap();
-        assert_eq!(plan.now, vec!["/w/a.meno".to_string(), "/x/b.meno".to_string()]);
-        assert_eq!(plan.later, vec!["/w/Route.meno".to_string()]);
+    fn the_file_being_saved_is_held_back_however_spelled_and_the_rest_open_again_at_once() {
+        let dir = folder("held", &["w/a.meno", "w/Route.meno", "x/Route.meno"]);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(dir.join("w/Route.meno"), dir.join("w/link.meno")).unwrap();
+        let state = PageStop::default();
+        let mut files = vec![at(&dir, "w/a.meno"), at(&dir, "w/Route.meno"), at(&dir, "x/Route.meno")];
+        #[cfg(unix)]
+        files.push(at(&dir, "w/link.meno"));
+        state.held().files = files;
+        let token = state.saving("Route.meno".into());
+        state.write_begins(Some(token), &dir.join("w/Route.meno")).unwrap();
+        let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
+        let opened = Mutex::new(Vec::new());
+        run_start_again(&state, plan, Duration::ZERO, |f| opened.lock().unwrap().push(f), || {}, || {});
+        let opened = opened.into_inner().unwrap();
+        // at once: the others - another file of the same name in another folder among them; the file itself, by a link too, held back
+        assert_eq!(opened[0], vec![at(&dir, "w/a.meno"), at(&dir, "x/Route.meno")]);
         assert_eq!(
-            held.now_said.unwrap(),
+            state.held().now_said.take().unwrap(),
             "Meno's window stopped working and was started again. What was not saved is lost. Route.meno was being saved: what came of that save is said here once it has ended. The files that were open are open again, as they were last saved."
         );
+        // (its end not seen within the limit: not opened, and said so)
+        assert_eq!(opened.len(), 1);
         // a save written already, or not to be: every file at once, as it is on disk
         for written in [Written::Done, Written::NotYet] {
-            let mut held = Held { files: vec!["/w/Route.meno".into()], saving: saving("Route.meno", 1, written), ..Held::default() };
-            let plan = held.stopped(Kind::Ended, Instant::now()).unwrap();
-            assert_eq!((plan.now.len(), plan.later.len()), (1, 0));
+            let mut held = Held { files: vec![at(&dir, "w/Route.meno")], saving: saving("Route.meno", 1, written), ..Held::default() };
+            assert_eq!(held.stopped(Kind::Ended, Instant::now()).unwrap().now.len(), 1);
+            assert!(held.waiting.is_none());
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_page_come_back_is_taken_from_its_first_list_and_a_stopped_page_s_late_list_never() {
+        let mut held = Held::default();
+        for told in 1..=5 {
+            assert!(held.files_told("old", told, vec![format!("/w/{told}.meno")]));
+        }
+        // an older list of the same page, late: let be
+        assert!(!held.files_told("old", 3, vec!["/w/3.meno".into()]));
+        held.stopped(Kind::Ended, Instant::now());
+        // the page that came back counts from one: taken
+        assert!(held.files_told("new", 1, vec!["/w/a.meno".into()]));
+        assert_eq!(held.files, vec!["/w/a.meno".to_string()]);
+        // the stopped page's late list after that: never
+        assert!(!held.files_told("old", 6, vec!["/w/6.meno".into()]));
+        assert_eq!(held.files, vec!["/w/a.meno".to_string()]);
+        assert!(held.files_told("new", 2, vec!["/w/b.meno".into()]));
+        assert_eq!(held.files, vec!["/w/b.meno".to_string()]);
     }
 
     #[test]
     fn a_write_is_known_by_its_token_and_a_later_save_of_the_same_name_is_its_own() {
         let state = Arc::new(PageStop::default());
         // none told: written as it is
-        assert_eq!(state.write_begins(None), Ok(None));
+        assert_eq!(state.write_begins(None, Path::new(NOWHERE)), Ok(None));
         let first = state.saving("Route.meno".into());
-        assert_eq!(state.write_begins(Some(first)), Ok(Some(first)));
+        assert_eq!(state.write_begins(Some(first), Path::new(NOWHERE)), Ok(Some(first)));
         let write = mark(&state, first);
         // the page stops while it is written
         state.held().stopped(Kind::Ended, Instant::now());
         // the page that came back saves the same file again: its own save, never refused, never taken for the first
         let second = state.saving("Route.meno".into());
         assert_ne!(first, second);
-        assert_eq!(state.write_begins(Some(second)), Ok(Some(second)));
+        assert_eq!(state.write_begins(Some(second), Path::new(NOWHERE)), Ok(Some(second)));
         // the first write ends: the stopped page's save is settled, not the new one
         drop(write);
-        assert_eq!(state.held().left, saving("Route.meno", first, Written::Unknown));
-        assert_eq!(state.held().saving, saving("Route.meno", second, Written::Writing));
+        let written = |token, written| Some(Saving { target: Some(PathBuf::from(NOWHERE)), ..saving("Route.meno", token, written).unwrap() });
+        assert_eq!(state.held().left, written(first, Written::Unknown));
+        assert_eq!(state.held().saving, written(second, Written::Writing));
         state.write_ends(second, Written::Done);
         state.saved(second);
         assert!(state.held().saving.is_none());
@@ -639,16 +740,16 @@ mod tests {
         let state = PageStop::default();
         let shut = state.saving("Route.meno".into());
         state.held().stopped(Kind::Ended, Instant::now());
-        assert!(state.write_begins(Some(shut)).is_err());
+        assert!(state.write_begins(Some(shut), Path::new(NOWHERE)).is_err());
         let again = state.saving("Route.meno".into());
-        assert_eq!(state.write_begins(Some(again)), Ok(Some(again)));
+        assert_eq!(state.write_begins(Some(again), Path::new(NOWHERE)), Ok(Some(again)));
     }
 
     #[test]
     fn a_write_that_panics_is_marked_ended_and_the_wait_for_it_ends() {
         let state = Arc::new(PageStop::default());
         let token = state.saving("Route.meno".into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), Path::new(NOWHERE)).unwrap();
         state.held().stopped(Kind::Ended, Instant::now());
         let write = mark(&state, token);
         let t = std::thread::spawn(move || {
@@ -666,7 +767,7 @@ mod tests {
     fn a_write_that_does_not_end_is_waited_for_no_longer_than_the_limit() {
         let state = Arc::new(PageStop::default());
         let token = state.saving("Route.meno".into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), Path::new(NOWHERE)).unwrap();
         state.held().stopped(Kind::Ended, Instant::now());
         let at = Instant::now();
         let left = state.left_after(token, Duration::from_millis(80)).unwrap();
@@ -684,7 +785,7 @@ mod tests {
     fn a_write_that_ends_is_said_as_it_ended_once_it_has() {
         let state = Arc::new(PageStop::default());
         let token = state.saving("a.meno".into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), Path::new(NOWHERE)).unwrap();
         let mut write = mark(&state, token);
         let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
         assert_eq!(plan.saving.unwrap().written, Written::Writing);
@@ -698,7 +799,7 @@ mod tests {
         // a write that fails
         let state = Arc::new(PageStop::default());
         let token = state.saving("a.meno".into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), Path::new(NOWHERE)).unwrap();
         let mut write = mark(&state, token);
         state.held().stopped(Kind::Ended, Instant::now());
         write.ended(false);
@@ -711,7 +812,7 @@ mod tests {
         // (the wait `close` makes, with a write that ends and one that does not)
         let state = Arc::new(PageStop::default());
         let token = state.saving("Route.meno".into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), Path::new(NOWHERE)).unwrap();
         state.held().started_again = Some(Instant::now());
         let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
         assert_eq!(plan.then, Then::CloseAgain);
@@ -726,19 +827,24 @@ mod tests {
     }
 
     /// A stop of the page while `name` is being written, its files `files`: the state, the save's token, its write's mark, and the plan.
-    fn stopped_while_writing(name: &str, files: &[&str]) -> (Arc<PageStop>, u64, Mark, Plan) {
+    /// (in a folder of its own, `tag`'s: `w/<name>` being written, `files` there, the tabs' files as they are named)
+    fn stopped_while_writing(tag: &str, name: &str, files: &[&str]) -> (PathBuf, Arc<PageStop>, u64, Mark, Plan) {
+        let mut all = files.to_vec();
+        let written = format!("w/{name}");
+        all.push(&written);
+        let dir = folder(tag, &all);
         let state = Arc::new(PageStop::default());
-        state.held().files = files.iter().map(|f| f.to_string()).collect();
+        state.held().files = files.iter().map(|f| at(&dir, f)).collect();
         let token = state.saving(name.into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), &dir.join(&written)).unwrap();
         let write = mark(&state, token);
         let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
-        (state, token, write, plan)
+        (dir, state, token, write, plan)
     }
 
     #[test]
     fn start_again_opens_the_rest_at_once_and_the_file_being_saved_once_its_write_has_ended_an_open_of_it_meanwhile_too() {
-        let (state, _, mut write, plan) = stopped_while_writing("Route.meno", &["/w/a.meno", "/w/Route.meno"]);
+        let (dir, state, _, mut write, plan) = stopped_while_writing("reopen", "Route.meno", &["w/a.meno", "w/Route.meno", "w/b.meno", "x/Route.meno"]);
         let done: Arc<Mutex<Vec<String>>> = Arc::default();
         let (runs, said) = (state.clone(), done.clone());
         let run = std::thread::spawn(move || {
@@ -753,15 +859,18 @@ mod tests {
             );
         });
         // the chemist opens the file by hand while its write goes on - from Open, or from outside: held back, not opened now
-        assert_eq!(state.hold_opens(vec!["/w/Route.meno".into(), "/w/b.meno".into(), "/x/Route.meno".into()]), vec!["/w/b.meno".to_string()]);
+        // (another of the same name, in another folder, is not it: opened at once)
+        assert_eq!(state.hold_opens(vec![at(&dir, "w/Route.meno"), at(&dir, "w/b.meno"), at(&dir, "x/Route.meno")]), vec![at(&dir, "w/b.meno"), at(&dir, "x/Route.meno")]);
         write.ended(true);
         drop(write);
         run.join().unwrap();
         // the rest at once, the page started again, then the file - once, as saved - and the later words told
-        assert_eq!(*done.lock().unwrap(), ["open /w/a.meno", "reload", "open /w/Route.meno /x/Route.meno", "told"]);
+        let done = done.lock().unwrap().clone();
+        assert_eq!(done, [format!("open {} {} {}", at(&dir, "w/a.meno"), at(&dir, "w/b.meno"), at(&dir, "x/Route.meno")), "reload".into(), format!("open {}", at(&dir, "w/Route.meno")), "told".into()]);
         assert_eq!(state.held().later_said.as_deref(), Some("Route.meno was being saved, and the save was finished: Route.meno is as saved. It is open again."));
         // and once the write has ended, an Open of it opens at once
-        assert_eq!(state.hold_opens(vec!["/w/Route.meno".into()]), vec!["/w/Route.meno".to_string()]);
+        assert_eq!(state.hold_opens(vec![at(&dir, "w/Route.meno")]), vec![at(&dir, "w/Route.meno")]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -778,37 +887,50 @@ mod tests {
 
     #[test]
     fn a_save_over_the_file_being_written_waits_for_that_write_and_is_refused_only_past_the_limit() {
-        let (state, first, write, _) = stopped_while_writing("Route.meno", &[]);
+        let (dir, state, first, write, _) = stopped_while_writing("over", "Route.meno", &["x/Route.meno"]);
+        let route = dir.join("w/Route.meno");
         let second = state.saving("Route.meno".into());
-        assert_eq!(state.write_begins(Some(second)), Ok(Some(second)));
+        assert_eq!(state.write_begins(Some(second), &route), Ok(Some(second)));
         // past the limit, while the first is still being written: refused, in true words
         assert_eq!(
-            state.write_after_left("Route.meno", Some(second), Duration::ZERO),
+            state.write_after_left(&route, Some(second), Duration::ZERO),
             Err("Route.meno is still being written by the save made as Meno's window stopped; save again once that save has ended".into())
         );
-        // another file, or the first write itself: at once
-        assert_eq!(state.write_after_left("Other.meno", Some(second), Duration::ZERO), Ok(()));
-        assert_eq!(state.write_after_left("Route.meno", Some(first), Duration::ZERO), Ok(()));
+        // the same file reached through a link, or spelled in another case where the volume does not tell case apart: the same
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&route, dir.join("w/link.meno")).unwrap();
+            assert!(state.write_after_left(&dir.join("w/link.meno"), None, Duration::ZERO).is_err());
+        }
+        let other_case = dir.join("w/ROUTE.meno");
+        if other_case.exists() {
+            assert!(state.write_after_left(&other_case, None, Duration::ZERO).is_err());
+        }
+        // a file of the same name in another folder, another file, or the first write itself: at once
+        assert_eq!(state.write_after_left(&dir.join("x/Route.meno"), Some(second), Duration::ZERO), Ok(()));
+        assert_eq!(state.write_after_left(&dir.join("w/Other.meno"), Some(second), Duration::ZERO), Ok(()));
+        assert_eq!(state.write_after_left(&route, Some(first), Duration::ZERO), Ok(()));
         // within it: written only after the first write has ended
         let order: Arc<Mutex<Vec<&str>>> = Arc::default();
-        let (waits, written) = (state.clone(), order.clone());
+        let (waits, written, to) = (state.clone(), order.clone(), route.clone());
         let later = std::thread::spawn(move || {
-            waits.write_after_left("Route.meno", Some(second), Duration::from_secs(60)).unwrap();
+            waits.write_after_left(&to, Some(second), Duration::from_secs(60)).unwrap();
             written.lock().unwrap().push("second written");
         });
         order.lock().unwrap().push("first ended");
         drop(write);
         later.join().unwrap();
         assert_eq!(*order.lock().unwrap(), ["first ended", "second written"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn close_shows_its_message_once_the_save_has_ended_and_then_exits() {
-        let (state, _, mut write, _) = stopped_while_writing("Route.meno", &[]);
+        let (_dir, state, _, mut write, _) = stopped_while_writing("close", "Route.meno", &[]);
         // a second stop soon after: closed
         state.held().started_again = Some(Instant::now());
         let token = state.saving("Route.meno".into());
-        state.write_begins(Some(token)).unwrap();
+        state.write_begins(Some(token), Path::new(NOWHERE)).unwrap();
         let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
         assert_eq!(plan.then, Then::CloseAgain);
         write.ended(true);
@@ -830,7 +952,7 @@ mod tests {
             ]
         );
         // and past its limit, without waiting longer: said so, and exits all the same
-        let (state, _, _write, mut plan) = stopped_while_writing("Route.meno", &[]);
+        let (_dir2, state, _, _write, mut plan) = stopped_while_writing("close-past", "Route.meno", &[]);
         plan.then = Then::CloseGone;
         let done = Mutex::new(Vec::new());
         run_close(&state, plan, Duration::ZERO, |w| done.lock().unwrap().push(w), || done.lock().unwrap().push("exit".into()));

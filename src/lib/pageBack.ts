@@ -18,13 +18,15 @@ const send: Send = (command, args) => invoke(command, args);
 /** The last list of files told, so that the same list is not told again; and how many have been, each list sent with its number. */
 let told: string | undefined;
 let lists = 0;
+/** This page, among those the window has had: a page started again after one stopped counts its lists anew. */
+const page = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 /** The files the window's tabs hold now (lib/doc/savers), told to the app where they changed. */
 export function tellOpenFiles(paths: readonly string[] = savedPaths(), to: Send = send): void {
   const key = JSON.stringify(paths);
   if (key === told) return;
   told = key;
-  void to("page_files", { paths: [...paths], told: ++lists }).catch(() => {});
+  void to("page_files", { paths: [...paths], told: ++lists, page }).catch(() => {});
 }
 
 /** The last part of `path`, as a file's name. */
@@ -106,4 +108,13 @@ export async function openableNow(paths: readonly string[], to: Send = send): Pr
   if (!paths.length) return [];
   const now = (await to("page_hold_opens", { paths: [...paths] }).catch(() => null)) as string[] | null;
   return Array.isArray(now) ? now : [...paths];
+}
+
+/**
+ * `open` given the files of `paths` to open now (`openableNow`), asked
+ * before any is read: one held back is read only once the write that held
+ * it has ended, by the app - never as it was before.
+ */
+export async function openUnlessHeld<T>(paths: readonly string[], open: (now: readonly string[]) => Promise<T>, to: Send = send): Promise<T> {
+  return open(await openableNow(paths, to));
 }

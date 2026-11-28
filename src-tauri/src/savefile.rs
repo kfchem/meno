@@ -76,16 +76,14 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
     // (the workspace's save the page said it makes - the `save` header, its token: its write followed to its end,
     //  however it ends, so that a page that stops meanwhile is told what the file is - pagestop.rs)
     let save = request.headers().get("save").and_then(|t| t.to_str().ok()).and_then(|t| t.parse::<u64>().ok());
-    let mut mark = app.state::<crate::pagestop::PageStop>().write_begins(save)?.map(|token| {
+    let mut mark = app.state::<crate::pagestop::PageStop>().write_begins(save, &target)?.map(|token| {
         let app = app.clone();
         crate::pagestop::Mark::new(move |written| app.state::<crate::pagestop::PageStop>().write_ends(token, written))
     });
     let stops = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // (a file the stopped page's save is still writing: this write after it, never alongside it - pagestop.rs)
-        //  (by the name the page gave it, as the page names its saves)
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        if let Err(e) = stops.state::<crate::pagestop::PageStop>().write_after_left(&name, save, crate::pagestop::REOPEN_WAIT) {
+        if let Err(e) = stops.state::<crate::pagestop::PageStop>().write_after_left(&target, save, crate::pagestop::REOPEN_WAIT) {
             if let Some(mark) = mark.as_mut() {
                 mark.ended(false);
             }
@@ -682,6 +680,34 @@ impl Placing for OnDisk<'_> {
 #[cfg(unix)]
 fn sync_dir(dir: &Path) -> io::Result<()> {
     File::open(dir)?.sync_all()
+}
+
+/// Whether `a` and `b` are one file: each taken to the file at the end of its
+/// links (`real_target`) in its folder as the system has it (every link and
+/// `..` in the folder's path followed); then, where both are there, one file
+/// by the system's own count of it on macOS and Linux (its device and
+/// number) - a name spelled in another case on a volume that does not tell
+/// case apart being the same file; elsewhere - Windows - by their paths
+/// compared without case, as NTFS compares names by default. Not one file
+/// where either cannot be looked at.
+pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
+    let whole = |p: &Path| -> Option<PathBuf> {
+        let real = real_target(p).ok()?;
+        Some(fs::canonicalize(real.parent()?).ok()?.join(real.file_name()?))
+    };
+    let (Some(a), Some(b)) = (whole(a), whole(b)) else { return false };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(x), Ok(y)) = (fs::metadata(&a), fs::metadata(&b)) {
+            return x.dev() == y.dev() && x.ino() == y.ino();
+        }
+    }
+    if cfg!(windows) {
+        a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    } else {
+        a == b
+    }
 }
 
 /// Where a document named `path` is written: `path`, or - where it is a

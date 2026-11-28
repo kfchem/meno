@@ -72,7 +72,7 @@ import { startUpdates } from "./lib/update";
 import { showSettingsSection, useSettingsAsked } from "./ui/features/SettingsPanel/section";
 import { letOfficeGo, officeInUse, startedForOffice, takeOfficeStructures, watchOffice } from "./lib/ole";
 import { watchOpenedFiles } from "./lib/openedFiles";
-import { openableNow, sayCameBack, tellOpenFiles } from "./lib/pageBack";
+import { openUnlessHeld, sayCameBack, tellOpenFiles } from "./lib/pageBack";
 import { onItsWay } from "./ui/views/onItsWay";
 
 /** Meno started by the system: every page waits, not empty, until it is known whether a file was opened with it (ui/views/onItsWay). */
@@ -468,7 +468,10 @@ export default function App() {
   const openPaths = async (paths: readonly string[], outside = false) => {
     const arrived = onItsWay(null);
     try {
-      await openPathsAlone(paths, outside);
+      // (the file whose save was being written as the page stopped under Meno: not read here, but opened by the app
+      //  once that write has ended - asked before anything is read: lib/pageBack)
+      if (isTauri()) await openUnlessHeld(paths, (now) => openPathsAlone(now, outside));
+      else await openPathsAlone(paths, outside);
     } finally {
       arrived();
       if (paths.length) firstActionDone();
@@ -548,10 +551,8 @@ export default function App() {
     const rest = texts.length + pdfs.length + pictures.length + structures.length > 0;
     // (one already open in a tab - by where it is saved, its one true path - brought forward, not opened again: two tabs on one file overwrite each other)
     const tabs = () => Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path }));
-    // (the file whose save was being written as the page stopped under Meno: opened by the app once that write has ended - lib/pageBack)
-    const now = isTauri() ? new Set(await openableNow(workspaces.map((w) => w.path))) : null;
     await openEachOnce(
-      now ? workspaces.filter((w) => now.has(w.path)) : workspaces,
+      workspaces,
       tabs,
       (id) => act({ type: "SELECT_TAB", id }),
       (w) => openWorkspaceTab(w.name, w.workspace, w.path, !rest),
