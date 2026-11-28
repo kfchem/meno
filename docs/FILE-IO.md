@@ -1241,24 +1241,29 @@ left out, with its size.
   changed since it was listed fails the save, and the file saved before
   stays as it was. Only a plain file inside its job's folder is read: never
   through a link, whatever the page's list says.
-- **Kept again from the file it was opened from.** A workspace opened on
-  another computer has its jobs' files in the `.meno` it was opened from.
-  Saved again, Meno reads them from that file as the new one is written -
-  each checked against its SHA-256 - while that file is still as it was
-  opened (its size and when it was written). Each save then notes the file
-  it has just written, as Meno finds it the moment it is in its place, as
-  where every job file it holds is: the
-  next save reads them from that file in the same way, so that the second
-  save of a session, and every one after, costs the page what the first
-  did - never every job file read back into the page and packed again.
-  Where the file has changed since, or the workspace was opened with no
-  path, they are kept from what was held of it as it was opened, through
-  the page. A file written over by something else in a way that keeps its
-  size and time, so that it no longer holds what was noted, fails the save
-  as it is written - the file there left as it was - and Meno makes the
-  save again at once without that file, keeping each job file from what
-  the page holds of it; one it holds nothing of is recorded as not had,
-  as above.
+- **Kept again from wherever they are.** A workspace opened on another
+  computer has its jobs' files in the `.meno` it was opened from. Saved
+  again, Meno takes each from wherever it finds it whole
+  (`src-tauri/src/keptjobs.rs`, `job_files_where`): the files the
+  workspace was opened from or saved to this session, the file it is saved
+  over as it is now - whoever wrote it, a copy of it put there from outside
+  too - a copy a save kept beside any of them (`aspirin.meno.bak`), and its
+  job's folder. Each is known by its name, its SHA-256, and taken only if
+  its bytes are what that says, checked as the new file is written; a
+  file's size and when it was written decide nothing. Where a file holds
+  one under its name that is not it, the save is made again at once, each
+  read whole and checked first, so that it is taken from elsewhere. So the
+  second save of a session, and every one after, costs the page what the
+  first did, whatever was done to the file meanwhile.
+- **Never all through the page.** Only a job file Meno finds nowhere is
+  sent from what the page holds of it - read from the file it was opened
+  from as it was, one file at a time, each sent alone as its bytes and set
+  down by Meno, checked against its SHA-256, in its local data folder
+  (`saving/`) until the save is written: the page holds no more than the
+  largest of them at once, never all of them, packed or not. What was set
+  down goes once the save is written, or not; what a page or Meno stopped
+  half way left goes as Meno next starts. One it holds nothing of is
+  recorded as not had, as above.
 - **Raw outputs can name this computer.** A program's output and its logs
   often hold the user's name, the folders it ran in and the computer's
   name: Gaussian and ORCA print the host they ran on, for one. Meno never
