@@ -1126,6 +1126,20 @@ describe("a figure whose wedges are filled and then stroked round", () => {
     expect(s.atoms.filter((a) => a.el === "C")).toHaveLength(3);
   });
 
+  it("keeps a short line both of whose ends lie by one corner of a wedge: an edge runs from one corner to another", () => {
+    // (a wedge's wide end drawn into the bonds it meets, notched at its atom and one corner carried out along a hash's line, a line
+    // of the hash beside that corner - as Meno's Nature style draws one: the line is the hash's, not an edge of the wedge)
+    const wedge: P[] = [[137, 106.4], [137.7, 105.5], [142.4, 107.9], [129.9, 97.5], [129.5, 98]];
+    const bar = filled([142.74, 107.56], [143.29, 107.81], [142.52, 109.13], [142.04, 108.78]);
+    const kept = shapesOf(figure([filled(...wedge), bar]));
+    expect(kept.wedges).toHaveLength(1);
+    expect(kept.strokes).toHaveLength(1);
+    // (a line stroked from one corner to another is still the wedge's own edge)
+    const edge = shapesOf(figure([filled(...wedge), { ...stroke([129.5, 98], [137, 106.4]), width: 0.2 }]));
+    expect(edge.wedges).toHaveLength(1);
+    expect(edge.strokes).toHaveLength(0);
+  });
+
   it("reads a line under three tenths of a bond, from a joint into a label, as the label's bond", () => {
     // (as RDKit draws a crowded OH by default - ouabain's - its bond cut back at the label to 0.3 of a bond; and in its ACS 1996
     // mode an amide's C-N into its HN, 0.18 of a bond - microcystin-LR's)

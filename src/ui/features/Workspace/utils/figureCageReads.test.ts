@@ -1,10 +1,13 @@
 /**
- * Two cages read back from drawings Meno made of them (fixtures: Meno's own drawing printed to PDF, as the PDF reader gives it, and
+ * Cages read back from drawings Meno made of them (fixtures: Meno's own drawing printed to PDF, as the PDF reader gives it, and
  * the same kind of drawing as a 300 dpi picture of it): each read as the molecule drawn - its formula and its identity those of the
  * structure typed in - where two drawn things meet in a way the reader once took for one.
  *
  * - Ginkgolide B, in Meno's own style: two hashed bonds drawn end to end at a ring carbon - one hash's wide end where the next
  *   one's narrow end starts - are two hashes (lib/figure/read `hashesApart`), not one long hash through the carbon.
+ * - Ginkgolide B, in the Nature style: a wedge's wide end drawn into the bonds it meets, one corner carried out along a hash's
+ *   line, a line of the hash by that corner: the line stays the hash's (lib/figure/drawn `shapesOf`: an edge stroked round a
+ *   wedge runs from one corner to another), so the hash starts at the carbon and the ring bond meets it there.
  * - Gibberellic acid, in the Nature style, as a picture: a bond ending where a double bond ends is not carried on, across that
  *   joint, into a hash's bar lying on its line (`brokenAcross`): a joint is an atom, not a line cut short round one in front.
  * - Picrotoxinin, in Meno's own style: a bond cut short round a bond drawn in front of it, where a third bond meets the cut line
@@ -24,6 +27,7 @@ import { figureFrom, figureLabels, pictureResult } from "./figures";
 import { drawnFromSmiles } from "./smilesDrawn";
 import { measured } from "../../../../testing/timeouts";
 import ginkgolideB from "../../../../lib/figure/fixtures/ginkgolide-b-meno.json";
+import ginkgolideBNature from "../../../../lib/figure/fixtures/ginkgolide-b-nature.json";
 import picrotoxinin from "../../../../lib/figure/fixtures/picrotoxinin-meno.json";
 import gibberellicAt from "../../../../lib/figure/fixtures/pictures/gibberellic-acid-nature-300dpi.json";
 
@@ -73,6 +77,15 @@ describe("a cage drawn by Meno, read back", () => {
     const bond = plain.sort((p, q) => p - q)[plain.length >> 1];
     expect(lengths.length).toBe(3);
     for (const l of lengths) expect(l).toBeLessThan(1.5 * bond);
+  }, measured(1500));
+
+  it("ginkgolide B in the Nature style, a wedge's corner carried out by a hash's lines: the hash keeps them, the carbon its ring", () => {
+    const got = figureFrom(ginkgolideBNature as unknown as FigureDrawn, SHA, 0);
+    if ("none" in got) throw new Error(got.none);
+    const t = truth(GINKGOLIDE_B);
+    expect(t.formula).toBe("C20H24O10");
+    expect(partFormula(got.model)).toBe(t.formula);
+    expect(identityOfDrawn(got.model).text).toBe(t.identity);
   }, measured(1500));
 
   it("picrotoxinin with a bond broken round one in front, a third bond meeting it by the gap: one bond across", () => {
