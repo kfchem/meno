@@ -96,6 +96,10 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
 4. **One canvas, drawn only when needed.**
    - A 3D molecule's turning, with its inertia, requests frames while it
      moves, as panning does.
+   - What moves on its own for as long as something lasts - a running
+     step's marks - asks for frames only while the page is seen, and not
+     where the system asks for less motion (`pageGl/runningTick`: the one
+     place that decides it).
    - Atoms and bonds are instanced, so that a hundred conformers overlaid
      stay smooth.
 5. **The rules already in place hold.**

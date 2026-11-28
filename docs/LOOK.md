@@ -161,6 +161,11 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   for what comes and goes.
 - A highlight's strength is eased, not switched: on in `quick` with
   `EASE`, off in `quick` with `EASE_LEAVE`.
+- **What moves for as long as it lasts** (a running step's turning icon,
+  its wire's moving dashes) moves only while the page is seen, and goes
+  on where it stood when seen again; where the system asks for less
+  motion it stands still, in a mark that still says what it is
+  (`pageGl/runningTick`).
 
 ## Room
 

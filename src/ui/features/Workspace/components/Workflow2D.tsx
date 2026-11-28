@@ -10,7 +10,8 @@ import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame from "../workflow/SetFrame";
 import FrameTabs, { FRAMES_ORDER, type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
-import { dashAdvance, runningTick } from "../pageGl/runningTick";
+import { dashAdvance } from "../pageGl/runningTick";
+import { useRunningMotion } from "../pageGl/useRunningMotion";
 import { positionBadge, recordLabel } from "../pageGl/workflowMarks";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
@@ -355,9 +356,9 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   );
   useEffect(() => () => material.dispose(), [material]);
   const { invalidate, camera, gl } = useThree();
-  // (a frame asked for thirty times a second, the dashes going by the time between frames: pageGl/runningTick)
-  const tick = useMemo(runningTick, []);
-  useEffect(() => tick.stop, [tick]);
+  // (a frame asked for thirty times a second while the page is seen, the dashes going by the time between frames - none asked unseen,
+  //  and the dashes still where the system asks for less motion: pageGl/runningTick)
+  const tick = useRunningMotion(true);
   useFrame((_, dt) => {
     const u = material.uniforms;
     const wire = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio());
@@ -365,7 +366,7 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
     u.ink.value = wire.ink;
     u.dash.value = DASH_PX * PAGE_PX;
     u.gap.value = GAP_PX * PAGE_PX;
-    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, DASH_PX, GAP_PX);
+    u.offset.value = dashAdvance(u.offset.value, tick.step(dt), DASH_SPEED, DASH_PX, GAP_PX);
     tick.ask(invalidate);
   });
   return (

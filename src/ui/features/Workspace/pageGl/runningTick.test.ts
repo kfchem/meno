@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dashAdvance, RUNNING_FRAME_MS, runningTick } from "./runningTick";
+import { dashAdvance, RUNNING_FRAME_MS, runningFramesAsked, runningTick, tellWindowSeen } from "./runningTick";
 import { PAGE_PX } from "../utils/pageScale";
 
 describe("a running mark's frames", () => {
@@ -69,5 +69,218 @@ describe("a wire's dashes", () => {
   it("never go past one dash and gap, nor leap on a stalled page", () => {
     expect(along(1000, 1 / 30)).toBeLessThan(10 * P);
     expect(dashAdvance(0, 5, 12, 6, 4)).toBeCloseTo(((0.1 * 12) % 10) * P, 9);
+  });
+});
+
+/** A page whose document the web view says is visible or hidden, and whose system asks for less motion or not: the page's own gate reads these. */
+function aPage() {
+  const doc = Object.assign(new EventTarget(), { visibilityState: "visible" as DocumentVisibilityState });
+  const less = Object.assign(new EventTarget(), { matches: false, media: "(prefers-reduced-motion: reduce)" });
+  vi.stubGlobal("document", doc);
+  vi.stubGlobal("matchMedia", () => less);
+  return {
+    hide: () => ((doc.visibilityState = "hidden"), doc.dispatchEvent(new Event("visibilitychange"))),
+    show: () => ((doc.visibilityState = "visible"), doc.dispatchEvent(new Event("visibilitychange"))),
+    lessMotion: (on: boolean) => ((less.matches = on), less.dispatchEvent(new Event("change"))),
+  };
+}
+
+/** A mark running for `ms`: a frame drawn as each is asked for, `dt` the seconds since the last, each moving it and asking again; the frames asked for. */
+function run(tick: ReturnType<typeof runningTick>, ms: number, drawn: number[] = []): number {
+  let frames = 0;
+  let last = Date.now();
+  const invalidate = () => {
+    frames++;
+    // (the frame drawn at once, as the canvas would: the mark moved by the time gone, and asking again)
+    const now = Date.now();
+    drawn.push(tick.step((now - last) / 1000));
+    last = now;
+    tick.ask(invalidate);
+  };
+  tick.ask(invalidate);
+  vi.advanceTimersByTime(ms);
+  return frames;
+}
+
+describe("a running mark, seen or not", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("asks no frame while the page is hidden, and goes on asking once it is shown again", () => {
+    const page = aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(1000);
+    const seen = invalidate.mock.calls.length;
+    expect(seen).toBeGreaterThanOrEqual(25);
+    page.hide();
+    // (an hour hidden: not one frame, and no timer left waiting)
+    vi.advanceTimersByTime(3600 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(seen);
+    expect(vi.getTimerCount()).toBe(0);
+    // (shown again: a frame at once, then about thirty a second again)
+    page.show();
+    expect(invalidate).toHaveBeenCalledTimes(seen + 1);
+    vi.advanceTimersByTime(1000);
+    expect(invalidate.mock.calls.length - seen).toBeGreaterThanOrEqual(25);
+    tick.stop();
+  });
+
+  it("asks no frame while the page is hidden, counted as the page counts them", () => {
+    const page = aPage();
+    page.hide();
+    const before = runningFramesAsked();
+    const tick = runningTick();
+    expect(run(tick, 60 * 1000)).toBe(0);
+    expect(runningFramesAsked()).toBe(before);
+    tick.stop();
+  });
+
+  it("asks no frame while its tab is not the one shown, and goes on once it is", () => {
+    aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(100);
+    tick.shown(false);
+    const before = invalidate.mock.calls.length;
+    vi.advanceTimersByTime(60 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(before);
+    tick.shown(true);
+    vi.advanceTimersByTime(1000);
+    expect(invalidate.mock.calls.length - before).toBeGreaterThanOrEqual(25);
+    tick.stop();
+  });
+
+  it("goes on where it stood once seen again: no leap for the time it was hidden", () => {
+    const page = aPage();
+    const tick = runningTick();
+    const drawn: number[] = [];
+    run(tick, 1000, drawn);
+    const at = tick.time();
+    expect(at).toBeGreaterThan(0.9);
+    page.hide();
+    vi.advanceTimersByTime(3600 * 1000);
+    page.show();
+    vi.advanceTimersByTime(RUNNING_FRAME_MS * 2);
+    // (no step longer than a frame's own: the hour hidden not made up, nor a tenth of a second)
+    expect(Math.max(...drawn)).toBeLessThanOrEqual(RUNNING_FRAME_MS / 1000 + 1e-9);
+    expect(tick.time() - at).toBeLessThan(0.1);
+    tick.stop();
+  });
+
+  it("is still where the system asks for less motion: no frame asked, and moved by none at a frame drawn for something else", () => {
+    const page = aPage();
+    page.lessMotion(true);
+    const tick = runningTick();
+    expect(run(tick, 10 * 1000)).toBe(0);
+    expect(tick.step(1 / 60)).toBe(0);
+    expect(tick.time()).toBe(0);
+    // (and moving again as the setting is let go)
+    page.lessMotion(false);
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(1000);
+    expect(invalidate.mock.calls.length).toBeGreaterThanOrEqual(25);
+    tick.stop();
+  });
+
+  it("goes by the document's being hidden, not by the window's being in front: a window behind another is seen", () => {
+    aPage();
+    const win = new EventTarget();
+    vi.stubGlobal("window", win);
+    const tick = runningTick();
+    win.dispatchEvent(new Event("blur"));
+    expect(run(tick, 1000)).toBeGreaterThanOrEqual(25);
+    tick.stop();
+  });
+
+  it("leaves nothing watching once stopped: shown again, it asks nothing", () => {
+    const page = aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    page.hide();
+    tick.stop();
+    page.show();
+    vi.advanceTimersByTime(1000);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("a running mark, by the back end's word on the window", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    tellWindowSeen(null);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("asks no frame while the window is minimised, its document still saying it is visible, and goes on at once restored", () => {
+    aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(1000);
+    const seen = invalidate.mock.calls.length;
+    expect(seen).toBeGreaterThanOrEqual(25);
+    tellWindowSeen(false);
+    vi.advanceTimersByTime(3600 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(seen);
+    expect(vi.getTimerCount()).toBe(0);
+    tellWindowSeen(true);
+    expect(invalidate).toHaveBeenCalledTimes(seen + 1);
+    vi.advanceTimersByTime(1000);
+    expect(invalidate.mock.calls.length - seen).toBeGreaterThanOrEqual(25);
+    tick.stop();
+  });
+
+  it("goes on where it stood once restored: no leap for the time it was minimised", () => {
+    aPage();
+    const tick = runningTick();
+    const drawn: number[] = [];
+    run(tick, 1000, drawn);
+    const at = tick.time();
+    tellWindowSeen(false);
+    vi.advanceTimersByTime(3600 * 1000);
+    tellWindowSeen(true);
+    vi.advanceTimersByTime(RUNNING_FRAME_MS * 2);
+    expect(Math.max(...drawn)).toBeLessThanOrEqual(RUNNING_FRAME_MS / 1000 + 1e-9);
+    expect(tick.time() - at).toBeLessThan(0.1);
+    tick.stop();
+  });
+
+  it("is unseen while either says so: the word coming while the document is hidden too, and the document shown while the window is still minimised", () => {
+    const page = aPage();
+    const tick = runningTick();
+    const invalidate = vi.fn(() => tick.ask(invalidate));
+    tick.ask(invalidate);
+    vi.advanceTimersByTime(100);
+    page.hide();
+    tellWindowSeen(false);
+    const before = invalidate.mock.calls.length;
+    page.show();
+    vi.advanceTimersByTime(60 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(before);
+    // (restored with the document hidden: still none)
+    page.hide();
+    tellWindowSeen(true);
+    vi.advanceTimersByTime(60 * 1000);
+    expect(invalidate).toHaveBeenCalledTimes(before);
+    page.show();
+    expect(invalidate).toHaveBeenCalledTimes(before + 1);
+    tick.stop();
+  });
+
+  it("takes the window as seen where no word has come", () => {
+    aPage();
+    tellWindowSeen(null);
+    const tick = runningTick();
+    expect(run(tick, 1000)).toBeGreaterThanOrEqual(25);
+    tick.stop();
   });
 });

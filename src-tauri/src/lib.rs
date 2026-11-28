@@ -40,6 +40,7 @@ mod savefile;
 mod tools;
 mod truepath;
 mod update;
+mod windowseen;
 mod windowstate;
 #[cfg(windows)]
 mod keymenu;
@@ -1213,8 +1214,12 @@ pub fn run() {
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
         .manage(windowstate::Kept::default())
-        // (the main window's size and place kept as it moves, resizes and closes: windowstate.rs)
-        .on_window_event(windowstate::on_event)
+        .manage(windowseen::Told::default())
+        // (the main window's size and place kept as it moves, resizes and closes: windowstate.rs; and the page told whether it can be seen: windowseen.rs)
+        .on_window_event(|w, event| {
+            windowstate::on_event(w, event);
+            windowseen::on_event(w, event);
+        })
         // (its page loaded anew - reloaded while a worker held the computer awake - holds nothing yet: let go)
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started && webview.label() == "main" {
@@ -1368,6 +1373,8 @@ pub fn run() {
             update::update_state,
             update::update_check,
             update::update_restart_after_quit,
+            // whether the main window can be seen (the page's running marks rest while it cannot)
+            windowseen::window_seen,
             // python sidecar
             ext_spawn_sidecar,
             ext_stdin,
