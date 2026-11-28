@@ -106,7 +106,7 @@ export function PanZoom2D() {
       // (the user takes the view: a fit on its way gives way, and a pinch's
       // glide, and a drag's - whatever the press is on: an atom or a
       // molecule pressed stays under the pointer; where it stopped is kept:
-      // a press alone has not moved it - viewStopOf)
+      // a press alone has not moved it)
       stopViewGoal(camera);
       zoomGlide.current = 0;
       vel.current.set(0, 0);

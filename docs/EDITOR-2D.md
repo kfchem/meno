@@ -335,23 +335,18 @@ come up, so a right drag is a move, not a menu.
 **Menus on the page** (the maintainer). Quick Add, and the menu a right-click
 opens - a part's, a step's card's, a frames chip's - stand where they were
 asked for: the menu's top left corner 14 px up and to the right of the point,
-whatever its size, and kept at that point on the page as the view moves. Where
-any of it would lie past the canvas - the column's width counted - the view
-eases along by just what it lies past and 16 px more, never zooming: a menu is
-a screen's size, not the page's. A panel opened in Quick Add, or a row in a
-menu, that makes it larger asks again. A menu taller than the canvas has its
-top brought in and scrolls inside. Once it has shut - by Escape, a click
-outside or a row chosen - the view eases back to where it was before it
-moved, so what the chemist was working on is where they had put it. A row
-that opens a panel, a card or another menu where the menu was holds the view
-on, and it goes back once the last of them has shut; a menu opened elsewhere
-while one is open asks for its own room, and the view still goes back to
-where it was before the first. Where the chemist has moved the view
-themselves meanwhile - a pan, a zoom, a fit - or a row has moved it on
-purpose, the view is theirs and stays; a press alone - a click outside, a
-right-click elsewhere - moves nothing, and the view still goes back. The pan needed is one pure rule
-(`panFor`, `menuAt.ts`), and what is given back another (`menuRoom.ts`; the
-hook that anchors a menu and asks for it, `useMenuAt.ts`).
+whatever its size, and kept at that point on the page as the view moves. A
+menu is seen whole, 16 px clear of the canvas's edges - the column's width
+counted - and it never moves the view to be: the view moves only when the
+chemist moves it, and nothing on the page jumps as a menu opens. Where
+it would lie past the right edge it opens to the left of its point instead,
+its right edge 14 px from it; past the foot, upward, its foot 14 px below the
+point, growing in from that corner; where neither way has room it is slid in
+just clear of the edge it lay past. A panel opened in Quick Add, or a row in
+a menu, that makes it larger places it again, as does the chemist moving the
+view while it is open. A menu taller than the canvas has its top brought in
+and scrolls inside. Where it stands is one pure rule (`placeMenu`,
+`menuAt.ts`; the hook that anchors a menu to the page, `useMenuAt.ts`).
 
 **Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
 again they go on round, 2026-11-04). With the pointer on a bond, 1, 2
@@ -400,7 +395,7 @@ fullest menu, ten icons (an atom's eight with its arrows, and cut and copy:
 under the thing's, Delete staying at the right end of the line of the icons
 it came with (the maintainer: the icons had stood on two lines where one
 would hold them; `menuIconLines`). A menu so widened still opens inside the
-canvas: the view eases along for it as for any menu (*Menus on the page*).
+canvas: it places itself as any menu does, the view as it is (*Menus on the page*).
 An icon's name - of a menu's rows, the menu on empty space and Quick
 Add's - is shown in Meno's own look, as the page's tip is: under the icon,
 or over it where there is no room under it, once the pointer has rested on

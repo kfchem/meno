@@ -12,9 +12,8 @@ import { useDrawingStyle } from "../useDrawingStyle";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { style3dOf } from "../style3dOf";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
-import { eyeOf, middleAfterPan } from "../utils/page";
-import { setViewGoal, viewGoalOf, viewStopOf } from "./viewGoal";
-import { roomAsked, roomFreed, type MenuRoom } from "../menuRoom";
+import { eyeOf } from "../utils/page";
+import { setViewGoal } from "./viewGoal";
 import { viewToShow } from "../utils/viewShow";
 import { opensWith } from "./openingFit";
 import { wordsSet } from "../../../../lib/chem/captions";
@@ -295,29 +294,5 @@ export default function FitToContent2D({
     setViewGoal(cam, { zoom: to.zoom, x: to.x, y: to.y });
     invalidate();
   }, [showRequest, camera, size.width, size.height, store, paddingPx, invalidate]);
-  // A menu opened past the canvas's edge: the page eased along by what it lay
-  // past (menuAt), the zoom as it is - and eased back once every menu it
-  // moved for has shut, if the view is still where they sent it (menuRoom)
-  const panRequest = useEditor((s) => s.panRequest);
-  const panned = useRef(panRequest?.n ?? 0);
-  const menuRoom = useRef<MenuRoom>(null);
-  useEffect(() => {
-    if (!panRequest || panRequest.n === panned.current) return;
-    panned.current = panRequest.n;
-    const cam = camera as THREE.OrthographicCamera;
-    const at = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
-    const now = { at, goal: viewGoalOf(cam), stopped: viewStopOf(cam) };
-    if (panRequest.back) {
-      const back = roomFreed(menuRoom.current, now);
-      menuRoom.current = null;
-      if (!back) return;
-      setViewGoal(cam, back);
-    } else {
-      const to = { zoom: at.zoom, ...middleAfterPan(cam, size, panRequest.dx, panRequest.dy) };
-      menuRoom.current = roomAsked(menuRoom.current, now, to);
-      setViewGoal(cam, to);
-    }
-    invalidate();
-  }, [panRequest, camera, size.width, size.height, invalidate]);
   return null;
 }

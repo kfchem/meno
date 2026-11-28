@@ -293,7 +293,7 @@ export default function PartMenu({
   anchor,
 }: {
   target: MenuTarget;
-  /** The canvas, for the menu to stand at its point on the page and the view to ease along for it (useMenuAt). */
+  /** The canvas, for the menu to stand at its point on the page, wherever there is room for it (useMenuAt). */
   anchor?: MenuAnchor;
   /** The part deleted, or the selection when the menu is its. */
   onDelete: () => void;
@@ -610,7 +610,7 @@ export default function PartMenu({
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the magnifications offered, as "Magnification" is pressed
   const [magnifying, setMagnifying] = useState(false);
-  // opened at its point on the page, up and to the right; the view eases along where it would lie past the canvas (useMenuAt)
+  // opened at its point on the page, up and to the right; placed otherwise - upward, to the left - where it would lie past the canvas, the view left as it is (useMenuAt)
   useMenuAt(ref, target, anchor);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();

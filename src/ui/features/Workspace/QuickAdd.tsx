@@ -252,7 +252,7 @@ export default function QuickAdd({
   onClose,
   anchor,
 }: {
-  /** The canvas, for it to stand at its point on the page and the view to ease along for it (useMenuAt). */
+  /** The canvas, for it to stand at its point on the page, wherever there is room for it (useMenuAt). */
   anchor?: MenuAnchor;
   x: number;
   y: number;
@@ -345,7 +345,7 @@ export default function QuickAdd({
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
   const width = wired ? (steps.length ? calcWidth + 8 : 200) : calcOpen ? Math.max(rowWidth, calcWidth + 8) : rowWidth;
-  // opened at its point on the page, up and to the right, whatever its size; the view eases along where it would lie past the canvas (useMenuAt)
+  // opened at its point on the page, up and to the right, whatever its size; placed otherwise - upward, to the left - where it would lie past the canvas, the view left as it is (useMenuAt)
   useMenuAt(ref, { x, y }, anchor);
   return (
     <motion.div
@@ -356,7 +356,7 @@ export default function QuickAdd({
       aria-label="Add"
       data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
-      style={{ left: x + MENU_OFF, top: y - MENU_OFF, transformOrigin: "top left", maxHeight: within.height - 2 * MENU_MARGIN, overflowY: "auto" }}
+      style={{ left: x + MENU_OFF, top: y - MENU_OFF, maxHeight: within.height - 2 * MENU_MARGIN, overflowY: "auto" }}
     >
       {!wired && (
         <div className="flex items-center gap-0.5">
