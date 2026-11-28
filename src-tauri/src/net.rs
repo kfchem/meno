@@ -41,10 +41,14 @@ struct Inner {
     granted: Mutex<HashSet<String>>,
     /// Tasks under way, by token.
     tasks: Mutex<HashMap<String, Task>>,
-    /// Tasks at rest, by token: a worker's that has nothing asked of it
-    /// (`TaskHandle::rest`) - its last spell ended, as the window was told,
-    /// its way out still standing for when it is asked again (`resume`).
+    /// Tasks at rest, by token: a worker's that nothing holds under way
+    /// (`Spell`) - its last spell ended, as the window was told, its way
+    /// out still standing for when it is asked again, or reaches out.
     resting: Mutex<HashMap<String, Task>>,
+    /// The spells of the tasks begun at rest (`begin_resting`), by token -
+    /// those alone. Locks, where more than one is held: `tasks`, then
+    /// `resting`, then this.
+    spells: Mutex<HashMap<String, Spell>>,
     /// Recent connections, newest last.
     recent: Mutex<Vec<Connection>>,
     port: OnceLock<u16>,
@@ -99,6 +103,21 @@ pub struct Connection {
     pub outcome: String,
     /// Why it was blocked, or how it ended (`Ended`): "the server closed it", "nothing came either way for 120 s".
     pub reason: Option<String>,
+}
+
+/// What holds a task begun at rest under way, in its spell: each request
+/// its worker has yet to answer counts one, taken by the worker's handle
+/// (`TaskHandle::resume`), each connection open on it one more, taken by
+/// the proxy as it is opened - so nothing goes out on its token unshown or
+/// off the record. The last let go, the spell ends: failed where anything
+/// in it did (`Net::spoil`) - a connection that failed or was refused, an
+/// answer that said it could not, a request made while Meno is offline -
+/// done where nothing did.
+#[derive(Default)]
+struct Spell {
+    holds: usize,
+    failed: bool,
+    why: Option<String>,
 }
 
 fn now_ms() -> u64 {
@@ -199,6 +218,7 @@ impl Net {
             self.write_log(&serde_json::json!({ "task": task }));
         } else {
             self.0.resting.lock().unwrap().insert(token.clone(), task);
+            self.0.spells.lock().unwrap().insert(token.clone(), Spell::default());
         }
         Ok(TaskHandle {
             net: self.clone(),
@@ -208,13 +228,21 @@ impl Net {
     }
 
     /// Ends a task, its way out with it: the window told, where it was
-    /// under way - one at rest had its end told as it came to rest.
+    /// under way - one at rest had its end told as it came to rest. A spell
+    /// something in which went wrong ends failed, saying why, however its
+    /// worker ended.
     fn end(&self, token: &str, outcome: &str, reason: Option<&str>) {
+        // (the window told under the tasks' lock: each task's beginning and end told in turn - `hold`, `release`)
+        let mut tasks = self.0.tasks.lock().unwrap();
         self.0.resting.lock().unwrap().remove(token);
-        let Some(task) = self.0.tasks.lock().unwrap().remove(token) else {
+        let spell = self.0.spells.lock().unwrap().remove(token);
+        let Some(task) = tasks.remove(token) else {
             return;
         };
-        self.ended(task, outcome, reason);
+        match &spell {
+            Some(s) if s.failed => self.ended(task, "failed", s.why.as_deref().or(reason)),
+            _ => self.ended(task, outcome, reason),
+        }
     }
 
     fn ended(&self, mut task: Task, outcome: &str, reason: Option<&str>) {
@@ -225,36 +253,61 @@ impl Net {
         self.write_log(&serde_json::json!({ "task": task }));
     }
 
-    /// A task under way come to rest, done: ended as the window sees it,
-    /// its way out kept. Nothing where it is at rest already, or ended.
-    fn rest(&self, token: &str) {
-        // (both held at once - the tasks first, as everywhere - so that its way out is never missing in between)
-        let task = {
-            let mut tasks = self.0.tasks.lock().unwrap();
-            let Some(mut task) = tasks.remove(token) else { return };
-            task.ended = Some(now_ms());
-            task.outcome = Some("done".into());
-            task.reason = None;
-            self.0.resting.lock().unwrap().insert(token.into(), task.clone());
-            task
-        };
+    /// One more hold on a task begun at rest (`Spell`): where it was at
+    /// rest, a spell of its own begun - a new task as the window and the
+    /// record see it, told as any task begun. The spell under way; none
+    /// where the task was not begun at rest, or has ended.
+    fn hold(&self, token: &str) -> Option<Task> {
+        let mut tasks = self.0.tasks.lock().unwrap();
+        let mut resting = self.0.resting.lock().unwrap();
+        let mut spells = self.0.spells.lock().unwrap();
+        let spell = spells.get_mut(token)?;
+        if let Some(last) = resting.remove(token) {
+            let task = Task { id: uuid::Uuid::new_v4().to_string(), started: now_ms(), ended: None, outcome: None, reason: None, ..last };
+            tasks.insert(token.into(), task.clone());
+            *spell = Spell { holds: 1, ..Spell::default() };
+            self.emit("net:task", &task);
+            self.write_log(&serde_json::json!({ "task": task }));
+            return Some(task);
+        }
+        spell.holds += 1;
+        tasks.get(token).cloned()
+    }
+
+    /// A hold let go (`hold`): the last of them, and the spell ends - done,
+    /// or failed where something in it went wrong - the task at rest, its
+    /// way out kept.
+    fn release(&self, token: &str) {
+        let mut tasks = self.0.tasks.lock().unwrap();
+        let mut resting = self.0.resting.lock().unwrap();
+        let mut spells = self.0.spells.lock().unwrap();
+        let Some(spell) = spells.get_mut(token) else { return };
+        if !tasks.contains_key(token) {
+            return;
+        }
+        spell.holds = spell.holds.saturating_sub(1);
+        if spell.holds > 0 {
+            return;
+        }
+        let Some(mut task) = tasks.remove(token) else { return };
+        task.ended = Some(now_ms());
+        task.outcome = Some(if spell.failed { "failed" } else { "done" }.into());
+        task.reason = spell.why.take();
+        spell.failed = false;
+        resting.insert(token.into(), task.clone());
         self.emit("net:task", &task);
         self.write_log(&serde_json::json!({ "task": task }));
     }
 
-    /// A task at rest under way again: a spell of its own, begun now, that
-    /// the window is told of as of any task begun. Nothing where it is under
-    /// way already, or ended.
-    fn resume(&self, token: &str) {
-        let task = {
-            let mut tasks = self.0.tasks.lock().unwrap();
-            let Some(last) = self.0.resting.lock().unwrap().remove(token) else { return };
-            let task = Task { id: uuid::Uuid::new_v4().to_string(), started: now_ms(), ended: None, outcome: None, reason: None, ..last };
-            tasks.insert(token.into(), task.clone());
-            task
-        };
-        self.emit("net:task", &task);
-        self.write_log(&serde_json::json!({ "task": task }));
+    /// Something in the spell under way went wrong, saying why where it
+    /// said: it ends failed. The first reason kept.
+    fn spoil(&self, token: &str, why: Option<&str>) {
+        let mut spells = self.0.spells.lock().unwrap();
+        let Some(spell) = spells.get_mut(token).filter(|s| s.holds > 0) else { return };
+        spell.failed = true;
+        if spell.why.is_none() {
+            spell.why = why.map(str::to_string);
+        }
     }
 
     fn emit<T: Serialize>(&self, event: &str, payload: &T) {
@@ -451,15 +504,26 @@ impl TaskHandle {
         self.ended = true;
     }
 
-    /// Nothing more asked of it for now: its spell ended as done - its
-    /// notice then goes as any finished task's does - its way out kept.
+    /// Its worker's requests all answered: their hold let go (`Spell`) -
+    /// the spell ends where nothing else holds it, and its notice goes as
+    /// any finished task's does; its way out kept.
     pub fn rest(&self) {
-        self.net.rest(&self.token);
+        self.net.release(&self.token);
     }
 
-    /// Asked for something again: under way, as a spell of its own.
+    /// Its worker asked something: held under way till it is answered
+    /// (`rest`), a spell of its own where it was at rest - failed, where
+    /// Meno is offline: nothing goes out for it.
     pub fn resume(&self) {
-        self.net.resume(&self.token);
+        if self.net.hold(&self.token).is_some() && self.net.offline() {
+            self.net.spoil(&self.token, Some("Meno is offline"));
+        }
+    }
+
+    /// Something in its spell under way went wrong - an answer that said it
+    /// could not: the spell ends failed.
+    pub fn spoil(&self) {
+        self.net.spoil(&self.token, None);
     }
 }
 
@@ -617,11 +681,14 @@ impl Net {
             let _ = client.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n").await;
             return;
         };
-        // (one at rest still has its way out: what its worker reaches for unasked goes on the record under its last spell)
-        let task = request.token.as_deref().and_then(|t| {
-            let tasks = self.0.tasks.lock().unwrap();
-            tasks.get(t).cloned().or_else(|| self.0.resting.lock().unwrap().get(t).cloned())
-        });
+        // (one begun at rest is held under way while the connection is open - a spell begun where it rested: shown, on the record, its bytes counted in the spell they flow in)
+        let (task, holding) = match request.token.as_deref() {
+            None => (None, Holding { net: self.clone(), token: None }),
+            Some(t) => match self.hold(t) {
+                Some(task) => (Some(task), Holding { net: self.clone(), token: Some(t.into()) }),
+                None => (self.0.tasks.lock().unwrap().get(t).cloned(), Holding { net: self.clone(), token: None }),
+            },
+        };
         let mut c = Connection {
             id: self.0.next.fetch_add(1, Ordering::SeqCst),
             task_id: task.as_ref().map(|t| t.id.clone()),
@@ -657,11 +724,11 @@ impl Net {
             let found = tokio::time::timeout(Duration::from_secs(20), tokio::net::lookup_host((request.host.as_str(), request.port))).await;
             let found: Vec<std::net::SocketAddr> = match found {
                 Ok(Ok(a)) => a.collect(),
-                Ok(Err(e)) => return self.fail(&mut client, c, &e.to_string()).await,
-                Err(_) => return self.fail(&mut client, c, "timed out").await,
+                Ok(Err(e)) => return self.fail(&mut client, c, &holding, &e.to_string()).await,
+                Err(_) => return self.fail(&mut client, c, &holding, "timed out").await,
             };
             if found.is_empty() {
-                return self.fail(&mut client, c, "no address").await;
+                return self.fail(&mut client, c, &holding, "no address").await;
             }
             if found.iter().any(|a| inward(a.ip())) {
                 refusal = Some(("403 Forbidden", "an address on this computer or its own network"));
@@ -676,6 +743,7 @@ impl Net {
             c.reason = Some(reason.into());
             c.ended = Some(now_ms());
             self.record(&c);
+            holding.spoil(reason);
             return;
         }
         self.record(&c);
@@ -688,8 +756,8 @@ impl Net {
         let upstream = tokio::time::timeout(Duration::from_secs(20), connecting).await;
         let upstream = match upstream {
             Ok(Ok(s)) => s,
-            Ok(Err(e)) => return self.fail(&mut client, c, &e.to_string()).await,
-            Err(_) => return self.fail(&mut client, c, "timed out").await,
+            Ok(Err(e)) => return self.fail(&mut client, c, &holding, &e.to_string()).await,
+            Err(_) => return self.fail(&mut client, c, &holding, "timed out").await,
         };
         if client
             .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
@@ -701,12 +769,13 @@ impl Net {
         self.pipe(client, upstream, c).await;
     }
 
-    async fn fail(&self, client: &mut TcpStream, mut c: Connection, why: &str) {
+    async fn fail(&self, client: &mut TcpStream, mut c: Connection, holding: &Holding, why: &str) {
         let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
         c.outcome = "failed".into();
         c.reason = Some(why.into());
         c.ended = Some(now_ms());
         self.record(&c);
+        holding.spoil(why);
     }
 
     /// Carries the connection both ways, counting, and telling the window
@@ -732,6 +801,30 @@ impl Net {
         c.reason = Some(ended.said(IDLE));
         c.ended = Some(now_ms());
         self.record(&c);
+    }
+}
+
+/// A connection's hold on the task begun at rest it goes out under
+/// (`Net::hold`), let go as the connection ends, however it ends.
+struct Holding {
+    net: Net,
+    token: Option<String>,
+}
+
+impl Holding {
+    /// The connection failed, or was refused: so did its spell.
+    fn spoil(&self, why: &str) {
+        if let Some(t) = &self.token {
+            self.net.spoil(t, Some(why));
+        }
+    }
+}
+
+impl Drop for Holding {
+    fn drop(&mut self) {
+        if let Some(t) = &self.token {
+            self.net.release(t);
+        }
     }
 }
 
@@ -1449,5 +1542,151 @@ mod tests {
             let lower: Vec<_> = cmd.get_envs().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
             assert!(lower.iter().any(|k| k == "https_proxy"));
         }
+    }
+
+    /// The tasks the window was told of, by id, each as last told, in the order they were first told.
+    fn spells_told(told: &Mutex<Vec<(String, serde_json::Value)>>) -> Vec<serde_json::Value> {
+        let mut out: Vec<serde_json::Value> = Vec::new();
+        for (_, t) in told.lock().unwrap().iter().filter(|(e, _)| e == "net:task") {
+            match out.iter_mut().find(|o| o["id"] == t["id"]) {
+                Some(o) => *o = t.clone(),
+                None => out.push(t.clone()),
+            }
+        }
+        out
+    }
+
+    /// Waits, a little at a time, till `what` holds - or a while has gone.
+    async fn till(what: impl Fn() -> bool) {
+        for _ in 0..500 {
+            if what() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    #[test]
+    fn a_connection_on_a_task_at_rest_begins_a_spell_of_it_shown_and_on_the_record_till_it_closes() {
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            let told = net.told();
+            let path = std::env::temp_dir().join(format!("meno-net-rest-{}.jsonl", uuid::Uuid::new_v4()));
+            let _ = net.0.log.set(path.clone());
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            assert_eq!((net.running(), spells_told(&told).len()), (0, 0));
+
+            // (reached out unasked: a spell of its own, told as begun, the connection under it)
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            let spells = spells_told(&told);
+            assert_eq!((net.running(), spells.len()), (1, 1));
+            assert!(spells[0]["ended"].is_null());
+            let id = spells[0]["id"].as_str().unwrap().to_string();
+            assert_eq!(net.0.recent.lock().unwrap()[0].task_id.as_deref(), Some(id.as_str()));
+            // (closed, nothing asked: the spell ends, done - its bytes under it)
+            hello(&mut c).await;
+            drop(c);
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!((spells.len(), spells[0]["outcome"].as_str()), (1, Some("done")), "{spells:?}");
+            let conn = net.0.recent.lock().unwrap()[0].clone();
+            assert_eq!((conn.task_id.as_deref(), conn.sent, conn.received, conn.outcome.as_str()), (Some(id.as_str()), 5, 5, "done"));
+            // (on the record: the spell begun and ended, the connection under it)
+            let log = std::fs::read_to_string(&path).unwrap();
+            let entries: Vec<serde_json::Value> = log.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+            let of_spell = entries.iter().filter(|e| e["task"]["id"] == id.as_str()).count();
+            assert_eq!(of_spell, 2, "{log}");
+            assert!(entries.iter().any(|e| e["connection"]["taskId"] == id.as_str() && e["connection"]["outcome"] == "done"), "{log}");
+
+            // (a host its consent did not name: still refused - a spell of its own, failed, saying why)
+            let (_, status) = ask_for(port, "elsewhere.example.org", 443, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!(spells.len(), 2);
+            assert_eq!(spells[1]["outcome"], "failed");
+            assert!(spells[1]["reason"].is_string(), "{spells:?}");
+            assert_eq!(net.running(), 0);
+            let _ = std::fs::remove_file(&path);
+        });
+    }
+
+    #[test]
+    fn bytes_count_under_the_spell_they_flow_in_a_connection_kept_open_holding_it_under_way() {
+        runtime().block_on(async {
+            let (net, port, to) = proxy_and_echo().await;
+            let told = net.told();
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{to}")])).unwrap();
+            // (asked; a connection opened for it, kept open past its answer)
+            task.resume();
+            let (mut c, status) = ask(port, to, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 200 Connection Established");
+            task.rest();
+            assert_eq!(net.running(), 1, "a connection still open: its spell still under way");
+            // (asked again while it is open: the same spell, the bytes under it)
+            task.resume();
+            hello(&mut c).await;
+            drop(c);
+            till(|| net.0.recent.lock().unwrap()[0].outcome == "done").await;
+            assert_eq!(net.running(), 1, "a request still waits");
+            task.rest();
+            till(|| net.running() == 0).await;
+            let spells = spells_told(&told);
+            assert_eq!(spells.len(), 1, "{spells:?}");
+            assert_eq!(spells[0]["outcome"], "done");
+            let conn = net.0.recent.lock().unwrap()[0].clone();
+            assert_eq!((conn.task_id.as_deref(), conn.received), (spells[0]["id"].as_str(), 5));
+        });
+    }
+
+    #[test]
+    fn a_spell_in_which_anything_went_wrong_ends_failed_saying_why() {
+        runtime().block_on(async {
+            let (net, port, _) = proxy_and_echo().await;
+            let told = net.told();
+            // (a port nothing listens on)
+            let dead = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
+            net.0.granted.lock().unwrap().insert("python-env:test".into());
+            let task = net.begin_resting("python-env:test", "Testing", Some(vec![format!("127.0.0.1:{dead}")])).unwrap();
+            let last = || spells_told(&told).last().cloned().unwrap();
+            // (its answer said it could not)
+            task.resume();
+            task.spoil();
+            task.rest();
+            assert_eq!(last()["outcome"], "failed");
+            // (the next, where nothing went wrong: done - nothing carried over)
+            task.resume();
+            task.rest();
+            assert_eq!(last()["outcome"], "done");
+            // (a connection that failed)
+            task.resume();
+            let (_, status) = ask(port, dead, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 502 Bad Gateway");
+            task.rest();
+            till(|| net.running() == 0).await;
+            assert_eq!(last()["outcome"], "failed");
+            assert!(last()["reason"].is_string());
+            // (asked while Meno is offline: failed, saying so - its connection refused under it)
+            net.0.offline.store(true, Ordering::SeqCst);
+            task.resume();
+            let (_, status) = ask(port, dead, Some(&task.token)).await;
+            assert_eq!(status, "HTTP/1.1 403 Forbidden");
+            task.rest();
+            till(|| net.running() == 0).await;
+            assert_eq!((last()["outcome"].as_str(), last()["reason"].as_str()), (Some("failed"), Some("Meno is offline")));
+            let refused = net.0.recent.lock().unwrap().last().cloned().unwrap();
+            assert_eq!((refused.outcome.as_str(), refused.task_id.as_deref()), ("blocked", last()["id"].as_str()));
+            // (its worker gone mid-spell, its answer having said it could not: failed, though nothing was left unanswered)
+            net.0.offline.store(false, Ordering::SeqCst);
+            task.resume();
+            task.spoil();
+            task.finish(true);
+            assert_eq!(last()["outcome"], "failed");
+            assert_eq!(spells_told(&told).len(), 5);
+            assert_eq!(net.running(), 0);
+        });
     }
 }

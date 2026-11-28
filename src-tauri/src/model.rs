@@ -226,8 +226,9 @@ impl Keys for SystemKeys {
 
 /// A model plugin's worker, as Meno started it: whose it is, the network
 /// task it goes out under (none where its purpose was not allowed when it
-/// started, or once it has ended) - under way only while something asked of
-/// it is unanswered (`asked`), at rest between - every key given to it, to be taken out of
+/// started, or once it has ended) - under way while something asked of it
+/// is unanswered (`asked`), or a connection on it is open (net.rs `Spell`),
+/// at rest between - every key given to it, to be taken out of
 /// what it says, and how many of its streams - its output and its errors -
 /// are still read. It is forgotten, keys and all, only once the last of
 /// them is read to its end: what it said till then is all taken out.
@@ -313,17 +314,22 @@ impl Models {
     pub fn not_asked(&self, sidecar: &str, data: &str) {
         let mut workers = self.workers();
         let Some(w) = workers.get_mut(sidecar) else { return };
+        let mut dropped = false;
         for id in data.lines().filter_map(request_id) {
-            w.asked.remove(&id);
+            dropped |= w.asked.remove(&id);
         }
-        rest_if_idle(w);
+        if dropped {
+            rest_if_idle(w);
+        }
     }
 
     /// A line `sidecar` said on its output: where it answers a request -
     /// as the page takes an answer (lib/roles/client `receive`): any line
     /// with the request's id, but a part of the words said as they come -
     /// that one is no longer waited for; the last of them answered, and
-    /// its network task is at rest, its notice going as a finished one's.
+    /// its network task is at rest, its notice going as a finished one's -
+    /// as a failed one's where an answer in its spell said it could not
+    /// (`"ok": false`).
     pub fn heard(&self, sidecar: &str, line: &str) {
         let Ok(Value::Object(o)) = serde_json::from_str::<Value>(line) else { return };
         let Some(id) = o.get("id").and_then(Value::as_i64) else { return };
@@ -333,6 +339,11 @@ impl Models {
         let mut workers = self.workers();
         let Some(w) = workers.get_mut(sidecar) else { return };
         if w.asked.remove(&id) {
+            if o.get("ok") == Some(&Value::Bool(false)) {
+                if let Some(task) = &w.task {
+                    task.spoil();
+                }
+            }
             rest_if_idle(w);
         }
     }
@@ -696,14 +707,15 @@ mod tests {
         assert_eq!(net.running(), 0);
         let first = tasks_told(&told);
         assert_eq!((first.len(), first[0].1.as_deref()), (1, Some("done")));
-        // (asked again: a spell of its own, under way till its answer; two at once, till the last of them)
+        // (asked again: a spell of its own, under way till its answer; two at once, till the last of them - failed, as one of their answers said it could not)
         m.asking("w1", "{\"id\":2,\"op\":\"find_name\",\"name\":\"a\"}\n{\"id\":3,\"op\":\"find_name\",\"name\":\"b\"}\n");
         m.heard("w1", r#"{"id":2,"ok":false,"error":"none found"}"#);
         assert_eq!(net.running(), 1, "a request still waits: its task still under way");
         m.heard("w1", r#"{"id":3,"ok":true,"result":[]}"#);
         let both = tasks_told(&told);
         assert_eq!(both.len(), 2);
-        assert!(both[0].0 != both[1].0 && both.iter().all(|(_, o)| o.as_deref() == Some("done")), "{both:?}");
+        assert!(both[0].0 != both[1].0, "{both:?}");
+        assert_eq!((both[0].1.as_deref(), both[1].1.as_deref()), (Some("done"), Some("failed")));
         // (a request whose writing failed waits for nothing)
         m.asking("w1", "{\"id\":4,\"op\":\"find_name\",\"name\":\"c\"}\n");
         m.not_asked("w1", "{\"id\":4,\"op\":\"find_name\",\"name\":\"c\"}\n");
@@ -717,6 +729,35 @@ mod tests {
         // (ended, asked nothing more: no task begun again)
         m.asking("w1", "{\"id\":6,\"op\":\"find_name\",\"name\":\"e\"}\n");
         assert_eq!((net.running(), tasks_told(&told).len()), (0, 4));
+    }
+
+    #[test]
+    fn a_models_conversation_has_its_network_task_under_way_till_its_answer_its_words_as_they_come_ending_nothing() {
+        let net = crate::net::Net::default();
+        let told = net.told();
+        let hosts = vec!["models.example.org".to_string()];
+        net.allow(&Hosted::Model.purpose("talker", &hosts));
+        let task = net.begin_resting(&Hosted::Model.purpose("talker", &hosts), &Hosted::Model.label("talker"), Some(hosts.clone())).unwrap();
+        let keys = MemoryKeys(Mutex::new(HashMap::new()));
+        keys.set("talker", KEY).unwrap();
+        let m = Models::new(Box::new(keys));
+        m.started("w1", "talker", Hosted::Model, Some(task));
+        let line = m.converse_line("w1", r#"{"id":8,"op":"converse","told":"t","said":[],"tools":[],"options":{},"stream":true}"#).unwrap();
+        m.asking("w1", &line);
+        assert_eq!((net.running(), tasks_told(&told).len()), (1, 1));
+        for part in ["Glycine ", "is ", "here."] {
+            m.heard("w1", &json!({"id": 8, "partial": part}).to_string());
+        }
+        assert_eq!(net.running(), 1, "its words as they come: no answer yet");
+        m.heard("w1", r#"{"id":8,"ok":true,"result":{"text":"Glycine is here."}}"#);
+        assert_eq!(net.running(), 0);
+        assert_eq!(tasks_told(&told)[0].1.as_deref(), Some("done"));
+        // (another, its answer an error: a spell of its own, failed)
+        let line = m.converse_line("w1", r#"{"id":9,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
+        m.asking("w1", &line);
+        m.heard("w1", r#"{"id":9,"ok":false,"error":"the line went quiet"}"#);
+        let spells = tasks_told(&told);
+        assert_eq!((spells.len(), spells[1].1.as_deref(), net.running()), (2, Some("failed"), 0));
     }
 
     #[test]

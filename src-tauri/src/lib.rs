@@ -1996,6 +1996,34 @@ mod tests {
     }
 
     #[test]
+    fn an_answer_that_comes_in_two_reads_ends_its_look_ups_network_task_as_one_line() {
+        /// A worker's output that comes a piece at a time, each piece one read.
+        struct Pieces(std::collections::VecDeque<&'static [u8]>);
+        impl Read for Pieces {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                let Some(piece) = self.0.pop_front() else { return Ok(0) };
+                buf[..piece.len()].copy_from_slice(piece);
+                Ok(piece.len())
+            }
+        }
+        let net = net::Net::default();
+        let told = net.told();
+        let hosts = vec!["names.example.org".to_string()];
+        net.allow(&model::Hosted::Names.purpose("finder", &hosts));
+        let models = model::Models::new(Box::new(model::MemoryKeys(Mutex::new(HashMap::new()))));
+        models.started("w1", "finder", model::Hosted::Names, hosted_task(&net, "finder", model::Hosted::Names, &hosts));
+        models.asking("w1", "{\"id\":1,\"op\":\"find_name\",\"name\":\"aspirin\"}\n");
+        let output = Pieces([&b"{\"id\":1,\"o"[..], &b"k\":true,\"result\":[]}\n"[..]].into_iter().collect());
+        let mut lines = Vec::new();
+        // (read to its end: the worker gone - had the answer not been heard whole, its look-up would end failed)
+        read_worker_output(&models, "w1", output, true, |l| lines.push(l));
+        assert_eq!(lines, vec!["{\"id\":1,\"ok\":true,\"result\":[]}".to_string()]);
+        let ends: Vec<serde_json::Value> = told.lock().unwrap().iter().filter(|(e, t)| e == "net:task" && t["ended"].is_number()).map(|(_, t)| t.clone()).collect();
+        assert_eq!(ends.len(), 1, "{ends:?}");
+        assert_eq!(ends[0]["outcome"], "done");
+    }
+
+    #[test]
     fn a_names_plugins_worker_is_given_no_key_and_no_converse() {
         let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
         model::Keys::set(&keys, "finder", "sk-test-key-0123456789abcdef").unwrap();
