@@ -9,7 +9,7 @@ A calculation step is done by Meno or by a plugin ([Workflows](workflows#steps))
 - Some bring their program with them: Meno downloads it when the plugin is set up, as with the xTB and CREST plugins.
 - Others are interfaces to a program you install yourself, such as the ORCA interface for ORCA and the Gaussian interface for Gaussian 16. Meno never downloads such a program: setting up the interface fetches only what the interface needs.
 
-Settings, *Plugins*, lists them ([Plugins](plugins#offered)).
+Settings, *Plugins*, lists them ([Plugins](plugins)).
 
 ## A program you installed {#locate}
 
