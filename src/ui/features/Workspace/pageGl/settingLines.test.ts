@@ -64,6 +64,22 @@ describe("a step's setting on its card", () => {
   });
 });
 
+describe("a number that is not given yet", () => {
+  // (a made-up step as a plugin's: its window has no value until the chemist gives one)
+  const options = [
+    { id: "count", label: "Most conformers", type: "number", default: 50 },
+    { id: "window", label: "New conformers within", type: "number", default: Number.NaN, min: 0, unit: "kcal/mol" },
+    { id: "field", label: "Force field", type: "choice", default: "a", choices: [{ value: "a", label: "A" }] },
+  ] as const;
+  it("says nothing on its card, the others said as they are", () => {
+    expect(howOf(options, undefined)).toBe("50 \u00b7 Force field: A");
+    expect(howOf(options, { window: "" })).toBe("50 \u00b7 Force field: A");
+  });
+  it("is said with its unit once it is given", () => {
+    expect(howOf(options, { window: 5 })).toBe("50 \u00b7 5 kcal/mol \u00b7 Force field: A");
+  });
+});
+
 describe("a list's lines", () => {
   it("break after a comma, an item wider than a line by itself among its own words", () => {
     expect(listLines("a, b, c", 11, 1000)).toEqual(["a, b, c"]);
