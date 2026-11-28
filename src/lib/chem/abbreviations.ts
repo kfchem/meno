@@ -24,7 +24,7 @@ import { chainGroup } from "./chain";
 import { complexStructure, DONOR_TEXT_METAL, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { aromaticRefusal, kekuleOrders, outsideRingRefusal } from "./kekulize";
-import { typedRingRefused } from "./smilesWhy";
+import { chargedWithH, typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
 import { ELEMENTS as TABLE } from "./elements";
 import { notMetal } from "./perception/elements";
@@ -826,7 +826,7 @@ export function structureProblem(smiles: string): string | null {
     return `The SMILES cannot be read: ${e instanceof Error ? e.message : String(e)}`;
   }
   const refused = aromaticRefusal(read.atoms, read.bonds);
-  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused)}`;
+  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused, chargedWithH(read.atoms, read.bonds))}`;
   const outside = outsideRingRefusal(read.atoms, read.bonds);
   if (outside) return `The SMILES cannot be read: ${outside}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));
