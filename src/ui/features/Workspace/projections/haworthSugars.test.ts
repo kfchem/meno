@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { labelBox, labelSetOf, layoutMolecule, runsWidth, segmentMeetsBox } from "../../../../lib/chem/layout2d";
+import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox } from "../../../../lib/chem/layout2d";
+import { wordSpace } from "./haworthLabels";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { createWorkspaceDocument } from "../document";
@@ -111,7 +112,7 @@ function meetings(model: Model, names: string[]): string[] {
     const ns = model.bonds.filter((b) => b.a === id || b.b === id).map((b) => byId.get(b.a === id ? b.b : b.a)!);
     return ns.length === 1 && ringIds.has(ns[0].id) && Math.abs(ns[0].x - g.x) < 1e-6 && g.y > Math.min(...ringYs) && g.y < Math.max(...ringYs);
   };
-  const word = lay.texts.length ? runsWidth([{ text: "N" }], lay.texts[0].fontPx, set) : 0;
+  const word = lay.texts.length ? wordSpace(lay.texts[0].fontPx, set) : 0;
   const nm = (id: number) => `${names[id] ?? "atom" + id}[${texts.get(id)}]`;
   const out: string[] = [];
   const ids = [...boxes.keys()];
@@ -123,7 +124,7 @@ function meetings(model: Model, names: string[]): string[] {
         const depth = Math.min(box.maxX - q.minX, q.maxX - box.minX, box.maxY - q.minY, q.maxY - box.minY);
         out.push(`${nm(id)} x ${nm(o)} label ${depth.toFixed(3)}`);
       } else if ((inside(id) || inside(o)) && q.minY < box.maxY && box.minY < q.maxY && q.minX < box.maxX + word && box.minX < q.maxX + word) {
-        // (two labels on one row of text closer than a capital's width, one of them inside the ring's picture where Meno sets it: they
+        // (two labels on one row of text closer than a word space, one of them inside the ring's picture where Meno sets it: they
         //  read as one word)
         out.push(`${nm(id)} x ${nm(o)} one row`);
       }
@@ -224,18 +225,11 @@ function every(): Sugar[] {
 }
 
 /**
- * What is not yet clear, pinned as it is drawn today (docs/EDITOR-2D.md, the Haworth ring, "Not yet clear"): no height and no reading
- * sets these labels a word's gap apart and off every line, so they stand as they did before the strict reading - a graze let pass, the
- * front up labels where the old steps leave them. In the five-ring of a manno- or talofuranose, C-2's HO and C-3's OH on one row closer than a
- * capital's width; in a beta-D-ManNAc drawn with its H atoms, the NHAc, which no height sets clear of both C-3's OH and C-5's H.
+ * What is not yet clear, pinned as it is drawn today (docs/EDITOR-2D.md, the Haworth ring, "Not yet clear"): in a beta-D-ManNAc drawn
+ * with its H atoms no height and no reading sets the NHAc both off C-3's OH and a word space from C-5's H, so it stands as it did before
+ * the strict reading - a graze let pass, at 0.40.
  */
 const LIMITS: Record<string, string[]> = {
-  "alpha-D-mannofuranose": ["C2up:OH[HO] x C3up:OH[OH] one row"],
-  "beta-D-mannofuranose": ["C2up:OH[HO] x C3up:OH[OH] one row"],
-  "alpha-D-talofuranose": ["C2up:OH[HO] x C3up:OH[OH] one row"],
-  "beta-D-talofuranose": ["C2up:OH[HO] x C3up:OH[OH] one row"],
-  "beta-D-mannofuranose (no H)": ["C2up:OH[HO] x C3up:OH[OH] one row"],
-  "beta-D-talofuranose (no H)": ["C2up:OH[HO] x C3up:OH[OH] one row"],
   "2-acetamido-2-deoxy-beta-D-mannopyranose": ["C2up:NHAc[NHAc] x line of 2-C1down:H", "C2up:NHAc[NHAc] x shape of 2-3"],
 };
 
@@ -248,7 +242,7 @@ describe("labels of the sugars a chemist commonly draws as Haworth rings", () =>
     return lay.texts.filter((t) => (t as { atom?: number }).atom === index.get(id)).map((t) => t.text).join("");
   };
 
-  it("touch nothing and stand a word's gap apart on a row: no label's ink meets another label or any bond but its own, every aldohexose in both ring sizes and both anomers, the deoxy sugars, uronic acids, N-acetyl amino sugars, methyl glycosides and alpha-L-galactopyranose", () => {
+  it("touch nothing and stand a word space apart on a row at the least: no label's ink meets another label or any bond but its own, every aldohexose in both ring sizes and both anomers, the deoxy sugars, uronic acids, N-acetyl amino sugars, methyl glycosides and alpha-L-galactopyranose", () => {
     const touching = drawn.filter(({ s }) => !LIMITS[s.name]).flatMap(({ s, model, names }) => meetings(model, names).map((m) => `${s.name}: ${m}`));
     expect(touching.join("\n")).toBe("");
   });
@@ -273,14 +267,24 @@ describe("labels of the sugars a chemist commonly draws as Haworth rings", () =>
     }
   });
 
-  it("stand both front up OH of a mannopyranose clear, alpha and beta: C-3's on the figures' stem, C-2's HO above its row, a word's gap from every label on its own", () => {
-    for (const name of ["alpha-D-mannopyranose", "beta-D-mannopyranose"]) {
+  it("stand both front up OH of a mannopyranose and a talopyranose level on the ring's own stems, HO and OH a word space apart at the least", () => {
+    for (const name of ["alpha-D-mannopyranose", "beta-D-mannopyranose", "alpha-D-talopyranose", "beta-D-talopyranose"]) {
       const x = drawn.find((y) => y.s.name === name)!;
       expect(meetings(x.model, x.names), name).toEqual([]);
-      expect(length(x, 4, 3).toFixed(3), name).toBe("0.464");
-      expect(length(x, 2, 2), name).toBeGreaterThan(0.6);
-      expect(text(x.model, 52), name).toBe("HO");
+      expect([length(x, 2, 2), length(x, 4, 3)].map((v) => v.toFixed(3)), name).toEqual(["0.464", "0.464"]);
+      expect([text(x.model, 52), text(x.model, 54)], name).toEqual(["HO", "OH"]);
     }
+  });
+
+  it("read an AcHN beside a lone H closer than a word space as one word, and never leave them so", () => {
+    // (a beta-D-ManNAc's AcHN up from C-2 at 0.70 of the level bond, the least height that clears C-3's OH, read toward the ring's
+    //  middle: it shares a row with C-5's H down, closer than a word space - "HAcHN")
+    const x = drawn.find((y) => y.s.name === "2-acetamido-2-deoxy-beta-D-mannopyranose")!;
+    const c2 = x.d.atoms[2];
+    const crowded: Model = { ...x.model, atoms: x.model.atoms.map((a) => (a.id === 52 ? { ...a, y: c2.y + 0.7 * x.d.scale, reads: "left" as const } : a)) };
+    expect(meetings(crowded, x.names)).toContain("C2up:NHAc[AcHN] x C5down:H[H] one row");
+    // (as typed, it is never left there)
+    expect(meetings(x.model, x.names).filter((m) => m.includes("one row"))).toEqual([]);
   });
 
   it("raise an NHAc up from C-2 of a beta-D-mannopyranose drawn without its H atoms above the row of C-3's OH, read AcHN toward the ring's middle, the OH on its stem", () => {

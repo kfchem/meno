@@ -1,4 +1,4 @@
-import { labelBox, labelSetOf, layoutMolecule, runsWidth, segmentMeetsBox, showsLabel, type LayoutOptions } from "../../../../lib/chem/layout2d";
+import { labelBox, labelSetOf, layoutMolecule, runsWidth, segmentMeetsBox, showsLabel, type LabelSet, type LayoutOptions } from "../../../../lib/chem/layout2d";
 import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
 import { layoutBonds } from "../layoutOptions";
 import type { Model } from "../store/types";
@@ -22,6 +22,18 @@ const STEP = 0.01;
 export const LABELS_APART = 0.02;
 
 type Box = { minX: number; maxX: number; minY: number; maxY: number };
+
+/**
+ * A word space at a label's size: the label font's own space, as wide as the font sets between two words. Two labels on one row of text
+ * closer than this read as one word ("HAcHN" for an H beside an AcHN); as far apart as this or more, as two (HO and OH up from a
+ * mannopyranose's front atoms, level, a quarter of the level bond apart).
+ */
+export function wordSpace(fontSize: number, set: LabelSet): number {
+  return runsWidth([{ text: " " }], fontSize, set);
+}
+
+/** How many times the labels' ring has been laid out by `haworthLabelsStepped`, for its tests: what a label commit costs. */
+export let laidCount = 0;
 type Pt = { x: number; y: number };
 
 /**
@@ -76,7 +88,7 @@ export const INK_DEPTH = 0.1;
  * drawn out - is never moved; what each moved group carries goes with it. First, each label of the ring on its upright bond that meets
  * something is read the other way - HO for OH, HOH2C for CH2OH, or back - where that takes a meeting away and adds none (`Atom.reads`);
  * where no step clears them, every label reads as its bonds decide. All this is tried first strictly - no touch at all, a line's width
- * counted, no graze let pass, and two labels on one row, one of them inside the ring, a capital's width apart at the least - a back
+ * counted, no graze let pass, and two labels on one row, one of them inside the ring, a word space apart at the least (`wordSpace`) - a back
  * atom's down label giving way, then one front atom's up label read either way or rising along its vertical above its neighbour's row,
  * below the ring's back edge, by the least height that sets every label inside the ring clear (an NHAc up from C-2 beside an OH up from
  * C-3); only where that clears nothing, as above. Every settle starts from the ring's own stems (`HAWORTH_GROUP`) and each label read as
@@ -184,28 +196,44 @@ export function haworthLabelsStepped(
           });
         return boxes.length ? boxes.reduce((u, b) => ({ minX: Math.min(u.minX, b.minX), maxX: Math.max(u.maxX, b.maxX), minY: Math.min(u.minY, b.minY), maxY: Math.max(u.maxY, b.maxY) })) : null;
       };
-      // (a capital's width at the labels' size: an N's)
-      const word = lay.texts.length ? runsWidth([{ text: "N" }], lay.texts[0].fontPx, set) : 0;
-      return { lay, boxOf, word };
+      laidCount++;
+      const word = lay.texts.length ? wordSpace(lay.texts[0].fontPx, set) : 0;
+      return { lines: lay.lines, polys: lay.polys, boxOf, word };
     };
-    const meetingNow = () => {
-      const { lay, boxOf, word } = laidNow();
+    type Laid = ReturnType<typeof laidNow>;
+    // (the same drawing with one label, `id` of a group up its vertical, moved up by `rise` as one: its box with it, and its own stem
+    //  - the line up its vertical from its ring atom - reaching as much further; nothing else of the layout changes)
+    const risen = (laid: Laid, id: number, ringX: number, ringY: number, labelY: number, rise: number): Laid => ({
+      ...laid,
+      boxOf: (o: number) => {
+        const b = laid.boxOf(o);
+        return b && o === id ? { minX: b.minX, maxX: b.maxX, minY: b.minY + rise, maxY: b.maxY + rise } : b;
+      },
+      lines: laid.lines.map((l) => {
+        const own = Math.abs(l.x1 - ringX) < 1e-6 && Math.abs(l.x2 - ringX) < 1e-6 && Math.min(l.y1, l.y2) >= ringY - 1e-6 && Math.max(l.y1, l.y2) <= labelY + 1e-6;
+        return own ? { ...l, y1: l.y1 === Math.max(l.y1, l.y2) ? l.y1 + rise : l.y1, y2: l.y2 === Math.max(l.y1, l.y2) && l.y1 !== l.y2 ? l.y2 + rise : l.y2 } : l;
+      }),
+    });
+    const meetingNow = () => judge(laidNow());
+    // (which of the labels read meet something in a drawing laid out: `at` the places the labels stand at, where one is moved)
+    const judge = (laid: Laid, at: (id: number) => { x: number; y: number } = (id) => place.get(id)!) => {
+      const { lines, polys, boxOf, word } = laid;
       // (the other labels: the ring's groups' and the ring's own - its O)
       const others = [...groupsOfRing, ...ring].map((id) => ({ id, box: boxOf(id) })).filter((o): o is { id: number; box: Box } => o.box != null);
       return checked.filter((u) => {
         const box = boxOf(u.group.id);
         if (!box) return false;
         // (every line but the label's own bond - the one along its vertical, between its ring atom and itself - and every filled shape)
-        const g = place.get(u.group.id)!;
+        const g = at(u.group.id);
         const [lo, hi] = [Math.min(u.ring.y, g.y), Math.max(u.ring.y, g.y)];
         const own = (l: { x1: number; y1: number; x2: number; y2: number }) =>
           Math.abs(l.x1 - u.ring.x) < 1e-6 && Math.abs(l.x2 - u.ring.x) < 1e-6 && Math.min(l.y1, l.y2) >= lo - 1e-6 && Math.max(l.y1, l.y2) <= hi + 1e-6;
-        const ink = { lines: lay.lines.filter((l) => !own(l)).map((l) => ({ p: { x: l.x1, y: l.y1 }, q: { x: l.x2, y: l.y2 }, half: strict ? l.widthPx / INK_ZOOM / 2 : 0 })), polys: lay.polys.map((q) => q.points) };
+        const ink = { lines: lines.filter((l) => !own(l)).map((l) => ({ p: { x: l.x1, y: l.y1 }, q: { x: l.x2, y: l.y2 }, half: strict ? l.widthPx / INK_ZOOM / 2 : 0 })), polys: polys.map((q) => q.points) };
         const depth = strict ? 0 : INK_DEPTH;
         const deep = { minX: box.minX + depth, maxX: box.maxX - depth, minY: box.minY + depth, maxY: box.maxY - depth };
         if (deep.minX < deep.maxX && deep.minY < deep.maxY && meetsInk(deep, ink)) return true;
         // (two labels visibly apart: a gap of `LABELS_APART` between them at the least - and, read strictly, two on one row of text a
-        //  word's gap apart, a capital's width at the least, so that they never read as one word)
+        //  word space apart at the least, so that they never read as one word)
         const gap = LABELS_APART * h.scale;
         const apart = (o: { box: Box }) => o.box.minX < box.maxX + gap && box.minX < o.box.maxX + gap && o.box.minY < box.maxY + gap && box.minY < o.box.maxY + gap;
         const oneRow = (o: { id: number; box: Box }) =>
@@ -293,7 +321,6 @@ export function haworthLabelsStepped(
         reads.set(u.group.id, way);
         moveTo(u, began.get(u)! + rise);
       };
-      const clearNow = (u: (typeof movers)[number]) => !faults(movers).length && faults(upright).every((v) => v.group.id === u.group.id || touchedBefore.has(v.group.id));
       for (const lengths of lengthSets) {
         for (const base of bases) {
           let best: { u: (typeof movers)[number]; way: "left" | "right" | undefined; rise: number } | null = null;
@@ -302,8 +329,10 @@ export function haworthLabelsStepped(
             for (const way of ways) {
               put(lengths, base, u, way, 0);
               // (the heights worth trying: none, and each at which the label's box, moved up as one, comes clear above a label, a line
-              //  or a shape beside it - laid out once; the least that clears all is at one of them)
-              const { lay, boxOf, word } = laidNow();
+              //  or a shape beside it - the ring laid out once, the label tried at each by moving its box, not by laying it out again;
+              //  the least that clears all is at one of them)
+              const laid = laidNow();
+              const { lines, polys, boxOf, word } = laid;
               const box = boxOf(u.group.id);
               if (!box) continue;
               const reach = Math.max(gap, word);
@@ -321,20 +350,21 @@ export function haworthLabelsStepped(
                 const at = (x: number) => (Math.abs(q.x - p.x) < 1e-12 ? Math.max(p.y, q.y) : p.y + ((q.y - p.y) * (x - p.x)) / (q.x - p.x));
                 return Math.max(at(lo), at(hi)) + half;
               };
-              for (const l of lay.lines) {
+              for (const l of lines) {
                 const own = Math.abs(l.x1 - u.ring.x) < 1e-6 && Math.abs(l.x2 - u.ring.x) < 1e-6;
                 const top = own ? null : edgeTop({ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }, l.widthPx / INK_ZOOM / 2);
                 if (top != null) rises.push(over(top));
               }
-              for (const q of lay.polys) {
+              for (const q of polys) {
                 for (const [i, p] of q.points.entries()) {
                   const top = edgeTop(p, q.points[(i + 1) % q.points.length], 0);
                   if (top != null) rises.push(over(top));
                 }
               }
+              const g = place.get(u.group.id)!;
               for (const rise of [...new Set(rises)].filter((r) => r >= 0 && began.get(u)! + r < highest && (!best || r < best.rise)).sort((a, b) => a - b)) {
-                put(lengths, base, u, way, rise);
-                if (clearNow(u)) {
+                const meeting = new Set(judge(risen(laid, u.group.id, u.ring.x, u.ring.y, g.y, rise), (id) => (id === u.group.id ? { x: g.x, y: g.y + rise } : place.get(id)!)).map((v) => v.group.id));
+                if (movers.every((v) => !meeting.has(v.group.id)) && upright.every((v) => !meeting.has(v.group.id) || v.group.id === u.group.id || touchedBefore.has(v.group.id))) {
                   best = { u, way, rise };
                   break;
                 }

@@ -810,17 +810,21 @@ on a page), and the **Newman projection** (`newman`).
   Haworth ring is typed, that ring's labels inside its picture are set afresh from the ring's own stems,
   each read as its bonds decide - never from where an earlier label put them - so that the picture depends
   on what is drawn alone (a ManNAc relabelled a glucose is the glucose typed afresh); the other rings of
-  the page stand as they are. This is read first strictly - no touch at all between a label's ink and
+  the page stand as they are. A stem inside the ring that was lengthened or shortened by hand goes back to
+  the ring's own length the next time a label of that ring is typed: the drawing cannot tell a length set
+  by hand from one Meno set. This is read first strictly - no touch at all between a label's ink and
   another label, any line (its width counted) or any filled shape, and two labels on one row of text, one
-  of them inside the ring, at least a capital's width apart, so that they never read as one word. Where a
+  of them inside the ring, at least a word space apart (the label font's own space, `wordSpace`), so that
+  they never read as one word - an AcHN beside a lone H closer than that reads "HAcHN"; two labels level on
+  the ring's own stems that far apart or more stay level, as a mannopyranose's HO and OH. Where a
   label still touches something so read, a back atom's down label gives way first, toward its atom; then
   one front atom's up label is read either way and, where that is not enough, rises along its vertical
   into the ring's middle, below the ring's back edge, by the least height that sets every label inside
   the ring clear and adds no touch to any other - the others on the ring's own stems, as they gave way or
-  with every back atom's down label as short as it may be (a mannopyranose's HO up from C-2 stands above
-  the row of C-3's OH, which keeps its stem; an NHAc up from C-2 of a mannopyranose drawn without its H
-  atoms reads AcHN, above C-3's OH; a CH2OH up from a six-ring's front atom beside a label up from the
-  other likewise; an L-galactopyranose's CH2OH down from C-5 gives way above C-2's HO). Only where nothing
+  with every back atom's down label as short as it may be (an NHAc up from C-2 of a mannopyranose drawn
+  without its H atoms reads AcHN, above C-3's OH, which keeps its stem; a CH2OH up from a six-ring's front atom beside a label up from the
+  other likewise; an L-galactopyranose's CH2OH and an L-fucopyranose's CH3 down from C-5 give way above
+  C-2's HO). Only where nothing
   clears them so is a graze let pass, as follows. Then one that still meets something
   steps along its vertical toward its atom by the least that clears every label:
   a back atom's down label first, to as little as 0.30, then a front atom's up label, to as little as
@@ -831,13 +835,11 @@ on a page), and the **Newman projection** (`newman`).
   the way a label reads go, so that its bonds decide again. Every aldohexose, pyranose and furanose, each
   anomer, the 2- and 6-deoxy sugars, glucuronic and L-iduronic acid, the N-acetyl amino sugars, the methyl
   glycosides and alpha-L-galactopyranose, each with and without its H atoms, are drawn so with no label
-  touching anything and none a word's gap short on a row (`haworthSugars.test.ts`; a furanose's Fischer
+  touching anything and none closer than a word space on a row (`haworthSugars.test.ts`; a furanose's Fischer
   side chain led down from C-4 drawn half a bond longer than its free place, since a carbon drawn out is
   never moved and a group across it at that place lies on the near edge's bold bond), except what is not
-  yet clear: in a manno- or talofuranose, C-2's HO and C-3's OH up on one row closer than a capital's width
-  - the five-ring's front edge is short, its middle low, and no height or reading parts them; a
-  beta-ManNAc drawn with its H atoms, whose NHAc no height sets both off C-3's OH and a word's gap from
-  C-5's H; and in the five-ring a CH2OH up from a front atom beside a second label up from the other.
+  yet clear: a beta-ManNAc drawn with its H atoms, whose NHAc no height sets both off C-3's OH and a word
+  space from C-5's H; and in the five-ring a CH2OH up from a front atom beside a second label up from the other.
   These stand as before the strict reading, a graze let pass. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up keeping it as drawn and the 3D notice are the chair's; laid flat, its near edge's bold and wedge-shaped bonds are drawn plain, as the depth they showed is gone (a look given to a flat bond stays). It is not flipped or fused. A Haworth ring is read by
   its depth, as any ring drawn in perspective is. Known answers (`haworth.test.ts`): beta- and alpha-D-glucopyranose drawn by the tool are
