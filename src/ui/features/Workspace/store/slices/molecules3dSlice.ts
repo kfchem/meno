@@ -245,7 +245,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     gatherStack: (stack: number, shown: number) => {
       const members = stackMembers(get().molecules3d, stack);
       if (members.length < 2 || !members[0].stack?.spread) return;
-      doc.edit("stack again", (d) => ops.gatherStack(d, stack, middleOf(members.map((m) => m.at))));
+      doc.edit("gather into a stack", (d) => ops.gatherStack(d, stack, middleOf(members.map((m) => m.at))));
       get().showInStack(stack, shown);
     },
     selectMolecules3d: (ids: Iterable<number>, add = false) =>

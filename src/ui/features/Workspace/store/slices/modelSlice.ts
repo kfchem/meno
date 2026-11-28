@@ -532,7 +532,7 @@ export const createModelSlice = (
     new Set(doc.history().undoLabel === "expand abbreviation" ? (doc.getState().expanded ?? []) : []),
 
   updateBond: (id: number, patch: Partial<Bond>) => {
-    doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
+    doc.edit(bondChangeLabel(get().model.bonds.find((b) => b.id === id), patch), (d) => ops.updateBond(d, id, patch));
   },
 
   // (which of two crossing bonds is in front, said from the right-click menu: one step, named for what was done - chem/crossings)
@@ -570,7 +570,7 @@ export const createModelSlice = (
     if (!bond) return false;
     const patch = bondKeyPatch(key, bond, model.atoms, model.bonds);
     if (patchChangesNothing(bond, patch)) return false;
-    doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
+    doc.edit(bondChangeLabel(bond, patch), (d) => ops.updateBond(d, id, patch));
     return true;
   },
 
@@ -1198,4 +1198,20 @@ function shownLists(scheme: ImportedScheme | undefined, first: number, open: Edi
     if (list?.on === "list" && list.shown != null) out[first + i] = { list: resultKey(list), row: list.shown, pointed: null };
   });
   return out;
+}
+
+/**
+ * A bond's change as the history names it: what the bond was made - single,
+ * double or triple; wedged, hashed or plain - or, where it was made none of
+ * them (a double bond's line moved, a wedge turned round), a change of it.
+ */
+export function bondChangeLabel(bond: Pick<Bond, "order" | "stereo"> | undefined, patch: Partial<Pick<Bond, "order" | "stereo">>): string {
+  if (patch.order != null && patch.order !== bond?.order) return `make bond ${({ 1: "single", 2: "double", 3: "triple" } as const)[patch.order]}`;
+  const stereo = patch.stereo ?? bond?.stereo ?? "none";
+  if (stereo !== (bond?.stereo ?? "none")) {
+    if (stereo === "up") return "make bond wedged";
+    if (stereo === "down") return "make bond hashed";
+    if (stereo === "none") return "make bond plain";
+  }
+  return "change bond";
 }

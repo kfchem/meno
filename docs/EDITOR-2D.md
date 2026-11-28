@@ -1402,7 +1402,7 @@ All hover-based, as above.
     is** (the maintainer, 2026-11-14; 2026-11-11 had it so only with the
     pointer on one of them): one atom selected, its label opens with the
     letter; several, the label is typed once and written on every one of
-    them as one undo step ("label 3 atoms: OMe"), the letters shown on each
+    them as one undo step ("change 3 atoms to OMe"), the letters shown on each
     as they are typed, their bonds drawing back for them, the caret on the
     one nearest the pointer, and the count beside it ("3 atoms", those out
     of view counted too). With atoms selected and the pointer on another

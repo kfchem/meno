@@ -153,7 +153,7 @@ export function createUiSlice(
             return a && !readsAsNothing(a.el) ? [[i, a.el] as const] : [];
           }),
         );
-        changed = doc.edit(ids.length > 1 ? `label ${ids.length} atoms: ${value}` : "rename atom", (d) => {
+        changed = doc.edit(ids.length > 1 ? `change ${ids.length} atoms to ${value}` : value ? `change atom to ${value}` : "change atom", (d) => {
           const labelled = ids.reduce((acc, i) => {
             const at = acc.model.atoms.find((a) => a.id === i);
             return at ? ops.setAtomChemistry(acc, i, chem(acc, at), as) : acc;

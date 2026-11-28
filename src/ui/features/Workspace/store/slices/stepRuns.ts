@@ -520,7 +520,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (stopped) {
       const took = Date.now() - at;
       const as = { kind: still.kind, ...(step.options ? { options: step.options } : {}) };
-      return void doc.edit("run step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+      return void doc.edit("stop step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     return putDrawn(id, at, key, "stereoisomers", entries, answers, by);
   }
@@ -596,7 +596,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!still) return;
       const took = Date.now() - at;
       const as = { kind: still.kind, ...(step.options ? { options: step.options } : {}) };
-      return void doc.edit("run step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+      return void doc.edit("stop step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     const outcome = made.ok ? { ...made, said: `${made.said} \u00b7 ${open}` } : made;
     doc.edit("run step", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
@@ -698,7 +698,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!still) return;
     const took = Date.now() - at;
     const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
-    if (!outcome) return void doc.edit("run step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+    if (!outcome) return void doc.edit("stop step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     // (what came in changed meanwhile - an edit, an undo, its set deleted: its results are of what came in when it started, put in all the same, and the step says it has changed)
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
@@ -765,7 +765,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
     if (stopped || menoStops.has(id) || mapped.length < plan.groups.length) {
       menoStops.delete(id);
-      return void doc.edit("run step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+      return void doc.edit("stop step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     // (no time said: Meno's own steps say none)
     const outcome = atomMapSet(entries, references, m.holds as Holds3D, v, mapped);
@@ -1117,7 +1117,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!still) return;
       const took = Date.now() - at;
       const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
-      return void doc.edit("run step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+      return void doc.edit("stop step", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     const of = drawnIn(input);
     // (each not made said: those that could not be, and those whose stereo is left open)
