@@ -7,9 +7,10 @@
  * A ring counts as aromatic, as drawn, when its double bonds alternate all
  * the way round - a six-membered ring with three - or when a five-membered
  * ring has two and the atom left over is one that gives the ring a lone pair
- * by Meno's aromatic rule (lib/chem/perception/aromatic, `RING_LONE_PAIR`):
- * an N, P, As, O, S, Se or Te (a pyrrole, a furan, a thiophene, an arsole, a
- * tellurophene). Among the ways the shared double bonds can go, the
+ * by Meno's aromatic rule (lib/chem/perception/aromatic, `piElectrons`): an
+ * N, P, As, O, S, Se or Te with no + charge (a pyrrole, a furan, a thiophene,
+ * an arsole, a tellurophene - not a 2H-pyrrolium's N+, whose pair is a bond),
+ * or a C- (a cyclopentadienide). Among the ways the shared double bonds can go, the
  * one that shows the most aromatic rings wins; between those showing as
  * many, the one whose rings are larger - indole shows its benzene ring.
  *
@@ -18,7 +19,7 @@
  * nothing.
  */
 import { smallestRings } from "../layout/rings";
-import { RING_LONE_PAIR } from "./perception/aromatic";
+import { piElectrons } from "./perception/aromatic";
 
 type RingBond = { a1: number; a2: number; order: number };
 
@@ -33,6 +34,7 @@ function aromaticRing(
   bondAt: Map<string, number>,
   bonds: readonly RingBond[],
   elements: readonly string[],
+  charges: readonly number[],
 ): number[] | null {
   const doubles: number[] = [];
   const inDouble = new Set<number>();
@@ -52,14 +54,17 @@ function aromaticRing(
   if (ring.length === 6 && doubles.length === 3) return doubles;
   if (ring.length === 5 && doubles.length === 2) {
     const left = ring.find((a) => !inDouble.has(a));
-    return left != null && RING_LONE_PAIR.has(elements[left]) ? doubles : null;
+    // (its two electrons as Meno's aromatic rule counts them: a lone pair of its own, no bond to anything out of the ring by a double)
+    const pi = left == null ? null : piElectrons({ el: elements[left], charge: charges[left] ?? 0, inSystem: false, outTo: null, triple: false, degree: 2 });
+    return pi === 2 ? doubles : null;
   }
   return null;
 }
 
 /**
  * For each double bond in an aromatic ring (by index into `bonds`), the ring
- * - its atoms, in order round it - its second line goes into.
+ * - its atoms, in order round it - its second line goes into. Each atom's
+ * charge by index (`charges`; none, 0).
  */
 export function aromaticRingSides(
   atomCount: number,
@@ -70,11 +75,12 @@ export function aromaticRingSides(
     atomCount,
     bonds.map((b) => [b.a1, b.a2] as const),
   ),
+  charges: readonly number[] = [],
 ): Map<number, number[]> {
   const bondAt = new Map<string, number>();
   bonds.forEach((b, i) => bondAt.set(key(b.a1, b.a2), i));
   const aromatic = rings
-    .map((ring) => ({ ring, doubles: aromaticRing(ring, bondAt, bonds, elements) }))
+    .map((ring) => ({ ring, doubles: aromaticRing(ring, bondAt, bonds, elements, charges) }))
     .filter((r): r is { ring: number[]; doubles: number[] } => r.doubles != null);
   const out = new Map<number, number[]>();
   if (!aromatic.length) return out;
@@ -157,12 +163,13 @@ export function ringSides(
   atomCount: number,
   bonds: readonly RingBond[],
   elements: readonly string[],
+  charges: readonly number[] = [],
 ): Map<number, number[]> {
   const rings = smallestRings(
     atomCount,
     bonds.map((b) => [b.a1, b.a2] as const),
   );
-  const out = aromaticRingSides(atomCount, bonds, elements, rings);
+  const out = aromaticRingSides(atomCount, bonds, elements, rings, charges);
   const bondAt = new Map<string, number>();
   bonds.forEach((b, i) => bondAt.set(key(b.a1, b.a2), i));
   const ringBonds = rings.map((ring) =>
@@ -205,12 +212,13 @@ export function ringSidesOf(
   atomCount: number,
   bonds: readonly RingBond[],
   elements: readonly string[],
+  charges: readonly number[] = [],
 ): Map<number, number[]> {
   const k =
-    elements.join(" ") + "|" + bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(" ");
+    elements.map((el, i) => (charges[i] ? `${el}${charges[i]}` : el)).join(" ") + "|" + bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(" ");
   let found = remembered.get(k);
   if (!found) {
-    found = ringSides(atomCount, bonds, elements);
+    found = ringSides(atomCount, bonds, elements, charges);
     if (remembered.size > 32) remembered.delete(remembered.keys().next().value!);
     remembered.set(k, found);
   }
