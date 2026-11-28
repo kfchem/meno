@@ -43,5 +43,5 @@
       "wholeWindow": "ウィンドウ全体を表示"
     }
   },
-  "howTo": ["draw-3d", "draw-catalytic-cycle", "draw-chair"]
+  "howTo": ["draw-3d", "draw-catalytic-cycle", "draw-chair", "look-through-conformers"]
 }

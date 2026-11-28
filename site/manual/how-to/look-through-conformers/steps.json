@@ -1,0 +1,296 @@
+{
+  "meno": "0.1.29",
+  "size": {
+    "width": 2400,
+    "height": 1560
+  },
+  "needs": [
+    "RDKit"
+  ],
+  "steps": [
+    {
+      "id": "open-quick-add",
+      "shot": "01-open-quick-add.webp",
+      "mark": {
+        "kind": "doubleclick",
+        "x": 700,
+        "y": 330,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "type-smiles",
+      "shot": "02-type-smiles.webp",
+      "mark": {
+        "kind": "type",
+        "text": "CCCCC"
+      }
+    },
+    {
+      "id": "put-down",
+      "shot": "03-put-down.webp",
+      "mark": {
+        "kind": "key",
+        "text": "Enter"
+      }
+    },
+    {
+      "id": "let-go-drawing",
+      "shot": "04-let-go-drawing.webp",
+      "mark": {
+        "kind": "click",
+        "x": 400,
+        "y": 1300,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "right-click",
+      "shot": "05-right-click.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 699,
+        "y": 301,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "make-3d",
+      "shot": "06-make-3d.webp",
+      "mark": {
+        "kind": "click",
+        "x": 964,
+        "y": 326,
+        "w": 72,
+        "h": 72
+      }
+    },
+    {
+      "id": "open-chip",
+      "shot": "07-open-chip.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1244,
+        "y": 470,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "press-bar",
+      "shot": "08-press-bar.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1190,
+        "y": 524,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "drag-bars",
+      "shot": "09-drag-bars.webp",
+      "mark": {
+        "kind": "drag",
+        "x": 1410,
+        "y": 524,
+        "w": 0,
+        "h": 0,
+        "path": [
+          [
+            1410,
+            524
+          ],
+          [
+            1410,
+            524
+          ],
+          [
+            1400,
+            524
+          ],
+          [
+            1390,
+            524
+          ],
+          [
+            1380,
+            524
+          ],
+          [
+            1370,
+            524
+          ],
+          [
+            1360,
+            524
+          ],
+          [
+            1350,
+            524
+          ],
+          [
+            1340,
+            524
+          ],
+          [
+            1330,
+            524
+          ],
+          [
+            1320,
+            524
+          ],
+          [
+            1310,
+            524
+          ],
+          [
+            1300,
+            524
+          ],
+          [
+            1290,
+            524
+          ],
+          [
+            1280,
+            524
+          ],
+          [
+            1270,
+            524
+          ],
+          [
+            1260,
+            524
+          ],
+          [
+            1250,
+            524
+          ],
+          [
+            1240,
+            524
+          ],
+          [
+            1230,
+            524
+          ],
+          [
+            1220,
+            524
+          ],
+          [
+            1210,
+            524
+          ],
+          [
+            1200,
+            524
+          ],
+          [
+            1190,
+            524
+          ],
+          [
+            1180,
+            524
+          ],
+          [
+            1170,
+            524
+          ],
+          [
+            1160,
+            524
+          ],
+          [
+            1150,
+            524
+          ],
+          [
+            1140,
+            524
+          ],
+          [
+            1130,
+            524
+          ],
+          [
+            1120,
+            524
+          ],
+          [
+            1110,
+            524
+          ],
+          [
+            1100,
+            524
+          ],
+          [
+            1090,
+            524
+          ],
+          [
+            1080,
+            524
+          ],
+          [
+            1080,
+            524
+          ]
+        ]
+      }
+    },
+    {
+      "id": "how-made",
+      "shot": "10-how-made.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1244,
+        "y": 700,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "show-menu",
+      "shot": "11-show-menu.webp",
+      "mark": {
+        "kind": "rightclick",
+        "x": 1244,
+        "y": 312,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "id": "show-all",
+      "shot": "12-show-all.webp",
+      "mark": {
+        "kind": "click",
+        "x": 1274,
+        "y": 574,
+        "w": 476,
+        "h": 64
+      }
+    },
+    {
+      "id": "let-go",
+      "shot": "13-let-go.webp",
+      "mark": {
+        "kind": "click",
+        "x": 400,
+        "y": 1300,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "result": "result.webp"
+}
