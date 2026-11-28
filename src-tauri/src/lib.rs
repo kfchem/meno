@@ -1143,6 +1143,16 @@ fn registration_asked() -> Option<i32> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    // the folders this build keeps its things in, as its config names them - before anything uses them, a job's
+    // runner among them (folders.rs)
+    let built = folders::Built { over: context.config().app.app_directories_override.clone(), identifier: context.config().identifier.clone() };
+    // (folders it cannot work out: not started, and said - no log yet, as there is no folder for it)
+    if let Err(why) = folders::built_with(built) {
+        eprintln!("Meno cannot start: {why}");
+        std::process::exit(1);
+    }
     // started to run a job (jobs.rs): that, apart from Meno, and nothing else
     if let Some(code) = jobs::job_mode() {
         std::process::exit(code);
@@ -1157,8 +1167,6 @@ pub fn run() {
     }
     // a panic into Meno's log too (logfile.rs)
     logfile::catch_panics();
-    #[allow(unused_mut)]
-    let mut context = tauri::generate_context!();
     // A Meno Windows starts for Office opens unseen: it shows itself when a
     // structure opens in it (ole.rs), and one started only for a picture
     // goes again without having been seen.

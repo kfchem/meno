@@ -1195,6 +1195,30 @@ data, local data and caches (`folders.rs`; tauri.conf.json's
 | local data: environments, tools, jobs, plugins' downloads | the data folder | `%LOCALAPPDATA%\Meno\data` | the data folder |
 | caches: PDFs' pages, ligand data | `~/Library/Caches/Meno` | the local data folder | `$XDG_CACHE_HOME/Meno` |
 
+A build given other folders - a release candidate built with a config of
+its own beside tauri.conf.json, whose `appDirectoriesOverride` names folders
+apart from the released Meno's - keeps everything in those: at a start,
+before anything uses them, Meno takes the folders from the config it was
+built with (`folders::built_with`), so its log, its settings and a job's
+runner, which has no window to ask, find the same folders as Tauri's
+`app_*_dir` and the window. Meno works a named folder out as Tauri does
+where it begins with `$DATA`, `$LOCALDATA`, `$CONFIG`, `$CACHE` or `$HOME`,
+or is absolute; a folder the config does not name is Tauri's own, under
+the build's identifier. Two failures are told apart. A name the config
+gets wrong - another of Tauri's variables, or a relative path, which Tauri
+puts beside the app in a place that differs by system - Meno does not
+guess: it does not start, a job's runner with it, rather than keep
+anything in the released Meno's folders in their place. It says why on its
+standard error, which a windowed build shows nobody, so the refusal is for
+whoever builds such a config and starts it from a terminal or a runner. A
+known variable this computer gives no folder for (no data folder; on a Mac
+or Linux a relative `HOME`) is no fault of the config: Meno starts as it
+did before, with no such folder - no log, and a job's runner that finds no
+folder ends without running the job - and never the released Meno's
+folders in its place. What a Meno
+before 0.1.14 kept is still moved into the released Meno's folders, whose
+it is.
+
 The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
 in the webview) holds what is large and of this computer alone: uv's and pixi's
 environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
