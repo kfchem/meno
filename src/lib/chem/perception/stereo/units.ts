@@ -10,6 +10,7 @@ import { drawnRoundMetal } from "../elements";
 import { canonicalSearched, canonicalWritten, settingCisTrans, symmetryClasses, type SymmetryInput } from "../symmetry";
 import { inSmallRing } from "./candidates";
 import { lonePairCentres, trigonalEnd } from "./lonePairs";
+import { runsOf } from "./runs";
 
 /**
  * Two donors of one metal that its ligand joins by a ring of this many atoms or fewer, the metal counted, are never across: a chelate's
@@ -96,17 +97,14 @@ export function blanksOf(g: SymmetryInput): Blank[] {
     if (!p.length || !q.length || !trigonal(b.a) || !trigonal(b.b) || inSmallRing(g, k)) return;
     out.push({ kind: "bond", at: k, refs: [p[0], q[0]], own: [b.a, b.b], sides: [p, q] });
   });
-  // (a run: from an end of one double bond through atoms of two to the other end of one)
+  // (a run: from an end of one double bond through atoms of two to the other end of one - through a C or an N+ bonded by its two
+  //  double bonds alone, the readers' rule, ./runs `linear`: no blank of an axis where no reader reads one)
   const given = new Set([...(g.axes ?? []), ...(g.cumulated ?? [])].map((x) => [...x.atoms].sort((u, v) => u - v).join(",")));
-  for (let e = 0; e < n; e++) {
-    if (doubles[e].length !== 1 || doubles[doubles[e][0]].length !== 2) continue;
-    let [before, at, count] = [e, doubles[e][0], 1];
-    while (doubles[at].length === 2 && count <= n) {
-      const next = doubles[at].find((m) => m !== before)!;
-      [before, at, count] = [at, next, count + 1];
-    }
-    const f = at;
-    if (f <= e || doubles[f].length !== 1 || element(e) !== "C" || element(f) !== "C" || given.has(`${e},${f}`)) continue;
+  const linearRuns = runsOf({ atoms: g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0 })), bonds: g.bonds }, "linear").all;
+  for (const run of linearRuns) {
+    const [e, f] = [run.atoms[0], run.atoms[run.atoms.length - 1]];
+    const count = run.doubles;
+    if (doubles[e].length !== 1 || doubles[f].length !== 1 || element(e) !== "C" || element(f) !== "C" || given.has(`${e},${f}`)) continue;
     const [p, q] = [others(e, doubles[e][0]), others(f, doubles[f][0])];
     if (!p.length || !q.length) continue;
     out.push({ kind: count % 2 ? "cumulated" : "axis", ends: [e, f], refs: [p[0], q[0]], own: [e, f], sides: [p, q] });

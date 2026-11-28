@@ -176,3 +176,23 @@ describe("a double bond's ends: trigonal-planar, or no cis or trans", () => {
     expect(found("CC=[Si](C)CC")).toEqual(["bond 1-2"]);
   });
 });
+
+describe("what a run goes on through: the readers' rule, a C or an N+", () => {
+  it("offers no axis through an S, a P+ or a B- between two double bonds - no reader reads one there - nor asks one filled", () => {
+    for (const s of ["FC=S=CF", "CC(F)=S=C(F)C", "FC=[P+]=CF", "FC=[B-]=CF"]) {
+      expect(found(s), s).toEqual([]);
+      expect(blanksOf(graph(s)).filter((b) => b.kind === "axis" || b.kind === "cumulated"), s).toEqual([]);
+    }
+  });
+
+  it("keeps the axis of an allene, of a run of four double bonds and of an N+ in the middle, as a candidate and as a blank", () => {
+    for (const [s, axis] of [
+      ["FC=C=CF", "axis 1-3"],
+      ["FC=C=C=C=CF", "axis 1-5"],
+      ["FC=[N+]=CF", "axis 1-3"],
+    ]) {
+      expect(found(s), s).toEqual([axis]);
+      expect(blanksOf(graph(s)).filter((b) => b.kind === "axis").map((b) => ("ends" in b ? b.ends.join("-") : "")), s).toEqual([axis.slice(5)]);
+    }
+  });
+});
