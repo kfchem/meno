@@ -2499,8 +2499,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   made round what is drawn, labels included (an OH reaches past its O); a
   result set is as large as its molecules reach, each in any of its
   frames as it is turned, with room for its frames chip below it - as
-  wide as all it says, of every frame: why its energy is not given ("none
-  finished: no lowest to stand above") and what it says after it - why it
+  wide as all it says, of every frame: why its energy is not given ("no frame
+  finished", "which frames finished is not known") and what it says after it - why it
   failed, its imaginary frequencies, its warnings (2026-10-31: a saddle
   point's chip ran into its neighbours', a failed one's past the frame) -
   and no larger than its name needs.
