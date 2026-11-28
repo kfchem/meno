@@ -96,6 +96,59 @@ export function clearableJobs(jobs: JobsKept): string[] {
 }
 
 /**
+ * After a save to `path`: every job file it holds - added from its folder,
+ * copied from the file it was opened from, or carried by the page - noted
+ * as kept there, as the file is now (`now`: its size, and when it was
+ * written), so that the next save has Meno copy each from it as it writes
+ * (src-tauri keptjobs.rs `append_job_files`, which takes one only if it is
+ * what its SHA-256 says), never read back into the page and packed again:
+ * a save then costs what the first did, however many came before it. A job
+ * whose folder is here is still listed from its folder; nothing noted where
+ * the file cannot be looked at.
+ */
+export async function noteJobFilesSaved(
+  path: string,
+  jobs: Pick<JobsKept, "listed" | "carried" | "packed">,
+  now: (path: string) => Promise<{ size: number; mtime: number | null } | null> = (p) => fileNow(p).catch(() => null),
+): Promise<void> {
+  const shas = [...jobs.listed, ...jobs.carried].map((f) => f.sha256);
+  if (!shas.length) return;
+  const is = await now(path);
+  if (!is) return;
+  const from: OpenedFrom = { path, size: is.size, mtime: is.mtime };
+  for (const sha256 of shas) {
+    const was = held.get(sha256);
+    const packed = jobs.packed.get(sha256) ?? was?.packed;
+    held.set(sha256, { read: was?.read ?? (() => null), from, ...(packed != null ? { packed } : {}) });
+  }
+}
+
+/**
+ * After a save failed, as Meno's backend said why (`message`): each file
+ * its job files were to be copied from (`appended`'s `from`) that it found
+ * no longer holding one, or not to be read (src-tauri keptjobs.rs
+ * `carried`) - written over since it was noted - taken no longer as where
+ * they are, so that a save made again keeps each from what the page holds
+ * of it, or, where it holds nothing of it, says it is not had. Whether any
+ * was: none, the failure was another's, and nothing is changed.
+ */
+export function dropNotedSources(message: string, appended: readonly Appended[]): boolean {
+  const failed = new Set(
+    appended.flatMap((a) => {
+      const name = a.from?.split(/[\\/]/).pop();
+      return a.from && name && (message.includes(`${name} no longer holds a file it kept`) || message.includes(`${name} could not be read`)) ? [a.from] : [];
+    }),
+  );
+  if (!failed.size) return false;
+  for (const [sha256, h] of held) {
+    if (!h.from || !failed.has(h.from.path)) continue;
+    const { from: _, ...rest } = h;
+    held.set(sha256, rest);
+  }
+  return true;
+}
+
+/**
  * After a save to `path`: the folders of the jobs it holds whole
  * (`clearableJobs`) moved to the system's Trash by Meno's backend - each
  * only where the file there, read back, holds every file of the job's

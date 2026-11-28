@@ -4,8 +4,8 @@ import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushAr
 import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow } from "../../../lib/jobs";
-import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
-import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { writeDocument, writeDocumentNow, type Appended, type FileNow } from "../../../lib/io/writeDocument";
+import { clearSavedJobs, dropNotedSources, jobsToKeep, LARGE_WORKSPACE_MB, noteJobFilesSaved, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
@@ -115,8 +115,8 @@ function withExtension(path: string, ext: string): string {
 
 /** How a workspace's file is written, each part given apart where tests give their own (`writtenWhere`). */
 export type SaveWays = {
-  /** Writes the file, keeping the one there beside it where asked, with its steps' job files added from the disk; where it was kept. */
-  write?: (path: string, bytes: Uint8Array, keepOld: boolean, appended: readonly Appended[]) => Promise<string | null>;
+  /** Writes the file, keeping the one there beside it where asked, with its steps' job files added from the disk; where it was kept - and, where it was looked at, the file as it then was in its place. */
+  write?: (path: string, bytes: Uint8Array, keepOld: boolean, appended: readonly Appended[]) => Promise<string | null | { kept: string | null; now: FileNow | null }>;
   /** A file's one true path (lib/io/truePath). */
   truePathOf?: (path: string) => Promise<string>;
   /** The label of the tab - another than the one saving - that holds the file at a one true path (lib/doc/savers `heldElsewhere`). */
@@ -148,14 +148,15 @@ export function keepsOld(real: string, savedPath: string | null, lastHolds: bool
  * would overwrite it unseen. Refused, as a save's failure is said, naming
  * the tab; nothing is written.
  */
-export async function writtenWhere(path: string, bytes: Uint8Array, ways: SaveWays = {}, appended: readonly Appended[] = []): Promise<{ kept: string; old: string | null }> {
-  const { write = writeDocument, truePathOf = truePath, heldBy = () => undefined, keepOld = () => false } = ways;
+export async function writtenWhere(path: string, bytes: Uint8Array, ways: SaveWays = {}, appended: readonly Appended[] = []): Promise<{ kept: string; old: string | null; now?: FileNow }> {
+  const { write = writeDocumentNow, truePathOf = truePath, heldBy = () => undefined, keepOld = () => false } = ways;
   const before = await truePathOf(path);
   const holder = heldBy(before);
   if (holder !== undefined) throw new Error(`that file is open in the tab "${holder}"; save there, or close it first.`);
   // (written where the dialog said - where it let the page write - before its one true path is asked)
-  const old = await write(path, bytes, keepOld(before), appended);
-  return { kept: await truePathOf(path), old };
+  const written = await write(path, bytes, keepOld(before), appended);
+  const { kept: old, now } = typeof written === "object" && written ? written : { kept: written, now: null };
+  return { kept: await truePathOf(path), old, ...(now ? { now } : {}) };
 }
 
 /**
@@ -963,21 +964,38 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         }
       }
       // (still past it, its raw outputs left out or none to leave: written, to say why it cannot be)
-      const { bytes, notKept, lastHolds } = at.file ?? (await workspaceFile(store.getState(), at.jobs));
-      const { kept, old } = await writtenWhere(
-        path,
-        bytes,
-        {
-          // (never a file another tab saves to)
-          heldBy: (real) => heldElsewhere(real, tabId),
-          // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
-          keepOld: (real) => keepsOld(real, at.savedPath, lastHolds, at.leftOnOpen),
-        },
-        // (its steps' job files, added from their folders as it is written)
-        at.jobs.appended,
-      );
+      const write = async () => {
+        const { bytes, notKept, lastHolds } = at.file ?? (await workspaceFile(store.getState(), at.jobs));
+        const done = await writtenWhere(
+          path,
+          bytes,
+          {
+            // (never a file another tab saves to)
+            heldBy: (real) => heldElsewhere(real, tabId),
+            // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
+            keepOld: (real) => keepsOld(real, at.savedPath, lastHolds, at.leftOnOpen),
+          },
+          // (its steps' job files, added from their folders as it is written)
+          at.jobs.appended,
+        );
+        return { ...done, notKept };
+      };
+      let written: Awaited<ReturnType<typeof write>>;
+      try {
+        written = await write();
+      } catch (e) {
+        // (a file its job files were to be copied from no longer holding them - written over since it was noted: no longer
+        //  taken as where they are, and the save made again at once without it, each kept from what the page holds of it)
+        if (!dropNotedSources(e instanceof Error ? e.message : String(e), at.jobs.appended)) throw e;
+        at = await made();
+        written = await write();
+      }
+      const { kept, old, now, notKept } = written;
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
+      // (its job files, from now on copied by Meno from the file just written - never read back into the page by the next save;
+      //  a note not taken costs the next save only that: never a save that was written said to have failed)
+      await noteJobFilesSaved(kept, at.jobs, now ? async () => now : undefined).catch(() => undefined);
       // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
       //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
       //  docs/WORKFLOWS.md, *A job's folder*)

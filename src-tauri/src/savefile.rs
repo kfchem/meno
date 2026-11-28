@@ -39,8 +39,11 @@ const MOST_KEPT: usize = 1000;
 /// from its job's folder to the hidden file before it reaches the disk and
 /// takes the old one's place (keptjobs.rs `append_job_files`) - so that a
 /// job file changed or gone fails the save, and the file there is as it was.
+/// Given back with the file as it is once in its place (`now`: its size and
+/// when it was written, as `file_now` gives them), looked at at once - so
+/// that the page notes the file it wrote, not one written over it since.
 #[tauri::command]
-pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
+pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<Written, String> {
     let path = request
         .headers()
         .get("path")
@@ -75,11 +78,19 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
     }
     tauri::async_runtime::spawn_blocking(move || {
         replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
-        .map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
+            .map(|kept| Written { kept: kept.map(|k| k.to_string_lossy().into_owned()), now: crate::keptjobs::now_of(&target) })
             .map_err(|e| format!("{}: {e}", path.display()))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// A document written: where the file it replaced was kept beside it, where
+/// it was (`kept`); and the file as it is now in its place (`now`).
+#[derive(serde::Serialize)]
+pub struct Written {
+    pub kept: Option<String>,
+    pub now: Option<crate::keptjobs::FileNow>,
 }
 
 /// The most the document at `path` may come to, where it is held to one: a

@@ -492,7 +492,7 @@ pub struct ClearedSaved {
 }
 
 /// A file as it is now: its size, and when it was last written; none where it is not a file.
-fn now_of(path: &Path) -> Option<FileNow> {
+pub(crate) fn now_of(path: &Path) -> Option<FileNow> {
     let m = fs::metadata(path).ok().filter(|m| m.is_file())?;
     let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     Some(FileNow { size: m.len(), mtime })
@@ -917,13 +917,49 @@ mod tests {
         assert_eq!(bytes, out);
         // (one it does not hold, or holds as something else: the save fails)
         let other = Appended { sha256: "a".repeat(64), ..one.clone() };
-        assert!(append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[other]).unwrap_err().contains("no longer holds"));
+        // (said in these very words: the page knows by them that a file its job files were noted in was written over, and makes
+        //  the save again without it - src/ui/features/Workspace/workflow/keptJobs.ts `dropNotedSources`, its test in
+        //  keptJobs.cleared.test.ts feeding it these texts)
+        assert_eq!(
+            append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[other]).unwrap_err(),
+            "work/run.out could not be kept: opened.meno no longer holds a file it kept"
+        );
+        let bad = root.join("bad.meno");
+        fs::write(&bad, b"not a zip").unwrap();
+        let unread = Appended { from: Some(bad), ..one.clone() };
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[unread]).unwrap_err();
+        assert!(err.starts_with("work/run.out could not be kept: bad.meno could not be read: "), "{err}");
         // (and written back out from it, for Show files)
         let mut sources = Sources::new();
         let mut buf = vec![0u8; CHUNK];
         let back = write_back(&root.join("kept"), ID, "work/run.out", &sha256, |file, sha| carried(&mut sources, &from, &sha256, &mut Hashed { file, sha }, &mut buf)).unwrap();
         assert!(!back.differs);
         assert_eq!(fs::read(root.join("kept").join(ID).join("work/run.out")).unwrap(), out);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_save_over_the_file_its_job_files_are_copied_from_holds_every_one_whole_and_says_the_file_as_it_now_is() {
+        // (the file the last save wrote, holding two job files: saved over again, each copied from it as the new one is written)
+        let root = temp("over-itself");
+        let outs = [b"SCF Done ".repeat(8_000), b"Normal termination ".repeat(5_000)];
+        let shas: Vec<String> = outs.iter().map(|o| hex(&Sha256::digest(o))).collect();
+        let files: Vec<(&str, &[u8])> = shas.iter().map(String::as_str).zip(outs.iter().map(Vec::as_slice)).collect();
+        let (path, _) = saved(&root, &files, &[]);
+        let appended: Vec<Appended> = shas.iter().map(|s| Appended { sha256: s.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(path.clone()) }).collect();
+        for _ in 0..2 {
+            crate::savefile::replace_keeping(&path, false, |file| crate::savefile::document_written(file, &base_zip("{}"), Some((std::slice::from_ref(&root), &appended[..])), Some(MOST_WORKSPACE_FILE))).unwrap();
+            let mut z = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
+            for (sha, out) in shas.iter().zip(&outs) {
+                let mut bytes = Vec::new();
+                z.by_name(&format!("files/{sha}")).unwrap().read_to_end(&mut bytes).unwrap();
+                assert_eq!(&bytes, out);
+            }
+            let now = now_of(&path).unwrap();
+            assert_eq!(now.size, fs::metadata(&path).unwrap().len());
+        }
+        // (nothing of its own left beside it)
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

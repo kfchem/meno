@@ -7,11 +7,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, body: unknown, options?: { headers?: Record<string, string> }) => {
     sent.push({ cmd, body, headers: options?.headers ?? {} });
     // (where the file there was kept, as the app gives it back: only where asked)
-    return cmd === "write_document" && options?.headers?.["keep-old"] === "1" ? `${decodeURIComponent(options.headers.path)}.bak` : null;
+    // (and the file as it now is, in its place)
+    if (cmd !== "write_document") return null;
+    return { kept: options?.headers?.["keep-old"] === "1" ? `${decodeURIComponent(options.headers.path)}.bak` : null, now: { size: 4, mtime: 7 } };
   },
 }));
 
-const { writeAppFile, writeDocument } = await import("./writeDocument");
+const { writeAppFile, writeDocument, writeDocumentNow } = await import("./writeDocument");
 
 describe("a document written where the chemist chose", () => {
   it("goes to Meno's writer as its bytes, text as UTF-8, the path named apart", async () => {
@@ -32,6 +34,10 @@ describe("a document written where the chemist chose", () => {
     expect(await writeDocument("/w/a.meno", new Uint8Array([0x50, 0x4b]))).toBeNull();
     expect(await writeDocument("/w/a.meno", new Uint8Array([0x50, 0x4b]), true)).toBe("/w/a.meno.bak");
     expect(sent.map((s) => s.headers["keep-old"])).toEqual([undefined, "1"]);
+  });
+
+  it("says the file as Meno found it in its place, once written", async () => {
+    expect(await writeDocumentNow("/w/a.meno", new Uint8Array([0x50, 0x4b, 3, 4]))).toEqual({ kept: null, now: { size: 4, mtime: 7 } });
   });
 });
 
