@@ -73,7 +73,9 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     keepRawOutputs: (id: number, keep: boolean) => doc.edit(keep ? "keep raw outputs" : "keep no raw outputs", (d) => wf.keepRawOutputs(d, id, keep)),
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextWorkflowId ?? 1;
-      doc.edit("add set", (d) => wf.addSet(d, frame));
+      // (made by a press - a menu's row, the selection's port: its frame fitted to what it holds as the press is let go, `settleFrames`,
+      //  is in this step, which it joins - one undo takes the set away whole)
+      doc.edit("add set", (d) => wf.addSet(d, frame), gestureStep(`set-add:${id}`));
       return id;
     },
     placeTable: (table: Table, at: { x: number; y: number }, name?: string) => {
