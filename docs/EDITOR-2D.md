@@ -814,7 +814,7 @@ on a page), and the **Newman projection** (`newman`).
   the ring's own length the next time a label of that ring is typed: the drawing cannot tell a length set
   by hand from one Meno set. This is read first strictly - no touch at all between a label's ink and
   another label, any line (its width counted) or any filled shape, and two labels on one row of text, one
-  of them inside the ring, at least a word space apart (the label font's own space, `wordSpace`), so that
+  of them inside the ring, at least a word space apart (the label font's own space, `wordSpace` in lib/chem/captions, as between a caption's words), so that
   they never read as one word - an AcHN beside a lone H closer than that reads "HAcHN"; two labels level on
   the ring's own stems that far apart or more stay level, as a mannopyranose's HO and OH. Where a
   label still touches something so read, a back atom's down label gives way first, toward its atom; then

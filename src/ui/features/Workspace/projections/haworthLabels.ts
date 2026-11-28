@@ -1,5 +1,6 @@
-import { labelBox, labelSetOf, layoutMolecule, runsWidth, segmentMeetsBox, showsLabel, type LabelSet, type LayoutOptions } from "../../../../lib/chem/layout2d";
+import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox, showsLabel, type LayoutOptions } from "../../../../lib/chem/layout2d";
 import { HAWORTH_GROUP } from "../../../../lib/chem/perception/projection/views";
+import { wordSpace } from "../../../../lib/chem/captions";
 import { layoutBonds } from "../layoutOptions";
 import type { Model } from "../store/types";
 import { haworthOf } from "./haworth";
@@ -23,14 +24,6 @@ export const LABELS_APART = 0.02;
 
 type Box = { minX: number; maxX: number; minY: number; maxY: number };
 
-/**
- * A word space at a label's size: the label font's own space, as wide as the font sets between two words. Two labels on one row of text
- * closer than this read as one word ("HAcHN" for an H beside an AcHN); as far apart as this or more, as two (HO and OH up from a
- * mannopyranose's front atoms, level, a quarter of the level bond apart).
- */
-export function wordSpace(fontSize: number, set: LabelSet): number {
-  return runsWidth([{ text: " " }], fontSize, set);
-}
 
 /** How many times the labels' ring has been laid out by `haworthLabelsStepped`, for its tests: what a label commit costs. */
 export let laidCount = 0;
@@ -214,7 +207,43 @@ export function haworthLabelsStepped(
         return own ? { ...l, y1: l.y1 === Math.max(l.y1, l.y2) ? l.y1 + rise : l.y1, y2: l.y2 === Math.max(l.y1, l.y2) && l.y1 !== l.y2 ? l.y2 + rise : l.y2 } : l;
       }),
     });
-    const meetingNow = () => judge(laidNow());
+    // (a label that carries nothing, moved along its vertical, moves its box and its own stem's far end with it and nothing else of the
+    //  layout: the ring is laid out once for each way its labels read, and every place tried by moving those - `dys` by label id)
+    const shifted = (laid: Laid, dys: ReadonlyMap<number, { dy: number; y: number }>): Laid => {
+      const stems = movers.flatMap((u) => {
+        const s = dys.get(u.group.id);
+        return s && s.dy !== 0 ? [{ u, ...s }] : [];
+      });
+      if (!stems.length) return laid;
+      return {
+        ...laid,
+        boxOf: (o: number) => {
+          const b = laid.boxOf(o);
+          const dy = dys.get(o)?.dy ?? 0;
+          return b && dy ? { minX: b.minX, maxX: b.maxX, minY: b.minY + dy, maxY: b.maxY + dy } : b;
+        },
+        lines: laid.lines.map((l) => {
+          const s = stems.find(({ u, y }) => Math.abs(l.x1 - u.ring.x) < 1e-6 && Math.abs(l.x2 - u.ring.x) < 1e-6 && Math.min(l.y1, l.y2) >= Math.min(u.ring.y, y) - 1e-6 && Math.max(l.y1, l.y2) <= Math.max(u.ring.y, y) + 1e-6);
+          if (!s) return l;
+          return Math.abs(l.y1 - s.u.ring.y) > Math.abs(l.y2 - s.u.ring.y) ? { ...l, y1: l.y1 + s.dy } : { ...l, y2: l.y2 + s.dy };
+        }),
+      };
+    };
+    let exact = !movers.every((u) => carried(u.group.id, u.ring.id).size === 1);
+    const laidBy = new Map<string, { laid: Laid; y: Map<number, number> }>();
+    // (the drawing as it stands now: laid out afresh only for a way of reading not laid out before)
+    const viewNow = (): Laid => {
+      if (exact) return laidNow();
+      const key = upright.map((u) => reads.get(u.group.id) ?? "").join();
+      let c = laidBy.get(key);
+      if (!c) {
+        c = { laid: laidNow(), y: new Map(movers.map((u) => [u.group.id, place.get(u.group.id)!.y])) };
+        laidBy.set(key, c);
+      }
+      const at = c.y;
+      return shifted(c.laid, new Map(movers.map((u) => [u.group.id, { dy: place.get(u.group.id)!.y - at.get(u.group.id)!, y: at.get(u.group.id)! }])));
+    };
+    const meetingNow = () => judge(viewNow());
     // (which of the labels read meet something in a drawing laid out: `at` the places the labels stand at, where one is moved)
     const judge = (laid: Laid, at: (id: number) => { x: number; y: number } = (id) => place.get(id)!) => {
       const { lines, polys, boxOf, word } = laid;
@@ -331,7 +360,7 @@ export function haworthLabelsStepped(
               // (the heights worth trying: none, and each at which the label's box, moved up as one, comes clear above a label, a line
               //  or a shape beside it - the ring laid out once, the label tried at each by moving its box, not by laying it out again;
               //  the least that clears all is at one of them)
-              const laid = laidNow();
+              const laid = viewNow();
               const { lines, polys, boxOf, word } = laid;
               const box = boxOf(u.group.id);
               if (!box) continue;
@@ -380,14 +409,31 @@ export function haworthLabelsStepped(
       return false;
     };
     const [placeWas, readsWas, movedWas] = [new Map(place), new Map(reads), new Set(moved)];
-    let clear = settle();
-    if (!clear) {
+    const restore = () => {
       for (const [id, q] of placeWas) place.set(id, q);
       for (const id of reads.keys()) if (!readsWas.has(id)) reads.delete(id);
       for (const [id, w] of readsWas) reads.set(id, w);
       for (const id of [...moved]) if (!movedWas.has(id)) moved.delete(id);
+    };
+    const attempt = () => {
+      strict = true;
+      if (settle()) return true;
+      restore();
       strict = false;
-      clear = settle();
+      return settle();
+    };
+    let clear = attempt();
+    // (what moving the boxes found clear, laid out once more as the page lays it out; where that meets something after all - a label
+    //  laid out otherwise where it stands - the ring is settled again laying it out afresh at every place tried)
+    const asLaid = () => {
+      const c = laidBy.get(upright.map((u) => reads.get(u.group.id) ?? "").join());
+      return !!c && movers.every((u) => Math.abs(place.get(u.group.id)!.y - c.y.get(u.group.id)!) < 1e-12);
+    };
+    if (clear && !exact && !asLaid() && judge(laidNow()).some((u) => placed.has(u.group.id))) {
+      restore();
+      exact = true;
+      met.clear();
+      clear = attempt();
     }
     // (none within reach clears them: as main draws them - each label read as it was)
     if (!clear) {

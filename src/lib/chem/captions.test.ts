@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, inArrowReach, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, keptWords, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed } from "./captions";
-import { labelBox, placeLabel, runsWidth } from "./layout2d";
+import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, inArrowReach, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, keptWords, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed, wordSpace } from "./captions";
+import { ACS_LABEL_SET, labelBox, placeLabel, runsWidth } from "./layout2d";
 
 const shown = (line: string) =>
   captionRuns(line)
@@ -491,5 +491,11 @@ describe("words within an arrow's reach", () => {
     // (where one is put by it, it is within its reach: captionPlace and this agree)
     expect(captionPlace({ x: 0, y: 2.8 }, half, [{ ...arrow, id: 1 }], 1).arrow).toBe(1);
     expect(captionPlace({ x: 0, y: 2.81 }, half, [{ ...arrow, id: 1 }], 1).arrow).toBeUndefined();
+  });
+});
+
+describe("a word space", () => {
+  it("is the label font's own space: Arial's, 569 of its 2048 units to the em", () => {
+    expect(wordSpace(10, ACS_LABEL_SET)).toBeCloseTo((569 / 2048) * 10, 3);
   });
 });

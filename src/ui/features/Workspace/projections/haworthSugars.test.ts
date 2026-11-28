@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { labelBox, labelSetOf, layoutMolecule, segmentMeetsBox } from "../../../../lib/chem/layout2d";
-import { wordSpace } from "./haworthLabels";
+import { wordSpace } from "../../../../lib/chem/captions";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { createWorkspaceDocument } from "../document";
