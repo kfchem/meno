@@ -191,14 +191,47 @@ pub async fn job_kept(app: AppHandle, id: String) -> Result<Option<Vec<KeptJobFi
 /// A job's file to be added to a workspace's file: by its SHA-256, from the
 /// job `job`'s folder, where it is `name` - or, where its folder is not on
 /// this computer, from the workspace's file it was opened from (`from`), which
-/// keeps it as `files/<sha256>`.
-#[derive(Deserialize, Clone, Debug)]
+/// keeps it as `files/<sha256>` - or from where Meno set it down for this
+/// save as the page sent it (`staged`: the save's own id; `job_file_staged`),
+/// found nowhere else.
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct Appended {
     pub sha256: String,
     pub job: String,
     pub name: String,
     #[serde(default)]
     pub from: Option<PathBuf>,
+    #[serde(default)]
+    pub staged: Option<String>,
+    /// The folder a staged one was set down in, as `write_document` finds it from `staged`: never the page's to say.
+    #[serde(skip)]
+    pub staged_at: Option<PathBuf>,
+}
+
+/// Where the job files the page sends for a save are set down until it is written, in Meno's local data folder: a folder for each save.
+pub(crate) const STAGED: &str = "saving";
+
+/// The folder the job files sent for the save `save` are set down in, under `root` (`STAGED`): none where `save` is not a save's id.
+pub(crate) fn staged_in(root: &Path, save: &str) -> Option<PathBuf> {
+    uuid::Uuid::parse_str(save).ok().filter(|u| u.hyphenated().to_string() == save).map(|_| root.join(save))
+}
+
+/// Whether `sha256` is a SHA-256 as Meno writes one: 64 lower-case hex digits.
+fn is_sha(sha256: &str) -> bool {
+    sha256.len() == 64 && sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// Streams `from` into `out`, a piece of at most `buf`'s length at a time - never the whole held at once - and gives back the SHA-256 of what passed.
+fn copied_checked<R: Read, W: Write>(from: &mut R, out: &mut W, buf: &mut [u8]) -> io::Result<String> {
+    let mut sha = Sha256::new();
+    loop {
+        let n = from.read(buf)?;
+        if n == 0 {
+            return Ok(hex(&sha.finalize()));
+        }
+        sha.update(&buf[..n]);
+        out.write_all(&buf[..n])?;
+    }
 }
 
 /// The most a workspace's file may come to, saved: one Meno can open again.
@@ -266,16 +299,7 @@ fn carried<W: Write>(sources: &mut Sources, from: &Path, sha256: &str, out: &mut
     }
     let archive = sources.get_mut(from).expect("opened above");
     let mut entry = archive.by_name(&format!("files/{sha256}")).map_err(|_| format!("{} no longer holds a file it kept", what()))?;
-    let mut sha = Sha256::new();
-    loop {
-        let n = entry.read(buf).map_err(|e| format!("{}: {e}", what()))?;
-        if n == 0 {
-            break;
-        }
-        sha.update(&buf[..n]);
-        out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
-    }
-    if hex(&sha.finalize()) != sha256 {
+    if copied_checked(&mut entry, out, buf).map_err(|e| format!("{}: {e}", what()))? != sha256 {
         return Err(format!("{} no longer holds a file it kept as it was", what()));
     }
     Ok(())
@@ -304,7 +328,7 @@ pub fn append_job_files<F: Read + Write + Seek>(zip: F, jobs_roots: &[PathBuf], 
         if !held.insert(entry.clone()) {
             continue;
         }
-        if !jobs::job_id_ok(&a.job) || !kept_name(&a.name) || a.sha256.len() != 64 || !a.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        if !jobs::job_id_ok(&a.job) || !kept_name(&a.name) || !is_sha(&a.sha256) {
             return Err(format!("not a job's file: {} {}", a.job, a.name));
         }
         if let Some(from) = &a.from {
@@ -313,19 +337,20 @@ pub fn append_job_files<F: Read + Write + Seek>(zip: F, jobs_roots: &[PathBuf], 
             continue;
         }
         let gone = |e: io::Error| format!("{} could not be kept: {e}", a.name);
+        if a.staged.is_some() {
+            // (sent by the page, found nowhere else: as Meno set it down for this save, checked again as it is added)
+            let dir = a.staged_at.as_deref().ok_or_else(|| gone(io::Error::from(io::ErrorKind::NotFound)))?;
+            let mut file = open_inside(dir, &a.sha256).map_err(gone)?;
+            out.start_file(entry.as_str(), options).map_err(|e| e.to_string())?;
+            if copied_checked(&mut file, &mut out, &mut buf).map_err(gone)? != a.sha256 {
+                return Err(format!("{} could not be kept: what was sent of it is not what it was", a.name));
+            }
+            continue;
+        }
         let dir = jobs::job_in(jobs_roots, &a.job).ok_or_else(|| gone(io::Error::from(io::ErrorKind::NotFound)))?;
         let mut file = open_inside(&dir, &a.name).map_err(gone)?;
         out.start_file(entry.as_str(), options).map_err(|e| e.to_string())?;
-        let mut sha = Sha256::new();
-        loop {
-            let n = file.read(&mut buf).map_err(gone)?;
-            if n == 0 {
-                break;
-            }
-            sha.update(&buf[..n]);
-            out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
-        }
-        if hex(&sha.finalize()) != a.sha256 {
+        if copied_checked(&mut file, &mut out, &mut buf).map_err(gone)? != a.sha256 {
             return Err(format!("{} changed while the workspace was saved", a.name));
         }
     }
@@ -349,6 +374,171 @@ pub fn file_now(app: AppHandle, path: PathBuf) -> Option<FileNow> {
         return None;
     }
     now_of(&path)
+}
+
+/// A job file a save keeps whose job's folder the page did not find: by its
+/// SHA-256, its job and name, its size, and the workspace files the page
+/// knows it was in this session (`from`), newest first.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Asked {
+    pub sha256: String,
+    pub job: String,
+    pub name: String,
+    pub size: u64,
+    #[serde(default)]
+    pub from: Vec<PathBuf>,
+}
+
+/// Where a job file asked for is: in the workspace file `from`, or - none - in its job's folder.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Found {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+}
+
+/// How many copies kept beside a file (`<name>.bak`, `<name>.1.bak` and on) are looked in for a job file, at most.
+const MOST_COPIES_LOOKED_IN: usize = 16;
+
+/// The copies of `path` a save kept beside it (savefile.rs `kept_beside`), the latest numbered first.
+fn copies_beside(path: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else { return Vec::new() };
+    let mut copies: Vec<PathBuf> = (0..MOST_COPIES_LOOKED_IN)
+        .map(|n| {
+            let mut kept = name.to_os_string();
+            kept.push(if n == 0 { ".bak".to_string() } else { format!(".{n}.bak") });
+            dir.join(kept)
+        })
+        .filter(|p| p.is_file())
+        .collect();
+    copies.reverse();
+    copies
+}
+
+/// The file `path` is a copy of, kept beside it by a save (`copies_beside`): none where it is not one.
+pub(crate) fn copy_of(path: &Path) -> Option<PathBuf> {
+    let name = path.file_name()?.to_str()?;
+    let stem = name.strip_suffix(".bak")?;
+    let stem = match stem.rsplit_once('.') {
+        Some((s, n)) if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && s.to_ascii_lowercase().ends_with(".meno") => s,
+        _ => stem,
+    };
+    (!stem.is_empty()).then(|| path.with_file_name(stem))
+}
+
+/// Whether the workspace file in `sources` at `from` holds `a` - by its
+/// name, `files/<sha256>`, and size; and, `whole`, read whole and what its
+/// SHA-256 says.
+fn holds(sources: &mut HashMap<PathBuf, Option<zip::ZipArchive<File>>>, from: &Path, a: &Asked, whole: bool, buf: &mut [u8]) -> bool {
+    let archive = sources.entry(from.to_path_buf()).or_insert_with(|| File::open(from).ok().and_then(|f| zip::ZipArchive::new(f).ok()));
+    let Some(archive) = archive else { return false };
+    let Ok(mut entry) = archive.by_name(&format!("files/{}", a.sha256)) else { return false };
+    if entry.size() != a.size {
+        return false;
+    }
+    !whole || copied_checked(&mut entry, &mut io::sink(), buf).is_ok_and(|sha| sha == a.sha256)
+}
+
+/// Where each job file `asked` for is to be had whole, for a save to
+/// `target`: in the workspace files it names (`from`), each only where
+/// `readable`; `target` as it is now, whoever wrote it; a copy kept beside
+/// any of those; else its job's folder in `jobs_roots`. By its name and size
+/// - and, `whole`, its SHA-256, read whole; a save checks it as it is
+/// written in any case. None for one found nowhere.
+pub fn found_where(target: &Path, asked: &[Asked], jobs_roots: &[PathBuf], whole: bool, readable: impl Fn(&Path) -> bool) -> Vec<Option<Found>> {
+    let mut sources = HashMap::new();
+    let mut buf = vec![0u8; CHUNK];
+    asked
+        .iter()
+        .map(|a| {
+            if !jobs::job_id_ok(&a.job) || !kept_name(&a.name) || !is_sha(&a.sha256) {
+                return None;
+            }
+            let mut places: Vec<PathBuf> = Vec::new();
+            for p in a.from.iter().filter(|p| readable(p)).chain(readable(target).then_some(target)) {
+                if !places.contains(p) {
+                    places.push(p.clone());
+                }
+            }
+            let copies: Vec<PathBuf> = places.iter().flat_map(|p| copies_beside(p)).collect();
+            for p in places.into_iter().chain(copies) {
+                if holds(&mut sources, &p, a, whole, &mut buf) {
+                    return Some(Found { from: Some(p.to_string_lossy().into_owned()) });
+                }
+            }
+            let dir = jobs::job_in(jobs_roots, &a.job)?;
+            let mut file = open_inside(&dir, &a.name).ok()?;
+            let size_ok = file.metadata().is_ok_and(|m| m.len() == a.size);
+            (size_ok && (!whole || copied_checked(&mut file, &mut io::sink(), &mut buf).is_ok_and(|sha| sha == a.sha256))).then_some(Found { from: None, ..Default::default() })
+        })
+        .collect()
+}
+
+/// Where Meno finds each job file a save to `target` keeps whose job's
+/// folder the page did not find (`found_where`): so that the page sends only
+/// those found nowhere, and never one it holds that Meno can read itself.
+#[tauri::command]
+pub async fn job_files_where(app: AppHandle, target: PathBuf, asked: Vec<Asked>, whole: bool) -> Result<Vec<Option<Found>>, String> {
+    let roots = jobs::all_roots(&app)?;
+    let readable: HashSet<PathBuf> = asked.iter().flat_map(|a| a.from.iter()).chain(std::iter::once(&target)).filter(|p| crate::savefile::may_read(&app, p)).cloned().collect();
+    tauri::async_runtime::spawn_blocking(move || found_where(&target, &asked, &roots, whole, |p| readable.contains(p))).await.map_err(|e| e.to_string())
+}
+
+/// How old the folder of job files set down for a save must be to be taken
+/// away as another is set down: one whose page stopped before it saved -
+/// never one a save still under way writes from.
+const STALE_STAGED: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+
+/// The folders of job files set down for saves under `root` taken away:
+/// those older than `stale`; with none, every one (as Meno starts, when no
+/// save is under way).
+pub(crate) fn sweep_staged(root: &Path, stale: Option<std::time::Duration>) {
+    let Ok(entries) = fs::read_dir(root) else { return };
+    for e in entries.flatten() {
+        let old = stale.is_none_or(|stale| e.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= stale));
+        if old && e.file_type().is_ok_and(|t| t.is_dir()) && staged_in(root, &e.file_name().to_string_lossy()).is_some() {
+            let _ = fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// A job file's bytes, sent by the page alone, set down for a save
+/// (`<root>/<save>/<sha256>`), whole or not at all - only where they are
+/// what its SHA-256 says.
+pub(crate) fn staged_file(root: &Path, save: &str, sha256: &str, bytes: &[u8]) -> Result<(), String> {
+    let dir = staged_in(root, save).ok_or("not a save's job files")?;
+    if !is_sha(sha256) {
+        return Err("not a job's file".into());
+    }
+    if hex(&Sha256::digest(bytes)) != sha256 {
+        return Err("a job file sent is not what its SHA-256 says".into());
+    }
+    sweep_staged(root, Some(STALE_STAGED));
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    crate::savefile::write_whole(&dir.join(sha256), bytes).map_err(|e| e.to_string())
+}
+
+/// One job file for the save named by the `save` header, sent as its bytes
+/// with its SHA-256 (`sha256`): set down until the save is written
+/// (`staged_file`), which takes them away, written or not.
+#[tauri::command]
+pub async fn job_file_staged(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let (Some(save), Some(sha256)) = (header("save"), header("sha256")) else {
+        return Err("a job file is sent with its save and its SHA-256".into());
+    };
+    let bytes = crate::savefile::bytes_of(request.body()).ok_or("a job file is sent as its bytes")?;
+    let root = crate::local_data_dir(&app)?.join(STAGED);
+    tauri::async_runtime::spawn_blocking(move || staged_file(&root, &save, &sha256, &bytes)).await.map_err(|e| e.to_string())?
+}
+
+/// The job files set down for the save `save` taken away: a save not written.
+#[tauri::command]
+pub fn job_files_unstaged(app: AppHandle, save: String) -> Result<(), String> {
+    let root = crate::local_data_dir(&app)?.join(STAGED);
+    if let Some(dir) = staged_in(&root, &save) {
+        let _ = fs::remove_dir_all(dir);
+    }
+    Ok(())
 }
 
 /// A job's file written back out (`job_write_back`): where its job's work
@@ -753,7 +943,7 @@ mod tests {
         let root = temp("append");
         let dir = job(&root);
         let files = kept_files(&dir);
-        let mut appended: Vec<Appended> = files.iter().map(|f| Appended { sha256: f.sha256.clone(), job: ID.into(), name: f.name.clone(), from: None }).collect();
+        let mut appended: Vec<Appended> = files.iter().map(|f| Appended { sha256: f.sha256.clone(), job: ID.into(), name: f.name.clone(), from: None, ..Default::default() }).collect();
         appended.push(appended[0].clone());
         let out = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &appended).unwrap().into_inner();
         let mut z = zip::ZipArchive::new(Cursor::new(out)).unwrap();
@@ -778,7 +968,7 @@ mod tests {
         let own = temp("own");
         let dir = job(&own);
         let f = kept_files(&dir).into_iter().find(|f| f.name == "log.txt").unwrap();
-        let one = Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None };
+        let one = Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None, ..Default::default() };
         let out = append_job_files(Cursor::new(base_zip("{}")), &[chosen.clone(), own.clone()], std::slice::from_ref(&one)).unwrap().into_inner();
         let mut z = zip::ZipArchive::new(Cursor::new(out)).unwrap();
         let mut bytes = Vec::new();
@@ -797,7 +987,7 @@ mod tests {
         let dir = job(&root);
         let f = kept_files(&dir).into_iter().find(|f| f.name == "work/input.inp").unwrap();
         fs::write(dir.join("work/input.inp"), "! changed\n").unwrap();
-        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None }]).unwrap_err();
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None, ..Default::default() }]).unwrap_err();
         assert_eq!(err, "work/input.inp changed while the workspace was saved");
         fs::remove_dir_all(root).unwrap();
     }
@@ -807,7 +997,7 @@ mod tests {
         let root = temp("save");
         let dir = job(&root);
         let files = kept_files(&dir);
-        let appended: Vec<Appended> = files.iter().map(|f| Appended { sha256: f.sha256.clone(), job: ID.into(), name: f.name.clone(), from: None }).collect();
+        let appended: Vec<Appended> = files.iter().map(|f| Appended { sha256: f.sha256.clone(), job: ID.into(), name: f.name.clone(), from: None, ..Default::default() }).collect();
         let path = root.join("work.meno");
         fs::write(&path, b"the workspace saved before").unwrap();
         let page = base_zip("{}");
@@ -833,10 +1023,10 @@ mod tests {
         let root = temp("outside");
         job(&root);
         for name in ["job.json", "state.json", "work/../job.json", "../x", "/etc/passwd", "work/"] {
-            let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: "0".repeat(64), job: ID.into(), name: name.into(), from: None }]).unwrap_err();
+            let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: "0".repeat(64), job: ID.into(), name: name.into(), from: None, ..Default::default() }]).unwrap_err();
             assert!(err.starts_with("not a job's file"), "{name}: {err}");
         }
-        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: "0".repeat(64), job: "../x".into(), name: "log.txt".into(), from: None }]).unwrap_err();
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: "0".repeat(64), job: "../x".into(), name: "log.txt".into(), from: None, ..Default::default() }]).unwrap_err();
         assert!(err.starts_with("not a job's file"));
         fs::remove_dir_all(root).unwrap();
     }
@@ -891,7 +1081,7 @@ mod tests {
         // (and, named by the page all the same, refused)
         let sha256 = hex(&Sha256::digest(b"not a job's"));
         for name in ["work/linked.out", "work/up/secret.txt"] {
-            let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: sha256.clone(), job: ID.into(), name: name.into(), from: None }]).unwrap_err();
+            let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: sha256.clone(), job: ID.into(), name: name.into(), from: None, ..Default::default() }]).unwrap_err();
             assert!(err.contains("could not be kept"), "{name}: {err}");
         }
         fs::remove_dir_all(root).unwrap();
@@ -910,7 +1100,7 @@ mod tests {
         let from = root.join("opened.meno");
         fs::create_dir_all(&root).unwrap();
         fs::write(&from, z.finish().unwrap().into_inner()).unwrap();
-        let one = Appended { sha256: sha256.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(from.clone()) };
+        let one = Appended { sha256: sha256.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(from.clone()), ..Default::default() };
         let made = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), std::slice::from_ref(&one)).unwrap().into_inner();
         let mut bytes = Vec::new();
         zip::ZipArchive::new(Cursor::new(made)).unwrap().by_name(&format!("files/{sha256}")).unwrap().read_to_end(&mut bytes).unwrap();
@@ -946,7 +1136,7 @@ mod tests {
         let shas: Vec<String> = outs.iter().map(|o| hex(&Sha256::digest(o))).collect();
         let files: Vec<(&str, &[u8])> = shas.iter().map(String::as_str).zip(outs.iter().map(Vec::as_slice)).collect();
         let (path, _) = saved(&root, &files, &[]);
-        let appended: Vec<Appended> = shas.iter().map(|s| Appended { sha256: s.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(path.clone()) }).collect();
+        let appended: Vec<Appended> = shas.iter().map(|s| Appended { sha256: s.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(path.clone()), ..Default::default() }).collect();
         for _ in 0..2 {
             crate::savefile::replace_keeping(&path, false, |file| crate::savefile::document_written(file, &base_zip("{}"), Some((std::slice::from_ref(&root), &appended[..])), Some(MOST_WORKSPACE_FILE))).unwrap();
             let mut z = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
@@ -961,6 +1151,164 @@ mod tests {
         // (nothing of its own left beside it)
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A workspace's file at `path` holding each of `files` as `files/<sha256>`: its `bytes`.
+    fn holding(path: &Path, files: &[(&str, &[u8])]) {
+        let mut z = zip::ZipWriter::new_append(Cursor::new(base_zip("{}"))).unwrap();
+        for (sha, bytes) in files {
+            z.start_file(format!("files/{sha}"), zip::write::SimpleFileOptions::default()).unwrap();
+            z.write_all(bytes).unwrap();
+        }
+        fs::write(path, z.finish().unwrap().into_inner()).unwrap();
+    }
+
+    fn asked(sha256: &str, size: usize, from: &[&Path]) -> Asked {
+        Asked { sha256: sha256.into(), job: ID.into(), name: "work/run.out".into(), size: size as u64, from: from.iter().map(|p| p.to_path_buf()).collect() }
+    }
+
+    #[test]
+    fn a_job_file_is_taken_from_wherever_it_is_whole_whoever_wrote_that_file_never_by_its_size_or_time() {
+        let root = temp("where");
+        let out = b"SCF Done ".repeat(4_000);
+        let sha = hex(&Sha256::digest(&out));
+        let target = root.join("large.meno");
+        let found = |from: &str| Some(Found { from: Some(root.join(from).to_string_lossy().into_owned()) });
+        for whole in [false, true] {
+            let all = |a: &Asked| found_where(&target, std::slice::from_ref(a), &[], whole, |_| true).remove(0);
+            // (an older copy of the same workspace copied over the file from outside: another size and time, the same job files)
+            holding(&target, &[(&sha, &out), ("b".repeat(64).as_str(), b"more")]);
+            assert_eq!(all(&asked(&sha, out.len(), &[])), found("large.meno"));
+            // (an unrelated file there: taken from the copy a save kept beside it)
+            holding(&target, &[]);
+            holding(&root.join("large.meno.bak"), &[(&sha, &out)]);
+            assert_eq!(all(&asked(&sha, out.len(), &[])), found("large.meno.bak"));
+            assert_eq!(copy_of(&root.join("large.meno.bak")), Some(target.clone()));
+            assert_eq!(copy_of(&root.join("large.meno.3.bak")), Some(target.clone()));
+            fs::remove_file(root.join("large.meno.bak")).unwrap();
+            // (the file gone: from the file the workspace was opened from)
+            fs::remove_file(&target).unwrap();
+            let opened = root.join("opened.meno");
+            holding(&opened, &[(&sha, &out)]);
+            assert_eq!(all(&asked(&sha, out.len(), &[&opened])), found("opened.meno"));
+            // (one Meno may not read: never looked in)
+            assert_eq!(found_where(&target, &[asked(&sha, out.len(), &[&opened])], &[], whole, |p| p != opened), vec![None]);
+            fs::remove_file(&opened).unwrap();
+            // (its job's folder)
+            let dir = root.join(ID);
+            fs::create_dir_all(dir.join("work")).unwrap();
+            fs::write(dir.join("job.json"), "{}").unwrap();
+            fs::write(dir.join("work/run.out"), &out).unwrap();
+            assert_eq!(found_where(&target, &[asked(&sha, out.len(), &[])], std::slice::from_ref(&root), whole, |_| true), vec![Some(Found { from: None })]);
+            fs::remove_dir_all(&dir).unwrap();
+            // (nowhere)
+            assert_eq!(all(&asked(&sha, out.len(), &[])), None);
+        }
+        // (bytes on the disk not what their name says, of its very size: read whole, not taken from there - from the copy beside it)
+        let other = b"SCF Dome ".repeat(4_000);
+        holding(&target, &[(&sha, &other)]);
+        holding(&root.join("large.meno.1.bak"), &[(&sha, &out)]);
+        assert_eq!(found_where(&target, &[asked(&sha, out.len(), &[])], &[], true, |_| true), vec![found("large.meno.1.bak")]);
+        // (and, asked by name and size alone, the save's own check refuses it - in the words the page makes the save again by)
+        let at = found_where(&target, &[asked(&sha, out.len(), &[])], &[], false, |_| true).remove(0).unwrap().from.unwrap();
+        let one = Appended { sha256: sha.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(at.into()), ..Default::default() };
+        let err = append_job_files(Cursor::new(base_zip("{}")), &[], &[one]).unwrap_err();
+        assert!(err.contains(" could not be kept: "), "{err}");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_job_file_the_page_sends_is_set_down_alone_checked_and_added_and_a_save_failing_half_way_leaves_the_file_as_it_was_and_nothing_for_good() {
+        let root = temp("staged");
+        let staging = root.join(STAGED);
+        let save = uuid::Uuid::new_v4().to_string();
+        let outs = [b"Normal termination ".repeat(3_000), b"SCF Done ".repeat(2_000)];
+        let shas: Vec<String> = outs.iter().map(|o| hex(&Sha256::digest(o))).collect();
+        // (not what its SHA-256 says, or no save's: nothing set down)
+        assert!(staged_file(&staging, &save, &shas[0], &outs[1]).is_err());
+        assert!(staged_file(&staging, "../x", &shas[0], &outs[0]).is_err());
+        assert!(!staging.join(&save).exists());
+        staged_file(&staging, &save, &shas[0], &outs[0]).unwrap();
+        let path = root.join("work.meno");
+        fs::write(&path, b"the workspace saved before").unwrap();
+        let before = fs::read(&path).unwrap();
+        let appended: Vec<Appended> = shas
+            .iter()
+            .map(|s| Appended { sha256: s.clone(), job: ID.into(), name: "work/run.out".into(), staged: Some(save.clone()), staged_at: staged_in(&staging, &save), ..Default::default() })
+            .collect();
+        let write = |appended: &[Appended]| crate::savefile::replace_keeping(&path, false, |f| crate::savefile::document_written(f, &base_zip("{}"), Some((&[], appended)), Some(MOST_WORKSPACE_FILE)));
+        // (the second piece never came - the page stopped half way: the file as it was, nothing of the save's beside it)
+        let err = write(&appended).unwrap_err().to_string();
+        assert!(err.contains(" could not be kept: "), "{err}");
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert!(!fs::read_dir(&root).unwrap().any(|e| e.unwrap().file_name().to_string_lossy().ends_with(".part")));
+        // (both set down: written, each whole)
+        staged_file(&staging, &save, &shas[1], &outs[1]).unwrap();
+        write(&appended).unwrap();
+        let mut z = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
+        for (sha, out) in shas.iter().zip(&outs) {
+            let mut bytes = Vec::new();
+            z.by_name(&format!("files/{sha}")).unwrap().read_to_end(&mut bytes).unwrap();
+            assert_eq!(&bytes, out);
+        }
+        // (one changed where it was set down: not added)
+        fs::write(staging.join(&save).join(&shas[1]), &outs[0]).unwrap();
+        assert!(write(&appended).is_err());
+        // (one the page never said where Meno set it down: refused)
+        assert!(append_job_files(Cursor::new(base_zip("{}")), &[], &[Appended { staged_at: None, ..appended[0].clone() }]).is_err());
+        // (left by a page that stopped: young ones kept for a save under way; every one taken away as Meno starts)
+        sweep_staged(&staging, Some(STALE_STAGED));
+        assert!(staging.join(&save).exists());
+        sweep_staged(&staging, None);
+        assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_job_file_passes_a_piece_at_a_time_never_gathered_whole_first() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        // (a file of 64 pieces, each given only once all before it has gone on: a copy that gathered it whole first would stop)
+        let piece = 64 * 1024;
+        let gone = Rc::new(Cell::new(0usize));
+        struct Lazy {
+            given: usize,
+            left: usize,
+            piece: usize,
+            gone: Rc<Cell<usize>>,
+        }
+        impl Read for Lazy {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                assert!(self.gone.get() + self.piece >= self.given, "gathered before it was sent on");
+                let n = buf.len().min(self.left).min(self.piece);
+                buf[..n].fill(7);
+                self.left -= n;
+                self.given += n;
+                Ok(n)
+            }
+        }
+        struct On {
+            gone: Rc<Cell<usize>>,
+            most: usize,
+        }
+        impl Write for On {
+            fn write(&mut self, b: &[u8]) -> io::Result<usize> {
+                self.gone.set(self.gone.get() + b.len());
+                self.most = self.most.max(b.len());
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut on = On { gone: gone.clone(), most: 0 };
+        let mut buf = vec![0u8; piece];
+        let sha = copied_checked(&mut Lazy { given: 0, left: 64 * piece, piece, gone: gone.clone() }, &mut on, &mut buf).unwrap();
+        assert_eq!(gone.get(), 64 * piece);
+        assert!(on.most <= piece);
+        assert_eq!(sha, hex(&Sha256::digest(vec![7u8; 64 * piece])));
+        // (the pieces Meno takes, whatever a file comes to: at most this)
+        assert_eq!(CHUNK, 1 << 20);
     }
 
     /// A saved workspace's file at `root/saved.meno` holding `files` as `files/<sha256>`, each its `bytes` - and the job's record of them.

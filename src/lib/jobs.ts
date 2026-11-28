@@ -113,6 +113,21 @@ export type KeptJobFile = { name: string; size: number; sha256: string; deflated
 export const jobKept = (id: string) => invoke<KeptJobFile[] | null>("job_kept", { id });
 /** A file the page may read, as it is now: its size, and when it was last written (ms); none where it is not there or may not be read (src-tauri keptjobs.rs `file_now`). */
 export const fileNow = (path: string) => invoke<{ size: number; mtime: number | null } | null>("file_now", { path });
+/** A job file a save keeps whose job's folder the page did not find (src-tauri keptjobs.rs `job_files_where`): by its SHA-256, its job, its name and size there, and the workspace files to look in first (`from`). */
+export type AskedJobFile = { sha256: string; job: string; name: string; size: number; from: string[] };
+/** Where Meno found one: in the workspace file `from`, or - none said - in its job's folder. */
+export type FoundJobFile = { from?: string };
+/**
+ * Where Meno finds each job file `asked` for a save to `target` - none for
+ * one it finds nowhere: in the files each names, `target` as it is now, a
+ * copy kept beside any of them, its job's folder; each where `whole` read
+ * whole and checked by its SHA-256, else by its name and size alone.
+ */
+export const jobFilesWhere = (target: string, asked: readonly AskedJobFile[], whole: boolean) => invoke<(FoundJobFile | null)[]>("job_files_where", { target, asked, whole });
+/** One job file's bytes, sent alone, set down by Meno for the save `save` - checked by its SHA-256 - to be added to the file as it is written (keptjobs.rs `job_file_staged`). */
+export const stageJobFile = async (save: string, sha256: string, bytes: Uint8Array): Promise<void> => void (await invoke("job_file_staged", bytes, { headers: { save, sha256 } }));
+/** The job files set down for the save `save` taken away: a save that was not written (keptjobs.rs `job_files_unstaged`). */
+export const unstageJobFiles = (save: string) => invoke<void>("job_files_unstaged", { save });
 export type WrittenBack = { work: string; differs: boolean };
 /**
  * A file a workspace kept of the job `id` written back out (src-tauri

@@ -245,8 +245,8 @@ export type SavedFile = { bytes: Uint8Array; notKept: string[]; lastHolds: boole
  * lay - by what it is known by, which its file does not hold - so that,
  * opened again, it is named again, never taken for one that is there.
  * Given what a save keeps of its steps' jobs (`jobs`, workflow/keptJobs):
- * those of them not on this computer, and a list of those that are, whose
- * bytes are added from the disk as it is written (src-tauri keptjobs.rs).
+ * a list of their files, whose bytes Meno adds from the disk as it is
+ * written (src-tauri keptjobs.rs) - never any of them packed by the page.
  */
 export async function workspaceFile(state: Saved & { savedPath?: string | null }, jobs?: JobsKept): Promise<SavedFile> {
   // (the outputs they were read from, and the wavefunctions kept with them)
@@ -270,7 +270,7 @@ export async function workspaceFile(state: Saved & { savedPath?: string | null }
   const keptOutputs = new Set([...outputs.kept.map((k) => k.sha256), ...outputs.notKept.map((s) => s.sha256).filter((h) => had.has(h))]);
   const bytes = await writeMenoFile(
     workspaceText(state, keptOutputs, texts.map((t) => t.sha256), jobs?.records),
-    [...outputs.kept, ...texts, ...lost.kept, ...pdfs.kept, ...pictures.kept, ...carried, ...(jobs?.carried ?? [])],
+    [...outputs.kept, ...texts, ...lost.kept, ...pdfs.kept, ...pictures.kept, ...carried],
     jobs?.listed ?? [],
   );
   const notKept = wanting.filter((w) => !had.has(w.sha256));

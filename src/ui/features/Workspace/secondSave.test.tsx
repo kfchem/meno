@@ -35,6 +35,17 @@ const io = vi.hoisted(() => ({
   /** Whether noting where the job files are fails. */
   noteFails: false,
   picked: null as string | null,
+  /** The job files the page sent, each alone: its length, as each was sent. */
+  pieces: [] as number[],
+  /** What the backend holds of what was sent for each save, by SHA-256 - the bytes themselves kept apart (`known`), so that the page's heap is what it holds. */
+  staged: new Map<string, Set<string>>(),
+  known: new Map<string, Uint8Array>(),
+  /** The piece, counted from 1, whose sending fails; none where none does. */
+  failPiece: 0,
+  /** Called as each piece is set down, with its length: what the page holds then is looked at. */
+  onPiece: null as ((n: number) => void) | null,
+  /** How each ask of where the job files are was made: read whole, or by name and size. */
+  asks: [] as boolean[],
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => io.picked }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
@@ -55,6 +66,36 @@ vi.mock("../../../lib/jobs", async (real) => ({
   },
   // (no job's folder on this computer: the workspace's file was made on another)
   jobKept: async () => null,
+  // (as src-tauri keptjobs.rs `found_where` looks: the files named, the target as it is now, a copy kept beside them)
+  jobFilesWhere: async (target: string, asked: { sha256: string; size: number; from: string[] }[], whole: boolean) => {
+    io.asks.push(whole);
+    const { unzipSync: unzip } = await import("fflate");
+    const { sha256Hex: hash } = await import("../../../lib/binary/sha256");
+    return asked.map((a) => {
+      const places = [...new Set([...a.from, target])];
+      for (const p of [...places, ...places.map((q) => `${q}.bak`)]) {
+        const f = io.disk.get(p);
+        if (!f) continue;
+        let data: Uint8Array | undefined;
+        try {
+          data = unzip(f.bytes, { filter: (e) => e.name === `files/${a.sha256}` })[`files/${a.sha256}`];
+        } catch {
+          continue;
+        }
+        if (data && data.length === a.size && (!whole || hash(data) === a.sha256)) return { from: p };
+      }
+      return null;
+    });
+  },
+  stageJobFile: async (save: string, sha256: string, bytes: Uint8Array) => {
+    io.pieces.push(bytes.length);
+    if (io.failPiece === io.pieces.length) throw new Error("the disk is full");
+    const { sha256Hex: hash } = await import("../../../lib/binary/sha256");
+    if (hash(bytes) !== sha256) throw new Error("a job file sent is not what its SHA-256 says");
+    io.onPiece?.(bytes.length);
+    io.staged.set(save, (io.staged.get(save) ?? new Set()).add(sha256));
+  },
+  unstageJobFiles: async (save: string) => void io.staged.delete(save),
   clearSavedFolders: async () => ({ gone: [], left: [], at: null }),
 }));
 vi.mock("../../../lib/doc/menoFileWriter", async () => {
@@ -77,14 +118,24 @@ vi.mock("../../../lib/io/writeDocument", () => {
     // (what the page wrote, as it wrote it - the first entry, what it is, stored)
     const entries: Zippable = Object.fromEntries(Object.entries(unzipSync(content)).map(([name, data]) => [name, [data, { level: name.startsWith("files/") ? 6 : 0 }]]));
     for (const a of appended) {
+      if (a.staged) {
+        // (as Meno set it down - checked as it was sent - and taken away once written, or not)
+        if (!io.staged.get(a.staged)?.has(a.sha256)) throw new Error(`${a.name} could not be kept: not found`);
+        entries[`files/${a.sha256}`] = [io.known.get(a.sha256)!, { level: 6 }];
+        continue;
+      }
       if (!a.from) throw new Error(`no folder of ${a.job} here`);
       const from = io.disk.get(a.from);
       if (!from) throw new Error(`${a.from} is not there`);
       const data = unzipSync(from.bytes, { filter: (f) => f.name === `files/${a.sha256}` })[`files/${a.sha256}`];
       // (as src-tauri keptjobs.rs says it)
-      if (!data || sha256Hex(data) !== a.sha256) throw new Error(`${a.name} could not be kept: ${a.from.split("/").pop()} no longer holds a file it kept`);
+      if (!data || sha256Hex(data) !== a.sha256) {
+        for (const x of appended) if (x.staged) io.staged.delete(x.staged);
+        throw new Error(`${a.name} could not be kept: ${a.from.split("/").pop()} no longer holds a file it kept`);
+      }
       entries[`files/${a.sha256}`] = [data, { level: 6 }];
     }
+    for (const x of appended) if (x.staged) io.staged.delete(x.staged);
     io.disk.set(path, { bytes: zipSync(entries), mtime: ++io.clock });
     if (io.overWritten) io.disk.set(path, { bytes: io.overWritten, mtime: ++io.clock });
     io.overWritten = null;
@@ -122,6 +173,12 @@ afterEach(async () => {
   io.overWritten = null;
   io.noteFails = false;
   io.picked = null;
+  io.pieces.length = 0;
+  io.staged.clear();
+  io.known.clear();
+  io.failPiece = 0;
+  io.onPiece = null;
+  io.asks.length = 0;
 });
 
 async function tabOf(doc: ReturnType<typeof createWorkspaceDocument>): Promise<() => FileActions> {
@@ -152,9 +209,10 @@ function madeUpOutput(seed: number, n: number): Uint8Array {
   return new TextEncoder().encode(text.slice(0, n));
 }
 
-const JOBS = 6;
-const EACH = 256 * 1024;
+let JOBS = 6;
+let EACH = 256 * 1024;
 const SAVED = "/made/up/large.meno";
+let made = 0;
 
 /**
  * A workspace's file made on another computer: one step whose run kept the
@@ -162,11 +220,14 @@ const SAVED = "/made/up/large.meno";
  * `SAVED`, its job files held from it as the page opens it (views/openFile),
  * and each byte the page reads of them counted.
  */
-function openedWorkspace(): { store: ReturnType<typeof storeOf>; doc: ReturnType<typeof createWorkspaceDocument>; inflated: () => number; total: number } {
+function openedWorkspace(): { store: ReturnType<typeof storeOf>; doc: ReturnType<typeof createWorkspaceDocument>; inflated: () => number; total: number; original: Uint8Array } {
   const jobs = Array.from({ length: JOBS }, (_, i) => `0b6f5c1e-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`);
   const files = jobs.map((job, i) => {
-    const data = madeUpOutput(i + 1, EACH);
-    return { job, data, sha256: sha256Hex(data) };
+    // (each workspace's its own: what this session holds of another's never stands in)
+    const data = madeUpOutput(++made * 1000 + i + 1, EACH);
+    const sha256 = sha256Hex(data);
+    io.known.set(sha256, data);
+    return { job, data, sha256 };
   });
   const step: WorkflowStep = {
     id: 1,
@@ -192,7 +253,7 @@ function openedWorkspace(): { store: ReturnType<typeof storeOf>; doc: ReturnType
   const store = storeOf(doc);
   doc.edit("opened", (d) => ({ ...d, steps: [step] }));
   store.getState().markSavedAs(SAVED, store.getState().writing());
-  return { store, doc, inflated: () => inflated, total: JOBS * EACH };
+  return { store, doc, inflated: () => inflated, total: JOBS * EACH, original: bytes };
 }
 
 describe("a workspace saved again and again in one session", () => {
@@ -264,4 +325,118 @@ describe("a workspace saved again and again in one session", () => {
     expect(files().error).toBeNull();
     expect(jobFilesIn(SAVED)).toHaveLength(JOBS);
   });
+
+  /** Every job file the file at `path` holds is whole: its name its SHA-256. */
+  const verifies = (path: string) => {
+    const f = readMenoFile(io.disk.get(path)!.bytes);
+    const jobs = f.files.filter((x) => x.media === JOB_FILE_MEDIA);
+    return jobs.length === JOBS && jobs.every((x) => f.data(x.sha256) !== null);
+  };
+
+  /** Opened and saved once; then the file at `SAVED` made `what` from outside Meno - another size and time - and something changed. */
+  async function savedThen(as: (w: ReturnType<typeof openedWorkspace>) => Uint8Array | null) {
+    const w = openedWorkspace();
+    const what = as(w);
+    const files = await tabOf(w.doc);
+    w.store.getState().addAtom(0, 0, "C");
+    await act(async () => void (await files().save()));
+    if (what) io.disk.set(SAVED, { bytes: what, mtime: ++io.clock });
+    else io.disk.delete(SAVED);
+    w.store.getState().addAtom(1.5, 0, "C");
+    io.pieces.length = 0;
+    io.packed.length = 0;
+    return { w, files, inflated: w.inflated() };
+  }
+
+  it("sends no job file through the page where the file was replaced from outside by an older copy holding the same job files", async () => {
+    const { w, files, inflated } = await savedThen((w) => w.original);
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(io.pieces).toEqual([]);
+    expect(io.packed).toEqual([0]);
+    expect(w.inflated() - inflated).toBe(0);
+    expect(verifies(SAVED)).toBe(true);
+  });
+
+  it("takes them from the copy kept beside a file replaced by an unrelated one: none through the page", async () => {
+    const { w, files, inflated } = await savedThen((w) => (io.disk.set(`${SAVED}.bak`, { bytes: w.original, mtime: ++io.clock }), menoFileBytes("{}", [])));
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(io.pieces).toEqual([]);
+    expect(io.packed).toEqual([0]);
+    expect(w.inflated() - inflated).toBe(0);
+    expect(verifies(SAVED)).toBe(true);
+  });
+
+  it("sends only those found nowhere - the file deleted - each alone, read as it is sent", async () => {
+    const { w, files, inflated } = await savedThen(() => null);
+    const readAtEach: number[] = [];
+    io.onPiece = () => readAtEach.push(w.inflated() - inflated);
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(io.pieces).toEqual(Array.from({ length: JOBS }, () => EACH));
+    // (the k-th sent once k had been read: never all read first)
+    expect(readAtEach).toEqual(Array.from({ length: JOBS }, (_, k) => (k + 1) * EACH));
+    expect(io.packed).toEqual([0]);
+    expect(verifies(SAVED)).toBe(true);
+    // (and set down only for that save: nothing left)
+    expect(io.staged.size).toBe(0);
+  });
+
+  it("never takes a job file from a file whose bytes are not what its name says: read whole, taken from elsewhere, the save said to have worked", async () => {
+    const { files } = await savedThen((w) => menoFileBytes("{}", readMenoFile(w.original).files.map((f) => ({ ...f, data: new Uint8Array(f.size).fill(120) }))));
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    // (asked by name and size first; the write's own check refused it; asked again, read whole)
+    expect(io.asks.slice(-2)).toEqual([false, true]);
+    expect(io.pieces).toHaveLength(JOBS);
+    expect(verifies(SAVED)).toBe(true);
+  });
+
+  it("leaves the file as it was, and nothing set down, where a piece fails half way", async () => {
+    const { files } = await savedThen(() => null);
+    io.disk.set(SAVED, { bytes: menoFileBytes("{}", []), mtime: ++io.clock });
+    const before = io.disk.get(SAVED)!.bytes;
+    io.failPiece = 3;
+    await act(async () => void (await files().save()));
+    expect(files().error).toMatch(/^Save failed: .*the disk is full/);
+    expect(io.disk.get(SAVED)!.bytes).toBe(before);
+    expect(io.staged.size).toBe(0);
+  });
+
+  it("saves as another file, the one it was saved to replaced from outside, sending no job file through the page", async () => {
+    const { w, files, inflated } = await savedThen((w) => w.original);
+    io.picked = "/made/up/copy.meno";
+    await act(async () => void (await files().saveAs()));
+    expect(files().error).toBeNull();
+    expect(io.pieces).toEqual([]);
+    expect(io.packed).toEqual([0]);
+    expect(w.inflated() - inflated).toBe(0);
+    expect(verifies("/made/up/copy.meno")).toBe(true);
+  });
+
+  it("holds no more than the largest job file and a little besides, the heavy way, however many there are", async () => {
+    const v8 = await import("node:v8");
+    const vm = await import("node:vm");
+    v8.setFlagsFromString("--expose_gc");
+    const gc = vm.runInNewContext("gc") as (o?: object) => void;
+    // (a full collection, its freeing done before it returns - else what was let go is still counted)
+    const held = () => (gc({ type: "major", execution: "sync" }), gc({ type: "major", execution: "sync" }), process.memoryUsage().arrayBuffers);
+    [JOBS, EACH] = [48, 1024 * 1024];
+    try {
+      const { files } = await savedThen(() => null);
+      const base = held();
+      let most = 0;
+      io.onPiece = () => void (most = Math.max(most, held() - base));
+
+      await act(async () => void (await files().save()));
+      expect(files().error).toBeNull();
+      expect(io.pieces).toHaveLength(JOBS);
+      // (the bound: the largest job file, and a little besides)
+      expect(most).toBeLessThan(EACH + 64 * 1024);
+      expect(most).toBeLessThan((JOBS * EACH) / 10);
+    } finally {
+      [JOBS, EACH] = [6, 256 * 1024];
+    }
+  }, 60_000);
 });

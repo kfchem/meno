@@ -1224,6 +1224,10 @@ pub fn run() {
             }
         })
         .setup(move |app| {
+            // (job files set down for saves a page sent and never wrote - Meno stopped, or its page - taken away: no save is under way yet)
+            if let Ok(local) = local_data_dir(app.handle()) {
+                keptjobs::sweep_staged(&local.join(keptjobs::STAGED), None);
+            }
             // the main window, made here rather than from tauri.conf.json (its "create" is
             // false): on Windows its pinch is let through before its page first loads (pinch.rs) -
             // made hidden, then put where it was left and shown (windowstate.rs), so that it is never
@@ -1401,6 +1405,9 @@ pub fn run() {
             jobs::jobs_finished_bytes,
             keptjobs::job_kept,
             keptjobs::file_now,
+            keptjobs::job_files_where,
+            keptjobs::job_file_staged,
+            keptjobs::job_files_unstaged,
             keptjobs::job_write_back,
             keptjobs::job_clear_saved
         ])

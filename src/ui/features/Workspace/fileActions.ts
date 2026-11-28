@@ -3,9 +3,9 @@ import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
-import { fileNow } from "../../../lib/jobs";
+import { fileNow, unstageJobFiles } from "../../../lib/jobs";
 import { writeDocument, writeDocumentNow, type Appended, type FileNow } from "../../../lib/io/writeDocument";
-import { clearSavedJobs, dropNotedSources, jobsToKeep, LARGE_WORKSPACE_MB, noteJobFilesSaved, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, dropNotedSources, findJobFiles, jobsToKeep, LARGE_WORKSPACE_MB, noteJobFilesSaved, sizeAsk, takenFromElsewhereFailed, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
@@ -937,13 +937,16 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
   // (whether it was saved: not, where the size warning was cancelled)
   const saveTo = useCallback(
     async (path: string): Promise<boolean> => {
+      // (the job files set down for a save that is then not written, or made again: taken away - Meno takes them away itself once it has written)
+      const unstage = (jobs: { staged: string | null }) => void (jobs.staged && unstageJobFiles(jobs.staged).catch(() => undefined));
       // (the workspace's file, as it is as its writing begins - with what is kept of its steps' jobs, listed from their folders)
-      const made = async () => {
+      const made = async (whole = false) => {
         // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
         const written = store.getState().writing();
         // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
         const { savedPath } = store.getState();
-        const jobs = await jobsToKeep(store.getState().steps ?? []);
+        // (its job files whose folders are not here: each taken by Meno from wherever it finds it whole - only one found nowhere sent, alone)
+        const jobs = await jobsToKeep(store.getState().steps ?? [], undefined, undefined, findJobFiles(path, savedPath ?? null, whole));
         // (a job file past what a workspace's file keeps of one: asked about first - never written to be refused)
         const file = jobs.largest > MOST_FILE ? null : await workspaceFile(store.getState(), jobs);
         // (what its file held that could not be read as it opened: not in this one - so the file it was opened from, the first time it is saved over, kept beside it)
@@ -951,62 +954,71 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         return { written, savedPath, leftOnOpen, jobs, file };
       };
       let at = await made();
-      // (past the size Settings says, as the file it replaces was not: asked - never anything left out unasked - docs/FILE-IO.md, *A step's jobs*)
-      const before = await fileNow(path).then((f) => f?.size ?? null, () => null);
-      const asked = sizeAsk(store.getState().steps ?? [], at.jobs, at.file?.bytes.length ?? 0, before, useAppSettings.getState().calculations.largeWorkspaceMB ?? LARGE_WORKSPACE_MB);
-      if (asked) {
-        const answer = await new Promise<"all" | "no raw" | "cancel">((answer) => setSizeAsked({ ...asked, answer }));
-        setSizeAsked(null);
-        if (answer === "cancel") return false;
-        if (answer === "no raw") {
-          for (const s of asked.steps) store.getState().keepRawOutputs(s.id, false);
-          at = await made();
-        }
-      }
-      // (still past it, its raw outputs left out or none to leave: written, to say why it cannot be)
-      const write = async () => {
-        const { bytes, notKept, lastHolds } = at.file ?? (await workspaceFile(store.getState(), at.jobs));
-        const done = await writtenWhere(
-          path,
-          bytes,
-          {
-            // (never a file another tab saves to)
-            heldBy: (real) => heldElsewhere(real, tabId),
-            // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
-            keepOld: (real) => keepsOld(real, at.savedPath, lastHolds, at.leftOnOpen),
-          },
-          // (its steps' job files, added from their folders as it is written)
-          at.jobs.appended,
-        );
-        return { ...done, notKept };
-      };
-      let written: Awaited<ReturnType<typeof write>>;
       try {
-        written = await write();
-      } catch (e) {
-        // (a file its job files were to be copied from no longer holding them - written over since it was noted: no longer
-        //  taken as where they are, and the save made again at once without it, each kept from what the page holds of it)
-        if (!dropNotedSources(e instanceof Error ? e.message : String(e), at.jobs.appended)) throw e;
-        at = await made();
-        written = await write();
+        // (past the size Settings says, as the file it replaces was not: asked - never anything left out unasked - docs/FILE-IO.md, *A step's jobs*)
+        const before = await fileNow(path).then((f) => f?.size ?? null, () => null);
+        const asked = sizeAsk(store.getState().steps ?? [], at.jobs, at.file?.bytes.length ?? 0, before, useAppSettings.getState().calculations.largeWorkspaceMB ?? LARGE_WORKSPACE_MB);
+        if (asked) {
+          const answer = await new Promise<"all" | "no raw" | "cancel">((answer) => setSizeAsked({ ...asked, answer }));
+          setSizeAsked(null);
+          if (answer === "cancel") return false;
+          if (answer === "no raw") {
+            for (const s of asked.steps) store.getState().keepRawOutputs(s.id, false);
+            unstage(at.jobs);
+            at = await made();
+          }
+        }
+        // (still past it, its raw outputs left out or none to leave: written, to say why it cannot be)
+        const write = async () => {
+          const { bytes, notKept, lastHolds } = at.file ?? (await workspaceFile(store.getState(), at.jobs));
+          const done = await writtenWhere(
+            path,
+            bytes,
+            {
+              // (never a file another tab saves to)
+              heldBy: (real) => heldElsewhere(real, tabId),
+              // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
+              keepOld: (real) => keepsOld(real, at.savedPath, lastHolds, at.leftOnOpen),
+            },
+            // (its steps' job files, added from their folders as it is written)
+            at.jobs.appended,
+          );
+          return { ...done, notKept };
+        };
+        let written: Awaited<ReturnType<typeof write>>;
+        try {
+          written = await write();
+        } catch (e) {
+          // (a file its job files were to be copied from no longer holding one as it was asked for - written over since: no longer
+          //  taken as where they are, and the save made again at once, each job file read whole where Meno finds it, and only
+          //  one found nowhere sent from what the page holds of it)
+          const message = e instanceof Error ? e.message : String(e);
+          const failed = dropNotedSources(message, at.jobs.appended);
+          if (!failed && !takenFromElsewhereFailed(message, at.jobs.appended)) throw e;
+          unstage(at.jobs);
+          at = await made(true);
+          written = await write();
+        }
+        const { kept, old, now, notKept } = written;
+        store.getState().markSavedAs(kept, at.written);
+        store.getState().markLeftKept();
+        // (its job files, from now on copied by Meno from the file just written - never read back into the page by the next save;
+        //  a note not taken costs the next save only that: never a save that was written said to have failed)
+        await noteJobFilesSaved(kept, at.jobs, now ? async () => now : undefined).catch(() => undefined);
+        // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
+        //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
+        //  docs/WORKFLOWS.md, *A job's folder*)
+        if (!keepsJobFolders(useAppSettings.getState().calculations))
+          void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
+        naming.current?.(fileNameOf(kept));
+        // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
+        const keptAs = old && fileNameOf(old);
+        const said = [notKeptSaid(notKept, keptAs), leftOutSavedSaid(at.leftOnOpen?.left, notKept.length ? null : keptAs)].filter(Boolean);
+        setError(said.length ? said.join(" ") : null);
+        return true;
+      } finally {
+        unstage(at.jobs);
       }
-      const { kept, old, now, notKept } = written;
-      store.getState().markSavedAs(kept, at.written);
-      store.getState().markLeftKept();
-      // (its job files, from now on copied by Meno from the file just written - never read back into the page by the next save;
-      //  a note not taken costs the next save only that: never a save that was written said to have failed)
-      await noteJobFilesSaved(kept, at.jobs, now ? async () => now : undefined).catch(() => undefined);
-      // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
-      //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
-      //  docs/WORKFLOWS.md, *A job's folder*)
-      if (!keepsJobFolders(useAppSettings.getState().calculations))
-        void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
-      naming.current?.(fileNameOf(kept));
-      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
-      const keptAs = old && fileNameOf(old);
-      const said = [notKeptSaid(notKept, keptAs), leftOutSavedSaid(at.leftOnOpen?.left, notKept.length ? null : keptAs)].filter(Boolean);
-      setError(said.length ? said.join(" ") : null);
-      return true;
     },
     [store, tabId],
   );

@@ -53,7 +53,7 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         .ok_or("no file was named to write to")?;
     let keep_old = request.headers().get("keep-old").is_some_and(|v| v == "1");
     let mut bytes = bytes_of(request.body()).ok_or("a document is sent as its bytes")?;
-    let appended = match request.headers().get("appended") {
+    let mut appended: Vec<crate::keptjobs::Appended> = match request.headers().get("appended") {
         None => Vec::new(),
         Some(n) => {
             let n = n.to_str().ok().and_then(|n| n.parse::<usize>().ok()).filter(|&n| n <= bytes.len()).ok_or("the job files to add are not said")?;
@@ -63,9 +63,22 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         }
     };
     let jobs_root = if appended.is_empty() { None } else { Some(crate::jobs::all_roots(&app)?) };
-    // (a job file carried from the workspace's file it was opened from: one the page could have read)
-    if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f)) {
+    // (a job file carried from a workspace's file: one the page could have read - or a copy a save kept beside one)
+    if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f) && !crate::keptjobs::copy_of(f).is_some_and(|o| may_read(&app, &o))) {
         return Err(format!("Meno may not read {}", from.display()));
+    }
+    // (one the page sent, found nowhere else: where Meno set it down for this save - taken away once it is written, or not)
+    let staged_root = if appended.iter().any(|a| a.staged.is_some()) { Some(crate::local_data_dir(&app)?.join(crate::keptjobs::STAGED)) } else { None };
+    let mut staged = Vec::new();
+    if let Some(root) = &staged_root {
+        for a in appended.iter_mut().filter(|a| a.staged.is_some()) {
+            a.staged_at = crate::keptjobs::staged_in(root, a.staged.as_deref().unwrap_or_default());
+            if let Some(d) = &a.staged_at {
+                if !staged.contains(d) {
+                    staged.push(d.clone());
+                }
+            }
+        }
     }
     let most = most_for(&path, !appended.is_empty());
     // (as the plugin takes a path: whole, and going up nowhere)
@@ -77,9 +90,13 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         return Err(format!("Meno may not write to {}", path.display()));
     }
     tauri::async_runtime::spawn_blocking(move || {
-        replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
+        let written = replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
             .map(|kept| Written { kept: kept.map(|k| k.to_string_lossy().into_owned()), now: crate::keptjobs::now_of(&target) })
-            .map_err(|e| format!("{}: {e}", path.display()))
+            .map_err(|e| format!("{}: {e}", path.display()));
+        for d in &staged {
+            let _ = fs::remove_dir_all(d);
+        }
+        written
     })
     .await
     .map_err(|e| e.to_string())?
@@ -189,7 +206,7 @@ fn may_write(path: &Path, target: &Path, allowed: impl Fn(&Path) -> bool) -> boo
 /// The bytes sent: as they are, or - where the window could send them only
 /// as JSON, as the file system plugin also takes them - a list of numbers,
 /// each a byte; none where they are neither.
-fn bytes_of(body: &tauri::ipc::InvokeBody) -> Option<Vec<u8>> {
+pub(crate) fn bytes_of(body: &tauri::ipc::InvokeBody) -> Option<Vec<u8>> {
     match body {
         tauri::ipc::InvokeBody::Raw(bytes) => Some(bytes.clone()),
         tauri::ipc::InvokeBody::Json(serde_json::Value::Array(list)) => list.iter().map(|v| v.as_u64().and_then(|b| u8::try_from(b).ok())).collect(),

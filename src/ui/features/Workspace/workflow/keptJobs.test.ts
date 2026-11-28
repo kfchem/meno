@@ -78,7 +78,8 @@ describe("what a save keeps of the steps' jobs", () => {
       },
     ];
     const bytes = new Map([[sha("1"), new Uint8Array([1, 2, 3])]]);
-    const kept = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null);
+    const sent: { save: string; sha256: string; bytes: Uint8Array }[] = [];
+    const kept = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, undefined, undefined, async (save, sha256, b) => void sent.push({ save, sha256, bytes: b }));
     expect(kept.records.get(J3)).toEqual({
       job: J3,
       files: [{ name: "work/job.out", sha256: sha("1"), size: 3, role: "read" }],
@@ -87,23 +88,26 @@ describe("what a save keeps of the steps' jobs", () => {
         { name: "work/big.tmp", size: 9, why: "raw" },
       ],
     });
-    expect(kept.carried).toEqual([{ sha256: sha("1"), name: "work/job.out", media: JOB_FILE_MEDIA, data: new Uint8Array([1, 2, 3]) }]);
-    expect(kept.appended).toEqual([]);
+    // (found nowhere by Meno: sent from what the page holds of it, alone, and added from where Meno set it down)
+    expect(sent).toEqual([{ save: kept.staged, sha256: sha("1"), bytes: new Uint8Array([1, 2, 3]) }]);
+    expect(kept.appended).toEqual([{ sha256: sha("1"), job: J3, name: "work/job.out", staged: kept.staged }]);
+    expect(kept.listed.map((f) => [f.sha256, f.media])).toEqual([[sha("1"), JOB_FILE_MEDIA]]);
   });
 
   it("has Meno read a job's files again from the file it was opened from, where that is as it was - never through the page", async () => {
     const opened = step(1, [J3]);
     opened.ran!.kept = [{ job: J3, files: [{ name: "work/job.out", sha256: sha("1"), size: 3, role: "read" }] }];
     const bytes = new Map([[sha("1"), new Uint8Array([1, 2, 3])]]);
-    const there = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async () => "/work/opened.meno");
+    const there = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async (asked) => asked.map(() => ({ from: "/work/opened.meno" })));
     expect(there.appended).toEqual([{ sha256: sha("1"), job: J3, name: "work/job.out", from: "/work/opened.meno" }]);
     expect(there.listed.map((f) => f.sha256)).toEqual([sha("1")]);
-    expect(there.carried).toEqual([]);
+    expect(there.staged).toBeNull();
     expect(there.adds).toBe(3);
-    // (that file changed or gone since: kept from what was held of it as it was opened)
-    const changed = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async () => null);
-    expect(changed.appended).toEqual([]);
-    expect(changed.carried.map((c) => c.sha256)).toEqual([sha("1")]);
+    // (found nowhere by Meno: sent from what was held of it as it was opened, alone)
+    const sent: string[] = [];
+    const changed = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async (asked) => asked.map(() => null), undefined, async (_save, sha256) => void sent.push(sha256));
+    expect(changed.appended.map((a) => [a.sha256, !!a.staged, a.from])).toEqual([[sha("1"), true, undefined]]);
+    expect(sent).toEqual([sha("1")]);
   });
 
   it("reads again from where a file was opened only while it is there as it was", async () => {
