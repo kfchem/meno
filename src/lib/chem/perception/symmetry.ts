@@ -34,8 +34,7 @@ import type { ChemGraph } from "./graph";
 import type { Cumulated } from "./stereo/types";
 import { parity } from "./stereo/geometry";
 import { runsThrough } from "./stereo/runs";
-import { metal } from "./elements";
-import { lonePairOfThree } from "./stereo/lonePairs";
+import { trigonalEnd } from "./stereo/lonePairs";
 
 /**
  * What the symmetry reads: the core's graph, with an odd run of cumulated double bonds set cis or trans (a butatriene's), and
@@ -381,16 +380,11 @@ export function settingCisTrans<T extends SymmetryInput>(input: T): T {
     ];
   };
   const others = (end: number, on: number) => adj[end].map((e) => e.to).filter((t) => t !== on);
-  // (an end that is a trigonal-planar centre: no metal, and its neighbours, hydrogens and lone pairs three at most)
+  // (an end that is a trigonal-planar centre: ./stereo/lonePairs `trigonalEnd` - the element alone, as a reader's graph writes a mass
+  //  number or unpaired electrons after it: perception/stereo/from2d `drawnGraph`)
   const trigonal = (end: number): boolean => {
     const a = input.atoms[end];
-    // (the element alone: a reader's graph writes a mass number or unpaired electrons after it - perception/stereo/from2d `drawnGraph`)
-    const el = a.el.replace(/[\^.].*$/, "");
-    if (metal.has(el)) return false;
-    const hs = Math.max(0, a.hs ?? 0);
-    const groups = adj[end].length + hs;
-    if (groups > 3) return false;
-    return !(groups === 3 && lonePairOfThree(el, a.charge ?? 0, adj[end].length, adj[end].reduce((t, e) => t + e.order, 0), hs));
+    return trigonalEnd(a.el.replace(/[\^.].*$/, ""), a.charge ?? 0, adj[end].length, adj[end].reduce((t, e) => t + e.order, 0), a.hs ?? 0);
   };
   // (what an atom bonded to `end` alone is, as the ranks first read it: element, charge, H count, its bond's order; none where
   //  it is a star's, a metal's donor across from another, or an axis's or a run's own)

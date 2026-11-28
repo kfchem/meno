@@ -15,6 +15,7 @@ import type { IdentityInput } from "../identity";
 import { protonatedAmineHeld } from "../lonePairCentres";
 import { lonePairsIn3d } from "../lonePairsIn3d";
 import { configuredFrom, runsFrom3d, type Place } from "../perception/stereo/from3d";
+import { trigonalEnd } from "../perception/stereo/lonePairs";
 import type { Axial, Cumulated } from "../perception/stereo/types";
 import { cipLabels } from "./index";
 import { factsOf, OPEN_RING } from "../perception/facts";
@@ -27,7 +28,7 @@ export type In3d = { atoms: readonly { el: string; charge?: number; isotope?: nu
 
 /**
  * Why a unit of a molecule in 3D has no descriptor: its groups nearly in a plane, so that its places give it no sense (`flat`, under
- * stereo/geometry `FLAT_VOLUME_3D`); an N that exchanges its H (`exchanges`); or the CIP's own why - the structure too large to work
+ * stereo/geometry `FLAT_VOLUME_3D`; of an allene, its two ends' groups nearly in one plane, under stereo/from3d `FLAT_ALLENE`); an N that exchanges its H (`exchanges`); or the CIP's own why - the structure too large to work
  * out, a group it depends on not told apart. Never for an atom or a bond that is no unit: two of its groups alike.
  */
 export type In3dWhy = "flat" | "exchanges" | "large" | "unsure" | "open";
@@ -64,8 +65,20 @@ export function cipIn3d(m: In3d): In3dLabels {
   //  from getting a label, so this guard has no case where it shows - it says what a unit here is)
   const doublesAt = m.atoms.map((_, i) => m.bonds.filter((b) => b.order === 2 && (b.a1 === i || b.a2 === i)).length);
   const ringed = factsOf({ atoms: m.atoms, bonds });
+  // (each end trigonal-planar - no ylide's S or P, no sulfoximine's S: perception/stereo/lonePairs `trigonalEnd`, as identity asks)
+  const ordersAt = m.atoms.map((_, i) => m.bonds.reduce((t, b) => t + (b.a1 === i || b.a2 === i ? b.order : 0), 0));
+  const trigonal = (i: number) => trigonalEnd(m.atoms[i].el, m.atoms[i].charge ?? 0, around[i].length, ordersAt[i], 0);
   const doubles = m.bonds.flatMap((b, i) =>
-    b.order === 2 && around[b.a1].length > 1 && around[b.a2].length > 1 && doublesAt[b.a1] === 1 && doublesAt[b.a2] === 1 && !ringed.inRingSmallerThan(i, OPEN_RING) ? [i] : [],
+    b.order === 2 &&
+    around[b.a1].length > 1 &&
+    around[b.a2].length > 1 &&
+    doublesAt[b.a1] === 1 &&
+    doublesAt[b.a2] === 1 &&
+    trigonal(b.a1) &&
+    trigonal(b.a2) &&
+    !ringed.inRingSmallerThan(i, OPEN_RING)
+      ? [i]
+      : [],
   );
   const read = configuredFrom(bonds, places, four, doubles);
   const pyramids = lonePairsIn3d(m.atoms, m.bonds, m.xyz, three).read;
@@ -73,7 +86,7 @@ export function cipIn3d(m: In3d): In3dLabels {
   for (const c of read.centres) tetra.set(c.atom, { neighbours: c.neighbours, volume: c.sense });
   for (const [a, t] of pyramids) tetra.set(a, t);
   const stereo = new Map(read.doubles.map((d) => [d.bond, { refs: d.ends, cis: d.cis }]));
-  const { axes, cumulated, shownOn } = runsFrom3d(around, m.bonds, places);
+  const { axes, cumulated, shownOn, flat: flatAxes } = runsFrom3d(around, m.bonds, places, m.atoms);
   const input: IdentityInput = {
     atoms: m.atoms.map((a, i) => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}), ...(tetra.has(i) ? { tetra: tetra.get(i)! } : {}) })),
     bonds: bonds.map((b, i) => ({ ...b, ...(stereo.has(i) ? { stereo: stereo.get(i)! } : {}) })),
@@ -95,9 +108,13 @@ export function cipIn3d(m: In3d): In3dLabels {
   //  it - asked so apart, its sense one taken for the asking, never shown)
   const flat = fourAll.filter((i) => !tetra.has(i));
   const flatDoubles = doubles.filter((i) => !stereo.has(i));
-  if (flat.length || flatDoubles.length) {
+  if (flat.length || flatDoubles.length || flatAxes.length) {
+    // (an allene whose two ends' planes are one plane - from3d `FLAT_ALLENE` - asked with either hand, as a flat centre is: said on the
+    //  first double bond of its run, where its Ra or Sa would be)
+    const axesAsked = [...axes, ...flatAxes.map((x) => ({ atoms: x.atoms, refs: x.refs, sense: 1 as const }))];
     const asked: IdentityInput = {
       ...input,
+      ...(axesAsked.length ? { axes: axesAsked } : {}),
       atoms: input.atoms.map((a, i) => (flat.includes(i) ? { ...a, tetra: { neighbours: [...around[i]], volume: 1 as const } } : a)),
       bonds: input.bonds.map((b, i) => {
         if (!flatDoubles.includes(i)) return b;
@@ -106,8 +123,11 @@ export function cipIn3d(m: In3d): In3dLabels {
         return na != null && nb != null ? { ...b, stereo: { refs: [na, nb] as [number, number], cis: true } } : b;
       }),
     };
-    const t = cipLabels(asked, { centres: flat, bonds: flatDoubles });
+    const t = cipLabels(asked, { centres: flat, bonds: flatDoubles, axes: flatAxes.map((_, k) => axes.length + k) });
     const named = (v: unknown) => !!v && typeof v === "object" && "label" in v;
+    flatAxes.forEach((x, k) => {
+      if (named(t.axes.get(axes.length + k))) said.bonds[String(x.shownOn)] = "flat";
+    });
     for (const i of flat) if (named(t.centres.get(i))) said.atoms[String(i)] = held(i) === false ? "exchanges" : "flat";
     for (const i of flatDoubles) if (named(t.bonds.get(i))) said.bonds[String(i)] = "flat";
   }
@@ -124,7 +144,7 @@ export function runsIn3dOf(m: In3d): { axes: Axial[]; cumulated: Cumulated[] } {
   });
   const places: Record<number, Place> = {};
   for (let i = 0; i < m.atoms.length; i++) places[i] = [m.xyz[3 * i], m.xyz[3 * i + 1], m.xyz[3 * i + 2]];
-  const { axes, cumulated } = runsFrom3d(around, m.bonds, places);
+  const { axes, cumulated } = runsFrom3d(around, m.bonds, places, m.atoms);
   return { axes, cumulated };
 }
 

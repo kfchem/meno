@@ -110,22 +110,38 @@ export const FLAT_ALLENE = 0.5;
  * other, an odd cumulene's cis or trans by whether those two stand on one
  * side of the run; none where they are in line, or square (flat or
  * twisted half way, as no such run is). Each with the first double bond of
- * its run, to be shown on. A biaryl's axis is not read: every biaryl is
- * twisted in 3D, whether or not its turn is held.
+ * its run, to be shown on. An allene left with no hand for being flat is
+ * listed apart (`flat`), with the bond it would be shown on: it is an axis
+ * whose places give it no sense, as a centre whose groups lie flat. A run
+ * goes on through a C or an N+ bonded by its two double bonds alone, as the
+ * drawing's and the SMILES's runs do (./runs, `linear`): an N with no charge
+ * between two double bonds, or an S, is no allene's middle, whatever its
+ * places. A biaryl's axis is not read: every biaryl is twisted in 3D,
+ * whether or not its turn is held.
  */
 export function runsFrom3d(
   around: readonly number[][],
   bonds: readonly { a1: number; a2: number; order: number }[],
   places: Readonly<Record<number, Place>>,
-): { axes: Axial[]; cumulated: Cumulated[]; shownOn: { axes: number[]; cumulated: number[] } } {
+  atoms: readonly { el: string; charge?: number }[],
+): {
+  axes: Axial[];
+  cumulated: Cumulated[];
+  shownOn: { axes: number[]; cumulated: number[] };
+  flat: { atoms: [number, number]; refs: [number, number]; shownOn: number }[];
+} {
   const orderOf = new Map(bonds.map((b, i) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, i]));
   const bondOf = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`);
   const order = (a: number, b: number) => bonds[bondOf(a, b) ?? -1]?.order ?? 0;
-  // (its runs of cumulated double bonds: ./runs - here any atom bonded by its two double bonds alone, its places saying whether it is
-  //  in line)
-  const runs = runsOf({ atoms: around.map(() => ({})), bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }, "bondedByTwo");
+  // (its runs of cumulated double bonds: ./runs - through a C or an N+ bonded by its two double bonds alone, the reader's rule)
+  const runs = runsOf({ atoms, bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }, "linear");
   const { middle } = runs;
-  const out = { axes: [] as Axial[], cumulated: [] as Cumulated[], shownOn: { axes: [] as number[], cumulated: [] as number[] } };
+  const out = {
+    axes: [] as Axial[],
+    cumulated: [] as Cumulated[],
+    shownOn: { axes: [] as number[], cumulated: [] as number[] },
+    flat: [] as { atoms: [number, number]; refs: [number, number]; shownOn: number }[],
+  };
   around.forEach((_, i) => {
     if (middle(i)) return;
     for (const m of around[i]) {
@@ -153,11 +169,12 @@ export function runsFrom3d(
         // (an allene's ends' planes one plane - its groups' turn about the run near none or half a turn: no hand, as an odd run
         //  twisted near a quarter turn has no cis or trans)
         const cross = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]);
-        const sense = cross < FLAT_ALLENE * Math.hypot(...u) * Math.hypot(...w) ? 0 : torsionSense(P, I, J, Q);
+        const flat = cross < FLAT_ALLENE * Math.hypot(...u) * Math.hypot(...w);
+        const sense = flat ? 0 : torsionSense(P, I, J, Q);
         if (sense) {
           out.axes.push({ atoms: [i, j], refs: [p, q], sense });
           out.shownOn.axes.push(first);
-        }
+        } else if (flat) out.flat.push({ atoms: [i, j], refs: [p, q], shownOn: first });
         continue;
       }
       // (the two groups on the same side of the run: cis)

@@ -10,9 +10,10 @@
  *   keep theirs).
  * - A centre of three groups and a lone pair it keeps (./lonePairs, Meno's rule; P-93.3.3.2 takes them with a phantom atom): with an H
  *   among the three, a P, As, Sb or Bi as without one (a secondary phosphine's P, the maintainer's ruling of 2026-11-06).
- * - A double bond with a group besides the other end on each end, in no ring of `SMALL_RING` atoms or fewer (P-93.5.1.4.1: there it
- *   is cis and states nothing; the text says monocycles, Meno takes the smallest ring through the bond for fused and bridged ones,
- *   its own extension), and not a C=N whose E/Z is none of its own (./movingCN).
+ * - A double bond with a group besides the other end on each end, each end a trigonal-planar centre (./lonePairs `trigonalEnd`: not
+ *   a sulfonium ylide's S, a sulfoximine's, a phosphorus ylide's P), in no ring of `SMALL_RING` atoms or fewer (P-93.5.1.4.1: there
+ *   it is cis and states nothing; the text says monocycles, Meno takes the smallest ring through the bond for fused and bridged
+ *   ones, its own extension), and not a C=N whose E/Z is none of its own (./movingCN).
  * - A run of cumulated double bonds between two carbons, each with a group: even, an axis (an allene's); odd, a cis or trans. Both
  *   ends carbon is a cautious rule of Meno's, no text's: the text's runs are all carbon (P-93.4.2.2, P-93.4.2.3), and of an N end
  *   it says nothing. An allene in a ring is a candidate as any.
@@ -23,7 +24,7 @@ import { factsOf, OPEN_RING } from "../facts";
 import type { ChemGraph } from "../graph";
 import { SMALL_RING } from "../rings";
 import type { SymmetryInput } from "../symmetry";
-import { lonePairCentres } from "./lonePairs";
+import { lonePairCentres, trigonalEnd } from "./lonePairs";
 import { MOVING_CN, movingCN } from "./movingCN";
 
 /** The elements a centre of four groups may be. */
@@ -58,6 +59,7 @@ export const NOT_CANDIDATE = {
   few: "it has fewer than three groups round it",
   notDouble: "it is no double bond",
   bare: "an end of it carries nothing besides the other end",
+  notTrigonal: "an end of it is no trigonal-planar centre (an ylide's S or P, a sulfoximine's S), so its groups do not lie in one plane",
   ring: `it is in a ring of ${SMALL_RING} atoms or fewer, which holds it cis`,
   moving: (why: string) => `${why} - no configuration of its own`,
   run: "it is part of a run of double bonds",
@@ -101,7 +103,14 @@ function readOf(g: SymmetryInput) {
     g.bonds,
   );
   const others = (end: number, partner: number) => around[end].filter((m) => m !== partner);
-  return { n, around, doubles, element, hs, pyramid, moving, others };
+  const orders = g.atoms.map(() => 0);
+  for (const b of g.bonds) {
+    if (b.a === b.b) continue;
+    orders[b.a] += b.order;
+    orders[b.b] += b.order;
+  }
+  const trigonal = (i: number) => trigonalEnd(element(i), g.atoms[i].charge ?? 0, around[i].length, orders[i], hs(i));
+  return { n, around, doubles, element, hs, pyramid, moving, others, trigonal };
 }
 type Read = ReturnType<typeof readOf>;
 
@@ -126,6 +135,7 @@ function bondWhyNot(g: SymmetryInput, r: Read, k: number): string | null {
   if (b.order !== 2) return NOT_CANDIDATE.notDouble;
   if (r.doubles[b.a].length !== 1 || r.doubles[b.b].length !== 1) return NOT_CANDIDATE.run;
   if (!r.others(b.a, b.b).length || !r.others(b.b, b.a).length) return NOT_CANDIDATE.bare;
+  if (!r.trigonal(b.a) || !r.trigonal(b.b)) return NOT_CANDIDATE.notTrigonal;
   const moving = r.moving.get(k);
   if (moving) return NOT_CANDIDATE.moving(MOVING_CN[moving]);
   if (inSmallRing(g, k)) return NOT_CANDIDATE.ring;

@@ -216,8 +216,9 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string 
       return "No R or S: this N does not keep a configuration.";
     case "undrawn":
       return unit === "centre" ? "No R or S: no configuration is drawn here." : `No ${what}: none is drawn here.`;
-    // (a molecule in 3D whose places give the unit no sense: lib/chem/cip/in3d)
+    // (a molecule in 3D whose places give the unit no sense - an allene's, its two ends' planes one plane: lib/chem/cip/in3d)
     case "flat":
+      if (unit === "axis") return "No Ra or Sa: the groups at its two ends lie nearly in one plane here.";
       return unit === "centre" ? "No R or S: its groups lie nearly in a plane here." : `No ${what}: it is twisted nearly a right angle here.`;
   }
 }

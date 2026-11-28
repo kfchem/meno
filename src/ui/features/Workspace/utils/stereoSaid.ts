@@ -5,6 +5,7 @@
  * under *Stereo*: the units of one why on one row, named by their atoms ("C4, C7"), counted past `SAID_NAMED_MOST`. Nothing for an atom or
  * a bond that is no unit; nothing where no R or S is shown on it.
  */
+import { runsOf } from "../../../../lib/chem/perception/stereo/runs";
 import { cipSaid, type CipNone } from "../chem/cipMarks";
 import { stereoShownOf } from "../document";
 import type { Molecule3D } from "../store/types";
@@ -24,9 +25,13 @@ export function stereoSaidRows(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">
     rows.set(text, row);
   };
   for (const [k, why] of Object.entries(said.atoms)) add(cipSaid(why as CipNone, "centre"), name(Number(k)), "centre");
+  // (a bond said of an allene's axis - the first double bond of its run, an even number of them: lib/chem/cip/in3d - in an axis's words)
+  const runs = runsOf({ atoms: m.atoms, bonds: m.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
   for (const [k, why] of Object.entries(said.bonds)) {
     const b = m.bonds[Number(k)];
-    if (b) add(cipSaid(why as CipNone, "bond"), `${name(b.a1)}=${name(b.a2)}`, "bond");
+    if (!b) continue;
+    const run = runs.of(b.a1, b.a2);
+    add(cipSaid(why as CipNone, run.doubles > 1 && !run.odd ? "axis" : "bond"), `${name(b.a1)}=${name(b.a2)}`, "bond");
   }
   return [...rows].map(([text, r]) => ({
     label: r.names.length > SAID_NAMED_MOST ? `${r.names.length} ${r.unit === "centre" ? "centres" : "double bonds"}` : r.names.join(", "),

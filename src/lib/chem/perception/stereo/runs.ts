@@ -23,12 +23,12 @@ export type Run = {
 
 /**
  * Which atoms a run goes on through - an atom between two of its double bonds:
- * - `linear`, the reader's: a carbon, or an N+, bonded by its two double bonds and nothing else (a sulfur's C=S=C is bent, and no run -
- *   the rule the restraints' linear-by-bonds has);
- * - `bondedByTwo`, 3D's: any atom bonded by its two double bonds and nothing else - its places say whether it is in line;
+ * - `linear`, the readers' - the drawing's, the SMILES's and 3D's: a carbon, or an N+, bonded by its two double bonds and nothing else (a
+ *   sulfur's C=S=C is bent, and no run - the rule the restraints' linear-by-bonds has; an N with no charge and two double bonds has
+ *   four bonds, which a closed-shell N has only as an N+: a file that lost its charge, read as no run);
  * - `twoDoubles`, the CIP marks': any atom with two double bonds, whatever else it is bonded to.
  */
-export type Middle = "linear" | "bondedByTwo" | "twoDoubles";
+export type Middle = "linear" | "twoDoubles";
 
 /** The atoms and bonds a run is found in: an atom's element (a carbon where none is said) and charge; bonds by their atoms' indices. */
 export type RunGraph = {
@@ -79,7 +79,7 @@ export function runsOf(g: RunGraph, middle: Middle = "linear"): Runs {
   const isMiddle =
     middle === "twoDoubles"
       ? (x: number) => doubles(x).length === 2
-      : (x: number) => near[x].length === 2 && near[x].every((m) => orderOf(x, m) === 2) && (middle === "bondedByTwo" || linear(x));
+      : (x: number) => near[x].length === 2 && near[x].every((m) => orderOf(x, m) === 2) && linear(x);
   const from = (end: number, next: number): number[] => {
     const run = [end, next];
     while (isMiddle(run[run.length - 1]) && run.length <= n) {

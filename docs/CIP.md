@@ -254,7 +254,14 @@ group of each, and whether the two are on one side (`Cumulated`).
   descriptor. A double bond in a ring of seven atoms or fewer has none of
   its own, and a cumulated double bond none: an allene's axis is read from
   the turn between its ends' groups, an odd cumulene's E or Z from their
-  sides, each shown on the first double bond of its run. A biaryl's axis
+  sides, each shown on the first double bond of its run. An allene whose
+  two ends' groups lie nearly in one plane has no hand there - its places
+  give it none, as a centre's lying flat - and its card says so; a run
+  goes on through a C or an N+ alone, as on the drawing and in SMILES (an
+  N with no charge between two double bonds, or an S, is no allene's
+  middle). A C=S or C=P whose S or P is no trigonal-planar end - a
+  sulfonium ylide's S, a sulfoximine's, a phosphorus ylide's P - has no E
+  or Z in 3D either. A biaryl's axis
   is not read in 3D: every biaryl is twisted there, whether or not its
   turn is held. A stereoisomer made as its mirror image's reflection is
   read after it is reflected.

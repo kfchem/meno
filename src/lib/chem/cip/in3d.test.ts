@@ -258,3 +258,65 @@ describe("an allene's axis and an odd cumulene's cis or trans in 3D, read from i
     expect(cipIn3d(butatriene([4.5, 0, 1.1], [4.5, 0, -1.1])).bonds).toEqual({});
   });
 });
+
+describe("an allene's axis in 3D: when there is none, and why", () => {
+  // (along x: F 0 on C1 1, the middle 2, C3 3 with F 4; the H's 5 on C1 and 6 on C3 - or, `alike`, a second H for C3's F. C1's groups in
+  //  the plane z = 0; C3's turned about x by `deg`. The middle a C, or as `middle` says)
+  const allene = (deg: number, middle: { el: string; charge?: number } = { el: "C" }, alike = false) => {
+    const t = (deg * Math.PI) / 180;
+    const [fy, fz] = [Math.cos(t) * 1.2, Math.sin(t) * 1.2];
+    return {
+      atoms: [{ el: "F" }, { el: "C" }, middle, { el: "C" }, { el: alike ? "H" : "F" }, { el: "H" }, { el: "H" }],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 2 },
+        { a1: 2, a2: 3, order: 2 },
+        { a1: 3, a2: 4, order: 1 },
+        { a1: 1, a2: 5, order: 1 },
+        { a1: 3, a2: 6, order: 1 },
+      ],
+      xyz: [-0.8, 1.2, 0, 0, 0, 0, 1.3, 0, 0, 2.6, 0, 0, 3.4, fy, fz, -0.8, -1.2, 0, 3.4, -fy, -fz],
+    };
+  };
+
+  it("says of an allene whose two ends' planes are one plane that its places give it no hand, as of a centre whose groups lie flat", () => {
+    // (1,3-difluoroallene flat, its F's half a turn apart or together: an axis - each end's two groups unlike - but no hand read)
+    for (const deg of [180, 0]) expect(cipIn3d(allene(deg)), `${deg}`).toEqual({ atoms: {}, bonds: {}, said: { atoms: {}, bonds: { "1": "flat" } } });
+    // (1-fluoroallene flat: C3's two groups alike, no axis at all - nothing said)
+    expect(cipIn3d(allene(180, { el: "C" }, true))).toEqual({ atoms: {}, bonds: {} });
+    // (turned a quarter turn: a hand, nothing said)
+    expect(cipIn3d(allene(90)).said).toBeUndefined();
+  });
+
+  it("reads an axis through a middle C or N+ alone, as the drawing and SMILES do: a neutral N, or an S, between two double bonds is no allene's middle", () => {
+    // (a 2-azaallenium, its N+ in line between two double bonds as an allene's C: an axis, its sense by the turn)
+    const nPlus = (deg: number) => runsIn3dOf(allene(deg, { el: "N", charge: 1 })).axes;
+    expect(nPlus(90).map((x) => x.atoms)).toEqual([[1, 3]]);
+    expect(nPlus(-90)[0].sense).toBe(-nPlus(90)[0].sense);
+    // (the same with a neutral N - an N with four bonds and no charge, a file that lost its charge - or an S: no run, no axis, no E or Z)
+    for (const el of ["N", "S"]) {
+      expect(cipIn3d(allene(90, { el })).bonds, el).toEqual({});
+      expect(runsIn3dOf(allene(90, { el })).axes, el).toEqual([]);
+    }
+  });
+
+  it("reads no E or Z across an ylide's C=S in 3D, nor says why: its S is no trigonal-planar end, as identity has it", () => {
+    // (CH3-CH=S(CH3)-CH2CH3, every atom in the plane z = 0 but the ethyl's: the C's methyl and the S's ethyl on one side, as a Z would
+    //  stand - no unit there, so nothing)
+    const ylide = {
+      atoms: [{ el: "C" }, { el: "C" }, { el: "S" }, { el: "C" }, { el: "C" }, { el: "H" }, { el: "C" }],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 2 },
+        { a1: 2, a2: 3, order: 1 },
+        { a1: 2, a2: 4, order: 1 },
+        { a1: 1, a2: 5, order: 1 },
+        { a1: 4, a2: 6, order: 1 },
+      ],
+      xyz: [-0.8, 1.2, 0, 0, 0, 0, 1.6, 0, 0, 2.4, -1.3, 0.6, 2.4, 1.3, 0.3, -0.6, -0.9, 0, 3.9, 1.3, 0.3],
+    };
+    const r = cipIn3d(ylide);
+    expect(r.bonds).toEqual({});
+    expect(r.said?.bonds ?? {}).toEqual({});
+  });
+});
