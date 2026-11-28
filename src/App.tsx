@@ -32,6 +32,7 @@ import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { IS_MAC, keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
 import { editFromMenu, editMenuState, tellEditMenu, watchEditMenu } from "./lib/doc/editMenu";
+import { chosenFromMenu } from "./ui/features/Workspace/components/pressHeld";
 import { openEachOnce, saverOf, setTabsListed } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
@@ -235,7 +236,8 @@ export default function App() {
     return watchEditMenu((command) => {
       const id = activeIdRef.current;
       const doc = id ? documentsRef.current.get(id)?.doc : undefined;
-      editFromMenu(command, { active: document.activeElement, doc, field: (c) => document.execCommand(c) });
+      // (chosen: something the chemist did, counted as a press or a key is - components/pressHeld)
+      editFromMenu(command, { active: document.activeElement, doc, field: (c) => document.execCommand(c), chosen: chosenFromMenu });
     });
   }, []);
   useEffect(() => {
