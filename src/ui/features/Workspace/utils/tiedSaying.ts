@@ -20,69 +20,61 @@ import type { WorkspaceDocument } from "../document";
 type Drawn = { atoms: readonly { id: number }[]; bonds: readonly { a: number; b: number }[] };
 
 /**
- * A warning's words, the atoms (by id, in order) and bonds of what it is about as they were, where each lay in the drawing's
- * lists (`atomAt`, `bondAt`), how many bonds the drawing had (`bondsWere`), the drawing last looked at (`seen`), and whether
- * what it is about is not as it was now.
+ * A warning's words; the atoms of what it is about (by id, in order), and where each lay in the drawing's list of atoms
+ * (`atomAt`); its bonds - every bond at those atoms - as they were; the lists last looked at (`seenAtoms`, `seenBonds`); and
+ * whether what it is about is not as it was now.
  */
 export type Tied = {
   text: string;
   ids: readonly number[];
+  /** The same ids, to be asked of each bond's ends. */
+  idSet: ReadonlySet<number>;
   atoms: readonly object[];
   atomAt: readonly number[];
-  bonds: readonly object[];
-  bondAt: readonly number[];
-  bondsWere: number;
-  seen: Drawn;
+  bonds: ReadonlySet<object>;
+  seenAtoms: Drawn["atoms"];
+  seenBonds: Drawn["bonds"];
   hidden: boolean;
 };
 
-/** Where `t`'s atoms and bonds lie in `model`, looked for through the whole of it; null where one of them is not there as it was. */
-function foundWhole(t: Pick<Tied, "ids" | "atoms" | "bonds">, model: Drawn): Pick<Tied, "atomAt" | "bondAt" | "bondsWere"> | null {
-  const ids = new Set(t.ids);
-  const atomAt = t.ids.map(() => -1);
-  const slot = new Map(t.ids.map((id, i) => [id, i]));
-  model.atoms.forEach((a, i) => {
-    const k = slot.get(a.id);
-    if (k != null) atomAt[k] = a === t.atoms[k] ? i : -1;
-  });
-  if (atomAt.some((i) => i < 0)) return null;
-  const was = new Map(t.bonds.map((b, i) => [b, i]));
-  const bondAt = t.bonds.map(() => -1);
-  let n = 0;
-  for (let i = 0; i < model.bonds.length; i++) {
-    const b = model.bonds[i];
-    if (!ids.has(b.a) && !ids.has(b.b)) continue;
-    const k = was.get(b);
-    if (k == null) return null;
-    bondAt[k] = i;
-    n++;
-  }
-  return n === t.bonds.length ? { atomAt, bondAt, bondsWere: model.bonds.length } : null;
-}
-
 /**
- * Whether what `t` is about is in `model` just as it was - the same atoms, the same bonds at them - and where (null: not so).
- * Looked at where they lay, and at the bonds put on after, so that it costs what the structure warned of costs, not the page:
- * the whole drawing is looked through only where an edit took things away or put them before them (the lists moved under them).
+ * Whether `t`'s atoms are in `atoms` as they were, and where (null: one is not). Looked at where they lay - what the structure
+ * warned of costs, not the page - and the whole list looked through only where it moved under them (something taken away or
+ * put in before them).
  */
-function asItWas(t: Tied, model: Drawn): Pick<Tied, "atomAt" | "bondAt" | "bondsWere"> | null {
-  let moved = model.bonds.length < t.bondsWere;
-  for (let i = 0; i < t.ids.length && !moved; i++) {
-    const a = model.atoms[t.atomAt[i]];
+function atomsAsTheyWere(t: Tied, atoms: Drawn["atoms"]): readonly number[] | null {
+  let moved = false;
+  for (let i = 0; i < t.ids.length; i++) {
+    const a = atoms[t.atomAt[i]];
     if (a === t.atoms[i]) continue;
     // (the atom itself changed - moved, given another element: not as it was)
     if (a?.id === t.ids[i]) return null;
     moved = true;
+    break;
   }
-  for (let i = 0; i < t.bonds.length && !moved; i++) if (model.bonds[t.bondAt[i]] !== t.bonds[i]) moved = true;
-  if (moved) return foundWhole(t, model);
-  // (bonds put on since: one at an atom of it makes it another)
-  const ids = new Set(t.ids);
-  for (let i = t.bondsWere; i < model.bonds.length; i++) {
-    const b = model.bonds[i];
-    if (ids.has(b.a) || ids.has(b.b)) return null;
+  if (!moved) return t.atomAt;
+  const slot = new Map(t.ids.map((id, i) => [id, i]));
+  const at = t.ids.map(() => -1);
+  atoms.forEach((a, i) => {
+    const k = slot.get(a.id);
+    if (k != null && a === t.atoms[k]) at[k] = i;
+  });
+  return at.some((i) => i < 0) ? null : at;
+}
+
+/**
+ * Whether the bonds at `t`'s atoms in `bonds` are its own bonds, all of them: one plain pass, nothing made - every edit
+ * that puts a bond at them, takes one away or makes one anew, wherever in the list, is seen.
+ */
+function bondsAsTheyWere(t: Tied, bonds: Drawn["bonds"]): boolean {
+  let n = 0;
+  for (let i = 0; i < bonds.length; i++) {
+    const b = bonds[i];
+    if (!t.idSet.has(b.a) && !t.idSet.has(b.b)) continue;
+    if (!t.bonds.has(b)) return false;
+    n++;
   }
-  return t;
+  return n === t.bonds.size;
 }
 
 /** A warning about `atoms` of `model` as it is: null where there are none - a warning about nothing in particular, shown as it is. */
@@ -92,28 +84,33 @@ export function tiedTo(text: string, atoms: Iterable<number>, model: Drawn): Tie
   const at = new Map(model.atoms.map((a, i) => [a.id, i]));
   const atomAt = ids.map((id) => at.get(id) ?? -1);
   const set = new Set(ids);
-  const bondAt = model.bonds.flatMap((b, i) => (set.has(b.a) || set.has(b.b) ? [i] : []));
   return {
     text,
     ids,
+    idSet: set,
     atoms: atomAt.map((i) => (i < 0 ? {} : model.atoms[i])),
     atomAt,
-    bonds: bondAt.map((i) => model.bonds[i]),
-    bondAt,
-    bondsWere: model.bonds.length,
-    seen: model,
+    bonds: new Set<object>(model.bonds.filter((b) => set.has(b.a) || set.has(b.b))),
+    seenAtoms: model.atoms,
+    seenBonds: model.bonds,
     // (one of them gone already - said after an undo took it away: out of sight from the first)
     hidden: atomAt.some((i) => i < 0),
   };
 }
 
-/** What `t` is once the document has changed to `model`: shown only while what it is about is as it was. Nothing looked at for the drawing it has seen. */
+/**
+ * What `t` is once the document has changed to `model`: shown only while what it is about is as it was. Lists already looked at
+ * are not looked at again: the same two, `t` as it is; the same bonds, its atoms alone; the same atoms, its bonds alone.
+ */
 export function tiedAfter(t: Tied, model: Drawn): Tied {
-  if (model === t.seen) return t;
-  const found = asItWas(t, model);
-  const hidden = found == null;
-  if (found === t) return hidden === t.hidden ? { ...t, seen: model } : { ...t, seen: model, hidden };
-  return found ? { ...t, ...found, seen: model, hidden: false } : { ...t, seen: model, hidden: true };
+  const sameAtoms = model.atoms === t.seenAtoms;
+  const sameBonds = model.bonds === t.seenBonds;
+  if (sameAtoms && sameBonds) return t;
+  // (what was seen not as it was, looked at again whole: an undo or a redo may bring it back)
+  const atomAt = sameAtoms && !t.hidden ? t.atomAt : atomsAsTheyWere(t, model.atoms);
+  const bondsKept = sameBonds && !t.hidden ? true : atomAt != null && bondsAsTheyWere(t, model.bonds);
+  const hidden = atomAt == null || !bondsKept;
+  return { ...t, atomAt: atomAt ?? t.atomAt, seenAtoms: model.atoms, seenBonds: model.bonds, hidden };
 }
 
 /**

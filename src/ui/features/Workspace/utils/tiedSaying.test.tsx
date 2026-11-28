@@ -43,34 +43,48 @@ describe("a warning tied to the structure it is about, as it was", () => {
     expect(tiedAfter(said, { atoms: [a1, a2, { id: 9 }, atom(10)], bonds: [b12, bond(9, 10)] }).hidden).toBe(false);
   });
 
-  it("costs what the structure warned of costs, not the page: on a page of thousands of atoms, an edit elsewhere - a drag's step - reads its few atoms and bonds; the drawing it has seen, nothing", () => {
+  it("is out of sight once a bond comes to end at it anywhere in the list, the count of bonds kept: one taken away after it and one put on at it, or one made anew in place", () => {
+    const a10 = atom(10);
+    const b910 = bond(9, 10);
+    const page = { atoms: [a1, a2, a9, a10], bonds: [b12, b910] };
+    const said = tiedTo("words", [1, 2], page)!;
+    // (one edit: the 9-10 bond taken away, a bond from 2 to 9 put on - as many bonds as before)
+    expect(tiedAfter(said, { atoms: page.atoms, bonds: [b12, bond(2, 9)] }).hidden).toBe(true);
+    // (the 9-10 bond made anew where it lay, its end now at 2 - an atom merged onto it, an end dragged to it)
+    expect(tiedAfter(said, { atoms: page.atoms, bonds: [b12, bond(2, 10)] }).hidden).toBe(true);
+    // (and back as it was with the undo)
+    const changed = tiedAfter(said, { atoms: page.atoms, bonds: [b12, bond(2, 10)] });
+    expect(tiedAfter(changed, page).hidden).toBe(false);
+  });
+
+  it("costs what the structure warned of costs, not the page: an edit elsewhere on a page of thousands reads its atoms alone where the bonds stay, the bonds once where they are made anew, and nothing for what it has seen", () => {
     const many = 5000;
     const atoms = [a1, a2, ...Array.from({ length: many }, (_, i) => atom(100 + i))];
     const bonds = [b12, ...Array.from({ length: many - 1 }, (_, i) => bond(100 + i, 101 + i))];
     const said = tiedTo("words", [1, 2], { atoms, bonds })!;
-    // (a step of a drag far off: one atom there made anew, the lists made anew, every element read counted)
-    let reads = 0;
-    const counted = <T,>(list: T[]) =>
+    // (every element read counted, list by list)
+    const reads = { atoms: 0, bonds: 0 };
+    const counted = <T,>(list: T[], of: keyof typeof reads) =>
       new Proxy(list, {
         get: (t, k, r) => {
-          if (typeof k === "string" && /^\d+$/.test(k)) reads++;
+          if (typeof k === "string" && /^\d+$/.test(k)) reads[of]++;
           return Reflect.get(t, k, r);
         },
       });
-    const dragged = atoms.map((a, i) => (i === 3000 ? { id: a.id } : a));
-    const step = { atoms: counted(dragged), bonds: counted([...bonds]) };
+    const far = (list: typeof atoms) => counted(list.map((a, i) => (i === 3000 ? { id: a.id } : a)), "atoms");
+    // (a step of a drag far off, the bonds list kept: its two atoms, where they lay)
+    const step = { atoms: far(atoms), bonds };
     const after = tiedAfter(said, step);
     expect(after.hidden).toBe(false);
-    // (its two atoms and its one bond, where they lay - no more)
-    expect(reads).toBe(3);
-    reads = 0;
+    expect(reads).toEqual({ atoms: 2, bonds: 0 });
+    // (the same drawing again: nothing)
+    reads.atoms = 0;
     expect(tiedAfter(after, step)).toBe(after);
-    expect(reads).toBe(0);
-    // (and a step of a drag of the structure itself: seen as another at once, from where its atom lay)
-    const ownStep = { atoms: counted(atoms.map((a) => (a === a2 ? { id: 2 } : a))), bonds: counted([...bonds]) };
-    reads = 0;
-    expect(tiedAfter(after, ownStep).hidden).toBe(true);
-    expect(reads).toBeLessThanOrEqual(2);
+    expect(reads).toEqual({ atoms: 0, bonds: 0 });
+    // (a step that makes the bonds list anew: its two atoms, and one pass over the bonds)
+    const remade = { atoms: far(atoms), bonds: counted([...bonds], "bonds") };
+    expect(tiedAfter(after, remade).hidden).toBe(false);
+    expect(reads).toEqual({ atoms: 2, bonds: bonds.length });
   });
 
   it("about no atoms, is tied to nothing - shown as any other words; said after an undo took its atoms, out of sight from the first", () => {
