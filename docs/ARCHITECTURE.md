@@ -298,7 +298,12 @@ The page itself can stop under Meno: the system takes its process away
   ended), whether a save was under way - never which file - and what Meno
   did.
 - **The page started again** in the same window, at once. The workspace
-  files its tabs held are opened again from their files, as a file opened
+  files its tabs were tied to as it stopped - each tab's file however it
+  was opened (Open, a double-click, a second Meno handing it over, a
+  come-back), where it is saved now after a Save As, a tab closed not
+  among them (`savedPaths` in `lib/doc/savers.ts`: where the tab's view
+  says it is saved, or else the file it was opened from, the view not yet
+  knowing it) - are opened again from their files, as a file opened
   from outside Meno is (`opened.rs`): each as it was last saved. The page
   tells the back end which they are as its tabs change and after each save
   (`page_files`, looked at off the window's thread); only workspace files it
@@ -312,7 +317,12 @@ The page itself can stop under Meno: the system takes its process away
   kept before anything said after it, a file that could not be read among
   them, till OK: "Meno's window stopped working and was started again. What
   was not saved is lost.", then "The files that were open are open again,
-  as they were last saved." where any were.
+  as they were last saved." where every one of them is; a file gone or
+  that cannot be read since is named instead, as Meno names a file it
+  could not open ("b.meno could not be read: it is no longer where it
+  was."). What came back is what the back end holds till the page started
+  again tells its own, so a second stop before it does opens the same
+  again.
 - **A save under way.** The page tells the back end the name of the
   workspace file it saves as the save begins - and is given a token for
   that save, which its write is sent with - and that it ended as it ends

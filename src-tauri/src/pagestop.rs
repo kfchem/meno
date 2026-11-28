@@ -160,6 +160,21 @@ pub fn said(then: Then, saving: Option<&Saving>, reopened: bool) -> String {
     s.join(" ")
 }
 
+/// Why a file cannot be read, in plain words.
+fn unread_why(e: &std::io::Error) -> &'static str {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => "it is no longer where it was",
+        std::io::ErrorKind::PermissionDenied => "Meno may not read it",
+        _ => "it cannot be opened",
+    }
+}
+
+/// A file that was open, not opened again as it cannot be read, said as Meno says one it could not open.
+pub fn unread_said(path: &str, why: &str) -> String {
+    let name = Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
+    format!("{name} could not be read: {why}.")
+}
+
 /// What is said once the save that was being written as the page stopped has ended, or was waited for long enough:
 /// `reopened`, its file opened again.
 pub fn later_said(saving: &Saving, reopened: bool) -> String {
@@ -522,8 +537,31 @@ fn run_start_again(state: &PageStop, plan: Plan, limit: Duration, open: impl Fn(
     // (the file being written held back, the rest opened now - said at once, before the page is there to ask)
     let writing = plan.saving.as_ref().filter(|s| s.written == Written::Writing);
     let (now, later) = split_files(plan.now, writing.and_then(|s| s.target.as_deref()));
+    let held_back = writing.map(|s| (s.token, later.clone()));
     let now = [now, writing.map(|s| state.keep_for_later(s.token, later.clone())).unwrap_or(later)].concat();
-    state.held().now_said = Some(said(Then::StartAgain, plan.saving.as_ref(), !now.is_empty()));
+    // (a file gone, or that cannot be read, since its tab was told: named, never said to be open again)
+    let (now, unread): (Vec<String>, Vec<String>) = now.into_iter().map(|f| (std::fs::File::open(&f).err().map(|e| unread_why(&e)), f)).fold(
+        (Vec::new(), Vec::new()),
+        |(mut now, mut unread), (why, f)| {
+            match why {
+                None => now.push(f),
+                Some(why) => unread.push(unread_said(&f, why)),
+            }
+            (now, unread)
+        },
+    );
+    {
+        let mut held = state.held();
+        let mut words = said(Then::StartAgain, plan.saving.as_ref(), !now.is_empty() && unread.is_empty());
+        for u in &unread {
+            words.push(' ');
+            words.push_str(u);
+        }
+        held.now_said = Some(words);
+        // (what comes back is what its tabs are tied to, till the page started again tells its own: should it stop
+        //  again before it does, these are opened again)
+        held.files = [now.clone(), held_back.map(|(_, later)| later).unwrap_or_default()].concat();
+    }
     open(now);
     reload();
     let Some(token) = plan.saving.filter(|s| s.written == Written::Writing).map(|s| s.token) else { return };
@@ -875,14 +913,57 @@ mod tests {
 
     #[test]
     fn start_again_with_no_save_under_way_opens_every_file_at_once_and_says_nothing_more() {
+        let dir = folder("plain", &["w/a.meno"]);
         let state = PageStop::default();
-        state.held().files = vec!["/w/a.meno".into()];
+        state.held().files = vec![at(&dir, "w/a.meno")];
         let plan = state.held().stopped(Kind::Ended, Instant::now()).unwrap();
         let done = Mutex::new(Vec::new());
         run_start_again(&state, plan, Duration::ZERO, |f| done.lock().unwrap().push(f.join(" ")), || done.lock().unwrap().push("reload".into()), || done.lock().unwrap().push("told".into()));
-        assert_eq!(*done.lock().unwrap(), ["/w/a.meno", "reload"]);
+        assert_eq!(*done.lock().unwrap(), [at(&dir, "w/a.meno"), "reload".into()]);
         assert!(state.held().later_said.is_none());
-        assert_eq!(state.hold_opens(vec!["/w/a.meno".into()]), vec!["/w/a.meno".to_string()]);
+        assert_eq!(state.hold_opens(vec![at(&dir, "w/a.meno")]), vec![at(&dir, "w/a.meno")]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A stop, and the page started again, `files` its tabs': what was opened, and what it says.
+    fn stop_and_start(state: &PageStop, at_: Instant) -> (Vec<Vec<String>>, String) {
+        let plan = state.held().stopped(Kind::Ended, at_).unwrap();
+        assert_eq!(plan.then, Then::StartAgain);
+        let opened = Mutex::new(Vec::new());
+        run_start_again(state, plan, Duration::ZERO, |f| opened.lock().unwrap().push(f), || {}, || {});
+        (opened.into_inner().unwrap(), state.held().now_said.take().unwrap())
+    }
+
+    #[test]
+    fn a_second_stop_after_a_come_back_opens_again_what_came_back_even_before_the_page_tells_its_own() {
+        let dir = folder("twice", &["w/a.meno", "w/b.meno"]);
+        let (a, b) = (at(&dir, "w/a.meno"), at(&dir, "w/b.meno"));
+        let state = PageStop::default();
+        assert!(state.held().files_told("first page", 1, vec![a.clone(), b.clone()]));
+        let t0 = Instant::now();
+        let (opened, _) = stop_and_start(&state, t0);
+        assert_eq!(opened, vec![vec![a.clone(), b.clone()]]);
+        // the page that came back says nothing of its files before it stops again, long after: both again
+        let (opened, said) = stop_and_start(&state, t0 + SOON + Duration::from_secs(30));
+        assert_eq!(opened, vec![vec![a.clone(), b.clone()]]);
+        assert!(said.ends_with("The files that were open are open again, as they were last saved."));
+        // and once it tells its own - a tab closed - that is what comes back
+        assert!(state.held().files_told("third page", 1, vec![a.clone()]));
+        let (opened, _) = stop_and_start(&state, t0 + 2 * SOON + Duration::from_secs(60));
+        assert_eq!(opened, vec![vec![a.clone()]]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_gone_since_is_named_and_the_rest_are_not_said_to_be_all_open() {
+        let dir = folder("gone", &["w/a.meno", "w/b.meno"]);
+        let state = PageStop::default();
+        assert!(state.held().files_told("page", 1, vec![at(&dir, "w/a.meno"), at(&dir, "w/b.meno")]));
+        std::fs::remove_file(dir.join("w/b.meno")).unwrap();
+        let (opened, said) = stop_and_start(&state, Instant::now());
+        assert_eq!(opened, vec![vec![at(&dir, "w/a.meno")]]);
+        assert_eq!(said, "Meno's window stopped working and was started again. What was not saved is lost. b.meno could not be read: it is no longer where it was.");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

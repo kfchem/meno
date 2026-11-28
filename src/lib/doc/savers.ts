@@ -84,11 +84,14 @@ export function heldElsewhere(path: string, own: string | undefined, tabs: reado
 }
 
 /**
- * Where each of `tabs` - the window's, as listed - is saved, or opened from
- * where its view is not yet there (`tabHolding`'s path): those that have one.
+ * The files the window's tabs are tied to, as they are now: each tab's, where
+ * its view says it is saved - or else the file it was opened from, its view
+ * not yet there or not yet knowing it (a workspace's file is taken into its
+ * store a moment after its tab is made) - those that have one, each once.
  */
 export function savedPaths(tabs: readonly ListedTab[] = listed()): string[] {
-  return tabs.map((t) => (paths.has(t.id) ? paths.get(t.id)!() : t.openedFrom)).filter((p): p is string => !!p);
+  const tied = tabs.map((t) => (paths.has(t.id) ? paths.get(t.id)!() : null) ?? t.openedFrom).filter((p): p is string => !!p);
+  return [...new Set(tied)];
 }
 
 /**
