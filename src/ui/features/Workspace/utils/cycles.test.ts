@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { branchWordsAt, cycleMembers, endKey, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
+import { branchPath, branchWordsAt, cycleMembers, endKey, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import type { Model } from "../store/types";
-import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey } from "./cycles";
+import { createWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey, turnCycle, wordsOfBranches } from "./cycles";
 
 const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, lo: half, hi: half });
 const settle = (e: CycleEase) => {
@@ -141,6 +143,93 @@ describe("the words by a cycle's arrow", () => {
 
   it("are none, with none near", () => {
     expect(branchWords(c, b, cycleThings({ atoms: [], bonds: [] }, [words(3, 20 * B, 0)], style))).toBeNull();
+  });
+});
+
+describe("the words that are an arrow's own, beside another arrow", () => {
+  const B = NOMINAL_BOND_LENGTH;
+  type Branch = NonNullable<Cycle["branches"]>[number];
+  // (a page with a cycle on it, and words set by its arrows - each where the rule sets words by that arrow, or where given)
+  const page = (branches: Branch[], words: { text: string; by?: number; at?: (half: { w: number; h: number }) => { x: number; y: number } }[]) => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const id = st().addCycle({ x: 0, y: 0, r: 4.5 * B, branches })!;
+    const ids = words.map((w) => {
+      const n = st().addCaption(w.text, 0, 0);
+      const t = cycleThings(st().model, st().captions, styleOf(st().docStyle)).find((x) => x.caption === n)!;
+      const off = { x: (t.box.x0 + t.box.x1) / 2, y: (t.box.y0 + t.box.y1) / 2 };
+      const cy = st().cycles.find((x) => x.id === id)!;
+      const half = { w: (t.box.x1 - t.box.x0) / 2, h: (t.box.y1 - t.box.y0) / 2 };
+      const to = w.at ? w.at(half) : branchWordsAt(cy, branches[w.by!], B, half);
+      st().updateCycle(id, {}, undefined, [{ id: n, x: to.x - off.x, y: to.y - off.y }]);
+      return n;
+    });
+    const cycle = () => st().cycles.find((x) => x.id === id)!;
+    const things = () => cycleThings(st().model, st().captions, styleOf(st().docStyle), [cycle()]);
+    const turn = () => {
+      const now = vi.spyOn(performance, "now").mockReturnValue(0);
+      let next: (() => void) | null = null;
+      turnCycle(store, id, (go) => void (next = go));
+      now.mockReturnValue(1e6);
+      (next as (() => void) | null)?.();
+      now.mockRestore();
+    };
+    // (whether each set of words stands where the rule sets words by arrow `by` of the cycle as it is now)
+    const atRule = (n: number, by: number) => {
+      const t = things().find((x) => x.caption === n)!;
+      const m = branchWordsAt(cycle(), branches[by], B, { w: (t.box.x1 - t.box.x0) / 2, h: (t.box.y1 - t.box.y0) / 2 });
+      return Math.hypot((t.box.x0 + t.box.x1) / 2 - m.x, (t.box.y0 + t.box.y1) / 2 - m.y) < 1e-6;
+    };
+    return { st, ids, cycle, things, turn, atRule };
+  };
+  const top: Branch = { at: Math.PI / 2, way: "out" };
+  const beside: Branch = { at: Math.PI / 4, way: "in" };
+
+  it("an arrow with no words never takes its neighbour's, as it is, turned round, or the whole cycle turned", () => {
+    for (const [a, b] of [[top, beside], [{ ...top, way: "in" as const }, beside], [top, { ...beside, way: "out" as const }]]) {
+      const p = page([a, b], [{ text: "Ar-X", by: 0 }]);
+      expect(branchWords(p.cycle(), b, p.things())).toBeNull();
+      expect(branchWords(p.cycle(), a, p.things())).toBe(p.ids[0]);
+      p.turn();
+      expect(p.atRule(p.ids[0], 0)).toBe(true);
+      expect(wordsOfBranches(p.cycle(), p.things())).toEqual([p.ids[0], null]);
+      p.turn();
+      expect(p.atRule(p.ids[0], 0)).toBe(true);
+    }
+  });
+
+  it("two arrows side by side, each with words, each keep their own through a turn", () => {
+    const p = page([top, beside], [{ text: "Ar-X", by: 0 }, { text: "L", by: 1 }]);
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+    p.turn();
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+    expect(p.atRule(p.ids[0], 0) && p.atRule(p.ids[1], 1)).toBe(true);
+  });
+
+  it("words moved well away from any arrow by hand are no arrow's, and are left where they are", () => {
+    // (their nearest corner a bond from the top arrow's end, more than three times the gap the rule sets them at)
+    const end = branchPath({ x: 0, y: 0, r: 4.5 * B }, top, B).end;
+    const away = B / Math.SQRT2;
+    const p = page([top, beside], [{ text: "Ar-X", at: (h) => ({ x: end.x - away - h.w, y: end.y + Math.sign(end.y) * (away + h.h) }) }]);
+    const was = p.st().captions.find((w) => w.id === p.ids[0])!;
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual([null, null]);
+    expect(carriedByCycle(p.cycle(), p.things()).captions).toEqual([]);
+    p.turn();
+    expect(p.st().captions.find((w) => w.id === p.ids[0])).toMatchObject({ x: was.x, y: was.y });
+  });
+
+  it("the whole cycle turned, with arrows in and out all round: every set of words still its own arrow's, at the gap", () => {
+    const branches: Branch[] = [0, 1, 2, 3, 4, 5].map((k) => ({ at: (k * Math.PI) / 3 + 0.2, way: k % 2 ? "in" : "out" }));
+    const texts = ["X", "Ar-X", "base-H", "L", "Ar'B(OH)2", "HX"];
+    const p = page(branches, texts.map((text, by) => ({ text, by })));
+    expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+    for (let round = 0; round < 2; round++) {
+      p.turn();
+      expect(wordsOfBranches(p.cycle(), p.things())).toEqual(p.ids);
+      expect(p.ids.every((n, by) => p.atRule(n, by))).toBe(true);
+    }
   });
 });
 

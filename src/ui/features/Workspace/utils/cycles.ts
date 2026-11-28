@@ -28,8 +28,8 @@ export const cyclePointed: { id: number | null; angle: number } = { id: null, an
 
 /** How near a cycle's line a thing let go is put on it, in bonds. */
 const SNAP = 1.0;
-/** How near the far end of an arrow coming in or going out its words' box comes, to go with the cycle, in bonds. */
-const LABEL_NEAR = 1.4;
+/** How near the far end of an arrow coming in or going out its words' box comes, to be its words, in bonds: a little over twice the gap they are set at (`WORDS_GAP`), so that words moved well away by hand are no arrow's. */
+const LABEL_NEAR = 0.7;
 /** How near a cycle's line anything is measured, in bonds: what lies further can be on no cycle, nor be put on one, nor be the words by its arrows. */
 const NEAR = 3;
 
@@ -151,22 +151,45 @@ export function arrowsOfCycles(cycles: readonly Cycle[], things: readonly CycleT
   return cycles.flatMap((c) => cycleArrows(c, boxes, NOMINAL_BOND_LENGTH, membersOn(c, things)));
 }
 
-/** The words by the far end of a cycle's arrow coming in or going out, of `things`: those whose box comes nearest it, within `LABEL_NEAR` bonds - none, where there are none. */
-export function branchWords(c: Cycle, b: CycleBranch, things: readonly CycleThing[]): number | null {
-  const l = branchPath(c, b, NOMINAL_BOND_LENGTH).end;
-  let best: { d: number; id: number } | null = null;
+/**
+ * The words by each arrow coming in or going out of a cycle, of `things`, in
+ * the order of its arrows. Nothing on the page ties words to an arrow but
+ * where they stand, so each set of words is the one arrow's whose far end its
+ * box comes nearest, within `LABEL_NEAR` bonds - no arrow's, where two ends
+ * are as near - and each arrow has the nearest of the words so its own: none,
+ * where none are. A set of words is never two arrows', nor taken by an arrow
+ * whose neighbour's end it stands nearer.
+ */
+export function wordsOfBranches(c: Cycle, things: readonly CycleThing[]): (number | null)[] {
+  const ends = (c.branches ?? []).map((b) => branchPath(c, b, NOMINAL_BOND_LENGTH).end);
+  const best: ({ d: number; id: number } | null)[] = ends.map(() => null);
   for (const t of things) {
     if (t.caption == null) continue;
-    const d = Math.hypot(Math.max(t.box.x0 - l.x, 0, l.x - t.box.x1), Math.max(t.box.y0 - l.y, 0, l.y - t.box.y1));
-    if (d < LABEL_NEAR * NOMINAL_BOND_LENGTH && (!best || d < best.d)) best = { d, id: t.caption };
+    const ds = ends.map((l) => Math.hypot(Math.max(t.box.x0 - l.x, 0, l.x - t.box.x1), Math.max(t.box.y0 - l.y, 0, l.y - t.box.y1)));
+    let at = -1;
+    let tied = false;
+    ds.forEach((d, i) => {
+      if (at < 0 || d < ds[at] - 1e-6) [at, tied] = [i, false];
+      else if (d <= ds[at] + 1e-6) tied = true;
+    });
+    if (at < 0 || tied || ds[at] >= LABEL_NEAR * NOMINAL_BOND_LENGTH) continue;
+    const was = best[at];
+    if (!was || ds[at] < was.d) best[at] = { d: ds[at], id: t.caption };
   }
-  return best?.id ?? null;
+  return best.map((w) => w?.id ?? null);
+}
+
+/** The words by the far end of one of a cycle's arrows coming in or going out, of `things` (`wordsOfBranches`): none, where none are its own. */
+export function branchWords(c: Cycle, b: CycleBranch, things: readonly CycleThing[]): number | null {
+  const branches = c.branches ?? [];
+  const i = branches.findIndex((x) => x.at === b.at && x.way === b.way);
+  return i >= 0 ? wordsOfBranches(c, things)[i] : wordsOfBranches({ ...c, branches: [...branches, b] }, things)[branches.length];
 }
 
 /** What goes with a cycle as it is moved or sized: what is on its line, and the words at its arrows' far ends. */
 export function carriedByCycle(c: Cycle, things: readonly CycleThing[]): { atoms: number[]; captions: number[] } {
   const on = new Set(membersOn(c, things).map((m) => m.index));
-  const words = new Set((c.branches ?? []).map((b) => branchWords(c, b, things)));
+  const words = new Set(wordsOfBranches(c, things));
   const atoms: number[] = [];
   const captions: number[] = [];
   things.forEach((t, i) => {
@@ -320,8 +343,9 @@ export function turnCycle(store: EditorStore, id: number, frame: (go: () => void
   if (!c) return;
   const turned: Cycle = { ...c, ccw: c.ccw ? undefined : true };
   const things = cycleThings(st.model, st.captions, styleOf(st.docStyle), [c]);
-  const moves = (c.branches ?? []).flatMap((b) => {
-    const id = branchWords(c, b, things);
+  const own = wordsOfBranches(c, things);
+  const moves = (c.branches ?? []).flatMap((b, i) => {
+    const id = own[i];
     const words = st.captions.find((w) => w.id === id);
     const box = things.find((t) => t.caption === id)?.box;
     if (!words || !box) return [];

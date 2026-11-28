@@ -2260,13 +2260,15 @@ All hover-based, as above.
     from outside and joins the circle along the way it goes; one going out
     leaves it so and curves out, its head at its far end. Each is given
     words at its far end, typed at once, which go with the cycle. They
-    stand on out of the arrow - past its head, or back past its tail - a
-    small gap (0.3 of a bond) clear of that end and of its line, as they
-    grow while typed: the way the arrow runs there decides which side of
-    them faces it - beside it where it runs more across than up or down,
-    their near side the gap from it (to its right left-aligned, to its
-    left right-aligned), over or under it else - whatever their length,
-    at every place round the circle (`lib/chem/cycle` `wordsBeyond`). *Remove
+    stand past its head, or back past its tail, a small gap (0.3 of a
+    bond) clear of that end and of the arrow's line, however long they
+    grow and wherever the arrow is round the circle. Where the arrow runs
+    more across than up or down, they stand beside its end and run on
+    away from it; else they stand over or under it (`lib/chem/cycle`
+    `wordsBeyond`). Words are an arrow's own by where they stand: each set
+    goes to the one arrow whose end it is nearest, within 0.7 of a bond,
+    so an arrow without words never takes its neighbour's, and words
+    moved well away are no arrow's. *Remove
     this arrow* takes the one there away. One put there grows - in from
     its far end, or out from the circle - and one taken away goes the
     same way back.
