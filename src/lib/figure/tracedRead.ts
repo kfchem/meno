@@ -159,7 +159,7 @@ export function valenceUnread(read: Pick<FigureRead, "atoms" | "bonds">): Map<nu
   const donorOne = (i: number) => DONOR.has(elOf(i)) && uncharged(i) && !ringed.has(i) && sum[i] === takesOf(i)![0] + 1;
   const acceptorFour = (i: number) => ACCEPTOR.has(elOf(i)) && uncharged(i) && sum[i] === 4;
   const adduct = (i: number) => (donorOne(i) && near[i].some(acceptorFour)) || (acceptorFour(i) && near[i].some(donorOne));
-  read.atoms.forEach((a, i) => {
+  read.atoms.forEach((_, i) => {
     const takes = takesOf(i);
     if (!takes || !uncharged(i)) return;
     if (sum[i] < takes[0]) out.set(i, "few");
