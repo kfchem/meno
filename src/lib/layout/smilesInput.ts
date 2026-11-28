@@ -17,7 +17,7 @@ import { openDoubleBonds } from "./drawn";
 export function smilesInput(smiles: string): LayoutInput {
   const s = readSmiles(smiles);
   const refused = aromaticRefusal(s.atoms, s.bonds);
-  if (refused) throw new Error(`This SMILES could not be read: ${typedRingRefused(refused, chargedWithH(s.atoms))}`);
+  if (refused) throw new Error(`This SMILES could not be read: ${typedRingRefused(refused, chargedWithH(s.atoms, s.bonds))}`);
   // (its bonds marked aromatic outside a ring, where no form of single and double bonds closes them: refused, never filled with an H)
   const outside = outsideRingRefusal(s.atoms, s.bonds);
   if (outside) throw new Error(`This SMILES could not be read: ${outside}`);

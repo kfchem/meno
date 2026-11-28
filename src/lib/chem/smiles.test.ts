@@ -286,6 +286,9 @@ describe("a ring carbon whose charge and H are stated (a bracket's [cH+], [cH-])
       "This SMILES could not be read: its aromatic ring of 6 atoms (1, 2, 3, 4, 5 and 6) cannot have alternating double bonds as written: atom 4 is written with an H and a charge, which leave no room for a double bond",
     );
     expect(() => smilesInput("c1cc[c+]cc1")).not.toThrow();
+    // (a pyridinium's [nH+] has room for its double bond: a refused ring holding one beside a pyrrole-type [nH], and no such carbon, keeps the old words)
+    expect(() => smilesInput("c1c[nH+]c[nH]c1")).toThrow(/cannot have alternating double bonds: is a charge or an H missing\?$/);
+    expect(() => smilesInput("c1cccc[cH+]cc1")).toThrow(/atom 6 is written with an H and a charge, which leave no room for a double bond$/);
     // (a refusal of the same kind with no such atom keeps its words)
     expect(() => smilesInput("c1cccc1")).toThrow(/cannot have alternating double bonds: is a charge or an H missing\?$/);
   });

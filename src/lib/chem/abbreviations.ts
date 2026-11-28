@@ -826,7 +826,7 @@ export function structureProblem(smiles: string): string | null {
     return `The SMILES cannot be read: ${e instanceof Error ? e.message : String(e)}`;
   }
   const refused = aromaticRefusal(read.atoms, read.bonds);
-  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused, chargedWithH(read.atoms))}`;
+  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused, chargedWithH(read.atoms, read.bonds))}`;
   const outside = outsideRingRefusal(read.atoms, read.bonds);
   if (outside) return `The SMILES cannot be read: ${outside}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));

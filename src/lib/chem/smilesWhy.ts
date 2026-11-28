@@ -7,6 +7,7 @@
  */
 import { elementOf } from "./elements";
 import { ionic } from "./perception/elements";
+import { implicitHydrogens } from "./molecule";
 
 /** One problem the toolkit's own check finds in a SMILES it parses but cannot make sense of, as it names it. */
 export type SmilesProblem = {
@@ -198,8 +199,19 @@ export function typedRingRefused(atoms: readonly number[], chargedWithH: readonl
   return `${ringCannotAlternate(atoms)} as written: ${listed} written with an H and a charge, which leave no room for a double bond`;
 }
 
-/** The atoms written with both an H and a charge (a bracket's [cH+], [cH-]), by place: where `typedRingRefused` says to look. */
-export const chargedWithH = (atoms: readonly { hs?: number; charge?: number }[]): number[] => atoms.flatMap((a, i) => (a.hs && a.charge ? [i] : []));
+/**
+ * The atoms written with both an H and a charge whose bonds and H then fill their valence, by place (a ring's [cH+] or [cH-], of
+ * two ring bonds and its H: three, all a charged carbon holds - the room left judged as the Kekulé form judges it, by
+ * `implicitHydrogens`): where `typedRingRefused` says to look. Not a pyridinium's [nH+], which has room for its double bond.
+ */
+export function chargedWithH(atoms: readonly { el: string; hs?: number; charge?: number }[], bonds: readonly { a1: number; a2: number }[]): number[] {
+  const degree = atoms.map(() => 0);
+  for (const b of bonds) {
+    degree[b.a1]++;
+    degree[b.a2]++;
+  }
+  return atoms.flatMap((a, i) => (a.hs && a.charge && implicitHydrogens(a.el, degree[i] + a.hs, a.charge) <= 0 ? [i] : []));
+}
 
 /** What the plugin that fills the SMILES role says when it cannot read one: its words, before Meno's why. */
 export const NOT_READ = "This SMILES could not be read.";
