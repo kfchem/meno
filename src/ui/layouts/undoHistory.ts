@@ -5,6 +5,7 @@
  */
 import type { DocumentStore, HistoryStep } from "../../lib/doc/document";
 import { editFromMenu, editMenuState, fieldHasUndo, type EditCommand, type EditDone } from "../../lib/doc/editMenu";
+import { takeSteps } from "../../lib/doc/takeSteps";
 import { shortcutLabel } from "../../lib/doc/shortcuts";
 
 /** What the button needs of the tab in front's document. */
@@ -12,17 +13,18 @@ export type UndoDoc = Pick<DocumentStore<unknown>, "undo" | "redo" | "history" |
 
 /**
  * A click: one step back, as Edit > Undo and the keys take it - the field's
- * own undo where the focus is in a field that keeps one, else the document's
- * (`editFromMenu`, the one way of both).
+ * own undo where the focus is in a field that keeps one (`fieldStep`), else
+ * the document's, held first where the page holds the keys' (`editFromMenu`,
+ * the one way of all of them: lib/doc/takeSteps).
  */
 export function undoClick(o: { active: unknown; doc: UndoDoc | undefined; field: (command: EditCommand) => boolean }): EditDone {
   return editFromMenu("undo", o);
 }
 
-/** A press on the button or the list that leaves the focus - and with it the selection - where it was: on the page, or in a field. */
-export function keepFocus(e: { preventDefault(): void; stopPropagation(): void }): void {
-  e.preventDefault();
-  e.stopPropagation();
+/** What a click on the button does: with its list open, shuts it and takes no step; the click that ends a hold, nothing; else a step back. */
+export function clickDoes(o: { held: boolean; open: boolean }): "shut" | "nothing" | "undo" {
+  if (o.open) return "shut";
+  return o.held ? "nothing" : "undo";
 }
 
 /** Whether a click has a step to take back: as Edit > Undo is on (`editMenuState`). */
@@ -42,12 +44,18 @@ export function stepText(step: HistoryStep): string {
   return said.charAt(0).toUpperCase() + said.slice(1);
 }
 
-/** The button's tip: what it is, the next step back where there is one, its keys, and that holding it shows the history. */
+/**
+ * The button's tip: what it is, the next step back where there is one, its
+ * keys, and that holding it shows the history - or, faint, that there is
+ * nothing to undo, and the history held only where it has steps to redo.
+ */
 export function undoTip(doc: UndoDoc | undefined, active: unknown, mac?: boolean): string {
+  const held = hasHistory(doc) ? "\nHold for the history" : "";
+  if (!canUndo(doc, active)) return `Nothing to undo${held}`;
   // (in a field that keeps its own undo, the click is the field's: its step is not known here)
   const next = fieldHasUndo(active) ? undefined : doc?.steps().back[0];
   const keys = shortcutLabel("Z", false, mac);
-  return `${next ? `Undo ${stepText(next)}` : "Undo"} (${keys})\nHold for the history`;
+  return `${next ? `Undo ${stepText(next)}` : "Undo"} (${keys})${held}`;
 }
 
 /** A line of the history list: a step, `offset` from now (back below 0, forward above), or the mark of now (0). */
@@ -66,9 +74,24 @@ export function isLit(offset: number, pointed: number | null): boolean {
   return Math.sign(offset) === Math.sign(pointed) && Math.abs(offset) <= Math.abs(pointed);
 }
 
-/** A step of the list chosen: the document gone there in one change (`travel`). */
+/**
+ * A step of the list chosen: the document gone there in one change, as the
+ * keys take steps (`takeSteps`) - held first where the page holds them, and
+ * asked once where it would take away a step still running. Whether it went.
+ */
 export function chooseStep(doc: UndoDoc | undefined, offset: number): boolean {
-  return !!doc && offset !== 0 && doc.travel(offset);
+  return takeSteps(doc, offset) === "taken";
+}
+
+/** The most rows the list shows at once before it scrolls, and each row's height (px); the mark of now, and the list's padding. */
+export const LIST_ROWS = 12;
+export const ROW_PX = 32;
+const NOW_PX = 24;
+const PAD_PX = 8;
+
+/** The list's greatest height (px): `LIST_ROWS` rows and the mark of now, and never past the window's lower edge, `edge` px clear of it. */
+export function listHeight(windowHeight: number, top: number, edge = 8): number {
+  return Math.max(0, Math.min(LIST_ROWS * ROW_PX + NOW_PX + PAD_PX, windowHeight - top - edge));
 }
 
 /** Timers as the window has them, given for tests. */

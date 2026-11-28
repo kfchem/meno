@@ -3,7 +3,7 @@ import * as editMenu from "../../lib/doc/editMenu";
 import { changeSet, createDocument } from "../../lib/doc/document";
 import { LONG_PRESSES } from "../features/Workspace/constants";
 import { longPressMs } from "../features/Workspace/longPress";
-import { canUndo, chooseStep, hasHistory, historyRows, isLit, pressHold, stepText, undoClick, undoTip, type Timers } from "./undoHistory";
+import { canUndo, chooseStep, clickDoes, hasHistory, historyRows, isLit, LIST_ROWS, listHeight, pressHold, ROW_PX, stepText, undoClick, undoTip, type Timers } from "./undoHistory";
 
 /** A document of a count, with `labels` made as steps one after another, and a turn of a conversation last where `talked`. */
 function drawn(labels: string[], talked = false) {
@@ -59,7 +59,7 @@ describe("Undo in the title bar: a click", () => {
 
   it("is told by its tip: what it is, the next step back, its keys, and the history held under it", () => {
     expect(undoTip(drawn(["add atom", "add bond"]), page, true)).toBe("Undo Add bond (⌘Z)\nHold for the history");
-    expect(undoTip(drawn([]), page, false)).toBe("Undo (Ctrl+Z)\nHold for the history");
+    expect(undoTip(drawn([]), page, false)).toBe("Nothing to undo");
     expect(undoTip(drawn(["add atom"]), field, true)).toBe("Undo (⌘Z)\nHold for the history");
   });
 });
@@ -199,5 +199,38 @@ describe("the history under Undo", () => {
     expect(historyRows(two.steps()).map((r) => r.text)).toEqual(["Now", "Add text"]);
     chooseStep(two, -1);
     expect(one.getState()).toEqual({ n: 2 });
+  });
+});
+
+describe("Undo faint, with nothing to take back", () => {
+  it("says so in its tip, and offers a hold only where there are steps to redo", () => {
+    expect(undoTip(drawn([]), page, true)).toBe("Nothing to undo");
+    expect(undoTip(undefined, page, true)).toBe("Nothing to undo");
+    const back = drawn(["add atom"]);
+    back.undo();
+    expect(undoTip(back, page, true)).toBe("Nothing to undo\nHold for the history");
+  });
+});
+
+describe("a click on Undo while its history is open", () => {
+  it("shuts the history and takes no step; the click ending a hold takes none; any other is a step back", () => {
+    expect(clickDoes({ held: false, open: true })).toBe("shut");
+    expect(clickDoes({ held: true, open: true })).toBe("shut");
+    expect(clickDoes({ held: true, open: false })).toBe("nothing");
+    expect(clickDoes({ held: false, open: false })).toBe("undo");
+  });
+});
+
+describe("a long history", () => {
+  it("is shown at most some twelve rows high, and scrolls beyond them", () => {
+    expect(LIST_ROWS).toBe(12);
+    const most = listHeight(2000, 40);
+    expect(most).toBeGreaterThanOrEqual(LIST_ROWS * ROW_PX);
+    expect(most).toBeLessThan((LIST_ROWS + 2) * ROW_PX);
+  });
+
+  it("never reaches past the window's lower edge", () => {
+    expect(listHeight(300, 40)).toBe(300 - 40 - 8);
+    expect(listHeight(30, 40)).toBe(0);
   });
 });

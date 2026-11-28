@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createDocument } from "../../lib/doc/document";
 import TopBar from "./TopBar";
 import UndoButton from "./UndoButton";
-import { keepFocus } from "./undoHistory";
+import { keepPress } from "./pressKeepsPage";
 
 const ctl = { tabOrder: [], tabsById: {}, activeId: null, reorder() {}, select() {}, close() {}, add() {}, openFiles() {} };
 
@@ -27,9 +27,12 @@ describe("Undo in the title bar", () => {
     expect(html).toContain("Undo Add atom");
   });
 
-  it("leaves the focus, and so the selection, where it was when pressed", () => {
-    const e = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
-    keepFocus(e);
+  it("is no press on the page: it says it keeps the page, and a press on it leaves the focus - a field's caret - where it was", () => {
+    const html = renderToStaticMarkup(<UndoButton doc={createDocument({ n: 0 })} />);
+    expect(html).toMatch(/<button[^>]*data-keeps-page=""/);
+    const button = { closest: (s: string) => (s === "[data-keeps-page]" ? button : null) };
+    const e = { type: "mousedown", target: button, preventDefault: vi.fn(), stopImmediatePropagation: vi.fn() };
+    expect(keepPress(e)).toBe(true);
     expect(e.preventDefault).toHaveBeenCalled();
   });
 });
