@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument } from "../document";
 import { addStep } from "./model";
 import { setsOnPage, unseenSets } from "./onPage";
-import { madeByRun, ranBy, untouchedSince, type PageNow } from "./runShown";
+import { madeByRun, ranBy, untouchedSince, watchEdits, type PageNow } from "./runShown";
+import { createWorkspaceDocument } from "../document";
+import { editFromMenu, watchEditMenu, type EditCommand } from "../../../../lib/doc/editMenu";
 import { actsSoFar, heard, pressHeld, typing } from "../components/pressHeld";
 import { heldByRepeats } from "./flow";
 
@@ -86,5 +88,39 @@ describe("what the end of Run all shows", () => {
     const [a] = one.steps!.map((s) => s.id);
     expect(ranBy(one, [a])).toEqual([a]);
     expect(madeByRun(one, ranBy(one, [a]))).toEqual(madeByRun(one, [a]));
+  });
+
+  it("stays after an undo chosen from the app's own menu bar during a run - no press, no key - and moves where only the run edited", async () => {
+    const view0 = { x0: 0, x1: 800, y0: -600, y1: 0 };
+    const page = (edited: boolean): PageNow => ({ view: view0, acts: 1, selected: [], tab: true, held: false, typing: false, edited });
+    const doc = createWorkspaceDocument();
+    doc.edit("add text", (d) => ({ ...d, nextMolecule3dId: (d.nextMolecule3dId ?? 1) + 1 }));
+    // (the menu bar's Undo, by its own path: the event it sends the page, then the document's step - lib/doc/editMenu)
+    let send: ((e: { payload: unknown }) => void) | undefined;
+    const hear = ((_: string, h: (e: { payload: unknown }) => void) => {
+      send = h;
+      return Promise.resolve(() => {});
+    }) as unknown as Parameters<typeof watchEditMenu>[1];
+    watchEditMenu((command: EditCommand) => void editFromMenu(command, { active: null, doc, field: () => false }), hear);
+    // (a run during which the chemist chose Undo from the menu bar: the view stays, nothing said)
+    const during = watchEdits(doc);
+    doc.edit("run", (d) => ({ ...d, nextMolecule3dId: (d.nextMolecule3dId ?? 1) + 1 }));
+    send!({ payload: "undo" });
+    doc.edit("results", (d) => ({ ...d, nextMolecule3dId: (d.nextMolecule3dId ?? 1) + 1 }));
+    during.stop();
+    expect(during.edited()).toBe(true);
+    expect(untouchedSince(page(false), page(during.edited()))).toBe(false);
+    // (a run during which nothing was done: its own steps alone - the view goes)
+    const quiet = watchEdits(doc);
+    doc.edit("run", (d) => ({ ...d, nextMolecule3dId: (d.nextMolecule3dId ?? 1) + 1 }));
+    doc.edit("results", (d) => ({ ...d, nextMolecule3dId: (d.nextMolecule3dId ?? 1) + 1 }));
+    quiet.stop();
+    expect(quiet.edited()).toBe(false);
+    expect(untouchedSince(page(false), page(quiet.edited()))).toBe(true);
+    // (a paste from the menu bar: an edit of the chemist's own)
+    const pasted = watchEdits(doc);
+    doc.edit("paste", (d) => ({ ...d, nextMolecule3dId: (d.nextMolecule3dId ?? 1) + 1 }));
+    pasted.stop();
+    expect(pasted.edited()).toBe(true);
   });
 });

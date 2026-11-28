@@ -1173,8 +1173,10 @@ are shown as what is put down is shown (WORKSPACE.md,
 edge in a small window - the view eases along to take them in, or out as
 little as needed; seen whole, it stays. It moves only where the chemist
 has done nothing on the page since they pressed: no press anywhere, no
-key (an edit, a menu, a card opened, a text written each take one), the
-same things selected, the same tab in front, the view where it stood -
+key (an edit, a menu, a card opened, a text written each take one), no
+change to the document but the run's own (an undo, a redo, a paste, a
+cut or a delete chosen from the app's menu bar, which sends no press or
+key to the page), the same things selected, the same tab in front, the view where it stood -
 and nothing held or being written as the run ends. Anything done, and
 the view stays where they have it, and nothing is said: what the run
 made is on the page beside its step (workflow/runShown).

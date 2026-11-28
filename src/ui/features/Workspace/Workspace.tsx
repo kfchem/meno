@@ -98,7 +98,7 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf, cutShort } from "./utils/workspace";
 import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
-import { madeByRun, ranBy, untouchedSince, type PageNow } from "./workflow/runShown";
+import { madeByRun, ranBy, untouchedSince, watchEdits, type PageNow } from "./workflow/runShown";
 import { allToRun, heldByRepeats, stepsAfter } from "./workflow/flow";
 import { actsSoFar, pressHeld, typing } from "./components/pressHeld";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
@@ -527,8 +527,15 @@ function WorkspaceContent({
     async (targets: readonly number[], run: () => Promise<void>) => {
       const ran = ranBy(store.getState(), targets);
       const began = pageNow();
-      await run();
-      if (!untouchedSince(began, pageNow())) return;
+      // (the document changed by the chemist meanwhile - an undo from the menu bar, a paste - not only by the run: workflow/runShown)
+      const doc = documentOf(store);
+      const edits = doc ? watchEdits(doc) : undefined;
+      try {
+        await run();
+      } finally {
+        edits?.stop();
+      }
+      if (!untouchedSince(began, { ...pageNow(), edited: edits?.edited() ?? false })) return;
       const box = madeByRun(store.getState(), ran);
       if (box) store.getState().requestShow(box);
     },
