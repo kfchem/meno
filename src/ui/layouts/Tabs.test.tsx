@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TabStrip } from "./Tabs";
-import { dragWithin, pressTab, scrollToShow } from "./tabDrag";
+import { dragWithin, scrollToShow, tabGestures, watchDragEnds, type DragMark } from "./tabDrag";
 
 describe("the tabs in the title bar", () => {
   it("are dragged as far as the room's ends, never under the + nor past the bar's start", () => {
@@ -38,11 +38,55 @@ describe("the tabs in the title bar", () => {
     expect(scrollToShow(4, 80, 100, 400, 8)).toBe(0);
   });
 
-  it("choose the tab pressed, always - even after a drag whose end never came, let go outside the window", () => {
+  it("choose the tab pressed though a drag's end never came, as the strip gives each tab its gestures - a second pointer during a drag choosing nothing", () => {
     const chosen: string[] = [];
-    const dragging = { current: true };
-    pressTab(dragging, () => chosen.push("settings"));
+    const mark: DragMark = { current: null };
+    const tab = tabGestures(mark, () => chosen.push("settings"));
+    // (a drag begun by the mouse, its end never coming - let go outside the window)
+    tab.onDragStart({ pointerId: 1 });
+    expect(mark.current).toBe(1);
+    // (a second pointer while the drag is in hand: nothing chosen, the drag kept within the strip)
+    tab.onPointerDown({ pointerId: 7 });
+    expect(chosen).toEqual([]);
+    expect(mark.current).toBe(1);
+    // (the mouse pressed again: that drag is over, and the tab chosen)
+    tab.onPointerDown({ pointerId: 1 });
     expect(chosen).toEqual(["settings"]);
-    expect(dragging.current).toBe(false);
+    expect(mark.current).toBeNull();
+  });
+
+  it("end a drag at every way one ends: its own end, its pointer let go or cancelled anywhere, the window left, Escape", () => {
+    const heard = new Map<string, (e: Event) => void>();
+    const on = { addEventListener: (k: string, f: (e: Event) => void) => void heard.set(k, f), removeEventListener: (k: string) => void heard.delete(k) } as unknown as Window;
+    const mark: DragMark = { current: null };
+    const stop = watchDragEnds(mark, on);
+    const ends: [string, object][] = [
+      ["pointerup", { pointerId: 1 }],
+      ["pointercancel", { pointerId: 1 }],
+      ["blur", {}],
+      ["keydown", { key: "Escape" }],
+    ];
+    for (const [kind, e] of ends) {
+      mark.current = 1;
+      heard.get(kind)!(e as Event);
+      expect(mark.current).toBeNull();
+    }
+    // (another pointer let go, or another key: the drag goes on)
+    mark.current = 1;
+    heard.get("pointerup")!({ pointerId: 7 } as unknown as Event);
+    heard.get("keydown")!({ key: "a" } as unknown as Event);
+    expect(mark.current).toBe(1);
+    tabGestures(mark, () => {}).onDragEnd();
+    expect(mark.current).toBeNull();
+    stop();
+    expect(heard.size).toBe(0);
+  });
+
+  it("give each tab those gestures - the strip's own, not a press that asks first whether a drag is under way", async () => {
+    const source = (await import("node:fs")).readFileSync(new URL("./Tabs.tsx", import.meta.url), "utf8");
+    expect(source).toContain("{...tabGestures(draggingRef, onSelect)}");
+    expect(source).toContain("watchDragEnds(draggingRef, window)");
+    expect(source).not.toMatch(/draggingRef\.current\) onSelect|onSelect\(\)\s*;?\s*\}?\s*\}\s*$/m);
+    expect(source).not.toContain("onDragStart=");
   });
 });
