@@ -2278,7 +2278,10 @@ All hover-based, as above.
     arrow sets them (more than 0.8 of a bond), or when their arrow is
     taken away. Words in a drawing saved before this open as free text.
     Words emptied are gone, as any words are. One arrow of each way can
-    be put at one place. *Remove
+    be put at one place: where one of a way is near (within 12 degrees
+    of where the menu was asked for), the menu's row for adding one that
+    way is dimmed, "(one is here)", and the other way's row still adds
+    one. *Remove
     this arrow* takes the one there away; its words stay where they
     are, as free text. One put there grows - in from
     its far end, or out from the circle - and one taken away goes the

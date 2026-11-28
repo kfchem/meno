@@ -26,6 +26,21 @@ export type CycleThing = { atoms?: number[]; caption?: number; branch?: Caption[
  */
 export const cyclePointed: { id: number | null; angle: number } = { id: null, angle: 0 };
 
+/** How near round the circle an arrow coming in or going out is to where a cycle's menu was asked for, to be the arrow there: a few degrees (radians). */
+const ARROW_NEAR = (12 * Math.PI) / 180;
+
+/**
+ * The arrows coming in or going out near an angle round a cycle (radians) -
+ * where its menu was asked for (`ARROW_NEAR`): the first there, by its place
+ * among them (-1, none), the one *Remove this arrow* takes away; and whether
+ * one coming in, and one going out, is there - no second of that way is put
+ * there.
+ */
+export function arrowsNear(branches: readonly CycleBranch[], at: number): { index: number; in: boolean; out: boolean } {
+  const here = (b: CycleBranch) => Math.abs(Math.atan2(Math.sin(b.at - at), Math.cos(b.at - at))) < ARROW_NEAR;
+  return { index: branches.findIndex(here), in: branches.some((b) => b.way === "in" && here(b)), out: branches.some((b) => b.way === "out" && here(b)) };
+}
+
 /** How near a cycle's line a thing let go is put on it, in bonds. */
 const SNAP = 1.0;
 /** How near words are put down, by hand, to where an arrow coming in or going out sets words of their size (`branchWordsAt`), their middle, to be its words, in bonds: a nudge keeps them its own, words taken well away are free. */

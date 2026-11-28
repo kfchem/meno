@@ -6,7 +6,7 @@ import type { Model } from "../store/types";
 import { createWorkspaceDocument, schemeOf, withImportedScheme, updateCycle as cycleChanged, type WorkspaceDocument } from "../document";
 import { readDrawn } from "./copyPaste";
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { arrowsOfCycles, branchDropped, branchOpened, branchTyped, wordsFollowing, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey, turnCycle, TURN_S, wordsOfBranches } from "./cycles";
+import { arrowsNear, arrowsOfCycles, branchDropped, branchOpened, branchTyped, wordsFollowing, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsAt, endsRenamed, membersOn, thingKey, turnCycle, TURN_S, wordsOfBranches } from "./cycles";
 
 const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, lo: half, hi: half });
 const settle = (e: CycleEase) => {
@@ -502,6 +502,21 @@ describe("the words that are an arrow's own, beside another arrow", () => {
     expect(branchTyped(cycles, caps, undefined, { x: 0, y: -6.5 * B }, half)).toBeNull();
     // (typed at a new arrow: its own, wherever)
     expect(branchTyped(cycles, caps, { cycle: p.cycle().id, ...top }, { x: 0, y: -6.5 * B }, half)).toEqual({ cycle: p.cycle().id, ...top });
+  });
+});
+
+describe("the arrows near where a cycle's menu was asked for", () => {
+  const deg = Math.PI / 180;
+  const inAt = { at: 90 * deg, way: "in" as const };
+
+  it("an arrow coming in a few degrees off: none coming in is put there again; one going out is; just past the near angle, one coming in is", () => {
+    const near = arrowsNear([inAt], 90 * deg + 11 * deg);
+    expect(near).toEqual({ index: 0, in: true, out: false });
+    const past = arrowsNear([inAt], 90 * deg + 13 * deg);
+    expect(past).toEqual({ index: -1, in: false, out: false });
+    // (either side, and across the angle's zero)
+    expect(arrowsNear([inAt], 90 * deg - 11 * deg).in).toBe(true);
+    expect(arrowsNear([{ at: 359 * deg, way: "out" }], 5 * deg)).toEqual({ index: 0, in: false, out: true });
   });
 });
 

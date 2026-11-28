@@ -217,8 +217,8 @@ import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
-import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
-import { branchBeyond, branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN, sameBranch } from "../../../lib/chem/cycle";
+import { arrowsNear, cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
+import { branchBeyond, branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
 import { CONVERSATION_FRAME } from "./conversation/ops";
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
@@ -2609,10 +2609,11 @@ function WorkspaceContent({
             // (where on its line it was right-clicked: an arrow put there; one there already, near it, can be taken away)
             const at = cyclePointed.id === cy.id ? cyclePointed.angle : 0;
             const branches = cy.branches ?? [];
-            const near = branches.findIndex((b) => Math.abs(Math.atan2(Math.sin(b.at - at), Math.cos(b.at - at))) < (12 * Math.PI) / 180);
+            const there = arrowsNear(branches, at);
+            const near = there.index;
             const add = (way: "in" | "out") => {
-              // (one arrow of each way at a place, at most: one there already that way is not put there again)
-              if (branches.some((b) => sameBranch(b, { at, way }))) return;
+              // (one arrow of each way at a place, at most: one near there already that way is not put there again)
+              if (there[way]) return;
               st.updateCycle(cy.id, { branches: [...branches, { at, way }] });
               // (its words written at once, set on from its far end the gap clear of it as they grow, and kept as its own: Escape, or nothing written, leaves it without)
               const path = branchPath(cy, { at, way }, NOMINAL_BOND_LENGTH);
@@ -2621,6 +2622,8 @@ function WorkspaceContent({
             return {
               onIn: () => add("in"),
               onOut: () => add("out"),
+              inHere: there.in,
+              outHere: there.out,
               ...(near >= 0 ? { onRemoveArrow: () => st.updateCycle(cy.id, { branches: branches.filter((_, i) => i !== near) }) } : {}),
               ccw: !!cy.ccw,
               onTurn: () => turnCycle(store, cy.id),

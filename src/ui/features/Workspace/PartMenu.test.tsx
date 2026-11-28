@@ -569,4 +569,14 @@ describe("frames and molecules taken as conformers, on the menu", () => {
     // (on a molecule, the page's own item is not listed a second time)
     expect(menu(target({ kind: "molecule3d", id: 1, selection: "here" }), { onJoinConformers: none, molecule3d: base as never }).listed).not.toContain("Join as conformers");
   });
+
+  it("on a cycle, dims the row adding an arrow of a way one near there already goes, and keeps the other way's", () => {
+    const cycle = { onIn: none, onOut: none, ccw: false, onTurn: none, gap: 0.5, setGap: none };
+    const at = (extra: object) => menu(target({ kind: "cycle", id: 1 }), { cycle: { ...cycle, ...extra } }).html;
+    const html = at({ inHere: true, onRemoveArrow: none });
+    expect(html).toMatch(/disabled=""[^>]*><span>Arrow coming in \(one is here\)<\/span>/);
+    expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*><span>Arrow going out<\/span>/);
+    const plain = at({});
+    expect(plain).toMatch(/<button(?![^>]*disabled="")[^>]*><span>Arrow coming in<\/span>/);
+  });
 });
