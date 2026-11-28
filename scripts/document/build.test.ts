@@ -164,6 +164,27 @@ describe("a workspace built from a manifest", () => {
     await expect(wrong([{ text: "intro.md" }], { colour: "red" })).rejects.toThrow(`The manifest: unknown key "colour"`);
     await expect(buildDocument({ entries: [{ text: "intro.md" }] }, read)).rejects.toThrow(`The manifest needs a "title".`);
   });
+
+  it("says of a text that goes on past its sheet where the sheet leaves off, by its entry - the text kept whole", async () => {
+    // (a heading, a blank line and 80 items: 82 lines, more than a sheet's 40 lines' height holds)
+    const long = `# Long\n\n${Array.from({ length: 80 }, (_, i) => `- item ${i}`).join("\n")}\n`;
+    const files: Record<string, string> = { ...FILES, "long.md": long };
+    const built = await buildDocument({ title: "t", entries: [{ text: "intro.md" }, { text: "long.md" }] }, (p) => files[p]);
+    expect(built.notes).toHaveLength(1);
+    const said = /^Entry 2 \(long\.md\): its sheet shows the text's first part: the first words it does not show are on line (\d+) of its 82\. The workspace keeps the whole text; it is read in the text column\.$/.exec(built.notes[0]);
+    expect(said).not.toBeNull();
+    // (the line where its sheet's rows leave off: an item's, past the heading, short of the end)
+    const line = Number(said![1]);
+    expect(line).toBeGreaterThan(3);
+    expect(line).toBeLessThan(82);
+    expect(long.split("\n")[line - 1]).toBe(`- item ${line - 3}`);
+    const file = readMenoFile(built.bytes, keptNamedIn);
+    holdOutputsOf(file);
+    const { ws } = await readKept(readWorkspace(file.workspace)!);
+    expect(ws.texts.map((t) => t.text)).toEqual([FILES["intro.md"], long]);
+    // (texts that fit: nothing said)
+    expect((await buildDocument(MANIFEST, read)).notes).toEqual([]);
+  });
 });
 
 describe("a built workspace's names", () => {

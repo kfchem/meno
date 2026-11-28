@@ -7,7 +7,9 @@
  * made, where it is given a width; and, put near an arrow, set over it or
  * under it, clear of it, to go where it goes.
  */
-import { italicUnits, labelUnits, unitRuns } from "./abbreviations";
+import { italicUnits, labelUnitNames, labelUnits, unitRuns } from "./abbreviations";
+import { ELEMENTS } from "./elements";
+import { metal } from "./perception/elements";
 import { ACS_LABEL_SET, labelBox, runsPlaces, runsWidth, type LabelSet, type TextItem, type TextRun } from "./layout2d";
 import { wordsLine, type SchemeArrow } from "./reactionScheme";
 import { letterStarts } from "../text/editing";
@@ -47,17 +49,107 @@ export const WORDS_STEPS: readonly number[] = [6, 7, 8, 9, 10, 11, 12, 14, 16, 1
  * `labelRuns`): K2CO3 with its counts low, Pd2(dba)3 likewise, t-BuOK with
  * its t in italics, a sign at its end - NH4+ - a charge. A prefix is only
  * one at the word's start, or after a bracket: the o of co-solvent is no
- * ortho. Words with no letter in them - 60, +, (1:1) - stay as typed.
+ * ortho. Words with no letter in them - 60, +, (1:1) - stay as typed; so
+ * does a word that is no formula (`formulaUnits`), one of the few written
+ * like one (`AS_TYPED_WORDS`), and an element's symbol with a number after
+ * it alone (P450, H1, C18) but for an element's own molecules (H2, S8).
  */
 function wordRuns(word: string): TextRun[] {
-  if (!/\p{L}/u.test(word)) return [{ text: word }];
-  const charge = /[a-zA-Z0-9)\]][+−-]$/.test(word) ? word.slice(-1) : null;
-  const body = charge ? word.slice(0, -1) : word;
+  if (!/\p{L}/u.test(word) || AS_TYPED_WORDS.has(word) || /^pH[\d.]+$/.test(word)) return [{ text: word }];
+  // (a name of the list within brackets, before a stop or a comma, or before a hyphen - (SN2), SN2., SN2-type: as typed, what follows the hyphen as any word)
+  const [, open, inner, close] = /^([([]*)(.*?)([)\].,:;!?]*)$/u.exec(word)!;
+  const head = inner.split("-")[0];
+  if (AS_TYPED_WORDS.has(head) && (open || close || head !== inner)) {
+    const after = inner.slice(head.length + 1);
+    return [{ text: open + head + (head !== inner ? "-" : "") }, ...(after ? wordRuns(after) : []), ...(close ? [{ text: close }] : [])];
+  }
+  // (the electron, and electrons counted: e-, 2e-)
+  const electron = /^(\d*e)[−-]$/.exec(word);
+  if (electron) return [{ text: electron[1] }, { text: "−", sup: true }];
+  const signed = /[a-zA-Z0-9)\]][+−-]$/.test(word);
+  let body = signed ? word.slice(0, -1) : word;
   const units = labelUnits(body);
-  const italic = italicUnits(units).map((it, k) => it && (k === 0 || /[([,]$/.test(units[k - 1])));
-  const runs = unitRuns(units, italic);
-  if (charge) runs.push({ text: charge.replace("-", "−"), sup: true });
+  const formula = formulaUnits(units);
+  const lone = /^(\p{Lu}\p{Ll}?)(\d+)$/u.exec(body);
+  // (a sign at its end is a charge only on a formula, or an element's symbol: H+, Cl-, NH4+ - never ortho-, TS1-)
+  const charged = signed && ((formula && units.some((u) => /^[\p{Lu}([]/u.test(u))) || SYMBOLS.has(body) || GENERIC.has(body));
+  if (signed && !charged) return [{ text: word }];
+  if (!signed && lone && (SYMBOLS.has(lone[1]) || GENERIC.has(lone[1])) && !ELEMENTS_AS_MOLECULES.has(body)) return [{ text: word }];
+  // (the digits that go with the sign: a metal's one - Fe3+, M2+, Ln3+; a bracket's - [Fe(CN)6]4-; of two or more, the last, 2 to 9 - SO42-)
+  let charge = "";
+  if (charged) {
+    const sign = word.slice(-1).replace("-", "−");
+    const ion = /^(\p{Lu}\p{Ll}?)(\d)$/u.exec(body);
+    const bracket = /\](\d+)$/.exec(body);
+    // (a charge is never written 0 or 1: C60- is C60 with its charge)
+    const digits = ion && (metal.has(ion[1]) || ion[1] === "M" || ion[1] === "Ln") ? ion[2] : bracket ? bracket[1] : /(?<=\d)[2-9]$/.exec(body)?.[0] ?? "";
+    body = body.slice(0, body.length - digits.length);
+    charge = digits + sign;
+  }
+  const parts = charge && body !== word.slice(0, -1) ? labelUnits(body) : units;
+  const italic = italicUnits(parts).map((it, k) => it && (k === 0 || /[([,]$/.test(parts[k - 1])));
+  let runs = unitRuns(parts, italic);
+  // (a name - AB1_CD002, TS1, Fig2 - is no formula: its digits stay as typed)
+  if (!formula) runs = runs.map(({ sub: _, ...r }) => r);
+  if (charge) runs.push({ text: charge, sup: true });
   return runs;
+}
+
+/**
+ * Words written as a formula would be that are none: the names of
+ * mechanisms, set as typed (docs/EDITOR-2D.md, *Text*).
+ */
+export const AS_TYPED_WORDS: ReadonlySet<string> = new Set(["SN1", "SN2", "SN2'", "SN2′", "SNi", "SRN1", "E1", "E2", "E1cB", "E1cb"]);
+
+/** An element's own molecules: an element's symbol and a count that is a formula, where a symbol and a number alone are a name. */
+const ELEMENTS_AS_MOLECULES: ReadonlySet<string> = new Set(["H2", "D2", "N2", "O2", "O3", "F2", "Cl2", "Br2", "I2", "S8", "P4", "C60", "C70", "X2"]);
+
+/** Element symbols, deuterium's D (CDCl3, D2O), and the single capitals a formula writes for a group: R2NH, R3SiCl, ArX. */
+const SYMBOLS: ReadonlySet<string> = new Set([...ELEMENTS.map((e) => e.symbol), "D", "R", "X"]);
+/**
+ * What a formula writes for a ligand, a metal and a lanthanide: L2Pd, ML2,
+ * M(CO)6, Ln(OTf)3. Read so only where one of them is counted or holds a
+ * bracket, and the word has a metal or nothing else written in capitals -
+ * so that B3LYP, PM6, MP2, IL6 and HL60 stay names.
+ */
+const GENERIC: ReadonlySet<string> = new Set(["L", "M", "Ln"]);
+/** What may stand between a formula's units: brackets, a dot of a hydrate or an adduct, a bond, a prime. */
+const JOINER = /^[()[\]·•.\-−+=≡*'′″]$/;
+/** The names Meno knows, as a set - made again only when they change (the user's own abbreviations). */
+let knownNames: { from: readonly string[]; names: ReadonlySet<string> } | null = null;
+
+/**
+ * Whether a word's units read as a formula, so that its counts are set low:
+ * each that has a count after it, or begins with a capital, an element's
+ * symbol or a group, ligand or reagent Meno knows (lib/chem/abbreviations
+ * `labelUnitNames`, the user's own with them), what a bracket holds read
+ * the same way, and nothing else between them but brackets, dots and
+ * bonds - and a deuterated solvent's d and count after a hyphen
+ * (DMSO-d6). K2CO3, Pd2(dba)3, Et3N, BF3·OEt2 are formulae; AB1_CD002 (A is
+ * no symbol, and _ is in no formula), TS1, Fig2 and Run12 are names. A
+ * locant written as one - C7-H - reads as a formula: the rule cannot tell.
+ */
+function formulaUnits(units: readonly string[]): boolean {
+  const from = labelUnitNames();
+  if (knownNames?.from !== from) knownNames = { from, names: new Set(from) };
+  const known = knownNames.names;
+  const flat = (us: readonly string[]): string[] => us.flatMap((u) => (/^\(.*\)\d*$/.test(u) ? [u, ...flat(labelUnits(u.replace(/^\((.*)\)\d*$/, "$1")))] : [u]));
+  const all = flat(units);
+  const cores = all.map((u) => u.replace(/\d+$/, ""));
+  const generic =
+    all.some((u, k) => GENERIC.has(cores[k]) && (u !== cores[k] || all[k + 1]?.startsWith("("))) &&
+    (cores.some((c) => metal.has(c)) || units.every((u) => !/^\p{Lu}/u.test(u) || GENERIC.has(u.replace(/\d+$/, ""))));
+  const reads = (us: readonly string[]): boolean =>
+    us.every((u, k) => {
+      if (/^d\d+$/.test(u) && us[k - 1] === "-") return true;
+      const group = /^\((.*)\)\d*$/.exec(u);
+      if (group) return reads(labelUnits(group[1]));
+      const core = u.replace(/\d+$/, "");
+      if (!/\p{L}/u.test(core)) return core === "" || JOINER.test(core);
+      if (core !== u || /^\p{Lu}/u.test(core)) return SYMBOLS.has(core) || known.has(core) || (generic && GENERIC.has(core));
+      return true;
+    });
+  return reads(units);
 }
 
 /**

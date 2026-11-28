@@ -88,6 +88,17 @@ refused, not passed over.
 - A mistake - a file missing, a key not known, a structure file that is not flat,
   frames of other atoms in a file marked `conformers` - stops the build with a
   sentence naming the entry. Nothing is skipped without saying so.
+- **A text longer than its sheet.** A sheet shows a text's first part, as in the
+  app: a Markdown text's rows as far as a sheet's 40 lines' height holds them,
+  its last line saying how many more lines the text has.
+  The workspace keeps the whole text, read in the text column. The build goes on
+  and says so on the console (and in `notes`, for a caller of `buildDocument`),
+  naming the entry and the line where the first words the sheet does not show
+  are, as the sheet itself measures it: "Entry 2 (notes.md): its sheet shows the
+  text's first part: the first words it does not show are on line 40 of its
+  120. The workspace keeps the whole text; it is read in the text column."
+- **The title and the names** are words on the page, set as the app sets them: a
+  formula's counts low (K2CO3), a name's digits as typed (TS1, AB1_CD002).
 
 ## What it does not do
 

@@ -24,6 +24,110 @@ describe("a caption's words", () => {
     expect(shown("BF4-")).toBe("BF|_4|^−");
   });
 
+  it("keep a name's digits as typed: only a word of element symbols and groups Meno knows is a formula", () => {
+    // (worked from the rule first: A is no element's symbol and _ is in no formula; T, Fig, Run, G and Cat name nothing a formula counts, and an L alone is a name)
+    expect(shown("AB1_CD002")).toBe("AB1_CD002");
+    expect(shown("Sample_A1, TS1, Fig2")).toBe("Sample_A1, TS1, Fig2");
+    expect(shown("Run12 Cat1 L1")).toBe("Run12 Cat1 L1");
+    expect(shown("XPhos Pd G3")).toBe("XPhos Pd G3");
+    expect(shown("3a, 2b")).toBe("3a, 2b");
+    // (formulae keep their counts low: elements, deuterium, groups, ligands, a hydrate's dot, a bracket's count)
+    expect(shown("H2O2")).toBe("H|_2|O|_2");
+    expect(shown("CDCl3, D2O")).toBe("CDCl|_3|, D|_2|O");
+    expect(shown("BF3·OEt2")).toBe("BF|_3|·OEt|_2");
+    expect(shown("CuSO4·5H2O")).toBe("CuSO|_4|·5H|_2|O");
+    expect(shown("[RuCl2(p-cymene)]2")).toBe("[RuCl|_2|(|/p/|-cymene)]|_2");
+    expect(shown("Ni(cod)2, R2NH")).toBe("Ni(cod)|_2|, R|_2|NH");
+    expect(shown("Ts2O, Boc2O")).toBe("Ts|_2|O, Boc|_2|O");
+    // (a locant written as a formula is - C7-H, 6-H2 - reads as one: the rule cannot tell)
+    expect(shown("C7-H")).toBe("C|_7|-H");
+    expect(shown("6-H2")).toBe("6-H|_2");
+  });
+
+  it("keep a deuterated solvent's count low: a d and its count after a hyphen", () => {
+    expect(shown("DMSO-d6")).toBe("DMSO-d|_6");
+    expect(shown("acetone-d6")).toBe("acetone-d|_6");
+    expect(shown("THF-d8")).toBe("THF-d|_8");
+    expect(shown("methanol-d4")).toBe("methanol-d|_4");
+    expect(shown("toluene-d8")).toBe("toluene-d|_8");
+    expect(shown("benzene-d6")).toBe("benzene-d|_6");
+    expect(shown("pyridine-d5")).toBe("pyridine-d|_5");
+    expect(shown("CD3OD")).toBe("CD|_3|OD");
+    expect(shown("CD2Cl2")).toBe("CD|_2|Cl|_2");
+    expect(shown("C6D6")).toBe("C|_6|D|_6");
+    expect(shown("D2O")).toBe("D|_2|O");
+    expect(shown("CDCl3")).toBe("CDCl|_3");
+  });
+
+  it("set the names of mechanisms as typed", () => {
+    for (const w of ["SN1", "SN2", "SN2'", "SNi", "SRN1", "E1", "E2", "E1cB"]) expect(shown(w)).toBe(w);
+    expect(shown("an SN2 step")).toBe("an SN2 step");
+    // (within brackets, before a stop or a comma, before a hyphen - what follows the hyphen set as any word)
+    expect(shown("(SN2)")).toBe("(SN2)");
+    expect(shown("by SN2.")).toBe("by SN2.");
+    expect(shown("SN1, E1")).toBe("SN1, E1");
+    expect(shown("SN2-type")).toBe("SN2-type");
+    expect(shown("an SN2-like step")).toBe("an SN2-like step");
+    expect(shown("[E2]")).toBe("[E2]");
+    expect(shown("E1cB-like")).toBe("E1cB-like");
+    // (the formulae beside them keep their counts)
+    expect(shown("NO2, CS2")).toBe("NO|_2|, CS|_2");
+  });
+
+  it("set an element's symbol and a number alone as typed, but for an element's own molecules", () => {
+    for (const w of ["P450", "K562", "U87", "H1299", "B16", "S9", "F12", "N95", "W2", "Y2", "H1", "D3", "C18", "B12", "S1", "R1", "L1", "M1"]) expect(shown(w)).toBe(w);
+    expect(shown("H2, D2, N2, O2, O3")).toBe("H|_2|, D|_2|, N|_2|, O|_2|, O|_3");
+    expect(shown("F2 Cl2 Br2 I2")).toBe("F|_2| Cl|_2| Br|_2| I|_2");
+    expect(shown("S8, P4, C60, C70, X2")).toBe("S|_8|, P|_4|, C|_60|, C|_70|, X|_2");
+  });
+
+  it("read L, M and Ln as a ligand, a metal and a lanthanide where one is counted, beside a metal or alone", () => {
+    expect(shown("L2Pd")).toBe("L|_2|Pd");
+    expect(shown("PdL4")).toBe("PdL|_4");
+    expect(shown("ML2")).toBe("ML|_2");
+    expect(shown("M(CO)6")).toBe("M(CO)|_6");
+    expect(shown("Ln(OTf)3")).toBe("Ln(OTf)|_3");
+    expect(shown("PdCl2L2")).toBe("PdCl|_2|L|_2");
+    // (names that hold an L or an M: no metal beside it, or it uncounted)
+    for (const w of ["B3LYP-D3", "PM6", "MP2", "IM2", "MCF7", "IL6", "HL60", "M2", "L3"]) expect(shown(w)).toBe(w);
+  });
+
+  it("set a sign at a word's end as a charge only on a formula or an element's symbol", () => {
+    expect(shown("H+, Cl-, OH-, Na+")).toBe("H|^+|, Cl|^−|, OH|^−|, Na|^+");
+    expect(shown("NH4+, Me4N+, M+")).toBe("NH|_4|^+|, Me|_4|N|^+|, M|^+");
+    // (the electron, and electrons counted)
+    expect(shown("e-")).toBe("e|^−");
+    expect(shown("+ 2e-")).toBe("+ 2e|^−");
+    // (pH and a number: as typed)
+    expect(shown("pH7, pH7.4")).toBe("pH7, pH7.4");
+    for (const w of ["ortho-", "para-", "anti-", "syn-", "cis-", "trans-", "tert-", "TS1-", "Fig2-"]) expect(shown(w)).toBe(w);
+    // (a hyphen within a word is a hyphen)
+    expect(shown("N-methyl, O-alkylation, C-H, S-phenyl")).toBe("N-methyl, O-alkylation, C-H, S-phenyl");
+  });
+
+  it("raise a charge's number with its sign: a metal's digit, a bracket's, and the last of two or more", () => {
+    expect(shown("Fe3+, Cu2+, Al3+")).toBe("Fe|^3+|, Cu|^2+|, Al|^3+");
+    expect(shown("Ca2+ Pd2+ Ce4+")).toBe("Ca|^2+| Pd|^2+| Ce|^4+");
+    expect(shown("SO42-")).toBe("SO|_4|^2−");
+    expect(shown("PO43-, CO32-")).toBe("PO|_4|^3−|, CO|_3|^2−");
+    expect(shown("Cr2O72-")).toBe("Cr|_2|O|_7|^2−");
+    expect(shown("S2O32-, O22-")).toBe("S|_2|O|_3|^2−|, O|_2|^2−");
+    expect(shown("Hg22+")).toBe("Hg|_2|^2+");
+    // (a charge is never written 0 or 1: the last digit goes with the sign only where it is 2 to 9)
+    expect(shown("C60-")).toBe("C|_60|^−");
+    expect(shown("C70-")).toBe("C|_70|^−");
+    expect(shown("S42-")).toBe("S|_4|^2−");
+    // (a metal written M or Ln: its digit the charge)
+    expect(shown("M2+, M3+, Ln3+")).toBe("M|^2+|, M|^3+|, Ln|^3+");
+    expect(shown("[Fe(CN)6]4-")).toBe("[Fe(CN)|_6|]|^4−");
+    expect(shown("[Rh(cod)Cl]2")).toBe("[Rh(cod)Cl]|_2");
+    // (one digit on a formula of several parts, or on a nonmetal: the count)
+    expect(shown("PF6-, BF4-, MnO4-")).toBe("PF|_6|^−|, BF|_4|^−|, MnO|_4|^−");
+    expect(shown("NO3-, I3-, N3-")).toBe("NO|_3|^−|, I|_3|^−|, N|_3|^−");
+    // (an oxide or a superoxide written O2- reads as the count: set by hand where it is the charge)
+    expect(shown("O2-")).toBe("O|_2|^−");
+  });
+
   it("leave what has no letters as typed: numbers, signs, ratios", () => {
     expect(shown("−78 °C, 2 h")).toBe("−78 °C, 2 h");
     expect(shown("A + B")).toBe("A + B");

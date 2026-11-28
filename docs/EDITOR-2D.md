@@ -2408,7 +2408,47 @@ All hover-based, as above.
     Pd₂(dba)₃, Pd(PPh₃)₄), a prefix's t- in italics at a word's start
     (*t*-BuOK, not the o of co-solvent), a sign at a formula's end its
     charge (NH₄⁺); what has no letter in it - 60 °C, 12 h, (1:1), + - as
-    typed. Line under line, each centred, in the labels' typeface and size.
+    typed. A word is a formula only where it reads as one
+    (`lib/chem/captions` `formulaUnits`):
+    - each of its parts that has a count after it, or begins with a
+      capital, is an element's symbol (D too), R or X, or a group, ligand
+      or reagent Meno knows - the chemist's own abbreviations with them;
+      what a bracket holds is read the same way; nothing stands between
+      them but brackets, a dot (CuSO₄·5H₂O), a hyphen, a bond or a prime;
+      and a deuterated solvent's d and count after a hyphen is a count
+      (DMSO-d₆, its d upright).
+    - L, M and Ln are a ligand, a metal and a lanthanide (L₂Pd, ML₂,
+      M(CO)₆, Ln(OTf)₃) where one of them is counted or holds a bracket,
+      beside a metal or with no other capital in the word; else they are
+      letters of a name (B3LYP, PM6, IL6).
+    - A name keeps its digits as typed: AB1_CD002, TS1, Fig2, Run12, XPhos
+      Pd G3. So does an element's symbol and a number alone - P450, H1,
+      C18, S1, B12, C2 - but for an element's own molecules (H₂, D₂, N₂,
+      O₂, O₃, F₂, Cl₂, Br₂, I₂, S₈, P₄, C₆₀, C₇₀, X₂); and a short list of
+      names of mechanisms written as formulae are (`AS_TYPED_WORDS`: SN1,
+      SN2, SN2', SNi, SRN1, E1, E2, E1cB), within brackets, before a
+      stop or a comma and before a hyphen too - (SN2), SN2., SN2-type, the
+      words after the hyphen set as any; and pH with a number (pH7,
+      pH7.4).
+    - A sign at a word's end is a charge only on a formula or an element's
+      symbol (H⁺, Cl⁻, NH₄⁺, M⁺), and the electron (e⁻, 2e⁻); else it is
+      a hyphen as typed (ortho-, tert-, TS1-). Its number goes up with it:
+      a metal's one digit, M's and Ln's too (Fe³⁺, Cu²⁺, M²⁺, Ln³⁺), a
+      closing square bracket's ([Fe(CN)₆]⁴⁻; without a sign, [Rh(cod)Cl]₂
+      keeps its count), and the last of two digits or more where it is 2
+      to 9, a charge never being written 0 or 1 (SO₄²⁻, Cr₂O₇²⁻, Hg₂²⁺;
+      C₆₀⁻); one digit on a formula of several parts or a nonmetal stays
+      its count (PF₆⁻, MnO₄⁻, N₃⁻).
+    - The rule cannot tell some: a locant written as a formula is (C7-H,
+      C2-C3, N1-H, 6-H2), set as a formula; a cluster's charge after its
+      count (Au25-, set Au₂⁵⁻); names of cells and proteins written as
+      formulae are (CD4, PC3), set so; O2- and S2-, set as superoxide and
+      disulfide (O₂⁻, S₂⁻) - an oxide's or a sulfide's charge is set by
+      selecting the 2 and *Superscript*. *Superscript* and
+      *Subscript* raise and lower letters, but nothing yet sets a count
+      back on the line.
+
+    Line under line, each centred, in the labels' typeface and size.
   - Put down near an arrow - within its length and two and a half ems of
     it - they go over it or under it, on the side they were put, centred on
     its middle and half an em clear of it, beyond any words already there;
@@ -2513,8 +2553,10 @@ All hover-based, as above.
       from the palette (Settings, *General*), where they are right-clicked
       or among a selection. The words stay plain text: the marks are kept
       beside them as ranges of their letters, so that copying, smart words
-      and finding words are as they were. A formula's counts stay low and
-      its prefixes in italics, whatever is marked. Bold is drawn on the
+      and finding words are as they were. A formula's counts are low and
+      its prefixes in italics where nothing is marked; letters marked
+      *Superscript* or *Subscript* are raised or lowered as marked, a
+      count too. Bold is drawn on the
       canvas as an outline of the letters' own colour, and as bold type
       in pictures.
     - *Lists*: a line that starts - after a tab for each level it is in,

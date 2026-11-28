@@ -132,8 +132,28 @@ type Ready = {
   put: (at: { x: number; y: number }, nameY: number) => void;
 };
 
-/** The built workspace: its file's bytes, and where each entry went (the manifest's order, breaks left out) - each box as it stands on the page. */
-export type Built = { bytes: Uint8Array; boxes: Box[]; title: Box };
+/**
+ * The built workspace: its file's bytes, where each entry went (the
+ * manifest's order, breaks left out) - each box as it stands on the page -
+ * and what the build has to say of it that is no mistake (`notes`): a
+ * text that goes on past its sheet, by its entry.
+ */
+export type Built = { bytes: Uint8Array; boxes: Box[]; title: Box; notes: string[] };
+
+/**
+ * What a text's sheet leaves out, said of its entry: where the first words
+ * it does not show are, by the text's line, and how many of the lines it
+ * shows are cut short at its edge - none, where it shows the whole text.
+ * The text is kept whole, and read whole in the text column.
+ */
+export function sheetLeavesOut(at: string, text: string, sheet: { more?: number; cut?: number }): string | null {
+  if (sheet.more == null && !sheet.cut) return null;
+  const lines = text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+  const said: string[] = [];
+  if (sheet.more != null) said.push(`its sheet shows the text's first part: the first words it does not show are on line ${text.slice(0, sheet.more).split("\n").length} of its ${lines}`);
+  if (sheet.cut) said.push(`${sheet.cut} of the lines it shows ${sheet.cut === 1 ? "is" : "are"} wider than the sheet, cut short at its edge`);
+  return `${at}: ${said.join("; ")}. The workspace keeps the whole text; it is read in the text column.`;
+}
 
 /**
  * The workspace `manifest` makes. `read` gives a file's text by its path
@@ -167,6 +187,7 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   };
 
   const ready: (Ready | "break")[] = [];
+  const notes: string[] = [];
   for (const [i, raw] of given.entries.entries()) {
     const at = where(i, raw as Record<string, unknown>);
     if ("break" in raw) {
@@ -177,6 +198,8 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
       // (Markdown as its file is, whatever it is named - as a file opened in the app)
       const markdown = isMarkdown(raw.text);
       const sheet = sheetOf(text, markdown);
+      const leftOut = sheetLeavesOut(at, text, sheet);
+      if (leftOut) notes.push(leftOut);
       // (a sheet lies from its top left corner: `at`)
       ready.push({ foot: { x0: 0, x1: sheet.w, y0: -sheet.h, y1: 0 }, sheet: true, put: (p) => store.getState().addTexts([{ name, text, ...(markdown ? { markdown: true as const } : {}), at: p }]) });
     } else if ("structure" in raw) {
@@ -307,5 +330,5 @@ export async function buildDocument(manifest: unknown, read: (path: string) => s
   for (const { r, p, nameY } of plan) r.put(p, nameY);
   const boxes = plan.map((q) => q.box);
   const { bytes } = await workspaceFile(store.getState());
-  return { bytes, boxes, title: titleBox };
+  return { bytes, boxes, title: titleBox, notes };
 }

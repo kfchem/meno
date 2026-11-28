@@ -595,6 +595,20 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   type, and its name under it. A text opened, dropped or made new
   (*New text*) lies on the page as well as being in the column. Seen
   nearer, more of it shows, and it is read where it lies.
+  - A plain text's sheet is as wide as its longest line among its first
+    40, up to 80 letters, and as tall as those lines; a longer line is
+    cut at its edge. A text of more than 40 lines shows its first 39,
+    and its last line says, in the grey of the sheet's name, how many
+    more it has ("21 more lines"); a Markdown text's sheet ends so too,
+    under the rows it holds, counting the lines of the text from the
+    one its first row left out begins on. The text itself is kept whole
+    and read whole in the column. A Chinese, Japanese or Korean letter,
+    or a full-width form, counts 1.75 letters across: the type takes it
+    from a fallback, a whole em wide where a letter of its own is 0.6 of
+    one, and a twentieth of an em is spared - so that a line of them is
+    as wide on its sheet as its words (`utils/textSheets`). A Markdown
+    text's sheet is broken into lines as the column breaks it, between
+    such letters too.
 - **It comes onto the page as an icon**, as a PDF does: its sheet made
   small, its longer side as long as a PDF's icon is tall, its name
   under it at the size of the drawing's labels. *Show full size* and
