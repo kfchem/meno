@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALIKE_WAYS, SAME_CONFORMER, Sameness, WAY_STEPS, work } from "./sameConformer";
 import { runMeno } from "./meno";
+import { rmsd } from "./rmsd";
 import { entryOfSet, setEntries, type SetEntry } from "./entries";
 
 /** A geometry turned about z by `deg` and moved by `by`. */
@@ -235,6 +236,46 @@ describe("Duplicates, on the one definition", () => {
       ok: false,
       said: "Which stereoisomer entry 1 is is not known: a mirror image is counted in only where it is the same stereoisomer",
     });
+  });
+});
+
+describe("Duplicates within each value of a property, its entries numbered each their own way", () => {
+  // (a gauche peroxide - a chiral shape of an achiral molecule - as a made-up saddle point found twice: the second its
+  //  mirror image, its atoms numbered H, O, H, O and bonded by another map, the O-O bond not drawn)
+  const gauche = peroxide(115);
+  const order = [3, 1, 2, 0];
+  const mirror = renumbered(turned(peroxide(-115), 80, [1, 1, 1]), order);
+  const entry = (atoms: { el: string }[], bonds: { a1: number; a2: number; order: number }[], xyz: readonly number[], id: number) => ({
+    id,
+    at: { x: 0, y: 0 },
+    atoms: atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })),
+    bonds,
+    energies: [0],
+    imaginary: [[-300]],
+    properties: [{ path: { value: "p", unit: "none" as const, status: "computed" as const } }],
+  });
+  const two = () =>
+    setEntries(
+      [
+        entry(PEROXIDE.atoms, PEROXIDE.bonds, gauche, 1),
+        entry(order.map((i) => PEROXIDE.atoms[i]), [{ a1: 0, a2: 1, order: 1 }, { a1: 2, a2: 3, order: 1 }], mirror, 2),
+      ],
+      "molecules",
+    ).map((e) => ({ ...e, stereo: { perceived: true as const, elements: [], key: "achiral", by: { plugin: "rdkit", version: "1" } } }));
+
+  it("keeps a mirror image apart by default, and counts it in where asked - the atoms it swaps in each one's own numbering", () => {
+    const by = { within: "each value", groupBy: "path" };
+    const apart = runMeno("duplicates", two(), "molecules", by);
+    expect(apart.ok && apart.kept.length).toBe(2);
+    const counted = runMeno("duplicates", two(), "molecules", { ...by, mirrors: "counted" });
+    if (!counted.ok) throw new Error(counted.said);
+    expect(counted.kept.map((e) => e.degeneracy)).toEqual([2]);
+    // (the kept one's atom i plays in the mirror image, as that one is numbered, the part of its atom swap[i]: the kept
+    //  one reflected lies over the mirror image put in that order)
+    const swap = counted.kept[0].mirror!;
+    expect(swap.map((i) => order[i] < 2 ? "O" : "H")).toEqual(["O", "O", "H", "H"]);
+    const reflected = gauche.map((v, k) => (k % 3 === 0 ? -v : v));
+    expect(rmsd(reflected, renumbered(mirror, swap))).toBeLessThan(1e-6);
   });
 });
 

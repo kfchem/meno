@@ -18,7 +18,8 @@
  * other atoms not in a line - water, ethyne - has nothing to lay over by
  * them: the ways of all its atoms are tried instead.
  */
-import { symmetryClasses } from "../../../../lib/layout/canonical";
+import { canonicalSearched, symmetryClasses } from "../../../../lib/layout/canonical";
+import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import { huckelBonds } from "../../../../lib/chem/huckel";
 import { rmsd } from "./rmsd";
 
@@ -206,6 +207,48 @@ export class Sameness {
     }
     return true;
   }
+}
+
+/**
+ * Geometries of the same atoms put in one numbering by where their atoms
+ * stand, not by the numbers or bonds they came with: a saddle point found
+ * from both directions is numbered and bonded by each side's own map. Each
+ * is bonded by distance (`bondedPairs`, as a file of atoms alone is, all
+ * single) and written in its own order (`canonicalSearched`); those written
+ * alike are one group, numbered as its first: atom j of the group is the
+ * member's own atom `from[j]`, its place `xyz`'s j-th. One whose bonds by
+ * distance differ from another's - a bond just at the reach in one alone -
+ * is of another group: a duplicate can be missed so, never two made one,
+ * since the group's members are still compared by `Sameness`.
+ */
+export function byWhereTheyStand(given: readonly { atoms: readonly Atom[]; xyz: readonly number[] }[]): { atoms: Atom[]; bonds: Bond[]; members: { at: number; xyz: number[]; from: number[] }[] }[] {
+  const groups = new Map<string, { atoms: Atom[]; bonds: Bond[]; place: number[]; members: { at: number; xyz: number[]; from: number[] }[] }>();
+  given.forEach(({ atoms, xyz }, at) => {
+    const pairs = bondedPairs(xyz, bondRadii(atoms.map((a) => a.el)));
+    const bonds: Bond[] = [];
+    for (let k = 0; k < pairs.length; k += 2) bonds.push({ a1: pairs[k], a2: pairs[k + 1], order: 1 });
+    // (an isotope is part of what an atom is; a charge is not - each side's map may give the same atoms charges of its own, the whole's charge compared apart)
+    const { text, ranks } = canonicalSearched({
+      atoms: atoms.map((a) => ({ el: a.isotope ? `${a.isotope}${a.el}` : a.el, hs: 0 })),
+      bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: 1 })),
+    });
+    const n = atoms.length;
+    const whole = ranks.length === n && new Set(ranks).size === n && ranks.every((r) => r >= 0 && r < n);
+    // (a numbering not one place for each atom: on its own, as it came)
+    const key = whole ? text : `#${at}`;
+    const atPlace = new Array<number>(n);
+    if (whole) ranks.forEach((r, i) => (atPlace[r] = i));
+    else for (let i = 0; i < n; i++) atPlace[i] = i;
+    const g = groups.get(key);
+    if (!g) {
+      groups.set(key, { atoms: atoms.map((a) => ({ el: a.el, ...(a.isotope ? { isotope: a.isotope } : {}) })), bonds, place: whole ? ranks : atPlace, members: [{ at, xyz: [...xyz], from: atoms.map((_, i) => i) }] });
+      return;
+    }
+    // (the group's atom j stands at place g.place[j]; this one's atom there is atPlace[g.place[j]])
+    const from = g.place.map((p) => atPlace[p]);
+    g.members.push({ at, xyz: from.flatMap((i) => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]]), from });
+  });
+  return [...groups.values()].map(({ atoms, bonds, members }) => ({ atoms, bonds, members }));
 }
 
 /**

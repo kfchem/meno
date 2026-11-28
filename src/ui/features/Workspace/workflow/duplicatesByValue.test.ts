@@ -121,3 +121,62 @@ describe("Duplicates, within each value of a property", () => {
     expect(needsOf({ kind: "duplicates", options: { within: "each value" } })).toBe("Name the property whose values are the groups");
   });
 });
+
+// The same saddle point found from both directions comes numbered, and bonded, by each side's own map: judged one by
+// where its atoms stand, on the one definition of the same conformer - all atoms within 0.01 Å, turned and moved,
+// never reflected - its atoms' correspondence found from the geometry, not taken from the numbers.
+describe("Duplicates, within each value of a property: the same saddle point numbered two ways", () => {
+  const P = { product: text("P") };
+  /** A made-up saddle point at a carbon with four different atoms on it (C, H, F, Cl, Br): each atom's place. */
+  const CHFClBr: [string, number[]][] = (() => {
+    const s = 1 / Math.sqrt(3);
+    const on = (d: number, v: number[]) => v.map((x) => d * x * s);
+    return [
+      ["C", [0, 0, 0]],
+      ["H", on(1.09, [1, 1, 1])],
+      ["F", on(1.35, [1, -1, -1])],
+      ["Cl", on(1.78, [-1, 1, -1])],
+      ["Br", on(1.94, [-1, -1, 1])],
+    ];
+  })();
+  /** A molecule of those atoms in `order` (its atom k is CHFClBr's `order[k]`), turned about z by 90° and moved, each place mapped by `move`; bonded as `bonds` (by CHFClBr's numbers). */
+  function numbered(order: readonly number[], bonds: readonly [number, number][], e: number, move = (v: number[]) => v): Omit<Molecule3D, "id"> {
+    const at = order.map((i) => {
+      const [x, y, z] = move(CHFClBr[i][1]);
+      return { el: CHFClBr[i][0], x: -y + 3, y: x - 1, z: z + 2 };
+    });
+    return {
+      at: { x: 0, y: 0 },
+      atoms: at,
+      bonds: bonds.map(([a, b]) => ({ a1: order.indexOf(a), a2: order.indexOf(b), order: 1 })),
+      conformerSet: true,
+      energies: [e],
+      properties: [P],
+      imaginary: [[-450]],
+    };
+  }
+  // (one side's map: C bonded to all four; the other's: atoms in another order, the C-Cl bond it breaks not drawn)
+  const fromReactant = () => numbered([0, 1, 2, 3, 4], [[0, 1], [0, 2], [0, 3], [0, 4]], -100.0);
+  const fromProduct = (move?: (v: number[]) => number[]) => numbered([4, 3, 0, 2, 1], [[0, 1], [0, 2], [0, 4]], -100.001, move);
+
+  it("keeps one: the same geometry under two numberings, bonded each its own way", () => {
+    const doc = runStep(compared([fromReactant(), fromProduct()], BY), 2, W);
+    expect(ran(doc)?.said).toBe("1 of 2 entries kept · rest 1");
+    // (the lower kept: the product side's, b)
+    expect(asides(doc)).toEqual(["the same as b #1, which was kept"]);
+    // (a hair apart - the bromine 0.002 Å out - well within 0.01 Å: one)
+    const hair = runStep(compared([fromReactant(), fromProduct((v) => (v === CHFClBr[4][1] ? v.map((x) => x * 1.001) : v))], BY), 2, W);
+    expect(ran(hair)?.said).toBe("1 of 2 entries kept · rest 1");
+  });
+
+  it("keeps two: a mirror image, and a saddle point truly different", () => {
+    const mirrored = runStep(compared([fromReactant(), fromProduct(([x, y, z]) => [-x, y, z])], BY), 2, W);
+    expect(ran(mirrored)?.said).toBe("2 of 2 entries kept");
+    // (the bromine 0.1 Å out: past 0.01 Å, two)
+    const longer = runStep(compared([fromReactant(), fromProduct((v) => (v === CHFClBr[4][1] ? v.map((x) => (x * 2.04) / 1.94) : v))], BY), 2, W);
+    expect(ran(longer)?.said).toBe("2 of 2 entries kept");
+    // (nor across products: each value compared within itself)
+    const q = { ...fromProduct(), properties: [{ product: text("Q") }] };
+    expect(ran(runStep(compared([fromReactant(), q], BY), 2, W))?.said).toBe("2 of 2 entries kept");
+  });
+});

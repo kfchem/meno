@@ -27,7 +27,7 @@ import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
 import { displaceRead, kindInfo, optionsOf, WINDOW_NEEDED, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
-import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
+import { byWhereTheyStand, cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
@@ -753,7 +753,9 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
       else if (kinds.every((k) => k === "not known")) unknownKinds++;
     }
     valued = entries.filter((e) => !why.has(e));
-    keyOf = (e: SetEntry) => `${valueOf.get(e)}|${atomsOf(e)}|${bondsOf(e)}|${speciesOf(e)}`;
+    // (across compounds the same atoms may come numbered and bonded each its own way - a saddle point found from both
+    //  directions, by each side's map: compared by what they are and where they stand, numbered alike below)
+    keyOf = (e: SetEntry) => `${valueOf.get(e)}|${formulaOf(e)}|${speciesOf(e)}`;
   }
   const energies = valued.every(hasEnergy);
   const groups = [...valued.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
@@ -772,8 +774,19 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
   let counted = 0;
   // (compounds with too many ways onto themselves to try, taken atom against atom: a duplicate of one could be missed - said)
   let capped = 0;
-  for (const g of groups) {
-    const same = new Sameness(g[0].atoms, g[0].bonds, g[0].xyz);
+  // (each entry's geometry in its group's numbering, and which of its own atoms each is: in each value of a property, by
+  //  where they stand - byWhereTheyStand - else as they came)
+  const laid = new Map<SetEntry, { xyz: readonly number[]; from: readonly number[] }>();
+  const xyzOf = (e: SetEntry) => laid.get(e)?.xyz ?? e.xyz;
+  const units = !by
+    ? groups.map((g) => ({ g, same: new Sameness(g[0].atoms, g[0].bonds, g[0].xyz) }))
+    : groups.flatMap((g) =>
+        byWhereTheyStand(g).map(({ atoms, bonds, members }) => {
+          for (const m of members) laid.set(g[m.at], m);
+          return { g: members.map((m) => g[m.at]), same: new Sameness(atoms, bonds, members[0].xyz) };
+        }),
+      );
+  for (const { g, same } of units) {
     if (same.capped && g.length > 1) capped++;
     const here: { e: SetEntry; sig: Float64Array }[] = [];
     let order: readonly SetEntry[] = energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g;
@@ -782,8 +795,8 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
       for (const e of g) {
         if (done > 0 && due()) yield done;
         done++;
-        const sig = same.signature(e.xyz);
-        const seed = seeds.find((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9 && same.same(k.e.xyz, e.xyz));
+        const sig = same.signature(xyzOf(e));
+        const seed = seeds.find((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9 && same.same(xyzOf(k.e), xyzOf(e)));
         if (seed) seed.members.push(e);
         else seeds.push({ e, sig, members: [e] });
       }
@@ -803,19 +816,27 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
     for (const e of order) {
       if (done > 0 && due()) yield done;
       if (!by) done++;
-      const sig = same.signature(e.xyz);
+      const sig = same.signature(xyzOf(e));
       // (only those it could be within reach of: a mirror image's atoms lie as far from its centre)
       const near = here.filter((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9);
-      const twinOf = near.find((k) => same.same(k.e.xyz, e.xyz));
+      const twinOf = near.find((k) => same.same(xyzOf(k.e), xyzOf(e)));
       if (twinOf) {
         if (by) why.set(e, `the same as ${named(twinOf.e)}, which was kept`);
         continue;
       }
       if (mirrors === "counted") {
-        const twin = near.find((k) => !kept.get(k.e)!.mirror && stereoIdentity(k.e.stereo) === stereoIdentity(e.stereo) && same.mirrorOf(k.e.xyz, e.xyz));
+        const twin = near.find((k) => !kept.get(k.e)!.mirror && stereoIdentity(k.e.stereo) === stereoIdentity(e.stereo) && same.mirrorOf(xyzOf(k.e), xyzOf(e)));
         if (twin) {
           const k = kept.get(twin.e)!;
-          k.mirror = same.mirrorOf(twin.e.xyz, e.xyz)!.to;
+          const to = same.mirrorOf(xyzOf(twin.e), xyzOf(e))!.to;
+          // (in their own numberings: the group's atom j is the kept one's atom fromT[j], and the mirror image's own fromE[j])
+          const fromT = laid.get(twin.e)?.from;
+          const fromE = laid.get(e)?.from;
+          if (fromT && fromE) {
+            const own = new Array<number>(to.length);
+            to.forEach((t, j) => (own[fromT[j]] = fromE[t]));
+            k.mirror = own;
+          } else k.mirror = to;
           k.degeneracy += e.degeneracy ?? 1;
           counted++;
           continue;
@@ -893,6 +914,8 @@ function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, CalcLevel
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
+/** An entry's atoms by what each is - element and isotope - in no order: what entries numbered each their own way are first grouped by. */
+const formulaOf = (e: SetEntry) => e.atoms.map((a) => `${a.isotope ?? ""}${a.el}`).sort().join(" ");
 const bondsOf = (e: SetEntry) => e.bonds.map((b) => `${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}:${b.order}`).sort().join(" ");
 
 /**
