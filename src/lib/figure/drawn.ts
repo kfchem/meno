@@ -471,8 +471,18 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     return false;
   });
   // (a wedge's edges stroked round it - filled, then outlined, as some drawings have one - its own, no lines: each end at a corner of it)
-  const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
-  out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
+  // (an edge runs from one corner to another: a short line with both ends by one corner - a hash's line beside a wedge's corner carried
+  // out to the hash's own line, as a wide end drawn into the bonds it meets has one - is no edge of it, and is kept)
+  const corner = (p: Point, w: Wedge, d: number) => {
+    const q = (w.outline ?? []).reduce<Point | null>((m, c) => (!m || dist(p, c) < dist(p, m) ? c : m), null);
+    return q && dist(p, q) <= d ? q : null;
+  };
+  const edgeOf = (s: Stroke, w: Wedge, d: number) => {
+    const [i, j] = [corner(s.a, w, d), corner(s.b, w, d)];
+    // (two corners, not one written twice: within a thousandth, as `filledShape` tells its corners)
+    return !!i && !!j && dist(i, j) > 1e-3;
+  };
+  out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => edgeOf(s, w, Math.max(0.5, 2 * s.w))));
   // (and a line drawn down a wedge, within it - its middle line, under the fill or over it, as some programs draw one - its own: else
   // read as a bond beside it, to an atom of its own at the wide end)
   const inWedge = (p: Point, w: Wedge, d: number) => {

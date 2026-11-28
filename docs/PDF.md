@@ -525,14 +525,52 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   of a bond, or nearest letters read in no label, within 1.2 bonds, is
   unsure, and says so. A label the matcher cannot read, or whose bond was
   lost, would otherwise be left out with what it holds, and what is left
-  can be a whole structure that is not the picture's.
+  can be a whole structure that is not the picture's. A lone ion's word
+  that no atom took - a metal or a halide, alone, with or without its
+  count and sign: Na, K+, Cl- - standing farther off than that is said
+  where the structure nearest it is not whole without an ion: charged as
+  read, or with an atom left open (below). It is said as that
+  structure's counter-ion, and, where an atom is open, in that atom's one
+  sentence. A molecule's formula - a reagent's or a solvent's, NaOH,
+  MeOH, K2CO3, NaBH4 - is no lone ion, and a lone Na by a structure read
+  whole and neutral is a reagent's: neither is said.
+- **An atom its bonds do not fit**: read from a picture, an atom written
+  as its element alone - no H, no charge, no charge drawn by it, no
+  radical's dots - whose bonds its element cannot hold uncharged, by the
+  valences Meno fills hydrogens to (B 3; N 3 or 5; O 2; P 3 or 5; S 2, 4
+  or 6; F, Cl, Br, I 1), is unsure and says so. Too few - an acetate's O
+  whose minus was not traced, a Cl read alone with no bond - would
+  otherwise be filled with H; too many - an N or a B with four bonds, an
+  O with three - has a plus or a minus not shown or not read. Too many is
+  judged on B, N, O, S and P alone: a halogen's higher valences (an
+  iodane's I, a perchlorate's Cl) are as drawn. It is never said on an
+  atom bonded to a metal, whose donor bond is often drawn as a plain
+  line (a pyridine's N on Pd, a phosphine's P, an ether's O on Mg), nor
+  on a donor with one bond too many bonded to a B or an Al of four bonds
+  (an amine-borane, an etherate drawn with a plain line). A B of four
+  bonds with no such donor - a tetrafluoroborate whose minus is not
+  shown - is said. An element the table does not hold, such as Se, is
+  not judged. A bond counts as its
+  order, one of a ring drawn with a circle as one and a half (an atom of
+  such a ring is not judged to have too many: its ring's order is open),
+  a dative bond none. A chemist writes a hetero atom's H's, so a ring's
+  or an ether's O, a carbonyl's O, an amine's, an imine's or a nitrile's
+  N are never said; a sulfoxide's or a sulfone's S and a phosphate's P
+  are as drawn. This is said wherever the atom stands and however large
+  its structure.
 - **A small piece of carbons alone** (2026-11-19): read from a picture,
   a piece - atoms joined by bonds - of six atoms or fewer, all of them
   carbons with no label, is unsure and says that it may be a number or
   letters read as bonds: a digit or a letter the matcher does not read
   is traced as a line or two. So is such a piece holding a carbon with
-  no label beside a larger one, saying it may be part of the structure,
-  its bond not read: an OH come off with a stray carbon, a tert-butyl
+  no label beside a larger one - an atom of it as near an atom of the
+  larger one as the longest bond read in the picture - of those no
+  longer than two bonds: a longer one is a rule, a bracket or an arrow
+  read as a bond - and half a bond more, never under a bond and a half: a group cut off by one bond not
+  traced stands one drawn bond off, and a bond to a label or a
+  stretched one is longer than most - saying it may be part of the
+  structure, its bond not read: an OH come off with a stray carbon, a
+  tert-butyl
   with its CH-OH. Neither is ever left out - a cyclohexane or a hexane
   drawn alone is such a piece, and comes through said. Six is inferred,
   not measured on papers: set on Meno's made pictures, above every stray
@@ -554,7 +592,9 @@ Meno's own figure reader reads it as it reads a PDF's figure (2026-11-18).
   traced, would otherwise leave its ring open with nothing said.
 - **A small piece beside a structure** (2026-11-26): read from a picture,
   a piece of two to four atoms, labels and all, none of them charged,
-  within a bond of the box of a larger piece, is unsure and says it may
+  as near a larger piece as *A small piece of carbons alone* has it
+  (atom to atom, the longest bond read and half a bond more), is unsure
+  and says it may
   be part of the structure, its bond not read - a joint traced open cuts
   off a side chain's carbons, a C-N or a C-OH so. A counter-ion is
   charged or a single atom and is not said; a piece further off is a
@@ -1417,7 +1457,11 @@ it where it lies out of view.
   from its wide end, the same way and wider, is its wide half. A wedge
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
-  its corners to another is no bond. So is a line drawn down a wedge,
+  its corners to another is no bond. A short line with both its ends by
+  one corner is no edge, and is kept: a wedge's wide end drawn into the
+  bonds it meets has a corner carried out along a hashed bond's line,
+  and the hash's line beside that corner stays the hash's. A line drawn
+  down a wedge is the wedge's own as well,
   within it - or reaching up to a tenth of its length past where its tip
   is taken to be, to the point a narrow end may come to - at least half
   as long: its middle line, under the fill or
@@ -2100,8 +2144,10 @@ Not yet:
 - **An equilibrium drawn with corners** is read as its two arrows, each
   a reaction's. One whose lines differ in length, one way favoured, is
   read as a plain equilibrium.
-- **A scheme in a picture** - a figure that is a picture - is read by the
-  plugin as one structure, not as a scheme.
+- **A scheme in a picture** - a figure that is a picture - is read by
+  Meno, traced as any picture is (*A picture traced*), for its structures
+  alone, each its own: its arrows, "+" signs and words are no part of any
+  structure and are not put down with them.
 
 ### Structures picked from a PDF (decided 2026-10-23)
 

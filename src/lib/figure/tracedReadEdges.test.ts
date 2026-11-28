@@ -73,7 +73,7 @@ describe("a small piece of carbons, said beside a larger piece only", () => {
   it("is not said where it holds a label and no piece larger is there: only the piece of bare carbons is", () => {
     const atoms: ReadAtom[] = [0, 1, 2].map((k) => ({ x: k, y: 0 }) as ReadAtom).concat([{ x: 10, y: 0, label: "OH" }, { x: 11, y: 0 }]);
     const bonds: ReadBond[] = [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 3, b: 4, order: 1 }];
-    expect(tinyPieces({ atoms, bonds })).toEqual([{ atoms: [0, 1, 2], apart: false }]);
+    expect(tinyPieces({ atoms, bonds, bond: 1 })).toEqual([{ atoms: [0, 1, 2], apart: false }]);
   });
 });
 
