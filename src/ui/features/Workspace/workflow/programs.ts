@@ -824,6 +824,23 @@ export function notAsAsked(asked: string | undefined, said: string | null | unde
 }
 
 /**
+ * A compound's conformers split by failures - some of them done by a step,
+ * the rest out of its *Failed* exit - each side only a part of the
+ * compound's conformers (`partOf`): shares over those done would be over a
+ * part as if over the whole. A compound all done, or all failed, is as it
+ * came. A search's conformers are its compound's anew, whole
+ * (`conformersWorked`), and a set of molecules is of no search: neither is
+ * marked.
+ */
+export function splitByFailures<E extends SetEntry>(kind: StepKind, gives: Holds3D, worked: readonly E[], failed: readonly E[]): { worked: E[]; failed: E[] } {
+  if (gives !== "conformers" || kind === "conformers") return { worked: [...worked], failed: [...failed] };
+  const done = new Set(worked.map((e) => e.compound));
+  const split = new Set(failed.flatMap((e) => (done.has(e.compound) ? [e.compound] : [])));
+  const part = (e: E): E => (split.has(e.compound) && !e.partOf ? { ...e, partOf: true as const } : e);
+  return { worked: worked.map(part), failed: failed.map(part) };
+}
+
+/**
  * An entry's conformers, as a conformer search worked them out: each
  * geometry it gave a conformer of the entry's compound, numbered in order,
  * with its energy - and what the calculation was, kept with each, what it
