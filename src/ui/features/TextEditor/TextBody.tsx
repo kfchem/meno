@@ -187,11 +187,13 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
       }}
     >
       {ec ? (
-        <div ref={fieldRef} data-text-field="" tabIndex={-1} aria-label="Text" style={{ position: "absolute", inset: 0, outline: "none" }} />
+        <div ref={fieldRef} data-text-field="" data-column-text="" tabIndex={-1} aria-label="Text" style={{ position: "absolute", inset: 0, outline: "none" }} />
       ) : (
         <textarea
           ref={fieldRef}
           data-text-field=""
+          // (a text in the column: Escape lets its selection go, then goes on - lib/doc/shortcuts `isDeselectKey`)
+          data-column-text=""
           aria-label="Text"
           spellCheck={false}
           autoCorrect="off"

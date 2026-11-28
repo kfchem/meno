@@ -13,6 +13,8 @@ type KeyLike = {
   altKey?: boolean;
   /** Whether the key is held down and coming again. */
   repeat?: boolean;
+  /** Whether an input method is composing with it. */
+  isComposing?: boolean;
   target?: unknown;
 };
 
@@ -125,9 +127,24 @@ export function keepSystemMenuShut(event: { target?: unknown; preventDefault(): 
   if (!typedIn) event.preventDefault();
 }
 
-/** Escape lets the selection go - but not while a text field has the keys. */
+/**
+ * Escape lets the selection go, and goes on to what is behind it - but not
+ * while words are being typed: in a field, in what is written on the page,
+ * or through an input method composing. A text read in the column (a
+ * Markdown text, or a plain text, marked `data-column-text`) is not that:
+ * its keys are its own for its moves and its copying, but Escape there
+ * lets its selected words go (its own Escape, taken) and, with none, goes
+ * on as anywhere else.
+ */
 export function isDeselectKey(event: KeyLike): boolean {
-  return event.key === "Escape" && !isTextTarget(event.target);
+  if (event.key !== "Escape" || event.isComposing) return false;
+  return !isTextTarget(event.target) || isColumnText(event.target);
+}
+
+/** A text read in the column: its words shown there, selected, or written in (TextEditor `MarkdownBody`, `TextBody`). */
+function isColumnText(target: unknown): boolean {
+  const el = target as { dataset?: { columnText?: string } } | null;
+  return el?.dataset?.columnText != null;
 }
 
 /**

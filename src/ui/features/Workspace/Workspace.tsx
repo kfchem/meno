@@ -253,7 +253,7 @@ import type { SelectableKind } from "./store/slices/selectionSlice";
 import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menuScope";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
-import { shutColumnOnceHeard } from "./columnEscape";
+import { sendEscape, shutColumnOnceHeard } from "./columnEscape";
 import { useTiedSaying } from "./utils/tiedSaying";
 import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapOffered, mapStanding, numberingSaid, reactionOf, unpairedSaid } from "./chem/atomMap";
@@ -1191,7 +1191,7 @@ function WorkspaceContent({
     if (!active) return;
     // (not in a talk, where Escape ends the talk: a pen's stroke there is let be)
     const escape = () => {
-      if (!store.getState().presenting) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+      if (!store.getState().presenting) sendEscape();
     };
     const onKey = (e: KeyboardEvent) => {
       // (words typed on the page: their field's undo is theirs - undoIntent leaves it the keys)

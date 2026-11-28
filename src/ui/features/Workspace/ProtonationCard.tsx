@@ -38,10 +38,13 @@ export default function ProtonationCard({
   // (Escape lets it go while its tab is in front - not while its hydrogens are being added: they would be added after it had gone)
   const inFront = useInFront();
   useEffect(() => {
-    if (!inFront || busy) return;
-    // (not an Escape one of its lists has had, closing it)
+    if (!inFront) return;
+    // (not an Escape one of its lists has had, closing it; taken, so that nothing behind the card - the column - answers it too;
+    //  while its hydrogens are added, taken and nothing done)
     const onKey = (e: KeyboardEvent) => {
-      if (escapeLeft(e)) onCancel();
+      if (!escapeLeft(e)) return;
+      e.preventDefault();
+      if (!busy) onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

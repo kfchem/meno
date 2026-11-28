@@ -107,3 +107,13 @@ describe("a text's scroll bars", () => {
     expect(both.thumbs.h!.track).toBe(300 - both.gutter - corner);
   });
 });
+
+describe("Escape in a text in the column", () => {
+  it("lets the words selected go, the caret at the selection's head - and, with none selected, does nothing, so that Escape goes on", () => {
+    const ed = new Editor("one line of made-up words");
+    ed.sel = { anchor: 4, head: 8 };
+    expect(ed.letSelectionGo()).toBe(true);
+    expect(ed.sel).toEqual({ anchor: 8, head: 8 });
+    expect(ed.letSelectionGo()).toBe(false);
+  });
+});

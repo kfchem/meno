@@ -41,6 +41,8 @@ export interface FieldHost {
   onChange(): void;
   command(c: Command, mac: boolean): void;
   selectedText(): string;
+  /** Escape in a text in the column: its selection let go; whether there was one. A host without it (words written on the page) keeps its own Escape. */
+  letSelectionGo?(): boolean;
   /** What is selected replaced by what is typed - or, `pasted`, by what is pasted. */
   replaceSelection(insert: string, pasted?: boolean): void;
   edit(e: Edit, sel?: Sel): void;
@@ -115,6 +117,14 @@ abstract class Field implements TypingField {
   /** An editor's key: Meno's command - none while the IME has the keys. */
   protected onKey(e: KeyboardEvent): boolean {
     if (e.isComposing || e.keyCode === 229 || this.composingNow) return false;
+    // (Escape: the words selected let go first - taken; with none, it goes on: the column shut behind the text)
+    if (e.key === "Escape" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (!this.ed.letSelectionGo?.()) return false;
+      e.preventDefault();
+      e.stopPropagation();
+      this.sync();
+      return true;
+    }
     const c = commandOf(e, IS_MAC);
     if (!c) return false;
     e.preventDefault();

@@ -156,6 +156,13 @@ describe("selection keys", () => {
     expect(isSelectAllKey({ key: "a", ctrlKey: true, target: { tagName: "TEXTAREA" } })).toBe(false);
     expect(isDeselectKey({ key: "Escape" })).toBe(true);
     expect(isDeselectKey({ key: "Escape", target: { tagName: "INPUT" } })).toBe(false);
+    // (a text read in the column - Markdown, or plain - is no field being typed in: Escape goes on from it; one composing keeps it)
+    expect(isDeselectKey({ key: "Escape", target: { tagName: "DIV", dataset: { textField: "", columnText: "" } } })).toBe(true);
+    expect(isDeselectKey({ key: "Escape", target: { tagName: "TEXTAREA", dataset: { textField: "", columnText: "" } } })).toBe(true);
+    expect(isDeselectKey({ key: "Escape", isComposing: true, target: { tagName: "TEXTAREA", dataset: { textField: "", columnText: "" } } })).toBe(false);
+    // (words written on the page, a field of a card: their own)
+    expect(isDeselectKey({ key: "Escape", target: { tagName: "DIV", dataset: { textField: "" } } })).toBe(false);
+    expect(isDeselectKey({ key: "Escape", target: { tagName: "TEXTAREA" } })).toBe(false);
   });
 
   it("never lets Ctrl/Cmd+A select the app's own words, but leaves text fields theirs", () => {

@@ -146,6 +146,8 @@ export default function MarkdownBody({ entry, reader, value, name = "Text" }: Pr
       ref={boxRef}
       // (its keys its own: Meno's shortcuts let a text field's be)
       data-text-field=""
+      // (a text read: Escape here lets its words go, then goes on - lib/doc/shortcuts `isDeselectKey`)
+      data-column-text=""
       tabIndex={-1}
       aria-label="Text"
       className="relative w-full h-full overflow-hidden cursor-text outline-none"

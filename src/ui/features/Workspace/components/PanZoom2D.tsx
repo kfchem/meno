@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef } from "react";
+import { sendEscape } from "../columnEscape";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { FRAME_ORDER, pageAt } from "../utils/page";
@@ -312,7 +313,7 @@ export function PanZoom2D() {
         return;
       }
       // (what the first finger began let go of by its own Escape, as a gesture lost is, then taken back whole)
-      if (gestureUnderWay(st)) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+      if (gestureUnderWay(st)) sendEscape();
       store.getState().takeBackPress();
       // (the first finger's pan given way to the pinch: no glide, no pan as well)
       maybe.current.active = false;
