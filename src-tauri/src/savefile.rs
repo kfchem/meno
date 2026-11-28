@@ -63,8 +63,11 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         }
     };
     let jobs_root = if appended.is_empty() { None } else { Some(crate::jobs::all_roots(&app)?) };
-    // (a job file carried from a workspace's file: one the page could have read - or a copy a save kept beside one)
-    if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f) && !crate::keptjobs::copy_of(f).is_some_and(|o| may_read(&app, &o))) {
+    // (a job file carried from a workspace's file: one the page could have read - or a copy a save kept beside one, or
+    //  beside the file this one is written to, where a link takes it)
+    let real = real_target(&path).ok();
+    let copy_readable = |f: &Path| crate::keptjobs::copy_of(f).is_some_and(|o| may_read(&app, &o) || real.as_deref() == Some(o.as_path()));
+    if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f) && !copy_readable(f)) {
         return Err(format!("Meno may not read {}", from.display()));
     }
     // (one the page sent, found nowhere else: where Meno set it down for this save - taken away once it is written, or not)
@@ -693,7 +696,7 @@ fn sync_dir(dir: &Path) -> io::Result<()> {
 
 /// Where a document named `path` is written: `path`, or - where it is a
 /// link - the file at the end of its links, there or not.
-fn real_target(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn real_target(path: &Path) -> io::Result<PathBuf> {
     let mut at = path.to_path_buf();
     for _ in 0..MOST_LINKS {
         match fs::symlink_metadata(&at) {

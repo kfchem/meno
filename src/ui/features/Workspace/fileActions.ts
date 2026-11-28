@@ -5,7 +5,7 @@ import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow, unstageJobFiles } from "../../../lib/jobs";
 import { writeDocument, writeDocumentNow, type Appended, type FileNow } from "../../../lib/io/writeDocument";
-import { clearSavedJobs, dropNotedSources, findJobFiles, jobsToKeep, LARGE_WORKSPACE_MB, noteJobFilesSaved, sizeAsk, takenFromElsewhereFailed, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, dropNotedSources, findJobFiles, jobFilesNotHadSaid, jobsToKeep, LARGE_WORKSPACE_MB, noteJobFilesSaved, sizeAsk, takenFromElsewhereFailed, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
@@ -948,7 +948,11 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         // (its job files whose folders are not here: each taken by Meno from wherever it finds it whole - only one found nowhere sent, alone)
         const jobs = await jobsToKeep(store.getState().steps ?? [], undefined, undefined, findJobFiles(path, savedPath ?? null, whole));
         // (a job file past what a workspace's file keeps of one: asked about first - never written to be refused)
-        const file = jobs.largest > MOST_FILE ? null : await workspaceFile(store.getState(), jobs);
+        // (what was set down for it taken away where what follows fails: never left for a save that is not written)
+        const file = jobs.largest > MOST_FILE ? null : await workspaceFile(store.getState(), jobs).catch((e: unknown) => {
+          unstage(jobs);
+          throw e;
+        });
         // (what its file held that could not be read as it opened: not in this one - so the file it was opened from, the first time it is saved over, kept beside it)
         const { leftOnOpen } = store.getState();
         return { written, savedPath, leftOnOpen, jobs, file };
@@ -1013,7 +1017,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         naming.current?.(fileNameOf(kept));
         // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
         const keptAs = old && fileNameOf(old);
-        const said = [notKeptSaid(notKept, keptAs), leftOutSavedSaid(at.leftOnOpen?.left, notKept.length ? null : keptAs)].filter(Boolean);
+        // (and the job files it holds nothing of, found nowhere: counted, as what else it could not keep is said)
+        const said = [notKeptSaid(notKept, keptAs), jobFilesNotHadSaid(at.jobs.notHad), leftOutSavedSaid(at.leftOnOpen?.left, notKept.length ? null : keptAs)].filter(Boolean);
         setError(said.length ? said.join(" ") : null);
         return true;
       } finally {

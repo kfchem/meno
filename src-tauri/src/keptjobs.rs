@@ -447,6 +447,23 @@ fn holds(sources: &mut HashMap<PathBuf, Option<zip::ZipArchive<File>>>, from: &P
 pub fn found_where(target: &Path, asked: &[Asked], jobs_roots: &[PathBuf], whole: bool, readable: impl Fn(&Path) -> bool) -> Vec<Option<Found>> {
     let mut sources = HashMap::new();
     let mut buf = vec![0u8; CHUNK];
+    // (the copies beside each place, looked for once - not once for every job file; beside the target where a link
+    //  takes it, too, where a save keeps its copy: savefile.rs `kept_beside`)
+    let mut beside: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+    let mut copies_of = |p: &Path| -> Vec<PathBuf> {
+        beside
+            .entry(p.to_path_buf())
+            .or_insert_with(|| {
+                let mut copies = copies_beside(p);
+                if let Ok(real) = crate::savefile::real_target(p) {
+                    if real != p {
+                        copies.extend(copies_beside(&real).into_iter().filter(|c| !copies.contains(c)).collect::<Vec<_>>());
+                    }
+                }
+                copies
+            })
+            .clone()
+    };
     asked
         .iter()
         .map(|a| {
@@ -459,7 +476,7 @@ pub fn found_where(target: &Path, asked: &[Asked], jobs_roots: &[PathBuf], whole
                     places.push(p.to_path_buf());
                 }
             }
-            let copies: Vec<PathBuf> = places.iter().flat_map(|p| copies_beside(p)).collect();
+            let copies: Vec<PathBuf> = places.iter().flat_map(|p| copies_of(p)).collect();
             for p in places.into_iter().chain(copies) {
                 if holds(&mut sources, &p, a, whole, &mut buf) {
                     return Some(Found { from: Some(p.to_string_lossy().into_owned()) });
@@ -488,13 +505,18 @@ pub async fn job_files_where(app: AppHandle, target: PathBuf, asked: Vec<Asked>,
 /// never one a save still under way writes from.
 const STALE_STAGED: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 
+/// How long the folder of job files set down for a save must have been left
+/// untouched to be taken away as Meno starts: a save under way touches it at
+/// every piece, so that another Meno started on the same folder never takes
+/// a running save's pieces.
+pub(crate) const UNTOUCHED_STAGED: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 /// The folders of job files set down for saves under `root` taken away:
-/// those older than `stale`; with none, every one (as Meno starts, when no
-/// save is under way).
-pub(crate) fn sweep_staged(root: &Path, stale: Option<std::time::Duration>) {
+/// those untouched for `stale` or longer, `now`.
+pub(crate) fn sweep_staged(root: &Path, stale: std::time::Duration, now: std::time::SystemTime) {
     let Ok(entries) = fs::read_dir(root) else { return };
     for e in entries.flatten() {
-        let old = stale.is_none_or(|stale| e.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= stale));
+        let old = e.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| now.duration_since(t).ok()).is_some_and(|age| age >= stale);
         if old && e.file_type().is_ok_and(|t| t.is_dir()) && staged_in(root, &e.file_name().to_string_lossy()).is_some() {
             let _ = fs::remove_dir_all(e.path());
         }
@@ -505,14 +527,23 @@ pub(crate) fn sweep_staged(root: &Path, stale: Option<std::time::Duration>) {
 /// (`<root>/<save>/<sha256>`), whole or not at all - only where they are
 /// what its SHA-256 says.
 pub(crate) fn staged_file(root: &Path, save: &str, sha256: &str, bytes: &[u8]) -> Result<(), String> {
+    staged_within(root, save, sha256, bytes, MOST_WORKSPACE_FILE)
+}
+
+/// As `staged_file`, refusing one past `most`.
+fn staged_within(root: &Path, save: &str, sha256: &str, bytes: &[u8], most: u64) -> Result<(), String> {
     let dir = staged_in(root, save).ok_or("not a save's job files")?;
     if !is_sha(sha256) {
         return Err("not a job's file".into());
     }
+    // (never more than a workspace's file may hold: the page sends only what it holds of one)
+    if bytes.len() as u64 > most {
+        return Err(format!("a job file sent comes to {}, more than a workspace file holds", sized(bytes.len() as u64)));
+    }
     if hex(&Sha256::digest(bytes)) != sha256 {
         return Err("a job file sent is not what its SHA-256 says".into());
     }
-    sweep_staged(root, Some(STALE_STAGED));
+    sweep_staged(root, STALE_STAGED, std::time::SystemTime::now());
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     crate::savefile::write_whole(&dir.join(sha256), bytes).map_err(|e| e.to_string())
 }
@@ -1256,11 +1287,68 @@ mod tests {
         assert!(write(&appended).is_err());
         // (one the page never said where Meno set it down: refused)
         assert!(append_job_files(Cursor::new(base_zip("{}")), &[], &[Appended { staged_at: None, ..appended[0].clone() }]).is_err());
-        // (left by a page that stopped: young ones kept for a save under way; every one taken away as Meno starts)
-        sweep_staged(&staging, Some(STALE_STAGED));
+        // (left by a page that stopped: kept while a save may still be under way - touched at every piece - by the sweep as
+        //  Meno starts and the one at each piece alike; taken away once untouched for longer than each says)
+        let now = std::time::SystemTime::now();
+        let after = |d: u64| now + std::time::Duration::from_secs(d);
+        sweep_staged(&staging, UNTOUCHED_STAGED, now);
+        sweep_staged(&staging, STALE_STAGED, now);
         assert!(staging.join(&save).exists());
-        sweep_staged(&staging, None);
+        sweep_staged(&staging, UNTOUCHED_STAGED, after(5 * 60));
+        assert!(staging.join(&save).exists());
+        sweep_staged(&staging, STALE_STAGED, after(11 * 60));
+        assert!(staging.join(&save).exists());
+        sweep_staged(&staging, UNTOUCHED_STAGED, after(11 * 60));
         assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
+        staged_file(&staging, &save, &shas[0], &outs[0]).unwrap();
+        sweep_staged(&staging, STALE_STAGED, after(7 * 60 * 60));
+        assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
+        // (a piece more than a workspace's file may hold: refused as it comes, nothing written)
+        let err = staged_within(&staging, &save, &shas[0], &outs[0], outs[0].len() as u64 - 1).unwrap_err();
+        assert!(err.contains("more than a workspace file holds"), "{err}");
+        assert!(!staging.join(&save).exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_save_whose_job_file_is_only_in_the_copy_beside_keeps_the_old_file_and_holds_it_whole_the_copy_unchanged() {
+        let root = temp("only-in-bak");
+        let out = b"Normal termination ".repeat(6_000);
+        let sha = hex(&Sha256::digest(&out));
+        let target = root.join("large.meno");
+        // (the file there holds nothing of it, and is kept beside the new one; the only copy of the job file is in the .bak)
+        holding(&target, &[]);
+        let bak = root.join("large.meno.bak");
+        holding(&bak, &[(&sha, &out)]);
+        let (bak_before, target_before) = (fs::read(&bak).unwrap(), fs::read(&target).unwrap());
+        let at = found_where(&target, &[asked(&sha, out.len(), &[])], &[], true, |_| true).remove(0).unwrap().from.unwrap();
+        assert_eq!(PathBuf::from(&at), bak);
+        let one = Appended { sha256: sha.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(at.into()), ..Default::default() };
+        let kept = crate::savefile::replace_keeping(&target, true, |f| crate::savefile::document_written(f, &base_zip("{}"), Some((&[], std::slice::from_ref(&one))), Some(MOST_WORKSPACE_FILE))).unwrap();
+        // (the old file kept beside under a new name - never over the copy it was read from - and that copy as it was)
+        assert_eq!(kept, Some(root.join("large.meno.1.bak")));
+        assert_eq!(fs::read(root.join("large.meno.1.bak")).unwrap(), target_before);
+        assert_eq!(fs::read(&bak).unwrap(), bak_before);
+        let mut bytes = Vec::new();
+        zip::ZipArchive::new(File::open(&target).unwrap()).unwrap().by_name(&format!("files/{sha}")).unwrap().read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, out);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_job_file_is_looked_for_beside_the_real_file_a_link_saves_to() {
+        let root = temp("link-bak");
+        let out = b"SCF Done ".repeat(3_000);
+        let sha = hex(&Sha256::digest(&out));
+        fs::create_dir_all(root.join("real")).unwrap();
+        let real = root.join("real/large.meno");
+        holding(&real, &[]);
+        holding(&root.join("real/large.meno.bak"), &[(&sha, &out)]);
+        let link = root.join("large.meno");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let at = found_where(&link, &[asked(&sha, out.len(), &[])], &[], true, |_| true).remove(0).unwrap().from.unwrap();
+        assert_eq!(fs::canonicalize(at).unwrap(), fs::canonicalize(root.join("real/large.meno.bak")).unwrap());
         fs::remove_dir_all(root).unwrap();
     }
 

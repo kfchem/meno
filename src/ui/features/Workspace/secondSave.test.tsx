@@ -46,6 +46,10 @@ const io = vi.hoisted(() => ({
   onPiece: null as ((n: number) => void) | null,
   /** How each ask of where the job files are was made: read whole, or by name and size. */
   asks: [] as boolean[],
+  /** Whether the page's packing of its file fails. */
+  packFails: false,
+  /** Whether the next write finds a piece set down for it gone. */
+  loseStaged: false,
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => io.picked }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
@@ -102,6 +106,7 @@ vi.mock("../../../lib/doc/menoFileWriter", async () => {
   const { menoFileBytes: bytesOf } = await import("../../../lib/doc/menoFile");
   return {
     writeMenoFile: async (workspace: string, files: readonly KeptData[], listed: readonly unknown[] = []) => {
+      if (io.packFails) throw new Error("the workspace could not be written");
       io.packed.push(files.reduce((n, f) => n + f.data.length, 0));
       return bytesOf(workspace, files, listed as never);
     },
@@ -119,6 +124,12 @@ vi.mock("../../../lib/io/writeDocument", () => {
     const entries: Zippable = Object.fromEntries(Object.entries(unzipSync(content)).map(([name, data]) => [name, [data, { level: name.startsWith("files/") ? 6 : 0 }]]));
     for (const a of appended) {
       if (a.staged) {
+        // (one gone from where it was set down: as src-tauri keptjobs.rs says it - the folder taken away, written or not)
+        if (io.loseStaged) {
+          io.loseStaged = false;
+          for (const x of appended) if (x.staged) io.staged.delete(x.staged);
+          throw new Error(`${a.name} could not be kept: No such file or directory (os error 2)`);
+        }
         // (as Meno set it down - checked as it was sent - and taken away once written, or not)
         if (!io.staged.get(a.staged)?.has(a.sha256)) throw new Error(`${a.name} could not be kept: not found`);
         entries[`files/${a.sha256}`] = [io.known.get(a.sha256)!, { level: 6 }];
@@ -179,6 +190,8 @@ afterEach(async () => {
   io.failPiece = 0;
   io.onPiece = null;
   io.asks.length = 0;
+  io.packFails = false;
+  io.loseStaged = false;
 });
 
 async function tabOf(doc: ReturnType<typeof createWorkspaceDocument>): Promise<() => FileActions> {
@@ -439,4 +452,36 @@ describe("a workspace saved again and again in one session", () => {
       [JOBS, EACH] = [6, 256 * 1024];
     }
   }, 60_000);
+
+  it("leaves nothing set down where the page's own packing fails after pieces were set down", async () => {
+    const { files } = await savedThen(() => null);
+    io.packFails = true;
+    await act(async () => void (await files().save()));
+    expect(files().error).toMatch(/^Save failed: /);
+    expect(io.pieces).toHaveLength(JOBS);
+    expect(io.staged.size).toBe(0);
+  });
+
+  it("makes the save again, each read whole, where a piece set down for it is gone as it is written", async () => {
+    const { files } = await savedThen(() => null);
+    io.loseStaged = true;
+    await act(async () => void (await files().save()));
+    expect(files().error).toBeNull();
+    expect(io.asks.slice(-2)).toEqual([false, true]);
+    expect(io.pieces).toHaveLength(2 * JOBS);
+    expect(verifies(SAVED)).toBe(true);
+    expect(io.staged.size).toBe(0);
+  });
+
+  it("says, counted, the job files it could have from nowhere - never a save said to have kept all", async () => {
+    const w = openedWorkspace();
+    const files = await tabOf(w.doc);
+    const step = w.store.getState().steps![0];
+    const gone = { name: "work/gone.out", sha256: "f".repeat(64), size: 10, role: "read" as const };
+    w.doc.edit("kept", (d) => ({ ...d, steps: [{ ...step, ran: { ...step.ran!, kept: step.ran!.kept!.map((k, i) => (i === 0 ? { ...k, files: [...k.files, gone] } : k)) } }] }));
+    w.store.getState().addAtom(0, 0, "C");
+    await act(async () => void (await files().save()));
+    expect(files().error).toBe("Saved, but 1 job file of its steps is not in the file: it could not be read.");
+    expect(verifies(SAVED)).toBe(true);
+  });
 });

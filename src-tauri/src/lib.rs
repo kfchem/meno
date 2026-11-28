@@ -1224,9 +1224,10 @@ pub fn run() {
             }
         })
         .setup(move |app| {
-            // (job files set down for saves a page sent and never wrote - Meno stopped, or its page - taken away: no save is under way yet)
+            // (job files set down for saves a page sent and never wrote - Meno stopped, or its page - taken away: only those
+            //  untouched for some minutes, so that a save another Meno on the same folder has under way keeps its own)
             if let Ok(local) = local_data_dir(app.handle()) {
-                keptjobs::sweep_staged(&local.join(keptjobs::STAGED), None);
+                keptjobs::sweep_staged(&local.join(keptjobs::STAGED), keptjobs::UNTOUCHED_STAGED, std::time::SystemTime::now());
             }
             // the main window, made here rather than from tauri.conf.json (its "create" is
             // false): on Windows its pinch is let through before its page first loads (pinch.rs) -

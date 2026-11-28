@@ -32,6 +32,8 @@ export type JobsKept = {
   appended: Appended[];
   /** Where the files Meno found nowhere were set down, sent from what the page holds of them one at a time (`stageJobFile`): the save's own, none where none was. */
   staged: string | null;
+  /** How many job files this save could have from nowhere - not in the file, or anywhere Meno looked, and held of nothing by the page: each recorded as not had, and said (`jobFilesNotHadSaid`). */
+  notHad: number;
   /** About how much each step's jobs add to the file, deflated, largest first. */
   steps: { step: number; bytes: number }[];
   /** About how much they all add. */
@@ -257,7 +259,7 @@ export async function jobsToKeep(
   packedOf: (sha256: string) => number | undefined = heldJobPacked,
   stage: (save: string, sha256: string, bytes: Uint8Array) => Promise<void> = stageJobFile,
 ): Promise<JobsKept> {
-  const out: JobsKept = { records: new Map(), listed: [], appended: [], staged: null, steps: [], bytes: 0, adds: 0, largest: 0, packed: new Map() };
+  const out: JobsKept = { records: new Map(), listed: [], appended: [], staged: null, notHad: 0, steps: [], bytes: 0, adds: 0, largest: 0, packed: new Map() };
   const seen = new Set<string>();
   const stepBytes = new Map<number, number>();
   const add = (step: number, n: number) => stepBytes.set(step, (stepBytes.get(step) ?? 0) + n);
@@ -335,6 +337,7 @@ export async function jobsToKeep(
     out.adds += packed;
   }
   // (one found nowhere and held nowhere: not had, in every job's record that has it)
+  out.notHad = notHad.size;
   if (notHad.size)
     for (const [job, r] of out.records) {
       const gone = r.files.filter((f) => notHad.has(f.sha256));
@@ -360,6 +363,10 @@ export function withKeptJobs(steps: readonly WorkflowStep[], records: ReadonlyMa
   };
   return steps.map((s) => ({ ...s, ...(s.ran ? { ran: ran(s.ran) } : {}), ...(s.runs ? { runs: s.runs.map(ran) } : {}) }));
 }
+
+/** What Save says of the job files a save could have from nowhere (`JobsKept`'s `notHad`), counted: none where it had them all. */
+export const jobFilesNotHadSaid = (n: number): string | null =>
+  n === 0 ? null : n === 1 ? "Saved, but 1 job file of its steps is not in the file: it could not be read." : `Saved, but ${n.toLocaleString("en")} job files of its steps are not in the file: they could not be read.`;
 
 /** The size a save past which says the workspace is large, by default (docs/WORKFLOWS-FOUNDATION.md, answer Q), in MB. */
 export const LARGE_WORKSPACE_MB = 500;

@@ -1248,9 +1248,10 @@ left out, with its size.
   workspace was opened from or saved to this session, the file it is saved
   over as it is now - whoever wrote it, a copy of it put there from outside
   too - a copy a save kept beside any of them (`aspirin.meno.bak`), and its
-  job's folder. Each is known by its name, its SHA-256, and taken only if
-  its bytes are what that says, checked as the new file is written; a
-  file's size and when it was written decide nothing. Where a file holds
+  job's folder - beside the file a link saves to, too. Each is known by
+  its name, its SHA-256, and taken only if its bytes are what that says,
+  checked as the new file is written; its size is only a first filter of
+  where to look, and when a file was written is not looked at. Where a file holds
   one under its name that is not it, the save is made again at once, each
   read whole and checked first, so that it is taken from elsewhere. So the
   second save of a session, and every one after, costs the page what the
@@ -1262,8 +1263,11 @@ left out, with its size.
   (`saving/`) until the save is written: the page holds no more than the
   largest of them at once, never all of them, packed or not. What was set
   down goes once the save is written, or not; what a page or Meno stopped
-  half way left goes as Meno next starts. One it holds nothing of is
-  recorded as not had, as above.
+  half way left goes as Meno next starts, once it has been untouched for
+  some minutes. One the page holds nothing of either is recorded as not
+  had, as above, and Save says how many: "Saved, but 2 job files of its
+  steps are not in the file: they could not be read." No piece is taken
+  that is larger than a workspace's file may hold.
 - **Raw outputs can name this computer.** A program's output and its logs
   often hold the user's name, the folders it ran in and the computer's
   name: Gaussian and ORCA print the host they ran on, for one. Meno never
