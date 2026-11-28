@@ -1878,13 +1878,24 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * one id none of them uses, so that an undo or a redo keeps it, its column still showing it. Its id.
    */
   function lookedAt(text: WorkspaceText): number {
+    // (one step, one log: where a state holds the step's log already - one closed since, back by an undo - that one, brought up to date)
+    const step = text.of && "step" in text.of ? text.of.step : null;
+    const logOf = (x: WorkspaceDocument) => (step == null ? undefined : (x.texts ?? []).find((t) => !t.at && t.of && "step" in t.of && t.of.step === step));
+    let held: number | null = null;
     let id = text.id;
     doc.amend((x) => {
+      held ??= logOf(x)?.id ?? null;
       id = Math.max(id, x.nextTextId ?? 0, ...(x.texts ?? []).map((t) => t.id + 1));
       return x;
     });
+    if (held != null) id = held;
     const kept = { ...text, id };
-    doc.amend((x) => ({ ...x, texts: [...(x.texts ?? []), kept], nextTextId: Math.max(x.nextTextId ?? 0, id + 1) }));
+    doc.amend((x) => {
+      const log = logOf(x);
+      if (!log) return { ...x, texts: [...(x.texts ?? []), kept], nextTextId: Math.max(x.nextTextId ?? 0, id + 1) };
+      if (log.text === kept.text && log.name === kept.name && JSON.stringify(log.of) === JSON.stringify(kept.of)) return x;
+      return { ...x, texts: x.texts!.map((t) => (t === log ? { ...log, name: kept.name, text: kept.text, of: kept.of } : t)) };
+    });
     return id;
   }
 

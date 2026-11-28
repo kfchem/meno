@@ -1372,6 +1372,30 @@ describe("a step that runs a plugin's program", () => {
     expect(st().texts.find((t) => t.id === log.id)?.text).toBe("cycle 1\n");
   });
 
+  it("keeps one log for a step: shown twice, one text; shown, closed and shown again, one log of the step in every state an undo or a redo comes to", async () => {
+    const { doc, st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" }, log: "cycle 1\n" });
+    await st().lookAtJobs();
+    await ran;
+    const logsOf = () => st().texts.filter((t) => t.of && "step" in t.of && t.of.step === step);
+    await st().showStepLog(step);
+    await st().showStepLog(step);
+    expect(logsOf()).toHaveLength(1);
+    const first = logsOf()[0].id;
+    st().removeText(first);
+    expect(logsOf()).toHaveLength(0);
+    // (its job's log grown meanwhile: shown again, as it is now)
+    jobs.get(idOf(1))!.log = "cycle 1\ncycle 2\n";
+    await st().showStepLog(step);
+    expect(logsOf()).toMatchObject([{ id: first, text: "cycle 1\ncycle 2\n" }]);
+    // (back past the close, and on again: one log of the step every time, under one id)
+    while (doc.undo()) expect(logsOf().map((t) => t.id)).toEqual([first]);
+    while (doc.redo()) expect(logsOf().map((t) => t.id)).toEqual([first]);
+  });
+
   it("shows the log of a step that is not running as it is - looked at, not followed: its workspace left as saved while another step runs", async () => {
     const { doc, st, step, store } = editor();
     const ran = st().runStep(step);
