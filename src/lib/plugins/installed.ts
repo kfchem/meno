@@ -81,6 +81,35 @@ export async function lookForAll(plugins: readonly { id: string; installed: read
   await Promise.all(plugins.flatMap((p) => p.installed.filter((d) => here == null || d.files[here]).map((d) => lookFor(p.id, d.name, ask))));
 }
 
+/** A plugin's state while it waits its turn to be added, is being added, or is being taken away (lib/calc/workers `ReaderState`). */
+const BUSY = new Set(["waiting", "adding", "removing"]);
+
+/**
+ * Looks again, until stopped, for the programs installed separately of each
+ * plugin whose adding, update or taking away has just finished - its state
+ * in `readers` come to rest from a busy one - and of every plugin as the
+ * plugins in place change (`changed`: one got, updated or its files taken
+ * away), so that what Settings says of each is what is there now, never
+ * "Looking…" until the page is shown again. Returns what stops it.
+ */
+export function lookAgainOnceDone(
+  readers: { subscribe: (listener: (now: { state: Record<string, string> }, was: { state: Record<string, string> }) => void) => () => void },
+  changed: (listener: () => void) => () => void,
+  plugins: () => readonly { id: string; installed: readonly InstalledDecl[] }[],
+  look: (plugins: readonly { id: string; installed: readonly InstalledDecl[] }[]) => Promise<void> = lookForAll,
+): () => void {
+  const stopReaders = readers.subscribe((now, was) => {
+    const done = new Set(Object.keys(was.state).filter((id) => BUSY.has(was.state[id]) && !BUSY.has(now.state[id] ?? "")));
+    const those = done.size ? plugins().filter((p) => done.has(p.id)) : [];
+    if (those.length) void look(those);
+  });
+  const stopChanged = changed(() => void look(plugins()));
+  return () => {
+    stopReaders();
+    stopChanged();
+  };
+}
+
 /**
  * Locates a program installed separately: the chemist picks its file - or,
  * on macOS, the app that holds it (its `.app`) - which is kept where it is

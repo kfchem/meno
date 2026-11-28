@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { create } from "zustand";
 import { useAppSettings } from "../settings/appSettings";
-import { locate, lookFor, lookForAll, tooOld, useInstalled, whereIs } from "./installed";
+import { locate, lookAgainOnceDone, lookFor, lookForAll, tooOld, useInstalled, whereIs } from "./installed";
 
 vi.mock("./here", () => ({ systemHere: () => "macos" }));
 
@@ -99,5 +100,51 @@ describe("a program installed separately", () => {
     const now = (async () => ({ path: "/Applications/Lumen.app/Contents/MacOS/Lumen", version: "5.2.2" })) as never;
     expect(await lookFor("lumen", "lumen", now)).toBe("/Applications/Lumen.app/Contents/MacOS/Lumen");
     expect(tooOld("lumen", "lumen")).toBeUndefined();
+  });
+});
+
+describe("a program installed separately, looked for again", () => {
+  /** A plugin's state, as Settings' store holds it, and what was looked for. */
+  function watched() {
+    const readers = create<{ state: Record<string, string> }>(() => ({ state: { quantum: "absent", other: "added" } }));
+    let changedListener: () => void = () => {};
+    const changed = (l: () => void) => ((changedListener = l), () => (changedListener = () => {}));
+    const plugins = [
+      { id: "quantum", installed: [QUANTA] },
+      { id: "other", installed: [LUMEN] },
+    ];
+    const looked: string[][] = [];
+    const stop = lookAgainOnceDone(readers, changed, () => plugins, async (ps) => void looked.push(ps.map((p) => p.id)));
+    const to = (id: string, state: string) => readers.setState((s) => ({ state: { ...s.state, [id]: state } }));
+    return { to, looked, stop, changedNow: () => changedListener() };
+  }
+
+  it("once a plugin's Add has finished - not while it waits or is being added - for that plugin's programs alone", () => {
+    const w = watched();
+    w.to("quantum", "waiting");
+    w.to("quantum", "adding");
+    expect(w.looked).toEqual([]);
+    w.to("quantum", "added");
+    expect(w.looked).toEqual([["quantum"]]);
+    // (one that failed to be added comes to rest too: what is there is said all the same)
+    w.to("quantum", "adding");
+    w.to("quantum", "absent");
+    expect(w.looked).toEqual([["quantum"], ["quantum"]]);
+    w.stop();
+  });
+
+  it("once a Remove has finished, and as the plugins in place change - an update, one got - for every plugin", () => {
+    const w = watched();
+    w.to("other", "removing");
+    w.to("other", "absent");
+    expect(w.looked).toEqual([["other"]]);
+    w.changedNow();
+    expect(w.looked).toEqual([["other"], ["quantum", "other"]]);
+    // (stopped as the page is left: nothing more)
+    w.stop();
+    w.to("quantum", "adding");
+    w.to("quantum", "added");
+    w.changedNow();
+    expect(w.looked).toHaveLength(2);
   });
 });

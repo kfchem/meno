@@ -66,8 +66,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
 | Molecules in 3D | pictures and films of them, rendered (RENDER.md) | Blender (a job: Blender, Meno's own copy, fetched as the plugin is set up) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
-| Conversations | talking with a model, in a conversation on the page (`language-model`, with the hosts it talks to: [CONVERSATIONS.md](CONVERSATIONS.md), *Talking through a plugin*) | - (none in the catalogue yet) |
-| Chemistry | a structure found by its name, in a database outside Meno (`names`, with the hosts it talks to): Quick Add's field looks a name up only when that row is chosen, the person asked the first time (EDITOR-2D.md, *Quick Add*) | - (none in the catalogue yet) |
+| Conversations | talking with a model, in a conversation on the page (`language-model`, with the hosts it talks to: [CONVERSATIONS.md](CONVERSATIONS.md), *Talking through a plugin*) | a plugin in the catalogue, added in Settings, *Plugins* |
+| Chemistry | a structure found by its name, in a database outside Meno (`names`, with the hosts it talks to): Quick Add's field looks a name up only when that row is chosen, the person asked the first time (EDITOR-2D.md, *Quick Add*) | a plugin in the catalogue, added in Settings, *Plugins* |
 | Later | a program outside Meno, connecting to a conversation on the page (*outside entrance*, CONVERSATIONS.md) | - |
 | Later | fingerprints, similarity | - |
 | Later | structure search in outside databases | - |

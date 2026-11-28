@@ -1743,9 +1743,11 @@ is not held to one.
   Meno - their licences do not allow it. A plugin's manifest says which
   program it needs and how to know it (its name, and the line its version
   is read from); Meno looks for it where the system finds programs, and
-  Settings, *Plugins*, shows where - or *Not found - Locate…*. A step
-  whose program is not found says so on its card, and its *Run* opens
-  that place.
+  Settings, *Plugins*, shows where - or *Not found - Locate…*: looked for
+  as the page is shown, as Meno is come back to, and as a plugin's Add,
+  update or Remove has finished, so that a plugin just added says at once
+  what it found. A step whose program is not found says so on its card,
+  and its *Run* opens that place.
 
 ### What changes in the contract
 
