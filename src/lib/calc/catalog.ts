@@ -166,6 +166,12 @@ export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.fin
 /** A plugin's name, by its id: the one Meno knows of, or else the list of plugins online's - one used, not got yet - or else its id. */
 export const pluginName = (id: string): string => anyPluginById(id)?.name ?? listedName(id) ?? id;
 
+/** What a plugin not added is called where the chemist is told of it: its name as Settings, Plugins shows it - the one Meno knows of, or else the list of plugins online's - and, where Meno knows neither, "a plugin Meno does not know the name of": never its id. */
+export const absentName = (id: string): string => anyPluginById(id)?.name ?? listedName(id) ?? UNNAMED_PLUGIN;
+
+/** A plugin Meno knows no name of, said (`absentName`). */
+export const UNNAMED_PLUGIN = "a plugin Meno does not know the name of";
+
 /** The plugin of that id. */
 export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find((p) => p.id === id);
 
@@ -189,7 +195,7 @@ const interfaceVersion = (plugin: string, id: string) => anyPluginById(plugin)?.
 export function stoppedOf(p: Plugin, added: ReadonlySet<string>): string | null {
   const m = manifestOf(p.id);
   if (!m) return null;
-  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), pluginName, interfaceVersion);
+  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), absentName, interfaceVersion);
 }
 
 /** What an added plugin brings another through its interface: by whom, and what. */

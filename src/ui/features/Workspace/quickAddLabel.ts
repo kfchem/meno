@@ -26,3 +26,7 @@ const SHOWN_LEAST = 6;
 
 /** The most the steps of the one open stand before they scroll, with `rows` rows: what the rows leave, never less than `SHOWN_LEAST` of them. */
 export const stepsMost = (rows: number) => Math.max(SHOWN_LEAST * CALC_ROW, CALC_MOST - rows * CALC_ROW);
+
+/** What a saved procedure's row in Quick Add says over it: its name - and, one that needs plugins not added, which, by name (workflow/procedures `procedureNeeds`), and where they are added. */
+export const procedureTip = (p: { name: string; needs: readonly string[] }): string =>
+  p.needs.length ? `${p.name} - needs ${p.needs.join(" and ")}: add ${p.needs.length > 1 ? "them" : "it"} in Settings, Plugins` : p.name;

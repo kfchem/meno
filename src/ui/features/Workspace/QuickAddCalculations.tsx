@@ -4,7 +4,7 @@ import ScrollRail from "../../controls/ScrollRail";
 import { ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { kindInfo, STEP_FAMILIES, type StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
-import { CALC_ROW, stepsMost } from "./quickAddLabel";
+import { CALC_ROW, procedureTip, stepsMost } from "./quickAddLabel";
 import { keyRows, openAfter, openFirst, remembersPress, rowAfter, typedIn } from "./utils/quickAddList";
 
 /** What Quick Add remembers of its list (lib/settings/appSettings `options`): who was opened last. */
@@ -91,7 +91,7 @@ export default function QuickAddCalculations({
       {procedures.length > 0 && (
         <Section name="Procedures" count={procedures.length} open={open === PROCEDURES} onToggle={() => choose(PROCEDURES)} most={most}>
           {procedures.map((p) => (
-            <Row key={p.id} name={p.needs.length ? `${p.name} - needs ${p.needs.join(" and ")}` : p.name} label={`Procedure: ${p.name}`} disabled={p.needs.length > 0} onClick={() => onProcedure?.(p.id)} text={p.name}>
+            <Row key={p.id} name={procedureTip(p)} label={`Procedure: ${p.name}`} disabled={p.needs.length > 0} onClick={() => onProcedure?.(p.id)} text={p.name}>
               <ProcedureGlyph size={18} stroke={2} />
             </Row>
           ))}

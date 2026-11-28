@@ -8,7 +8,7 @@
  */
 import { looksOffered, renderOptions } from "../render/renderOptions";
 import { chosenFrom, presetOffer } from "../render/presets";
-import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
+import { absentName, anyPluginById, pluginById, PLUGINS, presetsFor, UNNAMED_PLUGIN } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
 import { defaultsFrom, valuesOf, type Option, type OptionValues } from "../../../../lib/options";
 import { RING_CONFORMERS, roundsAsked, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
@@ -16,7 +16,6 @@ import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
-import { listedName } from "../../../../lib/plugins/known";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
 import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, optionsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
@@ -104,13 +103,12 @@ export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefine
   return by === MENO.id ? MENO : { id: by, name: p ? doerName(p) : absentName(by) };
 }
 
-/** What a plugin not here to do a step is called: its name as Settings, Plugins shows it - one Meno knows of, or one on the list of plugins online - never its id; "a plugin not known here", one on neither. */
-export const absentName = (by: string): string => anyPluginById(by)?.name ?? listedName(by) ?? "a plugin not known here";
+export { absentName };
 
-/** What a step says where the plugin `by` that does it is not here to: the plugin by its name as Settings, Plugins shows it, and what to do - or, one on neither Meno's list nor the list online, so. */
+/** What a step says where the plugin `by` that does it is not here to: the plugin by its name as Settings, Plugins shows it (`absentName`), and what to do - or, where Meno knows no name of it, so, and where plugins are added. */
 export function absentSaid(by: string): string {
-  const name = anyPluginById(by)?.name ?? listedName(by);
-  return name ? `${name} is not added: add it in Settings, Plugins` : "The plugin that does this step is neither here nor among the plugins online";
+  const name = absentName(by);
+  return name !== UNNAMED_PLUGIN ? `${name} is not added: add it in Settings, Plugins` : "The plugin that does this step is not added, and Meno does not know its name: plugins are added in Settings, Plugins";
 }
 
 /**
