@@ -13,7 +13,7 @@ import type { Style3D } from "../../../../lib/chem/style3d";
 import { lookOf, NOTES_MARK_GAP_PX, NOTES_MARK_PX, notesOf, poseOf, rowAbout, rowAfter, seenBounds, solidOf } from "./molecule3d";
 import { openedAsStack } from "./stacks";
 import { greatest } from "../../../../lib/chem/lists";
-import { principalTurn } from "./align3d";
+import { firstTurn } from "./firstTurn";
 import { chipWide } from "../workflow/run";
 import { hasChip } from "../workflow/selectionSet";
 import { CHIP, PX } from "../workflow/look";
@@ -175,14 +175,15 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
   // (its "+" signs, each a label's size, as the page measures them: ./extent)
   const plusHalf = editorLayoutOptions(drawingStyle).fontPx / 2;
   for (const p of scheme.pluses ?? []) take(p.x - plusHalf, p.y - plusHalf, p.x + plusHalf, p.y + plusHalf);
-  // (each molecule in 3D as it will first be seen - along its principal axes, as modelSlice `shownTurns` turns it -
-  //  with its frames chip and its notes)
+  // (each molecule in 3D as it will first be seen - in the frame it is first shown at, turned as modelSlice `shownTurns` turns
+  //  it, by the one rule of utils/firstTurn - with its frames chip and its notes)
   (result.molecules3d ?? []).forEach((m, i) => {
     const at = scheme.molecules3d?.[i]?.at;
     if (!at) return;
     const placed = { ...m, id: 0, at } as Molecule3D;
-    const turn = m.drawnFrom ? undefined : principalTurn(m.atoms.flatMap((a) => [a.x, a.y, a.z ?? 0]));
-    const seen = seenBox(placed, style, turn, (scheme.molecules3d?.[i] as { frame?: number } | undefined)?.frame);
+    const frame = (scheme.molecules3d?.[i] as { frame?: number } | undefined)?.frame;
+    const turn = firstTurn({ ...m, ...(frame != null ? { frame } : {}) });
+    const seen = seenBox(placed, style, turn, frame);
     for (const b of [seen, ...shownBeside(placed, seen, style)]) take(b.x0, b.y0, b.x1, b.y1);
   });
   // (its words, as far as they are set: ./extent)

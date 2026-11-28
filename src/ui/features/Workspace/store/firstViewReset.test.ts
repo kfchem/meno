@@ -7,6 +7,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
 import { firstSeen } from "../workflow/run";
 import { principalTurn } from "../utils/align3d";
+import { firstFrame, firstTurn } from "../utils/firstTurn";
 import type { Molecule3D, Turn3D } from "./types";
 
 // Invented geometries: a bent three-atom molecule, on one line at the start of a path and bent at its end, in the x-z plane.
@@ -72,5 +73,20 @@ describe("a step's molecule, first seen and reset by one rule", () => {
     st().setTurn3d(id, byHand);
     st().resetTurn3d(id);
     expect(st().turns3d[id]).toBeUndefined();
+  });
+
+  it("is first shown, each kind, at the one frame decided in one place - and first seen along it", () => {
+    const frames = [tilted, bent];
+    // (a calculation's output a file gives at its last geometry - an optimisation, a scan, a path along a reaction alike)
+    expect(firstFrame({ frames, frame: 2 })).toBe(2);
+    expect(firstTurn({ atoms: atomsOf(onLine), frames, frame: 2 } as never)).toEqual(principalTurn(bent));
+    // (a step's optimisation path: at its end)
+    expect(firstFrame({ frames, path: true })).toBe(2);
+    // (a single entry among its frames: at it)
+    expect(firstFrame({ frames, entryFrames: [1] })).toBe(1);
+    // (a conformer set, a film of several geometries naming no frame, a single geometry: at the first)
+    expect(firstFrame({ frames })).toBe(0);
+    expect(firstFrame({ frames, entryFrames: [0, 1, 2] })).toBe(0);
+    expect(firstFrame({})).toBe(0);
   });
 });

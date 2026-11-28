@@ -56,6 +56,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, type Prepared, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type CarriedRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
+import { firstFrame } from "../../utils/firstTurn";
 import { emptyIn, energiesBy, energyLevels, fillExit, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, seenAs, viewKeptOrFirst, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { DRAWN_AND_3D, runDuplicatesDrawnInTurns, runMenoInTurns } from "../../workflow/meno";
 import { ENUMERATE_STOPPED, enumerateStopped, runMenoDrawnOff } from "../../workflow/enumerateOff";
@@ -827,8 +828,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   function atTheirEnds(before: ReadonlySet<number>) {
     for (const m of doc.getState().molecules3d ?? []) {
       if (before.has(m.id) || !m.frames?.length) continue;
-      if (m.path) get().setFrame3d(m.id, m.frames.length);
-      else if (m.entryFrames?.length === 1) get().setFrame3d(m.id, m.entryFrames[0]);
+      // (the frame it is first shown at, as it is first seen at: utils/firstTurn, the one place that decides it)
+      const f = firstFrame(m);
+      if (f) get().setFrame3d(m.id, f);
     }
   }
 

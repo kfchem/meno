@@ -2455,10 +2455,14 @@ file is, by the one rule *Reset turn* gives back (utils/firstTurn): one
 tied to a drawing lies as its drawing lies, unturned; any other is seen
 along its principal axes (utils/align3d `principalTurn`) - its longest
 extent across, its next up, its least towards the viewer - in the frame
-it is first shown at: an optimisation's path at its end, the geometry it
-converged on and the frame on screen as its set lands; one of a single
-entry among its frames at that entry; else its first frame - a conformer
-set's lowest, which it follows, the set's frames sharing that one turn.
+it is first shown at, decided in one place (utils/firstTurn
+`firstFrame`) for a step's results and a file's molecules alike: the
+frame a file gives (a calculation's output shown at its last geometry);
+else an optimisation's path at its end, the geometry it converged on and
+the frame on screen as its set lands; else one of a single entry among
+its frames at that entry; else its first frame - a conformer set's first
+entry, the one shown first, its frames sharing that one turn so that
+showing another never turns the view.
 So a bent three-atom molecule is seen bent and a planar one face-on, the
 same geometry is seen the same way in every card of a run, and *Reset
 turn* on a result just landed changes nothing. Only the view is turned;

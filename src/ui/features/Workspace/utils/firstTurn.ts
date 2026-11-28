@@ -7,14 +7,18 @@
 import type { Molecule3D, Turn3D } from "../store/types";
 import { principalTurn } from "./align3d";
 
-type Seen = Pick<Molecule3D, "atoms" | "frames" | "path" | "entryFrames" | "drawnFrom">;
+/** A molecule as it is put down: with the frame its file shows it at, where its file gives one (utils/io: an output at its last). */
+type Seen = Pick<Molecule3D, "atoms" | "frames" | "path" | "entryFrames" | "drawnFrom"> & { frame?: number };
 
 /**
- * The frame a molecule is first shown at: an optimisation's path at its end, the geometry it converged on; one of a
- * single entry among its frames, that entry; else its first - a conformer set's lowest, as it is followed. Counted as
- * the page counts frames: 0 its atoms, k its k-th frame.
+ * The frame a molecule is first shown at - the one place that decides it, for a file and a step's result alike (modelSlice
+ * `shownFrames`, stepRuns `atTheirEnds`): the frame its file gives (a calculation's output, at its last geometry); else an
+ * optimisation's path at its end, the geometry it converged on; else one of a single entry among its frames at that entry;
+ * else its first - a conformer set's first entry, a film's first frame, a single geometry. Counted as the page counts
+ * frames: 0 its atoms, k its k-th frame.
  */
-export function firstFrame(m: Pick<Molecule3D, "frames" | "path" | "entryFrames">): number {
+export function firstFrame(m: Pick<Molecule3D, "frames" | "path" | "entryFrames"> & { frame?: number }): number {
+  if (m.frame != null) return m.frame;
   if (m.path) return m.frames?.length ?? 0;
   if (m.entryFrames?.length === 1) return m.entryFrames[0];
   return 0;
